@@ -9,3 +9,8 @@ edsm_cache.json
 # Python Internals
 __pycache__/
 *.log
+
+# PyInstaller
+build/
+dist/
+*.spec
