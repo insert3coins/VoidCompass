@@ -67,7 +67,7 @@ class MainDashboard:
         nav = tk.Frame(self.root, bg=COLOR_PANEL, height=50, highlightbackground=COLOR_ACCENT, highlightthickness=1)
         nav.pack(fill=tk.X, padx=10, pady=(10, 0))
         
-        tk.Label(nav, text=" > SURVEY_LOGGER_OS // V1.30", font=("Courier", 11, "bold"), fg=COLOR_ACCENT, bg=COLOR_PANEL).pack(side=tk.LEFT, padx=15)
+        tk.Label(nav, text=" > SURVEY ANALYSIS // V1.30", font=("Courier", 11, "bold"), fg=COLOR_ACCENT, bg=COLOR_PANEL).pack(side=tk.LEFT, padx=15)
         
         btn = tk.Button(nav, text="[ CONFIGURATION ]", command=self.open_settings, bg=COLOR_PANEL, fg=COLOR_ORANGE, font=("Courier", 9, "bold"), relief=tk.FLAT)
         btn.pack(side=tk.RIGHT, padx=15)
@@ -80,11 +80,17 @@ class MainDashboard:
         self.side.pack_propagate(False)
         
         self.sys_stat = self.create_stat("CURRENT_SYSTEM", "---")
+        self.nav_stat = self.create_stat("NAVIGATION TARGET", "---")
+        self.traffic_stat = self.create_stat("TRAFFIC (24H)", "---")
         self.scan_stat = self.create_stat("SCAN_PROGRESS", "0 / 0")
         self.bio_stat = self.create_stat("ORGANIC_LOGS", "0")
         self.edsm_stat = self.create_stat("EDSM_STATUS", "DISABLED")
         if not (self.config.get("edsm_cmdr_name") and self.config.get("edsm_api_key")): self.edsm_stat.config(fg="#666")
         self.queue_stat = self.create_stat("UPLOAD_QUEUE", "0")
+        
+        tk.Label(self.side, text="VALUABLE FINDS", font=("Courier", 8), fg="#666", bg=COLOR_PANEL).pack(anchor="w", padx=20, pady=(15,0))
+        self.valuable_list = tk.Listbox(self.side, bg=COLOR_PANEL, fg=COLOR_ORANGE, font=("Courier", 9), height=6, relief=tk.FLAT, highlightthickness=0, borderwidth=0)
+        self.valuable_list.pack(fill=tk.X, padx=20, pady=5)
         
         console_frame = tk.Frame(body, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
         console_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
@@ -106,6 +112,19 @@ class MainDashboard:
 
     def update_queue_count(self, count):
         self.root.after(0, lambda: self.queue_stat.config(text=str(count)))
+
+    def update_nav_label(self):
+        txt = "NO ROUTE"
+        if self.dest_name:
+            dist = ""
+            if self.dest_coords and self.current_coords:
+                try:
+                    d = math.sqrt(sum((a-b)**2 for a,b in zip(self.current_coords, self.dest_coords)))
+                    dist = f" ({d:,.0f} LY)"
+                except: pass
+            txt = f"{self.dest_name}{dist}"
+        
+        self.root.after(0, lambda: self.nav_stat.config(text=txt))
 
     def on_close(self):
         """Save state and exit."""
@@ -154,6 +173,7 @@ class MainDashboard:
     def fetch_system_traffic(self, system_name):
         def callback(traffic_data):
             self.system_traffic = traffic_data
+            self.root.after(0, lambda: self.traffic_stat.config(text=str(traffic_data.get('day', 0))))
             # Always update the HUD to reflect the new (or reset) traffic data.
             self.update_hud()
             self.update_live_discord()
@@ -232,7 +252,12 @@ class MainDashboard:
 
             log_msg = f"JUMP: {self.current_sys}" if is_jump else f"LOCATION: {self.current_sys}"
             self.log(log_msg)
-            self.root.after(0, lambda: self.sys_stat.config(text=self.current_sys.upper()))
+            
+            sys_text = self.current_sys.upper()
+            if self.star_class: sys_text += f" [{self.star_class}]"
+            self.root.after(0, lambda: self.sys_stat.config(text=sys_text))
+            self.root.after(0, lambda: self.valuable_list.delete(0, tk.END))
+            self.update_nav_label()
             self.root.after(0, lambda: self.bio_stat.config(text=str(self.organic_count)))
 
             was_enqueued = self.edsm.enqueue(data, self.current_sys, self.current_coords)
@@ -289,6 +314,7 @@ class MainDashboard:
                         elif p_class == "Ammonia world": icon = "☣️"
                         elif terraformable: icon = "🛠️"
                         self.valuable_bodies.append(f"- {icon} {body_name_str}")
+                        self.root.after(0, lambda: self.valuable_list.insert(tk.END, f"{icon} {body_name_str}"))
 
                     # --- Notification Logic ---
                     # Since this is a new scan, we always update.
@@ -322,6 +348,7 @@ class MainDashboard:
                         dest = data['Route'][-1]
                         self.dest_coords = dest['StarPos']
                         self.dest_name = dest['StarSystem']
+                        self.update_nav_label()
             except: pass
 
         with open(self.last_journal, 'r', encoding='utf-8') as f:
