@@ -92,6 +92,8 @@ class MainDashboard:
         self.valuable_list = tk.Listbox(self.side, bg=COLOR_PANEL, fg=COLOR_ORANGE, font=("Courier", 9), height=6, relief=tk.FLAT, highlightthickness=0, borderwidth=0)
         self.valuable_list.pack(fill=tk.X, padx=20, pady=5)
         
+        tk.Label(self.side, text="© 2026 insert3coins", font=("Courier", 8), fg="#444", bg=COLOR_PANEL).pack(side=tk.BOTTOM, anchor="w", padx=20, pady=10)
+        
         console_frame = tk.Frame(body, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
         console_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
         
