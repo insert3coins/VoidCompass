@@ -1,0 +1,11 @@
+# Configuration
+config.py
+config.json
+
+# Application Cache
+edsm_cache
+edsm_cache.json
+
+# Python Internals
+__pycache__/
+*.log
