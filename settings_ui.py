@@ -61,6 +61,28 @@ def open_settings(root, config, on_save_callback):
     toggle_btn = tk.Button(toggle_frame, text="[ ENABLED ]", font=("Courier", 9, "bold"), bg=COLOR_BG, activebackground=COLOR_BG, bd=0, command=toggle_overlay, cursor="hand2")
     toggle_btn.pack(side=tk.RIGHT)
     update_toggle_visuals()
+    
+    # Custom Toggle for Cargo Overlay
+    cargo_frame = tk.Frame(sec_gen, bg=COLOR_BG)
+    cargo_frame.pack(fill=tk.X, padx=15, pady=(0, 10))
+    
+    tk.Label(cargo_frame, text="Cargo Manifest Overlay", font=("Courier", 9), fg="#888", bg=COLOR_BG).pack(side=tk.LEFT)
+    
+    cargo_var = tk.BooleanVar(value=config.get("cargo_overlay_enabled", False))
+    
+    def toggle_cargo():
+        cargo_var.set(not cargo_var.get())
+        update_cargo_visuals()
+        
+    def update_cargo_visuals():
+        if cargo_var.get():
+            cargo_btn.config(text="[ ENABLED ]", fg=COLOR_ACCENT)
+        else:
+            cargo_btn.config(text="[ DISABLED ]", fg="#555")
+
+    cargo_btn = tk.Button(cargo_frame, text="[ DISABLED ]", font=("Courier", 9, "bold"), bg=COLOR_BG, activebackground=COLOR_BG, bd=0, command=toggle_cargo, cursor="hand2")
+    cargo_btn.pack(side=tk.RIGHT)
+    update_cargo_visuals()
 
     # --- EDSM Settings ---
     sec_edsm = create_section(container, "EDSM UPLINK")
@@ -82,6 +104,7 @@ def open_settings(root, config, on_save_callback):
             "edsm_cmdr_name": n_e.get().strip(),
             "edsm_api_key": k_e.get().strip(),
             "overlay_enabled": ov_var.get(),
+            "cargo_overlay_enabled": cargo_var.get(),
             "settings_geometry": win.geometry()
         })
         

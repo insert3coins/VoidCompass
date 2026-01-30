@@ -1,0 +1,96 @@
+import tkinter as tk
+import json
+from config import CONFIG_FILE, COLOR_ACCENT, COLOR_GREEN, COLOR_TEXT, COLOR_ORANGE
+
+class CargoHUD:
+    def __init__(self, root, config):
+        self.win = tk.Toplevel(root)
+        self.config = config
+        
+        self.win.attributes("-topmost", True, "-transparentcolor", "black", "-toolwindow", True)
+        self.win.overrideredirect(True)
+        self.win.config(bg="black")
+        
+        self.canvas = tk.Canvas(self.win, width=300, height=400, bg="black", highlightthickness=0)
+        self.canvas.pack()
+
+        self.canvas.bind("<Button-1>", self.start_move)
+        self.canvas.bind("<B1-Motion>", self.do_move)
+        self.canvas.bind("<ButtonRelease-1>", self.save_final_pos)
+
+        # Default to right middle side
+        screen_width = root.winfo_screenwidth()
+        screen_height = root.winfo_screenheight()
+        
+        default_x = screen_width - 320
+        default_y = (screen_height // 2) - 200
+        
+        x = self.config.get("cargo_hud_x", default_x)
+        y = self.config.get("cargo_hud_y", default_y)
+        self.win.geometry(f"+{x}+{y}")
+        
+        self.force_topmost()
+        
+    def force_topmost(self):
+        """Keeps the window on top of the game."""
+        self.win.attributes("-topmost", True)
+        self.win.lift()
+        self.win.after(2000, self.force_topmost)
+
+    def start_move(self, event):
+        self.x = event.x
+        self.y = event.y
+
+    def do_move(self, event):
+        deltax = event.x - self.x
+        deltay = event.y - self.y
+        x = self.win.winfo_x() + deltax
+        y = self.win.winfo_y() + deltay
+        self.win.geometry(f"+{x}+{y}")
+
+    def save_final_pos(self, event):
+        self.config["cargo_hud_x"] = self.win.winfo_x()
+        self.config["cargo_hud_y"] = self.win.winfo_y()
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(self.config, f, indent=4)
+
+    def update(self, inventory):
+        self.canvas.delete("all")
+        
+        w = 300
+        h = 400
+        
+        # Border
+        self.canvas.create_rectangle(5, 5, w-5, h-5, fill="#010101", outline=COLOR_ACCENT, width=2)
+        # Header separator
+        self.canvas.create_line(5, 35, w-5, 35, fill=COLOR_ACCENT, width=1)
+        
+        # Title
+        self.canvas.create_text(15, 20, text="CARGO MANIFEST", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
+        
+        # Total Count
+        total = sum(item.get("Count", 0) for item in inventory)
+        self.canvas.create_text(w-15, 20, text=f"TOTAL: {total}", fill=COLOR_ORANGE, font=("Courier", 10, "bold"), anchor="e")
+        
+        y_pos = 50
+        if not inventory:
+            self.canvas.create_text(w//2, h//2, text="[ HOLD EMPTY ]", fill="#555", font=("Courier", 10), anchor="center")
+        else:
+            # Sort alphabetically
+            inventory.sort(key=lambda x: x.get("Name_Localised", x.get("Name", "Unknown")))
+            
+            for item in inventory:
+                if y_pos > h - 25:
+                    self.canvas.create_text(w//2, y_pos, text="... overflow ...", fill="#555", font=("Courier", 8), anchor="center")
+                    break
+                
+                name = item.get("Name_Localised", item.get("Name", "Unknown"))
+                count = item.get("Count", 0)
+                
+                # Truncate name
+                display_name = (name[:22] + '..') if len(name) > 22 else name
+                
+                self.canvas.create_text(15, y_pos, text=display_name, fill=COLOR_TEXT, font=("Courier", 9), anchor="w")
+                self.canvas.create_text(w-15, y_pos, text=str(count), fill=COLOR_GREEN, font=("Courier", 9, "bold"), anchor="e")
+                
+                y_pos += 20

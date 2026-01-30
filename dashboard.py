@@ -16,6 +16,7 @@ from config import (
 )
 from version import APP_VERSION
 from hud import TacticalHUD
+from cargo_hud import CargoHUD
 from edsm_handler import EDSMHandler
 from discord_handler import DiscordHandler
 from settings_ui import open_settings
@@ -59,6 +60,11 @@ class MainDashboard:
             self.hud = TacticalHUD(self.root, self.config)
         else:
             self.hud = None
+            
+        if self.config.get("cargo_overlay_enabled", False):
+            self.cargo_hud = CargoHUD(self.root, self.config)
+        else:
+            self.cargo_hud = None
         
         threading.Thread(target=self.threaded_poll_engine, daemon=True).start()
         
@@ -166,12 +172,42 @@ class MainDashboard:
 
     def open_settings(self):
         def on_save():
+            # Live Update: EDSM
+            self.verify_link()
+            
             if self.config.get("edsm_cmdr_name") and self.config.get("edsm_api_key"):
                 self.edsm.status = "STANDBY"
                 self.edsm_stat.config(text="STANDBY", fg=COLOR_TEXT)
             else:
                 self.edsm.status = "DISABLED"
                 self.edsm_stat.config(text="DISABLED", fg="#666")
+            
+            # Live Update: Discord
+            if self.config.get("discord_webhook"):
+                self.log("Discord Integration: ACTIVE (Settings Updated)")
+
+            # Live Toggle: Tactical HUD
+            if self.config.get("overlay_enabled", True):
+                if self.hud is None:
+                    self.hud = TacticalHUD(self.root, self.config)
+                    self.update_hud()
+            else:
+                if self.hud:
+                    self.hud.win.destroy()
+                    self.hud = None
+
+            # Live Toggle: Cargo HUD
+            if self.config.get("cargo_overlay_enabled", False):
+                if self.cargo_hud is None:
+                    self.cargo_hud = CargoHUD(self.root, self.config)
+                    # Force re-read of cargo file
+                    if hasattr(self, 'last_cargo_mtime'):
+                        del self.last_cargo_mtime
+                    self.check_cargo_file()
+            else:
+                if self.cargo_hud:
+                    self.cargo_hud.win.destroy()
+                    self.cargo_hud = None
         
         open_settings(self.root, self.config, on_save)
 
@@ -399,10 +435,33 @@ class MainDashboard:
 
             self.file_pos = f.tell()
 
+    def check_cargo_file(self):
+        if not self.cargo_hud: return
+        
+        path = self.config.get("journal_path")
+        if not path: return
+        
+        c_file = os.path.join(path, "Cargo.json")
+        if not os.path.exists(c_file): return
+        
+        try:
+            mtime = os.path.getmtime(c_file)
+            if not hasattr(self, 'last_cargo_mtime') or mtime != self.last_cargo_mtime:
+                self.last_cargo_mtime = mtime
+                with open(c_file, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                    if content:
+                        data = json.loads(content)
+                        inventory = data.get("Inventory", [])
+                        self.root.after(0, lambda: self.cargo_hud.update(inventory))
+        except Exception:
+            pass
+
     def threaded_poll_engine(self):
         while self.is_running:
             try:
                 self.poll_engine()
+                self.check_cargo_file()
             except Exception as e:
                 logging.error(f"Poll Error: {e}")
             time.sleep(1)
