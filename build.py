@@ -75,6 +75,14 @@ VSVersionInfo(
     readme_content = f"""SURVEY ANALYSIS // ELITE DANGEROUS COMPANION // v{APP_VERSION}
 ============================================
 
+DESCRIPTION
+-----------
+Survey Analysis is a real-time exploration companion for Elite Dangerous.
+It reads your journal files as you play to provide:
+- A tactical HUD overlay with navigation and scan progress.
+- Automatic data upload to EDSM.
+- Live telemetry updates to Discord.
+
 INSTALLATION
 ------------
 1. Place 'SurveyAnalysis.exe' anywhere you like.
@@ -118,5 +126,10 @@ Fly Safe, Commander! o7
         with open(readme_path, 'w', encoding='utf-8') as f:
             f.write(readme_content)
         print(f"📄 README.txt created at: {readme_path}")
+
+    # Copy mini-readme.md to dist as UPDATE_LOG.md
+    if os.path.exists('mini-readme.md'):
+        shutil.copy('mini-readme.md', os.path.join(dist_dir, 'UPDATE_LOG.md'))
+        print("📄 Copied mini-readme.md to dist/UPDATE_LOG.txt")
 
     print("✅ Build Complete. Check the 'dist' folder.")

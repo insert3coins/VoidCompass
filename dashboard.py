@@ -5,6 +5,8 @@ import math
 import logging
 import time
 import tkinter as tk
+import requests
+import webbrowser
 from datetime import datetime
 from tkinter import scrolledtext
 
@@ -61,16 +63,18 @@ class MainDashboard:
         threading.Thread(target=self.threaded_poll_engine, daemon=True).start()
         
         self.root.after(2000, self.verify_link)
+        
+        threading.Thread(target=self.check_updates, daemon=True).start()
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def setup_layout(self):
-        nav = tk.Frame(self.root, bg=COLOR_PANEL, height=50, highlightbackground=COLOR_ACCENT, highlightthickness=1)
-        nav.pack(fill=tk.X, padx=10, pady=(10, 0))
+        self.nav = tk.Frame(self.root, bg=COLOR_PANEL, height=50, highlightbackground=COLOR_ACCENT, highlightthickness=1)
+        self.nav.pack(fill=tk.X, padx=10, pady=(10, 0))
         
-        tk.Label(nav, text=f" > SURVEY ANALYSIS // V{APP_VERSION}", font=("Courier", 11, "bold"), fg=COLOR_ACCENT, bg=COLOR_PANEL).pack(side=tk.LEFT, padx=15)
+        tk.Label(self.nav, text=f" > SURVEY ANALYSIS // V{APP_VERSION}", font=("Courier", 11, "bold"), fg=COLOR_ACCENT, bg=COLOR_PANEL).pack(side=tk.LEFT, padx=15)
         
-        btn = tk.Button(nav, text="[ CONFIGURATION ]", command=self.open_settings, bg=COLOR_PANEL, fg=COLOR_ORANGE, font=("Courier", 9, "bold"), relief=tk.FLAT)
+        btn = tk.Button(self.nav, text="[ CONFIGURATION ]", command=self.open_settings, bg=COLOR_PANEL, fg=COLOR_ORANGE, font=("Courier", 9, "bold"), relief=tk.FLAT)
         btn.pack(side=tk.RIGHT, padx=15)
         
         body = tk.Frame(self.root, bg=COLOR_BG)
@@ -109,6 +113,28 @@ class MainDashboard:
 
     def log(self, msg):
         self.root.after(0, lambda: (self.log_box.insert(tk.END, f"[{datetime.now().strftime('%H:%M:%S')}] {msg}\n"), self.log_box.see(tk.END)))
+
+    def check_updates(self):
+        try:
+            url = "https://api.github.com/repos/insert3coins/SurveyAnalysis-Release/releases/latest"
+            r = requests.get(url, timeout=5)
+            if r.status_code == 200:
+                data = r.json()
+                tag = data.get("tag_name", "").lstrip("v")
+                html_url = data.get("html_url", "")
+                
+                current_v = [int(x) for x in APP_VERSION.split('.')]
+                remote_v = [int(x) for x in tag.split('.')]
+                
+                if remote_v > current_v:
+                    self.root.after(0, lambda: self.show_update_btn(html_url, tag))
+        except Exception:
+            pass
+
+    def show_update_btn(self, url, tag):
+        self.log(f"✨ UPDATE AVAILABLE: v{tag}")
+        btn = tk.Button(self.nav, text="[ UPDATE AVAILABLE ]", command=lambda: webbrowser.open(url), bg=COLOR_PANEL, fg=COLOR_GREEN, font=("Courier", 9, "bold"), relief=tk.FLAT, activebackground=COLOR_PANEL, activeforeground=COLOR_GREEN)
+        btn.pack(side=tk.RIGHT, padx=5)
 
     def update_edsm_status(self, text, color):
         self.root.after(0, lambda: self.edsm_stat.config(text=text, fg=color))
