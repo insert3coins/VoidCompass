@@ -7,6 +7,7 @@ import time
 import logging
 from datetime import datetime, timezone
 from config import EDSM_CACHE_FILE, COLOR_GREEN
+from version import APP_VERSION
 
 class EDSMHandler:
     def __init__(self, config, update_status_cb, update_queue_cb):
@@ -123,12 +124,12 @@ class EDSMHandler:
                         "commanderName": name,
                         "apiKey": key,
                         "fromSoftware": "SurveyLogger",
-                        "fromSoftwareVersion": "1.30",
+                        "fromSoftwareVersion": APP_VERSION,
                         "message": json.dumps(batch)
                     }
                     if self.game_version: payload['fromGameVersion'] = self.game_version
                     if self.game_build: payload['fromGameBuild'] = self.game_build
-                    headers = {'User-Agent': 'SurveyLogger/1.30'}
+                    headers = {'User-Agent': f'SurveyLogger/{APP_VERSION}'}
                     
                     r = requests.post(url, data=payload, headers=headers, timeout=30)
                     
@@ -175,7 +176,7 @@ class EDSMHandler:
             try:
                 params = {'systemName': system_name}
                 url = "https://www.edsm.net/api-system-v1/traffic"
-                headers = {'User-Agent': 'SurveyLogger/1.30'}
+                headers = {'User-Agent': f'SurveyLogger/{APP_VERSION}'}
                 r = requests.get(url, params=params, headers=headers, timeout=10)
                 r.raise_for_status()
                 data = r.json()

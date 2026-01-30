@@ -6,6 +6,7 @@ import math
 import json
 from datetime import datetime, timezone
 from config import CONFIG_FILE
+from version import APP_VERSION
 
 class DiscordHandler:
     def __init__(self, config, root):
@@ -101,7 +102,7 @@ class DiscordHandler:
                 "description": desc,
                 "color": embed_color,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "footer": {"text": "SURVEY ANALYSIS v1.30"}
+                "footer": {"text": f"SURVEY ANALYSIS v{APP_VERSION}"}
             }]
         }
 
