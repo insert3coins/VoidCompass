@@ -1,10 +1,16 @@
 import PyInstaller.__main__
 import os
+import shutil
 from version import APP_VERSION
 
 # This script automates the build process for SurveyAnalysis
 
 if __name__ == '__main__':
+    # Clean up previous build artifacts
+    if os.path.exists('build'):
+        print("🧹 Removing previous build folder...")
+        shutil.rmtree('build')
+
     # Convert "1.3.0" -> (1, 3, 0, 0) for Windows Version Info
     v_parts = [int(x) for x in APP_VERSION.split('.')]
     while len(v_parts) < 4:
@@ -106,7 +112,7 @@ Fly Safe, Commander! o7
 """
 
     dist_dir = os.path.join(os.getcwd(), 'dist')
-    readme_path = os.path.join(dist_dir, 'README.txt')
+    readme_path = os.path.join(dist_dir, 'README.md')
     
     if os.path.exists(dist_dir):
         with open(readme_path, 'w', encoding='utf-8') as f:
