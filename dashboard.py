@@ -21,6 +21,8 @@ from edsm_handler import EDSMHandler
 from discord_handler import DiscordHandler
 from settings_ui import open_settings
 
+SCAN_HISTORY_FILE = "scan_history.json"
+
 class MainDashboard:
     def __init__(self, root):
         self.root = root
@@ -44,6 +46,7 @@ class MainDashboard:
         self.scanned_bodies = set()
         self.cmdr_name = self.config.get("edsm_cmdr_name", "CMDR")
         self.last_scan_event = None
+        self.scan_history = {}
         
         self.dest_coords = None
         self.current_coords = [0,0,0]
@@ -66,6 +69,7 @@ class MainDashboard:
         else:
             self.cargo_hud = None
         
+        self.load_history()
         threading.Thread(target=self.threaded_poll_engine, daemon=True).start()
         
         self.root.after(2000, self.verify_link)
@@ -105,6 +109,9 @@ class MainDashboard:
         
         tk.Label(self.side, text="© 2026 insert3coins", font=("Courier", 8), fg="#444", bg=COLOR_PANEL).pack(side=tk.BOTTOM, anchor="w", padx=20, pady=10)
         
+        btn_scan = tk.Button(self.side, text="[ REBUILD CACHE ]", command=self.scan_all_logs_threaded, bg=COLOR_PANEL, fg="#555", font=("Courier", 8, "bold"), relief=tk.FLAT, activebackground=COLOR_PANEL, activeforeground=COLOR_TEXT)
+        btn_scan.pack(side=tk.BOTTOM, anchor="w", padx=20, pady=(0, 5))
+        
         console_frame = tk.Frame(body, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
         console_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
         
@@ -142,6 +149,114 @@ class MainDashboard:
         btn = tk.Button(self.nav, text="[ UPDATE AVAILABLE ]", command=lambda: webbrowser.open(url), bg=COLOR_PANEL, fg=COLOR_GREEN, font=("Courier", 9, "bold"), relief=tk.FLAT, activebackground=COLOR_PANEL, activeforeground=COLOR_GREEN)
         btn.pack(side=tk.RIGHT, padx=5)
 
+    def load_history(self):
+        if os.path.exists(SCAN_HISTORY_FILE):
+            try:
+                with open(SCAN_HISTORY_FILE, 'r') as f:
+                    self.scan_history = json.load(f)
+            except Exception:
+                self.scan_history = {}
+
+    def scan_all_logs_threaded(self):
+        threading.Thread(target=self.scan_all_logs, daemon=True).start()
+
+    def scan_all_logs(self):
+        path = self.config.get("journal_path")
+        if not path or not os.path.exists(path):
+            self.log("❌ Journal path invalid.")
+            return
+
+        self.log("📚 STARTING HISTORY REBUILD...")
+        
+        try:
+            files = sorted([os.path.join(path, f) for f in os.listdir(path) if f.startswith("Journal.") and f.endswith(".log")])
+        except Exception as e:
+            self.log(f"❌ Error listing files: {e}")
+            return
+
+        total_files = len(files)
+        if total_files == 0:
+            self.log("⚠️ No journal files found.")
+            return
+
+        new_history = self.scan_history.copy()
+        processed = 0
+
+        for filepath in files:
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    current_sys_context = None
+                    for line in f:
+                        try:
+                            data = json.loads(line)
+                            ev = data.get("event")
+
+                            if ev in ["FSDJump", "Location"]:
+                                sys_name = data.get("StarSystem")
+                                current_sys_context = sys_name
+                                if sys_name and sys_name not in new_history:
+                                    new_history[sys_name] = {"total": 0, "bodies": [], "scanned_count": 0}
+
+                            elif ev == "FSSDiscoveryScan":
+                                sys_name = data.get("SystemName", current_sys_context)
+                                if sys_name:
+                                    if sys_name not in new_history: new_history[sys_name] = {"total": 0, "bodies": [], "scanned_count": 0}
+                                    count = data.get("BodyCount", 0)
+                                    if count > new_history[sys_name]["total"]: new_history[sys_name]["total"] = count
+
+                            elif ev == "FSSAllBodiesFound":
+                                sys_name = data.get("SystemName", current_sys_context)
+                                if sys_name:
+                                    if sys_name not in new_history: new_history[sys_name] = {"total": 0, "bodies": [], "scanned_count": 0}
+                                    count = data.get("Count", 0)
+                                    new_history[sys_name]["total"] = count
+                                    new_history[sys_name]["scanned_count"] = count
+
+                            elif ev == "Scan":
+                                sys_name = data.get("StarSystem", current_sys_context)
+                                if sys_name and ("StarType" in data or "PlanetClass" in data):
+                                    if sys_name not in new_history: new_history[sys_name] = {"total": 0, "bodies": [], "scanned_count": 0}
+                                    body_id = data.get("BodyID")
+                                    if body_id is not None:
+                                        if "bodies" not in new_history[sys_name]: new_history[sys_name]["bodies"] = []
+                                        if body_id not in new_history[sys_name]["bodies"]: new_history[sys_name]["bodies"].append(body_id)
+                        except ValueError: continue
+            except Exception: pass
+            
+            processed += 1
+            if processed % 10 == 0: self.log(f"⏳ Scanning... {int((processed/total_files)*100)}%")
+
+        for sys_name, data in new_history.items():
+            if len(data.get("bodies", [])) > data.get("scanned_count", 0): data["scanned_count"] = len(data["bodies"])
+            if data.get("scanned_count", 0) > data.get("total", 0): data["total"] = data["scanned_count"]
+
+        self.scan_history = new_history
+        self.save_history()
+        self.log(f"✅ CACHE REBUILD COMPLETE. ({len(new_history)} Systems)")
+        
+        if self.current_sys in self.scan_history:
+            h = self.scan_history[self.current_sys]
+            self.total = h.get("total", 0)
+            self.scanned_bodies = set(h.get("bodies", []))
+            self.scanned = h.get("scanned_count", 0)
+            self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+            self.update_hud()
+
+    def save_history(self):
+        if not self.current_sys or self.current_sys == "---" or self.current_sys == "Unknown":
+            return
+        
+        self.scan_history[self.current_sys] = {
+            "total": self.total,
+            "bodies": list(self.scanned_bodies),
+            "scanned_count": self.scanned
+        }
+        try:
+            with open(SCAN_HISTORY_FILE, 'w') as f:
+                json.dump(self.scan_history, f, indent=4)
+        except Exception:
+            pass
+
     def update_edsm_status(self, text, color):
         self.root.after(0, lambda: self.edsm_stat.config(text=text, fg=color))
 
@@ -172,6 +287,7 @@ class MainDashboard:
 
     def open_settings(self):
         def on_save():
+            self.log("Configuration saved successfully.")
             # Live Update: EDSM
             self.verify_link()
             
@@ -219,6 +335,8 @@ class MainDashboard:
             self.log("EDSM Integration: DISABLED (No Credentials)")
 
     def update_live_discord(self, event_data=None):
+        if self.is_first_load:
+            return
         state = {
             "current_sys": self.current_sys,
             "star_class": self.star_class,
@@ -305,12 +423,23 @@ class MainDashboard:
             self.current_sys = data.get("StarSystem", "Unknown")
             self.current_coords = data.get("StarPos", [0,0,0])
             self.star_class = data.get("StarClass", "")
-            self.scanned = 0
-            self.total = 0
+            
+            # Load from history if available
+            if self.current_sys in self.scan_history:
+                h = self.scan_history[self.current_sys]
+                self.total = h.get("total", 0)
+                self.scanned_bodies = set(h.get("bodies", []))
+                self.scanned = len(self.scanned_bodies)
+                if self.scanned == 0 and h.get("scanned_count", 0) > 0:
+                     self.scanned = h.get("scanned_count", 0)
+            else:
+                self.scanned = 0
+                self.total = 0
+                self.scanned_bodies.clear()
+
             self.organic_count = 0 # Reset bio count for new system
             self.system_bio_signals = 0
             self.last_scan_event = None
-            self.scanned_bodies.clear()
             self.valuable_system = False
             self.valuable_bodies.clear()
             self.system_traffic = {'day': 0, 'week': 0, 'total': 0}
@@ -324,6 +453,7 @@ class MainDashboard:
             self.root.after(0, lambda: self.valuable_list.delete(0, tk.END))
             self.update_nav_label()
             self.root.after(0, lambda: self.bio_stat.config(text=str(self.organic_count)))
+            self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
 
             was_enqueued = self.edsm.enqueue(data, self.current_sys, self.current_coords)
             if was_enqueued:
@@ -338,8 +468,19 @@ class MainDashboard:
             if "SystemName" in data and data["SystemName"] != self.current_sys:
                 return
             self.total = data.get("BodyCount", self.total)
+            self.save_history()
+            self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
             self.edsm.enqueue(data, self.current_sys, self.current_coords)
+            self.log(f"🔭 HONK: {self.total} bodies detected.")
             self.update_live_discord(data)
+
+        elif ev == "FSSAllBodiesFound":
+            if "SystemName" in data and data["SystemName"] == self.current_sys:
+                self.total = data.get("Count", self.total)
+                self.scanned = self.total
+                self.save_history()
+                self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+                self.log("📡 SYSTEM SCAN COMPLETE: All bodies found.")
         
         elif ev == "Scan":
             body_name = data.get("BodyName", "")
@@ -359,6 +500,8 @@ class MainDashboard:
                     # --- State Updates for a new body ---
                     self.scanned_bodies.add(body_id)
                     self.scanned += 1
+                    self.save_history()
+                    self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                     self.last_scan_event = data
 
                     # Check for biological signals and update the system total
@@ -432,6 +575,7 @@ class MainDashboard:
                     self.discord.reset_msg_id()
                 # Once initial load is done, update the HUD to the final state.
                 self.update_hud()
+                self.update_live_discord()
 
             self.file_pos = f.tell()
 

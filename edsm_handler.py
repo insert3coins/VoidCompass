@@ -45,20 +45,7 @@ class EDSMHandler:
         except (IOError, json.JSONDecodeError):
             return
         
-        now = datetime.now(timezone.utc)
-        expiry_days = 7
-        cleaned_cache = {}
-        for event_ts, upload_ts_str in cache_data.items():
-            try:
-                upload_ts = datetime.fromisoformat(upload_ts_str.replace('Z', '+00:00'))
-                if (now - upload_ts).days <= expiry_days:
-                    cleaned_cache[event_ts] = upload_ts_str
-            except (ValueError, TypeError):
-                continue
-        
-        self.cache = cleaned_cache
-        if len(self.cache) < len(cache_data):
-            self.save_cache()
+        self.cache = cache_data
 
     def save_cache(self):
         try:
@@ -85,13 +72,7 @@ class EDSMHandler:
 
         event_ts = log_data.get("timestamp")
         if event_ts and event_ts in self.cache:
-            upload_ts_str = self.cache[event_ts]
-            try:
-                upload_ts = datetime.fromisoformat(upload_ts_str.replace('Z', '+00:00'))
-                if (datetime.now(timezone.utc) - upload_ts).total_seconds() < 24 * 3600:
-                    return False
-            except (ValueError, TypeError):
-                pass
+            return False
 
         self.queue.put(log_data)
         if self.update_queue_cb:

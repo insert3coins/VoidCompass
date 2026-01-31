@@ -5,6 +5,7 @@ config.json
 # Application Cache
 edsm_cache
 edsm_cache.json
+scan_history.json
 
 # Python Internals
 __pycache__/

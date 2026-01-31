@@ -1,6 +1,5 @@
 import tkinter as tk
 import json
-from tkinter import messagebox
 from config import CONFIG_FILE, COLOR_BG, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
 
 def open_settings(root, config, on_save_callback):
@@ -112,7 +111,6 @@ def open_settings(root, config, on_save_callback):
             json.dump(config, f, indent=4)
         
         on_save_callback()
-        messagebox.showinfo("SYSTEM", "Configuration saved successfully.")
         win.destroy()
 
     def close_window():
