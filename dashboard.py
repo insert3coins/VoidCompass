@@ -528,9 +528,6 @@ class MainDashboard:
                     # Since this is a new scan, we always update.
                     self.update_live_discord(data)
 
-        if not self.is_first_load:
-            self.update_hud()
-
     def poll_engine(self):
         path = self.config["journal_path"]
         if not os.path.exists(path): return
@@ -563,10 +560,14 @@ class MainDashboard:
             f.seek(self.file_pos)
             lines = f.readlines()
             
-            for line in lines:
-                try:
-                    self.process_event(json.loads(line))
-                except: pass
+            if lines:
+                for line in lines:
+                    try:
+                        self.process_event(json.loads(line))
+                    except: pass
+                
+                if not self.is_first_load:
+                    self.update_hud()
             
             if self.is_first_load and len(lines) > 0:
                 self.is_first_load = False
