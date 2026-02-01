@@ -468,6 +468,8 @@ class MainDashboard:
 
     def fetch_system_traffic(self, system_name):
         def callback(traffic_data):
+            if self.current_sys != system_name:
+                return
             self.system_traffic = traffic_data
             self.root.after(0, lambda: self.traffic_stat.config(text=str(traffic_data.get('day', 0))))
             # Always update the HUD to reflect the new (or reset) traffic data.
@@ -592,7 +594,8 @@ class MainDashboard:
                     self.discord.reset_msg_id()
                 self.update_live_discord(data)
             
-            self.fetch_system_traffic(self.current_sys)
+            if not self.is_first_load:
+                self.fetch_system_traffic(self.current_sys)
 
         elif ev == "FSSDiscoveryScan":
             if "SystemName" in data and data["SystemName"] != self.current_sys:
@@ -705,6 +708,7 @@ class MainDashboard:
                 if self.config.get("discord_msg_system") != self.current_sys:
                     self.log("Stale Discord message detected. A new message will be created.")
                     self.discord.reset_msg_id()
+                self.fetch_system_traffic(self.current_sys)
                 # Once initial load is done, update the HUD to the final state.
                 self.update_hud()
                 self.update_live_discord()
