@@ -103,6 +103,9 @@ class RoutePlotter:
         total_dist = 0.0
         prev_coords = self.current_coords
         
+        # Determine current waypoint index for status markers
+        current_idx = self.manager.get_waypoint_index(self.current_sys)
+        
         for i, wp in enumerate(self.manager.waypoints):
             name = wp['name']
             coords = wp['coords']
@@ -117,15 +120,31 @@ class RoutePlotter:
             elif coords:
                 prev_coords = coords # Start measuring from here if we lost the chain
             
-            display = f"{i+1:02d} | {name:<25} | +{dist_str}"
+            marker = "|"
+            if current_idx != -1:
+                if i < current_idx: marker = "✓" # Completed
+                elif i == current_idx: marker = "📍" # Current
+            
+            display = f"{i+1:02d} {marker} {name:<25} | +{dist_str}"
             if note:
                 display += f" [{note}]"
             self.listbox.insert(tk.END, display)
+            
+            # Highlight current and dim completed
+            if i == current_idx:
+                self.listbox.itemconfig(i, {'fg': COLOR_ORANGE})
+            elif current_idx != -1 and i < current_idx:
+                self.listbox.itemconfig(i, {'fg': '#555'})
             
         self.stats_lbl.config(text=f"TOTAL PLOTTED DISTANCE: {total_dist:,.1f} LY")
 
         if self.on_change_callback:
             self.root.after(0, self.on_change_callback)
+
+    def update_current_system(self, sys_name, coords):
+        self.current_sys = sys_name
+        self.current_coords = coords
+        self.refresh_list()
 
     def move_up(self):
         sel = self.listbox.curselection()

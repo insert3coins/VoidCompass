@@ -570,6 +570,12 @@ class MainDashboard:
             self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
             self.root.after(0, self.update_waypoint_display)
 
+            # Update Route Plotter UI if open
+            if self.route_plotter and self.route_plotter.win.winfo_exists():
+                s_sys = self.current_sys
+                s_coords = self.current_coords
+                self.root.after(0, lambda: self.route_plotter.update_current_system(s_sys, s_coords))
+
             # Auto-copy next waypoint logic
             if self.config.get("auto_copy_waypoint", False):
                 next_wp = self.waypoint_manager.get_next_waypoint(self.current_sys)
