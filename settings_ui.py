@@ -85,11 +85,55 @@ def open_settings(root, config, on_save_callback):
 
     # --- EDSM Settings ---
     sec_edsm = create_section(container, "EDSM UPLINK")
+    
+    # Toggle EDSM
+    edsm_toggle_frame = tk.Frame(sec_edsm, bg=COLOR_BG)
+    edsm_toggle_frame.pack(fill=tk.X, padx=15, pady=(5, 5))
+    tk.Label(edsm_toggle_frame, text="Enable EDSM Integration", font=("Courier", 9), fg="#888", bg=COLOR_BG).pack(side=tk.LEFT)
+    
+    edsm_var = tk.BooleanVar(value=config.get("edsm_enabled", True))
+    
+    def toggle_edsm():
+        edsm_var.set(not edsm_var.get())
+        update_edsm_visuals()
+        
+    def update_edsm_visuals():
+        if edsm_var.get():
+            edsm_btn.config(text="[ ENABLED ]", fg=COLOR_ACCENT)
+        else:
+            edsm_btn.config(text="[ DISABLED ]", fg="#555")
+
+    edsm_btn = tk.Button(edsm_toggle_frame, text="[ ENABLED ]", font=("Courier", 9, "bold"), bg=COLOR_BG, activebackground=COLOR_BG, bd=0, command=toggle_edsm, cursor="hand2")
+    edsm_btn.pack(side=tk.RIGHT)
+    update_edsm_visuals()
+
     n_e = create_input(sec_edsm, "Commander Name", "edsm_cmdr_name")
     k_e = create_input(sec_edsm, "API Key", "edsm_api_key", is_password=True)
 
     # --- Discord Settings ---
     sec_disc = create_section(container, "DISCORD TELEMETRY")
+    
+    # Toggle Discord
+    disc_toggle_frame = tk.Frame(sec_disc, bg=COLOR_BG)
+    disc_toggle_frame.pack(fill=tk.X, padx=15, pady=(5, 5))
+    tk.Label(disc_toggle_frame, text="Enable Discord Integration", font=("Courier", 9), fg="#888", bg=COLOR_BG).pack(side=tk.LEFT)
+    
+    disc_var = tk.BooleanVar(value=config.get("discord_enabled", True))
+    
+    def toggle_disc():
+        disc_var.set(not disc_var.get())
+        update_disc_visuals()
+        
+    def update_disc_visuals():
+        if disc_var.get():
+            disc_btn.config(text="[ ENABLED ]", fg=COLOR_ACCENT)
+        else:
+            disc_btn.config(text="[ DISABLED ]", fg="#555")
+
+    disc_btn = tk.Button(disc_toggle_frame, text="[ ENABLED ]", font=("Courier", 9, "bold"), bg=COLOR_BG, activebackground=COLOR_BG, bd=0, command=toggle_disc, cursor="hand2")
+    disc_btn.pack(side=tk.RIGHT)
+    update_disc_visuals()
+
     d_e = create_input(sec_disc, "Webhook URL", "discord_webhook")
 
     # --- Footer Buttons ---
@@ -102,6 +146,8 @@ def open_settings(root, config, on_save_callback):
             "discord_webhook": d_e.get().strip(),
             "edsm_cmdr_name": n_e.get().strip(),
             "edsm_api_key": k_e.get().strip(),
+            "edsm_enabled": edsm_var.get(),
+            "discord_enabled": disc_var.get(),
             "overlay_enabled": ov_var.get(),
             "cargo_overlay_enabled": cargo_var.get(),
             "settings_geometry": win.geometry()

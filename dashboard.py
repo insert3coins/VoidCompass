@@ -110,7 +110,7 @@ class MainDashboard:
         self.scan_stat = self.create_stat("SCAN_PROGRESS", "0 / 0")
         self.bio_stat = self.create_stat("ORGANIC_LOGS", "0")
         self.edsm_stat = self.create_stat("EDSM_STATUS", "DISABLED")
-        if not (self.config.get("edsm_cmdr_name") and self.config.get("edsm_api_key")): self.edsm_stat.config(fg="#666")
+        if not (self.config.get("edsm_enabled", True) and self.config.get("edsm_cmdr_name") and self.config.get("edsm_api_key")): self.edsm_stat.config(fg="#666")
         self.queue_stat = self.create_stat("UPLOAD_QUEUE", "0")
         
         tk.Label(self.side, text="VALUABLE FINDS", font=("Courier", 8), fg="#666", bg=COLOR_PANEL).pack(anchor="w", padx=20, pady=(15,0))
@@ -299,13 +299,7 @@ class MainDashboard:
     def update_nav_label(self):
         txt = "NO ROUTE"
         if self.dest_name:
-            dist = ""
-            if self.dest_coords and self.current_coords:
-                try:
-                    d = math.sqrt(sum((a-b)**2 for a,b in zip(self.current_coords, self.dest_coords)))
-                    dist = f" ({d:,.0f} LY)"
-                except: pass
-            txt = f"{self.dest_name}{dist}"
+            txt = self.dest_name
         
         self.root.after(0, lambda: self.nav_stat.config(text=txt))
 
@@ -401,25 +395,31 @@ class MainDashboard:
     def open_settings(self):
         def on_save():
             self.log("Configuration saved successfully.")
-            # Live Update: EDSM
-            self.verify_link()
             
-            if self.config.get("edsm_cmdr_name") and self.config.get("edsm_api_key"):
+            # Live Update: EDSM
+            edsm_active = self.config.get("edsm_enabled", True) and self.config.get("edsm_cmdr_name") and self.config.get("edsm_api_key")
+            
+            if edsm_active:
                 self.edsm.status = "STANDBY"
                 self.edsm_stat.config(text="STANDBY", fg=COLOR_TEXT)
+                self.verify_link()
             else:
                 self.edsm.status = "DISABLED"
                 self.edsm_stat.config(text="DISABLED", fg="#666")
+                self.verify_link()
             
             # Live Update: Discord
-            if self.config.get("discord_webhook"):
-                self.log("Discord Integration: ACTIVE (Settings Updated)")
+            discord_active = self.config.get("discord_enabled", True) and self.config.get("discord_webhook")
+            if discord_active:
+                self.log("Discord Integration: ACTIVE")
+            else:
+                self.log("Discord Integration: DISABLED")
 
             # Live Toggle: Tactical HUD
             if self.config.get("overlay_enabled", True):
                 if self.hud is None:
                     self.hud = TacticalHUD(self.root, self.config)
-                    self.update_hud()
+                self.update_hud()
             else:
                 if self.hud:
                     self.hud.win.destroy()
@@ -441,11 +441,14 @@ class MainDashboard:
         open_settings(self.root, self.config, on_save)
 
     def verify_link(self):
-        if self.config.get("edsm_cmdr_name") and self.config.get("edsm_api_key"):
+        if self.config.get("edsm_enabled", True) and self.config.get("edsm_cmdr_name") and self.config.get("edsm_api_key"):
             self.log("INITIATING EDSM HANDSHAKE...")
             self.edsm.enqueue({"event": "Music", "MusicTrack": "NoTrack"}, self.current_sys, self.current_coords)
         else:
-            self.log("EDSM Integration: DISABLED (No Credentials)")
+            if not self.config.get("edsm_enabled", True):
+                self.log("EDSM Integration: DISABLED (User Setting)")
+            else:
+                self.log("EDSM Integration: DISABLED (No Credentials)")
 
     def update_live_discord(self, event_data=None):
         if self.is_first_load:

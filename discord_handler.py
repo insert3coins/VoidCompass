@@ -18,6 +18,8 @@ class DiscordHandler:
         self.msg_system = config.get("discord_msg_system", "")
 
     def update_live(self, event_data, state):
+        if not self.config.get("discord_enabled", True):
+            return
         webhook = self.config.get("discord_webhook")
         if not webhook: return
 

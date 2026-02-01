@@ -23,7 +23,7 @@ class EDSMHandler:
         
         self.load_cache()
         
-        if self.config.get("edsm_cmdr_name") and self.config.get("edsm_api_key"):
+        if self.config.get("edsm_enabled", True) and self.config.get("edsm_cmdr_name") and self.config.get("edsm_api_key"):
             self.status = "STANDBY"
         
         threading.Thread(target=self.worker, daemon=True).start()
@@ -55,6 +55,8 @@ class EDSMHandler:
             pass
 
     def enqueue(self, log_data, current_sys, current_coords):
+        if not self.config.get("edsm_enabled", True):
+            return False
         if not (self.config.get("edsm_cmdr_name") and self.config.get("edsm_api_key")):
             return False
 
@@ -156,6 +158,8 @@ class EDSMHandler:
 
     def fetch_traffic(self, system_name, callback):
         def _fetch():
+            if not self.config.get("edsm_enabled", True):
+                return
             try:
                 params = {'systemName': system_name}
                 url = "https://www.edsm.net/api-system-v1/traffic"
@@ -174,6 +178,9 @@ class EDSMHandler:
 
     def fetch_system_coords(self, system_name, callback):
         def _fetch():
+            if not self.config.get("edsm_enabled", True):
+                callback(system_name, None)
+                return
             try:
                 params = {'systemName': system_name, 'showCoordinates': 1}
                 url = "https://www.edsm.net/api-v1/system"
@@ -193,6 +200,9 @@ class EDSMHandler:
 
     def fetch_system_details(self, system_name, callback):
         def _fetch():
+            if not self.config.get("edsm_enabled", True):
+                callback(None)
+                return
             try:
                 params = {'systemName': system_name, 'showInformation': 1, 'showPrimaryStar': 1}
                 url = "https://www.edsm.net/api-v1/system"
