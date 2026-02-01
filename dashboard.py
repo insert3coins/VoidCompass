@@ -491,13 +491,31 @@ class MainDashboard:
             except Exception:
                 pass
         
-        r_pos = None
-        if self.route_list and self.current_sys in self.route_list:
-            r_pos = (self.route_list.index(self.current_sys)+1, len(self.route_list))
+        custom_r_pos = None
+        
+        if self.waypoint_manager.waypoints:
+            total_wp = len(self.waypoint_manager.waypoints)
+            # Check if we are at a waypoint
+            idx = self.waypoint_manager.get_waypoint_index(self.current_sys)
             
+            if idx != -1:
+                # We are at waypoint (idx+1)
+                custom_r_pos = (idx + 1, total_wp)
+            elif self.target_waypoint:
+                # We are navigating to target_waypoint
+                t_idx = self.waypoint_manager.get_waypoint_index(self.target_waypoint['name'])
+                if t_idx != -1:
+                    custom_r_pos = (t_idx + 1, total_wp)
+            else:
+                custom_r_pos = (1, total_wp)
+
+        game_r_pos = None
+        if self.route_list and self.current_sys in self.route_list:
+            game_r_pos = (self.route_list.index(self.current_sys)+1, len(self.route_list))
+
         self.root.after(0, lambda: self.hud.update(
             self.current_sys, self.dest_name, dist, 
-            self.scanned, self.total, self.edsm.status, r_pos, self.organic_count, self.system_traffic
+            self.scanned, self.total, self.edsm.status, custom_r_pos, self.organic_count, self.system_traffic, game_r_pos
         ))
 
     def process_event(self, data):
