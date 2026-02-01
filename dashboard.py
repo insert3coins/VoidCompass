@@ -20,6 +20,8 @@ from cargo_hud import CargoHUD
 from edsm_handler import EDSMHandler
 from discord_handler import DiscordHandler
 from settings_ui import open_settings
+from route_plotter import RoutePlotter
+from waypoint_manager import WaypointManager
 
 SCAN_HISTORY_FILE = "scan_history.json"
 
@@ -54,6 +56,10 @@ class MainDashboard:
         self.route_list = []
         
         self.setup_layout()
+        self.waypoint_manager = WaypointManager()
+        self.route_plotter = None
+        self.target_waypoint = None
+        self.waypoint_cache = {}
         
         # Initialize Handlers
         self.edsm = EDSMHandler(self.config, self.update_edsm_status, self.update_queue_count)
@@ -84,8 +90,12 @@ class MainDashboard:
         
         tk.Label(self.nav, text=f" > SURVEY ANALYSIS // V{APP_VERSION}", font=("Courier", 11, "bold"), fg=COLOR_ACCENT, bg=COLOR_PANEL).pack(side=tk.LEFT, padx=15)
         
-        btn = tk.Button(self.nav, text="[ CONFIGURATION ]", command=self.open_settings, bg=COLOR_PANEL, fg=COLOR_ORANGE, font=("Courier", 9, "bold"), relief=tk.FLAT)
-        btn.pack(side=tk.RIGHT, padx=15)
+        btn_conf = tk.Button(self.nav, text="[ CONFIGURATION ]", command=self.open_settings, bg=COLOR_PANEL, fg=COLOR_ORANGE, font=("Courier", 9, "bold"), relief=tk.FLAT)
+        btn_conf.pack(side=tk.RIGHT, padx=15)
+
+        # Route Button
+        btn_route = tk.Button(self.nav, text="[ ROUTE PLANNER ]", command=self.open_route_planner, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9, "bold"), relief=tk.FLAT)
+        btn_route.pack(side=tk.RIGHT, padx=5)
         
         body = tk.Frame(self.root, bg=COLOR_BG)
         body.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -112,10 +122,33 @@ class MainDashboard:
         btn_scan = tk.Button(self.side, text="[ REBUILD CACHE ]", command=self.scan_all_logs_threaded, bg=COLOR_PANEL, fg="#555", font=("Courier", 8, "bold"), relief=tk.FLAT, activebackground=COLOR_PANEL, activeforeground=COLOR_TEXT)
         btn_scan.pack(side=tk.BOTTOM, anchor="w", padx=20, pady=(0, 5))
         
-        console_frame = tk.Frame(body, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
-        console_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        # Right Column (Waypoint Info + Log)
+        right_col = tk.Frame(body, bg=COLOR_BG)
+        right_col.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+        # Waypoint Info Panel
+        self.wp_panel = tk.Frame(right_col, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1, height=80)
+        self.wp_panel.pack(fill=tk.X, pady=(0, 10))
+        self.wp_panel.pack_propagate(False)
+
+        # Header Row
+        header_row = tk.Frame(self.wp_panel, bg=COLOR_PANEL)
+        header_row.pack(fill=tk.X, padx=10, pady=(5, 0))
+        tk.Label(header_row, text="NEXT WAYPOINT:", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(side=tk.LEFT)
+        self.wp_dist_lbl = tk.Label(header_row, text="", font=("Courier", 10, "bold"), fg=COLOR_ACCENT, bg=COLOR_PANEL)
+        self.wp_dist_lbl.pack(side=tk.RIGHT)
+
+        self.wp_name_lbl = tk.Label(self.wp_panel, text="NO ACTIVE ROUTE", font=("Courier", 16, "bold"), fg=COLOR_TEXT, bg=COLOR_PANEL)
+        self.wp_name_lbl.pack(anchor="w", padx=10)
         
-        self.log_box = scrolledtext.ScrolledText(console_frame, bg="#000", fg=COLOR_GREEN, font=("Courier", 10), borderwidth=0)
+        self.wp_info_lbl = tk.Label(self.wp_panel, text="", font=("Courier", 9), fg="#aaa", bg=COLOR_PANEL)
+        self.wp_info_lbl.pack(anchor="w", padx=10)
+
+        # Log Panel
+        log_frame = tk.Frame(right_col, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
+        log_frame.pack(fill=tk.BOTH, expand=True)
+        
+        self.log_box = scrolledtext.ScrolledText(log_frame, bg="#000", fg=COLOR_GREEN, font=("Courier", 10), borderwidth=0)
         self.log_box.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
     def create_stat(self, label, val):
@@ -276,14 +309,94 @@ class MainDashboard:
         
         self.root.after(0, lambda: self.nav_stat.config(text=txt))
 
+    def update_waypoint_display(self):
+        if not self.waypoint_manager.waypoints:
+            self.target_waypoint = None
+            self.wp_name_lbl.config(text="NO ACTIVE ROUTE")
+            self.wp_dist_lbl.config(text="")
+            self.wp_info_lbl.config(text="")
+            return
+
+        idx = self.waypoint_manager.get_waypoint_index(self.current_sys)
+        
+        if idx != -1:
+            # We are at a waypoint, target the next one
+            if idx + 1 < len(self.waypoint_manager.waypoints):
+                self.target_waypoint = self.waypoint_manager.waypoints[idx+1]
+            else:
+                self.target_waypoint = None # End of route
+                self.wp_name_lbl.config(text="ROUTE COMPLETE")
+                self.wp_dist_lbl.config(text="")
+                self.wp_info_lbl.config(text="")
+                return
+        elif self.target_waypoint is None:
+             # Not at a waypoint, and no target set. Default to first.
+             self.target_waypoint = self.waypoint_manager.waypoints[0]
+        
+        if self.target_waypoint:
+            name = self.target_waypoint['name']
+            coords = self.target_waypoint['coords']
+            note = self.target_waypoint.get('note')
+            dist_str = ""
+            if coords and self.current_coords:
+                d = self.waypoint_manager.get_distance(self.current_coords, coords)
+                dist_str = f"({d:,.1f} LY)"
+
+            # Fetch EDSM Info if not cached
+            if name not in self.waypoint_cache:
+                self.waypoint_cache[name] = {"fetching": True}
+                def cb(data):
+                    if data:
+                        self.waypoint_cache[name] = data
+                    else:
+                        self.waypoint_cache[name] = {"error": True}
+                    self.root.after(0, self.update_waypoint_display)
+                self.edsm.fetch_system_details(name, cb)
+            
+            # Format Info String
+            info_text = "Fetching data..."
+            cached = self.waypoint_cache.get(name)
+            if cached and not cached.get("fetching"):
+                if cached.get("error"):
+                    info_text = "EDSM Data Unavailable"
+                else:
+                    p_star = cached.get("primaryStar", {}).get("type", "Unknown Star")
+                    if "Main Sequence" in p_star: p_star = p_star.replace(" Main Sequence Star", "")
+                    
+                    info = cached.get("information", {})
+                    gov = info.get("government", "None")
+                    alg = info.get("allegiance", "Independent")
+                    
+                    info_text = f"⭐ {p_star}  🏛️ {gov}  🚩 {alg}"
+            
+            if note:
+                if info_text == "Fetching data..." or info_text == "EDSM Data Unavailable":
+                     info_text = f"📝 {note}"
+                else:
+                     info_text = f"📝 {note}  {info_text}"
+
+            self.wp_name_lbl.config(text=name)
+            self.wp_dist_lbl.config(text=dist_str)
+            self.wp_info_lbl.config(text=info_text)
+
     def on_close(self):
         """Save state and exit."""
         self.is_running = False
+        
+        if self.route_plotter and self.route_plotter.win.winfo_exists():
+            self.route_plotter.on_close()
+            
         self.edsm.stop()
         self.config["main_geometry"] = self.root.geometry()
         with open(CONFIG_FILE, 'w') as f:
             json.dump(self.config, f, indent=4)
         self.root.destroy()
+
+    def open_route_planner(self):
+        if self.route_plotter and self.route_plotter.win.winfo_exists():
+            self.route_plotter.win.lift()
+            return
+        self.route_plotter = RoutePlotter(self.root, self.edsm, self.current_coords, self.current_sys, self.config, self.waypoint_manager, on_change_callback=self.update_waypoint_display)
 
     def open_settings(self):
         def on_save():
@@ -455,6 +568,16 @@ class MainDashboard:
             self.update_nav_label()
             self.root.after(0, lambda: self.bio_stat.config(text=str(self.organic_count)))
             self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+            self.root.after(0, self.update_waypoint_display)
+
+            # Auto-copy next waypoint logic
+            if self.config.get("auto_copy_waypoint", False):
+                next_wp = self.waypoint_manager.get_next_waypoint(self.current_sys)
+                if next_wp:
+                    self.root.clipboard_clear()
+                    self.root.clipboard_append(next_wp)
+                    self.root.update()
+                    self.log(f"📋 COPIED NEXT WAYPOINT: {next_wp}")
 
             was_enqueued = self.edsm.enqueue(data, self.current_sys, self.current_coords)
             if was_enqueued:
