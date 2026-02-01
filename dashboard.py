@@ -411,7 +411,8 @@ class MainDashboard:
             species = data.get("Species_Localised", "Unknown")
             
             self.log(f"🌱 BIO: {genus}")
-            self.edsm.enqueue(data, self.current_sys, self.current_coords)
+            # Note: ScanOrganic is in EDSM's discarded events list, so we don't send it
+            # self.edsm.enqueue(data, self.current_sys, self.current_coords)
             self.update_live_discord(data)
             
             self.root.after(0, lambda: self.bio_stat.config(text=str(self.organic_count)))
@@ -480,6 +481,7 @@ class MainDashboard:
                 self.scanned = self.total
                 self.save_history()
                 self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+                self.edsm.enqueue(data, self.current_sys, self.current_coords)
                 self.log("📡 SYSTEM SCAN COMPLETE: All bodies found.")
         
         elif ev == "Scan":

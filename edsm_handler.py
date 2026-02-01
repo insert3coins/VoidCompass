@@ -59,16 +59,18 @@ class EDSMHandler:
             return False
 
         event_type = log_data.get("event")
-        if event_type in ["FSDJump", "Location", "Scan"]:
+        
+        # ScanOrganic is in EDSM's discarded events list - don't send it
+        if event_type == "ScanOrganic":
+            return False
+            
+        # For events sent individually, add transient state fields for context
+        if event_type in ["FSDJump", "Location", "Scan", "FSSDiscoveryScan", "FSSAllBodiesFound"]:
             log_data = log_data.copy()
-            if "StarSystem" in log_data:
-                log_data["systemName"] = log_data["StarSystem"]
-            if "StarPos" in log_data:
-                log_data["starPos"] = log_data["StarPos"]
-        elif event_type == "ScanOrganic":
-            log_data = log_data.copy()
-            log_data["systemName"] = current_sys
-            log_data["starPos"] = current_coords
+            if current_sys:
+                log_data["_systemName"] = current_sys
+            if current_coords:
+                log_data["_systemCoordinates"] = current_coords
 
         event_ts = log_data.get("timestamp")
         if event_ts and event_ts in self.cache:
