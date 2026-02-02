@@ -48,6 +48,10 @@ class RoutePlotter:
         list_frame = tk.Frame(self.win, bg=COLOR_BG)
         list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
+        # Column Header
+        header_str = f"{'ID':<2} {'S':<1} {'SYSTEM NAME':<25} | {'DISTANCE'}    {'NOTE'}"
+        tk.Label(list_frame, text=header_str, font=("Courier", 10), fg="#888", bg=COLOR_BG, anchor="w").pack(fill=tk.X, pady=(0, 2))
+
         self.listbox = tk.Listbox(list_frame, bg="#050505", fg=COLOR_TEXT, font=("Courier", 10), relief=tk.FLAT, highlightthickness=1, highlightbackground="#333", selectbackground=COLOR_ACCENT, selectforeground="black")
         self.listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
@@ -65,6 +69,7 @@ class RoutePlotter:
         mk_btn("MOVE UP", self.move_up).pack(side=tk.LEFT, padx=(0, 5))
         mk_btn("MOVE DOWN", self.move_down).pack(side=tk.LEFT, padx=5)
         mk_btn("EDIT", self.edit_selected).pack(side=tk.LEFT, padx=5)
+        mk_btn("MARK DONE", self.toggle_visited, COLOR_ACCENT, "black").pack(side=tk.LEFT, padx=5)
         mk_btn("REMOVE", self.remove, "#331111", "red").pack(side=tk.RIGHT, padx=(5, 0))
         mk_btn("CLEAR ALL", self.clear_all, "#331111", "red").pack(side=tk.RIGHT)
 
@@ -110,6 +115,7 @@ class RoutePlotter:
             name = wp['name']
             coords = wp['coords']
             note = wp.get('note')
+            is_visited = wp.get('visited', False)
             dist_str = "---"
             
             if coords and prev_coords:
@@ -121,9 +127,10 @@ class RoutePlotter:
                 prev_coords = coords # Start measuring from here if we lost the chain
             
             marker = "|"
-            if current_idx != -1:
-                if i < current_idx: marker = "✓" # Completed
-                elif i == current_idx: marker = "📍" # Current
+            if i == current_idx:
+                marker = "📍"
+            elif is_visited:
+                marker = "✓"
             
             display = f"{i+1:02d} {marker} {name:<25} | +{dist_str}"
             if note:
@@ -133,7 +140,7 @@ class RoutePlotter:
             # Highlight current and dim completed
             if i == current_idx:
                 self.listbox.itemconfig(i, {'fg': COLOR_ORANGE})
-            elif current_idx != -1 and i < current_idx:
+            elif is_visited:
                 self.listbox.itemconfig(i, {'fg': '#555'})
             
         self.stats_lbl.config(text=f"TOTAL PLOTTED DISTANCE: {total_dist:,.1f} LY")
@@ -161,6 +168,20 @@ class RoutePlotter:
         if self.manager.move_down(idx):
             self.refresh_list()
             self.listbox.selection_set(idx+1)
+
+    def toggle_visited(self):
+        sel = self.listbox.curselection()
+        if not sel: return
+        idx = sel[0]
+        wp = self.manager.waypoints[idx]
+        wp['visited'] = not wp.get('visited', False)
+        
+        if hasattr(self.manager, 'save_waypoints'):
+            self.manager.save_waypoints()
+        elif hasattr(self.manager, 'save'):
+            self.manager.save()
+            
+        self.refresh_list()
 
     def edit_selected(self):
         sel = self.listbox.curselection()

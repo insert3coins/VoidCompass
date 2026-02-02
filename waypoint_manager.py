@@ -13,7 +13,8 @@ class WaypointManager:
         if os.path.exists(WAYPOINTS_FILE):
             try:
                 with open(WAYPOINTS_FILE, 'r') as f:
-                    self.waypoints = json.load(f)
+                    data = json.load(f)
+                    self.waypoints = data
             except:
                 self.waypoints = []
 

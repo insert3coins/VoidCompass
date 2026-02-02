@@ -309,23 +309,33 @@ class MainDashboard:
             self.wp_name_lbl.config(text="NO ACTIVE ROUTE")
             self.wp_dist_lbl.config(text="")
             self.wp_info_lbl.config(text="")
+            self.update_hud()
             return
 
+        # Auto-mark visited based on location
         idx = self.waypoint_manager.get_waypoint_index(self.current_sys)
-        
         if idx != -1:
-            # We are at a waypoint, target the next one
-            if idx + 1 < len(self.waypoint_manager.waypoints):
-                self.target_waypoint = self.waypoint_manager.waypoints[idx+1]
-            else:
-                self.target_waypoint = None # End of route
-                self.wp_name_lbl.config(text="ROUTE COMPLETE")
-                self.wp_dist_lbl.config(text="")
-                self.wp_info_lbl.config(text="")
-                return
-        elif self.target_waypoint is None:
-             # Not at a waypoint, and no target set. Default to first.
-             self.target_waypoint = self.waypoint_manager.waypoints[0]
+            changed = False
+            for i in range(idx + 1):
+                if not self.waypoint_manager.waypoints[i].get('visited', False):
+                    self.waypoint_manager.waypoints[i]['visited'] = True
+                    changed = True
+            if changed and hasattr(self.waypoint_manager, 'save_waypoints'):
+                self.waypoint_manager.save_waypoints()
+
+        # Find next target (first unvisited)
+        self.target_waypoint = None
+        for wp in self.waypoint_manager.waypoints:
+            if not wp.get('visited', False):
+                self.target_waypoint = wp
+                break
+        
+        if self.target_waypoint is None:
+             self.wp_name_lbl.config(text="ROUTE COMPLETE")
+             self.wp_dist_lbl.config(text="")
+             self.wp_info_lbl.config(text="")
+             self.update_hud()
+             return
         
         if self.target_waypoint:
             name = self.target_waypoint['name']
@@ -372,6 +382,7 @@ class MainDashboard:
             self.wp_name_lbl.config(text=name)
             self.wp_dist_lbl.config(text=dist_str)
             self.wp_info_lbl.config(text=info_text)
+            self.update_hud()
 
     def on_close(self):
         """Save state and exit."""
@@ -498,19 +509,11 @@ class MainDashboard:
         
         if self.waypoint_manager.waypoints:
             total_wp = len(self.waypoint_manager.waypoints)
-            # Check if we are at a waypoint
-            idx = self.waypoint_manager.get_waypoint_index(self.current_sys)
             
-            if idx != -1:
-                # We are at waypoint (idx+1)
-                custom_r_pos = (idx + 1, total_wp)
-            elif self.target_waypoint:
-                # We are navigating to target_waypoint
-                t_idx = self.waypoint_manager.get_waypoint_index(self.target_waypoint['name'])
-                if t_idx != -1:
-                    custom_r_pos = (t_idx + 1, total_wp)
-            else:
-                custom_r_pos = (1, total_wp)
+            visited_count = sum(1 for wp in self.waypoint_manager.waypoints if wp.get('visited', False))
+            step = visited_count + 1
+            if step > total_wp: step = total_wp
+            custom_r_pos = (step, total_wp)
 
         game_r_pos = None
         if self.route_list and self.current_sys in self.route_list:
