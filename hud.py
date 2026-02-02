@@ -73,13 +73,13 @@ class TacticalHUD:
         if organic_count > 0:
             self.canvas.create_text(440, 20, text=f"BIO-LOGS: {organic_count}", fill=COLOR_GREEN, font=("Courier", 9, "bold"), anchor="e")
 
-        self.canvas.create_text(20, 55, text=f"SYS: {current_sys.upper()}", fill=COLOR_TEXT, font=("Courier", 12, "bold"), anchor="w")
+        self.canvas.create_text(20, 55, text=f"SYS: {current_sys.upper()}", fill=COLOR_TEXT, font=("Courier", 10, "bold"), anchor="w")
         
         dest_txt = f"NAV: {dest_name.upper() if dest_name else '---'}"
         if game_r_pos:
             dest_txt += f" [{game_r_pos[0]}/{game_r_pos[1]}]"
-        self.canvas.create_text(20, 80, text=dest_txt, fill=COLOR_ORANGE, font=("Courier", 10), anchor="w")
-        self.canvas.create_text(440, 80, text=dist_ly, fill=COLOR_ORANGE, font=("Courier", 10), anchor="e")
+        self.canvas.create_text(20, 80, text=dest_txt, fill=COLOR_ORANGE, font=("Courier", 10, "bold"), anchor="w")
+        self.canvas.create_text(440, 80, text=dist_ly, fill=COLOR_ORANGE, font=("Courier", 10, "bold"), anchor="e")
         
         pct = (scanned / total) if total > 0 else 0
         self.canvas.create_rectangle(20, 105, 440, 120, outline="#333", width=1)
@@ -95,7 +95,7 @@ class TacticalHUD:
         self.canvas.create_text(20, 155, text=f"TRAFFIC: Today : {t_day}  This Week : {t_week}  Total : {t_total}", fill=COLOR_TEXT, font=("Courier", 9), anchor="w")
 
         status_color = COLOR_GREEN if edsm_status == "OK" else "red"
-        self.canvas.create_text(20, 175, text=f"EDSM: {edsm_status}", fill=status_color, font=("Courier", 8, "bold"), anchor="w")
+        self.canvas.create_text(20, 175, text=f"EDSM: {edsm_status}", fill=status_color, font=("Courier", 9, "bold"), anchor="w")
 
         route_text = "ROUTE: INACTIVE"
         if r_pos:
