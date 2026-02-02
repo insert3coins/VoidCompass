@@ -7,11 +7,11 @@ class CargoHUD:
         self.win = tk.Toplevel(root)
         self.config = config
         
-        self.win.attributes("-topmost", True, "-transparentcolor", "black", "-toolwindow", True)
+        self.win.attributes("-topmost", True, "-transparentcolor", "#ff00ff", "-toolwindow", True)
         self.win.overrideredirect(True)
-        self.win.config(bg="black")
+        self.win.config(bg="#ff00ff")
         
-        self.canvas = tk.Canvas(self.win, width=300, height=400, bg="black", highlightthickness=0)
+        self.canvas = tk.Canvas(self.win, width=300, height=400, bg="#ff00ff", highlightthickness=0)
         self.canvas.pack()
 
         self.canvas.bind("<Button-1>", self.start_move)
@@ -54,6 +54,10 @@ class CargoHUD:
         with open(CONFIG_FILE, 'w') as f:
             json.dump(self.config, f, indent=4)
 
+    def draw_text(self, x, y, text, fill, font, anchor="w"):
+        self.canvas.create_text(x+1, y+1, text=text, fill="black", font=font, anchor=anchor)
+        self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor)
+
     def update(self, inventory):
         self.canvas.delete("all")
         
@@ -66,22 +70,22 @@ class CargoHUD:
         self.canvas.create_line(5, 35, w-5, 35, fill=COLOR_ACCENT, width=1)
         
         # Title
-        self.canvas.create_text(15, 20, text="CARGO MANIFEST", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
+        self.draw_text(15, 20, text="CARGO MANIFEST", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
         
         # Total Count
         total = sum(item.get("Count", 0) for item in inventory)
-        self.canvas.create_text(w-15, 20, text=f"TOTAL: {total}", fill=COLOR_ORANGE, font=("Courier", 10, "bold"), anchor="e")
+        self.draw_text(w-15, 20, text=f"TOTAL: {total}", fill=COLOR_ORANGE, font=("Courier", 10, "bold"), anchor="e")
         
         y_pos = 50
         if not inventory:
-            self.canvas.create_text(w//2, h//2, text="[ HOLD EMPTY ]", fill="#555", font=("Courier", 10), anchor="center")
+            self.draw_text(w//2, h//2, text="[ HOLD EMPTY ]", fill="#555", font=("Courier", 10), anchor="center")
         else:
             # Sort alphabetically
             inventory.sort(key=lambda x: x.get("Name_Localised", x.get("Name", "Unknown")))
             
             for item in inventory:
                 if y_pos > h - 25:
-                    self.canvas.create_text(w//2, y_pos, text="... overflow ...", fill="#555", font=("Courier", 8), anchor="center")
+                    self.draw_text(w//2, y_pos, text="... overflow ...", fill="#555", font=("Courier", 8), anchor="center")
                     break
                 
                 name = item.get("Name_Localised", item.get("Name", "Unknown"))
@@ -90,7 +94,7 @@ class CargoHUD:
                 # Truncate name
                 display_name = (name[:22] + '..') if len(name) > 22 else name
                 
-                self.canvas.create_text(15, y_pos, text=display_name, fill=COLOR_TEXT, font=("Courier", 9), anchor="w")
-                self.canvas.create_text(w-15, y_pos, text=str(count), fill=COLOR_GREEN, font=("Courier", 9, "bold"), anchor="e")
+                self.draw_text(15, y_pos, text=display_name, fill=COLOR_TEXT, font=("Courier", 9), anchor="w")
+                self.draw_text(w-15, y_pos, text=str(count), fill=COLOR_GREEN, font=("Courier", 9, "bold"), anchor="e")
                 
                 y_pos += 20
