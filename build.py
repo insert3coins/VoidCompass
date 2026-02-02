@@ -1,6 +1,7 @@
 import PyInstaller.__main__
 import os
 import shutil
+import secrets
 from version import APP_VERSION
 
 # This script automates the build process for SurveyAnalysis
@@ -53,6 +54,11 @@ VSVersionInfo(
     with open('version_info.txt', 'w', encoding='utf-8') as f:
         f.write(version_content)
 
+    # Generate a random key for bytecode encryption
+    # NOTE: You must install tinyaes for this to work: pip install tinyaes
+    encryption_key = secrets.token_urlsafe(16)
+    print(f"🔐 Encrypting bytecode with key: {encryption_key}")
+
     opts = [
         'SurveyAnalysis.py',       # Your main entry point
         '--name=SurveyAnalysis',   # Name of the executable
@@ -62,7 +68,8 @@ VSVersionInfo(
         '--log-level=INFO',
         '--icon=icon.ico',         # Sets the file icon for the .exe
         '--add-data=icon.ico;.',   # Bundles the icon inside the .exe for the GUI
-        '--version-file=version_info.txt'
+        '--version-file=version_info.txt',
+        f'--key={encryption_key}'  # Encrypt Python bytecode
     ]
 
     print("🚀 Starting Build Process...")

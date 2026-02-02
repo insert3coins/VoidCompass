@@ -887,6 +887,17 @@ class MainDashboard:
                 self.update_hud()
                 self.update_live_discord()
 
+                # Auto-copy next waypoint on startup if enabled
+                if self.config.get("auto_copy_waypoint", False):
+                    next_wp = self.waypoint_manager.get_next_waypoint(self.current_sys)
+                    if next_wp:
+                        def _copy():
+                            self.root.clipboard_clear()
+                            self.root.clipboard_append(next_wp)
+                            self.root.update()
+                        self.root.after(0, _copy)
+                        self.log(f"📋 COPIED NEXT WAYPOINT: {next_wp}")
+
             self.file_pos = f.tell()
 
     def check_cargo_file(self):
