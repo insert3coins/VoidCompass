@@ -1,27 +1,18 @@
 # SURVEY ANALYSIS // UPDATE LOG
 
-## v1.5.0 // ROUTE MASTER
-**Release Date:** 2026-Feb-02
+## v1.6.1 // SCREENSHOT STUDIO
+**Release Date:** 2026-Feb-03
 
 ### 🌟 NEW FEATURES
-*   **Custom Route Planner:**
-    *   Dedicated UI to plot, reorder, and manage multi-waypoint routes.
-    *   **Bulk Import:** Paste lists of systems (supports "System Name, Note" format).
-    *   **Smart Tracking:** Visual indicators for Current (📍) and Completed (✓) waypoints.
-    *   **Auto-Copy:** Option to automatically copy the next waypoint to clipboard upon arrival.
-*   **Enhanced Dashboard:**
-    *   New **Next Waypoint** panel displaying distance and EDSM details (Star Type, Government, Allegiance).
-    *   Displays custom notes from your route list if available.
-*   **HUD Integration:**
-    *   Tactical Overlay now displays custom route progress (e.g., "ROUTE: 3 / 15").
-    *   Shows in-game navigation target alongside custom route info.
+*   **Screenshot Converter:**
+    *   Automatically converts game screenshots from BMP to PNG format.
+    *   **Smart Renaming:** Files are automatically renamed with the current **System Name** and **Timestamp**.
+    *   **Auto-Cleanup:** Original BMP files are deleted after conversion to save disk space.
+    *   Fully configurable via the Settings menu (Toggle ON/OFF, Custom Watch Folder).
 
 ### 🔧 IMPROVEMENTS
-*   **Configuration Control:**
-    *   Added **Enable/Disable** toggles for EDSM and Discord in settings.
-    *   Settings changes now apply instantly without restarting.
-*   **Window Management:**
-    *   Route Planner and popup dialogs now remember their screen positions.
-*   **Stability:**
-    *   Fixed stale traffic data loading on startup.
-    *   Optimized EDSM data fetching for route planning.
+*   **User Interface:**
+    *   Fixed layout issues in the Settings window where the "Save" button could disappear.
+    *   Added live log confirmation when features are toggled via settings.
+*   **Bug Fixes:**
+    *   Fixed an issue where Discord checks would run on startup even if Discord integration was disabled.

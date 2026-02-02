@@ -1,11 +1,12 @@
 import tkinter as tk
+import os
 import json
 from config import CONFIG_FILE, COLOR_BG, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
 
 def open_settings(root, config, on_save_callback):
     win = tk.Toplevel(root)
     win.title("SYSTEM CONFIGURATION")
-    win.geometry(config.get("settings_geometry", "600x700"))
+    win.geometry(config.get("settings_geometry", "600x900"))
     win.configure(bg=COLOR_BG)
     win.attributes("-topmost", True)
     
@@ -16,6 +17,10 @@ def open_settings(root, config, on_save_callback):
     # Header
     tk.Label(container, text=" // SYSTEM CONFIGURATION", font=("Courier", 16, "bold"), fg=COLOR_ACCENT, bg=COLOR_BG).pack(anchor="w", pady=(0, 20))
     
+    # Footer Buttons Frame (Packed early to ensure visibility)
+    btn_frame = tk.Frame(container, bg=COLOR_BG)
+    btn_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)
+
     # --- Helper Functions ---
     def create_section(parent, title):
         frame = tk.LabelFrame(parent, text=f" {title} ", font=("Courier", 10, "bold"), fg=COLOR_ORANGE, bg=COLOR_BG, bd=1, relief=tk.SOLID)
@@ -136,9 +141,35 @@ def open_settings(root, config, on_save_callback):
 
     d_e = create_input(sec_disc, "Webhook URL", "discord_webhook")
 
+    # --- Screenshot Settings ---
+    sec_ss = create_section(container, "SCREENSHOTS")
+    
+    ss_toggle_frame = tk.Frame(sec_ss, bg=COLOR_BG)
+    ss_toggle_frame.pack(fill=tk.X, padx=15, pady=(5, 5))
+    tk.Label(ss_toggle_frame, text="Convert BMP to PNG", font=("Courier", 9), fg="#888", bg=COLOR_BG).pack(side=tk.LEFT)
+    
+    ss_var = tk.BooleanVar(value=config.get("screenshots_enabled", False))
+    
+    def toggle_ss():
+        ss_var.set(not ss_var.get())
+        update_ss_visuals()
+        
+    def update_ss_visuals():
+        if ss_var.get():
+            ss_btn.config(text="[ ENABLED ]", fg=COLOR_ACCENT)
+        else:
+            ss_btn.config(text="[ DISABLED ]", fg="#555")
+
+    ss_btn = tk.Button(ss_toggle_frame, text="[ DISABLED ]", font=("Courier", 9, "bold"), bg=COLOR_BG, activebackground=COLOR_BG, bd=0, command=toggle_ss, cursor="hand2")
+    ss_btn.pack(side=tk.RIGHT)
+    update_ss_visuals()
+
+    if "screenshots_path" not in config:
+        config["screenshots_path"] = os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous")
+    ss_e = create_input(sec_ss, "Watch Folder", "screenshots_path")
+
     # --- Footer Buttons ---
-    btn_frame = tk.Frame(container, bg=COLOR_BG)
-    btn_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)
+    # btn_frame is created at the top to ensure visibility
 
     def save_config():
         config.update({
@@ -150,6 +181,8 @@ def open_settings(root, config, on_save_callback):
             "discord_enabled": disc_var.get(),
             "overlay_enabled": ov_var.get(),
             "cargo_overlay_enabled": cargo_var.get(),
+            "screenshots_enabled": ss_var.get(),
+            "screenshots_path": ss_e.get().strip(),
             "settings_geometry": win.geometry()
         })
         
@@ -166,6 +199,6 @@ def open_settings(root, config, on_save_callback):
         win.destroy()
 
     tk.Button(btn_frame, text="CANCEL", command=close_window, bg="#222", fg="#888", font=("Courier", 10, "bold"), relief=tk.FLAT, width=12).pack(side=tk.LEFT)
-    tk.Button(btn_frame, text="SAVE CHANGES", command=save_config, bg=COLOR_ACCENT, fg="black", font=("Courier", 10, "bold"), relief=tk.FLAT).pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
+    tk.Button(btn_frame, text="SAVE SETTINGS", command=save_config, bg=COLOR_ACCENT, fg="black", font=("Courier", 10, "bold"), relief=tk.FLAT).pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
 
     win.protocol("WM_DELETE_WINDOW", close_window)

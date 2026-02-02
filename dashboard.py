@@ -20,6 +20,7 @@ from hud import TacticalHUD
 from cargo_hud import CargoHUD
 from edsm_handler import EDSMHandler
 from discord_handler import DiscordHandler
+from screenshot_handler import ScreenshotHandler
 from settings_ui import open_settings
 from route_plotter import RoutePlotter
 from waypoint_manager import WaypointManager
@@ -65,6 +66,7 @@ class MainDashboard:
         # Initialize Handlers
         self.edsm = EDSMHandler(self.config, self.update_edsm_status, self.update_queue_count)
         self.discord = DiscordHandler(self.config, self.root)
+        self.screenshots = ScreenshotHandler(self.config, lambda: self.current_sys, self.log)
         
         if self.config.get("overlay_enabled", True):
             self.hud = TacticalHUD(self.root, self.config)
@@ -139,6 +141,10 @@ class MainDashboard:
         # Route Button
         btn_route = tk.Button(self.nav, text="[ ROUTE PLANNER ]", command=self.open_route_planner, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9, "bold"), relief=tk.FLAT)
         btn_route.pack(side=tk.RIGHT, padx=5)
+        
+        # Screenshot Button
+        btn_ss = tk.Button(self.nav, text="[ SCREENSHOTS ]", command=self.open_screenshots_folder, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9, "bold"), relief=tk.FLAT)
+        btn_ss.pack(side=tk.RIGHT, padx=5)
         
         body = tk.Frame(self.root, bg=COLOR_BG)
         body.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -479,6 +485,7 @@ class MainDashboard:
             self.route_plotter.on_close()
             
         self.edsm.stop()
+        self.screenshots.stop()
         self.config["main_geometry"] = self.root.geometry()
         with open(CONFIG_FILE, 'w') as f:
             json.dump(self.config, f, indent=4)
@@ -488,6 +495,21 @@ class MainDashboard:
                 self.conn.close()
             except: pass
         self.root.destroy()
+
+    def open_screenshots_folder(self):
+        path = self.config.get("screenshots_path")
+        if not path:
+            path = os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous")
+            
+        if os.path.exists(path):
+            try:
+                os.startfile(path)
+            except AttributeError:
+                webbrowser.open(path)
+            except Exception as e:
+                self.log(f"❌ Error opening folder: {e}")
+        else:
+            self.log("⚠️ Screenshot folder not found.")
 
     def open_route_planner(self):
         if self.route_plotter and self.route_plotter.win.winfo_exists():
@@ -517,6 +539,12 @@ class MainDashboard:
                 self.log("Discord Integration: ACTIVE")
             else:
                 self.log("Discord Integration: DISABLED")
+
+            # Live Update: Screenshots
+            if self.config.get("screenshots_enabled", False):
+                self.log("Screenshot Converter: ACTIVE")
+            else:
+                self.log("Screenshot Converter: DISABLED")
 
             # Live Toggle: Tactical HUD
             if self.config.get("overlay_enabled", True):
@@ -851,7 +879,7 @@ class MainDashboard:
             
             if self.is_first_load and len(lines) > 0:
                 self.is_first_load = False
-                if self.config.get("discord_msg_system") != self.current_sys:
+                if self.config.get("discord_enabled", True) and self.config.get("discord_msg_system") != self.current_sys:
                     self.log("Stale Discord message detected. A new message will be created.")
                     self.discord.reset_msg_id()
                 self.fetch_system_traffic(self.current_sys)
