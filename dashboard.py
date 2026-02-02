@@ -2,6 +2,7 @@ import os
 import json
 import threading
 import math
+import sqlite3
 import logging
 import time
 import tkinter as tk
@@ -24,6 +25,7 @@ from route_plotter import RoutePlotter
 from waypoint_manager import WaypointManager
 
 SCAN_HISTORY_FILE = "scan_history.json"
+DB_FILE = "exploration_data.db"
 
 class MainDashboard:
     def __init__(self, root):
@@ -48,7 +50,6 @@ class MainDashboard:
         self.scanned_bodies = set()
         self.cmdr_name = self.config.get("edsm_cmdr_name", "CMDR")
         self.last_scan_event = None
-        self.scan_history = {}
         
         self.dest_coords = None
         self.current_coords = [0,0,0]
@@ -75,7 +76,8 @@ class MainDashboard:
         else:
             self.cargo_hud = None
         
-        self.load_history()
+        self.db_lock = threading.Lock()
+        self.init_db()
         threading.Thread(target=self.threaded_poll_engine, daemon=True).start()
         
         self.root.after(2000, self.verify_link)
@@ -83,6 +85,46 @@ class MainDashboard:
         threading.Thread(target=self.check_updates, daemon=True).start()
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    def init_db(self):
+        """Initialize SQLite database and migrate JSON if needed."""
+        self.conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+        with self.db_lock:
+            self.conn.execute("PRAGMA journal_mode=WAL")
+            self.conn.execute("PRAGMA synchronous = FULL")
+            self.conn.execute("CREATE TABLE IF NOT EXISTS systems (name TEXT PRIMARY KEY, total INTEGER, scanned_count INTEGER)")
+            self.conn.execute("CREATE TABLE IF NOT EXISTS bodies (system_name TEXT, body_id INTEGER, PRIMARY KEY (system_name, body_id))")
+            self.conn.commit()
+        
+        if os.path.exists(SCAN_HISTORY_FILE):
+            self.migrate_json_history()
+
+    def migrate_json_history(self):
+        self.log("📦 MIGRATING HISTORY TO DATABASE...")
+        try:
+            with open(SCAN_HISTORY_FILE, 'r') as f:
+                data = json.load(f)
+            
+            with self.db_lock:
+                try:
+                    self.conn.execute("BEGIN TRANSACTION")
+                    for sys_name, info in data.items():
+                        total = info.get("total", 0)
+                        bodies = info.get("bodies", [])
+                        scanned_count = info.get("scanned_count", len(bodies))
+                        
+                        self.conn.execute("INSERT OR REPLACE INTO systems (name, total, scanned_count) VALUES (?, ?, ?)", (sys_name, total, scanned_count))
+                        for bid in bodies:
+                            self.conn.execute("INSERT OR IGNORE INTO bodies (system_name, body_id) VALUES (?, ?)", (sys_name, bid))
+                    self.conn.commit()
+                except sqlite3.Error:
+                    self.conn.rollback()
+                    raise
+            
+            os.rename(SCAN_HISTORY_FILE, SCAN_HISTORY_FILE + ".bak")
+            self.log("✅ MIGRATION COMPLETE.")
+        except Exception as e:
+            self.log(f"❌ MIGRATION FAILED: {e}")
 
     def setup_layout(self):
         self.nav = tk.Frame(self.root, bg=COLOR_PANEL, height=50, highlightbackground=COLOR_ACCENT, highlightthickness=1)
@@ -182,14 +224,6 @@ class MainDashboard:
         btn = tk.Button(self.nav, text="[ UPDATE AVAILABLE ]", command=lambda: webbrowser.open(url), bg=COLOR_PANEL, fg=COLOR_GREEN, font=("Courier", 9, "bold"), relief=tk.FLAT, activebackground=COLOR_PANEL, activeforeground=COLOR_GREEN)
         btn.pack(side=tk.RIGHT, padx=5)
 
-    def load_history(self):
-        if os.path.exists(SCAN_HISTORY_FILE):
-            try:
-                with open(SCAN_HISTORY_FILE, 'r') as f:
-                    self.scan_history = json.load(f)
-            except Exception:
-                self.scan_history = {}
-
     def scan_all_logs_threaded(self):
         threading.Thread(target=self.scan_all_logs, daemon=True).start()
 
@@ -212,7 +246,7 @@ class MainDashboard:
             self.log("⚠️ No journal files found.")
             return
 
-        new_history = self.scan_history.copy()
+        new_history = {}
         processed = 0
 
         for filepath in files:
@@ -259,36 +293,65 @@ class MainDashboard:
             processed += 1
             if processed % 10 == 0: self.log(f"⏳ Scanning... {int((processed/total_files)*100)}%")
 
-        for sys_name, data in new_history.items():
-            if len(data.get("bodies", [])) > data.get("scanned_count", 0): data["scanned_count"] = len(data["bodies"])
-            if data.get("scanned_count", 0) > data.get("total", 0): data["total"] = data["scanned_count"]
+        self.log("💾 Saving to database...")
+        with self.db_lock:
+            try:
+                self.conn.execute("BEGIN TRANSACTION")
+                for sys_name, data in new_history.items():
+                    b_len = len(data.get("bodies", []))
+                    if b_len > data.get("scanned_count", 0): data["scanned_count"] = b_len
+                    if data.get("scanned_count", 0) > data.get("total", 0): data["total"] = data["scanned_count"]
+                    
+                    self.conn.execute("INSERT OR REPLACE INTO systems (name, total, scanned_count) VALUES (?, ?, ?)", 
+                                      (sys_name, data["total"], data["scanned_count"]))
+                    for b in data.get("bodies", []):
+                        self.conn.execute("INSERT OR IGNORE INTO bodies (system_name, body_id) VALUES (?, ?)", (sys_name, b))
+                self.conn.commit()
+            except sqlite3.Error as e:
+                self.conn.rollback()
+                self.log(f"❌ DB ERROR (Rebuild): {e}")
 
-        self.scan_history = new_history
-        self.save_history()
-        self.log(f"✅ CACHE REBUILD COMPLETE. ({len(new_history)} Systems)")
-        
-        if self.current_sys in self.scan_history:
-            h = self.scan_history[self.current_sys]
-            self.total = h.get("total", 0)
-            self.scanned_bodies = set(h.get("bodies", []))
-            self.scanned = h.get("scanned_count", 0)
-            self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
-            self.update_hud()
+        self.log(f"✅ CACHE REBUILD COMPLETE.")
+        self.load_system_from_db(self.current_sys)
+        self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+        self.update_hud()
 
-    def save_history(self):
-        if not self.current_sys or self.current_sys == "---" or self.current_sys == "Unknown":
-            return
-        
-        self.scan_history[self.current_sys] = {
-            "total": self.total,
-            "bodies": list(self.scanned_bodies),
-            "scanned_count": self.scanned
-        }
-        try:
-            with open(SCAN_HISTORY_FILE, 'w') as f:
-                json.dump(self.scan_history, f, indent=4)
-        except Exception:
-            pass
+    def load_system_from_db(self, sys_name):
+        with self.db_lock:
+            try:
+                c = self.conn.cursor()
+                c.execute("SELECT total, scanned_count FROM systems WHERE name=?", (sys_name,))
+                row = c.fetchone()
+                if row:
+                    self.total = row[0]
+                    c.execute("SELECT body_id FROM bodies WHERE system_name=?", (sys_name,))
+                    self.scanned_bodies = set(r[0] for r in c.fetchall())
+                    self.scanned = len(self.scanned_bodies)
+                else:
+                    self.total = 0
+                    self.scanned = 0
+                    self.scanned_bodies = set()
+            except sqlite3.Error as e:
+                self.log(f"❌ DB READ ERROR: {e}")
+                self.total = 0
+                self.scanned = 0
+                self.scanned_bodies = set()
+
+    def db_update_system(self, sys_name, total, scanned):
+        with self.db_lock:
+            try:
+                self.conn.execute("INSERT OR REPLACE INTO systems (name, total, scanned_count) VALUES (?, ?, ?)", (sys_name, total, scanned))
+                self.conn.commit()
+            except sqlite3.Error as e:
+                self.log(f"❌ DB ERROR (System): {e}")
+
+    def db_add_body(self, sys_name, body_id):
+        with self.db_lock:
+            try:
+                self.conn.execute("INSERT OR IGNORE INTO bodies (system_name, body_id) VALUES (?, ?)", (sys_name, body_id))
+                self.conn.commit()
+            except sqlite3.Error as e:
+                self.log(f"❌ DB ERROR (Body): {e}")
 
     def update_edsm_status(self, text, color):
         self.root.after(0, lambda: self.edsm_stat.config(text=text, fg=color))
@@ -395,6 +458,11 @@ class MainDashboard:
         self.config["main_geometry"] = self.root.geometry()
         with open(CONFIG_FILE, 'w') as f:
             json.dump(self.config, f, indent=4)
+        if hasattr(self, 'conn'):
+            try:
+                self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                self.conn.close()
+            except: pass
         self.root.destroy()
 
     def open_route_planner(self):
@@ -586,17 +654,7 @@ class MainDashboard:
             self.star_class = data.get("StarClass", "")
             
             # Load from history if available
-            if self.current_sys in self.scan_history:
-                h = self.scan_history[self.current_sys]
-                self.total = h.get("total", 0)
-                self.scanned_bodies = set(h.get("bodies", []))
-                self.scanned = len(self.scanned_bodies)
-                if self.scanned == 0 and h.get("scanned_count", 0) > 0:
-                     self.scanned = h.get("scanned_count", 0)
-            else:
-                self.scanned = 0
-                self.total = 0
-                self.scanned_bodies.clear()
+            self.load_system_from_db(self.current_sys)
 
             self.organic_count = 0 # Reset bio count for new system
             self.system_bio_signals = 0
@@ -646,7 +704,7 @@ class MainDashboard:
             if "SystemName" in data and data["SystemName"] != self.current_sys:
                 return
             self.total = data.get("BodyCount", self.total)
-            self.save_history()
+            self.db_update_system(self.current_sys, self.total, self.scanned)
             self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
             self.edsm.enqueue(data, self.current_sys, self.current_coords)
             self.log(f"🔭 HONK: {self.total} bodies detected.")
@@ -656,7 +714,7 @@ class MainDashboard:
             if "SystemName" in data and data["SystemName"] == self.current_sys:
                 self.total = data.get("Count", self.total)
                 self.scanned = self.total
-                self.save_history()
+                self.db_update_system(self.current_sys, self.total, self.scanned)
                 self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                 self.edsm.enqueue(data, self.current_sys, self.current_coords)
                 self.log("📡 SYSTEM SCAN COMPLETE: All bodies found.")
@@ -679,7 +737,8 @@ class MainDashboard:
                     # --- State Updates for a new body ---
                     self.scanned_bodies.add(body_id)
                     self.scanned += 1
-                    self.save_history()
+                    self.db_add_body(self.current_sys, body_id)
+                    self.db_update_system(self.current_sys, self.total, self.scanned)
                     self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                     self.last_scan_event = data
 

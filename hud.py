@@ -81,6 +81,8 @@ class TacticalHUD:
         self.canvas.create_text(20, 80, text=dest_txt, fill=COLOR_ORANGE, font=("Courier", 10, "bold"), anchor="w")
         self.canvas.create_text(440, 80, text=dist_ly, fill=COLOR_ORANGE, font=("Courier", 10, "bold"), anchor="e")
         
+        self.canvas.create_line(20, 95, 440, 95, fill="#333", width=1)
+        
         pct = (scanned / total) if total > 0 else 0
         self.canvas.create_rectangle(20, 105, 440, 120, outline="#333", width=1)
         if pct > 0:
