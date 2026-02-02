@@ -513,7 +513,28 @@ class MainDashboard:
             visited_count = sum(1 for wp in self.waypoint_manager.waypoints if wp.get('visited', False))
             step = visited_count + 1
             if step > total_wp: step = total_wp
-            custom_r_pos = (step, total_wp)
+            
+            # Calculate remaining distance
+            rem_dist = 0.0
+            idx = -1
+            for i, wp in enumerate(self.waypoint_manager.waypoints):
+                if not wp.get('visited', False):
+                    idx = i
+                    break
+            
+            if idx != -1:
+                next_wp = self.waypoint_manager.waypoints[idx]
+                if self.current_coords and next_wp['coords']:
+                    rem_dist += self.waypoint_manager.get_distance(self.current_coords, next_wp['coords'])
+                
+                prev_coords = next_wp['coords']
+                for i in range(idx + 1, total_wp):
+                    wp = self.waypoint_manager.waypoints[i]
+                    if prev_coords and wp['coords']:
+                        rem_dist += self.waypoint_manager.get_distance(prev_coords, wp['coords'])
+                    prev_coords = wp['coords']
+            
+            custom_r_pos = (step, total_wp, f"{rem_dist:,.0f} LY")
 
         game_r_pos = None
         if self.route_list and self.current_sys in self.route_list:

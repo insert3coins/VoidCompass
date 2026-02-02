@@ -99,5 +99,8 @@ class TacticalHUD:
 
         route_text = "ROUTE: INACTIVE"
         if r_pos:
-            route_text = f"ROUTE: {r_pos[0]} / {r_pos[1]}"
+            if len(r_pos) > 2:
+                route_text = f"ROUTE: {r_pos[0]} / {r_pos[1]} ({r_pos[2]})"
+            else:
+                route_text = f"ROUTE: {r_pos[0]} / {r_pos[1]}"
         self.canvas.create_text(440, 175, text=route_text, fill=COLOR_GREEN, font=("Courier", 9, "bold"), anchor="e")
