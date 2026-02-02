@@ -11,6 +11,7 @@ A real-time survey and exploration companion for Elite Dangerous. This tool read
     *   Current system and coordinates.
     *   System scan progress (bodies scanned vs. total).
     *   Exobiology scan count.
+    *   **Next Waypoint** navigation panel.
     *   EDSM upload status and queue size.
     *   A detailed console log of all major events.
 *   **Tactical HUD Overlay:** A movable, always-on-top window that displays critical information over your game:
@@ -19,6 +20,15 @@ A real-time survey and exploration companion for Elite Dangerous. This tool read
     *   A visual progress bar for system scans.
     *   Live system traffic data from EDSM (24h, weekly, total).
     *   Organic (biology) scan count.
+*   **Cargo Manifest Overlay:** A separate overlay to track your ship's inventory in real-time.
+*   **Route Planner:**
+    *   Built-in tool to plot custom routes.
+    *   Manage waypoints and track progress.
+    *   Auto-copy next waypoint to clipboard.
+*   **Screenshot Studio:**
+    *   Automatically converts high-res BMP screenshots to PNG.
+    *   Renames files with **System Name** and **Timestamp**.
+    *   Auto-deletes original BMPs to save space.
 *   **Live Discord Integration:**
     *   Posts a single, persistent message to a specified webhook that updates in real-time.
     *   Dynamic titles for events like `🚀 JUMP COMPLETE`, `🛰️ SCAN: [Body]`, and `🌱 BIO-LOG: [Genus]`.
@@ -38,9 +48,9 @@ A real-time survey and exploration companion for Elite Dangerous. This tool read
 
 1.  **Prerequisites:**
     *   Python 3.x must be installed.
-    *   You will need the `requests` library. You can install it by running:
+    *   You will need the `requests` and `Pillow` libraries. You can install them by running:
         ```
-        pip install requests
+        pip install requests Pillow
         ```
 
 2.  **Running the Application:**
@@ -71,6 +81,12 @@ The application can be configured via the in-app settings panel or by directly e
 *   `discord_webhook`: The full URL for the Discord webhook you want the bot to post updates to.
 
 *   `overlay_enabled`: Set to `true` to show the tactical HUD overlay, or `false` to hide it.
+
+*   `cargo_overlay_enabled`: Set to `true` to show the cargo manifest overlay.
+
+*   `screenshots_enabled`: Set to `true` to enable the BMP to PNG converter.
+
+*   `screenshots_path`: The folder to watch for new screenshots.
 
 *   `hud_x` / `hud_y`: The screen coordinates for the HUD's position. This is set automatically when you move the HUD.
 
