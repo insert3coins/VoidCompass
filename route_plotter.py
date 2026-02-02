@@ -176,10 +176,7 @@ class RoutePlotter:
         wp = self.manager.waypoints[idx]
         wp['visited'] = not wp.get('visited', False)
         
-        if hasattr(self.manager, 'save_waypoints'):
-            self.manager.save_waypoints()
-        elif hasattr(self.manager, 'save'):
-            self.manager.save()
+        self.manager.save()
             
         self.refresh_list()
 

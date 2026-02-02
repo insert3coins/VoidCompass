@@ -76,7 +76,8 @@ class MainDashboard:
         else:
             self.cargo_hud = None
         
-        self.db_lock = threading.Lock()
+        self.db_lock = threading.RLock()
+        self.batch_mode = False
         self.init_db()
         threading.Thread(target=self.threaded_poll_engine, daemon=True).start()
         
@@ -341,7 +342,8 @@ class MainDashboard:
         with self.db_lock:
             try:
                 self.conn.execute("INSERT OR REPLACE INTO systems (name, total, scanned_count) VALUES (?, ?, ?)", (sys_name, total, scanned))
-                self.conn.commit()
+                if not self.batch_mode:
+                    self.conn.commit()
             except sqlite3.Error as e:
                 self.log(f"❌ DB ERROR (System): {e}")
 
@@ -349,7 +351,8 @@ class MainDashboard:
         with self.db_lock:
             try:
                 self.conn.execute("INSERT OR IGNORE INTO bodies (system_name, body_id) VALUES (?, ?)", (sys_name, body_id))
-                self.conn.commit()
+                if not self.batch_mode:
+                    self.conn.commit()
             except sqlite3.Error as e:
                 self.log(f"❌ DB ERROR (Body): {e}")
 
@@ -364,7 +367,28 @@ class MainDashboard:
         if self.dest_name:
             txt = self.dest_name
         
-        self.root.after(0, lambda: self.nav_stat.config(text=txt))
+        if not self.batch_mode:
+            self.root.after(0, lambda: self.nav_stat.config(text=txt))
+
+    def update_dashboard_ui(self):
+        """Force update all dashboard labels from current state."""
+        sys_text = self.current_sys.upper()
+        if self.star_class: sys_text += f" [{self.star_class}]"
+        
+        self.sys_stat.config(text=sys_text)
+        self.scan_stat.config(text=f"{self.scanned} / {self.total}")
+        self.bio_stat.config(text=str(self.organic_count))
+        self.traffic_stat.config(text=str(self.system_traffic.get('day', 0)))
+        self.update_nav_label()
+        
+        self.valuable_list.delete(0, tk.END)
+        for item in self.valuable_bodies:
+            # item is stored as "- 🌍 Earthlike...", listbox needs just "🌍 Earthlike..."
+            # The storage format in process_event is "- {icon} {name}"
+            # The listbox insert in process_event is "{icon} {name}"
+            # Let's just strip the leading "- " if present
+            display_text = item[2:] if item.startswith("- ") else item
+            self.valuable_list.insert(tk.END, display_text)
 
     def update_waypoint_display(self):
         if not self.waypoint_manager.waypoints:
@@ -383,8 +407,8 @@ class MainDashboard:
                 if not self.waypoint_manager.waypoints[i].get('visited', False):
                     self.waypoint_manager.waypoints[i]['visited'] = True
                     changed = True
-            if changed and hasattr(self.waypoint_manager, 'save_waypoints'):
-                self.waypoint_manager.save_waypoints()
+            if changed:
+                self.waypoint_manager.save()
 
         # Find next target (first unvisited)
         self.target_waypoint = None
@@ -666,14 +690,15 @@ class MainDashboard:
             log_msg = f"JUMP: {self.current_sys}" if is_jump else f"LOCATION: {self.current_sys}"
             self.log(log_msg)
             
-            sys_text = self.current_sys.upper()
-            if self.star_class: sys_text += f" [{self.star_class}]"
-            self.root.after(0, lambda: self.sys_stat.config(text=sys_text))
-            self.root.after(0, lambda: self.valuable_list.delete(0, tk.END))
-            self.update_nav_label()
-            self.root.after(0, lambda: self.bio_stat.config(text=str(self.organic_count)))
-            self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
-            self.root.after(0, self.update_waypoint_display)
+            if not self.batch_mode:
+                sys_text = self.current_sys.upper()
+                if self.star_class: sys_text += f" [{self.star_class}]"
+                self.root.after(0, lambda: self.sys_stat.config(text=sys_text))
+                self.root.after(0, lambda: self.valuable_list.delete(0, tk.END))
+                self.update_nav_label()
+                self.root.after(0, lambda: self.bio_stat.config(text=str(self.organic_count)))
+                self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+                self.root.after(0, self.update_waypoint_display)
 
             # Update Route Plotter UI if open
             if self.route_plotter and self.route_plotter.win.winfo_exists():
@@ -705,7 +730,8 @@ class MainDashboard:
                 return
             self.total = data.get("BodyCount", self.total)
             self.db_update_system(self.current_sys, self.total, self.scanned)
-            self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+            if not self.batch_mode:
+                self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
             self.edsm.enqueue(data, self.current_sys, self.current_coords)
             self.log(f"🔭 HONK: {self.total} bodies detected.")
             self.update_live_discord(data)
@@ -715,7 +741,8 @@ class MainDashboard:
                 self.total = data.get("Count", self.total)
                 self.scanned = self.total
                 self.db_update_system(self.current_sys, self.total, self.scanned)
-                self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+                if not self.batch_mode:
+                    self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                 self.edsm.enqueue(data, self.current_sys, self.current_coords)
                 self.log("📡 SYSTEM SCAN COMPLETE: All bodies found.")
         
@@ -739,7 +766,8 @@ class MainDashboard:
                     self.scanned += 1
                     self.db_add_body(self.current_sys, body_id)
                     self.db_update_system(self.current_sys, self.total, self.scanned)
-                    self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+                    if not self.batch_mode:
+                        self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                     self.last_scan_event = data
 
                     # Check for biological signals and update the system total
@@ -760,7 +788,8 @@ class MainDashboard:
                         elif p_class == "Ammonia world": icon = "☣️"
                         elif terraformable: icon = "🛠️"
                         self.valuable_bodies.append(f"- {icon} {body_name_str}")
-                        self.root.after(0, lambda: self.valuable_list.insert(tk.END, f"{icon} {body_name_str}"))
+                        if not self.batch_mode:
+                            self.root.after(0, lambda: self.valuable_list.insert(tk.END, f"{icon} {body_name_str}"))
 
                     # --- Notification Logic ---
                     # Since this is a new scan, we always update.
@@ -799,11 +828,24 @@ class MainDashboard:
             lines = f.readlines()
             
             if lines:
-                for line in lines:
-                    try:
-                        self.process_event(json.loads(line))
-                    except: pass
+                # Enable batch mode if processing many lines (e.g. startup)
+                self.batch_mode = len(lines) > 50
                 
+                with self.db_lock:
+                    if self.batch_mode:
+                        self.conn.execute("BEGIN TRANSACTION")
+                    
+                    for line in lines:
+                        try:
+                            self.process_event(json.loads(line))
+                        except: pass
+                    
+                    if self.batch_mode:
+                        self.conn.commit()
+                        self.batch_mode = False
+                        # Force UI refresh after batch
+                        self.root.after(0, self.update_dashboard_ui)
+
                 if not self.is_first_load:
                     self.update_hud()
             
