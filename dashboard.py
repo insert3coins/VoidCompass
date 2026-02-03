@@ -395,6 +395,7 @@ class MainDashboard:
             # Let's just strip the leading "- " if present
             display_text = item[2:] if item.startswith("- ") else item
             self.valuable_list.insert(tk.END, display_text)
+        self.update_waypoint_display()
 
     def update_waypoint_display(self):
         if not self.waypoint_manager.waypoints:
@@ -878,6 +879,7 @@ class MainDashboard:
                 # Once initial load is done, update the HUD to the final state.
                 self.update_hud()
                 self.update_live_discord()
+                self.root.after(0, self.update_waypoint_display)
 
                 # Auto-copy next waypoint on startup if enabled
                 if self.config.get("auto_copy_waypoint", False):
