@@ -74,8 +74,7 @@ class TacticalHUD:
         txt = getattr(self, "anim_char", "⢄")
         self.draw_text(32, 20, text=txt, fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="e", tags="anim_title")
         self.draw_text(38, 20, text="NAVIGATION HUD", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
-        if organic_count > 0:
-            self.draw_text(440, 20, text=f"BIO-LOGS: {organic_count}", fill=COLOR_GREEN, font=("Courier", 9, "bold"), anchor="e")
+        # Bio logs hidden for now (counting disabled)
 
         self.draw_text(20, 55, text=f"SYS: {current_sys.upper()}", fill=COLOR_TEXT, font=("Courier", 10, "bold"), anchor="w")
         

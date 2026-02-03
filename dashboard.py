@@ -157,7 +157,7 @@ class MainDashboard:
         self.nav_stat = self.create_stat("NAVIGATION TARGET", "---")
         self.traffic_stat = self.create_stat("TRAFFIC (24H)", "---")
         self.scan_stat = self.create_stat("SCAN_PROGRESS", "0 / 0")
-        self.bio_stat = self.create_stat("ORGANIC_LOGS", "0")
+        # Bio logs hidden for now (counting disabled)
         self.edsm_stat = self.create_stat("EDSM_STATUS", "DISABLED")
         if not (self.config.get("edsm_enabled", True) and self.config.get("edsm_cmdr_name") and self.config.get("edsm_api_key")): self.edsm_stat.config(fg="#666")
         self.queue_stat = self.create_stat("UPLOAD_QUEUE", "0")
@@ -383,7 +383,7 @@ class MainDashboard:
         
         self.sys_stat.config(text=sys_text)
         self.scan_stat.config(text=f"{self.scanned} / {self.total}")
-        self.bio_stat.config(text=str(self.organic_count))
+        # Bio logs hidden for now (counting disabled)
         self.traffic_stat.config(text=str(self.system_traffic.get('day', 0)))
         self.update_nav_label()
         
@@ -686,16 +686,8 @@ class MainDashboard:
                 self.log(f"Game version detected from LoadGame: {game_version} ({game_build})")
 
         elif ev == "ScanOrganic":
-            self.organic_count += 1
-            genus = data.get("Genus_Localised", "Unknown")
-            species = data.get("Species_Localised", "Unknown")
-            
-            self.log(f"🌱 BIO: {genus}")
-            # Note: ScanOrganic is in EDSM's discarded events list, so we don't send it
-            # self.edsm.enqueue(data, self.current_sys, self.current_coords)
-            self.update_live_discord(data)
-            
-            self.root.after(0, lambda: self.bio_stat.config(text=str(self.organic_count)))
+            # Bio counting is temporarily disabled.
+            return
 
         elif ev == "Location" or ev == "FSDJump":
             is_jump = ev == "FSDJump"
@@ -724,7 +716,7 @@ class MainDashboard:
                 self.root.after(0, lambda: self.sys_stat.config(text=sys_text))
                 self.root.after(0, lambda: self.valuable_list.delete(0, tk.END))
                 self.update_nav_label()
-                self.root.after(0, lambda: self.bio_stat.config(text=str(self.organic_count)))
+            # Bio logs hidden for now (counting disabled)
                 self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                 self.root.after(0, self.update_waypoint_display)
 
