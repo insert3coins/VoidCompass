@@ -221,7 +221,7 @@ class MainDashboard:
 
     def check_updates(self):
         try:
-            url = "https://api.github.com/repos/insert3coins/SurveyAnalysis-Release/releases/latest"
+            url = "https://api.github.com/repos/insert3coins/VoidCompass-Release/releases/latest"
             r = requests.get(url, timeout=5)
             if r.status_code == 200:
                 data = r.json()
