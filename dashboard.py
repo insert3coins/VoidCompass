@@ -24,6 +24,7 @@ from screenshot_handler import ScreenshotHandler
 from settings_ui import open_settings
 from route_plotter import RoutePlotter
 from waypoint_manager import WaypointManager
+from journal_watcher import JournalWatcher
 
 SCAN_HISTORY_FILE = "scan_history.json"
 DB_FILE = "exploration_data.db"
@@ -51,6 +52,7 @@ class MainDashboard:
         self.scanned_bodies = set()
         self.cmdr_name = self.config.get("edsm_cmdr_name", "CMDR")
         self.last_scan_event = None
+        self.cargo_capacity = 0
         
         self.dest_coords = None
         self.current_coords = [0,0,0]
@@ -81,7 +83,15 @@ class MainDashboard:
         self.db_lock = threading.RLock()
         self.batch_mode = False
         self.init_db()
-        threading.Thread(target=self.threaded_poll_engine, daemon=True).start()
+        
+        self.watcher = JournalWatcher(self.config.get("journal_path"))
+        self.watcher.register_callback(
+            event_cb=self.process_event,
+            batch_cb=self.process_batch,
+            cargo_cb=self.update_cargo,
+            nav_cb=self.update_nav_route
+        )
+        self.watcher.start()
         
         self.root.after(2000, self.verify_link)
         
@@ -235,70 +245,13 @@ class MainDashboard:
         threading.Thread(target=self.scan_all_logs, daemon=True).start()
 
     def scan_all_logs(self):
-        path = self.config.get("journal_path")
-        if not path or not os.path.exists(path):
-            self.log("❌ Journal path invalid.")
-            return
-
         self.log("📚 STARTING HISTORY REBUILD...")
         
-        try:
-            files = sorted([os.path.join(path, f) for f in os.listdir(path) if f.startswith("Journal.") and f.endswith(".log")])
-        except Exception as e:
-            self.log(f"❌ Error listing files: {e}")
+        new_history = self.watcher.scan_history(lambda p, t: self.log(f"⏳ Scanning... {int((p/t)*100)}%"))
+        
+        if not new_history:
+            self.log("⚠️ No history found or scan failed.")
             return
-
-        total_files = len(files)
-        if total_files == 0:
-            self.log("⚠️ No journal files found.")
-            return
-
-        new_history = {}
-        processed = 0
-
-        for filepath in files:
-            try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    current_sys_context = None
-                    for line in f:
-                        try:
-                            data = json.loads(line)
-                            ev = data.get("event")
-
-                            if ev in ["FSDJump", "Location"]:
-                                sys_name = data.get("StarSystem")
-                                current_sys_context = sys_name
-                                if sys_name and sys_name not in new_history:
-                                    new_history[sys_name] = {"total": 0, "bodies": [], "scanned_count": 0}
-
-                            elif ev == "FSSDiscoveryScan":
-                                sys_name = data.get("SystemName", current_sys_context)
-                                if sys_name:
-                                    if sys_name not in new_history: new_history[sys_name] = {"total": 0, "bodies": [], "scanned_count": 0}
-                                    count = data.get("BodyCount", 0)
-                                    if count > new_history[sys_name]["total"]: new_history[sys_name]["total"] = count
-
-                            elif ev == "FSSAllBodiesFound":
-                                sys_name = data.get("SystemName", current_sys_context)
-                                if sys_name:
-                                    if sys_name not in new_history: new_history[sys_name] = {"total": 0, "bodies": [], "scanned_count": 0}
-                                    count = data.get("Count", 0)
-                                    new_history[sys_name]["total"] = count
-                                    new_history[sys_name]["scanned_count"] = count
-
-                            elif ev == "Scan":
-                                sys_name = data.get("StarSystem", current_sys_context)
-                                if sys_name and ("StarType" in data or "PlanetClass" in data):
-                                    if sys_name not in new_history: new_history[sys_name] = {"total": 0, "bodies": [], "scanned_count": 0}
-                                    body_id = data.get("BodyID")
-                                    if body_id is not None:
-                                        if "bodies" not in new_history[sys_name]: new_history[sys_name]["bodies"] = []
-                                        if body_id not in new_history[sys_name]["bodies"]: new_history[sys_name]["bodies"].append(body_id)
-                        except ValueError: continue
-            except Exception: pass
-            
-            processed += 1
-            if processed % 10 == 0: self.log(f"⏳ Scanning... {int((processed/total_files)*100)}%")
 
         self.log("💾 Saving to database...")
         with self.db_lock:
@@ -485,6 +438,7 @@ class MainDashboard:
         if self.route_plotter and self.route_plotter.win.winfo_exists():
             self.route_plotter.on_close()
             
+        self.watcher.stop()
         self.edsm.stop()
         self.screenshots.stop()
         self.config["main_geometry"] = self.root.geometry()
@@ -561,10 +515,7 @@ class MainDashboard:
             if self.config.get("cargo_overlay_enabled", False):
                 if self.cargo_hud is None:
                     self.cargo_hud = CargoHUD(self.root, self.config)
-                    # Force re-read of cargo file
-                    if hasattr(self, 'last_cargo_mtime'):
-                        del self.last_cargo_mtime
-                    self.check_cargo_file()
+                    self.watcher.force_check_cargo()
             else:
                 if self.cargo_hud:
                     self.cargo_hud.win.destroy()
@@ -672,6 +623,10 @@ class MainDashboard:
         if ev == "Fileheader":
             self.edsm.set_game_version(data.get("gameversion"), data.get("build"))
             self.log(f"Game version detected: {data.get('gameversion')} ({data.get('build')})")
+
+        elif ev == "Loadout":
+            self.cargo_capacity = data.get("CargoCapacity", 0)
+            self.watcher.force_check_cargo()
 
         elif ev == "Commander":
             self.cmdr_name = data.get("Name", "CMDR")
@@ -816,111 +771,47 @@ class MainDashboard:
                     # Since this is a new scan, we always update.
                     self.update_live_discord(data)
 
-    def poll_engine(self):
-        path = self.config["journal_path"]
-        if not os.path.exists(path): return
-
-        files = sorted([os.path.join(path, f) for f in os.listdir(path) if f.startswith("Journal.")])
-        if not files: return
+    def process_batch(self, events):
+        self.batch_mode = True
+        with self.db_lock:
+            self.conn.execute("BEGIN TRANSACTION")
+            for ev in events:
+                try:
+                    self.process_event(ev)
+                except: pass
+            self.conn.commit()
+        self.batch_mode = False
+        self.root.after(0, self.update_dashboard_ui)
         
-        latest = files[-1]
-        
-        if not hasattr(self, 'last_journal') or latest != self.last_journal:
-            if hasattr(self, 'last_journal'): # Avoid logging on the initial first load
-                self.log(f"New game session detected, switching to: {os.path.basename(latest)}")
-            self.last_journal = latest
-            self.file_pos = 0
-        
-        route_f = os.path.join(path, "NavRoute.json")
-        if os.path.exists(route_f):
-            try:
-                with open(route_f, 'r') as f:
-                    data = json.load(f)
-                    self.route_list = [r['StarSystem'] for r in data.get('Route', [])]
-                    if self.route_list:
-                        dest = data['Route'][-1]
-                        self.dest_coords = dest['StarPos']
-                        self.dest_name = dest['StarSystem']
-                        self.update_nav_label()
-            except: pass
-
-        with open(self.last_journal, 'r', encoding='utf-8') as f:
-            f.seek(self.file_pos)
-            lines = f.readlines()
+        if self.is_first_load:
+            self.is_first_load = False
+            if self.config.get("discord_enabled", True) and self.config.get("discord_msg_system") != self.current_sys:
+                self.log("Stale Discord message detected. A new message will be created.")
+                self.discord.reset_msg_id()
+            self.fetch_system_traffic(self.current_sys)
+            self.update_hud()
+            self.update_live_discord()
+            self.root.after(0, self.update_waypoint_display)
             
-            if lines:
-                # Enable batch mode if processing many lines (e.g. startup)
-                self.batch_mode = len(lines) > 50
-                
-                with self.db_lock:
-                    if self.batch_mode:
-                        self.conn.execute("BEGIN TRANSACTION")
-                    
-                    for line in lines:
-                        try:
-                            self.process_event(json.loads(line))
-                        except: pass
-                    
-                    if self.batch_mode:
-                        self.conn.commit()
-                        self.batch_mode = False
-                        # Force UI refresh after batch
-                        self.root.after(0, self.update_dashboard_ui)
+            if self.config.get("auto_copy_waypoint", False):
+                next_wp = self.waypoint_manager.get_next_waypoint(self.current_sys)
+                if next_wp:
+                    def _copy():
+                        self.root.clipboard_clear()
+                        self.root.clipboard_append(next_wp)
+                        self.root.update()
+                    self.root.after(0, _copy)
+                    self.log(f"📋 COPIED NEXT WAYPOINT: {next_wp}")
 
-                if not self.is_first_load:
-                    self.update_hud()
-            
-            if self.is_first_load and len(lines) > 0:
-                self.is_first_load = False
-                if self.config.get("discord_enabled", True) and self.config.get("discord_msg_system") != self.current_sys:
-                    self.log("Stale Discord message detected. A new message will be created.")
-                    self.discord.reset_msg_id()
-                self.fetch_system_traffic(self.current_sys)
-                # Once initial load is done, update the HUD to the final state.
-                self.update_hud()
-                self.update_live_discord()
-                self.root.after(0, self.update_waypoint_display)
+    def update_cargo(self, inventory):
+        if self.cargo_hud:
+            self.root.after(0, lambda: self.cargo_hud.update(inventory, self.cargo_capacity))
 
-                # Auto-copy next waypoint on startup if enabled
-                if self.config.get("auto_copy_waypoint", False):
-                    next_wp = self.waypoint_manager.get_next_waypoint(self.current_sys)
-                    if next_wp:
-                        def _copy():
-                            self.root.clipboard_clear()
-                            self.root.clipboard_append(next_wp)
-                            self.root.update()
-                        self.root.after(0, _copy)
-                        self.log(f"📋 COPIED NEXT WAYPOINT: {next_wp}")
-
-            self.file_pos = f.tell()
-
-    def check_cargo_file(self):
-        if not self.cargo_hud: return
-        
-        path = self.config.get("journal_path")
-        if not path: return
-        
-        c_file = os.path.join(path, "Cargo.json")
-        if not os.path.exists(c_file): return
-        
-        try:
-            mtime = os.path.getmtime(c_file)
-            if not hasattr(self, 'last_cargo_mtime') or mtime != self.last_cargo_mtime:
-                self.last_cargo_mtime = mtime
-                with open(c_file, 'r', encoding='utf-8') as f:
-                    content = f.read().strip()
-                    if content:
-                        data = json.loads(content)
-                        inventory = data.get("Inventory", [])
-                        self.root.after(0, lambda: self.cargo_hud.update(inventory))
-        except Exception:
-            pass
-
-    def threaded_poll_engine(self):
-        while self.is_running:
-            try:
-                self.poll_engine()
-                self.check_cargo_file()
-            except Exception as e:
-                logging.error(f"Poll Error: {e}")
-            time.sleep(1)
+    def update_nav_route(self, data):
+        self.route_list = [r['StarSystem'] for r in data.get('Route', [])]
+        if self.route_list:
+            dest = data['Route'][-1]
+            self.dest_coords = dest['StarPos']
+            self.dest_name = dest['StarSystem']
+            self.update_nav_label()
+            self.update_hud()

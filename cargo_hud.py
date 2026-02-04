@@ -58,7 +58,7 @@ class CargoHUD:
         self.canvas.create_text(x+1, y+1, text=text, fill="black", font=font, anchor=anchor)
         self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor)
 
-    def update(self, inventory):
+    def update(self, inventory, capacity=0):
         self.canvas.delete("all")
         
         w = 300
@@ -74,7 +74,21 @@ class CargoHUD:
         
         # Total Count
         total = sum(item.get("Count", 0) for item in inventory)
-        self.draw_text(w-15, 20, text=f"TOTAL: {total}", fill=COLOR_ORANGE, font=("Courier", 10, "bold"), anchor="e")
+        
+        bars = ["▱▱▱▱▱▱▱▱▱▱", "▰▱▱▱▱▱▱▱▱▱", "▰▰▱▱▱▱▱▱▱▱", "▰▰▰▱▱▱▱▱▱▱", "▰▰▰▰▱▱▱▱▱▱", "▰▰▰▰▰▱▱▱▱▱", "▰▰▰▰▰▰▱▱▱▱", "▰▰▰▰▰▰▰▱▱▱", "▰▰▰▰▰▰▰▰▱▱", "▰▰▰▰▰▰▰▰▰▱", "▰▰▰▰▰▰▰▰▰▰"]
+        
+        if capacity > 0:
+            pct = total / capacity
+            if pct > 1.0: pct = 1.0
+            idx = int(pct * 10)
+            idx = max(0, min(idx, 10))
+            
+            self.draw_text(150, 20, text=bars[idx], fill=COLOR_ORANGE, font=("Courier", 10), anchor="w")
+            total_str = f"TOTAL: {total}/{capacity}"
+        else:
+            total_str = f"TOTAL: {total}"
+
+        self.draw_text(w-15, 20, text=total_str, fill=COLOR_ORANGE, font=("Courier", 10, "bold"), anchor="e")
         
         y_pos = 50
         if not inventory:
