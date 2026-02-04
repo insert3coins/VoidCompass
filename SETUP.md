@@ -1,6 +1,6 @@
 # Setup Guide: EDSM & Discord Integration
 
-This guide provides detailed steps for obtaining the necessary credentials to enable EDSM and Discord integration for the Survey Analysis Logger.
+This guide provides detailed steps for obtaining the necessary credentials to enable EDSM and Discord integration for Void Compass.
 
 ---
 
@@ -24,7 +24,7 @@ Connecting to EDSM allows the application to upload your exploration data to the
     !EDSM API Key Location
 
 5.  **Copy and Paste:**
-    *   Copy both your `Commander Name` and the `API key` into the corresponding fields in the Survey Logger's **[ CONFIGURATION ]** panel.
+    *   Copy both your `Commander Name` and the `API key` into the corresponding fields in the Void Compass **[ CONFIGURATION ]** panel.
 
 ---
 
@@ -45,10 +45,10 @@ A Discord webhook provides a URL that the application can use to send live updat
     *   Click on the **"Webhooks"** section, then click the **"New Webhook"** button.
 
 5.  **Configure the Webhook:**
-    *   Give your new webhook a name (e.g., "Survey Analysis") and choose the channel where you want the updates to be posted. You can also give it a custom icon if you wish.
+    *   Give your new webhook a name (e.g., "Void Compass") and choose the channel where you want the updates to be posted. You can also give it a custom icon if you wish.
 
 6.  **Copy the Webhook URL:**
     *   Click the **"Copy Webhook URL"** button. This is the URL you need.
 
 7.  **Paste into Configuration:**
-    *   Paste the copied URL into the `Discord Webhook` field in the Survey Logger's **[ CONFIGURATION ]** panel.
+    *   Paste the copied URL into the `Discord Webhook` field in the Void Compass **[ CONFIGURATION ]** panel.

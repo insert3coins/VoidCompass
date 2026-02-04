@@ -33,7 +33,7 @@ class MainDashboard:
     def __init__(self, root):
         self.root = root
         self.config = load_config()
-        self.root.title(f"SURVEY ANALYSIS // v{APP_VERSION}")
+        self.root.title(f"VOID COMPASS // v{APP_VERSION}")
         self.root.geometry(self.config.get("main_geometry", "1000x700"))
         self.root.configure(bg=COLOR_BG)
         
@@ -143,7 +143,7 @@ class MainDashboard:
         self.nav = tk.Frame(self.root, bg=COLOR_PANEL, height=50, highlightbackground=COLOR_ACCENT, highlightthickness=1)
         self.nav.pack(fill=tk.X, padx=10, pady=(10, 0))
         
-        tk.Label(self.nav, text=f" > SURVEY ANALYSIS // V{APP_VERSION}", font=("Courier", 11, "bold"), fg=COLOR_ACCENT, bg=COLOR_PANEL).pack(side=tk.LEFT, padx=15)
+        tk.Label(self.nav, text=f" > VOID COMPASS // V{APP_VERSION}", font=("Courier", 11, "bold"), fg=COLOR_ACCENT, bg=COLOR_PANEL).pack(side=tk.LEFT, padx=15)
         
         btn_conf = tk.Button(self.nav, text="[ CONFIGURATION ]", command=self.open_settings, bg=COLOR_PANEL, fg=COLOR_ORANGE, font=("Courier", 9, "bold"), relief=tk.FLAT)
         btn_conf.pack(side=tk.RIGHT, padx=15)

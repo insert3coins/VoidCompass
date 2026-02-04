@@ -38,12 +38,12 @@ VSVersionInfo(
       StringTable(
         u'040904B0',
         [StringStruct(u'CompanyName', u'insert3coins'),
-        StringStruct(u'FileDescription', u'Elite Dangerous Survey Analysis Tool'),
+        StringStruct(u'FileDescription', u'Elite Dangerous Exploration & Navigation Tool'),
         StringStruct(u'FileVersion', u'{v_str}'),
-        StringStruct(u'InternalName', u'SurveyAnalysis'),
+        StringStruct(u'InternalName', u'VoidCompass'),
         StringStruct(u'LegalCopyright', u'Copyright (c) 2026 insert3coins'),
-        StringStruct(u'OriginalFilename', u'SurveyAnalysis.exe'),
-        StringStruct(u'ProductName', u'Survey Analysis'),
+        StringStruct(u'OriginalFilename', u'VoidCompass.exe'),
+        StringStruct(u'ProductName', u'Void Compass'),
         StringStruct(u'ProductVersion', u'{v_str}')])
       ]),
     VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
@@ -54,8 +54,8 @@ VSVersionInfo(
         f.write(version_content)
 
     opts = [
-        'SurveyAnalysis.py',       # Your main entry point
-        '--name=SurveyAnalysis',   # Name of the executable
+        'VoidCompass.py',          # Your main entry point
+        '--name=VoidCompass',      # Name of the executable
         '--onefile',               # Bundle everything into a single .exe file
         '--windowed',              # Hide the console (GUI only)
         '--clean',                 # Clean cache before building
@@ -72,12 +72,12 @@ VSVersionInfo(
         os.remove('version_info.txt')
     
     # --- Create Distribution README ---
-    readme_content = f"""SURVEY ANALYSIS // ELITE DANGEROUS COMPANION // v{APP_VERSION}
+    readme_content = f"""VOID COMPASS // ELITE DANGEROUS COMPANION // v{APP_VERSION}
 ============================================
 
 DESCRIPTION
 -----------
-Survey Analysis is a real-time exploration companion for Elite Dangerous.
+Void Compass is a real-time exploration companion for Elite Dangerous.
 It reads your journal files as you play to provide:
 - A tactical HUD overlay with navigation and scan progress.
 - A Cargo Manifest overlay to track inventory.
@@ -88,7 +88,7 @@ It reads your journal files as you play to provide:
 
 INSTALLATION
 ------------
-1. Place 'SurveyAnalysis.exe' anywhere you like.
+1. Place 'VoidCompass.exe' anywhere you like.
 2. Run the application.
 3. A 'config.json' file will be created automatically in the same folder.
 

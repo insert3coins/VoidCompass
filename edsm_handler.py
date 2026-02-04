@@ -108,13 +108,13 @@ class EDSMHandler:
                     payload = {
                         "commanderName": name,
                         "apiKey": key,
-                        "fromSoftware": "SurveyLogger",
+                        "fromSoftware": "VoidCompass",
                         "fromSoftwareVersion": APP_VERSION,
                         "message": json.dumps(batch)
                     }
                     if self.game_version: payload['fromGameVersion'] = self.game_version
                     if self.game_build: payload['fromGameBuild'] = self.game_build
-                    headers = {'User-Agent': f'SurveyLogger/{APP_VERSION}'}
+                    headers = {'User-Agent': f'VoidCompass/{APP_VERSION}'}
                     
                     r = requests.post(url, data=payload, headers=headers, timeout=30)
                     
@@ -163,7 +163,7 @@ class EDSMHandler:
             try:
                 params = {'systemName': system_name}
                 url = "https://www.edsm.net/api-system-v1/traffic"
-                headers = {'User-Agent': f'SurveyLogger/{APP_VERSION}'}
+                headers = {'User-Agent': f'VoidCompass/{APP_VERSION}'}
                 r = requests.get(url, params=params, headers=headers, timeout=10)
                 r.raise_for_status()
                 data = r.json()
@@ -184,7 +184,7 @@ class EDSMHandler:
             try:
                 params = {'systemName': system_name, 'showCoordinates': 1}
                 url = "https://www.edsm.net/api-v1/system"
-                headers = {'User-Agent': f'SurveyLogger/{APP_VERSION}'}
+                headers = {'User-Agent': f'VoidCompass/{APP_VERSION}'}
                 r = requests.get(url, params=params, headers=headers, timeout=10)
                 r.raise_for_status()
                 data = r.json()
@@ -206,7 +206,7 @@ class EDSMHandler:
             try:
                 params = {'systemName': system_name, 'showInformation': 1, 'showPrimaryStar': 1}
                 url = "https://www.edsm.net/api-v1/system"
-                headers = {'User-Agent': f'SurveyLogger/{APP_VERSION}'}
+                headers = {'User-Agent': f'VoidCompass/{APP_VERSION}'}
                 r = requests.get(url, params=params, headers=headers, timeout=10)
                 r.raise_for_status()
                 data = r.json()

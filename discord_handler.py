@@ -44,7 +44,7 @@ class DiscordHandler:
         webhook = self.config.get("discord_webhook")
         if not webhook: return
 
-        title = "🛸 SURVEY TELEMETRY"
+        title = "🛸 VOID COMPASS TELEMETRY"
         event_type = event_data.get("event") if event_data else None
 
         if event_type == "FSDJump":
@@ -104,7 +104,7 @@ class DiscordHandler:
                 "description": desc,
                 "color": embed_color,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "footer": {"text": f"SURVEY ANALYSIS v{APP_VERSION}"}
+                "footer": {"text": f"VOID COMPASS v{APP_VERSION}"}
             }]
         }
 

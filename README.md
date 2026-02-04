@@ -1,6 +1,6 @@
-# Elite Dangerous - Survey Analysis Logger
+# Elite Dangerous - Void Compass
 
-A real-time survey and exploration companion for Elite Dangerous. This tool reads your journal files as you play, providing a tactical overlay, a detailed dashboard, and live integration with EDSM and Discord to track your exploration progress.
+A real-time exploration and navigation companion for Elite Dangerous. This tool reads your journal files as you play, providing a tactical overlay, a detailed dashboard, and live integration with EDSM and Discord to track your journey.
 
 ![Dashboard Screenshot](https://i.imgur.com/placeholder.png "Dashboard Screenshot")
 
@@ -54,10 +54,10 @@ A real-time survey and exploration companion for Elite Dangerous. This tool read
         ```
 
 2.  **Running the Application:**
-    *   Download the `SurveyAnalysis.py` script.
+    *   Download the `VoidCompass.py` script.
     *   Run the script from your terminal:
-        ```
-        python SurveyAnalysis.py
+        ```bash
+        python VoidCompass.py
         ```
 
 3.  **First-Time Configuration:**
@@ -80,7 +80,7 @@ The application can be configured via the in-app settings panel or by directly e
 
 *   `discord_webhook`: The full URL for the Discord webhook you want the bot to post updates to.
 
-*   `overlay_enabled`: Set to `true` to show the tactical HUD overlay, or `false` to hide it.
+*   `overlay_enabled`: Set to `true` to show the tactical Navigation HUD overlay, or `false` to hide it.
 
 *   `cargo_overlay_enabled`: Set to `true` to show the cargo manifest overlay.
 
