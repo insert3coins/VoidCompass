@@ -2,7 +2,7 @@
 
 A real-time exploration and navigation companion for Elite Dangerous. This tool reads your journal files as you play, providing a tactical overlay, a detailed dashboard, and live integration with EDSM and Discord to track your journey.
 
-![Dashboard Screenshot](https://i.imgur.com/placeholder.png "Dashboard Screenshot")
+![Dashboard Screenshot](https://raw.githubusercontent.com/insert3coins/VoidCompass-Release/main/DashBoard.PNG "Dashboard Screenshot")
 
 ## Features
 
@@ -20,12 +20,21 @@ A real-time exploration and navigation companion for Elite Dangerous. This tool 
     *   A visual progress bar for system scans.
     *   Live system traffic data from EDSM (24h, weekly, total).
     *   Organic (biology) scan count.
+
+    ![Tactical HUD](https://raw.githubusercontent.com/insert3coins/VoidCompass-Release/main/NavHud.PNG "Tactical HUD")
+
 *   **Cargo Manifest Overlay:** A separate overlay to track your ship's inventory in real-time.
+
+    <!-- Screenshot pending: cargo overlay -->
+
 *   **Route Planner:**
     *   Built-in tool to plot custom routes.
     *   Manage waypoints and track progress.
     *   Auto-copy next waypoint to clipboard.
-*   **Screenshot Studio:**
+
+    ![Route Planner](https://raw.githubusercontent.com/insert3coins/VoidCompass-Release/main/RoutePlanner.PNG "Route Planner")
+
+*   **Screenshot Converter:**
     *   Automatically converts high-res BMP screenshots to PNG.
     *   Renames files with **System Name** and **Timestamp**.
     *   Auto-deletes original BMPs to save space.
@@ -46,21 +55,7 @@ A real-time exploration and navigation companion for Elite Dangerous. This tool 
 
 ## Installation & Setup
 
-1.  **Prerequisites:**
-    *   Python 3.x must be installed.
-    *   You will need the `requests` and `Pillow` libraries. You can install them by running:
-        ```
-        pip install requests Pillow
-        ```
-
-2.  **Running the Application:**
-    *   Download the `VoidCompass.py` script.
-    *   Run the script from your terminal:
-        ```bash
-        python VoidCompass.py
-        ```
-
-3.  **First-Time Configuration:**
+1.  **First-Time Configuration:**
     *   On the first run, the application will create a `config.json` file in the same directory.
     *   The application will open. Click the **[ CONFIGURATION ]** button in the top-right corner.
     *   Fill in the required fields in the settings panel.
