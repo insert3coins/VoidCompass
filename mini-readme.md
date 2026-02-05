@@ -1,10 +1,10 @@
 # VoidCompass // UPDATE LOG
 
-## v1.8.2 // FSS SCAN HUD
+## v1.8.1 // FSS SCAN HUD
 **Release Date:** 2026-Feb-05
 
 ### 🌟 NEW FEATURES
-*   **InfraSurveyor‑Style FSS Scan HUD:**
+*   **FSS Scan HUD:**
     *   System header with undiscovered marker and FSS completion check.
     *   Scanned bodies summary with total credit value.
     *   Per‑body list with scan value, DSS value, bio genus count, and icons.
