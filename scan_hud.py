@@ -80,22 +80,20 @@ class ScanHUD:
 
         self.canvas.create_rectangle(5, 5, w - 5, h - 5, fill="#010101", outline=COLOR_ACCENT, width=2)
 
-        # Header box
-        header_top = 8
-        header_bottom = 46
-        self.canvas.create_rectangle(8, header_top, w - 8, header_bottom, outline=COLOR_ACCENT, width=1)
+        # Header separator line (like Tactical HUD)
+        self.canvas.create_line(5, 46, w - 5, 46, fill=COLOR_ACCENT, width=1)
 
         header_name = f"⚑ {system_name}" if system_undiscovered else system_name
         if fss_all_bodies:
             header_name += " ✔️"
-        self.draw_text(14, 18, text=header_name, fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
+        self.draw_text(12, 18, text=header_name, fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
 
         total_txt = self._format_credits(total_value, hide_units=False)
         if fss_all_bodies:
             summary = f"Scanned all {scanned_count} bodies: {total_txt}"
         else:
             summary = f"Scanned {scanned_count} bodies: {total_txt}"
-        self.draw_text(14, 34, text=summary, fill=COLOR_ORANGE, font=("Courier", 9), anchor="w")
+        self.draw_text(12, 34, text=summary, fill=COLOR_ORANGE, font=("Courier", 9), anchor="w")
 
         y = 54
         row_h = 34
@@ -140,8 +138,9 @@ class ScanHUD:
             self.canvas.create_line(12, y + row_h - 4, w - 12, y + row_h - 4, fill="#101010", width=1)
             y += row_h
 
-        self.draw_text(12, h - 32, text="Scan value | DSS value", fill=COLOR_ORANGE, font=("Courier", 8), anchor="w")
-        self.draw_text(12, h - 18, text="🌎 Terraformable   🚀 Landable   ⚑ Undiscovered   🦶 First Footfall", fill=COLOR_ORANGE, font=("Courier", 8), anchor="w")
+        # Footer legend (disabled)
+        # self.draw_text(12, h - 32, text="Scan value | DSS value", fill=COLOR_ORANGE, font=("Courier", 8), anchor="w")
+        # self.draw_text(12, h - 18, text="🌎 Terraformable   🚀 Landable   ⚑ Undiscovered   🦶 First Footfall", fill=COLOR_ORANGE, font=("Courier", 8), anchor="w")
 
     def _format_credits(self, credits, hide_units=False):
         if credits is None:
