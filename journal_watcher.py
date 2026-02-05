@@ -15,9 +15,11 @@ class JournalWatcher:
         self.batch_event_callback = None
         self.cargo_callback = None
         self.nav_route_callback = None
+        self.status_callback = None
         
         self.last_cargo_mtime = 0
         self.last_nav_mtime = 0
+        self.last_status_mtime = 0
         self.thread = None
 
     def start(self):
@@ -29,14 +31,19 @@ class JournalWatcher:
     def stop(self):
         self.is_running = False
 
-    def register_callback(self, event_cb=None, batch_cb=None, cargo_cb=None, nav_cb=None):
+    def register_callback(self, event_cb=None, batch_cb=None, cargo_cb=None, nav_cb=None, status_cb=None):
         if event_cb: self.event_callback = event_cb
         if batch_cb: self.batch_event_callback = batch_cb
         if cargo_cb: self.cargo_callback = cargo_cb
         if nav_cb: self.nav_route_callback = nav_cb
+        if status_cb: self.status_callback = status_cb
 
     def force_check_cargo(self):
         self.last_cargo_mtime = 0
+        self._check_special_files()
+
+    def force_check_status(self):
+        self.last_status_mtime = 0
         self._check_special_files()
 
     def _worker(self):
@@ -115,6 +122,19 @@ class JournalWatcher:
                         with open(n_file, 'r', encoding='utf-8') as f:
                             data = json.load(f)
                             self.nav_route_callback(data)
+                except: pass
+
+        # Status.json
+        if self.status_callback:
+            s_file = os.path.join(self.journal_path, "Status.json")
+            if os.path.exists(s_file):
+                try:
+                    mtime = os.path.getmtime(s_file)
+                    if mtime != self.last_status_mtime:
+                        self.last_status_mtime = mtime
+                        with open(s_file, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                            self.status_callback(data)
                 except: pass
 
     def scan_history(self, progress_callback=None):

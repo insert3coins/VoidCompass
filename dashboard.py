@@ -18,6 +18,7 @@ from config import (
 from version import APP_VERSION
 from hud import TacticalHUD
 from cargo_hud import CargoHUD
+from scan_hud import ScanHUD
 from edsm_handler import EDSMHandler
 from discord_handler import DiscordHandler
 from screenshot_handler import ScreenshotHandler
@@ -28,6 +29,7 @@ from journal_watcher import JournalWatcher
 
 SCAN_HISTORY_FILE = "scan_history.json"
 DB_FILE = "exploration_data.db"
+SCAN_CACHE_FILE = "scan_cache.json"
 
 class MainDashboard:
     def __init__(self, root):
@@ -50,6 +52,15 @@ class MainDashboard:
         self.valuable_system = False
         self.valuable_bodies = []
         self.scanned_bodies = set()
+        self.scan_items = []
+        self.scan_items_by_id = {}
+        self.in_fss = False
+        self.scan_hud_hide_job = None
+        self.scan_hud_hide_delay_ms = 60000
+        self.body_signals = {}
+        self.body_dss_complete = set()
+        self.system_undiscovered = False
+        self.fss_all_bodies = False
         self.cmdr_name = self.config.get("edsm_cmdr_name", "CMDR")
         self.last_scan_event = None
         self.cargo_capacity = 0
@@ -79,21 +90,30 @@ class MainDashboard:
             self.cargo_hud = CargoHUD(self.root, self.config)
         else:
             self.cargo_hud = None
+
+        if self.config.get("scan_overlay_enabled", True):
+            self.scan_hud = ScanHUD(self.root, self.config)
+            self.scan_hud.hide()
+        else:
+            self.scan_hud = None
         
         self.db_lock = threading.RLock()
         self.batch_mode = False
         self.init_db()
+        self.import_scan_cache_json()
         
         self.watcher = JournalWatcher(self.config.get("journal_path"))
         self.watcher.register_callback(
             event_cb=self.process_event,
             batch_cb=self.process_batch,
             cargo_cb=self.update_cargo,
-            nav_cb=self.update_nav_route
+            nav_cb=self.update_nav_route,
+            status_cb=self.update_status
         )
         self.watcher.start()
         
         self.root.after(2000, self.verify_link)
+        self.watcher.force_check_status()
         
         threading.Thread(target=self.check_updates, daemon=True).start()
 
@@ -107,10 +127,95 @@ class MainDashboard:
             self.conn.execute("PRAGMA synchronous = FULL")
             self.conn.execute("CREATE TABLE IF NOT EXISTS systems (name TEXT PRIMARY KEY, total INTEGER, scanned_count INTEGER)")
             self.conn.execute("CREATE TABLE IF NOT EXISTS bodies (system_name TEXT, body_id INTEGER, PRIMARY KEY (system_name, body_id))")
+            self.conn.execute(
+                "CREATE TABLE IF NOT EXISTS scan_hud_items (system_name TEXT, body_id INTEGER, data_json TEXT, ts INTEGER, PRIMARY KEY (system_name, body_id))"
+            )
             self.conn.commit()
         
         if os.path.exists(SCAN_HISTORY_FILE):
             self.migrate_json_history()
+
+    def import_scan_cache_json(self):
+        if not os.path.exists(SCAN_CACHE_FILE):
+            return
+        try:
+            with open(SCAN_CACHE_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except Exception:
+            return
+
+        if not isinstance(data, dict):
+            return
+
+        now = int(time.time())
+        with self.db_lock:
+            try:
+                self.conn.execute("BEGIN TRANSACTION")
+                for system_name, items in data.items():
+                    if not isinstance(items, list):
+                        continue
+                    for idx, item in enumerate(items):
+                        if not isinstance(item, dict):
+                            continue
+                        body_id = item.get("body_id")
+                        if body_id is None:
+                            continue
+                        ts = item.get("_ts")
+                        if not isinstance(ts, int):
+                            ts = now - idx
+                            item["_ts"] = ts
+                        payload = json.dumps(item)
+                        self.conn.execute(
+                            "INSERT OR REPLACE INTO scan_hud_items (system_name, body_id, data_json, ts) VALUES (?, ?, ?, ?)",
+                            (system_name, int(body_id), payload, int(ts))
+                        )
+                self.conn.commit()
+            except sqlite3.Error:
+                self.conn.rollback()
+                return
+
+        try:
+            os.rename(SCAN_CACHE_FILE, SCAN_CACHE_FILE + ".bak")
+        except Exception:
+            pass
+
+    def load_scan_items_from_db(self, system_name):
+        items = []
+        with self.db_lock:
+            try:
+                cur = self.conn.cursor()
+                cur.execute(
+                    "SELECT data_json FROM scan_hud_items WHERE system_name=? ORDER BY ts DESC LIMIT 60",
+                    (system_name,)
+                )
+                rows = cur.fetchall()
+                for (data_json,) in rows:
+                    try:
+                        item = json.loads(data_json)
+                        if isinstance(item, dict):
+                            items.append(item)
+                    except Exception:
+                        pass
+            except sqlite3.Error:
+                return []
+        return items
+
+    def save_scan_item_to_db(self, system_name, item):
+        try:
+            body_id = item.get("body_id")
+            ts = item.get("_ts")
+            if body_id is None or ts is None:
+                return
+            payload = json.dumps(item)
+            with self.db_lock:
+                self.conn.execute(
+                    "INSERT OR REPLACE INTO scan_hud_items (system_name, body_id, data_json, ts) VALUES (?, ?, ?, ?)",
+                    (system_name, int(body_id), payload, int(ts))
+                )
+                if not self.batch_mode:
+                    self.conn.commit()
+        except sqlite3.Error:
+            return
 
     def migrate_json_history(self):
         self.log("📦 MIGRATING HISTORY TO DATABASE...")
@@ -316,7 +421,10 @@ class MainDashboard:
                 self.log(f"❌ DB ERROR (Body): {e}")
 
     def update_edsm_status(self, text, color):
-        self.root.after(0, lambda: self.edsm_stat.config(text=text, fg=color))
+        def _apply():
+            self.edsm_stat.config(text=text, fg=color)
+            self.update_hud()
+        self.root.after(0, _apply)
 
     def update_queue_count(self, count):
         self.root.after(0, lambda: self.queue_stat.config(text=str(count)))
@@ -520,6 +628,16 @@ class MainDashboard:
                 if self.cargo_hud:
                     self.cargo_hud.win.destroy()
                     self.cargo_hud = None
+
+            # Live Toggle: Scan HUD
+            if self.config.get("scan_overlay_enabled", True):
+                if self.scan_hud is None:
+                    self.scan_hud = ScanHUD(self.root, self.config)
+                self.update_scan_hud()
+            else:
+                if self.scan_hud:
+                    self.scan_hud.win.destroy()
+                    self.scan_hud = None
         
         open_settings(self.root, self.config, on_save)
 
@@ -567,6 +685,7 @@ class MainDashboard:
     def update_hud(self):
         """Gathers all current state and sends it to the HUD for redrawing."""
         if not self.hud:
+            self.update_scan_hud()
             return
 
         dist = "---"
@@ -616,6 +735,344 @@ class MainDashboard:
             self.current_sys, self.dest_name, dist, 
             self.scanned, self.total, self.edsm.status, custom_r_pos, self.organic_count, self.system_traffic, game_r_pos
         ))
+        self.update_scan_hud()
+
+    def update_scan_hud(self):
+        if not self.scan_hud:
+            return
+
+        scanned_count = len(self.scan_items)
+        total_value = 0
+        for item in self.scan_items:
+            reward = item.get("dss_reward") if item.get("dss_complete") else item.get("reward")
+            if isinstance(reward, (int, float)):
+                total_value += int(reward)
+
+        self.root.after(0, lambda: self.scan_hud.update(
+            self.current_sys,
+            self.system_undiscovered,
+            self.fss_all_bodies,
+            scanned_count,
+            total_value,
+            self.scan_items
+        ))
+
+    def _rebuild_scan_index(self):
+        self.scan_items_by_id = {}
+        for item in self.scan_items:
+            self._normalize_scan_item(item)
+            body_id = item.get("body_id")
+            if body_id is not None:
+                self.scan_items_by_id[body_id] = item
+            self.save_scan_item_to_db(self.current_sys, item)
+
+    def _format_credits(self, credits, hide_units=False):
+        if credits is None:
+            return ""
+        try:
+            credits = int(credits)
+        except Exception:
+            return ""
+
+        if credits < 1_000:
+            txt = f"{credits:,}"
+        elif credits < 100_000:
+            txt = f"{credits / 1_000:.2f} K"
+        elif credits < 1_000_000:
+            txt = f"{credits / 1_000:.0f} K"
+        elif credits < 100_000_000:
+            txt = f"{credits / 1_000_000:.2f} M"
+        elif credits < 1_000_000_000:
+            txt = f"{credits / 1_000_000:.0f} M"
+        else:
+            txt = f"{credits / 1_000_000_000:.3f} B"
+
+        if not hide_units:
+            txt += " CR"
+        return txt
+
+    def _get_body_k_value(self, planet_class, is_terraformable):
+        if planet_class == "Metal rich body":
+            k = 21790
+        elif planet_class == "Ammonia world":
+            k = 96932
+        elif planet_class == "Sudarsky class I gas giant":
+            k = 1656
+        elif planet_class == "Sudarsky class II gas giant" or planet_class == "High metal content body":
+            k = 9654
+            if is_terraformable:
+                k += 100677
+        elif planet_class == "Water world":
+            k = 64831
+            if is_terraformable:
+                k += 116295
+        elif planet_class and planet_class.startswith("Earth"):
+            k = 64831 + 116295
+        else:
+            k = 300
+            if is_terraformable:
+                k += 93328
+        return k
+
+    def _get_star_k_value(self, star_type):
+        if star_type in ("NS", "BH", "SupermassiveBlackHole"):
+            return 22628
+        if star_type and star_type.startswith("W"):
+            return 14057
+        return 1200
+
+    def _get_body_value(self, planet_class, star_type, is_terraformable, mass, is_first_discoverer, is_mapped, is_first_mapped, with_efficiency_bonus=True):
+        is_star = False
+        if star_type:
+            is_star = True
+        elif planet_class and (len(planet_class) < 8 or (len(planet_class) > 1 and planet_class[1] == '_') or planet_class in ("SupermassiveBlackHole", "Nebula", "StellarRemnantNebula")):
+            is_star = True
+
+        if is_star:
+            kk = self._get_star_k_value(star_type or planet_class or "")
+            star_value = kk + (mass * kk / 66.25)
+            return int(round(star_value))
+
+        k = self._get_body_k_value(planet_class or "", is_terraformable)
+
+        q = 0.56591828
+        mapping_multiplier = 1
+        if is_mapped:
+            if is_first_discoverer and is_first_mapped:
+                mapping_multiplier = 3.699622554
+            elif is_first_mapped:
+                mapping_multiplier = 8.0956
+            else:
+                mapping_multiplier = 3.3333333333
+        value = (k + k * q * pow(mass, 0.2)) * mapping_multiplier
+        if is_mapped:
+            value += max(value * 0.3, 555)
+            if with_efficiency_bonus:
+                value *= 1.25
+        value = max(500, value)
+        if is_first_discoverer:
+            value *= 2.6
+        return int(round(value))
+
+    def _normalize_scan_item(self, item):
+        if item.get("icons") is None:
+            item["icons"] = []
+        if item.get("body_id") is None:
+            item["body_id"] = None
+
+        body_class = item.get("class") or "Unknown"
+        star_type = item.get("star_type")
+        planet_class = item.get("planet_class")
+
+        if not star_type and (body_class.lower().endswith("star") or body_class.lower().endswith(" star")):
+            star_type = body_class.split()[0].upper()
+        if not planet_class and not star_type:
+            planet_class = body_class
+
+        terraformable = item.get("terraformable")
+        if terraformable is None:
+            terraformable = "🛠" in item["icons"] or "🌍" in item["icons"]
+
+        was_discovered = item.get("was_discovered")
+        if was_discovered is None:
+            was_discovered = "⚑" not in item["icons"]
+
+        was_mapped = item.get("was_mapped")
+        if was_mapped is None:
+            was_mapped = False
+
+        mass = item.get("mass")
+        if mass is None:
+            mass = 1.0
+
+        reward = item.get("reward")
+        dss_reward = item.get("dss_reward")
+        if reward is None or dss_reward is None:
+            is_first_discoverer = not was_discovered
+            is_first_mapped = not was_mapped
+            reward = self._get_body_value(planet_class, star_type, terraformable, mass, is_first_discoverer, False, is_first_mapped, True)
+            dss_reward = self._get_body_value(planet_class, star_type, terraformable, mass, is_first_discoverer, True, is_first_mapped, True)
+
+        dss_complete = item.get("dss_complete")
+        if dss_complete is None:
+            dss_complete = was_mapped
+
+        bio_count = item.get("bio_count")
+        if bio_count is None:
+            bio_count = 0
+
+        is_star = item.get("is_star")
+        if is_star is None:
+            is_star = bool(star_type)
+
+        icons = item["icons"]
+        if not was_discovered and "⚑" not in icons:
+            icons.append("⚑")
+        if terraformable and "🛠" not in icons:
+            icons.append("🛠")
+        if item.get("landable") and "🚀" not in icons:
+            icons.append("🚀")
+        if item.get("first_footfall") and "🦶" not in icons:
+            icons.append("🦶")
+
+        if not is_star:
+            if planet_class == "Earthlike body" and "🌍" not in icons:
+                icons.append("🌍")
+            elif planet_class == "Water world" and "💧" not in icons:
+                icons.append("💧")
+            elif planet_class == "Ammonia world" and "☣" not in icons:
+                icons.append("☣")
+
+        highlight = (bio_count > 0) or (not is_star and dss_reward > reward)
+        color = COLOR_ACCENT if highlight else COLOR_TEXT
+
+        item.update({
+            "star_type": star_type,
+            "planet_class": planet_class,
+            "terraformable": terraformable,
+            "was_discovered": was_discovered,
+            "was_mapped": was_mapped,
+            "mass": mass,
+            "reward": reward,
+            "dss_reward": dss_reward,
+            "dss_complete": dss_complete,
+            "bio_count": bio_count,
+            "is_star": is_star,
+            "color": color,
+            "icons": icons,
+        })
+
+        if item.get("_ts") is None:
+            item["_ts"] = int(time.time())
+
+    def update_status(self, data):
+        gui_focus = data.get("GuiFocus", -1)
+        in_fss = gui_focus == 9 or gui_focus == "FSS"
+        if in_fss != self.in_fss:
+            self.in_fss = in_fss
+            if self.scan_hud:
+                if self.in_fss:
+                    if self.scan_hud_hide_job:
+                        try:
+                            self.root.after_cancel(self.scan_hud_hide_job)
+                        except Exception:
+                            pass
+                        self.scan_hud_hide_job = None
+                    self.scan_hud.show()
+                else:
+                    if self.scan_hud_hide_job:
+                        return
+                    self.scan_hud_hide_job = self.root.after(
+                        self.scan_hud_hide_delay_ms,
+                        self._hide_scan_hud_delayed
+                    )
+
+    def _hide_scan_hud_delayed(self):
+        self.scan_hud_hide_job = None
+        if self.scan_hud and not self.in_fss:
+            self.scan_hud.hide()
+
+    def add_scan_item(self, data):
+        body_name = data.get("BodyName", "Unknown")
+        if body_name.startswith(self.current_sys):
+            body_name = body_name.replace(self.current_sys, "").strip()
+            if not body_name:
+                body_name = self.current_sys
+
+        star_type = data.get("StarType")
+        planet_class = data.get("PlanetClass")
+        is_star = bool(star_type)
+        if is_star:
+            body_class = f"{star_type} Star"
+            icons = ["★"]
+        else:
+            body_class = planet_class or "Unknown"
+            icons = []
+
+        terraformable = data.get("TerraformState") == "Terraformable"
+        landable = data.get("Landable", False)
+        was_discovered = data.get("WasDiscovered", True)
+        was_mapped = data.get("WasMapped", True)
+        first_footfall = data.get("FirstFootfall", False)
+
+        if not was_discovered:
+            icons.append("⚑")
+
+        # Planet/Body icons
+        if body_class == "Earthlike body":
+            icons.append("🌍")
+        elif body_class == "Water world":
+            icons.append("💧")
+        elif body_class == "Ammonia world":
+            icons.append("☣")
+        elif "Gas giant" in body_class:
+            icons.append("🌀")
+        elif "Metal rich" in body_class:
+            icons.append("⬢")
+        elif "High metal content" in body_class:
+            icons.append("⛰")
+        elif "Rocky" in body_class:
+            icons.append("🪨")
+
+        if terraformable:
+            icons.append("🛠")
+        if landable:
+            icons.append("🚀")
+        if first_footfall:
+            icons.append("🦶")
+
+        body_id = data.get("BodyID")
+        mass = data.get("MassEM") or data.get("StellarMass") or 0
+        is_first_discoverer = not was_discovered
+        is_first_mapped = not was_mapped
+        reward = self._get_body_value(planet_class, star_type, terraformable, mass, is_first_discoverer, False, is_first_mapped, True)
+        dss_reward = self._get_body_value(planet_class, star_type, terraformable, mass, is_first_discoverer, True, is_first_mapped, True)
+        dss_complete = was_mapped or (body_id in self.body_dss_complete)
+
+        bio_count = 0
+        if "BioSignals" in data:
+            for signal in data.get("BioSignals", []):
+                if signal.get("Type_Localised") == "Biological":
+                    bio_count += signal.get("Count", 0)
+        elif body_id in self.body_signals:
+            bio_count = self.body_signals[body_id].get("bio", 0)
+
+        highlight = (bio_count > 0) or (not is_star and dss_reward > reward)
+        color = COLOR_ACCENT if highlight else COLOR_TEXT
+
+        ts = int(time.time())
+        item = {
+            "body_id": body_id,
+            "name": body_name,
+            "class": body_class,
+            "star_type": star_type,
+            "planet_class": planet_class,
+            "terraformable": terraformable,
+            "landable": landable,
+            "was_mapped": was_mapped,
+            "mass": mass,
+            "icons": icons,
+            "color": color,
+            "reward": reward,
+            "dss_reward": dss_reward,
+            "dss_complete": dss_complete,
+            "bio_count": bio_count,
+            "is_star": is_star,
+            "was_discovered": was_discovered,
+            "first_footfall": first_footfall,
+            "_ts": ts
+        }
+
+        existing = None
+        if body_id is not None:
+            existing = self.scan_items_by_id.get(body_id)
+        if existing:
+            self.scan_items.remove(existing)
+        self.scan_items.insert(0, item)
+        self.scan_items = self.scan_items[:60]
+        if body_id is not None:
+            self.scan_items_by_id[body_id] = item
+        self.save_scan_item_to_db(self.current_sys, item)
 
     def process_event(self, data):
         ev = data.get("event")
@@ -662,6 +1119,12 @@ class MainDashboard:
             self.valuable_system = False
             self.valuable_bodies.clear()
             self.system_traffic = {'day': 0, 'week': 0, 'total': 0}
+            self.scan_items = self.load_scan_items_from_db(self.current_sys)
+            self.body_signals = {}
+            self.body_dss_complete = set()
+            self.system_undiscovered = False
+            self.fss_all_bodies = False
+            self._rebuild_scan_index()
 
             log_msg = f"JUMP: {self.current_sys}" if is_jump else f"LOCATION: {self.current_sys}"
             self.log(log_msg)
@@ -675,6 +1138,7 @@ class MainDashboard:
             # Bio logs hidden for now (counting disabled)
                 self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                 self.root.after(0, self.update_waypoint_display)
+                self.update_scan_hud()
 
             # Update Route Plotter UI if open
             if self.route_plotter and self.route_plotter.win.winfo_exists():
@@ -705,22 +1169,62 @@ class MainDashboard:
             if "SystemName" in data and data["SystemName"] != self.current_sys:
                 return
             self.total = data.get("BodyCount", self.total)
+            self.fss_all_bodies = False
             self.db_update_system(self.current_sys, self.total, self.scanned)
             if not self.batch_mode:
                 self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
             self.edsm.enqueue(data, self.current_sys, self.current_coords)
             self.log(f"🔭 HONK: {self.total} bodies detected.")
             self.update_live_discord(data)
+            if not self.batch_mode:
+                self.update_hud()
 
         elif ev == "FSSAllBodiesFound":
             if "SystemName" in data and data["SystemName"] == self.current_sys:
                 self.total = data.get("Count", self.total)
                 self.scanned = self.total
+                self.fss_all_bodies = True
                 self.db_update_system(self.current_sys, self.total, self.scanned)
                 if not self.batch_mode:
                     self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                 self.edsm.enqueue(data, self.current_sys, self.current_coords)
                 self.log("📡 SYSTEM SCAN COMPLETE: All bodies found.")
+                if not self.batch_mode:
+                    self.update_hud()
+        
+        elif ev == "FSSBodySignals":
+            body_id = data.get("BodyID")
+            if body_id is not None:
+                bio_count = 0
+                geo_count = 0
+                for signal in data.get("Signals", []):
+                    if signal.get("Type") == "$SAA_SignalType_Biological;":
+                        bio_count = signal.get("Count", 0)
+                    elif signal.get("Type") == "$SAA_SignalType_Geological;":
+                        geo_count = signal.get("Count", 0)
+                self.body_signals[body_id] = {"bio": bio_count, "geo": geo_count}
+                item = self.scan_items_by_id.get(body_id)
+                if item:
+                    item["bio_count"] = bio_count
+                    item["color"] = COLOR_ACCENT if (bio_count > 0 or (not item.get("is_star") and item.get("dss_reward", 0) > item.get("reward", 0))) else COLOR_TEXT
+                    if item.get("_ts") is None:
+                        item["_ts"] = int(time.time())
+                    self.save_scan_item_to_db(self.current_sys, item)
+                    if not self.batch_mode:
+                        self.update_hud()
+        
+        elif ev == "SAAScanComplete":
+            body_id = data.get("BodyID")
+            if body_id is not None:
+                self.body_dss_complete.add(body_id)
+                item = self.scan_items_by_id.get(body_id)
+                if item:
+                    item["dss_complete"] = True
+                    if item.get("_ts") is None:
+                        item["_ts"] = int(time.time())
+                    self.save_scan_item_to_db(self.current_sys, item)
+                    if not self.batch_mode:
+                        self.update_hud()
         
         elif ev == "Scan":
             body_name = data.get("BodyName", "")
@@ -745,6 +1249,11 @@ class MainDashboard:
                     if not self.batch_mode:
                         self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                     self.last_scan_event = data
+                    self.add_scan_item(data)
+                    if "StarType" in data and data.get("BodyName") == self.current_sys and data.get("WasDiscovered") is False:
+                        self.system_undiscovered = True
+                    if not self.batch_mode:
+                        self.update_hud()
 
                     # Check for biological signals and update the system total
                     if "BioSignals" in data:
@@ -782,6 +1291,7 @@ class MainDashboard:
             self.conn.commit()
         self.batch_mode = False
         self.root.after(0, self.update_dashboard_ui)
+        self.root.after(0, self.update_hud)
         
         if self.is_first_load:
             self.is_first_load = False

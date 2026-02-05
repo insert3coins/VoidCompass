@@ -10,7 +10,24 @@ COLOR_TEXT = '#e0e0e0'
 COLOR_GREEN = '#00ff00'
 def load_config():
     """Loads configuration from file or returns defaults."""
-    defaults = {'journal_path': '', 'edsm_cmdr_name': '', 'edsm_api_key': '', 'discord_webhook': '', 'overlay_enabled': True, 'cargo_overlay_enabled': False, 'hud_x': 100, 'hud_y': 100, 'cargo_hud_x': 800, 'cargo_hud_y': 400, 'main_geometry': '1000x700', 'settings_geometry': '600x500', 'discord_msg_system': ''}
+    defaults = {
+        'journal_path': '',
+        'edsm_cmdr_name': '',
+        'edsm_api_key': '',
+        'discord_webhook': '',
+        'overlay_enabled': True,
+        'cargo_overlay_enabled': False,
+        'scan_overlay_enabled': True,
+        'hud_x': 100,
+        'hud_y': 100,
+        'cargo_hud_x': 800,
+        'cargo_hud_y': 400,
+        'scan_hud_x': 1000,
+        'scan_hud_y': 150,
+        'main_geometry': '1000x700',
+        'settings_geometry': '600x500',
+        'discord_msg_system': ''
+    }
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r') as f:

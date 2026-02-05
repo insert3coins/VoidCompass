@@ -88,6 +88,28 @@ def open_settings(root, config, on_save_callback):
     cargo_btn.pack(side=tk.RIGHT)
     update_cargo_visuals()
 
+    # Custom Toggle for Scan Overlay
+    scan_frame = tk.Frame(sec_gen, bg=COLOR_BG)
+    scan_frame.pack(fill=tk.X, padx=15, pady=(0, 10))
+
+    tk.Label(scan_frame, text="Scan Results Overlay", font=("Courier", 9), fg="#888", bg=COLOR_BG).pack(side=tk.LEFT)
+
+    scan_var = tk.BooleanVar(value=config.get("scan_overlay_enabled", True))
+
+    def toggle_scan():
+        scan_var.set(not scan_var.get())
+        update_scan_visuals()
+
+    def update_scan_visuals():
+        if scan_var.get():
+            scan_btn.config(text="[ ENABLED ]", fg=COLOR_ACCENT)
+        else:
+            scan_btn.config(text="[ DISABLED ]", fg="#555")
+
+    scan_btn = tk.Button(scan_frame, text="[ ENABLED ]", font=("Courier", 9, "bold"), bg=COLOR_BG, activebackground=COLOR_BG, bd=0, command=toggle_scan, cursor="hand2")
+    scan_btn.pack(side=tk.RIGHT)
+    update_scan_visuals()
+
     # --- EDSM Settings ---
     sec_edsm = create_section(container, "EDSM UPLINK")
     
@@ -181,6 +203,7 @@ def open_settings(root, config, on_save_callback):
             "discord_enabled": disc_var.get(),
             "overlay_enabled": ov_var.get(),
             "cargo_overlay_enabled": cargo_var.get(),
+            "scan_overlay_enabled": scan_var.get(),
             "screenshots_enabled": ss_var.get(),
             "screenshots_path": ss_e.get().strip(),
             "settings_geometry": win.geometry()
