@@ -56,7 +56,7 @@ class MainDashboard:
         self.scan_items_by_id = {}
         self.in_fss = False
         self.scan_hud_hide_job = None
-        self.scan_hud_hide_delay_ms = 60000
+        self.scan_hud_hide_delay_ms = 30000
         self.fss_summary_active = False
         self.body_signals = {}
         self.body_dss_complete = set()
@@ -843,13 +843,25 @@ class MainDashboard:
                     icon = "☣"
                 elif terraformable:
                     icon = "🛠"
-                label = item.get("name") or ""
+                label = item.get("full_name") or item.get("name") or ""
+                if label and self.current_sys and self.current_sys not in label:
+                    label = f"{self.current_sys} {label}"
                 if not label:
                     label = item.get("class") or ""
                 if not label:
                     body_id = item.get("body_id")
                     label = f"Body {body_id}" if body_id is not None else "Body"
-                high_value.append(f"{icon} {label}".strip())
+                if planet_class == "Earthlike body":
+                    class_label = "ELW"
+                elif planet_class == "Water world":
+                    class_label = "WW"
+                elif planet_class == "Ammonia world":
+                    class_label = "AW"
+                elif terraformable:
+                    class_label = "TF"
+                else:
+                    class_label = planet_class if planet_class else "HV"
+                high_value.append(f"{icon} {class_label}: {label}".strip())
 
             if item.get("landable"):
                 landable_count += 1
@@ -932,6 +944,16 @@ class MainDashboard:
             item["icons"] = []
         if item.get("body_id") is None:
             item["body_id"] = None
+
+        name = item.get("name")
+        if not name:
+            fallback = item.get("class") or ""
+            if not fallback:
+                body_id = item.get("body_id")
+                fallback = f"Body {body_id}" if body_id is not None else "Body"
+            item["name"] = fallback
+        if item.get("full_name") is None:
+            item["full_name"] = item.get("name")
 
         body_class = item.get("class") or "Unknown"
         star_type = item.get("star_type")
@@ -1053,7 +1075,8 @@ class MainDashboard:
 
 
     def add_scan_item(self, data):
-        body_name = data.get("BodyName", "Unknown")
+        full_body_name = data.get("BodyName", "Unknown")
+        body_name = full_body_name
         if body_name.startswith(self.current_sys):
             body_name = body_name.replace(self.current_sys, "").strip()
             if not body_name:
@@ -1124,6 +1147,7 @@ class MainDashboard:
         item = {
             "body_id": body_id,
             "name": body_name,
+            "full_name": full_body_name,
             "class": body_class,
             "star_type": star_type,
             "planet_class": planet_class,
