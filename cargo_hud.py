@@ -67,9 +67,9 @@ class CargoHUD:
         # Border
         self.canvas.create_rectangle(5, 5, w-5, h-5, fill="#010101", outline=COLOR_ACCENT, width=2)
         # Header separator
-        self.canvas.create_line(5, 35, w-5, 35, fill=COLOR_ACCENT, width=1)
+        self.canvas.create_line(5, 45, w-5, 45, fill=COLOR_ACCENT, width=1)
         
-        # Title
+        # Title + total (line 1)
         self.draw_text(15, 20, text="CARGO MANIFEST", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
         
         # Total Count
@@ -83,14 +83,15 @@ class CargoHUD:
             idx = int(pct * 10)
             idx = max(0, min(idx, 10))
             
-            self.draw_text(150, 20, text=bars[idx], fill=COLOR_ORANGE, font=("Courier", 10), anchor="w")
+            # Bar (line 2)
+            self.draw_text(15, 35, text=bars[idx], fill=COLOR_ORANGE, font=("Courier", 10), anchor="w")
             total_str = f"TOTAL: {total}/{capacity}"
         else:
             total_str = f"TOTAL: {total}"
 
         self.draw_text(w-15, 20, text=total_str, fill=COLOR_ORANGE, font=("Courier", 10, "bold"), anchor="e")
         
-        y_pos = 50
+        y_pos = 60
         if not inventory:
             self.draw_text(w//2, h//2, text="[ HOLD EMPTY ]", fill="#555", font=("Courier", 10), anchor="center")
         else:
