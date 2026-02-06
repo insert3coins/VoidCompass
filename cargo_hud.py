@@ -83,8 +83,8 @@ class CargoHUD:
             idx = int(pct * 10)
             idx = max(0, min(idx, 10))
             
-            # Bar (line 2)
-            self.draw_text(15, 35, text=bars[idx], fill=COLOR_ORANGE, font=("Courier", 10), anchor="w")
+            # Bar (line 2) aligned under total (right side)
+            self.draw_text(w-15, 35, text=bars[idx], fill=COLOR_ORANGE, font=("Courier", 10), anchor="e")
             total_str = f"TOTAL: {total}/{capacity}"
         else:
             total_str = f"TOTAL: {total}"

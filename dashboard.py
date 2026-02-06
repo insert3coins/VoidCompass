@@ -823,7 +823,7 @@ class MainDashboard:
 
         high_value = []
         landable_count = 0
-        undiscovered_count = 0
+        remaining_count = max(self.total - self.scanned, 0) if self.total else 0
         for item in self.scan_items:
             planet_class = item.get("planet_class") or item.get("class") or ""
             terraformable = item.get("terraformable", False)
@@ -854,9 +854,6 @@ class MainDashboard:
             if item.get("landable"):
                 landable_count += 1
 
-            if item.get("was_discovered") is False:
-                undiscovered_count += 1
-
         high_value = high_value[:3]
 
         return {
@@ -864,7 +861,7 @@ class MainDashboard:
             "total": self._format_credits(total_value, hide_units=False),
             "high_value": high_value,
             "landable_count": landable_count,
-            "undiscovered_count": undiscovered_count
+            "remaining_count": remaining_count
         }
 
     def _get_body_k_value(self, planet_class, is_terraformable):

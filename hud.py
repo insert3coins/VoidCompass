@@ -13,7 +13,7 @@ class TacticalHUD:
         
         self.width = 460
         self.base_height = 175
-        self.expanded_height = 220
+        self.expanded_height = 210
         self.canvas = tk.Canvas(self.win, width=self.width, height=self.base_height, bg="#ff00ff", highlightthickness=0)
         self.canvas.pack()
 
@@ -116,18 +116,18 @@ class TacticalHUD:
                 hv_line = hv_line[:65] + "..."
             self.draw_text(20, 146, text=hv_line, fill=COLOR_ACCENT, font=("Courier", 8), anchor="w")
 
-            undiscovered_count = fss_summary.get("undiscovered_count", 0)
-            und_line = f"UNDISCOVERED: {undiscovered_count}"
-            self.draw_text(20, 158, text=und_line, fill=COLOR_ACCENT, font=("Courier", 8), anchor="w")
+            # remaining_count = fss_summary.get("remaining_count", 0)
+            # rem_line = f"REMAINING: {remaining_count}"
+            # self.draw_text(20, 158, text=rem_line, fill=COLOR_ACCENT, font=("Courier", 8), anchor="w")
 
             landable_count = fss_summary.get("landable_count", 0)
             land_line = f"LANDABLE: {landable_count}"
-            self.draw_text(20, 170, text=land_line, fill=COLOR_ACCENT, font=("Courier", 8), anchor="w")
+            self.draw_text(20, 158, text=land_line, fill=COLOR_ACCENT, font=("Courier", 8), anchor="w")
             t_day = system_traffic.get('day', 0)
             t_week = system_traffic.get('week', 0)
             t_total = system_traffic.get('total', 0)
-            self.draw_text(20, 182, text=f"TRAFFIC: Today : {t_day}  This Week : {t_week}  Total : {t_total}", fill=COLOR_TEXT, font=("Courier", 8), anchor="w")
-            edsm_y = 196
+            self.draw_text(20, 170, text=f"TRAFFIC: Today : {t_day}  This Week : {t_week}  Total : {t_total}", fill=COLOR_TEXT, font=("Courier", 8), anchor="w")
+            edsm_y = 184
         else:
             t_day = system_traffic.get('day', 0)
             t_week = system_traffic.get('week', 0)
