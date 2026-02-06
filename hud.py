@@ -11,7 +11,10 @@ class TacticalHUD:
         self.win.overrideredirect(True)
         self.win.config(bg="#ff00ff")
         
-        self.canvas = tk.Canvas(self.win, width=460, height=175, bg="#ff00ff", highlightthickness=0)
+        self.width = 460
+        self.base_height = 175
+        self.expanded_height = 220
+        self.canvas = tk.Canvas(self.win, width=self.width, height=self.base_height, bg="#ff00ff", highlightthickness=0)
         self.canvas.pack()
 
         self.canvas.bind("<Button-1>", self.start_move)
@@ -65,11 +68,18 @@ class TacticalHUD:
         self.canvas.create_text(x+1, y+1, text=text, fill="black", font=font, anchor=anchor, tags=tags)
         self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor, tags=tags)
 
-    def update(self, current_sys, dest_name, dist_ly, scanned, total, edsm_status, r_pos, organic_count, system_traffic, game_r_pos=None):
+    def update(self, current_sys, dest_name, dist_ly, scanned, total, edsm_status, r_pos, organic_count, system_traffic, game_r_pos=None, fss_summary=None, fss_summary_active=False):
+        target_h = self.expanded_height if fss_summary_active and fss_summary else self.base_height
+        if self.canvas.winfo_height() != target_h:
+            self.canvas.config(height=target_h)
+            x = self.win.winfo_x()
+            y = self.win.winfo_y()
+            self.win.geometry(f"{self.width}x{target_h}+{x}+{y}")
         self.canvas.delete("all")
         
-        self.canvas.create_rectangle(5, 5, 455, 170, fill="#010101", outline=COLOR_ACCENT, width=2)
-        self.canvas.create_line(5, 35, 455, 35, fill=COLOR_ACCENT, width=1)
+        h = target_h
+        self.canvas.create_rectangle(5, 5, self.width - 5, h - 5, fill="#010101", outline=COLOR_ACCENT, width=2)
+        self.canvas.create_line(5, 35, self.width - 5, 35, fill=COLOR_ACCENT, width=1)
         
         txt = getattr(self, "anim_char", "⢄")
         self.draw_text(32, 20, text=txt, fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="e", tags="anim_title")
@@ -94,13 +104,39 @@ class TacticalHUD:
         self.draw_text(20, 116, text=f"SCAN: {scanned}/{total} BODIES", fill=COLOR_TEXT, font=("Courier", 9), anchor="w")
         self.draw_text(440, 116, text=f"{int(pct*100)}%", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="e")
         
-        t_day = system_traffic.get('day', 0)
-        t_week = system_traffic.get('week', 0)
-        t_total = system_traffic.get('total', 0)
-        self.draw_text(20, 134, text=f"TRAFFIC: Today : {t_day}  This Week : {t_week}  Total : {t_total}", fill=COLOR_TEXT, font=("Courier", 9), anchor="w")
+        if fss_summary_active and fss_summary:
+            fss_line = f"FSS: {fss_summary.get('count')} bodies | {fss_summary.get('total')}"
+            if len(fss_line) > 68:
+                fss_line = fss_line[:65] + "..."
+            self.draw_text(20, 134, text=fss_line, fill=COLOR_ACCENT, font=("Courier", 8), anchor="w")
+
+            hv = fss_summary.get("high_value") or []
+            hv_line = "HV: " + " | ".join(hv) if hv else "HV: -"
+            if len(hv_line) > 68:
+                hv_line = hv_line[:65] + "..."
+            self.draw_text(20, 146, text=hv_line, fill=COLOR_ACCENT, font=("Courier", 8), anchor="w")
+
+            undiscovered_count = fss_summary.get("undiscovered_count", 0)
+            und_line = f"UNDISCOVERED: {undiscovered_count}"
+            self.draw_text(20, 158, text=und_line, fill=COLOR_ACCENT, font=("Courier", 8), anchor="w")
+
+            landable_count = fss_summary.get("landable_count", 0)
+            land_line = f"LANDABLE: {landable_count}"
+            self.draw_text(20, 170, text=land_line, fill=COLOR_ACCENT, font=("Courier", 8), anchor="w")
+            t_day = system_traffic.get('day', 0)
+            t_week = system_traffic.get('week', 0)
+            t_total = system_traffic.get('total', 0)
+            self.draw_text(20, 182, text=f"TRAFFIC: Today : {t_day}  This Week : {t_week}  Total : {t_total}", fill=COLOR_TEXT, font=("Courier", 8), anchor="w")
+            edsm_y = 196
+        else:
+            t_day = system_traffic.get('day', 0)
+            t_week = system_traffic.get('week', 0)
+            t_total = system_traffic.get('total', 0)
+            self.draw_text(20, 134, text=f"TRAFFIC: Today : {t_day}  This Week : {t_week}  Total : {t_total}", fill=COLOR_TEXT, font=("Courier", 9), anchor="w")
+            edsm_y = 154
 
         status_color = COLOR_GREEN if edsm_status == "OK" else "red"
-        self.draw_text(20, 154, text=f"EDSM: {edsm_status}", fill=status_color, font=("Courier", 9, "bold"), anchor="w")
+        self.draw_text(20, edsm_y, text=f"EDSM: {edsm_status}", fill=status_color, font=("Courier", 9, "bold"), anchor="w")
 
         route_text = "ROUTE: INACTIVE"
         if r_pos:
@@ -108,4 +144,4 @@ class TacticalHUD:
                 route_text = f"ROUTE: {r_pos[0]} / {r_pos[1]} ({r_pos[2]})"
             else:
                 route_text = f"ROUTE: {r_pos[0]} / {r_pos[1]}"
-        self.draw_text(440, 154, text=route_text, fill=COLOR_GREEN, font=("Courier", 9, "bold"), anchor="e")
+        self.draw_text(440, edsm_y, text=route_text, fill=COLOR_GREEN, font=("Courier", 9, "bold"), anchor="e")

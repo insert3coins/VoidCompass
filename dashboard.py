@@ -57,6 +57,7 @@ class MainDashboard:
         self.in_fss = False
         self.scan_hud_hide_job = None
         self.scan_hud_hide_delay_ms = 60000
+        self.fss_summary_active = False
         self.body_signals = {}
         self.body_dss_complete = set()
         self.system_undiscovered = False
@@ -118,6 +119,7 @@ class MainDashboard:
         threading.Thread(target=self.check_updates, daemon=True).start()
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.update_hud()
 
     def init_db(self):
         """Initialize SQLite database and migrate JSON if needed."""
@@ -731,9 +733,11 @@ class MainDashboard:
         if self.route_list and self.current_sys in self.route_list:
             game_r_pos = (self.route_list.index(self.current_sys)+1, len(self.route_list))
 
+        fss_summary = self._get_fss_summary()
         self.root.after(0, lambda: self.hud.update(
             self.current_sys, self.dest_name, dist, 
-            self.scanned, self.total, self.edsm.status, custom_r_pos, self.organic_count, self.system_traffic, game_r_pos
+            self.scanned, self.total, self.edsm.status, custom_r_pos, self.organic_count, self.system_traffic, game_r_pos,
+            fss_summary, self.fss_summary_active
         ))
         self.update_scan_hud()
 
@@ -790,6 +794,78 @@ class MainDashboard:
         if not hide_units:
             txt += " CR"
         return txt
+
+    def _get_fss_summary(self):
+        if not self.scan_items:
+            return None
+
+        scanned_count = len(self.scan_items)
+        total_value = 0
+        for item in self.scan_items:
+            reward = item.get("dss_reward") if item.get("dss_complete") else item.get("reward")
+            if isinstance(reward, (int, float)):
+                total_value += int(reward)
+
+        last = self.scan_items[0]
+        last_name = last.get("name") or ""
+        last_class = last.get("class") or ""
+        last_bio = last.get("bio_count", 0)
+        last_reward = last.get("reward")
+        last_dss = last.get("dss_reward")
+        last_is_star = last.get("is_star", False)
+
+        if last.get("dss_complete"):
+            last_value = self._format_credits(last_reward, hide_units=True)
+        else:
+            last_value = self._format_credits(last_reward, hide_units=True)
+            if not last_is_star and last_dss:
+                last_value = f"{last_value} | {self._format_credits(last_dss, hide_units=True)}"
+
+        high_value = []
+        landable_count = 0
+        undiscovered_count = 0
+        for item in self.scan_items:
+            planet_class = item.get("planet_class") or item.get("class") or ""
+            terraformable = item.get("terraformable", False)
+            icons = item.get("icons") or []
+            if not terraformable and "🛠" in icons:
+                terraformable = True
+            is_high = terraformable or planet_class in ("Earthlike body", "Water world", "Ammonia world") or any(icon in icons for icon in ("🌍", "💧", "☣"))
+            if not is_high:
+                pass
+            else:
+                icon = ""
+                if planet_class == "Earthlike body":
+                    icon = "🌍"
+                elif planet_class == "Water world":
+                    icon = "💧"
+                elif planet_class == "Ammonia world":
+                    icon = "☣"
+                elif terraformable:
+                    icon = "🛠"
+                label = item.get("name") or ""
+                if not label:
+                    label = item.get("class") or ""
+                if not label:
+                    body_id = item.get("body_id")
+                    label = f"Body {body_id}" if body_id is not None else "Body"
+                high_value.append(f"{icon} {label}".strip())
+
+            if item.get("landable"):
+                landable_count += 1
+
+            if item.get("was_discovered") is False:
+                undiscovered_count += 1
+
+        high_value = high_value[:3]
+
+        return {
+            "count": scanned_count,
+            "total": self._format_credits(total_value, hide_units=False),
+            "high_value": high_value,
+            "landable_count": landable_count,
+            "undiscovered_count": undiscovered_count
+        }
 
     def _get_body_k_value(self, planet_class, is_terraformable):
         if planet_class == "Metal rich body":
@@ -966,11 +1042,18 @@ class MainDashboard:
                         self.scan_hud_hide_delay_ms,
                         self._hide_scan_hud_delayed
                     )
+            if self.in_fss:
+                self.fss_summary_active = False
+            else:
+                self.fss_summary_active = True
+            if not self.batch_mode:
+                self.update_hud()
 
     def _hide_scan_hud_delayed(self):
         self.scan_hud_hide_job = None
         if self.scan_hud and not self.in_fss:
             self.scan_hud.hide()
+
 
     def add_scan_item(self, data):
         body_name = data.get("BodyName", "Unknown")
@@ -1102,9 +1185,15 @@ class MainDashboard:
             # Bio counting is temporarily disabled.
             return
 
-        elif ev == "Location" or ev == "FSDJump":
-            is_jump = ev == "FSDJump"
+        elif ev == "Location" or ev == "FSDJump" or ev == "StartJump":
+            is_jump = ev == "FSDJump" or ev == "StartJump"
             
+            # Hide scan HUD on jump initiation/completion
+            if ev in ("StartJump", "FSDJump") and self.scan_hud:
+                self.scan_hud.hide()
+                self.in_fss = False
+                self.fss_summary_active = False
+
             # State reset for new system
             self.current_sys = data.get("StarSystem", "Unknown")
             self.current_coords = data.get("StarPos", [0,0,0])
@@ -1124,6 +1213,7 @@ class MainDashboard:
             self.body_dss_complete = set()
             self.system_undiscovered = False
             self.fss_all_bodies = False
+            self.fss_summary_active = False
             self._rebuild_scan_index()
 
             log_msg = f"JUMP: {self.current_sys}" if is_jump else f"LOCATION: {self.current_sys}"
