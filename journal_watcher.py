@@ -147,6 +147,21 @@ class JournalWatcher:
                     "star_class": data.get("StarClass")
                 }
             }
+        if ev in ("Touchdown", "Liftoff"):
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "star_system": data.get("StarSystem"),
+                    "body": data.get("Body"),
+                    "body_id": data.get("BodyID"),
+                    "on_station": data.get("OnStation"),
+                    "on_planet": data.get("OnPlanet"),
+                    "latitude": data.get("Latitude"),
+                    "longitude": data.get("Longitude"),
+                    "player_controlled": data.get("PlayerControlled")
+                }
+            }
         if ev == "FSSDiscoveryScan":
             return {
                 "type": ev,
@@ -201,7 +216,9 @@ class JournalWatcher:
                     "scan_type": data.get("ScanType_Localised") or data.get("ScanType"),
                     "is_new_entry": bool(data.get("IsNewEntry")),
                     "is_new_sample": bool(data.get("IsNewSample")),
+                    "is_complete": bool(data.get("IsComplete")),
                     "body_name": data.get("BodyName") or data.get("Body"),
+                    "body_id": data.get("BodyID"),
                     "max_samples": data.get("MaxSamples", 3),
                     "biome": data.get("Biome"),
                     "planet_class": data.get("PlanetClass"),

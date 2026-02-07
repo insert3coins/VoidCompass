@@ -19,7 +19,6 @@ from version import APP_VERSION
 from hud import TacticalHUD
 from cargo_hud import CargoHUD
 from scan_hud import ScanHUD
-from bio_hud import BioHUD
 from edsm_handler import EDSMHandler
 from discord_handler import DiscordHandler
 from screenshot_handler import ScreenshotHandler
@@ -58,8 +57,6 @@ class MainDashboard:
         self.in_fss = False
         self.scan_hud_hide_job = None
         self.scan_hud_hide_delay_ms = 30000
-        self.bio_hud_hide_job = None
-        self.bio_hud_hide_delay_ms = 15000
         self.fss_summary_active = False
         self.body_signals = {}
         self.body_dss_complete = set()
@@ -67,7 +64,6 @@ class MainDashboard:
         self.fss_all_bodies = False
         self.cmdr_name = self.config.get("edsm_cmdr_name", "CMDR")
         self.last_scan_event = None
-        self.last_bio_scan = {}
         self.cargo_capacity = 0
         
         self.dest_coords = None
@@ -102,11 +98,6 @@ class MainDashboard:
         else:
             self.scan_hud = None
 
-        if self.config.get("bio_overlay_enabled", True):
-            self.bio_hud = BioHUD(self.root, self.config)
-            self.bio_hud.hide()
-        else:
-            self.bio_hud = None
         
         self.db_lock = threading.RLock()
         self.batch_mode = False
@@ -651,15 +642,6 @@ class MainDashboard:
                     self.scan_hud.win.destroy()
                     self.scan_hud = None
 
-            # Live Toggle: Bio HUD
-            if self.config.get("bio_overlay_enabled", True):
-                if self.bio_hud is None:
-                    self.bio_hud = BioHUD(self.root, self.config)
-                    self.bio_hud.hide()
-            else:
-                if self.bio_hud:
-                    self.bio_hud.win.destroy()
-                    self.bio_hud = None
         
         open_settings(self.root, self.config, on_save)
 
@@ -1093,10 +1075,6 @@ class MainDashboard:
         if self.scan_hud and not self.in_fss:
             self.scan_hud.hide()
 
-    def _hide_bio_hud_delayed(self):
-        self.bio_hud_hide_job = None
-        if self.bio_hud:
-            self.bio_hud.hide()
 
 
     def add_scan_item(self, data):
@@ -1180,6 +1158,11 @@ class MainDashboard:
             "landable": landable,
             "was_mapped": was_mapped,
             "mass": mass,
+            "radius": data.get("Radius"),
+            "surface_temp": data.get("SurfaceTemperature"),
+            "surface_gravity": data.get("SurfaceGravity"),
+            "atmosphere": data.get("Atmosphere") or data.get("AtmosphereType"),
+            "volcanism": data.get("Volcanism"),
             "icons": icons,
             "color": color,
             "reward": reward,
@@ -1230,63 +1213,7 @@ class MainDashboard:
                 self.log(f"Game version detected from LoadGame: {game_version} ({game_build})")
 
         elif ev == "ScanOrganic":
-            species = d.get("species")
-            genus = d.get("genus")
-            sample_idx = d.get("sample_idx")
-            scan_type = d.get("scan_type")
-            is_new_entry = bool(d.get("is_new_entry"))
-            is_new_sample = bool(d.get("is_new_sample"))
-            body_name = d.get("body_name")
-            max_samples = d.get("max_samples", 3)
-            biome = d.get("biome")
-            planet_class = d.get("planet_class")
-            sample_distance = d.get("sample_distance")
-
-            self.last_bio_scan = {
-                "species": species,
-                "genus": genus,
-                "sample_idx": sample_idx,
-                "max_samples": max_samples,
-                "scan_type": scan_type,
-                "is_new_entry": is_new_entry,
-                "is_new_sample": is_new_sample,
-                "body_name": body_name,
-                "system_name": self.current_sys,
-                "biome": biome,
-                "planet_class": planet_class,
-                "sample_distance": sample_distance
-            }
-
-            if self.bio_hud:
-                if self.bio_hud_hide_job:
-                    try:
-                        self.root.after_cancel(self.bio_hud_hide_job)
-                    except Exception:
-                        pass
-                    self.bio_hud_hide_job = None
-
-                def _update_bio():
-                    self.bio_hud.update(
-                        self.current_sys,
-                        body_name,
-                        genus,
-                        species,
-                        sample_idx,
-                        max_samples,
-                        scan_type,
-                        is_new_entry,
-                        is_new_sample,
-                        biome=biome,
-                        planet_class=planet_class,
-                        sample_distance=sample_distance
-                    )
-                    self.bio_hud.show()
-
-                self.root.after(0, _update_bio)
-                self.bio_hud_hide_job = self.root.after(
-                    self.bio_hud_hide_delay_ms,
-                    self._hide_bio_hud_delayed
-                )
+            # Bio counting is temporarily disabled.
             return
 
         elif ev == "Location" or ev == "FSDJump" or ev == "StartJump":
@@ -1296,14 +1223,6 @@ class MainDashboard:
                     self.scan_hud.hide()
                     self.in_fss = False
                     self.fss_summary_active = False
-                if self.bio_hud:
-                    self.bio_hud.hide()
-                    if self.bio_hud_hide_job:
-                        try:
-                            self.root.after_cancel(self.bio_hud_hide_job)
-                        except Exception:
-                            pass
-                        self.bio_hud_hide_job = None
                 return
 
             is_jump = ev == "FSDJump"
@@ -1313,14 +1232,6 @@ class MainDashboard:
                 self.scan_hud.hide()
                 self.in_fss = False
                 self.fss_summary_active = False
-            if ev == "FSDJump" and self.bio_hud:
-                self.bio_hud.hide()
-                if self.bio_hud_hide_job:
-                    try:
-                        self.root.after_cancel(self.bio_hud_hide_job)
-                    except Exception:
-                        pass
-                    self.bio_hud_hide_job = None
 
             # State reset for new system
             self.current_sys = d.get("star_system", "Unknown")
