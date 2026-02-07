@@ -110,6 +110,28 @@ def open_settings(root, config, on_save_callback):
     scan_btn.pack(side=tk.RIGHT)
     update_scan_visuals()
 
+    # Custom Toggle for Bio Scan Overlay
+    bio_frame = tk.Frame(sec_gen, bg=COLOR_BG)
+    bio_frame.pack(fill=tk.X, padx=15, pady=(0, 10))
+
+    tk.Label(bio_frame, text="Bio Scan Overlay", font=("Courier", 9), fg="#888", bg=COLOR_BG).pack(side=tk.LEFT)
+
+    bio_var = tk.BooleanVar(value=config.get("bio_overlay_enabled", True))
+
+    def toggle_bio():
+        bio_var.set(not bio_var.get())
+        update_bio_visuals()
+
+    def update_bio_visuals():
+        if bio_var.get():
+            bio_btn.config(text="[ ENABLED ]", fg=COLOR_ACCENT)
+        else:
+            bio_btn.config(text="[ DISABLED ]", fg="#555")
+
+    bio_btn = tk.Button(bio_frame, text="[ ENABLED ]", font=("Courier", 9, "bold"), bg=COLOR_BG, activebackground=COLOR_BG, bd=0, command=toggle_bio, cursor="hand2")
+    bio_btn.pack(side=tk.RIGHT)
+    update_bio_visuals()
+
     # --- EDSM Settings ---
     sec_edsm = create_section(container, "EDSM UPLINK")
     
@@ -204,6 +226,7 @@ def open_settings(root, config, on_save_callback):
             "overlay_enabled": ov_var.get(),
             "cargo_overlay_enabled": cargo_var.get(),
             "scan_overlay_enabled": scan_var.get(),
+            "bio_overlay_enabled": bio_var.get(),
             "screenshots_enabled": ss_var.get(),
             "screenshots_path": ss_e.get().strip(),
             "settings_geometry": win.geometry()

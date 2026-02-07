@@ -19,6 +19,7 @@ from version import APP_VERSION
 from hud import TacticalHUD
 from cargo_hud import CargoHUD
 from scan_hud import ScanHUD
+from bio_hud import BioHUD
 from edsm_handler import EDSMHandler
 from discord_handler import DiscordHandler
 from screenshot_handler import ScreenshotHandler
@@ -57,6 +58,8 @@ class MainDashboard:
         self.in_fss = False
         self.scan_hud_hide_job = None
         self.scan_hud_hide_delay_ms = 30000
+        self.bio_hud_hide_job = None
+        self.bio_hud_hide_delay_ms = 15000
         self.fss_summary_active = False
         self.body_signals = {}
         self.body_dss_complete = set()
@@ -64,6 +67,7 @@ class MainDashboard:
         self.fss_all_bodies = False
         self.cmdr_name = self.config.get("edsm_cmdr_name", "CMDR")
         self.last_scan_event = None
+        self.last_bio_scan = {}
         self.cargo_capacity = 0
         
         self.dest_coords = None
@@ -97,6 +101,12 @@ class MainDashboard:
             self.scan_hud.hide()
         else:
             self.scan_hud = None
+
+        if self.config.get("bio_overlay_enabled", True):
+            self.bio_hud = BioHUD(self.root, self.config)
+            self.bio_hud.hide()
+        else:
+            self.bio_hud = None
         
         self.db_lock = threading.RLock()
         self.batch_mode = False
@@ -640,6 +650,16 @@ class MainDashboard:
                 if self.scan_hud:
                     self.scan_hud.win.destroy()
                     self.scan_hud = None
+
+            # Live Toggle: Bio HUD
+            if self.config.get("bio_overlay_enabled", True):
+                if self.bio_hud is None:
+                    self.bio_hud = BioHUD(self.root, self.config)
+                    self.bio_hud.hide()
+            else:
+                if self.bio_hud:
+                    self.bio_hud.win.destroy()
+                    self.bio_hud = None
         
         open_settings(self.root, self.config, on_save)
 
@@ -1073,6 +1093,11 @@ class MainDashboard:
         if self.scan_hud and not self.in_fss:
             self.scan_hud.hide()
 
+    def _hide_bio_hud_delayed(self):
+        self.bio_hud_hide_job = None
+        if self.bio_hud:
+            self.bio_hud.hide()
+
 
     def add_scan_item(self, data):
         full_body_name = data.get("BodyName", "Unknown")
@@ -1179,46 +1204,128 @@ class MainDashboard:
         self.save_scan_item_to_db(self.current_sys, item)
 
     def process_event(self, data):
-        ev = data.get("event")
+        ev = data.get("type") or data.get("event")
+        raw = data.get("raw", data)
+        d = data.get("data", data)
         
         if ev == "Fileheader":
-            self.edsm.set_game_version(data.get("gameversion"), data.get("build"))
-            self.log(f"Game version detected: {data.get('gameversion')} ({data.get('build')})")
+            self.edsm.set_game_version(d.get("gameversion"), d.get("build"))
+            self.log(f"Game version detected: {d.get('gameversion')} ({d.get('build')})")
 
         elif ev == "Loadout":
-            self.cargo_capacity = data.get("CargoCapacity", 0)
+            self.cargo_capacity = d.get("cargo_capacity", 0)
             self.watcher.force_check_cargo()
 
         elif ev == "Commander":
-            self.cmdr_name = data.get("Name", "CMDR")
+            self.cmdr_name = d.get("name", "CMDR")
             if not self.config.get("edsm_cmdr_name"):
                 self.config["edsm_cmdr_name"] = self.cmdr_name
 
         elif ev == "LoadGame":
-            self.cmdr_name = data.get("Commander", "CMDR")
-            game_version = data.get("gameversion")
-            game_build = data.get("build")
+            self.cmdr_name = d.get("commander", "CMDR")
+            game_version = d.get("gameversion")
+            game_build = d.get("build")
             if game_version and game_build:
                 self.edsm.set_game_version(game_version, game_build)
                 self.log(f"Game version detected from LoadGame: {game_version} ({game_build})")
 
         elif ev == "ScanOrganic":
-            # Bio counting is temporarily disabled.
+            species = d.get("species")
+            genus = d.get("genus")
+            sample_idx = d.get("sample_idx")
+            scan_type = d.get("scan_type")
+            is_new_entry = bool(d.get("is_new_entry"))
+            is_new_sample = bool(d.get("is_new_sample"))
+            body_name = d.get("body_name")
+            max_samples = d.get("max_samples", 3)
+            biome = d.get("biome")
+            planet_class = d.get("planet_class")
+            sample_distance = d.get("sample_distance")
+
+            self.last_bio_scan = {
+                "species": species,
+                "genus": genus,
+                "sample_idx": sample_idx,
+                "max_samples": max_samples,
+                "scan_type": scan_type,
+                "is_new_entry": is_new_entry,
+                "is_new_sample": is_new_sample,
+                "body_name": body_name,
+                "system_name": self.current_sys,
+                "biome": biome,
+                "planet_class": planet_class,
+                "sample_distance": sample_distance
+            }
+
+            if self.bio_hud:
+                if self.bio_hud_hide_job:
+                    try:
+                        self.root.after_cancel(self.bio_hud_hide_job)
+                    except Exception:
+                        pass
+                    self.bio_hud_hide_job = None
+
+                def _update_bio():
+                    self.bio_hud.update(
+                        self.current_sys,
+                        body_name,
+                        genus,
+                        species,
+                        sample_idx,
+                        max_samples,
+                        scan_type,
+                        is_new_entry,
+                        is_new_sample,
+                        biome=biome,
+                        planet_class=planet_class,
+                        sample_distance=sample_distance
+                    )
+                    self.bio_hud.show()
+
+                self.root.after(0, _update_bio)
+                self.bio_hud_hide_job = self.root.after(
+                    self.bio_hud_hide_delay_ms,
+                    self._hide_bio_hud_delayed
+                )
             return
 
         elif ev == "Location" or ev == "FSDJump" or ev == "StartJump":
-            is_jump = ev == "FSDJump" or ev == "StartJump"
+            # Do not update HUDs during jump charge; wait for arrival.
+            if ev == "StartJump":
+                if self.scan_hud:
+                    self.scan_hud.hide()
+                    self.in_fss = False
+                    self.fss_summary_active = False
+                if self.bio_hud:
+                    self.bio_hud.hide()
+                    if self.bio_hud_hide_job:
+                        try:
+                            self.root.after_cancel(self.bio_hud_hide_job)
+                        except Exception:
+                            pass
+                        self.bio_hud_hide_job = None
+                return
+
+            is_jump = ev == "FSDJump"
             
-            # Hide scan HUD on jump initiation/completion
-            if ev in ("StartJump", "FSDJump") and self.scan_hud:
+            # Hide scan HUD on jump completion
+            if ev == "FSDJump" and self.scan_hud:
                 self.scan_hud.hide()
                 self.in_fss = False
                 self.fss_summary_active = False
+            if ev == "FSDJump" and self.bio_hud:
+                self.bio_hud.hide()
+                if self.bio_hud_hide_job:
+                    try:
+                        self.root.after_cancel(self.bio_hud_hide_job)
+                    except Exception:
+                        pass
+                    self.bio_hud_hide_job = None
 
             # State reset for new system
-            self.current_sys = data.get("StarSystem", "Unknown")
-            self.current_coords = data.get("StarPos", [0,0,0])
-            self.star_class = data.get("StarClass", "")
+            self.current_sys = d.get("star_system", "Unknown")
+            self.current_coords = d.get("star_pos", [0,0,0])
+            self.star_class = d.get("star_class", "")
             
             # Load from history if available
             self.load_system_from_db(self.current_sys)
@@ -1226,6 +1333,7 @@ class MainDashboard:
             self.organic_count = 0 # Reset bio count for new system
             self.system_bio_signals = 0
             self.last_scan_event = None
+            self.last_bio_scan = {}
             self.valuable_system = False
             self.valuable_bodies.clear()
             self.system_traffic = {'day': 0, 'week': 0, 'total': 0}
@@ -1266,53 +1374,48 @@ class MainDashboard:
                     self.root.update()
                     self.log(f"📋 COPIED NEXT WAYPOINT: {next_wp}")
 
-            was_enqueued = self.edsm.enqueue(data, self.current_sys, self.current_coords)
+            was_enqueued = self.edsm.enqueue(raw, self.current_sys, self.current_coords)
             if was_enqueued:
                 if is_jump:
                     # It's a new jump, so reset the Discord message for the new system.
                     self.discord.reset_msg_id()
-                self.update_live_discord(data)
+                self.update_live_discord(raw)
             
             if not self.is_first_load:
                 self.fetch_system_traffic(self.current_sys)
 
         elif ev == "FSSDiscoveryScan":
-            if "SystemName" in data and data["SystemName"] != self.current_sys:
+            if d.get("system_name") and d.get("system_name") != self.current_sys:
                 return
-            self.total = data.get("BodyCount", self.total)
+            self.total = d.get("body_count", self.total)
             self.fss_all_bodies = False
             self.db_update_system(self.current_sys, self.total, self.scanned)
             if not self.batch_mode:
                 self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
-            self.edsm.enqueue(data, self.current_sys, self.current_coords)
+            self.edsm.enqueue(raw, self.current_sys, self.current_coords)
             self.log(f"🔭 HONK: {self.total} bodies detected.")
-            self.update_live_discord(data)
+            self.update_live_discord(raw)
             if not self.batch_mode:
                 self.update_hud()
 
         elif ev == "FSSAllBodiesFound":
-            if "SystemName" in data and data["SystemName"] == self.current_sys:
-                self.total = data.get("Count", self.total)
+            if d.get("system_name") and d.get("system_name") == self.current_sys:
+                self.total = d.get("count", self.total)
                 self.scanned = self.total
                 self.fss_all_bodies = True
                 self.db_update_system(self.current_sys, self.total, self.scanned)
                 if not self.batch_mode:
                     self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
-                self.edsm.enqueue(data, self.current_sys, self.current_coords)
+                self.edsm.enqueue(raw, self.current_sys, self.current_coords)
                 self.log("📡 SYSTEM SCAN COMPLETE: All bodies found.")
                 if not self.batch_mode:
                     self.update_hud()
         
         elif ev == "FSSBodySignals":
-            body_id = data.get("BodyID")
+            body_id = d.get("body_id")
             if body_id is not None:
-                bio_count = 0
-                geo_count = 0
-                for signal in data.get("Signals", []):
-                    if signal.get("Type") == "$SAA_SignalType_Biological;":
-                        bio_count = signal.get("Count", 0)
-                    elif signal.get("Type") == "$SAA_SignalType_Geological;":
-                        geo_count = signal.get("Count", 0)
+                bio_count = d.get("bio_count", 0)
+                geo_count = d.get("geo_count", 0)
                 self.body_signals[body_id] = {"bio": bio_count, "geo": geo_count}
                 item = self.scan_items_by_id.get(body_id)
                 if item:
@@ -1325,7 +1428,7 @@ class MainDashboard:
                         self.update_hud()
         
         elif ev == "SAAScanComplete":
-            body_id = data.get("BodyID")
+            body_id = d.get("body_id")
             if body_id is not None:
                 self.body_dss_complete.add(body_id)
                 item = self.scan_items_by_id.get(body_id)
@@ -1338,15 +1441,15 @@ class MainDashboard:
                         self.update_hud()
         
         elif ev == "Scan":
-            body_name = data.get("BodyName", "")
-            body_id = data.get("BodyID", body_name)
+            body_name = d.get("body_name", "")
+            body_id = d.get("body_id", body_name)
             
-            self.edsm.enqueue(data, self.current_sys, self.current_coords)
+            self.edsm.enqueue(raw, self.current_sys, self.current_coords)
             
             # Only count scans of stars or planets/moons, not belts.
-            if 'StarType' in data or 'PlanetClass' in data:
+            if d.get("is_body_scan"):
                 # Ensure the scan belongs to the current system to prevent state corruption
-                if "StarSystem" in data and data["StarSystem"] != self.current_sys:
+                if d.get("star_system") and d.get("star_system") != self.current_sys:
                     return
 
                 is_new_body_scan = body_id not in self.scanned_bodies
@@ -1360,24 +1463,21 @@ class MainDashboard:
                     if not self.batch_mode:
                         self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                     self.last_scan_event = data
-                    self.add_scan_item(data)
-                    if "StarType" in data and data.get("BodyName") == self.current_sys and data.get("WasDiscovered") is False:
+                    self.add_scan_item(raw)
+                    if d.get("star_type") and body_name == self.current_sys and d.get("was_discovered") is False:
                         self.system_undiscovered = True
                     if not self.batch_mode:
                         self.update_hud()
 
                     # Check for biological signals and update the system total
-                    if "BioSignals" in data:
-                        for signal in data.get("BioSignals", []):
-                            if signal.get("Type_Localised") == "Biological":
-                                self.system_bio_signals += signal.get("Count", 0)
+                    self.system_bio_signals += d.get("bio_signals_count", 0)
 
                     # Check for valuable bodies
-                    p_class = data.get("PlanetClass", "")
-                    terraformable = data.get("TerraformState") == "Terraformable"
+                    p_class = d.get("planet_class", "")
+                    terraformable = d.get("terraform_state") == "Terraformable"
                     if p_class in ["Earthlike body", "Water world", "Ammonia world"] or terraformable:
                         self.valuable_system = True
-                        body_name_str = data.get("BodyName", "Unknown")
+                        body_name_str = body_name or "Unknown"
                         icon = "✨"
                         if p_class == "Earthlike body": icon = "🌍"
                         elif p_class == "Water world": icon = "💧"
@@ -1389,7 +1489,7 @@ class MainDashboard:
 
                     # --- Notification Logic ---
                     # Since this is a new scan, we always update.
-                    self.update_live_discord(data)
+                    self.update_live_discord(raw)
 
     def process_batch(self, events):
         self.batch_mode = True

@@ -81,9 +81,11 @@ class JournalWatcher:
                     events = []
                     for line in lines:
                         try:
-                            events.append(json.loads(line))
-                        except: pass
-                    
+                            raw = json.loads(line)
+                        except Exception:
+                            continue
+                        events.append(self._normalize_event(raw))
+
                     if events:
                         if len(events) > 50 and self.batch_event_callback:
                             self.batch_event_callback(events)
@@ -94,6 +96,147 @@ class JournalWatcher:
                 self.file_pos = f.tell()
         except Exception as e:
             logging.error(f"Error reading journal: {e}")
+
+    def _normalize_event(self, data):
+        ev = data.get("event")
+        if not ev:
+            return {"type": None, "raw": data, "data": {}}
+
+        if ev == "Fileheader":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "gameversion": data.get("gameversion"),
+                    "build": data.get("build")
+                }
+            }
+        if ev == "Loadout":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "cargo_capacity": data.get("CargoCapacity", 0)
+                }
+            }
+        if ev == "Commander":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "name": data.get("Name")
+                }
+            }
+        if ev == "LoadGame":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "commander": data.get("Commander"),
+                    "gameversion": data.get("gameversion"),
+                    "build": data.get("build")
+                }
+            }
+        if ev in ("Location", "FSDJump", "StartJump"):
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "star_system": data.get("StarSystem"),
+                    "star_pos": data.get("StarPos"),
+                    "star_class": data.get("StarClass")
+                }
+            }
+        if ev == "FSSDiscoveryScan":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "system_name": data.get("SystemName"),
+                    "body_count": data.get("BodyCount", 0)
+                }
+            }
+        if ev == "FSSAllBodiesFound":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "system_name": data.get("SystemName"),
+                    "count": data.get("Count", 0)
+                }
+            }
+        if ev == "FSSBodySignals":
+            bio_count = 0
+            geo_count = 0
+            for signal in data.get("Signals", []):
+                if signal.get("Type") == "$SAA_SignalType_Biological;":
+                    bio_count = signal.get("Count", 0)
+                elif signal.get("Type") == "$SAA_SignalType_Geological;":
+                    geo_count = signal.get("Count", 0)
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "body_id": data.get("BodyID"),
+                    "bio_count": bio_count,
+                    "geo_count": geo_count
+                }
+            }
+        if ev == "SAAScanComplete":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "body_id": data.get("BodyID")
+                }
+            }
+        if ev == "ScanOrganic":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "species": data.get("Species_Localised") or data.get("Species"),
+                    "genus": data.get("Genus_Localised") or data.get("Genus"),
+                    "sample_idx": data.get("Sample"),
+                    "scan_type": data.get("ScanType_Localised") or data.get("ScanType"),
+                    "is_new_entry": bool(data.get("IsNewEntry")),
+                    "is_new_sample": bool(data.get("IsNewSample")),
+                    "body_name": data.get("BodyName") or data.get("Body"),
+                    "max_samples": data.get("MaxSamples", 3),
+                    "biome": data.get("Biome"),
+                    "planet_class": data.get("PlanetClass"),
+                    "sample_distance": data.get("SampleDistance")
+                }
+            }
+        if ev == "Scan":
+            star_type = data.get("StarType")
+            planet_class = data.get("PlanetClass")
+            bio_signals_count = 0
+            for signal in data.get("BioSignals", []):
+                if signal.get("Type_Localised") == "Biological":
+                    bio_signals_count += signal.get("Count", 0)
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "body_name": data.get("BodyName", ""),
+                    "body_id": data.get("BodyID"),
+                    "star_system": data.get("StarSystem"),
+                    "star_type": star_type,
+                    "planet_class": planet_class,
+                    "terraform_state": data.get("TerraformState"),
+                    "landable": data.get("Landable", False),
+                    "was_discovered": data.get("WasDiscovered", True),
+                    "was_mapped": data.get("WasMapped", True),
+                    "first_footfall": data.get("FirstFootfall", False),
+                    "mass_em": data.get("MassEM"),
+                    "stellar_mass": data.get("StellarMass"),
+                    "is_body_scan": bool(star_type or planet_class),
+                    "bio_signals_count": bio_signals_count
+                }
+            }
+
+        return {"type": ev, "raw": data, "data": data}
 
     def _check_special_files(self):
         # Cargo.json

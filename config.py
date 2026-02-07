@@ -18,6 +18,7 @@ def load_config():
         'overlay_enabled': True,
         'cargo_overlay_enabled': False,
         'scan_overlay_enabled': True,
+        'bio_overlay_enabled': True,
         'hud_x': 100,
         'hud_y': 100,
         'cargo_hud_x': 800,
