@@ -1,6 +1,6 @@
 # Elite Dangerous - Void Compass
 
-A real-time exploration and navigation companion for Elite Dangerous. This tool reads your journal files as you play, providing a tactical overlay, a detailed dashboard, and live integration with EDSM and Discord to track your journey.
+A real-time exploration and navigation companion for Elite Dangerous. This tool reads your journal files as you play, providing a tactical overlay, a detailed dashboard, and live Discord integration with EDSM-backed traffic and system data.
 
 ![Dashboard Screenshot](https://raw.githubusercontent.com/insert3coins/VoidCompass-Release/main/DashBoard.PNG "Dashboard Screenshot")
 
@@ -12,7 +12,6 @@ A real-time exploration and navigation companion for Elite Dangerous. This tool 
     *   System scan progress (bodies scanned vs. total).
     *   Exobiology scan count.
     *   **Next Waypoint** navigation panel.
-    *   EDSM upload status and queue size.
     *   A detailed console log of all major events.
 *   **Tactical HUD Overlay:** A movable, always-on-top window that displays critical information over your game:
     *   Current system and route progress (e.g., "Jump 5 of 20").
@@ -43,9 +42,9 @@ A real-time exploration and navigation companion for Elite Dangerous. This tool 
     *   Dynamic titles for events like `🚀 JUMP COMPLETE`, `🛰️ SCAN: [Body]`, and `🌱 BIO-LOG: [Genus]`.
     *   Automatically highlights valuable discoveries (Earth-like, Water, Ammonia worlds, and Terraformables) with special emojis and colors.
     *   Resets with a new message upon jumping to a new system.
-*   **EDSM Integration:**
-    *   Automatically uploads your travel history and scan data (`FSDJump`, `FSSDiscoveryScan`, `Scan`, `ScanOrganic`) to the EDSM database.
-    *   Fetches system traffic data to display on the HUD.
+*   **EDSM Data:**
+    *   Fetches system traffic data for the HUD.
+    *   Pulls system coordinates/details to support route plotting and info panels.
 *   **Easy Configuration:**
     *   Automatically creates a `config.json` file on first launch.
     *   In-app settings panel to configure all major features.
@@ -68,10 +67,6 @@ The application can be configured via the in-app settings panel or by directly e
 
 *   `journal_path`: The path to your Elite Dangerous journal files. The application attempts to find the default path, but you may need to adjust it.
     *   *Default:* `C:\Users\[YourUser]\Saved Games\Frontier Developments\Elite Dangerous`
-
-*   `edsm_cmdr_name`: Your in-game commander name as registered on EDSM.
-
-*   `edsm_api_key`: Your personal API key from your EDSM profile settings.
 
 *   `discord_webhook`: The full URL for the Discord webhook you want the bot to post updates to.
 

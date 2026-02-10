@@ -62,7 +62,7 @@ class MainDashboard:
         self.body_dss_complete = set()
         self.system_undiscovered = False
         self.fss_all_bodies = False
-        self.cmdr_name = self.config.get("edsm_cmdr_name", "CMDR")
+        self.cmdr_name = "CMDR"
         self.last_scan_event = None
         self.cargo_capacity = 0
         
@@ -78,7 +78,7 @@ class MainDashboard:
         self.waypoint_cache = {}
         
         # Initialize Handlers
-        self.edsm = EDSMHandler(self.config, self.update_edsm_status, self.update_queue_count)
+        self.edsm = EDSMHandler(self.config)
         self.discord = DiscordHandler(self.config, self.root)
         self.screenshots = ScreenshotHandler(self.config, lambda: self.current_sys, self.log)
         
@@ -114,7 +114,6 @@ class MainDashboard:
         )
         self.watcher.start()
         
-        self.root.after(2000, self.verify_link)
         self.watcher.force_check_status()
         
         threading.Thread(target=self.check_updates, daemon=True).start()
@@ -276,9 +275,6 @@ class MainDashboard:
         self.traffic_stat = self.create_stat("TRAFFIC (24H)", "---")
         self.scan_stat = self.create_stat("SCAN_PROGRESS", "0 / 0")
         # Bio logs hidden for now (counting disabled)
-        self.edsm_stat = self.create_stat("EDSM_STATUS", "DISABLED")
-        if not (self.config.get("edsm_enabled", True) and self.config.get("edsm_cmdr_name") and self.config.get("edsm_api_key")): self.edsm_stat.config(fg="#666")
-        self.queue_stat = self.create_stat("UPLOAD_QUEUE", "0")
         
         tk.Label(self.side, text="VALUABLE FINDS", font=("Courier", 8), fg="#666", bg=COLOR_PANEL).pack(anchor="w", padx=20, pady=(15,0))
         self.valuable_list = tk.Listbox(self.side, bg=COLOR_PANEL, fg=COLOR_ORANGE, font=("Courier", 9), height=6, relief=tk.FLAT, highlightthickness=0, borderwidth=0)
@@ -423,15 +419,6 @@ class MainDashboard:
             except sqlite3.Error as e:
                 self.log(f"❌ DB ERROR (Body): {e}")
 
-    def update_edsm_status(self, text, color):
-        def _apply():
-            self.edsm_stat.config(text=text, fg=color)
-            self.update_hud()
-        self.root.after(0, _apply)
-
-    def update_queue_count(self, count):
-        self.root.after(0, lambda: self.queue_stat.config(text=str(count)))
-
     def update_nav_label(self):
         txt = "NO ROUTE"
         if self.dest_name:
@@ -550,7 +537,6 @@ class MainDashboard:
             self.route_plotter.on_close()
             
         self.watcher.stop()
-        self.edsm.stop()
         self.screenshots.stop()
         self.config["main_geometry"] = self.root.geometry()
         with open(CONFIG_FILE, 'w') as f:
@@ -586,19 +572,7 @@ class MainDashboard:
     def open_settings(self):
         def on_save():
             self.log("Configuration saved successfully.")
-            
-            # Live Update: EDSM
-            edsm_active = self.config.get("edsm_enabled", True) and self.config.get("edsm_cmdr_name") and self.config.get("edsm_api_key")
-            
-            if edsm_active:
-                self.edsm.status = "STANDBY"
-                self.edsm_stat.config(text="STANDBY", fg=COLOR_TEXT)
-                self.verify_link()
-            else:
-                self.edsm.status = "DISABLED"
-                self.edsm_stat.config(text="DISABLED", fg="#666")
-                self.verify_link()
-            
+
             # Live Update: Discord
             discord_active = self.config.get("discord_enabled", True) and self.config.get("discord_webhook")
             if discord_active:
@@ -644,16 +618,6 @@ class MainDashboard:
 
         
         open_settings(self.root, self.config, on_save)
-
-    def verify_link(self):
-        if self.config.get("edsm_enabled", True) and self.config.get("edsm_cmdr_name") and self.config.get("edsm_api_key"):
-            self.log("INITIATING EDSM HANDSHAKE...")
-            self.edsm.enqueue({"event": "Music", "MusicTrack": "NoTrack"}, self.current_sys, self.current_coords)
-        else:
-            if not self.config.get("edsm_enabled", True):
-                self.log("EDSM Integration: DISABLED (User Setting)")
-            else:
-                self.log("EDSM Integration: DISABLED (No Credentials)")
 
     def update_live_discord(self, event_data=None):
         if self.is_first_load:
@@ -738,7 +702,7 @@ class MainDashboard:
         fss_summary = self._get_fss_summary()
         self.root.after(0, lambda: self.hud.update(
             self.current_sys, self.dest_name, dist, 
-            self.scanned, self.total, self.edsm.status, custom_r_pos, self.organic_count, self.system_traffic, game_r_pos,
+            self.scanned, self.total, custom_r_pos, self.organic_count, self.system_traffic, game_r_pos,
             fss_summary, self.fss_summary_active
         ))
         self.update_scan_hud()
@@ -1192,7 +1156,6 @@ class MainDashboard:
         d = data.get("data", data)
         
         if ev == "Fileheader":
-            self.edsm.set_game_version(d.get("gameversion"), d.get("build"))
             self.log(f"Game version detected: {d.get('gameversion')} ({d.get('build')})")
 
         elif ev == "Loadout":
@@ -1201,15 +1164,12 @@ class MainDashboard:
 
         elif ev == "Commander":
             self.cmdr_name = d.get("name", "CMDR")
-            if not self.config.get("edsm_cmdr_name"):
-                self.config["edsm_cmdr_name"] = self.cmdr_name
 
         elif ev == "LoadGame":
             self.cmdr_name = d.get("commander", "CMDR")
             game_version = d.get("gameversion")
             game_build = d.get("build")
             if game_version and game_build:
-                self.edsm.set_game_version(game_version, game_build)
                 self.log(f"Game version detected from LoadGame: {game_version} ({game_build})")
 
         elif ev == "ScanOrganic":
@@ -1285,12 +1245,10 @@ class MainDashboard:
                     self.root.update()
                     self.log(f"📋 COPIED NEXT WAYPOINT: {next_wp}")
 
-            was_enqueued = self.edsm.enqueue(raw, self.current_sys, self.current_coords)
-            if was_enqueued:
-                if is_jump:
-                    # It's a new jump, so reset the Discord message for the new system.
-                    self.discord.reset_msg_id()
-                self.update_live_discord(raw)
+            if is_jump:
+                # It's a new jump, so reset the Discord message for the new system.
+                self.discord.reset_msg_id()
+            self.update_live_discord(raw)
             
             if not self.is_first_load:
                 self.fetch_system_traffic(self.current_sys)
@@ -1303,7 +1261,6 @@ class MainDashboard:
             self.db_update_system(self.current_sys, self.total, self.scanned)
             if not self.batch_mode:
                 self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
-            self.edsm.enqueue(raw, self.current_sys, self.current_coords)
             self.log(f"🔭 HONK: {self.total} bodies detected.")
             self.update_live_discord(raw)
             if not self.batch_mode:
@@ -1317,7 +1274,6 @@ class MainDashboard:
                 self.db_update_system(self.current_sys, self.total, self.scanned)
                 if not self.batch_mode:
                     self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
-                self.edsm.enqueue(raw, self.current_sys, self.current_coords)
                 self.log("📡 SYSTEM SCAN COMPLETE: All bodies found.")
                 if not self.batch_mode:
                     self.update_hud()
@@ -1354,8 +1310,6 @@ class MainDashboard:
         elif ev == "Scan":
             body_name = d.get("body_name", "")
             body_id = d.get("body_id", body_name)
-            
-            self.edsm.enqueue(raw, self.current_sys, self.current_coords)
             
             # Only count scans of stars or planets/moons, not belts.
             if d.get("is_body_scan"):

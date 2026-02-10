@@ -1,7 +1,6 @@
 import os
 import json
 CONFIG_FILE = 'config.json'
-EDSM_CACHE_FILE = 'edsm_cache.json'
 COLOR_BG = '#0b0b0b'
 COLOR_PANEL = '#1e1e1e'
 COLOR_ACCENT = '#00d1ff'
@@ -12,8 +11,6 @@ def load_config():
     """Loads configuration from file or returns defaults."""
     defaults = {
         'journal_path': '',
-        'edsm_cmdr_name': '',
-        'edsm_api_key': '',
         'discord_webhook': '',
         'overlay_enabled': True,
         'cargo_overlay_enabled': False,

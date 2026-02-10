@@ -1,34 +1,10 @@
-# Setup Guide: EDSM & Discord Integration
+# Setup Guide: Discord Integration
 
-This guide provides detailed steps for obtaining the necessary credentials to enable EDSM and Discord integration for Void Compass.
-
----
-
-## 1. EDSM (Elite Dangerous Star Map) API Setup
-
-Connecting to EDSM allows the application to upload your exploration data to the public database and fetch system traffic information.
-
-1.  **Navigate to EDSM:**
-    *   Open your web browser and go to [https://www.edsm.net/](https://www.edsm.net/).
-
-2.  **Log In:**
-    *   Log in using your Frontier account. If you don't have an account, you will need to create one.
-
-3.  **Access Your Profile:**
-    *   Once logged in, click on your commander name in the top-right corner of the page and select **"My EDSM profile"** from the dropdown menu.
-
-4.  **Find Your Credentials:**
-    *   On your profile page, look for a section on the right-hand side labeled **"Account"**.
-    *   In this section, you will find your **`Commander Name`** and your **`API key`**.
-
-    !EDSM API Key Location
-
-5.  **Copy and Paste:**
-    *   Copy both your `Commander Name` and the `API key` into the corresponding fields in the Void Compass **[ CONFIGURATION ]** panel.
+Void Compass fetches EDSM traffic and system data automatically; no EDSM credentials or setup are required.
 
 ---
 
-## 2. Discord Webhook Setup
+## Discord Webhook Setup
 
 A Discord webhook provides a URL that the application can use to send live updates directly to a text channel in your server.
 

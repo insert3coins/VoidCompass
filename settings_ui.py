@@ -110,33 +110,6 @@ def open_settings(root, config, on_save_callback):
     scan_btn.pack(side=tk.RIGHT)
     update_scan_visuals()
 
-    # --- EDSM Settings ---
-    sec_edsm = create_section(container, "EDSM UPLINK")
-    
-    # Toggle EDSM
-    edsm_toggle_frame = tk.Frame(sec_edsm, bg=COLOR_BG)
-    edsm_toggle_frame.pack(fill=tk.X, padx=15, pady=(5, 5))
-    tk.Label(edsm_toggle_frame, text="Enable EDSM Integration", font=("Courier", 9), fg="#888", bg=COLOR_BG).pack(side=tk.LEFT)
-    
-    edsm_var = tk.BooleanVar(value=config.get("edsm_enabled", True))
-    
-    def toggle_edsm():
-        edsm_var.set(not edsm_var.get())
-        update_edsm_visuals()
-        
-    def update_edsm_visuals():
-        if edsm_var.get():
-            edsm_btn.config(text="[ ENABLED ]", fg=COLOR_ACCENT)
-        else:
-            edsm_btn.config(text="[ DISABLED ]", fg="#555")
-
-    edsm_btn = tk.Button(edsm_toggle_frame, text="[ ENABLED ]", font=("Courier", 9, "bold"), bg=COLOR_BG, activebackground=COLOR_BG, bd=0, command=toggle_edsm, cursor="hand2")
-    edsm_btn.pack(side=tk.RIGHT)
-    update_edsm_visuals()
-
-    n_e = create_input(sec_edsm, "Commander Name", "edsm_cmdr_name")
-    k_e = create_input(sec_edsm, "API Key", "edsm_api_key", is_password=True)
-
     # --- Discord Settings ---
     sec_disc = create_section(container, "DISCORD TELEMETRY")
     
@@ -197,9 +170,6 @@ def open_settings(root, config, on_save_callback):
         config.update({
             "journal_path": j_e.get().strip(),
             "discord_webhook": d_e.get().strip(),
-            "edsm_cmdr_name": n_e.get().strip(),
-            "edsm_api_key": k_e.get().strip(),
-            "edsm_enabled": edsm_var.get(),
             "discord_enabled": disc_var.get(),
             "overlay_enabled": ov_var.get(),
             "cargo_overlay_enabled": cargo_var.get(),
@@ -208,6 +178,8 @@ def open_settings(root, config, on_save_callback):
             "screenshots_path": ss_e.get().strip(),
             "settings_geometry": win.geometry()
         })
+        for key in ("edsm_cmdr_name", "edsm_api_key", "edsm_enabled"):
+            config.pop(key, None)
         
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=4)
@@ -217,6 +189,8 @@ def open_settings(root, config, on_save_callback):
 
     def close_window():
         config["settings_geometry"] = win.geometry()
+        for key in ("edsm_cmdr_name", "edsm_api_key", "edsm_enabled"):
+            config.pop(key, None)
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=4)
         win.destroy()

@@ -1,6 +1,6 @@
 import tkinter as tk
 import json
-from config import CONFIG_FILE, COLOR_ACCENT, COLOR_GREEN, COLOR_TEXT, COLOR_ORANGE
+from config import CONFIG_FILE, COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE
 
 class TacticalHUD:
     def __init__(self, root, config):
@@ -68,7 +68,7 @@ class TacticalHUD:
         self.canvas.create_text(x+1, y+1, text=text, fill="black", font=font, anchor=anchor, tags=tags)
         self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor, tags=tags)
 
-    def update(self, current_sys, dest_name, dist_ly, scanned, total, edsm_status, r_pos, organic_count, system_traffic, game_r_pos=None, fss_summary=None, fss_summary_active=False):
+    def update(self, current_sys, dest_name, dist_ly, scanned, total, r_pos, organic_count, system_traffic, game_r_pos=None, fss_summary=None, fss_summary_active=False):
         # Build HV lines for dynamic sizing when FSS summary is active
         hv_lines = []
         if fss_summary_active and fss_summary:
@@ -147,16 +147,13 @@ class TacticalHUD:
             t_week = system_traffic.get('week', 0)
             t_total = system_traffic.get('total', 0)
             self.draw_text(20, y_line, text=f"TRAFFIC: Today : {t_day}  This Week : {t_week}  Total : {t_total}", fill=COLOR_TEXT, font=("Courier", 8), anchor="w")
-            edsm_y = y_line + 14
+            route_y = y_line + 14
         else:
             t_day = system_traffic.get('day', 0)
             t_week = system_traffic.get('week', 0)
             t_total = system_traffic.get('total', 0)
             self.draw_text(20, 134, text=f"TRAFFIC: Today : {t_day}  This Week : {t_week}  Total : {t_total}", fill=COLOR_TEXT, font=("Courier", 9), anchor="w")
-            edsm_y = 154
-
-        status_color = COLOR_GREEN if edsm_status == "OK" else "red"
-        self.draw_text(20, edsm_y, text=f"EDSM: {edsm_status}", fill=status_color, font=("Courier", 9, "bold"), anchor="w")
+            route_y = 154
 
         route_text = "ROUTE: INACTIVE"
         if r_pos:
@@ -164,4 +161,4 @@ class TacticalHUD:
                 route_text = f"ROUTE: {r_pos[0]} / {r_pos[1]} ({r_pos[2]})"
             else:
                 route_text = f"ROUTE: {r_pos[0]} / {r_pos[1]}"
-        self.draw_text(440, edsm_y, text=route_text, fill=COLOR_GREEN, font=("Courier", 9, "bold"), anchor="e")
+        self.draw_text(440, route_y, text=route_text, fill=COLOR_ACCENT, font=("Courier", 9, "bold"), anchor="e")
