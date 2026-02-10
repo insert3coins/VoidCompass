@@ -1,0 +1,114 @@
+Beagle Point, Starting point - 65,279 LY from Sol (34 LY minimum range to reach)
+Myeia Thaa ZE-R d4-0, Podar - ringed ELW with 3 moons on the Abyss edge
+Cheae Eurl AA-A e0, The Sublustris Beacon (eastern rim)
+Hyphielia QH-K c22-0, Silentium Shores
+Praei Bre WO-R d4-3, Northern rim waypoint
+Suvua FG-Y f0, Alatar and Pallando (binary system)
+Hypaa Byio ZE-A g1, The Hypaa Byio Buoy
+Eembaitl DL-Y d13, Ultima Centauri (neutron star)
+Chua Eop ZC-T c20-0, Lone Star (northern extreme)
+Exahn AZ-S d3-8, Northern rim (1.0% Polonium)
+Gria Bloae YE-A g0, Northern void waypoint
+Oedgaf DL-Y g0, Rimor Captionem
+Footie AA-A g0, Blue In The Black
+Flyae Proae IN-S e4-1, Flyae Proae Planetary Nebula (black hole + gas giant)
+Flyoo Groa SO-Z e0, DSSA Solsen's Alastor
+Slacheae CK-A d0, The Amphitheatre
+Eos Brai KR-W e1-4, Osprey Stellar Remnant
+Hypiae Brue DI-D c12-0, Hanekura Crossing
+Hypou Chreou RS-S c17-6, Western rim approach
+Lyruewry BK-R d4-12, Banded Azane
+Auzorts NR-N d6-0, Western rim navigation
+Byaa Thoi EW-E d11-0, Basecamp Star One
+Cyuefoo LC-D d12-0, WESTERN MERIDIAN - Manifest Destiny (furthest west!)
+Cyuefai BC-D d12-4, Westpoint Ormand
+Spongou FA-A e2, Spongou Nebula (planetary nebula with black hole)
+HIP 117078, PZ Cassiopeiae
+Syroifoe CL-Y g1, The Syroifoe Oasis
+Aicods KD-K d8-3, Point Decision (historic circumnavigation waypoint)
+Hypuae Euq ZK-P d5-0, Notus - The Southern Meridian
+Lyed YJ-I d9-0, Amundsen's Star
+Angosk OM-W d1-0, Sepositus Beacon
+Angosk DL-P d5-0, Distant Angosk (ALL jumponium materials!)
+Hypau Aec IO-Z d13-0, Arms End - DSSA Explorer's Bar & Grill
+Spliehm HW-Y b55-0, Southern approach
+Chraufoa HW-L d8-0, Southern rim navigation
+3 Geminorum, Southern rim waypoint
+Crab Sector DL-Y d9, Station X (1.2% Polonium)
+HIP 23759, Witch Head Science Centre
+NGC 1501, Oyster Nebula (ALL jumponium materials)
+Heart Nebula, IC 1805 region
+Soul Nebula, Twin nebula complex
+EAFOTS LZ-H b10-0, Formidine Rift Abandoned Settlements
+Syreadiae JX-F c0, The Zurara (Dynasty megaship wreck!)
+EAFOTS EU-R c4-1, Formidine Rift Dynasty beacon
+Wregoe BU-Y b29-0, Formidine Rift listening post
+Col 359 Sector MJ-D b13-0, Bovomit Badlands (DANGEROUS! twin star + black holes!)
+Plae Eur IC-D d12-0, PERNICIOUS - Eastern Meridian (furthest east from core)
+Plae Eur DW-E d11-0, Eastern rim approach
+Ood Fleau ZJ-I d9-0, MAGELLAN'S STAR - Southern Extreme (furthest south)
+Ausain CO-S c17-2, Fly By Ice
+Prea Aick MO-Z d13-2, King Midas
+Blea Airgh EI-B d13-1, Eastern rim navigation
+Synookaea MX-L d7-0, Eastern edge waypoint
+Iorady JO-Z d13-0, ASTEROUS - Northern Meridian (FURTHEST NORTH!)
+Rackham's Peak, HIP 58832 (highest elevation planet in galaxy!)
+Phae Phlai AA-A h0, Explorer's End
+Booreau AA-A h0, Northern rim H-class
+Floarps AA-A h0, Perseus Arm navigation
+Dryuae Aowsy AA-A h0, Northern edge H-class
+Prua Phoe AA-A h0, Rim waypoint
+Lyaisae AA-A h0, Northern rim H-class
+Graea Hypue AA-A h0, Perseus edge
+Phrio Bluae KC-V e2-0, Rim navigation
+Hypoe Flyuae AA-A h0, Northern H-class waypoint
+Bleethuae NI-B d674, Eastern rim approach
+Dryaa Flyuae AA-A h0, H-class waypoint
+Dryooe Flyou AA-A h0, Navigation point
+Skaude AA-A h294, Collection of Wonders (2 black holes, ringed M-star, ringed white dwarf, ringed neutron!)
+Dryau Chreou WD-K d8-0, Approach to Colonia
+Dryau Ausms KG-Y e3390, DSSA Buurian Anchorage
+Kashyapa, Deep space outpost
+Colonia, MAJOR RESUPPLY - Jaques Station (full services!)
+Stuemeae FG-Y d7561, Explorer's Anchorage (near Sag A*)
+Great Annihilator, Binary black hole system (dangerous!)
+Sagittarius A*, Galactic center supermassive black hole
+Pru Aescs NC-M d7-192, Core region waypoint
+Swoals IL-Y e0, Goliath's Rest
+Smootoae QY-S d3-202, Luna's Shadow
+Eactainds AA-A h1, Rendezvous Point
+Prungoa EF-A e5, Red Coral
+Nyeakue AA-A h31, Sheol
+Eta Carina Sector JH-V c2-7, Eta Carina Nebula
+Statue of Liberty Sector LC-V c2-12, Statue of Liberty Nebula
+HD 112272, Variabilis
+NGC 6357, War and Peace Nebula
+NGC 6188, RCW 108
+Thor's Helmet, NGC 2359
+Rosette Nebula, NGC 2237-9
+Horsehead Nebula, Iconic dark nebula
+Flame Nebula, NGC 2024
+Orion Nebula, Messier 42 (Great Nebula!)
+Barnard's Loop, Giant emission arc
+California Nebula, NGC 1499
+Pleiades Nebula, Seven Sisters cluster
+Merope, Pleiades (barnacle sites - meta-alloys!)
+Maia, Thargoid presence
+Alcyone, Brightest Pleiad
+Witch Head Nebula, Blue reflection nebula
+Elephant's Trunk Nebula, IC 1396
+NGC 7822, Black hole cluster (10+ black holes!)
+Caldwell 1, NGC 188
+Lemon Slice Nebula, BD+83 357
+Thor's Eye, Black hole with nebula
+Eagle Nebula, Messier 16 (Pillars of Creation!)
+Lagoon Nebula, Messier 8
+Trifid Nebula, Messier 20
+Omega Nebula, Messier 17
+Veil Nebula, Supernova remnant
+Crab Nebula, Messier 1 (pulsar!)
+Helix Nebula, NGC 7293
+Dumbbell Nebula, Messier 27
+Ring Nebula, Messier 57
+Cat's Eye Nebula, NGC 6543
+Sol, HOME - Journey complete! o7
