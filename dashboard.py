@@ -71,6 +71,12 @@ class MainDashboard:
         self.current_coords = [0,0,0]
         self.dest_name = None
         self.route_list = []
+        self.session_start_ts = time.time()
+        self.session_jump_count = 0
+        self.session_ly = 0.0
+        self.log_filter = "ALL"
+        self.log_entries = []
+        self.details_visible = True
         
         self.setup_layout()
         self.waypoint_manager = WaypointManager()
@@ -121,6 +127,7 @@ class MainDashboard:
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.update_hud()
+        self._tick_session_clock()
 
     def init_db(self):
         """Initialize SQLite database and migrate JSON if needed."""
@@ -263,66 +270,187 @@ class MainDashboard:
         # Screenshot Button
         btn_ss = tk.Button(self.nav, text="[ SCREENSHOTS ]", command=self.open_screenshots_folder, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9, "bold"), relief=tk.FLAT)
         btn_ss.pack(side=tk.RIGHT, padx=5)
-        
+
+        self.summary_bar = tk.Frame(self.root, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1, height=34)
+        self.summary_bar.pack(fill=tk.X, padx=10, pady=(8, 0))
+        self.summary_bar.pack_propagate(False)
+
+        def _summary_item(text):
+            lbl = tk.Label(self.summary_bar, text=text, font=("Courier", 9, "bold"), fg=COLOR_TEXT, bg=COLOR_PANEL)
+            lbl.pack(side=tk.LEFT, padx=14)
+            return lbl
+
+        self.summary_sys = _summary_item("SYS: ---")
+        self.summary_route = _summary_item("ROUTE: INACTIVE")
+        self.summary_scan = _summary_item("SCAN: 0/0")
+        self.summary_traffic = _summary_item("TRAFFIC: 0/0/0")
+        self.summary_session = _summary_item("SESSION: 00:00:00")
+
+        self.alert_bar = tk.Frame(self.root, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1, height=30)
+        self.alert_bar.pack(fill=tk.X, padx=10, pady=(6, 0))
+        self.alert_bar.pack_propagate(False)
+        tk.Label(self.alert_bar, text="ALERTS", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(side=tk.LEFT, padx=(10, 8))
+        self.alert_lbl = tk.Label(self.alert_bar, text="NONE", font=("Courier", 9), fg="#888", bg=COLOR_PANEL, anchor="w")
+        self.alert_lbl.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
         body = tk.Frame(self.root, bg=COLOR_BG)
         body.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        self.side = tk.Frame(body, bg=COLOR_PANEL, width=280, highlightbackground="#333", highlightthickness=1)
+
+        self.side = tk.Frame(body, bg=COLOR_PANEL, width=320, highlightbackground="#333", highlightthickness=1)
         self.side.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
         self.side.pack_propagate(False)
-        
-        self.sys_stat = self.create_stat("CURRENT_SYSTEM", "---")
-        self.nav_stat = self.create_stat("NAVIGATION TARGET", "---")
-        self.traffic_stat = self.create_stat("TRAFFIC (24H)", "---")
-        self.scan_stat = self.create_stat("SCAN_PROGRESS", "0 / 0")
-        # Bio logs hidden for now (counting disabled)
-        
-        tk.Label(self.side, text="VALUABLE FINDS", font=("Courier", 8), fg="#666", bg=COLOR_PANEL).pack(anchor="w", padx=20, pady=(15,0))
-        self.valuable_list = tk.Listbox(self.side, bg=COLOR_PANEL, fg=COLOR_ORANGE, font=("Courier", 9), height=6, relief=tk.FLAT, highlightthickness=0, borderwidth=0)
-        self.valuable_list.pack(fill=tk.X, padx=20, pady=5)
-        
-        tk.Label(self.side, text="© 2026 insert3coins", font=("Courier", 8), fg="#444", bg=COLOR_PANEL).pack(side=tk.BOTTOM, anchor="w", padx=20, pady=10)
-        
-        btn_scan = tk.Button(self.side, text="[ REBUILD CACHE ]", command=self.scan_all_logs_threaded, bg=COLOR_PANEL, fg="#555", font=("Courier", 8, "bold"), relief=tk.FLAT, activebackground=COLOR_PANEL, activeforeground=COLOR_TEXT)
-        btn_scan.pack(side=tk.BOTTOM, anchor="w", padx=20, pady=(0, 5))
-        
-        # Right Column (Waypoint Info + Log)
-        right_col = tk.Frame(body, bg=COLOR_BG)
-        right_col.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
-        # Waypoint Info Panel
-        self.wp_panel = tk.Frame(right_col, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1, height=80)
-        self.wp_panel.pack(fill=tk.X, pady=(0, 10))
+        status_card = tk.Frame(self.side, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
+        status_card.pack(fill=tk.X, padx=10, pady=(10, 8))
+        tk.Label(status_card, text="STATUS", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(6, 0))
+        self.integration_lbl = tk.Label(status_card, text="HUD: ON | DISCORD: OFF | SHOTS: OFF", font=("Courier", 8), fg="#999", bg=COLOR_PANEL, anchor="w")
+        self.integration_lbl.pack(fill=tk.X, padx=10, pady=(2, 8))
+
+        metrics_card = tk.Frame(self.side, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
+        metrics_card.pack(fill=tk.X, padx=10, pady=8)
+        tk.Label(metrics_card, text="PINNED METRICS", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(6, 0))
+        self.sys_stat = self.create_stat(metrics_card, "CURRENT SYSTEM", "---")
+        self.nav_stat = self.create_stat(metrics_card, "NAV TARGET", "---")
+        self.scan_stat = self.create_stat(metrics_card, "SCAN PROGRESS", "0 / 0")
+
+        self.wp_panel = tk.Frame(self.side, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1, height=110)
+        self.wp_panel.pack(fill=tk.X, padx=10, pady=8)
         self.wp_panel.pack_propagate(False)
-
-        # Header Row
         header_row = tk.Frame(self.wp_panel, bg=COLOR_PANEL)
         header_row.pack(fill=tk.X, padx=10, pady=(5, 0))
-        tk.Label(header_row, text="NEXT WAYPOINT:", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(side=tk.LEFT)
-        self.wp_dist_lbl = tk.Label(header_row, text="", font=("Courier", 10, "bold"), fg=COLOR_ACCENT, bg=COLOR_PANEL)
+        tk.Label(header_row, text="ROUTE NOTES", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(side=tk.LEFT)
+        self.wp_dist_lbl = tk.Label(header_row, text="", font=("Courier", 9, "bold"), fg=COLOR_ACCENT, bg=COLOR_PANEL)
         self.wp_dist_lbl.pack(side=tk.RIGHT)
+        self.wp_name_lbl = tk.Label(self.wp_panel, text="NO ACTIVE ROUTE", font=("Courier", 12, "bold"), fg=COLOR_TEXT, bg=COLOR_PANEL, anchor="w")
+        self.wp_name_lbl.pack(fill=tk.X, padx=10, pady=(6, 0))
+        self.wp_info_lbl = tk.Label(self.wp_panel, text="", font=("Courier", 8), fg="#aaa", bg=COLOR_PANEL, anchor="w", justify=tk.LEFT, wraplength=290)
+        self.wp_info_lbl.pack(fill=tk.X, padx=10, pady=(2, 6))
 
-        self.wp_name_lbl = tk.Label(self.wp_panel, text="NO ACTIVE ROUTE", font=("Courier", 16, "bold"), fg=COLOR_TEXT, bg=COLOR_PANEL)
-        self.wp_name_lbl.pack(anchor="w", padx=10)
-        
-        self.wp_info_lbl = tk.Label(self.wp_panel, text="", font=("Courier", 9), fg="#aaa", bg=COLOR_PANEL)
-        self.wp_info_lbl.pack(anchor="w", padx=10)
+        side_actions = tk.Frame(self.side, bg=COLOR_PANEL)
+        side_actions.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
+        tk.Button(side_actions, text="[ REBUILD CACHE ]", command=self.scan_all_logs_threaded, bg=COLOR_PANEL, fg="#777", font=("Courier", 8, "bold"), relief=tk.FLAT, activebackground=COLOR_PANEL, activeforeground=COLOR_TEXT).pack(side=tk.LEFT)
+        tk.Label(side_actions, text="© 2026 insert3coins", font=("Courier", 8), fg="#444", bg=COLOR_PANEL).pack(side=tk.RIGHT)
 
-        # Log Panel
-        log_frame = tk.Frame(right_col, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
+        center = tk.Frame(body, bg=COLOR_BG)
+        center.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        ops = tk.Frame(center, bg=COLOR_BG)
+        ops.pack(fill=tk.X)
+        for col in range(3):
+            ops.grid_columnconfigure(col, weight=1)
+
+        self.card_nav = self._build_ops_card(ops, "NAVIGATION", 0, 0)
+        self.card_scan = self._build_ops_card(ops, "SCANNING", 0, 1)
+        self.card_traffic = self._build_ops_card(ops, "TRAFFIC", 0, 2)
+        self.card_value = self._build_ops_card(ops, "ECONOMY", 1, 0)
+        self.card_session = self._build_ops_card(ops, "SESSION", 1, 1)
+        self.card_system = self._build_ops_card(ops, "SYSTEM INTEL", 1, 2)
+
+        self.details_toggle = tk.Button(center, text="[ DETAILS: VISIBLE ]", command=self.toggle_details, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 8, "bold"), relief=tk.FLAT, activebackground=COLOR_PANEL, activeforeground=COLOR_ACCENT)
+        self.details_toggle.pack(anchor="w", pady=(10, 4))
+
+        self.details_drawer = tk.Frame(center, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
+        self.details_drawer.pack(fill=tk.X, pady=(0, 8))
+        self.details_drawer.grid_columnconfigure(0, weight=1)
+        self.details_drawer.grid_columnconfigure(1, weight=1)
+
+        vf_wrap = tk.Frame(self.details_drawer, bg=COLOR_PANEL)
+        vf_wrap.grid(row=0, column=0, sticky="nsew", padx=(8, 4), pady=8)
+        tk.Label(vf_wrap, text="VALUABLE FINDS", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w")
+        self.valuable_list = tk.Listbox(vf_wrap, bg=COLOR_PANEL, fg=COLOR_ORANGE, font=("Courier", 9), height=7, relief=tk.FLAT, highlightthickness=0, borderwidth=0)
+        self.valuable_list.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
+
+        rd_wrap = tk.Frame(self.details_drawer, bg=COLOR_PANEL)
+        rd_wrap.grid(row=0, column=1, sticky="nsew", padx=(4, 8), pady=8)
+        tk.Label(rd_wrap, text="RECENT DISCOVERIES", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w")
+        self.recent_list = tk.Listbox(rd_wrap, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9), height=7, relief=tk.FLAT, highlightthickness=0, borderwidth=0)
+        self.recent_list.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
+
+        log_frame = tk.Frame(center, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
         log_frame.pack(fill=tk.BOTH, expand=True)
-        
+        log_toolbar = tk.Frame(log_frame, bg=COLOR_PANEL)
+        log_toolbar.pack(fill=tk.X, padx=6, pady=(6, 2))
+        tk.Label(log_toolbar, text="ACTIVITY LOG", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(side=tk.LEFT)
+        for tag in ("ALL", "JUMP", "SCAN", "ALERT", "ERROR"):
+            tk.Button(log_toolbar, text=f"[ {tag} ]", command=lambda t=tag: self.set_log_filter(t), bg=COLOR_PANEL, fg=COLOR_TEXT if tag == "ALL" else "#888", font=("Courier", 8, "bold"), relief=tk.FLAT, activebackground=COLOR_PANEL, activeforeground=COLOR_ACCENT).pack(side=tk.RIGHT, padx=2)
         self.log_box = scrolledtext.ScrolledText(log_frame, bg="#000", fg=COLOR_GREEN, font=("Courier", 10), borderwidth=0)
         self.log_box.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-    def create_stat(self, label, val):
-        tk.Label(self.side, text=label, font=("Courier", 8), fg="#666", bg=COLOR_PANEL).pack(anchor="w", padx=20, pady=(10,0))
-        l = tk.Label(self.side, text=val, font=("Courier", 11, "bold"), fg=COLOR_TEXT, bg=COLOR_PANEL)
-        l.pack(anchor="w", padx=20)
+    def create_stat(self, parent, label, val):
+        tk.Label(parent, text=label, font=("Courier", 8), fg="#666", bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(8, 0))
+        l = tk.Label(parent, text=val, font=("Courier", 10, "bold"), fg=COLOR_TEXT, bg=COLOR_PANEL)
+        l.pack(anchor="w", padx=10)
         return l
 
+    def _build_ops_card(self, parent, title, row, col):
+        card = tk.Frame(parent, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
+        card.grid(row=row, column=col, sticky="nsew", padx=4, pady=4)
+        tk.Label(card, text=title, font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(6, 0))
+        line1 = tk.Label(card, text="-", font=("Courier", 9, "bold"), fg=COLOR_TEXT, bg=COLOR_PANEL, anchor="w")
+        line1.pack(fill=tk.X, padx=10, pady=(4, 0))
+        line2 = tk.Label(card, text="-", font=("Courier", 8), fg="#aaa", bg=COLOR_PANEL, anchor="w")
+        line2.pack(fill=tk.X, padx=10, pady=(2, 0))
+        line3 = tk.Label(card, text="-", font=("Courier", 8), fg="#888", bg=COLOR_PANEL, anchor="w")
+        line3.pack(fill=tk.X, padx=10, pady=(2, 8))
+        card.line1 = line1
+        card.line2 = line2
+        card.line3 = line3
+        return card
+
+    def set_log_filter(self, mode):
+        self.log_filter = mode
+        self._refresh_log_view()
+
+    def _matches_log_filter(self, text):
+        t = text.upper()
+        if self.log_filter == "ALL":
+            return True
+        if self.log_filter == "JUMP":
+            return "JUMP" in t or "LOCATION" in t
+        if self.log_filter == "SCAN":
+            return "SCAN" in t or "HONK" in t or "FSS" in t
+        if self.log_filter == "ALERT":
+            return "BIO" in t or "VALUABLE" in t or "SYSTEM SCAN COMPLETE" in t
+        if self.log_filter == "ERROR":
+            return "ERROR" in t or "FAILED" in t or "ERR" in t
+        return True
+
+    def _refresh_log_view(self):
+        if not hasattr(self, "log_box"):
+            return
+        self.log_box.delete("1.0", tk.END)
+        for line in self.log_entries[-500:]:
+            if self._matches_log_filter(line):
+                self.log_box.insert(tk.END, line + "\n")
+        self.log_box.see(tk.END)
+
     def log(self, msg):
-        self.root.after(0, lambda: (self.log_box.insert(tk.END, f"[{datetime.now().strftime('%H:%M:%S')}] {msg}\n"), self.log_box.see(tk.END)))
+        line = f"[{datetime.now().strftime('%H:%M:%S')}] {msg}"
+        self.log_entries.append(line)
+        self.root.after(0, self._refresh_log_view)
+
+    def toggle_details(self):
+        self.details_visible = not self.details_visible
+        if self.details_visible:
+            self.details_drawer.pack(fill=tk.X, pady=(0, 8))
+            self.details_toggle.config(text="[ DETAILS: VISIBLE ]")
+        else:
+            self.details_drawer.pack_forget()
+            self.details_toggle.config(text="[ DETAILS: HIDDEN ]")
+
+    def _get_session_elapsed_text(self):
+        elapsed = max(int(time.time() - self.session_start_ts), 0)
+        hrs = elapsed // 3600
+        mins = (elapsed % 3600) // 60
+        secs = elapsed % 60
+        return f"{hrs:02d}:{mins:02d}:{secs:02d}"
+
+    def _tick_session_clock(self):
+        if not self.is_running:
+            return
+        if hasattr(self, "summary_session"):
+            self.summary_session.config(text=f"SESSION: {self._get_session_elapsed_text()}")
+        self.root.after(1000, self._tick_session_clock)
 
     def check_updates(self):
         try:
@@ -435,18 +563,83 @@ class MainDashboard:
         
         self.sys_stat.config(text=sys_text)
         self.scan_stat.config(text=f"{self.scanned} / {self.total}")
-        # Bio logs hidden for now (counting disabled)
-        self.traffic_stat.config(text=str(self.system_traffic.get('day', 0)))
         self.update_nav_label()
-        
+
+        route_text = "INACTIVE"
+        if self.waypoint_manager.waypoints:
+            total_wp = len(self.waypoint_manager.waypoints)
+            visited = sum(1 for wp in self.waypoint_manager.waypoints if wp.get("visited", False))
+            route_text = f"{visited}/{total_wp}"
+
+        traffic_day = self.system_traffic.get("day", 0)
+        traffic_week = self.system_traffic.get("week", 0)
+        traffic_total = self.system_traffic.get("total", 0)
+
+        self.summary_sys.config(text=f"SYS: {self.current_sys}")
+        self.summary_route.config(text=f"ROUTE: {route_text}")
+        self.summary_scan.config(text=f"SCAN: {self.scanned}/{self.total}")
+        self.summary_traffic.config(text=f"TRAFFIC: {traffic_day}/{traffic_week}/{traffic_total}")
+        self.summary_session.config(text=f"SESSION: {self._get_session_elapsed_text()}")
+
+        self.card_nav.line1.config(text=f"Target: {self.dest_name or 'NO ROUTE'}")
+        self.card_nav.line2.config(text=f"Current: {self.current_sys}")
+        self.card_nav.line3.config(text=f"Route Progress: {route_text}")
+
+        scan_pct = int((self.scanned / self.total) * 100) if self.total > 0 else 0
+        self.card_scan.line1.config(text=f"Scanned: {self.scanned}/{self.total} ({scan_pct}%)")
+        self.card_scan.line2.config(text=f"Bodies Tracked: {len(self.scanned_bodies)}")
+        self.card_scan.line3.config(text=f"FSS Summary: {'ACTIVE' if self.fss_summary_active else 'IDLE'}")
+
+        self.card_traffic.line1.config(text=f"Current Sys: {self.current_sys}")
+        self.card_traffic.line2.config(text=f"Coords: {self.current_coords}")
+        self.card_traffic.line3.config(text=f"Star: {self.star_class or 'UNKNOWN'}")
+
+        total_value = 0
+        for item in self.scan_items:
+            reward = item.get("dss_reward") if item.get("dss_complete") else item.get("reward")
+            if isinstance(reward, (int, float)):
+                total_value += int(reward)
+        self.card_value.line1.config(text=f"System Value Est: {self._format_credits(total_value)}")
+        self.card_value.line2.config(text=f"Valuable Bodies: {len(self.valuable_bodies)}")
+        self.card_value.line3.config(text=f"Bio Signals: {self.system_bio_signals}")
+
+        self.card_session.line1.config(text=f"Jumps: {self.session_jump_count}")
+        self.card_session.line2.config(text=f"Distance: {self.session_ly:,.1f} LY")
+        avg_jump = (self.session_ly / self.session_jump_count) if self.session_jump_count else 0.0
+        self.card_session.line3.config(text=f"Avg Jump: {avg_jump:,.1f} LY")
+
+        self.card_system.line1.config(text=f"Star Class: {self.star_class or 'UNKNOWN'}")
+        self.card_system.line2.config(text=f"Undiscovered System: {'YES' if self.system_undiscovered else 'NO'}")
+        self.card_system.line3.config(text=f"In FSS: {'YES' if self.in_fss else 'NO'}")
+
+        hud_on = "ON" if self.hud else "OFF"
+        disc_on = "ON" if (self.config.get("discord_enabled", True) and self.config.get("discord_webhook")) else "OFF"
+        shots_on = "ON" if self.config.get("screenshots_enabled", False) else "OFF"
+        self.integration_lbl.config(text=f"HUD: {hud_on} | DISCORD: {disc_on} | SHOTS: {shots_on}")
+
+        alerts = []
+        if self.system_undiscovered:
+            alerts.append("UNDISCOVERED SYSTEM")
+        if self.system_bio_signals > 0:
+            alerts.append(f"BIO SIGNALS: {self.system_bio_signals}")
+        if self.valuable_bodies:
+            alerts.append(f"VALUABLE FINDS: {len(self.valuable_bodies)}")
+        if self.fss_summary_active:
+            alerts.append("FSS SUMMARY ACTIVE")
+        self.alert_lbl.config(text=" | ".join(alerts) if alerts else "NONE")
+
         self.valuable_list.delete(0, tk.END)
         for item in self.valuable_bodies:
-            # item is stored as "- 🌍 Earthlike...", listbox needs just "🌍 Earthlike..."
-            # The storage format in process_event is "- {icon} {name}"
-            # The listbox insert in process_event is "{icon} {name}"
-            # Let's just strip the leading "- " if present
             display_text = item[2:] if item.startswith("- ") else item
             self.valuable_list.insert(tk.END, display_text)
+
+        self.recent_list.delete(0, tk.END)
+        for item in self.scan_items[:10]:
+            nm = item.get("name", "Unknown")
+            reward = item.get("dss_reward") if item.get("dss_complete") else item.get("reward")
+            reward_txt = self._format_credits(reward, hide_units=True)
+            self.recent_list.insert(tk.END, f"{nm}  [{reward_txt}]")
+
         self.update_waypoint_display()
 
     def update_waypoint_display(self):
@@ -641,13 +834,14 @@ class MainDashboard:
 
     def fetch_system_traffic(self, system_name):
         def callback(traffic_data):
-            if self.current_sys != system_name:
-                return
-            self.system_traffic = traffic_data
-            self.root.after(0, lambda: self.traffic_stat.config(text=str(traffic_data.get('day', 0))))
-            # Always update the HUD to reflect the new (or reset) traffic data.
-            self.update_hud()
-            self.update_live_discord()
+            def _apply():
+                if self.current_sys != system_name:
+                    return
+                self.system_traffic = traffic_data
+                self.update_dashboard_ui()
+                self.update_hud()
+                self.update_live_discord()
+            self.root.after(0, _apply)
         
         self.edsm.fetch_traffic(system_name, callback)
 
@@ -1194,10 +1388,25 @@ class MainDashboard:
                 self.in_fss = False
                 self.fss_summary_active = False
 
+            prev_coords = self.current_coords if isinstance(self.current_coords, list) else None
+
             # State reset for new system
             self.current_sys = d.get("star_system", "Unknown")
             self.current_coords = d.get("star_pos", [0,0,0])
-            self.star_class = d.get("star_class", "")
+            # Preserve existing class when an event omits StarClass (common on some transitions).
+            next_star_class = d.get("star_class")
+            if not next_star_class:
+                next_star_class = raw.get("StarClass") if isinstance(raw, dict) else None
+            if next_star_class:
+                self.star_class = next_star_class
+
+            if is_jump and prev_coords and self.current_coords:
+                try:
+                    jump_ly = math.sqrt(sum((a - b) ** 2 for a, b in zip(prev_coords, self.current_coords)))
+                    self.session_jump_count += 1
+                    self.session_ly += jump_ly
+                except Exception:
+                    pass
             
             # Load from history if available
             self.load_system_from_db(self.current_sys)
@@ -1229,6 +1438,7 @@ class MainDashboard:
             # Bio logs hidden for now (counting disabled)
                 self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                 self.root.after(0, self.update_waypoint_display)
+                self.root.after(0, self.update_dashboard_ui)
                 self.update_scan_hud()
 
             # Update Route Plotter UI if open
