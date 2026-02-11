@@ -49,6 +49,7 @@ class MainDashboard:
         self.organic_count = 0
         self.system_bio_signals = 0
         self.system_traffic = {'day': 0, 'week': 0, 'total': 0}
+        self.last_traffic_system = None
         self.valuable_system = False
         self.valuable_bodies = []
         self.scanned_bodies = set()
@@ -1250,7 +1251,8 @@ class MainDashboard:
                 self.discord.reset_msg_id()
             self.update_live_discord(raw)
             
-            if not self.is_first_load:
+            if self.current_sys != self.last_traffic_system:
+                self.last_traffic_system = self.current_sys
                 self.fetch_system_traffic(self.current_sys)
 
         elif ev == "FSSDiscoveryScan":
@@ -1374,6 +1376,7 @@ class MainDashboard:
             if self.config.get("discord_enabled", True) and self.config.get("discord_msg_system") != self.current_sys:
                 self.log("Stale Discord message detected. A new message will be created.")
                 self.discord.reset_msg_id()
+            self.last_traffic_system = self.current_sys
             self.fetch_system_traffic(self.current_sys)
             self.update_hud()
             self.update_live_discord()
