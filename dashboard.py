@@ -343,10 +343,10 @@ class MainDashboard:
 
         self.card_nav = self._build_ops_card(ops, "NAVIGATION", 0, 0)
         self.card_scan = self._build_ops_card(ops, "SCANNING", 0, 1)
-        self.card_traffic = self._build_ops_card(ops, "TRAFFIC", 0, 2)
+        self.card_system = self._build_ops_card(ops, "SYSTEM INTEL", 0, 2)
         self.card_value = self._build_ops_card(ops, "ECONOMY", 1, 0)
         self.card_session = self._build_ops_card(ops, "SESSION", 1, 1)
-        self.card_system = self._build_ops_card(ops, "SYSTEM INTEL", 1, 2)
+        self.card_ops = self._build_ops_card(ops, "OPERATIONS", 1, 2)
 
         self.details_toggle = tk.Button(center, text="[ DETAILS: VISIBLE ]", command=self.toggle_details, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 8, "bold"), relief=tk.FLAT, activebackground=COLOR_PANEL, activeforeground=COLOR_ACCENT)
         self.details_toggle.pack(anchor="w", pady=(10, 4))
@@ -590,6 +590,12 @@ class MainDashboard:
         traffic_day = self.system_traffic.get("day", 0)
         traffic_week = self.system_traffic.get("week", 0)
         traffic_total = self.system_traffic.get("total", 0)
+        coords_text = "-"
+        if isinstance(self.current_coords, (list, tuple)) and len(self.current_coords) == 3:
+            try:
+                coords_text = f"{self.current_coords[0]:,.0f},{self.current_coords[1]:,.0f},{self.current_coords[2]:,.0f}"
+            except Exception:
+                coords_text = str(self.current_coords)
 
         self.summary_sys.config(text=f"SYS: {self.current_sys}")
         self.summary_route.config(text=f"ROUTE: {route_text}")
@@ -606,9 +612,9 @@ class MainDashboard:
         self.card_scan.line2.config(text=f"Bodies Tracked: {len(self.scanned_bodies)}")
         self.card_scan.line3.config(text=f"FSS Summary: {'ACTIVE' if self.fss_summary_active else 'IDLE'}")
 
-        self.card_traffic.line1.config(text=f"Current Sys: {self.current_sys}")
-        self.card_traffic.line2.config(text=f"Coords: {self.current_coords}")
-        self.card_traffic.line3.config(text=f"Star: {self.star_class or 'UNKNOWN'}")
+        self.card_system.line1.config(text=f"Star: {self.star_class or 'UNKNOWN'}")
+        self.card_system.line2.config(text=f"System: {self.current_sys}")
+        self.card_system.line3.config(text=f"Coords: {coords_text} | FSS: {'YES' if self.in_fss else 'NO'}")
 
         total_value = 0
         for item in self.scan_items:
@@ -623,10 +629,6 @@ class MainDashboard:
         self.card_session.line2.config(text=f"Distance: {self.session_ly:,.1f} LY")
         avg_jump = (self.session_ly / self.session_jump_count) if self.session_jump_count else 0.0
         self.card_session.line3.config(text=f"Avg Jump: {avg_jump:,.1f} LY")
-
-        self.card_system.line1.config(text=f"Star Class: {self.star_class or 'UNKNOWN'}")
-        self.card_system.line2.config(text=f"Undiscovered System: {'YES' if self.system_undiscovered else 'NO'}")
-        self.card_system.line3.config(text=f"In FSS: {'YES' if self.in_fss else 'NO'}")
 
         hud_on = "ON" if self.hud else "OFF"
         disc_on = "ON" if (self.config.get("discord_enabled", True) and self.config.get("discord_webhook")) else "OFF"
@@ -643,6 +645,10 @@ class MainDashboard:
         if self.fss_summary_active:
             alerts.append("FSS SUMMARY ACTIVE")
         self.alert_lbl.config(text=" | ".join(alerts) if alerts else "NONE")
+
+        self.card_ops.line1.config(text=f"Undiscovered System: {'YES' if self.system_undiscovered else 'NO'}")
+        self.card_ops.line2.config(text=f"HUD: {hud_on} | DISCORD: {disc_on}")
+        self.card_ops.line3.config(text=f"SHOTS: {shots_on} | Alerts: {len(alerts)}")
 
         self.valuable_list.delete(0, tk.END)
         for item in self.valuable_bodies:
