@@ -77,6 +77,8 @@ class MainDashboard:
         self.log_filter = "ALL"
         self.log_entries = []
         self.details_visible = True
+        self.dashboard_refresh_job = None
+        self.dashboard_refresh_full_pending = False
         
         self.setup_layout()
         self.waypoint_manager = WaypointManager()
@@ -438,6 +440,20 @@ class MainDashboard:
             self.details_drawer.pack_forget()
             self.details_toggle.config(text="[ DETAILS: HIDDEN ]")
 
+    def schedule_dashboard_refresh(self, full=False):
+        if full:
+            self.dashboard_refresh_full_pending = True
+        if self.dashboard_refresh_job is None:
+            self.dashboard_refresh_job = self.root.after(120, self._run_scheduled_dashboard_refresh)
+
+    def _run_scheduled_dashboard_refresh(self):
+        self.dashboard_refresh_job = None
+        if self.dashboard_refresh_full_pending:
+            self.dashboard_refresh_full_pending = False
+            self.update_dashboard_ui()
+        else:
+            self.update_dashboard_panels()
+
     def _get_session_elapsed_text(self):
         elapsed = max(int(time.time() - self.session_start_ts), 0)
         hrs = elapsed // 3600
@@ -556,8 +572,8 @@ class MainDashboard:
         if not self.batch_mode:
             self.root.after(0, lambda: self.nav_stat.config(text=txt))
 
-    def update_dashboard_ui(self):
-        """Force update all dashboard labels from current state."""
+    def update_dashboard_panels(self):
+        """Refresh dashboard cards/summary without waypoint recompute."""
         sys_text = self.current_sys.upper()
         if self.star_class: sys_text += f" [{self.star_class}]"
         
@@ -639,6 +655,10 @@ class MainDashboard:
             reward = item.get("dss_reward") if item.get("dss_complete") else item.get("reward")
             reward_txt = self._format_credits(reward, hide_units=True)
             self.recent_list.insert(tk.END, f"{nm}  [{reward_txt}]")
+
+    def update_dashboard_ui(self):
+        """Force update full dashboard, including waypoint panel."""
+        self.update_dashboard_panels()
 
         self.update_waypoint_display()
 
@@ -1228,6 +1248,7 @@ class MainDashboard:
                 self.fss_summary_active = True
             if not self.batch_mode:
                 self.update_hud()
+                self.schedule_dashboard_refresh()
 
     def _hide_scan_hud_delayed(self):
         self.scan_hud_hide_job = None
@@ -1438,7 +1459,7 @@ class MainDashboard:
             # Bio logs hidden for now (counting disabled)
                 self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                 self.root.after(0, self.update_waypoint_display)
-                self.root.after(0, self.update_dashboard_ui)
+                self.schedule_dashboard_refresh(full=True)
                 self.update_scan_hud()
 
             # Update Route Plotter UI if open
@@ -1477,6 +1498,7 @@ class MainDashboard:
             self.update_live_discord(raw)
             if not self.batch_mode:
                 self.update_hud()
+                self.schedule_dashboard_refresh()
 
         elif ev == "FSSAllBodiesFound":
             if d.get("system_name") and d.get("system_name") == self.current_sys:
@@ -1489,6 +1511,7 @@ class MainDashboard:
                 self.log("📡 SYSTEM SCAN COMPLETE: All bodies found.")
                 if not self.batch_mode:
                     self.update_hud()
+                    self.schedule_dashboard_refresh()
         
         elif ev == "FSSBodySignals":
             body_id = d.get("body_id")
@@ -1505,6 +1528,7 @@ class MainDashboard:
                     self.save_scan_item_to_db(self.current_sys, item)
                     if not self.batch_mode:
                         self.update_hud()
+                        self.schedule_dashboard_refresh()
         
         elif ev == "SAAScanComplete":
             body_id = d.get("body_id")
@@ -1518,10 +1542,20 @@ class MainDashboard:
                     self.save_scan_item_to_db(self.current_sys, item)
                     if not self.batch_mode:
                         self.update_hud()
+                        self.schedule_dashboard_refresh()
         
         elif ev == "Scan":
             body_name = d.get("body_name", "")
             body_id = d.get("body_id", body_name)
+
+            # Accept star class from system star scans even when this body is already known.
+            star_type = d.get("star_type")
+            is_system_star_scan = bool(star_type) and isinstance(body_name, str) and body_name.startswith(self.current_sys)
+            if is_system_star_scan and self.star_class != star_type:
+                self.star_class = star_type
+                if not self.batch_mode:
+                    self.schedule_dashboard_refresh()
+                    self.update_hud()
             
             # Only count scans of stars or planets/moons, not belts.
             if d.get("is_body_scan"):
@@ -1541,10 +1575,11 @@ class MainDashboard:
                         self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                     self.last_scan_event = data
                     self.add_scan_item(raw)
-                    if d.get("star_type") and body_name == self.current_sys and d.get("was_discovered") is False:
+                    if is_system_star_scan and d.get("was_discovered") is False:
                         self.system_undiscovered = True
                     if not self.batch_mode:
                         self.update_hud()
+                        self.schedule_dashboard_refresh()
 
                     # Check for biological signals and update the system total
                     self.system_bio_signals += d.get("bio_signals_count", 0)
