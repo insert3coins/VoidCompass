@@ -19,6 +19,13 @@ class DiscordHandler:
         self.msg_system = config.get("discord_msg_system", "")
         self.last_payload_sig = ""
 
+    @staticmethod
+    def _fmt_num(value):
+        try:
+            return f"{int(value):,}"
+        except Exception:
+            return "0"
+
     def _build_title(self, event_data):
         event_type = event_data.get("event") if event_data else None
         if event_type == "FSDJump":
@@ -48,11 +55,14 @@ class DiscordHandler:
         embed_color = 0x00D1FF
         if state.get("valuable_system"):
             embed_color = 0x00FF41
+        if event_data and event_data.get("event") == "ScanOrganic":
+            embed_color = 0xF5A623
 
         current_sys = state.get("current_sys", "---")
         sys_url = f"https://www.edsm.net/show-system?systemName={current_sys.replace(' ', '+')}"
         cmdr = state.get("cmdr_name", "CMDR")
         star = state.get("star_class")
+        organic = int(state.get("organic_count", 0) or 0)
 
         scanned = int(state.get("scanned", 0) or 0)
         total = int(state.get("total", 0) or 0)
@@ -63,20 +73,32 @@ class DiscordHandler:
         t_week = int(traffic.get("week", 0) or 0)
         t_total = int(traffic.get("total", 0) or 0)
 
-        fields = [
-            {"name": "Exploration", "value": f"{scanned} / {total} ({pct}%)", "inline": True},
-            {"name": "Traffic", "value": f"24h {t_day} | 7d {t_week} | total {t_total}", "inline": True},
-        ]
-
-        dest_name = state.get("dest_name")
+        nav_text = "`NO ROUTE`"
         if dest_name:
             try:
                 curr = state.get("current_coords", [0, 0, 0])
                 dest = state.get("dest_coords", [0, 0, 0])
                 d = math.sqrt(sum((a - b) ** 2 for a, b in zip(curr, dest)))
-                fields.append({"name": "Target", "value": f"{dest_name} ({d:,.1f} LY)", "inline": False})
+                nav_text = f"`{dest_name}` ({d:,.1f} LY)"
             except Exception:
-                fields.append({"name": "Target", "value": str(dest_name), "inline": False})
+                nav_text = f"`{str(dest_name)}`"
+
+        ops_lines = [
+            f"CMDR    {cmdr}",
+            f"SYSTEM  {current_sys}",
+            f"STAR    {str(star).upper() if star else 'UNKNOWN'}",
+            f"ROUTE   {dest_name if dest_name else 'INACTIVE'}",
+            f"SCAN    {self._fmt_num(scanned)}/{self._fmt_num(total)} ({pct}%)",
+            f"BIO     {self._fmt_num(organic)}",
+            f"TRAF    {self._fmt_num(t_day)} / {self._fmt_num(t_week)} / {self._fmt_num(t_total)}",
+        ]
+
+        fields = [
+            {"name": "System Link", "value": f"[{current_sys}]({sys_url})", "inline": False},
+            {"name": "Navigation", "value": nav_text, "inline": True},
+            {"name": "Exploration", "value": f"`{self._fmt_num(scanned)} / {self._fmt_num(total)} ({pct}%)`", "inline": True},
+            {"name": "Traffic", "value": f"`24h {self._fmt_num(t_day)} | 7d {self._fmt_num(t_week)} | total {self._fmt_num(t_total)}`", "inline": False},
+        ]
 
         valuables = state.get("valuable_bodies") or []
         if valuables:
@@ -90,16 +112,13 @@ class DiscordHandler:
                 value_txt += f"\n... +{extra} more"
             fields.append({"name": "Valuable Discoveries", "value": value_txt[:1024], "inline": False})
 
-        description = f"CMDR **{cmdr}**\nSystem: [{current_sys}]({sys_url})"
-        if star:
-            description += f"\nStar Class: **{str(star).upper()}**"
-
         return {
             "embeds": [{
-                "title": title,
-                "description": description,
+                "title": f"VOID COMPASS // OPERATIONS BRIEF",
+                "description": "```text\n" + "\n".join(ops_lines) + "\n```",
                 "color": embed_color,
                 "fields": fields,
+                "author": {"name": title},
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "footer": {"text": f"VOID COMPASS v{APP_VERSION}"}
             }]
@@ -133,7 +152,12 @@ class DiscordHandler:
         if not webhook: return
 
         payload = self._build_payload(event_data, state)
-        payload_sig = hashlib.sha1(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+        payload_no_ts = json.loads(json.dumps(payload))
+        try:
+            payload_no_ts["embeds"][0].pop("timestamp", None)
+        except Exception:
+            pass
+        payload_sig = hashlib.sha1(json.dumps(payload_no_ts, sort_keys=True).encode("utf-8")).hexdigest()
         event_type = event_data.get("event") if event_data else None
         if payload_sig == self.last_payload_sig and event_type not in ("FSDJump",):
             return
