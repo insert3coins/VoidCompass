@@ -74,30 +74,33 @@ class DiscordHandler:
         t_total = int(traffic.get("total", 0) or 0)
         dest_name = state.get("dest_name")
 
-        nav_text = "`NO ROUTE`"
+        nav_text = "NO ROUTE"
         if dest_name:
             try:
                 curr = state.get("current_coords", [0, 0, 0])
                 dest = state.get("dest_coords", [0, 0, 0])
                 d = math.sqrt(sum((a - b) ** 2 for a, b in zip(curr, dest)))
-                nav_text = f"`{dest_name}` ({d:,.1f} LY)"
+                nav_text = f"{dest_name} ({d:,.1f} LY)"
             except Exception:
-                nav_text = f"`{str(dest_name)}`"
+                nav_text = f"{str(dest_name)}"
+
+        def _kv(label, value):
+            # Keep labels aligned in plain embed text (no code block background).
+            return f"{label:<7}: {value}"
 
         ops_lines = [
-            f"CMDR    {cmdr}",
-            f"SYSTEM  {current_sys}",
-            f"STAR    {str(star).upper() if star else 'UNKNOWN'}",
-            f"ROUTE   {dest_name if dest_name else 'INACTIVE'}",
-            f"SCAN    {self._fmt_num(scanned)}/{self._fmt_num(total)} ({pct}%)",
-            f"BIO     {self._fmt_num(organic)}",
+            _kv("CMDR", cmdr),
+            _kv("SYSTEM", current_sys),
+            _kv("STAR", str(star).upper() if star else "UNKNOWN"),
+            _kv("ROUTE", dest_name if dest_name else "INACTIVE"),
+            _kv("SCAN", f"{self._fmt_num(scanned)}/{self._fmt_num(total)} ({pct}%)"),
         ]
 
         fields = [
             {"name": "System Link", "value": f"[{current_sys}]({sys_url})", "inline": False},
             {"name": "Navigation", "value": nav_text, "inline": True},
-            {"name": "Exploration", "value": f"`{self._fmt_num(scanned)} / {self._fmt_num(total)} ({pct}%)`", "inline": True},
-            {"name": "Traffic", "value": f"`24h {self._fmt_num(t_day)} | 7d {self._fmt_num(t_week)} | total {self._fmt_num(t_total)}`", "inline": False},
+            {"name": "Exploration", "value": f"{self._fmt_num(scanned)} / {self._fmt_num(total)} ({pct}%)", "inline": True},
+            {"name": "Traffic", "value": f"24h {self._fmt_num(t_day)} | 7d {self._fmt_num(t_week)} | total {self._fmt_num(t_total)}", "inline": False},
         ]
 
         valuables = state.get("valuable_bodies") or []
