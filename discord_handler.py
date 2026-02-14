@@ -48,7 +48,7 @@ class DiscordHandler:
             return f"Bio Log: {genus}"
         if event_type == "FSSDiscoveryScan":
             return "System Scan Initiated"
-        return "Void Compass Telemetry"
+        return "Live Update"
 
     def _build_payload(self, event_data, state):
         title = self._build_title(event_data)
@@ -72,6 +72,7 @@ class DiscordHandler:
         t_day = int(traffic.get("day", 0) or 0)
         t_week = int(traffic.get("week", 0) or 0)
         t_total = int(traffic.get("total", 0) or 0)
+        dest_name = state.get("dest_name")
 
         nav_text = "`NO ROUTE`"
         if dest_name:
@@ -90,7 +91,6 @@ class DiscordHandler:
             f"ROUTE   {dest_name if dest_name else 'INACTIVE'}",
             f"SCAN    {self._fmt_num(scanned)}/{self._fmt_num(total)} ({pct}%)",
             f"BIO     {self._fmt_num(organic)}",
-            f"TRAF    {self._fmt_num(t_day)} / {self._fmt_num(t_week)} / {self._fmt_num(t_total)}",
         ]
 
         fields = [
@@ -114,11 +114,10 @@ class DiscordHandler:
 
         return {
             "embeds": [{
-                "title": f"VOID COMPASS // OPERATIONS BRIEF",
-                "description": "```text\n" + "\n".join(ops_lines) + "\n```",
+                "title": str(title)[:256],
+                "description": "\n".join(ops_lines),
                 "color": embed_color,
                 "fields": fields,
-                "author": {"name": title},
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "footer": {"text": f"VOID COMPASS v{APP_VERSION}"}
             }]

@@ -228,6 +228,9 @@ class RoutePlotter:
         self._fetch_edsm_note(name, lambda edsm_note: self._add_waypoint_with_notes(name, coords, manual_note, edsm_note))
 
     def _add_waypoint_with_notes(self, name, coords, manual_note, edsm_note):
+        if not coords:
+            messagebox.showwarning("Add Waypoint", f"System not found on EDSM:\n{name}\n\nWaypoint was not added.")
+            return
         final_note = self._merge_notes(manual_note, edsm_note)
         outcome, idx = self._apply_duplicate_policy(name, coords, final_note)
         if outcome in ("added", "added_duplicate"):
@@ -576,15 +579,7 @@ class RoutePlotter:
     def process_bulk_list(self, systems):
         if not systems:
             return
-        job_id = str(time.time())
-        self.pending_import_jobs[job_id] = {
-            "added": 0,
-            "skipped": 0,
-            "merged": 0,
-            "pending": set(),
-            "resolved": 0,
-            "unresolved": 0,
-        }
+        records = []
         for line in systems:
             name = line
             note = None
@@ -593,46 +588,79 @@ class RoutePlotter:
                 name = parts[0].strip()
                 if len(parts) > 1 and parts[1].strip():
                     note = parts[1].strip()
-            outcome, _ = self._apply_duplicate_policy(name, None, note)
-            if outcome in ("added", "added_duplicate"):
-                self.pending_import_jobs[job_id]["added"] += 1
-            elif outcome == "merged":
-                self.pending_import_jobs[job_id]["merged"] += 1
-            else:
-                self.pending_import_jobs[job_id]["skipped"] += 1
-        self.refresh_list()
+            if name:
+                records.append({"name": name, "coords": None, "note": note})
+        self._start_import_job(records)
 
-        for line in systems:
-            name = line.split(",", 1)[0].strip() if "," in line else line.strip()
-            self.pending_import_jobs[job_id]["pending"].add(name.lower())
-            self.edsm.fetch_system_coords(name, lambda n, c, j=job_id: self._run_on_ui(lambda: self._bulk_update_cb(j, n, c)))
-            self._fetch_edsm_note(name, lambda note, n=name: self._apply_edsm_note_to_waypoints(n, note))
+    def _start_import_job(self, records):
+        if not records:
+            return
+        job_id = str(time.time())
+        self.pending_import_jobs[job_id] = {
+            "added": 0,
+            "skipped": 0,
+            "merged": 0,
+            "resolved": 0,
+            "unresolved": 0,
+            "remaining": len(records),
+            "records": records,
+            "results": [None] * len(records),
+        }
+        for idx, rec in enumerate(records):
+            coords = rec.get("coords")
+            if coords is not None:
+                self._on_import_coord_resolved(job_id, idx, rec.get("name"), coords)
+                continue
+            name = rec.get("name")
+            self.edsm.fetch_system_coords(
+                name,
+                lambda n, c, j=job_id, i=idx: self._run_on_ui(lambda: self._on_import_coord_resolved(j, i, n, c))
+            )
 
-    def _bulk_update_cb(self, job_id, name, coords):
+    def _on_import_coord_resolved(self, job_id, index, name, coords):
         job = self.pending_import_jobs.get(job_id)
         if not job:
             return
-        key = name.lower()
-        if key in job["pending"]:
-            job["pending"].remove(key)
-
-        if not coords:
-            job["unresolved"] += 1
-            if not job["pending"]:
-                self._finalize_import_job(job_id)
+        if not (0 <= index < len(job["results"])):
             return
 
-        updated = False
-        for i, wp in enumerate(self.manager.waypoints):
-            if wp["coords"] is None and wp["name"].lower() == name.lower():
-                self.manager.update_coords(i, coords)
-                updated = True
-                job["resolved"] += 1
-                break
-        if updated:
-            self.refresh_list()
-        if not job["pending"]:
-            self._finalize_import_job(job_id)
+        if job["results"][index] is not None:
+            return
+
+        record = job["records"][index]
+        resolved_name = (name or record.get("name") or "").strip()
+        job["results"][index] = {"name": resolved_name, "coords": coords}
+        if coords:
+            job["resolved"] += 1
+        else:
+            job["unresolved"] += 1
+        job["remaining"] -= 1
+
+        if job["remaining"] == 0:
+            self._apply_import_job(job_id)
+
+    def _apply_import_job(self, job_id):
+        job = self.pending_import_jobs.get(job_id)
+        if not job:
+            return
+
+        for i, rec in enumerate(job["records"]):
+            result = job["results"][i]
+            if not result or not result.get("coords"):
+                continue
+            name = result.get("name") or rec.get("name")
+            note = rec.get("note")
+            outcome, _ = self._apply_duplicate_policy(name, result.get("coords"), note)
+            if outcome in ("added", "added_duplicate"):
+                job["added"] += 1
+            elif outcome == "merged":
+                job["merged"] += 1
+            else:
+                job["skipped"] += 1
+            self._fetch_edsm_note(name, lambda edsm_note, n=name: self._apply_edsm_note_to_waypoints(n, edsm_note))
+
+        self.refresh_list()
+        self._finalize_import_job(job_id)
 
     def _finalize_import_job(self, job_id):
         job = self.pending_import_jobs.pop(job_id, None)
@@ -643,7 +671,7 @@ class RoutePlotter:
             f"Merged Duplicates: {job['merged']}\n"
             f"Skipped Duplicates: {job['skipped']}\n"
             f"Coords Resolved: {job['resolved']}\n"
-            f"Coords Unresolved: {job['unresolved']}"
+            f"Unresolved Removed: {job['unresolved']}"
         )
         messagebox.showinfo("Import Report", msg)
 
@@ -676,34 +704,7 @@ class RoutePlotter:
             messagebox.showwarning("Import Spansh CSV", "No valid systems found in CSV.")
             return
 
-        job_id = str(time.time())
-        self.pending_import_jobs[job_id] = {
-            "added": 0,
-            "skipped": 0,
-            "merged": 0,
-            "pending": set(),
-            "resolved": 0,
-            "unresolved": 0,
-        }
-
-        for rec in records:
-            outcome, _ = self._apply_duplicate_policy(rec["name"], rec["coords"], rec["note"])
-            if outcome in ("added", "added_duplicate"):
-                self.pending_import_jobs[job_id]["added"] += 1
-            elif outcome == "merged":
-                self.pending_import_jobs[job_id]["merged"] += 1
-            else:
-                self.pending_import_jobs[job_id]["skipped"] += 1
-
-            if rec["coords"] is None:
-                self.pending_import_jobs[job_id]["pending"].add(rec["name"].lower())
-                self.edsm.fetch_system_coords(rec["name"], lambda n, c, j=job_id: self._run_on_ui(lambda: self._bulk_update_cb(j, n, c)))
-            self._fetch_edsm_note(rec["name"], lambda note, n=rec["name"]: self._apply_edsm_note_to_waypoints(n, note))
-
-        self.refresh_list()
-
-        if not self.pending_import_jobs[job_id]["pending"]:
-            self._finalize_import_job(job_id)
+        self._start_import_job(records)
 
     def _extract_spansh_name(self, row):
         for key in ("System Name", "system", "name", "system_name", "starsystem", "star_system", "Star System"):
