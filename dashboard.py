@@ -315,7 +315,7 @@ class MainDashboard:
         self.nav_stat = self.create_stat(metrics_card, "NAV TARGET", "---")
         self.scan_stat = self.create_stat(metrics_card, "SCAN PROGRESS", "0 / 0")
 
-        self.wp_panel = tk.Frame(self.side, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1, height=110)
+        self.wp_panel = tk.Frame(self.side, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1, height=180)
         self.wp_panel.pack(fill=tk.X, padx=10, pady=8)
         self.wp_panel.pack_propagate(False)
         header_row = tk.Frame(self.wp_panel, bg=COLOR_PANEL)
@@ -338,7 +338,7 @@ class MainDashboard:
             highlightthickness=0,
             wrap=tk.WORD,
             yscrollcommand=self.wp_info_scroll.set,
-            height=3
+            height=7
         )
         self.wp_info_scroll.config(command=self.wp_info_text.yview)
         self.wp_info_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -625,10 +625,17 @@ class MainDashboard:
         self.update_nav_label()
 
         route_text = "INACTIVE"
+        route_total = 0
+        route_visited = 0
+        next_waypoint_name = "NONE"
         if self.waypoint_manager.waypoints:
-            total_wp = len(self.waypoint_manager.waypoints)
-            visited = sum(1 for wp in self.waypoint_manager.waypoints if wp.get("visited", False))
-            route_text = f"{visited}/{total_wp}"
+            route_total = len(self.waypoint_manager.waypoints)
+            route_visited = sum(1 for wp in self.waypoint_manager.waypoints if wp.get("visited", False))
+            route_text = f"{route_visited}/{route_total}"
+            for wp in self.waypoint_manager.waypoints:
+                if not wp.get("visited", False):
+                    next_waypoint_name = wp.get("name", "UNKNOWN")
+                    break
 
         traffic_day = self.system_traffic.get("day", 0)
         traffic_week = self.system_traffic.get("week", 0)
@@ -689,9 +696,11 @@ class MainDashboard:
             alerts.append("FSS SUMMARY ACTIVE")
         self.alert_lbl.config(text=" | ".join(alerts) if alerts else "NONE")
 
-        self.card_ops.line1.config(text=f"Undiscovered System: {'YES' if self.system_undiscovered else 'NO'}")
-        self.card_ops.line2.config(text=f"HUD: {hud_on} | DISCORD: {disc_on}")
-        self.card_ops.line3.config(text=f"SHOTS: {shots_on} | Alerts: {len(alerts)}")
+        planner_open = "YES" if (self.route_plotter and self.route_plotter.win.winfo_exists()) else "NO"
+        auto_copy = "ON" if self.config.get("auto_copy_waypoint", False) else "OFF"
+        self.card_ops.line1.config(text=f"Waypoints: {route_total} | Pending: {max(route_total - route_visited, 0)}")
+        self.card_ops.line2.config(text=f"Next WP: {next_waypoint_name}")
+        self.card_ops.line3.config(text=f"Auto-Copy: {auto_copy} | Planner Open: {planner_open}")
 
         self.valuable_list.delete(0, tk.END)
         for item in self.valuable_bodies:

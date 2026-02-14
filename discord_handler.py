@@ -4,6 +4,7 @@ import requests
 import logging
 import math
 import json
+import hashlib
 from datetime import datetime, timezone
 from config import CONFIG_FILE
 from version import APP_VERSION
@@ -16,6 +17,93 @@ class DiscordHandler:
         self.update_timer = None
         self.msg_id = config.get("discord_msg_id", "")
         self.msg_system = config.get("discord_msg_system", "")
+        self.last_payload_sig = ""
+
+    def _build_title(self, event_data):
+        event_type = event_data.get("event") if event_data else None
+        if event_type == "FSDJump":
+            return "Jump Complete"
+        if event_type == "Scan":
+            body_name = event_data.get("BodyName", "Unknown Body")
+            p_class = event_data.get("PlanetClass", "")
+            terraformable = event_data.get("TerraformState") == "Terraformable"
+            if p_class == "Earthlike body":
+                return f"Scan: Earthlike - {body_name}"
+            if p_class == "Water world":
+                return f"Scan: Water World - {body_name}"
+            if p_class == "Ammonia world":
+                return f"Scan: Ammonia World - {body_name}"
+            if terraformable:
+                return f"Scan: Terraformable - {body_name}"
+            return f"Scan: {body_name}"
+        if event_type == "ScanOrganic":
+            genus = event_data.get("Genus_Localised", "Organic")
+            return f"Bio Log: {genus}"
+        if event_type == "FSSDiscoveryScan":
+            return "System Scan Initiated"
+        return "Void Compass Telemetry"
+
+    def _build_payload(self, event_data, state):
+        title = self._build_title(event_data)
+        embed_color = 0x00D1FF
+        if state.get("valuable_system"):
+            embed_color = 0x00FF41
+
+        current_sys = state.get("current_sys", "---")
+        sys_url = f"https://www.edsm.net/show-system?systemName={current_sys.replace(' ', '+')}"
+        cmdr = state.get("cmdr_name", "CMDR")
+        star = state.get("star_class")
+
+        scanned = int(state.get("scanned", 0) or 0)
+        total = int(state.get("total", 0) or 0)
+        pct = int((scanned / total) * 100) if total > 0 else 0
+
+        traffic = state.get("system_traffic", {}) or {}
+        t_day = int(traffic.get("day", 0) or 0)
+        t_week = int(traffic.get("week", 0) or 0)
+        t_total = int(traffic.get("total", 0) or 0)
+
+        fields = [
+            {"name": "Exploration", "value": f"{scanned} / {total} ({pct}%)", "inline": True},
+            {"name": "Traffic", "value": f"24h {t_day} | 7d {t_week} | total {t_total}", "inline": True},
+        ]
+
+        dest_name = state.get("dest_name")
+        if dest_name:
+            try:
+                curr = state.get("current_coords", [0, 0, 0])
+                dest = state.get("dest_coords", [0, 0, 0])
+                d = math.sqrt(sum((a - b) ** 2 for a, b in zip(curr, dest)))
+                fields.append({"name": "Target", "value": f"{dest_name} ({d:,.1f} LY)", "inline": False})
+            except Exception:
+                fields.append({"name": "Target", "value": str(dest_name), "inline": False})
+
+        valuables = state.get("valuable_bodies") or []
+        if valuables:
+            cleaned = []
+            for v in valuables[:6]:
+                txt = v[2:] if isinstance(v, str) and v.startswith("- ") else str(v)
+                cleaned.append(txt)
+            extra = len(valuables) - len(cleaned)
+            value_txt = "\n".join(cleaned)
+            if extra > 0:
+                value_txt += f"\n... +{extra} more"
+            fields.append({"name": "Valuable Discoveries", "value": value_txt[:1024], "inline": False})
+
+        description = f"CMDR **{cmdr}**\nSystem: [{current_sys}]({sys_url})"
+        if star:
+            description += f"\nStar Class: **{str(star).upper()}**"
+
+        return {
+            "embeds": [{
+                "title": title,
+                "description": description,
+                "color": embed_color,
+                "fields": fields,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "footer": {"text": f"VOID COMPASS v{APP_VERSION}"}
+            }]
+        }
 
     def update_live(self, event_data, state):
         if not self.config.get("discord_enabled", True):
@@ -44,69 +132,13 @@ class DiscordHandler:
         webhook = self.config.get("discord_webhook")
         if not webhook: return
 
-        title = "🛸 VOID COMPASS TELEMETRY"
+        payload = self._build_payload(event_data, state)
+        payload_sig = hashlib.sha1(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
         event_type = event_data.get("event") if event_data else None
-
-        if event_type == "FSDJump":
-            title = f"🚀 JUMP COMPLETE"
-        elif event_type == "Scan":
-            body_name = event_data.get("BodyName", "Unknown Body")
-            p_class = event_data.get("PlanetClass", "")
-            terraformable = event_data.get("TerraformState") == "Terraformable"
-            prefix = "🛰️ SCAN: "
-            if p_class == "Earthlike body": prefix = "🌍 SCAN: "
-            elif p_class == "Water world": prefix = "💧 SCAN: "
-            elif p_class == "Ammonia world": prefix = "☣️ SCAN: "
-            elif terraformable: prefix = "🛠️ SCAN: "
-            title = f"{prefix}{body_name}"
-        elif event_type == "ScanOrganic":
-            genus = event_data.get("Genus_Localised", "Organic")
-            title = f"🌱 BIO-LOG: {genus}"
-        elif event_type == "FSSDiscoveryScan":
-            title = "📡 SYSTEM SCAN INITIATED"
-
-        embed_color = 0x00d1ff
-        if state.get("valuable_system"):
-            embed_color = 0x00FF41
-
+        if payload_sig == self.last_payload_sig and event_type not in ("FSDJump",):
+            return
+        self.last_payload_sig = payload_sig
         current_sys = state.get("current_sys", "---")
-        sys_url = f"https://www.edsm.net/show-system?systemName={current_sys.replace(' ', '+')}"
-        
-        desc = f"**CMDR {state.get('cmdr_name', 'CMDR')}**\n"
-        desc += f"📍 **System:** [{current_sys}]({sys_url})\n"
-        if state.get("star_class"):
-            desc += f"☀️ **Star Class:** {state.get('star_class').upper()}\n"
-        desc += f"🛰️ **Scanned:** {state.get('scanned', 0)} / {state.get('total', 0)}\n"
-
-        if state.get("valuable_bodies"):
-            desc += "\n**Valuable Discoveries:**\n"
-            desc += "\n".join(state.get("valuable_bodies"))
-            desc += "\n"
-
-        traffic = state.get("system_traffic", {})
-        t_day = traffic.get('day', 0)
-        t_week = traffic.get('week', 0)
-        if t_day > 0 or t_week > 0:
-            desc += f"🚦 **Traffic (24h/wk):** {t_day} / {t_week}\n"
-
-        dest_name = state.get("dest_name")
-        if dest_name:
-            try:
-                curr = state.get("current_coords", [0,0,0])
-                dest = state.get("dest_coords", [0,0,0])
-                d = math.sqrt(sum((a-b)**2 for a,b in zip(curr, dest)))
-                desc += f"🏁 **Target:** {dest_name} ({d:,.1f} LY)\n"
-            except: pass
-
-        payload = {
-            "embeds": [{
-                "title": title,
-                "description": desc,
-                "color": embed_color,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "footer": {"text": f"VOID COMPASS v{APP_VERSION}"}
-            }]
-        }
 
         def _post():
             try:
