@@ -325,8 +325,29 @@ class MainDashboard:
         self.wp_dist_lbl.pack(side=tk.RIGHT)
         self.wp_name_lbl = tk.Label(self.wp_panel, text="NO ACTIVE ROUTE", font=("Courier", 12, "bold"), fg=COLOR_TEXT, bg=COLOR_PANEL, anchor="w")
         self.wp_name_lbl.pack(fill=tk.X, padx=10, pady=(6, 0))
-        self.wp_info_lbl = tk.Label(self.wp_panel, text="", font=("Courier", 8), fg="#aaa", bg=COLOR_PANEL, anchor="w", justify=tk.LEFT, wraplength=290)
-        self.wp_info_lbl.pack(fill=tk.X, padx=10, pady=(2, 6))
+        self.wp_info_wrap = tk.Frame(self.wp_panel, bg=COLOR_PANEL)
+        self.wp_info_wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=(2, 6))
+        self.wp_info_scroll = tk.Scrollbar(self.wp_info_wrap, orient=tk.VERTICAL)
+        self.wp_info_text = tk.Text(
+            self.wp_info_wrap,
+            bg=COLOR_PANEL,
+            fg="#aaa",
+            font=("Courier", 8),
+            relief=tk.FLAT,
+            borderwidth=0,
+            highlightthickness=0,
+            wrap=tk.WORD,
+            yscrollcommand=self.wp_info_scroll.set,
+            height=3
+        )
+        self.wp_info_scroll.config(command=self.wp_info_text.yview)
+        self.wp_info_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.wp_info_text.config(state=tk.DISABLED)
+        self.wp_info_scroll_visible = False
+
+        self.wp_info_text.bind("<Enter>", lambda e: self._toggle_wp_scrollbar(True))
+        self.wp_info_text.bind("<Leave>", lambda e: self._toggle_wp_scrollbar(False))
+        self.wp_info_text.bind("<MouseWheel>", self._on_wp_info_wheel)
 
         side_actions = tk.Frame(self.side, bg=COLOR_PANEL)
         side_actions.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
@@ -467,6 +488,28 @@ class MainDashboard:
         if hasattr(self, "summary_session"):
             self.summary_session.config(text=f"SESSION: {self._get_session_elapsed_text()}")
         self.root.after(1000, self._tick_session_clock)
+
+    def _toggle_wp_scrollbar(self, show):
+        if show and not self.wp_info_scroll_visible:
+            self.wp_info_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+            self.wp_info_scroll_visible = True
+        elif not show and self.wp_info_scroll_visible:
+            self.wp_info_scroll.pack_forget()
+            self.wp_info_scroll_visible = False
+
+    def _on_wp_info_wheel(self, event):
+        try:
+            self.wp_info_text.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            return "break"
+        except Exception:
+            return None
+
+    def _set_wp_info_text(self, text):
+        self.wp_info_text.config(state=tk.NORMAL)
+        self.wp_info_text.delete("1.0", tk.END)
+        self.wp_info_text.insert("1.0", text or "")
+        self.wp_info_text.config(state=tk.DISABLED)
+        self.wp_info_text.yview_moveto(0.0)
 
     def check_updates(self):
         try:
@@ -673,7 +716,7 @@ class MainDashboard:
             self.target_waypoint = None
             self.wp_name_lbl.config(text="NO ACTIVE ROUTE")
             self.wp_dist_lbl.config(text="")
-            self.wp_info_lbl.config(text="")
+            self._set_wp_info_text("")
             self.update_hud()
             return
 
@@ -698,7 +741,7 @@ class MainDashboard:
         if self.target_waypoint is None:
              self.wp_name_lbl.config(text="ROUTE COMPLETE")
              self.wp_dist_lbl.config(text="")
-             self.wp_info_lbl.config(text="")
+             self._set_wp_info_text("")
              self.update_hud()
              return
         
@@ -746,7 +789,7 @@ class MainDashboard:
 
             self.wp_name_lbl.config(text=name)
             self.wp_dist_lbl.config(text=dist_str)
-            self.wp_info_lbl.config(text=info_text)
+            self._set_wp_info_text(info_text)
             self.update_hud()
 
     def on_close(self):

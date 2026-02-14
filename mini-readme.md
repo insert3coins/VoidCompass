@@ -1,22 +1,39 @@
 # VoidCompass // UPDATE LOG
 
-## v1.8.1 // FSS SCAN HUD
-**Release Date:** 2026-Feb-05
+## v2.1.2 // Route Plotter Update
+**Release Date:** 2026-Feb-14
 
 ### 🌟 NEW FEATURES
-*   **FSS Scan HUD:**
-    *   System header with undiscovered marker and FSS completion check.
-    *   Scanned bodies summary with total credit value.
-    *   Per‑body list with scan value, DSS value, bio genus count, and icons.
-    *   Footer legend for scan value/DSS value and icon meanings.
-*   **FSS‑Only Visibility:**
-    *   Scan HUD only shows in FSS.
-    *   Auto‑hide delay after exiting FSS (60s).
-*   **Persistent Scan List:**
-    *   Scan list and computed values survive restarts.
+*   **Dashboard Redesign (same color theme):**
+    *   Added top summary strip for `SYS`, `ROUTE`, `SCAN`, `TRAFFIC`, and `SESSION`.
+    *   Added alert bar with live system-state indicators.
+    *   Added operations card grid, details drawer, and filtered activity log.
+*   **Route Plotter Redesign:**
+    *   Reworked planner layout with dedicated selection panel and action buttons.
+    *   Added explicit per-item actions for copy/delete/edit/reorder/mark.
+    *   Added optional EDSM auto-note enrichment for waypoint notes.
+*   **Advanced Route Tools:**
+    *   Added route health panel (`pending`, `visited`, `missing coords`, `duplicates`).
+    *   Added duplicate handling modes: `skip`, `append note`, `keep both`.
+    *   Added batch actions for copy/delete/mark done/mark todo.
+    *   Added distance inspector (`from current`, `segment`, `cumulative`).
+    *   Added import report summaries and CSV route export.
+    *   Added Spansh CSV import button and parser support.
+*   **Runtime Safety:**
+    *   Added single-instance lock to prevent launching duplicate app processes.
+
+### 🐞 BUG FIXES
+*   **Traffic Refresh Reliability:**
+    *   Fixed traffic fetch/update logic to refresh dashboard + HUD consistently on system changes.
+*   **System Intel Refresh:**
+    *   Fixed stale card updates by scheduling panel refreshes from scan/FSS/status event paths.
+*   **Star Class Detection:**
+    *   Added robust fallbacks so star class is captured from jump/location events and system-star scan events.
+*   **UI Performance:**
+    *   Added throttled dashboard refresh scheduling to prevent redraw storms during heavy event bursts.
 
 ### 🔧 IMPROVEMENTS
-*   **Live HUD Updates:**
-    *   Tactical HUD and scan HUD refresh on scan events and EDSM status changes.
-*   **Overlay Controls:**
-    *   Added settings toggle for Scan Results Overlay.
+*   **Route Planner Defaults:**
+    *   Increased default window size to `1020x700` for the expanded control set.
+*   **Naming/Clarity:**
+    *   Merged duplicate system/star presentation in dashboard cards for cleaner intel display.
