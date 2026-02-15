@@ -12,8 +12,7 @@ class TacticalHUD:
         self.win.config(bg="#ff00ff")
         
         self.width = 460
-        self.base_height = 175
-        self.fss_base_height = 210
+        self.base_height = 180
         self.canvas = tk.Canvas(self.win, width=self.width, height=self.base_height, bg="#ff00ff", highlightthickness=0)
         self.canvas.pack()
 
@@ -68,30 +67,21 @@ class TacticalHUD:
         self.canvas.create_text(x+1, y+1, text=text, fill="black", font=font, anchor=anchor, tags=tags)
         self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor, tags=tags)
 
-    def update(self, current_sys, dest_name, dist_ly, scanned, total, r_pos, organic_count, system_traffic, game_r_pos=None, fss_summary=None, fss_summary_active=False, route_destination=None):
-        # Build HV lines for dynamic sizing when FSS summary is active
-        hv_lines = []
-        if fss_summary_active and fss_summary:
-            hv_items = fss_summary.get("high_value") or []
-            if hv_items:
-                max_len = 68
-                current = "HV: "
-                for item in hv_items:
-                    chunk = ("" if current == "HV: " else " | ") + item
-                    if len(current) + len(chunk) > max_len:
-                        hv_lines.append(current)
-                        current = "HV: " + item
-                    else:
-                        current += chunk
-                hv_lines.append(current)
-            else:
-                hv_lines = ["HV: -"]
-
-        extra_lines = len(hv_lines) - 1 if hv_lines else 0
-        if fss_summary_active and fss_summary:
-            target_h = self.fss_base_height + (extra_lines * 12)
-        else:
-            target_h = self.base_height
+    def update(
+        self,
+        current_sys,
+        dest_name,
+        dist_ly,
+        scanned,
+        total,
+        r_pos,
+        organic_count,
+        system_traffic,
+        game_r_pos=None,
+        route_destination=None,
+        route_counts=None,
+    ):
+        target_h = self.base_height
         if self.canvas.winfo_height() != target_h:
             self.canvas.config(height=target_h)
             x = self.win.winfo_x()
@@ -125,42 +115,20 @@ class TacticalHUD:
         
         self.draw_text(20, 116, text=f"SCAN: {scanned}/{total} BODIES", fill=COLOR_TEXT, font=("Courier", 9), anchor="w")
         self.draw_text(440, 116, text=f"{int(pct*100)}%", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="e")
-        
-        if fss_summary_active and fss_summary:
-            fss_line = f"FSS: {fss_summary.get('count')} bodies | {fss_summary.get('total')}"
-            if len(fss_line) > 68:
-                fss_line = fss_line[:65] + "..."
-            self.draw_text(20, 134, text=fss_line, fill=COLOR_ACCENT, font=("Courier", 8), anchor="w")
 
-            y_line = 146
-            for hv_line in hv_lines:
-                if len(hv_line) > 68:
-                    hv_line = hv_line[:65] + "..."
-                self.draw_text(20, y_line, text=hv_line, fill=COLOR_ACCENT, font=("Courier", 8), anchor="w")
-                y_line += 12
+        t_day = system_traffic.get('day', 0)
+        t_week = system_traffic.get('week', 0)
+        t_total = system_traffic.get('total', 0)
+        self.draw_text(20, 140, text=f"TRAFFIC: Today : {t_day}  This Week : {t_week}  Total : {t_total}", fill=COLOR_TEXT, font=("Courier", 9), anchor="w")
+        route_y = h - 18
 
-            landable_count = fss_summary.get("landable_count", 0)
-            land_line = f"LANDABLE: {landable_count}"
-            self.draw_text(20, y_line, text=land_line, fill=COLOR_ACCENT, font=("Courier", 8), anchor="w")
-            y_line += 12
-            t_day = system_traffic.get('day', 0)
-            t_week = system_traffic.get('week', 0)
-            t_total = system_traffic.get('total', 0)
-            self.draw_text(20, y_line, text=f"TRAFFIC: Today : {t_day}  This Week : {t_week}  Total : {t_total}", fill=COLOR_TEXT, font=("Courier", 8), anchor="w")
-            route_y = y_line + 14
-        else:
-            t_day = system_traffic.get('day', 0)
-            t_week = system_traffic.get('week', 0)
-            t_total = system_traffic.get('total', 0)
-            self.draw_text(20, 134, text=f"TRAFFIC: Today : {t_day}  This Week : {t_week}  Total : {t_total}", fill=COLOR_TEXT, font=("Courier", 9), anchor="w")
-            route_y = 154
+        route_pct = 0.0
+        route_count_txt = "ROUTE: 0/0"
+        if route_counts and route_counts[1] > 0:
+            route_pct = max(0.0, min(1.0, route_counts[0] / route_counts[1]))
+            route_count_txt = f"ROUTE: {route_counts[0]}/{route_counts[1]}"
+        route_text = f"{route_count_txt} ({int(route_pct * 100)}%)"
 
-        route_text = "ROUTE: INACTIVE"
-        if r_pos:
-            if len(r_pos) > 2:
-                route_text = f"ROUTE: {r_pos[0]} / {r_pos[1]} ({r_pos[2]})"
-            else:
-                route_text = f"ROUTE: {r_pos[0]} / {r_pos[1]}"
         if route_destination:
             dest_text = f"DEST: {route_destination.upper()}"
             if len(dest_text) > 34:

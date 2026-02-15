@@ -30,24 +30,6 @@ class DiscordHandler:
             return "0"
 
     def _build_title(self, event_data):
-        event_type = event_data.get("event") if event_data else None
-        if event_type == "FSDJump":
-            return "Jump Complete"
-        if event_type == "Scan":
-            body_name = event_data.get("BodyName", "Unknown Body")
-            p_class = event_data.get("PlanetClass", "")
-            terraformable = event_data.get("TerraformState") == "Terraformable"
-            if p_class == "Earthlike body":
-                return f"Scan: Earthlike - {body_name}"
-            if p_class == "Water world":
-                return f"Scan: Water World - {body_name}"
-            if p_class == "Ammonia world":
-                return f"Scan: Ammonia World - {body_name}"
-            if terraformable:
-                return f"Scan: Terraformable - {body_name}"
-            return f"Scan: {body_name}"
-        if event_type == "FSSDiscoveryScan":
-            return "System Scan Initiated"
         return "Live Update"
 
     def _build_payload(self, event_data, state):
