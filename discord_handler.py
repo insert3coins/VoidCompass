@@ -18,6 +18,9 @@ class DiscordHandler:
         self.msg_id = config.get("discord_msg_id", "")
         self.msg_system = config.get("discord_msg_system", "")
         self.last_payload_sig = ""
+        self.last_scanned = None
+        self.last_traffic_total = None
+        self.alerted_valuable_bodies = set()
 
     @staticmethod
     def _fmt_num(value):
@@ -52,26 +55,26 @@ class DiscordHandler:
 
     def _build_payload(self, event_data, state):
         title = self._build_title(event_data)
-        embed_color = 0x00D1FF
-        if state.get("valuable_system"):
-            embed_color = 0x00FF41
-        if event_data and event_data.get("event") == "ScanOrganic":
-            embed_color = 0xF5A623
+        event_type = event_data.get("event") if event_data else None
 
         current_sys = state.get("current_sys", "---")
         sys_url = f"https://www.edsm.net/show-system?systemName={current_sys.replace(' ', '+')}"
         cmdr = state.get("cmdr_name", "CMDR")
         star = state.get("star_class")
-        organic = int(state.get("organic_count", 0) or 0)
 
         scanned = int(state.get("scanned", 0) or 0)
         total = int(state.get("total", 0) or 0)
         pct = int((scanned / total) * 100) if total > 0 else 0
+        progress_delta = scanned - self.last_scanned if self.last_scanned is not None else 0
+        progress_trend = f"+{progress_delta}" if progress_delta > 0 else "0"
 
         traffic = state.get("system_traffic", {}) or {}
         t_day = int(traffic.get("day", 0) or 0)
         t_week = int(traffic.get("week", 0) or 0)
         t_total = int(traffic.get("total", 0) or 0)
+        traffic_delta = t_total - self.last_traffic_total if self.last_traffic_total is not None else 0
+        traffic_arrow = "↑" if traffic_delta > 0 else ("↓" if traffic_delta < 0 else "→")
+        traffic_trend = f"{traffic_arrow}{abs(traffic_delta)}"
         dest_name = state.get("dest_name")
 
         nav_text = "NO ROUTE"
@@ -84,36 +87,36 @@ class DiscordHandler:
             except Exception:
                 nav_text = f"{str(dest_name)}"
 
-        def _kv(label, value):
-            # Keep labels aligned in plain embed text (no code block background).
-            return f"{label:<7}: {value}"
+        is_valuable_scan = (
+            event_type == "Scan" and
+            (
+                event_data.get("PlanetClass") in ("Earthlike body", "Water world", "Ammonia world") or
+                event_data.get("TerraformState") == "Terraformable"
+            )
+        )
+        color_map = {
+            "FSDJump": 0x4DA3FF,
+            "Scan": 0x00D1FF,
+            "ScanOrganic": 0xF5A623,
+            "FSSDiscoveryScan": 0x7AA2F7,
+        }
+        if is_valuable_scan:
+            embed_color = 0x00FF41
+        else:
+            embed_color = color_map.get(event_type, 0x00D1FF)
 
         ops_lines = [
-            _kv("CMDR", cmdr),
-            _kv("SYSTEM", current_sys),
-            _kv("STAR", str(star).upper() if star else "UNKNOWN"),
-            _kv("ROUTE", dest_name if dest_name else "INACTIVE"),
-            _kv("SCAN", f"{self._fmt_num(scanned)}/{self._fmt_num(total)} ({pct}%)"),
+            f"CMDR: {cmdr}",
+            f"SYSTEM: {current_sys} [{str(star).upper() if star else 'UNKNOWN'}]",
+            f"ROUTE: {dest_name if dest_name else 'INACTIVE'}",
         ]
 
         fields = [
             {"name": "System Link", "value": f"[{current_sys}]({sys_url})", "inline": False},
             {"name": "Navigation", "value": nav_text, "inline": True},
-            {"name": "Exploration", "value": f"{self._fmt_num(scanned)} / {self._fmt_num(total)} ({pct}%)", "inline": True},
-            {"name": "Traffic", "value": f"24h {self._fmt_num(t_day)} | 7d {self._fmt_num(t_week)} | total {self._fmt_num(t_total)}", "inline": False},
+            {"name": "Exploration", "value": f"{self._fmt_num(scanned)} / {self._fmt_num(total)} ({pct}%) | {progress_trend}", "inline": True},
+            {"name": "Traffic", "value": f"24h {self._fmt_num(t_day)} | 7d {self._fmt_num(t_week)} | total {self._fmt_num(t_total)} | {traffic_trend}", "inline": False},
         ]
-
-        valuables = state.get("valuable_bodies") or []
-        if valuables:
-            cleaned = []
-            for v in valuables[:6]:
-                txt = v[2:] if isinstance(v, str) and v.startswith("- ") else str(v)
-                cleaned.append(txt)
-            extra = len(valuables) - len(cleaned)
-            value_txt = "\n".join(cleaned)
-            if extra > 0:
-                value_txt += f"\n... +{extra} more"
-            fields.append({"name": "Valuable Discoveries", "value": value_txt[:1024], "inline": False})
 
         return {
             "embeds": [{
@@ -121,6 +124,45 @@ class DiscordHandler:
                 "description": "\n".join(ops_lines),
                 "color": embed_color,
                 "fields": fields,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "footer": {"text": f"VOID COMPASS v{APP_VERSION}"}
+            }]
+        }
+
+    def _build_valuable_alert_payload(self, event_data, state):
+        if not event_data or event_data.get("event") != "Scan":
+            return None
+
+        planet_class = event_data.get("PlanetClass")
+        terraformable = event_data.get("TerraformState") == "Terraformable"
+        if planet_class not in ("Earthlike body", "Water world", "Ammonia world") and not terraformable:
+            return None
+
+        body_name = event_data.get("BodyName", "Unknown Body")
+        if body_name in self.alerted_valuable_bodies:
+            return None
+        self.alerted_valuable_bodies.add(body_name)
+
+        if planet_class == "Earthlike body":
+            icon = "🌍"
+            label = "Earthlike World"
+        elif planet_class == "Water world":
+            icon = "💧"
+            label = "Water World"
+        elif planet_class == "Ammonia world":
+            icon = "☣️"
+            label = "Ammonia World"
+        else:
+            icon = "🛠️"
+            label = "Terraformable"
+
+        current_sys = state.get("current_sys", "---")
+        sys_url = f"https://www.edsm.net/show-system?systemName={current_sys.replace(' ', '+')}"
+        return {
+            "embeds": [{
+                "title": f"{icon} Valuable Discovery",
+                "description": f"{label}: **{body_name}**\nSystem: [{current_sys}]({sys_url})",
+                "color": 0x00FF41,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "footer": {"text": f"VOID COMPASS v{APP_VERSION}"}
             }]
@@ -154,6 +196,7 @@ class DiscordHandler:
         if not webhook: return
 
         payload = self._build_payload(event_data, state)
+        valuable_alert_payload = self._build_valuable_alert_payload(event_data, state)
         payload_no_ts = json.loads(json.dumps(payload))
         try:
             payload_no_ts["embeds"][0].pop("timestamp", None)
@@ -161,10 +204,13 @@ class DiscordHandler:
             pass
         payload_sig = hashlib.sha1(json.dumps(payload_no_ts, sort_keys=True).encode("utf-8")).hexdigest()
         event_type = event_data.get("event") if event_data else None
-        if payload_sig == self.last_payload_sig and event_type not in ("FSDJump",):
+        if payload_sig == self.last_payload_sig and event_type not in ("FSDJump",) and not valuable_alert_payload:
             return
         self.last_payload_sig = payload_sig
         current_sys = state.get("current_sys", "---")
+        self.last_scanned = int(state.get("scanned", 0) or 0)
+        traffic = state.get("system_traffic", {}) or {}
+        self.last_traffic_total = int(traffic.get("total", 0) or 0)
 
         def _post():
             try:
@@ -183,6 +229,9 @@ class DiscordHandler:
                         self.config["discord_msg_id"] = msg_id
                         self.config["discord_msg_system"] = current_sys
                         with open(CONFIG_FILE, 'w') as f: json.dump(self.config, f, indent=4)
+
+                if valuable_alert_payload:
+                    requests.post(f"{webhook}", json=valuable_alert_payload, timeout=5)
             except Exception as e:
                 logging.error(f"Discord Live Error: {e}")
         
@@ -192,3 +241,4 @@ class DiscordHandler:
         self.msg_id = ""
         self.config["discord_msg_id"] = ""
         self.config["discord_msg_system"] = ""
+        self.alerted_valuable_bodies.clear()

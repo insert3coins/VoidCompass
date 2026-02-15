@@ -1,9 +1,7 @@
 # VoidCompass // UPDATE LOG
 
-## v2.1.2 // Route Plotter Update
-**Release Date:** 2026-Feb-14
-
-### 🌟 NEW FEATURES
+## v2.1.6 // Route Plotter Update
+**Release Date:** 2026-Feb-16
 *   **Dashboard Redesign (same color theme):**
     *   Added top summary strip for `SYS`, `ROUTE`, `SCAN`, `TRAFFIC`, and `SESSION`.
     *   Added alert bar with live system-state indicators.
@@ -37,3 +35,9 @@
     *   Increased default window size to `1020x700` for the expanded control set.
 *   **Naming/Clarity:**
     *   Merged duplicate system/star presentation in dashboard cards for cleaner intel display.
+*   **Discord Live Output Refresh:**
+    *   Removed duplicated navigation/exploration details from the live embed for a cleaner status card.
+    *   Limited live embed description to a compact 3-line operations summary.
+    *   Moved valuable world reporting to dedicated alert posts instead of the persistent live status message.
+    *   Added trend indicators in the live embed (`Progress +N`, `Traffic ↑/↓/→`).
+    *   Switched to explicit event-based Discord color mapping (`Jump`, `Scan`, `Valuable`, `Bio`, `FSS`).
