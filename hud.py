@@ -1,6 +1,6 @@
 import tkinter as tk
 import json
-from config import CONFIG_FILE, COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE
+from config import CONFIG_FILE, COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, COLOR_GREEN
 
 class TacticalHUD:
     def __init__(self, root, config):
@@ -80,6 +80,7 @@ class TacticalHUD:
         game_r_pos=None,
         route_destination=None,
         route_counts=None,
+        hud_status="OK",
     ):
         target_h = self.base_height
         if self.canvas.winfo_height() != target_h:
@@ -96,6 +97,13 @@ class TacticalHUD:
         txt = getattr(self, "anim_char", "⢄")
         self.draw_text(32, 20, text=txt, fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="e", tags="anim_title")
         self.draw_text(38, 20, text="NAVIGATION HUD", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
+        status_label = str(hud_status or "OK").upper()
+        status_color = {
+            "OK": COLOR_GREEN,
+            "ALERT": COLOR_ORANGE,
+            "FAIL": "#ff4d4d",
+        }.get(status_label, COLOR_TEXT)
+        self.draw_text(440, 20, text=f"● {status_label}", fill=status_color, font=("Courier", 9, "bold"), anchor="e")
         # Bio logs hidden for now (counting disabled)
 
         self.draw_text(20, 48, text=f"SYS: {current_sys.upper()}", fill=COLOR_TEXT, font=("Courier", 10, "bold"), anchor="w")
@@ -128,6 +136,8 @@ class TacticalHUD:
             route_pct = max(0.0, min(1.0, route_counts[0] / route_counts[1]))
             route_count_txt = f"ROUTE: {route_counts[0]}/{route_counts[1]}"
         route_text = f"{route_count_txt} ({int(route_pct * 100)}%)"
+        if r_pos and len(r_pos) > 2 and r_pos[2]:
+            route_text = f"{route_text} [{r_pos[2]}]"
 
         if route_destination:
             dest_text = f"DEST: {route_destination.upper()}"

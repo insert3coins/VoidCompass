@@ -123,25 +123,22 @@ class DashboardUIMixin:
         self.card_session = self._build_ops_card(ops, "SESSION", 1, 1)
         self.card_ops = self._build_ops_card(ops, "OPERATIONS", 1, 2)
 
-        self.details_toggle = tk.Button(center, text="[ DETAILS: VISIBLE ]", command=self.toggle_details, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 8, "bold"), relief=tk.FLAT, activebackground=COLOR_PANEL, activeforeground=COLOR_ACCENT)
-        self.details_toggle.pack(anchor="w", pady=(10, 4))
-
         self.details_drawer = tk.Frame(center, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
-        self.details_drawer.pack(fill=tk.X, pady=(0, 8))
-        self.details_drawer.grid_columnconfigure(0, weight=1)
-        self.details_drawer.grid_columnconfigure(1, weight=1)
-
-        vf_wrap = tk.Frame(self.details_drawer, bg=COLOR_PANEL)
-        vf_wrap.grid(row=0, column=0, sticky="nsew", padx=(8, 4), pady=8)
-        tk.Label(vf_wrap, text="VALUABLE FINDS", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w")
-        self.valuable_list = tk.Listbox(vf_wrap, bg=COLOR_PANEL, fg=COLOR_ORANGE, font=("Courier", 9), height=7, relief=tk.FLAT, highlightthickness=0, borderwidth=0)
-        self.valuable_list.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
-
-        rd_wrap = tk.Frame(self.details_drawer, bg=COLOR_PANEL)
-        rd_wrap.grid(row=0, column=1, sticky="nsew", padx=(4, 8), pady=8)
-        tk.Label(rd_wrap, text="RECENT DISCOVERIES", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w")
-        self.recent_list = tk.Listbox(rd_wrap, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9), height=7, relief=tk.FLAT, highlightthickness=0, borderwidth=0)
-        self.recent_list.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
+        self.details_drawer.pack(fill=tk.X, pady=(10, 8))
+        feed_wrap = tk.Frame(self.details_drawer, bg=COLOR_PANEL)
+        feed_wrap.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+        tk.Label(feed_wrap, text="EVENT FEED", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w")
+        self.event_feed_list = tk.Listbox(
+            feed_wrap,
+            bg=COLOR_PANEL,
+            fg=COLOR_TEXT,
+            font=("Courier", 9),
+            height=8,
+            relief=tk.FLAT,
+            highlightthickness=0,
+            borderwidth=0,
+        )
+        self.event_feed_list.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
 
         log_frame = tk.Frame(center, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
         log_frame.pack(fill=tk.BOTH, expand=True)
@@ -205,15 +202,6 @@ class DashboardUIMixin:
         line = f"[{datetime.now().strftime('%H:%M:%S')}] {msg}"
         self.log_entries.append(line)
         self.root.after(0, self._refresh_log_view)
-
-    def toggle_details(self):
-        self.details_visible = not self.details_visible
-        if self.details_visible:
-            self.details_drawer.pack(fill=tk.X, pady=(0, 8))
-            self.details_toggle.config(text="[ DETAILS: VISIBLE ]")
-        else:
-            self.details_drawer.pack_forget()
-            self.details_toggle.config(text="[ DETAILS: HIDDEN ]")
 
     def schedule_dashboard_refresh(self, full=False):
         if full:
@@ -382,17 +370,37 @@ class DashboardUIMixin:
         self.card_ops.line2.config(text=f"Next WP: {next_waypoint_name}")
         self.card_ops.line3.config(text=f"Auto-Copy: {auto_copy} | Planner Open: {planner_open}")
 
-        self.valuable_list.delete(0, tk.END)
+        feed_entries = []
         for item in self.valuable_bodies:
             display_text = item[2:] if item.startswith("- ") else item
-            self.valuable_list.insert(tk.END, display_text)
-
-        self.recent_list.delete(0, tk.END)
-        for item in self.scan_items[:10]:
+            feed_entries.append(("VALUABLE", f"[VALUABLE] {display_text}"))
+        for item in self.scan_items[:12]:
             nm = item.get("name", "Unknown")
             reward = item.get("dss_reward") if item.get("dss_complete") else item.get("reward")
             reward_txt = self._format_credits(reward, hide_units=True)
-            self.recent_list.insert(tk.END, f"{nm}  [{reward_txt}]")
+            feed_entries.append(("SCAN", f"[SCAN] {nm} [{reward_txt}]"))
+
+        # Keep most recent-looking entries first and avoid duplicate lines.
+        deduped = []
+        seen = set()
+        for tag, line in feed_entries:
+            if line in seen:
+                continue
+            deduped.append((tag, line))
+            seen.add(line)
+
+        self.event_feed_list.delete(0, tk.END)
+        color_map = {
+            "VALUABLE": COLOR_ORANGE,
+            "SCAN": COLOR_TEXT,
+            "ALERT": "#ff4d4d",
+            "JUMP": COLOR_ACCENT,
+            "INFO": "#aaa",
+        }
+        for tag, line in deduped[:20]:
+            self.event_feed_list.insert(tk.END, line)
+            idx = self.event_feed_list.size() - 1
+            self.event_feed_list.itemconfig(idx, fg=color_map.get(tag, COLOR_TEXT))
 
     def update_dashboard_ui(self):
         """Force update full dashboard, including waypoint panel."""

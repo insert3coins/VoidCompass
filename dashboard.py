@@ -73,7 +73,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.session_ly = 0.0
         self.log_filter = "ALL"
         self.log_entries = []
-        self.details_visible = True
         self.dashboard_refresh_job = None
         self.dashboard_refresh_full_pending = False
         
@@ -317,10 +316,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             game_r_pos = (self.route_list.index(self.current_sys)+1, len(self.route_list))
 
         hud_destination = route_destination if self.route_list else None
+        hud_status = "OK"
+        if not self.is_running or not self.watcher or not self.watcher.is_running:
+            hud_status = "FAIL"
+        else:
+            has_alerts = (
+                self.system_undiscovered
+                or self.system_bio_signals > 0
+                or bool(self.valuable_bodies)
+                or self.fss_summary_active
+            )
+            if has_alerts:
+                hud_status = "ALERT"
         self.root.after(0, lambda: self.hud.update(
             self.current_sys, self.dest_name, dist, 
             self.scanned, self.total, custom_r_pos, self.organic_count, self.system_traffic, game_r_pos,
-            hud_destination, route_counts
+            hud_destination, route_counts, hud_status
         ))
         self.update_scan_hud()
 
@@ -412,7 +423,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 sys_text = self.current_sys.upper()
                 if self.star_class: sys_text += f" [{self.star_class}]"
                 self.root.after(0, lambda: self.sys_stat.config(text=sys_text))
-                self.root.after(0, lambda: self.valuable_list.delete(0, tk.END))
                 self.update_nav_label()
             # Bio logs hidden for now (counting disabled)
                 self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
@@ -551,8 +561,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         elif p_class == "Ammonia world": icon = "☣️"
                         elif terraformable: icon = "🛠️"
                         self.valuable_bodies.append(f"- {icon} {body_name_str}")
-                        if not self.batch_mode:
-                            self.root.after(0, lambda: self.valuable_list.insert(tk.END, f"{icon} {body_name_str}"))
 
                     # --- Notification Logic ---
                     # Since this is a new scan, we always update.
