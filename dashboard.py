@@ -250,6 +250,19 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         
         self.edsm.fetch_traffic(system_name, callback)
 
+    def _copy_waypoint_to_clipboard(self, waypoint_name, log_label="NEXT WAYPOINT"):
+        if not waypoint_name:
+            return False
+        try:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(waypoint_name)
+            self.root.update()
+            self.log(f"📋 COPIED {log_label}: {waypoint_name}")
+            return True
+        except Exception as e:
+            self.log(f"❌ CLIPBOARD COPY FAILED: {e}")
+            return False
+
     def update_hud(self):
         """Gathers all current state and sends it to the HUD for redrawing."""
         if not self.hud:
@@ -413,10 +426,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if self.config.get("auto_copy_waypoint", False):
                 next_wp = self.waypoint_manager.get_next_waypoint(self.current_sys)
                 if next_wp:
-                    self.root.clipboard_clear()
-                    self.root.clipboard_append(next_wp)
-                    self.root.update()
-                    self.log(f"📋 COPIED NEXT WAYPOINT: {next_wp}")
+                    self._copy_waypoint_to_clipboard(next_wp, "NEXT WAYPOINT")
 
             if is_jump:
                 # It's a new jump, so reset the Discord message for the new system.
@@ -570,13 +580,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             
             if self.config.get("auto_copy_waypoint", False):
                 next_wp = self.waypoint_manager.get_next_waypoint(self.current_sys)
-                if next_wp:
-                    def _copy():
-                        self.root.clipboard_clear()
-                        self.root.clipboard_append(next_wp)
-                        self.root.update()
-                    self.root.after(0, _copy)
-                    self.log(f"📋 COPIED NEXT WAYPOINT: {next_wp}")
+                copied_wp = next_wp
+                log_label = "NEXT WAYPOINT"
+                if not copied_wp and self.waypoint_manager.waypoints:
+                    for wp in self.waypoint_manager.waypoints:
+                        if not wp.get("visited", False):
+                            copied_wp = wp.get("name")
+                            log_label = "FIRST PENDING WAYPOINT (STARTUP)"
+                            break
+                if copied_wp:
+                    self.root.after(0, lambda w=copied_wp, l=log_label: self._copy_waypoint_to_clipboard(w, l))
 
     def update_cargo(self, inventory):
         if self.cargo_hud:
