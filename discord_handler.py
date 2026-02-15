@@ -46,9 +46,6 @@ class DiscordHandler:
             if terraformable:
                 return f"Scan: Terraformable - {body_name}"
             return f"Scan: {body_name}"
-        if event_type == "ScanOrganic":
-            genus = event_data.get("Genus_Localised", "Organic")
-            return f"Bio Log: {genus}"
         if event_type == "FSSDiscoveryScan":
             return "System Scan Initiated"
         return "Live Update"
@@ -97,7 +94,6 @@ class DiscordHandler:
         color_map = {
             "FSDJump": 0x4DA3FF,
             "Scan": 0x00D1FF,
-            "ScanOrganic": 0xF5A623,
             "FSSDiscoveryScan": 0x7AA2F7,
         }
         if is_valuable_scan:
@@ -173,6 +169,8 @@ class DiscordHandler:
             return
         webhook = self.config.get("discord_webhook")
         if not webhook: return
+        if event_data and event_data.get("event") == "ScanOrganic":
+            return
 
         if self.update_timer:
             self.root.after_cancel(self.update_timer)
