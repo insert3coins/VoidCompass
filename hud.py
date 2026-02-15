@@ -68,7 +68,7 @@ class TacticalHUD:
         self.canvas.create_text(x+1, y+1, text=text, fill="black", font=font, anchor=anchor, tags=tags)
         self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor, tags=tags)
 
-    def update(self, current_sys, dest_name, dist_ly, scanned, total, r_pos, organic_count, system_traffic, game_r_pos=None, fss_summary=None, fss_summary_active=False):
+    def update(self, current_sys, dest_name, dist_ly, scanned, total, r_pos, organic_count, system_traffic, game_r_pos=None, fss_summary=None, fss_summary_active=False, route_destination=None):
         # Build HV lines for dynamic sizing when FSS summary is active
         hv_lines = []
         if fss_summary_active and fss_summary:
@@ -161,4 +161,8 @@ class TacticalHUD:
                 route_text = f"ROUTE: {r_pos[0]} / {r_pos[1]} ({r_pos[2]})"
             else:
                 route_text = f"ROUTE: {r_pos[0]} / {r_pos[1]}"
+        dest_text = f"DEST: {route_destination.upper()}" if route_destination else "DEST: ---"
+        if len(dest_text) > 34:
+            dest_text = dest_text[:31] + "..."
+        self.draw_text(20, route_y, text=dest_text, fill=COLOR_ORANGE, font=("Courier", 9, "bold"), anchor="w")
         self.draw_text(440, route_y, text=route_text, fill=COLOR_ACCENT, font=("Courier", 9, "bold"), anchor="e")

@@ -278,9 +278,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 pass
         
         custom_r_pos = None
+        route_destination = None
         
         if self.waypoint_manager.waypoints:
             total_wp = len(self.waypoint_manager.waypoints)
+            route_destination = self.waypoint_manager.waypoints[-1].get("name")
             
             visited_count = sum(1 for wp in self.waypoint_manager.waypoints if wp.get('visited', False))
             step = visited_count + 1
@@ -316,7 +318,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.root.after(0, lambda: self.hud.update(
             self.current_sys, self.dest_name, dist, 
             self.scanned, self.total, custom_r_pos, self.organic_count, self.system_traffic, game_r_pos,
-            fss_summary, self.fss_summary_active
+            fss_summary, self.fss_summary_active, route_destination
         ))
         self.update_scan_hud()
 
