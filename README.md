@@ -1,96 +1,63 @@
-# Elite Dangerous - Void Compass
+# Void Compass
 
-A real-time exploration and navigation companion for Elite Dangerous. This tool reads your journal files as you play, providing a tactical overlay, a detailed dashboard, and live Discord integration with EDSM-backed traffic and system data.
+Void Compass is a real-time Elite Dangerous companion app with a desktop dashboard, in-game overlays, route planning tools, EDSM integration, and live Discord telemetry.
 
 ![Dashboard Screenshot](https://raw.githubusercontent.com/insert3coins/VoidCompass-Release/main/DashBoard.PNG "Dashboard Screenshot")
 
-## Features
+## Current Features
 
-*   **Real-time Event Logging:** Reads the Elite Dangerous journal files live to track your actions.
-*   **Detailed Dashboard:** A desktop application that provides a central view of:
-    *   Current system and coordinates.
-    *   System scan progress (bodies scanned vs. total).
-    *   Exobiology scan count.
-    *   **Next Waypoint** navigation panel.
-    *   A detailed console log of all major events.
-*   **Tactical HUD Overlay:** A movable, always-on-top window that displays critical information over your game:
-    *   Current system and route progress (e.g., "Jump 5 of 20").
-    *   Navigation target and distance in light-years.
-    *   A visual progress bar for system scans.
-    *   Live system traffic data from EDSM (24h, weekly, total).
-    *   Organic (biology) scan count.
+- Live journal ingestion for `Location`, `FSDJump`, `Scan`, `FSS`, `SAA`, cargo, nav route, and status data.
+- Single-instance lock to prevent duplicate app launches.
+- Dashboard summary strip for `SYS`, `ROUTE`, `SCAN`, `TRAFFIC`, and `SESSION`.
+- Alert bar with live system-state warnings.
+- Activity log with filters: `ALL`, `JUMP`, `SCAN`, `ALERT`, `ERROR`.
+- Event Feed panel replacing old split drawers, with color-coded entries.
+- Tactical Navigation HUD overlay: current system, nav target, distance, scan progress bar, traffic, destination, route progress, and remaining LY.
+- Top-right status blip (`OK`, `ALERT`, `FAIL`) for quick health/attention status.
+- Cargo overlay for live inventory/capacity.
+- Scan results overlay for exploration/FSS workflow.
+- Route Planner window: waypoint add/edit/delete/reorder and visited-state tracking.
+- Batch actions: copy, mark done/todo, delete.
+- Duplicate handling modes: `skip`, `append note`, `keep both`.
+- Route health indicators: pending, visited, missing coords, duplicates.
+- EDSM route refresh and optional automatic EDSM note enrichment.
+- Bulk import from pasted lists and Spansh CSV import.
+- Route CSV export with segment and cumulative LY.
+- Auto-copy waypoint support (including startup behavior).
+- Discord webhook integration with a persistent live message (`Live Update` title) and separate valuable-discovery alerts.
+- Screenshot converter (BMP -> PNG) with system/timestamp naming and optional BMP cleanup.
+- Auto-saved window positions/geometries for dashboard, settings, overlays, and route tools.
 
-    ![Tactical HUD](https://raw.githubusercontent.com/insert3coins/VoidCompass-Release/main/NavHud.PNG "Tactical HUD")
+![Tactical HUD](https://raw.githubusercontent.com/insert3coins/VoidCompass-Release/main/NavHud.PNG "Tactical HUD")
 
-*   **Cargo Manifest Overlay:** A separate overlay to track your ship's inventory in real-time.
+![Route Planner](https://raw.githubusercontent.com/insert3coins/VoidCompass-Release/main/RoutePlanner.PNG "Route Planner")
 
-    <!-- Screenshot pending: cargo overlay -->
-
-*   **Route Planner:**
-    *   Built-in tool to plot custom routes.
-    *   Manage waypoints and track progress.
-    *   Auto-copy next waypoint to clipboard.
-
-    ![Route Planner](https://raw.githubusercontent.com/insert3coins/VoidCompass-Release/main/RoutePlanner.PNG "Route Planner")
-
-*   **Screenshot Converter:**
-    *   Automatically converts high-res BMP screenshots to PNG.
-    *   Renames files with **System Name** and **Timestamp**.
-    *   Auto-deletes original BMPs to save space.
-*   **Live Discord Integration:**
-    *   Posts a single, persistent message to a specified webhook that updates in real-time.
-    *   Dynamic titles for events like `🚀 JUMP COMPLETE`, `🛰️ SCAN: [Body]`, and `🌱 BIO-LOG: [Genus]`.
-    *   Automatically highlights valuable discoveries (Earth-like, Water, Ammonia worlds, and Terraformables) with special emojis and colors.
-    *   Resets with a new message upon jumping to a new system.
-*   **EDSM Data:**
-    *   Fetches system traffic data for the HUD.
-    *   Pulls system coordinates/details to support route plotting and info panels.
-*   **Easy Configuration:**
-    *   Automatically creates a `config.json` file on first launch.
-    *   In-app settings panel to configure all major features.
-    *   Saves window positions for a consistent layout.
-
----
-
-## Installation & Setup
-
-1.  **First-Time Configuration:**
-    *   On the first run, the application will create a `config.json` file in the same directory.
-    *   The application will open. Click the **[ CONFIGURATION ]** button in the top-right corner.
-    *   Fill in the required fields in the settings panel.
-
----
+On first launch, `config.json` is created automatically.
 
 ## Configuration
 
-The application can be configured via the in-app settings panel or by directly editing the `config.json` file.
+Use the in-app **[ CONFIGURATION ]** panel or edit `config.json` directly.
 
-*   `journal_path`: The path to your Elite Dangerous journal files. The application attempts to find the default path, but you may need to adjust it.
-    *   *Default:* `C:\Users\[YourUser]\Saved Games\Frontier Developments\Elite Dangerous`
+- `journal_path`: Elite journal folder path. If blank, Void Compass tries auto-detect.
+- `overlay_enabled`: Enable/disable tactical nav HUD.
+- `cargo_overlay_enabled`: Enable/disable cargo overlay.
+- `scan_overlay_enabled`: Enable/disable scan overlay.
+- `discord_enabled`: Enable/disable Discord integration.
+- `discord_webhook`: Discord webhook URL.
+- `screenshots_enabled`: Enable/disable screenshot conversion.
+- `screenshots_path`: Folder to watch for BMP screenshots.
+- `hud_x`, `hud_y`: Tactical HUD position.
+- `cargo_hud_x`, `cargo_hud_y`: Cargo HUD position.
+- `scan_hud_x`, `scan_hud_y`: Scan HUD position.
+- `main_geometry`, `settings_geometry`: Saved window geometry.
 
-*   `discord_webhook`: The full URL for the Discord webhook you want the bot to post updates to.
+Default journal path target:
 
-*   `overlay_enabled`: Set to `true` to show the tactical Navigation HUD overlay, or `false` to hide it.
+`C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous`
 
-*   `cargo_overlay_enabled`: Set to `true` to show the cargo manifest overlay.
+## Notes
 
-*   `screenshots_enabled`: Set to `true` to enable the BMP to PNG converter.
+- Pillow (`PIL`) is required for screenshot conversion. If missing, that feature auto-disables and logs an error.
+- Discord live telemetry updates one persistent message and emits separate one-off valuable discovery alerts.
 
-*   `screenshots_path`: The folder to watch for new screenshots.
-
-*   `hud_x` / `hud_y`: The screen coordinates for the HUD's position. This is set automatically when you move the HUD.
-
-*   `main_geometry` / `settings_geometry`: The size and position of the main dashboard and settings windows. These are saved automatically when you close the windows.
-
-**Note:** After saving changes in the configuration window, a restart of the application is recommended for all changes to take effect.
-
----
-
-## Usage
-
-*   **Start the application before or during your game session.** It will automatically detect the latest journal file and start processing events.
-*   **The Dashboard** provides a comprehensive overview and a log of all activities.
-*   **The HUD** can be clicked and dragged to any position on your screen. Its position will be saved for the next session.
-*   **Discord messages** will be created/updated automatically in the channel associated with your webhook URL. A new message is created each time you jump to a new system.
-
-Happy exploring, Commander! o7
+o7
