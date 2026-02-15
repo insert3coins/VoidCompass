@@ -315,10 +315,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             game_r_pos = (self.route_list.index(self.current_sys)+1, len(self.route_list))
 
         fss_summary = self._get_fss_summary()
+        hud_destination = route_destination if self.route_list else None
         self.root.after(0, lambda: self.hud.update(
             self.current_sys, self.dest_name, dist, 
             self.scanned, self.total, custom_r_pos, self.organic_count, self.system_traffic, game_r_pos,
-            fss_summary, self.fss_summary_active, route_destination
+            fss_summary, self.fss_summary_active, hud_destination
         ))
         self.update_scan_hud()
 

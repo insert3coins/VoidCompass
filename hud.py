@@ -161,8 +161,9 @@ class TacticalHUD:
                 route_text = f"ROUTE: {r_pos[0]} / {r_pos[1]} ({r_pos[2]})"
             else:
                 route_text = f"ROUTE: {r_pos[0]} / {r_pos[1]}"
-        dest_text = f"DEST: {route_destination.upper()}" if route_destination else "DEST: ---"
-        if len(dest_text) > 34:
-            dest_text = dest_text[:31] + "..."
-        self.draw_text(20, route_y, text=dest_text, fill=COLOR_ORANGE, font=("Courier", 9, "bold"), anchor="w")
+        if route_destination:
+            dest_text = f"DEST: {route_destination.upper()}"
+            if len(dest_text) > 34:
+                dest_text = dest_text[:31] + "..."
+            self.draw_text(20, route_y, text=dest_text, fill=COLOR_ORANGE, font=("Courier", 9, "bold"), anchor="w")
         self.draw_text(440, route_y, text=route_text, fill=COLOR_ACCENT, font=("Courier", 9, "bold"), anchor="e")
