@@ -73,6 +73,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.session_ly = 0.0
         self.log_filter = "ALL"
         self.log_entries = []
+        self.event_feed_entries = []
+        self.event_feed_filter = "ALL"
+        self.event_feed_view = []
+        self.event_feed_max_entries = 150
+        self.event_feed_display_limit = 30
         self.dashboard_refresh_job = None
         self.dashboard_refresh_full_pending = False
         
@@ -165,7 +170,33 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.route_plotter and self.route_plotter.win.winfo_exists():
             self.route_plotter.win.lift()
             return
-        self.route_plotter = RoutePlotter(self.root, self.edsm, self.current_coords, self.current_sys, self.config, self.waypoint_manager, on_change_callback=self.update_waypoint_display)
+        self.route_plotter = RoutePlotter(
+            self.root,
+            self.edsm,
+            self.current_coords,
+            self.current_sys,
+            self.config,
+            self.waypoint_manager,
+            on_change_callback=self.update_waypoint_display,
+            event_callback=self._on_route_event,
+        )
+
+    def _on_route_event(self, tag, message, severity="INFO", copy_text=None, system_name=None, pinned=False):
+        if not message:
+            return
+        event_tag = (tag or "ROUTE").upper()
+        sys_name = system_name or self.current_sys
+        url = None
+        if sys_name and sys_name not in ("---", "Unknown"):
+            url = f"https://www.edsm.net/show-system?systemName={str(sys_name).replace(' ', '+')}"
+        self.add_event_feed_entry(
+            event_tag,
+            message,
+            severity=severity,
+            copy_text=copy_text,
+            url=url,
+            pinned=pinned,
+        )
 
     def open_settings(self):
         def on_save():
@@ -257,9 +288,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.root.clipboard_append(waypoint_name)
             self.root.update()
             self.log(f"📋 COPIED {log_label}: {waypoint_name}")
+            self.add_event_feed_entry("ROUTE", f"Copied {log_label}: {waypoint_name}", severity="INFO", copy_text=waypoint_name)
             return True
         except Exception as e:
             self.log(f"❌ CLIPBOARD COPY FAILED: {e}")
+            self.add_event_feed_entry("ALERT", f"Clipboard copy failed: {e}", severity="FAIL")
             return False
 
     def update_hud(self):
@@ -342,6 +375,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         
         if ev == "Fileheader":
             self.log(f"Game version detected: {d.get('gameversion')} ({d.get('build')})")
+            self.add_event_feed_entry("INFO", f"Game {d.get('gameversion')} ({d.get('build')})", severity="INFO")
 
         elif ev == "Loadout":
             self.cargo_capacity = d.get("cargo_capacity", 0)
@@ -356,6 +390,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             game_build = d.get("build")
             if game_version and game_build:
                 self.log(f"Game version detected from LoadGame: {game_version} ({game_build})")
+                self.add_event_feed_entry("INFO", f"LoadGame {game_version} ({game_build})", severity="INFO")
 
         elif ev == "ScanOrganic":
             # Bio counting is temporarily disabled.
@@ -418,6 +453,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
             log_msg = f"JUMP: {self.current_sys}" if is_jump else f"LOCATION: {self.current_sys}"
             self.log(log_msg)
+            evt_tag = "JUMP" if is_jump else "SYSTEM"
+            evt_msg = f"{'Arrived' if is_jump else 'Location set'}: {self.current_sys}"
+            self.add_event_feed_entry(evt_tag, evt_msg, severity="INFO", copy_text=self.current_sys, url=f"https://www.edsm.net/show-system?systemName={self.current_sys.replace(' ', '+')}")
             
             if not self.batch_mode:
                 sys_text = self.current_sys.upper()
@@ -460,6 +498,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if not self.batch_mode:
                 self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
             self.log(f"🔭 HONK: {self.total} bodies detected.")
+            self.add_event_feed_entry("SCAN", f"Honk complete: {self.total} bodies", severity="INFO", copy_text=self.current_sys)
             self.update_live_discord(raw)
             if not self.batch_mode:
                 self.update_hud()
@@ -474,6 +513,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if not self.batch_mode:
                     self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                 self.log("📡 SYSTEM SCAN COMPLETE: All bodies found.")
+                self.add_event_feed_entry("ALERT", "FSS complete: all bodies found", severity="WARN", copy_text=self.current_sys)
                 if not self.batch_mode:
                     self.update_hud()
                     self.schedule_dashboard_refresh()
@@ -505,6 +545,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     if item.get("_ts") is None:
                         item["_ts"] = int(time.time())
                     self.save_scan_item_to_db(self.current_sys, item)
+                    body_label = item.get("name") or f"Body {body_id}"
+                    self.add_event_feed_entry("DSS", f"DSS complete: {body_label}", severity="INFO", copy_text=body_label)
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
@@ -546,6 +588,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.update_hud()
                         self.schedule_dashboard_refresh()
 
+                    body_label = body_name or "Unknown Body"
+                    landable_marker = " 🚀" if d.get("landable") else ""
+                    self.add_event_feed_entry("SCAN", f"{body_label}{landable_marker}", severity="INFO", copy_text=body_label)
+
                     # Check for biological signals and update the system total
                     self.system_bio_signals += d.get("bio_signals_count", 0)
 
@@ -561,6 +607,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         elif p_class == "Ammonia world": icon = "☣️"
                         elif terraformable: icon = "🛠️"
                         self.valuable_bodies.append(f"- {icon} {body_name_str}")
+                        self.add_event_feed_entry("VALUABLE", f"{icon} Valuable world: {body_name_str}", severity="WARN", copy_text=body_name_str, pinned=True)
+                    if is_system_star_scan and d.get("was_discovered") is False:
+                        self.add_event_feed_entry("ALERT", "Undiscovered system star scanned", severity="WARN", copy_text=self.current_sys)
 
                     # --- Notification Logic ---
                     # Since this is a new scan, we always update.
@@ -613,5 +662,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             dest = data['Route'][-1]
             self.dest_coords = dest['StarPos']
             self.dest_name = dest['StarSystem']
+            self.add_event_feed_entry("SYSTEM", f"Nav route loaded: {len(self.route_list)} jumps to {self.dest_name}", severity="INFO", copy_text=self.dest_name, url=f"https://www.edsm.net/show-system?systemName={self.dest_name.replace(' ', '+')}")
             self.update_nav_label()
             self.update_hud()
+        else:
+            self.dest_coords = None
+            self.dest_name = None
+            self.add_event_feed_entry("SYSTEM", "Nav route cleared", severity="INFO")

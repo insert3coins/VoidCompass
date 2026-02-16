@@ -9,7 +9,7 @@ from waypoint_manager import WaypointManager
 
 
 class RoutePlotter:
-    def __init__(self, root, edsm_handler, current_coords=None, current_sys="Unknown", config=None, manager=None, on_change_callback=None):
+    def __init__(self, root, edsm_handler, current_coords=None, current_sys="Unknown", config=None, manager=None, on_change_callback=None, event_callback=None):
         self.root = root
         self.edsm = edsm_handler
         self.manager = manager if manager else WaypointManager()
@@ -17,6 +17,7 @@ class RoutePlotter:
         self.current_sys = current_sys
         self.config = config if config is not None else {}
         self.on_change_callback = on_change_callback
+        self.event_callback = event_callback
         self.route_refresh_running = False
         self._route_refresh_state = None
         self.duplicate_mode = self.config.get("route_duplicate_mode", "skip")
@@ -30,6 +31,14 @@ class RoutePlotter:
 
         self.setup_ui()
         self.refresh_list()
+
+    def _emit_event(self, tag, message, severity="INFO", copy_text=None, pinned=False):
+        if not callable(self.event_callback):
+            return
+        try:
+            self.event_callback(tag, message, severity=severity, copy_text=copy_text, system_name=self.current_sys, pinned=pinned)
+        except Exception:
+            pass
 
     def setup_ui(self):
         wrapper = tk.Frame(self.win, bg=COLOR_BG)
@@ -174,6 +183,7 @@ class RoutePlotter:
         self.duplicate_mode = modes[(idx + 1) % len(modes)]
         self.config["route_duplicate_mode"] = self.duplicate_mode
         self._update_duplicate_mode_btn()
+        self._emit_event("ROUTE", f"Duplicate mode: {self.duplicate_mode.upper()}", "INFO")
 
     def _find_waypoint_index(self, name):
         if not name:
@@ -230,6 +240,7 @@ class RoutePlotter:
     def _add_waypoint_with_notes(self, name, coords, manual_note, edsm_note):
         if not coords:
             messagebox.showwarning("Add Waypoint", f"System not found on EDSM:\n{name}\n\nWaypoint was not added.")
+            self._emit_event("ROUTE", f"Waypoint lookup failed: {name}", "WARN", copy_text=name)
             return
         final_note = self._merge_notes(manual_note, edsm_note)
         outcome, idx = self._apply_duplicate_policy(name, coords, final_note)
@@ -237,6 +248,12 @@ class RoutePlotter:
             self.refresh_list(select_last=True)
         else:
             self.refresh_list(select_index=idx)
+        if outcome in ("added", "added_duplicate"):
+            self._emit_event("ROUTE", f"Waypoint added: {name}", "INFO", copy_text=name)
+        elif outcome == "merged":
+            self._emit_event("ROUTE", f"Waypoint merged: {name}", "INFO", copy_text=name)
+        else:
+            self._emit_event("ROUTE", f"Waypoint skipped (duplicate): {name}", "INFO", copy_text=name)
 
     def refresh_list(self, select_index=None, select_last=False):
         previous = self.get_selected_index()
@@ -674,6 +691,11 @@ class RoutePlotter:
             f"Unresolved Removed: {job['unresolved']}"
         )
         messagebox.showinfo("Import Report", msg)
+        self._emit_event(
+            "ROUTE",
+            f"Import complete: added {job['added']}, merged {job['merged']}, skipped {job['skipped']}, unresolved {job['unresolved']}",
+            "INFO",
+        )
 
     def import_spansh_csv(self):
         path = filedialog.askopenfilename(
@@ -682,6 +704,7 @@ class RoutePlotter:
         )
         if not path:
             return
+        self._emit_event("ROUTE", f"Spansh CSV import started: {os.path.basename(path)}", "INFO", copy_text=path)
 
         records = []
         try:
@@ -827,6 +850,7 @@ class RoutePlotter:
     def export_route_csv(self):
         if not self.manager.waypoints:
             messagebox.showinfo("Export Route", "No waypoints to export.")
+            self._emit_event("ROUTE", "CSV export skipped: no waypoints", "WARN")
             return
 
         filename = f"route_export_{time.strftime('%Y%m%d_%H%M%S')}.csv"
@@ -866,18 +890,22 @@ class RoutePlotter:
                         f"{cumulative:.2f}" if segment else "",
                     ])
             messagebox.showinfo("Export Route", f"Exported route to:\n{path}")
+            self._emit_event("ROUTE", f"CSV export complete: {os.path.basename(path)}", "INFO", copy_text=path)
         except Exception as e:
             messagebox.showerror("Export Route", f"Export failed:\n{e}")
+            self._emit_event("ROUTE", f"CSV export failed: {e}", "FAIL")
 
     def refresh_route_from_edsm(self):
         if self.route_refresh_running:
             return
         if not self.manager.waypoints:
             messagebox.showinfo("Refresh Route", "No waypoints to refresh.")
+            self._emit_event("ROUTE", "EDSM refresh skipped: no waypoints", "WARN")
             return
 
         self.route_refresh_running = True
         self.refresh_route_btn.config(state=tk.DISABLED, text="[ REFRESHING... ]")
+        self._emit_event("ROUTE", "EDSM refresh started", "INFO")
         self._route_refresh_state = {
             "remaining": len(self.manager.waypoints),
             "updated_coords": 0,
@@ -952,6 +980,11 @@ class RoutePlotter:
                     f"Unchanged: {max(unchanged, 0)}\n"
                     f"Unresolved: {st['failed']}"
                 ),
+            )
+            self._emit_event(
+                "ROUTE",
+                f"EDSM refresh done: coords {st['updated_coords']}, names {st['updated_names']}, notes {st['updated_notes']}, unresolved {st['failed']}",
+                "INFO",
             )
 
     def on_close(self):

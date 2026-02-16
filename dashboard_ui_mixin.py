@@ -128,6 +128,23 @@ class DashboardUIMixin:
         feed_wrap = tk.Frame(self.details_drawer, bg=COLOR_PANEL)
         feed_wrap.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
         tk.Label(feed_wrap, text="EVENT FEED", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w")
+        self.event_filter_row = tk.Frame(feed_wrap, bg=COLOR_PANEL)
+        self.event_filter_row.pack(fill=tk.X, pady=(4, 2))
+        self.event_filter_buttons = {}
+        for tag in ("ALL", "VALUABLE", "SCAN", "ALERT", "JUMP", "ROUTE", "SYSTEM", "DSS", "INFO"):
+            btn = tk.Button(
+                self.event_filter_row,
+                text=f"[ {tag} ]",
+                command=lambda t=tag: self.set_event_feed_filter(t),
+                bg=COLOR_PANEL,
+                fg=COLOR_TEXT if tag == "ALL" else "#888",
+                font=("Courier", 8, "bold"),
+                relief=tk.FLAT,
+                activebackground=COLOR_PANEL,
+                activeforeground=COLOR_ACCENT,
+            )
+            btn.pack(side=tk.LEFT, padx=(0, 2))
+            self.event_filter_buttons[tag] = btn
         self.event_feed_list = tk.Listbox(
             feed_wrap,
             bg=COLOR_PANEL,
@@ -139,6 +156,8 @@ class DashboardUIMixin:
             borderwidth=0,
         )
         self.event_feed_list.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
+        self.event_feed_list.bind("<ButtonRelease-1>", lambda e: self._copy_selected_event_feed())
+        self.event_feed_list.bind("<Double-Button-1>", lambda e: self._open_selected_event_feed_link())
 
         log_frame = tk.Frame(center, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
         log_frame.pack(fill=tk.BOTH, expand=True)
@@ -174,6 +193,118 @@ class DashboardUIMixin:
     def set_log_filter(self, mode):
         self.log_filter = mode
         self._refresh_log_view()
+
+    def set_event_feed_filter(self, mode):
+        self.event_feed_filter = mode
+        if hasattr(self, "event_filter_buttons"):
+            for tag, btn in self.event_filter_buttons.items():
+                btn.config(fg=COLOR_TEXT if tag == mode else "#888")
+        self._refresh_event_feed()
+
+    def add_event_feed_entry(self, tag, message, severity="INFO", copy_text=None, url=None, pinned=False):
+        if not message:
+            return
+        if getattr(self, "batch_mode", False) and getattr(self, "is_first_load", False):
+            return
+        entry = {
+            "ts": time.time(),
+            "tag": (tag or "INFO").upper(),
+            "severity": (severity or "INFO").upper(),
+            "message": str(message),
+            "copy_text": copy_text or str(message),
+            "url": url,
+            "pinned": bool(pinned),
+            "new_until": time.time() + 6.0,
+        }
+        if self.event_feed_entries:
+            prev = self.event_feed_entries[0]
+            if (
+                prev.get("tag") == entry["tag"]
+                and prev.get("message") == entry["message"]
+                and abs(prev.get("ts", 0) - entry["ts"]) < 1.5
+            ):
+                return
+        self.event_feed_entries.insert(0, entry)
+        if len(self.event_feed_entries) > self.event_feed_max_entries:
+            self.event_feed_entries = self.event_feed_entries[:self.event_feed_max_entries]
+        self._refresh_event_feed()
+
+    def _event_feed_matches_filter(self, entry):
+        mode = getattr(self, "event_feed_filter", "ALL")
+        if mode == "ALL":
+            return True
+        return entry.get("tag") == mode
+
+    def _event_feed_row_color(self, entry):
+        sev = entry.get("severity", "INFO")
+        if sev == "FAIL":
+            base = "#ff4d4d"
+        elif sev == "WARN":
+            base = COLOR_ORANGE
+        else:
+            base = COLOR_TEXT
+        if entry.get("tag") == "VALUABLE":
+            base = COLOR_ORANGE
+        elif entry.get("tag") == "JUMP":
+            base = COLOR_ACCENT
+        elif entry.get("tag") == "INFO":
+            base = "#aaa"
+        if time.time() <= entry.get("new_until", 0):
+            if sev == "FAIL":
+                return "#ff7f7f"
+            if sev == "WARN":
+                return "#ff9a4d"
+            return "#d7f4ff"
+        return base
+
+    def _refresh_event_feed(self):
+        if not hasattr(self, "event_feed_list"):
+            return
+
+        visible = [e for e in self.event_feed_entries if self._event_feed_matches_filter(e)]
+        pinned = [e for e in visible if e.get("pinned")]
+        unpinned = [e for e in visible if not e.get("pinned")]
+        rows = pinned + unpinned
+        rows = rows[:self.event_feed_display_limit]
+        self.event_feed_view = rows
+
+        self.event_feed_list.delete(0, tk.END)
+        for row in rows:
+            ts_txt = datetime.fromtimestamp(row.get("ts", time.time())).strftime("%H:%M:%S")
+            pin_prefix = "📌 " if row.get("pinned") else ""
+            line = f"[{ts_txt}] {pin_prefix}[{row.get('tag', 'INFO')}] {row.get('message', '')}"
+            self.event_feed_list.insert(tk.END, line)
+            idx = self.event_feed_list.size() - 1
+            self.event_feed_list.itemconfig(idx, fg=self._event_feed_row_color(row))
+
+    def _copy_selected_event_feed(self):
+        if not hasattr(self, "event_feed_list"):
+            return
+        sel = self.event_feed_list.curselection()
+        if not sel:
+            return
+        idx = sel[0]
+        if idx >= len(self.event_feed_view):
+            return
+        payload = self.event_feed_view[idx].get("copy_text")
+        if not payload:
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(str(payload))
+        self.root.update()
+
+    def _open_selected_event_feed_link(self):
+        if not hasattr(self, "event_feed_list"):
+            return
+        sel = self.event_feed_list.curselection()
+        if not sel:
+            return
+        idx = sel[0]
+        if idx >= len(self.event_feed_view):
+            return
+        link = self.event_feed_view[idx].get("url")
+        if link:
+            webbrowser.open(link)
 
     def _matches_log_filter(self, text):
         t = text.upper()
@@ -229,6 +360,7 @@ class DashboardUIMixin:
             return
         if hasattr(self, "summary_session"):
             self.summary_session.config(text=f"SESSION: {self._get_session_elapsed_text()}")
+        self._refresh_event_feed()
         self.root.after(1000, self._tick_session_clock)
 
     def _toggle_wp_scrollbar(self, show):
@@ -370,37 +502,7 @@ class DashboardUIMixin:
         self.card_ops.line2.config(text=f"Next WP: {next_waypoint_name}")
         self.card_ops.line3.config(text=f"Auto-Copy: {auto_copy} | Planner Open: {planner_open}")
 
-        feed_entries = []
-        for item in self.valuable_bodies:
-            display_text = item[2:] if item.startswith("- ") else item
-            feed_entries.append(("VALUABLE", f"[VALUABLE] {display_text}"))
-        for item in self.scan_items[:12]:
-            nm = item.get("name", "Unknown")
-            reward = item.get("dss_reward") if item.get("dss_complete") else item.get("reward")
-            reward_txt = self._format_credits(reward, hide_units=True)
-            feed_entries.append(("SCAN", f"[SCAN] {nm} [{reward_txt}]"))
-
-        # Keep most recent-looking entries first and avoid duplicate lines.
-        deduped = []
-        seen = set()
-        for tag, line in feed_entries:
-            if line in seen:
-                continue
-            deduped.append((tag, line))
-            seen.add(line)
-
-        self.event_feed_list.delete(0, tk.END)
-        color_map = {
-            "VALUABLE": COLOR_ORANGE,
-            "SCAN": COLOR_TEXT,
-            "ALERT": "#ff4d4d",
-            "JUMP": COLOR_ACCENT,
-            "INFO": "#aaa",
-        }
-        for tag, line in deduped[:20]:
-            self.event_feed_list.insert(tk.END, line)
-            idx = self.event_feed_list.size() - 1
-            self.event_feed_list.itemconfig(idx, fg=color_map.get(tag, COLOR_TEXT))
+        self._refresh_event_feed()
 
     def update_dashboard_ui(self):
         """Force update full dashboard, including waypoint panel."""
@@ -421,12 +523,16 @@ class DashboardUIMixin:
         idx = self.waypoint_manager.get_waypoint_index(self.current_sys)
         if idx != -1:
             changed = False
+            visited_now = []
             for i in range(idx + 1):
                 if not self.waypoint_manager.waypoints[i].get('visited', False):
                     self.waypoint_manager.waypoints[i]['visited'] = True
                     changed = True
+                    visited_now.append(self.waypoint_manager.waypoints[i].get("name", f"Waypoint {i+1}"))
             if changed:
                 self.waypoint_manager.save()
+                for wp_name in visited_now:
+                    self.add_event_feed_entry("ROUTE", f"Waypoint visited: {wp_name}", severity="INFO", copy_text=wp_name)
 
         # Find next target (first unvisited)
         self.target_waypoint = None
