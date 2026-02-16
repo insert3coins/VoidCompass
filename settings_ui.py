@@ -134,6 +134,48 @@ def open_settings(root, config, on_save_callback):
     disc_btn.pack(side=tk.RIGHT)
     update_disc_visuals()
 
+    # Live Updates toggle
+    disc_live_frame = tk.Frame(sec_disc, bg=COLOR_BG)
+    disc_live_frame.pack(fill=tk.X, padx=15, pady=(0, 5))
+    tk.Label(disc_live_frame, text="Live Updates Message", font=("Courier", 9), fg="#888", bg=COLOR_BG).pack(side=tk.LEFT)
+
+    disc_live_var = tk.BooleanVar(value=config.get("discord_live_enabled", True))
+
+    def toggle_disc_live():
+        disc_live_var.set(not disc_live_var.get())
+        update_disc_live_visuals()
+
+    def update_disc_live_visuals():
+        if disc_live_var.get():
+            disc_live_btn.config(text="[ ENABLED ]", fg=COLOR_ACCENT)
+        else:
+            disc_live_btn.config(text="[ DISABLED ]", fg="#555")
+
+    disc_live_btn = tk.Button(disc_live_frame, text="[ ENABLED ]", font=("Courier", 9, "bold"), bg=COLOR_BG, activebackground=COLOR_BG, bd=0, command=toggle_disc_live, cursor="hand2")
+    disc_live_btn.pack(side=tk.RIGHT)
+    update_disc_live_visuals()
+
+    # Fleet Carrier watcher toggle
+    disc_fleet_frame = tk.Frame(sec_disc, bg=COLOR_BG)
+    disc_fleet_frame.pack(fill=tk.X, padx=15, pady=(0, 5))
+    tk.Label(disc_fleet_frame, text="Fleet Carrier Watcher Message", font=("Courier", 9), fg="#888", bg=COLOR_BG).pack(side=tk.LEFT)
+
+    disc_fleet_var = tk.BooleanVar(value=config.get("discord_fleet_enabled", True))
+
+    def toggle_disc_fleet():
+        disc_fleet_var.set(not disc_fleet_var.get())
+        update_disc_fleet_visuals()
+
+    def update_disc_fleet_visuals():
+        if disc_fleet_var.get():
+            disc_fleet_btn.config(text="[ ENABLED ]", fg=COLOR_ACCENT)
+        else:
+            disc_fleet_btn.config(text="[ DISABLED ]", fg="#555")
+
+    disc_fleet_btn = tk.Button(disc_fleet_frame, text="[ ENABLED ]", font=("Courier", 9, "bold"), bg=COLOR_BG, activebackground=COLOR_BG, bd=0, command=toggle_disc_fleet, cursor="hand2")
+    disc_fleet_btn.pack(side=tk.RIGHT)
+    update_disc_fleet_visuals()
+
     d_e = create_input(sec_disc, "Webhook URL", "discord_webhook")
 
     # --- Screenshot Settings ---
@@ -171,6 +213,8 @@ def open_settings(root, config, on_save_callback):
             "journal_path": j_e.get().strip(),
             "discord_webhook": d_e.get().strip(),
             "discord_enabled": disc_var.get(),
+            "discord_live_enabled": disc_live_var.get(),
+            "discord_fleet_enabled": disc_fleet_var.get(),
             "overlay_enabled": ov_var.get(),
             "cargo_overlay_enabled": cargo_var.get(),
             "scan_overlay_enabled": scan_var.get(),

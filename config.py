@@ -12,6 +12,9 @@ def load_config():
     defaults = {
         'journal_path': '',
         'discord_webhook': '',
+        'discord_enabled': True,
+        'discord_live_enabled': True,
+        'discord_fleet_enabled': True,
         'overlay_enabled': True,
         'cargo_overlay_enabled': False,
         'scan_overlay_enabled': True,

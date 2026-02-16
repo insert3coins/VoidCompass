@@ -10,6 +10,10 @@ class JournalWatcher:
         self.is_running = False
         self.last_journal = None
         self.file_pos = 0
+        # Startup catch-up reads only the recent tail of the active journal to avoid UI stalls.
+        self.startup_tail_bytes = 512 * 1024  # 512 KB
+        self._startup_catchup_done = False
+        self._skip_partial_line_once = False
         
         self.event_callback = None
         self.batch_event_callback = None
@@ -71,10 +75,27 @@ class JournalWatcher:
                 logging.info(f"New journal detected: {os.path.basename(latest)}")
             self.last_journal = latest
             self.file_pos = 0
+            self._skip_partial_line_once = False
+            # First watcher attach can be very large; jump near EOF and process recent lines only.
+            if not self._startup_catchup_done:
+                try:
+                    sz = os.path.getsize(self.last_journal)
+                    if sz > self.startup_tail_bytes:
+                        self.file_pos = sz - self.startup_tail_bytes
+                        self._skip_partial_line_once = True
+                except Exception:
+                    self.file_pos = 0
         
         try:
             with open(self.last_journal, 'r', encoding='utf-8') as f:
                 f.seek(self.file_pos)
+                # If we jumped into the middle of the file, discard partial first line.
+                if self._skip_partial_line_once and self.file_pos > 0:
+                    try:
+                        f.readline()
+                    except Exception:
+                        pass
+                    self._skip_partial_line_once = False
                 lines = f.readlines()
                 
                 if lines:
@@ -94,6 +115,7 @@ class JournalWatcher:
                                 self.event_callback(ev)
                 
                 self.file_pos = f.tell()
+                self._startup_catchup_done = True
         except Exception as e:
             logging.error(f"Error reading journal: {e}")
 

@@ -23,6 +23,7 @@ from settings_ui import open_settings
 from route_plotter import RoutePlotter
 from waypoint_manager import WaypointManager
 from journal_watcher import JournalWatcher
+from fleet_carrier_watcher import FleetCarrierWatcher
 from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
 from dashboard_scan_mixin import DashboardScanMixin
@@ -91,6 +92,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.edsm = EDSMHandler(self.config)
         self.discord = DiscordHandler(self.config, self.root)
         self.screenshots = ScreenshotHandler(self.config, lambda: self.current_sys, self.log)
+        self.fc_watcher = FleetCarrierWatcher(
+            self.root,
+            self.config,
+            self.edsm,
+            self.waypoint_manager,
+            self.discord,
+            self.add_event_feed_entry,
+        )
         
         if self.config.get("overlay_enabled", True):
             self.hud = TacticalHUD(self.root, self.config)
@@ -181,8 +190,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             event_callback=self._on_route_event,
         )
 
+    def open_fleet_carrier_watcher(self):
+        self.fc_watcher.open_window()
+
+    def _process_fleet_carrier_event(self, ev, raw, d):
+        self.fc_watcher.process_event(ev, raw, d, self.current_sys)
+
     def _on_route_event(self, tag, message, severity="INFO", copy_text=None, system_name=None, pinned=False):
         if not message:
+            return
+        sev = str(severity or "INFO").upper()
+        if sev == "FAIL":
+            self.log(f"❌ ROUTE: {message}")
             return
         event_tag = (tag or "ROUTE").upper()
         sys_name = system_name or self.current_sys
@@ -198,14 +217,25 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             pinned=pinned,
         )
 
+    @staticmethod
+    def _normalize_body_id(body_id):
+        if body_id is None:
+            return None
+        try:
+            return int(body_id)
+        except Exception:
+            return body_id
+
     def open_settings(self):
         def on_save():
             self.log("Configuration saved successfully.")
 
             # Live Update: Discord
-            discord_active = self.config.get("discord_enabled", True) and self.config.get("discord_webhook")
-            if discord_active:
-                self.log("Discord Integration: ACTIVE")
+            discord_master = self.config.get("discord_enabled", True) and self.config.get("discord_webhook")
+            if discord_master:
+                live_on = "ON" if self.config.get("discord_live_enabled", True) else "OFF"
+                fleet_on = "ON" if self.config.get("discord_fleet_enabled", True) else "OFF"
+                self.log(f"Discord Integration: ACTIVE (Live: {live_on} | Fleet: {fleet_on})")
             else:
                 self.log("Discord Integration: DISABLED")
 
@@ -292,7 +322,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return True
         except Exception as e:
             self.log(f"❌ CLIPBOARD COPY FAILED: {e}")
-            self.add_event_feed_entry("ALERT", f"Clipboard copy failed: {e}", severity="FAIL")
             return False
 
     def update_hud(self):
@@ -372,10 +401,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         ev = data.get("type") or data.get("event")
         raw = data.get("raw", data)
         d = data.get("data", data)
+        self._process_fleet_carrier_event(ev, raw, d)
         
         if ev == "Fileheader":
             self.log(f"Game version detected: {d.get('gameversion')} ({d.get('build')})")
-            self.add_event_feed_entry("INFO", f"Game {d.get('gameversion')} ({d.get('build')})", severity="INFO")
 
         elif ev == "Loadout":
             self.cargo_capacity = d.get("cargo_capacity", 0)
@@ -390,7 +419,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             game_build = d.get("build")
             if game_version and game_build:
                 self.log(f"Game version detected from LoadGame: {game_version} ({game_build})")
-                self.add_event_feed_entry("INFO", f"LoadGame {game_version} ({game_build})", severity="INFO")
 
         elif ev == "ScanOrganic":
             # Bio counting is temporarily disabled.
@@ -519,7 +547,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.schedule_dashboard_refresh()
         
         elif ev == "FSSBodySignals":
-            body_id = d.get("body_id")
+            body_id = self._normalize_body_id(d.get("body_id"))
             if body_id is not None:
                 bio_count = d.get("bio_count", 0)
                 geo_count = d.get("geo_count", 0)
@@ -536,7 +564,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.schedule_dashboard_refresh()
         
         elif ev == "SAAScanComplete":
-            body_id = d.get("body_id")
+            body_id = self._normalize_body_id(d.get("body_id"))
             if body_id is not None:
                 self.body_dss_complete.add(body_id)
                 item = self.scan_items_by_id.get(body_id)
@@ -553,7 +581,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         
         elif ev == "Scan":
             body_name = d.get("body_name", "")
-            body_id = d.get("body_id", body_name)
+            body_id = self._normalize_body_id(d.get("body_id"))
+            if body_id is None:
+                body_id = body_name
 
             # Accept star class from system star scans even when this body is already known.
             star_type = d.get("star_type")
@@ -630,7 +660,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         
         if self.is_first_load:
             self.is_first_load = False
-            if self.config.get("discord_enabled", True) and self.config.get("discord_msg_system") != self.current_sys:
+            if self.config.get("discord_enabled", True) and self.config.get("discord_live_enabled", True) and self.config.get("discord_msg_system") != self.current_sys:
                 self.log("Stale Discord message detected. A new message will be created.")
                 self.discord.reset_msg_id()
             self.last_traffic_system = self.current_sys

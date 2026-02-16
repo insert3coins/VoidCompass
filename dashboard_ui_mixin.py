@@ -22,6 +22,10 @@ class DashboardUIMixin:
         # Route Button
         btn_route = tk.Button(self.nav, text="[ ROUTE PLANNER ]", command=self.open_route_planner, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9, "bold"), relief=tk.FLAT)
         btn_route.pack(side=tk.RIGHT, padx=5)
+
+        # Fleet Carrier Watcher Button
+        btn_fc = tk.Button(self.nav, text="[ FLEET CARRIER WATCHER ]", command=self.open_fleet_carrier_watcher, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9, "bold"), relief=tk.FLAT)
+        btn_fc.pack(side=tk.RIGHT, padx=5)
         
         # Screenshot Button
         btn_ss = tk.Button(self.nav, text="[ SCREENSHOTS ]", command=self.open_screenshots_folder, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9, "bold"), relief=tk.FLAT)
@@ -156,16 +160,14 @@ class DashboardUIMixin:
             borderwidth=0,
         )
         self.event_feed_list.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
-        self.event_feed_list.bind("<ButtonRelease-1>", lambda e: self._copy_selected_event_feed())
-        self.event_feed_list.bind("<Double-Button-1>", lambda e: self._open_selected_event_feed_link())
+        self.event_feed_list.bind("<Button-1>", lambda e: "break")
+        self.event_feed_list.bind("<Double-Button-1>", lambda e: "break")
 
         log_frame = tk.Frame(center, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
         log_frame.pack(fill=tk.BOTH, expand=True)
         log_toolbar = tk.Frame(log_frame, bg=COLOR_PANEL)
         log_toolbar.pack(fill=tk.X, padx=6, pady=(6, 2))
         tk.Label(log_toolbar, text="ACTIVITY LOG", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(side=tk.LEFT)
-        for tag in ("ALL", "JUMP", "SCAN", "ALERT", "ERROR"):
-            tk.Button(log_toolbar, text=f"[ {tag} ]", command=lambda t=tag: self.set_log_filter(t), bg=COLOR_PANEL, fg=COLOR_TEXT if tag == "ALL" else "#888", font=("Courier", 8, "bold"), relief=tk.FLAT, activebackground=COLOR_PANEL, activeforeground=COLOR_ACCENT).pack(side=tk.RIGHT, padx=2)
         self.log_box = scrolledtext.ScrolledText(log_frame, bg="#000", fg=COLOR_GREEN, font=("Courier", 10), borderwidth=0)
         self.log_box.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
@@ -330,6 +332,20 @@ class DashboardUIMixin:
         self.log_box.see(tk.END)
 
     def log(self, msg):
+        # Activity Log should keep only game-version + error/failure style entries.
+        if not isinstance(msg, str):
+            return
+        upper = msg.upper()
+        is_game_version = msg.startswith("Game version detected")
+        is_error = ("ERROR" in upper) or ("FAILED" in upper) or ("ERR" in upper) or ("❌" in msg)
+        is_cache_rebuild = (
+            "REBUILD" in upper
+            or "MIGRAT" in upper
+            or "SCANNING..." in upper
+            or "CACHE" in upper
+        )
+        if not (is_game_version or is_error or is_cache_rebuild):
+            return
         line = f"[{datetime.now().strftime('%H:%M:%S')}] {msg}"
         self.log_entries.append(line)
         self.root.after(0, self._refresh_log_view)
@@ -481,7 +497,9 @@ class DashboardUIMixin:
         self.card_session.line3.config(text=f"Avg Jump: {avg_jump:,.1f} LY")
 
         hud_on = "ON" if self.hud else "OFF"
-        disc_on = "ON" if (self.config.get("discord_enabled", True) and self.config.get("discord_webhook")) else "OFF"
+        discord_master = self.config.get("discord_enabled", True) and self.config.get("discord_webhook")
+        any_discord_channel = self.config.get("discord_live_enabled", True) or self.config.get("discord_fleet_enabled", True)
+        disc_on = "ON" if (discord_master and any_discord_channel) else "OFF"
         shots_on = "ON" if self.config.get("screenshots_enabled", False) else "OFF"
         self.integration_lbl.config(text=f"HUD: {hud_on} | DISCORD: {disc_on} | SHOTS: {shots_on}")
 
