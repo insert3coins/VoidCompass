@@ -344,7 +344,18 @@ class DashboardUIMixin:
             or "SCANNING..." in upper
             or "CACHE" in upper
         )
-        if not (is_game_version or is_error or is_cache_rebuild):
+        is_settings = (
+            "CONFIGURATION SAVED" in upper
+            or "DISCORD INTEGRATION" in upper
+            or "SCREENSHOT CONVERTER" in upper
+            or "SETTINGS" in upper
+        )
+        is_screenshot_event = (
+            "SCREENSHOT SAVED" in upper
+            or "CONVERTED SCREENSHOT" in upper
+            or "SCREENSHOT" in upper and "SAVED" in upper
+        )
+        if not (is_game_version or is_error or is_cache_rebuild or is_settings or is_screenshot_event):
             return
         line = f"[{datetime.now().strftime('%H:%M:%S')}] {msg}"
         self.log_entries.append(line)
