@@ -50,6 +50,10 @@ class JournalWatcher:
         self.last_status_mtime = 0
         self._check_special_files()
 
+    def force_check_nav(self):
+        self.last_nav_mtime = 0
+        self._check_special_files()
+
     def get_latest_cargo_capacity(self, tail_bytes=2 * 1024 * 1024):
         """Best-effort lookup of the most recent Loadout CargoCapacity."""
         if not self.journal_path or not os.path.exists(self.journal_path):

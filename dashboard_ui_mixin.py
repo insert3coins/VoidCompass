@@ -167,7 +167,7 @@ class DashboardUIMixin:
         log_frame.pack(fill=tk.BOTH, expand=True)
         log_toolbar = tk.Frame(log_frame, bg=COLOR_PANEL)
         log_toolbar.pack(fill=tk.X, padx=6, pady=(6, 2))
-        tk.Label(log_toolbar, text="ACTIVITY LOG", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(side=tk.LEFT)
+        tk.Label(log_toolbar, text="CONSOLE LOG", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(side=tk.LEFT)
         self.log_box = scrolledtext.ScrolledText(log_frame, bg="#000", fg=COLOR_GREEN, font=("Courier", 10), borderwidth=0)
         self.log_box.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
@@ -332,33 +332,38 @@ class DashboardUIMixin:
         self.log_box.see(tk.END)
 
     def log(self, msg):
-        # Activity Log should keep only game-version + error/failure style entries.
+        # Curated operational stream; Event Feed handles high-volume gameplay events.
         if not isinstance(msg, str):
             return
         upper = msg.upper()
         is_game_version = msg.startswith("Game version detected")
-        is_error = ("ERROR" in upper) or ("FAILED" in upper) or ("ERR" in upper) or ("❌" in msg)
-        is_cache_rebuild = (
-            "REBUILD" in upper
-            or "MIGRAT" in upper
-            or "SCANNING..." in upper
-            or "CACHE" in upper
-        )
+        is_journal_change = msg.startswith("Journal file:")
         is_settings = (
             "CONFIGURATION SAVED" in upper
             or "DISCORD INTEGRATION" in upper
             or "SCREENSHOT CONVERTER" in upper
             or "SETTINGS" in upper
         )
+        is_error = ("ERROR" in upper) or ("FAILED" in upper) or ("ERR" in upper) or ("❌" in msg)
+        is_cache_or_maint = (
+            "REBUILD" in upper
+            or "MIGRAT" in upper
+            or "SCANNING..." in upper
+            or "CACHE" in upper
+            or "UPDATE AVAILABLE" in upper
+            or "STALE DISCORD MESSAGE" in upper
+        )
         is_screenshot_event = (
             "SCREENSHOT SAVED" in upper
             or "CONVERTED SCREENSHOT" in upper
-            or "SCREENSHOT" in upper and "SAVED" in upper
+            or ("SCREENSHOT" in upper and "SAVED" in upper)
         )
-        if not (is_game_version or is_error or is_cache_rebuild or is_settings or is_screenshot_event):
+        if not (is_game_version or is_journal_change or is_settings or is_error or is_cache_or_maint or is_screenshot_event):
             return
         line = f"[{datetime.now().strftime('%H:%M:%S')}] {msg}"
         self.log_entries.append(line)
+        if len(self.log_entries) > 2000:
+            self.log_entries = self.log_entries[-2000:]
         self.root.after(0, self._refresh_log_view)
 
     def schedule_dashboard_refresh(self, full=False):

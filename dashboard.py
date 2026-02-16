@@ -7,6 +7,7 @@ import logging
 import time
 import tkinter as tk
 import webbrowser
+from collections import deque
 
 from config import (
     load_config, CONFIG_FILE,
@@ -63,7 +64,24 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.fss_all_bodies = False
         self.cmdr_name = "CMDR"
         self.last_scan_event = None
+        self.last_bio_scan = {}
         self.cargo_capacity = 0
+        self.last_journal_event_ts = 0.0
+        self.last_logged_journal_file = None
+        self.last_status_event_ts = 0.0
+        self.last_nav_event_ts = 0.0
+        self.last_cargo_event_ts = 0.0
+        self.last_edsm_event_ts = 0.0
+        self.last_edsm_request_ts = 0.0
+        self._event_rate_ts = deque(maxlen=1200)
+        # HUD source freshness thresholds (ok_age, warn_age) tuned for real flight cadence.
+        self.hud_source_thresholds = {
+            "J": (4.0, 20.0),    # Journal stream
+            "S": (4.0, 20.0),    # Status.json stream
+            "N": (20.0, 90.0),   # NavRoute.json updates are sparse
+            "C": (25.0, 120.0),  # Cargo.json updates are sparse
+            "E": (45.0, 180.0),  # EDSM network callbacks are slower and bursty
+        }
         
         self.dest_coords = None
         self.current_coords = [0,0,0]
@@ -102,7 +120,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         
         if self.config.get("overlay_enabled", True):
-            self.hud = TacticalHUD(self.root, self.config)
+            self.hud = TacticalHUD(self.root, self.config, on_widget_click=self._on_hud_widget_click)
         else:
             self.hud = None
             
@@ -249,7 +267,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             # Live Toggle: Tactical HUD
             if self.config.get("overlay_enabled", True):
                 if self.hud is None:
-                    self.hud = TacticalHUD(self.root, self.config)
+                    self.hud = TacticalHUD(self.root, self.config, on_widget_click=self._on_hud_widget_click)
                 self.update_hud()
             else:
                 if self.hud:
@@ -300,10 +318,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.discord.update_live(event_data, state)
 
     def fetch_system_traffic(self, system_name):
+        self.last_edsm_request_ts = time.time()
         def callback(traffic_data):
             def _apply():
                 if self.current_sys != system_name:
                     return
+                self.last_edsm_event_ts = time.time()
                 self.system_traffic = traffic_data
                 self.update_dashboard_ui()
                 self.update_hud()
@@ -380,7 +400,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             game_r_pos = (self.route_list.index(self.current_sys)+1, len(self.route_list))
 
         hud_destination = route_destination if self.route_list else None
-        hud_status = "OK"
+        hud_health = self._build_hud_health()
+        hud_status = hud_health.get("status", "OK")
         if not self.is_running or not self.watcher or not self.watcher.is_running:
             hud_status = "FAIL"
         else:
@@ -395,14 +416,162 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.root.after(0, lambda: self.hud.update(
             self.current_sys, self.dest_name, dist, 
             self.scanned, self.total, custom_r_pos, self.organic_count, self.system_traffic, game_r_pos,
-            hud_destination, route_counts, hud_status
+            hud_destination, route_counts, hud_status, hud_health
         ))
         self.update_scan_hud()
+
+    def _record_journal_event(self):
+        now = time.time()
+        self.last_journal_event_ts = now
+        self._event_rate_ts.append(now)
+        cutoff = now - 120
+        while self._event_rate_ts and self._event_rate_ts[0] < cutoff:
+            self._event_rate_ts.popleft()
+
+    @staticmethod
+    def _source_state_for_age(age_seconds, ok_age, warn_age, unknown_state="FAIL"):
+        if age_seconds is None:
+            return unknown_state
+        if age_seconds <= ok_age:
+            return "OK"
+        if age_seconds <= warn_age:
+            return "WARN"
+        return "FAIL"
+
+    def _build_event_rate_sparkline(self, width=16, bucket_seconds=2):
+        now = time.time()
+        buckets = [0] * width
+        horizon = width * bucket_seconds
+        cutoff = now - horizon
+        for ts in self._event_rate_ts:
+            if ts < cutoff:
+                continue
+            idx = int((now - ts) // bucket_seconds)
+            if 0 <= idx < width:
+                buckets[width - 1 - idx] += 1
+        return buckets
+
+    def _build_hud_health(self):
+        now = time.time()
+        watcher_alive = bool(self.watcher and self.watcher.is_running)
+
+        def _age(ts):
+            return (now - ts) if ts else None
+
+        age_j = _age(self.last_journal_event_ts)
+        age_s = _age(self.last_status_event_ts)
+        age_n = _age(self.last_nav_event_ts)
+        age_c = _age(self.last_cargo_event_ts)
+        age_e = _age(self.last_edsm_event_ts)
+
+        j_ok, j_warn = self.hud_source_thresholds["J"]
+        s_ok, s_warn = self.hud_source_thresholds["S"]
+        n_ok, n_warn = self.hud_source_thresholds["N"]
+        c_ok, c_warn = self.hud_source_thresholds["C"]
+        e_ok, e_warn = self.hud_source_thresholds["E"]
+        source_states = {
+            "J": "FAIL" if not watcher_alive else self._source_state_for_age(age_j, j_ok, j_warn, unknown_state="WARN"),
+            "S": self._source_state_for_age(age_s, s_ok, s_warn, unknown_state="WARN"),
+            # N/C/E can be legitimately idle for long periods; start in WARN until seen.
+            "N": self._source_state_for_age(age_n, n_ok, n_warn, unknown_state="WARN"),
+            "C": self._source_state_for_age(age_c, c_ok, c_warn, unknown_state="WARN"),
+            "E": self._source_state_for_age(age_e, e_ok, e_warn, unknown_state="WARN"),
+        }
+
+        alert_reason = "OK"
+        if not watcher_alive:
+            alert_reason = "FAIL"
+        elif self.system_undiscovered:
+            alert_reason = "DISC"
+        elif self.system_bio_signals > 0:
+            alert_reason = "BIO"
+        elif bool(self.valuable_bodies):
+            alert_reason = "VAL"
+        elif self.fss_summary_active:
+            alert_reason = "FSS"
+        elif source_states["E"] == "FAIL" and self.last_edsm_request_ts > 0 and (now - self.last_edsm_request_ts) > 60.0:
+            alert_reason = "NET"
+
+        # Confidence score (0-100) based on source health and watcher state.
+        score = 100
+        if not watcher_alive:
+            score -= 35
+        for key, weight in (("J", 25), ("S", 15), ("N", 10), ("C", 10), ("E", 15)):
+            state = source_states.get(key, "FAIL")
+            if state == "WARN":
+                score -= int(weight * 0.5)
+            elif state == "FAIL":
+                score -= weight
+        if alert_reason in ("BIO", "VAL", "FSS", "DISC", "NET", "FAIL"):
+            score -= 8
+        confidence = max(0, min(100, score))
+
+        status = "OK"
+        if alert_reason in ("BIO", "VAL", "FSS", "DISC", "NET"):
+            status = "ALERT"
+        if alert_reason == "FAIL":
+            status = "FAIL"
+        if not watcher_alive:
+            status = "FAIL"
+
+        mini_stats = [
+            f"SCAN {self.scanned}/{self.total}",
+            f"BIO {self.organic_count}",
+            f"VAL {len(self.valuable_bodies)}",
+            f"ROUTE {len(self.route_list)}",
+            f"TRAF {self.system_traffic.get('day', 0)}/{self.system_traffic.get('week', 0)}",
+            f"HLTH {confidence}%",
+        ]
+
+        return {
+            "status": status,
+            "reason": alert_reason,
+            "confidence": confidence,
+            "age_journal": age_j,
+            "age_by_source": {
+                "J": age_j,
+                "S": age_s,
+                "N": age_n,
+                "C": age_c,
+                "E": age_e,
+            },
+            "source_states": source_states,
+            "spark": self._build_event_rate_sparkline(),
+            "mini_stats": mini_stats,
+        }
+
+    def _on_hud_widget_click(self, payload):
+        reason = None
+        source = None
+        if isinstance(payload, dict):
+            reason = (payload.get("reason") or "").upper()
+            source = (payload.get("source") or "").upper()
+
+        if source == "E":
+            self.set_event_feed_filter("SYSTEM")
+        elif source == "N":
+            self.set_event_feed_filter("ROUTE")
+        elif source == "C":
+            self.set_event_feed_filter("SYSTEM")
+        elif reason == "VAL":
+            self.set_event_feed_filter("VALUABLE")
+        elif reason in ("BIO", "DISC"):
+            self.set_event_feed_filter("ALERT")
+        elif reason == "FSS":
+            self.set_event_feed_filter("SCAN")
+        else:
+            self.set_event_feed_filter("ALL")
+        self.root.after(0, self.root.lift)
 
     def process_event(self, data):
         ev = data.get("type") or data.get("event")
         raw = data.get("raw", data)
         d = data.get("data", data)
+        self._record_journal_event()
+        current_journal = getattr(self.watcher, "last_journal", None)
+        if current_journal and current_journal != self.last_logged_journal_file:
+            self.last_logged_journal_file = current_journal
+            self.log(f"Journal file: {os.path.basename(current_journal)}")
         self._process_fleet_carrier_event(ev, raw, d)
         
         if ev == "Fileheader":
@@ -411,6 +580,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "Loadout":
             self.cargo_capacity = d.get("cargo_capacity", 0)
             self.watcher.force_check_cargo()
+
+        elif ev == "Cargo":
+            # Journal can emit Cargo before/without immediate file polling update.
+            self.watcher.force_check_cargo()
+
+        elif ev in ("NavRoute", "NavRouteClear"):
+            # Nav route details live in NavRoute.json; trigger immediate refresh.
+            self.watcher.force_check_nav()
 
         elif ev == "Commander":
             self.cmdr_name = d.get("name", "CMDR")
@@ -423,8 +600,38 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.log(f"Game version detected from LoadGame: {game_version} ({game_build})")
 
         elif ev == "ScanOrganic":
-            # Bio counting is temporarily disabled.
-            return
+            body_id = self._normalize_body_id(d.get("body_id"))
+            body_label = d.get("body_name") or (f"Body {body_id}" if body_id is not None else "Unknown Body")
+            species = d.get("species") or d.get("genus") or "Organic"
+            species_key = f"{body_id}|{species}" if body_id is not None else f"{body_label}|{species}"
+
+            existing = self.last_bio_scan.get(species_key, {})
+            is_complete = bool(d.get("is_complete"))
+            was_complete = bool(existing.get("is_complete"))
+
+            self.last_bio_scan[species_key] = {
+                "body_id": body_id,
+                "body_name": body_label,
+                "species": species,
+                "sample_idx": d.get("sample_idx"),
+                "scan_type": d.get("scan_type"),
+                "is_new_entry": bool(d.get("is_new_entry")),
+                "is_new_sample": bool(d.get("is_new_sample")),
+                "is_complete": is_complete,
+            }
+
+            if is_complete and not was_complete:
+                self.organic_count += 1
+                self.add_event_feed_entry("BIO", f"Organic complete: {species} ({body_label})", severity="INFO", copy_text=species)
+            elif d.get("is_new_sample"):
+                sample_idx = d.get("sample_idx")
+                sample_txt = f" sample {sample_idx}" if sample_idx is not None else ""
+                self.add_event_feed_entry("BIO", f"Organic{sample_txt}: {species} ({body_label})", severity="INFO", copy_text=species)
+
+            self.update_live_discord(raw)
+            if not self.batch_mode:
+                self.update_hud()
+                self.schedule_dashboard_refresh()
 
         elif ev == "Location" or ev == "FSDJump" or ev == "StartJump":
             # Do not update HUDs during jump charge; wait for arrival.
@@ -685,10 +892,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.root.after(0, lambda w=copied_wp, l=log_label: self._copy_waypoint_to_clipboard(w, l))
 
     def update_cargo(self, inventory):
+        self.last_cargo_event_ts = time.time()
         if self.cargo_hud:
             self.root.after(0, lambda: self.cargo_hud.update(inventory, self.cargo_capacity))
 
     def update_nav_route(self, data):
+        self.last_nav_event_ts = time.time()
         self.route_list = [r['StarSystem'] for r in data.get('Route', [])]
         if self.route_list:
             dest = data['Route'][-1]

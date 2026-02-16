@@ -305,6 +305,7 @@ class DashboardScanMixin:
             item["_ts"] = int(time.time())
 
     def update_status(self, data):
+        self.last_status_event_ts = time.time()
         gui_focus = data.get("GuiFocus", -1)
         in_fss = gui_focus == 9 or gui_focus == "FSS"
         if in_fss != self.in_fss:

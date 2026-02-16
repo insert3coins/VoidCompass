@@ -1,6 +1,31 @@
 # VoidCompass // UPDATE LOG
 
-## v2.1.6 // Route Plotter Update
+## v2.3.2 // HUD Telemetry + Event Reliability
+**Release Date:** 2026-Feb-16
+*   **Journal/Event Coverage Validation:**
+    *   Audited live handlers against `Journal.2026-02-16T143413.01.log` and confirmed active scan/navigation coverage.
+    *   Confirmed `SAAScanComplete` handling path and added active `ScanOrganic` processing in dashboard flow.
+*   **Journal Trigger Reliability:**
+    *   Added explicit handling for `Cargo`, `NavRoute`, and `NavRouteClear` journal events.
+    *   Added `force_check_nav()` path in watcher to refresh `NavRoute.json` immediately on route events.
+*   **Organic Scan Tracking:**
+    *   Added per-body/species organic state tracking with completion gating.
+    *   Added `BIO` event-feed entries for sample progress/completion and synced HUD/dashboard refresh.
+*   **HUD Telemetry Widget Upgrade:**
+    *   Added source-health indicators for `J/S/N/C/E` with freshness-aware states.
+    *   Added clickable source/reason routing to focus dashboard event-feed filters.
+    *   Added tuned source freshness thresholds to reduce false `FAIL` during normal idle periods.
+*   **HUD Visual Cleanup:**
+    *   Removed duplicated/ambiguous top-line text and simplified status area to source telemetry + age readout.
+    *   Increased source-row readability (larger labels/dots and spacing alignment improvements).
+    *   Added per-source age rotation (`J/S/N/C/E`) instead of fixed `J`-only timing output.
+    *   Removed persistent sparkle travel effects after usability testing to reduce distraction.
+*   **Log/Console Behavior:**
+    *   Renamed `ACTIVITY LOG` to `CONSOLE LOG`.
+    *   Restored curated operational logging (game version, journal file changes, settings updates, errors, maintenance lines).
+    *   Added explicit journal file rollover line (`Journal file: ...`) in console output.
+
+## v2.3.1 // Route Plotter Update
 **Release Date:** 2026-Feb-16
 *   **Dashboard Redesign (same color theme):**
     *   Added top summary strip for `SYS`, `ROUTE`, `SCAN`, `TRAFFIC`, and `SESSION`.
