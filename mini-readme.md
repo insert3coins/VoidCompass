@@ -1,5 +1,48 @@
 # VoidCompass // UPDATE LOG
 
+## v2.3.3 // Fleet Carrier Watcher + Discord Feed
+**Release Date:** 2026-Feb-16
+*   **New Fleet Carrier Watcher Window:**
+    *   Added dedicated watcher UI in dashboard nav (`[ FLEET CARRIER WATCHER ]`).
+    *   Added tracked fields: carrier callsign/name, status note, optional manual heading, optional departure time.
+    *   Added `OK`, `PUSH UPDATE`, and `CANCEL` actions with saved geometry/config persistence.
+*   **Carrier Identity + Journal Sync:**
+    *   Added callsign/name resolution from journal (`CarrierStats`) with carrier-id correlation.
+    *   Added startup/history scan pass to restore last known carrier state from recent journals.
+    *   Added resilient event matching for jump/cancel events when journal payloads are sparse.
+*   **Fleet Carrier Journal Event Handling:**
+    *   Added/verified watcher handling for:
+        *   `CarrierStats`
+        *   `CarrierLocation`
+        *   `CarrierJumpRequest`
+        *   `CarrierJump`
+        *   `CarrierJumpCancelled`
+        *   `CarrierNameChanged`
+        *   carrier-related `Docked` / `Location` cases
+    *   Added explicit event-feed entries for jump request, jump complete, cancel, and location updates.
+*   **Discord Fleet Message Overhaul:**
+    *   Added dedicated fleet message flow (separate from Live Update stream).
+    *   Updated fleet embed to compact operations format with icon lines and change-aware title.
+    *   Added informative refresh reason titles (`Manual update`, `Journal event: ...`, `Distance recalculated`, etc.).
+    *   Added carrier headline format (`🛸 Carrier: ...`) and clickable links.
+*   **Fleet Discord Routing/Links:**
+    *   Carrier headline link now resolves via Inara station search.
+    *   Current location and current target lines link to EDSM system pages.
+*   **Fleet Targeting + Distance Logic:**
+    *   Split distance tracking into:
+        *   manual heading distance
+        *   live current-target (journal) distance
+    *   Fixed stale-distance issue where destination line could show old/manual LY after new jump requests.
+    *   Current target now updates to arrived location once jump completes.
+*   **Fleet Output Conditional Display Rules:**
+    *   Hide `Departure` when empty or when departure time has passed.
+    *   Hide `Status` when empty.
+    *   Hide `Heading` when manual heading is empty.
+    *   Added `Current Target` label rename and destination/current-target clarity updates.
+*   **Startup Noise/Performance Guardrails (Fleet Path):**
+    *   Reduced startup fleet Discord spam by buffering historical replay into one consolidated startup update.
+    *   Added journal-tail startup read behavior to reduce launch stalls during large journal files.
+
 ## v2.3.2 // HUD Telemetry + Event Reliability
 **Release Date:** 2026-Feb-16
 *   **Journal/Event Coverage Validation:**
