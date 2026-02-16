@@ -74,20 +74,30 @@ class CargoHUD:
         
         # Total Count
         total = sum(item.get("Count", 0) for item in inventory)
-        
-        bars = ["▱▱▱▱▱▱▱▱▱▱", "▰▱▱▱▱▱▱▱▱▱", "▰▰▱▱▱▱▱▱▱▱", "▰▰▰▱▱▱▱▱▱▱", "▰▰▰▰▱▱▱▱▱▱", "▰▰▰▰▰▱▱▱▱▱", "▰▰▰▰▰▰▱▱▱▱", "▰▰▰▰▰▰▰▱▱▱", "▰▰▰▰▰▰▰▰▱▱", "▰▰▰▰▰▰▰▰▰▱", "▰▰▰▰▰▰▰▰▰▰"]
+        bars = [
+            "▱▱▱▱▱▱▱▱▱▱",
+            "▰▱▱▱▱▱▱▱▱▱",
+            "▰▰▱▱▱▱▱▱▱▱",
+            "▰▰▰▱▱▱▱▱▱▱",
+            "▰▰▰▰▱▱▱▱▱▱",
+            "▰▰▰▰▰▱▱▱▱▱",
+            "▰▰▰▰▰▰▱▱▱▱",
+            "▰▰▰▰▰▰▰▱▱▱",
+            "▰▰▰▰▰▰▰▰▱▱",
+            "▰▰▰▰▰▰▰▰▰▱",
+            "▰▰▰▰▰▰▰▰▰▰",
+        ]
         
         if capacity > 0:
             pct = total / capacity
             if pct > 1.0: pct = 1.0
             idx = int(pct * 10)
             idx = max(0, min(idx, 10))
-            
-            # Bar (line 2) aligned under total (right side)
-            self.draw_text(w-15, 35, text=bars[idx], fill=COLOR_ORANGE, font=("Courier", 10), anchor="e")
+            self.draw_text(w-15, 35, text=bars[idx], fill=COLOR_ORANGE, font=("Segoe UI Symbol", 10), anchor="e")
             total_str = f"TOTAL: {total}/{capacity}"
         else:
             total_str = f"TOTAL: {total}"
+            self.draw_text(w-15, 35, text=bars[0], fill="#777", font=("Segoe UI Symbol", 10), anchor="e")
 
         self.draw_text(w-15, 20, text=total_str, fill=COLOR_ORANGE, font=("Courier", 10, "bold"), anchor="e")
         

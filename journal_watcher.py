@@ -50,6 +50,42 @@ class JournalWatcher:
         self.last_status_mtime = 0
         self._check_special_files()
 
+    def get_latest_cargo_capacity(self, tail_bytes=2 * 1024 * 1024):
+        """Best-effort lookup of the most recent Loadout CargoCapacity."""
+        if not self.journal_path or not os.path.exists(self.journal_path):
+            return 0
+        try:
+            files = sorted(
+                [
+                    os.path.join(self.journal_path, f)
+                    for f in os.listdir(self.journal_path)
+                    if f.startswith("Journal.") and f.endswith(".log")
+                ]
+            )
+            if not files:
+                return 0
+            latest = files[-1]
+            size = os.path.getsize(latest)
+            start = max(0, size - tail_bytes)
+            with open(latest, "rb") as f:
+                f.seek(start)
+                content = f.read().decode("utf-8", errors="ignore")
+            lines = content.splitlines()
+            for line in reversed(lines):
+                try:
+                    data = json.loads(line)
+                except Exception:
+                    continue
+                if data.get("event") == "Loadout":
+                    capacity = data.get("CargoCapacity", 0)
+                    try:
+                        return max(0, int(capacity))
+                    except Exception:
+                        return 0
+        except Exception:
+            return 0
+        return 0
+
     def _worker(self):
         while self.is_running:
             try:

@@ -132,6 +132,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             status_cb=self.update_status
         )
         self.watcher.start()
+        self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
         
         self.watcher.force_check_status()
         
@@ -259,6 +260,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if self.config.get("cargo_overlay_enabled", False):
                 if self.cargo_hud is None:
                     self.cargo_hud = CargoHUD(self.root, self.config)
+                    self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
                     self.watcher.force_check_cargo()
             else:
                 if self.cargo_hud:
