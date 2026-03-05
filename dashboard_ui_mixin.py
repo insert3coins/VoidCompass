@@ -395,6 +395,7 @@ class DashboardUIMixin:
             return
         upper = msg.upper()
         is_game_version = msg.startswith("Game version detected")
+        is_config_debug = msg.startswith("CONFIG FILE:")
         is_journal_change = msg.startswith("Journal file:")
         is_settings = (
             "CONFIGURATION SAVED" in upper
@@ -410,13 +411,15 @@ class DashboardUIMixin:
             or "CACHE" in upper
             or "UPDATE AVAILABLE" in upper
             or "STALE DISCORD MESSAGE" in upper
+            or "PERF SPIKE" in upper
+            or "UI STALL" in upper
         )
         is_screenshot_event = (
             "SCREENSHOT SAVED" in upper
             or "CONVERTED SCREENSHOT" in upper
             or ("SCREENSHOT" in upper and "SAVED" in upper)
         )
-        if not (is_game_version or is_journal_change or is_settings or is_error or is_cache_or_maint or is_screenshot_event):
+        if not (is_game_version or is_config_debug or is_journal_change or is_settings or is_error or is_cache_or_maint or is_screenshot_event):
             return
         line = f"[{datetime.now().strftime('%H:%M:%S')}] {msg}"
         self.log_entries.append(line)

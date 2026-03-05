@@ -25,17 +25,41 @@ class CargoHUD:
         default_x = screen_width - 320
         default_y = (screen_height // 2) - 200
         
-        x = self.config.get("cargo_hud_x", default_x)
-        y = self.config.get("cargo_hud_y", default_y)
-        self.win.geometry(f"+{x}+{y}")
+        x = self._safe_int(self.config.get("cargo_hud_x"), default_x)
+        y = self._safe_int(self.config.get("cargo_hud_y"), default_y)
+        self._desired_pos = (x, y)
+        self.win.geometry(f"300x400+{x}+{y}")
+        self.win.after(0, self._apply_initial_position)
+        self.win.after(250, self._apply_initial_position)
+        self.win.after(700, self._apply_initial_position)
         
         self.force_topmost()
-        
+        self._save_job = None
+
+    @staticmethod
+    def _safe_int(value, default):
+        try:
+            return int(float(value))
+        except Exception:
+            return int(default)
+
+    def _apply_initial_position(self):
+        try:
+            x, y = self._desired_pos
+            self.win.geometry(f"300x400+{x}+{y}")
+        except Exception:
+            pass
+
     def force_topmost(self):
         """Keeps the window on top of the game."""
-        self.win.attributes("-topmost", True)
-        self.win.lift()
-        self.win.after(2000, self.force_topmost)
+        try:
+            self.win.attributes("-topmost", True)
+        except Exception:
+            pass
+        refresh_ms = int(self.config.get("overlay_topmost_refresh_ms", 12000) or 12000)
+        if refresh_ms < 2000:
+            refresh_ms = 2000
+        self.win.after(refresh_ms, self.force_topmost)
 
     def start_move(self, event):
         self.x = event.x
@@ -47,12 +71,34 @@ class CargoHUD:
         x = self.win.winfo_x() + deltax
         y = self.win.winfo_y() + deltay
         self.win.geometry(f"+{x}+{y}")
+        # Persist while dragging so release outside the canvas still keeps the new position.
+        self.config["cargo_hud_x"] = x
+        self.config["cargo_hud_y"] = y
+        self._schedule_config_save()
 
     def save_final_pos(self, event):
         self.config["cargo_hud_x"] = self.win.winfo_x()
         self.config["cargo_hud_y"] = self.win.winfo_y()
+        self._write_config()
+
+    def _write_config(self):
         with open(CONFIG_FILE, 'w') as f:
             json.dump(self.config, f, indent=4)
+
+    def _schedule_config_save(self):
+        if self._save_job:
+            try:
+                self.win.after_cancel(self._save_job)
+            except Exception:
+                pass
+        self._save_job = self.win.after(250, self._flush_scheduled_save)
+
+    def _flush_scheduled_save(self):
+        self._save_job = None
+        try:
+            self._write_config()
+        except Exception:
+            pass
 
     def draw_text(self, x, y, text, fill, font, anchor="w"):
         self.canvas.create_text(x+1, y+1, text=text, fill="black", font=font, anchor=anchor)

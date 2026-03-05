@@ -12,9 +12,12 @@ class DashboardDBMixin:
     def init_db(self):
         """Initialize SQLite database and migrate JSON if needed."""
         self.conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+        self._db_last_commit_ts = time.time()
+        self._db_commit_interval_s = max(0.05, float(self.config.get("db_commit_interval_ms", 250)) / 1000.0)
         with self.db_lock:
             self.conn.execute("PRAGMA journal_mode=WAL")
-            self.conn.execute("PRAGMA synchronous = FULL")
+            # NORMAL+WAL significantly reduces fsync spikes while preserving good durability.
+            self.conn.execute("PRAGMA synchronous = NORMAL")
             self.conn.execute("CREATE TABLE IF NOT EXISTS systems (name TEXT PRIMARY KEY, total INTEGER, scanned_count INTEGER)")
             self.conn.execute("CREATE TABLE IF NOT EXISTS bodies (system_name TEXT, body_id INTEGER, PRIMARY KEY (system_name, body_id))")
             self.conn.execute(
@@ -24,6 +27,26 @@ class DashboardDBMixin:
 
         if os.path.exists(SCAN_HISTORY_FILE):
             self.migrate_json_history()
+
+    def _db_commit(self, reason=""):
+        t0 = time.perf_counter()
+        self.conn.commit()
+        self._db_last_commit_ts = time.time()
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        if hasattr(self, "_trace_record_ms"):
+            try:
+                self._trace_record_ms(f"db_commit:{reason or 'general'}", elapsed_ms)
+            except Exception:
+                pass
+        if elapsed_ms >= 25.0:
+            self.log(f"PERF SPIKE [db_commit:{reason or 'general'}] {elapsed_ms:.1f} ms")
+
+    def _db_maybe_commit(self, reason=""):
+        if self.batch_mode:
+            return
+        now = time.time()
+        if (now - self._db_last_commit_ts) >= self._db_commit_interval_s:
+            self._db_commit(reason=reason)
 
     def import_scan_cache_json(self):
         if not os.path.exists(SCAN_CACHE_FILE):
@@ -102,8 +125,7 @@ class DashboardDBMixin:
                     "INSERT OR REPLACE INTO scan_hud_items (system_name, body_id, data_json, ts) VALUES (?, ?, ?, ?)",
                     (system_name, int(body_id), payload, int(ts)),
                 )
-                if not self.batch_mode:
-                    self.conn.commit()
+                self._db_maybe_commit(reason="scan_item")
         except sqlite3.Error:
             return
 
@@ -206,8 +228,7 @@ class DashboardDBMixin:
                     "INSERT OR REPLACE INTO systems (name, total, scanned_count) VALUES (?, ?, ?)",
                     (sys_name, total, scanned),
                 )
-                if not self.batch_mode:
-                    self.conn.commit()
+                self._db_maybe_commit(reason="system")
             except sqlite3.Error as e:
                 self.log(f"❌ DB ERROR (System): {e}")
 
@@ -215,7 +236,6 @@ class DashboardDBMixin:
         with self.db_lock:
             try:
                 self.conn.execute("INSERT OR IGNORE INTO bodies (system_name, body_id) VALUES (?, ?)", (sys_name, body_id))
-                if not self.batch_mode:
-                    self.conn.commit()
+                self._db_maybe_commit(reason="body")
             except sqlite3.Error as e:
                 self.log(f"❌ DB ERROR (Body): {e}")

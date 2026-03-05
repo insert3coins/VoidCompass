@@ -1,6 +1,14 @@
 import os
 import json
-CONFIG_FILE = 'config.json'
+
+
+def _get_config_file():
+    # Always resolve config relative to current working directory.
+    # This matches local Python runs and packaged EXE runs from dist/.
+    return os.path.abspath(os.path.join(os.getcwd(), "config.json"))
+
+
+CONFIG_FILE = _get_config_file()
 COLOR_BG = '#0b0b0b'
 COLOR_PANEL = '#1e1e1e'
 COLOR_ACCENT = '#00d1ff'
@@ -33,7 +41,15 @@ def load_config():
         'ground_target_lat': 0.0,
         'ground_target_lon': 0.0,
         'perf_spike_threshold_ms': 45.0,
-        'ui_watchdog_spike_ms': 120.0
+        'ui_watchdog_spike_ms': 120.0,
+        'db_commit_interval_ms': 250,
+        'screenshot_max_convert_per_cycle': 2,
+        'overlay_topmost_refresh_ms': 12000,
+        'hud_anim_interval_ms': 100,
+        'runtime_trace_enabled': True,
+        'runtime_trace_path': 'runtime_trace.log',
+        'watcher_max_journal_lines_per_cycle': 160,
+        'watcher_startup_tail_bytes': 131072
     }
     if os.path.exists(CONFIG_FILE):
         try:

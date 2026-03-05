@@ -5,13 +5,20 @@ import threading
 import logging
 
 class JournalWatcher:
-    def __init__(self, journal_path):
+    def __init__(self, journal_path, trace_callback=None, config=None):
         self.journal_path = journal_path
+        self.trace_callback = trace_callback
+        self.config = config or {}
         self.is_running = False
         self.last_journal = None
         self.file_pos = 0
         # Startup catch-up reads only the recent tail of the active journal to avoid UI stalls.
-        self.startup_tail_bytes = 512 * 1024  # 512 KB
+        self.startup_tail_bytes = int(self.config.get("watcher_startup_tail_bytes", 131072) or 131072)
+        if self.startup_tail_bytes < 32768:
+            self.startup_tail_bytes = 32768
+        self.max_journal_lines_per_cycle = int(self.config.get("watcher_max_journal_lines_per_cycle", 160) or 160)
+        if self.max_journal_lines_per_cycle < 20:
+            self.max_journal_lines_per_cycle = 20
         self._startup_catchup_done = False
         self._skip_partial_line_once = False
         
@@ -25,6 +32,10 @@ class JournalWatcher:
         self.last_nav_mtime = 0
         self.last_status_mtime = 0
         self.thread = None
+        self._journal_files = []
+        self._journal_files_refresh_ts = 0.0
+        self._journal_files_refresh_interval_s = 5.0
+        self._force_special_check = False
 
     def start(self):
         if not self.is_running:
@@ -44,15 +55,15 @@ class JournalWatcher:
 
     def force_check_cargo(self):
         self.last_cargo_mtime = 0
-        self._check_special_files()
+        self._force_special_check = True
 
     def force_check_status(self):
         self.last_status_mtime = 0
-        self._check_special_files()
+        self._force_special_check = True
 
     def force_check_nav(self):
         self.last_nav_mtime = 0
-        self._check_special_files()
+        self._force_special_check = True
 
     def get_latest_cargo_capacity(self, tail_bytes=2 * 1024 * 1024):
         """Best-effort lookup of the most recent Loadout CargoCapacity."""
@@ -92,17 +103,40 @@ class JournalWatcher:
 
     def _worker(self):
         while self.is_running:
+            t0 = time.perf_counter()
             try:
                 if self.journal_path and os.path.exists(self.journal_path):
                     self._check_journal()
                     self._check_special_files()
+                    self._force_special_check = False
             except Exception as e:
                 logging.error(f"Watcher Error: {e}")
+            if callable(self.trace_callback):
+                try:
+                    self.trace_callback("watcher.worker_cycle", (time.perf_counter() - t0) * 1000.0)
+                except Exception:
+                    pass
             time.sleep(1)
 
     def _check_journal(self):
+        t0 = time.perf_counter()
         try:
-            files = sorted([os.path.join(self.journal_path, f) for f in os.listdir(self.journal_path) if f.startswith("Journal.") and f.endswith(".log")])
+            now = time.time()
+            need_refresh = (
+                (now - self._journal_files_refresh_ts) >= self._journal_files_refresh_interval_s
+                or not self._journal_files
+                or (self.last_journal and not os.path.exists(self.last_journal))
+            )
+            if need_refresh:
+                self._journal_files = sorted(
+                    [
+                        os.path.join(self.journal_path, f)
+                        for f in os.listdir(self.journal_path)
+                        if f.startswith("Journal.") and f.endswith(".log")
+                    ]
+                )
+                self._journal_files_refresh_ts = now
+            files = self._journal_files
         except Exception:
             return
 
@@ -136,28 +170,36 @@ class JournalWatcher:
                     except Exception:
                         pass
                     self._skip_partial_line_once = False
-                lines = f.readlines()
-                
-                if lines:
-                    events = []
-                    for line in lines:
-                        try:
-                            raw = json.loads(line)
-                        except Exception:
-                            continue
-                        events.append(self._normalize_event(raw))
+                lines_read = 0
+                events = []
+                while lines_read < self.max_journal_lines_per_cycle:
+                    line = f.readline()
+                    if not line:
+                        break
+                    lines_read += 1
+                    try:
+                        raw = json.loads(line)
+                    except Exception:
+                        continue
+                    events.append(self._normalize_event(raw))
 
-                    if events:
-                        if len(events) > 50 and self.batch_event_callback:
-                            self.batch_event_callback(events)
-                        elif self.event_callback:
-                            for ev in events:
-                                self.event_callback(ev)
+                if events:
+                    if len(events) > 50 and self.batch_event_callback:
+                        self.batch_event_callback(events)
+                    elif self.event_callback:
+                        for ev in events:
+                            self.event_callback(ev)
                 
                 self.file_pos = f.tell()
                 self._startup_catchup_done = True
         except Exception as e:
             logging.error(f"Error reading journal: {e}")
+        finally:
+            if callable(self.trace_callback):
+                try:
+                    self.trace_callback("watcher.check_journal", (time.perf_counter() - t0) * 1000.0)
+                except Exception:
+                    pass
 
     def _normalize_event(self, data):
         ev = data.get("event")
@@ -318,6 +360,7 @@ class JournalWatcher:
         return {"type": ev, "raw": data, "data": data}
 
     def _check_special_files(self):
+        t0 = time.perf_counter()
         # Cargo.json
         if self.cargo_callback:
             c_file = os.path.join(self.journal_path, "Cargo.json")
@@ -358,6 +401,11 @@ class JournalWatcher:
                             data = json.load(f)
                             self.status_callback(data)
                 except: pass
+        if callable(self.trace_callback):
+            try:
+                self.trace_callback("watcher.check_special_files", (time.perf_counter() - t0) * 1000.0)
+            except Exception:
+                pass
 
     def scan_history(self, progress_callback=None):
         if not self.journal_path or not os.path.exists(self.journal_path):

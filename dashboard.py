@@ -25,6 +25,7 @@ from route_plotter import RoutePlotter
 from waypoint_manager import WaypointManager
 from journal_watcher import JournalWatcher
 from fleet_carrier_watcher import FleetCarrierWatcher
+from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
 from dashboard_scan_mixin import DashboardScanMixin
@@ -139,6 +140,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._ui_watchdog_interval_ms = 50
         self._ui_watchdog_spike_ms = float(self.config.get("ui_watchdog_spike_ms", 120.0))
         self._ui_watchdog_last_ts = time.perf_counter()
+        self._overlay_pos_last_saved = {"hud": None, "cargo": None, "scan": None}
+        self._overlay_sync_grace_until = time.time() + 4.0
+        self.runtime_trace = RuntimeTrace(
+            self.config.get("runtime_trace_path", "runtime_trace.log"),
+            enabled=bool(self.config.get("runtime_trace_enabled", True)),
+        )
+        self.runtime_trace.start()
         
         self.setup_layout()
         self.waypoint_manager = WaypointManager()
@@ -149,7 +157,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         # Initialize Handlers
         self.edsm = EDSMHandler(self.config)
         self.discord = DiscordHandler(self.config, self.root)
-        self.screenshots = ScreenshotHandler(self.config, lambda: self.current_sys, self.log)
+        self.screenshots = ScreenshotHandler(
+            self.config,
+            lambda: self.current_sys,
+            self.log,
+            trace_callback=self._trace_record_ms,
+        )
         self.fc_watcher = FleetCarrierWatcher(
             self.root,
             self.config,
@@ -157,15 +170,28 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.waypoint_manager,
             self.discord,
             self.add_event_feed_entry,
+            trace_callback=self._trace_record_ms,
         )
         
         if self.config.get("overlay_enabled", True):
             self.hud = TacticalHUD(self.root, self.config, on_widget_click=self._on_hud_widget_click)
+            try:
+                hx = int(float(self.config.get("hud_x", 100)))
+                hy = int(float(self.config.get("hud_y", 100)))
+                self.hud.win.geometry(f"+{hx}+{hy}")
+            except Exception:
+                pass
         else:
             self.hud = None
             
         if self.config.get("cargo_overlay_enabled", False):
             self.cargo_hud = CargoHUD(self.root, self.config)
+            try:
+                cx = int(float(self.config.get("cargo_hud_x", self.cargo_hud.win.winfo_x())))
+                cy = int(float(self.config.get("cargo_hud_y", self.cargo_hud.win.winfo_y())))
+                self.cargo_hud.win.geometry(f"+{cx}+{cy}")
+            except Exception:
+                pass
         else:
             self.cargo_hud = None
 
@@ -181,7 +207,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.init_db()
         self.import_scan_cache_json()
         
-        self.watcher = JournalWatcher(self.config.get("journal_path"))
+        self.watcher = JournalWatcher(
+            self.config.get("journal_path"),
+            trace_callback=self._trace_record_ms,
+            config=self.config,
+        )
         self.watcher.register_callback(
             event_cb=self.process_event,
             batch_cb=self.process_batch,
@@ -197,19 +227,125 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         threading.Thread(target=self.check_updates, daemon=True).start()
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.log(
+            f"CONFIG FILE: {CONFIG_FILE} | HUD({self.config.get('hud_x')},{self.config.get('hud_y')}) "
+            f"| CARGO({self.config.get('cargo_hud_x')},{self.config.get('cargo_hud_y')})"
+        )
+        self.root.after(120, self._reapply_overlay_positions)
         self.update_hud()
         self.update_ground_target_ui()
         self._tick_ground_target()
         self._tick_session_clock()
         self._tick_ui_stall_watchdog()
+        self._tick_runtime_trace()
+        self._tick_overlay_position_sync()
+
+    def _reapply_overlay_positions(self):
+        try:
+            if self.hud and self.hud.win and self.hud.win.winfo_exists():
+                hx = int(float(self.config.get("hud_x", self.hud.win.winfo_x())))
+                hy = int(float(self.config.get("hud_y", self.hud.win.winfo_y())))
+                self.hud.win.geometry(f"460x180+{hx}+{hy}")
+        except Exception:
+            pass
+        try:
+            if self.cargo_hud and self.cargo_hud.win and self.cargo_hud.win.winfo_exists():
+                cx = int(float(self.config.get("cargo_hud_x", self.cargo_hud.win.winfo_x())))
+                cy = int(float(self.config.get("cargo_hud_y", self.cargo_hud.win.winfo_y())))
+                self.cargo_hud.win.geometry(f"300x400+{cx}+{cy}")
+        except Exception:
+            pass
+        self.root.after(250, self._log_applied_overlay_positions)
+
+    def _log_applied_overlay_positions(self):
+        try:
+            hxy = "-"
+            cxy = "-"
+            if self.hud and self.hud.win and self.hud.win.winfo_exists():
+                hxy = f"{self.hud.win.winfo_x()},{self.hud.win.winfo_y()}"
+            if self.cargo_hud and self.cargo_hud.win and self.cargo_hud.win.winfo_exists():
+                cxy = f"{self.cargo_hud.win.winfo_x()},{self.cargo_hud.win.winfo_y()}"
+            self.log(f"CONFIG FILE: APPLIED HUD({hxy}) | CARGO({cxy})")
+        except Exception:
+            pass
 
     @staticmethod
     def _perf_start():
         return time.perf_counter()
 
+    def _trace_record_ms(self, label, elapsed_ms):
+        if self.runtime_trace:
+            self.runtime_trace.record_ms(label, elapsed_ms)
+
+    def _trace_bump(self, label, amount=1):
+        if self.runtime_trace:
+            self.runtime_trace.bump(label, amount)
+
+    def _tick_runtime_trace(self):
+        if not self.is_running:
+            return
+        extra = {
+            "route_waypoints": len(getattr(self.waypoint_manager, "waypoints", []) or []),
+            "scan_items": len(getattr(self, "scan_items", []) or []),
+            "log_entries": len(getattr(self, "log_entries", []) or []),
+            "event_feed_entries": len(getattr(self, "event_feed_entries", []) or []),
+        }
+        if self.runtime_trace:
+            self.runtime_trace.flush(extra=extra)
+        self.root.after(1000, self._tick_runtime_trace)
+
+    def _tick_overlay_position_sync(self):
+        if not self.is_running:
+            return
+        changed = False
+        now = time.time()
+        try:
+            if self.hud and self.hud.win and self.hud.win.winfo_exists():
+                pos = (int(self.hud.win.winfo_x()), int(self.hud.win.winfo_y()))
+                cfg_pos = (
+                    int(float(self.config.get("hud_x", pos[0]))),
+                    int(float(self.config.get("hud_y", pos[1]))),
+                )
+                if now < self._overlay_sync_grace_until and pos == (0, 0) and cfg_pos != (0, 0):
+                    pos = cfg_pos
+                if self._overlay_pos_last_saved.get("hud") != pos:
+                    self._overlay_pos_last_saved["hud"] = pos
+                    self.config["hud_x"], self.config["hud_y"] = pos
+                    changed = True
+        except Exception:
+            pass
+        try:
+            if self.cargo_hud and self.cargo_hud.win and self.cargo_hud.win.winfo_exists():
+                pos = (int(self.cargo_hud.win.winfo_x()), int(self.cargo_hud.win.winfo_y()))
+                cfg_pos = (
+                    int(float(self.config.get("cargo_hud_x", pos[0]))),
+                    int(float(self.config.get("cargo_hud_y", pos[1]))),
+                )
+                if now < self._overlay_sync_grace_until and pos == (0, 0) and cfg_pos != (0, 0):
+                    pos = cfg_pos
+                if self._overlay_pos_last_saved.get("cargo") != pos:
+                    self._overlay_pos_last_saved["cargo"] = pos
+                    self.config["cargo_hud_x"], self.config["cargo_hud_y"] = pos
+                    changed = True
+        except Exception:
+            pass
+        try:
+            if self.scan_hud and self.scan_hud.win and self.scan_hud.win.winfo_exists():
+                pos = (int(self.scan_hud.win.winfo_x()), int(self.scan_hud.win.winfo_y()))
+                if self._overlay_pos_last_saved.get("scan") != pos:
+                    self._overlay_pos_last_saved["scan"] = pos
+                    self.config["scan_hud_x"], self.config["scan_hud_y"] = pos
+                    changed = True
+        except Exception:
+            pass
+        if changed:
+            self._save_config_file()
+        self.root.after(700, self._tick_overlay_position_sync)
+
     def _perf_spike(self, label, started_at, threshold_ms=None):
         threshold = self._perf_spike_threshold_ms if threshold_ms is None else float(threshold_ms)
         elapsed_ms = (time.perf_counter() - started_at) * 1000.0
+        self._trace_record_ms(label, elapsed_ms)
         if elapsed_ms < threshold:
             return
         now = time.time()
@@ -220,6 +356,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         msg = f"PERF SPIKE [{label}] {elapsed_ms:.1f} ms"
         print(msg, flush=True)
         logging.warning(msg)
+        self.log(msg)
 
     def _tick_ui_stall_watchdog(self):
         if not self.is_running:
@@ -229,9 +366,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._ui_watchdog_last_ts = now
         overrun_ms = delta_ms - float(self._ui_watchdog_interval_ms)
         if overrun_ms >= self._ui_watchdog_spike_ms:
-            msg = f"UI STALL [{delta_ms:.1f} ms tick, +{overrun_ms:.1f} ms overrun]"
-            print(msg, flush=True)
-            logging.warning(msg)
+            now_ts = time.time()
+            last = self._perf_last_emit_ts.get("UI_STALL", 0.0)
+            if (now_ts - last) >= self._perf_emit_min_interval_s:
+                self._perf_last_emit_ts["UI_STALL"] = now_ts
+                msg = f"UI STALL [{delta_ms:.1f} ms tick, +{overrun_ms:.1f} ms overrun]"
+                print(msg, flush=True)
+                logging.warning(msg)
+                self.log(msg)
+                self._trace_record_ms("ui_stall_overrun", overrun_ms)
         self.root.after(self._ui_watchdog_interval_ms, self._tick_ui_stall_watchdog)
 
     def on_close(self):
@@ -243,14 +386,38 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             
         self.watcher.stop()
         self.screenshots.stop()
+        try:
+            if self.hud and self.hud.win and self.hud.win.winfo_exists():
+                self.config["hud_x"] = int(self.hud.win.winfo_x())
+                self.config["hud_y"] = int(self.hud.win.winfo_y())
+        except Exception:
+            pass
+        try:
+            if self.cargo_hud and self.cargo_hud.win and self.cargo_hud.win.winfo_exists():
+                self.config["cargo_hud_x"] = int(self.cargo_hud.win.winfo_x())
+                self.config["cargo_hud_y"] = int(self.cargo_hud.win.winfo_y())
+        except Exception:
+            pass
+        try:
+            if self.scan_hud and self.scan_hud.win and self.scan_hud.win.winfo_exists():
+                self.config["scan_hud_x"] = int(self.scan_hud.win.winfo_x())
+                self.config["scan_hud_y"] = int(self.scan_hud.win.winfo_y())
+        except Exception:
+            pass
         self.config["main_geometry"] = self.root.geometry()
         with open(CONFIG_FILE, 'w') as f:
             json.dump(self.config, f, indent=4)
         if hasattr(self, 'conn'):
             try:
+                self.conn.commit()
                 self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                 self.conn.close()
             except: pass
+        if self.runtime_trace:
+            try:
+                self.runtime_trace.flush(extra={"shutdown": True})
+            except Exception:
+                pass
         self._destroy_ground_popup()
         self.root.destroy()
 

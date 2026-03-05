@@ -33,9 +33,14 @@ class ScanHUD:
         self.force_topmost()
 
     def force_topmost(self):
-        self.win.attributes("-topmost", True)
-        self.win.lift()
-        self.win.after(2000, self.force_topmost)
+        try:
+            self.win.attributes("-topmost", True)
+        except Exception:
+            pass
+        refresh_ms = int(self.config.get("overlay_topmost_refresh_ms", 12000) or 12000)
+        if refresh_ms < 2000:
+            refresh_ms = 2000
+        self.win.after(refresh_ms, self.force_topmost)
 
     def show(self):
         try:

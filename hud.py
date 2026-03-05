@@ -23,9 +23,13 @@ class TacticalHUD:
         self.canvas.bind("<B1-Motion>", self._on_mouse_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_mouse_up)
 
-        x = self.config.get("hud_x", 100)
-        y = self.config.get("hud_y", 100)
-        self.win.geometry(f"+{x}+{y}")
+        x = self._safe_int(self.config.get("hud_x"), 100)
+        y = self._safe_int(self.config.get("hud_y"), 100)
+        self._desired_pos = (x, y)
+        self.win.geometry(f"{self.width}x{self.base_height}+{x}+{y}")
+        self.win.after(0, self._apply_initial_position)
+        self.win.after(250, self._apply_initial_position)
+        self.win.after(700, self._apply_initial_position)
         
         self.force_topmost()
         
@@ -42,13 +46,36 @@ class TacticalHUD:
         self._dot_blink_until = {}
         self._age_cycle_idx = 0
         self._age_cycle_ts = time.time()
+        self._save_job = None
+        self._anim_interval_ms = int(self.config.get("hud_anim_interval_ms", 100) or 100)
+        if self._anim_interval_ms < 33:
+            self._anim_interval_ms = 33
         self.animate_ui()
+
+    def _apply_initial_position(self):
+        try:
+            x, y = self._desired_pos
+            self.win.geometry(f"{self.width}x{self.base_height}+{x}+{y}")
+        except Exception:
+            pass
+
+    @staticmethod
+    def _safe_int(value, default):
+        try:
+            return int(float(value))
+        except Exception:
+            return int(default)
 
     def force_topmost(self):
         """Keeps the window on top of the game."""
-        self.win.attributes("-topmost", True)
-        self.win.lift()
-        self.win.after(2000, self.force_topmost)
+        try:
+            self.win.attributes("-topmost", True)
+        except Exception:
+            pass
+        refresh_ms = int(self.config.get("overlay_topmost_refresh_ms", 12000) or 12000)
+        if refresh_ms < 2000:
+            refresh_ms = 2000
+        self.win.after(refresh_ms, self.force_topmost)
 
     def animate_ui(self):
         try:
@@ -59,7 +86,7 @@ class TacticalHUD:
             # self.canvas.itemconfigure("anim_title", text=self.anim_char)
 
             # Subtle source-row animation: breathing dots + drifting sparkle.
-            if self._source_anim_targets:
+            if self._source_anim_targets and self.win.winfo_viewable():
                 t = time.time()
 
                 for idx, label in enumerate(("J", "S", "N", "C", "E")):
@@ -80,7 +107,7 @@ class TacticalHUD:
             pass
         finally:
             try:
-                self.win.after(33, self.animate_ui)
+                self.win.after(self._anim_interval_ms, self.animate_ui)
             except Exception:
                 pass
 
@@ -94,12 +121,34 @@ class TacticalHUD:
         x = self.win.winfo_x() + deltax
         y = self.win.winfo_y() + deltay
         self.win.geometry(f"+{x}+{y}")
+        # Persist while dragging so release outside the canvas still keeps the new position.
+        self.config["hud_x"] = x
+        self.config["hud_y"] = y
+        self._schedule_config_save()
 
     def save_final_pos(self, event=None):
         self.config["hud_x"] = self.win.winfo_x()
         self.config["hud_y"] = self.win.winfo_y()
+        self._write_config()
+
+    def _write_config(self):
         with open(CONFIG_FILE, 'w') as f:
             json.dump(self.config, f, indent=4)
+
+    def _schedule_config_save(self):
+        if self._save_job:
+            try:
+                self.win.after_cancel(self._save_job)
+            except Exception:
+                pass
+        self._save_job = self.win.after(250, self._flush_scheduled_save)
+
+    def _flush_scheduled_save(self):
+        self._save_job = None
+        try:
+            self._write_config()
+        except Exception:
+            pass
 
     def _in_rect(self, x, y, rect):
         x0, y0, x1, y1 = rect

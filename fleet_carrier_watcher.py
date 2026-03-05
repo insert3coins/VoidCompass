@@ -9,13 +9,14 @@ from config import CONFIG_FILE, COLOR_BG, COLOR_PANEL, COLOR_ACCENT, COLOR_ORANG
 
 
 class FleetCarrierWatcher:
-    def __init__(self, root, config, edsm, waypoint_manager, discord_handler, event_callback):
+    def __init__(self, root, config, edsm, waypoint_manager, discord_handler, event_callback, trace_callback=None):
         self.root = root
         self.config = config
         self.edsm = edsm
         self.waypoint_manager = waypoint_manager
         self.discord = discord_handler
         self.event_callback = event_callback
+        self.trace_callback = trace_callback
 
         self.window = None
         self.name_entry = None
@@ -40,6 +41,8 @@ class FleetCarrierWatcher:
         self._startup_dispatch_job = None
         self._startup_dispatch_reason = ""
         self._distance_job = 0
+        self._last_journal_rescan_ts = 0.0
+        self._journal_rescan_cooldown_s = 30.0
 
     def _emit_event(self, tag, message, severity="INFO", copy_text=None, url=None, pinned=False):
         if not callable(self.event_callback) or not message:
@@ -216,6 +219,7 @@ class FleetCarrierWatcher:
             return None
 
     def _scan_journal_for_watched(self, max_files=30):
+        t0 = time.perf_counter()
         if not self.watch_name:
             return False, False
         journal_path = self.config.get("journal_path")
@@ -378,6 +382,11 @@ class FleetCarrierWatcher:
             self._save_config()
             self._update_distance_async()
             self._emit_event("SYSTEM", "Fleet watcher journal scan refreshed", severity="INFO", copy_text=self.watch_name)
+        if callable(self.trace_callback):
+            try:
+                self.trace_callback("fleet.scan_journal_for_watched", (time.perf_counter() - t0) * 1000.0)
+            except Exception:
+                pass
         return changed, found_any_match
 
     def _update_distance_async(self):
@@ -697,6 +706,7 @@ class FleetCarrierWatcher:
         dlg.protocol("WM_DELETE_WINDOW", _cancel)
 
     def process_event(self, ev, raw, d, current_sys):
+        t0 = time.perf_counter()
         if not self.watch_name:
             return
         if not isinstance(raw, dict):
@@ -705,7 +715,10 @@ class FleetCarrierWatcher:
         matched = self._matches_watched(raw)
         if not matched and ev in ("CarrierStats", "CarrierLocation", "CarrierJumpRequest", "CarrierJump", "CarrierJumpCancelled", "CarrierNameChanged"):
             # Fallback: refresh id/name mapping from recent journals, then re-check match.
-            self._scan_journal_for_watched(max_files=5)
+            now = time.time()
+            if (now - self._last_journal_rescan_ts) >= self._journal_rescan_cooldown_s:
+                self._last_journal_rescan_ts = now
+                self._scan_journal_for_watched(max_files=3)
             matched = self._matches_watched(raw)
         if not matched and ev in ("CarrierJump", "CarrierJumpCancelled"):
             # Some jump-complete/cancel journal variants omit callsign/name fields.
@@ -840,3 +853,8 @@ class FleetCarrierWatcher:
             self._emit_event("SYSTEM", "Carrier jump cancelled", severity="WARN", copy_text=self.watch_name)
             self._refresh_preview()
             self._dispatch_from_event("Journal event: CarrierJumpCancelled", raw)
+        if callable(self.trace_callback):
+            try:
+                self.trace_callback(f"fleet.process_event:{ev}", (time.perf_counter() - t0) * 1000.0)
+            except Exception:
+                pass
