@@ -116,6 +116,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.ground_popup_canvas = None
         self.ground_popup_drag_origin = None
         self._ground_popup_visible = False
+        self._ground_popup_compass_ids = None
         self.ground_popup_enabled = bool(self.config.get("ground_popup_enabled", True))
         self._ground_ui_needs_update = False
         self._ground_last_status_key = None

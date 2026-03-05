@@ -48,8 +48,10 @@ def load_config():
         'hud_anim_interval_ms': 100,
         'runtime_trace_enabled': True,
         'runtime_trace_path': 'runtime_trace.log',
-        'watcher_max_journal_lines_per_cycle': 160,
-        'watcher_startup_tail_bytes': 131072
+        'watcher_max_journal_lines_per_cycle': 40,
+        'watcher_startup_max_lines_per_cycle': 20,
+        'watcher_startup_tail_bytes': 131072,
+        'watcher_special_file_settle_ms': 200
     }
     if os.path.exists(CONFIG_FILE):
         try:

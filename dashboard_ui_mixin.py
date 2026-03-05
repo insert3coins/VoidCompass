@@ -664,6 +664,7 @@ class DashboardUIMixin:
         self.ground_popup_canvas = None
         self._ground_popup_visible = False
         self._ground_popup_last_render_key = None
+        self._ground_popup_compass_ids = None
 
     def _draw_ground_popup_compass(self, solution):
         canvas = self.ground_popup_canvas
@@ -679,27 +680,59 @@ class DashboardUIMixin:
         cy = h // 2
         r = min(w, h) // 2 - 8
 
-        canvas.delete("all")
-        canvas.create_oval(cx - r, cy - r, cx + r, cy + r, outline="#555", width=1)
-        canvas.create_text(cx, cy - r - 4, text="N", fill="#999", font=("Courier", 8, "bold"))
-        canvas.create_text(cx + r + 5, cy, text="E", fill="#666", font=("Courier", 7))
-        canvas.create_text(cx, cy + r + 6, text="S", fill="#666", font=("Courier", 7))
-        canvas.create_text(cx - r - 5, cy, text="W", fill="#666", font=("Courier", 7))
-
-        # Ship forward marker is always up in this relative compass.
-        canvas.create_line(cx, cy + 2, cx, cy - r + 8, fill="#777", width=2)
+        ids = getattr(self, "_ground_popup_compass_ids", None)
+        if not ids or ids.get("canvas") is not canvas:
+            canvas.delete("all")
+            ring = canvas.create_oval(cx - r, cy - r, cx + r, cy + r, outline="#555", width=1)
+            n = canvas.create_text(cx, cy - r - 4, text="N", fill="#999", font=("Courier", 8, "bold"))
+            e = canvas.create_text(cx + r + 5, cy, text="E", fill="#666", font=("Courier", 7))
+            s = canvas.create_text(cx, cy + r + 6, text="S", fill="#666", font=("Courier", 7))
+            w_txt = canvas.create_text(cx - r - 5, cy, text="W", fill="#666", font=("Courier", 7))
+            # Ship forward marker is always up in this relative compass.
+            ship = canvas.create_line(cx, cy + 2, cx, cy - r + 8, fill="#777", width=2)
+            needle = canvas.create_line(cx, cy, cx, cy, fill=COLOR_ACCENT, width=3)
+            dot = canvas.create_oval(cx - 3, cy - 3, cx + 3, cy + 3, fill=COLOR_ACCENT, outline=COLOR_ACCENT)
+            unknown = canvas.create_text(cx, cy, text="?", fill="#888", font=("Courier", 14, "bold"), state="hidden")
+            ids = {
+                "canvas": canvas,
+                "ring": ring,
+                "n": n,
+                "e": e,
+                "s": s,
+                "w": w_txt,
+                "ship": ship,
+                "needle": needle,
+                "dot": dot,
+                "unknown": unknown,
+            }
+            self._ground_popup_compass_ids = ids
+        else:
+            # Keep static geometry aligned even if popup scales.
+            canvas.coords(ids["ring"], cx - r, cy - r, cx + r, cy + r)
+            canvas.coords(ids["n"], cx, cy - r - 4)
+            canvas.coords(ids["e"], cx + r + 5, cy)
+            canvas.coords(ids["s"], cx, cy + r + 6)
+            canvas.coords(ids["w"], cx - r - 5, cy)
+            canvas.coords(ids["ship"], cx, cy + 2, cx, cy - r + 8)
 
         rel = solution.get("heading_delta")
         if rel is None:
-            canvas.create_text(cx, cy, text="?", fill="#888", font=("Courier", 14, "bold"))
+            canvas.itemconfig(ids["unknown"], state="normal")
+            canvas.itemconfig(ids["needle"], state="hidden")
+            canvas.itemconfig(ids["dot"], state="hidden")
             return
 
+        canvas.itemconfig(ids["unknown"], state="hidden")
+        canvas.itemconfig(ids["needle"], state="normal")
+        canvas.itemconfig(ids["dot"], state="normal")
         rad = math.radians(rel)
         tx = cx + math.sin(rad) * (r - 10)
         ty = cy - math.cos(rad) * (r - 10)
         color = COLOR_ACCENT if abs(rel) > 12 else "#00ff99"
-        canvas.create_line(cx, cy, tx, ty, fill=color, width=3)
-        canvas.create_oval(tx - 3, ty - 3, tx + 3, ty + 3, fill=color, outline=color)
+        canvas.coords(ids["needle"], cx, cy, tx, ty)
+        canvas.itemconfig(ids["needle"], fill=color)
+        canvas.coords(ids["dot"], tx - 3, ty - 3, tx + 3, ty + 3)
+        canvas.itemconfig(ids["dot"], fill=color, outline=color)
 
     def _update_ground_popup(self, solution):
         t0 = self._perf_start()

@@ -19,6 +19,14 @@ class JournalWatcher:
         self.max_journal_lines_per_cycle = int(self.config.get("watcher_max_journal_lines_per_cycle", 160) or 160)
         if self.max_journal_lines_per_cycle < 20:
             self.max_journal_lines_per_cycle = 20
+        self.startup_max_journal_lines_per_cycle = int(
+            self.config.get("watcher_startup_max_lines_per_cycle", 20) or 20
+        )
+        if self.startup_max_journal_lines_per_cycle < 5:
+            self.startup_max_journal_lines_per_cycle = 5
+        self.special_file_settle_s = float(self.config.get("watcher_special_file_settle_ms", 200) or 200) / 1000.0
+        if self.special_file_settle_s < 0.0:
+            self.special_file_settle_s = 0.0
         self._startup_catchup_done = False
         self._skip_partial_line_once = False
         
@@ -170,13 +178,21 @@ class JournalWatcher:
                     except Exception:
                         pass
                     self._skip_partial_line_once = False
+                line_budget = self.max_journal_lines_per_cycle
+                if not self._startup_catchup_done:
+                    line_budget = min(line_budget, self.startup_max_journal_lines_per_cycle)
                 lines_read = 0
                 events = []
-                while lines_read < self.max_journal_lines_per_cycle:
+                eof_reached = False
+                while lines_read < line_budget:
                     line = f.readline()
                     if not line:
+                        eof_reached = True
                         break
                     lines_read += 1
+                    # Yield periodically so the UI thread can run between parse bursts.
+                    if (lines_read % 5) == 0:
+                        time.sleep(0)
                     try:
                         raw = json.loads(line)
                     except Exception:
@@ -187,11 +203,14 @@ class JournalWatcher:
                     if len(events) > 50 and self.batch_event_callback:
                         self.batch_event_callback(events)
                     elif self.event_callback:
-                        for ev in events:
+                        for idx, ev in enumerate(events, start=1):
                             self.event_callback(ev)
+                            if (idx % 5) == 0:
+                                time.sleep(0)
                 
                 self.file_pos = f.tell()
-                self._startup_catchup_done = True
+                if eof_reached:
+                    self._startup_catchup_done = True
         except Exception as e:
             logging.error(f"Error reading journal: {e}")
         finally:
@@ -361,6 +380,7 @@ class JournalWatcher:
 
     def _check_special_files(self):
         t0 = time.perf_counter()
+        now = time.time()
         # Cargo.json
         if self.cargo_callback:
             c_file = os.path.join(self.journal_path, "Cargo.json")
@@ -368,13 +388,18 @@ class JournalWatcher:
                 try:
                     mtime = os.path.getmtime(c_file)
                     if mtime != self.last_cargo_mtime:
-                        self.last_cargo_mtime = mtime
-                        with open(c_file, 'r', encoding='utf-8') as f:
-                            content = f.read().strip()
-                            if content:
-                                data = json.loads(content)
-                                self.cargo_callback(data.get("Inventory", []))
-                except: pass
+                        # Avoid reading while the game may still be writing this file.
+                        if (now - mtime) < self.special_file_settle_s and not self._force_special_check:
+                            pass
+                        else:
+                            with open(c_file, 'r', encoding='utf-8') as f:
+                                content = f.read().strip()
+                                if content:
+                                    data = json.loads(content)
+                                    self.cargo_callback(data.get("Inventory", []))
+                                    self.last_cargo_mtime = mtime
+                except:
+                    pass
 
         # NavRoute.json
         if self.nav_route_callback:
@@ -383,11 +408,15 @@ class JournalWatcher:
                 try:
                     mtime = os.path.getmtime(n_file)
                     if mtime != self.last_nav_mtime:
-                        self.last_nav_mtime = mtime
-                        with open(n_file, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
-                            self.nav_route_callback(data)
-                except: pass
+                        if (now - mtime) < self.special_file_settle_s and not self._force_special_check:
+                            pass
+                        else:
+                            with open(n_file, 'r', encoding='utf-8') as f:
+                                data = json.load(f)
+                                self.nav_route_callback(data)
+                                self.last_nav_mtime = mtime
+                except:
+                    pass
 
         # Status.json
         if self.status_callback:
@@ -396,11 +425,13 @@ class JournalWatcher:
                 try:
                     mtime = os.path.getmtime(s_file)
                     if mtime != self.last_status_mtime:
-                        self.last_status_mtime = mtime
+                        # Status drives live HUD/ground target; don't defer it with settle timing.
                         with open(s_file, 'r', encoding='utf-8') as f:
                             data = json.load(f)
                             self.status_callback(data)
-                except: pass
+                            self.last_status_mtime = mtime
+                except:
+                    pass
         if callable(self.trace_callback):
             try:
                 self.trace_callback("watcher.check_special_files", (time.perf_counter() - t0) * 1000.0)
