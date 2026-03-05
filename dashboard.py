@@ -31,6 +31,15 @@ from dashboard_scan_mixin import DashboardScanMixin
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
+    @staticmethod
+    def _to_float(value, default=None):
+        try:
+            if value is None:
+                return default
+            return float(value)
+        except Exception:
+            return default
+
     def __init__(self, root):
         self.root = root
         self.config = load_config()
@@ -90,6 +99,27 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.session_start_ts = time.time()
         self.session_jump_count = 0
         self.session_ly = 0.0
+        self.target_lat = self._to_float(self.config.get("ground_target_lat"), 0.0)
+        self.target_lon = self._to_float(self.config.get("ground_target_lon"), 0.0)
+        self.target_latlon_active = bool(self.config.get("ground_target_active", False))
+        self.current_latitude = None
+        self.current_longitude = None
+        self.current_heading = None
+        self.current_planet_radius = None
+        self.on_planet = False
+        self._ground_last_on_planet = False
+        self.ground_popup = None
+        self.ground_popup_header = None
+        self.ground_popup_line1 = None
+        self.ground_popup_line2 = None
+        self.ground_popup_canvas = None
+        self.ground_popup_drag_origin = None
+        self._ground_popup_visible = False
+        self.ground_popup_enabled = bool(self.config.get("ground_popup_enabled", True))
+        self._ground_ui_needs_update = False
+        self._ground_last_status_key = None
+        self._pending_status_data = None
+        self._status_dispatch_scheduled = False
         self.log_filter = "ALL"
         self.log_entries = []
         self.event_feed_entries = []
@@ -99,6 +129,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.event_feed_display_limit = 30
         self.dashboard_refresh_job = None
         self.dashboard_refresh_full_pending = False
+        self._hud_refresh_job = None
+        self._hud_refresh_requested = False
+        self._last_hud_refresh_ts = 0.0
+        self._hud_refresh_interval_ms = 120
+        self._perf_spike_threshold_ms = float(self.config.get("perf_spike_threshold_ms", 45.0))
+        self._perf_emit_min_interval_s = 0.75
+        self._perf_last_emit_ts = {}
+        self._ui_watchdog_interval_ms = 50
+        self._ui_watchdog_spike_ms = float(self.config.get("ui_watchdog_spike_ms", 120.0))
+        self._ui_watchdog_last_ts = time.perf_counter()
         
         self.setup_layout()
         self.waypoint_manager = WaypointManager()
@@ -158,7 +198,41 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.update_hud()
+        self.update_ground_target_ui()
+        self._tick_ground_target()
         self._tick_session_clock()
+        self._tick_ui_stall_watchdog()
+
+    @staticmethod
+    def _perf_start():
+        return time.perf_counter()
+
+    def _perf_spike(self, label, started_at, threshold_ms=None):
+        threshold = self._perf_spike_threshold_ms if threshold_ms is None else float(threshold_ms)
+        elapsed_ms = (time.perf_counter() - started_at) * 1000.0
+        if elapsed_ms < threshold:
+            return
+        now = time.time()
+        last = self._perf_last_emit_ts.get(label, 0.0)
+        if (now - last) < self._perf_emit_min_interval_s:
+            return
+        self._perf_last_emit_ts[label] = now
+        msg = f"PERF SPIKE [{label}] {elapsed_ms:.1f} ms"
+        print(msg, flush=True)
+        logging.warning(msg)
+
+    def _tick_ui_stall_watchdog(self):
+        if not self.is_running:
+            return
+        now = time.perf_counter()
+        delta_ms = (now - self._ui_watchdog_last_ts) * 1000.0
+        self._ui_watchdog_last_ts = now
+        overrun_ms = delta_ms - float(self._ui_watchdog_interval_ms)
+        if overrun_ms >= self._ui_watchdog_spike_ms:
+            msg = f"UI STALL [{delta_ms:.1f} ms tick, +{overrun_ms:.1f} ms overrun]"
+            print(msg, flush=True)
+            logging.warning(msg)
+        self.root.after(self._ui_watchdog_interval_ms, self._tick_ui_stall_watchdog)
 
     def on_close(self):
         """Save state and exit."""
@@ -177,7 +251,71 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                 self.conn.close()
             except: pass
+        self._destroy_ground_popup()
         self.root.destroy()
+
+    def _save_config_file(self):
+        try:
+            with open(CONFIG_FILE, 'w') as f:
+                json.dump(self.config, f, indent=4)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _normalize_lon(delta):
+        return ((delta + 180.0) % 360.0) - 180.0
+
+    @staticmethod
+    def _bearing_deg(lat1, lon1, lat2, lon2):
+        lat1_r = math.radians(lat1)
+        lon1_r = math.radians(lon1)
+        lat2_r = math.radians(lat2)
+        lon2_r = math.radians(lon2)
+        x = math.cos(lat2_r) * math.sin(lon2_r - lon1_r)
+        y = math.cos(lat1_r) * math.sin(lat2_r) - math.sin(lat1_r) * math.cos(lat2_r) * math.cos(lon2_r - lon1_r)
+        bearing = math.degrees(math.atan2(x, y))
+        if bearing < 0:
+            bearing += 360.0
+        return bearing
+
+    @staticmethod
+    def _surface_distance_m(lat1, lon1, lat2, lon2, radius_m):
+        if radius_m is None or radius_m <= 0:
+            return None
+        lat1_r = math.radians(lat1)
+        lat2_r = math.radians(lat2)
+        dlon_r = math.radians(lon2 - lon1)
+        z = (math.sin(lat1_r) * math.sin(lat2_r)) + (math.cos(lat1_r) * math.cos(lat2_r) * math.cos(dlon_r))
+        z = max(-1.0, min(1.0, z))
+        return math.acos(z) * radius_m
+
+    @staticmethod
+    def _format_ground_distance(distance_m):
+        if distance_m is None:
+            return "---"
+        if distance_m < 1000.0:
+            return f"{distance_m:,.0f} m"
+        return f"{distance_m / 1000.0:,.2f} km"
+
+    @staticmethod
+    def _format_direction(delta_deg):
+        abs_delta = abs(delta_deg)
+        if abs_delta <= 12:
+            return "AHEAD"
+        if abs_delta >= 168:
+            return "BEHIND"
+        return "RIGHT" if delta_deg > 0 else "LEFT"
+
+    def _tick_ground_target(self):
+        if not self.is_running:
+            return
+        if self._ground_ui_needs_update and not self.batch_mode:
+            self._ground_ui_needs_update = False
+            try:
+                self.update_ground_target_ui()
+            except Exception:
+                pass
+        self.root.after(220, self._tick_ground_target)
 
     def open_screenshots_folder(self):
         path = self.config.get("screenshots_path")
@@ -346,7 +484,33 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.log(f"❌ CLIPBOARD COPY FAILED: {e}")
             return False
 
+    def _run_scheduled_hud_refresh(self):
+        t0 = self._perf_start()
+        self._hud_refresh_job = None
+        if not self._hud_refresh_requested:
+            return
+        self._hud_refresh_requested = False
+        self._last_hud_refresh_ts = time.time()
+        self._perform_hud_update()
+        # If additional requests came in while rendering, schedule one more pass.
+        if self._hud_refresh_requested and self._hud_refresh_job is None:
+            self._hud_refresh_job = self.root.after(self._hud_refresh_interval_ms, self._run_scheduled_hud_refresh)
+        self._perf_spike("_run_scheduled_hud_refresh", t0, threshold_ms=35.0)
+
     def update_hud(self):
+        if threading.current_thread() is not threading.main_thread():
+            self.root.after(0, self.update_hud)
+            return
+        self._hud_refresh_requested = True
+        if self._hud_refresh_job is not None:
+            return
+        now = time.time()
+        elapsed_ms = int((now - self._last_hud_refresh_ts) * 1000.0)
+        delay = 0 if elapsed_ms >= self._hud_refresh_interval_ms else (self._hud_refresh_interval_ms - elapsed_ms)
+        self._hud_refresh_job = self.root.after(delay, self._run_scheduled_hud_refresh)
+
+    def _perform_hud_update(self):
+        t0 = self._perf_start()
         """Gathers all current state and sends it to the HUD for redrawing."""
         if not self.hud:
             self.update_scan_hud()
@@ -419,6 +583,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             hud_destination, route_counts, hud_status, hud_health
         ))
         self.update_scan_hud()
+        self._perf_spike("_perform_hud_update", t0, threshold_ms=30.0)
 
     def _record_journal_event(self):
         now = time.time()

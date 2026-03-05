@@ -26,7 +26,14 @@ def load_config():
         'scan_hud_y': 150,
         'main_geometry': '1000x700',
         'settings_geometry': '600x500',
-        'discord_msg_system': ''
+        'ground_popup_geometry': '340x140+1320+160',
+        'ground_popup_enabled': True,
+        'discord_msg_system': '',
+        'ground_target_active': False,
+        'ground_target_lat': 0.0,
+        'ground_target_lon': 0.0,
+        'perf_spike_threshold_ms': 45.0,
+        'ui_watchdog_spike_ms': 120.0
     }
     if os.path.exists(CONFIG_FILE):
         try:

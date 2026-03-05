@@ -1,4 +1,5 @@
 import time
+import math
 import tkinter as tk
 import requests
 import webbrowser
@@ -10,6 +11,24 @@ from version import APP_VERSION
 
 
 class DashboardUIMixin:
+    def _config_label_if_changed(self, widget, text=None, fg=None):
+        try:
+            current_text = widget.cget("text")
+        except Exception:
+            current_text = None
+        try:
+            current_fg = widget.cget("fg")
+        except Exception:
+            current_fg = None
+
+        kwargs = {}
+        if text is not None and text != current_text:
+            kwargs["text"] = text
+        if fg is not None and fg != current_fg:
+            kwargs["fg"] = fg
+        if kwargs:
+            widget.config(**kwargs)
+
     def setup_layout(self):
         self.nav = tk.Frame(self.root, bg=COLOR_PANEL, height=50, highlightbackground=COLOR_ACCENT, highlightthickness=1)
         self.nav.pack(fill=tk.X, padx=10, pady=(10, 0))
@@ -72,6 +91,40 @@ class DashboardUIMixin:
         self.sys_stat = self.create_stat(metrics_card, "CURRENT SYSTEM", "---")
         self.nav_stat = self.create_stat(metrics_card, "NAV TARGET", "---")
         self.scan_stat = self.create_stat(metrics_card, "SCAN PROGRESS", "0 / 0")
+
+        self.ground_panel = tk.Frame(self.side, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
+        self.ground_panel.pack(fill=tk.X, padx=10, pady=8)
+        tk.Label(self.ground_panel, text="GROUND TARGET", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(6, 2))
+        input_row = tk.Frame(self.ground_panel, bg=COLOR_PANEL)
+        input_row.pack(fill=tk.X, padx=10, pady=(0, 4))
+        tk.Label(input_row, text="LAT", font=("Courier", 8), fg="#999", bg=COLOR_PANEL).grid(row=0, column=0, sticky="w")
+        tk.Label(input_row, text="LON", font=("Courier", 8), fg="#999", bg=COLOR_PANEL).grid(row=0, column=2, sticky="w", padx=(8, 0))
+        self.ground_lat_entry = tk.Entry(input_row, width=10, bg="#111", fg=COLOR_TEXT, font=("Courier", 9), insertbackground=COLOR_ACCENT, relief=tk.FLAT)
+        self.ground_lat_entry.grid(row=1, column=0, sticky="ew")
+        self.ground_lon_entry = tk.Entry(input_row, width=10, bg="#111", fg=COLOR_TEXT, font=("Courier", 9), insertbackground=COLOR_ACCENT, relief=tk.FLAT)
+        self.ground_lon_entry.grid(row=1, column=2, sticky="ew", padx=(8, 0))
+        input_row.grid_columnconfigure(0, weight=1)
+        input_row.grid_columnconfigure(2, weight=1)
+
+        btn_row = tk.Frame(self.ground_panel, bg=COLOR_PANEL)
+        btn_row.pack(fill=tk.X, padx=10, pady=(0, 4))
+        tk.Button(btn_row, text="[ SET ]", command=self.set_ground_target_from_entries, bg=COLOR_ACCENT, fg="black", font=("Courier", 8, "bold"), relief=tk.FLAT).pack(side=tk.LEFT)
+        tk.Button(btn_row, text="[ HERE ]", command=self.set_ground_target_here, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 8, "bold"), relief=tk.FLAT).pack(side=tk.LEFT, padx=(6, 0))
+        tk.Button(btn_row, text="[ CLEAR ]", command=self.clear_ground_target, bg=COLOR_PANEL, fg="#aaa", font=("Courier", 8, "bold"), relief=tk.FLAT).pack(side=tk.LEFT, padx=(6, 0))
+        self.ground_popup_toggle_btn = tk.Button(
+            btn_row,
+            text="[ POPUP: ON ]" if getattr(self, "ground_popup_enabled", True) else "[ POPUP: OFF ]",
+            command=self.toggle_ground_popup,
+            bg=COLOR_PANEL,
+            fg="#aaa",
+            font=("Courier", 8, "bold"),
+            relief=tk.FLAT,
+        )
+        self.ground_popup_toggle_btn.pack(side=tk.RIGHT)
+        self.ground_status_lbl = tk.Label(self.ground_panel, text="Target: OFF", font=("Courier", 8, "bold"), fg="#888", bg=COLOR_PANEL, anchor="w")
+        self.ground_status_lbl.pack(fill=tk.X, padx=10, pady=(0, 2))
+        self.ground_detail_lbl = tk.Label(self.ground_panel, text="Waiting for planetary coordinates.", font=("Courier", 8), fg="#888", bg=COLOR_PANEL, anchor="w")
+        self.ground_detail_lbl.pack(fill=tk.X, padx=10, pady=(0, 8))
 
         self.wp_panel = tk.Frame(self.side, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1, height=180)
         self.wp_panel.pack(fill=tk.X, padx=10, pady=8)
@@ -170,6 +223,11 @@ class DashboardUIMixin:
         tk.Label(log_toolbar, text="CONSOLE LOG", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(side=tk.LEFT)
         self.log_box = scrolledtext.ScrolledText(log_frame, bg="#000", fg=COLOR_GREEN, font=("Courier", 10), borderwidth=0)
         self.log_box.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        self.ground_lat_entry.delete(0, tk.END)
+        self.ground_lon_entry.delete(0, tk.END)
+        self.ground_lat_entry.insert(0, f"{getattr(self, 'target_lat', 0.0):.6f}")
+        self.ground_lon_entry.insert(0, f"{getattr(self, 'target_lon', 0.0):.6f}")
 
     def create_stat(self, parent, label, val):
         tk.Label(parent, text=label, font=("Courier", 8), fg="#666", bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(8, 0))
@@ -373,12 +431,14 @@ class DashboardUIMixin:
             self.dashboard_refresh_job = self.root.after(120, self._run_scheduled_dashboard_refresh)
 
     def _run_scheduled_dashboard_refresh(self):
+        t0 = self._perf_start()
         self.dashboard_refresh_job = None
         if self.dashboard_refresh_full_pending:
             self.dashboard_refresh_full_pending = False
             self.update_dashboard_ui()
         else:
             self.update_dashboard_panels()
+        self._perf_spike("_run_scheduled_dashboard_refresh", t0, threshold_ms=35.0)
 
     def _get_session_elapsed_text(self):
         elapsed = max(int(time.time() - self.session_start_ts), 0)
@@ -447,7 +507,322 @@ class DashboardUIMixin:
         if not self.batch_mode:
             self.root.after(0, lambda: self.nav_stat.config(text=txt))
 
+    def set_ground_target_from_entries(self):
+        try:
+            lat = float(self.ground_lat_entry.get().strip())
+            lon = float(self.ground_lon_entry.get().strip())
+        except Exception:
+            self.ground_status_lbl.config(text="Target: INVALID LAT/LON", fg="#ff7777")
+            self.ground_detail_lbl.config(text="Use numeric values, e.g. 12.3456 and -98.7654", fg="#ff7777")
+            return
+
+        if lat < -90.0 or lat > 90.0:
+            self.ground_status_lbl.config(text="Target: INVALID LAT", fg="#ff7777")
+            self.ground_detail_lbl.config(text="Latitude must be between -90 and +90.", fg="#ff7777")
+            return
+        lon = self._normalize_lon(lon)
+
+        self.target_lat = lat
+        self.target_lon = lon
+        self.target_latlon_active = True
+        self.config["ground_target_active"] = True
+        self.config["ground_target_lat"] = lat
+        self.config["ground_target_lon"] = lon
+        self._save_config_file()
+        self.update_ground_target_ui()
+        self.add_event_feed_entry("SYSTEM", f"Ground target set: {lat:.6f}, {lon:.6f}", severity="INFO", copy_text=f"{lat:.6f}, {lon:.6f}")
+
+    def set_ground_target_here(self):
+        if self.current_latitude is None or self.current_longitude is None:
+            self.ground_status_lbl.config(text="Target: NO PLANET POSITION", fg="#ff9a4d")
+            self.ground_detail_lbl.config(text="Current latitude/longitude not available yet.", fg="#ff9a4d")
+            return
+
+        self.target_lat = float(self.current_latitude)
+        self.target_lon = float(self.current_longitude)
+        self.target_latlon_active = True
+        self.config["ground_target_active"] = True
+        self.config["ground_target_lat"] = self.target_lat
+        self.config["ground_target_lon"] = self.target_lon
+        self._save_config_file()
+        self.ground_lat_entry.delete(0, tk.END)
+        self.ground_lon_entry.delete(0, tk.END)
+        self.ground_lat_entry.insert(0, f"{self.target_lat:.6f}")
+        self.ground_lon_entry.insert(0, f"{self.target_lon:.6f}")
+        self.update_ground_target_ui()
+        self.add_event_feed_entry("SYSTEM", "Ground target set to current position", severity="INFO")
+
+    def clear_ground_target(self):
+        self.target_latlon_active = False
+        self.config["ground_target_active"] = False
+        self._save_config_file()
+        self.update_ground_target_ui()
+        self.add_event_feed_entry("SYSTEM", "Ground target cleared", severity="INFO")
+
+    def toggle_ground_popup(self):
+        self.ground_popup_enabled = not bool(self.ground_popup_enabled)
+        self.config["ground_popup_enabled"] = bool(self.ground_popup_enabled)
+        self._save_config_file()
+        if hasattr(self, "ground_popup_toggle_btn"):
+            self.ground_popup_toggle_btn.config(
+                text="[ POPUP: ON ]" if self.ground_popup_enabled else "[ POPUP: OFF ]",
+                fg=COLOR_TEXT if self.ground_popup_enabled else "#888",
+            )
+        if not self.ground_popup_enabled and self.ground_popup and self.ground_popup.winfo_exists():
+            self.ground_popup.withdraw()
+            self._ground_popup_visible = False
+        self.update_ground_target_ui()
+
+    def _on_ground_popup_press(self, event):
+        try:
+            if not self.ground_popup or not self.ground_popup.winfo_exists():
+                self.ground_popup_drag_origin = None
+                return
+            self.ground_popup_drag_origin = (
+                event.x_root,
+                event.y_root,
+                self.ground_popup.winfo_x(),
+                self.ground_popup.winfo_y(),
+            )
+        except Exception:
+            self.ground_popup_drag_origin = None
+
+    def _on_ground_popup_drag(self, event):
+        if not self.ground_popup or not self.ground_popup.winfo_exists():
+            return
+        if not self.ground_popup_drag_origin:
+            return
+        ox, oy, wx, wy = self.ground_popup_drag_origin
+        dx = event.x_root - ox
+        dy = event.y_root - oy
+        nx = wx + dx
+        ny = wy + dy
+        self.ground_popup.geometry(f"+{nx}+{ny}")
+
+    def _on_ground_popup_release(self, _event):
+        self.ground_popup_drag_origin = None
+        if self.ground_popup and self.ground_popup.winfo_exists():
+            w = self.ground_popup.winfo_width()
+            h = self.ground_popup.winfo_height()
+            x = self.ground_popup.winfo_x()
+            y = self.ground_popup.winfo_y()
+            self.config["ground_popup_geometry"] = f"{w}x{h}+{x}+{y}"
+            self._save_config_file()
+
+    def _ensure_ground_popup(self):
+        if self.ground_popup and self.ground_popup.winfo_exists():
+            return
+        self.ground_popup = tk.Toplevel(self.root)
+        self.ground_popup.withdraw()
+        self._ground_popup_visible = False
+        self.ground_popup.overrideredirect(True)
+        self.ground_popup.attributes("-topmost", True)
+        self.ground_popup.configure(bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
+        self.ground_popup.geometry(self.config.get("ground_popup_geometry", "340x140+1320+160"))
+        self.ground_popup.minsize(300, 132)
+
+        title = tk.Frame(self.ground_popup, bg="#171717", height=22)
+        title.pack(fill=tk.X)
+        title.pack_propagate(False)
+        self.ground_popup_header = tk.Label(title, text="GROUND TARGET  [DRAG]", font=("Courier", 8, "bold"), fg=COLOR_ORANGE, bg="#171717", anchor="w")
+        self.ground_popup_header.pack(fill=tk.BOTH, expand=True, padx=8)
+
+        frame = tk.Frame(self.ground_popup, bg=COLOR_PANEL)
+        frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=(6, 6))
+
+        left = tk.Frame(frame, bg=COLOR_PANEL, width=96, height=96)
+        left.pack(side=tk.LEFT, fill=tk.Y)
+        left.pack_propagate(False)
+        self.ground_popup_canvas = tk.Canvas(left, width=96, height=96, bg=COLOR_PANEL, highlightthickness=0, bd=0)
+        self.ground_popup_canvas.pack(fill=tk.BOTH, expand=True)
+
+        right = tk.Frame(frame, bg=COLOR_PANEL)
+        right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(8, 0))
+        self.ground_popup_line1 = tk.Label(right, text="-", font=("Courier", 11, "bold"), fg=COLOR_ACCENT, bg=COLOR_PANEL, anchor="w")
+        self.ground_popup_line1.pack(fill=tk.X, pady=(2, 0))
+        self.ground_popup_line2 = tk.Label(right, text="-", font=("Courier", 9), fg=COLOR_TEXT, bg=COLOR_PANEL, anchor="w")
+        self.ground_popup_line2.pack(fill=tk.X, pady=(6, 0))
+
+        for widget in (self.ground_popup, title, self.ground_popup_header, frame, left, self.ground_popup_canvas, right, self.ground_popup_line1, self.ground_popup_line2):
+            widget.bind("<ButtonPress-1>", self._on_ground_popup_press)
+            widget.bind("<B1-Motion>", self._on_ground_popup_drag)
+            widget.bind("<ButtonRelease-1>", self._on_ground_popup_release)
+
+    def _destroy_ground_popup(self):
+        if self.ground_popup and self.ground_popup.winfo_exists():
+            try:
+                self.ground_popup.destroy()
+            except Exception:
+                pass
+        self.ground_popup = None
+        self.ground_popup_header = None
+        self.ground_popup_line1 = None
+        self.ground_popup_line2 = None
+        self.ground_popup_canvas = None
+        self._ground_popup_visible = False
+        self._ground_popup_last_render_key = None
+
+    def _draw_ground_popup_compass(self, solution):
+        canvas = self.ground_popup_canvas
+        if not canvas:
+            return
+        try:
+            w = int(canvas.cget("width"))
+            h = int(canvas.cget("height"))
+        except Exception:
+            w = 96
+            h = 96
+        cx = w // 2
+        cy = h // 2
+        r = min(w, h) // 2 - 8
+
+        canvas.delete("all")
+        canvas.create_oval(cx - r, cy - r, cx + r, cy + r, outline="#555", width=1)
+        canvas.create_text(cx, cy - r - 4, text="N", fill="#999", font=("Courier", 8, "bold"))
+        canvas.create_text(cx + r + 5, cy, text="E", fill="#666", font=("Courier", 7))
+        canvas.create_text(cx, cy + r + 6, text="S", fill="#666", font=("Courier", 7))
+        canvas.create_text(cx - r - 5, cy, text="W", fill="#666", font=("Courier", 7))
+
+        # Ship forward marker is always up in this relative compass.
+        canvas.create_line(cx, cy + 2, cx, cy - r + 8, fill="#777", width=2)
+
+        rel = solution.get("heading_delta")
+        if rel is None:
+            canvas.create_text(cx, cy, text="?", fill="#888", font=("Courier", 14, "bold"))
+            return
+
+        rad = math.radians(rel)
+        tx = cx + math.sin(rad) * (r - 10)
+        ty = cy - math.cos(rad) * (r - 10)
+        color = COLOR_ACCENT if abs(rel) > 12 else "#00ff99"
+        canvas.create_line(cx, cy, tx, ty, fill=color, width=3)
+        canvas.create_oval(tx - 3, ty - 3, tx + 3, ty + 3, fill=color, outline=color)
+
+    def _update_ground_popup(self, solution):
+        t0 = self._perf_start()
+        if not bool(getattr(self, "ground_popup_enabled", True)):
+            if self.ground_popup and self.ground_popup.winfo_exists():
+                if getattr(self, "_ground_popup_visible", False):
+                    self.ground_popup.withdraw()
+                    self._ground_popup_visible = False
+            self._ground_popup_last_render_key = None
+            self._perf_spike("_update_ground_popup", t0, threshold_ms=22.0)
+            return
+        should_show = bool(self.target_latlon_active and self.on_planet and solution and solution.get("state") == "OK")
+        if not should_show:
+            if self.ground_popup and self.ground_popup.winfo_exists():
+                if getattr(self, "_ground_popup_visible", False):
+                    self.ground_popup.withdraw()
+                    self._ground_popup_visible = False
+            self._ground_popup_last_render_key = None
+            self._perf_spike("_update_ground_popup", t0, threshold_ms=22.0)
+            return
+
+        self._ensure_ground_popup()
+        if not (self.ground_popup and self.ground_popup.winfo_exists()):
+            self._perf_spike("_update_ground_popup", t0, threshold_ms=22.0)
+            return
+
+        bearing = solution["bearing"]
+        distance_txt = self._format_ground_distance(solution["distance_m"])
+        direction = solution["direction"]
+        if solution["heading_delta"] is None:
+            turn_txt = "HEADING N/A"
+        else:
+            side = "R" if solution["heading_delta"] > 0 else "L"
+            turn_txt = f"{side} {abs(solution['heading_delta']):.0f} deg"
+
+        render_key = (
+            int(round(bearing)),
+            int(round((solution.get("distance_m") or 0.0) / 10.0)),
+            None if solution.get("heading_delta") is None else int(round(solution["heading_delta"])),
+            direction,
+            distance_txt,
+            turn_txt,
+        )
+        if getattr(self, "_ground_popup_last_render_key", None) != render_key:
+            self._ground_popup_last_render_key = render_key
+            self._config_label_if_changed(self.ground_popup_line1, text=f"{direction} | {distance_txt}")
+            self._config_label_if_changed(self.ground_popup_line2, text=f"Bearing {bearing:03.0f} deg | Turn {turn_txt}")
+            self._draw_ground_popup_compass(solution)
+        if not getattr(self, "_ground_popup_visible", False):
+            self.ground_popup.deiconify()
+            self._ground_popup_visible = True
+        self._perf_spike("_update_ground_popup", t0, threshold_ms=22.0)
+
+    def _ground_target_solution(self):
+        if not getattr(self, "target_latlon_active", False):
+            return None
+        if self.current_latitude is None or self.current_longitude is None:
+            return {"state": "WAIT_POS"}
+
+        bearing = self._bearing_deg(self.current_latitude, self.current_longitude, self.target_lat, self.target_lon)
+        distance = self._surface_distance_m(
+            self.current_latitude,
+            self.current_longitude,
+            self.target_lat,
+            self.target_lon,
+            self.current_planet_radius,
+        )
+        if self.current_heading is None:
+            heading_delta = None
+            direction = "HEADING N/A"
+        else:
+            heading_delta = ((bearing - self.current_heading + 540.0) % 360.0) - 180.0
+            direction = self._format_direction(heading_delta)
+        return {
+            "state": "OK",
+            "bearing": bearing,
+            "distance_m": distance,
+            "direction": direction,
+            "heading_delta": heading_delta,
+        }
+
+    def update_ground_target_ui(self):
+        t0 = self._perf_start()
+        if not hasattr(self, "ground_status_lbl"):
+            self._perf_spike("update_ground_target_ui", t0, threshold_ms=18.0)
+            return
+        if hasattr(self, "ground_popup_toggle_btn"):
+            self._config_label_if_changed(
+                self.ground_popup_toggle_btn,
+                text="[ POPUP: ON ]" if self.ground_popup_enabled else "[ POPUP: OFF ]",
+                fg=COLOR_TEXT if self.ground_popup_enabled else "#888",
+            )
+
+        if not self.target_latlon_active:
+            self._config_label_if_changed(self.ground_status_lbl, text="Target: OFF", fg="#888")
+            self._config_label_if_changed(self.ground_detail_lbl, text="Set a lat/lon target to start tracking.", fg="#888")
+            self._update_ground_popup(None)
+            self._perf_spike("update_ground_target_ui", t0, threshold_ms=18.0)
+            return
+
+        solution = self._ground_target_solution()
+        self._config_label_if_changed(
+            self.ground_status_lbl,
+            text=f"Target: {self.target_lat:.6f}, {self.target_lon:.6f}",
+            fg=COLOR_ACCENT,
+        )
+
+        if not solution or solution.get("state") != "OK":
+            self._config_label_if_changed(self.ground_detail_lbl, text="Awaiting live planetary coordinates...", fg="#ff9a4d")
+            self._update_ground_popup(solution)
+            self._perf_spike("update_ground_target_ui", t0, threshold_ms=18.0)
+            return
+
+        bearing = solution["bearing"]
+        distance_txt = self._format_ground_distance(solution["distance_m"])
+        direction = solution["direction"]
+        if solution["heading_delta"] is None:
+            detail = f"Bearing {bearing:03.0f}° | Distance {distance_txt} | {direction}"
+        else:
+            detail = f"Bearing {bearing:03.0f}° | Distance {distance_txt} | {direction} {abs(solution['heading_delta']):.0f}°"
+        self._config_label_if_changed(self.ground_detail_lbl, text=detail, fg=COLOR_TEXT)
+        self._update_ground_popup(solution)
+        self._perf_spike("update_ground_target_ui", t0, threshold_ms=18.0)
+
     def update_dashboard_panels(self):
+        t0 = self._perf_start()
         """Refresh dashboard cards/summary without waypoint recompute."""
         sys_text = self.current_sys.upper()
         if self.star_class: sys_text += f" [{self.star_class}]"
@@ -487,7 +862,11 @@ class DashboardUIMixin:
 
         self.card_nav.line1.config(text=f"Target: {self.dest_name or 'NO ROUTE'}")
         self.card_nav.line2.config(text=f"Current: {self.current_sys}")
-        self.card_nav.line3.config(text=f"Route Progress: {route_text}")
+        gt = self._ground_target_solution()
+        if gt and gt.get("state") == "OK":
+            self.card_nav.line3.config(text=f"Ground: {gt['direction']} | {self._format_ground_distance(gt['distance_m'])}")
+        else:
+            self.card_nav.line3.config(text=f"Route Progress: {route_text}")
 
         scan_pct = int((self.scanned / self.total) * 100) if self.total > 0 else 0
         self.card_scan.line1.config(text=f"Scanned: {self.scanned}/{self.total} ({scan_pct}%)")
@@ -537,6 +916,7 @@ class DashboardUIMixin:
         self.card_ops.line3.config(text=f"Auto-Copy: {auto_copy} | Planner Open: {planner_open}")
 
         self._refresh_event_feed()
+        self._perf_spike("update_dashboard_panels", t0, threshold_ms=28.0)
 
     def update_dashboard_ui(self):
         """Force update full dashboard, including waypoint panel."""

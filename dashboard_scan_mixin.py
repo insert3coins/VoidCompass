@@ -1,10 +1,80 @@
 import math
 import time
+import threading
 
 from config import COLOR_ACCENT, COLOR_TEXT
 
 
 class DashboardScanMixin:
+    def _flush_pending_status_update(self):
+        self._status_dispatch_scheduled = False
+        data = getattr(self, "_pending_status_data", None)
+        self._pending_status_data = None
+        if data is None:
+            return
+        self._apply_status_update(data)
+
+    def _apply_status_update(self, data):
+        t0 = self._perf_start()
+        self.last_status_event_ts = time.time()
+        was_on_planet = bool(self.on_planet)
+        self.current_latitude = self._to_float(data.get("Latitude"))
+        self.current_longitude = self._to_float(data.get("Longitude"))
+        self.current_heading = self._to_float(data.get("Heading"))
+        self.current_planet_radius = self._to_float(data.get("PlanetRadius"))
+        self.on_planet = (
+            self.current_latitude is not None
+            and self.current_longitude is not None
+            and self.current_planet_radius is not None
+            and self.current_planet_radius > 0
+        )
+
+        gui_focus = data.get("GuiFocus", -1)
+        in_fss = gui_focus == 9 or gui_focus == "FSS"
+        if in_fss != self.in_fss:
+            self.in_fss = in_fss
+            if self.scan_hud:
+                if self.in_fss:
+                    if self.scan_hud_hide_job:
+                        try:
+                            self.root.after_cancel(self.scan_hud_hide_job)
+                        except Exception:
+                            pass
+                        self.scan_hud_hide_job = None
+                    self.scan_hud.show()
+                else:
+                    if self.scan_hud_hide_job:
+                        return
+                    self.scan_hud_hide_job = self.root.after(
+                        self.scan_hud_hide_delay_ms,
+                        self._hide_scan_hud_delayed
+                    )
+            if self.in_fss:
+                self.fss_summary_active = False
+            else:
+                self.fss_summary_active = True
+            if not self.batch_mode:
+                self.update_hud()
+                self.schedule_dashboard_refresh()
+
+        on_planet_changed = (was_on_planet != bool(self.on_planet))
+        status_key = None
+        if self.on_planet:
+            status_key = (
+                round(self.current_latitude, 5),
+                round(self.current_longitude, 5),
+                None if self.current_heading is None else int(round(self.current_heading)),
+                int(round(self.current_planet_radius)),
+            )
+        moved = status_key != getattr(self, "_ground_last_status_key", None)
+        self._ground_last_status_key = status_key
+
+        # Only request live ground updates while target tracking is active.
+        needs_live_ground_update = bool(self.on_planet and self.target_latlon_active and moved)
+        if on_planet_changed or needs_live_ground_update:
+            self._ground_ui_needs_update = True
+        self._perf_spike("_apply_status_update", t0, threshold_ms=20.0)
+
     def update_scan_hud(self):
         if not self.scan_hud:
             return
@@ -305,34 +375,13 @@ class DashboardScanMixin:
             item["_ts"] = int(time.time())
 
     def update_status(self, data):
-        self.last_status_event_ts = time.time()
-        gui_focus = data.get("GuiFocus", -1)
-        in_fss = gui_focus == 9 or gui_focus == "FSS"
-        if in_fss != self.in_fss:
-            self.in_fss = in_fss
-            if self.scan_hud:
-                if self.in_fss:
-                    if self.scan_hud_hide_job:
-                        try:
-                            self.root.after_cancel(self.scan_hud_hide_job)
-                        except Exception:
-                            pass
-                        self.scan_hud_hide_job = None
-                    self.scan_hud.show()
-                else:
-                    if self.scan_hud_hide_job:
-                        return
-                    self.scan_hud_hide_job = self.root.after(
-                        self.scan_hud_hide_delay_ms,
-                        self._hide_scan_hud_delayed
-                    )
-            if self.in_fss:
-                self.fss_summary_active = False
-            else:
-                self.fss_summary_active = True
-            if not self.batch_mode:
-                self.update_hud()
-                self.schedule_dashboard_refresh()
+        if threading.current_thread() is not threading.main_thread():
+            self._pending_status_data = data
+            if not getattr(self, "_status_dispatch_scheduled", False):
+                self._status_dispatch_scheduled = True
+                self.root.after(0, self._flush_pending_status_update)
+            return
+        self._apply_status_update(data)
 
     def _hide_scan_hud_delayed(self):
         self.scan_hud_hide_job = None
