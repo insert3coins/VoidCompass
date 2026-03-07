@@ -36,6 +36,8 @@ def load_config():
         'settings_geometry': '600x500',
         'ground_popup_geometry': '340x140+1320+160',
         'ground_popup_enabled': True,
+        'bio_estimate_popup_enabled': True,
+        'bio_estimate_popup_geometry': '300x340+1450+180',
         'discord_msg_system': '',
         'ground_target_active': False,
         'ground_target_lat': 0.0,

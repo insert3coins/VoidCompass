@@ -17,6 +17,16 @@ class DashboardScanMixin:
     def _apply_status_update(self, data):
         t0 = self._perf_start()
         self.last_status_event_ts = time.time()
+        self.last_gui_focus = data.get("GuiFocus", -1)
+        try:
+            self.last_status_flags = int(data.get("Flags", 0) or 0)
+        except Exception:
+            self.last_status_flags = 0
+        try:
+            self.last_status_flags2 = int(data.get("Flags2", 0) or 0)
+        except Exception:
+            self.last_status_flags2 = 0
+        self.current_body_name = data.get("BodyName") or data.get("Body")
         was_on_planet = bool(self.on_planet)
         self.current_latitude = self._to_float(data.get("Latitude"))
         self.current_longitude = self._to_float(data.get("Longitude"))
@@ -278,6 +288,7 @@ class DashboardScanMixin:
             item["icons"] = []
         if item.get("body_id") is None:
             item["body_id"] = None
+        body_id = item.get("body_id")
 
         name = item.get("name")
         if not name:
@@ -329,6 +340,11 @@ class DashboardScanMixin:
         bio_count = item.get("bio_count")
         if bio_count is None:
             bio_count = 0
+        bio_genuses = item.get("bio_genuses")
+        if bio_genuses is None:
+            bio_genuses = []
+        if body_id in self.body_signals and not bio_genuses:
+            bio_genuses = list(self.body_signals[body_id].get("genuses", []) or [])
 
         is_star = item.get("is_star")
         if is_star is None:
@@ -366,6 +382,7 @@ class DashboardScanMixin:
             "dss_reward": dss_reward,
             "dss_complete": dss_complete,
             "bio_count": bio_count,
+            "bio_genuses": bio_genuses,
             "is_star": is_star,
             "color": color,
             "icons": icons,
@@ -455,6 +472,9 @@ class DashboardScanMixin:
                     bio_count += signal.get("Count", 0)
         elif body_id in self.body_signals:
             bio_count = self.body_signals[body_id].get("bio", 0)
+        bio_genuses = []
+        if body_id in self.body_signals:
+            bio_genuses = list(self.body_signals[body_id].get("genuses", []) or [])
 
         highlight = (bio_count > 0) or (not is_star and dss_reward > reward)
         color = COLOR_ACCENT if highlight else COLOR_TEXT
@@ -482,6 +502,7 @@ class DashboardScanMixin:
             "dss_reward": dss_reward,
             "dss_complete": dss_complete,
             "bio_count": bio_count,
+            "bio_genuses": bio_genuses,
             "is_star": is_star,
             "was_discovered": was_discovered,
             "first_footfall": first_footfall,

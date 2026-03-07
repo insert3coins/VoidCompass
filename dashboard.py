@@ -26,6 +26,7 @@ from waypoint_manager import WaypointManager
 from journal_watcher import JournalWatcher
 from fleet_carrier_watcher import FleetCarrierWatcher
 from runtime_trace import RuntimeTrace
+from bio_estimate_popup import BioEstimatePopup
 from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
 from dashboard_scan_mixin import DashboardScanMixin
@@ -107,6 +108,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_longitude = None
         self.current_heading = None
         self.current_planet_radius = None
+        self.current_body_name = None
         self.on_planet = False
         self._ground_last_on_planet = False
         self.ground_popup = None
@@ -120,6 +122,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.ground_popup_enabled = bool(self.config.get("ground_popup_enabled", True))
         self._ground_ui_needs_update = False
         self._ground_last_status_key = None
+        self.last_gui_focus = -1
+        self.last_status_flags = 0
+        self.last_status_flags2 = 0
         self._pending_status_data = None
         self._status_dispatch_scheduled = False
         self.log_filter = "ALL"
@@ -148,6 +153,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             enabled=bool(self.config.get("runtime_trace_enabled", True)),
         )
         self.runtime_trace.start()
+        self.bio_popup = BioEstimatePopup(
+            self.root,
+            self.config,
+            self._save_config_file,
+            lambda v: self._format_credits(v, hide_units=False),
+        )
         
         self.setup_layout()
         self.waypoint_manager = WaypointManager()
@@ -417,6 +428,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.runtime_trace:
             try:
                 self.runtime_trace.flush(extra={"shutdown": True})
+            except Exception:
+                pass
+        if getattr(self, "bio_popup", None):
+            try:
+                self.bio_popup.destroy()
             except Exception:
                 pass
         self._destroy_ground_popup()
@@ -946,12 +962,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "body_id": body_id,
                 "body_name": body_label,
                 "species": species,
+                "genus": d.get("genus"),
                 "sample_idx": d.get("sample_idx"),
                 "scan_type": d.get("scan_type"),
                 "is_new_entry": bool(d.get("is_new_entry")),
                 "is_new_sample": bool(d.get("is_new_sample")),
                 "is_complete": is_complete,
+                "reward": d.get("reward"),
             }
+            self.save_organic_scan_to_db(self.current_sys, species_key, self.last_bio_scan[species_key])
 
             if is_complete and not was_complete:
                 self.organic_count += 1
@@ -1014,6 +1033,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.valuable_bodies.clear()
             self.system_traffic = {'day': 0, 'week': 0, 'total': 0}
             self.scan_items = self.load_scan_items_from_db(self.current_sys)
+            self.last_bio_scan = self.load_organic_scans_from_db(self.current_sys)
             self.body_signals = {}
             self.body_dss_complete = set()
             self.system_undiscovered = False
@@ -1098,6 +1118,31 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if item:
                     item["bio_count"] = bio_count
                     item["color"] = COLOR_ACCENT if (bio_count > 0 or (not item.get("is_star") and item.get("dss_reward", 0) > item.get("reward", 0))) else COLOR_TEXT
+                    if item.get("_ts") is None:
+                        item["_ts"] = int(time.time())
+                    self.save_scan_item_to_db(self.current_sys, item)
+                    if not self.batch_mode:
+                        self.update_hud()
+                        self.schedule_dashboard_refresh()
+        
+        elif ev == "SAASignalsFound":
+            body_id = self._normalize_body_id(d.get("body_id"))
+            if body_id is not None:
+                genuses = d.get("genuses") or []
+                body_sig = self.body_signals.get(body_id, {})
+                if genuses:
+                    body_sig["genuses"] = genuses
+                count = d.get("count")
+                if isinstance(count, int) and count >= 0:
+                    body_sig["bio"] = count
+                self.body_signals[body_id] = body_sig
+
+                item = self.scan_items_by_id.get(body_id)
+                if item:
+                    if genuses:
+                        item["bio_genuses"] = genuses
+                    if isinstance(count, int) and count >= 0:
+                        item["bio_count"] = count
                     if item.get("_ts") is None:
                         item["_ts"] = int(time.time())
                     self.save_scan_item_to_db(self.current_sys, item)

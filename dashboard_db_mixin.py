@@ -23,6 +23,15 @@ class DashboardDBMixin:
             self.conn.execute(
                 "CREATE TABLE IF NOT EXISTS scan_hud_items (system_name TEXT, body_id INTEGER, data_json TEXT, ts INTEGER, PRIMARY KEY (system_name, body_id))"
             )
+            self.conn.execute(
+                "CREATE TABLE IF NOT EXISTS organic_scans ("
+                "system_name TEXT, "
+                "scan_key TEXT, "
+                "data_json TEXT, "
+                "ts INTEGER, "
+                "PRIMARY KEY (system_name, scan_key)"
+                ")"
+            )
             self.conn.commit()
 
         if os.path.exists(SCAN_HISTORY_FILE):
@@ -126,6 +135,42 @@ class DashboardDBMixin:
                     (system_name, int(body_id), payload, int(ts)),
                 )
                 self._db_maybe_commit(reason="scan_item")
+        except sqlite3.Error:
+            return
+
+    def load_organic_scans_from_db(self, system_name):
+        scans = {}
+        with self.db_lock:
+            try:
+                cur = self.conn.cursor()
+                cur.execute(
+                    "SELECT scan_key, data_json FROM organic_scans WHERE system_name=?",
+                    (system_name,),
+                )
+                rows = cur.fetchall()
+                for scan_key, data_json in rows:
+                    try:
+                        item = json.loads(data_json)
+                    except Exception:
+                        continue
+                    if isinstance(scan_key, str) and isinstance(item, dict):
+                        scans[scan_key] = item
+            except sqlite3.Error:
+                return {}
+        return scans
+
+    def save_organic_scan_to_db(self, system_name, scan_key, scan_entry):
+        if not system_name or not scan_key or not isinstance(scan_entry, dict):
+            return
+        try:
+            payload = json.dumps(scan_entry)
+            ts = int(time.time())
+            with self.db_lock:
+                self.conn.execute(
+                    "INSERT OR REPLACE INTO organic_scans (system_name, scan_key, data_json, ts) VALUES (?, ?, ?, ?)",
+                    (system_name, scan_key, payload, ts),
+                )
+                self._db_maybe_commit(reason="organic_scan")
         except sqlite3.Error:
             return
 
