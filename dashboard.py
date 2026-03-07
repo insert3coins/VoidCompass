@@ -984,6 +984,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if not self.batch_mode:
                 self.update_hud()
                 self.schedule_dashboard_refresh()
+                self.update_bio_estimate_popup()
 
         elif ev == "Location" or ev == "FSDJump" or ev == "StartJump":
             # Do not update HUDs during jump charge; wait for arrival.
@@ -1121,9 +1122,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     if item.get("_ts") is None:
                         item["_ts"] = int(time.time())
                     self.save_scan_item_to_db(self.current_sys, item)
-                    if not self.batch_mode:
-                        self.update_hud()
-                        self.schedule_dashboard_refresh()
+                if not self.batch_mode:
+                    self.update_hud()
+                    self.schedule_dashboard_refresh()
+                    self.update_bio_estimate_popup()
         
         elif ev == "SAASignalsFound":
             body_id = self._normalize_body_id(d.get("body_id"))
@@ -1146,9 +1148,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     if item.get("_ts") is None:
                         item["_ts"] = int(time.time())
                     self.save_scan_item_to_db(self.current_sys, item)
-                    if not self.batch_mode:
-                        self.update_hud()
-                        self.schedule_dashboard_refresh()
+                if not self.batch_mode:
+                    self.update_hud()
+                    self.schedule_dashboard_refresh()
+                    self.update_bio_estimate_popup()
         
         elif ev == "SAAScanComplete":
             body_id = self._normalize_body_id(d.get("body_id"))
@@ -1162,9 +1165,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.save_scan_item_to_db(self.current_sys, item)
                     body_label = item.get("name") or f"Body {body_id}"
                     self.add_event_feed_entry("DSS", f"DSS complete: {body_label}", severity="INFO", copy_text=body_label)
-                    if not self.batch_mode:
-                        self.update_hud()
-                        self.schedule_dashboard_refresh()
+                if not self.batch_mode:
+                    self.update_hud()
+                    self.schedule_dashboard_refresh()
+                    self.update_bio_estimate_popup()
         
         elif ev == "Scan":
             body_name = d.get("body_name", "")
