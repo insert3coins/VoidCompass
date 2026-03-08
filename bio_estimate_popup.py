@@ -1,6 +1,5 @@
 import re
 import tkinter as tk
-import tkinter.font as tkfont
 
 from config import COLOR_ACCENT, COLOR_BG, COLOR_ORANGE, COLOR_TEXT
 
@@ -176,14 +175,6 @@ class BioEstimatePopup:
             return short or body
         return body
 
-    def _format_body_label(self, short_body):
-        s = str(short_body or "").strip()
-        # Format simple numeric+letter body IDs like "2a" / "2 a" as "2(a)".
-        m = re.match(r"^(\d+)\s*([A-Za-z])$", s)
-        if m:
-            return f"{m.group(1)}({m.group(2).lower()})"
-        return s
-
     def _natural_key(self, text):
         return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", str(text or ""))]
 
@@ -267,13 +258,7 @@ class BioEstimatePopup:
             except Exception:
                 canvas_w = 286
         canvas_w = max(260, canvas_w)
-        system_name = model.get("system_name", "")
-        labels = [self._format_body_label(self._short_body(system_name, b.get("name", ""))) for b in bodies]
-        name_font = tkfont.Font(family="Consolas", size=12)
-        max_label_px = max((name_font.measure(lbl) for lbl in labels), default=16)
-        label_gap_px = 10
-        # Keep clear spacing between body label and first bar.
-        box_left = max(40, min(120, name_x + max_label_px + label_gap_px))
+        box_left = 34
         box_w = (max_signals * 11) + 2
         value_x = box_left + box_w + 10
         # If too tight, shift bars left a little and clamp value column.
@@ -286,9 +271,10 @@ class BioEstimatePopup:
         height = top_pad + (len(bodies) * row_h) + 4
         cv.config(scrollregion=(0, 0, width, height))
 
+        system_name = model.get("system_name", "")
         # Short body IDs like 2a/3e should fit without truncation.
         char_px = 7
-        name_max_chars = max(2, int((box_left - name_x - 14) / char_px))
+        name_max_chars = max(2, int((box_left - name_x - 6) / char_px))
 
         def _fit_name(txt):
             s = str(txt or "")
@@ -300,7 +286,7 @@ class BioEstimatePopup:
 
         for i, body in enumerate(bodies):
             y = top_pad + (i * row_h)
-            short = self._format_body_label(self._short_body(system_name, body.get("name", "")))
+            short = self._short_body(system_name, body.get("name", ""))
             scanned = int(body.get("scanned", 0) or 0)
             signals = int(body.get("signals", 0) or 0)
             signals = max(0, signals)
