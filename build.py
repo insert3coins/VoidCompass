@@ -64,10 +64,6 @@ VSVersionInfo(
         '--add-data=icon.ico;.',   # Bundles the icon inside the .exe for the GUI
         '--version-file=version_info.txt'
     ]
-    if os.path.exists('codexRef.json'):
-        opts.append('--add-data=codexRef.json;.')
-    else:
-        print("⚠ codexRef.json not found in project root; build will rely on runtime download/fallback.")
 
     print("🚀 Starting Build Process...")
     PyInstaller.__main__.run(opts)
@@ -80,8 +76,5 @@ VSVersionInfo(
     if os.path.exists('mini-readme.md'):
         shutil.copy('mini-readme.md', os.path.join(dist_dir, 'UPDATE_LOG.md'))
         print("📄 Copied mini-readme.md to dist/UPDATE_LOG.txt")
-    if os.path.exists('codexRef.json'):
-        shutil.copy('codexRef.json', os.path.join(dist_dir, 'codexRef.json'))
-        print("📄 Copied codexRef.json to dist/codexRef.json")
 
     print("✅ Build Complete. Check the 'dist' folder.")

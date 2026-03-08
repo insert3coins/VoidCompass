@@ -320,22 +320,6 @@ class JournalWatcher:
                     "geo_count": geo_count
                 }
             }
-        if ev == "SAASignalsFound":
-            genuses = []
-            for g in data.get("Genuses", []) or []:
-                name = g.get("Genus_Localised") or g.get("Genus")
-                if name:
-                    genuses.append(name)
-            return {
-                "type": ev,
-                "raw": data,
-                "data": {
-                    "body_id": data.get("BodyID"),
-                    "body_name": data.get("BodyName") or data.get("Body"),
-                    "count": data.get("SignalsFound", 0),
-                    "genuses": genuses,
-                }
-            }
         if ev == "SAAScanComplete":
             return {
                 "type": ev,
@@ -361,8 +345,7 @@ class JournalWatcher:
                     "max_samples": data.get("MaxSamples", 3),
                     "biome": data.get("Biome"),
                     "planet_class": data.get("PlanetClass"),
-                    "sample_distance": data.get("SampleDistance"),
-                    "reward": data.get("Reward"),
+                    "sample_distance": data.get("SampleDistance")
                 }
             }
         if ev == "Scan":
