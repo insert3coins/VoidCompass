@@ -299,7 +299,7 @@ class DashboardUIMixin:
             bg="#0b0f13",
             fg=COLOR_TEXT,
             font=self.UI_MONO,
-            height=22,
+            height=1,
             relief=tk.FLAT,
             highlightthickness=0,
             borderwidth=0,

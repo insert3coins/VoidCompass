@@ -127,7 +127,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.event_feed_filter = "ALL"
         self.event_feed_view = []
         self.event_feed_max_entries = 150
-        self.event_feed_display_limit = 30
+        self.event_feed_display_limit = 80
         self.dashboard_refresh_job = None
         self.dashboard_refresh_full_pending = False
         self._hud_refresh_job = None
