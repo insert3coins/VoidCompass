@@ -1,7 +1,7 @@
 import tkinter as tk
-import os
 import json
-from config import CONFIG_FILE, COLOR_BG, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
+import os
+from config import CONFIG_FILE, DEPRECATED_CONFIG_KEYS, COLOR_BG, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
 
 def open_settings(root, config, on_save_callback):
     win = tk.Toplevel(root)
@@ -110,74 +110,6 @@ def open_settings(root, config, on_save_callback):
     scan_btn.pack(side=tk.RIGHT)
     update_scan_visuals()
 
-    # --- Discord Settings ---
-    sec_disc = create_section(container, "DISCORD TELEMETRY")
-    
-    # Toggle Discord
-    disc_toggle_frame = tk.Frame(sec_disc, bg=COLOR_BG)
-    disc_toggle_frame.pack(fill=tk.X, padx=15, pady=(5, 5))
-    tk.Label(disc_toggle_frame, text="Enable Discord Integration", font=("Courier", 9), fg="#888", bg=COLOR_BG).pack(side=tk.LEFT)
-    
-    disc_var = tk.BooleanVar(value=config.get("discord_enabled", True))
-    
-    def toggle_disc():
-        disc_var.set(not disc_var.get())
-        update_disc_visuals()
-        
-    def update_disc_visuals():
-        if disc_var.get():
-            disc_btn.config(text="[ ENABLED ]", fg=COLOR_ACCENT)
-        else:
-            disc_btn.config(text="[ DISABLED ]", fg="#555")
-
-    disc_btn = tk.Button(disc_toggle_frame, text="[ ENABLED ]", font=("Courier", 9, "bold"), bg=COLOR_BG, activebackground=COLOR_BG, bd=0, command=toggle_disc, cursor="hand2")
-    disc_btn.pack(side=tk.RIGHT)
-    update_disc_visuals()
-
-    # Live Updates toggle
-    disc_live_frame = tk.Frame(sec_disc, bg=COLOR_BG)
-    disc_live_frame.pack(fill=tk.X, padx=15, pady=(0, 5))
-    tk.Label(disc_live_frame, text="Live Updates Message", font=("Courier", 9), fg="#888", bg=COLOR_BG).pack(side=tk.LEFT)
-
-    disc_live_var = tk.BooleanVar(value=config.get("discord_live_enabled", True))
-
-    def toggle_disc_live():
-        disc_live_var.set(not disc_live_var.get())
-        update_disc_live_visuals()
-
-    def update_disc_live_visuals():
-        if disc_live_var.get():
-            disc_live_btn.config(text="[ ENABLED ]", fg=COLOR_ACCENT)
-        else:
-            disc_live_btn.config(text="[ DISABLED ]", fg="#555")
-
-    disc_live_btn = tk.Button(disc_live_frame, text="[ ENABLED ]", font=("Courier", 9, "bold"), bg=COLOR_BG, activebackground=COLOR_BG, bd=0, command=toggle_disc_live, cursor="hand2")
-    disc_live_btn.pack(side=tk.RIGHT)
-    update_disc_live_visuals()
-
-    # Fleet Carrier watcher toggle
-    disc_fleet_frame = tk.Frame(sec_disc, bg=COLOR_BG)
-    disc_fleet_frame.pack(fill=tk.X, padx=15, pady=(0, 5))
-    tk.Label(disc_fleet_frame, text="Fleet Carrier Watcher Message", font=("Courier", 9), fg="#888", bg=COLOR_BG).pack(side=tk.LEFT)
-
-    disc_fleet_var = tk.BooleanVar(value=config.get("discord_fleet_enabled", True))
-
-    def toggle_disc_fleet():
-        disc_fleet_var.set(not disc_fleet_var.get())
-        update_disc_fleet_visuals()
-
-    def update_disc_fleet_visuals():
-        if disc_fleet_var.get():
-            disc_fleet_btn.config(text="[ ENABLED ]", fg=COLOR_ACCENT)
-        else:
-            disc_fleet_btn.config(text="[ DISABLED ]", fg="#555")
-
-    disc_fleet_btn = tk.Button(disc_fleet_frame, text="[ ENABLED ]", font=("Courier", 9, "bold"), bg=COLOR_BG, activebackground=COLOR_BG, bd=0, command=toggle_disc_fleet, cursor="hand2")
-    disc_fleet_btn.pack(side=tk.RIGHT)
-    update_disc_fleet_visuals()
-
-    d_e = create_input(sec_disc, "Webhook URL", "discord_webhook")
-
     # --- Screenshot Settings ---
     sec_ss = create_section(container, "SCREENSHOTS")
     
@@ -211,10 +143,6 @@ def open_settings(root, config, on_save_callback):
     def save_config():
         config.update({
             "journal_path": j_e.get().strip(),
-            "discord_webhook": d_e.get().strip(),
-            "discord_enabled": disc_var.get(),
-            "discord_live_enabled": disc_live_var.get(),
-            "discord_fleet_enabled": disc_fleet_var.get(),
             "overlay_enabled": ov_var.get(),
             "cargo_overlay_enabled": cargo_var.get(),
             "scan_overlay_enabled": scan_var.get(),
@@ -222,7 +150,7 @@ def open_settings(root, config, on_save_callback):
             "screenshots_path": ss_e.get().strip(),
             "settings_geometry": win.geometry()
         })
-        for key in ("edsm_cmdr_name", "edsm_api_key", "edsm_enabled"):
+        for key in ("edsm_cmdr_name", "edsm_api_key", "edsm_enabled", *DEPRECATED_CONFIG_KEYS):
             config.pop(key, None)
         
         with open(CONFIG_FILE, 'w') as f:
@@ -233,7 +161,7 @@ def open_settings(root, config, on_save_callback):
 
     def close_window():
         config["settings_geometry"] = win.geometry()
-        for key in ("edsm_cmdr_name", "edsm_api_key", "edsm_enabled"):
+        for key in ("edsm_cmdr_name", "edsm_api_key", "edsm_enabled", *DEPRECATED_CONFIG_KEYS):
             config.pop(key, None)
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=4)

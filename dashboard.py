@@ -18,7 +18,6 @@ from hud import TacticalHUD
 from cargo_hud import CargoHUD
 from scan_hud import ScanHUD
 from edsm_handler import EDSMHandler
-from discord_handler import DiscordHandler
 from screenshot_handler import ScreenshotHandler
 from settings_ui import open_settings
 from route_plotter import RoutePlotter
@@ -157,7 +156,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         
         # Initialize Handlers
         self.edsm = EDSMHandler(self.config)
-        self.discord = DiscordHandler(self.config, self.root)
         self.screenshots = ScreenshotHandler(
             self.config,
             lambda: self.current_sys,
@@ -169,7 +167,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.config,
             self.edsm,
             self.waypoint_manager,
-            self.discord,
             self.add_event_feed_entry,
             trace_callback=self._trace_record_ms,
         )
@@ -555,15 +552,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         def on_save():
             self.log("Configuration saved successfully.")
 
-            # Live Update: Discord
-            discord_master = self.config.get("discord_enabled", True) and self.config.get("discord_webhook")
-            if discord_master:
-                live_on = "ON" if self.config.get("discord_live_enabled", True) else "OFF"
-                fleet_on = "ON" if self.config.get("discord_fleet_enabled", True) else "OFF"
-                self.log(f"Discord Integration: ACTIVE (Live: {live_on} | Fleet: {fleet_on})")
-            else:
-                self.log("Discord Integration: DISABLED")
-
             # Live Update: Screenshots
             if self.config.get("screenshots_enabled", False):
                 self.log("Screenshot Converter: ACTIVE")
@@ -604,25 +592,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         
         open_settings(self.root, self.config, on_save)
 
-    def update_live_discord(self, event_data=None):
-        if self.is_first_load:
-            return
-        state = {
-            "current_sys": self.current_sys,
-            "star_class": self.star_class,
-            "scanned": self.scanned,
-            "total": self.total,
-            "organic_count": self.organic_count,
-            "valuable_bodies": self.valuable_bodies,
-            "system_traffic": self.system_traffic,
-            "dest_name": self.dest_name,
-            "dest_coords": self.dest_coords,
-            "current_coords": self.current_coords,
-            "cmdr_name": self.cmdr_name,
-            "valuable_system": self.valuable_system
-        }
-        self.discord.update_live(event_data, state)
-
     def fetch_system_traffic(self, system_name):
         self.last_edsm_request_ts = time.time()
         def callback(traffic_data):
@@ -633,7 +602,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.system_traffic = traffic_data
                 self.update_dashboard_ui()
                 self.update_hud()
-                self.update_live_discord()
             self.root.after(0, _apply)
         
         self.edsm.fetch_traffic(system_name, callback)
@@ -961,7 +929,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 sample_txt = f" sample {sample_idx}" if sample_idx is not None else ""
                 self.add_event_feed_entry("BIO", f"Organic{sample_txt}: {species} ({body_label})", severity="INFO", copy_text=species)
 
-            self.update_live_discord(raw)
             if not self.batch_mode:
                 self.update_hud()
                 self.schedule_dashboard_refresh()
@@ -1050,11 +1017,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if next_wp:
                     self._copy_waypoint_to_clipboard(next_wp, "NEXT WAYPOINT")
 
-            if is_jump:
-                # It's a new jump, so reset the Discord message for the new system.
-                self.discord.reset_msg_id()
-            self.update_live_discord(raw)
-            
             if self.current_sys != self.last_traffic_system:
                 self.last_traffic_system = self.current_sys
                 self.fetch_system_traffic(self.current_sys)
@@ -1069,7 +1031,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
             self.log(f"🔭 HONK: {self.total} bodies detected.")
             self.add_event_feed_entry("SCAN", f"Honk complete: {self.total} bodies", severity="INFO", copy_text=self.current_sys)
-            self.update_live_discord(raw)
             if not self.batch_mode:
                 self.update_hud()
                 self.schedule_dashboard_refresh()
@@ -1183,10 +1144,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     if is_system_star_scan and d.get("was_discovered") is False:
                         self.add_event_feed_entry("ALERT", "Undiscovered system star scanned", severity="WARN", copy_text=self.current_sys)
 
-                    # --- Notification Logic ---
-                    # Since this is a new scan, we always update.
-                    self.update_live_discord(raw)
-
     def process_batch(self, events):
         self.batch_mode = True
         with self.db_lock:
@@ -1202,13 +1159,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         
         if self.is_first_load:
             self.is_first_load = False
-            if self.config.get("discord_enabled", True) and self.config.get("discord_live_enabled", True) and self.config.get("discord_msg_system") != self.current_sys:
-                self.log("Stale Discord message detected. A new message will be created.")
-                self.discord.reset_msg_id()
             self.last_traffic_system = self.current_sys
             self.fetch_system_traffic(self.current_sys)
             self.update_hud()
-            self.update_live_discord()
             self.root.after(0, self.update_waypoint_display)
             
             if self.config.get("auto_copy_waypoint", False):

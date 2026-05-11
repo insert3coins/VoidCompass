@@ -1,11 +1,11 @@
 # VoidCompass // UPDATE LOG
 
-## v2.3.3 // Fleet Carrier Watcher + Discord Feed
+## v2.3.3 // Fleet Carrier Watcher + Event Feed
 **Release Date:** 2026-Feb-16
 *   **New Fleet Carrier Watcher Window:**
     *   Added dedicated watcher UI in dashboard nav (`[ FLEET CARRIER WATCHER ]`).
     *   Added tracked fields: carrier callsign/name, status note, optional manual heading, optional departure time.
-    *   Added `OK`, `PUSH UPDATE`, and `CANCEL` actions with saved geometry/config persistence.
+    *   Added `OK` and `CANCEL` actions with saved geometry/config persistence.
 *   **Carrier Identity + Journal Sync:**
     *   Added callsign/name resolution from journal (`CarrierStats`) with carrier-id correlation.
     *   Added startup/history scan pass to restore last known carrier state from recent journals.
@@ -20,14 +20,9 @@
         *   `CarrierNameChanged`
         *   carrier-related `Docked` / `Location` cases
     *   Added explicit event-feed entries for jump request, jump complete, cancel, and location updates.
-*   **Discord Fleet Message Overhaul:**
-    *   Added dedicated fleet message flow (separate from Live Update stream).
-    *   Updated fleet embed to compact operations format with icon lines and change-aware title.
-    *   Added informative refresh reason titles (`Manual update`, `Journal event: ...`, `Distance recalculated`, etc.).
-    *   Added carrier headline format (`🛸 Carrier: ...`) and clickable links.
-*   **Fleet Discord Routing/Links:**
-    *   Carrier headline link now resolves via Inara station search.
-    *   Current location and current target lines link to EDSM system pages.
+*   **Fleet Status Preview:**
+    *   Added a compact operations preview with icon lines and change-aware carrier state.
+    *   Added informative refresh reasons (`Manual update`, `Journal event: ...`, `Distance recalculated`, etc.) for local state updates.
 *   **Fleet Targeting + Distance Logic:**
     *   Split distance tracking into:
         *   manual heading distance
@@ -40,7 +35,7 @@
     *   Hide `Heading` when manual heading is empty.
     *   Added `Current Target` label rename and destination/current-target clarity updates.
 *   **Startup Noise/Performance Guardrails (Fleet Path):**
-    *   Reduced startup fleet Discord spam by buffering historical replay into one consolidated startup update.
+    *   Reduced startup fleet watcher noise by buffering historical replay into one consolidated startup update.
     *   Added journal-tail startup read behavior to reduce launch stalls during large journal files.
 
 ## v2.3.2 // HUD Telemetry + Event Reliability
@@ -103,9 +98,8 @@
     *   Increased default window size to `1020x700` for the expanded control set.
 *   **Naming/Clarity:**
     *   Merged duplicate system/star presentation in dashboard cards for cleaner intel display.
-*   **Discord Live Output Refresh:**
-    *   Removed duplicated navigation/exploration details from the live embed for a cleaner status card.
-    *   Limited live embed description to a compact 3-line operations summary.
-    *   Moved valuable world reporting to dedicated alert posts instead of the persistent live status message.
-    *   Added trend indicators in the live embed (`Progress +N`, `Traffic ↑/↓/→`).
-    *   Switched to explicit event-based Discord color mapping (`Jump`, `Scan`, `Valuable`, `Bio`, `FSS`).
+*   **Live Status Refresh:**
+    *   Removed duplicated navigation/exploration details from the status card.
+    *   Limited status details to a compact operations summary.
+    *   Moved valuable world reporting into dedicated event-feed alerts.
+    *   Added trend indicators for progress and traffic.

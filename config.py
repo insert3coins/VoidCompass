@@ -9,6 +9,17 @@ def _get_config_file():
 
 
 CONFIG_FILE = _get_config_file()
+DEPRECATED_CONFIG_KEYS = (
+    'discord_webhook',
+    'discord_enabled',
+    'discord_live_enabled',
+    'discord_fleet_enabled',
+    'discord_msg_id',
+    'discord_msg_system',
+    'discord_fc_msg_id',
+    'discord_fc_last_status_note',
+    'discord_fc_last_state',
+)
 COLOR_BG = '#0b0b0b'
 COLOR_PANEL = '#1e1e1e'
 COLOR_ACCENT = '#00d1ff'
@@ -19,10 +30,6 @@ def load_config():
     """Loads configuration from file or returns defaults."""
     defaults = {
         'journal_path': '',
-        'discord_webhook': '',
-        'discord_enabled': True,
-        'discord_live_enabled': True,
-        'discord_fleet_enabled': True,
         'overlay_enabled': True,
         'cargo_overlay_enabled': False,
         'scan_overlay_enabled': True,
@@ -36,7 +43,6 @@ def load_config():
         'settings_geometry': '600x500',
         'ground_popup_geometry': '340x140+1320+160',
         'ground_popup_enabled': True,
-        'discord_msg_system': '',
         'ground_target_active': False,
         'ground_target_lat': 0.0,
         'ground_target_lon': 0.0,
@@ -57,6 +63,8 @@ def load_config():
         try:
             with open(CONFIG_FILE, 'r') as f:
                 data = json.load(f)
+                for key in DEPRECATED_CONFIG_KEYS:
+                    data.pop(key, None)
                 defaults.update(data)
         except Exception:
             pass

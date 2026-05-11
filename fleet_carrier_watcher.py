@@ -9,12 +9,11 @@ from config import CONFIG_FILE, COLOR_BG, COLOR_PANEL, COLOR_ACCENT, COLOR_ORANG
 
 
 class FleetCarrierWatcher:
-    def __init__(self, root, config, edsm, waypoint_manager, discord_handler, event_callback, trace_callback=None):
+    def __init__(self, root, config, edsm, waypoint_manager, event_callback, trace_callback=None):
         self.root = root
         self.config = config
         self.edsm = edsm
         self.waypoint_manager = waypoint_manager
-        self.discord = discord_handler
         self.event_callback = event_callback
         self.trace_callback = trace_callback
 
@@ -38,8 +37,8 @@ class FleetCarrierWatcher:
         if self.watch_state.get("last_change") is None:
             self.watch_state["last_change"] = ""
         self._session_start_ts = time.time()
-        self._startup_dispatch_job = None
-        self._startup_dispatch_reason = ""
+        self._startup_refresh_job = None
+        self._startup_refresh_reason = ""
         self._distance_job = 0
         self._last_journal_rescan_ts = 0.0
         self._journal_rescan_cooldown_s = 30.0
@@ -415,9 +414,8 @@ class FleetCarrierWatcher:
             def _finish_if_ready():
                 if heading_done and target_done:
                     self._save_config()
-                    self._refresh_preview()
-                    if not self._startup_dispatch_reason:
-                        self._dispatch_discord("Distance recalculated")
+                    if not self._startup_refresh_reason:
+                        self._refresh_preview()
 
             def _calc_distance_and_store(c2, key):
                 if c1 and c2:
@@ -465,49 +463,42 @@ class FleetCarrierWatcher:
 
         self.edsm.fetch_system_coords(last_loc, _loc_cb)
 
-    def _dispatch_discord(self, reason):
-        payload = self.build_discord_state()
-        payload["refresh_reason"] = reason or "Watcher refresh"
-        self.discord.update_fleet_carrier(payload)
-
     def _is_historical_event(self, raw):
         ts = self._parse_journal_ts(raw) if isinstance(raw, dict) else None
         return bool(ts and ts < (self._session_start_ts - 2))
 
-    def _buffer_startup_dispatch(self, reason):
-        self._startup_dispatch_reason = reason or "Journal sync"
-        if self._startup_dispatch_job and self.root:
+    def _buffer_startup_refresh(self, reason):
+        self._startup_refresh_reason = reason or "Journal sync"
+        if self._startup_refresh_job and self.root:
             try:
-                self.root.after_cancel(self._startup_dispatch_job)
+                self.root.after_cancel(self._startup_refresh_job)
             except Exception:
                 pass
         if not self.root:
             return
-        self._startup_dispatch_job = self.root.after(1200, self._flush_startup_dispatch)
+        self._startup_refresh_job = self.root.after(1200, self._flush_startup_refresh)
 
-    def _flush_startup_dispatch(self):
-        self._startup_dispatch_job = None
-        if not self._startup_dispatch_reason:
+    def _flush_startup_refresh(self):
+        self._startup_refresh_job = None
+        if not self._startup_refresh_reason:
             return
-        reason = self._startup_dispatch_reason
-        self._startup_dispatch_reason = ""
-        self._dispatch_discord(f"Startup sync: {reason}")
+        self._startup_refresh_reason = ""
+        self._refresh_preview()
 
-    def _dispatch_from_event(self, reason, raw):
+    def _refresh_from_event(self, reason, raw):
         if self._is_historical_event(raw):
-            self._buffer_startup_dispatch(reason)
+            self._buffer_startup_refresh(reason)
             return
-        # Live event arrived; cancel any pending startup flush.
-        self._startup_dispatch_reason = ""
-        if self._startup_dispatch_job and self.root:
+        self._startup_refresh_reason = ""
+        if self._startup_refresh_job and self.root:
             try:
-                self.root.after_cancel(self._startup_dispatch_job)
+                self.root.after_cancel(self._startup_refresh_job)
             except Exception:
                 pass
-            self._startup_dispatch_job = None
-        self._dispatch_discord(reason)
+            self._startup_refresh_job = None
+        self._refresh_preview()
 
-    def build_discord_state(self):
+    def build_status_preview(self):
         resolved_name = (self.watch_state.get("resolved_name") or "").strip()
         name = resolved_name or self.watch_name or "UNSET CARRIER"
         callsign = None
@@ -594,7 +585,7 @@ class FleetCarrierWatcher:
     def _refresh_preview(self):
         if not self.window or not self.window.winfo_exists():
             return
-        payload = self.build_discord_state()
+        payload = self.build_status_preview()
         preview = "\n".join(payload.get("lines", []))
         try:
             self.preview_text.config(state=tk.NORMAL)
@@ -647,7 +638,7 @@ class FleetCarrierWatcher:
         self.departure_entry.pack(fill=tk.X, pady=(2, 0), ipady=4)
         self.departure_entry.insert(0, self.watch_departure)
 
-        tk.Label(dlg, text="Discord Preview:", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_BG).pack(anchor="w", padx=14, pady=(8, 4))
+        tk.Label(dlg, text="Status Preview:", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_BG).pack(anchor="w", padx=14, pady=(8, 4))
         self.preview_text = tk.Text(dlg, bg="#111", fg=COLOR_TEXT, font=("Courier", 9), height=10, relief=tk.FLAT, highlightthickness=1, highlightbackground="#333", wrap=tk.WORD)
         self.preview_text.pack(fill=tk.BOTH, expand=True, padx=14, pady=(0, 10))
         self.preview_text.config(state=tk.DISABLED)
@@ -671,25 +662,6 @@ class FleetCarrierWatcher:
             self._update_distance_async()
             self._refresh_preview()
             self._emit_event("SYSTEM", f"Fleet watcher updated: {self.watch_name or 'UNSET'}", severity="INFO", copy_text=self.watch_name or "")
-            self._dispatch_discord("Manual update (OK)")
-
-        def _push():
-            # Mirror save semantics so PUSH UPDATE uses current form values.
-            self.watch_name = self.name_entry.get().strip()
-            self.watch_status = self.status_entry.get().strip()
-            self.watch_destination = self.destination_entry.get().strip()
-            self.watch_departure = self.departure_entry.get().strip()
-            self.watch_state["status_note"] = self.watch_status
-            self._save_config()
-            _changed, found = self._scan_journal_for_watched()
-            if not found:
-                self._emit_event("ALERT", f"No journal matches found for carrier: {self.watch_name or 'UNSET'}", severity="WARN", copy_text=self.watch_name or "")
-            if self.watch_departure and self._parse_manual_departure(self.watch_departure) is None:
-                self._emit_event("ALERT", "Invalid departure format. Use YYYY-MM-DD HH:MM or epoch seconds.", severity="WARN", copy_text=self.watch_departure)
-            self._update_distance_async()
-            self._refresh_preview()
-            self._dispatch_discord("Manual push update")
-            self._emit_event("SYSTEM", "Fleet watcher pushed to Discord", severity="INFO")
 
         def _cancel():
             self.config["fleet_carrier_watcher_geometry"] = dlg.geometry()
@@ -701,7 +673,6 @@ class FleetCarrierWatcher:
             _cancel()
 
         tk.Button(btn_row, text="CANCEL", command=_cancel, bg="#222", fg="#888", font=("Courier", 9, "bold"), relief=tk.FLAT, width=10).pack(side=tk.LEFT)
-        tk.Button(btn_row, text="PUSH UPDATE", command=_push, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9, "bold"), relief=tk.FLAT, width=14).pack(side=tk.LEFT, padx=6)
         tk.Button(btn_row, text="OK", command=_ok, bg=COLOR_ACCENT, fg="black", font=("Courier", 9, "bold"), relief=tk.FLAT, width=10).pack(side=tk.RIGHT)
         dlg.protocol("WM_DELETE_WINDOW", _cancel)
 
@@ -746,7 +717,7 @@ class FleetCarrierWatcher:
             self.watch_state["last_change"] = "Carrier stats updated"
             self._save_config()
             self._refresh_preview()
-            self._dispatch_from_event("Journal event: CarrierStats", raw)
+            self._refresh_from_event("Journal event: CarrierStats", raw)
             return
 
         if ev == "CarrierLocation":
@@ -759,7 +730,7 @@ class FleetCarrierWatcher:
             self._save_config()
             self._emit_event("SYSTEM", f"Carrier location update: {sys_name}", severity="INFO", copy_text=sys_name)
             self._refresh_preview()
-            self._dispatch_from_event("Journal event: CarrierLocation", raw)
+            self._refresh_from_event("Journal event: CarrierLocation", raw)
             return
 
         if ev == "Docked":
@@ -777,7 +748,7 @@ class FleetCarrierWatcher:
                 self._save_config()
                 self._emit_event("SYSTEM", f"Carrier docked at {sys_name}", severity="INFO", copy_text=station_name or self.watch_name)
                 self._refresh_preview()
-                self._dispatch_from_event("Journal event: Docked", raw)
+                self._refresh_from_event("Journal event: Docked", raw)
                 return
 
         if ev == "Location" and raw.get("Docked") and raw.get("StationType") == "FleetCarrier":
@@ -790,7 +761,7 @@ class FleetCarrierWatcher:
             self._save_config()
             self._emit_event("SYSTEM", f"Carrier location update: {sys_name}", severity="INFO", copy_text=sys_name)
             self._refresh_preview()
-            self._dispatch_from_event("Journal event: Location", raw)
+            self._refresh_from_event("Journal event: Location", raw)
             return
 
         if ev == "CarrierJumpRequest":
@@ -810,7 +781,7 @@ class FleetCarrierWatcher:
             self._update_distance_async()
             self._emit_event("SYSTEM", f"Carrier jump requested to {dest or 'Unknown'}", severity="WARN", copy_text=dest or self.watch_name)
             self._refresh_preview()
-            self._dispatch_from_event("Journal event: CarrierJumpRequest", raw)
+            self._refresh_from_event("Journal event: CarrierJumpRequest", raw)
             return
 
         if ev == "CarrierJump":
@@ -832,14 +803,14 @@ class FleetCarrierWatcher:
                 )
             self._emit_event("SYSTEM", f"Carrier arrived in {arrived}", severity="INFO", copy_text=arrived)
             self._refresh_preview()
-            self._dispatch_from_event("Journal event: CarrierJump", raw)
+            self._refresh_from_event("Journal event: CarrierJump", raw)
             return
 
         if ev == "CarrierNameChanged":
             if name_changed:
                 self._save_config()
                 self._refresh_preview()
-                self._dispatch_from_event("Journal event: CarrierNameChanged", raw)
+                self._refresh_from_event("Journal event: CarrierNameChanged", raw)
             return
 
         if ev == "CarrierJumpCancelled":
@@ -852,7 +823,7 @@ class FleetCarrierWatcher:
             self._save_config()
             self._emit_event("SYSTEM", "Carrier jump cancelled", severity="WARN", copy_text=self.watch_name)
             self._refresh_preview()
-            self._dispatch_from_event("Journal event: CarrierJumpCancelled", raw)
+            self._refresh_from_event("Journal event: CarrierJumpCancelled", raw)
         if callable(self.trace_callback):
             try:
                 self.trace_callback(f"fleet.process_event:{ev}", (time.perf_counter() - t0) * 1000.0)

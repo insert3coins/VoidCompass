@@ -8,7 +8,7 @@ from version import APP_VERSION
 if __name__ == '__main__':
     # Clean up previous build artifacts
     if os.path.exists('build'):
-        print("🧹 Removing previous build folder...")
+        print("Removing previous build folder...")
         shutil.rmtree('build')
 
     # Convert "1.3.0" -> (1, 3, 0, 0) for Windows Version Info
@@ -65,7 +65,7 @@ VSVersionInfo(
         '--version-file=version_info.txt'
     ]
 
-    print("🚀 Starting Build Process...")
+    print("Starting build process...")
     PyInstaller.__main__.run(opts)
     
     if os.path.exists('version_info.txt'):
@@ -75,6 +75,6 @@ VSVersionInfo(
     # Copy mini-readme.md to dist as UPDATE_LOG.md
     if os.path.exists('mini-readme.md'):
         shutil.copy('mini-readme.md', os.path.join(dist_dir, 'UPDATE_LOG.md'))
-        print("📄 Copied mini-readme.md to dist/UPDATE_LOG.txt")
+        print("Copied mini-readme.md to dist/UPDATE_LOG.md")
 
-    print("✅ Build Complete. Check the 'dist' folder.")
+    print("Build complete. Check the 'dist' folder.")

@@ -82,7 +82,7 @@ class DashboardUIMixin:
         status_card = tk.Frame(self.side, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
         status_card.pack(fill=tk.X, padx=10, pady=(10, 8))
         tk.Label(status_card, text="STATUS", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(6, 0))
-        self.integration_lbl = tk.Label(status_card, text="HUD: ON | DISCORD: OFF | SHOTS: OFF", font=("Courier", 8), fg="#999", bg=COLOR_PANEL, anchor="w")
+        self.integration_lbl = tk.Label(status_card, text="HUD: ON | SHOTS: OFF", font=("Courier", 8), fg="#999", bg=COLOR_PANEL, anchor="w")
         self.integration_lbl.pack(fill=tk.X, padx=10, pady=(2, 8))
 
         metrics_card = tk.Frame(self.side, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
@@ -928,11 +928,8 @@ class DashboardUIMixin:
         self.card_session.line3.config(text=f"Avg Jump: {avg_jump:,.1f} LY")
 
         hud_on = "ON" if self.hud else "OFF"
-        discord_master = self.config.get("discord_enabled", True) and self.config.get("discord_webhook")
-        any_discord_channel = self.config.get("discord_live_enabled", True) or self.config.get("discord_fleet_enabled", True)
-        disc_on = "ON" if (discord_master and any_discord_channel) else "OFF"
         shots_on = "ON" if self.config.get("screenshots_enabled", False) else "OFF"
-        self.integration_lbl.config(text=f"HUD: {hud_on} | DISCORD: {disc_on} | SHOTS: {shots_on}")
+        self.integration_lbl.config(text=f"HUD: {hud_on} | SHOTS: {shots_on}")
 
         alerts = []
         if self.system_undiscovered:
