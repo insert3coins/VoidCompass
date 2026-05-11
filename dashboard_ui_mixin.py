@@ -6,11 +6,26 @@ import webbrowser
 from datetime import datetime
 from tkinter import scrolledtext
 
-from config import COLOR_BG, COLOR_PANEL, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, COLOR_GREEN
+from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
 from version import APP_VERSION
 
 
 class DashboardUIMixin:
+    UI_BG = "#080a0d"
+    UI_PANEL = "#12161b"
+    UI_PANEL_2 = "#171d23"
+    UI_BORDER = "#26313a"
+    UI_MUTED = "#7d8891"
+    UI_DIM = "#4e5962"
+    UI_FAIL = "#ff5c5c"
+    UI_WARN = "#ff9a3c"
+    UI_OK = "#21d189"
+    UI_FONT = ("Segoe UI", 9)
+    UI_FONT_BOLD = ("Segoe UI", 9, "bold")
+    UI_FONT_TITLE = ("Segoe UI", 13, "bold")
+    UI_MONO = ("Consolas", 9)
+    UI_MONO_BOLD = ("Consolas", 10, "bold")
+
     def _config_label_if_changed(self, widget, text=None, fg=None):
         try:
             current_text = widget.cget("text")
@@ -29,121 +44,161 @@ class DashboardUIMixin:
         if kwargs:
             widget.config(**kwargs)
 
+    def _panel(self, parent, bg=None, border=None):
+        return tk.Frame(
+            parent,
+            bg=bg or self.UI_PANEL,
+            highlightbackground=border or self.UI_BORDER,
+            highlightthickness=1,
+            bd=0,
+        )
+
+    def _section_label(self, parent, text, fg=None, bg=None):
+        return tk.Label(
+            parent,
+            text=text,
+            font=self.UI_FONT_BOLD,
+            fg=fg or COLOR_ORANGE,
+            bg=bg or parent.cget("bg"),
+            anchor="w",
+        )
+
+    def _action_button(self, parent, text, command, accent=False, muted=False):
+        bg = COLOR_ACCENT if accent else parent.cget("bg")
+        fg = "black" if accent else (self.UI_DIM if muted else COLOR_TEXT)
+        return tk.Button(
+            parent,
+            text=text,
+            command=command,
+            bg=bg,
+            fg=fg,
+            activebackground=COLOR_ACCENT if accent else self.UI_PANEL_2,
+            activeforeground="black" if accent else COLOR_TEXT,
+            font=self.UI_FONT_BOLD,
+            relief=tk.FLAT,
+            bd=0,
+            padx=10,
+            pady=4,
+            cursor="hand2",
+        )
+
     def setup_layout(self):
-        self.nav = tk.Frame(self.root, bg=COLOR_PANEL, height=50, highlightbackground=COLOR_ACCENT, highlightthickness=1)
-        self.nav.pack(fill=tk.X, padx=10, pady=(10, 0))
-        
-        tk.Label(self.nav, text=f" > VOID COMPASS // V{APP_VERSION}", font=("Courier", 11, "bold"), fg=COLOR_ACCENT, bg=COLOR_PANEL).pack(side=tk.LEFT, padx=15)
-        
-        btn_conf = tk.Button(self.nav, text="[ CONFIGURATION ]", command=self.open_settings, bg=COLOR_PANEL, fg=COLOR_ORANGE, font=("Courier", 9, "bold"), relief=tk.FLAT)
-        btn_conf.pack(side=tk.RIGHT, padx=15)
+        self.root.configure(bg=self.UI_BG)
 
-        # Route Button
-        btn_route = tk.Button(self.nav, text="[ ROUTE PLANNER ]", command=self.open_route_planner, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9, "bold"), relief=tk.FLAT)
-        btn_route.pack(side=tk.RIGHT, padx=5)
+        self.nav = tk.Frame(self.root, bg="#0c1014", height=54)
+        self.nav.pack(fill=tk.X, padx=12, pady=(12, 0))
+        self.nav.pack_propagate(False)
 
-        # Fleet Carrier Watcher Button
-        btn_fc = tk.Button(self.nav, text="[ FLEET CARRIER WATCHER ]", command=self.open_fleet_carrier_watcher, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9, "bold"), relief=tk.FLAT)
-        btn_fc.pack(side=tk.RIGHT, padx=5)
-        
-        # Screenshot Button
-        btn_ss = tk.Button(self.nav, text="[ SCREENSHOTS ]", command=self.open_screenshots_folder, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9, "bold"), relief=tk.FLAT)
-        btn_ss.pack(side=tk.RIGHT, padx=5)
+        brand = tk.Frame(self.nav, bg="#0c1014")
+        brand.pack(side=tk.LEFT, fill=tk.Y, padx=(14, 8))
+        tk.Label(brand, text="VOID COMPASS", font=("Segoe UI", 15, "bold"), fg=COLOR_ACCENT, bg="#0c1014").pack(anchor="w", pady=(7, 0))
+        tk.Label(brand, text=f"EXPLORATION COMMAND DECK  //  v{APP_VERSION}", font=("Segoe UI", 8, "bold"), fg=self.UI_MUTED, bg="#0c1014").pack(anchor="w")
 
-        self.summary_bar = tk.Frame(self.root, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1, height=34)
-        self.summary_bar.pack(fill=tk.X, padx=10, pady=(8, 0))
-        self.summary_bar.pack_propagate(False)
+        nav_actions = tk.Frame(self.nav, bg="#0c1014")
+        nav_actions.pack(side=tk.RIGHT, fill=tk.Y, padx=10)
+        self._action_button(nav_actions, "Configuration", self.open_settings, accent=True).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
+        self._action_button(nav_actions, "Screenshots", self.open_screenshots_folder).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
+        self._action_button(nav_actions, "Fleet Watcher", self.open_fleet_carrier_watcher).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
+        self._action_button(nav_actions, "Route Planner", self.open_route_planner).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
 
-        def _summary_item(text):
-            lbl = tk.Label(self.summary_bar, text=text, font=("Courier", 9, "bold"), fg=COLOR_TEXT, bg=COLOR_PANEL)
-            lbl.pack(side=tk.LEFT, padx=14)
+        self.summary_bar = tk.Frame(self.root, bg=self.UI_BG)
+        self.summary_bar.pack(fill=tk.X, padx=12, pady=(10, 0))
+
+        def _summary_item(text, accent=False):
+            wrap = tk.Frame(self.summary_bar, bg=self.UI_PANEL_2, highlightbackground=self.UI_BORDER, highlightthickness=1)
+            wrap.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
+            lbl = tk.Label(
+                wrap,
+                text=text,
+                font=self.UI_MONO_BOLD,
+                fg=COLOR_ACCENT if accent else COLOR_TEXT,
+                bg=self.UI_PANEL_2,
+                anchor="w",
+            )
+            lbl.pack(fill=tk.X, padx=10, pady=7)
             return lbl
 
-        self.summary_sys = _summary_item("SYS: ---")
+        self.summary_sys = _summary_item("SYS: ---", accent=True)
         self.summary_route = _summary_item("ROUTE: INACTIVE")
         self.summary_scan = _summary_item("SCAN: 0/0")
         self.summary_traffic = _summary_item("TRAFFIC: 0/0/0")
         self.summary_session = _summary_item("SESSION: 00:00:00")
 
-        self.alert_bar = tk.Frame(self.root, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1, height=30)
-        self.alert_bar.pack(fill=tk.X, padx=10, pady=(6, 0))
-        self.alert_bar.pack_propagate(False)
-        tk.Label(self.alert_bar, text="ALERTS", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(side=tk.LEFT, padx=(10, 8))
-        self.alert_lbl = tk.Label(self.alert_bar, text="NONE", font=("Courier", 9), fg="#888", bg=COLOR_PANEL, anchor="w")
-        self.alert_lbl.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        body = tk.Frame(self.root, bg=self.UI_BG)
+        body.pack(fill=tk.BOTH, expand=True, padx=12, pady=10)
 
-        body = tk.Frame(self.root, bg=COLOR_BG)
-        body.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        self.side = tk.Frame(body, bg=COLOR_PANEL, width=320, highlightbackground="#333", highlightthickness=1)
+        self.side = tk.Frame(body, bg=self.UI_BG, width=310)
         self.side.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
         self.side.pack_propagate(False)
 
-        status_card = tk.Frame(self.side, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
-        status_card.pack(fill=tk.X, padx=10, pady=(10, 8))
-        tk.Label(status_card, text="STATUS", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(6, 0))
-        self.integration_lbl = tk.Label(status_card, text="HUD: ON | SHOTS: OFF", font=("Courier", 8), fg="#999", bg=COLOR_PANEL, anchor="w")
-        self.integration_lbl.pack(fill=tk.X, padx=10, pady=(2, 8))
+        status_card = self._panel(self.side)
+        status_card.pack(fill=tk.X, pady=(0, 10))
+        self._section_label(status_card, "SHIP SYSTEMS").pack(anchor="w", padx=12, pady=(9, 0))
+        self.integration_lbl = tk.Label(status_card, text="HUD: ON | SHOTS: OFF", font=self.UI_MONO, fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w")
+        self.integration_lbl.pack(fill=tk.X, padx=12, pady=(3, 10))
 
-        metrics_card = tk.Frame(self.side, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
-        metrics_card.pack(fill=tk.X, padx=10, pady=8)
-        tk.Label(metrics_card, text="PINNED METRICS", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(6, 0))
+        metrics_card = self._panel(self.side)
+        metrics_card.pack(fill=tk.X, pady=(0, 10))
+        self._section_label(metrics_card, "PRIMARY TELEMETRY").pack(anchor="w", padx=12, pady=(9, 0))
         self.sys_stat = self.create_stat(metrics_card, "CURRENT SYSTEM", "---")
         self.nav_stat = self.create_stat(metrics_card, "NAV TARGET", "---")
         self.scan_stat = self.create_stat(metrics_card, "SCAN PROGRESS", "0 / 0")
 
-        self.ground_panel = tk.Frame(self.side, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
-        self.ground_panel.pack(fill=tk.X, padx=10, pady=8)
-        tk.Label(self.ground_panel, text="GROUND TARGET", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(6, 2))
-        input_row = tk.Frame(self.ground_panel, bg=COLOR_PANEL)
-        input_row.pack(fill=tk.X, padx=10, pady=(0, 4))
-        tk.Label(input_row, text="LAT", font=("Courier", 8), fg="#999", bg=COLOR_PANEL).grid(row=0, column=0, sticky="w")
-        tk.Label(input_row, text="LON", font=("Courier", 8), fg="#999", bg=COLOR_PANEL).grid(row=0, column=2, sticky="w", padx=(8, 0))
-        self.ground_lat_entry = tk.Entry(input_row, width=10, bg="#111", fg=COLOR_TEXT, font=("Courier", 9), insertbackground=COLOR_ACCENT, relief=tk.FLAT)
+        self.ground_panel = self._panel(self.side)
+        self.ground_panel.pack(fill=tk.X, pady=(0, 10))
+        self._section_label(self.ground_panel, "GROUND TARGET").pack(anchor="w", padx=12, pady=(9, 3))
+        input_row = tk.Frame(self.ground_panel, bg=self.UI_PANEL)
+        input_row.pack(fill=tk.X, padx=12, pady=(0, 6))
+        tk.Label(input_row, text="LAT", font=("Segoe UI", 8, "bold"), fg=self.UI_MUTED, bg=self.UI_PANEL).grid(row=0, column=0, sticky="w")
+        tk.Label(input_row, text="LON", font=("Segoe UI", 8, "bold"), fg=self.UI_MUTED, bg=self.UI_PANEL).grid(row=0, column=2, sticky="w", padx=(8, 0))
+        self.ground_lat_entry = tk.Entry(input_row, width=10, bg="#090c10", fg=COLOR_TEXT, font=self.UI_MONO, insertbackground=COLOR_ACCENT, relief=tk.FLAT)
         self.ground_lat_entry.grid(row=1, column=0, sticky="ew")
-        self.ground_lon_entry = tk.Entry(input_row, width=10, bg="#111", fg=COLOR_TEXT, font=("Courier", 9), insertbackground=COLOR_ACCENT, relief=tk.FLAT)
+        self.ground_lon_entry = tk.Entry(input_row, width=10, bg="#090c10", fg=COLOR_TEXT, font=self.UI_MONO, insertbackground=COLOR_ACCENT, relief=tk.FLAT)
         self.ground_lon_entry.grid(row=1, column=2, sticky="ew", padx=(8, 0))
         input_row.grid_columnconfigure(0, weight=1)
         input_row.grid_columnconfigure(2, weight=1)
 
-        btn_row = tk.Frame(self.ground_panel, bg=COLOR_PANEL)
-        btn_row.pack(fill=tk.X, padx=10, pady=(0, 4))
-        tk.Button(btn_row, text="[ SET ]", command=self.set_ground_target_from_entries, bg=COLOR_ACCENT, fg="black", font=("Courier", 8, "bold"), relief=tk.FLAT).pack(side=tk.LEFT)
-        tk.Button(btn_row, text="[ HERE ]", command=self.set_ground_target_here, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 8, "bold"), relief=tk.FLAT).pack(side=tk.LEFT, padx=(6, 0))
-        tk.Button(btn_row, text="[ CLEAR ]", command=self.clear_ground_target, bg=COLOR_PANEL, fg="#aaa", font=("Courier", 8, "bold"), relief=tk.FLAT).pack(side=tk.LEFT, padx=(6, 0))
+        btn_row = tk.Frame(self.ground_panel, bg=self.UI_PANEL)
+        btn_row.pack(fill=tk.X, padx=12, pady=(0, 6))
+        self._action_button(btn_row, "Set", self.set_ground_target_from_entries, accent=True).pack(side=tk.LEFT)
+        self._action_button(btn_row, "Here", self.set_ground_target_here).pack(side=tk.LEFT, padx=(6, 0))
+        self._action_button(btn_row, "Clear", self.clear_ground_target, muted=True).pack(side=tk.LEFT, padx=(6, 0))
         self.ground_popup_toggle_btn = tk.Button(
             btn_row,
-            text="[ POPUP: ON ]" if getattr(self, "ground_popup_enabled", True) else "[ POPUP: OFF ]",
+            text="Popup On" if getattr(self, "ground_popup_enabled", True) else "Popup Off",
             command=self.toggle_ground_popup,
-            bg=COLOR_PANEL,
-            fg="#aaa",
-            font=("Courier", 8, "bold"),
+            bg=self.UI_PANEL,
+            fg=self.UI_MUTED,
+            font=self.UI_FONT_BOLD,
             relief=tk.FLAT,
+            bd=0,
+            cursor="hand2",
         )
         self.ground_popup_toggle_btn.pack(side=tk.RIGHT)
-        self.ground_status_lbl = tk.Label(self.ground_panel, text="Target: OFF", font=("Courier", 8, "bold"), fg="#888", bg=COLOR_PANEL, anchor="w")
-        self.ground_status_lbl.pack(fill=tk.X, padx=10, pady=(0, 2))
-        self.ground_detail_lbl = tk.Label(self.ground_panel, text="Waiting for planetary coordinates.", font=("Courier", 8), fg="#888", bg=COLOR_PANEL, anchor="w")
-        self.ground_detail_lbl.pack(fill=tk.X, padx=10, pady=(0, 8))
+        self.ground_status_lbl = tk.Label(self.ground_panel, text="Target: OFF", font=self.UI_MONO_BOLD, fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w")
+        self.ground_status_lbl.pack(fill=tk.X, padx=12, pady=(0, 2))
+        self.ground_detail_lbl = tk.Label(self.ground_panel, text="Waiting for planetary coordinates.", font=self.UI_MONO, fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w")
+        self.ground_detail_lbl.pack(fill=tk.X, padx=12, pady=(0, 10))
 
-        self.wp_panel = tk.Frame(self.side, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1, height=180)
-        self.wp_panel.pack(fill=tk.X, padx=10, pady=8)
+        self.wp_panel = self._panel(self.side, border=COLOR_ACCENT)
+        self.wp_panel.pack(fill=tk.X, pady=(0, 10))
         self.wp_panel.pack_propagate(False)
-        header_row = tk.Frame(self.wp_panel, bg=COLOR_PANEL)
-        header_row.pack(fill=tk.X, padx=10, pady=(5, 0))
-        tk.Label(header_row, text="ROUTE NOTES", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(side=tk.LEFT)
-        self.wp_dist_lbl = tk.Label(header_row, text="", font=("Courier", 9, "bold"), fg=COLOR_ACCENT, bg=COLOR_PANEL)
+        self.wp_panel.config(height=170)
+        header_row = tk.Frame(self.wp_panel, bg=self.UI_PANEL)
+        header_row.pack(fill=tk.X, padx=12, pady=(9, 0))
+        self._section_label(header_row, "ROUTE NOTES").pack(side=tk.LEFT)
+        self.wp_dist_lbl = tk.Label(header_row, text="", font=self.UI_MONO_BOLD, fg=COLOR_ACCENT, bg=self.UI_PANEL)
         self.wp_dist_lbl.pack(side=tk.RIGHT)
-        self.wp_name_lbl = tk.Label(self.wp_panel, text="NO ACTIVE ROUTE", font=("Courier", 12, "bold"), fg=COLOR_TEXT, bg=COLOR_PANEL, anchor="w")
-        self.wp_name_lbl.pack(fill=tk.X, padx=10, pady=(6, 0))
-        self.wp_info_wrap = tk.Frame(self.wp_panel, bg=COLOR_PANEL)
-        self.wp_info_wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=(2, 6))
+        self.wp_name_lbl = tk.Label(self.wp_panel, text="NO ACTIVE ROUTE", font=("Segoe UI", 12, "bold"), fg=COLOR_TEXT, bg=self.UI_PANEL, anchor="w")
+        self.wp_name_lbl.pack(fill=tk.X, padx=12, pady=(6, 0))
+        self.wp_info_wrap = tk.Frame(self.wp_panel, bg=self.UI_PANEL)
+        self.wp_info_wrap.pack(fill=tk.BOTH, expand=True, padx=12, pady=(2, 8))
         self.wp_info_scroll = tk.Scrollbar(self.wp_info_wrap, orient=tk.VERTICAL)
         self.wp_info_text = tk.Text(
             self.wp_info_wrap,
-            bg=COLOR_PANEL,
-            fg="#aaa",
-            font=("Courier", 8),
+            bg=self.UI_PANEL,
+            fg=self.UI_MUTED,
+            font=self.UI_MONO,
             relief=tk.FLAT,
             borderwidth=0,
             highlightthickness=0,
@@ -160,69 +215,84 @@ class DashboardUIMixin:
         self.wp_info_text.bind("<Leave>", lambda e: self._toggle_wp_scrollbar(False))
         self.wp_info_text.bind("<MouseWheel>", self._on_wp_info_wheel)
 
-        side_actions = tk.Frame(self.side, bg=COLOR_PANEL)
-        side_actions.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
-        tk.Button(side_actions, text="[ REBUILD CACHE ]", command=self.scan_all_logs_threaded, bg=COLOR_PANEL, fg="#777", font=("Courier", 8, "bold"), relief=tk.FLAT, activebackground=COLOR_PANEL, activeforeground=COLOR_TEXT).pack(side=tk.LEFT)
-        tk.Label(side_actions, text="© 2026 insert3coins", font=("Courier", 8), fg="#444", bg=COLOR_PANEL).pack(side=tk.RIGHT)
+        side_actions = tk.Frame(self.side, bg=self.UI_BG)
+        side_actions.pack(side=tk.BOTTOM, fill=tk.X)
+        self._action_button(side_actions, "Rebuild Cache", self.scan_all_logs_threaded, muted=True).pack(side=tk.LEFT)
+        tk.Label(side_actions, text="2026 insert3coins", font=("Segoe UI", 8), fg=self.UI_DIM, bg=self.UI_BG).pack(side=tk.RIGHT, pady=6)
 
-        center = tk.Frame(body, bg=COLOR_BG)
-        center.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        center = tk.Frame(body, bg=self.UI_BG)
+        center.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
 
-        ops = tk.Frame(center, bg=COLOR_BG)
-        ops.pack(fill=tk.X)
-        for col in range(3):
+        self.alert_bar = self._panel(center, bg=self.UI_PANEL_2)
+        self.alert_bar.pack(fill=tk.X, pady=(0, 10))
+        tk.Label(self.alert_bar, text="ALERTS", font=self.UI_FONT_BOLD, fg=COLOR_ORANGE, bg=self.UI_PANEL_2).pack(side=tk.LEFT, padx=(12, 8), pady=8)
+        self.alert_lbl = tk.Label(self.alert_bar, text="NONE", font=self.UI_MONO_BOLD, fg=self.UI_MUTED, bg=self.UI_PANEL_2, anchor="w")
+        self.alert_lbl.pack(side=tk.LEFT, fill=tk.X, expand=True, pady=8)
+
+        ops = tk.Frame(center, bg=self.UI_BG)
+        ops.pack(fill=tk.BOTH, expand=True)
+        for col in range(2):
             ops.grid_columnconfigure(col, weight=1)
+        for row in range(3):
+            ops.grid_rowconfigure(row, weight=1)
 
         self.card_nav = self._build_ops_card(ops, "NAVIGATION", 0, 0)
         self.card_scan = self._build_ops_card(ops, "SCANNING", 0, 1)
-        self.card_system = self._build_ops_card(ops, "SYSTEM INTEL", 0, 2)
-        self.card_value = self._build_ops_card(ops, "ECONOMY", 1, 0)
-        self.card_session = self._build_ops_card(ops, "SESSION", 1, 1)
-        self.card_ops = self._build_ops_card(ops, "OPERATIONS", 1, 2)
+        self.card_system = self._build_ops_card(ops, "SYSTEM INTEL", 1, 0)
+        self.card_value = self._build_ops_card(ops, "ECONOMY", 1, 1)
+        self.card_session = self._build_ops_card(ops, "SESSION", 2, 0)
+        self.card_ops = self._build_ops_card(ops, "OPERATIONS", 2, 1)
 
-        self.details_drawer = tk.Frame(center, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
-        self.details_drawer.pack(fill=tk.X, pady=(10, 8))
-        feed_wrap = tk.Frame(self.details_drawer, bg=COLOR_PANEL)
-        feed_wrap.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
-        tk.Label(feed_wrap, text="EVENT FEED", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w")
-        self.event_filter_row = tk.Frame(feed_wrap, bg=COLOR_PANEL)
+        log_frame = self._panel(center)
+        log_frame.pack(fill=tk.X, pady=(10, 0))
+        log_toolbar = tk.Frame(log_frame, bg=self.UI_PANEL)
+        log_toolbar.pack(fill=tk.X, padx=10, pady=(8, 2))
+        self._section_label(log_toolbar, "DEBUG CONSOLE", fg=self.UI_MUTED).pack(side=tk.LEFT)
+        self.log_box = scrolledtext.ScrolledText(log_frame, bg="#050607", fg="#62d66f", font=("Consolas", 8), borderwidth=0, height=5, relief=tk.FLAT)
+        self.log_box.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+        self.details_drawer = self._panel(body)
+        self.details_drawer.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(0, 0))
+        self.details_drawer.config(width=370)
+        self.details_drawer.pack_propagate(False)
+        feed_wrap = tk.Frame(self.details_drawer, bg=self.UI_PANEL)
+        feed_wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self._section_label(feed_wrap, "LIVE EVENT TIMELINE").pack(anchor="w")
+        self.event_filter_row = tk.Frame(feed_wrap, bg=self.UI_PANEL)
         self.event_filter_row.pack(fill=tk.X, pady=(4, 2))
         self.event_filter_buttons = {}
         for tag in ("ALL", "VALUABLE", "SCAN", "ALERT", "JUMP", "ROUTE", "SYSTEM", "DSS", "INFO"):
             btn = tk.Button(
                 self.event_filter_row,
-                text=f"[ {tag} ]",
+                text=tag,
                 command=lambda t=tag: self.set_event_feed_filter(t),
-                bg=COLOR_PANEL,
+                bg=self.UI_PANEL,
                 fg=COLOR_TEXT if tag == "ALL" else "#888",
-                font=("Courier", 8, "bold"),
+                font=("Segoe UI", 8, "bold"),
                 relief=tk.FLAT,
-                activebackground=COLOR_PANEL,
+                bd=0,
+                padx=5,
+                pady=2,
+                activebackground=self.UI_PANEL_2,
                 activeforeground=COLOR_ACCENT,
             )
-            btn.pack(side=tk.LEFT, padx=(0, 2))
+            btn.pack(side=tk.LEFT, padx=(0, 3), pady=(2, 4))
             self.event_filter_buttons[tag] = btn
         self.event_feed_list = tk.Listbox(
             feed_wrap,
-            bg=COLOR_PANEL,
+            bg="#0b0f13",
             fg=COLOR_TEXT,
-            font=("Courier", 9),
-            height=8,
+            font=self.UI_MONO,
+            height=22,
             relief=tk.FLAT,
             highlightthickness=0,
             borderwidth=0,
+            activestyle="none",
+            selectbackground="#1f3942",
+            selectforeground=COLOR_TEXT,
         )
         self.event_feed_list.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
-        self.event_feed_list.bind("<Button-1>", lambda e: "break")
-        self.event_feed_list.bind("<Double-Button-1>", lambda e: "break")
-
-        log_frame = tk.Frame(center, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
-        log_frame.pack(fill=tk.BOTH, expand=True)
-        log_toolbar = tk.Frame(log_frame, bg=COLOR_PANEL)
-        log_toolbar.pack(fill=tk.X, padx=6, pady=(6, 2))
-        tk.Label(log_toolbar, text="CONSOLE LOG", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(side=tk.LEFT)
-        self.log_box = scrolledtext.ScrolledText(log_frame, bg="#000", fg=COLOR_GREEN, font=("Courier", 10), borderwidth=0)
-        self.log_box.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.event_feed_list.bind("<Double-Button-1>", lambda e: self._open_selected_event_feed_link())
 
         self.ground_lat_entry.delete(0, tk.END)
         self.ground_lon_entry.delete(0, tk.END)
@@ -230,21 +300,21 @@ class DashboardUIMixin:
         self.ground_lon_entry.insert(0, f"{getattr(self, 'target_lon', 0.0):.6f}")
 
     def create_stat(self, parent, label, val):
-        tk.Label(parent, text=label, font=("Courier", 8), fg="#666", bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(8, 0))
-        l = tk.Label(parent, text=val, font=("Courier", 10, "bold"), fg=COLOR_TEXT, bg=COLOR_PANEL)
-        l.pack(anchor="w", padx=10)
+        tk.Label(parent, text=label, font=("Segoe UI", 8, "bold"), fg=self.UI_DIM, bg=parent.cget("bg")).pack(anchor="w", padx=12, pady=(8, 0))
+        l = tk.Label(parent, text=val, font=self.UI_MONO_BOLD, fg=COLOR_TEXT, bg=parent.cget("bg"), anchor="w")
+        l.pack(fill=tk.X, padx=12)
         return l
 
     def _build_ops_card(self, parent, title, row, col):
-        card = tk.Frame(parent, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
-        card.grid(row=row, column=col, sticky="nsew", padx=4, pady=4)
-        tk.Label(card, text=title, font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(6, 0))
-        line1 = tk.Label(card, text="-", font=("Courier", 9, "bold"), fg=COLOR_TEXT, bg=COLOR_PANEL, anchor="w")
-        line1.pack(fill=tk.X, padx=10, pady=(4, 0))
-        line2 = tk.Label(card, text="-", font=("Courier", 8), fg="#aaa", bg=COLOR_PANEL, anchor="w")
-        line2.pack(fill=tk.X, padx=10, pady=(2, 0))
-        line3 = tk.Label(card, text="-", font=("Courier", 8), fg="#888", bg=COLOR_PANEL, anchor="w")
-        line3.pack(fill=tk.X, padx=10, pady=(2, 8))
+        card = self._panel(parent)
+        card.grid(row=row, column=col, sticky="nsew", padx=5, pady=5)
+        tk.Label(card, text=title, font=self.UI_FONT_BOLD, fg=COLOR_ORANGE, bg=self.UI_PANEL).pack(anchor="w", padx=12, pady=(10, 0))
+        line1 = tk.Label(card, text="-", font=("Segoe UI", 11, "bold"), fg=COLOR_TEXT, bg=self.UI_PANEL, anchor="w")
+        line1.pack(fill=tk.X, padx=12, pady=(8, 0))
+        line2 = tk.Label(card, text="-", font=self.UI_MONO, fg="#aab4bd", bg=self.UI_PANEL, anchor="w")
+        line2.pack(fill=tk.X, padx=12, pady=(4, 0))
+        line3 = tk.Label(card, text="-", font=self.UI_MONO, fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w")
+        line3.pack(fill=tk.X, padx=12, pady=(4, 10))
         card.line1 = line1
         card.line2 = line2
         card.line3 = line3
@@ -258,7 +328,11 @@ class DashboardUIMixin:
         self.event_feed_filter = mode
         if hasattr(self, "event_filter_buttons"):
             for tag, btn in self.event_filter_buttons.items():
-                btn.config(fg=COLOR_TEXT if tag == mode else "#888")
+                selected = tag == mode
+                btn.config(
+                    fg=COLOR_TEXT if selected else "#888",
+                    bg=self.UI_PANEL_2 if selected else self.UI_PANEL,
+                )
         self._refresh_event_feed()
 
     def add_event_feed_entry(self, tag, message, severity="INFO", copy_text=None, url=None, pinned=False):
@@ -399,7 +473,6 @@ class DashboardUIMixin:
         is_journal_change = msg.startswith("Journal file:")
         is_settings = (
             "CONFIGURATION SAVED" in upper
-            or "DISCORD INTEGRATION" in upper
             or "SCREENSHOT CONVERTER" in upper
             or "SETTINGS" in upper
         )
@@ -410,7 +483,6 @@ class DashboardUIMixin:
             or "SCANNING..." in upper
             or "CACHE" in upper
             or "UPDATE AVAILABLE" in upper
-            or "STALE DISCORD MESSAGE" in upper
             or "PERF SPIKE" in upper
             or "UI STALL" in upper
         )
@@ -499,8 +571,8 @@ class DashboardUIMixin:
 
     def show_update_btn(self, url, tag):
         self.log(f"✨ UPDATE AVAILABLE: v{tag}")
-        btn = tk.Button(self.nav, text="[ UPDATE AVAILABLE ]", command=lambda: webbrowser.open(url), bg=COLOR_PANEL, fg=COLOR_GREEN, font=("Courier", 9, "bold"), relief=tk.FLAT, activebackground=COLOR_PANEL, activeforeground=COLOR_GREEN)
-        btn.pack(side=tk.RIGHT, padx=5)
+        btn = self._action_button(self.nav, f"Update v{tag}", lambda: webbrowser.open(url), accent=True)
+        btn.pack(side=tk.RIGHT, padx=8, pady=10)
 
     def update_nav_label(self):
         txt = "NO ROUTE"
@@ -568,8 +640,8 @@ class DashboardUIMixin:
         self._save_config_file()
         if hasattr(self, "ground_popup_toggle_btn"):
             self.ground_popup_toggle_btn.config(
-                text="[ POPUP: ON ]" if self.ground_popup_enabled else "[ POPUP: OFF ]",
-                fg=COLOR_TEXT if self.ground_popup_enabled else "#888",
+                text="Popup On" if self.ground_popup_enabled else "Popup Off",
+                fg=COLOR_TEXT if self.ground_popup_enabled else self.UI_MUTED,
             )
         if not self.ground_popup_enabled and self.ground_popup and self.ground_popup.winfo_exists():
             self.ground_popup.withdraw()
@@ -620,30 +692,30 @@ class DashboardUIMixin:
         self._ground_popup_visible = False
         self.ground_popup.overrideredirect(True)
         self.ground_popup.attributes("-topmost", True)
-        self.ground_popup.configure(bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
+        self.ground_popup.configure(bg=self.UI_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
         self.ground_popup.geometry(self.config.get("ground_popup_geometry", "340x140+1320+160"))
         self.ground_popup.minsize(300, 132)
 
-        title = tk.Frame(self.ground_popup, bg="#171717", height=22)
+        title = tk.Frame(self.ground_popup, bg="#0c1014", height=24)
         title.pack(fill=tk.X)
         title.pack_propagate(False)
-        self.ground_popup_header = tk.Label(title, text="GROUND TARGET  [DRAG]", font=("Courier", 8, "bold"), fg=COLOR_ORANGE, bg="#171717", anchor="w")
+        self.ground_popup_header = tk.Label(title, text="GROUND TARGET", font=self.UI_FONT_BOLD, fg=COLOR_ORANGE, bg="#0c1014", anchor="w")
         self.ground_popup_header.pack(fill=tk.BOTH, expand=True, padx=8)
 
-        frame = tk.Frame(self.ground_popup, bg=COLOR_PANEL)
+        frame = tk.Frame(self.ground_popup, bg=self.UI_PANEL)
         frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=(6, 6))
 
-        left = tk.Frame(frame, bg=COLOR_PANEL, width=96, height=96)
+        left = tk.Frame(frame, bg=self.UI_PANEL, width=96, height=96)
         left.pack(side=tk.LEFT, fill=tk.Y)
         left.pack_propagate(False)
-        self.ground_popup_canvas = tk.Canvas(left, width=96, height=96, bg=COLOR_PANEL, highlightthickness=0, bd=0)
+        self.ground_popup_canvas = tk.Canvas(left, width=96, height=96, bg=self.UI_PANEL, highlightthickness=0, bd=0)
         self.ground_popup_canvas.pack(fill=tk.BOTH, expand=True)
 
-        right = tk.Frame(frame, bg=COLOR_PANEL)
+        right = tk.Frame(frame, bg=self.UI_PANEL)
         right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(8, 0))
-        self.ground_popup_line1 = tk.Label(right, text="-", font=("Courier", 11, "bold"), fg=COLOR_ACCENT, bg=COLOR_PANEL, anchor="w")
+        self.ground_popup_line1 = tk.Label(right, text="-", font=self.UI_MONO_BOLD, fg=COLOR_ACCENT, bg=self.UI_PANEL, anchor="w")
         self.ground_popup_line1.pack(fill=tk.X, pady=(2, 0))
-        self.ground_popup_line2 = tk.Label(right, text="-", font=("Courier", 9), fg=COLOR_TEXT, bg=COLOR_PANEL, anchor="w")
+        self.ground_popup_line2 = tk.Label(right, text="-", font=self.UI_MONO, fg=COLOR_TEXT, bg=self.UI_PANEL, anchor="w")
         self.ground_popup_line2.pack(fill=tk.X, pady=(6, 0))
 
         for widget in (self.ground_popup, title, self.ground_popup_header, frame, left, self.ground_popup_canvas, right, self.ground_popup_line1, self.ground_popup_line2):
@@ -684,15 +756,15 @@ class DashboardUIMixin:
         if not ids or ids.get("canvas") is not canvas:
             canvas.delete("all")
             ring = canvas.create_oval(cx - r, cy - r, cx + r, cy + r, outline="#555", width=1)
-            n = canvas.create_text(cx, cy - r - 4, text="N", fill="#999", font=("Courier", 8, "bold"))
-            e = canvas.create_text(cx + r + 5, cy, text="E", fill="#666", font=("Courier", 7))
-            s = canvas.create_text(cx, cy + r + 6, text="S", fill="#666", font=("Courier", 7))
-            w_txt = canvas.create_text(cx - r - 5, cy, text="W", fill="#666", font=("Courier", 7))
+            n = canvas.create_text(cx, cy - r - 4, text="N", fill="#999", font=("Consolas", 8, "bold"))
+            e = canvas.create_text(cx + r + 5, cy, text="E", fill="#666", font=("Consolas", 7))
+            s = canvas.create_text(cx, cy + r + 6, text="S", fill="#666", font=("Consolas", 7))
+            w_txt = canvas.create_text(cx - r - 5, cy, text="W", fill="#666", font=("Consolas", 7))
             # Ship forward marker is always up in this relative compass.
             ship = canvas.create_line(cx, cy + 2, cx, cy - r + 8, fill="#777", width=2)
             needle = canvas.create_line(cx, cy, cx, cy, fill=COLOR_ACCENT, width=3)
             dot = canvas.create_oval(cx - 3, cy - 3, cx + 3, cy + 3, fill=COLOR_ACCENT, outline=COLOR_ACCENT)
-            unknown = canvas.create_text(cx, cy, text="?", fill="#888", font=("Courier", 14, "bold"), state="hidden")
+            unknown = canvas.create_text(cx, cy, text="?", fill="#888", font=("Consolas", 14, "bold"), state="hidden")
             ids = {
                 "canvas": canvas,
                 "ring": ring,
@@ -822,8 +894,8 @@ class DashboardUIMixin:
         if hasattr(self, "ground_popup_toggle_btn"):
             self._config_label_if_changed(
                 self.ground_popup_toggle_btn,
-                text="[ POPUP: ON ]" if self.ground_popup_enabled else "[ POPUP: OFF ]",
-                fg=COLOR_TEXT if self.ground_popup_enabled else "#888",
+                text="Popup On" if self.ground_popup_enabled else "Popup Off",
+                fg=COLOR_TEXT if self.ground_popup_enabled else self.UI_MUTED,
             )
 
         if not self.target_latlon_active:
@@ -940,7 +1012,11 @@ class DashboardUIMixin:
             alerts.append(f"VALUABLE FINDS: {len(self.valuable_bodies)}")
         if self.fss_summary_active:
             alerts.append("FSS SUMMARY ACTIVE")
-        self.alert_lbl.config(text=" | ".join(alerts) if alerts else "NONE")
+        alert_text = " | ".join(alerts) if alerts else "NONE"
+        alert_fg = COLOR_ORANGE if alerts else self.UI_MUTED
+        if self.system_undiscovered or self.valuable_bodies:
+            alert_fg = self.UI_WARN
+        self.alert_lbl.config(text=alert_text, fg=alert_fg)
 
         planner_open = "YES" if (self.route_plotter and self.route_plotter.win.winfo_exists()) else "NO"
         auto_copy = "ON" if self.config.get("auto_copy_waypoint", False) else "OFF"

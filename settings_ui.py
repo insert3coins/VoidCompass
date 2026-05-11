@@ -1,144 +1,135 @@
-import tkinter as tk
 import json
 import os
-from config import CONFIG_FILE, DEPRECATED_CONFIG_KEYS, COLOR_BG, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
+import tkinter as tk
+
+from config import CONFIG_FILE, DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
+
+
+UI_BG = "#080a0d"
+UI_PANEL = "#12161b"
+UI_PANEL_2 = "#171d23"
+UI_BORDER = "#26313a"
+UI_MUTED = "#7d8891"
+UI_DIM = "#4e5962"
+UI_INPUT = "#090c10"
+UI_FONT = ("Segoe UI", 9)
+UI_FONT_BOLD = ("Segoe UI", 9, "bold")
+UI_MONO = ("Consolas", 9)
+
 
 def open_settings(root, config, on_save_callback):
     win = tk.Toplevel(root)
     win.title("SYSTEM CONFIGURATION")
-    win.geometry(config.get("settings_geometry", "600x900"))
-    win.configure(bg=COLOR_BG)
+    win.geometry(config.get("settings_geometry", "720x620"))
+    win.minsize(620, 520)
+    win.configure(bg=UI_BG)
     win.attributes("-topmost", True)
-    
-    # Main container with padding
-    container = tk.Frame(win, bg=COLOR_BG)
-    container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-    
-    # Header
-    tk.Label(container, text=" // SYSTEM CONFIGURATION", font=("Courier", 16, "bold"), fg=COLOR_ACCENT, bg=COLOR_BG).pack(anchor="w", pady=(0, 20))
-    
-    # Footer Buttons Frame (Packed early to ensure visibility)
-    btn_frame = tk.Frame(container, bg=COLOR_BG)
-    btn_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)
 
-    # --- Helper Functions ---
-    def create_section(parent, title):
-        frame = tk.LabelFrame(parent, text=f" {title} ", font=("Courier", 10, "bold"), fg=COLOR_ORANGE, bg=COLOR_BG, bd=1, relief=tk.SOLID)
-        frame.pack(fill=tk.X, pady=10, ipady=5)
+    shell = tk.Frame(win, bg=UI_BG)
+    shell.pack(fill=tk.BOTH, expand=True, padx=16, pady=16)
+
+    header = tk.Frame(shell, bg="#0c1014", height=64)
+    header.pack(fill=tk.X)
+    header.pack_propagate(False)
+    tk.Label(header, text="SYSTEM CONFIGURATION", font=("Segoe UI", 15, "bold"), fg=COLOR_ACCENT, bg="#0c1014").pack(anchor="w", padx=14, pady=(10, 0))
+    tk.Label(header, text="LOCAL CONTROL SURFACE", font=("Segoe UI", 8, "bold"), fg=UI_MUTED, bg="#0c1014").pack(anchor="w", padx=14)
+
+    body = tk.Frame(shell, bg=UI_BG)
+    body.pack(fill=tk.BOTH, expand=True, pady=(12, 12))
+
+    footer = tk.Frame(shell, bg=UI_BG)
+    footer.pack(side=tk.BOTTOM, fill=tk.X)
+
+    def panel(parent, title):
+        frame = tk.Frame(parent, bg=UI_PANEL, highlightbackground=UI_BORDER, highlightthickness=1, bd=0)
+        frame.pack(fill=tk.X, pady=(0, 10))
+        tk.Label(frame, text=title, font=UI_FONT_BOLD, fg=COLOR_ORANGE, bg=UI_PANEL, anchor="w").pack(fill=tk.X, padx=12, pady=(10, 2))
         return frame
 
+    def action_button(parent, text, command, accent=False, muted=False):
+        bg = COLOR_ACCENT if accent else parent.cget("bg")
+        fg = "black" if accent else (UI_DIM if muted else COLOR_TEXT)
+        return tk.Button(
+            parent,
+            text=text,
+            command=command,
+            bg=bg,
+            fg=fg,
+            activebackground=COLOR_ACCENT if accent else UI_PANEL_2,
+            activeforeground="black" if accent else COLOR_TEXT,
+            font=UI_FONT_BOLD,
+            relief=tk.FLAT,
+            bd=0,
+            padx=12,
+            pady=7,
+            cursor="hand2",
+        )
+
     def create_input(parent, label, key, is_password=False):
-        f = tk.Frame(parent, bg=COLOR_BG)
-        f.pack(fill=tk.X, padx=15, pady=5)
-        
-        tk.Label(f, text=label, font=("Courier", 9), fg="#888", bg=COLOR_BG).pack(anchor="w")
-        
-        e = tk.Entry(f, bg="#111", fg=COLOR_TEXT, font=("Courier", 10), insertbackground=COLOR_ACCENT, relief=tk.FLAT, highlightthickness=1, highlightbackground="#333", highlightcolor=COLOR_ACCENT)
+        wrap = tk.Frame(parent, bg=UI_PANEL)
+        wrap.pack(fill=tk.X, padx=12, pady=(6, 10))
+        tk.Label(wrap, text=label, font=("Segoe UI", 8, "bold"), fg=UI_MUTED, bg=UI_PANEL, anchor="w").pack(fill=tk.X)
+        entry = tk.Entry(
+            wrap,
+            bg=UI_INPUT,
+            fg=COLOR_TEXT,
+            font=UI_MONO,
+            insertbackground=COLOR_ACCENT,
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground=UI_BORDER,
+            highlightcolor=COLOR_ACCENT,
+        )
         if is_password:
-            e.config(show="*")
-        e.insert(0, str(config.get(key, "")))
-        e.pack(fill=tk.X, pady=(2, 0), ipady=4)
-        return e
+            entry.config(show="*")
+        entry.insert(0, str(config.get(key, "")))
+        entry.pack(fill=tk.X, pady=(3, 0), ipady=5)
+        return entry
 
-    # --- General Settings ---
-    sec_gen = create_section(container, "GENERAL")
-    j_e = create_input(sec_gen, "Journal Path (Leave empty to auto-detect)", "journal_path")
-    
-    # Custom Toggle for Overlay
-    toggle_frame = tk.Frame(sec_gen, bg=COLOR_BG)
-    toggle_frame.pack(fill=tk.X, padx=15, pady=10)
-    
-    tk.Label(toggle_frame, text="Tactical Overlay", font=("Courier", 9), fg="#888", bg=COLOR_BG).pack(side=tk.LEFT)
-    
+    def create_toggle(parent, label, variable):
+        row = tk.Frame(parent, bg=UI_PANEL)
+        row.pack(fill=tk.X, padx=12, pady=(8, 0))
+        tk.Label(row, text=label, font=UI_FONT, fg=COLOR_TEXT, bg=UI_PANEL, anchor="w").pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        btn = tk.Button(row, font=UI_FONT_BOLD, relief=tk.FLAT, bd=0, width=10, cursor="hand2")
+
+        def refresh():
+            if variable.get():
+                btn.config(text="Enabled", bg=COLOR_ACCENT, fg="black", activebackground=COLOR_ACCENT, activeforeground="black")
+            else:
+                btn.config(text="Disabled", bg=UI_PANEL_2, fg=UI_MUTED, activebackground=UI_PANEL_2, activeforeground=COLOR_TEXT)
+
+        def toggle():
+            variable.set(not variable.get())
+            refresh()
+
+        btn.config(command=toggle)
+        btn.pack(side=tk.RIGHT)
+        refresh()
+        return btn
+
+    sec_gen = panel(body, "GENERAL")
+    j_e = create_input(sec_gen, "Journal Path (leave empty to auto-detect)", "journal_path")
+
     ov_var = tk.BooleanVar(value=config.get("overlay_enabled", True))
-    
-    def toggle_overlay():
-        ov_var.set(not ov_var.get())
-        update_toggle_visuals()
-        
-    def update_toggle_visuals():
-        if ov_var.get():
-            toggle_btn.config(text="[ ENABLED ]", fg=COLOR_ACCENT)
-        else:
-            toggle_btn.config(text="[ DISABLED ]", fg="#555")
-
-    toggle_btn = tk.Button(toggle_frame, text="[ ENABLED ]", font=("Courier", 9, "bold"), bg=COLOR_BG, activebackground=COLOR_BG, bd=0, command=toggle_overlay, cursor="hand2")
-    toggle_btn.pack(side=tk.RIGHT)
-    update_toggle_visuals()
-    
-    # Custom Toggle for Cargo Overlay
-    cargo_frame = tk.Frame(sec_gen, bg=COLOR_BG)
-    cargo_frame.pack(fill=tk.X, padx=15, pady=(0, 10))
-    
-    tk.Label(cargo_frame, text="Cargo Manifest Overlay", font=("Courier", 9), fg="#888", bg=COLOR_BG).pack(side=tk.LEFT)
-    
     cargo_var = tk.BooleanVar(value=config.get("cargo_overlay_enabled", False))
-    
-    def toggle_cargo():
-        cargo_var.set(not cargo_var.get())
-        update_cargo_visuals()
-        
-    def update_cargo_visuals():
-        if cargo_var.get():
-            cargo_btn.config(text="[ ENABLED ]", fg=COLOR_ACCENT)
-        else:
-            cargo_btn.config(text="[ DISABLED ]", fg="#555")
-
-    cargo_btn = tk.Button(cargo_frame, text="[ DISABLED ]", font=("Courier", 9, "bold"), bg=COLOR_BG, activebackground=COLOR_BG, bd=0, command=toggle_cargo, cursor="hand2")
-    cargo_btn.pack(side=tk.RIGHT)
-    update_cargo_visuals()
-
-    # Custom Toggle for Scan Overlay
-    scan_frame = tk.Frame(sec_gen, bg=COLOR_BG)
-    scan_frame.pack(fill=tk.X, padx=15, pady=(0, 10))
-
-    tk.Label(scan_frame, text="Scan Results Overlay", font=("Courier", 9), fg="#888", bg=COLOR_BG).pack(side=tk.LEFT)
-
     scan_var = tk.BooleanVar(value=config.get("scan_overlay_enabled", True))
+    create_toggle(sec_gen, "Tactical Overlay", ov_var)
+    create_toggle(sec_gen, "Cargo Manifest Overlay", cargo_var)
+    create_toggle(sec_gen, "Scan Results Overlay", scan_var)
+    tk.Frame(sec_gen, bg=UI_PANEL, height=10).pack(fill=tk.X)
 
-    def toggle_scan():
-        scan_var.set(not scan_var.get())
-        update_scan_visuals()
-
-    def update_scan_visuals():
-        if scan_var.get():
-            scan_btn.config(text="[ ENABLED ]", fg=COLOR_ACCENT)
-        else:
-            scan_btn.config(text="[ DISABLED ]", fg="#555")
-
-    scan_btn = tk.Button(scan_frame, text="[ ENABLED ]", font=("Courier", 9, "bold"), bg=COLOR_BG, activebackground=COLOR_BG, bd=0, command=toggle_scan, cursor="hand2")
-    scan_btn.pack(side=tk.RIGHT)
-    update_scan_visuals()
-
-    # --- Screenshot Settings ---
-    sec_ss = create_section(container, "SCREENSHOTS")
-    
-    ss_toggle_frame = tk.Frame(sec_ss, bg=COLOR_BG)
-    ss_toggle_frame.pack(fill=tk.X, padx=15, pady=(5, 5))
-    tk.Label(ss_toggle_frame, text="Convert BMP to PNG", font=("Courier", 9), fg="#888", bg=COLOR_BG).pack(side=tk.LEFT)
-    
+    sec_ss = panel(body, "SCREENSHOTS")
     ss_var = tk.BooleanVar(value=config.get("screenshots_enabled", False))
-    
-    def toggle_ss():
-        ss_var.set(not ss_var.get())
-        update_ss_visuals()
-        
-    def update_ss_visuals():
-        if ss_var.get():
-            ss_btn.config(text="[ ENABLED ]", fg=COLOR_ACCENT)
-        else:
-            ss_btn.config(text="[ DISABLED ]", fg="#555")
-
-    ss_btn = tk.Button(ss_toggle_frame, text="[ DISABLED ]", font=("Courier", 9, "bold"), bg=COLOR_BG, activebackground=COLOR_BG, bd=0, command=toggle_ss, cursor="hand2")
-    ss_btn.pack(side=tk.RIGHT)
-    update_ss_visuals()
+    create_toggle(sec_ss, "Convert BMP to PNG", ss_var)
 
     if "screenshots_path" not in config:
         config["screenshots_path"] = os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous")
     ss_e = create_input(sec_ss, "Watch Folder", "screenshots_path")
 
-    # --- Footer Buttons ---
-    # btn_frame is created at the top to ensure visibility
+    def remove_deprecated_keys():
+        for key in ("edsm_cmdr_name", "edsm_api_key", "edsm_enabled", *DEPRECATED_CONFIG_KEYS):
+            config.pop(key, None)
 
     def save_config():
         config.update({
@@ -148,26 +139,24 @@ def open_settings(root, config, on_save_callback):
             "scan_overlay_enabled": scan_var.get(),
             "screenshots_enabled": ss_var.get(),
             "screenshots_path": ss_e.get().strip(),
-            "settings_geometry": win.geometry()
+            "settings_geometry": win.geometry(),
         })
-        for key in ("edsm_cmdr_name", "edsm_api_key", "edsm_enabled", *DEPRECATED_CONFIG_KEYS):
-            config.pop(key, None)
-        
-        with open(CONFIG_FILE, 'w') as f:
+        remove_deprecated_keys()
+
+        with open(CONFIG_FILE, "w") as f:
             json.dump(config, f, indent=4)
-        
+
         on_save_callback()
         win.destroy()
 
     def close_window():
         config["settings_geometry"] = win.geometry()
-        for key in ("edsm_cmdr_name", "edsm_api_key", "edsm_enabled", *DEPRECATED_CONFIG_KEYS):
-            config.pop(key, None)
-        with open(CONFIG_FILE, 'w') as f:
+        remove_deprecated_keys()
+        with open(CONFIG_FILE, "w") as f:
             json.dump(config, f, indent=4)
         win.destroy()
 
-    tk.Button(btn_frame, text="CANCEL", command=close_window, bg="#222", fg="#888", font=("Courier", 10, "bold"), relief=tk.FLAT, width=12).pack(side=tk.LEFT)
-    tk.Button(btn_frame, text="SAVE SETTINGS", command=save_config, bg=COLOR_ACCENT, fg="black", font=("Courier", 10, "bold"), relief=tk.FLAT).pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
+    action_button(footer, "Cancel", close_window, muted=True).pack(side=tk.LEFT)
+    action_button(footer, "Save Settings", save_config, accent=True).pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
 
     win.protocol("WM_DELETE_WINDOW", close_window)
