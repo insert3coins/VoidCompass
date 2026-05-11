@@ -253,18 +253,31 @@ class DashboardUIMixin:
 
         self.details_drawer = self._panel(body)
         self.details_drawer.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(0, 0))
-        self.details_drawer.config(width=370)
+        self.details_drawer.config(width=450)
         self.details_drawer.pack_propagate(False)
         feed_wrap = tk.Frame(self.details_drawer, bg=self.UI_PANEL)
         feed_wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         self._section_label(feed_wrap, "LIVE EVENT TIMELINE").pack(anchor="w")
         self.event_filter_row = tk.Frame(feed_wrap, bg=self.UI_PANEL)
-        self.event_filter_row.pack(fill=tk.X, pady=(4, 2))
+        self.event_filter_row.pack(fill=tk.X, pady=(6, 4))
+        for col in range(3):
+            self.event_filter_row.grid_columnconfigure(col, weight=1, uniform="event_filter")
         self.event_filter_buttons = {}
-        for tag in ("ALL", "VALUABLE", "SCAN", "ALERT", "JUMP", "ROUTE", "SYSTEM", "DSS", "INFO"):
+        event_filters = (
+            ("ALL", "ALL"),
+            ("VALUABLE", "VALUE"),
+            ("SCAN", "SCAN"),
+            ("ALERT", "ALERT"),
+            ("JUMP", "JUMP"),
+            ("ROUTE", "ROUTE"),
+            ("SYSTEM", "SYSTEM"),
+            ("DSS", "DSS"),
+            ("INFO", "INFO"),
+        )
+        for idx, (tag, label) in enumerate(event_filters):
             btn = tk.Button(
                 self.event_filter_row,
-                text=tag,
+                text=label,
                 command=lambda t=tag: self.set_event_feed_filter(t),
                 bg=self.UI_PANEL,
                 fg=COLOR_TEXT if tag == "ALL" else "#888",
@@ -276,10 +289,13 @@ class DashboardUIMixin:
                 activebackground=self.UI_PANEL_2,
                 activeforeground=COLOR_ACCENT,
             )
-            btn.pack(side=tk.LEFT, padx=(0, 3), pady=(2, 4))
+            btn.grid(row=idx // 3, column=idx % 3, sticky="ew", padx=2, pady=2)
             self.event_filter_buttons[tag] = btn
-        self.event_feed_list = tk.Listbox(
-            feed_wrap,
+        event_text_wrap = tk.Frame(feed_wrap, bg="#0b0f13")
+        event_text_wrap.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
+        self.event_feed_scroll = tk.Scrollbar(event_text_wrap, orient=tk.VERTICAL)
+        self.event_feed_list = tk.Text(
+            event_text_wrap,
             bg="#0b0f13",
             fg=COLOR_TEXT,
             font=self.UI_MONO,
@@ -287,11 +303,16 @@ class DashboardUIMixin:
             relief=tk.FLAT,
             highlightthickness=0,
             borderwidth=0,
-            activestyle="none",
-            selectbackground="#1f3942",
-            selectforeground=COLOR_TEXT,
+            wrap=tk.WORD,
+            padx=8,
+            pady=6,
+            yscrollcommand=self.event_feed_scroll.set,
         )
-        self.event_feed_list.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
+        self.event_feed_scroll.config(command=self.event_feed_list.yview)
+        self.event_feed_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.event_feed_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.event_feed_list.config(state=tk.DISABLED)
+        self.event_feed_list.bind("<Button-1>", self._select_event_feed_line)
         self.event_feed_list.bind("<Double-Button-1>", lambda e: self._open_selected_event_feed_link())
 
         self.ground_lat_entry.delete(0, tk.END)
@@ -391,6 +412,33 @@ class DashboardUIMixin:
             return "#d7f4ff"
         return base
 
+    @staticmethod
+    def _event_feed_row_text(row):
+        ts_txt = datetime.fromtimestamp(row.get("ts", time.time())).strftime("%H:%M:%S")
+        pin_prefix = "PIN " if row.get("pinned") else ""
+        return f"[{ts_txt}] {pin_prefix}[{row.get('tag', 'INFO')}] {row.get('message', '')}"
+
+    def _recolor_event_feed_rows(self):
+        if not hasattr(self, "event_feed_list"):
+            return
+        self.event_feed_list.config(state=tk.NORMAL)
+        for idx in range(max(self.event_feed_display_limit, len(getattr(self, "event_feed_view", []))) + 1):
+            self.event_feed_list.tag_remove(f"event_row_{idx}", "1.0", tk.END)
+        for idx, row in enumerate(getattr(self, "event_feed_view", [])):
+            tag = f"event_row_{idx}"
+            self.event_feed_list.tag_add(tag, f"{idx + 1}.0", f"{idx + 2}.0")
+            self.event_feed_list.tag_config(tag, foreground=self._event_feed_row_color(row))
+        self.event_feed_list.config(state=tk.DISABLED)
+
+    def _event_feed_delete_rows(self, start_idx, end_idx):
+        if end_idx <= start_idx:
+            return
+        self.event_feed_list.delete(f"{start_idx + 1}.0", f"{end_idx + 1}.0")
+
+    def _event_feed_insert_rows(self, start_idx, lines):
+        for offset, line in enumerate(lines):
+            self.event_feed_list.insert(f"{start_idx + offset + 1}.0", line + "\n")
+
     def _refresh_event_feed(self):
         if not hasattr(self, "event_feed_list"):
             return
@@ -400,24 +448,60 @@ class DashboardUIMixin:
         unpinned = [e for e in visible if not e.get("pinned")]
         rows = pinned + unpinned
         rows = rows[:self.event_feed_display_limit]
-        self.event_feed_view = rows
+        lines = [self._event_feed_row_text(row) for row in rows]
+        old_lines = getattr(self, "_event_feed_render_lines", [])
 
-        self.event_feed_list.delete(0, tk.END)
-        for row in rows:
-            ts_txt = datetime.fromtimestamp(row.get("ts", time.time())).strftime("%H:%M:%S")
-            pin_prefix = "📌 " if row.get("pinned") else ""
-            line = f"[{ts_txt}] {pin_prefix}[{row.get('tag', 'INFO')}] {row.get('message', '')}"
-            self.event_feed_list.insert(tk.END, line)
-            idx = self.event_feed_list.size() - 1
-            self.event_feed_list.itemconfig(idx, fg=self._event_feed_row_color(row))
+        if old_lines == lines:
+            self.event_feed_view = rows
+            self._recolor_event_feed_rows()
+            return
+
+        self.event_feed_list.config(state=tk.NORMAL)
+        # Common live path: a new event appears at the top and older rows shift down.
+        if lines and old_lines and lines[1:] == old_lines[: len(lines) - 1]:
+            self.event_feed_list.insert("1.0", lines[0] + "\n")
+            if len(old_lines) >= len(lines):
+                self._event_feed_delete_rows(len(lines), len(old_lines) + 1)
+        else:
+            prefix = 0
+            max_prefix = min(len(old_lines), len(lines))
+            while prefix < max_prefix and old_lines[prefix] == lines[prefix]:
+                prefix += 1
+
+            suffix = 0
+            while (
+                suffix < (len(old_lines) - prefix)
+                and suffix < (len(lines) - prefix)
+                and old_lines[len(old_lines) - 1 - suffix] == lines[len(lines) - 1 - suffix]
+            ):
+                suffix += 1
+
+            old_end = len(old_lines) - suffix
+            new_end = len(lines) - suffix
+            if prefix < old_end:
+                self._event_feed_delete_rows(prefix, old_end)
+            self._event_feed_insert_rows(prefix, lines[prefix:new_end])
+
+        self.event_feed_view = rows
+        self._event_feed_render_lines = lines
+        self._recolor_event_feed_rows()
+
+    def _select_event_feed_line(self, event):
+        if not hasattr(self, "event_feed_list"):
+            return None
+        try:
+            idx = int(self.event_feed_list.index(f"@{event.x},{event.y}").split(".")[0]) - 1
+        except Exception:
+            idx = 0
+        self.event_feed_selected_idx = idx if 0 <= idx < len(self.event_feed_view) else None
+        return None
 
     def _copy_selected_event_feed(self):
         if not hasattr(self, "event_feed_list"):
             return
-        sel = self.event_feed_list.curselection()
-        if not sel:
+        idx = getattr(self, "event_feed_selected_idx", None)
+        if idx is None:
             return
-        idx = sel[0]
         if idx >= len(self.event_feed_view):
             return
         payload = self.event_feed_view[idx].get("copy_text")
@@ -430,10 +514,9 @@ class DashboardUIMixin:
     def _open_selected_event_feed_link(self):
         if not hasattr(self, "event_feed_list"):
             return
-        sel = self.event_feed_list.curselection()
-        if not sel:
+        idx = getattr(self, "event_feed_selected_idx", None)
+        if idx is None:
             return
-        idx = sel[0]
         if idx >= len(self.event_feed_view):
             return
         link = self.event_feed_view[idx].get("url")
@@ -527,7 +610,7 @@ class DashboardUIMixin:
             return
         if hasattr(self, "summary_session"):
             self.summary_session.config(text=f"SESSION: {self._get_session_elapsed_text()}")
-        self._refresh_event_feed()
+        self._recolor_event_feed_rows()
         self.root.after(1000, self._tick_session_clock)
 
     def _toggle_wp_scrollbar(self, show):
