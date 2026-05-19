@@ -21,3 +21,4 @@ resources/
 # Virtual environment
 .venv/
 venv/
+mining_data.db

@@ -114,9 +114,11 @@ def open_settings(root, config, on_save_callback):
     ov_var = tk.BooleanVar(value=config.get("overlay_enabled", True))
     cargo_var = tk.BooleanVar(value=config.get("cargo_overlay_enabled", False))
     scan_var = tk.BooleanVar(value=config.get("scan_overlay_enabled", True))
+    prospect_var = tk.BooleanVar(value=config.get("prospector_overlay_enabled", True))
     create_toggle(sec_gen, "Tactical Overlay", ov_var)
     create_toggle(sec_gen, "Cargo Manifest Overlay", cargo_var)
     create_toggle(sec_gen, "Scan Results Overlay", scan_var)
+    create_toggle(sec_gen, "Mining Prospector Overlay", prospect_var)
     tk.Frame(sec_gen, bg=UI_PANEL, height=10).pack(fill=tk.X)
 
     sec_ss = panel(body, "SCREENSHOTS")
@@ -137,6 +139,7 @@ def open_settings(root, config, on_save_callback):
             "overlay_enabled": ov_var.get(),
             "cargo_overlay_enabled": cargo_var.get(),
             "scan_overlay_enabled": scan_var.get(),
+            "prospector_overlay_enabled": prospect_var.get(),
             "screenshots_enabled": ss_var.get(),
             "screenshots_path": ss_e.get().strip(),
             "settings_geometry": win.geometry(),

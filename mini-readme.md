@@ -1,5 +1,19 @@
 # VoidCompass // UPDATE LOG
 
+## v2.7.2 // Enhanced Prospector Overlay
+**Release Date:** 2026-May-19
+*   **Mining Prospector Overlay:**
+    *   Added an enhanced prospector overlay for active mining sessions.
+    *   Shows prospector remaining percentage, material percentages, material content, and core asteroid detection.
+    *   Uses Void Compass overlay colors and transparent HUD styling.
+*   **Overlay Controls:**
+    *   Added `Mining Prospector Overlay` toggle in Settings.
+    *   Added `Overlay On/Off` control in the Mining window header.
+    *   Overlay only appears after a mining session has been started.
+*   **Overlay Position Persistence:**
+    *   Overlay can be dragged like the existing HUD overlays.
+    *   Position is saved to `config.json` and restored on next launch.
+
 ## v2.7.1 // Mining Companion + Startup Batching
 **Release Date:** 2026-May-19
 *   **New Mining Window:**

@@ -610,6 +610,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.scan_hud.win.destroy()
                     self.scan_hud = None
 
+            if self.mining_window and self.mining_window.is_open():
+                enabled = bool(self.config.get("prospector_overlay_enabled", True))
+                self.mining_window.overlay_var.set(enabled)
+                self.mining_window.overlay_btn.config(text="Overlay On" if enabled else "Overlay Off")
+                if not enabled and self.mining_window.prospector_overlay:
+                    self.mining_window.prospector_overlay.hide()
+
         
         open_settings(self.root, self.config, on_save)
 
