@@ -178,18 +178,35 @@ class DashboardDBMixin:
             try:
                 self.conn.execute("BEGIN TRANSACTION")
                 for sys_name, data in new_history.items():
-                    b_len = len(data.get("bodies", []))
-                    if b_len > data.get("scanned_count", 0):
-                        data["scanned_count"] = b_len
-                    if data.get("scanned_count", 0) > data.get("total", 0):
-                        data["total"] = data["scanned_count"]
+                    bodies = set(data.get("bodies", []))
+                    cursor = self.conn.cursor()
+                    cursor.execute("SELECT total, scanned_count FROM systems WHERE name=?", (sys_name,))
+                    row = cursor.fetchone()
+                    existing_total = row[0] if row else 0
+                    existing_scanned = row[1] if row else 0
+                    cursor.execute("SELECT COUNT(*) FROM bodies WHERE system_name=?", (sys_name,))
+                    existing_body_count = cursor.fetchone()[0] or 0
 
+                    scanned_count = max(
+                        int(data.get("scanned_count", 0) or 0),
+                        len(bodies),
+                        int(existing_scanned or 0),
+                        int(existing_body_count or 0),
+                    )
+                    total = max(
+                        int(data.get("total", 0) or 0),
+                        scanned_count,
+                        int(existing_total or 0),
+                    )
+                    if total <= 0 and scanned_count <= 0 and not bodies:
+                        continue
+
+                    for body_id in bodies:
+                        self.conn.execute("INSERT OR IGNORE INTO bodies (system_name, body_id) VALUES (?, ?)", (sys_name, body_id))
                     self.conn.execute(
                         "INSERT OR REPLACE INTO systems (name, total, scanned_count) VALUES (?, ?, ?)",
-                        (sys_name, data["total"], data["scanned_count"]),
+                        (sys_name, total, scanned_count),
                     )
-                    for body_id in data.get("bodies", []):
-                        self.conn.execute("INSERT OR IGNORE INTO bodies (system_name, body_id) VALUES (?, ?)", (sys_name, body_id))
                 self.conn.commit()
             except sqlite3.Error as e:
                 self.conn.rollback()
@@ -239,6 +256,12 @@ class DashboardDBMixin:
     def db_update_system(self, sys_name, total, scanned):
         with self.db_lock:
             try:
+                cursor = self.conn.cursor()
+                cursor.execute("SELECT total, scanned_count FROM systems WHERE name=?", (sys_name,))
+                row = cursor.fetchone()
+                if row:
+                    total = max(int(total or 0), int(row[0] or 0))
+                    scanned = max(int(scanned or 0), int(row[1] or 0))
                 self.conn.execute(
                     "INSERT OR REPLACE INTO systems (name, total, scanned_count) VALUES (?, ?, ?)",
                     (sys_name, total, scanned),
