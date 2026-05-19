@@ -1,5 +1,30 @@
 # VoidCompass // UPDATE LOG
 
+## v2.7.1 // Mining Companion + Startup Batching
+**Release Date:** 2026-May-19
+*   **New Mining Window:**
+    *   Added top-nav `Mining` button.
+    *   Added native mining companion tabs for session tracking, prospector results, cargo, hotspots, market search, missions, and history.
+    *   Tracks live mining events from the existing journal watcher without VoiceAttack automation.
+*   **Mining Session Tracking:**
+    *   Tracks `ProspectedAsteroid`, `MiningRefined`, cargo state, material percentages, core asteroids, and mined tons.
+    *   Saves mining session summaries into `mining_data.db`.
+    *   Added HTML mining session report generation under `Reports/Mining`.
+*   **Hotspot Finder:**
+    *   Added local mining hotspot database support via `mining_data.db`.
+    *   Added EliteMining `user_data.db` import for hotspot, overlap, and RES data.
+    *   Added live Spansh ring search with material/ring/source/range controls.
+    *   Added hotspot bookmarks.
+*   **Market Search:**
+    *   Added Spansh buyer search for mined commodities.
+    *   Shows station, price, demand, distance, arrival LS, station type, and market update time.
+*   **Build Packaging:**
+    *   Build script now creates `mining_data.db` when missing and copies it to `dist/mining_data.db`.
+    *   Bundles `mining_data.db` as PyInstaller data for packaged builds.
+*   **Startup Performance:**
+    *   Fixed current-journal startup catch-up so grouped journal events use the existing batch path.
+    *   Reduces dashboard/UI redraw churn while the active journal is being scanned at launch.
+
 ## v2.3.3 // Fleet Carrier Watcher + Event Feed
 **Release Date:** 2026-Feb-16
 *   **New Fleet Carrier Watcher Window:**

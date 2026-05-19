@@ -99,6 +99,7 @@ class DashboardUIMixin:
         self._action_button(nav_actions, "Configuration", self.open_settings, accent=True).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
         self._action_button(nav_actions, "Screenshots", self.open_screenshots_folder).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
         self._action_button(nav_actions, "Fleet Watcher", self.open_fleet_carrier_watcher).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
+        self._action_button(nav_actions, "Mining", self.open_mining_window).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
         self._action_button(nav_actions, "Route Planner", self.open_route_planner).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
 
         self.summary_bar = tk.Frame(self.root, bg=self.UI_BG)

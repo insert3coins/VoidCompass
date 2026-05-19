@@ -178,8 +178,9 @@ class JournalWatcher:
                     except Exception:
                         pass
                     self._skip_partial_line_once = False
+                startup_catchup = not self._startup_catchup_done
                 line_budget = self.max_journal_lines_per_cycle
-                if not self._startup_catchup_done:
+                if startup_catchup:
                     line_budget = min(line_budget, self.startup_max_journal_lines_per_cycle)
                 lines_read = 0
                 events = []
@@ -200,7 +201,7 @@ class JournalWatcher:
                     events.append(self._normalize_event(raw))
 
                 if events:
-                    if len(events) > 50 and self.batch_event_callback:
+                    if self.batch_event_callback and (startup_catchup or len(events) > 1):
                         self.batch_event_callback(events)
                     elif self.event_callback:
                         for idx, ev in enumerate(events, start=1):

@@ -17,6 +17,8 @@ class DashboardScanMixin:
     def _apply_status_update(self, data):
         t0 = self._perf_start()
         self.last_status_event_ts = time.time()
+        if getattr(self, "mining_window", None) and self.mining_window.is_open():
+            self.mining_window.update_status(data)
         was_on_planet = bool(self.on_planet)
         self.current_latitude = self._to_float(data.get("Latitude"))
         self.current_longitude = self._to_float(data.get("Longitude"))

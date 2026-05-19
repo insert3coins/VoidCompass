@@ -2,6 +2,7 @@ import PyInstaller.__main__
 import os
 import shutil
 from version import APP_VERSION
+from mining_data import MiningDataStore
 
 # This script automates the build process for SurveyAnalysis
 
@@ -53,6 +54,11 @@ VSVersionInfo(
     with open('version_info.txt', 'w', encoding='utf-8') as f:
         f.write(version_content)
 
+    mining_db_path = os.path.abspath("mining_data.db")
+    if not os.path.exists(mining_db_path):
+        MiningDataStore(mining_db_path)
+        print("Created mining_data.db")
+
     opts = [
         'VoidCompass.py',          # Your main entry point
         '--name=VoidCompass',      # Name of the executable
@@ -62,6 +68,7 @@ VSVersionInfo(
         '--log-level=INFO',
         '--icon=icon.ico',         # Sets the file icon for the .exe
         '--add-data=icon.ico;.',   # Bundles the icon inside the .exe for the GUI
+        '--add-data=mining_data.db;.',
         '--version-file=version_info.txt'
     ]
 
@@ -76,5 +83,8 @@ VSVersionInfo(
     if os.path.exists('mini-readme.md'):
         shutil.copy('mini-readme.md', os.path.join(dist_dir, 'UPDATE_LOG.md'))
         print("Copied mini-readme.md to dist/UPDATE_LOG.md")
+    if os.path.exists(mining_db_path):
+        shutil.copy(mining_db_path, os.path.join(dist_dir, 'mining_data.db'))
+        print("Copied mining_data.db to dist/mining_data.db")
 
     print("Build complete. Check the 'dist' folder.")

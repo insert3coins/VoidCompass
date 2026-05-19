@@ -24,6 +24,7 @@ from route_plotter import RoutePlotter
 from waypoint_manager import WaypointManager
 from journal_watcher import JournalWatcher
 from fleet_carrier_watcher import FleetCarrierWatcher
+from mining_window import MiningWindow
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
@@ -170,6 +171,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.add_event_feed_entry,
             trace_callback=self._trace_record_ms,
         )
+        self.mining_window = None
         
         if self.config.get("overlay_enabled", True):
             self.hud = TacticalHUD(self.root, self.config, on_widget_click=self._on_hud_widget_click)
@@ -381,6 +383,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         
         if self.route_plotter and self.route_plotter.win.winfo_exists():
             self.route_plotter.on_close()
+        if self.mining_window and self.mining_window.is_open():
+            self.mining_window.on_close()
             
         self.watcher.stop()
         self.screenshots.stop()
@@ -514,6 +518,23 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def open_fleet_carrier_watcher(self):
         self.fc_watcher.open_window()
+
+    def open_mining_window(self):
+        if self.mining_window and self.mining_window.is_open():
+            self.mining_window.lift()
+            return
+        self.mining_window = MiningWindow(
+            self.root,
+            self.config,
+            get_current_system=lambda: self.current_sys,
+            get_cargo_capacity=lambda: self.cargo_capacity,
+            get_current_coords=lambda: self.current_coords,
+        )
+        try:
+            self.watcher.force_check_cargo()
+            self.watcher.force_check_status()
+        except Exception:
+            pass
 
     def _process_fleet_carrier_event(self, ev, raw, d):
         self.fc_watcher.process_event(ev, raw, d, self.current_sys)
@@ -874,6 +895,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.last_logged_journal_file = current_journal
             self.log(f"Journal file: {os.path.basename(current_journal)}")
         self._process_fleet_carrier_event(ev, raw, d)
+        if self.mining_window and self.mining_window.is_open():
+            self.mining_window.process_event(data)
         
         if ev == "Fileheader":
             self.log(f"Game version detected: {d.get('gameversion')} ({d.get('build')})")
@@ -1179,6 +1202,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def update_cargo(self, inventory):
         self.last_cargo_event_ts = time.time()
+        if self.mining_window and self.mining_window.is_open():
+            self.mining_window.update_cargo(inventory, self.cargo_capacity)
         if self.cargo_hud:
             self.root.after(0, lambda: self.cargo_hud.update(inventory, self.cargo_capacity))
 
