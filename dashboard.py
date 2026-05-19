@@ -23,7 +23,6 @@ from settings_ui import open_settings
 from route_plotter import RoutePlotter
 from waypoint_manager import WaypointManager
 from journal_watcher import JournalWatcher
-from fleet_carrier_watcher import FleetCarrierWatcher
 from mining_window import MiningWindow
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
@@ -161,14 +160,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.config,
             lambda: self.current_sys,
             self.log,
-            trace_callback=self._trace_record_ms,
-        )
-        self.fc_watcher = FleetCarrierWatcher(
-            self.root,
-            self.config,
-            self.edsm,
-            self.waypoint_manager,
-            self.add_event_feed_entry,
             trace_callback=self._trace_record_ms,
         )
         self.mining_window = None
@@ -516,9 +507,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             event_callback=self._on_route_event,
         )
 
-    def open_fleet_carrier_watcher(self):
-        self.fc_watcher.open_window()
-
     def open_mining_window(self):
         if self.mining_window and self.mining_window.is_open():
             self.mining_window.lift()
@@ -535,9 +523,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.watcher.force_check_status()
         except Exception:
             pass
-
-    def _process_fleet_carrier_event(self, ev, raw, d):
-        self.fc_watcher.process_event(ev, raw, d, self.current_sys)
 
     def _on_route_event(self, tag, message, severity="INFO", copy_text=None, system_name=None, pinned=False):
         if not message:
@@ -609,13 +594,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if self.scan_hud:
                     self.scan_hud.win.destroy()
                     self.scan_hud = None
-
-            if self.mining_window and self.mining_window.is_open():
-                enabled = bool(self.config.get("prospector_overlay_enabled", True))
-                self.mining_window.overlay_var.set(enabled)
-                self.mining_window.overlay_btn.config(text="Overlay On" if enabled else "Overlay Off")
-                if not enabled and self.mining_window.prospector_overlay:
-                    self.mining_window.prospector_overlay.hide()
 
         
         open_settings(self.root, self.config, on_save)
@@ -901,11 +879,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if current_journal and current_journal != self.last_logged_journal_file:
             self.last_logged_journal_file = current_journal
             self.log(f"Journal file: {os.path.basename(current_journal)}")
-        self._process_fleet_carrier_event(ev, raw, d)
         if self.mining_window and self.mining_window.is_open():
             self.mining_window.process_event(data)
         
-        if ev == "Fileheader":
+        if ev in ("FileHeader", "Fileheader"):
             self.log(f"Game version detected: {d.get('gameversion')} ({d.get('build')})")
 
         elif ev == "Loadout":
@@ -1055,6 +1032,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if d.get("system_name") and d.get("system_name") != self.current_sys:
                 return
             self.total = d.get("body_count", self.total)
+            progress = d.get("progress")
+            if isinstance(progress, (int, float)) and progress > 0 and self.total > 0:
+                self.scanned = max(self.scanned, min(self.total, int(round(self.total * progress))))
             self.fss_all_bodies = False
             self.db_update_system(self.current_sys, self.total, self.scanned)
             if not self.batch_mode:
@@ -1064,6 +1044,27 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if not self.batch_mode:
                 self.update_hud()
                 self.schedule_dashboard_refresh()
+
+        elif ev == "DiscoveryScan":
+            discovered = d.get("bodies", 0)
+            if isinstance(discovered, int) and discovered > 0:
+                self.total = max(self.total, self.scanned + discovered)
+                self.db_update_system(self.current_sys, self.total, self.scanned)
+                if not self.batch_mode:
+                    self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+                    self.update_hud()
+                    self.schedule_dashboard_refresh()
+
+        elif ev == "NavBeaconScan":
+            count = d.get("num_bodies", 0)
+            if isinstance(count, int) and count > 0:
+                self.total = max(self.total, count)
+                self.db_update_system(self.current_sys, self.total, self.scanned)
+                self.add_event_feed_entry("SCAN", f"Nav beacon scan: {count} bodies", severity="INFO", copy_text=self.current_sys)
+                if not self.batch_mode:
+                    self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+                    self.update_hud()
+                    self.schedule_dashboard_refresh()
 
         elif ev == "FSSAllBodiesFound":
             if d.get("system_name") and d.get("system_name") == self.current_sys:
@@ -1085,6 +1086,27 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 bio_count = d.get("bio_count", 0)
                 geo_count = d.get("geo_count", 0)
                 self.body_signals[body_id] = {"bio": bio_count, "geo": geo_count}
+                if bio_count:
+                    self.system_bio_signals = max(self.system_bio_signals, bio_count)
+                item = self.scan_items_by_id.get(body_id)
+                if item:
+                    item["bio_count"] = bio_count
+                    item["color"] = COLOR_ACCENT if (bio_count > 0 or (not item.get("is_star") and item.get("dss_reward", 0) > item.get("reward", 0))) else COLOR_TEXT
+                    if item.get("_ts") is None:
+                        item["_ts"] = int(time.time())
+                    self.save_scan_item_to_db(self.current_sys, item)
+                    if not self.batch_mode:
+                        self.update_hud()
+                        self.schedule_dashboard_refresh()
+
+        elif ev == "SAASignalsFound":
+            body_id = self._normalize_body_id(d.get("body_id"))
+            if body_id is not None:
+                bio_count = d.get("bio_count", 0)
+                geo_count = d.get("geo_count", 0)
+                if bio_count or geo_count:
+                    self.body_signals[body_id] = {"bio": bio_count, "geo": geo_count}
+                    self.system_bio_signals = max(self.system_bio_signals, bio_count)
                 item = self.scan_items_by_id.get(body_id)
                 if item:
                     item["bio_count"] = bio_count
@@ -1176,14 +1198,31 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def process_batch(self, events):
         self.batch_mode = True
-        with self.db_lock:
-            self.conn.execute("BEGIN TRANSACTION")
-            for ev in events:
+        try:
+            with self.db_lock:
                 try:
-                    self.process_event(ev)
-                except: pass
-            self.conn.commit()
-        self.batch_mode = False
+                    self.conn.execute("BEGIN TRANSACTION")
+                    in_transaction = True
+                except Exception as e:
+                    in_transaction = False
+                    logging.warning(f"Batch transaction unavailable: {e}")
+                for ev in events:
+                    try:
+                        self.process_event(ev)
+                    except Exception as e:
+                        ev_type = ev.get("type") if isinstance(ev, dict) else "UNKNOWN"
+                        logging.warning(f"Batch event failed [{ev_type}]: {e}")
+                if in_transaction:
+                    try:
+                        self.conn.commit()
+                    except Exception as e:
+                        logging.warning(f"Batch commit failed: {e}")
+                        try:
+                            self.conn.rollback()
+                        except Exception:
+                            pass
+        finally:
+            self.batch_mode = False
         self.root.after(0, self.update_dashboard_ui)
         self.root.after(0, self.update_hud)
         

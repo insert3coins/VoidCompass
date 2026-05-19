@@ -105,6 +105,27 @@ class DashboardScanMixin:
             if body_id is not None:
                 self.scan_items_by_id[body_id] = item
             self.save_scan_item_to_db(self.current_sys, item)
+        self._reconcile_scan_progress_from_cache()
+
+    def _reconcile_scan_progress_from_cache(self):
+        cached_ids = set()
+        for item in self.scan_items:
+            body_id = item.get("body_id")
+            if body_id is not None:
+                cached_ids.add(body_id)
+        if cached_ids:
+            before = len(self.scanned_bodies)
+            self.scanned_bodies.update(cached_ids)
+            if len(self.scanned_bodies) != before:
+                for body_id in cached_ids:
+                    self.db_add_body(self.current_sys, body_id)
+        cached_count = len(self.scanned_bodies)
+        if cached_count > self.scanned:
+            self.scanned = cached_count
+        if self.total < self.scanned:
+            self.total = self.scanned
+        if self.current_sys and (cached_count or self.total):
+            self.db_update_system(self.current_sys, self.total, self.scanned)
 
     def _format_credits(self, credits, hide_units=False):
         if credits is None:

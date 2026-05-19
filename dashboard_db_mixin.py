@@ -207,14 +207,29 @@ class DashboardDBMixin:
                 cursor.execute("SELECT total, scanned_count FROM systems WHERE name=?", (sys_name,))
                 row = cursor.fetchone()
                 if row:
-                    self.total = row[0]
+                    self.total = row[0] or 0
+                    stored_scanned = row[1] or 0
+                    cursor.execute("SELECT body_id FROM bodies WHERE system_name=?", (sys_name,))
+                    self.scanned_bodies = set(r[0] for r in cursor.fetchall())
+                    self.scanned = max(len(self.scanned_bodies), stored_scanned)
+                    if self.scanned > self.total:
+                        self.total = self.scanned
+                        self.conn.execute(
+                            "INSERT OR REPLACE INTO systems (name, total, scanned_count) VALUES (?, ?, ?)",
+                            (sys_name, self.total, self.scanned),
+                        )
+                        self._db_maybe_commit(reason="system_reconcile")
+                else:
                     cursor.execute("SELECT body_id FROM bodies WHERE system_name=?", (sys_name,))
                     self.scanned_bodies = set(r[0] for r in cursor.fetchall())
                     self.scanned = len(self.scanned_bodies)
-                else:
-                    self.total = 0
-                    self.scanned = 0
-                    self.scanned_bodies = set()
+                    self.total = self.scanned
+                    if self.scanned:
+                        self.conn.execute(
+                            "INSERT OR REPLACE INTO systems (name, total, scanned_count) VALUES (?, ?, ?)",
+                            (sys_name, self.total, self.scanned),
+                        )
+                        self._db_maybe_commit(reason="system_reconcile")
             except sqlite3.Error as e:
                 self.log(f"❌ DB READ ERROR: {e}")
                 self.total = 0

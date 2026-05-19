@@ -1,18 +1,25 @@
 # VoidCompass // UPDATE LOG
 
-## v2.7.2 // Enhanced Prospector Overlay
+## v2.7.3 // Fleet Backout + Journal API Alignment
 **Release Date:** 2026-May-19
-*   **Mining Prospector Overlay:**
-    *   Added an enhanced prospector overlay for active mining sessions.
-    *   Shows prospector remaining percentage, material percentages, material content, and core asteroid detection.
-    *   Uses Void Compass overlay colors and transparent HUD styling.
-*   **Overlay Controls:**
-    *   Added `Mining Prospector Overlay` toggle in Settings.
-    *   Added `Overlay On/Off` control in the Mining window header.
-    *   Overlay only appears after a mining session has been started.
-*   **Overlay Position Persistence:**
-    *   Overlay can be dragged like the existing HUD overlays.
-    *   Position is saved to `config.json` and restored on next launch.
+*   **Fleet Carrier Feature Removed:**
+    *   Removed the Fleet Watcher/Carrier Manager window from the top navigation.
+    *   Removed fleet-carrier event forwarding, manager modules, Discord webhook settings, and saved fleet config keys.
+    *   Fleet carrier work is parked for now and can be revisited later with a cleaner product fit.
+*   **Journal API Alignment:**
+    *   Added handling for `DiscoveryScan` and `NavBeaconScan` totals per the Elite Dangerous Journal docs.
+    *   Added `FSSDiscoveryScan.Progress` support for better scan-progress restoration.
+    *   Normalized `FileHeader`/`fileheader` casing and improved `FSSBodySignals` / `SAASignalsFound` biological/geological signal parsing.
+    *   Reconciles HUD scan progress from stored body rows, stored scan counts, and scan HUD cache when revisiting systems.
+
+## v2.7.2 // Mining Overlay Backout
+**Release Date:** 2026-May-19
+*   **Prospector Overlay Removed:**
+    *   Removed the experimental enhanced prospector overlay.
+    *   Removed the Mining window overlay toggle and Settings toggle.
+    *   Removed prospector overlay config defaults and screen-position persistence keys.
+*   **Mining Window Preserved:**
+    *   Mining session tracking, prospector history, cargo, hotspots, market search, missions, reports, and bookmarks remain in place.
 
 ## v2.7.1 // Mining Companion + Startup Batching
 **Release Date:** 2026-May-19

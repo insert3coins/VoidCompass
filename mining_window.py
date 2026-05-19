@@ -9,7 +9,6 @@ from datetime import datetime
 
 from config import CONFIG_FILE, COLOR_ACCENT, COLOR_BG, COLOR_GREEN, COLOR_ORANGE, COLOR_TEXT
 from mining_data import MiningDataStore, search_spansh_buyers, search_spansh_rings
-from prospector_overlay import ProspectorOverlay
 
 
 MINING_MATERIALS = {
@@ -130,7 +129,6 @@ class MiningWindow:
         self.search_results = []
         self.search_running = False
         self.market_running = False
-        self.prospector_overlay = None
 
         self._build_style()
         self._build_layout()
@@ -197,9 +195,6 @@ class MiningWindow:
         self.stop_btn.pack(side=tk.RIGHT, padx=6, pady=9)
         self.reset_btn = self._button(header, "Reset", self.reset_session)
         self.reset_btn.pack(side=tk.RIGHT, padx=6, pady=9)
-        self.overlay_var = tk.BooleanVar(value=bool(self.config.get("prospector_overlay_enabled", True)))
-        self.overlay_btn = self._button(header, "Overlay On" if self.overlay_var.get() else "Overlay Off", self.toggle_prospector_overlay)
-        self.overlay_btn.pack(side=tk.RIGHT, padx=6, pady=9)
 
         self.notebook = ttk.Notebook(self.win, style="Mining.TNotebook")
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 12))
@@ -475,9 +470,6 @@ class MiningWindow:
         self.win.lift()
 
     def on_close(self):
-        if self.prospector_overlay:
-            self.prospector_overlay.destroy()
-            self.prospector_overlay = None
         self.config["mining_geometry"] = self.win.geometry()
         try:
             with open(CONFIG_FILE, "w") as f:
@@ -503,8 +495,6 @@ class MiningWindow:
     def stop_session(self):
         self.session_active = False
         self._finish_current_session()
-        if self.prospector_overlay:
-            self.prospector_overlay.hide()
         self._refresh_all()
 
     def reset_session(self):
@@ -519,31 +509,7 @@ class MiningWindow:
         self.material_stats = {}
         self.latest_prospector = "Waiting for prospector data."
         self._clear_tree(self.prospector_tree)
-        if self.prospector_overlay:
-            self.prospector_overlay.hide()
         self._refresh_all()
-
-    def toggle_prospector_overlay(self):
-        enabled = not bool(self.overlay_var.get())
-        self.overlay_var.set(enabled)
-        self.config["prospector_overlay_enabled"] = enabled
-        self.overlay_btn.config(text="Overlay On" if enabled else "Overlay Off")
-        if not enabled and self.prospector_overlay:
-            self.prospector_overlay.hide()
-        try:
-            with open(CONFIG_FILE, "w") as f:
-                json.dump(self.config, f, indent=4)
-        except Exception:
-            pass
-
-    def _show_prospector_overlay(self, raw):
-        if not self.session_active:
-            return
-        if not bool(self.config.get("prospector_overlay_enabled", True)):
-            return
-        if not self.prospector_overlay:
-            self.prospector_overlay = ProspectorOverlay(self.root, self.config)
-        self.prospector_overlay.show_prospector(raw)
 
     def process_event(self, event):
         if threading.current_thread() is not threading.main_thread():
@@ -694,7 +660,6 @@ class MiningWindow:
             values=(_event_time(raw), content, remaining_text, materials_text, core_text),
         )
         self._trim_tree(self.prospector_tree, 200)
-        self._show_prospector_overlay(raw)
 
         if self.session_active and materials:
             self.notebook.select(1)

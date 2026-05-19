@@ -29,6 +29,7 @@ class JournalWatcher:
             self.special_file_settle_s = 0.0
         self._startup_catchup_done = False
         self._skip_partial_line_once = False
+        self._startup_location_seeded = False
         
         self.event_callback = None
         self.batch_event_callback = None
@@ -167,6 +168,7 @@ class JournalWatcher:
                         self._skip_partial_line_once = True
                 except Exception:
                     self.file_pos = 0
+            self._seed_startup_location()
         
         try:
             with open(self.last_journal, 'r', encoding='utf-8') as f:
@@ -221,14 +223,41 @@ class JournalWatcher:
                 except Exception:
                     pass
 
+    def _seed_startup_location(self, tail_bytes=2 * 1024 * 1024):
+        """Dispatch the newest known location immediately while startup catch-up replays."""
+        if self._startup_location_seeded:
+            return
+        self._startup_location_seeded = True
+        if not self.last_journal or not self.event_callback:
+            return
+        try:
+            size = os.path.getsize(self.last_journal)
+            start = max(0, size - int(tail_bytes))
+            with open(self.last_journal, "rb") as f:
+                f.seek(start)
+                content = f.read().decode("utf-8", errors="ignore")
+            lines = content.splitlines()
+            if start > 0 and lines:
+                lines = lines[1:]
+            for line in reversed(lines):
+                try:
+                    raw = json.loads(line)
+                except Exception:
+                    continue
+                if raw.get("event") in ("FSDJump", "Location"):
+                    self.event_callback(self._normalize_event(raw))
+                    return
+        except Exception:
+            return
+
     def _normalize_event(self, data):
         ev = data.get("event")
         if not ev:
             return {"type": None, "raw": data, "data": {}}
 
-        if ev == "Fileheader":
+        if ev in ("FileHeader", "Fileheader", "fileheader"):
             return {
-                "type": ev,
+                "type": "FileHeader",
                 "raw": data,
                 "data": {
                     "gameversion": data.get("gameversion"),
@@ -292,7 +321,26 @@ class JournalWatcher:
                 "raw": data,
                 "data": {
                     "system_name": data.get("SystemName"),
+                    "progress": data.get("Progress"),
                     "body_count": data.get("BodyCount", 0)
+                }
+            }
+        if ev == "DiscoveryScan":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "system_address": data.get("SystemAddress"),
+                    "bodies": data.get("Bodies", 0)
+                }
+            }
+        if ev == "NavBeaconScan":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "system_address": data.get("SystemAddress"),
+                    "num_bodies": data.get("NumBodies", 0)
                 }
             }
         if ev == "FSSAllBodiesFound":
@@ -308,17 +356,41 @@ class JournalWatcher:
             bio_count = 0
             geo_count = 0
             for signal in data.get("Signals", []):
-                if signal.get("Type") == "$SAA_SignalType_Biological;":
+                signal_type = signal.get("Type")
+                signal_label = signal.get("Type_Localised")
+                if signal_type == "$SAA_SignalType_Biological;" or signal_label == "Biological":
                     bio_count = signal.get("Count", 0)
-                elif signal.get("Type") == "$SAA_SignalType_Geological;":
+                elif signal_type == "$SAA_SignalType_Geological;" or signal_label == "Geological":
                     geo_count = signal.get("Count", 0)
             return {
                 "type": ev,
                 "raw": data,
                 "data": {
+                    "body_name": data.get("BodyName"),
                     "body_id": data.get("BodyID"),
                     "bio_count": bio_count,
                     "geo_count": geo_count
+                }
+            }
+        if ev == "SAASignalsFound":
+            bio_count = 0
+            geo_count = 0
+            for signal in data.get("Signals", []):
+                signal_type = signal.get("Type")
+                signal_label = signal.get("Type_Localised")
+                if signal_type == "$SAA_SignalType_Biological;" or signal_label == "Biological":
+                    bio_count += signal.get("Count", 0)
+                elif signal_type == "$SAA_SignalType_Geological;" or signal_label == "Geological":
+                    geo_count += signal.get("Count", 0)
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "body_name": data.get("BodyName"),
+                    "body_id": data.get("BodyID"),
+                    "bio_count": bio_count,
+                    "geo_count": geo_count,
+                    "genuses": data.get("Genuses", [])
                 }
             }
         if ev == "SAAScanComplete":
@@ -475,6 +547,23 @@ class JournalWatcher:
                                 if sys_name:
                                     if sys_name not in new_history: new_history[sys_name] = {"total": 0, "bodies": [], "scanned_count": 0}
                                     count = data.get("BodyCount", 0)
+                                    if count > new_history[sys_name]["total"]: new_history[sys_name]["total"] = count
+
+                            elif ev == "DiscoveryScan":
+                                sys_name = current_sys_context
+                                if sys_name:
+                                    if sys_name not in new_history: new_history[sys_name] = {"total": 0, "bodies": [], "scanned_count": 0}
+                                    discovered = data.get("Bodies", 0)
+                                    if isinstance(discovered, int) and discovered > 0:
+                                        estimated_total = new_history[sys_name]["scanned_count"] + discovered
+                                        if estimated_total > new_history[sys_name]["total"]:
+                                            new_history[sys_name]["total"] = estimated_total
+
+                            elif ev == "NavBeaconScan":
+                                sys_name = current_sys_context
+                                if sys_name:
+                                    if sys_name not in new_history: new_history[sys_name] = {"total": 0, "bodies": [], "scanned_count": 0}
+                                    count = data.get("NumBodies", 0)
                                     if count > new_history[sys_name]["total"]: new_history[sys_name]["total"] = count
 
                             elif ev == "FSSAllBodiesFound":
