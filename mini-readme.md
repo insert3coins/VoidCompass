@@ -1,5 +1,18 @@
 # VoidCompass // UPDATE LOG
 
+## v2.7.5 // Scan Body Accuracy + HUD Progress Fixes
+**Release Date:** 2026-May-25
+*   **Elite Journal Scan Alignment:**
+    *   Preserved `SystemAddress` across location, scan, FSS, SAA, DSS, and organic scan events.
+    *   Filters body-level scan updates by active `SystemAddress` so same-numbered `BodyID` values from another system cannot contaminate the current dashboard/HUD state.
+    *   Stores `system_address` with scan HUD cache items for clearer source tracking.
+*   **Scan Result Refresh:**
+    *   Updates existing body cards when later detailed/nav-beacon `Scan` events add fields missing from earlier basic scan data.
+    *   Derives biological signal totals from per-body signal records instead of mixing max and incremental counting.
+*   **Navigation HUD Progress:**
+    *   Stopped treating `FSSDiscoveryScan.Progress` and `FSSAllBodiesFound` as completed body scans.
+    *   Scan progress now advances from actual body `Scan` events, and the HUD/dashboard percentage is clamped against stale historical data.
+
 ## v2.7.4 // Navigation HUD Route Polish
 **Release Date:** 2026-May-25
 *   **Navigation HUD Route Targeting:**
