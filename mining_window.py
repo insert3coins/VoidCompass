@@ -8,7 +8,7 @@ from tkinter import filedialog, messagebox, ttk
 from datetime import datetime
 
 from config import CONFIG_FILE, COLOR_ACCENT, COLOR_BG, COLOR_GREEN, COLOR_ORANGE, COLOR_TEXT
-from mining_data import MiningDataStore, search_spansh_buyers, search_spansh_rings
+from mining_data import MiningDataStore, normalize_material_name, normalize_ring_type, search_spansh_buyers, search_spansh_rings
 
 
 MINING_MATERIALS = {
@@ -56,10 +56,7 @@ MATERIAL_ALIASES = {
 
 
 def _clean_name(value):
-    text = str(value or "").strip().strip(";").lstrip("$")
-    if not text:
-        return ""
-    text = text.replace("_", " ")
+    text = normalize_material_name(value)
     text = re.sub(r"\s*\([^)]*\)", "", text).strip()
     if text.lower().startswith("material content"):
         text = text[len("material content"):].strip(": ")
@@ -367,7 +364,6 @@ class MiningWindow:
             ("ls", "LS", 70),
             ("overlap", "Overlap", 80),
             ("res", "RES", 80),
-            ("source", "Source", 90),
         ])
 
     def _build_missions_tab(self):
@@ -470,6 +466,7 @@ class MiningWindow:
         self.win.lift()
 
     def on_close(self):
+        self._save_current_session_progress()
         self.config["mining_geometry"] = self.win.geometry()
         try:
             with open(CONFIG_FILE, "w") as f:
@@ -577,7 +574,7 @@ class MiningWindow:
             if not name:
                 continue
             ring_class = str(ring.get("RingClass") or "").replace("eRingClass_", "")
-            ring_class = ring_class.replace("MetalRich", "Metal Rich").replace("Metalic", "Metallic")
+            ring_class = normalize_ring_type(ring_class) or "-"
             body = _ring_body_name(name, system)
             self.ring_metadata[(system, body)] = {
                 "ring_type": ring_class or "-",
@@ -646,6 +643,7 @@ class MiningWindow:
             for name, pct in material_values.items():
                 stats = self.material_stats.setdefault(name, [])
                 stats.append(float(pct))
+            self._save_current_session_progress()
 
         remaining_text = _fmt_pct(remaining) if remaining is not None else "-"
         materials_text = ", ".join(materials) if materials else "-"
@@ -668,6 +666,7 @@ class MiningWindow:
         name = _clean_name(raw.get("Type_Localised") or raw.get("Type"))
         if self.session_active and name:
             self.mined_tons[name] = self.mined_tons.get(name, 0) + 1
+            self._save_current_session_progress()
 
     def _apply_cargo_event(self, raw):
         inventory = raw.get("Inventory")
@@ -793,7 +792,6 @@ class MiningWindow:
                     ls_distance,
                     item.get("overlap_tag") or item.get("overlap") or "",
                     item.get("res_tag") or item.get("res") or "",
-                    item.get("data_source") or item.get("source") or "",
                 ),
             )
 
@@ -1000,8 +998,16 @@ class MiningWindow:
     def _finish_current_session(self):
         if not self.session_id:
             return
-        summary = {
-            "ended_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        summary = self._current_session_summary()
+        summary["ended_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        self.data_store.finish_session(self.session_id, summary)
+        self.session_id = None
+        self.session_started_at = None
+        self._refresh_sessions()
+
+    def _current_session_summary(self):
+        return {
+            "ended_at": None,
             "system_name": self.current_system,
             "body_name": self.current_body,
             "prospected_count": self.prospected_count,
@@ -1011,7 +1017,11 @@ class MiningWindow:
             "material_json": json.dumps(self.material_stats, sort_keys=True),
             "report_path": None,
         }
-        self.data_store.finish_session(self.session_id, summary)
+
+    def _save_current_session_progress(self):
+        if not self.session_active or not self.session_id:
+            return
+        self.data_store.update_session(self.session_id, self._current_session_summary())
         self._refresh_sessions()
 
     def generate_selected_report(self):

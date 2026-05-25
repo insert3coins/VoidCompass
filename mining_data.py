@@ -28,6 +28,57 @@ SPANSH_COMMODITY_MAP = {
     "Palladium": "Palladium",
 }
 
+MATERIAL_CANONICAL = {
+    "void opal": "Void Opals",
+    "void opals": "Void Opals",
+    "low temperature diamond": "Low Temperature Diamonds",
+    "low temperature diamonds": "Low Temperature Diamonds",
+    "low temp diamonds": "Low Temperature Diamonds",
+    "painite": "Painite",
+    "platinum": "Platinum",
+    "bromellite": "Bromellite",
+    "alexandrite": "Alexandrite",
+    "benitoite": "Benitoite",
+    "grandidierite": "Grandidierite",
+    "monazite": "Monazite",
+    "musgravite": "Musgravite",
+    "osmium": "Osmium",
+    "palladium": "Palladium",
+    "rhodplumsite": "Rhodplumsite",
+    "serendibite": "Serendibite",
+    "tritium": "Tritium",
+}
+
+RING_TYPE_CANONICAL = {
+    "metallic": "Metallic",
+    "metalic": "Metallic",
+    "metal rich": "Metal Rich",
+    "metalrich": "Metal Rich",
+    "rocky": "Rocky",
+    "icy": "Icy",
+}
+
+
+def normalize_material_name(value):
+    text = str(value or "").strip().strip(";").lstrip("$")
+    if not text:
+        return ""
+    text = text.replace("_", " ")
+    text = text.replace("SAA SignalType", "")
+    text = " ".join(text.split())
+    return MATERIAL_CANONICAL.get(text.lower(), text.title())
+
+
+def normalize_ring_type(value):
+    text = str(value or "").strip()
+    if not text:
+        return None
+    text = text.replace("eRingClass_", "")
+    text = text.replace("Ring", "")
+    text = text.replace("_", " ")
+    text = " ".join(text.split())
+    return RING_TYPE_CANONICAL.get(text.lower(), text.title())
+
 
 class MiningDataStore:
     def __init__(self, db_path=None):
@@ -96,7 +147,34 @@ class MiningDataStore:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_hotspots_material ON hotspots(material_name)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_hotspots_system ON hotspots(system_name)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_hotspots_ring ON hotspots(ring_type)")
+            self._normalize_existing_hotspots(conn)
             conn.commit()
+
+    def _normalize_existing_hotspots(self, conn):
+        rows = conn.execute("SELECT id, system_name, body_name, material_name, ring_type, hotspot_count FROM hotspots").fetchall()
+        for row in rows:
+            material_name = normalize_material_name(row["material_name"])
+            ring_type = normalize_ring_type(row["ring_type"])
+            if material_name != row["material_name"] or ring_type != row["ring_type"]:
+                try:
+                    conn.execute(
+                        "UPDATE hotspots SET material_name=?, ring_type=? WHERE id=?",
+                        (material_name, ring_type, row["id"]),
+                    )
+                except sqlite3.IntegrityError:
+                    existing = conn.execute(
+                        """
+                        SELECT id, hotspot_count FROM hotspots
+                        WHERE system_name=? AND body_name=? AND material_name=? AND id<>?
+                        """,
+                        (row["system_name"], row["body_name"], material_name, row["id"]),
+                    ).fetchone()
+                    if existing:
+                        conn.execute(
+                            "UPDATE hotspots SET hotspot_count=max(hotspot_count, ?) WHERE id=?",
+                            (int(row["hotspot_count"] or 0), existing["id"]),
+                        )
+                        conn.execute("DELETE FROM hotspots WHERE id=?", (row["id"],))
 
     @staticmethod
     def distance_ly(a, b):
@@ -109,6 +187,8 @@ class MiningDataStore:
 
     def upsert_hotspot(self, hotspot):
         now = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        material_name = normalize_material_name(hotspot.get("material_name") or hotspot.get("material"))
+        ring_type = normalize_ring_type(hotspot.get("ring_type"))
         with self._connect() as conn:
             conn.execute(
                 """
@@ -134,9 +214,9 @@ class MiningDataStore:
                 (
                     hotspot.get("system_name") or hotspot.get("system") or "",
                     hotspot.get("body_name") or hotspot.get("body") or "",
-                    hotspot.get("material_name") or hotspot.get("material") or "",
+                    material_name,
                     int(hotspot.get("hotspot_count") or hotspot.get("count") or 0),
-                    hotspot.get("ring_type"),
+                    ring_type,
                     hotspot.get("ls_distance") or hotspot.get("distance"),
                     hotspot.get("x_coord"),
                     hotspot.get("y_coord"),
@@ -154,9 +234,11 @@ class MiningDataStore:
         clauses = []
         params = []
         if material and material != "All":
+            material = normalize_material_name(material)
             clauses.append("lower(material_name) = lower(?)")
             params.append(material)
         if ring_type and ring_type != "All":
+            ring_type = normalize_ring_type(ring_type)
             clauses.append("lower(ring_type) = lower(?)")
             params.append(ring_type)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
@@ -233,6 +315,9 @@ class MiningDataStore:
             return cur.lastrowid
 
     def finish_session(self, session_id, summary):
+        self.update_session(session_id, summary, ended_at=summary.get("ended_at"))
+
+    def update_session(self, session_id, summary, ended_at=None):
         if not session_id:
             return
         with self._connect() as conn:
@@ -245,7 +330,7 @@ class MiningDataStore:
                 WHERE id = ?
                 """,
                 (
-                    summary.get("ended_at"),
+                    ended_at,
                     summary.get("system_name"),
                     summary.get("body_name"),
                     int(summary.get("prospected_count") or 0),
@@ -281,14 +366,10 @@ class MiningDataStore:
         source.row_factory = sqlite3.Row
         now = datetime.utcnow().isoformat(timespec="seconds") + "Z"
         try:
-            cursor = source.execute(
-                """
-                SELECT system_name, body_name, material_name, hotspot_count, scan_date,
-                       x_coord, y_coord, z_coord, ring_type, ls_distance,
-                       overlap_tag, res_tag, data_source
-                FROM hotspot_data
-                """
-            )
+            source_table = self._find_source_hotspot_table(source)
+            if not source_table:
+                raise sqlite3.Error("No hotspot table found in imported database")
+            cursor = source.execute(self._build_hotspot_import_query(source, source_table))
             rows = [dict(row) for row in cursor]
             with self._connect() as conn:
                 conn.executemany(
@@ -316,9 +397,9 @@ class MiningDataStore:
                         (
                             row.get("system_name") or "",
                             row.get("body_name") or "",
-                            row.get("material_name") or "",
+                            normalize_material_name(row.get("material_name")),
                             int(row.get("hotspot_count") or 0),
-                            row.get("ring_type"),
+                            normalize_ring_type(row.get("ring_type")),
                             row.get("ls_distance"),
                             row.get("x_coord"),
                             row.get("y_coord"),
@@ -337,6 +418,47 @@ class MiningDataStore:
         finally:
             source.close()
         return imported
+
+    @staticmethod
+    def _find_source_hotspot_table(conn):
+        tables = {
+            row[0]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        for name in ("hotspot_data", "hotspots"):
+            if name in tables:
+                return name
+        return None
+
+    @staticmethod
+    def _build_hotspot_import_query(conn, table_name):
+        columns = {
+            row[1]
+            for row in conn.execute(f"PRAGMA table_info({table_name})")
+        }
+
+        def expr(alias, *candidates):
+            for candidate in candidates:
+                if candidate in columns:
+                    return f'"{candidate}" AS "{alias}"'
+            return f'NULL AS "{alias}"'
+
+        select_parts = [
+            expr("system_name", "system_name", "system"),
+            expr("body_name", "body_name", "body", "ring_name"),
+            expr("material_name", "material_name", "material", "hotspot"),
+            expr("hotspot_count", "hotspot_count", "count", "signals"),
+            expr("scan_date", "scan_date", "updated_at", "timestamp"),
+            expr("x_coord", "x_coord", "x"),
+            expr("y_coord", "y_coord", "y"),
+            expr("z_coord", "z_coord", "z"),
+            expr("ring_type", "ring_type", "type"),
+            expr("ls_distance", "ls_distance", "distance", "distance_to_arrival"),
+            expr("overlap_tag", "overlap_tag", "overlap"),
+            expr("res_tag", "res_tag", "res"),
+            expr("data_source", "data_source", "source"),
+        ]
+        return f'SELECT {", ".join(select_parts)} FROM "{table_name}"'
 
 
 def search_spansh_rings(system_name, material=None, ring_type=None, max_results=100):
