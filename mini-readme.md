@@ -1,5 +1,26 @@
 # VoidCompass // UPDATE LOG
 
+## v2.7.6 // Mining Hotspot Data + Session Persistence
+**Release Date:** 2026-May-26
+*   **Hotspot Database Import:**
+    *   Added flexible EliteMining `user_data.db` import — detects `hotspot_data` or `hotspots` source table automatically.
+    *   Dynamic column mapping handles schema differences between EliteMining versions without hard-coded field lists.
+    *   Normalises material names and ring types on import so local search filters match correctly.
+    *   Import deduplicates on `(system_name, body_name, material_name)` using upsert — safe to re-run.
+*   **Material & Ring Normalisation:**
+    *   Added `MATERIAL_CANONICAL` lookup and `normalize_material_name()` shared across data layer and UI.
+    *   Added `RING_TYPE_CANONICAL` lookup and `normalize_ring_type()` replacing ad-hoc string replacements.
+    *   `_normalize_existing_hotspots()` runs on startup to clean any legacy data already in the local DB.
+    *   `upsert_hotspot()` and `search_hotspots()` both normalise before write/compare.
+    *   `_clean_name()` in the mining window now delegates to `normalize_material_name()`.
+*   **Hotspots Table:**
+    *   Removed the Source column from the hotspots treeview — System · Ring · Material · Signals · Ring Type · LY · LS · Overlap · RES.
+*   **Session Persistence:**
+    *   Added `update_session()` to write in-progress session data without ending it.
+    *   Session progress (prospected count, core count, tons, material stats) is saved to DB after each prospector result and each refined event, not only on session stop.
+    *   Progress is also saved when the mining window is closed mid-session.
+    *   Extracted `_current_session_summary()` helper used by both in-progress saves and final close.
+
 ## v2.7.5 // Scan Body Accuracy + HUD Progress Fixes
 **Release Date:** 2026-May-25
 *   **Elite Journal Scan Alignment:**
