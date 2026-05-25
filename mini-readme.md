@@ -1,5 +1,19 @@
 # VoidCompass // UPDATE LOG
 
+## v2.7.4 // Navigation HUD Route Polish
+**Release Date:** 2026-May-25
+*   **Navigation HUD Route Targeting:**
+    *   Changed the route-planner footer target from the final destination to the next unvisited waypoint.
+    *   Kept the top `NAV` row dedicated to the in-game navigation target.
+    *   Relabeled the route-planner target as `WP` to distinguish it from game navigation.
+*   **Navigation HUD Layout:**
+    *   Compact route progress formatting so waypoint and route status fit on one footer line.
+    *   Added dynamic waypoint font fitting to avoid overlap with long waypoint names.
+    *   Updated HUD geometry restoration to use the HUD's configured dimensions instead of a hardcoded size.
+*   **Navigation HUD Animation:**
+    *   Added a lightweight Braille-style title animation on the right side of the HUD header.
+    *   Animation redraws only the title glyph items and respects the HUD animation interval guardrail.
+
 ## v2.7.3 // Fleet Backout + Journal API Alignment
 **Release Date:** 2026-May-19
 *   **Fleet Carrier Feature Removed:**

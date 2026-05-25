@@ -1,4 +1,5 @@
 import tkinter as tk
+import tkinter.font as tkfont
 import json
 import time
 from config import CONFIG_FILE, COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE
@@ -32,15 +33,40 @@ class TacticalHUD:
         
         self.force_topmost()
         
-        # Optional title glyph animation (kept for later use):
-        # self.anim_step = 0
-        # self.anim_char = "⢄"
+        self.anim_step = 0
+        self.anim_frames = [
+            "⢄",
+            "⢂",
+            "⢁",
+            " ",
+            "⡈",
+            "⡐",
+            "⡠",
+            "⡰",
+            "⣠",
+            "⣐",
+            "⣈",
+            "⣁",
+            "⣂",
+            "⣄",
+            "⣆",
+            "⣇",
+            "⣧",
+            "⣷",
+            "⣾",
+            "⣶",
+            "⣼",
+            "⣸",
+            "⣙",
+            "⣉",
+            "⣁",
+        ]
         self._mouse_down = None
         self._mouse_dragging = False
         self._save_job = None
         self._anim_interval_ms = int(self.config.get("hud_anim_interval_ms", 100) or 100)
-        if self._anim_interval_ms < 33:
-            self._anim_interval_ms = 33
+        if self._anim_interval_ms < 80:
+            self._anim_interval_ms = 80
         self.animate_ui()
 
     def _apply_initial_position(self):
@@ -70,12 +96,8 @@ class TacticalHUD:
 
     def animate_ui(self):
         try:
-            # Optional title glyph animation (re-enable if desired):
-            # frames = ["⢄", "⢂", "⢁", " ", "⡈", "⡐", "⡠", "⡰", "⣠", "⣐", "⣈", "⣁", "⣂", "⣄", "⣆", "⣇", "⣧", "⣷", "⣾", "⣶", "⣼", "⣸", "⣙", "⣉", "⣁"]
-            # self.anim_char = frames[self.anim_step]
-            # self.anim_step = (self.anim_step + 1) % len(frames)
-            # self.canvas.itemconfigure("anim_title", text=self.anim_char)
-            pass
+            self._draw_title_anim()
+            self.anim_step = (self.anim_step + 1) % len(self.anim_frames)
         except Exception:
             pass
         finally:
@@ -145,6 +167,22 @@ class TacticalHUD:
         self.canvas.create_text(x+1, y+1, text=text, fill="black", font=font, anchor=anchor, tags=tags)
         self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor, tags=tags)
 
+    def _draw_title_anim(self):
+        self.canvas.delete("anim_title")
+        if not self.anim_frames:
+            return
+        frame = self.anim_frames[self.anim_step]
+        self.draw_text(440, 20, text=frame, fill=COLOR_ACCENT, font=("Courier", 12, "bold"), anchor="e", tags="anim_title")
+
+    def draw_fitted_text(self, x, y, text, fill, family="Courier", size=9, weight="bold", max_width=300, min_size=4):
+        font_size = size
+        while font_size > min_size:
+            font = tkfont.Font(family=family, size=font_size, weight=weight)
+            if font.measure(text) <= max_width:
+                break
+            font_size -= 1
+        self.draw_text(x, y, text=text, fill=fill, font=(family, font_size, weight), anchor="w")
+
     def update(
         self,
         current_sys,
@@ -156,7 +194,7 @@ class TacticalHUD:
         organic_count,
         system_traffic,
         game_r_pos=None,
-        route_destination=None,
+        route_waypoint=None,
         route_counts=None,
         hud_status="OK",
         hud_health=None,
@@ -173,11 +211,8 @@ class TacticalHUD:
         self.canvas.create_rectangle(5, 5, self.width - 5, h - 5, fill="#010101", outline=COLOR_ACCENT, width=2)
         self.canvas.create_line(5, 35, self.width - 5, 35, fill=COLOR_ACCENT, width=1)
         
-        # Optional title glyph animation (re-enable if desired):
-        # txt = getattr(self, "anim_char", "⢄")
-        # self.draw_text(32, 20, text=txt, fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="e", tags="anim_title")
-        # self.draw_text(38, 20, text="NAVIGATION HUD", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
         self.draw_text(20, 20, text="NAVIGATION HUD", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
+        self._draw_title_anim()
         _ = hud_health
         # Bio logs hidden for now (counting disabled)
 
@@ -206,17 +241,18 @@ class TacticalHUD:
         route_y = h - 18
 
         route_pct = 0.0
-        route_count_txt = "ROUTE: 0/0"
+        route_count_txt = "ROUTE 0/0"
         if route_counts and route_counts[1] > 0:
             route_pct = max(0.0, min(1.0, route_counts[0] / route_counts[1]))
-            route_count_txt = f"ROUTE: {route_counts[0]}/{route_counts[1]}"
-        route_text = f"{route_count_txt} ({int(route_pct * 100)}%)"
+            route_count_txt = f"ROUTE {route_counts[0]}/{route_counts[1]}"
+        route_text = f"{route_count_txt} {int(route_pct * 100)}%"
         if r_pos and len(r_pos) > 2 and r_pos[2]:
-            route_text = f"{route_text} [{r_pos[2]}]"
+            route_text = f"{route_text} {r_pos[2].replace(' ', '')}"
 
-        if route_destination:
-            dest_text = f"DEST: {route_destination.upper()}"
-            if len(dest_text) > 34:
-                dest_text = dest_text[:31] + "..."
-            self.draw_text(20, route_y, text=dest_text, fill=COLOR_ORANGE, font=("Courier", 9, "bold"), anchor="w")
+        if route_waypoint:
+            waypoint_text = f"WP: {route_waypoint.upper()}"
+            route_font = tkfont.Font(family="Courier", size=9, weight="bold")
+            route_width = route_font.measure(route_text)
+            waypoint_width = max(40, 440 - route_width - 28)
+            self.draw_fitted_text(20, route_y, waypoint_text, COLOR_ORANGE, max_width=waypoint_width)
         self.draw_text(440, route_y, text=route_text, fill=COLOR_ACCENT, font=("Courier", 9, "bold"), anchor="e")

@@ -236,7 +236,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if self.hud and self.hud.win and self.hud.win.winfo_exists():
                 hx = int(float(self.config.get("hud_x", self.hud.win.winfo_x())))
                 hy = int(float(self.config.get("hud_y", self.hud.win.winfo_y())))
-                self.hud.win.geometry(f"460x180+{hx}+{hy}")
+                self.hud.win.geometry(f"{self.hud.width}x{self.hud.base_height}+{hx}+{hy}")
         except Exception:
             pass
         try:
@@ -667,12 +667,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 pass
         
         custom_r_pos = None
-        route_destination = None
+        route_waypoint = None
         route_counts = None
         
         if self.waypoint_manager.waypoints:
             total_wp = len(self.waypoint_manager.waypoints)
-            route_destination = self.waypoint_manager.waypoints[-1].get("name")
             
             visited_count = sum(1 for wp in self.waypoint_manager.waypoints if wp.get('visited', False))
             route_counts = (visited_count, total_wp)
@@ -689,6 +688,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             
             if idx != -1:
                 next_wp = self.waypoint_manager.waypoints[idx]
+                route_waypoint = next_wp.get("name")
                 if self.current_coords and next_wp['coords']:
                     rem_dist += self.waypoint_manager.get_distance(self.current_coords, next_wp['coords'])
                 
@@ -705,7 +705,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.route_list and self.current_sys in self.route_list:
             game_r_pos = (self.route_list.index(self.current_sys)+1, len(self.route_list))
 
-        hud_destination = route_destination if self.route_list else None
         hud_health = self._build_hud_health()
         hud_status = hud_health.get("status", "OK")
         if not self.is_running or not self.watcher or not self.watcher.is_running:
@@ -722,7 +721,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.root.after(0, lambda: self.hud.update(
             self.current_sys, self.dest_name, dist, 
             self.scanned, self.total, custom_r_pos, self.organic_count, self.system_traffic, game_r_pos,
-            hud_destination, route_counts, hud_status, hud_health
+            route_waypoint, route_counts, hud_status, hud_health
         ))
         self.update_scan_hud()
         self._perf_spike("_perform_hud_update", t0, threshold_ms=30.0)
