@@ -51,6 +51,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.is_first_load = True
         
         self.current_sys = "---"
+        self.current_system_address = None
         self.star_class = ""
         self.scanned = 0
         self.total = 0
@@ -554,6 +555,33 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         except Exception:
             return body_id
 
+    @staticmethod
+    def _normalize_system_address(system_address):
+        if system_address is None:
+            return None
+        try:
+            return int(system_address)
+        except Exception:
+            return system_address
+
+    def _matches_current_system_address(self, data):
+        event_address = self._normalize_system_address(data.get("system_address"))
+        current_address = self._normalize_system_address(self.current_system_address)
+        return event_address is None or current_address is None or event_address == current_address
+
+    def _set_body_signals(self, body_id, bio_count=0, geo_count=0):
+        body_id = self._normalize_body_id(body_id)
+        if body_id is None:
+            return
+        self.body_signals[body_id] = {
+            "bio": int(bio_count or 0),
+            "geo": int(geo_count or 0),
+        }
+        self.system_bio_signals = sum(
+            int(signals.get("bio", 0) or 0)
+            for signals in self.body_signals.values()
+        )
+
     def open_settings(self):
         def on_save():
             self.log("Configuration saved successfully.")
@@ -907,6 +935,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.log(f"Game version detected from LoadGame: {game_version} ({game_build})")
 
         elif ev == "ScanOrganic":
+            if not self._matches_current_system_address(d):
+                return
             body_id = self._normalize_body_id(d.get("body_id"))
             body_label = d.get("body_name") or (f"Body {body_id}" if body_id is not None else "Unknown Body")
             species = d.get("species") or d.get("genus") or "Organic"
@@ -960,6 +990,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
             # State reset for new system
             self.current_sys = d.get("star_system", "Unknown")
+            self.current_system_address = self._normalize_system_address(d.get("system_address"))
             self.current_coords = d.get("star_pos", [0,0,0])
             # Preserve existing class when an event omits StarClass (common on some transitions).
             next_star_class = d.get("star_class")
@@ -1028,12 +1059,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.fetch_system_traffic(self.current_sys)
 
         elif ev == "FSSDiscoveryScan":
+            if not self._matches_current_system_address(d):
+                return
             if d.get("system_name") and d.get("system_name") != self.current_sys:
                 return
             self.total = d.get("body_count", self.total)
-            progress = d.get("progress")
-            if isinstance(progress, (int, float)) and progress > 0 and self.total > 0:
-                self.scanned = max(self.scanned, min(self.total, int(round(self.total * progress))))
             self.fss_all_bodies = False
             self.db_update_system(self.current_sys, self.total, self.scanned)
             if not self.batch_mode:
@@ -1045,6 +1075,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.schedule_dashboard_refresh()
 
         elif ev == "DiscoveryScan":
+            if not self._matches_current_system_address(d):
+                return
             discovered = d.get("bodies", 0)
             if isinstance(discovered, int) and discovered > 0:
                 self.total = max(self.total, self.scanned + discovered)
@@ -1055,6 +1087,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.schedule_dashboard_refresh()
 
         elif ev == "NavBeaconScan":
+            if not self._matches_current_system_address(d):
+                return
             count = d.get("num_bodies", 0)
             if isinstance(count, int) and count > 0:
                 self.total = max(self.total, count)
@@ -1066,9 +1100,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.schedule_dashboard_refresh()
 
         elif ev == "FSSAllBodiesFound":
+            if not self._matches_current_system_address(d):
+                return
             if d.get("system_name") and d.get("system_name") == self.current_sys:
                 self.total = d.get("count", self.total)
-                self.scanned = self.total
                 self.fss_all_bodies = True
                 self.db_update_system(self.current_sys, self.total, self.scanned)
                 if not self.batch_mode:
@@ -1080,13 +1115,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.schedule_dashboard_refresh()
         
         elif ev == "FSSBodySignals":
+            if not self._matches_current_system_address(d):
+                return
             body_id = self._normalize_body_id(d.get("body_id"))
             if body_id is not None:
                 bio_count = d.get("bio_count", 0)
                 geo_count = d.get("geo_count", 0)
-                self.body_signals[body_id] = {"bio": bio_count, "geo": geo_count}
-                if bio_count:
-                    self.system_bio_signals = max(self.system_bio_signals, bio_count)
+                self._set_body_signals(body_id, bio_count, geo_count)
                 item = self.scan_items_by_id.get(body_id)
                 if item:
                     item["bio_count"] = bio_count
@@ -1099,13 +1134,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.schedule_dashboard_refresh()
 
         elif ev == "SAASignalsFound":
+            if not self._matches_current_system_address(d):
+                return
             body_id = self._normalize_body_id(d.get("body_id"))
             if body_id is not None:
                 bio_count = d.get("bio_count", 0)
                 geo_count = d.get("geo_count", 0)
                 if bio_count or geo_count:
-                    self.body_signals[body_id] = {"bio": bio_count, "geo": geo_count}
-                    self.system_bio_signals = max(self.system_bio_signals, bio_count)
+                    self._set_body_signals(body_id, bio_count, geo_count)
                 item = self.scan_items_by_id.get(body_id)
                 if item:
                     item["bio_count"] = bio_count
@@ -1118,6 +1154,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.schedule_dashboard_refresh()
         
         elif ev == "SAAScanComplete":
+            if not self._matches_current_system_address(d):
+                return
             body_id = self._normalize_body_id(d.get("body_id"))
             if body_id is not None:
                 self.body_dss_complete.add(body_id)
@@ -1134,6 +1172,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.schedule_dashboard_refresh()
         
         elif ev == "Scan":
+            if not self._matches_current_system_address(d):
+                return
             body_name = d.get("body_name", "")
             body_id = self._normalize_body_id(d.get("body_id"))
             if body_id is None:
@@ -1177,7 +1217,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.add_event_feed_entry("SCAN", f"{body_label}{landable_marker}", severity="INFO", copy_text=body_label)
 
                     # Check for biological signals and update the system total
-                    self.system_bio_signals += d.get("bio_signals_count", 0)
+                    if d.get("bio_signals_count", 0):
+                        self._set_body_signals(body_id, d.get("bio_signals_count", 0), self.body_signals.get(body_id, {}).get("geo", 0))
 
                     # Check for valuable bodies
                     p_class = d.get("planet_class", "")
@@ -1194,6 +1235,29 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.add_event_feed_entry("VALUABLE", f"{icon} Valuable world: {body_name_str}", severity="WARN", copy_text=body_name_str, pinned=True)
                     if is_system_star_scan and d.get("was_discovered") is False:
                         self.add_event_feed_entry("ALERT", "Undiscovered system star scanned", severity="WARN", copy_text=self.current_sys)
+                else:
+                    # Later detailed/nav-beacon scans can add fields missing from an initial basic scan.
+                    self.last_scan_event = data
+                    self.add_scan_item(raw)
+
+                    p_class = d.get("planet_class", "")
+                    terraformable = d.get("terraform_state") == "Terraformable"
+                    if p_class in ["Earthlike body", "Water world", "Ammonia world"] or terraformable:
+                        body_name_str = body_name or "Unknown"
+                        already_tracked = any(body_name_str in body for body in self.valuable_bodies)
+                        if not already_tracked:
+                            self.valuable_system = True
+                            icon = "✨"
+                            if p_class == "Earthlike body": icon = "🌍"
+                            elif p_class == "Water world": icon = "💧"
+                            elif p_class == "Ammonia world": icon = "☣️"
+                            elif terraformable: icon = "🛠️"
+                            self.valuable_bodies.append(f"- {icon} {body_name_str}")
+                            self.add_event_feed_entry("VALUABLE", f"{icon} Valuable world: {body_name_str}", severity="WARN", copy_text=body_name_str, pinned=True)
+
+                    if not self.batch_mode:
+                        self.update_hud()
+                        self.schedule_dashboard_refresh()
 
     def process_batch(self, events):
         self.batch_mode = True

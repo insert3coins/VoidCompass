@@ -227,6 +227,7 @@ class TacticalHUD:
         self.canvas.create_line(20, 80, 440, 80, fill="#333", width=1)
         
         pct = (scanned / total) if total > 0 else 0
+        pct = max(0.0, min(1.0, pct))
         self.canvas.create_rectangle(20, 88, 440, 102, outline="#333", width=1)
         if pct > 0:
             self.canvas.create_rectangle(20, 88, 20 + (420 * pct), 102, fill=COLOR_ACCENT, outline=COLOR_ACCENT)

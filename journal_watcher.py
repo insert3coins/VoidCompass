@@ -296,6 +296,7 @@ class JournalWatcher:
                 "raw": data,
                 "data": {
                     "star_system": data.get("StarSystem"),
+                    "system_address": data.get("SystemAddress"),
                     "star_pos": data.get("StarPos"),
                     "star_class": data.get("StarClass")
                 }
@@ -321,6 +322,7 @@ class JournalWatcher:
                 "raw": data,
                 "data": {
                     "system_name": data.get("SystemName"),
+                    "system_address": data.get("SystemAddress"),
                     "progress": data.get("Progress"),
                     "body_count": data.get("BodyCount", 0)
                 }
@@ -349,6 +351,7 @@ class JournalWatcher:
                 "raw": data,
                 "data": {
                     "system_name": data.get("SystemName"),
+                    "system_address": data.get("SystemAddress"),
                     "count": data.get("Count", 0)
                 }
             }
@@ -368,6 +371,7 @@ class JournalWatcher:
                 "data": {
                     "body_name": data.get("BodyName"),
                     "body_id": data.get("BodyID"),
+                    "system_address": data.get("SystemAddress"),
                     "bio_count": bio_count,
                     "geo_count": geo_count
                 }
@@ -388,6 +392,7 @@ class JournalWatcher:
                 "data": {
                     "body_name": data.get("BodyName"),
                     "body_id": data.get("BodyID"),
+                    "system_address": data.get("SystemAddress"),
                     "bio_count": bio_count,
                     "geo_count": geo_count,
                     "genuses": data.get("Genuses", [])
@@ -398,7 +403,8 @@ class JournalWatcher:
                 "type": ev,
                 "raw": data,
                 "data": {
-                    "body_id": data.get("BodyID")
+                    "body_id": data.get("BodyID"),
+                    "system_address": data.get("SystemAddress")
                 }
             }
         if ev == "ScanOrganic":
@@ -415,6 +421,7 @@ class JournalWatcher:
                     "is_complete": bool(data.get("IsComplete")),
                     "body_name": data.get("BodyName") or data.get("Body"),
                     "body_id": data.get("BodyID"),
+                    "system_address": data.get("SystemAddress"),
                     "max_samples": data.get("MaxSamples", 3),
                     "biome": data.get("Biome"),
                     "planet_class": data.get("PlanetClass"),
@@ -435,6 +442,7 @@ class JournalWatcher:
                     "body_name": data.get("BodyName", ""),
                     "body_id": data.get("BodyID"),
                     "star_system": data.get("StarSystem"),
+                    "system_address": data.get("SystemAddress"),
                     "star_type": star_type,
                     "planet_class": planet_class,
                     "terraform_state": data.get("TerraformState"),

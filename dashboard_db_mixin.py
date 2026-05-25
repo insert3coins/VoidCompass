@@ -225,10 +225,9 @@ class DashboardDBMixin:
                 row = cursor.fetchone()
                 if row:
                     self.total = row[0] or 0
-                    stored_scanned = row[1] or 0
                     cursor.execute("SELECT body_id FROM bodies WHERE system_name=?", (sys_name,))
                     self.scanned_bodies = set(r[0] for r in cursor.fetchall())
-                    self.scanned = max(len(self.scanned_bodies), stored_scanned)
+                    self.scanned = len(self.scanned_bodies)
                     if self.scanned > self.total:
                         self.total = self.scanned
                         self.conn.execute(
@@ -261,7 +260,7 @@ class DashboardDBMixin:
                 row = cursor.fetchone()
                 if row:
                     total = max(int(total or 0), int(row[0] or 0))
-                    scanned = max(int(scanned or 0), int(row[1] or 0))
+                    scanned = int(scanned or 0)
                 self.conn.execute(
                     "INSERT OR REPLACE INTO systems (name, total, scanned_count) VALUES (?, ?, ?)",
                     (sys_name, total, scanned),

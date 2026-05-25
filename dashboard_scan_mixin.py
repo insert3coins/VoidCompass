@@ -301,6 +301,8 @@ class DashboardScanMixin:
             item["icons"] = []
         if item.get("body_id") is None:
             item["body_id"] = None
+        if item.get("system_address") is None and getattr(self, "current_system_address", None) is not None:
+            item["system_address"] = self.current_system_address
 
         name = item.get("name")
         if not name:
@@ -485,6 +487,7 @@ class DashboardScanMixin:
         ts = int(time.time())
         item = {
             "body_id": body_id,
+            "system_address": data.get("SystemAddress") or getattr(self, "current_system_address", None),
             "name": body_name,
             "full_name": full_body_name,
             "class": body_class,

@@ -1059,7 +1059,8 @@ class DashboardUIMixin:
         else:
             self.card_nav.line3.config(text=f"Route Progress: {route_text}")
 
-        scan_pct = int((self.scanned / self.total) * 100) if self.total > 0 else 0
+        scan_ratio = (self.scanned / self.total) if self.total > 0 else 0
+        scan_pct = int(max(0.0, min(1.0, scan_ratio)) * 100)
         self.card_scan.line1.config(text=f"Scanned: {self.scanned}/{self.total} ({scan_pct}%)")
         self.card_scan.line2.config(text=f"Bodies Tracked: {len(self.scanned_bodies)}")
         self.card_scan.line3.config(text=f"FSS Summary: {'ACTIVE' if self.fss_summary_active else 'IDLE'}")
