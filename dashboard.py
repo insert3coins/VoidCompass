@@ -1407,8 +1407,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.update_hud()
                         self.schedule_dashboard_refresh()
 
-        # ── Prospector overlay — independent of the scan/nav chain above ──
-        if self.prospector_hud:
+        # ── Prospector overlay — live events only, skip journal replay on startup ──
+        if self.prospector_hud and not self.batch_mode:
             if ev == "ProspectedAsteroid":
                 self.root.after(0, lambda r=raw: self.prospector_hud.update(r))
             elif ev == "MiningRefined":
