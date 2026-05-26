@@ -1173,8 +1173,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 return
             if d.get("system_name") and d.get("system_name") != self.current_sys:
                 return
-            body_count = d.get("body_count", self.total)
-            self.total = body_count
+            body_count = int(d.get("body_count") or 0)
+            # Only advance total — never let a missing/zero BodyCount wipe a
+            # value that load_system_from_db already restored from the DB.
+            if body_count > 0:
+                self.total = max(body_count, self.total)
             self.fss_all_bodies = False
             # Progress=1.0 means every body in this system is already known/discovered
             # (e.g. Sol and other pre-populated systems). Treat it as fully scanned so
@@ -1402,39 +1405,42 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.batch_mode = True
         try:
             with self.db_lock:
-                try:
-                    self.conn.execute("BEGIN TRANSACTION")
-                    in_transaction = True
-                except Exception as e:
-                    in_transaction = False
-                    logging.warning(f"Batch transaction unavailable: {e}")
+                # Let Python's sqlite3 implicit transaction management handle
+                # BEGIN automatically — explicit BEGIN here conflicts with any
+                # implicit transaction already open (e.g. from the startup seed).
                 for ev in events:
                     try:
                         self.process_event(ev)
                     except Exception as e:
                         ev_type = ev.get("type") if isinstance(ev, dict) else "UNKNOWN"
                         logging.warning(f"Batch event failed [{ev_type}]: {e}")
-                if in_transaction:
+                try:
+                    self.conn.commit()
+                except Exception as e:
+                    logging.warning(f"Batch commit failed: {e}")
                     try:
-                        self.conn.commit()
-                    except Exception as e:
-                        logging.warning(f"Batch commit failed: {e}")
-                        try:
-                            self.conn.rollback()
-                        except Exception:
-                            pass
+                        self.conn.rollback()
+                    except Exception:
+                        pass
         finally:
             self.batch_mode = False
-        self.root.after(0, self.update_dashboard_ui)
-        self.root.after(0, self.update_hud)
-        
+
         if self.is_first_load:
             self.is_first_load = False
             self.last_traffic_system = self.current_sys
             self.fetch_system_traffic(self.current_sys)
-            self.update_hud()
+            # After startup batch: re-read DB so scan_stat always reflects the
+            # committed authoritative values (fixes cases where in-memory state
+            # diverged during batch processing).
+            sys_snap = self.current_sys
+            def _startup_sync():
+                if sys_snap and sys_snap != "---":
+                    self.load_system_from_db(sys_snap)
+                self.update_dashboard_ui()
+            self.root.after(0, _startup_sync)
+            self.root.after(0, self.update_hud)
             self.root.after(0, self.update_waypoint_display)
-            
+
             if self.config.get("auto_copy_waypoint", False):
                 next_wp = self.waypoint_manager.get_next_waypoint(self.current_sys)
                 copied_wp = next_wp
@@ -1447,6 +1453,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                             break
                 if copied_wp:
                     self.root.after(0, lambda w=copied_wp, l=log_label: self._copy_waypoint_to_clipboard(w, l))
+        else:
+            self.root.after(0, self.update_dashboard_ui)
+            self.root.after(0, self.update_hud)
 
     def update_cargo(self, inventory):
         self.last_cargo_event_ts = time.time()

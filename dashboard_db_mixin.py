@@ -63,6 +63,7 @@ class DashboardDBMixin:
         now = int(time.time())
         with self.db_lock:
             try:
+                bodies_per_system = {}
                 for system_name, items in data.items():
                     if not isinstance(items, list):
                         continue
@@ -81,6 +82,29 @@ class DashboardDBMixin:
                             "INSERT OR REPLACE INTO scan_hud_items (system_name, body_id, data_json, ts) VALUES (?, ?, ?, ?)",
                             (system_name, int(body_id), payload, int(ts)),
                         )
+                        bodies_per_system.setdefault(system_name, set()).add(int(body_id))
+                # Populate bodies and systems tables so scan_stat loads correctly
+                # on the next startup without requiring a full cache rebuild.
+                cur = self.conn.cursor()
+                for system_name, body_ids in bodies_per_system.items():
+                    for bid in body_ids:
+                        self.conn.execute(
+                            "INSERT OR IGNORE INTO bodies (system_name, body_id) VALUES (?, ?)",
+                            (system_name, bid),
+                        )
+                    scanned_count = len(body_ids)
+                    cur.execute("SELECT total, scanned_count FROM systems WHERE name=?", (system_name,))
+                    row = cur.fetchone()
+                    if row:
+                        new_total = max(int(row[0] or 0), scanned_count)
+                        new_sc = max(int(row[1] or 0), scanned_count)
+                    else:
+                        new_total = scanned_count
+                        new_sc = scanned_count
+                    self.conn.execute(
+                        "INSERT OR REPLACE INTO systems (name, total, scanned_count) VALUES (?, ?, ?)",
+                        (system_name, new_total, new_sc),
+                    )
                 self.conn.commit()
             except sqlite3.Error:
                 self.conn.rollback()
