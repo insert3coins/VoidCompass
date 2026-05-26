@@ -649,6 +649,13 @@ class CarrierTracker:
                     "📢  **Status Update**",
                     f"📍  **Current Location:** {_loc(curr_sys, curr_body)}",
                 ]
+                manual_dep_ts = cd.get("_manual_departure_ts")
+                if manual_dep_ts:
+                    # Show both full date/time (F) and relative (R) so every
+                    # reader sees it in their own local timezone automatically.
+                    lines.append(
+                        f"🕐  **Departure:** <t:{manual_dep_ts}:F> (<t:{manual_dep_ts}:R>)"
+                    )
             else:
                 lines = [event_type]
 
@@ -693,14 +700,20 @@ class CarrierTracker:
             except Exception:
                 pass
 
-    def send_status_update(self):
-        """Manually fire a Discord status-update notification with current state."""
+    def send_status_update(self, departure_ts=None):
+        """Manually fire a Discord status-update notification with current state.
+
+        departure_ts: optional int Unix timestamp for a manual departure time.
+        """
         url = (self._config.get("carrier_discord_webhook_url") or "").strip()
         if not url:
             return False, "No webhook URL configured."
+        snapshot = dict(self.carrier_data)
+        if departure_ts is not None:
+            snapshot["_manual_departure_ts"] = int(departure_ts)
         threading.Thread(
             target=self._send_discord,
-            args=(url, "status_update", dict(self.carrier_data)),
+            args=(url, "status_update", snapshot),
             daemon=True,
         ).start()
         return True, None
