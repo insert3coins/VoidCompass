@@ -248,7 +248,12 @@ class JournalWatcher:
                     raw = json.loads(line)
                 except Exception:
                     continue
-                if raw.get("event") in ("FSDJump", "Location"):
+                ev = raw.get("event")
+                if ev in ("FSDJump", "Location"):
+                    self.event_callback(self._normalize_event(raw))
+                    return
+                # CarrierJump sets player location when they were on board
+                if ev == "CarrierJump" and raw.get("Docked"):
                     self.event_callback(self._normalize_event(raw))
                     return
         except Exception:
@@ -564,7 +569,9 @@ class JournalWatcher:
                             data = json.loads(line)
                             ev = data.get("event")
 
-                            if ev in ["FSDJump", "Location"]:
+                            if ev in ["FSDJump", "Location"] or (
+                                ev == "CarrierJump" and data.get("Docked")
+                            ):
                                 sys_name = data.get("StarSystem")
                                 current_sys_context = sys_name
                                 if sys_name and sys_name not in new_history:
