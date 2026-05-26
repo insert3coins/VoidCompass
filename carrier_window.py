@@ -273,9 +273,38 @@ class CarrierWindow:
         note_btn.pack(side=tk.LEFT, padx=(6, 0))
         self.note_entry.bind("<Return>", lambda _e: self._save_note())
 
-        # Manual Discord post
+        # Manual Discord post — departure time
+        self._section(f, "MANUAL DEPARTURE TIME")
+        tk.Label(f,
+                 text="Optional — shown as 🕐 in the manual post, auto-converts to each reader's local time.\n"
+                      "Format:  18:30  or  26/05 18:30  or  2026-05-27 20:00  (your local time)",
+                 font=("Segoe UI", 8), fg=self.UI_MUTED, bg=self.UI_PANEL,
+                 anchor="w", justify=tk.LEFT, wraplength=420,
+                 ).pack(fill=tk.X, padx=10, pady=(0, 4))
+        dep_time_row = tk.Frame(f, bg=self.UI_PANEL)
+        dep_time_row.pack(fill=tk.X, padx=10, pady=(0, 6))
+        self.dep_time_var = tk.StringVar()
+        self.dep_time_entry = tk.Entry(
+            dep_time_row, textvariable=self.dep_time_var,
+            bg="#090c10", fg=COLOR_TEXT, font=self.UI_MONO,
+            insertbackground=COLOR_ACCENT,
+            relief=tk.FLAT, highlightthickness=1,
+            highlightbackground=self.UI_BORDER,
+            highlightcolor=COLOR_ACCENT,
+        )
+        self.dep_time_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=5)
+        tk.Button(
+            dep_time_row, text="Clear",
+            bg=self.UI_PANEL, fg=self.UI_MUTED,
+            activebackground=self.UI_BORDER, activeforeground=COLOR_TEXT,
+            font=self.UI_FONT, relief=tk.FLAT, bd=0,
+            padx=8, cursor="hand2",
+            command=lambda: self.dep_time_var.set(""),
+        ).pack(side=tk.LEFT, padx=(6, 0))
+
+        # Post button + feedback
         post_row = tk.Frame(f, bg=self.UI_PANEL)
-        post_row.pack(fill=tk.X, padx=10, pady=(4, 12))
+        post_row.pack(fill=tk.X, padx=10, pady=(2, 12))
         self.post_discord_btn = tk.Button(
             post_row, text="📢  Post Status to Discord",
             bg=self.UI_PANEL, fg=COLOR_ACCENT,
@@ -330,8 +359,70 @@ class CarrierWindow:
             highlightcolor=COLOR_ACCENT, highlightbackground=self.UI_BORDER
         ) if self.is_open() else None)
 
+    @staticmethod
+    def _parse_departure_time(text):
+        """Parse a user-typed local time string into a UTC Unix timestamp.
+
+        Accepted formats (all treated as local time):
+          18:30          → today at 18:30
+          18:30:00       → today at 18:30:00
+          26/05 18:30    → 26 May this year at 18:30
+          26/05/2026 18:30
+          2026-05-26 18:30
+        Returns int Unix timestamp, or raises ValueError with a helpful message.
+        """
+        import re
+        from datetime import datetime
+        text = text.strip()
+        now = datetime.now()
+        dt = None
+
+        # Try formats in order of specificity
+        for fmt in (
+            "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",
+            "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M",
+        ):
+            try:
+                dt = datetime.strptime(text, fmt)
+                break
+            except ValueError:
+                pass
+
+        if dt is None:
+            # DD/MM HH:MM — assume current year
+            m = re.fullmatch(r"(\d{1,2})/(\d{1,2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?", text)
+            if m:
+                day, mon, hh, mm, ss = m.groups()
+                dt = datetime(now.year, int(mon), int(day), int(hh), int(mm), int(ss or 0))
+
+        if dt is None:
+            # HH:MM or HH:MM:SS — assume today
+            m = re.fullmatch(r"(\d{1,2}):(\d{2})(?::(\d{2}))?", text)
+            if m:
+                hh, mm, ss = m.groups()
+                dt = datetime(now.year, now.month, now.day, int(hh), int(mm), int(ss or 0))
+
+        if dt is None:
+            raise ValueError(f"Unrecognised format: {text!r}")
+
+        # Convert local → UTC unix timestamp
+        import time as _time
+        return int(_time.mktime(dt.timetuple()))
+
     def _post_status_to_discord(self):
-        ok, err = self.tracker.send_status_update()
+        dep_ts = None
+        raw_time = self.dep_time_var.get().strip()
+        if raw_time:
+            try:
+                dep_ts = self._parse_departure_time(raw_time)
+            except ValueError as exc:
+                self.post_discord_status_lbl.config(
+                    text=f"✗ Bad time: {exc}", fg=self.UI_FAIL)
+                self.win.after(5000, lambda: self.post_discord_status_lbl.config(
+                    text="") if self.is_open() else None)
+                return
+
+        ok, err = self.tracker.send_status_update(departure_ts=dep_ts)
         if ok:
             self.post_discord_status_lbl.config(text="✓ Sent", fg=self.UI_OK)
         else:
