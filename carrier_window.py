@@ -273,6 +273,24 @@ class CarrierWindow:
         note_btn.pack(side=tk.LEFT, padx=(6, 0))
         self.note_entry.bind("<Return>", lambda _e: self._save_note())
 
+        # Manual Discord post
+        post_row = tk.Frame(f, bg=self.UI_PANEL)
+        post_row.pack(fill=tk.X, padx=10, pady=(4, 12))
+        self.post_discord_btn = tk.Button(
+            post_row, text="📢  Post Status to Discord",
+            bg=self.UI_PANEL, fg=COLOR_ACCENT,
+            activebackground=self.UI_BORDER, activeforeground=COLOR_ACCENT,
+            font=self.UI_BOLD, relief=tk.FLAT, bd=0,
+            padx=12, pady=6, cursor="hand2",
+            command=self._post_status_to_discord,
+        )
+        self.post_discord_btn.pack(side=tk.LEFT)
+        self.post_discord_status_lbl = tk.Label(
+            post_row, text="", font=("Segoe UI", 8),
+            fg=self.UI_MUTED, bg=self.UI_PANEL,
+        )
+        self.post_discord_status_lbl.pack(side=tk.LEFT, padx=(10, 0))
+
     def _copy_countdown(self):
         dep = self.tracker.carrier_data.get("jump_departure_time")
         if not dep:
@@ -311,6 +329,16 @@ class CarrierWindow:
         self.win.after(1200, lambda: self.note_entry.config(
             highlightcolor=COLOR_ACCENT, highlightbackground=self.UI_BORDER
         ) if self.is_open() else None)
+
+    def _post_status_to_discord(self):
+        ok, err = self.tracker.send_status_update()
+        if ok:
+            self.post_discord_status_lbl.config(text="✓ Sent", fg=self.UI_OK)
+        else:
+            msg = err or "No webhook URL set in Configuration."
+            self.post_discord_status_lbl.config(text=f"✗ {msg}", fg=self.UI_FAIL)
+        self.win.after(4000, lambda: self.post_discord_status_lbl.config(
+            text="") if self.is_open() else None)
 
     # ---------- Finance tab ----------
     def _build_finance_tab(self):
