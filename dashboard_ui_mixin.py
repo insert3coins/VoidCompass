@@ -3,11 +3,31 @@ import math
 import tkinter as tk
 import requests
 import webbrowser
-from datetime import datetime
+from datetime import datetime, timezone
 from tkinter import scrolledtext
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
 from version import APP_VERSION
+
+
+def _carrier_countdown(dep_str):
+    """Return a compact H:MM:SS / Mm SSs countdown for a departure ISO timestamp."""
+    if not dep_str:
+        return ""
+    try:
+        dt = datetime.fromisoformat(dep_str.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        diff = (dt - datetime.now(timezone.utc)).total_seconds()
+        if diff <= 0:
+            return "JUMPING NOW"
+        m, s = divmod(int(diff), 60)
+        h, m = divmod(m, 60)
+        if h:
+            return f"{h}h {m:02d}m {s:02d}s"
+        return f"{m}m {s:02d}s"
+    except Exception:
+        return ""
 
 
 class DashboardUIMixin:
@@ -98,6 +118,7 @@ class DashboardUIMixin:
         nav_actions.pack(side=tk.RIGHT, fill=tk.Y, padx=10)
         self._action_button(nav_actions, "Configuration", self.open_settings, accent=True).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
         self._action_button(nav_actions, "Screenshots", self.open_screenshots_folder).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
+        self._action_button(nav_actions, "Fleet Carrier", self.open_carrier_window).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
         self._action_button(nav_actions, "Mining", self.open_mining_window).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
         self._action_button(nav_actions, "Route Planner", self.open_route_planner).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
 
@@ -143,6 +164,55 @@ class DashboardUIMixin:
         self.sys_stat = self.create_stat(metrics_card, "CURRENT SYSTEM", "---")
         self.nav_stat = self.create_stat(metrics_card, "NAV TARGET", "---")
         self.scan_stat = self.create_stat(metrics_card, "SCAN PROGRESS", "0 / 0")
+
+        # ── Fleet Carrier status panel ────────────────────────────────────
+        self.carrier_panel = self._panel(self.side)
+        self.carrier_panel.pack(fill=tk.X, pady=(0, 10))
+
+        carrier_hdr = tk.Frame(self.carrier_panel, bg=self.UI_PANEL)
+        carrier_hdr.pack(fill=tk.X, padx=12, pady=(9, 4))
+        self._section_label(carrier_hdr, "FLEET CARRIER").pack(side=tk.LEFT)
+        self.carrier_panel_badge = tk.Label(
+            carrier_hdr, text="IDLE", fg="black", bg=self.UI_DIM,
+            font=("Segoe UI", 7, "bold"), padx=6, pady=2,
+        )
+        self.carrier_panel_badge.pack(side=tk.RIGHT)
+
+        self.carrier_panel_name = tk.Label(
+            self.carrier_panel, text="Dock at your carrier to sync.",
+            fg=self.UI_DIM, bg=self.UI_PANEL,
+            font=self.UI_MONO_BOLD, anchor="w",
+        )
+        self.carrier_panel_name.pack(fill=tk.X, padx=12)
+
+        self.carrier_panel_loc = tk.Label(
+            self.carrier_panel, text="",
+            fg=self.UI_MUTED, bg=self.UI_PANEL,
+            font=self.UI_MONO, anchor="w",
+        )
+        self.carrier_panel_loc.pack(fill=tk.X, padx=12, pady=(1, 0))
+
+        self.carrier_panel_jump = tk.Label(
+            self.carrier_panel, text="",
+            fg=COLOR_ACCENT, bg=self.UI_PANEL,
+            font=("Segoe UI", 8, "bold"), anchor="w",
+        )
+        self.carrier_panel_jump.pack(fill=tk.X, padx=12, pady=(1, 0))
+
+        # Compact fuel bar
+        _cfuel = tk.Frame(self.carrier_panel, bg=self.UI_PANEL)
+        _cfuel.pack(fill=tk.X, padx=12, pady=(5, 9))
+        self.carrier_fuel_bar_bg = tk.Frame(_cfuel, bg="#1a2430", height=6, width=240)
+        self.carrier_fuel_bar_bg.pack(side=tk.LEFT)
+        self.carrier_fuel_bar_bg.pack_propagate(False)
+        self.carrier_fuel_fill = tk.Frame(self.carrier_fuel_bar_bg, bg=self.UI_OK, height=6)
+        self.carrier_fuel_fill.place(x=0, y=0, relheight=1.0, width=0)
+        self.carrier_fuel_txt = tk.Label(
+            _cfuel, text="", fg=self.UI_DIM, bg=self.UI_PANEL,
+            font=("Segoe UI", 7),
+        )
+        self.carrier_fuel_txt.pack(side=tk.LEFT, padx=(8, 0))
+        # ── end carrier panel ─────────────────────────────────────────────
 
         self.ground_panel = self._panel(self.side)
         self.ground_panel.pack(fill=tk.X, pady=(0, 10))
@@ -1114,8 +1184,90 @@ class DashboardUIMixin:
     def update_dashboard_ui(self):
         """Force update full dashboard, including waypoint panel."""
         self.update_dashboard_panels()
-
+        try:
+            self.update_carrier_panel()
+        except Exception as _cp_err:
+            import logging
+            logging.warning(f"update_carrier_panel error: {_cp_err}")
         self.update_waypoint_display()
+
+    def update_carrier_panel(self):
+        """Refresh the sidebar Fleet Carrier status panel from carrier_tracker data."""
+        if not hasattr(self, "carrier_panel") or not hasattr(self, "carrier_tracker"):
+            return
+        cd = self.carrier_tracker.carrier_data
+        name     = cd.get("name")
+        callsign = cd.get("callsign") or ""
+        system   = cd.get("system") or ""
+        status   = cd.get("status", "idle")
+
+        _badge_color = {
+            "idle":            self.UI_OK,
+            "jumping":         COLOR_ACCENT,
+            "cooldown":        self.UI_WARN,
+            "cooldown_cancel": self.UI_FAIL,
+        }
+        _badge_text = {
+            "idle":            "IDLE",
+            "jumping":         "JUMPING",
+            "cooldown":        "COOLDOWN",
+            "cooldown_cancel": "CANCELLED",
+        }
+
+        self.carrier_panel_badge.config(
+            text=_badge_text.get(status, status.upper()),
+            bg=_badge_color.get(status, self.UI_DIM),
+        )
+
+        if name:
+            name_txt = f"{name}  ({callsign})" if callsign else name
+            self._config_label_if_changed(self.carrier_panel_name, text=name_txt, fg=COLOR_TEXT)
+        else:
+            self._config_label_if_changed(
+                self.carrier_panel_name,
+                text="Dock at your carrier to sync.",
+                fg=self.UI_DIM,
+            )
+
+        self._config_label_if_changed(self.carrier_panel_loc, text=system, fg=self.UI_MUTED)
+
+        dest = cd.get("jump_destination")
+        dep  = cd.get("jump_departure_time")
+        if status == "jumping" and dest:
+            ct = _carrier_countdown(dep)
+            jump_txt = f"→ {dest}   {ct}" if ct else f"→ {dest}"
+            self._config_label_if_changed(self.carrier_panel_jump, text=jump_txt, fg=COLOR_ACCENT)
+        elif status == "cooldown":
+            self._config_label_if_changed(
+                self.carrier_panel_jump,
+                text="Jump complete — cooling down",
+                fg=self.UI_WARN,
+            )
+        elif status == "cooldown_cancel":
+            self._config_label_if_changed(
+                self.carrier_panel_jump,
+                text="Jump cancelled — cooling down",
+                fg=self.UI_FAIL,
+            )
+        else:
+            self._config_label_if_changed(self.carrier_panel_jump, text="", fg=self.UI_DIM)
+
+        fuel = cd.get("fuel_level")
+        cap  = cd.get("fuel_capacity") or 1000
+        if fuel is not None:
+            pct   = max(0.0, min(1.0, fuel / cap))
+            bar_w = int(240 * pct)
+            color = self.UI_OK if pct > 0.4 else (self.UI_WARN if pct > 0.15 else self.UI_FAIL)
+            self.carrier_fuel_fill.place(x=0, y=0, relheight=1.0, width=bar_w)
+            self.carrier_fuel_fill.config(bg=color)
+            self._config_label_if_changed(
+                self.carrier_fuel_txt,
+                text=f"{fuel:,} / {cap:,} T",
+                fg=self.UI_MUTED,
+            )
+        else:
+            self.carrier_fuel_fill.place(x=0, y=0, relheight=1.0, width=0)
+            self._config_label_if_changed(self.carrier_fuel_txt, text="", fg=self.UI_DIM)
 
     def update_waypoint_display(self):
         if not self.waypoint_manager.waypoints:

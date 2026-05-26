@@ -207,10 +207,14 @@ class JournalWatcher:
                         self.batch_event_callback(events)
                     elif self.event_callback:
                         for idx, ev in enumerate(events, start=1):
-                            self.event_callback(ev)
+                            try:
+                                self.event_callback(ev)
+                            except Exception as cb_err:
+                                ev_type = (ev.get("type") or "?") if isinstance(ev, dict) else "?"
+                                logging.error(f"Event callback error [{ev_type}]: {cb_err}")
                             if (idx % 5) == 0:
                                 time.sleep(0)
-                
+
                 self.file_pos = f.tell()
                 if eof_reached:
                     self._startup_catchup_done = True
