@@ -120,7 +120,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
     create_toggle(sec_gen, "Cargo Manifest Overlay", cargo_var)
     create_toggle(sec_gen, "Scan Results Overlay", scan_var)
     create_toggle(sec_gen, "Prospector Result Overlay", prosp_var)
-    prosp_timeout_e = create_input(sec_gen, "Prospector Overlay Auto-Hide (seconds)", "prospector_hud_timeout_s")
+    prosp_timeout_e = create_input(sec_gen, "Prospector Overlay Auto-Hide (seconds)  —  60 = 1 min  ·  120 = 2 min  ·  300 = 5 min", "prospector_hud_timeout_s")
     tk.Frame(sec_gen, bg=UI_PANEL, height=10).pack(fill=tk.X)
 
     sec_ss = panel(body, "SCREENSHOTS")

@@ -139,6 +139,12 @@ class ProspectorHUD:
 
     def show(self):
         try:
+            # Restore saved position before making the window visible.
+            # winfo_x()/winfo_y() return 0 on withdrawn windows, so we
+            # always drive position from config rather than the live geometry.
+            x = int(self.config.get("prospector_hud_x", 30))
+            y = int(self.config.get("prospector_hud_y", 600))
+            self.win.geometry(f"+{x}+{y}")
             self.win.deiconify()
             self.win.attributes("-topmost", True)
             self.win.lift()
@@ -164,7 +170,9 @@ class ProspectorHUD:
                 self.win.after_cancel(self._hide_job)
             except Exception:
                 pass
-        self._hide_job = self.win.after(self._timeout_ms, self._auto_hide)
+        # Read timeout dynamically so settings changes take effect without restart.
+        timeout_s = max(5, int(self.config.get("prospector_hud_timeout_s") or 45))
+        self._hide_job = self.win.after(timeout_s * 1000, self._auto_hide)
 
     def _auto_hide(self):
         self._hide_job = None
@@ -266,7 +274,11 @@ class ProspectorHUD:
         )
 
         self.canvas.config(width=w, height=height)
-        self.win.geometry(f"{w}x{height}+{self.win.winfo_x()}+{self.win.winfo_y()}")
+        # Only resize — never set position here.  winfo_x()/winfo_y() return 0
+        # when the window is withdrawn, which would silently reset the overlay
+        # to the top-left corner on every new prospect.  Position is set once
+        # in show() from config, and live during drag via _drag_move().
+        self.win.geometry(f"{w}x{height}")
         self.canvas.delete("all")
 
         # ── Background & border ───────────────────────────────────────────
