@@ -63,7 +63,6 @@ class DashboardDBMixin:
         now = int(time.time())
         with self.db_lock:
             try:
-                self.conn.execute("BEGIN TRANSACTION")
                 for system_name, items in data.items():
                     if not isinstance(items, list):
                         continue
@@ -137,7 +136,6 @@ class DashboardDBMixin:
 
             with self.db_lock:
                 try:
-                    self.conn.execute("BEGIN TRANSACTION")
                     for sys_name, info in data.items():
                         total = info.get("total", 0)
                         bodies = info.get("bodies", [])
@@ -176,7 +174,6 @@ class DashboardDBMixin:
         self.log("💾 Saving to database...")
         with self.db_lock:
             try:
-                self.conn.execute("BEGIN TRANSACTION")
                 for sys_name, data in new_history.items():
                     bodies = set(data.get("bodies", []))
                     cursor = self.conn.cursor()
