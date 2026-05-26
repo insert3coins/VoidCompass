@@ -24,6 +24,8 @@ from route_plotter import RoutePlotter
 from waypoint_manager import WaypointManager
 from journal_watcher import JournalWatcher
 from mining_window import MiningWindow
+from carrier_tracker import CarrierTracker
+from carrier_window import CarrierWindow
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
@@ -164,7 +166,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             trace_callback=self._trace_record_ms,
         )
         self.mining_window = None
-        
+        self.carrier_window = None
+        self._carrier_panel_tick_job = None
+        self.carrier_tracker = CarrierTracker()
+        self.carrier_tracker.set_config(self.config)
+        self.carrier_tracker.on_panel_updated = self._on_carrier_panel_updated
+        self.carrier_tracker.on_status_changed = self._on_carrier_status_changed
+
         if self.config.get("overlay_enabled", True):
             self.hud = TacticalHUD(self.root, self.config, on_widget_click=self._on_hud_widget_click)
             try:
@@ -213,9 +221,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         self.watcher.start()
         self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
-        
+
         self.watcher.force_check_status()
-        
+
+        journal_path = self.config.get("journal_path") or getattr(self.watcher, "journal_path", None)
+        threading.Thread(
+            target=self.carrier_tracker.scan_journal_history,
+            args=(journal_path,),
+            daemon=True,
+        ).start()
+
         threading.Thread(target=self.check_updates, daemon=True).start()
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -226,6 +241,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.root.after(120, self._reapply_overlay_positions)
         self.update_hud()
         self.update_ground_target_ui()
+        self.update_carrier_panel()
         self._tick_ground_target()
         self._tick_session_clock()
         self._tick_ui_stall_watchdog()
@@ -524,6 +540,82 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.watcher.force_check_status()
         except Exception:
             pass
+
+    def open_carrier_window(self):
+        if self.carrier_window and self.carrier_window.is_open():
+            self.carrier_window.win.lift()
+            return
+        self.carrier_window = CarrierWindow(self.root, self.config, self.carrier_tracker)
+
+    # ------------------------------------------------------------------
+    # Carrier dashboard panel + event-feed callbacks
+    # ------------------------------------------------------------------
+
+    def _on_carrier_status_changed(self, old_status, new_status, carrier_data):
+        """Push carrier status transitions into the dashboard Live Event Timeline."""
+        try:
+            name     = carrier_data.get("name") or "Fleet Carrier"
+            callsign = carrier_data.get("callsign") or ""
+            label    = f"{name} ({callsign})" if callsign else name
+
+            if new_status == "jumping":
+                dest = carrier_data.get("jump_destination") or "?"
+                dep  = carrier_data.get("jump_departure_time") or ""
+                dep_txt = ""
+                if dep:
+                    try:
+                        from datetime import datetime, timezone
+                        dt = datetime.fromisoformat(dep.replace("Z", "+00:00"))
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        dep_txt = f"  dep {dt.astimezone().strftime('%H:%M')}"
+                    except Exception:
+                        pass
+                msg = f"FC {label}: jump plotted → {dest}{dep_txt}"
+                self.root.after(0, lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="INFO"))
+
+            elif new_status == "cooldown":
+                system = carrier_data.get("system") or "?"
+                msg = f"FC {label}: arrived at {system}"
+                self.root.after(0, lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="INFO"))
+
+            elif new_status == "cooldown_cancel":
+                msg = f"FC {label}: jump cancelled"
+                self.root.after(0, lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="WARN"))
+
+            elif old_status in ("cooldown", "cooldown_cancel") and new_status == "idle":
+                system = carrier_data.get("system") or "?"
+                msg = f"FC {label}: cooldown complete @ {system}"
+                self.root.after(0, lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="INFO"))
+        except Exception:
+            pass
+
+    def _on_carrier_panel_updated(self, carrier_data):
+        """Fired by CarrierTracker whenever state changes (persistent hook)."""
+        try:
+            self.root.after(0, self.update_carrier_panel)
+            if carrier_data.get("status") == "jumping":
+                self.root.after(0, self._ensure_carrier_panel_ticker)
+        except Exception:
+            pass
+
+    def _ensure_carrier_panel_ticker(self):
+        """Start the 1-second countdown ticker if not already running."""
+        if self._carrier_panel_tick_job is not None:
+            return
+        self._tick_carrier_panel()
+
+    def _tick_carrier_panel(self):
+        """Refresh the carrier panel every second while the carrier is jumping."""
+        self._carrier_panel_tick_job = None
+        if not self.is_running:
+            return
+        status = self.carrier_tracker.carrier_data.get("status", "idle")
+        if status == "jumping":
+            self.update_carrier_panel()
+            self._carrier_panel_tick_job = self.root.after(1000, self._tick_carrier_panel)
+        # Ticker stops naturally when status is no longer jumping;
+        # _on_carrier_panel_updated will have already refreshed the panel.
 
     def _on_route_event(self, tag, message, severity="INFO", copy_text=None, system_name=None, pinned=False):
         if not message:
@@ -908,7 +1000,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.log(f"Journal file: {os.path.basename(current_journal)}")
         if self.mining_window and self.mining_window.is_open():
             self.mining_window.process_event(data)
-        
+
+        # Route carrier events defensively — a tracker failure must not cascade
+        # into the main navigation if/elif chain (fix #2).
+        if ev and ev.startswith("Carrier"):
+            try:
+                self.carrier_tracker.process_event(raw)
+            except Exception as _ct_err:
+                logging.warning(f"CarrierTracker.process_event error [{ev}]: {_ct_err}")
+
         if ev in ("FileHeader", "Fileheader"):
             self.log(f"Game version detected: {d.get('gameversion')} ({d.get('build')})")
 

@@ -1,5 +1,30 @@
 # VoidCompass // UPDATE LOG
 
+## v2.8.0 // Fleet Carrier Manager
+**Release Date:** 2026-May-26
+*   **Fleet Carrier Tracking (`carrier_tracker.py`):**
+    *   Tracks carrier identity, location, fuel, balance, services, and jump schedule from journal events.
+    *   Handles `CarrierStats`, `CarrierJump`, `CarrierJumpRequest`, `CarrierJumpCancelled`, `CarrierLocation`, `CarrierTradeOrder`, `CarrierDepositFuel`, `CarrierDockingPermission`, `CarrierNameChanged`, `CarrierFinance`, and `CarrierBuy`.
+    *   EDCM-aligned status state machine: `idle` → `jumping` (departure in future) → `cooldown` (≤290 s after jump) → `idle`; cancelled jumps enter `cooldown_cancel` within 60 s window.
+    *   Background 30 s timer chain keeps status current without UI polling.
+    *   Scans last 10 journal files on startup to restore carrier state without triggering Discord notifications.
+    *   Discord webhook notifications for jump requests, cancellations, and completed jumps; suppresses notifications for replayed history events via freshness check.
+    *   Three callback hooks: `on_updated` (carrier window), `on_panel_updated` (dashboard panel), `on_status_changed` (event feed).
+    *   Persists carrier state to config across sessions.
+*   **Fleet Carrier Window (`carrier_window.py`):**
+    *   Three-tab window: Overview, Finance, Services.
+    *   Overview: carrier identity, jump schedule with Discord-style relative timestamp (`<t:unix:R>`) copy button, carrier stats (fuel bar, jump range, space usage, docking access).
+    *   Finance: balance display, tax rates, storage costs, upkeep estimate with funded-for calculation (years/weeks/days) and low-funds warning.
+    *   Services: 11-service grid with three-state colouring — Active (green), Paused (orange + PAUSED label), Off (grey).
+*   **Dashboard Integration:**
+    *   Fleet Carrier button in the top navigation bar opens the carrier window.
+    *   Carrier panel on the main dashboard: status badge, carrier name, current location, jump countdown or destination, and a compact fuel bar.
+    *   Carrier status changes are logged to the event feed.
+*   **Defensive Architecture (fixes from prior regression):**
+    *   `journal_watcher.py`: event callback wrapped in `try/except` so `file_pos` is always updated even if a callback throws — prevents the watcher from replaying the same event and starving all subsequent navigation events.
+    *   `dashboard.py`: carrier event routing isolated in its own `try/except` block before the navigation `if/elif` chain — a tracker failure cannot cascade into FSDJump/Location/Scan handling.
+    *   `dashboard_ui_mixin.py`: `update_carrier_panel()` call guarded in `try/except` — a panel rendering error cannot prevent `update_waypoint_display()` and `update_hud()` from running.
+
 ## v2.7.6 // Mining Hotspot Data + Session Persistence
 **Release Date:** 2026-May-26
 *   **Hotspot Database Import:**
