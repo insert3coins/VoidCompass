@@ -37,6 +37,7 @@ _DISCORD_COLORS = {
     "jump_completed":    0x57F287,   # green — arrived
     "jump_cancelled":    0xED4245,   # red — cancelled
     "cooldown_finished": 0x5DADE2,   # blue — ready to jump
+    "status_update":     0xFEE75C,   # yellow — manual status post
 }
 
 CREW_ROLES = [
@@ -643,6 +644,11 @@ class CarrierTracker:
                     "🔓  **Cooldown Complete — Ready to Jump**",
                     f"📍  **Location:** {_loc(curr_sys, curr_body)}",
                 ]
+            elif event_type == "status_update":
+                lines = [
+                    "📢  **Status Update**",
+                    f"📍  **Current Location:** {_loc(curr_sys, curr_body)}",
+                ]
             else:
                 lines = [event_type]
 
@@ -686,6 +692,18 @@ class CarrierTracker:
                 self.on_panel_updated(self.carrier_data)
             except Exception:
                 pass
+
+    def send_status_update(self):
+        """Manually fire a Discord status-update notification with current state."""
+        url = (self._config.get("carrier_discord_webhook_url") or "").strip()
+        if not url:
+            return False, "No webhook URL configured."
+        threading.Thread(
+            target=self._send_discord,
+            args=(url, "status_update", dict(self.carrier_data)),
+            daemon=True,
+        ).start()
+        return True, None
 
     def send_test_discord(self, url):
         try:
