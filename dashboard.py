@@ -716,7 +716,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.scan_hud = None
 
         
-        open_settings(self.root, self.config, on_save)
+        open_settings(self.root, self.config, on_save, carrier_tracker=self.carrier_tracker)
 
     def fetch_system_traffic(self, system_name):
         self.last_edsm_request_ts = time.time()
@@ -1069,7 +1069,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.update_hud()
                 self.schedule_dashboard_refresh()
 
-        elif ev == "Location" or ev == "FSDJump" or ev == "StartJump":
+        elif ev == "Location" or ev == "FSDJump" or ev == "StartJump" or (ev == "CarrierJump" and d.get("docked")):
             # Do not update HUDs during jump charge; wait for arrival.
             if ev == "StartJump":
                 if self.scan_hud:
@@ -1078,10 +1078,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.fss_summary_active = False
                 return
 
-            is_jump = ev == "FSDJump"
-            
+            # CarrierJump counts as a jump for the player when they are docked on board.
+            is_jump = ev in ("FSDJump", "CarrierJump")
+
             # Hide scan HUD on jump completion
-            if ev == "FSDJump" and self.scan_hud:
+            if is_jump and self.scan_hud:
                 self.scan_hud.hide()
                 self.in_fss = False
                 self.fss_summary_active = False
@@ -1125,10 +1126,19 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.fss_summary_active = False
             self._rebuild_scan_index()
 
-            log_msg = f"JUMP: {self.current_sys}" if is_jump else f"LOCATION: {self.current_sys}"
+            if ev == "CarrierJump":
+                log_msg = f"CARRIER JUMP: {self.current_sys}"
+                evt_tag = "FC JUMP"
+                evt_msg = f"Carrier arrived: {self.current_sys}"
+            elif is_jump:
+                log_msg = f"JUMP: {self.current_sys}"
+                evt_tag = "JUMP"
+                evt_msg = f"Arrived: {self.current_sys}"
+            else:
+                log_msg = f"LOCATION: {self.current_sys}"
+                evt_tag = "SYSTEM"
+                evt_msg = f"Location set: {self.current_sys}"
             self.log(log_msg)
-            evt_tag = "JUMP" if is_jump else "SYSTEM"
-            evt_msg = f"{'Arrived' if is_jump else 'Location set'}: {self.current_sys}"
             self.add_event_feed_entry(evt_tag, evt_msg, severity="INFO", copy_text=self.current_sys, url=f"https://www.edsm.net/show-system?systemName={self.current_sys.replace(' ', '+')}")
             
             if not self.batch_mode:
