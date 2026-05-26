@@ -219,8 +219,35 @@ class CarrierWindow:
         self.stat_jump_max   = self._row(f, "Jump Range (max)")
         self.stat_docking    = self._row(f, "Docking Access")
 
+        self._section(f, "PLANNED DESTINATION")
+        tk.Label(f, text="Shown as 📌 Destination in Discord. Leave blank to show \"TBD\".",
+                 font=("Segoe UI", 8), fg=self.UI_MUTED, bg=self.UI_PANEL,
+                 anchor="w", wraplength=420).pack(fill=tk.X, padx=10, pady=(0, 4))
+        dest_row = tk.Frame(f, bg=self.UI_PANEL)
+        dest_row.pack(fill=tk.X, padx=10, pady=(0, 10))
+        self.dest_var = tk.StringVar()
+        self.dest_entry = tk.Entry(
+            dest_row, textvariable=self.dest_var,
+            bg="#090c10", fg=COLOR_TEXT, font=self.UI_MONO,
+            insertbackground=COLOR_ACCENT,
+            relief=tk.FLAT, highlightthickness=1,
+            highlightbackground=self.UI_BORDER,
+            highlightcolor=COLOR_ACCENT,
+        )
+        self.dest_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=5)
+        dest_btn = tk.Button(
+            dest_row, text="Set",
+            bg=self.UI_PANEL, fg=COLOR_ACCENT,
+            activebackground=self.UI_BORDER, activeforeground=COLOR_ACCENT,
+            font=self.UI_BOLD, relief=tk.FLAT, bd=0,
+            padx=10, cursor="hand2",
+            command=self._save_destination,
+        )
+        dest_btn.pack(side=tk.LEFT, padx=(6, 0))
+        self.dest_entry.bind("<Return>", lambda _e: self._save_destination())
+
         self._section(f, "STATUS NOTE")
-        tk.Label(f, text="Shown in Discord notifications as ℹ️  at the bottom of each message.",
+        tk.Label(f, text="Shown as ℹ️  in Discord notifications.",
                  font=("Segoe UI", 8), fg=self.UI_MUTED, bg=self.UI_PANEL,
                  anchor="w", wraplength=420).pack(fill=tk.X, padx=10, pady=(0, 4))
         note_row = tk.Frame(f, bg=self.UI_PANEL)
@@ -261,6 +288,17 @@ class CarrierWindow:
             self.win.after(3000, lambda: self._copy_btn.config(text=orig, fg=self.UI_MUTED) if self.is_open() else None)
         except Exception:
             pass
+
+    def _save_destination(self):
+        dest = self.dest_var.get().strip()
+        try:
+            self.tracker.set_destination_note(dest)
+        except Exception:
+            pass
+        self.dest_entry.config(highlightcolor=self.UI_OK, highlightbackground=self.UI_OK)
+        self.win.after(1200, lambda: self.dest_entry.config(
+            highlightcolor=COLOR_ACCENT, highlightbackground=self.UI_BORDER
+        ) if self.is_open() else None)
 
     def _save_note(self):
         note = self.note_var.get().strip()
@@ -453,6 +491,16 @@ class CarrierWindow:
                 dot.config(fg=self.UI_DIM)
                 lbl.config(fg=self.UI_DIM)
                 state_lbl.config(text="", fg=self.UI_DIM)
+
+        # Planned destination — only sync when not focused
+        try:
+            dest_focused = (self.win.focus_get() == self.dest_entry)
+        except Exception:
+            dest_focused = False
+        if not dest_focused:
+            stored_dest = cd.get("destination_note") or ""
+            if self.dest_var.get() != stored_dest:
+                self.dest_var.set(stored_dest)
 
         # Status note — only sync from tracker when entry isn't focused
         try:

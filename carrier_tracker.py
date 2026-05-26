@@ -27,7 +27,7 @@ _PERSIST_KEYS = {
     "space_total", "space_cargo", "space_crew", "space_free",
     "space_reserved", "space_ship_packs", "space_module_packs",
     "crew", "trade_orders", "jump_history",
-    "notes", "last_updated",
+    "notes", "destination_note", "last_updated",
 }
 
 _COOLDOWN_SECS = 290  # 4m50s post-departure cooldown window
@@ -105,6 +105,7 @@ class CarrierTracker:
             "trade_orders": [],
             "jump_history": [],
             "notes": "",
+            "destination_note": "",
             "last_updated": None,
         }
         self._last_cancel_ts = None
@@ -609,7 +610,9 @@ class CarrierTracker:
             dest_sys     = cd.get("jump_destination")  or "TBD"
             dest_body    = cd.get("jump_body")         or ""
             dep_token    = _discord_relative(cd.get("jump_departure_time"))
-            note         = (cd.get("notes") or "").strip()
+            note          = (cd.get("notes")            or "").strip()
+            dest_note     = (cd.get("destination_note") or "").strip()
+            dest_display  = dest_note or "TBD"
 
             def _loc(system, body):
                 return f"**{system}**" + (f" / {body}" if body else "")
@@ -618,7 +621,9 @@ class CarrierTracker:
                 lines = [
                     "🚀  **Jump Plotted**",
                     f"📍  **Current Location:** {_loc(curr_sys, curr_body)}",
-                    f"🎯  **Destination:** {_loc(dest_sys, dest_body)}",
+                    # Real game-plotted jump target — label as "Jump Target" to
+                    # distinguish it from the user's stated long-term destination.
+                    f"🎯  **Jump Target:** {_loc(dest_sys, dest_body)}",
                 ]
                 if dep_token:
                     lines.append(f"⏰  **Departing:** {dep_token}")
@@ -641,6 +646,7 @@ class CarrierTracker:
             else:
                 lines = [event_type]
 
+            lines.append(f"📌  **Destination:** {dest_display}")
             if note:
                 lines.append(f"ℹ️  *{note}*")
 
@@ -664,6 +670,16 @@ class CarrierTracker:
     def set_note(self, note: str):
         """Update the operator status note and persist to config."""
         self.carrier_data["notes"] = (note or "").strip()
+        self.save_state()
+        if callable(self.on_panel_updated):
+            try:
+                self.on_panel_updated(self.carrier_data)
+            except Exception:
+                pass
+
+    def set_destination_note(self, destination: str):
+        """Update the operator's stated destination and persist."""
+        self.carrier_data["destination_note"] = (destination or "").strip()
         self.save_state()
         if callable(self.on_panel_updated):
             try:
