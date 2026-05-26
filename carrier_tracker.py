@@ -616,6 +616,11 @@ class CarrierTracker:
             dest_display  = dest_note or "TBD"
 
             def _loc(system, body):
+                # Elite body names are "{SystemName} {index}", so strip the
+                # redundant system prefix to avoid "Sol / Sol 3" duplication.
+                if body and body.startswith(system):
+                    suffix = body[len(system):].strip()
+                    return f"**{system}**" + (f" / {suffix}" if suffix else "")
                 return f"**{system}**" + (f" / {body}" if body else "")
 
             if event_type == "jump_plotted":
