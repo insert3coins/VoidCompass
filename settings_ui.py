@@ -120,6 +120,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
     create_toggle(sec_gen, "Cargo Manifest Overlay", cargo_var)
     create_toggle(sec_gen, "Scan Results Overlay", scan_var)
     create_toggle(sec_gen, "Prospector Result Overlay", prosp_var)
+    prosp_timeout_e = create_input(sec_gen, "Prospector Overlay Auto-Hide (seconds)", "prospector_hud_timeout_s")
     tk.Frame(sec_gen, bg=UI_PANEL, height=10).pack(fill=tk.X)
 
     sec_ss = panel(body, "SCREENSHOTS")
@@ -161,6 +162,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
             "cargo_overlay_enabled": cargo_var.get(),
             "scan_overlay_enabled": scan_var.get(),
             "prospector_overlay_enabled": prosp_var.get(),
+            "prospector_hud_timeout_s": max(5, int(prosp_timeout_e.get().strip() or 45))
+                if prosp_timeout_e.get().strip().isdigit() else
+                config.get("prospector_hud_timeout_s", 45),
             "screenshots_enabled": ss_var.get(),
             "screenshots_path": ss_e.get().strip(),
             "carrier_discord_webhook_url": fc_wh_e.get().strip(),
