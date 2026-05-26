@@ -1,5 +1,27 @@
 # VoidCompass // UPDATE LOG
 
+## v2.8.2 // Scan Progress Accuracy
+**Release Date:** 2026-May-26
+*   **Known-System Scan Progress (`dashboard.py`, `dashboard_db_mixin.py`):**
+    *   Fixed `load_system_from_db` ignoring `systems.scanned_count` — it was read from the DB but never used; `scanned` was derived only from counting rows in the `bodies` table, so completion counts stored by `FSSAllBodiesFound` or the history builder were silently lost on app restart.
+    *   `FSSAllBodiesFound` now sets `scanned = total` (previously only updated `total`) and persists all current scan-item body IDs to the `bodies` table so return visits restore correctly.
+    *   `FSSDiscoveryScan` with `Progress ≥ 1.0` now sets `scanned = total` — in pre-populated/known systems (Sol, Shinrarta Dezhra, etc.) the game returns `Progress=1.0` on the first honk, meaning every body is already catalogued; the HUD now shows 100% immediately instead of 0/N.
+    *   Fixed double-counting in the `Scan` event handler: `scanned` was incremented with `+= 1` per new body, but when it was pre-loaded from `db_scanned_count` without individual body IDs, new scan events pushed `scanned` above `total`. Now derived from `len(scanned_bodies)` so it only advances when the set of known body IDs genuinely grows.
+
+## v2.8.1 // Fleet Carrier Follow-ups
+**Release Date:** 2026-May-26
+*   **Window Position Persistence (`carrier_window.py`):**
+    *   Carrier window now restores its last position and size from config on open (`carrier_window_geometry` key).
+    *   Saves geometry and flushes `config.json` on close — same pattern as the Mining and Route Planner windows.
+*   **Discord Webhook Configuration (`settings_ui.py`):**
+    *   Added **FLEET CARRIER** section to the Configuration window with a webhook URL input field.
+    *   Added **Send Test Message** button that dispatches a test embed to the configured webhook via a background thread (no UI blocking).
+    *   Webhook URL is saved to config on save; leaving it empty silently disables all carrier Discord notifications.
+*   **Fleet Carrier Jump = Player Location Update (`dashboard.py`, `journal_watcher.py`):**
+    *   When docked on a fleet carrier that jumps, the game fires `CarrierJump` instead of `FSDJump` or `Location`. The dashboard was unaware of this, so `current_sys`, `current_system_address`, and `current_coords` were never updated — navigation HUD and scan state appeared frozen in the old system.
+    *   `journal_watcher.py` now normalises `CarrierJump` with `star_system`, `system_address`, `star_pos`, `docked`, `body`, and `body_id` fields.
+    *   `dashboard.py` extends the `FSDJump`/`Location` branch to handle `CarrierJump` when `docked=True`: resets scan state, loads system DB history, updates all HUDs, counts the jump in session stats, and logs a distinct **FC JUMP / Carrier arrived** event-feed entry.
+
 ## v2.8.0 // Fleet Carrier Manager
 **Release Date:** 2026-May-26
 *   **Fleet Carrier Tracking (`carrier_tracker.py`):**
