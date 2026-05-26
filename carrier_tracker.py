@@ -33,10 +33,10 @@ _PERSIST_KEYS = {
 _COOLDOWN_SECS = 290  # 4m50s post-departure cooldown window
 
 _DISCORD_COLORS = {
-    "jump_plotted":      0x4048FF,
-    "jump_completed":    0x21D189,
-    "jump_cancelled":    0xFF4B3B,
-    "cooldown_finished": 0x4FB9C0,
+    "jump_plotted":      0x5865F2,   # blurple — departure pending
+    "jump_completed":    0x57F287,   # green — arrived
+    "jump_cancelled":    0xED4245,   # red — cancelled
+    "cooldown_finished": 0x5DADE2,   # blue — ready to jump
 }
 
 CREW_ROLES = [
@@ -600,56 +600,76 @@ class CarrierTracker:
     def _send_discord(self, url, event_type, cd):
         try:
             import requests
-            name = cd.get("name") or "Fleet Carrier"
-            callsign = cd.get("callsign") or "???-???"
-            current_system = cd.get("system") or "Unknown"
-            current_body   = cd.get("body") or ""
-            prev_system = cd.get("previous_system") or "Unknown"
-            prev_body   = cd.get("previous_body") or ""
-            dest_system = cd.get("jump_destination") or "Unknown"
-            dest_body   = cd.get("jump_body") or ""
-            dep_token = _discord_relative(cd.get("jump_departure_time"))
+            name         = cd.get("name")     or "Fleet Carrier"
+            callsign     = cd.get("callsign") or "???-???"
+            curr_sys     = cd.get("system")            or "Unknown"
+            curr_body    = cd.get("body")              or ""
+            prev_sys     = cd.get("previous_system")   or "Unknown"
+            prev_body    = cd.get("previous_body")     or ""
+            dest_sys     = cd.get("jump_destination")  or "TBD"
+            dest_body    = cd.get("jump_body")         or ""
+            dep_token    = _discord_relative(cd.get("jump_departure_time"))
+            note         = (cd.get("notes") or "").strip()
 
             def _loc(system, body):
                 return f"**{system}**" + (f" / {body}" if body else "")
 
-            desc_map = {
-                "jump_plotted": (
-                    f"Jump plotted to {_loc(dest_system, dest_body)}"
-                    + (f", departing {dep_token}" if dep_token else "")
-                ),
-                "jump_completed": f"Arrived at {_loc(current_system, current_body)}",
-                "jump_cancelled": "Jump cancelled",
-                "cooldown_finished": f"Cooldown complete at **{current_system}**, ready to jump",
-            }
-
-            if event_type == "jump_completed":
-                loc_label = "Departed From"
-                loc_value = _loc(prev_system, prev_body)
-            elif event_type == "jump_plotted":
-                loc_label = "Current Location"
-                loc_value = _loc(current_system, current_body)
+            if event_type == "jump_plotted":
+                lines = [
+                    "🚀  **Jump Plotted**",
+                    f"📍  **Current Location:** {_loc(curr_sys, curr_body)}",
+                    f"🎯  **Destination:** {_loc(dest_sys, dest_body)}",
+                ]
+                if dep_token:
+                    lines.append(f"⏰  **Departing:** {dep_token}")
+            elif event_type == "jump_completed":
+                lines = [
+                    "✅  **Jump Complete**",
+                    f"📍  **Arrived At:** {_loc(curr_sys, curr_body)}",
+                    f"🔙  **Departed From:** {_loc(prev_sys, prev_body)}",
+                ]
+            elif event_type == "jump_cancelled":
+                lines = [
+                    "❌  **Jump Cancelled**",
+                    f"📍  **Remaining At:** {_loc(curr_sys, curr_body)}",
+                ]
+            elif event_type == "cooldown_finished":
+                lines = [
+                    "🔓  **Cooldown Complete — Ready to Jump**",
+                    f"📍  **Location:** {_loc(curr_sys, curr_body)}",
+                ]
             else:
-                loc_label = "Location"
-                loc_value = _loc(current_system, current_body)
+                lines = [event_type]
+
+            if note:
+                lines.append(f"ℹ️  *{note}*")
 
             requests.post(
                 url,
                 json={
                     "username": "Void Compass",
                     "embeds": [{
-                        "title": f"{name}  ({callsign})",
-                        "description": desc_map.get(event_type, event_type),
+                        "title": f"{name}  ·  {callsign}",
+                        "description": "\n".join(lines),
                         "color": _DISCORD_COLORS.get(event_type, 0x888888),
-                        "fields": [
-                            {"name": loc_label, "value": loc_value, "inline": True}
-                        ],
+                        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "footer": {"text": "VoidCompass · Fleet Carrier Tracker"},
                     }],
                 },
                 timeout=8,
             )
         except Exception:
             pass
+
+    def set_note(self, note: str):
+        """Update the operator status note and persist to config."""
+        self.carrier_data["notes"] = (note or "").strip()
+        self.save_state()
+        if callable(self.on_panel_updated):
+            try:
+                self.on_panel_updated(self.carrier_data)
+            except Exception:
+                pass
 
     def send_test_discord(self, url):
         try:

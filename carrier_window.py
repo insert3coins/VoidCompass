@@ -219,6 +219,33 @@ class CarrierWindow:
         self.stat_jump_max   = self._row(f, "Jump Range (max)")
         self.stat_docking    = self._row(f, "Docking Access")
 
+        self._section(f, "STATUS NOTE")
+        tk.Label(f, text="Shown in Discord notifications as ℹ️  at the bottom of each message.",
+                 font=("Segoe UI", 8), fg=self.UI_MUTED, bg=self.UI_PANEL,
+                 anchor="w", wraplength=420).pack(fill=tk.X, padx=10, pady=(0, 4))
+        note_row = tk.Frame(f, bg=self.UI_PANEL)
+        note_row.pack(fill=tk.X, padx=10, pady=(0, 10))
+        self.note_var = tk.StringVar()
+        self.note_entry = tk.Entry(
+            note_row, textvariable=self.note_var,
+            bg="#090c10", fg=COLOR_TEXT, font=self.UI_MONO,
+            insertbackground=COLOR_ACCENT,
+            relief=tk.FLAT, highlightthickness=1,
+            highlightbackground=self.UI_BORDER,
+            highlightcolor=COLOR_ACCENT,
+        )
+        self.note_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=5)
+        note_btn = tk.Button(
+            note_row, text="Set",
+            bg=self.UI_PANEL, fg=COLOR_ACCENT,
+            activebackground=self.UI_BORDER, activeforeground=COLOR_ACCENT,
+            font=self.UI_BOLD, relief=tk.FLAT, bd=0,
+            padx=10, cursor="hand2",
+            command=self._save_note,
+        )
+        note_btn.pack(side=tk.LEFT, padx=(6, 0))
+        self.note_entry.bind("<Return>", lambda _e: self._save_note())
+
     def _copy_countdown(self):
         dep = self.tracker.carrier_data.get("jump_departure_time")
         if not dep:
@@ -234,6 +261,18 @@ class CarrierWindow:
             self.win.after(3000, lambda: self._copy_btn.config(text=orig, fg=self.UI_MUTED) if self.is_open() else None)
         except Exception:
             pass
+
+    def _save_note(self):
+        note = self.note_var.get().strip()
+        try:
+            self.tracker.set_note(note)
+        except Exception:
+            pass
+        # Brief visual confirmation
+        self.note_entry.config(highlightcolor=self.UI_OK, highlightbackground=self.UI_OK)
+        self.win.after(1200, lambda: self.note_entry.config(
+            highlightcolor=COLOR_ACCENT, highlightbackground=self.UI_BORDER
+        ) if self.is_open() else None)
 
     # ---------- Finance tab ----------
     def _build_finance_tab(self):
@@ -414,3 +453,13 @@ class CarrierWindow:
                 dot.config(fg=self.UI_DIM)
                 lbl.config(fg=self.UI_DIM)
                 state_lbl.config(text="", fg=self.UI_DIM)
+
+        # Status note — only sync from tracker when entry isn't focused
+        try:
+            focused = (self.win.focus_get() == self.note_entry)
+        except Exception:
+            focused = False
+        if not focused:
+            stored_note = cd.get("notes") or ""
+            if self.note_var.get() != stored_note:
+                self.note_var.set(stored_note)
