@@ -1,5 +1,55 @@
 # VoidCompass // UPDATE LOG
 
+## v2.8.8 // DB Rebuild Transaction Fix
+**Release Date:** 2026-May-26
+*   **Rebuild Cache no longer crashes (`dashboard_db_mixin.py`):**
+    *   Removed three explicit `conn.execute("BEGIN TRANSACTION")` calls from `import_scan_cache_json`, `migrate_json_history`, and `scan_all_logs`.
+    *   Python's `sqlite3` module manages implicit transactions automatically — any DML statement auto-begins a transaction. Issuing an explicit `BEGIN TRANSACTION` while an implicit one is already open caused SQLite to raise "cannot start a transaction within a transaction", aborting the entire rebuild.
+    *   `conn.commit()` and `conn.rollback()` calls are preserved; only the redundant explicit `BEGIN` is removed.
+
+## v2.8.7 // History Builder CarrierJump
+**Release Date:** 2026-May-26
+*   **Scan history rebuild now tracks FC jumps (`journal_watcher.py`):**
+    *   `scan_history()` now advances `current_sys_context` when it encounters a `CarrierJump` event with `Docked=True`, in addition to `FSDJump` and `Location`.
+    *   Previously, bodies scanned in systems reached by carrier jump were attributed to the wrong system during a history rebuild, because the context variable was never updated for `CarrierJump`.
+
+## v2.8.6 // CarrierJump Startup Restore
+**Release Date:** 2026-May-26
+*   **Last-system restore works after carrier jumps (`journal_watcher.py`):**
+    *   `_seed_startup_location()` now matches `CarrierJump` with `Docked=True` as a valid location anchor in addition to `FSDJump` and `Location`.
+    *   Previously, if the last position update in the journal was a `CarrierJump` (because the player was docked when the carrier jumped), the app restarted with no system or an outdated one.
+
+## v2.8.5 // Manual Discord Post + Departure Time
+**Release Date:** 2026-May-26
+*   **"Post Status to Discord" button (`carrier_window.py`, `carrier_tracker.py`):**
+    *   Added a **📢 Post Status to Discord** button at the bottom of the carrier window to manually fire a Discord status embed at any time.
+    *   Added an editable **Departure Time** field in the carrier window. Accepted formats: `18:30`, `18:30:00`, `DD/MM HH:MM`, `DD/MM/YYYY HH:MM`, `YYYY-MM-DD HH:MM`.
+    *   Departure time is interpreted as the local machine time and converted to a UTC unix timestamp. Discord renders it in each recipient's own timezone via `<t:unix:F>` / `<t:unix:R>` tokens.
+    *   UI shows a green **✓ Sent** or red **✗ reason** feedback label for 4 s after the post attempt; parse errors are surfaced for 5 s.
+    *   `carrier_tracker.send_status_update(departure_ts=None)` — fires the `status_update` embed in a background thread, returns `(ok, err)`. Embeds include the `🕐 Departure` line only when a timestamp is provided.
+
+## v2.8.4 // Editable Carrier Status & Destination
+**Release Date:** 2026-May-26
+*   **Editable fields in carrier window (`carrier_window.py`, `carrier_tracker.py`):**
+    *   Added **Planned Destination** entry field. Saved value is used as the destination in Discord jump embeds (`🎯 Jump Target`, `📌 Destination`); defaults to `TBD` when blank.
+    *   Added **Status Note** entry field. Saved value appears as the `ℹ️` italic line at the bottom of Discord embeds.
+    *   Both fields show a green flash confirmation on save (1.2 s). Enter key triggers save. Fields do not clobber user edits in progress — they only sync from tracker state when the entry is not focused.
+    *   `carrier_tracker.set_note(note)` and `carrier_tracker.set_destination_note(destination)` persist the values to config.
+
+## v2.8.3 // Discord Carrier Embed Redesign
+**Release Date:** 2026-May-26
+*   **Emoji-rich multi-line Discord embeds (`carrier_tracker.py`):**
+    *   Rewrote `_send_discord()` to produce structured, emoji-annotated embeds instead of plain-text messages.
+    *   Per-event content:
+        *   **Jump Plotted 🚀** — current location, jump target, departure time (if set), distance, and planned destination.
+        *   **Jump Completed ✅** — arrived-at system, departed-from system, planned destination.
+        *   **Jump Cancelled ❌** — remaining location and planned destination.
+        *   **Cooldown Finished 🔓** — current location and carrier readiness.
+        *   **Status Update 📢** — current location, optional departure timestamp, status note, and planned destination.
+    *   All embeds include a UTC `"timestamp"` field and footer `VoidCompass · Fleet Carrier Tracker`.
+    *   Departure times use Discord's `<t:unix:F>` (full local date/time) and `<t:unix:R>` (relative) tokens — each reader sees their own timezone automatically.
+    *   Per-event embed accent colours: jump plotted (#5865F2 blurple), completed (#57F287 green), cancelled (#ED4245 red), cooldown (#5DADE2 blue), status (#FEE75C yellow).
+
 ## v2.8.2 // Scan Progress Accuracy
 **Release Date:** 2026-May-26
 *   **Known-System Scan Progress (`dashboard.py`, `dashboard_db_mixin.py`):**
