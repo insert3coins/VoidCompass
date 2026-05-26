@@ -1,5 +1,14 @@
 # VoidCompass // UPDATE LOG
 
+## v2.8.12 // Prospector HUD Auto-Hide + Position Fixes
+**Release Date:** 2026-May-26
+*   **Auto-hide timer now works correctly (`prospector_hud.py`):**
+    *   `_schedule_hide()` now reads `prospector_hud_timeout_s` from config dynamically on each call, so changing the timeout in Settings takes effect immediately without an app restart. Previously the value was captured once at `__init__` time and never updated.
+    *   Clarified the Settings label: "Prospector Overlay Auto-Hide (seconds) — 60 = 1 min · 120 = 2 min · 300 = 5 min". The field has always been in seconds (240 = 4 minutes, not 2).
+*   **Overlay no longer jumps to top-left corner on new prospect (`prospector_hud.py`):**
+    *   `_redraw()` was calling `win.geometry(f"{w}x{height}+{winfo_x()}+{winfo_y()}")`. When the window is withdrawn (hidden), `winfo_x()/winfo_y()` both return 0, silently resetting the overlay to screen position (0, 0) before it was shown. Fixed by setting only size in `_redraw()` (`win.geometry(f"{w}x{height}")`).
+    *   `show()` now explicitly restores position from config (`prospector_hud_x` / `prospector_hud_y`) via `win.geometry(f"+{x}+{y}")` before calling `deiconify()`, so the overlay always appears in the saved location.
+
 ## v2.8.11 // Prospector Result Overlay
 **Release Date:** 2026-May-26
 *   **New `ProspectorHUD` overlay (`prospector_hud.py`):**
