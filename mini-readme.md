@@ -1,5 +1,17 @@
 # VoidCompass // UPDATE LOG
 
+## v2.8.10 // Startup Scan Progress Restore
+**Release Date:** 2026-May-26
+*   **Scan progress now reliably loads on restart (`dashboard.py`, `dashboard_db_mixin.py`):**
+    *   **`FSSDiscoveryScan` total-override bug fixed:** the `BodyCount` field in the journal event was normalised with a `0` default. When missing, `self.total = 0` wiped whatever `load_system_from_db` had just restored from the DB. Fixed by treating `body_count = 0` as "not provided" and using `max(body_count, self.total)` so the stored value is never decreased.
+    *   **Startup batch `BEGIN TRANSACTION` removed** (`process_batch` in `dashboard.py`): same implicit-transaction conflict as the `dashboard_db_mixin.py` fix in v2.8.8. The explicit `BEGIN TRANSACTION` failed silently when an implicit transaction was already open (from the startup-seed `process_event` call), setting `in_transaction = False` and skipping the commit at the end of the batch. Python's sqlite3 now manages the transaction implicitly; the batch always commits.
+    *   **Post-startup DB sync added:** on the first batch (`is_first_load`), after all events are processed and committed, the main thread calls `load_system_from_db` before running `update_dashboard_ui`. This ensures `scan_stat` always reflects the authoritative committed DB values rather than whatever in-memory state the batch left behind.
+    *   **`import_scan_cache_json` now populates `bodies` and `systems` tables:** previously only inserted into `scan_hud_items`, so players who migrated from the old JSON scan cache saw `0 / 0` scan counts until a full Rebuild Cache was run. Now the scan body IDs from the cache are also written to `bodies`, and `systems` is updated with `scanned_count = number of body IDs`, using `max(existing, new)` to avoid regressing data already in the DB.
+
+## v2.8.9 // Discord Embed Duplicate System Name Fix
+**Release Date:** 2026-May-26
+*   **Carrier location/target lines no longer repeat the system name (`carrier_tracker.py`):** Elite body names always start with the system name (e.g. `Parrot's Head Sector EL-Y d83 2`). The `_loc()` helper now strips the system-name prefix from the body string when present, showing `**System** / 2` instead of `**System** / System 2`.
+
 ## v2.8.8 // DB Rebuild Transaction Fix
 **Release Date:** 2026-May-26
 *   **Rebuild Cache no longer crashes (`dashboard_db_mixin.py`):**
