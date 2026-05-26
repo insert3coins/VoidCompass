@@ -225,9 +225,14 @@ class DashboardDBMixin:
                 row = cursor.fetchone()
                 if row:
                     self.total = row[0] or 0
+                    # scanned_count may have been set by FSSAllBodiesFound or history
+                    # builder without individual body IDs being written; use it as a floor.
+                    db_scanned_count = row[1] or 0
                     cursor.execute("SELECT body_id FROM bodies WHERE system_name=?", (sys_name,))
                     self.scanned_bodies = set(r[0] for r in cursor.fetchall())
-                    self.scanned = len(self.scanned_bodies)
+                    bodies_count = len(self.scanned_bodies)
+                    # Clamp stored count to total so we never present scanned > total here.
+                    self.scanned = max(bodies_count, min(db_scanned_count, self.total or db_scanned_count))
                     if self.scanned > self.total:
                         self.total = self.scanned
                         self.conn.execute(

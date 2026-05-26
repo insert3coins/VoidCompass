@@ -1173,8 +1173,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 return
             if d.get("system_name") and d.get("system_name") != self.current_sys:
                 return
-            self.total = d.get("body_count", self.total)
+            body_count = d.get("body_count", self.total)
+            self.total = body_count
             self.fss_all_bodies = False
+            # Progress=1.0 means every body in this system is already known/discovered
+            # (e.g. Sol and other pre-populated systems). Treat it as fully scanned so
+            # the HUD shows 100% without requiring individual FSS body scans.
+            progress = d.get("progress", raw.get("Progress") if isinstance(raw, dict) else None)
+            try:
+                progress = float(progress) if progress is not None else None
+            except (TypeError, ValueError):
+                progress = None
+            if progress is not None and progress >= 1.0 and self.total > 0:
+                self.scanned = self.total
+                # Ensure scanned_bodies count is consistent; individual IDs are
+                # populated later as NavBeaconDetail/AutoScan events arrive.
             self.db_update_system(self.current_sys, self.total, self.scanned)
             if not self.batch_mode:
                 self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
@@ -1213,7 +1226,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if not self._matches_current_system_address(d):
                 return
             if d.get("system_name") and d.get("system_name") == self.current_sys:
-                self.total = d.get("count", self.total)
+                count = d.get("count", self.total)
+                if count > 0:
+                    self.total = count
+                # All bodies found → mark as fully scanned.
+                self.scanned = self.total
+                # Persist all scan_item body IDs we have so return visits restore correctly.
+                for item in self.scan_items:
+                    bid = item.get("body_id")
+                    if bid is not None and bid not in self.scanned_bodies:
+                        self.scanned_bodies.add(bid)
+                        self.db_add_body(self.current_sys, bid)
                 self.fss_all_bodies = True
                 self.db_update_system(self.current_sys, self.total, self.scanned)
                 if not self.batch_mode:
@@ -1309,8 +1332,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if is_new_body_scan:
                     # --- State Updates for a new body ---
                     self.scanned_bodies.add(body_id)
-                    self.scanned += 1
                     self.db_add_body(self.current_sys, body_id)
+                    # Derive scanned from len(scanned_bodies) rather than a raw increment.
+                    # This prevents double-counting when scanned was pre-loaded from
+                    # systems.scanned_count (e.g. after FSSAllBodiesFound) without having
+                    # the individual body IDs in the bodies table.
+                    new_count = len(self.scanned_bodies)
+                    if new_count > self.scanned:
+                        self.scanned = new_count
                     self.db_update_system(self.current_sys, self.total, self.scanned)
                     if not self.batch_mode:
                         self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
