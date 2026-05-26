@@ -1,5 +1,10 @@
 # VoidCompass // UPDATE LOG
 
+## v2.8.13 // Prospector HUD Startup Replay Fix
+**Release Date:** 2026-May-26
+*   **Prospector overlay no longer pops up on program load (`dashboard.py`):**
+    *   `ProspectedAsteroid` and `MiningRefined` events are now gated on `not self.batch_mode`. During the startup journal catchup pass, `batch_mode = True`, so replayed history events are silently skipped by the overlay. Only events that arrive live (after startup completes) will trigger the overlay — same guard pattern used throughout `process_event` for every other UI update.
+
 ## v2.8.12 // Prospector HUD Auto-Hide + Position Fixes
 **Release Date:** 2026-May-26
 *   **Auto-hide timer now works correctly (`prospector_hud.py`):**
