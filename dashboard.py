@@ -26,6 +26,7 @@ from journal_watcher import JournalWatcher
 from mining_window import MiningWindow
 from carrier_tracker import CarrierTracker
 from carrier_window import CarrierWindow
+from prospector_hud import ProspectorHUD
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
@@ -200,6 +201,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.scan_hud.hide()
         else:
             self.scan_hud = None
+
+        if self.config.get("prospector_overlay_enabled", True):
+            self.prospector_hud = ProspectorHUD(self.root, self.config)
+        else:
+            self.prospector_hud = None
 
         
         self.db_lock = threading.RLock()
@@ -1400,6 +1406,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
+
+        # ── Prospector overlay — independent of the scan/nav chain above ──
+        if self.prospector_hud:
+            if ev == "ProspectedAsteroid":
+                self.root.after(0, lambda r=raw: self.prospector_hud.update(r))
+            elif ev == "MiningRefined":
+                mat = raw.get("Type_Localised") or raw.get("Type") or ""
+                self.root.after(0, lambda m=mat: self.prospector_hud.add_refined(m))
 
     def process_batch(self, events):
         self.batch_mode = True
