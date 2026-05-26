@@ -305,6 +305,22 @@ class JournalWatcher:
                     "star_class": data.get("StarClass")
                 }
             }
+        # CarrierJump fires when the player is docked on a carrier that jumps.
+        # Normalize the same location fields so dashboard location logic can reuse them.
+        if ev == "CarrierJump":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "star_system": data.get("StarSystem"),
+                    "system_address": data.get("SystemAddress"),
+                    "star_pos": data.get("StarPos"),
+                    "star_class": None,  # CarrierJump doesn't carry StarClass
+                    "docked": data.get("Docked", False),
+                    "body": data.get("Body"),
+                    "body_id": data.get("BodyID"),
+                }
+            }
         if ev in ("Touchdown", "Liftoff"):
             return {
                 "type": ev,

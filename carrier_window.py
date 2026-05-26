@@ -79,7 +79,7 @@ class CarrierWindow:
         self.win = tk.Toplevel(root)
         self.win.title("Fleet Carrier")
         self.win.configure(bg=self.UI_BG)
-        self.win.geometry("480x560")
+        self.win.geometry(config.get("carrier_window_geometry", "480x560"))
         self.win.resizable(True, True)
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -96,6 +96,14 @@ class CarrierWindow:
             return False
 
     def _on_close(self):
+        try:
+            self.config["carrier_window_geometry"] = self.win.geometry()
+            from config import CONFIG_FILE
+            import json
+            with open(CONFIG_FILE, "w") as _f:
+                json.dump(self.config, _f, indent=4)
+        except Exception:
+            pass
         self.tracker.on_updated = None
         if self._after_job:
             try:
