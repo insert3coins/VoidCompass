@@ -1,5 +1,17 @@
 # VoidCompass // UPDATE LOG
 
+## v2.8.11 // Prospector Result Overlay
+**Release Date:** 2026-May-26
+*   **New `ProspectorHUD` overlay (`prospector_hud.py`):**
+    *   Pops up automatically when a `ProspectedAsteroid` journal event fires (limpet returns data ~30 s after launch).
+    *   Displays: asteroid type and content level (colour-coded — green HIGH / yellow MED / grey LOW), remaining % from last prospect, material list sorted by proportion with visual fill-bars, and a core/motherlode highlight when `MotherlodeMaterial` is present (border and header turn orange, motherlode material row highlighted).
+    *   Running **refined-since-prospect** counter: every `MiningRefined` event after the last prospect increments the material count displayed in the footer (`~4 t refined: 2t Alexandrite  2t Cobaltite`). Resets on each new prospect.
+    *   Auto-hides after a configurable timeout (default 45 s, key `prospector_hud_timeout_s`).
+    *   Draggable — position is saved to `config.json` on mouse-release (`prospector_hud_x`, `prospector_hud_y`).
+    *   On/off toggle in Configuration → **Prospector Result Overlay** (key `prospector_overlay_enabled`, default on). Requires app restart to take effect (same as other overlays).
+    *   Canvas uses transparent chroma-key background (`-transparentcolor`), topmost, tool-window — same rendering path as ScanHUD and CargoHUD.
+*   **`dashboard.py`:** Imports `ProspectorHUD`; creates it alongside the other overlays in `__init__`; forwards `ProspectedAsteroid` and `MiningRefined` events to it at the end of `process_event`, independent of the main scan/nav elif chain.
+
 ## v2.8.10 // Startup Scan Progress Restore
 **Release Date:** 2026-May-26
 *   **Scan progress now reliably loads on restart (`dashboard.py`, `dashboard_db_mixin.py`):**
