@@ -27,6 +27,7 @@ from mining_window import MiningWindow
 from carrier_tracker import CarrierTracker
 from carrier_window import CarrierWindow
 from prospector_hud import ProspectorHUD
+from bio_hud import BioHUD
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
@@ -207,7 +208,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         else:
             self.prospector_hud = None
 
-        
+        if self.config.get("bio_overlay_enabled", True):
+            self.bio_hud = BioHUD(self.root, self.config)
+        else:
+            self.bio_hud = None
+
         self.db_lock = threading.RLock()
         self.batch_mode = False
         self.init_db()
@@ -1074,6 +1079,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if not self.batch_mode:
                 self.update_hud()
                 self.schedule_dashboard_refresh()
+                if self.bio_hud:
+                    _bid = body_id
+                    _bn  = body_label
+                    _sp  = d.get("species")
+                    _gn  = d.get("genus")
+                    _si  = d.get("sample_idx")
+                    _ms  = d.get("max_samples", 3)
+                    _ic  = is_complete
+                    self.root.after(0, lambda: self.bio_hud.on_scan_organic(
+                        _bid, _bn, _sp, _gn, _si, _ms, _ic))
 
         elif ev == "Location" or ev == "FSDJump" or ev == "StartJump" or (ev == "CarrierJump" and d.get("docked")):
             # Do not update HUDs during jump charge; wait for arrival.
@@ -1121,6 +1136,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.system_bio_signals = 0
             self.last_scan_event = None
             self.last_bio_scan = {}
+            if self.bio_hud and not self.batch_mode:
+                _sys = self.current_sys
+                self.root.after(0, lambda: self.bio_hud.on_system_change(_sys))
             self.valuable_system = False
             self.valuable_bodies.clear()
             self.system_traffic = {'day': 0, 'week': 0, 'total': 0}
