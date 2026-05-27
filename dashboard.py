@@ -1049,7 +1049,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if not self._matches_current_system_address(d):
                 return
             body_id = self._normalize_body_id(d.get("body_id"))
-            body_label = d.get("body_name") or (f"Body {body_id}" if body_id is not None else "Unknown Body")
+            # ScanOrganic doesn't include BodyName — look it up from the Scan
+            # event cache (scan_items_by_id) which does have it.
+            _scan_item = self.scan_items_by_id.get(body_id, {}) if body_id is not None else {}
+            body_label = (d.get("body_name")
+                          or _scan_item.get("name")
+                          or (f"Body {body_id}" if body_id is not None else "Unknown Body"))
             species = d.get("species") or d.get("genus") or "Organic"
             species_key = f"{body_id}|{species}" if body_id is not None else f"{body_label}|{species}"
 
