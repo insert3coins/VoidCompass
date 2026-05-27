@@ -542,6 +542,7 @@ class MiningWindow:
         self.session_active = False
         self.session_started_at = None
         self.session_id = None
+        self._json_session_key = None
         self.prospected_count = 0
         self.core_count = 0
         self.mined_tons = {}
