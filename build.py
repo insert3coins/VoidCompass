@@ -98,5 +98,9 @@ VSVersionInfo(
             shutil.rmtree(bio_criteria_dst)
         shutil.copytree(bio_criteria_src, bio_criteria_dst)
         print("Copied bio-criteria/ to dist/bio-criteria/")
+    col_data_src = os.path.join(os.getcwd(), 'colonisation_data.json')
+    if os.path.exists(col_data_src):
+        shutil.copy(col_data_src, os.path.join(dist_dir, 'colonisation_data.json'))
+        print("Copied colonisation_data.json to dist/")
 
     print("Build complete. Check the 'dist' folder.")
