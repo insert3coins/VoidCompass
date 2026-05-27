@@ -16,7 +16,6 @@ from config import (
 from version import APP_VERSION
 from hud import TacticalHUD
 from cargo_hud import CargoHUD
-from scan_hud import ScanHUD
 from edsm_handler import EDSMHandler
 from screenshot_handler import ScreenshotHandler
 from settings_ui import open_settings
@@ -70,8 +69,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.scan_items = []
         self.scan_items_by_id = {}
         self.in_fss = False
-        self.scan_hud_hide_job = None
-        self.scan_hud_hide_delay_ms = 30000
         self.fss_summary_active = False
         self.body_signals = {}
         self.body_dss_complete = set()
@@ -85,6 +82,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.body_scan_data: dict = {}  # body_id → conditions dict
         self.current_body_id    = None  # from ApproachBody
         self.current_body_name  = ""
+        # Colonization tracking
+        self.colonisation_projects: dict = {}  # market_id → project dict
+        self.current_colonisation_market: int | None = None
         self.cargo_capacity = 0
         self.last_journal_event_ts = 0.0
         self.last_logged_journal_file = None
@@ -203,12 +203,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         else:
             self.cargo_hud = None
 
-        if self.config.get("scan_overlay_enabled", True):
-            self.scan_hud = ScanHUD(self.root, self.config)
-            self.scan_hud.hide()
-        else:
-            self.scan_hud = None
-
         if self.config.get("prospector_overlay_enabled", True):
             self.prospector_hud = ProspectorHUD(self.root, self.config)
         else:
@@ -222,6 +216,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.db_lock = threading.RLock()
         self.batch_mode = False
         self.init_db()
+        self.colonisation_projects = self.db_load_colonisation_projects()
         self.import_scan_cache_json()
         
         self.watcher = JournalWatcher(
@@ -354,15 +349,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     changed = True
         except Exception:
             pass
-        try:
-            if self.scan_hud and self.scan_hud.win and self.scan_hud.win.winfo_exists():
-                pos = (int(self.scan_hud.win.winfo_x()), int(self.scan_hud.win.winfo_y()))
-                if self._overlay_pos_last_saved.get("scan") != pos:
-                    self._overlay_pos_last_saved["scan"] = pos
-                    self.config["scan_hud_x"], self.config["scan_hud_y"] = pos
-                    changed = True
-        except Exception:
-            pass
         if changed:
             self._save_config_file()
         self.root.after(700, self._tick_overlay_position_sync)
@@ -423,12 +409,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if self.cargo_hud and self.cargo_hud.win and self.cargo_hud.win.winfo_exists():
                 self.config["cargo_hud_x"] = int(self.cargo_hud.win.winfo_x())
                 self.config["cargo_hud_y"] = int(self.cargo_hud.win.winfo_y())
-        except Exception:
-            pass
-        try:
-            if self.scan_hud and self.scan_hud.win and self.scan_hud.win.winfo_exists():
-                self.config["scan_hud_x"] = int(self.scan_hud.win.winfo_x())
-                self.config["scan_hud_y"] = int(self.scan_hud.win.winfo_y())
         except Exception:
             pass
         self.config["main_geometry"] = self.root.geometry()
@@ -722,17 +702,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.cargo_hud.win.destroy()
                     self.cargo_hud = None
 
-            # Live Toggle: Scan HUD
-            if self.config.get("scan_overlay_enabled", True):
-                if self.scan_hud is None:
-                    self.scan_hud = ScanHUD(self.root, self.config)
-                self.update_scan_hud()
-            else:
-                if self.scan_hud:
-                    self.scan_hud.win.destroy()
-                    self.scan_hud = None
-
-        
         open_settings(self.root, self.config, on_save, carrier_tracker=self.carrier_tracker)
 
     def fetch_system_traffic(self, system_name):
@@ -1103,18 +1072,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "Location" or ev == "FSDJump" or ev == "StartJump" or (ev == "CarrierJump" and d.get("docked")):
             # Do not update HUDs during jump charge; wait for arrival.
             if ev == "StartJump":
-                if self.scan_hud:
-                    self.scan_hud.hide()
-                    self.in_fss = False
-                    self.fss_summary_active = False
+                self.in_fss = False
+                self.fss_summary_active = False
                 return
 
             # CarrierJump counts as a jump for the player when they are docked on board.
             is_jump = ev in ("FSDJump", "CarrierJump")
 
-            # Hide scan HUD on jump completion
-            if is_jump and self.scan_hud:
-                self.scan_hud.hide()
+            # Reset FSS state on jump completion
+            if is_jump:
                 self.in_fss = False
                 self.fss_summary_active = False
 
@@ -1501,6 +1467,40 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
+
+        # ── Colonization ──────────────────────────────────────────────────────────
+        if ev == "ColonisationConstructionDepot":
+            mid = d.get("market_id")
+            if mid is not None:
+                self.current_colonisation_market = mid
+                self.colonisation_projects[mid] = {
+                    "market_id":    mid,
+                    "system_name":  d.get("system_name", ""),
+                    "body_name":    d.get("body_name", ""),
+                    "progress":     d.get("progress", 0.0),
+                    "complete":     d.get("complete", False),
+                    "failed":       d.get("failed", False),
+                    "resources":    d.get("resources", []),
+                    "last_updated": time.time(),
+                }
+                self.db_save_colonisation_project(self.colonisation_projects[mid])
+                if not self.batch_mode:
+                    self.root.after(0, self.refresh_colonisation_ui)
+
+        elif ev == "ColonisationContribution":
+            mid = d.get("market_id")
+            if mid in self.colonisation_projects:
+                proj = self.colonisation_projects[mid]
+                proj["progress"] = d.get("progress", proj.get("progress", 0))
+                proj["last_updated"] = time.time()
+                contribs = {c["name"].lower(): c["count"] for c in (d.get("contributions") or [])}
+                for r in proj.get("resources", []):
+                    delta = contribs.get(r["name"].lower(), 0)
+                    if delta:
+                        r["provided"] = min(r["required"], r.get("provided", 0) + delta)
+                self.db_save_colonisation_project(proj)
+                if not self.batch_mode:
+                    self.root.after(0, self.refresh_colonisation_ui)
 
         # ── ApproachBody / LeaveBody ──────────────────────────────────────────────
         if ev == "ApproachBody" and not self.batch_mode:

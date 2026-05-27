@@ -23,6 +23,12 @@ class DashboardDBMixin:
             self.conn.execute(
                 "CREATE TABLE IF NOT EXISTS scan_hud_items (system_name TEXT, body_id INTEGER, data_json TEXT, ts INTEGER, PRIMARY KEY (system_name, body_id))"
             )
+            self.conn.execute(
+                "CREATE TABLE IF NOT EXISTS colonisation_projects "
+                "(market_id INTEGER PRIMARY KEY, system_name TEXT, body_name TEXT, "
+                " progress REAL, complete INTEGER, failed INTEGER, "
+                " resources_json TEXT, last_updated INTEGER)"
+            )
             self.conn.commit()
 
         if os.path.exists(SCAN_HISTORY_FILE):
@@ -302,3 +308,59 @@ class DashboardDBMixin:
                 self._db_maybe_commit(reason="body")
             except sqlite3.Error as e:
                 self.log(f"❌ DB ERROR (Body): {e}")
+
+    # ── Colonization ──────────────────────────────────────────────────────────
+
+    def db_save_colonisation_project(self, proj: dict):
+        mid = proj.get("market_id")
+        if mid is None:
+            return
+        with self.db_lock:
+            try:
+                self.conn.execute(
+                    "INSERT OR REPLACE INTO colonisation_projects "
+                    "(market_id, system_name, body_name, progress, complete, failed, resources_json, last_updated) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        int(mid),
+                        proj.get("system_name", ""),
+                        proj.get("body_name", ""),
+                        float(proj.get("progress", 0)),
+                        1 if proj.get("complete") else 0,
+                        1 if proj.get("failed") else 0,
+                        json.dumps(proj.get("resources") or []),
+                        int(proj.get("last_updated") or 0),
+                    ),
+                )
+                self._db_maybe_commit(reason="colonisation")
+            except sqlite3.Error as e:
+                self.log(f"❌ DB ERROR (Colonisation): {e}")
+
+    def db_load_colonisation_projects(self) -> dict:
+        projects = {}
+        try:
+            with self.db_lock:
+                cur = self.conn.cursor()
+                cur.execute(
+                    "SELECT market_id, system_name, body_name, progress, complete, failed, "
+                    "resources_json, last_updated FROM colonisation_projects ORDER BY last_updated DESC"
+                )
+                for row in cur.fetchall():
+                    mid = row[0]
+                    try:
+                        resources = json.loads(row[6] or "[]")
+                    except Exception:
+                        resources = []
+                    projects[mid] = {
+                        "market_id":    mid,
+                        "system_name":  row[1],
+                        "body_name":    row[2],
+                        "progress":     float(row[3] or 0),
+                        "complete":     bool(row[4]),
+                        "failed":       bool(row[5]),
+                        "resources":    resources,
+                        "last_updated": int(row[7] or 0),
+                    }
+        except sqlite3.Error:
+            pass
+        return projects
