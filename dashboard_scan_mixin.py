@@ -46,26 +46,7 @@ class DashboardScanMixin:
         in_fss = gui_focus == 9 or gui_focus == "FSS"
         if in_fss != self.in_fss:
             self.in_fss = in_fss
-            if self.scan_hud:
-                if self.in_fss:
-                    if self.scan_hud_hide_job:
-                        try:
-                            self.root.after_cancel(self.scan_hud_hide_job)
-                        except Exception:
-                            pass
-                        self.scan_hud_hide_job = None
-                    self.scan_hud.show()
-                else:
-                    if self.scan_hud_hide_job:
-                        return
-                    self.scan_hud_hide_job = self.root.after(
-                        self.scan_hud_hide_delay_ms,
-                        self._hide_scan_hud_delayed
-                    )
-            if self.in_fss:
-                self.fss_summary_active = False
-            else:
-                self.fss_summary_active = True
+            self.fss_summary_active = not in_fss
             if not self.batch_mode:
                 self.update_hud()
                 self.schedule_dashboard_refresh()
@@ -89,24 +70,7 @@ class DashboardScanMixin:
         self._perf_spike("_apply_status_update", t0, threshold_ms=20.0)
 
     def update_scan_hud(self):
-        if not self.scan_hud:
-            return
-
-        scanned_count = len(self.scan_items)
-        total_value = 0
-        for item in self.scan_items:
-            reward = item.get("dss_reward") if item.get("dss_complete") else item.get("reward")
-            if isinstance(reward, (int, float)):
-                total_value += int(reward)
-
-        self.root.after(0, lambda: self.scan_hud.update(
-            self.current_sys,
-            self.system_undiscovered,
-            self.fss_all_bodies,
-            scanned_count,
-            total_value,
-            self.scan_items
-        ))
+        pass  # ScanHUD overlay removed — scan data now lives on the main dashboard
 
     def _rebuild_scan_index(self):
         self.scan_items_by_id = {}
@@ -418,11 +382,6 @@ class DashboardScanMixin:
                 self.root.after(0, self._flush_pending_status_update)
             return
         self._apply_status_update(data)
-
-    def _hide_scan_hud_delayed(self):
-        self.scan_hud_hide_job = None
-        if self.scan_hud and not self.in_fss:
-            self.scan_hud.hide()
 
 
 

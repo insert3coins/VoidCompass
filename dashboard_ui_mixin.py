@@ -325,7 +325,45 @@ class DashboardUIMixin:
         self.details_drawer.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(0, 0))
         self.details_drawer.config(width=450)
         self.details_drawer.pack_propagate(False)
-        feed_wrap = tk.Frame(self.details_drawer, bg=self.UI_PANEL)
+
+        # ── Tab bar ───────────────────────────────────────────────────────────
+        _tab_bar = tk.Frame(self.details_drawer, bg=self.UI_PANEL_2)
+        _tab_bar.pack(fill=tk.X, padx=0, pady=0)
+        self._detail_tab_frames: dict  = {}
+        self._detail_tab_btns:   dict  = {}
+        self._active_detail_tab: str   = "events"
+
+        def _switch_detail_tab(name: str):
+            for n, f in self._detail_tab_frames.items():
+                f.pack_forget()
+            self._detail_tab_frames[name].pack(fill=tk.BOTH, expand=True)
+            self._active_detail_tab = name
+            for n, b in self._detail_tab_btns.items():
+                b.config(
+                    fg=COLOR_ACCENT if n == name else "#666",
+                    bg="#0d1317" if n == name else self.UI_PANEL_2,
+                )
+
+        self._switch_detail_tab = _switch_detail_tab
+
+        for _tname, _tlabel in [("events", "EVENTS"), ("colonisation", "COLONIZATION")]:
+            _b = tk.Button(
+                _tab_bar, text=_tlabel,
+                command=lambda n=_tname: _switch_detail_tab(n),
+                bg=self.UI_PANEL_2, fg="#666",
+                font=("Segoe UI", 8, "bold"),
+                relief=tk.FLAT, bd=0, padx=14, pady=5,
+                activebackground="#0d1317", activeforeground=COLOR_ACCENT,
+                cursor="hand2",
+            )
+            _b.pack(side=tk.LEFT)
+            self._detail_tab_btns[_tname] = _b
+
+        # ── Events tab ────────────────────────────────────────────────────────
+        events_frame = tk.Frame(self.details_drawer, bg=self.UI_PANEL)
+        self._detail_tab_frames["events"] = events_frame
+
+        feed_wrap = tk.Frame(events_frame, bg=self.UI_PANEL)
         feed_wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         self._section_label(feed_wrap, "LIVE EVENT TIMELINE").pack(anchor="w")
         self.event_filter_row = tk.Frame(feed_wrap, bg=self.UI_PANEL)
@@ -385,6 +423,14 @@ class DashboardUIMixin:
         self.event_feed_list.bind("<Button-1>", self._select_event_feed_line)
         self.event_feed_list.bind("<Double-Button-1>", lambda e: self._open_selected_event_feed_link())
 
+        # ── Colonization tab ──────────────────────────────────────────────────
+        col_frame = tk.Frame(self.details_drawer, bg=self.UI_PANEL)
+        self._detail_tab_frames["colonisation"] = col_frame
+        self._build_colonisation_tab(col_frame)
+
+        # Activate events tab by default
+        _switch_detail_tab("events")
+
         self.ground_lat_entry.delete(0, tk.END)
         self.ground_lon_entry.delete(0, tk.END)
         self.ground_lat_entry.insert(0, f"{getattr(self, 'target_lat', 0.0):.6f}")
@@ -414,6 +460,266 @@ class DashboardUIMixin:
     def set_log_filter(self, mode):
         self.log_filter = mode
         self._refresh_log_view()
+
+    # ── Colonization tab UI ───────────────────────────────────────────────────
+
+    def _build_colonisation_tab(self, parent):
+        """Build the static skeleton of the Colonization tab."""
+        # Header row: title + project selector
+        hdr = tk.Frame(parent, bg=self.UI_PANEL)
+        hdr.pack(fill=tk.X, padx=10, pady=(10, 2))
+        self._section_label(hdr, "COLONIZATION").pack(side=tk.LEFT)
+
+        # Project selector (dropdown updated when projects change)
+        self._col_proj_var = tk.StringVar(value="")
+        self._col_proj_menu = tk.OptionMenu(hdr, self._col_proj_var, "")
+        self._col_proj_menu.config(
+            bg=self.UI_PANEL_2, fg=COLOR_TEXT, activebackground=self.UI_PANEL_2,
+            activeforeground=COLOR_ACCENT, highlightthickness=0, relief=tk.FLAT,
+            font=("Segoe UI", 8), indicatoron=True, bd=0,
+        )
+        self._col_proj_menu["menu"].config(bg=self.UI_PANEL_2, fg=COLOR_TEXT,
+                                            activebackground="#0d1317",
+                                            activeforeground=COLOR_ACCENT)
+        self._col_proj_menu.pack(side=tk.RIGHT)
+        self._col_proj_var.trace_add("write", lambda *_: self._on_col_project_select())
+
+        # Site info
+        self._col_site_lbl = tk.Label(
+            parent, text="No construction site visited yet.",
+            font=self.UI_MONO_BOLD, fg=COLOR_TEXT, bg=self.UI_PANEL,
+            anchor="w", wraplength=420,
+        )
+        self._col_site_lbl.pack(fill=tk.X, padx=10, pady=(2, 0))
+
+        self._col_body_lbl = tk.Label(
+            parent, text="", font=self.UI_MONO, fg=self.UI_MUTED,
+            bg=self.UI_PANEL, anchor="w",
+        )
+        self._col_body_lbl.pack(fill=tk.X, padx=10)
+
+        # Progress bar
+        prog_row = tk.Frame(parent, bg=self.UI_PANEL)
+        prog_row.pack(fill=tk.X, padx=10, pady=(6, 2))
+        self._col_prog_lbl = tk.Label(
+            prog_row, text="Progress: —", font=self.UI_MONO_BOLD,
+            fg=COLOR_ACCENT, bg=self.UI_PANEL,
+        )
+        self._col_prog_lbl.pack(side=tk.LEFT)
+        self._col_prog_pct = tk.Label(
+            prog_row, text="", font=self.UI_MONO, fg=self.UI_MUTED, bg=self.UI_PANEL,
+        )
+        self._col_prog_pct.pack(side=tk.RIGHT)
+
+        bar_bg = tk.Frame(parent, bg="#1a2430", height=8)
+        bar_bg.pack(fill=tk.X, padx=10, pady=(0, 6))
+        bar_bg.pack_propagate(False)
+        self._col_bar_fill = tk.Frame(bar_bg, bg=COLOR_ACCENT, height=8)
+        self._col_bar_fill.place(x=0, y=0, relheight=1.0, relwidth=0.0)
+
+        # Commodity table (fixed-width monospace Text widget)
+        tbl_wrap = tk.Frame(parent, bg="#0b0f13")
+        tbl_wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 4))
+        col_scroll = tk.Scrollbar(tbl_wrap, orient=tk.VERTICAL)
+        self._col_table = tk.Text(
+            tbl_wrap,
+            bg="#0b0f13", fg=COLOR_TEXT,
+            font=("Consolas", 9),
+            relief=tk.FLAT, highlightthickness=0, borderwidth=0,
+            wrap=tk.NONE, padx=6, pady=4,
+            yscrollcommand=col_scroll.set,
+            state=tk.DISABLED,
+        )
+        col_scroll.config(command=self._col_table.yview)
+        self._col_table.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        col_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        # Text tags for colour coding
+        self._col_table.tag_config("hdr",      foreground=COLOR_ORANGE,  font=("Consolas", 9, "bold"))
+        self._col_table.tag_config("done",     foreground="#00cc44")
+        self._col_table.tag_config("partial",  foreground=COLOR_ORANGE)
+        self._col_table.tag_config("pending",  foreground=self.UI_MUTED)
+        self._col_table.tag_config("sep",      foreground="#1a2228")
+        self._col_table.tag_config("complete", foreground="#00cc44", font=("Consolas", 9, "bold"))
+        self._col_table.tag_config("failed",   foreground="#cc0000")
+
+        # Footer buttons
+        foot = tk.Frame(parent, bg=self.UI_PANEL)
+        foot.pack(fill=tk.X, padx=10, pady=(0, 8))
+        self._action_button(foot, "Copy Shopping List",
+                            self._copy_colonisation_shopping_list).pack(side=tk.LEFT)
+        self._action_button(foot, "Switch Tab → Events",
+                            lambda: self._switch_detail_tab("events"),
+                            muted=True).pack(side=tk.RIGHT)
+
+    def _get_selected_colonisation_project(self):
+        """Return the currently selected project dict, or None."""
+        label = self._col_proj_var.get()
+        for proj in getattr(self, "colonisation_projects", {}).values():
+            if self._col_project_label(proj) == label:
+                return proj
+        # Fall back to the project that was current when we docked
+        mid = getattr(self, "current_colonisation_market", None)
+        if mid and mid in getattr(self, "colonisation_projects", {}):
+            return self.colonisation_projects[mid]
+        # Last resort: first project
+        projects = getattr(self, "colonisation_projects", {})
+        if projects:
+            return next(iter(projects.values()))
+        return None
+
+    @staticmethod
+    def _col_project_label(proj: dict) -> str:
+        sys  = proj.get("system_name", "Unknown")
+        body = proj.get("body_name", "")
+        body_short = body.replace(sys, "").strip() if sys and body.startswith(sys) else body
+        suffix = f" ({body_short})" if body_short else ""
+        pct = int((proj.get("progress") or 0) * 100)
+        mark = "✓" if proj.get("complete") else ("✗" if proj.get("failed") else f"{pct}%")
+        return f"{sys}{suffix}  [{mark}]"
+
+    def _on_col_project_select(self):
+        self.refresh_colonisation_ui()
+
+    def refresh_colonisation_ui(self):
+        """Redraw the colonization tab with current project data."""
+        if not hasattr(self, "_col_table"):
+            return
+        projects = getattr(self, "colonisation_projects", {})
+
+        # Rebuild the dropdown menu
+        menu = self._col_proj_menu["menu"]
+        menu.delete(0, "end")
+        current_label = self._col_proj_var.get()
+        labels = [self._col_project_label(p) for p in projects.values()]
+        for lbl in labels:
+            menu.add_command(label=lbl,
+                             command=lambda v=lbl: self._col_proj_var.set(v))
+        if not labels:
+            menu.add_command(label="(none)")
+
+        # Pin current label if it's still valid, else pick the most-recently-updated
+        if current_label not in labels:
+            if projects:
+                best = max(projects.values(), key=lambda p: p.get("last_updated") or 0)
+                self._col_proj_var.set(self._col_project_label(best))
+            else:
+                self._col_proj_var.set("")
+
+        proj = self._get_selected_colonisation_project()
+        if not proj:
+            self._col_site_lbl.config(text="No construction site visited yet.")
+            self._col_body_lbl.config(text="")
+            self._col_prog_lbl.config(text="Progress: —")
+            self._col_prog_pct.config(text="")
+            self._col_bar_fill.place(relwidth=0.0)
+            self._col_table.config(state=tk.NORMAL)
+            self._col_table.delete("1.0", tk.END)
+            self._col_table.insert(tk.END, "  Visit a construction depot to begin tracking.\n",
+                                   "pending")
+            self._col_table.config(state=tk.DISABLED)
+            return
+
+        # Site labels
+        sys_name  = proj.get("system_name", "Unknown")
+        body_name = proj.get("body_name", "")
+        body_short = body_name.replace(sys_name, "").strip() if body_name.startswith(sys_name) else body_name
+        self._col_site_lbl.config(text=sys_name)
+        self._col_body_lbl.config(text=body_short or body_name)
+
+        # Progress
+        progress = float(proj.get("progress") or 0)
+        pct_int  = int(progress * 100)
+        is_complete = proj.get("complete", False)
+        is_failed   = proj.get("failed", False)
+        if is_complete:
+            prog_text = "CONSTRUCTION COMPLETE"
+            bar_col   = "#00cc44"
+            pct_txt   = "100%"
+        elif is_failed:
+            prog_text = "CONSTRUCTION FAILED"
+            bar_col   = "#cc0000"
+            pct_txt   = f"{pct_int}%"
+        else:
+            prog_text = "Progress"
+            bar_col   = COLOR_ACCENT
+            pct_txt   = f"{pct_int}%"
+        self._col_prog_lbl.config(text=prog_text, fg="#00cc44" if is_complete else ("#cc0000" if is_failed else COLOR_ACCENT))
+        self._col_prog_pct.config(text=pct_txt)
+        self._col_bar_fill.config(bg=bar_col)
+        self._col_bar_fill.place(relwidth=min(1.0, progress))
+
+        # Commodity table
+        resources = proj.get("resources") or []
+        self._col_table.config(state=tk.NORMAL)
+        self._col_table.delete("1.0", tk.END)
+
+        if not resources:
+            self._col_table.insert(tk.END, "  No resource data available.\n", "pending")
+            self._col_table.config(state=tk.DISABLED)
+            return
+
+        # Header
+        self._col_table.insert(tk.END,
+            f"  {'COMMODITY':<26} {'REQ':>7} {'DONE':>7} {'LEFT':>7}\n", "hdr")
+        self._col_table.insert(tk.END, "  " + "─" * 51 + "\n", "sep")
+
+        total_req  = 0
+        total_done = 0
+        for r in sorted(resources, key=lambda x: x.get("display", "")):
+            name    = r.get("display") or r.get("name", "")
+            req     = int(r.get("required") or 0)
+            prov    = int(r.get("provided") or 0)
+            left    = max(0, req - prov)
+            total_req  += req
+            total_done += min(prov, req)
+
+            # Truncate long names
+            name_disp = name if len(name) <= 26 else name[:25] + "…"
+
+            if prov >= req:
+                tag  = "done"
+                tick = " ✓"
+            elif prov > 0:
+                tag  = "partial"
+                tick = ""
+            else:
+                tag  = "pending"
+                tick = ""
+
+            line = f"  {name_disp:<26} {req:>7,} {prov:>7,} {left:>7,}{tick}\n"
+            self._col_table.insert(tk.END, line, tag)
+
+        # Totals row
+        total_left = max(0, total_req - total_done)
+        self._col_table.insert(tk.END, "  " + "─" * 51 + "\n", "sep")
+        totals_tag = "complete" if total_left == 0 else "partial"
+        self._col_table.insert(tk.END,
+            f"  {'TOTAL':<26} {total_req:>7,} {total_done:>7,} {total_left:>7,}\n",
+            totals_tag)
+
+        self._col_table.config(state=tk.DISABLED)
+
+    def _copy_colonisation_shopping_list(self):
+        """Copy remaining commodities as a plain-text shopping list to clipboard."""
+        proj = self._get_selected_colonisation_project()
+        if not proj:
+            return
+        lines = [f"Shopping list — {proj.get('system_name', 'Unknown')}"]
+        resources = proj.get("resources") or []
+        any_left = False
+        for r in sorted(resources, key=lambda x: x.get("display", "")):
+            left = max(0, int(r.get("required") or 0) - int(r.get("provided") or 0))
+            if left > 0:
+                lines.append(f"  {r.get('display') or r.get('name', '?')}: {left:,}")
+                any_left = True
+        if not any_left:
+            lines.append("  (nothing remaining — construction complete!)")
+        text = "\n".join(lines)
+        try:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(text)
+        except Exception:
+            pass
 
     def set_event_feed_filter(self, mode):
         self.event_feed_filter = mode

@@ -114,12 +114,10 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
 
     ov_var = tk.BooleanVar(value=config.get("overlay_enabled", True))
     cargo_var = tk.BooleanVar(value=config.get("cargo_overlay_enabled", False))
-    scan_var = tk.BooleanVar(value=config.get("scan_overlay_enabled", True))
     prosp_var = tk.BooleanVar(value=config.get("prospector_overlay_enabled", True))
     bio_var   = tk.BooleanVar(value=config.get("bio_overlay_enabled", True))
     create_toggle(sec_gen, "Tactical Overlay", ov_var)
     create_toggle(sec_gen, "Cargo Manifest Overlay", cargo_var)
-    create_toggle(sec_gen, "Scan Results Overlay", scan_var)
     create_toggle(sec_gen, "Prospector Result Overlay", prosp_var)
     prosp_timeout_e = create_input(sec_gen, "Prospector Overlay Auto-Hide (seconds)  —  60 = 1 min  ·  120 = 2 min  ·  300 = 5 min", "prospector_hud_timeout_s")
     create_toggle(sec_gen, "Exobiology Overlay", bio_var)
@@ -162,7 +160,6 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
             "journal_path": j_e.get().strip(),
             "overlay_enabled": ov_var.get(),
             "cargo_overlay_enabled": cargo_var.get(),
-            "scan_overlay_enabled": scan_var.get(),
             "prospector_overlay_enabled": prosp_var.get(),
             "prospector_hud_timeout_s": max(5, int(prosp_timeout_e.get().strip() or 45))
                 if prosp_timeout_e.get().strip().isdigit() else

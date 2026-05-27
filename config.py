@@ -10,6 +10,9 @@ def _get_config_file():
 
 CONFIG_FILE = _get_config_file()
 DEPRECATED_CONFIG_KEYS = (
+    'scan_overlay_enabled',
+    'scan_hud_x',
+    'scan_hud_y',
     'discord_webhook',
     'discord_enabled',
     'discord_live_enabled',
@@ -51,7 +54,6 @@ def load_config():
         'journal_path': '',
         'overlay_enabled': True,
         'cargo_overlay_enabled': False,
-        'scan_overlay_enabled': True,
         'prospector_overlay_enabled': True,
         'prospector_hud_timeout_s': 45,
         'prospector_hud_x': 30,
@@ -63,8 +65,6 @@ def load_config():
         'hud_y': 100,
         'cargo_hud_x': 800,
         'cargo_hud_y': 400,
-        'scan_hud_x': 1000,
-        'scan_hud_y': 150,
         'main_geometry': '1000x700',
         'settings_geometry': '600x500',
         'ground_popup_geometry': '340x140+1320+160',

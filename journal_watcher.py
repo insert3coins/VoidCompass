@@ -518,6 +518,67 @@ class JournalWatcher:
                 }
             }
 
+        if ev == "ColonisationConstructionDepot":
+            resources = []
+            for r in (data.get("ResourcesRequired") or []):
+                raw_name = r.get("Name", "")
+                # "$Steel_Name;" → "Steel" when no localised name provided
+                display = r.get("Name_Localised") or raw_name
+                if display.startswith("$") and "_Name;" in display:
+                    display = display.split("_Name;")[0].lstrip("$").replace("_", " ").title()
+                resources.append({
+                    "name":     raw_name,
+                    "display":  display,
+                    "required": int(r.get("RequiredAmount") or 0),
+                    "provided": int(r.get("ProvidedAmount") or 0),
+                })
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "market_id":      data.get("MarketID"),
+                    "system_name":    data.get("SystemName", ""),
+                    "system_address": data.get("SystemAddress"),
+                    "body_name":      data.get("BodyName", ""),
+                    "progress":       float(data.get("Progress") or 0),
+                    "complete":       bool(data.get("ConstructionComplete", False)),
+                    "failed":         bool(data.get("ConstructionFailed", False)),
+                    "resources":      resources,
+                }
+            }
+
+        if ev == "ColonisationContribution":
+            contributions = []
+            for c in (data.get("Contributions") or []):
+                raw_name = c.get("Name", "")
+                display = c.get("Name_Localised") or raw_name
+                if display.startswith("$") and "_Name;" in display:
+                    display = display.split("_Name;")[0].lstrip("$").replace("_", " ").title()
+                contributions.append({
+                    "name":    raw_name,
+                    "display": display,
+                    "count":   int(c.get("Count") or 0),
+                })
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "market_id":     data.get("MarketID"),
+                    "progress":      float(data.get("Progress") or 0),
+                    "contributions": contributions,
+                }
+            }
+
+        if ev == "ColonisationSystemClaimed":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "star_system":    data.get("StarSystem", ""),
+                    "system_address": data.get("SystemAddress"),
+                }
+            }
+
         return {"type": ev, "raw": data, "data": data}
 
     def _check_special_files(self):

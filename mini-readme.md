@@ -1,5 +1,19 @@
 # VoidCompass // UPDATE LOG
 
+## v2.9.3 // Colonization Tracker + Scan Overlay Removed
+**Release Date:** 2026-May-27
+*   **Scan Results Overlay removed (`scan_hud.py` deleted):**
+    *   The FSS body-list popup has been removed. All scan data remains available in the main dashboard (SCANNING card, event timeline, and body scan items in the DB). The `scan_overlay_enabled` config key is now deprecated and auto-scrubbed.
+*   **New Colonization tab in the right panel:**
+    *   The right panel (previously just the event timeline) now has a **tab bar** with **EVENTS** and **COLONIZATION** tabs.
+    *   The Colonization tab tracks construction depots you visit (`ColonisationConstructionDepot` journal event) and commodity deliveries (`ColonisationContribution`).
+    *   **Per-depot view:** system name, body label, overall progress bar with percentage.
+    *   **Commodity table:** rows for every required material — COMMODITY | REQ | DONE | LEFT — colour-coded green (complete), orange (partial), muted (not started). Totals row at bottom.
+    *   **"Copy Shopping List"** button: copies remaining materials in a clean text format to clipboard.
+    *   **Multi-depot:** a dropdown selector in the tab header lets you switch between all tracked construction sites.
+    *   **Persisted across sessions** via a new `colonisation_projects` table in `exploration_data.db` — your depot data survives app restarts.
+    *   `journal_watcher.py` now normalises `ColonisationConstructionDepot`, `ColonisationContribution`, and `ColonisationSystemClaimed` events.
+
 ## v2.9.2 // Exobiology Overlay — Full SrvSurvey Feature Parity
 **Release Date:** 2026-May-27
 *   **DSS genus rows (`bio_hud.py`, `dashboard.py`):**
