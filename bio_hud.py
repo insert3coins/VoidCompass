@@ -2,16 +2,15 @@
 BioHUD — transparent canvas overlay for exobiology scanning.
 
 Shows per-species sample progress (●●○), reward estimates, live distance
-to next sample, and system totals for the current system.
+to next sample, DSS-confirmed genera, bio predictions, and system totals.
 
-Appears on the first ScanOrganic event, stays visible while incomplete
-scans remain, and clears on system jump.
+Display priority per body:
+  1. Confirmed scans   — from ScanOrganic events (highest priority)
+  2. DSS genera        — from SAASignalsFound (genus confirmed, species unknown)
+  3. Predictions       — from bio-criteria prediction engine (lowest priority)
 
-Distance tracking:
-  Each time a sample is taken the player's lat/lon is recorded.  The
-  Status.json position feed (via on_position_update) keeps current_pos
-  fresh so the distance bar updates every ~1 s while on the surface.
-  Minimum scan distances are per-genus (datamined values).
+Appears on the first ScanOrganic / DSS / prediction event, hides on jump.
+Distance tracking uses Status.json lat/lon feed (~1 s updates).
 """
 
 import json
@@ -30,16 +29,19 @@ except Exception:
 _CHROMA = "#ff00ff"
 
 # Colours
-_COL_COMPLETE  = "#00cc44"   # completed species / tick
+_COL_COMPLETE  = "#00cc44"   # completed species
+_COL_DSS       = "#d4a017"   # DSS genus row (confirmed, species unknown)
+_COL_PREDICT   = "#445566"   # predicted row (greyed)
 _COL_BODY_LBL  = "#7d8891"   # body label prefix
-_COL_MUTED     = "#555555"   # muted text (completed row)
-_COL_SEP       = "#1a2228"   # separator lines
-_COL_DIST_OK   = "#00cc44"   # distance cleared (green)
-_COL_DIST_WARN = COLOR_ORANGE # distance not yet cleared (orange)
+_COL_MUTED     = "#555555"   # completed row text
+_COL_SEP       = "#1a2228"   # thin separator lines
+_COL_BODY_SEP  = "#2a3840"   # body-group separator
+_COL_DIST_OK   = "#00cc44"   # distance cleared
+_COL_DIST_WARN = COLOR_ORANGE
 _COL_DIST_BAR  = "#1c2830"   # unfilled bar track
+_COL_CURR_BODY = "#00aaff"   # current body highlight
 
-# Datamined minimum scan distances in metres, keyed by first word of
-# species name (genus), lower-cased.  Default 100 m for anything not listed.
+# Datamined minimum scan distances in metres, lower-cased genus key.
 _MIN_DIST_M: dict[str, int] = {
     "aleoida":    150,
     "bacterium":  500,
@@ -65,7 +67,6 @@ def _min_dist_for(species: str) -> int:
 
 
 def _surface_dist_m(lat1, lon1, lat2, lon2, radius_m) -> float:
-    """Great-circle distance between two lat/lon points on a sphere."""
     r    = math.radians
     dlat = r(lat2 - lat1)
     dlon = r(lon2 - lon1)
@@ -75,7 +76,6 @@ def _surface_dist_m(lat1, lon1, lat2, lon2, radius_m) -> float:
 
 
 def _fmt_credits(value) -> str:
-    """Compact credit display: 5_270_000 → '5.27M'."""
     v = int(value or 0)
     if v >= 1_000_000_000:
         return f"{v / 1_000_000_000:.2f}B"
@@ -99,27 +99,42 @@ def _strip_system(system_name, body_name) -> str:
 
 
 class BioHUD:
-    WIDTH    = 400   # fixed overlay width
-    ROW_H    = 22    # height per species row
-    DIST_H   = 14    # height of distance sub-row (shown for active samples)
-    HEADER_H = 50    # header section height
-    FOOTER_H = 32    # footer totals height
-    MIN_H    = 110   # minimum window height
+    WIDTH    = 420
+    ROW_H    = 22
+    DIST_H   = 14
+    BODY_H   = 18   # body-header row height
+    HEADER_H = 50
+    FOOTER_H = 32
+    MIN_H    = 110
 
     def __init__(self, root, config):
         self.root   = root
         self.config = config
 
-        # Species state: key = (body_id_or_name, species_lower) → dict
-        self._entries: dict = {}
-        # Position when each sample was taken: key → (lat, lon, radius_m)
-        self._sample_pos: dict = {}
-        # Current player position from Status.json
-        self._cur_pos: tuple | None = None   # (lat, lon, radius_m)
+        # ── Per-system state ────────────────────────────────────────────────
+        self._system_name    = ""
+        self._current_body_id = None   # from ApproachBody
 
-        self._system_name = ""
+        # Confirmed scans: (body_id_or_name, species_lower) → scan_entry dict
+        self._scans: dict = {}
 
-        # ── Transparent topmost window ────────────────────────────────────
+        # DSS genera per body: body_id → {"genus_token": str, "genus_display": str}
+        self._dss_genera: dict[object, list] = {}
+
+        # Bio predictions per body: body_id → [{"genus", "species", "variant"}, ...]
+        self._predictions: dict[object, list] = {}
+
+        # Body names: body_id → body_name
+        self._body_names: dict = {}
+
+        # DSS signal counts: body_id → int
+        self._bio_counts: dict = {}
+
+        # Sample positions for distance tracking
+        self._sample_pos: dict = {}    # scan key → (lat, lon, radius_m)
+        self._cur_pos: tuple | None = None
+
+        # ── Transparent topmost window ──────────────────────────────────────
         self.win = tk.Toplevel(root)
         self.win.attributes(
             "-topmost", True,
@@ -174,35 +189,87 @@ class BioHUD:
         except Exception:
             pass
 
-    # ── Data interface ────────────────────────────────────────────────────
+    def _has_content(self) -> bool:
+        return bool(self._scans or self._dss_genera or
+                    (self._predictions and self._current_body_id is not None))
+
+    # ── Data interface ─────────────────────────────────────────────────────
 
     def on_system_change(self, system_name: str):
-        """Call on FSDJump / Location / CarrierJump."""
-        self._entries.clear()
+        self._system_name     = system_name or ""
+        self._current_body_id = None
+        self._scans.clear()
+        self._dss_genera.clear()
+        self._predictions.clear()
+        self._body_names.clear()
+        self._bio_counts.clear()
         self._sample_pos.clear()
-        self._cur_pos  = None
-        self._system_name = system_name or ""
+        self._cur_pos = None
         self.hide()
+
+    def on_approach_body(self, body_id, body_name: str):
+        self._current_body_id = body_id
+        if body_id is not None and body_name:
+            self._body_names[body_id] = body_name
+        self._redraw()
+        if self._has_content():
+            self.show()
+
+    def on_leave_body(self):
+        self._current_body_id = None
+        self._redraw()
+
+    def on_dss_genuses(self, body_id, body_name: str,
+                       genuses: list, bio_count: int):
+        """Called on SAASignalsFound. genuses = [{"Genus": token, "Genus_Localised": ...}, ...]"""
+        if body_id is None:
+            return
+        if body_name:
+            self._body_names[body_id] = body_name
+        self._bio_counts[body_id] = bio_count
+
+        parsed = []
+        for g in (genuses or []):
+            token   = g.get("Genus") or ""
+            display = g.get("Genus_Localised") or g.get("Genus_localised") or token
+            # strip leading $..._Name; suffix if present
+            if display.startswith("$") and "_Name;" in display:
+                display = display.split("_Name;")[0].lstrip("$")
+            if token or display:
+                parsed.append({"genus_token": token, "genus_display": display})
+        self._dss_genera[body_id] = parsed
+
+        self._redraw()
+        self.show()
+
+    def on_predictions(self, body_id, body_name: str, predictions: list):
+        """Called after predict_for_body() runs. predictions = [{"genus", "species", "variant"}, ...]"""
+        if body_id is None or not predictions:
+            return
+        if body_name:
+            self._body_names[body_id] = body_name
+        self._predictions[body_id] = predictions
+        # Only trigger a redraw if we don't have better data already
+        # (show predictions only when no DSS yet for this body)
+        if body_id not in self._dss_genera:
+            self._redraw()
 
     def on_scan_organic(self, body_id, body_name, species, genus,
                         sample_idx, max_samples, is_complete,
                         lat=None, lon=None, radius_m=None):
-        """Call on each ScanOrganic event.
+        if body_name and body_id is not None:
+            self._body_names[body_id] = body_name
 
-        lat/lon/radius_m are the player's surface position at sample time;
-        pass None when not on a planet surface.
-        """
         key = (
             body_id if body_id is not None else (body_name or "?"),
             (species or genus or "unknown").lower(),
         )
-        existing = self._entries.get(key, {})
-
+        existing = self._scans.get(key, {})
         reward = existing.get("reward") or 0
         if not reward and _REWARD_CAT:
             reward = _REWARD_CAT.lookup(species, genus) or 0
 
-        self._entries[key] = {
+        self._scans[key] = {
             "body_id":     body_id,
             "body_name":   body_name or (f"Body {body_id}" if body_id is not None else "?"),
             "species":     species or genus or "Unknown Organic",
@@ -213,35 +280,27 @@ class BioHUD:
             "reward":      reward,
         }
 
-        # Record position for distance tracking (only when we have real coords
-        # and the scan is not already complete — no point tracking after done).
+        # Distance tracking
         if lat is not None and lon is not None and radius_m and not is_complete:
             self._sample_pos[key] = (float(lat), float(lon), float(radius_m))
         elif is_complete:
-            # Clear saved position once complete — no more distance needed.
             self._sample_pos.pop(key, None)
 
         self._redraw()
         self.show()
 
     def on_position_update(self, lat, lon, radius_m):
-        """Call on every Status.json tick while on a planet surface.
-
-        Triggers a lightweight distance-only redraw if there are active
-        (incomplete) entries with saved sample positions.
-        """
         if lat is None or lon is None or not radius_m:
             self._cur_pos = None
             return
         self._cur_pos = (float(lat), float(lon), float(radius_m))
-        # Only bother redrawing if there's something with distance to show.
-        if self._sample_pos and self._entries:
+        if self._sample_pos and self._scans:
             self._redraw()
 
     # ── Distance helpers ──────────────────────────────────────────────────
 
-    def _dist_for(self, key, entry) -> tuple[float | None, int]:
-        """Return (current_dist_m, min_dist_m) for an entry, or (None, min)."""
+    def _dist_for(self, key, entry) -> tuple:
+        """Return (current_dist_m | None, min_dist_m)."""
         min_d = _min_dist_for(entry.get("species", ""))
         sp    = self._sample_pos.get(key)
         cur   = self._cur_pos
@@ -273,7 +332,7 @@ class BioHUD:
         except Exception:
             pass
 
-    # ── Rendering ─────────────────────────────────────────────────────────
+    # ── Rendering helpers ─────────────────────────────────────────────────
 
     def _text(self, x, y, text, fill, font, anchor="w"):
         self.canvas.create_text(x + 1, y + 1, text=text, fill="#000000",
@@ -286,173 +345,294 @@ class BioHUD:
         done = n if is_complete else min(int(sample_idx or 1), n)
         return "●" * done + "○" * max(0, n - done)
 
+    # ── Main redraw ───────────────────────────────────────────────────────
+
     def _redraw(self):
-        if not self._entries:
+        # Collect all body IDs with any data
+        all_bodies = set()
+        all_bodies.update(e["body_id"] for e in self._scans.values()
+                          if e.get("body_id") is not None)
+        all_bodies.update(self._dss_genera.keys())
+        # Only show predictions for current body (not yet DSS'd)
+        if (self._current_body_id is not None
+                and self._current_body_id in self._predictions
+                and self._current_body_id not in self._dss_genera):
+            all_bodies.add(self._current_body_id)
+
+        if not all_bodies:
             return
 
-        entries = sorted(
-            self._entries.values(),
-            key=lambda e: (
-                e.get("body_id") if e.get("body_id") is not None else 10_000_000,
-                e.get("species", ""),
-            ),
-        )
+        # Sort bodies: current body first, then by body_id
+        def _body_sort_key(bid):
+            if bid == self._current_body_id:
+                return (0, 0)
+            try:
+                return (1, int(bid))
+            except (TypeError, ValueError):
+                return (1, 9999999)
 
-        # Pre-compute which entries need a distance sub-row so height is known.
-        dist_rows: dict = {}   # entry index → (dist_m | None, min_m)
-        for i, e in enumerate(entries):
-            if e.get("is_complete"):
-                continue
-            si = int(e.get("sample_idx") or 1)
-            if si < 1:
-                continue
-            key = (
-                e["body_id"] if e.get("body_id") is not None else e.get("body_name", "?"),
-                e.get("species", "").lower(),
-            )
-            d, min_d = self._dist_for(key, e)
-            # Show the bar as long as we have a saved sample position.
-            if key in self._sample_pos:
-                dist_rows[i] = (d, min_d)
+        sorted_bodies = sorted(all_bodies, key=_body_sort_key)
 
         w = self.WIDTH
-        n_dist = len(dist_rows)
-        total_content = (len(entries) * self.ROW_H) + (n_dist * self.DIST_H)
-        height = max(self.MIN_H, self.HEADER_H + total_content + self.FOOTER_H + 8)
+
+        # ── Build render plan to compute height ──────────────────────────
+        # Returns list of row-dicts; we'll render from that list.
+        rows = []   # each: {type, ...fields}
+
+        total_earned    = 0
+        total_remaining = 0
+
+        for bid in sorted_bodies:
+            bname = (self._body_names.get(bid)
+                     or (f"Body {bid}" if bid is not None else "?"))
+            bshort = _strip_system(self._system_name, bname)
+            if len(bshort) > 8:
+                bshort = bshort[:7] + "…"
+
+            is_current = (bid == self._current_body_id)
+            bio_count  = self._bio_counts.get(bid, 0)
+
+            # Build a set of genera already covered by confirmed scans on this body
+            scanned_genus_lower = {
+                e.get("genus", "").lower()
+                for e in self._scans.values()
+                if e.get("body_id") == bid and e.get("genus")
+            }
+
+            # Body header row
+            rows.append({
+                "type":       "body_header",
+                "label":      bshort,
+                "is_current": is_current,
+                "bio_count":  bio_count,
+            })
+
+            # ── Confirmed scans ────────────────────────────────────────
+            body_scans = [
+                (k, e) for k, e in self._scans.items()
+                if e.get("body_id") == bid
+            ]
+            body_scans.sort(key=lambda x: x[1].get("species", ""))
+
+            for key, entry in body_scans:
+                sp       = entry.get("species", "Unknown Organic")
+                done     = entry.get("is_complete", False)
+                reward   = entry.get("reward", 0)
+                if done:
+                    total_earned    += reward
+                else:
+                    total_remaining += reward
+
+                # Distance sub-row?
+                dist_info = None
+                if not done:
+                    si = int(entry.get("sample_idx") or 1)
+                    if si >= 1 and key in self._sample_pos:
+                        d, min_d = self._dist_for(key, entry)
+                        dist_info = (d, min_d)
+
+                rows.append({
+                    "type":      "scan",
+                    "key":       key,
+                    "entry":     entry,
+                    "sp":        sp,
+                    "done":      done,
+                    "reward":    reward,
+                    "dist_info": dist_info,
+                })
+
+            # ── DSS genera not yet confirmed by a scan ─────────────────
+            dss_list = self._dss_genera.get(bid, [])
+            for g in dss_list:
+                genus_disp = g.get("genus_display", "")
+                genus_low  = genus_disp.lower()
+                # Skip if already have a real scan for this genus
+                if any(genus_low in gl for gl in scanned_genus_lower):
+                    continue
+                rows.append({
+                    "type":         "dss_genus",
+                    "genus_display": genus_disp,
+                })
+
+            # ── Signal count vs known species discrepancy ──────────────
+            known_count = len(body_scans) + len(dss_list)
+            if bio_count and known_count < bio_count:
+                unknown = bio_count - known_count
+                rows.append({
+                    "type":    "unresolved",
+                    "count":   unknown,
+                })
+
+            # ── Predictions (only if no DSS and this is the current body) ─
+            if is_current and bid not in self._dss_genera:
+                preds = self._predictions.get(bid, [])
+                # Show predictions not already confirmed
+                scanned_sp_lower = {
+                    e.get("species", "").lower()
+                    for _, e in body_scans
+                }
+                for p in preds[:12]:   # cap at 12 to avoid overflow
+                    sp_low = p.get("species", "").lower()
+                    if sp_low in scanned_sp_lower:
+                        continue
+                    rows.append({
+                        "type":    "prediction",
+                        "genus":   p.get("genus", ""),
+                        "species": p.get("species", ""),
+                    })
+
+        # ── Compute total height ──────────────────────────────────────────
+        pixel_h = self.HEADER_H
+        for r in rows:
+            if r["type"] == "body_header":
+                pixel_h += self.BODY_H
+            elif r["type"] == "scan":
+                pixel_h += self.ROW_H
+                if r.get("dist_info") is not None:
+                    pixel_h += self.DIST_H
+            else:
+                pixel_h += self.ROW_H
+        pixel_h += self.FOOTER_H + 8
+        height = max(self.MIN_H, pixel_h)
 
         self.canvas.config(width=w, height=height)
         self.win.geometry(f"{w}x{height}")
         self.canvas.delete("all")
 
         # ── Background & border ───────────────────────────────────────────
-        complete_all = all(e.get("is_complete") for e in entries)
-        border_col   = _COL_COMPLETE if complete_all else COLOR_ACCENT
+        all_complete = (bool(self._scans)
+                        and all(e.get("is_complete") for e in self._scans.values()))
+        border_col = _COL_COMPLETE if all_complete else COLOR_ACCENT
         self.canvas.create_rectangle(
             4, 4, w - 4, height - 4,
             fill="#010101", outline=border_col, width=2,
         )
 
         # ── Header ───────────────────────────────────────────────────────
-        total    = len(entries)
-        complete = sum(1 for e in entries if e.get("is_complete"))
+        total_scans    = sum(1 for r in rows if r["type"] == "scan")
+        complete_scans = sum(1 for r in rows if r["type"] == "scan" and r["done"])
 
         self._text(12, 16, "◉  EXOBIOLOGY", border_col, ("Courier", 10, "bold"))
-
         sys_short = self._system_name
-        if len(sys_short) > 30:
-            sys_short = sys_short[:29] + "…"
-        self._text(12, 33, f"{sys_short}  ·  {complete}/{total} complete",
+        if len(sys_short) > 32:
+            sys_short = sys_short[:31] + "…"
+        status_str = f"{complete_scans}/{total_scans} sampled" if total_scans else "scanning…"
+        self._text(12, 33, f"{sys_short}  ·  {status_str}",
                    COLOR_TEXT, ("Courier", 8))
 
         sep_y = self.HEADER_H - 2
         self.canvas.create_line(4, sep_y, w - 4, sep_y, fill=border_col, width=1)
 
-        y = self.HEADER_H + 4
+        y = self.HEADER_H + 2
 
-        # Column x-positions
-        BODY_W   = 42
+        # Column positions
+        BODY_W   = 46
         DOTS_X   = w - 112
         REWARD_X = w - 68
         TICK_X   = w - 14
 
-        prev_body = object()
+        # ── Render rows ───────────────────────────────────────────────────
+        for r in rows:
+            rtype = r["type"]
 
-        for i, entry in enumerate(entries):
-            body_id   = entry.get("body_id")
-            body_name = entry.get("body_name", "")
-            body_key  = body_id if body_id is not None else body_name
+            if rtype == "body_header":
+                is_curr = r["is_current"]
+                bcol    = _COL_CURR_BODY if is_curr else _COL_BODY_LBL
+                prefix  = "▶ " if is_curr else "  "
+                lbl     = r["label"]
+                bc      = r["bio_count"]
+                bio_str = f"  [{bc} bio]" if bc else ""
 
-            if body_key != prev_body and prev_body is not object():
-                self.canvas.create_line(
-                    BODY_W + 4, y - 1, w - 6, y - 1,
-                    fill=_COL_SEP, width=1,
+                self.canvas.create_line(4, y, w - 4, y, fill=_COL_BODY_SEP, width=1)
+                self._text(8, y + 9, f"{prefix}{lbl}{bio_str}", bcol,
+                           ("Courier", 8, "bold"))
+                y += self.BODY_H
+
+            elif rtype == "scan":
+                entry    = r["entry"]
+                sp       = r["sp"]
+                done     = r["done"]
+                reward   = r["reward"]
+                dist_info = r.get("dist_info")
+
+                row_col = _COL_MUTED   if done else COLOR_TEXT
+                rew_col = _COL_COMPLETE if done else COLOR_ORANGE
+                dot_col = _COL_COMPLETE if done else COLOR_ACCENT
+
+                sp_display = sp if len(sp) <= 22 else sp[:21] + "…"
+                self._text(BODY_W + 4, y + 5, sp_display, row_col, ("Courier", 9))
+
+                dots    = self._sample_dots(
+                    entry.get("sample_idx"), entry.get("max_samples"), done
                 )
-            prev_body = body_key
+                self._text(DOTS_X, y + 5, dots, dot_col, ("Courier", 10, "bold"))
 
-            sp       = entry.get("species", "Unknown Organic")
-            dots     = self._sample_dots(
-                entry.get("sample_idx"), entry.get("max_samples"), entry.get("is_complete")
-            )
-            reward   = entry.get("reward", 0)
-            rew_txt  = _fmt_credits(reward) if reward else "?"
-            done     = entry.get("is_complete", False)
-            row_col  = _COL_MUTED   if done else COLOR_TEXT
-            rew_col  = _COL_COMPLETE if done else COLOR_ORANGE
-            dot_col  = _COL_COMPLETE if done else COLOR_ACCENT
+                rew_txt = _fmt_credits(reward) if reward else "?"
+                self._text(REWARD_X, y + 5, rew_txt, rew_col, ("Courier", 8))
 
-            # Body label
-            body_short = _strip_system(self._system_name, body_name)
-            if len(body_short) > 6:
-                body_short = body_short[:5] + "…"
-            self._text(BODY_W - 4, y + 5, body_short, _COL_BODY_LBL,
-                       ("Courier", 8), anchor="e")
+                if done:
+                    self._text(TICK_X, y + 5, "✓", _COL_COMPLETE,
+                               ("Courier", 10, "bold"), anchor="e")
 
-            # Species name
-            sp_display = sp if len(sp) <= 22 else sp[:21] + "…"
-            self._text(BODY_W + 4, y + 5, sp_display, row_col, ("Courier", 9))
+                y += self.ROW_H
 
-            # Sample dots
-            self._text(DOTS_X, y + 5, dots, dot_col, ("Courier", 10, "bold"))
+                # Distance sub-row
+                if dist_info is not None:
+                    dist_m, min_m = dist_info
+                    BAR_X   = BODY_W + 4
+                    BAR_END = DOTS_X - 4
+                    BAR_W   = BAR_END - BAR_X
+                    BAR_H   = 5
+                    bar_y   = y + 4
 
-            # Reward
-            self._text(REWARD_X, y + 5, rew_txt, rew_col, ("Courier", 8))
+                    cleared = dist_m is not None and dist_m >= min_m
+                    col     = _COL_DIST_OK if cleared else _COL_DIST_WARN
 
-            # Complete tick
-            if done:
-                self._text(TICK_X, y + 5, "✓", _COL_COMPLETE,
-                           ("Courier", 10, "bold"), anchor="e")
-
-            y += self.ROW_H
-
-            # ── Distance sub-row ─────────────────────────────────────────
-            if i in dist_rows:
-                dist_m, min_m = dist_rows[i]
-
-                BAR_X   = BODY_W + 4
-                BAR_END = DOTS_X - 4
-                BAR_W   = BAR_END - BAR_X
-                BAR_H   = 5
-                bar_y   = y + 4
-
-                cleared = dist_m is not None and dist_m >= min_m
-                col     = _COL_DIST_OK if cleared else _COL_DIST_WARN
-
-                # Bar track
-                self.canvas.create_rectangle(
-                    BAR_X, bar_y, BAR_END, bar_y + BAR_H,
-                    fill=_COL_DIST_BAR, outline="",
-                )
-                # Bar fill
-                if dist_m is not None:
-                    ratio   = min(1.0, dist_m / max(min_m, 1))
-                    fill_px = max(2, int(BAR_W * ratio))
                     self.canvas.create_rectangle(
-                        BAR_X, bar_y, BAR_X + fill_px, bar_y + BAR_H,
-                        fill=col, outline="",
+                        BAR_X, bar_y, BAR_END, bar_y + BAR_H,
+                        fill=_COL_DIST_BAR, outline="",
                     )
-
-                # Distance label
-                if dist_m is not None:
-                    dist_txt = f"{int(dist_m)}m / {min_m}m"
+                    if dist_m is not None:
+                        ratio   = min(1.0, dist_m / max(min_m, 1))
+                        fill_px = max(2, int(BAR_W * ratio))
+                        self.canvas.create_rectangle(
+                            BAR_X, bar_y, BAR_X + fill_px, bar_y + BAR_H,
+                            fill=col, outline="",
+                        )
+                    dist_txt = (f"{int(dist_m)}m / {min_m}m" if dist_m is not None
+                                else f"—  / {min_m}m")
                     ok_txt   = "  ✓ CLEAR" if cleared else ""
-                else:
-                    dist_txt = f"—  / {min_m}m"
-                    ok_txt   = ""
+                    self._text(BAR_X, bar_y - 1, dist_txt, col, ("Courier", 7))
+                    if ok_txt:
+                        self._text(BAR_END, bar_y - 1, ok_txt, _COL_DIST_OK,
+                                   ("Courier", 7), anchor="e")
+                    y += self.DIST_H
 
-                self._text(BAR_X,   bar_y - 1, dist_txt, col, ("Courier", 7))
-                if ok_txt:
-                    self._text(BAR_END, bar_y - 1, ok_txt, _COL_DIST_OK,
-                               ("Courier", 7), anchor="e")
+            elif rtype == "dss_genus":
+                gd  = r["genus_display"]
+                lbl = (gd if len(gd) <= 20 else gd[:19] + "…") + "  ?"
+                self._text(BODY_W + 4, y + 5, lbl, _COL_DSS,
+                           ("Courier", 9, "italic"))
+                self._text(DOTS_X, y + 5, "○○○", _COL_DSS, ("Courier", 10))
+                y += self.ROW_H
 
-                y += self.DIST_H
+            elif rtype == "unresolved":
+                cnt = r["count"]
+                msg = f"+ {cnt} unresolved signal{'s' if cnt != 1 else ''}"
+                self._text(BODY_W + 4, y + 5, msg, _COL_DSS,
+                           ("Courier", 8, "italic"))
+                y += self.ROW_H
+
+            elif rtype == "prediction":
+                sp  = r["species"] or r["genus"]
+                lbl = (sp if len(sp) <= 20 else sp[:19] + "…") + "  ~"
+                self._text(BODY_W + 4, y + 5, lbl, _COL_PREDICT,
+                           ("Courier", 9, "italic"))
+                y += self.ROW_H
 
         # ── Footer ───────────────────────────────────────────────────────
         self.canvas.create_line(4, y + 2, w - 4, y + 2, fill=_COL_SEP, width=1)
-
-        earned    = sum(e.get("reward", 0) for e in entries if e.get("is_complete"))
-        remaining = sum(e.get("reward", 0) for e in entries if not e.get("is_complete"))
-
-        self._text(10,     y + 18, f"EARNED  {_fmt_credits(earned)}",
+        self._text(10,     y + 18, f"EARNED  {_fmt_credits(total_earned)}",
                    _COL_COMPLETE, ("Courier", 8))
-        self._text(w // 2, y + 18, f"REMAINING  {_fmt_credits(remaining)}",
+        self._text(w // 2, y + 18, f"REMAINING  {_fmt_credits(total_remaining)}",
                    COLOR_ORANGE,  ("Courier", 8))

@@ -1,5 +1,20 @@
 # VoidCompass // UPDATE LOG
 
+## v2.9.2 // Exobiology Overlay — Full SrvSurvey Feature Parity
+**Release Date:** 2026-May-27
+*   **DSS genus rows (`bio_hud.py`, `dashboard.py`):**
+    *   When a body is DSS-scanned (`SAASignalsFound`), confirmed genus names are shown in the bio overlay under that body's header row in **gold italic** with `●●●?` placeholder dots — one row per genus, before any real samples are taken.  Once a `ScanOrganic` event arrives for that genus the DSS row is replaced by the full live scan row.
+    *   Signal-count discrepancy detection: if the bio-signal count from DSS exceeds the number of known genera + scanned species, a `"+ N unresolved signals"` line is shown so you know something is still unaccounted for.
+*   **Bio prediction engine (`bio_predictions.py`, `bio-criteria/`):**
+    *   21 SrvSurvey criteria JSON files (all genera: Aleoida through Tussock) bundled and loaded at runtime.  Builds a list of candidate species from planet conditions (body class, gravity, temperature, pressure, atmosphere type/composition, volcanism, materials, parent star type, galactic region).
+    *   Predictions appear in the overlay for the **current body** (from `ApproachBody`) only when DSS genus data is not yet available — shown in **muted italic** with a `~` suffix so they're clearly speculative.
+*   **ApproachBody / LeaveBody tracking (`journal_watcher.py`, `dashboard.py`, `bio_hud.py`):**
+    *   `ApproachBody` → highlights the approached body header in **cyan** with a `▶` prefix; triggers prediction display for that body.
+    *   `LeaveBody` → clears the current-body highlight.
+*   **Scan event enriched (`journal_watcher.py`):** Added `surface_gravity`, `surface_temp`, `surface_pressure`, `atmosphere_type`, `volcanism`, `materials`, `atmos_comp`, `parents`, `rings` to normalised `Scan` event data.  Used by prediction engine.
+*   **Star type tracking (`dashboard.py`):** `system_stars` dict (body_id → star_type) built from star scans; used to resolve parent-star type for any planet when running predictions.
+*   **Build updated (`build.py`):** `bio-criteria/` directory now bundled with `--add-data` and copied to `dist/` next to the exe.
+
 ## v2.9.1 // Exobiology Overlay — Scan Distance Bar
 **Release Date:** 2026-May-27
 *   **Bio scan distance tracking added to `BioHUD` (`bio_hud.py`, `dashboard.py`, `dashboard_scan_mixin.py`):**
