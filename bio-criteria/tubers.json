@@ -1,0 +1,238 @@
+{
+  "genus": "Roseum Sinuous Tubers",
+  "query": [
+    "atmosType [None]",
+    "     temp [200 ~ 500]",
+    " pressure [ ~ 0]"
+  ],
+  "children": [
+
+    {
+      "species": "Roseum Sinuous Tubers",
+      "query": [
+        "# hit count: 897",
+        "  regions [TubersBatch]"
+      ],
+      "children": [
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 429",
+            "     body [Rocky]",
+            "  gravity [ ~ 0.3]",
+            "volcanism [Major Silicate Vapour Geysers,Minor Rocky Magma]"
+          ]
+        },
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 468",
+            "     body [HMC]",
+            "  gravity [ ~ 4]",
+            "volcanism [Major Rocky Magma,Major Silicate Vapour Geysers,Metallic Magma,Minor Rocky Magma,Rocky Magma]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Prasinum Sinuous Tubers",
+      "query": [
+        "# hit count: 288",
+        "     temp [200 ~ 500]",
+        "  regions [1,2,3,4,5,8,9,10,11]"
+      ],
+      "children": [
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 142",
+            "     body [Rocky]",
+            "  gravity [ ~ 0.3]",
+            "volcanism [Major Metallic Magma,Major Silicate Vapour Geysers,Metallic Magma,Minor Metallic Magma,Minor Rocky Magma]"
+          ]
+        },
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 145",
+            "     body [HMC]",
+            "  gravity [ ~ 3]",
+            "volcanism [Major Rocky Magma,Major Silicate Vapour Geysers,Minor Rocky Magma,Rocky Magma]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Albidum Sinuous Tubers",
+      "query": [
+        "# hit count: 254",
+        "  regions [9,10,11]"
+      ],
+      "children": [
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 115",
+            "     body [Rocky]",
+            "  gravity [ ~ 0.3]",
+            "volcanism [Major Metallic Magma,Major Silicate Vapour Geysers,Metallic Magma,Minor Rocky Magma]"
+          ]
+        },
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 139",
+            "     body [HMC]",
+            "  gravity [ ~ 3]",
+            "volcanism [Major Rocky Magma,Major Silicate Vapour Geysers,Minor Rocky Magma,Rocky Magma]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Caeruleum Sinuous Tubers",
+      "query": [
+        "# hit count: 539",
+        "  regions [1,2,3,4,5,8,9,10,11]"
+      ],
+      "children": [
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 513",
+            "     body [Rocky]",
+            "  gravity [ ~ 0.7]",
+            "volcanism [Major Silicate Vapour Geysers]"
+          ]
+        },
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 26",
+            "     body [HMC]",
+            "  gravity [ ~ 3]",
+            "volcanism [Major Rocky Magma,Major Silicate Vapour Geysers]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Blatteum Sinuous Tubers",
+      "query": [
+        "# hit count: 210",
+        "  regions [6, 7, 8, 9, 10, 18, 19]"
+      ],
+      "children": [
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 115",
+            "     body [Rocky]",
+            "  gravity [ ~ 0.5]",
+            "volcanism [Major Metallic Magma,Major Silicate Vapour Geysers,Minor Metallic Magma]"
+          ]
+        },
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 95",
+            "     body [HMC]",
+            "  gravity [ ~ 3]",
+            "volcanism [Major Rocky Magma,Major Silicate Vapour Geysers,Metallic Magma,Rocky Magma]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Lindigoticum Sinuous Tubers",
+      "query": [
+        "# hit count: 186",
+        "  regions [4,5,6,7,8,9,10,18,19]"
+      ],
+      "children": [
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 170",
+            "     body [Rocky]",
+            "  gravity [ ~ 0.5]",
+            "volcanism [Major Metallic Magma,Major Silicate Vapour Geysers]"
+          ]
+        },
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 16",
+            "     body [HMC]",
+            "  gravity [ ~ 2]",
+            "volcanism [Major Rocky Magma,Metallic Magma,Rocky Magma]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Violaceum Sinuous Tubers",
+      "query": [
+        "# hit count: 92",
+        "  regions [2,3,4,5,6,7,8,9,10,18,19]"
+      ],
+      "children": [
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 60",
+            "     body [Rocky]",
+            "  gravity [ ~ 0.5]",
+            "volcanism [Major Metallic Magma,Major Silicate Vapour Geysers]"
+          ]
+        },
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 32",
+            "     body [HMC]",
+            "  gravity [ ~ 3]",
+            "volcanism [Major Rocky Magma,Major Silicate Vapour Geysers,Metallic Magma,Rocky Magma]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Viride Sinuous Tubers",
+      "query": [
+        "# hit count: 61",
+        "  regions [3,4,5,6,7,8,9,10,18,19]"
+      ],
+      "children": [
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 50",
+            "     body [Rocky]",
+            "  gravity [ ~ 0.3]",
+            "volcanism [Major Silicate Vapour Geysers]"
+          ]
+        },
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 11",
+            "     body [HMC]",
+            "  gravity [ ~ 2]",
+            "volcanism [Major Rocky Magma,Metallic Magma,Rocky Magma]"
+          ]
+        }
+      ]
+    }
+
+  ]
+
+}
+
