@@ -27,45 +27,6 @@
     *   **Persisted across sessions** via a new `colonisation_projects` table in `exploration_data.db` — your depot data survives app restarts.
     *   `journal_watcher.py` now normalises `ColonisationConstructionDepot`, `ColonisationContribution`, and `ColonisationSystemClaimed` events.
 
-## v2.9.2 // Exobiology Overlay — Full SrvSurvey Feature Parity
-**Release Date:** 2026-May-27
-*   **DSS genus rows (`bio_hud.py`, `dashboard.py`):**
-    *   When a body is DSS-scanned (`SAASignalsFound`), confirmed genus names are shown in the bio overlay under that body's header row in **gold italic** with `●●●?` placeholder dots — one row per genus, before any real samples are taken.  Once a `ScanOrganic` event arrives for that genus the DSS row is replaced by the full live scan row.
-    *   Signal-count discrepancy detection: if the bio-signal count from DSS exceeds the number of known genera + scanned species, a `"+ N unresolved signals"` line is shown so you know something is still unaccounted for.
-*   **Bio prediction engine (`bio_predictions.py`, `bio-criteria/`):**
-    *   21 SrvSurvey criteria JSON files (all genera: Aleoida through Tussock) bundled and loaded at runtime.  Builds a list of candidate species from planet conditions (body class, gravity, temperature, pressure, atmosphere type/composition, volcanism, materials, parent star type, galactic region).
-    *   Predictions appear in the overlay for the **current body** (from `ApproachBody`) only when DSS genus data is not yet available — shown in **muted italic** with a `~` suffix so they're clearly speculative.
-*   **ApproachBody / LeaveBody tracking (`journal_watcher.py`, `dashboard.py`, `bio_hud.py`):**
-    *   `ApproachBody` → highlights the approached body header in **cyan** with a `▶` prefix; triggers prediction display for that body.
-    *   `LeaveBody` → clears the current-body highlight.
-*   **Scan event enriched (`journal_watcher.py`):** Added `surface_gravity`, `surface_temp`, `surface_pressure`, `atmosphere_type`, `volcanism`, `materials`, `atmos_comp`, `parents`, `rings` to normalised `Scan` event data.  Used by prediction engine.
-*   **Star type tracking (`dashboard.py`):** `system_stars` dict (body_id → star_type) built from star scans; used to resolve parent-star type for any planet when running predictions.
-*   **Build updated (`build.py`):** `bio-criteria/` directory now bundled with `--add-data` and copied to `dist/` next to the exe.
-
-## v2.9.1 // Exobiology Overlay — Scan Distance Bar
-**Release Date:** 2026-May-27
-*   **Bio scan distance tracking added to `BioHUD` (`bio_hud.py`, `dashboard.py`, `dashboard_scan_mixin.py`):**
-    *   When a sample is taken on a planet surface, the player's lat/lon/radius is recorded at that moment.
-    *   `Status.json` position updates (already polled every ~1 s) are forwarded to `bio_hud.on_position_update()` via `_apply_status_update` in `dashboard_scan_mixin.py`.
-    *   For every incomplete species that has at least one sample taken, a compact distance sub-row appears below its species row: a fill bar showing progress toward the minimum required distance, and a `"143m / 500m"` label — orange while not yet cleared, green once reached.  A `✓ CLEAR` indicator appears when the required distance has been walked.
-    *   Minimum scan distances are per-genus (datamined values): Bacterium/Stratum/Fonticulua 500 m · Tubus/Osseus 800 m · Electricae 1000 m · Fungoida/Cactoida 300 m · Tussock 200 m · most others 100–150 m.
-    *   Distance rows are removed from the layout once a species is complete (3/3 samples), keeping the overlay compact.
-
-## v2.9.0 // Exobiology Overlay
-**Release Date:** 2026-May-27
-*   **New `BioHUD` overlay (`bio_hud.py`):**
-    *   Transparent topmost canvas overlay — same rendering path as ProspectorHUD and ScanHUD.
-    *   Appears automatically on the first `ScanOrganic` event in a system; stays visible as long as incomplete scans remain; clears and hides on system jump (FSDJump / Location / CarrierJump).
-    *   Per-species rows show: body label (system-prefix stripped), species name (truncated), sample progress dots (`●●○` = 2/3, `●●●` = complete), reward estimate, and a green ✓ tick on completion.
-    *   Footer shows **EARNED** (sum of completed species rewards) and **REMAINING** (sum of incomplete) so you always know what's still on the table.
-    *   Reward estimates sourced from SrvSurvey's `codexRef.json` via `srvsurvey_rewards.py` — exact match on species name, genus-range fallback when only the genus is known.
-    *   Subtle body-change separators group rows by body. Border turns green when all species in the system are complete.
-    *   Draggable — position saved to `config.json` on mouse-release (`bio_hud_x`, `bio_hud_y`).
-    *   On/off toggle in Configuration → **Exobiology Overlay** (key `bio_overlay_enabled`, default on). Requires restart (same as other overlays).
-*   **`srvsurvey_rewards.py`** — new reward-lookup module; reads `codexRef.json` (SrvSurvey's Biology codex with 814 entries); provides `lookup(species, genus)` for exact or genus-range reward estimates.
-*   **`codexRef.json`** — SrvSurvey Biology codex data (downloaded from `SrvSurvey/docs/codexRef.json`).
-*   **`dashboard.py`:** Imports `BioHUD`; creates it alongside other overlays; forwards `ScanOrganic` events (live only, skipped during startup batch); calls `on_system_change()` on every jump/location event.
-
 ## v2.8.13 // Prospector HUD Startup Replay Fix
 **Release Date:** 2026-May-26
 *   **Prospector overlay no longer pops up on program load (`dashboard.py`):**
