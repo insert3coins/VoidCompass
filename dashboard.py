@@ -1297,6 +1297,43 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
+                # Trigger bio overlay whenever the game confirms bio signals on
+                # a body.  This fires even for previously-scanned bodies (unlike
+                # the Scan-event prediction block which is gated on is_new_body_scan).
+                if bio_count > 0 and self.bio_hud and not self.batch_mode:
+                    _bid   = body_id
+                    _bname = (d.get("body_name")
+                              or (item.get("name") if item else None)
+                              or f"Body {body_id}")
+                    _bc    = bio_count
+                    bsd    = self.body_scan_data.get(body_id)
+                    if bsd and bsd.get("planet_class"):
+                        parent_stars = []
+                        for _p in (bsd.get("parents") or []):
+                            for _ptype, _pid in _p.items():
+                                st = self.system_stars.get(_pid)
+                                if st:
+                                    parent_stars.append(st)
+                        if not parent_stars:
+                            parent_stars = [self.star_class] if self.star_class else []
+                        try:
+                            _preds = _bio_predict(
+                                body_type   = bsd["planet_class"],
+                                gravity     = float(bsd["surface_gravity"] or 0),
+                                temp        = float(bsd["surface_temp"] or 0),
+                                pressure    = float(bsd["surface_pressure"] or 0),
+                                atmos_type  = bsd["atmosphere_type"],
+                                atmos_comp  = bsd["atmos_comp"],
+                                volcanism   = bsd["volcanism"],
+                                materials   = bsd["materials"],
+                                star_types  = parent_stars,
+                            )
+                        except Exception:
+                            _preds = []
+                    else:
+                        _preds = []
+                    self.root.after(0, lambda _b=_bid, _n=_bname, _p=_preds, _c=_bc:
+                        self.bio_hud.on_predictions(_b, _n, _p, _c))
 
         elif ev == "SAASignalsFound":
             if not self._matches_current_system_address(d):
