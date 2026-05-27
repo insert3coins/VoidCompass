@@ -1,0 +1,567 @@
+{
+  "genus": "Fumerola",
+  "children": [
+
+    {
+      "species": "Aquatis",
+      "query": [
+        "# hit count: 4694",
+        "  gravity [ ~ 0.276]",
+        "volcanism [Major Water Geysers,Major Water Magma,Minor Water Geysers,Minor Water Magma,Water Geysers,Water Magma]"
+      ],
+      "commonChildren": [
+        { "variant": "Yellow", "query": [ "mats [Mercury]" ] },
+        { "variant": "Gold", "query": [ "  mats [Niobium]" ] },
+        { "variant": "Orange", "query": [ "mats [Tin]" ] },
+        { "variant": "Cobalt", "query": [ "mats [Tungsten]" ] },
+        { "variant": "Cyan", "query": [ "  mats [Molybdenum]" ] },
+        { "variant": "Green", "query": [ " mats [Cadmium]" ] }
+      ],
+      "children": [
+        {
+          "query": [
+            "# hit count: 163",
+            "atmosType [Ammonia]",
+            "atmosComp [Ammonia >= 100]"
+          ],
+          "children": [
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 104",
+                "     body [Icy,Rocky Ice]",
+                "  gravity [ ~ 0.25]",
+                "     temp [160.7 ~ ]"
+              ]
+            },
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 59",
+                "     body [Rocky]",
+                "  gravity [ ~ 0.062]",
+                " pressure [0.006 ~ ]"
+              ]
+            }
+          ]
+        },
+        {
+          "query": [
+            "# hit count: 3801",
+            "atmosType [Argon]"
+          ],
+          "children": [
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 3759",
+                "   body [Icy]",
+                "gravity [0.16 ~ ]",
+                "   temp [ ~ 149]"
+              ]
+            },
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 42",
+                "     body [RockyIce]",
+                "  gravity [0.23 ~ ]",
+                "     temp [81 ~ 125]",
+                " pressure [0.001 ~ ]",
+                "atmosComp [Argon >= 100]"
+              ]
+            }
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 16",
+            "atmosType [ArgonRich]",
+            "     body [Icy]",
+            "     temp [79 ~ 92]",
+            " pressure [0.038 ~ ]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 5",
+            "atmosType [CarbonDioxide,CarbonDioxideRich]",
+            "     body [Icy]",
+            "  gravity [0.24 ~ 0.275]",
+            "     temp [160 ~ 180]",
+            " pressure [0.01 ~ ]",
+            "volcanism [Major Water Geysers]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 15",
+            "atmosType [Methane]",
+            "     body [Rocky]",
+            "  gravity [ ~ 0.11]",
+            "     temp [83 ~ 101]",
+            " pressure [0.01 ~ ]",
+            "volcanism [Minor Water Magma]",
+            "atmosComp [Methane >= 100]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 132",
+            "atmosType [Nitrogen]",
+            "     body [Icy]",
+            "     temp [ ~ 80]",
+            " pressure [0.001 ~ ]",
+            "atmosComp [Nitrogen >= 100]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 28",
+            "atmosType [Oxygen]",
+            "     body [Icy]",
+            "     temp [ ~ 193]",
+            "volcanism [Major Water Geysers,Major Water Magma,Water Geysers,Water Magma]"
+          ]
+        },
+        {
+          "query": [
+            "# hit count: 412",
+            "atmosType [SulphurDioxide]",
+            "atmosComp [SulphurDioxide >= 100]"
+          ],
+          "children": [
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 372",
+                "     body [Icy]",
+                "     temp [ ~ 272]",
+                " pressure [0.001 ~ ]"
+              ]
+            },
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 3",
+                "     body [Rocky]",
+                "     temp [149 ~ 272]",
+                " pressure [0.002 ~ ]",
+                "volcanism [Minor Water Magma]"
+              ]
+            },
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 37",
+                "     body [RockyIce]",
+                "     temp [ ~ 234]",
+                " pressure [0.0033 ~ ]"
+              ]
+            }
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 104",
+            "atmosType [Water]",
+            "     body [Rocky]",
+            "     temp [390 ~ ]",
+            " pressure [0.062 ~ ]",
+            "volcanism [Minor Water Magma]",
+            "atmosComp [Water >= 100]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Carbosis",
+      "query": [
+        "# hit count: 3712",
+        "volcanism [Carbon Dioxide Geysers,Minor Carbon Dioxide Geysers,Minor Methane Magma]"
+      ],
+      "commonChildren": [
+        { "variant": "Magenta", "query": [ "mats [Mercury]" ] },
+        { "variant": "Cobalt", "query": [ " mats [Niobium]" ] },
+        { "variant": "Cyan", "query": [ "   mats [Tin]" ] },
+        { "variant": "Yellow", "query": [ " mats [Tungsten]" ] },
+        { "variant": "Gold", "query": [ "   mats [Molybdenum]" ] },
+        { "variant": "Orange", "query": [ " mats [Cadmium]" ] }
+      ],
+      "children": [
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 4",
+            "atmosType [Ammonia]",
+            "     body [Icy]",
+            "  gravity [ ~ 0.031]",
+            "     temp [160.7 ~ ]",
+            "volcanism [Minor Carbon Dioxide Geysers]"
+          ]
+        },
+        {
+          "query": [
+            "# hit count: 1150",
+            "atmosType [Argon]",
+            "atmosComp [Argon >= 100 | Nitrogen >= 35]"
+          ],
+          "children": [
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 1138",
+                "     body [Icy]",
+                "     temp [ ~ 150]"
+              ]
+            },
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 12",
+                "     body [RockyIce]",
+                "     temp [78 ~ 122]",
+                " pressure [0.002 ~ ]"
+              ]
+            }
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 4",
+            "atmosType [ArgonRich]",
+            "     body [Icy]",
+            "     temp [ ~ 90]",
+            " pressure [0.03 ~ ]",
+            "volcanism [Minor Carbon Dioxide Geysers]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 1",
+            "atmosType [CarbonDioxideRich]",
+            "     body [Icy]",
+            "     temp [170 ~ 180]",
+            " pressure [0.06 ~ ]",
+            "volcanism [Carbon Dioxide Geysers]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 2358",
+            "atmosType [Methane]",
+            "     body [Icy]",
+            "  gravity [ ~ 0.047]",
+            " pressure [0.031 ~ ]",
+            "volcanism [Minor Methane Magma]",
+            "atmosComp [Methane >= 100]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 52",
+            "atmosType [Nitrogen]",
+            "     body [Icy]",
+            "     temp [ ~ 76]",
+            " pressure [0.001 ~ ]",
+            "atmosComp [Nitrogen >= 100]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 6",
+            "atmosType [Oxygen]",
+            "     body [Icy]",
+            "  gravity [0.26 ~ ]",
+            "     temp [ ~ 177]",
+            " pressure [ ~ 0.06]",
+            "atmosComp [Oxygen >= 100]"
+          ]
+        },
+        {
+          "query": [
+            "# hit count: 131",
+            "atmosType [SulphurDioxide]",
+            "atmosComp [SulphurDioxide >= 100]"
+          ],
+          "children": [
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 123",
+                "     body [Icy]",
+                "     temp [ ~ 272]"
+              ]
+            },
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 8",
+                "     body [RockyIce]",
+                "     temp [ ~ 212]",
+                " pressure [0.002 ~ ]"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Extremus",
+      "query": [
+        "# hit count: 2191",
+        "volcanism [Major Metallic Magma,Major Rocky Magma,Major Silicate Vapour Geysers,Metallic Magma,Minor Metallic Magma,Minor Rocky Magma,Minor Silicate Vapour Geysers,Rocky Magma,Silicate Vapour Geysers]"
+      ],
+      "commonChildren": [
+        { "variant": "Lime", "query": [ "      mats [Mercury]" ] },
+        { "variant": "White", "query": [ "     mats [Niobium]" ] },
+        { "variant": "Peach", "query": [ "     mats [Tin]" ] },
+        { "variant": "Mulberry", "query": [ "  mats [Tungsten]" ] },
+        { "variant": "Blue", "query": [ "      mats [Molybdenum]" ] },
+        { "variant": "Aquamarine", "query": [ "mats [Cadmium]" ] }
+      ],
+      "children": [
+        {
+          "query": [
+            "# hit count: 222",
+            "atmosType [Ammonia]",
+            "atmosComp [Ammonia >= 100]"
+          ],
+          "children": [
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 158",
+                "     body [Rocky]",
+                "  gravity [ ~ 0.048]",
+                "     temp [173 ~ ]"
+              ]
+            },
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 53",
+                "     body [RockyIce]",
+                "  gravity [ ~ 0.09]",
+                "     temp [160.7 ~ ]",
+                "volcanism [Major Rocky Magma,Major Silicate Vapour Geysers,Metallic Magma,Minor Metallic Magma,Minor Rocky Magma,Minor Silicate Vapour Geysers,Rocky Magma]"
+              ]
+            },
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 14",
+                "    body [HMC]",
+                " gravity [0.046 ~ 0.054]",
+                "    temp [174 ~ ]",
+                "pressure [0.01 ~ ]",
+                "volcanism [Major Rocky Magma,Major Silicate Vapour Geysers,Minor Metallic Magma,Minor Rocky Magma,Minor Silicate Vapour Geysers,Rocky Magma]"
+              ]
+            }
+          ]
+        },
+        {
+          "query": [
+            "# hit count: 21",
+            "atmosType [Argon]",
+            "atmosComp [Argon >= 100]"
+          ],
+          "children": [
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 4",
+                "     body [Rocky]",
+                "  gravity [ ~ 0.08]",
+                "     temp [ ~ 57]"
+              ]
+            },
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 17",
+                "     body [RockyIce]",
+                "  gravity [0.21 ~ ]",
+                "     temp [64 ~ 121]",
+                "volcanism [Major Rocky Magma,Major Silicate Vapour Geysers,Minor Metallic Magma,Minor Rocky Magma,Minor Silicate Vapour Geysers,Rocky Magma]"
+              ]
+            }
+          ]
+        },
+        {
+          "query": [
+            "# hit count: 1804",
+            "atmosType [Methane]",
+            "atmosComp [Methane >= 100]"
+          ],
+          "children": [
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 1801",
+                "     body [Rocky]",
+                "     temp [77 ~ 109]",
+                " pressure [0.01 ~ ]",
+                "volcanism [Major Metallic Magma,Major Silicate Vapour Geysers,Metallic Magma,Minor Rocky Magma,Minor Metallic Magma,Minor Rocky Magma,Minor Silicate Vapour Geysers]"
+              ]
+            },
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 3",
+                "     body [HMC]",
+                "  gravity [ ~ 0.12]",
+                "     temp [97 ~ 101]",
+                "volcanism [Major Silicate Vapour Geysers,Minor Silicate Vapour Geysers]"
+              ]
+            }
+          ]
+        },
+        {
+          "query": [
+            "# hit count: 144",
+            "atmosType [SulphurDioxide]",
+            "atmosComp [SulphurDioxide >= 100]"
+          ],
+          "children": [
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 128",
+                "     body [Rocky]",
+                "  gravity [0.26 ~ ]",
+                "     temp [147.7 ~ 168]",
+                " pressure [ ~ 0.006]",
+                "volcanism [Major Metallic Magma,Major Silicate Vapour Geysers,Metallic Magma,Minor Metallic Magma,Minor Rocky Magma,Minor Silicate Vapour Geysers]"
+              ]
+            },
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 16",
+                "    body [RockyIce]",
+                "    temp [153 ~ 204]",
+                "pressure [0.002 ~ ]",
+                "volcanism [Major Rocky Magma,Major Silicate Vapour Geysers,Metallic Magma,Minor Metallic Magma,Minor Silicate Vapour Geysers,Rocky Magma]"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Nitris",
+      "query": [
+        "# hit count: 5004",
+        "body [Icy]"
+      ],
+      "commonChildren": [
+        { "variant": "Peach", "query": [ "     mats [Mercury]" ] },
+        { "variant": "Red", "query": [ "       mats [Niobium]" ] },
+        { "variant": "Mulberry", "query": [ "  mats [Tin]" ] },
+        { "variant": "Aquamarine", "query": [ "mats [Tungsten]" ] },
+        { "variant": "Lime", "query": [ "      mats [Molybdenum]" ] },
+        { "variant": "White", "query": [ "     mats [Cadmium]" ] }
+      ],
+      "children": [
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 2619",
+            "atmosType [Argon]",
+            "     temp [ ~ 141]",
+            "volcanism [Minor Ammonia Magma,Minor Nitrogen Magma]",
+            "atmosComp [Argon >= 100 | Nitrogen >= 0.06]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 9",
+            "atmosType [ArgonRich]",
+            "     temp [ ~ 110]",
+            "volcanism [Minor Nitrogen Magma]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 2314",
+            "atmosType [Methane]",
+            "  gravity [ ~ 0.05]",
+            " pressure [0.03 ~ ]",
+            "volcanism [Minor Nitrogen Magma]",
+            "atmosComp [Methane >= 100]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 3",
+            "atmosType [Neon]",
+            "  gravity [0.26 ~ ]",
+            "     temp [39 ~ 51]",
+            "volcanism [Minor Nitrogen Magma]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 5",
+            "atmosType [NeonRich]",
+            "  gravity [0.25 ~ ]",
+            "     temp [60 ~ 68]",
+            "volcanism [Minor Nitrogen Magma]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 22",
+            "atmosType [Nitrogen]",
+            "  gravity [0.19 ~ ]",
+            "     temp [60 ~ 81]",
+            " pressure [ ~ 0.044]",
+            "volcanism [Minor Ammonia Magma,Minor Nitrogen Magma]",
+            "atmosComp [Nitrogen >= 100]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 2",
+            "atmosType [Oxygen]",
+            "     temp [ ~ 154]",
+            "volcanism [Minor Nitrogen Magma]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 30",
+            "atmosType [SulphurDioxide]",
+            "     temp [ ~ 249]",
+            "volcanism [Minor Ammonia Magma,Minor Nitrogen Magma]",
+            "atmosComp [SulphurDioxide >= 100]"
+          ]
+        }
+      ]
+    }
+
+  ]
+}
+

@@ -1,0 +1,493 @@
+{
+  "genus": "Tussock",
+  "commonChildren": [
+    { "variant": "Yellow", "query": [ " star [F,N]" ] },
+    { "variant": "Lime", "query": [ "   star [G]" ] },
+    { "variant": "Green", "query": [ "  star [K]" ] },
+    { "variant": "Emerald", "query": [ "star [M]" ] },
+    { "variant": "Sage", "query": [ "   star [L]" ] },
+    { "variant": "Teal", "query": [ "   star [T]" ] },
+    { "variant": "Red", "query": [ "    star [Y]" ] },
+    { "variant": "Orange", "query": [ " star [W]" ] },
+    { "variant": "Maroon", "query": [ " star [D]" ] }
+  ],
+  "query": [
+    " gravity [ ~ 0.276]"
+  ],
+  "children": [
+
+    {
+      "species": "Albata",
+      "query": [
+        "# hit count: 23976",
+        "atmosType [CarbonDioxide]",
+        " pressure [0.016 ~ ]",
+        "    temp [175 ~ 180]",
+        "volcanism [None]",
+        "atmosComp [CarbonDioxide >= 100 | SulphurDioxide >= 0.99]",
+        "  regions [Sagittarius-CarinaArm,PerseusArm,3,7]"
+      ],
+      "children": [
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 17379",
+            "    body [Rocky]",
+            " gravity [ ~ 0.238]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 6597",
+            "    body [HMC]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Capillum",
+      "query": [
+        "# hit count: 11101",
+        "     temp [80 ~ 129]"
+      ],
+      "children": [
+        {
+          "query": [
+            "# hit count: 5041",
+            "atmosType [Argon]"
+          ],
+          "children": [
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 4",
+                "     body [Rocky]",
+                "  gravity [0.269 ~ ]",
+                " pressure [0.002 ~ ]"
+              ]
+            },
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 9681",
+                "     body [RockyIce]",
+                "  gravity [0.22 ~ ]"
+              ]
+            }
+          ]
+        },
+        {
+          "query": [
+            "# hit count: 1416",
+            "atmosType [Methane]",
+            "atmosComp [Methane >= 100]"
+          ],
+          "children": [
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 599",
+                "     body [Rocky]"
+              ]
+            },
+            {
+              "useCommonChildren": true,
+              "query": [
+                "# hit count: 417",
+                "     body [RockyIce]",
+                "volcanism [None]"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Caputus",
+      "query": [
+        "# hit count: 26553",
+        "atmosType [CarbonDioxide]",
+        "     temp [181 ~ 190]",
+        " pressure [0.0276 ~ ]",
+        "volcanism [None]",
+        "atmosComp [CarbonDioxide >= 100 | SulphurDioxide >= 0.99]",
+        "  regions [Sagittarius-CarinaArm,PerseusArm,3,7]"
+      ],
+      "children": [
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 18492",
+            "   body [Rocky]",
+            "gravity [ ~ 0.238]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 8061",
+            "   body [HMC]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Catena",
+      "query": [
+        "# hit count: 16314",
+        "atmosType [Ammonia]",
+        "atmosComp [Ammonia >= 100]",
+        "  regions [Scutum-CentaurusArm]"
+      ],
+      "children": [
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 7011",
+            "     body [Rocky]",
+            "volcanism [None,Major Silicate Vapour Geysers,Metallic Magma,Minor Metallic Magma,Minor Rocky Magma,Minor Water Magma]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 2047",
+            "     body [HMC]",
+            "volcanism [None,Major Rocky Magma,Major Silicate Vapour Geysers]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Cultro",
+      "query": [
+        "# hit count: 55849",
+        "atmosType [Ammonia]",
+        "atmosComp [Ammonia >= 100]",
+        "  regions [Orion-CygnusArm,CentreLeft]"
+      ],
+      "children": [
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 35957",
+            "     body [Rocky]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 19892",
+            "     body [HMC]",
+            "volcanism [None,Major Silicate Vapour Geysers,Minor Metallic Magma]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Divisa",
+      "query": [
+        "# hit count: 20462",
+        "atmosType [Ammonia]",
+        "atmosComp [Ammonia >= 100]",
+        "  regions [PerseusArm,3]"
+      ],
+      "children": [
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 11458",
+            "     body [Rocky]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 9004",
+            "     body [HMC]",
+            "volcanism [None,Major Rocky Magma,Minor Carbo Dioxide Geysers,Minor Silicate Vapour Geysers]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Ignis",
+      "query": [
+        "# hit count: 44561",
+        "atmosType [CarbonDioxide]",
+        "     temp [161 ~ 170]",
+        " pressure [0.0028 ~ 0.053]",
+        "volcanism [None]",
+        "atmosComp [CarbonDioxide >= 100 | SulphurDioxide >= 0.99]",
+        "  regions [Sagittarius-CarinaArm,PerseusArm,3,7]"
+      ],
+      "children": [
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 37587",
+            "     body [Rocky]",
+            "  gravity [ ~ 0.171]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 6974",
+            "     body [HMC]",
+            "  gravity [ ~ 0.196]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Pennata",
+      "query": [
+        "# hit count: 7776",
+        "atmosType [CarbonDioxide]",
+        "     temp [145 ~ 154]",
+        " pressure [0.0028 ~ 0.0113]",
+        "volcanism [None]",
+        "atmosComp [CarbonDioxide >= 100 | SulphurDioxide >= 0.99]",
+        "  regions [Sagittarius-CarinaArm,PerseusArm,3,7]"
+      ],
+      "children": [
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 7274",
+            "     body [Rocky]",
+            "  gravity [ ~ 0.79]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 502",
+            "     body [HMC]",
+            "  gravity [ ~ 0.09]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Pennatis",
+      "query": [
+        "# hit count: 26134",
+        "atmosType [CarbonDioxide]",
+        "     temp [146 ~ 195.41]",
+        " pressure [0.002 ~ ]",
+        "volcanism [None]",
+        "atmosComp [CarbonDioxide >= 100 | SulphurDioxide >= 0.99]",
+        "  regions [OuterArm,CentreRight]"
+      ],
+      "children": [
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 21027",
+            "     body [Rocky]",
+            "  gravity [ ~ 0.238]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 5107",
+            "     body [HMC]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Propagito",
+      "query": [
+        "# hit count: 42460",
+        "atmosType [CarbonDioxide]",
+        "     temp [145 ~ 195.41]",
+        " pressure [0.0029 ~ ]",
+        "volcanism [None]",
+        "atmosComp [CarbonDioxide >= 100 | SulphurDioxide >= 0.99]",
+        "  regions [Scutum-CentaurusArm,CentreLeft]"
+      ],
+      "children": [
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 37259",
+            "     body [Rocky]",
+            "  gravity [ ~ 0.238]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 5201",
+            "     body [HMC]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Serrati",
+      "query": [
+        "# hit count: 17197",
+        "atmosType [CarbonDioxide]",
+        "    temp [171 ~ 174]",
+        "pressure [0.01 ~ ]",
+        "volcanism [None]",
+        "atmosComp [CarbonDioxide >= 100 | SulphurDioxide >= 0.99]",
+        "  regions [Sagittarius-CarinaArm,PerseusArm,3,7]"
+      ],
+      "children": [
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 14125",
+            "    body [Rocky]",
+            " gravity [ ~ 0.198]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 3072",
+            "    body [HMC]",
+            " gravity [ ~ 0.227]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Stigmasis",
+      "query": [
+        "# hit count: 2946",
+        "atmosType [SulphurDioxide]",
+        " pressure [ ~ 0.022]",
+        "atmosComp [SulphurDioxide >= 100]"
+      ],
+      "children": [
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 2662",
+            "     body [Rocky]",
+            "     temp [132 ~ 168]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 135",
+            "     body [HMC]",
+            "     temp [ ~ 152]",
+            "volcanism [None]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Triticum",
+      "query": [
+        "# hit count: 8748",
+        "atmosType [CarbonDioxide]",
+        "     temp [191 ~ 195.41]",
+        " pressure [0.058 ~ ]",
+        "volcanism [None]",
+        "atmosComp [CarbonDioxide >= 100 | SulphurDioxide >= 0.99]",
+        "  regions [Sagittarius-CarinaArm,PerseusArm,3,7]"
+      ],
+      "children": [
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 5071",
+            "     body [Rocky]",
+            "  gravity [ ~ 0.238]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 3677",
+            "     body [HMC]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Ventusa",
+      "query": [
+        "# hit count: 14569",
+        "atmosType [CarbonDioxide]",
+        "     temp [155 ~ 160]",
+        " pressure [0.0029 ~ 0.022]",
+        "atmosComp [CarbonDioxide >= 100 | SulphurDioxide >= 0.99]",
+        "  regions [Sagittarius-CarinaArm,PerseusArm,3,7]"
+      ],
+      "children": [
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 13060",
+            "     body [Rocky]",
+            "  gravity [ ~ 0.16]",
+            "volcanism [None,Minor Carbon Dioxide Geysers]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 1509",
+            "     body [HMC]",
+            "  gravity [ ~ 0.13]",
+            "volcanism [None]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Virgam",
+      "query": [
+        "# hit count: 13574",
+        "atmosType [Water]",
+        "     temp [390 ~ ]",
+        " pressure [0.05 ~ ]",
+        "atmosComp [Water >= 100]"
+      ],
+      "children": [
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 8280",
+            "     body [Rocky]",
+            "volcanism [None,Minor Water Magma]"
+          ]
+        },
+        {
+          "useCommonChildren": true,
+          "query": [
+            "# hit count: 5294",
+            "     body [HMC]",
+            "volcanism [None]"
+          ]
+        }
+      ]
+    }
+  ]
+}
