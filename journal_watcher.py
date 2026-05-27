@@ -444,8 +444,10 @@ class JournalWatcher:
                     "is_new_entry": bool(data.get("IsNewEntry")),
                     "is_new_sample": bool(data.get("IsNewSample")),
                     "is_complete": bool(data.get("IsComplete")),
-                    "body_name": data.get("BodyName") or data.get("Body"),
-                    "body_id": data.get("BodyID"),
+                    # ScanOrganic uses "Body" (integer) for the body ID, not "BodyID".
+                    # "BodyName" is not present in this event.
+                    "body_name": data.get("BodyName") or "",
+                    "body_id": data.get("BodyID") if data.get("BodyID") is not None else data.get("Body"),
                     "system_address": data.get("SystemAddress"),
                     "max_samples": data.get("MaxSamples", 3),
                     "biome": data.get("Biome"),
