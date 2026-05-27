@@ -455,6 +455,27 @@ class JournalWatcher:
                     "sample_distance": data.get("SampleDistance")
                 }
             }
+        if ev == "CodexEntry":
+            # Category for geological features: "$Codex_Category_Geology;"
+            # Category for biological features: "$Codex_Category_Biology;"
+            category     = data.get("Category", "")
+            category_loc = data.get("Category_Localised", "")
+            is_geological = (
+                category == "$Codex_Category_Geology;"
+                or category_loc.lower() == "geology"
+            )
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "body_id":       data.get("BodyID"),
+                    "body_name":     data.get("NearestDestination_Localised") or data.get("NearestDestination") or "",
+                    "system_address": data.get("SystemAddress"),
+                    "name":          data.get("Name_Localised") or data.get("Name") or "",
+                    "category":      category_loc or category,
+                    "is_geological": is_geological,
+                }
+            }
         if ev == "Scan":
             star_type = data.get("StarType")
             planet_class = data.get("PlanetClass")
