@@ -1,6 +1,7 @@
 import json
 import os
 import tkinter as tk
+import tkinter.messagebox
 
 from config import CONFIG_FILE, DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
 
@@ -17,7 +18,7 @@ UI_FONT_BOLD = ("Segoe UI", 9, "bold")
 UI_MONO = ("Consolas", 9)
 
 
-def open_settings(root, config, on_save_callback):
+def open_settings(root, config, on_save_callback, carrier_tracker=None):
     win = tk.Toplevel(root)
     win.title("SYSTEM CONFIGURATION")
     win.geometry(config.get("settings_geometry", "720x620"))
@@ -113,10 +114,11 @@ def open_settings(root, config, on_save_callback):
 
     ov_var = tk.BooleanVar(value=config.get("overlay_enabled", True))
     cargo_var = tk.BooleanVar(value=config.get("cargo_overlay_enabled", False))
-    scan_var = tk.BooleanVar(value=config.get("scan_overlay_enabled", True))
+    prosp_var = tk.BooleanVar(value=config.get("prospector_overlay_enabled", True))
     create_toggle(sec_gen, "Tactical Overlay", ov_var)
     create_toggle(sec_gen, "Cargo Manifest Overlay", cargo_var)
-    create_toggle(sec_gen, "Scan Results Overlay", scan_var)
+    create_toggle(sec_gen, "Prospector Result Overlay", prosp_var)
+    prosp_timeout_e = create_input(sec_gen, "Prospector Overlay Auto-Hide (seconds)  —  60 = 1 min  ·  120 = 2 min  ·  300 = 5 min", "prospector_hud_timeout_s")
     tk.Frame(sec_gen, bg=UI_PANEL, height=10).pack(fill=tk.X)
 
     sec_ss = panel(body, "SCREENSHOTS")
@@ -127,6 +129,26 @@ def open_settings(root, config, on_save_callback):
         config["screenshots_path"] = os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous")
     ss_e = create_input(sec_ss, "Watch Folder", "screenshots_path")
 
+    sec_fc = panel(body, "FLEET CARRIER")
+    fc_wh_e = create_input(sec_fc, "Discord Webhook URL  (leave empty to disable notifications)", "carrier_discord_webhook_url")
+
+    def _test_discord():
+        url = fc_wh_e.get().strip()
+        if not url:
+            tk.messagebox.showwarning("No URL", "Enter a webhook URL first.", parent=win)
+            return
+        if carrier_tracker is not None:
+            import threading
+            threading.Thread(target=carrier_tracker.send_test_discord, args=(url,), daemon=True).start()
+            tk.messagebox.showinfo("Test Sent", "Test message dispatched — check your Discord channel.", parent=win)
+        else:
+            tk.messagebox.showinfo("Not Available", "Carrier tracker not connected; save and reopen settings.", parent=win)
+
+    btn_row_fc = tk.Frame(sec_fc, bg=UI_PANEL)
+    btn_row_fc.pack(fill=tk.X, padx=12, pady=(0, 10))
+    action_button(btn_row_fc, "Send Test Message", _test_discord).pack(side=tk.LEFT)
+    tk.Frame(sec_fc, bg=UI_PANEL, height=2).pack(fill=tk.X)
+
     def remove_deprecated_keys():
         for key in ("edsm_cmdr_name", "edsm_api_key", "edsm_enabled", *DEPRECATED_CONFIG_KEYS):
             config.pop(key, None)
@@ -136,9 +158,13 @@ def open_settings(root, config, on_save_callback):
             "journal_path": j_e.get().strip(),
             "overlay_enabled": ov_var.get(),
             "cargo_overlay_enabled": cargo_var.get(),
-            "scan_overlay_enabled": scan_var.get(),
+            "prospector_overlay_enabled": prosp_var.get(),
+            "prospector_hud_timeout_s": max(5, int(prosp_timeout_e.get().strip() or 45))
+                if prosp_timeout_e.get().strip().isdigit() else
+                config.get("prospector_hud_timeout_s", 45),
             "screenshots_enabled": ss_var.get(),
             "screenshots_path": ss_e.get().strip(),
+            "carrier_discord_webhook_url": fc_wh_e.get().strip(),
             "settings_geometry": win.geometry(),
         })
         remove_deprecated_keys()

@@ -16,7 +16,6 @@ from config import (
 from version import APP_VERSION
 from hud import TacticalHUD
 from cargo_hud import CargoHUD
-from scan_hud import ScanHUD
 from edsm_handler import EDSMHandler
 from screenshot_handler import ScreenshotHandler
 from settings_ui import open_settings
@@ -24,10 +23,14 @@ from route_plotter import RoutePlotter
 from waypoint_manager import WaypointManager
 from journal_watcher import JournalWatcher
 from mining_window import MiningWindow
+from carrier_tracker import CarrierTracker
+from carrier_window import CarrierWindow
+from prospector_hud import ProspectorHUD
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
 from dashboard_scan_mixin import DashboardScanMixin
+from colonization_window import ColonizationWindow, save_colonisation_data, load_colonisation_data
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
@@ -65,8 +68,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.scan_items = []
         self.scan_items_by_id = {}
         self.in_fss = False
-        self.scan_hud_hide_job = None
-        self.scan_hud_hide_delay_ms = 30000
         self.fss_summary_active = False
         self.body_signals = {}
         self.body_dss_complete = set()
@@ -75,6 +76,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.cmdr_name = "CMDR"
         self.last_scan_event = None
         self.last_bio_scan = {}
+        # Bio tracking: star/body scan conditions for prediction
+        self.system_stars: dict  = {}   # body_id → star_type str
+        self.body_scan_data: dict = {}  # body_id → conditions dict
+        self.current_body_id    = None  # from ApproachBody
+        self.current_body_name  = ""
+        # Colonization tracking
+        self.colonisation_projects: dict = {}  # market_id → project dict
+        self.current_colonisation_market: int | None = None
         self.cargo_capacity = 0
         self.last_journal_event_ts = 0.0
         self.last_logged_journal_file = None
@@ -164,7 +173,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             trace_callback=self._trace_record_ms,
         )
         self.mining_window = None
-        
+        self.carrier_window = None
+        self.colonization_window = None
+        self._carrier_panel_tick_job = None
+        self.carrier_tracker = CarrierTracker()
+        self.carrier_tracker.set_config(self.config)
+        self.carrier_tracker.on_panel_updated = self._on_carrier_panel_updated
+        self.carrier_tracker.on_status_changed = self._on_carrier_status_changed
+
         if self.config.get("overlay_enabled", True):
             self.hud = TacticalHUD(self.root, self.config, on_widget_click=self._on_hud_widget_click)
             try:
@@ -187,16 +203,25 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         else:
             self.cargo_hud = None
 
-        if self.config.get("scan_overlay_enabled", True):
-            self.scan_hud = ScanHUD(self.root, self.config)
-            self.scan_hud.hide()
+        if self.config.get("prospector_overlay_enabled", True):
+            self.prospector_hud = ProspectorHUD(self.root, self.config)
         else:
-            self.scan_hud = None
+            self.prospector_hud = None
 
-        
         self.db_lock = threading.RLock()
         self.batch_mode = False
         self.init_db()
+        self.colonisation_projects = self.db_load_colonisation_projects()
+        # Merge JSON store (carries notes and any extra fields the DB doesn't have)
+        _json_projects = load_colonisation_data()
+        for mid, jp in _json_projects.items():
+            if mid in self.colonisation_projects:
+                # Copy over fields present in JSON but absent in DB (e.g. notes)
+                for k, v in jp.items():
+                    if k not in self.colonisation_projects[mid] or not self.colonisation_projects[mid].get(k):
+                        self.colonisation_projects[mid][k] = v
+            else:
+                self.colonisation_projects[mid] = jp
         self.import_scan_cache_json()
         
         self.watcher = JournalWatcher(
@@ -213,9 +238,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         self.watcher.start()
         self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
-        
+
         self.watcher.force_check_status()
-        
+
+        journal_path = self.config.get("journal_path") or getattr(self.watcher, "journal_path", None)
+        threading.Thread(
+            target=self.carrier_tracker.scan_journal_history,
+            args=(journal_path,),
+            daemon=True,
+        ).start()
+
         threading.Thread(target=self.check_updates, daemon=True).start()
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -226,6 +258,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.root.after(120, self._reapply_overlay_positions)
         self.update_hud()
         self.update_ground_target_ui()
+        self.update_carrier_panel()
         self._tick_ground_target()
         self._tick_session_clock()
         self._tick_ui_stall_watchdog()
@@ -321,15 +354,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     changed = True
         except Exception:
             pass
-        try:
-            if self.scan_hud and self.scan_hud.win and self.scan_hud.win.winfo_exists():
-                pos = (int(self.scan_hud.win.winfo_x()), int(self.scan_hud.win.winfo_y()))
-                if self._overlay_pos_last_saved.get("scan") != pos:
-                    self._overlay_pos_last_saved["scan"] = pos
-                    self.config["scan_hud_x"], self.config["scan_hud_y"] = pos
-                    changed = True
-        except Exception:
-            pass
         if changed:
             self._save_config_file()
         self.root.after(700, self._tick_overlay_position_sync)
@@ -377,6 +401,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.route_plotter.on_close()
         if self.mining_window and self.mining_window.is_open():
             self.mining_window.on_close()
+        if self.colonization_window and self.colonization_window.is_open():
+            self.colonization_window._on_close()
             
         self.watcher.stop()
         self.screenshots.stop()
@@ -390,12 +416,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if self.cargo_hud and self.cargo_hud.win and self.cargo_hud.win.winfo_exists():
                 self.config["cargo_hud_x"] = int(self.cargo_hud.win.winfo_x())
                 self.config["cargo_hud_y"] = int(self.cargo_hud.win.winfo_y())
-        except Exception:
-            pass
-        try:
-            if self.scan_hud and self.scan_hud.win and self.scan_hud.win.winfo_exists():
-                self.config["scan_hud_x"] = int(self.scan_hud.win.winfo_x())
-                self.config["scan_hud_y"] = int(self.scan_hud.win.winfo_y())
         except Exception:
             pass
         self.config["main_geometry"] = self.root.geometry()
@@ -525,6 +545,97 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         except Exception:
             pass
 
+    def open_carrier_window(self):
+        if self.carrier_window and self.carrier_window.is_open():
+            self.carrier_window.win.lift()
+            return
+        self.carrier_window = CarrierWindow(self.root, self.config, self.carrier_tracker)
+
+    def open_colonization_window(self):
+        if self.colonization_window and self.colonization_window.is_open():
+            self.colonization_window.lift()
+            return
+        self.colonization_window = ColonizationWindow(
+            self.root,
+            self.config,
+            self.colonisation_projects,
+            save_colonisation_data,
+        )
+
+    # ------------------------------------------------------------------
+    # Bio overlay helpers
+    # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # Carrier dashboard panel + event-feed callbacks
+    # ------------------------------------------------------------------
+
+    def _on_carrier_status_changed(self, old_status, new_status, carrier_data):
+        """Push carrier status transitions into the dashboard Live Event Timeline."""
+        try:
+            name     = carrier_data.get("name") or "Fleet Carrier"
+            callsign = carrier_data.get("callsign") or ""
+            label    = f"{name} ({callsign})" if callsign else name
+
+            if new_status == "jumping":
+                dest = carrier_data.get("jump_destination") or "?"
+                dep  = carrier_data.get("jump_departure_time") or ""
+                dep_txt = ""
+                if dep:
+                    try:
+                        from datetime import datetime, timezone
+                        dt = datetime.fromisoformat(dep.replace("Z", "+00:00"))
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        dep_txt = f"  dep {dt.astimezone().strftime('%H:%M')}"
+                    except Exception:
+                        pass
+                msg = f"FC {label}: jump plotted → {dest}{dep_txt}"
+                self.root.after(0, lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="INFO"))
+
+            elif new_status == "cooldown":
+                system = carrier_data.get("system") or "?"
+                msg = f"FC {label}: arrived at {system}"
+                self.root.after(0, lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="INFO"))
+
+            elif new_status == "cooldown_cancel":
+                msg = f"FC {label}: jump cancelled"
+                self.root.after(0, lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="WARN"))
+
+            elif old_status in ("cooldown", "cooldown_cancel") and new_status == "idle":
+                system = carrier_data.get("system") or "?"
+                msg = f"FC {label}: cooldown complete @ {system}"
+                self.root.after(0, lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="INFO"))
+        except Exception:
+            pass
+
+    def _on_carrier_panel_updated(self, carrier_data):
+        """Fired by CarrierTracker whenever state changes (persistent hook)."""
+        try:
+            self.root.after(0, self.update_carrier_panel)
+            if carrier_data.get("status") == "jumping":
+                self.root.after(0, self._ensure_carrier_panel_ticker)
+        except Exception:
+            pass
+
+    def _ensure_carrier_panel_ticker(self):
+        """Start the 1-second countdown ticker if not already running."""
+        if self._carrier_panel_tick_job is not None:
+            return
+        self._tick_carrier_panel()
+
+    def _tick_carrier_panel(self):
+        """Refresh the carrier panel every second while the carrier is jumping."""
+        self._carrier_panel_tick_job = None
+        if not self.is_running:
+            return
+        status = self.carrier_tracker.carrier_data.get("status", "idle")
+        if status == "jumping":
+            self.update_carrier_panel()
+            self._carrier_panel_tick_job = self.root.after(1000, self._tick_carrier_panel)
+        # Ticker stops naturally when status is no longer jumping;
+        # _on_carrier_panel_updated will have already refreshed the panel.
+
     def _on_route_event(self, tag, message, severity="INFO", copy_text=None, system_name=None, pinned=False):
         if not message:
             return
@@ -613,18 +724,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.cargo_hud.win.destroy()
                     self.cargo_hud = None
 
-            # Live Toggle: Scan HUD
-            if self.config.get("scan_overlay_enabled", True):
-                if self.scan_hud is None:
-                    self.scan_hud = ScanHUD(self.root, self.config)
-                self.update_scan_hud()
-            else:
-                if self.scan_hud:
-                    self.scan_hud.win.destroy()
-                    self.scan_hud = None
-
-        
-        open_settings(self.root, self.config, on_save)
+        open_settings(self.root, self.config, on_save, carrier_tracker=self.carrier_tracker)
 
     def fetch_system_traffic(self, system_name):
         self.last_edsm_request_ts = time.time()
@@ -908,7 +1008,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.log(f"Journal file: {os.path.basename(current_journal)}")
         if self.mining_window and self.mining_window.is_open():
             self.mining_window.process_event(data)
-        
+
+        # Route carrier events defensively — a tracker failure must not cascade
+        # into the main navigation if/elif chain (fix #2).
+        if ev and ev.startswith("Carrier"):
+            try:
+                self.carrier_tracker.process_event(raw)
+            except Exception as _ct_err:
+                logging.warning(f"CarrierTracker.process_event error [{ev}]: {_ct_err}")
+
         if ev in ("FileHeader", "Fileheader"):
             self.log(f"Game version detected: {d.get('gameversion')} ({d.get('build')})")
 
@@ -938,7 +1046,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if not self._matches_current_system_address(d):
                 return
             body_id = self._normalize_body_id(d.get("body_id"))
-            body_label = d.get("body_name") or (f"Body {body_id}" if body_id is not None else "Unknown Body")
+            # ScanOrganic doesn't include BodyName — look it up from the Scan
+            # event cache (scan_items_by_id) which does have it.
+            _scan_item = self.scan_items_by_id.get(body_id, {}) if body_id is not None else {}
+            body_label = (d.get("body_name")
+                          or _scan_item.get("name")
+                          or (f"Body {body_id}" if body_id is not None else "Unknown Body"))
             species = d.get("species") or d.get("genus") or "Organic"
             species_key = f"{body_id}|{species}" if body_id is not None else f"{body_label}|{species}"
 
@@ -947,14 +1060,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             was_complete = bool(existing.get("is_complete"))
 
             self.last_bio_scan[species_key] = {
-                "body_id": body_id,
-                "body_name": body_label,
-                "species": species,
-                "sample_idx": d.get("sample_idx"),
-                "scan_type": d.get("scan_type"),
-                "is_new_entry": bool(d.get("is_new_entry")),
-                "is_new_sample": bool(d.get("is_new_sample")),
-                "is_complete": is_complete,
+                "body_id":        body_id,
+                "body_name":      body_label,
+                "species":        species,
+                "genus":          d.get("genus"),
+                "sample_idx":     d.get("sample_idx"),
+                "max_samples":    d.get("max_samples", 3),
+                "scan_type":      d.get("scan_type"),
+                "is_new_entry":   bool(d.get("is_new_entry")),
+                "is_new_sample":  bool(d.get("is_new_sample")),
+                "is_complete":    is_complete,
+                "system_address": self.current_system_address,
             }
 
             if is_complete and not was_complete:
@@ -969,20 +1085,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.update_hud()
                 self.schedule_dashboard_refresh()
 
-        elif ev == "Location" or ev == "FSDJump" or ev == "StartJump":
+        elif ev == "Location" or ev == "FSDJump" or ev == "StartJump" or (ev == "CarrierJump" and d.get("docked")):
             # Do not update HUDs during jump charge; wait for arrival.
             if ev == "StartJump":
-                if self.scan_hud:
-                    self.scan_hud.hide()
-                    self.in_fss = False
-                    self.fss_summary_active = False
+                self.in_fss = False
+                self.fss_summary_active = False
                 return
 
-            is_jump = ev == "FSDJump"
-            
-            # Hide scan HUD on jump completion
-            if ev == "FSDJump" and self.scan_hud:
-                self.scan_hud.hide()
+            # CarrierJump counts as a jump for the player when they are docked on board.
+            is_jump = ev in ("FSDJump", "CarrierJump")
+
+            # Reset FSS state on jump completion
+            if is_jump:
                 self.in_fss = False
                 self.fss_summary_active = False
 
@@ -1014,6 +1128,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.system_bio_signals = 0
             self.last_scan_event = None
             self.last_bio_scan = {}
+            self.system_stars.clear()
+            self.body_scan_data.clear()
+            self.current_body_id   = None
+            self.current_body_name = ""
             self.valuable_system = False
             self.valuable_bodies.clear()
             self.system_traffic = {'day': 0, 'week': 0, 'total': 0}
@@ -1025,10 +1143,19 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.fss_summary_active = False
             self._rebuild_scan_index()
 
-            log_msg = f"JUMP: {self.current_sys}" if is_jump else f"LOCATION: {self.current_sys}"
+            if ev == "CarrierJump":
+                log_msg = f"CARRIER JUMP: {self.current_sys}"
+                evt_tag = "FC JUMP"
+                evt_msg = f"Carrier arrived: {self.current_sys}"
+            elif is_jump:
+                log_msg = f"JUMP: {self.current_sys}"
+                evt_tag = "JUMP"
+                evt_msg = f"Arrived: {self.current_sys}"
+            else:
+                log_msg = f"LOCATION: {self.current_sys}"
+                evt_tag = "SYSTEM"
+                evt_msg = f"Location set: {self.current_sys}"
             self.log(log_msg)
-            evt_tag = "JUMP" if is_jump else "SYSTEM"
-            evt_msg = f"{'Arrived' if is_jump else 'Location set'}: {self.current_sys}"
             self.add_event_feed_entry(evt_tag, evt_msg, severity="INFO", copy_text=self.current_sys, url=f"https://www.edsm.net/show-system?systemName={self.current_sys.replace(' ', '+')}")
             
             if not self.batch_mode:
@@ -1063,8 +1190,24 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 return
             if d.get("system_name") and d.get("system_name") != self.current_sys:
                 return
-            self.total = d.get("body_count", self.total)
+            body_count = int(d.get("body_count") or 0)
+            # Only advance total — never let a missing/zero BodyCount wipe a
+            # value that load_system_from_db already restored from the DB.
+            if body_count > 0:
+                self.total = max(body_count, self.total)
             self.fss_all_bodies = False
+            # Progress=1.0 means every body in this system is already known/discovered
+            # (e.g. Sol and other pre-populated systems). Treat it as fully scanned so
+            # the HUD shows 100% without requiring individual FSS body scans.
+            progress = d.get("progress", raw.get("Progress") if isinstance(raw, dict) else None)
+            try:
+                progress = float(progress) if progress is not None else None
+            except (TypeError, ValueError):
+                progress = None
+            if progress is not None and progress >= 1.0 and self.total > 0:
+                self.scanned = self.total
+                # Ensure scanned_bodies count is consistent; individual IDs are
+                # populated later as NavBeaconDetail/AutoScan events arrive.
             self.db_update_system(self.current_sys, self.total, self.scanned)
             if not self.batch_mode:
                 self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
@@ -1103,7 +1246,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if not self._matches_current_system_address(d):
                 return
             if d.get("system_name") and d.get("system_name") == self.current_sys:
-                self.total = d.get("count", self.total)
+                count = d.get("count", self.total)
+                if count > 0:
+                    self.total = count
+                # All bodies found → mark as fully scanned.
+                self.scanned = self.total
+                # Persist all scan_item body IDs we have so return visits restore correctly.
+                for item in self.scan_items:
+                    bid = item.get("body_id")
+                    if bid is not None and bid not in self.scanned_bodies:
+                        self.scanned_bodies.add(bid)
+                        self.db_add_body(self.current_sys, bid)
                 self.fss_all_bodies = True
                 self.db_update_system(self.current_sys, self.total, self.scanned)
                 if not self.batch_mode:
@@ -1187,6 +1340,26 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if not self.batch_mode:
                     self.schedule_dashboard_refresh()
                     self.update_hud()
+
+            # Track star types for bio prediction: build parent-star lookup
+            if star_type:
+                self.system_stars[body_id] = star_type
+
+            # Store planet conditions for bio prediction when we have a planet scan
+            if d.get("planet_class") and body_id is not None:
+                self.body_scan_data[body_id] = {
+                    "body_name":        body_name,
+                    "planet_class":     d.get("planet_class", ""),
+                    "surface_gravity":  d.get("surface_gravity"),
+                    "surface_temp":     d.get("surface_temp"),
+                    "surface_pressure": d.get("surface_pressure"),
+                    "atmosphere_type":  d.get("atmosphere_type", ""),
+                    "volcanism":        d.get("volcanism", ""),
+                    "materials":        d.get("materials") or {},
+                    "atmos_comp":       d.get("atmos_comp") or {},
+                    "parents":          d.get("parents") or [],
+                    "bio_signals_count": d.get("bio_signals_count", 0),
+                }
             
             # Only count scans of stars or planets/moons, not belts.
             if d.get("is_body_scan"):
@@ -1199,8 +1372,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if is_new_body_scan:
                     # --- State Updates for a new body ---
                     self.scanned_bodies.add(body_id)
-                    self.scanned += 1
                     self.db_add_body(self.current_sys, body_id)
+                    # Derive scanned from len(scanned_bodies) rather than a raw increment.
+                    # This prevents double-counting when scanned was pre-loaded from
+                    # systems.scanned_count (e.g. after FSSAllBodiesFound) without having
+                    # the individual body IDs in the bodies table.
+                    new_count = len(self.scanned_bodies)
+                    if new_count > self.scanned:
+                        self.scanned = new_count
                     self.db_update_system(self.current_sys, self.total, self.scanned)
                     if not self.batch_mode:
                         self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
@@ -1259,43 +1438,102 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.update_hud()
                         self.schedule_dashboard_refresh()
 
+        # ── Colonization ──────────────────────────────────────────────────────────
+        if ev == "ColonisationConstructionDepot":
+            mid = d.get("market_id")
+            if mid is not None:
+                self.current_colonisation_market = mid
+                # Preserve existing notes when refreshing from depot event
+                _existing = self.colonisation_projects.get(mid, {})
+                self.colonisation_projects[mid] = {
+                    "market_id":    mid,
+                    "system_name":  d.get("system_name", ""),
+                    "body_name":    d.get("body_name", ""),
+                    "progress":     d.get("progress", 0.0),
+                    "complete":     d.get("complete", False),
+                    "failed":       d.get("failed", False),
+                    "resources":    d.get("resources", []),
+                    "last_updated": time.time(),
+                    "notes":        _existing.get("notes", ""),
+                }
+                self.db_save_colonisation_project(self.colonisation_projects[mid])
+                if not self.batch_mode:
+                    save_colonisation_data(self.colonisation_projects)
+                    if self.colonization_window and self.colonization_window.is_open():
+                        self.colonization_window.refresh()
+
+        elif ev == "ColonisationContribution":
+            mid = d.get("market_id")
+            if mid in self.colonisation_projects:
+                proj = self.colonisation_projects[mid]
+                proj["progress"] = d.get("progress", proj.get("progress", 0))
+                proj["last_updated"] = time.time()
+                contribs = {c["name"].lower(): c["count"] for c in (d.get("contributions") or [])}
+                for r in proj.get("resources", []):
+                    delta = contribs.get(r["name"].lower(), 0)
+                    if delta:
+                        r["provided"] = min(r["required"], r.get("provided", 0) + delta)
+                self.db_save_colonisation_project(proj)
+                if not self.batch_mode:
+                    save_colonisation_data(self.colonisation_projects)
+                    if self.colonization_window and self.colonization_window.is_open():
+                        self.colonization_window.refresh()
+
+        # ── ApproachBody / LeaveBody ──────────────────────────────────────────────
+        if ev == "ApproachBody" and not self.batch_mode:
+            self.current_body_id   = self._normalize_body_id(d.get("body_id"))
+            self.current_body_name = d.get("body_name") or ""
+        elif ev == "LeaveBody" and not self.batch_mode:
+            self.current_body_id   = None
+            self.current_body_name = ""
+
+        # ── Prospector overlay — live events only, skip journal replay on startup ──
+        if self.prospector_hud and not self.batch_mode:
+            if ev == "ProspectedAsteroid":
+                self.root.after(0, lambda r=raw: self.prospector_hud.update(r))
+            elif ev == "MiningRefined":
+                mat = raw.get("Type_Localised") or raw.get("Type") or ""
+                self.root.after(0, lambda m=mat: self.prospector_hud.add_refined(m))
+
     def process_batch(self, events):
         self.batch_mode = True
         try:
             with self.db_lock:
-                try:
-                    self.conn.execute("BEGIN TRANSACTION")
-                    in_transaction = True
-                except Exception as e:
-                    in_transaction = False
-                    logging.warning(f"Batch transaction unavailable: {e}")
+                # Let Python's sqlite3 implicit transaction management handle
+                # BEGIN automatically — explicit BEGIN here conflicts with any
+                # implicit transaction already open (e.g. from the startup seed).
                 for ev in events:
                     try:
                         self.process_event(ev)
                     except Exception as e:
                         ev_type = ev.get("type") if isinstance(ev, dict) else "UNKNOWN"
                         logging.warning(f"Batch event failed [{ev_type}]: {e}")
-                if in_transaction:
+                try:
+                    self.conn.commit()
+                except Exception as e:
+                    logging.warning(f"Batch commit failed: {e}")
                     try:
-                        self.conn.commit()
-                    except Exception as e:
-                        logging.warning(f"Batch commit failed: {e}")
-                        try:
-                            self.conn.rollback()
-                        except Exception:
-                            pass
+                        self.conn.rollback()
+                    except Exception:
+                        pass
         finally:
             self.batch_mode = False
-        self.root.after(0, self.update_dashboard_ui)
-        self.root.after(0, self.update_hud)
-        
+
         if self.is_first_load:
             self.is_first_load = False
             self.last_traffic_system = self.current_sys
             self.fetch_system_traffic(self.current_sys)
-            self.update_hud()
+            # After startup batch: re-read DB so scan_stat always reflects the
+            # committed authoritative values (fixes cases where in-memory state
+            # diverged during batch processing).
+            sys_snap = self.current_sys
+            def _startup_sync():
+                if sys_snap and sys_snap != "---":
+                    self.load_system_from_db(sys_snap)
+                self.update_dashboard_ui()
+            self.root.after(0, _startup_sync)
+            self.root.after(0, self.update_hud)
             self.root.after(0, self.update_waypoint_display)
-            
             if self.config.get("auto_copy_waypoint", False):
                 next_wp = self.waypoint_manager.get_next_waypoint(self.current_sys)
                 copied_wp = next_wp
@@ -1308,6 +1546,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                             break
                 if copied_wp:
                     self.root.after(0, lambda w=copied_wp, l=log_label: self._copy_waypoint_to_clipboard(w, l))
+        else:
+            self.root.after(0, self.update_dashboard_ui)
+            self.root.after(0, self.update_hud)
 
     def update_cargo(self, inventory):
         self.last_cargo_event_ts = time.time()

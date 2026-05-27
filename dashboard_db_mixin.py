@@ -23,6 +23,12 @@ class DashboardDBMixin:
             self.conn.execute(
                 "CREATE TABLE IF NOT EXISTS scan_hud_items (system_name TEXT, body_id INTEGER, data_json TEXT, ts INTEGER, PRIMARY KEY (system_name, body_id))"
             )
+            self.conn.execute(
+                "CREATE TABLE IF NOT EXISTS colonisation_projects "
+                "(market_id INTEGER PRIMARY KEY, system_name TEXT, body_name TEXT, "
+                " progress REAL, complete INTEGER, failed INTEGER, "
+                " resources_json TEXT, last_updated INTEGER)"
+            )
             self.conn.commit()
 
         if os.path.exists(SCAN_HISTORY_FILE):
@@ -63,7 +69,7 @@ class DashboardDBMixin:
         now = int(time.time())
         with self.db_lock:
             try:
-                self.conn.execute("BEGIN TRANSACTION")
+                bodies_per_system = {}
                 for system_name, items in data.items():
                     if not isinstance(items, list):
                         continue
@@ -82,6 +88,29 @@ class DashboardDBMixin:
                             "INSERT OR REPLACE INTO scan_hud_items (system_name, body_id, data_json, ts) VALUES (?, ?, ?, ?)",
                             (system_name, int(body_id), payload, int(ts)),
                         )
+                        bodies_per_system.setdefault(system_name, set()).add(int(body_id))
+                # Populate bodies and systems tables so scan_stat loads correctly
+                # on the next startup without requiring a full cache rebuild.
+                cur = self.conn.cursor()
+                for system_name, body_ids in bodies_per_system.items():
+                    for bid in body_ids:
+                        self.conn.execute(
+                            "INSERT OR IGNORE INTO bodies (system_name, body_id) VALUES (?, ?)",
+                            (system_name, bid),
+                        )
+                    scanned_count = len(body_ids)
+                    cur.execute("SELECT total, scanned_count FROM systems WHERE name=?", (system_name,))
+                    row = cur.fetchone()
+                    if row:
+                        new_total = max(int(row[0] or 0), scanned_count)
+                        new_sc = max(int(row[1] or 0), scanned_count)
+                    else:
+                        new_total = scanned_count
+                        new_sc = scanned_count
+                    self.conn.execute(
+                        "INSERT OR REPLACE INTO systems (name, total, scanned_count) VALUES (?, ?, ?)",
+                        (system_name, new_total, new_sc),
+                    )
                 self.conn.commit()
             except sqlite3.Error:
                 self.conn.rollback()
@@ -137,7 +166,6 @@ class DashboardDBMixin:
 
             with self.db_lock:
                 try:
-                    self.conn.execute("BEGIN TRANSACTION")
                     for sys_name, info in data.items():
                         total = info.get("total", 0)
                         bodies = info.get("bodies", [])
@@ -176,7 +204,6 @@ class DashboardDBMixin:
         self.log("💾 Saving to database...")
         with self.db_lock:
             try:
-                self.conn.execute("BEGIN TRANSACTION")
                 for sys_name, data in new_history.items():
                     bodies = set(data.get("bodies", []))
                     cursor = self.conn.cursor()
@@ -225,9 +252,14 @@ class DashboardDBMixin:
                 row = cursor.fetchone()
                 if row:
                     self.total = row[0] or 0
+                    # scanned_count may have been set by FSSAllBodiesFound or history
+                    # builder without individual body IDs being written; use it as a floor.
+                    db_scanned_count = row[1] or 0
                     cursor.execute("SELECT body_id FROM bodies WHERE system_name=?", (sys_name,))
                     self.scanned_bodies = set(r[0] for r in cursor.fetchall())
-                    self.scanned = len(self.scanned_bodies)
+                    bodies_count = len(self.scanned_bodies)
+                    # Clamp stored count to total so we never present scanned > total here.
+                    self.scanned = max(bodies_count, min(db_scanned_count, self.total or db_scanned_count))
                     if self.scanned > self.total:
                         self.total = self.scanned
                         self.conn.execute(
@@ -276,3 +308,59 @@ class DashboardDBMixin:
                 self._db_maybe_commit(reason="body")
             except sqlite3.Error as e:
                 self.log(f"❌ DB ERROR (Body): {e}")
+
+    # ── Colonization ──────────────────────────────────────────────────────────
+
+    def db_save_colonisation_project(self, proj: dict):
+        mid = proj.get("market_id")
+        if mid is None:
+            return
+        with self.db_lock:
+            try:
+                self.conn.execute(
+                    "INSERT OR REPLACE INTO colonisation_projects "
+                    "(market_id, system_name, body_name, progress, complete, failed, resources_json, last_updated) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        int(mid),
+                        proj.get("system_name", ""),
+                        proj.get("body_name", ""),
+                        float(proj.get("progress", 0)),
+                        1 if proj.get("complete") else 0,
+                        1 if proj.get("failed") else 0,
+                        json.dumps(proj.get("resources") or []),
+                        int(proj.get("last_updated") or 0),
+                    ),
+                )
+                self._db_maybe_commit(reason="colonisation")
+            except sqlite3.Error as e:
+                self.log(f"❌ DB ERROR (Colonisation): {e}")
+
+    def db_load_colonisation_projects(self) -> dict:
+        projects = {}
+        try:
+            with self.db_lock:
+                cur = self.conn.cursor()
+                cur.execute(
+                    "SELECT market_id, system_name, body_name, progress, complete, failed, "
+                    "resources_json, last_updated FROM colonisation_projects ORDER BY last_updated DESC"
+                )
+                for row in cur.fetchall():
+                    mid = row[0]
+                    try:
+                        resources = json.loads(row[6] or "[]")
+                    except Exception:
+                        resources = []
+                    projects[mid] = {
+                        "market_id":    mid,
+                        "system_name":  row[1],
+                        "body_name":    row[2],
+                        "progress":     float(row[3] or 0),
+                        "complete":     bool(row[4]),
+                        "failed":       bool(row[5]),
+                        "resources":    resources,
+                        "last_updated": int(row[7] or 0),
+                    }
+        except sqlite3.Error:
+            pass
+        return projects

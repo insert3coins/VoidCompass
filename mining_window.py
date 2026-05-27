@@ -10,6 +10,30 @@ from datetime import datetime
 from config import CONFIG_FILE, COLOR_ACCENT, COLOR_BG, COLOR_GREEN, COLOR_ORANGE, COLOR_TEXT
 from mining_data import MiningDataStore, normalize_material_name, normalize_ring_type, search_spansh_buyers, search_spansh_rings
 
+MINING_SESSIONS_FILE = "mining_sessions.json"
+
+
+def load_mining_sessions_json():
+    """Load all saved sessions from the JSON file. Returns a list ordered newest-first."""
+    try:
+        if os.path.exists(MINING_SESSIONS_FILE):
+            with open(MINING_SESSIONS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                return data
+    except Exception:
+        pass
+    return []
+
+
+def save_mining_sessions_json(sessions):
+    """Persist the sessions list to the JSON file (newest-first)."""
+    try:
+        with open(MINING_SESSIONS_FILE, "w", encoding="utf-8") as f:
+            json.dump(sessions, f, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
+
 
 MINING_MATERIALS = {
     "Alexandrite",
@@ -123,6 +147,8 @@ class MiningWindow:
         self.last_status_cargo = None
         self.data_store = MiningDataStore()
         self.session_id = None
+        self._json_sessions = load_mining_sessions_json()   # in-memory list, newest-first
+        self._json_session_key = None                        # started_at key for current session
         self.search_results = []
         self.search_running = False
         self.market_running = False
@@ -434,12 +460,12 @@ class MiningWindow:
         session_frame = tk.Frame(left, bg="#11161c")
         session_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
         self.session_tree = self._tree(session_frame, [
-            ("id", "ID", 50),
-            ("started", "Started", 160),
-            ("system", "System", 160),
+            ("started", "Started", 165),
+            ("system", "System", 175),
             ("prospected", "Prospected", 90),
             ("tons", "Tons", 70),
-            ("report", "Report", 220),
+            ("cargo", "Cargo", 260),
+            ("status", "Status", 130),
         ])
 
         bookmark_header = tk.Frame(right, bg="#11161c")
@@ -478,8 +504,9 @@ class MiningWindow:
     def start_session(self):
         self.session_active = True
         self.session_started_at = time.time()
+        started_at = datetime.utcnow().isoformat(timespec="seconds") + "Z"
         self.session_id = self.data_store.create_session(
-            datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            started_at,
             self.current_system,
             self.current_body,
         )
@@ -487,6 +514,21 @@ class MiningWindow:
         self.core_count = 0
         self.mined_tons = {}
         self.material_stats = {}
+        # Create the JSON record for this session
+        self._json_session_key = started_at
+        record = {
+            "started_at": started_at,
+            "ended_at": None,
+            "system_name": self.current_system,
+            "body_name": self.current_body,
+            "prospected_count": 0,
+            "core_count": 0,
+            "mined_tons": {},
+            "material_stats": {},
+            "in_progress": True,
+        }
+        self._json_sessions.insert(0, record)
+        save_mining_sessions_json(self._json_sessions)
         self._refresh_all()
 
     def stop_session(self):
@@ -500,6 +542,7 @@ class MiningWindow:
         self.session_active = False
         self.session_started_at = None
         self.session_id = None
+        self._json_session_key = None
         self.prospected_count = 0
         self.core_count = 0
         self.mined_tons = {}
@@ -521,7 +564,12 @@ class MiningWindow:
         if ev == "Loadout":
             self.cargo_capacity = int(data.get("cargo_capacity") or raw.get("CargoCapacity") or self.cargo_capacity or 0)
         elif ev in ("Location", "FSDJump"):
-            self.current_system = data.get("star_system") or raw.get("StarSystem") or self.current_system
+            new_sys = data.get("star_system") or raw.get("StarSystem") or self.current_system
+            if new_sys != self.current_system and self.session_active:
+                # Jumped to a new system — auto-stop the active session
+                self.session_active = False
+                self._finish_current_session()
+            self.current_system = new_sys
             self.current_body = raw.get("Body") or self.current_body
         elif ev == "Scan":
             self._process_scan(raw)
@@ -635,6 +683,10 @@ class MiningWindow:
         content = raw.get("Content_Localised") or raw.get("Content") or "-"
         if isinstance(content, str) and content.startswith("$"):
             content = _clean_name(content)
+
+        if not self.session_active:
+            # Auto-start a session on the first prospector limpet fired
+            self.start_session()
 
         if self.session_active:
             self.prospected_count += 1
@@ -827,17 +879,21 @@ class MiningWindow:
         if not hasattr(self, "session_tree"):
             return
         self._clear_tree(self.session_tree)
-        for session in self.data_store.list_sessions():
+        for i, session in enumerate(self._json_sessions):
+            tons = sum(session.get("mined_tons", {}).values()) if isinstance(session.get("mined_tons"), dict) else (session.get("mined_tons") or 0)
+            status = "▶ IN PROGRESS" if session.get("in_progress") else (session.get("ended_at") or "")
+            cargo_str = ", ".join(f"{v}t {k}" for k, v in sorted(session.get("mined_tons", {}).items()) if v) if isinstance(session.get("mined_tons"), dict) else ""
             self.session_tree.insert(
                 "",
                 tk.END,
+                iid=str(i),
                 values=(
-                    session.get("id"),
                     session.get("started_at") or "",
                     session.get("system_name") or "",
                     session.get("prospected_count") or 0,
-                    session.get("mined_tons") or 0,
-                    session.get("report_path") or "",
+                    f"{tons} t",
+                    cargo_str or "-",
+                    status,
                 ),
             )
 
@@ -1001,8 +1057,10 @@ class MiningWindow:
         summary = self._current_session_summary()
         summary["ended_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
         self.data_store.finish_session(self.session_id, summary)
+        self._update_json_session(ended_at=summary["ended_at"], in_progress=False)
         self.session_id = None
         self.session_started_at = None
+        self._json_session_key = None
         self._refresh_sessions()
 
     def _current_session_summary(self):
@@ -1018,27 +1076,70 @@ class MiningWindow:
             "report_path": None,
         }
 
+    def _update_json_session(self, ended_at=None, in_progress=True):
+        """Keep the in-memory JSON list in sync and flush to disk."""
+        if not self._json_session_key:
+            return
+        for rec in self._json_sessions:
+            if rec.get("started_at") == self._json_session_key:
+                rec["system_name"] = self.current_system
+                rec["body_name"] = self.current_body
+                rec["prospected_count"] = self.prospected_count
+                rec["core_count"] = self.core_count
+                rec["mined_tons"] = dict(self.mined_tons)
+                # Summarise material stats: store avg/best/count per material
+                mat_summary = {}
+                for name, values in self.material_stats.items():
+                    if values:
+                        mat_summary[name] = {
+                            "hits": len(values),
+                            "avg": round(sum(values) / len(values), 1),
+                            "best": round(max(values), 1),
+                        }
+                rec["material_stats"] = mat_summary
+                rec["in_progress"] = in_progress
+                if ended_at:
+                    rec["ended_at"] = ended_at
+                break
+        save_mining_sessions_json(self._json_sessions)
+
     def _save_current_session_progress(self):
         if not self.session_active or not self.session_id:
             return
         self.data_store.update_session(self.session_id, self._current_session_summary())
+        self._update_json_session(in_progress=True)
         self._refresh_sessions()
 
     def generate_selected_report(self):
         selection = self.session_tree.selection()
         if not selection:
             return
-        values = self.session_tree.item(selection[0], "values")
-        if not values:
+        iid = selection[0]
+        try:
+            idx = int(iid)
+            session = self._json_sessions[idx]
+        except (ValueError, IndexError):
             return
-        session_id = values[0]
-        sessions = {str(row.get("id")): row for row in self.data_store.list_sessions(limit=500)}
-        session = sessions.get(str(session_id))
-        if not session:
-            return
-        path = self._write_session_report(session)
-        session["report_path"] = path
-        self.data_store.finish_session(session.get("id"), session)
+        # Convert JSON session to the format _write_session_report expects
+        mined_tons = session.get("mined_tons") or {}
+        if not isinstance(mined_tons, dict):
+            mined_tons = {}
+        mat_stats = session.get("material_stats") or {}
+        # Re-expand summarised stats into lists for the HTML writer
+        material_json_expanded = {k: [v.get("best", 0)] * v.get("hits", 1) for k, v in mat_stats.items()} if mat_stats else {}
+        report_session = {
+            "id": session.get("started_at", ""),
+            "started_at": session.get("started_at", ""),
+            "ended_at": session.get("ended_at", ""),
+            "system_name": session.get("system_name", ""),
+            "body_name": session.get("body_name", ""),
+            "prospected_count": session.get("prospected_count", 0),
+            "core_count": session.get("core_count", 0),
+            "mined_tons": sum(mined_tons.values()),
+            "cargo_json": json.dumps(mined_tons),
+            "material_json": json.dumps(material_json_expanded),
+        }
+        path = self._write_session_report(report_session)
         self._refresh_sessions()
         messagebox.showinfo("Report Generated", path)
 

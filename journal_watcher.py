@@ -207,10 +207,14 @@ class JournalWatcher:
                         self.batch_event_callback(events)
                     elif self.event_callback:
                         for idx, ev in enumerate(events, start=1):
-                            self.event_callback(ev)
+                            try:
+                                self.event_callback(ev)
+                            except Exception as cb_err:
+                                ev_type = (ev.get("type") or "?") if isinstance(ev, dict) else "?"
+                                logging.error(f"Event callback error [{ev_type}]: {cb_err}")
                             if (idx % 5) == 0:
                                 time.sleep(0)
-                
+
                 self.file_pos = f.tell()
                 if eof_reached:
                     self._startup_catchup_done = True
@@ -244,7 +248,12 @@ class JournalWatcher:
                     raw = json.loads(line)
                 except Exception:
                     continue
-                if raw.get("event") in ("FSDJump", "Location"):
+                ev = raw.get("event")
+                if ev in ("FSDJump", "Location"):
+                    self.event_callback(self._normalize_event(raw))
+                    return
+                # CarrierJump sets player location when they were on board
+                if ev == "CarrierJump" and raw.get("Docked"):
                     self.event_callback(self._normalize_event(raw))
                     return
         except Exception:
@@ -299,6 +308,22 @@ class JournalWatcher:
                     "system_address": data.get("SystemAddress"),
                     "star_pos": data.get("StarPos"),
                     "star_class": data.get("StarClass")
+                }
+            }
+        # CarrierJump fires when the player is docked on a carrier that jumps.
+        # Normalize the same location fields so dashboard location logic can reuse them.
+        if ev == "CarrierJump":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "star_system": data.get("StarSystem"),
+                    "system_address": data.get("SystemAddress"),
+                    "star_pos": data.get("StarPos"),
+                    "star_class": None,  # CarrierJump doesn't carry StarClass
+                    "docked": data.get("Docked", False),
+                    "body": data.get("Body"),
+                    "body_id": data.get("BodyID"),
                 }
             }
         if ev in ("Touchdown", "Liftoff"):
@@ -419,13 +444,36 @@ class JournalWatcher:
                     "is_new_entry": bool(data.get("IsNewEntry")),
                     "is_new_sample": bool(data.get("IsNewSample")),
                     "is_complete": bool(data.get("IsComplete")),
-                    "body_name": data.get("BodyName") or data.get("Body"),
-                    "body_id": data.get("BodyID"),
+                    # ScanOrganic uses "Body" (integer) for the body ID, not "BodyID".
+                    # "BodyName" is not present in this event.
+                    "body_name": data.get("BodyName") or "",
+                    "body_id": data.get("BodyID") if data.get("BodyID") is not None else data.get("Body"),
                     "system_address": data.get("SystemAddress"),
                     "max_samples": data.get("MaxSamples", 3),
                     "biome": data.get("Biome"),
                     "planet_class": data.get("PlanetClass"),
                     "sample_distance": data.get("SampleDistance")
+                }
+            }
+        if ev == "CodexEntry":
+            # Category for geological features: "$Codex_Category_Geology;"
+            # Category for biological features: "$Codex_Category_Biology;"
+            category     = data.get("Category", "")
+            category_loc = data.get("Category_Localised", "")
+            is_geological = (
+                category == "$Codex_Category_Geology;"
+                or category_loc.lower() == "geology"
+            )
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "body_id":       data.get("BodyID"),
+                    "body_name":     data.get("NearestDestination_Localised") or data.get("NearestDestination") or "",
+                    "system_address": data.get("SystemAddress"),
+                    "name":          data.get("Name_Localised") or data.get("Name") or "",
+                    "category":      category_loc or category,
+                    "is_geological": is_geological,
                 }
             }
         if ev == "Scan":
@@ -453,7 +501,104 @@ class JournalWatcher:
                     "mass_em": data.get("MassEM"),
                     "stellar_mass": data.get("StellarMass"),
                     "is_body_scan": bool(star_type or planet_class),
-                    "bio_signals_count": bio_signals_count
+                    "bio_signals_count": bio_signals_count,
+                    # Body conditions for bio prediction (planets only)
+                    "surface_gravity":  data.get("SurfaceGravity"),      # g
+                    "surface_temp":     data.get("SurfaceTemperature"),  # K
+                    "surface_pressure": data.get("SurfacePressure"),     # atm
+                    "atmosphere_type":  data.get("AtmosphereType") or "",
+                    "volcanism":        data.get("Volcanism") or "",
+                    "materials":        {m.get("Name", "").title(): float(m.get("Percent", 0))
+                                         for m in (data.get("Materials") or [])},
+                    "atmos_comp":       {c.get("Name", ""): float(c.get("Percent", 0))
+                                         for c in (data.get("AtmosphereComposition") or [])},
+                    "parents":          data.get("Parents") or [],
+                    "rings":            data.get("Rings") or [],
+                }
+            }
+
+        if ev == "ApproachBody":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "body_name":     data.get("Body", ""),
+                    "body_id":       data.get("BodyID"),
+                    "star_system":   data.get("StarSystem", ""),
+                    "system_address": data.get("SystemAddress"),
+                }
+            }
+
+        if ev == "LeaveBody":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "body_name":     data.get("Body", ""),
+                    "body_id":       data.get("BodyID"),
+                    "star_system":   data.get("StarSystem", ""),
+                    "system_address": data.get("SystemAddress"),
+                }
+            }
+
+        if ev == "ColonisationConstructionDepot":
+            resources = []
+            for r in (data.get("ResourcesRequired") or []):
+                raw_name = r.get("Name", "")
+                # "$Steel_Name;" → "Steel" when no localised name provided
+                display = r.get("Name_Localised") or raw_name
+                if display.startswith("$") and "_Name;" in display:
+                    display = display.split("_Name;")[0].lstrip("$").replace("_", " ").title()
+                resources.append({
+                    "name":     raw_name,
+                    "display":  display,
+                    "required": int(r.get("RequiredAmount") or 0),
+                    "provided": int(r.get("ProvidedAmount") or 0),
+                })
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "market_id":      data.get("MarketID"),
+                    "system_name":    data.get("SystemName", ""),
+                    "system_address": data.get("SystemAddress"),
+                    "body_name":      data.get("BodyName", ""),
+                    "progress":       float(data.get("Progress") or 0),
+                    "complete":       bool(data.get("ConstructionComplete", False)),
+                    "failed":         bool(data.get("ConstructionFailed", False)),
+                    "resources":      resources,
+                }
+            }
+
+        if ev == "ColonisationContribution":
+            contributions = []
+            for c in (data.get("Contributions") or []):
+                raw_name = c.get("Name", "")
+                display = c.get("Name_Localised") or raw_name
+                if display.startswith("$") and "_Name;" in display:
+                    display = display.split("_Name;")[0].lstrip("$").replace("_", " ").title()
+                contributions.append({
+                    "name":    raw_name,
+                    "display": display,
+                    "count":   int(c.get("Count") or 0),
+                })
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "market_id":     data.get("MarketID"),
+                    "progress":      float(data.get("Progress") or 0),
+                    "contributions": contributions,
+                }
+            }
+
+        if ev == "ColonisationSystemClaimed":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "star_system":    data.get("StarSystem", ""),
+                    "system_address": data.get("SystemAddress"),
                 }
             }
 
@@ -544,7 +689,9 @@ class JournalWatcher:
                             data = json.loads(line)
                             ev = data.get("event")
 
-                            if ev in ["FSDJump", "Location"]:
+                            if ev in ["FSDJump", "Location"] or (
+                                ev == "CarrierJump" and data.get("Docked")
+                            ):
                                 sys_name = data.get("StarSystem")
                                 current_sys_context = sys_name
                                 if sys_name and sys_name not in new_history:
