@@ -570,6 +570,73 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
 
     # ------------------------------------------------------------------
+    # Bio overlay helpers
+    # ------------------------------------------------------------------
+
+    def _bio_hud_startup_replay(self):
+        """Push any in-progress organic scans (and predictions) into the bio
+        overlay after the startup journal replay.
+
+        All bio_hud calls are skipped during batch_mode, so we replay the
+        data collected in last_bio_scan / body_signals here, filtered to the
+        current system address so old sessions don't bleed through.
+        """
+        if not self.bio_hud:
+            return
+
+        cur_addr = self.current_system_address
+
+        # ── 1. Predictions for bodies with known bio signals ──────────────
+        for body_id, signals in self.body_signals.items():
+            bio_count = signals.get("bio", 0)
+            if bio_count <= 0:
+                continue
+            bsd = self.body_scan_data.get(body_id)
+            bname = (self.scan_items_by_id.get(body_id, {}).get("name")
+                     or f"Body {body_id}")
+            if bsd and bsd.get("planet_class"):
+                parent_stars = []
+                for _p in (bsd.get("parents") or []):
+                    for _ptype, _pid in _p.items():
+                        st = self.system_stars.get(_pid)
+                        if st:
+                            parent_stars.append(st)
+                if not parent_stars:
+                    parent_stars = [self.star_class] if self.star_class else []
+                try:
+                    preds = _bio_predict(
+                        body_type   = bsd["planet_class"],
+                        gravity     = float(bsd["surface_gravity"] or 0),
+                        temp        = float(bsd["surface_temp"] or 0),
+                        pressure    = float(bsd["surface_pressure"] or 0),
+                        atmos_type  = bsd["atmosphere_type"],
+                        atmos_comp  = bsd["atmos_comp"],
+                        volcanism   = bsd["volcanism"],
+                        materials   = bsd["materials"],
+                        star_types  = parent_stars,
+                    )
+                except Exception:
+                    preds = []
+            else:
+                preds = []
+            self.bio_hud.on_predictions(body_id, bname, preds, bio_count)
+
+        # ── 2. Organic scan progress from last_bio_scan ───────────────────
+        for entry in self.last_bio_scan.values():
+            # Filter to current system only so old sessions don't bleed through
+            if cur_addr is not None and entry.get("system_address") != cur_addr:
+                continue
+            _bid  = entry.get("body_id")
+            _bn   = (self.scan_items_by_id.get(_bid, {}).get("name")
+                     if _bid is not None else None) or entry.get("body_name") or ""
+            _sp   = entry.get("species")
+            _gn   = entry.get("genus")
+            _si   = entry.get("sample_idx")
+            _ms   = entry.get("max_samples", 3)
+            _ic   = entry.get("is_complete", False)
+            self.bio_hud.on_scan_organic(_bid, _bn, _sp, _gn, _si, _ms, _ic)
+
+    # ------------------------------------------------------------------
     # Carrier dashboard panel + event-feed callbacks
     # ------------------------------------------------------------------
 
@@ -1063,14 +1130,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             was_complete = bool(existing.get("is_complete"))
 
             self.last_bio_scan[species_key] = {
-                "body_id": body_id,
-                "body_name": body_label,
-                "species": species,
-                "sample_idx": d.get("sample_idx"),
-                "scan_type": d.get("scan_type"),
-                "is_new_entry": bool(d.get("is_new_entry")),
-                "is_new_sample": bool(d.get("is_new_sample")),
-                "is_complete": is_complete,
+                "body_id":        body_id,
+                "body_name":      body_label,
+                "species":        species,
+                "genus":          d.get("genus"),
+                "sample_idx":     d.get("sample_idx"),
+                "max_samples":    d.get("max_samples", 3),
+                "scan_type":      d.get("scan_type"),
+                "is_new_entry":   bool(d.get("is_new_entry")),
+                "is_new_sample":  bool(d.get("is_new_sample")),
+                "is_complete":    is_complete,
+                "system_address": self.current_system_address,
             }
 
             if is_complete and not was_complete:
@@ -1639,6 +1709,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.root.after(0, _startup_sync)
             self.root.after(0, self.update_hud)
             self.root.after(0, self.update_waypoint_display)
+            if self.bio_hud:
+                # Replay any in-progress organic scans into the overlay now
+                # that batch_mode is False.  Scheduled after _startup_sync so
+                # scan_items_by_id is fully populated before we look up names.
+                self.root.after(0, self._bio_hud_startup_replay)
 
             if self.config.get("auto_copy_waypoint", False):
                 next_wp = self.waypoint_manager.get_next_waypoint(self.current_sys)
