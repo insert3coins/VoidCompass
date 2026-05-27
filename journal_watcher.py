@@ -478,7 +478,43 @@ class JournalWatcher:
                     "mass_em": data.get("MassEM"),
                     "stellar_mass": data.get("StellarMass"),
                     "is_body_scan": bool(star_type or planet_class),
-                    "bio_signals_count": bio_signals_count
+                    "bio_signals_count": bio_signals_count,
+                    # Body conditions for bio prediction (planets only)
+                    "surface_gravity":  data.get("SurfaceGravity"),      # g
+                    "surface_temp":     data.get("SurfaceTemperature"),  # K
+                    "surface_pressure": data.get("SurfacePressure"),     # atm
+                    "atmosphere_type":  data.get("AtmosphereType") or "",
+                    "volcanism":        data.get("Volcanism") or "",
+                    "materials":        {m.get("Name", "").title(): float(m.get("Percent", 0))
+                                         for m in (data.get("Materials") or [])},
+                    "atmos_comp":       {c.get("Name", ""): float(c.get("Percent", 0))
+                                         for c in (data.get("AtmosphereComposition") or [])},
+                    "parents":          data.get("Parents") or [],
+                    "rings":            data.get("Rings") or [],
+                }
+            }
+
+        if ev == "ApproachBody":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "body_name":     data.get("Body", ""),
+                    "body_id":       data.get("BodyID"),
+                    "star_system":   data.get("StarSystem", ""),
+                    "system_address": data.get("SystemAddress"),
+                }
+            }
+
+        if ev == "LeaveBody":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "body_name":     data.get("Body", ""),
+                    "body_id":       data.get("BodyID"),
+                    "star_system":   data.get("StarSystem", ""),
+                    "system_address": data.get("SystemAddress"),
                 }
             }
 

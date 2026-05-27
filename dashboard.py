@@ -28,6 +28,7 @@ from carrier_tracker import CarrierTracker
 from carrier_window import CarrierWindow
 from prospector_hud import ProspectorHUD
 from bio_hud import BioHUD
+from bio_predictions import predict_for_body as _bio_predict
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
@@ -79,6 +80,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.cmdr_name = "CMDR"
         self.last_scan_event = None
         self.last_bio_scan = {}
+        # Bio tracking: star/body scan conditions for prediction
+        self.system_stars: dict  = {}   # body_id → star_type str
+        self.body_scan_data: dict = {}  # body_id → conditions dict
+        self.current_body_id    = None  # from ApproachBody
+        self.current_body_name  = ""
         self.cargo_capacity = 0
         self.last_journal_event_ts = 0.0
         self.last_logged_journal_file = None
@@ -1140,6 +1146,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.system_bio_signals = 0
             self.last_scan_event = None
             self.last_bio_scan = {}
+            self.system_stars.clear()
+            self.body_scan_data.clear()
+            self.current_body_id   = None
+            self.current_body_name = ""
             if self.bio_hud and not self.batch_mode:
                 _sys = self.current_sys
                 self.root.after(0, lambda: self.bio_hud.on_system_change(_sys))
@@ -1316,6 +1326,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
+                # Forward DSS genera to bio overlay
+                genuses = d.get("genuses") or []
+                if self.bio_hud and bio_count and genuses and not self.batch_mode:
+                    _bid    = body_id
+                    _bname  = d.get("body_name") or (item.get("name") if item else "") or f"Body {body_id}"
+                    _genuses = genuses
+                    _count   = bio_count
+                    self.root.after(0, lambda: self.bio_hud.on_dss_genuses(
+                        _bid, _bname, _genuses, _count))
         
         elif ev == "SAAScanComplete":
             if not self._matches_current_system_address(d):
@@ -1351,6 +1370,26 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if not self.batch_mode:
                     self.schedule_dashboard_refresh()
                     self.update_hud()
+
+            # Track star types for bio prediction: build parent-star lookup
+            if star_type:
+                self.system_stars[body_id] = star_type
+
+            # Store planet conditions for bio prediction when we have a planet scan
+            if d.get("planet_class") and body_id is not None:
+                self.body_scan_data[body_id] = {
+                    "body_name":        body_name,
+                    "planet_class":     d.get("planet_class", ""),
+                    "surface_gravity":  d.get("surface_gravity"),
+                    "surface_temp":     d.get("surface_temp"),
+                    "surface_pressure": d.get("surface_pressure"),
+                    "atmosphere_type":  d.get("atmosphere_type", ""),
+                    "volcanism":        d.get("volcanism", ""),
+                    "materials":        d.get("materials") or {},
+                    "atmos_comp":       d.get("atmos_comp") or {},
+                    "parents":          d.get("parents") or [],
+                    "bio_signals_count": d.get("bio_signals_count", 0),
+                }
             
             # Only count scans of stars or planets/moons, not belts.
             if d.get("is_body_scan"):
@@ -1390,6 +1429,40 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     if d.get("bio_signals_count", 0):
                         self._set_body_signals(body_id, d.get("bio_signals_count", 0), self.body_signals.get(body_id, {}).get("geo", 0))
 
+                    # Run bio prediction when body has signals
+                    if self.bio_hud and d.get("planet_class") and not self.batch_mode:
+                        bsd = self.body_scan_data.get(body_id)
+                        if bsd:
+                            # Resolve parent star types for this body via parents list
+                            parent_stars = []
+                            for p in (bsd.get("parents") or []):
+                                for _ptype, _pid in p.items():
+                                    st = self.system_stars.get(_pid)
+                                    if st:
+                                        parent_stars.append(st)
+                            if not parent_stars:
+                                parent_stars = [self.star_class] if self.star_class else []
+                            try:
+                                preds = _bio_predict(
+                                    body_type   = bsd["planet_class"],
+                                    gravity     = float(bsd["surface_gravity"] or 0),
+                                    temp        = float(bsd["surface_temp"] or 0),
+                                    pressure    = float(bsd["surface_pressure"] or 0),
+                                    atmos_type  = bsd["atmosphere_type"],
+                                    atmos_comp  = bsd["atmos_comp"],
+                                    volcanism   = bsd["volcanism"],
+                                    materials   = bsd["materials"],
+                                    star_types  = parent_stars,
+                                )
+                            except Exception:
+                                preds = []
+                            if preds and self.bio_hud:
+                                _bid   = body_id
+                                _bname = body_name
+                                _preds = preds
+                                self.root.after(0, lambda: self.bio_hud.on_predictions(
+                                    _bid, _bname, _preds))
+
                     # Check for valuable bodies
                     p_class = d.get("planet_class", "")
                     terraformable = d.get("terraform_state") == "Terraformable"
@@ -1428,6 +1501,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
+
+        # ── ApproachBody / LeaveBody ──────────────────────────────────────────────
+        if ev == "ApproachBody" and not self.batch_mode:
+            self.current_body_id   = self._normalize_body_id(d.get("body_id"))
+            self.current_body_name = d.get("body_name") or ""
+            if self.bio_hud:
+                _bid   = self.current_body_id
+                _bname = self.current_body_name
+                self.root.after(0, lambda: self.bio_hud.on_approach_body(_bid, _bname))
+
+        elif ev == "LeaveBody" and not self.batch_mode:
+            self.current_body_id   = None
+            self.current_body_name = ""
+            if self.bio_hud:
+                self.root.after(0, self.bio_hud.on_leave_body)
 
         # ── Prospector overlay — live events only, skip journal replay on startup ──
         if self.prospector_hud and not self.batch_mode:
