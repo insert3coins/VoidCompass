@@ -69,6 +69,7 @@ VSVersionInfo(
         '--icon=icon.ico',         # Sets the file icon for the .exe
         '--add-data=icon.ico;.',   # Bundles the icon inside the .exe for the GUI
         '--add-data=mining_data.db;.',
+        '--add-data=codexRef.json;.',
         '--version-file=version_info.txt'
     ]
 
@@ -86,5 +87,8 @@ VSVersionInfo(
     if os.path.exists(mining_db_path):
         shutil.copy(mining_db_path, os.path.join(dist_dir, 'mining_data.db'))
         print("Copied mining_data.db to dist/mining_data.db")
+    if os.path.exists('codexRef.json'):
+        shutil.copy('codexRef.json', os.path.join(dist_dir, 'codexRef.json'))
+        print("Copied codexRef.json to dist/codexRef.json")
 
     print("Build complete. Check the 'dist' folder.")
