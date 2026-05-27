@@ -70,7 +70,6 @@ VSVersionInfo(
         '--add-data=icon.ico;.',   # Bundles the icon inside the .exe for the GUI
         '--add-data=mining_data.db;.',
         '--add-data=codexRef.json;.',
-        '--add-data=bio-criteria;bio-criteria',
         '--version-file=version_info.txt'
     ]
 
@@ -91,13 +90,6 @@ VSVersionInfo(
     if os.path.exists('codexRef.json'):
         shutil.copy('codexRef.json', os.path.join(dist_dir, 'codexRef.json'))
         print("Copied codexRef.json to dist/codexRef.json")
-    bio_criteria_src = os.path.join(os.getcwd(), 'bio-criteria')
-    bio_criteria_dst = os.path.join(dist_dir, 'bio-criteria')
-    if os.path.isdir(bio_criteria_src):
-        if os.path.exists(bio_criteria_dst):
-            shutil.rmtree(bio_criteria_dst)
-        shutil.copytree(bio_criteria_src, bio_criteria_dst)
-        print("Copied bio-criteria/ to dist/bio-criteria/")
     col_data_src = os.path.join(os.getcwd(), 'colonisation_data.json')
     if os.path.exists(col_data_src):
         shutil.copy(col_data_src, os.path.join(dist_dir, 'colonisation_data.json'))
