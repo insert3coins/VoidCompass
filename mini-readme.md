@@ -1,5 +1,18 @@
 # VoidCompass // UPDATE LOG
 
+## v2.9.4 // Colonization Tracker — Standalone Window
+**Release Date:** 2026-May-27
+*   **Colonization Tracker is now a standalone popup window** (`colonization_window.py`):
+    *   Accessible via the new **Colonization** button in the nav bar (between Mining and Fleet Carrier).
+    *   Window remembers its position and size across sessions (`colonisation_window_geometry` in `config.json`).
+    *   **Left panel:** scrollable list of all tracked construction sites — sorted by activity (active by progress, then complete, then failed). Each row shows the system name, delivery percentage, status badge, and a mini progress bar.
+    *   **Right panel:** full detail view — system/body labels, progress bar with percentage, colour-coded commodity table (COMMODITY | REQUIRED | DELIVERED | REMAINING), notes text area (auto-saved on close/project-switch), and footer buttons.
+    *   **"Copy Shopping List"** button: clipboard-ready list of remaining commodities for the selected site.
+    *   **"Delete Project"** button: removes the selected site after confirmation.
+    *   **JSON persistence:** all depot data saved to `colonisation_data.json` next to the executable — easy to back up or inspect. File is copied to `dist/` by `build.py` if present.
+    *   Notes survive depot refreshes (when you re-dock at the same depot, your notes are preserved).
+    *   The old embedded Colonization tab in the right panel has been removed; the right panel is now back to the full-width live event timeline.
+
 ## v2.9.3 // Colonization Tracker + Scan Overlay Removed
 **Release Date:** 2026-May-27
 *   **Scan Results Overlay removed (`scan_hud.py` deleted):**

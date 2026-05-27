@@ -32,6 +32,7 @@ from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
 from dashboard_scan_mixin import DashboardScanMixin
+from colonization_window import ColonizationWindow, save_colonisation_data, load_colonisation_data
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
@@ -175,6 +176,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         self.mining_window = None
         self.carrier_window = None
+        self.colonization_window = None
         self._carrier_panel_tick_job = None
         self.carrier_tracker = CarrierTracker()
         self.carrier_tracker.set_config(self.config)
@@ -217,6 +219,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.batch_mode = False
         self.init_db()
         self.colonisation_projects = self.db_load_colonisation_projects()
+        # Merge JSON store (carries notes and any extra fields the DB doesn't have)
+        _json_projects = load_colonisation_data()
+        for mid, jp in _json_projects.items():
+            if mid in self.colonisation_projects:
+                # Copy over fields present in JSON but absent in DB (e.g. notes)
+                for k, v in jp.items():
+                    if k not in self.colonisation_projects[mid] or not self.colonisation_projects[mid].get(k):
+                        self.colonisation_projects[mid][k] = v
+            else:
+                self.colonisation_projects[mid] = jp
         self.import_scan_cache_json()
         
         self.watcher = JournalWatcher(
@@ -396,6 +408,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.route_plotter.on_close()
         if self.mining_window and self.mining_window.is_open():
             self.mining_window.on_close()
+        if self.colonization_window and self.colonization_window.is_open():
+            self.colonization_window._on_close()
             
         self.watcher.stop()
         self.screenshots.stop()
@@ -543,6 +557,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.carrier_window.win.lift()
             return
         self.carrier_window = CarrierWindow(self.root, self.config, self.carrier_tracker)
+
+    def open_colonization_window(self):
+        if self.colonization_window and self.colonization_window.is_open():
+            self.colonization_window.lift()
+            return
+        self.colonization_window = ColonizationWindow(
+            self.root,
+            self.config,
+            self.colonisation_projects,
+            save_colonisation_data,
+        )
 
     # ------------------------------------------------------------------
     # Carrier dashboard panel + event-feed callbacks
@@ -1474,6 +1499,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             mid = d.get("market_id")
             if mid is not None:
                 self.current_colonisation_market = mid
+                # Preserve existing notes when refreshing from depot event
+                _existing = self.colonisation_projects.get(mid, {})
                 self.colonisation_projects[mid] = {
                     "market_id":    mid,
                     "system_name":  d.get("system_name", ""),
@@ -1483,10 +1510,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     "failed":       d.get("failed", False),
                     "resources":    d.get("resources", []),
                     "last_updated": time.time(),
+                    "notes":        _existing.get("notes", ""),
                 }
                 self.db_save_colonisation_project(self.colonisation_projects[mid])
                 if not self.batch_mode:
-                    self.root.after(0, self.refresh_colonisation_ui)
+                    save_colonisation_data(self.colonisation_projects)
+                    if self.colonization_window and self.colonization_window.is_open():
+                        self.colonization_window.refresh()
 
         elif ev == "ColonisationContribution":
             mid = d.get("market_id")
@@ -1501,7 +1531,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         r["provided"] = min(r["required"], r.get("provided", 0) + delta)
                 self.db_save_colonisation_project(proj)
                 if not self.batch_mode:
-                    self.root.after(0, self.refresh_colonisation_ui)
+                    save_colonisation_data(self.colonisation_projects)
+                    if self.colonization_window and self.colonization_window.is_open():
+                        self.colonization_window.refresh()
 
         # ── ApproachBody / LeaveBody ──────────────────────────────────────────────
         if ev == "ApproachBody" and not self.batch_mode:
