@@ -1087,8 +1087,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     _si  = d.get("sample_idx")
                     _ms  = d.get("max_samples", 3)
                     _ic  = is_complete
+                    # Capture surface position at sample time for distance tracking.
+                    _lat = self.current_latitude  if self.on_planet else None
+                    _lon = self.current_longitude if self.on_planet else None
+                    _rad = self.current_planet_radius if self.on_planet else None
                     self.root.after(0, lambda: self.bio_hud.on_scan_organic(
-                        _bid, _bn, _sp, _gn, _si, _ms, _ic))
+                        _bid, _bn, _sp, _gn, _si, _ms, _ic, _lat, _lon, _rad))
 
         elif ev == "Location" or ev == "FSDJump" or ev == "StartJump" or (ev == "CarrierJump" and d.get("docked")):
             # Do not update HUDs during jump charge; wait for arrival.

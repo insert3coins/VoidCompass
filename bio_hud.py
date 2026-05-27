@@ -1,14 +1,21 @@
 """
 BioHUD — transparent canvas overlay for exobiology scanning.
 
-Shows per-species sample progress (●●○), reward estimates, and system
-totals for the current system.  Appears on the first ScanOrganic event,
-stays visible while incomplete scans remain, and clears on system jump.
+Shows per-species sample progress (●●○), reward estimates, live distance
+to next sample, and system totals for the current system.
 
-Follows the same rendering pattern as ProspectorHUD and ScanHUD.
+Appears on the first ScanOrganic event, stays visible while incomplete
+scans remain, and clears on system jump.
+
+Distance tracking:
+  Each time a sample is taken the player's lat/lon is recorded.  The
+  Status.json position feed (via on_position_update) keeps current_pos
+  fresh so the distance bar updates every ~1 s while on the surface.
+  Minimum scan distances are per-genus (datamined values).
 """
 
 import json
+import math
 import tkinter as tk
 
 from config import CONFIG_FILE, COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE
@@ -23,15 +30,51 @@ except Exception:
 _CHROMA = "#ff00ff"
 
 # Colours
-_COL_COMPLETE  = "#00cc44"   # completed species text / tick
-_COL_DOTS_DONE = "#00cc44"   # filled sample dot
-_COL_DOTS_OPEN = "#333333"   # unfilled dot track
+_COL_COMPLETE  = "#00cc44"   # completed species / tick
 _COL_BODY_LBL  = "#7d8891"   # body label prefix
 _COL_MUTED     = "#555555"   # muted text (completed row)
 _COL_SEP       = "#1a2228"   # separator lines
+_COL_DIST_OK   = "#00cc44"   # distance cleared (green)
+_COL_DIST_WARN = COLOR_ORANGE # distance not yet cleared (orange)
+_COL_DIST_BAR  = "#1c2830"   # unfilled bar track
+
+# Datamined minimum scan distances in metres, keyed by first word of
+# species name (genus), lower-cased.  Default 100 m for anything not listed.
+_MIN_DIST_M: dict[str, int] = {
+    "aleoida":    150,
+    "bacterium":  500,
+    "cactoida":   300,
+    "clypeus":    150,
+    "concha":     150,
+    "electricae": 1000,
+    "fonticulua": 500,
+    "frutexa":    150,
+    "fungoida":   300,
+    "osseus":     800,
+    "recepta":    150,
+    "stratum":    500,
+    "tubus":      800,
+    "tussock":    200,
+}
+_DEFAULT_MIN_DIST = 100
 
 
-def _fmt_credits(value):
+def _min_dist_for(species: str) -> int:
+    genus = (species or "").split()[0].lower()
+    return _MIN_DIST_M.get(genus, _DEFAULT_MIN_DIST)
+
+
+def _surface_dist_m(lat1, lon1, lat2, lon2, radius_m) -> float:
+    """Great-circle distance between two lat/lon points on a sphere."""
+    r    = math.radians
+    dlat = r(lat2 - lat1)
+    dlon = r(lon2 - lon1)
+    a    = (math.sin(dlat / 2) ** 2
+            + math.cos(r(lat1)) * math.cos(r(lat2)) * math.sin(dlon / 2) ** 2)
+    return 2 * radius_m * math.asin(math.sqrt(max(0.0, min(1.0, a))))
+
+
+def _fmt_credits(value) -> str:
     """Compact credit display: 5_270_000 → '5.27M'."""
     v = int(value or 0)
     if v >= 1_000_000_000:
@@ -45,7 +88,7 @@ def _fmt_credits(value):
     return str(v)
 
 
-def _strip_system(system_name, body_name):
+def _strip_system(system_name, body_name) -> str:
     """Remove system-name prefix from body name: 'Sol 3' → '3'."""
     b = str(body_name or "")
     s = str(system_name or "")
@@ -56,20 +99,25 @@ def _strip_system(system_name, body_name):
 
 
 class BioHUD:
-    WIDTH     = 400   # fixed overlay width
-    ROW_H     = 22    # height per species row
-    HEADER_H  = 50    # header section height
-    FOOTER_H  = 32    # footer totals height
-    MIN_H     = 110   # minimum window height
+    WIDTH    = 400   # fixed overlay width
+    ROW_H    = 22    # height per species row
+    DIST_H   = 14    # height of distance sub-row (shown for active samples)
+    HEADER_H = 50    # header section height
+    FOOTER_H = 32    # footer totals height
+    MIN_H    = 110   # minimum window height
 
     def __init__(self, root, config):
         self.root   = root
         self.config = config
 
-        # State
-        self._system_name = ""
-        # key: (body_id_or_name, species) → entry dict
+        # Species state: key = (body_id_or_name, species_lower) → dict
         self._entries: dict = {}
+        # Position when each sample was taken: key → (lat, lon, radius_m)
+        self._sample_pos: dict = {}
+        # Current player position from Status.json
+        self._cur_pos: tuple | None = None   # (lat, lon, radius_m)
+
+        self._system_name = ""
 
         # ── Transparent topmost window ────────────────────────────────────
         self.win = tk.Toplevel(root)
@@ -88,12 +136,10 @@ class BioHUD:
         )
         self.canvas.pack()
 
-        # Drag bindings
-        self.canvas.bind("<Button-1>",       self._drag_start)
-        self.canvas.bind("<B1-Motion>",      self._drag_move)
+        self.canvas.bind("<Button-1>",        self._drag_start)
+        self.canvas.bind("<B1-Motion>",       self._drag_move)
         self.canvas.bind("<ButtonRelease-1>", self._drag_end)
 
-        # Restore saved position
         x = int(config.get("bio_hud_x", 30))
         y = int(config.get("bio_hud_y", 400))
         self.win.geometry(f"+{x}+{y}")
@@ -130,17 +176,21 @@ class BioHUD:
 
     # ── Data interface ────────────────────────────────────────────────────
 
-    def on_system_change(self, system_name):
-        """Call on FSDJump / Location / CarrierJump.  Clears all data and hides."""
+    def on_system_change(self, system_name: str):
+        """Call on FSDJump / Location / CarrierJump."""
         self._entries.clear()
+        self._sample_pos.clear()
+        self._cur_pos  = None
         self._system_name = system_name or ""
         self.hide()
 
     def on_scan_organic(self, body_id, body_name, species, genus,
-                        sample_idx, max_samples, is_complete):
+                        sample_idx, max_samples, is_complete,
+                        lat=None, lon=None, radius_m=None):
         """Call on each ScanOrganic event.
 
-        Upserts the entry and redraws.  Shows the overlay if hidden.
+        lat/lon/radius_m are the player's surface position at sample time;
+        pass None when not on a planet surface.
         """
         key = (
             body_id if body_id is not None else (body_name or "?"),
@@ -148,7 +198,6 @@ class BioHUD:
         )
         existing = self._entries.get(key, {})
 
-        # Reward lookup — keep previously resolved value if already known.
         reward = existing.get("reward") or 0
         if not reward and _REWARD_CAT:
             reward = _REWARD_CAT.lookup(species, genus) or 0
@@ -164,8 +213,45 @@ class BioHUD:
             "reward":      reward,
         }
 
+        # Record position for distance tracking (only when we have real coords
+        # and the scan is not already complete — no point tracking after done).
+        if lat is not None and lon is not None and radius_m and not is_complete:
+            self._sample_pos[key] = (float(lat), float(lon), float(radius_m))
+        elif is_complete:
+            # Clear saved position once complete — no more distance needed.
+            self._sample_pos.pop(key, None)
+
         self._redraw()
         self.show()
+
+    def on_position_update(self, lat, lon, radius_m):
+        """Call on every Status.json tick while on a planet surface.
+
+        Triggers a lightweight distance-only redraw if there are active
+        (incomplete) entries with saved sample positions.
+        """
+        if lat is None or lon is None or not radius_m:
+            self._cur_pos = None
+            return
+        self._cur_pos = (float(lat), float(lon), float(radius_m))
+        # Only bother redrawing if there's something with distance to show.
+        if self._sample_pos and self._entries:
+            self._redraw()
+
+    # ── Distance helpers ──────────────────────────────────────────────────
+
+    def _dist_for(self, key, entry) -> tuple[float | None, int]:
+        """Return (current_dist_m, min_dist_m) for an entry, or (None, min)."""
+        min_d = _min_dist_for(entry.get("species", ""))
+        sp    = self._sample_pos.get(key)
+        cur   = self._cur_pos
+        if sp is None or cur is None:
+            return None, min_d
+        try:
+            d = _surface_dist_m(sp[0], sp[1], cur[0], cur[1], cur[2])
+        except Exception:
+            return None, min_d
+        return d, min_d
 
     # ── Drag-to-move ──────────────────────────────────────────────────────
 
@@ -190,14 +276,12 @@ class BioHUD:
     # ── Rendering ─────────────────────────────────────────────────────────
 
     def _text(self, x, y, text, fill, font, anchor="w"):
-        """Draw text with a 1-px drop-shadow for readability on any background."""
         self.canvas.create_text(x + 1, y + 1, text=text, fill="#000000",
                                 font=font, anchor=anchor)
         self.canvas.create_text(x,     y,     text=text, fill=fill,
                                 font=font, anchor=anchor)
 
-    def _sample_dots(self, sample_idx, max_samples, is_complete):
-        """Return dot string, e.g. '●●○' for 2/3."""
+    def _sample_dots(self, sample_idx, max_samples, is_complete) -> str:
         n    = int(max_samples or 3)
         done = n if is_complete else min(int(sample_idx or 1), n)
         return "●" * done + "○" * max(0, n - done)
@@ -214,13 +298,29 @@ class BioHUD:
             ),
         )
 
-        w      = self.WIDTH
-        n_rows = len(entries)
-        height = max(self.MIN_H,
-                     self.HEADER_H + n_rows * self.ROW_H + self.FOOTER_H + 8)
+        # Pre-compute which entries need a distance sub-row so height is known.
+        dist_rows: dict = {}   # entry index → (dist_m | None, min_m)
+        for i, e in enumerate(entries):
+            if e.get("is_complete"):
+                continue
+            si = int(e.get("sample_idx") or 1)
+            if si < 1:
+                continue
+            key = (
+                e["body_id"] if e.get("body_id") is not None else e.get("body_name", "?"),
+                e.get("species", "").lower(),
+            )
+            d, min_d = self._dist_for(key, e)
+            # Show the bar as long as we have a saved sample position.
+            if key in self._sample_pos:
+                dist_rows[i] = (d, min_d)
+
+        w = self.WIDTH
+        n_dist = len(dist_rows)
+        total_content = (len(entries) * self.ROW_H) + (n_dist * self.DIST_H)
+        height = max(self.MIN_H, self.HEADER_H + total_content + self.FOOTER_H + 8)
 
         self.canvas.config(width=w, height=height)
-        # Size only — position is managed by show() and _drag_move().
         self.win.geometry(f"{w}x{height}")
         self.canvas.delete("all")
 
@@ -241,30 +341,27 @@ class BioHUD:
         sys_short = self._system_name
         if len(sys_short) > 30:
             sys_short = sys_short[:29] + "…"
-        sub = f"{sys_short}  ·  {complete}/{total} complete"
-        self._text(12, 33, sub, COLOR_TEXT, ("Courier", 8))
+        self._text(12, 33, f"{sys_short}  ·  {complete}/{total} complete",
+                   COLOR_TEXT, ("Courier", 8))
 
         sep_y = self.HEADER_H - 2
         self.canvas.create_line(4, sep_y, w - 4, sep_y, fill=border_col, width=1)
 
         y = self.HEADER_H + 4
 
-        # ── Column layout ─────────────────────────────────────────────────
-        # [body_lbl 40px] [species name ~200px] [dots ~40px] [reward ~55px] [✓ 12px]
-        BODY_W    = 42
-        DOTS_X    = w - 112
-        REWARD_X  = w - 68
-        TICK_X    = w - 14
+        # Column x-positions
+        BODY_W   = 42
+        DOTS_X   = w - 112
+        REWARD_X = w - 68
+        TICK_X   = w - 14
 
-        # ── Species rows ──────────────────────────────────────────────────
-        prev_body = object()   # sentinel
+        prev_body = object()
 
-        for entry in entries:
+        for i, entry in enumerate(entries):
             body_id   = entry.get("body_id")
             body_name = entry.get("body_name", "")
             body_key  = body_id if body_id is not None else body_name
 
-            # Subtle separator when body changes
             if body_key != prev_body and prev_body is not object():
                 self.canvas.create_line(
                     BODY_W + 4, y - 1, w - 6, y - 1,
@@ -272,27 +369,26 @@ class BioHUD:
                 )
             prev_body = body_key
 
-            sp        = entry.get("species", "Unknown Organic")
-            dots      = self._sample_dots(
+            sp       = entry.get("species", "Unknown Organic")
+            dots     = self._sample_dots(
                 entry.get("sample_idx"), entry.get("max_samples"), entry.get("is_complete")
             )
-            reward    = entry.get("reward", 0)
-            rew_txt   = _fmt_credits(reward) if reward else "?"
-            done      = entry.get("is_complete", False)
-            row_col   = _COL_MUTED   if done else COLOR_TEXT
-            rew_col   = _COL_COMPLETE if done else COLOR_ORANGE
-            dot_col   = _COL_COMPLETE if done else COLOR_ACCENT
+            reward   = entry.get("reward", 0)
+            rew_txt  = _fmt_credits(reward) if reward else "?"
+            done     = entry.get("is_complete", False)
+            row_col  = _COL_MUTED   if done else COLOR_TEXT
+            rew_col  = _COL_COMPLETE if done else COLOR_ORANGE
+            dot_col  = _COL_COMPLETE if done else COLOR_ACCENT
 
-            # Body label (right-justified, short)
+            # Body label
             body_short = _strip_system(self._system_name, body_name)
             if len(body_short) > 6:
                 body_short = body_short[:5] + "…"
             self._text(BODY_W - 4, y + 5, body_short, _COL_BODY_LBL,
                        ("Courier", 8), anchor="e")
 
-            # Species name (truncated to fit)
-            max_sp_chars = 22
-            sp_display   = sp if len(sp) <= max_sp_chars else sp[:max_sp_chars - 1] + "…"
+            # Species name
+            sp_display = sp if len(sp) <= 22 else sp[:21] + "…"
             self._text(BODY_W + 4, y + 5, sp_display, row_col, ("Courier", 9))
 
             # Sample dots
@@ -308,13 +404,55 @@ class BioHUD:
 
             y += self.ROW_H
 
+            # ── Distance sub-row ─────────────────────────────────────────
+            if i in dist_rows:
+                dist_m, min_m = dist_rows[i]
+
+                BAR_X   = BODY_W + 4
+                BAR_END = DOTS_X - 4
+                BAR_W   = BAR_END - BAR_X
+                BAR_H   = 5
+                bar_y   = y + 4
+
+                cleared = dist_m is not None and dist_m >= min_m
+                col     = _COL_DIST_OK if cleared else _COL_DIST_WARN
+
+                # Bar track
+                self.canvas.create_rectangle(
+                    BAR_X, bar_y, BAR_END, bar_y + BAR_H,
+                    fill=_COL_DIST_BAR, outline="",
+                )
+                # Bar fill
+                if dist_m is not None:
+                    ratio   = min(1.0, dist_m / max(min_m, 1))
+                    fill_px = max(2, int(BAR_W * ratio))
+                    self.canvas.create_rectangle(
+                        BAR_X, bar_y, BAR_X + fill_px, bar_y + BAR_H,
+                        fill=col, outline="",
+                    )
+
+                # Distance label
+                if dist_m is not None:
+                    dist_txt = f"{int(dist_m)}m / {min_m}m"
+                    ok_txt   = "  ✓ CLEAR" if cleared else ""
+                else:
+                    dist_txt = f"—  / {min_m}m"
+                    ok_txt   = ""
+
+                self._text(BAR_X,   bar_y - 1, dist_txt, col, ("Courier", 7))
+                if ok_txt:
+                    self._text(BAR_END, bar_y - 1, ok_txt, _COL_DIST_OK,
+                               ("Courier", 7), anchor="e")
+
+                y += self.DIST_H
+
         # ── Footer ───────────────────────────────────────────────────────
         self.canvas.create_line(4, y + 2, w - 4, y + 2, fill=_COL_SEP, width=1)
 
         earned    = sum(e.get("reward", 0) for e in entries if e.get("is_complete"))
         remaining = sum(e.get("reward", 0) for e in entries if not e.get("is_complete"))
 
-        self._text(10,   y + 18, f"EARNED  {_fmt_credits(earned)}",
+        self._text(10,     y + 18, f"EARNED  {_fmt_credits(earned)}",
                    _COL_COMPLETE, ("Courier", 8))
         self._text(w // 2, y + 18, f"REMAINING  {_fmt_credits(remaining)}",
-                   COLOR_ORANGE,   ("Courier", 8))
+                   COLOR_ORANGE,  ("Courier", 8))
