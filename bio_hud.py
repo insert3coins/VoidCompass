@@ -190,8 +190,7 @@ class BioHUD:
             pass
 
     def _has_content(self) -> bool:
-        return bool(self._scans or self._dss_genera or
-                    (self._predictions and self._current_body_id is not None))
+        return bool(self._scans or self._dss_genera or self._predictions)
 
     # ── Data interface ─────────────────────────────────────────────────────
 
@@ -242,17 +241,27 @@ class BioHUD:
         self._redraw()
         self.show()
 
-    def on_predictions(self, body_id, body_name: str, predictions: list):
-        """Called after predict_for_body() runs. predictions = [{"genus", "species", "variant"}, ...]"""
+    def on_predictions(self, body_id, body_name: str, predictions: list,
+                       bio_count: int = 0):
+        """Called after predict_for_body() runs.
+
+        bio_count should be the bio_signals_count from the Scan event so we
+        know the body actually has signals worth showing.
+        """
         if body_id is None or not predictions:
             return
         if body_name:
             self._body_names[body_id] = body_name
         self._predictions[body_id] = predictions
-        # Only trigger a redraw if we don't have better data already
-        # (show predictions only when no DSS yet for this body)
+        if bio_count:
+            self._bio_counts[body_id] = bio_count
+        # Show the overlay as soon as we have predictions for a bio body,
+        # even before ApproachBody fires.  Skip if DSS data is already
+        # richer (genus rows will be shown instead).
         if body_id not in self._dss_genera:
             self._redraw()
+            if self._has_content():
+                self.show()
 
     def on_scan_organic(self, body_id, body_name, species, genus,
                         sample_idx, max_samples, is_complete,
@@ -353,11 +362,12 @@ class BioHUD:
         all_bodies.update(e["body_id"] for e in self._scans.values()
                           if e.get("body_id") is not None)
         all_bodies.update(self._dss_genera.keys())
-        # Only show predictions for current body (not yet DSS'd)
-        if (self._current_body_id is not None
-                and self._current_body_id in self._predictions
-                and self._current_body_id not in self._dss_genera):
-            all_bodies.add(self._current_body_id)
+        # Show predictions for any body that has them and hasn't been DSS'd yet.
+        # This makes the overlay pop up on FSS scan rather than waiting for
+        # ApproachBody.
+        for bid in self._predictions:
+            if bid not in self._dss_genera:
+                all_bodies.add(bid)
 
         if not all_bodies:
             return
@@ -463,8 +473,8 @@ class BioHUD:
                     "count":   unknown,
                 })
 
-            # ── Predictions (only if no DSS and this is the current body) ─
-            if is_current and bid not in self._dss_genera:
+            # ── Predictions (any body without DSS data yet) ──────────────
+            if bid not in self._dss_genera:
                 preds = self._predictions.get(bid, [])
                 # Show predictions not already confirmed
                 scanned_sp_lower = {

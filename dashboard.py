@@ -1426,8 +1426,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                                 _bid   = body_id
                                 _bname = body_name
                                 _preds = preds
+                                _bc    = d.get("bio_signals_count", 0)
                                 self.root.after(0, lambda: self.bio_hud.on_predictions(
-                                    _bid, _bname, _preds))
+                                    _bid, _bname, _preds, _bc))
 
                     # Check for valuable bodies
                     p_class = d.get("planet_class", "")
