@@ -1253,9 +1253,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.body_scan_data.clear()
             self.current_body_id   = None
             self.current_body_name = ""
-            if self.bio_hud and not self.batch_mode:
+            if self.bio_hud:
                 _sys = self.current_sys
-                self.root.after(0, lambda: self.bio_hud.on_system_change(_sys))
+                self.root.after(0, lambda s=_sys: self.bio_hud.on_system_change(s))
             self.valuable_system = False
             self.valuable_bodies.clear()
             self.system_traffic = {'day': 0, 'week': 0, 'total': 0}
