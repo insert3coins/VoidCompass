@@ -1,5 +1,20 @@
 # VoidCompass // UPDATE LOG
 
+## v2.9.0 // Exobiology Overlay
+**Release Date:** 2026-May-27
+*   **New `BioHUD` overlay (`bio_hud.py`):**
+    *   Transparent topmost canvas overlay — same rendering path as ProspectorHUD and ScanHUD.
+    *   Appears automatically on the first `ScanOrganic` event in a system; stays visible as long as incomplete scans remain; clears and hides on system jump (FSDJump / Location / CarrierJump).
+    *   Per-species rows show: body label (system-prefix stripped), species name (truncated), sample progress dots (`●●○` = 2/3, `●●●` = complete), reward estimate, and a green ✓ tick on completion.
+    *   Footer shows **EARNED** (sum of completed species rewards) and **REMAINING** (sum of incomplete) so you always know what's still on the table.
+    *   Reward estimates sourced from SrvSurvey's `codexRef.json` via `srvsurvey_rewards.py` — exact match on species name, genus-range fallback when only the genus is known.
+    *   Subtle body-change separators group rows by body. Border turns green when all species in the system are complete.
+    *   Draggable — position saved to `config.json` on mouse-release (`bio_hud_x`, `bio_hud_y`).
+    *   On/off toggle in Configuration → **Exobiology Overlay** (key `bio_overlay_enabled`, default on). Requires restart (same as other overlays).
+*   **`srvsurvey_rewards.py`** — new reward-lookup module; reads `codexRef.json` (SrvSurvey's Biology codex with 814 entries); provides `lookup(species, genus)` for exact or genus-range reward estimates.
+*   **`codexRef.json`** — SrvSurvey Biology codex data (downloaded from `SrvSurvey/docs/codexRef.json`).
+*   **`dashboard.py`:** Imports `BioHUD`; creates it alongside other overlays; forwards `ScanOrganic` events (live only, skipped during startup batch); calls `on_system_change()` on every jump/location event.
+
 ## v2.8.13 // Prospector HUD Startup Replay Fix
 **Release Date:** 2026-May-26
 *   **Prospector overlay no longer pops up on program load (`dashboard.py`):**

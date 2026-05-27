@@ -116,11 +116,13 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
     cargo_var = tk.BooleanVar(value=config.get("cargo_overlay_enabled", False))
     scan_var = tk.BooleanVar(value=config.get("scan_overlay_enabled", True))
     prosp_var = tk.BooleanVar(value=config.get("prospector_overlay_enabled", True))
+    bio_var   = tk.BooleanVar(value=config.get("bio_overlay_enabled", True))
     create_toggle(sec_gen, "Tactical Overlay", ov_var)
     create_toggle(sec_gen, "Cargo Manifest Overlay", cargo_var)
     create_toggle(sec_gen, "Scan Results Overlay", scan_var)
     create_toggle(sec_gen, "Prospector Result Overlay", prosp_var)
     prosp_timeout_e = create_input(sec_gen, "Prospector Overlay Auto-Hide (seconds)  —  60 = 1 min  ·  120 = 2 min  ·  300 = 5 min", "prospector_hud_timeout_s")
+    create_toggle(sec_gen, "Exobiology Overlay", bio_var)
     tk.Frame(sec_gen, bg=UI_PANEL, height=10).pack(fill=tk.X)
 
     sec_ss = panel(body, "SCREENSHOTS")
@@ -165,6 +167,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
             "prospector_hud_timeout_s": max(5, int(prosp_timeout_e.get().strip() or 45))
                 if prosp_timeout_e.get().strip().isdigit() else
                 config.get("prospector_hud_timeout_s", 45),
+            "bio_overlay_enabled": bio_var.get(),
             "screenshots_enabled": ss_var.get(),
             "screenshots_path": ss_e.get().strip(),
             "carrier_discord_webhook_url": fc_wh_e.get().strip(),
