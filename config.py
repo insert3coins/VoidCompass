@@ -41,6 +41,9 @@ DEPRECATED_CONFIG_KEYS = (
     'fc_discord_cooldown_finished',
     'fc_discord_cooldown_finished_ping',
     'fc_notes',
+    'bio_overlay_enabled',
+    'bio_hud_x',
+    'bio_hud_y',
 )
 COLOR_BG = '#0b0b0b'
 COLOR_PANEL = '#1e1e1e'
