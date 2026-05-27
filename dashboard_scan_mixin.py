@@ -31,6 +31,17 @@ class DashboardScanMixin:
             and self.current_planet_radius > 0
         )
 
+        # Feed live position to the bio overlay for distance tracking.
+        if getattr(self, "bio_hud", None):
+            if self.on_planet:
+                self.bio_hud.on_position_update(
+                    self.current_latitude,
+                    self.current_longitude,
+                    self.current_planet_radius,
+                )
+            else:
+                self.bio_hud.on_position_update(None, None, None)
+
         gui_focus = data.get("GuiFocus", -1)
         in_fss = gui_focus == 9 or gui_focus == "FSS"
         if in_fss != self.in_fss:

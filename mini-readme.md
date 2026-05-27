@@ -1,5 +1,14 @@
 # VoidCompass // UPDATE LOG
 
+## v2.9.1 // Exobiology Overlay — Scan Distance Bar
+**Release Date:** 2026-May-27
+*   **Bio scan distance tracking added to `BioHUD` (`bio_hud.py`, `dashboard.py`, `dashboard_scan_mixin.py`):**
+    *   When a sample is taken on a planet surface, the player's lat/lon/radius is recorded at that moment.
+    *   `Status.json` position updates (already polled every ~1 s) are forwarded to `bio_hud.on_position_update()` via `_apply_status_update` in `dashboard_scan_mixin.py`.
+    *   For every incomplete species that has at least one sample taken, a compact distance sub-row appears below its species row: a fill bar showing progress toward the minimum required distance, and a `"143m / 500m"` label — orange while not yet cleared, green once reached.  A `✓ CLEAR` indicator appears when the required distance has been walked.
+    *   Minimum scan distances are per-genus (datamined values): Bacterium/Stratum/Fonticulua 500 m · Tubus/Osseus 800 m · Electricae 1000 m · Fungoida/Cactoida 300 m · Tussock 200 m · most others 100–150 m.
+    *   Distance rows are removed from the layout once a species is complete (3/3 samples), keeping the overlay compact.
+
 ## v2.9.0 // Exobiology Overlay
 **Release Date:** 2026-May-27
 *   **New `BioHUD` overlay (`bio_hud.py`):**
