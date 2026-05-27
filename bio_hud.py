@@ -190,7 +190,7 @@ class BioHUD:
             pass
 
     def _has_content(self) -> bool:
-        return bool(self._scans or self._dss_genera or self._predictions)
+        return bool(self._scans or self._dss_genera or self._predictions or self._bio_counts)
 
     # ── Data interface ─────────────────────────────────────────────────────
 
@@ -243,19 +243,22 @@ class BioHUD:
 
     def on_predictions(self, body_id, body_name: str, predictions: list,
                        bio_count: int = 0):
-        """Called after predict_for_body() runs.
+        """Called after predict_for_body() runs (or from FSSBodySignals when
+        bio_count > 0 but predictions may be empty).
 
-        bio_count should be the bio_signals_count from the Scan event so we
-        know the body actually has signals worth showing.
+        Showing is gated on having *either* predictions or a confirmed bio
+        signal count — so a body with 1 bio signal but no matching criteria
+        in the prediction engine still pops up the overlay.
         """
-        if body_id is None or not predictions:
+        if body_id is None or (not predictions and not bio_count):
             return
         if body_name:
             self._body_names[body_id] = body_name
-        self._predictions[body_id] = predictions
+        if predictions:
+            self._predictions[body_id] = predictions
         if bio_count:
             self._bio_counts[body_id] = bio_count
-        # Show the overlay as soon as we have predictions for a bio body,
+        # Show the overlay as soon as we have data for a bio body,
         # even before ApproachBody fires.  Skip if DSS data is already
         # richer (genus rows will be shown instead).
         if body_id not in self._dss_genera:
@@ -366,6 +369,11 @@ class BioHUD:
         # This makes the overlay pop up on FSS scan rather than waiting for
         # ApproachBody.
         for bid in self._predictions:
+            if bid not in self._dss_genera:
+                all_bodies.add(bid)
+        # Also include bodies where we have a confirmed bio signal count but
+        # no prediction data yet (e.g. prediction engine returned empty list).
+        for bid in self._bio_counts:
             if bid not in self._dss_genera:
                 all_bodies.add(bid)
 
