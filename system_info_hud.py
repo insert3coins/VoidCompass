@@ -9,6 +9,11 @@ _CHROMA = "#ff00ff"
 _COL_DIM  = "#7a8a98"
 _COL_GOLD = "#e8c97a"
 
+_STARPORT_TYPES = {
+    "Coriolis Starport", "Orbis Starport", "Ocellus Starport",
+    "Asteroid base", "Planetary Port", "Planetary Outpost",
+}
+
 
 def _fmt_pop(n):
     try:
@@ -68,6 +73,7 @@ class SystemInfoHUD:
         self._bio_total     = 0
         self._notable       = []   # list of (tag, name)
         self._edsm_info     = None
+        self._spansh        = None  # parsed station/service summary
 
         self._force_topmost()
         self.win.withdraw()
@@ -125,6 +131,7 @@ class SystemInfoHUD:
         self._star_class    = star_class or ""
         self._body_count    = int(total_bodies or 0)
         self._edsm_info     = None
+        self._spansh        = None
 
         self._scanned_count = sum(
             1 for it in (scan_items or []) if not it.get("is_star")
@@ -158,6 +165,47 @@ class SystemInfoHUD:
         if not details:
             return
         self._edsm_info = details.get("information") or {}
+        try:
+            if self.win.state() != "withdrawn":
+                self._redraw()
+        except Exception:
+            pass
+
+    def update_spansh(self, data):
+        if not data:
+            return
+        system = data.get("system") or {}
+
+        # Collect all stations: system-level + body-level
+        all_stations = list(system.get("stations") or [])
+        for body in (system.get("bodies") or []):
+            all_stations.extend(body.get("stations") or [])
+
+        counts = {"starport": 0, "outpost": 0, "settlement": 0, "fc": 0}
+        services = {"mat_trader": False, "tech_broker": False, "engineer": False}
+
+        for st in all_stations:
+            stype    = st.get("type") or ""
+            svc_list = st.get("services") or []
+            gov      = st.get("government") or ""
+
+            if stype == "Drake-Class Carrier":
+                counts["fc"] += 1
+            elif stype == "Settlement":
+                counts["settlement"] += 1
+            elif stype == "Outpost":
+                counts["outpost"] += 1
+            elif stype in _STARPORT_TYPES or (st.get("landingPads") and "Mega ship" in stype):
+                counts["starport"] += 1
+
+            if "Material Trader" in svc_list:
+                services["mat_trader"] = True
+            if "Technology Broker" in svc_list:
+                services["tech_broker"] = True
+            if gov == "Engineer":
+                services["engineer"] = True
+
+        self._spansh = {"counts": counts, "services": services}
         try:
             if self.win.state() != "withdrawn":
                 self._redraw()
@@ -218,6 +266,28 @@ class SystemInfoHUD:
             chunks = [f"{tag}:{_truncate(name, 10)}" for tag, name in self._notable[:4]]
             lines.append(("NOTABLE: " + "  ".join(chunks), COLOR_ORANGE))
 
+        # Spansh station counts + special services
+        if self._spansh:
+            c = self._spansh["counts"]
+            s = self._spansh["services"]
+            port_parts = [p for p in [
+                (f"{c['starport']} STARPORT" if c["starport"] else ""),
+                (f"{c['outpost']} OUTPOST"   if c["outpost"]   else ""),
+                (f"{c['settlement']} SETTLE"  if c["settlement"] else ""),
+                (f"{c['fc']} FC"             if c["fc"]        else ""),
+            ] if p]
+            if port_parts:
+                lines.append(("PORTS: " + "  ·  ".join(port_parts), COLOR_TEXT))
+            svc_parts = [p for p in [
+                ("MAT TRADER"  if s["mat_trader"]  else ""),
+                ("TECH BROKER" if s["tech_broker"] else ""),
+                ("ENGINEER"    if s["engineer"]    else ""),
+            ] if p]
+            if svc_parts:
+                lines.append(("SVCS:  " + "  ·  ".join(svc_parts), COLOR_ORANGE))
+        else:
+            lines.append(("PORTS: FETCHING...", _COL_DIM))
+
         # EDSM faction / population info
         if self._edsm_info:
             info = self._edsm_info
@@ -242,9 +312,6 @@ class SystemInfoHUD:
             ] if p]
             if fac_parts:
                 lines.append(("  ·  ".join(fac_parts), _COL_DIM))
-        else:
-            lines.append(("EDSM: FETCHING...", _COL_DIM))
-
         return lines
 
     def _draw_text(self, x, y, text, fill, font, anchor="w"):

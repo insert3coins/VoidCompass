@@ -78,6 +78,19 @@ class EDSMHandler:
         
         threading.Thread(target=_fetch, daemon=True).start()
 
+    def fetch_spansh_system(self, system_address, callback):
+        """Fetch full system dump from Spansh (stations, services, etc.)."""
+        def _fetch():
+            try:
+                url = f"https://spansh.co.uk/api/dump/{system_address}/"
+                r = self._limited_get(url, timeout=15, retries=1)
+                data = r.json()
+                callback(data if isinstance(data, dict) else None)
+            except Exception as e:
+                logging.warning(f"Spansh system dump failed: {e}")
+                callback(None)
+        threading.Thread(target=_fetch, daemon=True).start()
+
     def fetch_system_blurb(self, system_name, callback):
         def _fetch():
             try:
