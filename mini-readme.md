@@ -1,6 +1,18 @@
 # VoidCompass // UPDATE LOG
 
 
+## v2.9.7 // System Info Overlay
+**Release Date:** 2026-Jun-03
+*   **New `SystemInfoHUD` overlay (`system_info_hud.py`):**
+    *   Appears automatically each time you jump to a system. Auto-hides after a configurable timeout (default 30 s).
+    *   Draggable — position saved to `config.json` on mouse-release (`system_info_hud_x`, `system_info_hud_y`). Protected by the `winfo=0` guard so position is never clobbered when the window is hidden.
+    *   Content fills in two waves:
+        *   **Immediately on jump:** system name, primary star class, total body count, scanned count, total bio signals — all pulled from the DB for known systems. Notable bodies (ELW / Water World / Ammonia World / Terraformable) shown if previously recorded.
+        *   **~2–5 s async (EDSM):** traffic (today / week / all-time) and system details — population, allegiance, government, faction, security, state — via `fetch_system_details()` which was already implemented in `edsm_handler.py` but previously never called on arrival.
+    *   **Settings UI** (`settings_ui.py`): new *System Info Overlay* on/off toggle + *System Info Auto-Hide (seconds)* input (timeout takes effect without restart).
+    *   **Config defaults** (`config.py`): `system_info_enabled` (true), `system_info_timeout_s` (30), `system_info_hud_x` (30), `system_info_hud_y` (30).
+
+
 ## v2.9.6 // Overlay Position Memory Fix
 **Release Date:** 2026-Jun-03
 *   **Overlay positions are now reliably remembered between restarts (`dashboard.py`):**
