@@ -1,26 +1,19 @@
 import json
 import tkinter as tk
-from config import CONFIG_FILE, COLOR_ACCENT, COLOR_BG, COLOR_TEXT
+from config import CONFIG_FILE, COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE
 
-WIDTH   = 460
-PAD     = 12
-ROW_H   = 22
-HDR_H   = 44
+WIDTH = 460
 
 _CHROMA = "#ff00ff"
 
-_COL_DIM    = "#5a6a78"
-_COL_STAR   = "#e8c97a"
-_COL_BIO    = "#7ec89a"
-_COL_WARN   = "#e07040"
-_COL_POP    = "#8ab4cc"
+_ANIM_FRAMES = [
+    "⢄","⢂","⢁"," ","⡈","⡐","⡠","⡰","⣠","⣐","⣈","⣁",
+    "⣂","⣄","⣆","⣇","⣧","⣷","⣾","⣶","⣼","⣸","⣙","⣉","⣁",
+]
 
-_ICONS = {
-    "Earthlike body":        "ELW",
-    "Water world":           "WW",
-    "Ammonia world":         "AMM",
-    "terraformable":         "TF",
-}
+_COL_DIM  = "#7a8a98"
+_COL_GOLD = "#e8c97a"
+
 
 def _fmt_pop(n):
     try:
@@ -28,18 +21,13 @@ def _fmt_pop(n):
     except Exception:
         return ""
     if n >= 1_000_000_000:
-        return f"{n / 1_000_000_000:.1f}B"
+        return f"{n/1_000_000_000:.1f}B"
     if n >= 1_000_000:
-        return f"{n / 1_000_000:.1f}M"
+        return f"{n/1_000_000:.1f}M"
     if n >= 1_000:
-        return f"{n / 1_000:.0f}K"
+        return f"{n/1_000:.0f}K"
     return str(n)
 
-def _fmt_traffic(n):
-    try:
-        return f"{int(n):,}"
-    except Exception:
-        return "-"
 
 def _truncate(text, max_chars):
     if not text:
@@ -54,41 +42,42 @@ class SystemInfoHUD:
         self.config = config
 
         self.win = tk.Toplevel(root)
+        self.win.attributes("-topmost", True, "-transparentcolor", _CHROMA, "-toolwindow", True)
         self.win.overrideredirect(True)
-        self.win.attributes("-topmost", True)
-        self.win.attributes("-transparentcolor", _CHROMA)
-        self.win.configure(bg=_CHROMA)
-        self.win.resizable(False, False)
+        self.win.config(bg=_CHROMA)
 
         self.canvas = tk.Canvas(
             self.win, bg=_CHROMA, highlightthickness=0,
-            width=WIDTH, height=HDR_H,
+            width=WIDTH, height=100,
         )
         self.canvas.pack()
 
-        self.canvas.bind("<Button-1>",      self._drag_start)
-        self.canvas.bind("<B1-Motion>",     self._drag_move)
-        self.canvas.bind("<ButtonRelease-1>", self._drag_end)
+        self.canvas.bind("<Button-1>",        self._on_mouse_down)
+        self.canvas.bind("<B1-Motion>",       self._on_mouse_drag)
+        self.canvas.bind("<ButtonRelease-1>", self._on_mouse_up)
 
         x = int(config.get("system_info_hud_x", 30))
         y = int(config.get("system_info_hud_y", 30))
         self.win.geometry(f"+{x}+{y}")
 
-        self._hide_job    = None
-        self._save_job    = None
-        self._dx = self._dy = 0
+        self._hide_job       = None
+        self._save_job       = None
+        self._mouse_down     = None
+        self._mouse_dragging = False
+        self._mx = self._my  = 0
+        self._anim_step      = 0
 
-        # Current data
-        self._system      = ""
-        self._star_class  = ""
-        self._body_count  = 0          # total expected bodies
-        self._scanned_count = 0        # bodies scanned so far
-        self._bio_total   = 0          # total bio signals across all bodies
-        self._notable     = []         # list of (tag, name) e.g. ("ELW", "A 1")
-        self._traffic     = None       # dict day/week/total (EDSM async)
-        self._edsm_info   = None       # dict from EDSM system details (async)
+        # Displayed data
+        self._system        = ""
+        self._star_class    = ""
+        self._body_count    = 0
+        self._scanned_count = 0
+        self._bio_total     = 0
+        self._notable       = []   # list of (tag, name)
+        self._edsm_info     = None
 
         self._force_topmost()
+        self._tick_anim()
         self.win.withdraw()
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
@@ -100,6 +89,16 @@ class SystemInfoHUD:
             pass
         ms = max(2000, int(self.config.get("overlay_topmost_refresh_ms", 12000) or 12000))
         self.win.after(ms, self._force_topmost)
+
+    def _tick_anim(self):
+        try:
+            self.canvas.delete("anim")
+            frame = _ANIM_FRAMES[self._anim_step]
+            self._draw_text(440, 20, frame, COLOR_ACCENT, ("Courier", 12, "bold"), anchor="e", tag="anim")
+            self._anim_step = (self._anim_step + 1) % len(_ANIM_FRAMES)
+        except Exception:
+            pass
+        self.win.after(100, self._tick_anim)
 
     def show(self):
         x = int(self.config.get("system_info_hud_x", 30))
@@ -140,28 +139,23 @@ class SystemInfoHUD:
 
     def on_system_arrival(self, system_name, star_class,
                           scan_items, body_signals, total_bodies):
-        """Called on FSDJump / Location with whatever we know immediately."""
-        self._system      = system_name or "Unknown"
-        self._star_class  = star_class or ""
-        self._body_count  = int(total_bodies or 0)
-        self._traffic     = None
-        self._edsm_info   = None
+        self._system        = system_name or "Unknown"
+        self._star_class    = star_class or ""
+        self._body_count    = int(total_bodies or 0)
+        self._edsm_info     = None
 
-        # Count scanned bodies and bio signals from in-memory state
         self._scanned_count = sum(
-            1 for it in (scan_items or [])
-            if not it.get("is_star")
+            1 for it in (scan_items or []) if not it.get("is_star")
         )
         self._bio_total = sum(
             s.get("bio", 0) for s in (body_signals or {}).values()
         )
 
-        # Notable bodies from restored scan items
         self._notable = []
         for item in (scan_items or []):
             if item.get("is_star"):
                 continue
-            pc = (item.get("planet_class") or "").lower()
+            pc   = (item.get("planet_class") or "").lower()
             name = item.get("name") or ""
             if "earthlike" in pc:
                 self._notable.append(("ELW", name))
@@ -175,18 +169,13 @@ class SystemInfoHUD:
         self.show()
 
     def update_traffic(self, traffic):
-        """Called when EDSM traffic fetch returns."""
-        self._traffic = traffic
-        self._redraw_if_visible()
+        # Traffic is shown in the Navigation HUD — nothing to do here.
+        pass
 
     def update_edsm_details(self, details):
-        """Called when EDSM system details fetch returns."""
         if not details:
             return
         self._edsm_info = details.get("information") or {}
-        self._redraw_if_visible()
-
-    def _redraw_if_visible(self):
         try:
             if self.win.state() != "withdrawn":
                 self._redraw()
@@ -196,130 +185,137 @@ class SystemInfoHUD:
     # ── Rendering ─────────────────────────────────────────────────────────
 
     def _redraw(self):
-        rows = self._build_rows()
-        height = HDR_H + len(rows) * ROW_H + PAD
+        lines = self._build_lines()
+        # Each line is 18px; header=35px; padding top/bottom=10px each
+        height = 35 + len(lines) * 18 + 14
+        height = max(height, 60)
+
         self.canvas.config(width=WIDTH, height=height)
         self.win.geometry(f"{WIDTH}x{height}")
         self.canvas.delete("all")
 
-        # Background panel
-        r = 6
-        self.canvas.create_rectangle(0, 0, WIDTH, height,
-                                     fill="#080d11", outline=COLOR_ACCENT, width=1)
+        # Panel background (inset 5px, same as nav HUD)
+        self.canvas.create_rectangle(
+            5, 5, WIDTH - 5, height - 5,
+            fill="#010101", outline=COLOR_ACCENT, width=2,
+        )
+        # Header divider
+        self.canvas.create_line(5, 35, WIDTH - 5, 35, fill=COLOR_ACCENT, width=1)
 
-        # Header
-        # System name
-        sys_text = _truncate(self._system.upper(), 30)
-        self._text(PAD, 14, sys_text, COLOR_ACCENT,
-                   ("Segoe UI", 14, "bold"), anchor="w")
+        # Header label
+        self._draw_text(20, 20, "SYSTEM INFO", COLOR_ACCENT, ("Courier", 10, "bold"))
 
-        # Star class badge (right side)
+        # Spinner placeholder (redrawn by _tick_anim)
+        self._draw_text(440, 20, " ", COLOR_ACCENT, ("Courier", 12, "bold"), anchor="e", tag="anim")
+
+        # Content lines
+        y = 44
+        for text, color in lines:
+            self._draw_text(20, y, text, color, ("Courier", 10, "bold"))
+            y += 18
+
+    def _build_lines(self):
+        lines = []  # (text, color)
+
+        # System + star class
+        sys_text = _truncate(self._system.upper(), 32)
         if self._star_class:
-            badge = f"  {self._star_class}-TYPE  "
-            self._text(WIDTH - PAD, 14, badge, _COL_STAR,
-                       ("Consolas", 9, "bold"), anchor="e")
+            sys_text += f"  [{self._star_class}]"
+        lines.append((f"SYS: {sys_text}", COLOR_TEXT))
 
-        # Divider
-        self.canvas.create_line(PAD, HDR_H - 2, WIDTH - PAD, HDR_H - 2,
-                                fill=COLOR_ACCENT, width=1)
-
-        # Body rows
-        y = HDR_H + ROW_H // 2
-        for label, value, color in rows:
-            if label:
-                self._text(PAD, y, label, _COL_DIM,
-                           ("Segoe UI", 8, "bold"), anchor="w")
-                self._text(PAD + 80, y, value, color,
-                           ("Consolas", 10), anchor="w")
-            else:
-                # Full-width value (no label)
-                self._text(PAD, y, value, color,
-                           ("Consolas", 10), anchor="w")
-            y += ROW_H
-
-    def _build_rows(self):
-        rows = []  # (label, value, color)
-
-        # Bodies line
+        # Bodies
+        parts = []
         if self._body_count > 0:
-            body_str = f"{self._body_count} bodies"
-        else:
-            body_str = "? bodies"
+            parts.append(f"{self._body_count} BODIES")
         if self._scanned_count > 0:
-            body_str += f"  ·  {self._scanned_count} scanned"
+            parts.append(f"{self._scanned_count} SCANNED")
         if self._bio_total > 0:
-            body_str += f"  ·  {self._bio_total} bio"
-        rows.append(("BODIES", body_str, COLOR_TEXT))
+            parts.append(f"{self._bio_total} BIO")
+        if parts:
+            lines.append(("SCAN: " + "  ·  ".join(parts), COLOR_TEXT))
 
-        # Notable bodies (max 4, formatted as tags)
+        # Notable bodies
         if self._notable:
-            chunks = [f"[{tag}] {_truncate(name, 14)}" for tag, name in self._notable[:4]]
-            rows.append(("NOTABLE", "  ".join(chunks), _COL_WARN))
+            chunks = [f"{tag}:{_truncate(name, 10)}" for tag, name in self._notable[:4]]
+            lines.append(("NOTABLE: " + "  ".join(chunks), COLOR_ORANGE))
 
-        # EDSM info block
+        # EDSM faction / population info
         if self._edsm_info:
             info = self._edsm_info
-            pop = _fmt_pop(info.get("population"))
-            faction = _truncate(info.get("faction") or "", 24)
-            gov = info.get("government") or ""
-            alleg = info.get("allegiance") or ""
-            security = info.get("security") or ""
-            state = info.get("state") or ""
+            pop    = _fmt_pop(info.get("population"))
+            alleg  = (info.get("allegiance") or "").upper()
+            gov    = (info.get("government") or "").upper()
+            sec    = (info.get("security") or "").upper()
+            state  = (info.get("state") or "").upper()
+            faction = _truncate((info.get("faction") or "").upper(), 28)
 
-            # Population + allegiance / government
-            if pop or alleg:
-                line = "  ·  ".join(p for p in [
-                    (f"Pop {pop}" if pop else ""),
-                    alleg,
-                    gov,
-                ] if p)
-                rows.append(("FACTION", line, _COL_POP))
+            pol_parts = [p for p in [
+                (f"POP {pop}" if pop else ""),
+                alleg, gov,
+            ] if p]
+            if pol_parts:
+                lines.append(("  ·  ".join(pol_parts), _COL_DIM))
 
-            # Faction + security + state
-            if faction or security:
-                line2 = "  ·  ".join(p for p in [
-                    faction,
-                    security,
-                    (state if state and state.lower() not in ("none", "") else ""),
-                ] if p)
-                if line2:
-                    rows.append(("", line2, _COL_DIM))
-
-        # Traffic
-        if self._traffic:
-            t = self._traffic
-            d = _fmt_traffic(t.get("day", 0))
-            w = _fmt_traffic(t.get("week", 0))
-            total = _fmt_traffic(t.get("total", 0))
-            rows.append(("TRAFFIC", f"Today {d}  ·  Week {w}  ·  All-time {total}", _COL_DIM))
+            fac_parts = [p for p in [
+                faction,
+                sec,
+                (state if state and state not in ("NONE", "") else ""),
+            ] if p]
+            if fac_parts:
+                lines.append(("  ·  ".join(fac_parts), _COL_DIM))
         else:
-            rows.append(("TRAFFIC", "fetching…", _COL_DIM))
+            lines.append(("EDSM: FETCHING...", _COL_DIM))
 
-        return rows
+        return lines
 
-    def _text(self, x, y, text, fill, font, anchor="w"):
-        self.canvas.create_text(x + 1, y + 1, text=text, fill="#000000",
-                                font=font, anchor=anchor)
+    def _draw_text(self, x, y, text, fill, font, anchor="w", tag=None):
+        tags = (tag,) if tag else ()
+        self.canvas.create_text(x+1, y+1, text=text, fill="black",
+                                font=font, anchor=anchor, tags=tags)
         self.canvas.create_text(x, y, text=text, fill=fill,
-                                font=font, anchor=anchor)
+                                font=font, anchor=anchor, tags=tags)
 
     # ── Drag-to-move ──────────────────────────────────────────────────────
 
-    def _drag_start(self, event):
-        self._dx = event.x
-        self._dy = event.y
+    def _on_mouse_down(self, event):
+        self._mouse_down     = (event.x, event.y)
+        self._mouse_dragging = False
+        self._mx = event.x
+        self._my = event.y
 
-    def _drag_move(self, event):
-        x = self.win.winfo_x() + (event.x - self._dx)
-        y = self.win.winfo_y() + (event.y - self._dy)
+    def _on_mouse_drag(self, event):
+        if not self._mouse_down:
+            return
+        sx, sy = self._mouse_down
+        if abs(event.x - sx) > 3 or abs(event.y - sy) > 3:
+            self._mouse_dragging = True
+        x = self.win.winfo_x() + (event.x - self._mx)
+        y = self.win.winfo_y() + (event.y - self._my)
         self.win.geometry(f"+{x}+{y}")
+        self.config["system_info_hud_x"] = x
+        self.config["system_info_hud_y"] = y
+        self._schedule_config_save()
 
-    def _drag_end(self, event):
+    def _on_mouse_up(self, event):
         x, y = self.win.winfo_x(), self.win.winfo_y()
         if x != 0 or y != 0:
             self.config["system_info_hud_x"] = x
             self.config["system_info_hud_y"] = y
             self._write_config()
+        self._mouse_down     = None
+        self._mouse_dragging = False
+
+    def _schedule_config_save(self):
+        if self._save_job:
+            try:
+                self.win.after_cancel(self._save_job)
+            except Exception:
+                pass
+        self._save_job = self.win.after(250, self._flush_config_save)
+
+    def _flush_config_save(self):
+        self._save_job = None
+        self._write_config()
 
     def _write_config(self):
         try:
