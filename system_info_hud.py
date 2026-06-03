@@ -215,95 +215,111 @@ class SystemInfoHUD:
     # ── Rendering ─────────────────────────────────────────────────────────
 
     def _redraw(self):
-        lines = self._build_lines()
-        # Each line is 18px; header=35px; padding top/bottom=10px each
-        height = 35 + len(lines) * 18 + 14
-        height = max(height, 60)
+        # rows: (text, color) for text | ("---", None) for a thin divider
+        rows = self._build_rows()
 
-        self.canvas.config(width=WIDTH, height=height)
-        self.win.geometry(f"{WIDTH}x{height}")
+        LINE_H = 20
+        DIV_H  = 10   # height consumed by a divider row
+        total_h = 35  # header
+        for text, _ in rows:
+            total_h += DIV_H if text == "---" else LINE_H
+        total_h += 10  # bottom padding
+        total_h = max(total_h, 60)
+
+        self.canvas.config(width=WIDTH, height=total_h)
+        self.win.geometry(f"{WIDTH}x{total_h}")
         self.canvas.delete("all")
 
-        # Panel background (inset 5px, same as nav HUD)
+        # Panel — same as nav HUD
         self.canvas.create_rectangle(
-            5, 5, WIDTH - 5, height - 5,
+            5, 5, WIDTH - 5, total_h - 5,
             fill="#010101", outline=COLOR_ACCENT, width=2,
         )
-        # Header divider
         self.canvas.create_line(5, 35, WIDTH - 5, 35, fill=COLOR_ACCENT, width=1)
-
-        # Header label
         self._draw_text(20, 20, "SYSTEM INFO", COLOR_ACCENT, ("Courier", 10, "bold"))
 
-        # Content lines
         y = 44
-        for text, color in lines:
-            self._draw_text(20, y, text, color, ("Courier", 10, "bold"))
-            y += 18
+        first_row = True
+        for text, color in rows:
+            if text == "---":
+                mid = y + DIV_H // 2
+                self.canvas.create_line(
+                    20, mid, WIDTH - 20, mid, fill="#2a3a48", width=1,
+                )
+                y += DIV_H
+            else:
+                self._draw_text(20, y, text, color, ("Courier", 10, "bold"))
+                # Star class badge right-aligned on the system name row
+                if first_row and self._star_class:
+                    badge = f"[{self._star_class}]"
+                    self._draw_text(WIDTH - 20, y, badge, _COL_GOLD,
+                                    ("Courier", 10, "bold"), anchor="e")
+                first_row = False
+                y += LINE_H
 
-    def _build_lines(self):
-        lines = []  # (text, color)
+    def _build_rows(self):
+        # rows: list of (text, color) | ("---", None) for section dividers
+        rows = []
 
-        # System + star class
-        sys_text = _truncate(self._system.upper(), 32)
-        if self._star_class:
-            sys_text += f"  [{self._star_class}]"
-        lines.append((f"SYS: {sys_text}", COLOR_TEXT))
+        # ── System name (star class drawn right-aligned directly in _redraw)
+        sys_name = _truncate(self._system.upper(), 34)
+        rows.append((sys_name, COLOR_ACCENT))
 
-        # Bodies
-        parts = []
+        # ── Scan / bio / notable ──────────────────────────────────────────
+        rows.append(("---", None))
+
+        scan_parts = []
         if self._body_count > 0:
-            parts.append(f"{self._body_count} BODIES")
+            scan_parts.append(f"{self._body_count} BODIES")
         if self._scanned_count > 0:
-            parts.append(f"{self._scanned_count} SCANNED")
+            scan_parts.append(f"{self._scanned_count} SCANNED")
         if self._bio_total > 0:
-            parts.append(f"{self._bio_total} BIO")
-        if parts:
-            lines.append(("SCAN: " + "  ·  ".join(parts), COLOR_TEXT))
+            scan_parts.append(f"{self._bio_total} BIO")
+        if scan_parts:
+            rows.append(("  ·  ".join(scan_parts), _COL_DIM))
 
-        # Notable bodies
         if self._notable:
-            chunks = [f"{tag}:{_truncate(name, 10)}" for tag, name in self._notable[:4]]
-            lines.append(("NOTABLE: " + "  ".join(chunks), COLOR_ORANGE))
+            chunks = [f"[{tag}] {_truncate(name, 12)}" for tag, name in self._notable[:4]]
+            rows.append(("  ".join(chunks), COLOR_ORANGE))
 
-        # Spansh station counts + special services
+        # ── Stations + services (Spansh) ──────────────────────────────────
+        rows.append(("---", None))
         if self._spansh:
             c = self._spansh["counts"]
             s = self._spansh["services"]
             port_parts = [p for p in [
-                (f"{c['starport']} STARPORT" if c["starport"] else ""),
-                (f"{c['outpost']} OUTPOST"   if c["outpost"]   else ""),
-                (f"{c['settlement']} SETTLE"  if c["settlement"] else ""),
-                (f"{c['fc']} FC"             if c["fc"]        else ""),
+                (f"×{c['starport']} STARPORT"  if c["starport"]   else ""),
+                (f"×{c['outpost']} OUTPOST"    if c["outpost"]    else ""),
+                (f"×{c['settlement']} SETTLE"  if c["settlement"] else ""),
+                (f"×{c['fc']} FC"              if c["fc"]         else ""),
             ] if p]
-            if port_parts:
-                lines.append(("PORTS: " + "  ·  ".join(port_parts), COLOR_TEXT))
+            rows.append(("  ·  ".join(port_parts) if port_parts else "NO STATIONS", _COL_DIM))
             svc_parts = [p for p in [
                 ("MAT TRADER"  if s["mat_trader"]  else ""),
                 ("TECH BROKER" if s["tech_broker"] else ""),
                 ("ENGINEER"    if s["engineer"]    else ""),
             ] if p]
             if svc_parts:
-                lines.append(("SVCS:  " + "  ·  ".join(svc_parts), COLOR_ORANGE))
+                rows.append(("  ·  ".join(svc_parts), COLOR_ORANGE))
         else:
-            lines.append(("PORTS: FETCHING...", _COL_DIM))
+            rows.append(("STATIONS  ...", _COL_DIM))
 
-        # EDSM faction / population info
+        # ── Faction / population (EDSM) ───────────────────────────────────
+        rows.append(("---", None))
         if self._edsm_info:
-            info = self._edsm_info
+            info   = self._edsm_info
             pop    = _fmt_pop(info.get("population"))
             alleg  = (info.get("allegiance") or "").upper()
-            gov    = (info.get("government") or "").upper()
-            sec    = (info.get("security") or "").upper()
-            state  = (info.get("state") or "").upper()
-            faction = _truncate((info.get("faction") or "").upper(), 28)
+            gov    = (info.get("government")  or "").upper()
+            sec    = (info.get("security")    or "").upper()
+            state  = (info.get("state")       or "").upper()
+            faction = _truncate((info.get("faction") or "").upper(), 30)
 
             pol_parts = [p for p in [
-                (f"POP {pop}" if pop else ""),
-                alleg, gov,
+                (f"POP {pop}" if pop else ""), alleg, gov,
             ] if p]
             if pol_parts:
-                lines.append(("  ·  ".join(pol_parts), _COL_DIM))
+                rows.append(("  ·  ".join(pol_parts), _COL_DIM))
 
             fac_parts = [p for p in [
                 faction,
@@ -311,8 +327,11 @@ class SystemInfoHUD:
                 (state if state and state not in ("NONE", "") else ""),
             ] if p]
             if fac_parts:
-                lines.append(("  ·  ".join(fac_parts), _COL_DIM))
-        return lines
+                rows.append(("  ·  ".join(fac_parts), _COL_DIM))
+        else:
+            rows.append(("EDSM  ...", _COL_DIM))
+
+        return rows
 
     def _draw_text(self, x, y, text, fill, font, anchor="w"):
         self.canvas.create_text(x+1, y+1, text=text, fill="black",
