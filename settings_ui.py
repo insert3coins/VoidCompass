@@ -115,10 +115,13 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
     ov_var = tk.BooleanVar(value=config.get("overlay_enabled", True))
     cargo_var = tk.BooleanVar(value=config.get("cargo_overlay_enabled", False))
     prosp_var = tk.BooleanVar(value=config.get("prospector_overlay_enabled", True))
+    sysinfo_var = tk.BooleanVar(value=config.get("system_info_enabled", True))
     create_toggle(sec_gen, "Tactical Overlay", ov_var)
     create_toggle(sec_gen, "Cargo Manifest Overlay", cargo_var)
     create_toggle(sec_gen, "Prospector Result Overlay", prosp_var)
     prosp_timeout_e = create_input(sec_gen, "Prospector Overlay Auto-Hide (seconds)  —  60 = 1 min  ·  120 = 2 min  ·  300 = 5 min", "prospector_hud_timeout_s")
+    create_toggle(sec_gen, "System Info Overlay  (shows on jump arrival)", sysinfo_var)
+    sysinfo_timeout_e = create_input(sec_gen, "System Info Auto-Hide (seconds)  —  15 = quick  ·  30 = default  ·  60 = slow", "system_info_timeout_s")
     tk.Frame(sec_gen, bg=UI_PANEL, height=10).pack(fill=tk.X)
 
     sec_ss = panel(body, "SCREENSHOTS")
@@ -162,6 +165,10 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
             "prospector_hud_timeout_s": max(5, int(prosp_timeout_e.get().strip() or 45))
                 if prosp_timeout_e.get().strip().isdigit() else
                 config.get("prospector_hud_timeout_s", 45),
+            "system_info_enabled": sysinfo_var.get(),
+            "system_info_timeout_s": max(5, int(sysinfo_timeout_e.get().strip() or 30))
+                if sysinfo_timeout_e.get().strip().isdigit() else
+                config.get("system_info_timeout_s", 30),
             "screenshots_enabled": ss_var.get(),
             "screenshots_path": ss_e.get().strip(),
             "carrier_discord_webhook_url": fc_wh_e.get().strip(),
