@@ -6,11 +6,6 @@ WIDTH = 460
 
 _CHROMA = "#ff00ff"
 
-_ANIM_FRAMES = [
-    "⢄","⢂","⢁"," ","⡈","⡐","⡠","⡰","⣠","⣐","⣈","⣁",
-    "⣂","⣄","⣆","⣇","⣧","⣷","⣾","⣶","⣼","⣸","⣙","⣉","⣁",
-]
-
 _COL_DIM  = "#7a8a98"
 _COL_GOLD = "#e8c97a"
 
@@ -65,8 +60,6 @@ class SystemInfoHUD:
         self._mouse_down     = None
         self._mouse_dragging = False
         self._mx = self._my  = 0
-        self._anim_step      = 0
-
         # Displayed data
         self._system        = ""
         self._star_class    = ""
@@ -77,7 +70,6 @@ class SystemInfoHUD:
         self._edsm_info     = None
 
         self._force_topmost()
-        self._tick_anim()
         self.win.withdraw()
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
@@ -89,16 +81,6 @@ class SystemInfoHUD:
             pass
         ms = max(2000, int(self.config.get("overlay_topmost_refresh_ms", 12000) or 12000))
         self.win.after(ms, self._force_topmost)
-
-    def _tick_anim(self):
-        try:
-            self.canvas.delete("anim")
-            frame = _ANIM_FRAMES[self._anim_step]
-            self._draw_text(440, 20, frame, COLOR_ACCENT, ("Courier", 12, "bold"), anchor="e", tag="anim")
-            self._anim_step = (self._anim_step + 1) % len(_ANIM_FRAMES)
-        except Exception:
-            pass
-        self.win.after(100, self._tick_anim)
 
     def show(self):
         x = int(self.config.get("system_info_hud_x", 30))
@@ -205,9 +187,6 @@ class SystemInfoHUD:
         # Header label
         self._draw_text(20, 20, "SYSTEM INFO", COLOR_ACCENT, ("Courier", 10, "bold"))
 
-        # Spinner placeholder (redrawn by _tick_anim)
-        self._draw_text(440, 20, " ", COLOR_ACCENT, ("Courier", 12, "bold"), anchor="e", tag="anim")
-
         # Content lines
         y = 44
         for text, color in lines:
@@ -268,12 +247,11 @@ class SystemInfoHUD:
 
         return lines
 
-    def _draw_text(self, x, y, text, fill, font, anchor="w", tag=None):
-        tags = (tag,) if tag else ()
+    def _draw_text(self, x, y, text, fill, font, anchor="w"):
         self.canvas.create_text(x+1, y+1, text=text, fill="black",
-                                font=font, anchor=anchor, tags=tags)
+                                font=font, anchor=anchor)
         self.canvas.create_text(x, y, text=text, fill=fill,
-                                font=font, anchor=anchor, tags=tags)
+                                font=font, anchor=anchor)
 
     # ── Drag-to-move ──────────────────────────────────────────────────────
 
