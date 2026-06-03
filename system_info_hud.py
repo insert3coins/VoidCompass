@@ -162,9 +162,12 @@ class SystemInfoHUD:
         pass
 
     def update_edsm_details(self, details):
-        if not details:
-            return
-        self._edsm_info = details.get("information") or {}
+        # Always mark as arrived (even if empty) so the "EDSM ..." loading
+        # line disappears. Use {} for "arrived but no data" (uninhabited systems).
+        if details is None:
+            self._edsm_info = {}
+        else:
+            self._edsm_info = details.get("information") or {}
         try:
             if self.win.state() != "withdrawn":
                 self._redraw()
@@ -279,14 +282,19 @@ class SystemInfoHUD:
         else:
             rows.append(("STATIONS  ...", _COL_DIM))
 
-        if self._edsm_info:
-            info   = self._edsm_info
-            pop    = _fmt_pop(info.get("population"))
-            alleg  = (info.get("allegiance") or "").upper()
-            gov    = (info.get("government")  or "").upper()
-            sec    = (info.get("security")    or "").upper()
-            state  = (info.get("state")       or "").upper()
+        if self._edsm_info is None:
+            # Still waiting for EDSM response
+            rows.append(("EDSM  ...", _COL_DIM))
+        elif self._edsm_info:
+            # Has faction/population data (inhabited system)
+            info    = self._edsm_info
+            pop     = _fmt_pop(info.get("population"))
+            alleg   = (info.get("allegiance")   or "").upper()
+            gov     = (info.get("government")   or "").upper()
+            sec     = (info.get("security")     or "").upper()
+            state   = (info.get("factionState") or info.get("state") or "").upper()
             faction = _truncate((info.get("faction") or "").upper(), 30)
+            economy = (info.get("economy") or "").upper()
 
             pol_parts = [p for p in [
                 (f"POP {pop}" if pop else ""), alleg, gov,
@@ -297,12 +305,12 @@ class SystemInfoHUD:
             fac_parts = [p for p in [
                 faction,
                 sec,
-                (state if state and state not in ("NONE", "") else ""),
+                (state  if state  and state  not in ("NONE", "") else ""),
+                (economy if economy and economy not in ("NONE", "") else ""),
             ] if p]
             if fac_parts:
                 rows.append(("  ·  ".join(fac_parts), _COL_DIM))
-        else:
-            rows.append(("EDSM  ...", _COL_DIM))
+        # else: empty dict = arrived, uninhabited system — show nothing
 
         return rows
 
