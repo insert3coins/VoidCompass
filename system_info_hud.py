@@ -147,13 +147,13 @@ class SystemInfoHUD:
             pc   = (item.get("planet_class") or "").lower()
             name = item.get("name") or ""
             if "earthlike" in pc:
-                self._notable.append(("ELW", name))
+                self._notable.append(("Earthlike", name))
             elif "water world" in pc:
-                self._notable.append(("WW", name))
+                self._notable.append(("Water World", name))
             elif "ammonia world" in pc:
-                self._notable.append(("AMM", name))
+                self._notable.append(("Ammonia World", name))
             elif item.get("terraform_state") in ("Terraformable", "Candidate for terraforming"):
-                self._notable.append(("TF", name))
+                self._notable.append(("Terraformable", name))
 
         self.show()
 
@@ -187,9 +187,9 @@ class SystemInfoHUD:
         spansh_notable = []  # (tag, subType) for notable planet types
 
         _NOTABLE_SUBTYPES = {
-            "Earthlike body":   "ELW",
-            "Water world":      "WW",
-            "Ammonia world":    "AMM",
+            "Earthlike body": "Earthlike",
+            "Water world":    "Water World",
+            "Ammonia world":  "Ammonia World",
         }
 
         for body in bodies:
@@ -212,7 +212,7 @@ class SystemInfoHUD:
                 elif (body.get("terraformingState") or "").lower() in (
                     "candidate for terraforming", "terraformable",
                 ):
-                    spansh_notable.append("TF")
+                    spansh_notable.append("Terraformable")
 
         # ── Stations ─────────────────────────────────────────────────────
         all_stations = list(system.get("stations") or [])
@@ -300,60 +300,60 @@ class SystemInfoHUD:
                 star_str += "  " + "  ".join(sc)
             planet_str = f"{pc} PLANET{'S' if pc != 1 else ''}"
             if lc:
-                planet_str += f"  ({lc} LAND)"
+                planet_str += f"  {lc} Landable"
             rows.append((f"{star_str}  ·  {planet_str}", _COL_DIM))
 
             # Scanned / bio progress from local data
             prog_parts = []
             if self._scanned_count > 0:
-                prog_parts.append(f"{self._scanned_count} SCANNED")
+                prog_parts.append(f"{self._scanned_count} Scanned")
             if self._bio_total > 0:
-                prog_parts.append(f"{self._bio_total} BIO")
+                prog_parts.append(f"{self._bio_total} Bio Signals")
             if prog_parts:
                 rows.append(("  ·  ".join(prog_parts), _COL_DIM))
         else:
             # No Spansh yet — fall back to local DB counts
             scan_parts = []
             if self._body_count > 0:
-                scan_parts.append(f"{self._body_count} BODIES")
+                scan_parts.append(f"{self._body_count} Bodies")
             if self._scanned_count > 0:
-                scan_parts.append(f"{self._scanned_count} SCANNED")
+                scan_parts.append(f"{self._scanned_count} Scanned")
             if self._bio_total > 0:
-                scan_parts.append(f"{self._bio_total} BIO")
+                scan_parts.append(f"{self._bio_total} Bio Signals")
             if scan_parts:
                 rows.append(("  ·  ".join(scan_parts), _COL_DIM))
 
         # Notable bodies: prefer DB entries (have names), fall back to Spansh tags
         if self._notable:
-            chunks = [f"[{tag}] {_truncate(name, 12)}" for tag, name in self._notable[:4]]
-            rows.append(("  ".join(chunks), COLOR_ORANGE))
+            chunks = [f"{tag}: {_truncate(name, 14)}" for tag, name in self._notable[:3]]
+            rows.append(("  ·  ".join(chunks), COLOR_ORANGE))
         elif self._spansh and self._spansh["spansh_notable"]:
             tags = sorted(set(self._spansh["spansh_notable"]))
-            rows.append(("  ".join(f"[{t}]" for t in tags[:6]), COLOR_ORANGE))
+            rows.append(("  ·  ".join(tags[:4]), COLOR_ORANGE))
 
         if self._spansh:
             c = self._spansh["counts"]
             s = self._spansh["services"]
             port_parts = [p for p in [
-                (f"×{c['starport']} STARPORT"  if c["starport"]   else ""),
-                (f"×{c['outpost']} OUTPOST"    if c["outpost"]    else ""),
-                (f"×{c['settlement']} SETTLE"  if c["settlement"] else ""),
-                (f"×{c['fc']} FC"              if c["fc"]         else ""),
+                (f"×{c['starport']} Starport"   if c["starport"]   else ""),
+                (f"×{c['outpost']} Outpost"     if c["outpost"]    else ""),
+                (f"×{c['settlement']} Settlement" if c["settlement"] else ""),
+                (f"×{c['fc']} Fleet Carrier"    if c["fc"]         else ""),
             ] if p]
-            rows.append(("  ·  ".join(port_parts) if port_parts else "NO STATIONS", _COL_DIM))
+            rows.append(("  ·  ".join(port_parts) if port_parts else "No Stations", _COL_DIM))
             svc_parts = [p for p in [
-                ("MAT TRADER"  if s["mat_trader"]  else ""),
-                ("TECH BROKER" if s["tech_broker"] else ""),
-                ("ENGINEER"    if s["engineer"]    else ""),
+                ("Material Trader" if s["mat_trader"]  else ""),
+                ("Tech Broker"     if s["tech_broker"] else ""),
+                ("Engineer"        if s["engineer"]    else ""),
             ] if p]
             if svc_parts:
                 rows.append(("  ·  ".join(svc_parts), COLOR_ORANGE))
         else:
-            rows.append(("STATIONS  ...", _COL_DIM))
+            rows.append(("Stations  ...", _COL_DIM))
 
         if self._edsm_info is None:
             # Still waiting for EDSM response
-            rows.append(("EDSM  ...", _COL_DIM))
+            rows.append(("Faction info  ...", _COL_DIM))
         elif self._edsm_info:
             # Has faction/population data (inhabited system)
             info    = self._edsm_info
