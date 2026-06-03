@@ -776,6 +776,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.root.after(0, _apply)
             self.edsm.fetch_system_details(system_name, details_callback)
 
+            sys_addr = self.current_system_address
+            if sys_addr:
+                def spansh_callback(data):
+                    def _apply():
+                        if self.current_sys != system_name:
+                            return
+                        if self.system_info_hud:
+                            self.system_info_hud.update_spansh(data)
+                    self.root.after(0, _apply)
+                self.edsm.fetch_spansh_system(sys_addr, spansh_callback)
+
     def _copy_waypoint_to_clipboard(self, waypoint_name, log_label="NEXT WAYPOINT"):
         if not waypoint_name:
             return False
