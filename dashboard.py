@@ -331,7 +331,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     int(float(self.config.get("hud_x", pos[0]))),
                     int(float(self.config.get("hud_y", pos[1]))),
                 )
-                if now < self._overlay_sync_grace_until and pos == (0, 0) and cfg_pos != (0, 0):
+                # Never trust a (0,0) reading — it means the window is minimised,
+                # hidden, or the WM hasn't placed it yet. Keep the last good position.
+                if pos == (0, 0) and cfg_pos != (0, 0):
                     pos = cfg_pos
                 if self._overlay_pos_last_saved.get("hud") != pos:
                     self._overlay_pos_last_saved["hud"] = pos
@@ -346,7 +348,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     int(float(self.config.get("cargo_hud_x", pos[0]))),
                     int(float(self.config.get("cargo_hud_y", pos[1]))),
                 )
-                if now < self._overlay_sync_grace_until and pos == (0, 0) and cfg_pos != (0, 0):
+                if pos == (0, 0) and cfg_pos != (0, 0):
                     pos = cfg_pos
                 if self._overlay_pos_last_saved.get("cargo") != pos:
                     self._overlay_pos_last_saved["cargo"] = pos
@@ -408,14 +410,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.screenshots.stop()
         try:
             if self.hud and self.hud.win and self.hud.win.winfo_exists():
-                self.config["hud_x"] = int(self.hud.win.winfo_x())
-                self.config["hud_y"] = int(self.hud.win.winfo_y())
+                x, y = int(self.hud.win.winfo_x()), int(self.hud.win.winfo_y())
+                if x != 0 or y != 0:
+                    self.config["hud_x"], self.config["hud_y"] = x, y
         except Exception:
             pass
         try:
             if self.cargo_hud and self.cargo_hud.win and self.cargo_hud.win.winfo_exists():
-                self.config["cargo_hud_x"] = int(self.cargo_hud.win.winfo_x())
-                self.config["cargo_hud_y"] = int(self.cargo_hud.win.winfo_y())
+                x, y = int(self.cargo_hud.win.winfo_x()), int(self.cargo_hud.win.winfo_y())
+                if x != 0 or y != 0:
+                    self.config["cargo_hud_x"], self.config["cargo_hud_y"] = x, y
         except Exception:
             pass
         self.config["main_geometry"] = self.root.geometry()
