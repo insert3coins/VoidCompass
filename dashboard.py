@@ -26,6 +26,7 @@ from mining_window import MiningWindow
 from carrier_tracker import CarrierTracker
 from carrier_window import CarrierWindow
 from prospector_hud import ProspectorHUD
+from system_info_hud import SystemInfoHUD
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
@@ -150,7 +151,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._ui_watchdog_interval_ms = 50
         self._ui_watchdog_spike_ms = float(self.config.get("ui_watchdog_spike_ms", 120.0))
         self._ui_watchdog_last_ts = time.perf_counter()
-        self._overlay_pos_last_saved = {"hud": None, "cargo": None, "scan": None}
+        self._overlay_pos_last_saved = {"hud": None, "cargo": None, "scan": None, "system_info": None}
         self._overlay_sync_grace_until = time.time() + 4.0
         self.runtime_trace = RuntimeTrace(
             self.config.get("runtime_trace_path", "runtime_trace.log"),
@@ -207,6 +208,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.prospector_hud = ProspectorHUD(self.root, self.config)
         else:
             self.prospector_hud = None
+
+        if self.config.get("system_info_enabled", True):
+            self.system_info_hud = SystemInfoHUD(self.root, self.config)
+        else:
+            self.system_info_hud = None
 
         self.db_lock = threading.RLock()
         self.batch_mode = False
@@ -353,6 +359,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if self._overlay_pos_last_saved.get("cargo") != pos:
                     self._overlay_pos_last_saved["cargo"] = pos
                     self.config["cargo_hud_x"], self.config["cargo_hud_y"] = pos
+                    changed = True
+        except Exception:
+            pass
+        try:
+            if self.system_info_hud and self.system_info_hud.win and self.system_info_hud.win.winfo_exists():
+                pos = (int(self.system_info_hud.win.winfo_x()), int(self.system_info_hud.win.winfo_y()))
+                cfg_pos = (
+                    int(float(self.config.get("system_info_hud_x", pos[0]))),
+                    int(float(self.config.get("system_info_hud_y", pos[1]))),
+                )
+                if pos == (0, 0) and cfg_pos != (0, 0):
+                    pos = cfg_pos
+                if self._overlay_pos_last_saved.get("system_info") != pos:
+                    self._overlay_pos_last_saved["system_info"] = pos
+                    self.config["system_info_hud_x"], self.config["system_info_hud_y"] = pos
                     changed = True
         except Exception:
             pass
@@ -740,9 +761,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.system_traffic = traffic_data
                 self.update_dashboard_ui()
                 self.update_hud()
+                if self.system_info_hud:
+                    self.system_info_hud.update_traffic(traffic_data)
             self.root.after(0, _apply)
-        
         self.edsm.fetch_traffic(system_name, callback)
+
+        if self.config.get("system_info_enabled", True):
+            def details_callback(details):
+                def _apply():
+                    if self.current_sys != system_name:
+                        return
+                    if self.system_info_hud:
+                        self.system_info_hud.update_edsm_details(details)
+                self.root.after(0, _apply)
+            self.edsm.fetch_system_details(system_name, details_callback)
 
     def _copy_waypoint_to_clipboard(self, waypoint_name, log_label="NEXT WAYPOINT"):
         if not waypoint_name:
@@ -1188,6 +1220,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if self.current_sys != self.last_traffic_system:
                 self.last_traffic_system = self.current_sys
                 self.fetch_system_traffic(self.current_sys)
+
+            # Show system info overlay
+            if self.system_info_hud and not self.batch_mode:
+                _sys  = self.current_sys
+                _sc   = self.star_class
+                _si   = list(self.scan_items)
+                _bs   = dict(self.body_signals)
+                _tot  = self.total
+                self.root.after(0, lambda: self.system_info_hud.on_system_arrival(
+                    _sys, _sc, _si, _bs, _tot))
 
         elif ev == "FSSDiscoveryScan":
             if not self._matches_current_system_address(d):
