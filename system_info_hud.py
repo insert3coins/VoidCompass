@@ -215,22 +215,15 @@ class SystemInfoHUD:
     # ── Rendering ─────────────────────────────────────────────────────────
 
     def _redraw(self):
-        # rows: (text, color) for text | ("---", None) for a thin divider
         rows = self._build_rows()
-
-        LINE_H = 20
-        DIV_H  = 10   # height consumed by a divider row
-        total_h = 35  # header
-        for text, _ in rows:
-            total_h += DIV_H if text == "---" else LINE_H
-        total_h += 10  # bottom padding
+        LINE_H  = 20
+        total_h = 35 + len(rows) * LINE_H + 10
         total_h = max(total_h, 60)
 
         self.canvas.config(width=WIDTH, height=total_h)
         self.win.geometry(f"{WIDTH}x{total_h}")
         self.canvas.delete("all")
 
-        # Panel — same as nav HUD
         self.canvas.create_rectangle(
             5, 5, WIDTH - 5, total_h - 5,
             fill="#010101", outline=COLOR_ACCENT, width=2,
@@ -239,34 +232,18 @@ class SystemInfoHUD:
         self._draw_text(20, 20, "SYSTEM INFO", COLOR_ACCENT, ("Courier", 10, "bold"))
 
         y = 44
-        first_row = True
-        for text, color in rows:
-            if text == "---":
-                mid = y + DIV_H // 2
-                self.canvas.create_line(
-                    20, mid, WIDTH - 20, mid, fill="#2a3a48", width=1,
-                )
-                y += DIV_H
-            else:
-                self._draw_text(20, y, text, color, ("Courier", 10, "bold"))
-                # Star class badge right-aligned on the system name row
-                if first_row and self._star_class:
-                    badge = f"[{self._star_class}]"
-                    self._draw_text(WIDTH - 20, y, badge, _COL_GOLD,
-                                    ("Courier", 10, "bold"), anchor="e")
-                first_row = False
-                y += LINE_H
+        for i, (text, color) in enumerate(rows):
+            self._draw_text(20, y, text, color, ("Courier", 10, "bold"))
+            if i == 0 and self._star_class:
+                self._draw_text(WIDTH - 20, y, f"[{self._star_class}]", _COL_GOLD,
+                                ("Courier", 10, "bold"), anchor="e")
+            y += LINE_H
 
     def _build_rows(self):
-        # rows: list of (text, color) | ("---", None) for section dividers
         rows = []
 
-        # ── System name (star class drawn right-aligned directly in _redraw)
         sys_name = _truncate(self._system.upper(), 34)
         rows.append((sys_name, COLOR_ACCENT))
-
-        # ── Scan / bio / notable ──────────────────────────────────────────
-        rows.append(("---", None))
 
         scan_parts = []
         if self._body_count > 0:
@@ -282,8 +259,6 @@ class SystemInfoHUD:
             chunks = [f"[{tag}] {_truncate(name, 12)}" for tag, name in self._notable[:4]]
             rows.append(("  ".join(chunks), COLOR_ORANGE))
 
-        # ── Stations + services (Spansh) ──────────────────────────────────
-        rows.append(("---", None))
         if self._spansh:
             c = self._spansh["counts"]
             s = self._spansh["services"]
@@ -304,8 +279,6 @@ class SystemInfoHUD:
         else:
             rows.append(("STATIONS  ...", _COL_DIM))
 
-        # ── Faction / population (EDSM) ───────────────────────────────────
-        rows.append(("---", None))
         if self._edsm_info:
             info   = self._edsm_info
             pop    = _fmt_pop(info.get("population"))
