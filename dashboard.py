@@ -1232,8 +1232,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.last_traffic_system = self.current_sys
                 self.fetch_system_traffic(self.current_sys)
 
-            # Show system info overlay
-            if self.system_info_hud and not self.batch_mode:
+            # Show system info overlay on every live jump.
+            # Gate on is_first_load (not batch_mode) so it still fires when
+            # FSDJump arrives in the same read cycle as FSSDiscoveryScan and
+            # the watcher promotes them into a batch with batch_mode=True.
+            if self.system_info_hud and not self.is_first_load:
                 _sys  = self.current_sys
                 _sc   = self.star_class
                 _si   = list(self.scan_items)
