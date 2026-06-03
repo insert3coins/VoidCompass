@@ -178,10 +178,45 @@ class SystemInfoHUD:
         if not data:
             return
         system = data.get("system") or {}
+        bodies = system.get("bodies") or []
 
-        # Collect all stations: system-level + body-level
+        # ── Bodies: stars & planets ───────────────────────────────────────
+        star_classes = []   # spectral class strings, e.g. ["G", "M"]
+        planet_count = 0
+        landable_count = 0
+        spansh_notable = []  # (tag, subType) for notable planet types
+
+        _NOTABLE_SUBTYPES = {
+            "Earthlike body":   "ELW",
+            "Water world":      "WW",
+            "Ammonia world":    "AMM",
+        }
+
+        for body in bodies:
+            btype = (body.get("type") or "").lower()
+            if btype == "star":
+                sc = (body.get("spectralClass") or body.get("subType") or "").strip()
+                # Keep just the leading letter(s), e.g. "G" from "G (White-Yellow) Star"
+                if sc:
+                    sc = sc.split()[0]
+                    if sc not in star_classes:
+                        star_classes.append(sc)
+            elif btype in ("planet", "moon"):
+                planet_count += 1
+                if body.get("isLandable"):
+                    landable_count += 1
+                sub = body.get("subType") or ""
+                tag = _NOTABLE_SUBTYPES.get(sub)
+                if tag:
+                    spansh_notable.append(tag)
+                elif (body.get("terraformingState") or "").lower() in (
+                    "candidate for terraforming", "terraformable",
+                ):
+                    spansh_notable.append("TF")
+
+        # ── Stations ─────────────────────────────────────────────────────
         all_stations = list(system.get("stations") or [])
-        for body in (system.get("bodies") or []):
+        for body in bodies:
             all_stations.extend(body.get("stations") or [])
 
         counts = {"starport": 0, "outpost": 0, "settlement": 0, "fc": 0}
@@ -208,7 +243,14 @@ class SystemInfoHUD:
             if gov == "Engineer":
                 services["engineer"] = True
 
-        self._spansh = {"counts": counts, "services": services}
+        self._spansh = {
+            "counts":         counts,
+            "services":       services,
+            "star_classes":   star_classes,
+            "planet_count":   planet_count,
+            "landable_count": landable_count,
+            "spansh_notable": spansh_notable,
+        }
         try:
             if self.win.state() != "withdrawn":
                 self._redraw()
@@ -248,19 +290,46 @@ class SystemInfoHUD:
         sys_name = _truncate(self._system.upper(), 34)
         rows.append((sys_name, COLOR_ACCENT))
 
-        scan_parts = []
-        if self._body_count > 0:
-            scan_parts.append(f"{self._body_count} BODIES")
-        if self._scanned_count > 0:
-            scan_parts.append(f"{self._scanned_count} SCANNED")
-        if self._bio_total > 0:
-            scan_parts.append(f"{self._bio_total} BIO")
-        if scan_parts:
-            rows.append(("  ·  ".join(scan_parts), _COL_DIM))
+        if self._spansh:
+            # Stars line: "2 STARS  G · M"
+            sc = self._spansh["star_classes"]
+            pc = self._spansh["planet_count"]
+            lc = self._spansh["landable_count"]
+            star_str = f"{len(sc)} STAR{'S' if len(sc) != 1 else ''}"
+            if sc:
+                star_str += "  " + "  ".join(sc)
+            planet_str = f"{pc} PLANET{'S' if pc != 1 else ''}"
+            if lc:
+                planet_str += f"  ({lc} LAND)"
+            rows.append((f"{star_str}  ·  {planet_str}", _COL_DIM))
 
+            # Scanned / bio progress from local data
+            prog_parts = []
+            if self._scanned_count > 0:
+                prog_parts.append(f"{self._scanned_count} SCANNED")
+            if self._bio_total > 0:
+                prog_parts.append(f"{self._bio_total} BIO")
+            if prog_parts:
+                rows.append(("  ·  ".join(prog_parts), _COL_DIM))
+        else:
+            # No Spansh yet — fall back to local DB counts
+            scan_parts = []
+            if self._body_count > 0:
+                scan_parts.append(f"{self._body_count} BODIES")
+            if self._scanned_count > 0:
+                scan_parts.append(f"{self._scanned_count} SCANNED")
+            if self._bio_total > 0:
+                scan_parts.append(f"{self._bio_total} BIO")
+            if scan_parts:
+                rows.append(("  ·  ".join(scan_parts), _COL_DIM))
+
+        # Notable bodies: prefer DB entries (have names), fall back to Spansh tags
         if self._notable:
             chunks = [f"[{tag}] {_truncate(name, 12)}" for tag, name in self._notable[:4]]
             rows.append(("  ".join(chunks), COLOR_ORANGE))
+        elif self._spansh and self._spansh["spansh_notable"]:
+            tags = sorted(set(self._spansh["spansh_notable"]))
+            rows.append(("  ".join(f"[{t}]" for t in tags[:6]), COLOR_ORANGE))
 
         if self._spansh:
             c = self._spansh["counts"]
