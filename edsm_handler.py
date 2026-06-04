@@ -19,6 +19,7 @@ _EDSM_CREDIT_EVENTS = frozenset({
     "RedeemVoucher", "RefuelAll", "RefuelPartial", "Repair", "RepairAll",
     "RestockVehicle", "Resurrect", "SearchAndRescue", "SellDrones",
     "SellExplorationData", "SellMicroResources", "SellShipOnRebuy",
+    "MultiSellExplorationData",
     "ShipyardBuy", "ShipyardSell", "ShipyardTransfer",
 })
 
