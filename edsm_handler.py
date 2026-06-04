@@ -51,6 +51,11 @@ class EDSMHandler:
         self._flush_timer = None
         self._game_version = ""
         self._game_build = ""
+        self._log_callback = None  # set by dashboard: fn(tag, msg, severity)
+
+    def set_log_callback(self, callback):
+        """Wire up a function(tag, msg, severity) to post feed entries on upload."""
+        self._log_callback = callback
 
     # ------------------------------------------------------------------
     # Upload queue helpers
@@ -156,8 +161,12 @@ class EDSMHandler:
                     )
                     r.raise_for_status()
                     logging.debug(f"EDSM upload OK: {len(batch)} events")
+                    if self._log_callback:
+                        self._log_callback("EDSM", f"Uploaded {len(batch)} event(s) to EDSM", "INFO")
             except Exception as e:
                 logging.warning(f"EDSM batch upload failed ({len(batch)} events): {e}")
+                if self._log_callback:
+                    self._log_callback("EDSM", f"Upload failed: {e}", "ERROR")
 
         threading.Thread(target=_send, daemon=True).start()
 

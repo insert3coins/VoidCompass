@@ -167,6 +167,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         
         # Initialize Handlers
         self.edsm = EDSMHandler(self.config)
+        self.edsm.set_log_callback(
+            lambda tag, msg, sev: self.root.after(0, lambda: self.add_event_feed_entry(tag, msg, severity=sev))
+        )
         self.screenshots = ScreenshotHandler(
             self.config,
             lambda: self.current_sys,
