@@ -152,8 +152,50 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
     action_button(btn_row_fc, "Send Test Message", _test_discord).pack(side=tk.LEFT)
     tk.Frame(sec_fc, bg=UI_PANEL, height=2).pack(fill=tk.X)
 
+    sec_edsm = panel(body, "EDSM UPLOAD")
+    edsm_cmdr_e = create_input(sec_edsm, "Commander Name", "edsm_cmdr_name")
+    edsm_key_e = create_input(sec_edsm, "API Key", "edsm_api_key", is_password=True)
+    edsm_upload_var = tk.BooleanVar(value=config.get("edsm_upload_enabled", False))
+    create_toggle(sec_edsm, "Upload scan data to EDSM", edsm_upload_var)
+
+    def _test_edsm():
+        import threading, requests as _req
+        cmdr = edsm_cmdr_e.get().strip()
+        key = edsm_key_e.get().strip()
+        if not cmdr or not key:
+            tk.messagebox.showwarning("Missing credentials", "Enter Commander Name and API Key first.", parent=win)
+            return
+        def _do_test():
+            try:
+                from version import APP_VERSION
+                r = _req.post(
+                    "https://www.edsm.net/api-journal-v1",
+                    data={
+                        "commanderName": cmdr,
+                        "apiKey": key,
+                        "fromSoftware": "VoidCompass",
+                        "fromSoftwareVersion": APP_VERSION,
+                        "message": '[{"event":"Status"}]',
+                    },
+                    timeout=10,
+                )
+                body_text = r.json() if r.headers.get("content-type", "").startswith("application/json") else r.text
+                if isinstance(body_text, dict) and body_text.get("msgnum") == 100:
+                    win.after(0, lambda: tk.messagebox.showinfo("EDSM Test", "API key verified successfully.", parent=win))
+                else:
+                    msg = body_text.get("msg", str(body_text)) if isinstance(body_text, dict) else str(body_text)
+                    win.after(0, lambda: tk.messagebox.showwarning("EDSM Test", f"EDSM response: {msg}", parent=win))
+            except Exception as e:
+                win.after(0, lambda: tk.messagebox.showerror("EDSM Test", f"Request failed: {e}", parent=win))
+        threading.Thread(target=_do_test, daemon=True).start()
+
+    btn_row_edsm = tk.Frame(sec_edsm, bg=UI_PANEL)
+    btn_row_edsm.pack(fill=tk.X, padx=12, pady=(6, 10))
+    action_button(btn_row_edsm, "Test API Key", _test_edsm).pack(side=tk.LEFT)
+    tk.Frame(sec_edsm, bg=UI_PANEL, height=2).pack(fill=tk.X)
+
     def remove_deprecated_keys():
-        for key in ("edsm_cmdr_name", "edsm_api_key", "edsm_enabled", *DEPRECATED_CONFIG_KEYS):
+        for key in DEPRECATED_CONFIG_KEYS:
             config.pop(key, None)
 
     def save_config():
@@ -172,6 +214,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
             "screenshots_enabled": ss_var.get(),
             "screenshots_path": ss_e.get().strip(),
             "carrier_discord_webhook_url": fc_wh_e.get().strip(),
+            "edsm_cmdr_name": edsm_cmdr_e.get().strip(),
+            "edsm_api_key": edsm_key_e.get().strip(),
+            "edsm_upload_enabled": edsm_upload_var.get(),
             "settings_geometry": win.geometry(),
         })
         remove_deprecated_keys()

@@ -1049,6 +1049,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         raw = data.get("raw", data)
         d = data.get("data", data)
         self._record_journal_event()
+        if isinstance(raw, dict) and not self.batch_mode:
+            self.edsm.queue_journal_event(
+                raw,
+                system_name=self.current_sys,
+                system_coords=self.current_coords if isinstance(self.current_coords, list) else None,
+                system_address=self.current_system_address,
+            )
         current_journal = getattr(self.watcher, "last_journal", None)
         if current_journal and current_journal != self.last_logged_journal_file:
             self.last_logged_journal_file = current_journal
@@ -1066,6 +1073,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         if ev in ("FileHeader", "Fileheader"):
             self.log(f"Game version detected: {d.get('gameversion')} ({d.get('build')})")
+            self.edsm.set_game_version(d.get("gameversion"), d.get("build"))
 
         elif ev == "Loadout":
             self.cargo_capacity = d.get("cargo_capacity", 0)
@@ -1088,6 +1096,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             game_build = d.get("build")
             if game_version and game_build:
                 self.log(f"Game version detected from LoadGame: {game_version} ({game_build})")
+                self.edsm.set_game_version(game_version, game_build)
 
         elif ev == "ScanOrganic":
             if not self._matches_current_system_address(d):
@@ -1146,6 +1155,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if is_jump:
                 self.in_fss = False
                 self.fss_summary_active = False
+                # Flush any queued EDSM events from the previous system before resetting state.
+                self.edsm.flush_upload_queue()
 
             prev_coords = self.current_coords if isinstance(self.current_coords, list) else None
 
