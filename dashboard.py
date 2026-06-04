@@ -666,7 +666,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         # Ticker stops naturally when status is no longer jumping;
         # _on_carrier_panel_updated will have already refreshed the panel.
 
-    def _on_route_event(self, tag, message, severity="INFO", copy_text=None, system_name=None, pinned=False):
+    def _on_route_event(self, tag, message, severity="INFO", copy_text=None, system_name=None):
         if not message:
             return
         sev = str(severity or "INFO").upper()
@@ -684,7 +684,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             severity=severity,
             copy_text=copy_text,
             url=url,
-            pinned=pinned,
         )
 
     @staticmethod
@@ -1511,7 +1510,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         elif p_class == "Ammonia world": icon = "☣️"
                         elif terraformable: icon = "🛠️"
                         self.valuable_bodies.append(f"- {icon} {body_name_str}")
-                        self.add_event_feed_entry("VALUABLE", f"{icon} Valuable world: {body_name_str}", severity="WARN", copy_text=body_name_str, pinned=True)
+                        self.add_event_feed_entry("VALUABLE", f"{icon} Valuable world: {body_name_str}", severity="WARN", copy_text=body_name_str)
                     if is_system_star_scan and d.get("was_discovered") is False:
                         self.add_event_feed_entry("ALERT", "Undiscovered system star scanned", severity="WARN", copy_text=self.current_sys)
                 else:
@@ -1533,7 +1532,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                             elif p_class == "Ammonia world": icon = "☣️"
                             elif terraformable: icon = "🛠️"
                             self.valuable_bodies.append(f"- {icon} {body_name_str}")
-                            self.add_event_feed_entry("VALUABLE", f"{icon} Valuable world: {body_name_str}", severity="WARN", copy_text=body_name_str, pinned=True)
+                            self.add_event_feed_entry("VALUABLE", f"{icon} Valuable world: {body_name_str}", severity="WARN", copy_text=body_name_str)
 
                     if not self.batch_mode:
                         self.update_hud()

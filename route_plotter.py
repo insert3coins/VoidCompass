@@ -32,11 +32,11 @@ class RoutePlotter:
         self.setup_ui()
         self.refresh_list()
 
-    def _emit_event(self, tag, message, severity="INFO", copy_text=None, pinned=False):
+    def _emit_event(self, tag, message, severity="INFO", copy_text=None):
         if not callable(self.event_callback):
             return
         try:
-            self.event_callback(tag, message, severity=severity, copy_text=copy_text, system_name=self.current_sys, pinned=pinned)
+            self.event_callback(tag, message, severity=severity, copy_text=copy_text, system_name=self.current_sys)
         except Exception:
             pass
 
