@@ -222,6 +222,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.db_lock = threading.RLock()
         self.batch_mode = False
         self.init_db()
+        self.edsm.set_db(self.conn, self.db_lock)
         self.colonisation_projects = self.db_load_colonisation_projects()
         # Merge JSON store (carries notes and any extra fields the DB doesn't have)
         _json_projects = load_colonisation_data()
@@ -1279,6 +1280,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 _tot  = self.total
                 self.root.after(0, lambda: self.system_info_hud.on_system_arrival(
                     _sys, _sc, _si, _bs, _tot))
+
+        elif ev == "Docked":
+            station = d.get("StationName") or d.get("station_name", "Unknown")
+            stype = d.get("StationType") or d.get("station_type", "")
+            label = f"{station} ({stype})" if stype else station
+            self._queue_edsm_upload(raw, startup_replay=startup_replay)
+            if not self.batch_mode and not startup_replay:
+                self.add_event_feed_entry("DOCK", f"Docked: {label}", severity="INFO", copy_text=station)
+
+        elif ev == "Undocked":
+            station = d.get("StationName") or d.get("station_name", "")
+            self._queue_edsm_upload(raw, startup_replay=startup_replay)
+            if not self.batch_mode and not startup_replay:
+                self.add_event_feed_entry("DOCK", f"Undocked: {station}", severity="INFO", copy_text=station)
 
         elif ev == "FSSDiscoveryScan":
             if not self._matches_current_system_address(d):

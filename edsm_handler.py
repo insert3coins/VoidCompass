@@ -1,5 +1,5 @@
-import collections
 import json
+import os
 import threading
 import requests
 import logging
@@ -81,7 +81,8 @@ _EDSM_DISCARD_EVENTS = frozenset({
 }) - _EDSM_CREDIT_EVENTS
 
 _BATCH_SIZE = 50          # send when queue reaches this many events
-_FLUSH_INTERVAL_S = 30    # also flush after this many seconds of inactivity
+_FLUSH_INTERVAL_S = 5     # flush this many seconds after the last queued event
+_RETRY_DELAYS = [30, 60, 120, 300]  # backoff (seconds) after consecutive send failures
 
 
 class EDSMHandler:
@@ -91,11 +92,12 @@ class EDSMHandler:
         self._http_limiter = threading.BoundedSemaphore(6)
         self._session = requests.Session()
 
-        # Upload queue state
-        self._upload_queue = collections.deque()
         self._queue_lock = threading.Lock()
         self._flush_timer = None
-        self._log_callback = None  # set by dashboard: fn(tag, msg, severity)
+        self._retry_count = 0
+        self._log_callback = None
+        self._db_conn = None
+        self._db_lock = None
         self._game_version = self.config.get("edsm_game_version", "")
         self._game_build = self.config.get("edsm_game_build", "")
         self._missing_game_version_warned = False
@@ -103,6 +105,18 @@ class EDSMHandler:
     def set_log_callback(self, callback):
         """Wire up a function(tag, msg, severity) to post feed entries on upload."""
         self._log_callback = callback
+
+    def set_db(self, conn, lock):
+        """Wire up the shared DB connection. Call this after init_db()."""
+        self._db_conn = conn
+        self._db_lock = lock
+        with self._db_lock:
+            count = self._db_conn.execute("SELECT COUNT(*) FROM edsm_queue").fetchone()[0]
+        if count > 0:
+            logging.info(f"EDSM: {count} unsent event(s) found from last session")
+            if self._log_callback:
+                self._log_callback("EDSM", f"Recovered {count} unsent event(s) from last session", "WARN")
+            self._arm_flush(immediate=True)
 
     def set_game_version(self, game_version, game_build):
         """Record the live Elite game version/build required by EDSM uploads."""
@@ -123,11 +137,9 @@ class EDSMHandler:
     # ------------------------------------------------------------------
 
     def queue_journal_event(self, raw_event, system_name=None, system_coords=None, system_address=None):
-        """Queue a journal event for batched upload to EDSM.
-
-        Enriches the event with system context fields the way EDDiscovery does,
-        then adds it to the outbound queue. Skips events on the EDSM discard list.
-        """
+        """Persist a journal event to the DB queue for upload to EDSM."""
+        if not self._db_conn:
+            return
         if not self.config.get("edsm_upload_enabled"):
             return
         if not self.config.get("edsm_cmdr_name", "").strip():
@@ -144,15 +156,11 @@ class EDSMHandler:
         if ev_name in _EDSM_DISCARD_EVENTS:
             return
 
-        # For jump/location events the authoritative system context is inside
-        # the event itself (StarSystem / StarPos / SystemAddress), not our
-        # internal state which hasn't been updated yet when this is called.
         if ev_name in ("FSDJump", "Location", "CarrierJump"):
             system_name = raw_event.get("StarSystem") or system_name
             system_coords = raw_event.get("StarPos") or system_coords
             system_address = raw_event.get("SystemAddress") or system_address
 
-        # Enrich with system context (mirrors EDDiscovery _systemName etc.)
         enriched = dict(raw_event)
         if system_name:
             enriched["_systemName"] = system_name
@@ -161,51 +169,194 @@ class EDSMHandler:
         if system_coords:
             enriched["_systemCoordinates"] = system_coords
 
-        with self._queue_lock:
-            self._upload_queue.append(enriched)
-            queue_size = len(self._upload_queue)
+        try:
+            with self._db_lock:
+                self._db_conn.execute(
+                    "INSERT INTO edsm_queue (queued_ts, event_json) VALUES (?, ?)",
+                    (time.time(), json.dumps(enriched)),
+                )
+                self._db_conn.commit()
+        except Exception as e:
+            logging.warning(f"EDSM: failed to queue event: {e}")
+            return
 
-        if queue_size >= _BATCH_SIZE:
-            self._arm_flush(immediate=True)
-        else:
-            self._arm_flush(immediate=False)
+        self._arm_flush()
 
     def flush_upload_queue(self):
         """Force an immediate flush — call this on system jumps."""
         self._arm_flush(immediate=True)
 
-    def _arm_flush(self, immediate=False):
+    def _arm_flush(self, immediate=False, delay=None):
         with self._queue_lock:
             if self._flush_timer is not None:
-                if not immediate:
+                if not immediate and delay is None:
                     return  # existing timer is fine
                 self._flush_timer.cancel()
                 self._flush_timer = None
-            delay = 0 if immediate else _FLUSH_INTERVAL_S
+            if delay is None:
+                delay = 0 if immediate else _FLUSH_INTERVAL_S
             t = threading.Timer(delay, self._do_flush)
             t.daemon = True
             self._flush_timer = t
         t.start()
 
+    # ------------------------------------------------------------------
+    # Historical backfill
+    # ------------------------------------------------------------------
+
+    def run_backfill(self, journal_path):
+        """Queue all unprocessed historical journal events. Runs in background."""
+        if not self._db_conn:
+            return
+        if not self.config.get("edsm_upload_enabled"):
+            return
+        if not self.config.get("edsm_cmdr_name", "").strip():
+            return
+        if not self.config.get("edsm_api_key", "").strip():
+            return
+        threading.Thread(target=self._do_backfill, args=(journal_path,), daemon=True).start()
+
+    def _do_backfill(self, journal_path):
+        try:
+            if not journal_path or not os.path.exists(journal_path):
+                return
+
+            all_files = sorted(
+                f for f in os.listdir(journal_path)
+                if f.startswith("Journal.") and f.endswith(".log")
+            )
+            if not all_files:
+                return
+
+            # The most recently modified file is the active one — the live watcher handles it.
+            current = max(all_files, key=lambda f: os.path.getmtime(os.path.join(journal_path, f)))
+
+            with self._db_lock:
+                done = {r[0] for r in self._db_conn.execute("SELECT journal_file FROM edsm_backfill").fetchall()}
+
+            to_process = [f for f in all_files if f != current and f not in done]
+            if not to_process:
+                return
+
+            logging.info(f"EDSM backfill: {len(to_process)} journal file(s) to process")
+            total = 0
+            for filename in to_process:
+                total += self._backfill_file(os.path.join(journal_path, filename), filename)
+
+            if total > 0:
+                if self._log_callback:
+                    self._log_callback("EDSM", f"Backfilled {total} historical event(s) — uploading", "INFO")
+                self._arm_flush(immediate=True)
+        except Exception as e:
+            logging.warning(f"EDSM backfill error: {e}")
+
+    def _backfill_file(self, filepath, filename):
+        """Read one journal file, insert relevant events into edsm_queue. Returns count queued."""
+        count = 0
+        system_name = None
+        system_coords = None
+        system_address = None
+        batch = []
+
+        try:
+            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        raw = json.loads(line)
+                    except Exception:
+                        continue
+
+                    ev = raw.get("event", "")
+                    if not ev:
+                        continue
+
+                    # Mirror queue_journal_event: jump events carry their own system context.
+                    if ev in ("FSDJump", "Location", "CarrierJump"):
+                        system_name = raw.get("StarSystem") or system_name
+                        system_coords = raw.get("StarPos") or system_coords
+                        system_address = raw.get("SystemAddress") or system_address
+
+                    if ev in _EDSM_DISCARD_EVENTS:
+                        continue
+
+                    enriched = dict(raw)
+                    if system_name:
+                        enriched["_systemName"] = system_name
+                    if system_address is not None:
+                        enriched["_systemAddress"] = system_address
+                    if system_coords:
+                        enriched["_systemCoordinates"] = system_coords
+
+                    batch.append((time.time(), json.dumps(enriched)))
+                    count += 1
+
+                    if len(batch) >= 200:
+                        with self._db_lock:
+                            self._db_conn.executemany(
+                                "INSERT INTO edsm_queue (queued_ts, event_json) VALUES (?, ?)", batch
+                            )
+                            self._db_conn.commit()
+                        batch = []
+
+            if batch:
+                with self._db_lock:
+                    self._db_conn.executemany(
+                        "INSERT INTO edsm_queue (queued_ts, event_json) VALUES (?, ?)", batch
+                    )
+                    self._db_conn.commit()
+
+            with self._db_lock:
+                self._db_conn.execute(
+                    "INSERT OR REPLACE INTO edsm_backfill (journal_file, backfilled_ts) VALUES (?, ?)",
+                    (filename, time.time()),
+                )
+                self._db_conn.commit()
+
+        except Exception as e:
+            logging.warning(f"EDSM: failed to backfill {filename}: {e}")
+            count = 0
+
+        return count
+
+    # ------------------------------------------------------------------
+
     def _do_flush(self):
         with self._queue_lock:
             self._flush_timer = None
-            if not self._upload_queue:
-                return
-            batch = []
-            while self._upload_queue and len(batch) < _BATCH_SIZE:
-                batch.append(self._upload_queue.popleft())
 
-        if not batch:
+        if not self._db_conn:
+            return
+
+        try:
+            with self._db_lock:
+                rows = self._db_conn.execute(
+                    "SELECT id, event_json FROM edsm_queue ORDER BY id ASC LIMIT ?",
+                    (_BATCH_SIZE,),
+                ).fetchall()
+        except Exception as e:
+            logging.warning(f"EDSM: DB read failed: {e}")
+            return
+
+        if not rows:
+            return
+
+        ids = [r[0] for r in rows]
+        try:
+            batch = [json.loads(r[1]) for r in rows]
+        except Exception as e:
+            logging.warning(f"EDSM: failed to parse queued events: {e}")
             return
 
         cmdr = self.config.get("edsm_cmdr_name", "").strip()
         key = self.config.get("edsm_api_key", "").strip()
-        if not cmdr or not key:
-            return
         game_version = self._game_version
         game_build = self._game_build
-        if not game_version or not game_build:
+
+        if not cmdr or not key or not game_version or not game_build:
+            self._arm_flush()
             return
 
         def _send():
@@ -219,7 +370,6 @@ class EDSMHandler:
                     "fromGameBuild": game_build,
                     "message": batch,
                 }
-
                 with self._http_limiter:
                     headers = {"User-Agent": f"VoidCompass/{APP_VERSION}"}
                     r = self._session.post(
@@ -236,18 +386,36 @@ class EDSMHandler:
                     msgnum = resp.get("msgnum", 100)
                     msg = resp.get("msg", "OK")
                     if msgnum >= 200:
-                        # EDSM-level error (bad credentials, unknown cmdr, etc.)
+                        # Credential/cmdr error — drop the batch, don't retry.
                         logging.warning(f"EDSM rejected batch [{msgnum}]: {msg}")
+                        with self._db_lock:
+                            self._db_conn.execute(
+                                f"DELETE FROM edsm_queue WHERE id IN ({','.join('?'*len(ids))})", ids
+                            )
+                            self._db_conn.commit()
                         if self._log_callback:
                             self._log_callback("EDSM", f"Upload rejected [{msgnum}]: {msg}", "ERROR")
                     else:
+                        self._retry_count = 0
+                        with self._db_lock:
+                            self._db_conn.execute(
+                                f"DELETE FROM edsm_queue WHERE id IN ({','.join('?'*len(ids))})", ids
+                            )
+                            remaining = self._db_conn.execute("SELECT COUNT(*) FROM edsm_queue").fetchone()[0]
+                            self._db_conn.commit()
                         logging.debug(f"EDSM upload OK: {len(batch)} events")
                         if self._log_callback:
                             self._log_callback("EDSM", f"Uploaded {len(batch)} event(s) to EDSM", "INFO")
+                        if remaining > 0:
+                            self._arm_flush(immediate=True)
             except Exception as e:
+                # Network/HTTP error — rows stay in DB, retry with backoff.
                 logging.warning(f"EDSM batch upload failed ({len(batch)} events): {e}")
+                retry_delay = _RETRY_DELAYS[min(self._retry_count, len(_RETRY_DELAYS) - 1)]
+                self._retry_count += 1
                 if self._log_callback:
-                    self._log_callback("EDSM", f"Upload failed: {e}", "ERROR")
+                    self._log_callback("EDSM", f"Upload failed, retrying in {retry_delay}s", "WARN")
+                self._arm_flush(delay=retry_delay)
 
         threading.Thread(target=_send, daemon=True).start()
 

@@ -24,6 +24,12 @@ class DashboardDBMixin:
                 "CREATE TABLE IF NOT EXISTS scan_hud_items (system_name TEXT, body_id INTEGER, data_json TEXT, ts INTEGER, PRIMARY KEY (system_name, body_id))"
             )
             self.conn.execute(
+                "CREATE TABLE IF NOT EXISTS edsm_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, queued_ts REAL NOT NULL, event_json TEXT NOT NULL)"
+            )
+            self.conn.execute(
+                "CREATE TABLE IF NOT EXISTS edsm_backfill (journal_file TEXT PRIMARY KEY, backfilled_ts REAL NOT NULL)"
+            )
+            self.conn.execute(
                 "CREATE TABLE IF NOT EXISTS colonisation_projects "
                 "(market_id INTEGER PRIMARY KEY, system_name TEXT, body_name TEXT, "
                 " progress REAL, complete INTEGER, failed INTEGER, "
@@ -243,6 +249,12 @@ class DashboardDBMixin:
         self.load_system_from_db(self.current_sys)
         self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
         self.update_hud()
+
+        if self.config.get("edsm_upload_enabled"):
+            with self.db_lock:
+                self.conn.execute("DELETE FROM edsm_backfill")
+                self.conn.commit()
+            self.edsm.run_backfill(self.config.get("journal_path", ""))
 
     def load_system_from_db(self, sys_name):
         with self.db_lock:
