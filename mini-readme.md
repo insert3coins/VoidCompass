@@ -1,6 +1,24 @@
 # VoidCompass // UPDATE LOG
 
 
+## v3.0.1 // EDSM Journal Upload
+**Release Date:** 2026-Jun-04
+*   **Opt-in upload of exploration/scan events to EDSM (`edsm_handler.py`):**
+    *   Events are queued and sent in **batches** (up to 50 per POST) as a JSON array — matching the EDDiscovery approach rather than one-request-per-event.
+    *   Each event is **enriched** with `_systemName`, `_systemCoordinates`, and `_systemAddress` before queuing so EDSM can correctly attribute scans to the right system.
+    *   `fromGameVersion` and `fromGameBuild` are captured from `FileHeader` / `LoadGame` events and included in every POST.
+    *   A **denylist** (`_EDSM_DISCARD_EVENTS`) filters out noise — chat, market data, docking events, missions, powerplay, crew, cargo, etc. — before events enter the queue.
+    *   The queue **flushes immediately on every `FSDJump` / `CarrierJump`** so the previous system's data is shipped before internal state resets.
+    *   The queue also flushes on a **30-second inactivity timer** for events that arrive outside of a jump cycle.
+    *   Uploads are skipped during the startup journal catchup (`batch_mode`) so historical events are never replayed to EDSM.
+*   **Settings UI** (`settings_ui.py`): new **EDSM UPLOAD** panel with:
+    *   *Commander Name* text field.
+    *   *API Key* masked password field.
+    *   *Upload scan data to EDSM* on/off toggle (default off).
+    *   **Test API Key** button — sends a live probe to `api-journal-v1` and reports success or the EDSM error message without leaving the settings window.
+*   **Config defaults** (`config.py`): `edsm_cmdr_name` (`""`), `edsm_api_key` (`""`), `edsm_upload_enabled` (`false`).
+
+
 ## v2.9.7 // System Info Overlay
 **Release Date:** 2026-Jun-03
 *   **New `SystemInfoHUD` overlay (`system_info_hud.py`):**
