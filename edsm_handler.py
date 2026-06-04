@@ -49,8 +49,6 @@ class EDSMHandler:
         self._upload_queue = collections.deque()
         self._queue_lock = threading.Lock()
         self._flush_timer = None
-        self._game_version = ""
-        self._game_build = ""
         self._log_callback = None  # set by dashboard: fn(tag, msg, severity)
 
     def set_log_callback(self, callback):
@@ -60,13 +58,6 @@ class EDSMHandler:
     # ------------------------------------------------------------------
     # Upload queue helpers
     # ------------------------------------------------------------------
-
-    def set_game_version(self, version, build):
-        """Record the game version/build from FileHeader or LoadGame events."""
-        if version:
-            self._game_version = str(version)
-        if build:
-            self._game_build = str(build)
 
     def queue_journal_event(self, raw_event, system_name=None, system_coords=None, system_address=None):
         """Queue a journal event for batched upload to EDSM.
@@ -154,10 +145,6 @@ class EDSMHandler:
                     "fromSoftwareVersion": APP_VERSION,
                     "message": json.dumps(batch),
                 }
-                if self._game_version:
-                    payload["fromGameVersion"] = self._game_version
-                if self._game_build:
-                    payload["fromGameBuild"] = self._game_build
 
                 with self._http_limiter:
                     headers = {"User-Agent": f"VoidCompass/{APP_VERSION}"}
