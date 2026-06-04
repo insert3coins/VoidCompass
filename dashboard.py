@@ -1101,6 +1101,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "Cargo":
             # Journal can emit Cargo before/without immediate file polling update.
             self.watcher.force_check_cargo()
+            self._queue_edsm_upload(raw, allow_startup=True)
+
+        elif ev == "CargoDepot":
+            self._queue_edsm_upload(raw, startup_replay=startup_replay)
 
         elif ev in ("NavRoute", "NavRouteClear"):
             # Nav route details live in NavRoute.json; trigger immediate refresh.

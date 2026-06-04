@@ -76,7 +76,7 @@ _EDSM_DISCARD_EVENTS = frozenset({
     "Passengers", "PassengerManifest",
     "MissionAccepted", "MissionCompleted", "MissionFailed",
     "MissionAbandoned", "MissionRedirected",
-    "Cargo", "CargoDepot", "CargoTransfer",
+    "CargoTransfer",
     "NavRoute", "NavRouteClear",
     "Status",
 }) - _EDSM_CREDIT_EVENTS
