@@ -1096,6 +1096,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "Loadout":
             self.cargo_capacity = d.get("cargo_capacity", 0)
             self.watcher.force_check_cargo()
+            self._queue_edsm_upload(raw, allow_startup=True)
 
         elif ev == "Cargo":
             # Journal can emit Cargo before/without immediate file polling update.
@@ -1107,6 +1108,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         elif ev == "Commander":
             self.cmdr_name = d.get("name", "CMDR")
+            self._queue_edsm_upload(raw, allow_startup=True)
+
+        elif ev in ("Rank", "Progress", "Reputation", "Statistics"):
+            self._queue_edsm_upload(raw, allow_startup=True)
 
         elif ev == "LoadGame":
             self.cmdr_name = d.get("commander", "CMDR")
@@ -1240,6 +1245,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if is_jump:
                 self._queue_edsm_upload(raw, startup_replay=startup_replay)
                 self.edsm.flush_upload_queue()
+            elif ev == "Location":
+                self._queue_edsm_upload(raw, allow_startup=True)
             
             if not self.batch_mode:
                 sys_text = self.current_sys.upper()
