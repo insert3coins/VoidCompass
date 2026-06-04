@@ -75,6 +75,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.system_undiscovered = False
         self.fss_all_bodies = False
         self.cmdr_name = "CMDR"
+        self.cmdr_balance = None
+        self.cmdr_loan = None
         self.last_scan_event = None
         self.last_bio_scan = {}
         # Bio tracking: star/body scan conditions for prediction
@@ -1047,18 +1049,28 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.set_event_feed_filter("ALL")
         self.root.after(0, self.root.lift)
 
+    def _queue_edsm_upload(self, raw_event, allow_startup=False, flush=False, startup_replay=False):
+        """Queue accepted live journal events for EDSM without replaying startup history."""
+        if ((self.is_first_load or startup_replay) and not allow_startup) or not isinstance(raw_event, dict):
+            return False
+        self.edsm.queue_journal_event(
+            raw_event,
+            system_name=self.current_sys,
+            system_coords=self.current_coords if isinstance(self.current_coords, list) else None,
+            system_address=self.current_system_address,
+        )
+        if flush:
+            self.edsm.flush_upload_queue()
+        return True
+
     def process_event(self, data):
         ev = data.get("type") or data.get("event")
         raw = data.get("raw", data)
         d = data.get("data", data)
+        startup_replay = bool(data.get("startup_catchup"))
         self._record_journal_event()
-        if isinstance(raw, dict) and not self.batch_mode:
-            self.edsm.queue_journal_event(
-                raw,
-                system_name=self.current_sys,
-                system_coords=self.current_coords if isinstance(self.current_coords, list) else None,
-                system_address=self.current_system_address,
-            )
+        if ev != "LoadGame" and self.edsm.is_credit_event(ev):
+            self._queue_edsm_upload(raw, flush=True, startup_replay=startup_replay)
         current_journal = getattr(self.watcher, "last_journal", None)
         if current_journal and current_journal != self.last_logged_journal_file:
             self.last_logged_journal_file = current_journal
@@ -1075,7 +1087,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 logging.warning(f"CarrierTracker.process_event error [{ev}]: {_ct_err}")
 
         if ev in ("FileHeader", "Fileheader"):
-            self.log(f"Game version detected: {d.get('gameversion')} ({d.get('build')})")
+            game_version = d.get("gameversion")
+            game_build = d.get("build")
+            if game_version and game_build:
+                self.edsm.set_game_version(game_version, game_build)
+            self.log(f"Game version detected: {game_version} ({game_build})")
 
         elif ev == "Loadout":
             self.cargo_capacity = d.get("cargo_capacity", 0)
@@ -1097,7 +1113,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             game_version = d.get("gameversion")
             game_build = d.get("build")
             if game_version and game_build:
+                self.edsm.set_game_version(game_version, game_build)
                 self.log(f"Game version detected from LoadGame: {game_version} ({game_build})")
+            credits = d.get("credits")
+            loan = d.get("loan")
+            if credits is not None:
+                self.cmdr_balance = credits
+                self.cmdr_loan = loan
+                self._queue_edsm_upload(raw, allow_startup=True, flush=True)
 
         elif ev == "ScanOrganic":
             if not self._matches_current_system_address(d):
@@ -1156,8 +1179,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if is_jump:
                 self.in_fss = False
                 self.fss_summary_active = False
-                # Flush any queued EDSM events from the previous system before resetting state.
-                self.edsm.flush_upload_queue()
 
             prev_coords = self.current_coords if isinstance(self.current_coords, list) else None
 
@@ -1216,6 +1237,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 evt_msg = f"Location set: {self.current_sys}"
             self.log(log_msg)
             self.add_event_feed_entry(evt_tag, evt_msg, severity="INFO", copy_text=self.current_sys, url=f"https://www.edsm.net/show-system?systemName={self.current_sys.replace(' ', '+')}")
+            if is_jump:
+                self._queue_edsm_upload(raw, startup_replay=startup_replay)
+                self.edsm.flush_upload_queue()
             
             if not self.batch_mode:
                 sys_text = self.current_sys.upper()
@@ -1267,6 +1291,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             # value that load_system_from_db already restored from the DB.
             if body_count > 0:
                 self.total = max(body_count, self.total)
+                self._queue_edsm_upload(raw, startup_replay=startup_replay)
             self.fss_all_bodies = False
             # Progress=1.0 means every body in this system is already known/discovered
             # (e.g. Sol and other pre-populated systems). Treat it as fully scanned so
@@ -1321,6 +1346,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 count = d.get("count", self.total)
                 if count > 0:
                     self.total = count
+                    self._queue_edsm_upload(raw, startup_replay=startup_replay)
                 # All bodies found → mark as fully scanned.
                 self.scanned = self.total
                 # Persist all scan_item body IDs we have so return visits restore correctly.
@@ -1392,6 +1418,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.save_scan_item_to_db(self.current_sys, item)
                     body_label = item.get("name") or f"Body {body_id}"
                     self.add_event_feed_entry("DSS", f"DSS complete: {body_label}", severity="INFO", copy_text=body_label)
+                    self._queue_edsm_upload(raw, startup_replay=startup_replay)
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
@@ -1457,6 +1484,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                     self.last_scan_event = data
                     self.add_scan_item(raw)
+                    self._queue_edsm_upload(raw, startup_replay=startup_replay)
                     if is_system_star_scan and d.get("was_discovered") is False:
                         self.system_undiscovered = True
                     if not self.batch_mode:
@@ -1490,6 +1518,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     # Later detailed/nav-beacon scans can add fields missing from an initial basic scan.
                     self.last_scan_event = data
                     self.add_scan_item(raw)
+                    self._queue_edsm_upload(raw, startup_replay=startup_replay)
 
                     p_class = d.get("planet_class", "")
                     terraformable = d.get("terraform_state") == "Terraformable"
