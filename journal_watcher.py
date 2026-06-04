@@ -200,7 +200,10 @@ class JournalWatcher:
                         raw = json.loads(line)
                     except Exception:
                         continue
-                    events.append(self._normalize_event(raw))
+                    ev = self._normalize_event(raw)
+                    if isinstance(ev, dict):
+                        ev["startup_catchup"] = startup_catchup
+                    events.append(ev)
 
                 if events:
                     if self.batch_event_callback and (startup_catchup or len(events) > 1):
@@ -296,7 +299,9 @@ class JournalWatcher:
                 "data": {
                     "commander": data.get("Commander"),
                     "gameversion": data.get("gameversion"),
-                    "build": data.get("build")
+                    "build": data.get("build"),
+                    "credits": data.get("Credits"),
+                    "loan": data.get("Loan"),
                 }
             }
         if ev in ("Location", "FSDJump", "StartJump"):

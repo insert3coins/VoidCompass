@@ -8,9 +8,55 @@ import html
 import time
 from version import APP_VERSION
 
+_EDSM_CREDIT_EVENTS = frozenset({
+    "BuyExplorationData", "BuyMicroResources", "BuyTradeData",
+    "CancelTaxi", "CommunityGoalReward", "CrewHire",
+    "EngineerContribution", "FetchRemoteModule", "LoadGame",
+    "MarketBuy", "MarketSell", "MissionAbandoned", "MissionCompleted",
+    "MissionFailed", "ModuleBuy", "ModuleBuyAndStore", "ModuleRetrieve",
+    "ModuleSell", "ModuleSellRemote", "ModuleTransfer", "NpcCrewPaidWage",
+    "PayBounties", "PayFines", "PayLegacyFines", "PowerplaySalary",
+    "RedeemVoucher", "RefuelAll", "RefuelPartial", "Repair", "RepairAll",
+    "RestockVehicle", "Resurrect", "SearchAndRescue", "SellDrones",
+    "SellExplorationData", "SellMicroResources", "SellShipOnRebuy",
+    "ShipyardBuy", "ShipyardSell", "ShipyardTransfer",
+})
+
 # Events EDSM discards — matches the list served by api-journal-v1/discard.
 # Keeping these client-side avoids sending noise and saves round-trips.
 _EDSM_DISCARD_EVENTS = frozenset({
+    "AfmuRepairs", "AppliedToSquadron", "ApproachBody",
+    "AsteroidCracked", "BookDropship", "CancelDropship",
+    "CapShipBond", "CargoTransfer", "CarrierBankTransfer",
+    "CarrierBuy", "CarrierCrewServices", "CarrierDecommission",
+    "CarrierDepositFuel", "CarrierDockingPermission", "CarrierFinance",
+    "CarrierJumpCancelled", "CarrierJumpRequest", "CarrierModulePack",
+    "CarrierNameChange", "CarrierStats", "CarrierTradeOrder",
+    "ChangeCrewRole", "ClearSavedGame", "CockpitBreached",
+    "CollectItems", "ColonisationConstructionDepot",
+    "ColonisationContribution", "Commander", "Continued", "Coriolis",
+    "CreateSuitLoadout", "CrewLaunchFighter", "CrewMemberJoins",
+    "CrewMemberQuits", "CrewMemberRoleChange", "DataScanned",
+    "DatalinkScan", "DatalinkVoucher", "DisbandedSquadron",
+    "DiscoveryScan", "Disembark", "DockFighter", "DockSRV",
+    "DropItems", "DropshipDeploy", "EDDCommodityPrices", "EDDItemSet",
+    "EDShipyard", "Embark", "EndCrewSession", "EngineerApply",
+    "EngineerLegacyConvert", "EscapeInterdiction", "FSSBodySignals",
+    "FSSSignalDiscovered", "FactionKillBond", "FighterDestroyed",
+    "FighterRebuilt", "FileHeader", "Fileheader", "FuelScoop",
+    "HeatDamage", "HeatWarning", "HullDamage", "InvitedToSquadron",
+    "JetConeBoost", "JetConeDamage", "JoinedSquadron",
+    "KickCrewMember", "LaunchDrone", "LaunchFighter", "LaunchSRV",
+    "LeaveBody", "LoadoutEquipModule", "MassModuleStore",
+    "MaterialDiscovered", "ModuleArrived", "ModuleInfo",
+    "NavBeaconScan", "NewCommander", "PVPKill", "PowerplayMerits",
+    "ProspectedAsteroid", "RebootRepair", "RepairDrone",
+    "ReservoirReplenished", "SAASignalsFound", "SRVDestroyed",
+    "ScanBaryCentre", "ScanOrganic", "Scanned",
+    "SharedBookmarkToSquadron", "ShieldState", "ShipArrived",
+    "ShipTargeted", "SquadronCreated", "SquadronStartup",
+    "StartJump", "SuitLoadout", "SupercruiseDestinationDrop",
+    "SupercruiseEntry", "SupercruiseExit", "SwitchSuitLoadout",
     "ShutDown", "Shutdown",
     "Music", "Screenshot",
     "ReceiveText", "SendText",
@@ -32,7 +78,7 @@ _EDSM_DISCARD_EVENTS = frozenset({
     "Cargo", "CargoDepot", "CargoTransfer",
     "NavRoute", "NavRouteClear",
     "Status",
-})
+}) - _EDSM_CREDIT_EVENTS
 
 _BATCH_SIZE = 50          # send when queue reaches this many events
 _FLUSH_INTERVAL_S = 30    # also flush after this many seconds of inactivity
@@ -50,10 +96,27 @@ class EDSMHandler:
         self._queue_lock = threading.Lock()
         self._flush_timer = None
         self._log_callback = None  # set by dashboard: fn(tag, msg, severity)
+        self._game_version = self.config.get("edsm_game_version", "")
+        self._game_build = self.config.get("edsm_game_build", "")
+        self._missing_game_version_warned = False
 
     def set_log_callback(self, callback):
         """Wire up a function(tag, msg, severity) to post feed entries on upload."""
         self._log_callback = callback
+
+    def set_game_version(self, game_version, game_build):
+        """Record the live Elite game version/build required by EDSM uploads."""
+        if game_version:
+            self._game_version = str(game_version)
+            self.config["edsm_game_version"] = self._game_version
+        if game_build:
+            self._game_build = str(game_build)
+            self.config["edsm_game_build"] = self._game_build
+        if self._game_version and self._game_build:
+            self._missing_game_version_warned = False
+
+    def is_credit_event(self, event_name):
+        return event_name in _EDSM_CREDIT_EVENTS
 
     # ------------------------------------------------------------------
     # Upload queue helpers
@@ -70,6 +133,11 @@ class EDSMHandler:
         if not self.config.get("edsm_cmdr_name", "").strip():
             return
         if not self.config.get("edsm_api_key", "").strip():
+            return
+        if not self._game_version or not self._game_build:
+            if self._log_callback and not self._missing_game_version_warned:
+                self._missing_game_version_warned = True
+                self._log_callback("EDSM", "Upload skipped: game version/build not detected yet", "WARN")
             return
 
         ev_name = raw_event.get("event", "")
@@ -135,6 +203,10 @@ class EDSMHandler:
         key = self.config.get("edsm_api_key", "").strip()
         if not cmdr or not key:
             return
+        game_version = self._game_version
+        game_build = self._game_build
+        if not game_version or not game_build:
+            return
 
         def _send():
             try:
@@ -143,14 +215,16 @@ class EDSMHandler:
                     "apiKey": key,
                     "fromSoftware": "VoidCompass",
                     "fromSoftwareVersion": APP_VERSION,
-                    "message": json.dumps(batch),
+                    "fromGameVersion": game_version,
+                    "fromGameBuild": game_build,
+                    "message": batch,
                 }
 
                 with self._http_limiter:
                     headers = {"User-Agent": f"VoidCompass/{APP_VERSION}"}
                     r = self._session.post(
                         "https://www.edsm.net/api-journal-v1",
-                        data=payload,
+                        json=payload,
                         headers=headers,
                         timeout=20,
                     )

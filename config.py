@@ -91,6 +91,8 @@ def load_config():
         'edsm_cmdr_name': '',
         'edsm_api_key': '',
         'edsm_upload_enabled': False,
+        'edsm_game_version': '',
+        'edsm_game_build': '',
     }
     if os.path.exists(CONFIG_FILE):
         try:

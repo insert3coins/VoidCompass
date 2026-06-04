@@ -159,28 +159,43 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
     create_toggle(sec_edsm, "Upload scan data to EDSM", edsm_upload_var)
 
     def _test_edsm():
-        import threading, requests as _req
+        import threading, requests as _req, time
         cmdr = edsm_cmdr_e.get().strip()
         key = edsm_key_e.get().strip()
+        game_version = str(config.get("edsm_game_version") or "").strip()
+        game_build = str(config.get("edsm_game_build") or "").strip()
         if not cmdr or not key:
             tk.messagebox.showwarning("Missing credentials", "Enter Commander Name and API Key first.", parent=win)
+            return
+        if not game_version or not game_build:
+            tk.messagebox.showwarning(
+                "Game version unavailable",
+                "Start Elite and let VoidCompass read a FileHeader or LoadGame event before testing EDSM.",
+                parent=win,
+            )
             return
         def _do_test():
             try:
                 from version import APP_VERSION
+                probe_event = {
+                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "event": "Status",
+                }
                 r = _req.post(
                     "https://www.edsm.net/api-journal-v1",
-                    data={
+                    json={
                         "commanderName": cmdr,
                         "apiKey": key,
                         "fromSoftware": "VoidCompass",
                         "fromSoftwareVersion": APP_VERSION,
-                        "message": '[{"event":"Status"}]',
+                        "fromGameVersion": game_version,
+                        "fromGameBuild": game_build,
+                        "message": [probe_event],
                     },
                     timeout=10,
                 )
                 body_text = r.json() if r.headers.get("content-type", "").startswith("application/json") else r.text
-                if isinstance(body_text, dict) and body_text.get("msgnum") == 100:
+                if isinstance(body_text, dict) and body_text.get("msgnum") in (100, 304):
                     win.after(0, lambda: tk.messagebox.showinfo("EDSM Test", "API key verified successfully.", parent=win))
                 else:
                     msg = body_text.get("msg", str(body_text)) if isinstance(body_text, dict) else str(body_text)
