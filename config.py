@@ -87,7 +87,10 @@ def load_config():
         'watcher_max_journal_lines_per_cycle': 40,
         'watcher_startup_max_lines_per_cycle': 20,
         'watcher_startup_tail_bytes': 131072,
-        'watcher_special_file_settle_ms': 200
+        'watcher_special_file_settle_ms': 200,
+        'edsm_cmdr_name': '',
+        'edsm_api_key': '',
+        'edsm_upload_enabled': False,
     }
     if os.path.exists(CONFIG_FILE):
         try:

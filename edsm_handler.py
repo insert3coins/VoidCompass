@@ -1,3 +1,5 @@
+import collections
+import json
 import threading
 import requests
 import logging
@@ -6,12 +8,162 @@ import html
 import time
 from version import APP_VERSION
 
+# Events EDSM discards — matches the list served by api-journal-v1/discard.
+# Keeping these client-side avoids sending noise and saves round-trips.
+_EDSM_DISCARD_EVENTS = frozenset({
+    "ShutDown", "Shutdown",
+    "Music", "Screenshot",
+    "ReceiveText", "SendText",
+    "DockingRequested", "DockingGranted", "DockingDenied",
+    "DockingCancelled", "DockingTimeout",
+    "Market", "Shipyard", "Outfitting",
+    "StoredModules", "StoredShips",
+    "ModuleBuy", "ModuleSell", "ModuleRetrieve", "ModuleStore",
+    "ModuleSwap", "ModuleTransfer",
+    "ShipyardBuy", "ShipyardNew", "ShipyardSell", "ShipyardSwap", "ShipyardTransfer",
+    "Bounty", "RedeemVoucher", "CrimeVictim",
+    "PowerplayCollect", "PowerplayDeliver", "PowerplayDefect", "PowerplayEnlist",
+    "PowerplayFastTrack", "PowerplayJoin", "PowerplayLeave", "PowerplaySalary",
+    "PowerplayVote", "PowerplayVoucher",
+    "NpcCrewRank", "NpcCrewPaidWage", "CrewAssign", "CrewFire", "CrewHire",
+    "Passengers", "PassengerManifest",
+    "MissionAccepted", "MissionCompleted", "MissionFailed",
+    "MissionAbandoned", "MissionRedirected",
+    "Cargo", "CargoDepot", "CargoTransfer",
+    "NavRoute", "NavRouteClear",
+    "Status",
+})
+
+_BATCH_SIZE = 50          # send when queue reaches this many events
+_FLUSH_INTERVAL_S = 30    # also flush after this many seconds of inactivity
+
+
 class EDSMHandler:
     def __init__(self, config):
         self.config = config
         self.status = "ACTIVE"
         self._http_limiter = threading.BoundedSemaphore(6)
         self._session = requests.Session()
+
+        # Upload queue state
+        self._upload_queue = collections.deque()
+        self._queue_lock = threading.Lock()
+        self._flush_timer = None
+        self._game_version = ""
+        self._game_build = ""
+
+    # ------------------------------------------------------------------
+    # Upload queue helpers
+    # ------------------------------------------------------------------
+
+    def set_game_version(self, version, build):
+        """Record the game version/build from FileHeader or LoadGame events."""
+        if version:
+            self._game_version = str(version)
+        if build:
+            self._game_build = str(build)
+
+    def queue_journal_event(self, raw_event, system_name=None, system_coords=None, system_address=None):
+        """Queue a journal event for batched upload to EDSM.
+
+        Enriches the event with system context fields the way EDDiscovery does,
+        then adds it to the outbound queue. Skips events on the EDSM discard list.
+        """
+        if not self.config.get("edsm_upload_enabled"):
+            return
+        if not self.config.get("edsm_cmdr_name", "").strip():
+            return
+        if not self.config.get("edsm_api_key", "").strip():
+            return
+
+        ev_name = raw_event.get("event", "")
+        if ev_name in _EDSM_DISCARD_EVENTS:
+            return
+
+        # Enrich with system context (mirrors EDDiscovery _systemName etc.)
+        enriched = dict(raw_event)
+        if system_name:
+            enriched["_systemName"] = system_name
+        if system_address is not None:
+            enriched["_systemAddress"] = system_address
+        if system_coords:
+            enriched["_systemCoordinates"] = system_coords
+
+        with self._queue_lock:
+            self._upload_queue.append(enriched)
+            queue_size = len(self._upload_queue)
+
+        if queue_size >= _BATCH_SIZE:
+            self._arm_flush(immediate=True)
+        else:
+            self._arm_flush(immediate=False)
+
+    def flush_upload_queue(self):
+        """Force an immediate flush — call this on system jumps."""
+        self._arm_flush(immediate=True)
+
+    def _arm_flush(self, immediate=False):
+        with self._queue_lock:
+            if self._flush_timer is not None:
+                if not immediate:
+                    return  # existing timer is fine
+                self._flush_timer.cancel()
+                self._flush_timer = None
+            delay = 0 if immediate else _FLUSH_INTERVAL_S
+            t = threading.Timer(delay, self._do_flush)
+            t.daemon = True
+            self._flush_timer = t
+        t.start()
+
+    def _do_flush(self):
+        with self._queue_lock:
+            self._flush_timer = None
+            if not self._upload_queue:
+                return
+            batch = []
+            while self._upload_queue and len(batch) < _BATCH_SIZE:
+                batch.append(self._upload_queue.popleft())
+
+        if not batch:
+            return
+
+        cmdr = self.config.get("edsm_cmdr_name", "").strip()
+        key = self.config.get("edsm_api_key", "").strip()
+        if not cmdr or not key:
+            return
+
+        def _send():
+            try:
+                payload = {
+                    "commanderName": cmdr,
+                    "apiKey": key,
+                    "fromSoftware": "VoidCompass",
+                    "fromSoftwareVersion": APP_VERSION,
+                    "message": json.dumps(batch),
+                }
+                if self._game_version:
+                    payload["fromGameVersion"] = self._game_version
+                if self._game_build:
+                    payload["fromGameBuild"] = self._game_build
+
+                with self._http_limiter:
+                    headers = {"User-Agent": f"VoidCompass/{APP_VERSION}"}
+                    r = self._session.post(
+                        "https://www.edsm.net/api-journal-v1",
+                        data=payload,
+                        headers=headers,
+                        timeout=20,
+                    )
+                    r.raise_for_status()
+                    logging.debug(f"EDSM upload OK: {len(batch)} events")
+            except Exception as e:
+                logging.warning(f"EDSM batch upload failed ({len(batch)} events): {e}")
+
+        threading.Thread(target=_send, daemon=True).start()
+
+    # ------------------------------------------------------------------
+    # Read-only EDSM / Spansh fetch helpers (unchanged)
+    # ------------------------------------------------------------------
 
     def _limited_get(self, url, params=None, timeout=10, retries=2):
         last_exc = None
@@ -41,7 +193,6 @@ class EDSMHandler:
                         callback(traffic)
             except Exception as e:
                 logging.warning(f"Traffic fetch failed: {e}")
-        
         threading.Thread(target=_fetch, daemon=True).start()
 
     def fetch_system_coords(self, system_name, callback):
@@ -58,7 +209,6 @@ class EDSMHandler:
             except Exception as e:
                 logging.warning(f"Coords fetch failed: {e}")
                 callback(system_name, None)
-        
         threading.Thread(target=_fetch, daemon=True).start()
 
     def fetch_system_details(self, system_name, callback):
@@ -75,11 +225,9 @@ class EDSMHandler:
             except Exception as e:
                 logging.warning(f"System details fetch failed: {e}")
                 callback(None)
-        
         threading.Thread(target=_fetch, daemon=True).start()
 
     def fetch_spansh_system(self, system_address, callback):
-        """Fetch full system dump from Spansh (stations, services, etc.)."""
         def _fetch():
             try:
                 url = f"https://spansh.co.uk/api/dump/{system_address}/"
@@ -120,7 +268,6 @@ class EDSMHandler:
                     callback(None)
                     return
 
-                # Keep concise for notes: first two paragraphs max.
                 blurb = " ".join(cleaned[:2]).strip()
                 if len(blurb) > 420:
                     blurb = blurb[:417].rstrip() + "..."
