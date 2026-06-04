@@ -9,6 +9,20 @@ from tkinter import scrolledtext
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
 from version import APP_VERSION
 
+_FEED_TAG_COLORS = {
+    "JUMP":    "#00d1ff",  # cyan  — hyperspace jumps
+    "SCAN":    "#a5b4fc",  # indigo — passive body scans
+    "DSS":     "#6ee7b7",  # mint   — mapped surface scans
+    "BIO":     "#86efac",  # green  — organic life
+    "SYSTEM":  "#93c5fd",  # blue   — system / nav info
+    "ROUTE":   "#fde68a",  # gold   — waypoints / routing
+    "CARRIER": "#d8b4fe",  # purple — carrier events
+    "EDSM":    "#67e8f9",  # teal   — EDSM upload status
+    "VALUABLE":"#FF7100",  # orange — high-value worlds
+    "ALERT":   "#FF7100",  # orange — system alerts
+    "INFO":    "#888",     # gray   — generic info
+}
+
 
 def _carrier_countdown(dep_str):
     """Return a compact H:MM:SS / Mm SSs countdown for a departure ISO timestamp."""
@@ -429,19 +443,22 @@ class DashboardUIMixin:
                 )
         self._refresh_event_feed()
 
-    def add_event_feed_entry(self, tag, message, severity="INFO", copy_text=None, url=None, pinned=False):
+    def add_event_feed_entry(self, tag, message, severity="INFO", copy_text=None, url=None):
         if not message:
             return
         if getattr(self, "batch_mode", False) and getattr(self, "is_first_load", False):
             return
+        msg_clean = str(message).replace("\r\n", " ").replace("\r", " ").replace("\n", " ").strip()
+        sev = (severity or "INFO").upper()
+        if sev == "ERROR":
+            sev = "FAIL"
         entry = {
             "ts": time.time(),
             "tag": (tag or "INFO").upper(),
-            "severity": (severity or "INFO").upper(),
-            "message": str(message),
+            "severity": sev,
+            "message": msg_clean,
             "copy_text": copy_text or str(message),
             "url": url,
-            "pinned": bool(pinned),
             "new_until": time.time() + 6.0,
         }
         if self.event_feed_entries:
@@ -465,18 +482,13 @@ class DashboardUIMixin:
 
     def _event_feed_row_color(self, entry):
         sev = entry.get("severity", "INFO")
+        tag = entry.get("tag", "INFO")
         if sev == "FAIL":
             base = "#ff4d4d"
         elif sev == "WARN":
             base = COLOR_ORANGE
         else:
-            base = COLOR_TEXT
-        if entry.get("tag") == "VALUABLE":
-            base = COLOR_ORANGE
-        elif entry.get("tag") == "JUMP":
-            base = COLOR_ACCENT
-        elif entry.get("tag") == "INFO":
-            base = "#aaa"
+            base = _FEED_TAG_COLORS.get(tag, COLOR_TEXT)
         if time.time() <= entry.get("new_until", 0):
             if sev == "FAIL":
                 return "#ff7f7f"
@@ -488,8 +500,7 @@ class DashboardUIMixin:
     @staticmethod
     def _event_feed_row_text(row):
         ts_txt = datetime.fromtimestamp(row.get("ts", time.time())).strftime("%H:%M:%S")
-        pin_prefix = "PIN " if row.get("pinned") else ""
-        return f"[{ts_txt}] {pin_prefix}[{row.get('tag', 'INFO')}] {row.get('message', '')}"
+        return f"[{ts_txt}] [{row.get('tag', 'INFO')}] {row.get('message', '')}"
 
     def _recolor_event_feed_rows(self):
         if not hasattr(self, "event_feed_list"):
@@ -517,9 +528,7 @@ class DashboardUIMixin:
             return
 
         visible = [e for e in self.event_feed_entries if self._event_feed_matches_filter(e)]
-        pinned = [e for e in visible if e.get("pinned")]
-        unpinned = [e for e in visible if not e.get("pinned")]
-        rows = pinned + unpinned
+        rows = visible
         rows = rows[:self.event_feed_display_limit]
         lines = [self._event_feed_row_text(row) for row in rows]
         old_lines = getattr(self, "_event_feed_render_lines", [])
