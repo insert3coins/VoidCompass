@@ -1113,6 +1113,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev in ("Rank", "Progress", "Reputation", "Statistics"):
             self._queue_edsm_upload(raw, allow_startup=True)
 
+        elif ev == "Materials":
+            self._queue_edsm_upload(raw, allow_startup=True)
+
+        elif ev in ("MaterialCollected", "MaterialDiscarded", "MaterialTrade",
+                    "EngineerCraft", "Synthesis", "TechnologyBroker"):
+            self._queue_edsm_upload(raw, startup_replay=startup_replay)
+
         elif ev == "LoadGame":
             self.cmdr_name = d.get("commander", "CMDR")
             game_version = d.get("gameversion")
