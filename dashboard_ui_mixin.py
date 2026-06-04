@@ -10,7 +10,7 @@ from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
 from version import APP_VERSION
 
 _FEED_TAG_COLORS = {
-    "JUMP":    "#00d1ff",  # cyan  — hyperspace jumps
+    "JUMP":    "#00d1ff",  # cyan   — hyperspace jumps
     "SCAN":    "#a5b4fc",  # indigo — passive body scans
     "DSS":     "#6ee7b7",  # mint   — mapped surface scans
     "BIO":     "#86efac",  # green  — organic life
@@ -20,6 +20,7 @@ _FEED_TAG_COLORS = {
     "EDSM":    "#67e8f9",  # teal   — EDSM upload status
     "VALUABLE":"#FF7100",  # orange — high-value worlds
     "ALERT":   "#FF7100",  # orange — system alerts
+    "DOCK":    "#fb923c",  # amber  — docking / undocking
     "INFO":    "#888",     # gray   — generic info
 }
 
@@ -347,19 +348,20 @@ class DashboardUIMixin:
         self._section_label(feed_wrap, "LIVE EVENT TIMELINE").pack(anchor="w")
         self.event_filter_row = tk.Frame(feed_wrap, bg=self.UI_PANEL)
         self.event_filter_row.pack(fill=tk.X, pady=(6, 4))
-        for col in range(3):
+        for col in range(5):
             self.event_filter_row.grid_columnconfigure(col, weight=1, uniform="event_filter")
         self.event_filter_buttons = {}
         event_filters = (
-            ("ALL", "ALL"),
-            ("VALUABLE", "VALUE"),
-            ("SCAN", "SCAN"),
-            ("ALERT", "ALERT"),
-            ("JUMP", "JUMP"),
-            ("ROUTE", "ROUTE"),
-            ("SYSTEM", "SYSTEM"),
-            ("DSS", "DSS"),
-            ("INFO", "INFO"),
+            ("ALL",     "ALL"),
+            ("VALUABLE","VALUE"),
+            ("SCAN",    "SCAN"),
+            ("ALERT",   "ALERT"),
+            ("JUMP",    "JUMP"),
+            ("ROUTE",   "ROUTE"),
+            ("SYSTEM",  "SYSTEM"),
+            ("DSS",     "DSS"),
+            ("DOCK",    "DOCK"),
+            ("INFO",    "INFO"),
         )
         for idx, (tag, label) in enumerate(event_filters):
             btn = tk.Button(
@@ -376,7 +378,7 @@ class DashboardUIMixin:
                 activebackground=self.UI_PANEL_2,
                 activeforeground=COLOR_ACCENT,
             )
-            btn.grid(row=idx // 3, column=idx % 3, sticky="ew", padx=2, pady=2)
+            btn.grid(row=idx // 5, column=idx % 5, sticky="ew", padx=2, pady=2)
             self.event_filter_buttons[tag] = btn
         event_text_wrap = tk.Frame(feed_wrap, bg="#0b0f13")
         event_text_wrap.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
