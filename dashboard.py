@@ -1076,7 +1076,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         if ev in ("FileHeader", "Fileheader"):
             self.log(f"Game version detected: {d.get('gameversion')} ({d.get('build')})")
-            self.edsm.set_game_version(d.get("gameversion"), d.get("build"))
 
         elif ev == "Loadout":
             self.cargo_capacity = d.get("cargo_capacity", 0)
@@ -1099,7 +1098,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             game_build = d.get("build")
             if game_version and game_build:
                 self.log(f"Game version detected from LoadGame: {game_version} ({game_build})")
-                self.edsm.set_game_version(game_version, game_build)
 
         elif ev == "ScanOrganic":
             if not self._matches_current_system_address(d):
