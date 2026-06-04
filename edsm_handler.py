@@ -85,6 +85,14 @@ class EDSMHandler:
         if ev_name in _EDSM_DISCARD_EVENTS:
             return
 
+        # For jump/location events the authoritative system context is inside
+        # the event itself (StarSystem / StarPos / SystemAddress), not our
+        # internal state which hasn't been updated yet when this is called.
+        if ev_name in ("FSDJump", "Location", "CarrierJump"):
+            system_name = raw_event.get("StarSystem") or system_name
+            system_coords = raw_event.get("StarPos") or system_coords
+            system_address = raw_event.get("SystemAddress") or system_address
+
         # Enrich with system context (mirrors EDDiscovery _systemName etc.)
         enriched = dict(raw_event)
         if system_name:
@@ -160,9 +168,21 @@ class EDSMHandler:
                         timeout=20,
                     )
                     r.raise_for_status()
-                    logging.debug(f"EDSM upload OK: {len(batch)} events")
-                    if self._log_callback:
-                        self._log_callback("EDSM", f"Uploaded {len(batch)} event(s) to EDSM", "INFO")
+                    try:
+                        resp = r.json()
+                    except Exception:
+                        resp = {}
+                    msgnum = resp.get("msgnum", 100)
+                    msg = resp.get("msg", "OK")
+                    if msgnum >= 200:
+                        # EDSM-level error (bad credentials, unknown cmdr, etc.)
+                        logging.warning(f"EDSM rejected batch [{msgnum}]: {msg}")
+                        if self._log_callback:
+                            self._log_callback("EDSM", f"Upload rejected [{msgnum}]: {msg}", "ERROR")
+                    else:
+                        logging.debug(f"EDSM upload OK: {len(batch)} events")
+                        if self._log_callback:
+                            self._log_callback("EDSM", f"Uploaded {len(batch)} event(s) to EDSM", "INFO")
             except Exception as e:
                 logging.warning(f"EDSM batch upload failed ({len(batch)} events): {e}")
                 if self._log_callback:
