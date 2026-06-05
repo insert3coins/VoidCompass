@@ -251,9 +251,6 @@ class DashboardDBMixin:
         self.update_hud()
 
         if self.config.get("edsm_upload_enabled"):
-            with self.db_lock:
-                self.conn.execute("DELETE FROM edsm_backfill")
-                self.conn.commit()
             self.edsm.run_backfill(self.config.get("journal_path", ""))
 
     def load_system_from_db(self, sys_name):
