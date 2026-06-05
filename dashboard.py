@@ -1325,6 +1325,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                 self.root.after(0, self.update_waypoint_display)
                 self.schedule_dashboard_refresh(full=True)
+                self.update_hud()
                 self.update_scan_hud()
 
             # Update Route Plotter UI if open
