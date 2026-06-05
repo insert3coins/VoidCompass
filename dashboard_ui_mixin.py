@@ -120,70 +120,112 @@ class DashboardUIMixin:
     def setup_layout(self):
         self.root.configure(bg=self.UI_BG)
 
-        self.nav = tk.Frame(self.root, bg="#0c1014", height=54)
-        self.nav.pack(fill=tk.X, padx=12, pady=(12, 0))
-        self.nav.pack_propagate(False)
+        # ── HEADER: brand row + module toolbar ────────────────────────────
+        self.nav = tk.Frame(self.root, bg="#0c1014")
+        self.nav.pack(fill=tk.X)
 
-        brand = tk.Frame(self.nav, bg="#0c1014")
-        brand.pack(side=tk.LEFT, fill=tk.Y, padx=(14, 8))
-        tk.Label(brand, text="VOID COMPASS", font=("Segoe UI", 15, "bold"), fg=COLOR_ACCENT, bg="#0c1014").pack(anchor="w", pady=(7, 0))
-        tk.Label(brand, text=f"EXPLORATION COMMAND DECK  //  v{APP_VERSION}", font=("Segoe UI", 8, "bold"), fg=self.UI_MUTED, bg="#0c1014").pack(anchor="w")
+        self.brand_row = tk.Frame(self.nav, bg="#0c1014", height=48)
+        self.brand_row.pack(fill=tk.X, padx=12)
+        self.brand_row.pack_propagate(False)
 
-        nav_actions = tk.Frame(self.nav, bg="#0c1014")
-        nav_actions.pack(side=tk.RIGHT, fill=tk.Y, padx=10)
-        self._action_button(nav_actions, "Configuration", self.open_settings, accent=True).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
-        self._action_button(nav_actions, "Screenshots", self.open_screenshots_folder).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
-        self._action_button(nav_actions, "Fleet Carrier", self.open_carrier_window).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
-        self._action_button(nav_actions, "Colonization", self.open_colonization_window).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
-        self._action_button(nav_actions, "Mining", self.open_mining_window).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
-        self._action_button(nav_actions, "Route Planner", self.open_route_planner).pack(side=tk.RIGHT, padx=(6, 0), pady=10)
+        brand = tk.Frame(self.brand_row, bg="#0c1014")
+        brand.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 0))
+        title_row = tk.Frame(brand, bg="#0c1014")
+        title_row.pack(anchor="w", pady=(10, 0))
+        tk.Label(title_row, text="VOID COMPASS", font=("Segoe UI", 15, "bold"), fg=COLOR_ACCENT, bg="#0c1014").pack(side=tk.LEFT)
+        tk.Label(title_row, text=f"  v{APP_VERSION}", font=("Segoe UI", 8), fg=self.UI_DIM, bg="#0c1014").pack(side=tk.LEFT, anchor="s", pady=(0, 2))
 
-        self.summary_bar = tk.Frame(self.root, bg=self.UI_BG)
-        self.summary_bar.pack(fill=tk.X, padx=12, pady=(10, 0))
+        # Configuration (rightmost), then module buttons to its left
+        self._action_button(self.brand_row, "Configuration", self.open_settings, accent=True).pack(side=tk.RIGHT, pady=10)
+        tk.Frame(self.brand_row, bg=self.UI_BORDER, width=1).pack(side=tk.RIGHT, fill=tk.Y, pady=8)
 
-        def _summary_item(text, accent=False):
-            wrap = tk.Frame(self.summary_bar, bg=self.UI_PANEL_2, highlightbackground=self.UI_BORDER, highlightthickness=1)
-            wrap.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
-            lbl = tk.Label(
-                wrap,
-                text=text,
-                font=self.UI_MONO_BOLD,
-                fg=COLOR_ACCENT if accent else COLOR_TEXT,
-                bg=self.UI_PANEL_2,
-                anchor="w",
+        def _nav_btn(text, cmd):
+            return tk.Button(
+                self.brand_row, text=text, command=cmd,
+                bg="#0c1014", fg=self.UI_MUTED,
+                activebackground="#111820", activeforeground=COLOR_TEXT,
+                font=("Segoe UI", 8, "bold"),
+                relief=tk.FLAT, bd=0, padx=6, pady=6, cursor="hand2",
             )
-            lbl.pack(fill=tk.X, padx=10, pady=7)
+
+        for _text, _cmd in [
+            ("Shots",          self.open_screenshots_folder),
+            ("Carrier",        self.open_carrier_window),
+            ("BGS",            self.open_bgs_window),
+            ("Engineer",       self.open_engineer_window),
+            ("Colony",         self.open_colonization_window),
+            ("Mining",         self.open_mining_window),
+            ("Route Planner",  self.open_route_planner),
+        ]:
+            _nav_btn(_text, _cmd).pack(side=tk.RIGHT, padx=(0, 2))
+
+        tk.Frame(self.root, bg=self.UI_BORDER, height=1).pack(fill=tk.X)
+
+        # ── COMMAND STRIP ─────────────────────────────────────────────────
+        cmd_strip = tk.Frame(self.root, bg="#0c1014", height=58)
+        cmd_strip.pack(fill=tk.X, padx=12, pady=(8, 0))
+        cmd_strip.pack_propagate(False)
+
+        sys_zone = tk.Frame(cmd_strip, bg="#0c1014")
+        sys_zone.pack(side=tk.LEFT, fill=tk.Y, padx=(6, 12))
+        self.summary_sys = tk.Label(sys_zone, text="---",
+                                    font=("Segoe UI", 18, "bold"),
+                                    fg=COLOR_ACCENT, bg="#0c1014", anchor="w")
+        self.summary_sys.pack(anchor="w", pady=(3, 0))
+        self.integration_lbl = tk.Label(sys_zone, text="HUD: ON | SHOTS: OFF",
+                                        font=("Consolas", 8), fg=self.UI_DIM,
+                                        bg="#0c1014", anchor="w")
+        self.integration_lbl.pack(anchor="w")
+
+        tk.Frame(cmd_strip, bg=self.UI_BORDER, width=1).pack(side=tk.LEFT, fill=tk.Y, pady=6, padx=(0, 14))
+
+        def _strip_stat(parent, label):
+            f = tk.Frame(parent, bg="#0c1014")
+            f.pack(side=tk.LEFT, padx=(0, 18), fill=tk.Y)
+            tk.Label(f, text=label, font=("Segoe UI", 7, "bold"),
+                     fg=self.UI_DIM, bg="#0c1014").pack(anchor="w", pady=(3, 0))
+            lbl = tk.Label(f, text="—", font=self.UI_MONO_BOLD, fg=COLOR_TEXT, bg="#0c1014")
+            lbl.pack(anchor="w")
             return lbl
 
-        self.summary_sys = _summary_item("SYS: ---", accent=True)
-        self.summary_route = _summary_item("ROUTE: INACTIVE")
-        self.summary_scan = _summary_item("SCAN: 0/0")
-        self.summary_traffic = _summary_item("TRAFFIC: 0/0/0")
-        self.summary_session = _summary_item("SESSION: 00:00:00")
+        self.summary_scan    = _strip_stat(cmd_strip, "SCAN")
+        self.summary_route   = _strip_stat(cmd_strip, "ROUTE")
+        self.summary_traffic = _strip_stat(cmd_strip, "TRAFFIC")
+        self.summary_session = _strip_stat(cmd_strip, "SESSION")
 
+        tk.Frame(cmd_strip, bg=self.UI_BORDER, width=1).pack(side=tk.LEFT, fill=tk.Y, pady=6, padx=(0, 14))
+
+        alert_zone = tk.Frame(cmd_strip, bg="#0c1014")
+        alert_zone.pack(side=tk.LEFT, fill=tk.Y)
+        tk.Label(alert_zone, text="ALERTS", font=("Segoe UI", 7, "bold"),
+                 fg=self.UI_DIM, bg="#0c1014").pack(anchor="w", pady=(3, 0))
+        self.alert_lbl = tk.Label(alert_zone, text="NONE",
+                                  font=self.UI_MONO_BOLD, fg=self.UI_MUTED,
+                                  bg="#0c1014", anchor="w")
+        self.alert_lbl.pack(anchor="w")
+
+        tk.Frame(self.root, bg=self.UI_BORDER, height=1).pack(fill=tk.X, padx=12, pady=(6, 0))
+
+        # ── BODY ──────────────────────────────────────────────────────────
         body = tk.Frame(self.root, bg=self.UI_BG)
-        body.pack(fill=tk.BOTH, expand=True, padx=12, pady=10)
+        body.pack(fill=tk.BOTH, expand=True, padx=12, pady=8)
 
-        self.side = tk.Frame(body, bg=self.UI_BG, width=310)
-        self.side.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
+        # ── LEFT SIDEBAR (290px) ──────────────────────────────────────────
+        self.side = tk.Frame(body, bg=self.UI_BG, width=290)
+        self.side.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 8))
         self.side.pack_propagate(False)
 
-        status_card = self._panel(self.side)
-        status_card.pack(fill=tk.X, pady=(0, 10))
-        self._section_label(status_card, "SHIP SYSTEMS").pack(anchor="w", padx=12, pady=(9, 0))
-        self.integration_lbl = tk.Label(status_card, text="HUD: ON | SHOTS: OFF", font=self.UI_MONO, fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w")
-        self.integration_lbl.pack(fill=tk.X, padx=12, pady=(3, 10))
-
         metrics_card = self._panel(self.side)
-        metrics_card.pack(fill=tk.X, pady=(0, 10))
+        metrics_card.pack(fill=tk.X, pady=(0, 8))
         self._section_label(metrics_card, "PRIMARY TELEMETRY").pack(anchor="w", padx=12, pady=(9, 0))
         self.sys_stat = self.create_stat(metrics_card, "CURRENT SYSTEM", "---")
         self.nav_stat = self.create_stat(metrics_card, "NAV TARGET", "---")
         self.scan_stat = self.create_stat(metrics_card, "SCAN PROGRESS", "0 / 0")
+        tk.Frame(metrics_card, bg=self.UI_PANEL, height=8).pack()
 
         # ── Fleet Carrier status panel ────────────────────────────────────
         self.carrier_panel = self._panel(self.side)
-        self.carrier_panel.pack(fill=tk.X, pady=(0, 10))
+        self.carrier_panel.pack(fill=tk.X, pady=(0, 8))
 
         carrier_hdr = tk.Frame(self.carrier_panel, bg=self.UI_PANEL)
         carrier_hdr.pack(fill=tk.X, padx=12, pady=(9, 4))
@@ -231,7 +273,7 @@ class DashboardUIMixin:
         # ── end carrier panel ─────────────────────────────────────────────
 
         self.ground_panel = self._panel(self.side)
-        self.ground_panel.pack(fill=tk.X, pady=(0, 10))
+        self.ground_panel.pack(fill=tk.X, pady=(0, 8))
         self._section_label(self.ground_panel, "GROUND TARGET").pack(anchor="w", padx=12, pady=(9, 3))
         input_row = tk.Frame(self.ground_panel, bg=self.UI_PANEL)
         input_row.pack(fill=tk.X, padx=12, pady=(0, 6))
@@ -267,7 +309,7 @@ class DashboardUIMixin:
         self.ground_detail_lbl.pack(fill=tk.X, padx=12, pady=(0, 10))
 
         self.wp_panel = self._panel(self.side, border=COLOR_ACCENT)
-        self.wp_panel.pack(fill=tk.X, pady=(0, 10))
+        self.wp_panel.pack(fill=tk.X, pady=(0, 8))
         self.wp_panel.pack_propagate(False)
         self.wp_panel.config(height=170)
         header_row = tk.Frame(self.wp_panel, bg=self.UI_PANEL)
@@ -307,39 +349,53 @@ class DashboardUIMixin:
         tk.Label(side_actions, text="2026 insert3coins", font=("Segoe UI", 8), fg=self.UI_DIM, bg=self.UI_BG).pack(side=tk.RIGHT, pady=6)
 
         center = tk.Frame(body, bg=self.UI_BG)
-        center.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        center.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
 
-        self.alert_bar = self._panel(center, bg=self.UI_PANEL_2)
-        self.alert_bar.pack(fill=tk.X, pady=(0, 10))
-        tk.Label(self.alert_bar, text="ALERTS", font=self.UI_FONT_BOLD, fg=COLOR_ORANGE, bg=self.UI_PANEL_2).pack(side=tk.LEFT, padx=(12, 8), pady=8)
-        self.alert_lbl = tk.Label(self.alert_bar, text="NONE", font=self.UI_MONO_BOLD, fg=self.UI_MUTED, bg=self.UI_PANEL_2, anchor="w")
-        self.alert_lbl.pack(side=tk.LEFT, fill=tk.X, expand=True, pady=8)
-
+        # 2×2 ops grid (was 2×3 — alert bar and economy/nav cards moved)
         ops = tk.Frame(center, bg=self.UI_BG)
         ops.pack(fill=tk.BOTH, expand=True)
-        for col in range(2):
-            ops.grid_columnconfigure(col, weight=1)
-        for row in range(3):
-            ops.grid_rowconfigure(row, weight=1)
+        ops.grid_columnconfigure(0, weight=1)
+        ops.grid_columnconfigure(1, weight=1)
+        ops.grid_rowconfigure(0, weight=1)
+        ops.grid_rowconfigure(1, weight=1)
 
-        self.card_nav = self._build_ops_card(ops, "NAVIGATION", 0, 0)
-        self.card_scan = self._build_ops_card(ops, "SCANNING", 0, 1)
-        self.card_system = self._build_ops_card(ops, "SYSTEM INTEL", 1, 0)
-        self.card_value = self._build_ops_card(ops, "ECONOMY", 1, 1)
-        self.card_session = self._build_ops_card(ops, "SESSION", 2, 0)
-        self.card_ops = self._build_ops_card(ops, "OPERATIONS", 2, 1)
+        self.card_scan    = self._build_ops_card(ops, "SCAN INTEL",   0, 0)
+        self.card_system  = self._build_ops_card(ops, "SYSTEM",       0, 1)
+        self.card_session = self._build_ops_card(ops, "SESSION",      1, 0)
+        self.card_ops     = self._build_ops_card(ops, "OPERATIONS",   1, 1)
 
-        log_frame = self._panel(center)
-        log_frame.pack(fill=tk.X, pady=(10, 0))
-        log_toolbar = tk.Frame(log_frame, bg=self.UI_PANEL)
-        log_toolbar.pack(fill=tk.X, padx=10, pady=(8, 2))
-        self._section_label(log_toolbar, "DEBUG CONSOLE", fg=self.UI_MUTED).pack(side=tk.LEFT)
-        self.log_box = scrolledtext.ScrolledText(log_frame, bg="#050607", fg="#62d66f", font=("Consolas", 8), borderwidth=0, height=5, relief=tk.FLAT)
+        # Hidden card stubs — keep references so old callsites never crash
+        _ghost = tk.Frame(self.root)
+        self.card_nav   = self._build_ops_card(_ghost, "", 0, 0)
+        self.card_value = self._build_ops_card(_ghost, "", 0, 1)
+
+        # Debug console — collapsed by default
+        self._console_visible = False
+        _toggle_bar = tk.Frame(center, bg=self.UI_BG)
+        _toggle_bar.pack(fill=tk.X, pady=(6, 0))
+        self._console_toggle_btn = tk.Button(
+            _toggle_bar, text="▶  DEBUG CONSOLE",
+            command=self._toggle_console,
+            bg=self.UI_BG, fg=self.UI_DIM,
+            font=("Segoe UI", 8, "bold"),
+            relief=tk.FLAT, bd=0, cursor="hand2", padx=0,
+        )
+        self._console_toggle_btn.pack(side=tk.LEFT)
+
+        self._console_frame = self._panel(center)
+        _log_hdr = tk.Frame(self._console_frame, bg=self.UI_PANEL)
+        _log_hdr.pack(fill=tk.X, padx=10, pady=(8, 2))
+        self._section_label(_log_hdr, "DEBUG CONSOLE", fg=self.UI_MUTED).pack(side=tk.LEFT)
+        self.log_box = scrolledtext.ScrolledText(
+            self._console_frame, bg="#050607", fg="#62d66f",
+            font=("Consolas", 8), borderwidth=0, height=5, relief=tk.FLAT,
+        )
         self.log_box.pack(fill=tk.X, padx=10, pady=(0, 10))
+        # _console_frame is not packed — shown only when toggled
 
         self.details_drawer = self._panel(body)
-        self.details_drawer.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(0, 0))
-        self.details_drawer.config(width=450)
+        self.details_drawer.pack(side=tk.RIGHT, fill=tk.BOTH)
+        self.details_drawer.config(width=500)
         self.details_drawer.pack_propagate(False)
 
         # ── Live Event Timeline ───────────────────────────────────────────────
@@ -418,12 +474,15 @@ class DashboardUIMixin:
     def _build_ops_card(self, parent, title, row, col):
         card = self._panel(parent)
         card.grid(row=row, column=col, sticky="nsew", padx=5, pady=5)
-        tk.Label(card, text=title, font=self.UI_FONT_BOLD, fg=COLOR_ORANGE, bg=self.UI_PANEL).pack(anchor="w", padx=12, pady=(10, 0))
-        line1 = tk.Label(card, text="-", font=("Segoe UI", 11, "bold"), fg=COLOR_TEXT, bg=self.UI_PANEL, anchor="w")
+        tk.Frame(card, bg=COLOR_ORANGE, width=3).pack(side=tk.LEFT, fill=tk.Y)
+        inner = tk.Frame(card, bg=self.UI_PANEL)
+        inner.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tk.Label(inner, text=title, font=self.UI_FONT_BOLD, fg=COLOR_ORANGE, bg=self.UI_PANEL).pack(anchor="w", padx=12, pady=(10, 0))
+        line1 = tk.Label(inner, text="-", font=("Segoe UI", 11, "bold"), fg=COLOR_TEXT, bg=self.UI_PANEL, anchor="w")
         line1.pack(fill=tk.X, padx=12, pady=(8, 0))
-        line2 = tk.Label(card, text="-", font=self.UI_MONO, fg="#aab4bd", bg=self.UI_PANEL, anchor="w")
+        line2 = tk.Label(inner, text="-", font=self.UI_MONO, fg="#aab4bd", bg=self.UI_PANEL, anchor="w")
         line2.pack(fill=tk.X, padx=12, pady=(4, 0))
-        line3 = tk.Label(card, text="-", font=self.UI_MONO, fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w")
+        line3 = tk.Label(inner, text="-", font=self.UI_MONO, fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w")
         line3.pack(fill=tk.X, padx=12, pady=(4, 10))
         card.line1 = line1
         card.line2 = line2
@@ -444,6 +503,15 @@ class DashboardUIMixin:
                     bg=self.UI_PANEL_2 if selected else self.UI_PANEL,
                 )
         self._refresh_event_feed()
+
+    def _toggle_console(self):
+        self._console_visible = not self._console_visible
+        if self._console_visible:
+            self._console_frame.pack(fill=tk.X, pady=(4, 0))
+            self._console_toggle_btn.config(text="▼  DEBUG CONSOLE")
+        else:
+            self._console_frame.pack_forget()
+            self._console_toggle_btn.config(text="▶  DEBUG CONSOLE")
 
     def add_event_feed_entry(self, tag, message, severity="INFO", copy_text=None, url=None):
         if not message:
@@ -693,7 +761,7 @@ class DashboardUIMixin:
         if not self.is_running:
             return
         if hasattr(self, "summary_session"):
-            self.summary_session.config(text=f"SESSION: {self._get_session_elapsed_text()}")
+            self.summary_session.config(text=self._get_session_elapsed_text())
         self._recolor_event_feed_rows()
         self.root.after(1000, self._tick_session_clock)
 
@@ -738,8 +806,9 @@ class DashboardUIMixin:
 
     def show_update_btn(self, url, tag):
         self.log(f"✨ UPDATE AVAILABLE: v{tag}")
-        btn = self._action_button(self.nav, f"Update v{tag}", lambda: webbrowser.open(url), accent=True)
-        btn.pack(side=tk.RIGHT, padx=8, pady=10)
+        target = getattr(self, "brand_row", self.nav)
+        btn = self._action_button(target, f"Update v{tag}", lambda: webbrowser.open(url), accent=True)
+        btn.pack(side=tk.RIGHT, padx=(8, 0), pady=10)
 
     def update_nav_label(self):
         txt = "NO ROUTE"
@@ -1129,43 +1198,31 @@ class DashboardUIMixin:
             except Exception:
                 coords_text = str(self.current_coords)
 
-        self.summary_sys.config(text=f"SYS: {self.current_sys}")
-        self.summary_route.config(text=f"ROUTE: {route_text}")
-        self.summary_scan.config(text=f"SCAN: {self.scanned}/{self.total}")
-        self.summary_traffic.config(text=f"TRAFFIC: {traffic_day}/{traffic_week}/{traffic_total}")
-        self.summary_session.config(text=f"SESSION: {self._get_session_elapsed_text()}")
-
-        self.card_nav.line1.config(text=f"Target: {self.dest_name or 'NO ROUTE'}")
-        self.card_nav.line2.config(text=f"Current: {self.current_sys}")
-        gt = self._ground_target_solution()
-        if gt and gt.get("state") == "OK":
-            self.card_nav.line3.config(text=f"Ground: {gt['direction']} | {self._format_ground_distance(gt['distance_m'])}")
-        else:
-            self.card_nav.line3.config(text=f"Route Progress: {route_text}")
+        self.summary_sys.config(text=self.current_sys or "---")
+        self.summary_route.config(text=route_text)
+        self.summary_scan.config(text=f"{self.scanned}/{self.total}")
+        self.summary_traffic.config(text=f"{traffic_day}/{traffic_week}/{traffic_total}")
+        self.summary_session.config(text=self._get_session_elapsed_text())
 
         scan_ratio = (self.scanned / self.total) if self.total > 0 else 0
         scan_pct = int(max(0.0, min(1.0, scan_ratio)) * 100)
-        self.card_scan.line1.config(text=f"Scanned: {self.scanned}/{self.total} ({scan_pct}%)")
-        self.card_scan.line2.config(text=f"Bodies Tracked: {len(self.scanned_bodies)}")
-        self.card_scan.line3.config(text=f"FSS Summary: {'ACTIVE' if self.fss_summary_active else 'IDLE'}")
-
-        self.card_system.line1.config(text=f"Star: {self.star_class or 'UNKNOWN'}")
-        self.card_system.line2.config(text=f"System: {self.current_sys}")
-        self.card_system.line3.config(text=f"Coords: {coords_text} | FSS: {'YES' if self.in_fss else 'NO'}")
-
         total_value = 0
         for item in self.scan_items:
             reward = item.get("dss_reward") if item.get("dss_complete") else item.get("reward")
             if isinstance(reward, (int, float)):
                 total_value += int(reward)
-        self.card_value.line1.config(text=f"System Value Est: {self._format_credits(total_value)}")
-        self.card_value.line2.config(text=f"Valuable Bodies: {len(self.valuable_bodies)}")
-        self.card_value.line3.config(text=f"Bio Signals: {self.system_bio_signals}")
+        self.card_scan.line1.config(text=f"Scanned: {self.scanned}/{self.total}  ({scan_pct}%)")
+        self.card_scan.line2.config(text=f"Valuable: {len(self.valuable_bodies)}  |  Bio Signals: {self.system_bio_signals}")
+        self.card_scan.line3.config(text=f"Est. Value: {self._format_credits(total_value)}  |  FSS: {'ACTIVE' if self.fss_summary_active else 'IDLE'}")
 
-        self.card_session.line1.config(text=f"Jumps: {self.session_jump_count}")
-        self.card_session.line2.config(text=f"Distance: {self.session_ly:,.1f} LY")
+        self.card_system.line1.config(text=f"Star: {self.star_class or 'UNKNOWN'}  |  {'UNDISCOVERED' if self.system_undiscovered else 'known'}")
+        self.card_system.line2.config(text=f"Traffic: {traffic_day} today / {traffic_week} week / {traffic_total} total")
+        self.card_system.line3.config(text=f"Coords: {coords_text}")
+
+        self.card_session.line1.config(text=f"Time: {self._get_session_elapsed_text()}")
+        self.card_session.line2.config(text=f"Jumps: {self.session_jump_count}  |  {self.session_ly:,.1f} LY")
         avg_jump = (self.session_ly / self.session_jump_count) if self.session_jump_count else 0.0
-        self.card_session.line3.config(text=f"Avg Jump: {avg_jump:,.1f} LY")
+        self.card_session.line3.config(text=f"Avg jump: {avg_jump:,.1f} LY")
 
         hud_on = "ON" if self.hud else "OFF"
         shots_on = "ON" if self.config.get("screenshots_enabled", False) else "OFF"
@@ -1188,9 +1245,9 @@ class DashboardUIMixin:
 
         planner_open = "YES" if (self.route_plotter and self.route_plotter.win.winfo_exists()) else "NO"
         auto_copy = "ON" if self.config.get("auto_copy_waypoint", False) else "OFF"
-        self.card_ops.line1.config(text=f"Waypoints: {route_total} | Pending: {max(route_total - route_visited, 0)}")
-        self.card_ops.line2.config(text=f"Next WP: {next_waypoint_name}")
-        self.card_ops.line3.config(text=f"Auto-Copy: {auto_copy} | Planner Open: {planner_open}")
+        self.card_ops.line1.config(text=f"Target: {self.dest_name or 'NO ROUTE'}")
+        self.card_ops.line2.config(text=f"Waypoints: {route_total}  |  Pending: {max(route_total - route_visited, 0)}")
+        self.card_ops.line3.config(text=f"Auto-Copy: {auto_copy}  |  Planner: {planner_open}")
 
         self._refresh_event_feed()
         self._perf_spike("update_dashboard_panels", t0, threshold_ms=28.0)
