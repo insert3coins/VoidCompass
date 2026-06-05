@@ -71,6 +71,33 @@ class DashboardScanMixin:
             self.save_scan_item_to_db(self.current_sys, item)
         self._reconcile_scan_progress_from_cache()
 
+    def _rebuild_system_state_from_scan_items(self):
+        """Rebuild valuable_bodies, system_bio_signals, and star_class from
+        scan_items loaded from the DB. Needed when the journal tail doesn't
+        cover the Scan/FSSBodySignals events that originally populated these
+        fields (e.g. the system was entered in an older journal file)."""
+        bio_total = 0
+        primary_star = None
+        for item in self.scan_items:
+            bio_total += int(item.get("bio_count") or 0)
+            p_class = item.get("planet_class", "")
+            terraformable = item.get("terraformable", False)
+            if p_class in ("Earthlike body", "Water world", "Ammonia world") or terraformable:
+                body_name_str = item.get("name", "Unknown")
+                if not any(body_name_str in b for b in self.valuable_bodies):
+                    icon = "🌍" if p_class == "Earthlike body" else \
+                           "💧" if p_class == "Water world" else \
+                           "☣️" if p_class == "Ammonia world" else "🛠️"
+                    self.valuable_bodies.append(f"- {icon} {body_name_str}")
+                    self.valuable_system = True
+            if item.get("is_star") and item.get("star_type"):
+                bid = item.get("body_id", 9999)
+                if primary_star is None or bid < primary_star.get("body_id", 9999):
+                    primary_star = item
+        self.system_bio_signals = bio_total
+        if not self.star_class and primary_star:
+            self.star_class = primary_star.get("star_type")
+
     def _reconcile_scan_progress_from_cache(self):
         cached_ids = set()
         for item in self.scan_items:

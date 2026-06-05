@@ -351,23 +351,21 @@ class DashboardUIMixin:
         center = tk.Frame(body, bg=self.UI_BG)
         center.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
 
-        # 2×2 ops grid (was 2×3 — alert bar and economy/nav cards moved)
+        # 2×3 ops grid
         ops = tk.Frame(center, bg=self.UI_BG)
         ops.pack(fill=tk.BOTH, expand=True)
         ops.grid_columnconfigure(0, weight=1)
         ops.grid_columnconfigure(1, weight=1)
         ops.grid_rowconfigure(0, weight=1)
         ops.grid_rowconfigure(1, weight=1)
+        ops.grid_rowconfigure(2, weight=1)
 
-        self.card_scan    = self._build_ops_card(ops, "SCAN INTEL",   0, 0)
-        self.card_system  = self._build_ops_card(ops, "SYSTEM",       0, 1)
-        self.card_session = self._build_ops_card(ops, "SESSION",      1, 0)
-        self.card_ops     = self._build_ops_card(ops, "OPERATIONS",   1, 1)
-
-        # Hidden card stubs — keep references so old callsites never crash
-        _ghost = tk.Frame(self.root)
-        self.card_nav   = self._build_ops_card(_ghost, "", 0, 0)
-        self.card_value = self._build_ops_card(_ghost, "", 0, 1)
+        self.card_nav     = self._build_ops_card(ops, "NAVIGATION",   0, 0)
+        self.card_scan    = self._build_ops_card(ops, "SCAN INTEL",   0, 1)
+        self.card_system  = self._build_ops_card(ops, "SYSTEM INTEL", 1, 0)
+        self.card_value   = self._build_ops_card(ops, "ECONOMY",      1, 1)
+        self.card_session = self._build_ops_card(ops, "SESSION",      2, 0)
+        self.card_ops     = self._build_ops_card(ops, "OPERATIONS",   2, 1)
 
         # Debug console — collapsed by default
         self._console_visible = False
@@ -1204,21 +1202,41 @@ class DashboardUIMixin:
         self.summary_traffic.config(text=f"{traffic_day}/{traffic_week}/{traffic_total}")
         self.summary_session.config(text=self._get_session_elapsed_text())
 
+        # NAVIGATION
+        self.card_nav.line1.config(text=f"Target: {self.dest_name or 'NO ROUTE'}")
+        self.card_nav.line2.config(text=f"Current: {self.current_sys}")
+        gt = self._ground_target_solution()
+        if gt and gt.get("state") == "OK":
+            self.card_nav.line3.config(text=f"Ground: {gt['direction']}  |  {self._format_ground_distance(gt['distance_m'])}")
+        else:
+            self.card_nav.line3.config(text=f"Route Progress: {route_text}")
+
+        # SCAN INTEL
         scan_ratio = (self.scanned / self.total) if self.total > 0 else 0
         scan_pct = int(max(0.0, min(1.0, scan_ratio)) * 100)
+        self.card_scan.line1.config(text=f"Scanned: {self.scanned}/{self.total}  ({scan_pct}%)")
+        self.card_scan.line2.config(text=f"Valuable: {len(self.valuable_bodies)}  |  Bio Signals: {self.system_bio_signals}")
+        self.card_scan.line3.config(text=f"FSS: {'ACTIVE' if self.fss_summary_active else 'IDLE'}  |  Bodies tracked: {len(self.scanned_bodies)}")
+
+        # SYSTEM INTEL
+        star_txt = self.star_class if self.star_class else "---"
+        disc_txt = "  UNDISCOVERED" if self.system_undiscovered else ""
+        self.card_system.line1.config(text=f"Star: {star_txt}{disc_txt}")
+        traffic_txt = f"{traffic_day} / {traffic_week} / {traffic_total}" if (traffic_day or traffic_week or traffic_total) else "No traffic data"
+        self.card_system.line2.config(text=f"Traffic (d/w/all): {traffic_txt}")
+        self.card_system.line3.config(text=f"Coords: {coords_text}  |  FSS: {'YES' if self.in_fss else 'NO'}")
+
+        # ECONOMY
         total_value = 0
         for item in self.scan_items:
             reward = item.get("dss_reward") if item.get("dss_complete") else item.get("reward")
             if isinstance(reward, (int, float)):
                 total_value += int(reward)
-        self.card_scan.line1.config(text=f"Scanned: {self.scanned}/{self.total}  ({scan_pct}%)")
-        self.card_scan.line2.config(text=f"Valuable: {len(self.valuable_bodies)}  |  Bio Signals: {self.system_bio_signals}")
-        self.card_scan.line3.config(text=f"Est. Value: {self._format_credits(total_value)}  |  FSS: {'ACTIVE' if self.fss_summary_active else 'IDLE'}")
+        self.card_value.line1.config(text=f"Est. Value: {self._format_credits(total_value)}")
+        self.card_value.line2.config(text=f"Valuable Bodies: {len(self.valuable_bodies)}")
+        self.card_value.line3.config(text=f"Bio Signals: {self.system_bio_signals}")
 
-        self.card_system.line1.config(text=f"Star: {self.star_class or 'UNKNOWN'}  |  {'UNDISCOVERED' if self.system_undiscovered else 'known'}")
-        self.card_system.line2.config(text=f"Traffic: {traffic_day} today / {traffic_week} week / {traffic_total} total")
-        self.card_system.line3.config(text=f"Coords: {coords_text}")
-
+        # SESSION
         self.card_session.line1.config(text=f"Time: {self._get_session_elapsed_text()}")
         self.card_session.line2.config(text=f"Jumps: {self.session_jump_count}  |  {self.session_ly:,.1f} LY")
         avg_jump = (self.session_ly / self.session_jump_count) if self.session_jump_count else 0.0
@@ -1243,10 +1261,11 @@ class DashboardUIMixin:
             alert_fg = self.UI_WARN
         self.alert_lbl.config(text=alert_text, fg=alert_fg)
 
+        # OPERATIONS
         planner_open = "YES" if (self.route_plotter and self.route_plotter.win.winfo_exists()) else "NO"
         auto_copy = "ON" if self.config.get("auto_copy_waypoint", False) else "OFF"
-        self.card_ops.line1.config(text=f"Target: {self.dest_name or 'NO ROUTE'}")
-        self.card_ops.line2.config(text=f"Waypoints: {route_total}  |  Pending: {max(route_total - route_visited, 0)}")
+        self.card_ops.line1.config(text=f"Waypoints: {route_total}  |  Pending: {max(route_total - route_visited, 0)}")
+        self.card_ops.line2.config(text=f"Next WP: {next_waypoint_name}")
         self.card_ops.line3.config(text=f"Auto-Copy: {auto_copy}  |  Planner: {planner_open}")
 
         self._refresh_event_feed()

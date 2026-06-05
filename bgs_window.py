@@ -254,21 +254,19 @@ class BGSWindow:
             w.destroy()
 
         shown = 0
-        for sys_name, last_updated in systems:
+        for row in systems:
+            sys_name, last_updated = row[0], row[1]
+            has_factions = row[2] if len(row) > 2 else True
             if query and query not in sys_name.lower():
                 continue
             shown += 1
-            self._add_list_row(sys_name, last_updated)
+            self._add_list_row(sys_name, last_updated, has_factions)
 
         if not shown:
             if query:
                 msg = f'No match for "{query}".'
             else:
-                msg = (
-                    "No systems tracked yet.\n\n"
-                    "Jump to any inhabited\n"
-                    "system to start tracking."
-                )
+                msg = "No systems visited yet.\n\nJump to any system\nto start tracking."
             tk.Label(self._list_inner, text=msg,
                      font=("Consolas", 8), fg=self.UI_MUTED, bg=self.UI_PANEL,
                      justify=tk.LEFT
@@ -278,7 +276,7 @@ class BGSWindow:
         self._sys_count_lbl.config(
             text=f"{total} system{'s' if total != 1 else ''}")
 
-    def _add_list_row(self, sys_name: str, last_updated):
+    def _add_list_row(self, sys_name: str, last_updated, has_factions: bool = True):
         is_sel  = (sys_name == self._selected_system)
         row_bg  = "#0d1317" if is_sel else self.UI_PANEL
         bdr_col = COLOR_ACCENT if is_sel else self.UI_BORDER
@@ -288,9 +286,10 @@ class BGSWindow:
         row.pack(fill=tk.X, pady=(0, 3))
 
         name_disp = sys_name if len(sys_name) <= 23 else sys_name[:22] + "…"
+        name_color = (COLOR_ACCENT if is_sel else COLOR_TEXT) if has_factions else self.UI_DIM
         tk.Label(row, text=name_disp,
                  font=("Segoe UI", 9, "bold" if is_sel else "normal"),
-                 fg=COLOR_ACCENT if is_sel else COLOR_TEXT,
+                 fg=name_color,
                  bg=row_bg, anchor="w"
                  ).pack(fill=tk.X, padx=8, pady=(4, 0))
 

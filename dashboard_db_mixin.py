@@ -57,6 +57,19 @@ class DashboardDBMixin:
                 "CREATE INDEX IF NOT EXISTS idx_bgs_sys_ts "
                 "ON bgs_snapshots(system_name, recorded_at DESC)"
             )
+            self.conn.execute(
+                "CREATE TABLE IF NOT EXISTS visited_systems ("
+                " system_name TEXT PRIMARY KEY,"
+                " system_address INTEGER,"
+                " last_visited_at REAL NOT NULL"
+                ")"
+            )
+            # Seed visited_systems from existing bgs_snapshots so previously
+            # tracked inhabited systems aren't lost after the migration.
+            self.conn.execute(
+                "INSERT OR IGNORE INTO visited_systems (system_name, last_visited_at) "
+                "SELECT system_name, MAX(recorded_at) FROM bgs_snapshots GROUP BY system_name"
+            )
             self.conn.commit()
 
         if os.path.exists(SCAN_HISTORY_FILE):
@@ -414,19 +427,40 @@ class DashboardDBMixin:
             except sqlite3.Error as e:
                 self.log(f"❌ DB ERROR (BGS): {e}")
 
+    def db_record_visit(self, system_name: str, system_address, ts: float = None):
+        """Record that the commander visited system_name. Called on every jump."""
+        if not system_name or system_name in ("---", "Unknown"):
+            return
+        now = ts or time.time()
+        with self.db_lock:
+            try:
+                self.conn.execute(
+                    "INSERT INTO visited_systems (system_name, system_address, last_visited_at) "
+                    "VALUES (?, ?, ?) "
+                    "ON CONFLICT(system_name) DO UPDATE SET "
+                    "last_visited_at=excluded.last_visited_at, "
+                    "system_address=excluded.system_address",
+                    (system_name, system_address, now),
+                )
+                self._db_maybe_commit(reason="visit")
+            except sqlite3.Error as e:
+                self.log(f"❌ DB ERROR (visit): {e}")
+
     def db_load_bgs_systems(self) -> list:
-        """Return [(system_name, last_recorded_at)] sorted by most recent first."""
+        """Return [(system_name, last_visited_at, has_factions)] for all visited systems."""
         results = []
         try:
             with self.db_lock:
                 cur = self.conn.cursor()
                 cur.execute(
-                    "SELECT system_name, MAX(recorded_at) AS last_ts "
-                    "FROM bgs_snapshots "
-                    "GROUP BY system_name "
-                    "ORDER BY last_ts DESC"
+                    "SELECT v.system_name, v.last_visited_at, "
+                    "       CASE WHEN COUNT(b.id) > 0 THEN 1 ELSE 0 END "
+                    "FROM visited_systems v "
+                    "LEFT JOIN bgs_snapshots b ON b.system_name = v.system_name "
+                    "GROUP BY v.system_name "
+                    "ORDER BY v.last_visited_at DESC"
                 )
-                results = [(row[0], row[1]) for row in cur.fetchall()]
+                results = [(row[0], row[1], bool(row[2])) for row in cur.fetchall()]
         except sqlite3.Error:
             pass
         return results

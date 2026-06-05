@@ -1279,6 +1279,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.fss_all_bodies = False
             self.fss_summary_active = False
             self._rebuild_scan_index()
+            self._rebuild_system_state_from_scan_items()
 
             if ev == "CarrierJump":
                 log_msg = f"CARRIER JUMP: {self.current_sys}"
@@ -1300,6 +1301,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             elif ev == "Location":
                 self._queue_edsm_upload(raw, allow_startup=True)
 
+            # Track every visited system so the BGS window shows a full history.
+            self.db_record_visit(self.current_sys, self.current_system_address)
+
             # BGS snapshot — uses the journal event timestamp as a dedup key so
             # startup replay never creates duplicate rows.
             _factions = raw.get("Factions") if isinstance(raw, dict) else None
@@ -1309,8 +1313,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.current_sys, self.current_system_address,
                     _factions, _event_ts,
                 )
-                if not self.batch_mode and self.bgs_window and self.bgs_window.is_open():
-                    self.bgs_window.refresh_current()
+            if not self.batch_mode and self.bgs_window and self.bgs_window.is_open():
+                self.bgs_window.refresh_current()
             
             if not self.batch_mode:
                 sys_text = self.current_sys.upper()
