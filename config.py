@@ -93,6 +93,8 @@ def load_config():
         'edsm_upload_enabled': False,
         'edsm_game_version': '',
         'edsm_game_build': '',
+        'engineer_window_geometry': '740x560',
+        'bgs_window_geometry': '880x580',
     }
     if os.path.exists(CONFIG_FILE):
         try:

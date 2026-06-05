@@ -1,6 +1,31 @@
 # VoidCompass // UPDATE LOG
 
 
+## v3.1.0 // Engineer Materials + BGS Tracker
+**Release Date:** 2026-Jun-05
+
+### Engineer Material Tracker
+*   **New `EngineerWindow` (`engineer_window.py`) — material stock tracker:**
+    *   Three-tab view: **RAW** / **MANUFACTURED** / **ENCODED**, each with a scrollable material list grouped by grade (G1–G5).
+    *   Each material row shows grade badge, name, stock/cap fill bar, and count vs. individual grade cap.
+    *   Fill bar colour: dim blue (low) → cyan (mid) → red (near cap — 85%+).
+    *   Footer shows total units committed against the shared category capacity (1,000 Raw, 1,000 Manufactured, 500 Encoded) plus last-synced timestamp.
+    *   **Sync sources:** `Materials` event on login performs a full snapshot sync. Live `MaterialCollected`, `MaterialDiscarded`, `MaterialTrade`, `EngineerCraft`, `Synthesis`, and `TechnologyBroker` events apply incremental deltas. Startup journal replay is ignored (login sync is always sufficient).
+    *   Persisted to `engineer_materials.json` next to the executable.
+    *   Opened via **Engineer** button in the nav bar. Window geometry remembered.
+
+### BGS Tracker
+*   **New `BGSWindow` (`bgs_window.py`) — Background Simulation tracker:**
+    *   Left panel: scrollable list of all inhabited systems visited, sorted by most-recently-seen, with a live search/filter box.
+    *   Right panel: faction table for the selected system showing faction name, influence %, trend vs. the previous visit (▲▼═), allegiance (colour-coded: Federation blue / Empire gold / Alliance green / Independent grey), and active + pending BGS states with semantic colour coding (green Boom/Expansion, amber Famine/Unrest, red War/CivilWar).
+    *   An inline influence bar (0–100% width) runs under each faction row for quick visual comparison.
+    *   **Data source:** faction data from `FSDJump`, `Location`, and `CarrierJump` events is stored in the `bgs_snapshots` SQLite table. The original journal timestamp is used as a dedup key — startup replay never creates duplicate rows.
+    *   Trend indicator compares the two most recent snapshots for each faction; shows `—` when there is no prior data.
+    *   Opened via **BGS** button in the nav bar. Window geometry remembered.
+
+*   **`dashboard_db_mixin.py`:** new `bgs_snapshots` table with `UNIQUE(system_name, faction_name, event_timestamp)` constraint; `db_save_bgs_snapshot`, `db_load_bgs_systems`, `db_load_bgs_factions` methods.
+
+
 ## v3.0.1 // EDSM Journal Upload
 **Release Date:** 2026-Jun-04
 *   **Opt-in upload of exploration/scan events to EDSM (`edsm_handler.py`):**

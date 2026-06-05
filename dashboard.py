@@ -32,6 +32,11 @@ from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
 from dashboard_scan_mixin import DashboardScanMixin
 from colonization_window import ColonizationWindow, save_colonisation_data, load_colonisation_data
+from engineer_window import (
+    EngineerWindow, load_engineer_materials, save_engineer_materials,
+    get_material_category,
+)
+from bgs_window import BGSWindow
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
@@ -181,6 +186,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.mining_window = None
         self.carrier_window = None
         self.colonization_window = None
+        self.engineer_window = None
+        self.bgs_window = None
         self._carrier_panel_tick_job = None
         self.carrier_tracker = CarrierTracker()
         self.carrier_tracker.set_config(self.config)
@@ -234,6 +241,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.colonisation_projects[mid][k] = v
             else:
                 self.colonisation_projects[mid] = jp
+        self.engineer_materials = load_engineer_materials()
         self.import_scan_cache_json()
         
         self.watcher = JournalWatcher(
@@ -432,6 +440,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.mining_window.on_close()
         if self.colonization_window and self.colonization_window.is_open():
             self.colonization_window._on_close()
+        if self.engineer_window and self.engineer_window.is_open():
+            self.engineer_window._on_close()
+        if self.bgs_window and self.bgs_window.is_open():
+            self.bgs_window._on_close()
             
         self.watcher.stop()
         self.screenshots.stop()
@@ -591,6 +603,28 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.config,
             self.colonisation_projects,
             save_colonisation_data,
+        )
+
+    def open_engineer_window(self):
+        if self.engineer_window and self.engineer_window.is_open():
+            self.engineer_window.lift()
+            return
+        self.engineer_window = EngineerWindow(
+            self.root,
+            self.config,
+            self.engineer_materials,
+            save_engineer_materials,
+        )
+
+    def open_bgs_window(self):
+        if self.bgs_window and self.bgs_window.is_open():
+            self.bgs_window.lift()
+            return
+        self.bgs_window = BGSWindow(
+            self.root,
+            self.config,
+            self.db_load_bgs_systems,
+            self.db_load_bgs_factions,
         )
 
     # ------------------------------------------------------------------
@@ -1119,10 +1153,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         elif ev == "Materials":
             self._queue_edsm_upload(raw, allow_startup=True)
+            self._sync_materials_full(
+                raw.get("Raw") or [],
+                raw.get("Manufactured") or [],
+                raw.get("Encoded") or [],
+            )
 
         elif ev in ("MaterialCollected", "MaterialDiscarded", "MaterialTrade",
                     "EngineerCraft", "Synthesis", "TechnologyBroker"):
             self._queue_edsm_upload(raw, startup_replay=startup_replay)
+            if not startup_replay:
+                self._process_material_change(ev, raw)
 
         elif ev == "LoadGame":
             self.cmdr_name = d.get("commander", "CMDR")
@@ -1258,6 +1299,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.edsm.flush_upload_queue()
             elif ev == "Location":
                 self._queue_edsm_upload(raw, allow_startup=True)
+
+            # BGS snapshot — uses the journal event timestamp as a dedup key so
+            # startup replay never creates duplicate rows.
+            _factions = raw.get("Factions") if isinstance(raw, dict) else None
+            if _factions and self.current_sys and self.current_sys not in ("---", "Unknown"):
+                _event_ts = raw.get("timestamp") if isinstance(raw, dict) else None
+                self.db_save_bgs_snapshot(
+                    self.current_sys, self.current_system_address,
+                    _factions, _event_ts,
+                )
+                if not self.batch_mode and self.bgs_window and self.bgs_window.is_open():
+                    self.bgs_window.refresh_current()
             
             if not self.batch_mode:
                 sys_text = self.current_sys.upper()
@@ -1627,6 +1680,102 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             elif ev == "MiningRefined":
                 mat = raw.get("Type_Localised") or raw.get("Type") or ""
                 self.root.after(0, lambda m=mat: self.prospector_hud.add_refined(m))
+
+    # ── Engineer material helpers ─────────────────────────────────────────────
+
+    def _sync_materials_full(self, raw_list: list, mfg_list: list, enc_list: list):
+        """Rebuild engineer_materials from a Materials journal event (complete snapshot)."""
+        mats = self.engineer_materials
+        for cat_key, items in [("raw", raw_list), ("manufactured", mfg_list), ("encoded", enc_list)]:
+            mats[cat_key] = {}
+            for item in items:
+                key   = (item.get("Name") or "").lower()
+                name  = item.get("Name_Localised") or item.get("Name") or key.title()
+                count = int(item.get("Count") or 0)
+                if key:
+                    mats[cat_key][key] = {"name": name, "count": count}
+        mats["last_updated"] = time.time()
+        save_engineer_materials(mats)
+        if self.engineer_window and self.engineer_window.is_open():
+            self.engineer_window.refresh()
+
+    def _adjust_material(self, cat: str, key: str, name: str, delta: int):
+        """Adjust a single material count by delta, persist, and refresh the window."""
+        if not key or not cat:
+            return
+        cat_data = self.engineer_materials.setdefault(cat, {})
+        entry = cat_data.get(key)
+        if entry:
+            entry["count"] = max(0, int(entry.get("count", 0)) + delta)
+        elif delta > 0:
+            cat_data[key] = {"name": name or key.title(), "count": delta}
+        self.engineer_materials["last_updated"] = time.time()
+        save_engineer_materials(self.engineer_materials)
+        if self.engineer_window and self.engineer_window.is_open():
+            self.engineer_window.refresh()
+
+    def _process_material_change(self, ev: str, raw: dict):
+        """Apply live material collection/consumption events to engineer_materials."""
+        def _cat(s: str) -> str:
+            s = s.lower()
+            if s.startswith("enc"):
+                return "encoded"
+            if s.startswith("man"):
+                return "manufactured"
+            return "raw"
+
+        if ev == "MaterialCollected":
+            self._adjust_material(
+                _cat(raw.get("Category") or "raw"),
+                (raw.get("Name") or "").lower(),
+                raw.get("Name_Localised") or raw.get("Name") or "",
+                int(raw.get("Count") or 1),
+            )
+
+        elif ev == "MaterialDiscarded":
+            self._adjust_material(
+                _cat(raw.get("Category") or "raw"),
+                (raw.get("Name") or "").lower(),
+                raw.get("Name_Localised") or raw.get("Name") or "",
+                -int(raw.get("Count") or 1),
+            )
+
+        elif ev == "MaterialTrade":
+            paid = raw.get("Paid") or {}
+            recv = raw.get("Received") or {}
+            self._adjust_material(
+                _cat(paid.get("Category") or "raw"),
+                (paid.get("Material") or "").lower(),
+                paid.get("Material_Localised") or paid.get("Material") or "",
+                -int(paid.get("Quantity") or 0),
+            )
+            self._adjust_material(
+                _cat(recv.get("Category") or "raw"),
+                (recv.get("Material") or "").lower(),
+                recv.get("Material_Localised") or recv.get("Material") or "",
+                int(recv.get("Quantity") or 0),
+            )
+
+        elif ev in ("EngineerCraft", "Synthesis"):
+            ingredients = raw.get("Ingredients") or raw.get("Materials") or []
+            for ing in ingredients:
+                key = (ing.get("Name") or "").lower()
+                self._adjust_material(
+                    get_material_category(key),
+                    key,
+                    ing.get("Name_Localised") or ing.get("Name") or "",
+                    -int(ing.get("Count") or 0),
+                )
+
+        elif ev == "TechnologyBroker":
+            for mat in (raw.get("Materials") or []):
+                key = (mat.get("Name") or "").lower()
+                self._adjust_material(
+                    _cat(mat.get("Category") or get_material_category(key)),
+                    key,
+                    mat.get("Name_Localised") or mat.get("Name") or "",
+                    -int(mat.get("Quantity") or mat.get("Count") or 0),
+                )
 
     def process_batch(self, events):
         self.batch_mode = True

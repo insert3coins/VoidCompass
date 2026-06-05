@@ -35,6 +35,28 @@ class DashboardDBMixin:
                 " progress REAL, complete INTEGER, failed INTEGER, "
                 " resources_json TEXT, last_updated INTEGER)"
             )
+            self.conn.execute(
+                "CREATE TABLE IF NOT EXISTS bgs_snapshots ("
+                " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                " system_name TEXT NOT NULL,"
+                " system_address INTEGER,"
+                " faction_name TEXT NOT NULL,"
+                " influence REAL NOT NULL,"
+                " government TEXT,"
+                " allegiance TEXT,"
+                " happiness TEXT,"
+                " active_states TEXT,"
+                " pending_states TEXT,"
+                " recovering_states TEXT,"
+                " event_timestamp TEXT,"
+                " recorded_at REAL NOT NULL,"
+                " UNIQUE(system_name, faction_name, event_timestamp)"
+                ")"
+            )
+            self.conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_bgs_sys_ts "
+                "ON bgs_snapshots(system_name, recorded_at DESC)"
+            )
             self.conn.commit()
 
         if os.path.exists(SCAN_HISTORY_FILE):
@@ -344,6 +366,101 @@ class DashboardDBMixin:
                 self._db_maybe_commit(reason="colonisation")
             except sqlite3.Error as e:
                 self.log(f"❌ DB ERROR (Colonisation): {e}")
+
+    # ── BGS ───────────────────────────────────────────────────────────────────
+
+    def db_save_bgs_snapshot(
+        self,
+        system_name: str,
+        system_address,
+        factions: list,
+        event_timestamp: str | None = None,
+    ):
+        """Persist a BGS faction snapshot.  Duplicate (system, faction, timestamp) rows
+        are silently ignored so startup journal replay never inflates the history."""
+        now = time.time()
+        with self.db_lock:
+            try:
+                for f in factions:
+                    fname = f.get("Name") or f.get("faction_name")
+                    if not fname:
+                        continue
+                    inf = float(f.get("Influence") or f.get("influence") or 0)
+                    gov = f.get("Government") or f.get("government") or ""
+                    ally = f.get("Allegiance") or f.get("allegiance") or ""
+                    hap = f.get("Happiness_Localised") or f.get("happiness") or ""
+                    active = json.dumps([
+                        {"State": (s.get("State") or s) if isinstance(s, dict) else s}
+                        for s in (f.get("ActiveStates") or [])
+                    ])
+                    pending = json.dumps([
+                        {"State": (s.get("State") or s) if isinstance(s, dict) else s}
+                        for s in (f.get("PendingStates") or [])
+                    ])
+                    recovering = json.dumps([
+                        {"State": (s.get("State") or s) if isinstance(s, dict) else s}
+                        for s in (f.get("RecoveringStates") or [])
+                    ])
+                    self.conn.execute(
+                        "INSERT OR IGNORE INTO bgs_snapshots "
+                        "(system_name, system_address, faction_name, influence, "
+                        " government, allegiance, happiness, active_states, "
+                        " pending_states, recovering_states, event_timestamp, recorded_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (system_name, system_address, fname, inf, gov, ally, hap,
+                         active, pending, recovering, event_timestamp, now),
+                    )
+                self._db_maybe_commit(reason="bgs")
+            except sqlite3.Error as e:
+                self.log(f"❌ DB ERROR (BGS): {e}")
+
+    def db_load_bgs_systems(self) -> list:
+        """Return [(system_name, last_recorded_at)] sorted by most recent first."""
+        results = []
+        try:
+            with self.db_lock:
+                cur = self.conn.cursor()
+                cur.execute(
+                    "SELECT system_name, MAX(recorded_at) AS last_ts "
+                    "FROM bgs_snapshots "
+                    "GROUP BY system_name "
+                    "ORDER BY last_ts DESC"
+                )
+                results = [(row[0], row[1]) for row in cur.fetchall()]
+        except sqlite3.Error:
+            pass
+        return results
+
+    def db_load_bgs_factions(self, system_name: str) -> list:
+        """Return all snapshots for system_name, newest first (up to 500 rows)."""
+        results = []
+        try:
+            with self.db_lock:
+                cur = self.conn.cursor()
+                cur.execute(
+                    "SELECT faction_name, influence, government, allegiance, happiness, "
+                    "active_states, pending_states, recovering_states, recorded_at "
+                    "FROM bgs_snapshots "
+                    "WHERE system_name=? "
+                    "ORDER BY recorded_at DESC "
+                    "LIMIT 500",
+                    (system_name,),
+                )
+                for row in cur.fetchall():
+                    results.append({
+                        "faction_name":      row[0],
+                        "influence":         row[1],
+                        "government":        row[2],
+                        "allegiance":        row[3],
+                        "happiness":         row[4],
+                        "active_states":     row[5],
+                        "pending_states":    row[6],
+                        "recovering_states": row[7],
+                        "recorded_at":       row[8],
+                    })
+        except sqlite3.Error:
+            pass
+        return results
 
     def db_load_colonisation_projects(self) -> dict:
         projects = {}

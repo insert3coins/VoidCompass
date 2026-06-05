@@ -16,7 +16,7 @@ class RuntimeTrace:
             return
         self._started = True
         try:
-            with open(self.path, "a", encoding="utf-8") as f:
+            with open(self.path, "w", encoding="utf-8") as f:
                 f.write(
                     json.dumps(
                         {

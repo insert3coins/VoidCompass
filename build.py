@@ -98,5 +98,9 @@ VSVersionInfo(
     if os.path.exists(mining_sessions_src):
         shutil.copy(mining_sessions_src, os.path.join(dist_dir, 'mining_sessions.json'))
         print("Copied mining_sessions.json to dist/")
+    engineer_mats_src = os.path.join(os.getcwd(), 'engineer_materials.json')
+    if os.path.exists(engineer_mats_src):
+        shutil.copy(engineer_mats_src, os.path.join(dist_dir, 'engineer_materials.json'))
+        print("Copied engineer_materials.json to dist/")
 
     print("Build complete. Check the 'dist' folder.")
