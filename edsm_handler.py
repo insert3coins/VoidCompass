@@ -79,6 +79,7 @@ _EDSM_DISCARD_EVENTS = frozenset({
     "CargoTransfer",
     "NavRoute", "NavRouteClear",
     "Status",
+    "Mining_Refined", "Cargo", "EjectCargo",
 }) - _EDSM_CREDIT_EVENTS
 
 _BATCH_SIZE = 50          # send when queue reaches this many events
