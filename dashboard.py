@@ -1679,7 +1679,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_body_name = ""
 
         # ── Prospector overlay — live events only, skip journal replay on startup ──
-        if self.prospector_hud and not self.batch_mode:
+        # Use startup_replay (not batch_mode) so rapid-fire limpets that land in
+        # the same poll cycle still update the overlay.  batch_mode is True for
+        # any multi-event poll, not just startup, which was silently dropping updates.
+        if self.prospector_hud and not startup_replay:
             if ev == "ProspectedAsteroid":
                 self.root.after(0, lambda r=raw: self.prospector_hud.update(r))
             elif ev == "MiningRefined":
