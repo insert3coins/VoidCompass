@@ -27,6 +27,7 @@ from carrier_tracker import CarrierTracker
 from carrier_window import CarrierWindow
 from prospector_hud import ProspectorHUD
 from system_info_hud import SystemInfoHUD
+from colony_overlay import ColonyOverlay
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
@@ -93,6 +94,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.colonisation_projects: dict = {}  # market_id → project dict
         self.current_colonisation_market: int | None = None
         self.cargo_capacity = 0
+        self.current_cargo_inventory = []
         self.last_journal_event_ts = 0.0
         self.last_logged_journal_file = None
         self.last_status_event_ts = 0.0
@@ -158,7 +160,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._ui_watchdog_interval_ms = 50
         self._ui_watchdog_spike_ms = float(self.config.get("ui_watchdog_spike_ms", 120.0))
         self._ui_watchdog_last_ts = time.perf_counter()
-        self._overlay_pos_last_saved = {"hud": None, "cargo": None, "scan": None, "system_info": None}
+        self._overlay_pos_last_saved = {"hud": None, "cargo": None, "scan": None, "system_info": None, "colony": None}
         self._overlay_sync_grace_until = time.time() + 4.0
         self.runtime_trace = RuntimeTrace(
             self.config.get("runtime_trace_path", "runtime_trace.log"),
@@ -226,6 +228,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         else:
             self.system_info_hud = None
 
+        if self.config.get("colony_overlay_enabled", False):
+            self.colony_overlay = ColonyOverlay(
+                self.root,
+                self.config,
+                lambda: self.colonisation_projects,
+                lambda: self.current_cargo_inventory,
+                lambda: self.cargo_capacity,
+            )
+        else:
+            self.colony_overlay = None
+
         self.db_lock = threading.RLock()
         self.batch_mode = False
         self.init_db()
@@ -258,6 +271,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         self.watcher.start()
         self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
+        if self.colony_overlay:
+            self.colony_overlay.update()
 
         self.watcher.force_check_status()
 
@@ -391,6 +406,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     changed = True
         except Exception:
             pass
+        try:
+            if self.colony_overlay and self.colony_overlay.win and self.colony_overlay.win.winfo_exists():
+                pos = (int(self.colony_overlay.win.winfo_x()), int(self.colony_overlay.win.winfo_y()))
+                cfg_pos = (
+                    int(float(self.config.get("colony_overlay_x", pos[0]))),
+                    int(float(self.config.get("colony_overlay_y", pos[1]))),
+                )
+                if pos == (0, 0) and cfg_pos != (0, 0):
+                    pos = cfg_pos
+                if self._overlay_pos_last_saved.get("colony") != pos:
+                    self._overlay_pos_last_saved["colony"] = pos
+                    self.config["colony_overlay_x"], self.config["colony_overlay_y"] = pos
+                    changed = True
+        except Exception:
+            pass
         if changed:
             self._save_config_file()
         self.root.after(700, self._tick_overlay_position_sync)
@@ -459,6 +489,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 x, y = int(self.cargo_hud.win.winfo_x()), int(self.cargo_hud.win.winfo_y())
                 if x != 0 or y != 0:
                     self.config["cargo_hud_x"], self.config["cargo_hud_y"] = x, y
+        except Exception:
+            pass
+        try:
+            if self.colony_overlay and self.colony_overlay.win and self.colony_overlay.win.winfo_exists():
+                x, y = int(self.colony_overlay.win.winfo_x()), int(self.colony_overlay.win.winfo_y())
+                w, h = int(self.colony_overlay.win.winfo_width()), int(self.colony_overlay.win.winfo_height())
+                if x != 0 or y != 0:
+                    self.config["colony_overlay_x"], self.config["colony_overlay_y"] = x, y
+                if w > 0 and h > 0:
+                    self.config["colony_overlay_w"], self.config["colony_overlay_h"] = w, h
         except Exception:
             pass
         self.config["main_geometry"] = self.root.geometry()
@@ -603,7 +643,28 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.config,
             self.colonisation_projects,
             save_colonisation_data,
+            overlay_callback=self.toggle_colony_overlay,
         )
+
+    def toggle_colony_overlay(self):
+        try:
+            if self.colony_overlay and self.colony_overlay.is_open():
+                self.colony_overlay.win.destroy()
+                self.colony_overlay = None
+                self.config["colony_overlay_enabled"] = False
+                self._save_config_file()
+                return
+        except Exception:
+            self.colony_overlay = None
+        self.colony_overlay = ColonyOverlay(
+            self.root,
+            self.config,
+            lambda: self.colonisation_projects,
+            lambda: self.current_cargo_inventory,
+            lambda: self.cargo_capacity,
+        )
+        self.config["colony_overlay_enabled"] = True
+        self._save_config_file()
 
     def open_engineer_window(self):
         if self.engineer_window and self.engineer_window.is_open():
@@ -787,6 +848,23 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if self.cargo_hud:
                     self.cargo_hud.win.destroy()
                     self.cargo_hud = None
+
+            # Live Toggle: Colony Overlay
+            if self.config.get("colony_overlay_enabled", False):
+                if self.colony_overlay is None or not self.colony_overlay.is_open():
+                    self.colony_overlay = ColonyOverlay(
+                        self.root,
+                        self.config,
+                        lambda: self.colonisation_projects,
+                        lambda: self.current_cargo_inventory,
+                        lambda: self.cargo_capacity,
+                    )
+                else:
+                    self.colony_overlay.update()
+            else:
+                if self.colony_overlay and self.colony_overlay.is_open():
+                    self.colony_overlay.win.destroy()
+                self.colony_overlay = None
 
         open_settings(self.root, self.config, on_save, carrier_tracker=self.carrier_tracker)
 
@@ -1130,6 +1208,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "Loadout":
             self.cargo_capacity = d.get("cargo_capacity", 0)
             self.watcher.force_check_cargo()
+            if self.colony_overlay:
+                self.colony_overlay.update()
             self._queue_edsm_upload(raw, allow_startup=True)
 
         elif ev == "Cargo":
@@ -1652,6 +1732,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     save_colonisation_data(self.colonisation_projects)
                     if self.colonization_window and self.colonization_window.is_open():
                         self.colonization_window.refresh()
+                    if self.colony_overlay:
+                        self.colony_overlay.update()
 
         elif ev == "ColonisationContribution":
             mid = d.get("market_id")
@@ -1669,6 +1751,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     save_colonisation_data(self.colonisation_projects)
                     if self.colonization_window and self.colonization_window.is_open():
                         self.colonization_window.refresh()
+                    if self.colony_overlay:
+                        self.colony_overlay.update()
 
         # ── ApproachBody / LeaveBody ──────────────────────────────────────────────
         if ev == "ApproachBody" and not self.batch_mode:
@@ -1842,10 +1926,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def update_cargo(self, inventory):
         self.last_cargo_event_ts = time.time()
+        self.current_cargo_inventory = list(inventory or [])
         if self.mining_window and self.mining_window.is_open():
             self.mining_window.update_cargo(inventory, self.cargo_capacity)
         if self.cargo_hud:
             self.root.after(0, lambda: self.cargo_hud.update(inventory, self.cargo_capacity))
+        if self.colony_overlay:
+            self.root.after(0, self.colony_overlay.update)
 
     def update_nav_route(self, data):
         self.last_nav_event_ts = time.time()

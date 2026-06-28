@@ -64,7 +64,7 @@ class ColonizationWindow:
     UI_MONO   = ("Consolas", 9)
     UI_MONO_B = ("Consolas", 10, "bold")
 
-    def __init__(self, root, config: dict, projects: dict, save_callback):
+    def __init__(self, root, config: dict, projects: dict, save_callback, overlay_callback=None):
         """
         projects     – live reference to dashboard's colonisation_projects dict
         save_callback – callable(projects) that persists changes to JSON
@@ -73,6 +73,7 @@ class ColonizationWindow:
         self.config        = config
         self.projects      = projects       # shared reference — always current
         self.save_callback = save_callback
+        self.overlay_callback = overlay_callback
         self._selected_mid = None
         self._notes_dirty  = False
 
@@ -263,6 +264,9 @@ class ColonizationWindow:
 
         self._action_button(foot, "Copy Shopping List",
                             self._copy_shopping_list).pack(side=tk.LEFT)
+        if self.overlay_callback:
+            self._action_button(foot, "Toggle Overlay",
+                                self.overlay_callback, accent=True).pack(side=tk.LEFT, padx=(8, 0))
         self._action_button(foot, "Delete Project",
                             self._delete_project, muted=True).pack(side=tk.LEFT, padx=(8, 0))
         self._updated_lbl = tk.Label(foot, text="",
