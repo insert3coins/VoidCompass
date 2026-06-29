@@ -448,9 +448,12 @@ class EDSMHandler:
                 r = self._limited_get(url, params=params, timeout=10, retries=1)
                 data = r.json()
                 if isinstance(data, dict):
-                    traffic = data.get("traffic")
-                    if traffic:
-                        callback(traffic)
+                    traffic = data.get("traffic") or {}
+                    callback({
+                        "day": int(traffic.get("day") or 0),
+                        "week": int(traffic.get("week") or 0),
+                        "total": int(traffic.get("total") or 0),
+                    })
             except Exception as e:
                 logging.warning(f"Traffic fetch failed: {e}")
         threading.Thread(target=_fetch, daemon=True).start()
