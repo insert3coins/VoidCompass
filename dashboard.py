@@ -16,6 +16,7 @@ from config import (
 from version import APP_VERSION
 from hud import TacticalHUD
 from cargo_hud import CargoHUD
+from carrier_hud import CarrierHUD
 from edsm_handler import EDSMHandler
 from screenshot_handler import ScreenshotHandler
 from settings_ui import open_settings
@@ -160,7 +161,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._ui_watchdog_interval_ms = 50
         self._ui_watchdog_spike_ms = float(self.config.get("ui_watchdog_spike_ms", 120.0))
         self._ui_watchdog_last_ts = time.perf_counter()
-        self._overlay_pos_last_saved = {"hud": None, "cargo": None, "scan": None, "system_info": None, "colony": None}
+        self._overlay_pos_last_saved = {"hud": None, "cargo": None, "carrier": None, "scan": None, "system_info": None, "colony": None}
         self._overlay_sync_grace_until = time.time() + 4.0
         self.runtime_trace = RuntimeTrace(
             self.config.get("runtime_trace_path", "runtime_trace.log"),
@@ -217,6 +218,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 pass
         else:
             self.cargo_hud = None
+
+        if self.config.get("carrier_overlay_enabled", False):
+            self.carrier_hud = CarrierHUD(self.root, self.config, self.carrier_tracker)
+        else:
+            self.carrier_hud = None
 
         if self.config.get("prospector_overlay_enabled", True):
             self.prospector_hud = ProspectorHUD(self.root, self.config)
@@ -315,17 +321,27 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.cargo_hud.win.geometry(f"300x400+{cx}+{cy}")
         except Exception:
             pass
+        try:
+            if self.carrier_hud and self.carrier_hud.win and self.carrier_hud.win.winfo_exists():
+                fx = int(float(self.config.get("carrier_hud_x", self.carrier_hud.win.winfo_x())))
+                fy = int(float(self.config.get("carrier_hud_y", self.carrier_hud.win.winfo_y())))
+                self.carrier_hud.win.geometry(f"+{fx}+{fy}")
+        except Exception:
+            pass
         self.root.after(250, self._log_applied_overlay_positions)
 
     def _log_applied_overlay_positions(self):
         try:
             hxy = "-"
             cxy = "-"
+            fxy = "-"
             if self.hud and self.hud.win and self.hud.win.winfo_exists():
                 hxy = f"{self.hud.win.winfo_x()},{self.hud.win.winfo_y()}"
             if self.cargo_hud and self.cargo_hud.win and self.cargo_hud.win.winfo_exists():
                 cxy = f"{self.cargo_hud.win.winfo_x()},{self.cargo_hud.win.winfo_y()}"
-            self.log(f"CONFIG FILE: APPLIED HUD({hxy}) | CARGO({cxy})")
+            if self.carrier_hud and self.carrier_hud.win and self.carrier_hud.win.winfo_exists():
+                fxy = f"{self.carrier_hud.win.winfo_x()},{self.carrier_hud.win.winfo_y()}"
+            self.log(f"CONFIG FILE: APPLIED HUD({hxy}) | CARGO({cxy}) | CARRIER({fxy})")
         except Exception:
             pass
 
@@ -388,6 +404,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if self._overlay_pos_last_saved.get("cargo") != pos:
                     self._overlay_pos_last_saved["cargo"] = pos
                     self.config["cargo_hud_x"], self.config["cargo_hud_y"] = pos
+                    changed = True
+        except Exception:
+            pass
+        try:
+            if self.carrier_hud and self.carrier_hud.win and self.carrier_hud.win.winfo_exists():
+                pos = (int(self.carrier_hud.win.winfo_x()), int(self.carrier_hud.win.winfo_y()))
+                cfg_pos = (
+                    int(float(self.config.get("carrier_hud_x", pos[0]))),
+                    int(float(self.config.get("carrier_hud_y", pos[1]))),
+                )
+                if pos == (0, 0) and cfg_pos != (0, 0):
+                    pos = cfg_pos
+                if self._overlay_pos_last_saved.get("carrier") != pos:
+                    self._overlay_pos_last_saved["carrier"] = pos
+                    self.config["carrier_hud_x"], self.config["carrier_hud_y"] = pos
                     changed = True
         except Exception:
             pass
@@ -489,6 +520,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 x, y = int(self.cargo_hud.win.winfo_x()), int(self.cargo_hud.win.winfo_y())
                 if x != 0 or y != 0:
                     self.config["cargo_hud_x"], self.config["cargo_hud_y"] = x, y
+        except Exception:
+            pass
+        try:
+            if self.carrier_hud and self.carrier_hud.win and self.carrier_hud.win.winfo_exists():
+                x, y = int(self.carrier_hud.win.winfo_x()), int(self.carrier_hud.win.winfo_y())
+                if x != 0 or y != 0:
+                    self.config["carrier_hud_x"], self.config["carrier_hud_y"] = x, y
         except Exception:
             pass
         try:
@@ -739,6 +777,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         """Fired by CarrierTracker whenever state changes (persistent hook)."""
         try:
             self.root.after(0, self.update_carrier_panel)
+            if self.carrier_hud:
+                self.root.after(0, lambda d=dict(carrier_data): self.carrier_hud.update(d))
             if carrier_data.get("status") == "jumping":
                 self.root.after(0, self._ensure_carrier_panel_ticker)
         except Exception:
@@ -758,6 +798,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         status = self.carrier_tracker.carrier_data.get("status", "idle")
         if status == "jumping":
             self.update_carrier_panel()
+            if self.carrier_hud:
+                self.carrier_hud.update()
             self._carrier_panel_tick_job = self.root.after(1000, self._tick_carrier_panel)
         # Ticker stops naturally when status is no longer jumping;
         # _on_carrier_panel_updated will have already refreshed the panel.
@@ -849,6 +891,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.cargo_hud.win.destroy()
                     self.cargo_hud = None
 
+            # Live Toggle: Fleet Carrier HUD
+            if self.config.get("carrier_overlay_enabled", False):
+                if self.carrier_hud is None:
+                    self.carrier_hud = CarrierHUD(self.root, self.config, self.carrier_tracker)
+                else:
+                    self.carrier_hud.update()
+            else:
+                if self.carrier_hud:
+                    self.carrier_hud.destroy()
+                    self.carrier_hud = None
+
             # Live Toggle: Colony Overlay
             if self.config.get("colony_overlay_enabled", False):
                 if self.colony_overlay is None or not self.colony_overlay.is_open():
@@ -903,6 +956,19 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                             self.system_info_hud.update_spansh(data)
                     self.root.after(0, _apply)
                 self.edsm.fetch_spansh_system(sys_addr, spansh_callback)
+
+    def _show_system_info_for_current_system(self):
+        if not self.system_info_hud:
+            return
+        if not self.current_sys or self.current_sys in ("---", "Unknown"):
+            return
+        self.system_info_hud.on_system_arrival(
+            self.current_sys,
+            self.star_class,
+            list(self.scan_items),
+            dict(self.body_signals),
+            self.total,
+        )
 
     def _copy_waypoint_to_clipboard(self, waypoint_name, log_label="NEXT WAYPOINT"):
         if not waypoint_name:
@@ -1320,7 +1386,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             prev_coords = self.current_coords if isinstance(self.current_coords, list) else None
 
             # State reset for new system
-            self.current_sys = d.get("star_system", "Unknown")
+            incoming_sys = d.get("star_system", "Unknown")
+            traffic_before_reset = dict(self.system_traffic or {})
+            preserve_startup_traffic = (
+                startup_replay
+                and incoming_sys == self.last_traffic_system
+                and traffic_before_reset
+            )
+            self.current_sys = incoming_sys
             self.current_system_address = self._normalize_system_address(d.get("system_address"))
             self.current_coords = d.get("star_pos", [0,0,0])
             # Preserve existing class when an event omits StarClass (common on some transitions).
@@ -1351,7 +1424,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_body_name = ""
             self.valuable_system = False
             self.valuable_bodies.clear()
-            self.system_traffic = {'day': 0, 'week': 0, 'total': 0}
+            self.system_traffic = (
+                traffic_before_reset
+                if preserve_startup_traffic
+                else {'day': 0, 'week': 0, 'total': 0}
+            )
             self.scan_items = self.load_scan_items_from_db(self.current_sys)
             self.body_signals = {}
             self.body_dss_complete = set()
@@ -1424,11 +1501,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.last_traffic_system = self.current_sys
                 self.fetch_system_traffic(self.current_sys)
 
-            # Show system info overlay on every live jump.
-            # Gate on is_first_load (not batch_mode) so it still fires when
+            # Show system info overlay for live arrivals and the immediate
+            # startup location seed, but not for replayed startup history.
+            # Gate on startup_replay (not batch_mode) so it still fires when
             # FSDJump arrives in the same read cycle as FSSDiscoveryScan and
             # the watcher promotes them into a batch with batch_mode=True.
-            if self.system_info_hud and not self.is_first_load:
+            if self.system_info_hud and not startup_replay:
                 _sys  = self.current_sys
                 _sc   = self.star_class
                 _si   = list(self.scan_items)
@@ -1895,8 +1973,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         if self.is_first_load:
             self.is_first_load = False
-            self.last_traffic_system = self.current_sys
-            self.fetch_system_traffic(self.current_sys)
             # After startup batch: re-read DB so scan_stat always reflects the
             # committed authoritative values (fixes cases where in-memory state
             # diverged during batch processing).
@@ -1905,6 +1981,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if sys_snap and sys_snap != "---":
                     self.load_system_from_db(sys_snap)
                 self.update_dashboard_ui()
+                self._show_system_info_for_current_system()
+                if self.current_sys and self.current_sys != "---":
+                    self.last_traffic_system = self.current_sys
+                    self.fetch_system_traffic(self.current_sys)
             self.root.after(0, _startup_sync)
             self.root.after(0, self.update_hud)
             self.root.after(0, self.update_waypoint_display)
