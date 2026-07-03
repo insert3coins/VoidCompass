@@ -152,6 +152,7 @@ class DashboardUIMixin:
             ("Shots",          self.open_screenshots_folder),
             ("Carrier",        self.open_carrier_window),
             ("BGS",            self.open_bgs_window),
+            ("Squadron",       self.open_squadron_window),
             ("Engineer",       self.open_engineer_window),
             ("Colony",         self.open_colonization_window),
             ("Mining",         self.open_mining_window),

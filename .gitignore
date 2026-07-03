@@ -15,6 +15,7 @@ colony_overlay_prefs.json
 engineer_materials.json
 mining_sessions.json
 waypoints.json
+squadron_state.json
 
 # Python Internals
 __pycache__/
