@@ -1,10 +1,20 @@
 # Configuration
 config.json
+profiles/
 
 # Application Cache
 edsm_cache
 edsm_cache.json
 scan_history.json
+scan_cache.json
+exploration_data.db
+exploration_data.db-*
+carrier_state.json
+colonisation_data.json
+colony_overlay_prefs.json
+engineer_materials.json
+mining_sessions.json
+waypoints.json
 
 # Python Internals
 __pycache__/
@@ -22,3 +32,4 @@ resources/
 .venv/
 venv/
 mining_data.db
+mining_data.db-*

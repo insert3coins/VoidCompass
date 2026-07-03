@@ -93,20 +93,46 @@ def apply_profile_config(config, profile_key=None):
     key = profile_key or get_active_profile(config)
     profiles = config.setdefault("commander_profiles", {})
     profile = profiles.setdefault(key, {})
-    is_new_profile = not bool(profile)
+    is_initial_profile = len(profiles) <= 1
     config["active_commander_profile"] = key
     config["active_commander_name"] = profile.get("commander_name", config.get("active_commander_name", "Unknown Commander"))
     config["active_commander_fid"] = profile.get("fid", config.get("active_commander_fid", ""))
-    if "edsm_cmdr_name" not in profile:
-        profile["edsm_cmdr_name"] = (
-            config.get("edsm_cmdr_name", "") if is_new_profile else profile.get("commander_name", "")
-        )
-    if "edsm_api_key" not in profile:
-        profile["edsm_api_key"] = config.get("edsm_api_key", "") if is_new_profile else ""
-    if "edsm_upload_enabled" not in profile:
-        profile["edsm_upload_enabled"] = bool(config.get("edsm_upload_enabled", False)) if is_new_profile else False
-    for setting in ("edsm_cmdr_name", "edsm_api_key", "edsm_upload_enabled"):
-        config[setting] = profile.get(setting, "" if setting != "edsm_upload_enabled" else False)
+    text_profile_settings = ("edsm_cmdr_name", "edsm_api_key", "carrier_discord_webhook_url")
+    bool_profile_settings = (
+        "edsm_upload_enabled",
+        "overlay_enabled",
+        "cargo_overlay_enabled",
+        "carrier_overlay_enabled",
+        "colony_overlay_enabled",
+        "prospector_overlay_enabled",
+        "system_info_enabled",
+        "screenshots_enabled",
+    )
+    text_defaults = {
+        "edsm_cmdr_name": profile.get("commander_name", ""),
+        "edsm_api_key": "",
+        "carrier_discord_webhook_url": "",
+    }
+    bool_defaults = {
+        "edsm_upload_enabled": False,
+        "overlay_enabled": True,
+        "cargo_overlay_enabled": False,
+        "carrier_overlay_enabled": False,
+        "colony_overlay_enabled": False,
+        "prospector_overlay_enabled": True,
+        "system_info_enabled": True,
+        "screenshots_enabled": False,
+    }
+    for setting in text_profile_settings:
+        if setting not in profile:
+            profile[setting] = config.get(setting, text_defaults.get(setting, "")) if is_initial_profile else text_defaults.get(setting, "")
+    for setting in bool_profile_settings:
+        if setting not in profile:
+            profile[setting] = bool(config.get(setting, bool_defaults.get(setting, False))) if is_initial_profile else bool_defaults.get(setting, False)
+    for setting in text_profile_settings:
+        config[setting] = profile.get(setting, "")
+    for setting in bool_profile_settings:
+        config[setting] = bool(profile.get(setting, False))
     return config
 
 
@@ -116,8 +142,19 @@ def save_active_profile_config(config):
     profile = profiles.setdefault(key, {})
     profile["commander_name"] = config.get("active_commander_name", "Unknown Commander")
     profile["fid"] = config.get("active_commander_fid", "")
-    for setting in ("edsm_cmdr_name", "edsm_api_key", "edsm_upload_enabled"):
-        profile[setting] = config.get(setting, "" if setting != "edsm_upload_enabled" else False)
+    for setting in ("edsm_cmdr_name", "edsm_api_key", "carrier_discord_webhook_url"):
+        profile[setting] = config.get(setting, "")
+    for setting in (
+        "edsm_upload_enabled",
+        "overlay_enabled",
+        "cargo_overlay_enabled",
+        "carrier_overlay_enabled",
+        "colony_overlay_enabled",
+        "prospector_overlay_enabled",
+        "system_info_enabled",
+        "screenshots_enabled",
+    ):
+        profile[setting] = bool(config.get(setting, False))
     config["active_commander_profile"] = key
     return profile
 

@@ -116,6 +116,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.config["active_commander_name"] = commander_name
             self.config["active_commander_fid"] = fid or self.config.get("active_commander_fid", "")
             save_active_profile_config(self.config)
+            try:
+                if hasattr(self, "summary_cmdr"):
+                    self.summary_cmdr.config(text=str(commander_name).upper())
+            except Exception:
+                pass
             return
 
         try:
@@ -194,6 +199,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.update_dashboard_ui()
         self.update_hud()
         self.update_carrier_panel()
+        self._apply_runtime_feature_toggles()
         self.add_event_feed_entry("PROFILE", f"Switched to commander profile: {commander_name}", severity="INFO")
 
     def __init__(self, root):
@@ -227,8 +233,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.body_dss_complete = set()
         self.system_undiscovered = False
         self.fss_all_bodies = False
-        self.cmdr_name = "CMDR"
-        self.cmdr_fid = ""
+        self.cmdr_name = self.config.get("active_commander_name") or "CMDR"
+        self.cmdr_fid = self.config.get("active_commander_fid") or ""
         self.cmdr_balance = None
         self.cmdr_loan = None
         self.last_scan_event = None
@@ -1006,64 +1012,78 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             for signals in self.body_signals.values()
         )
 
+    def _apply_runtime_feature_toggles(self):
+        if self.config.get("screenshots_enabled", False):
+            self.log("Screenshot Converter: ACTIVE")
+        else:
+            self.log("Screenshot Converter: DISABLED")
+
+        if self.config.get("overlay_enabled", True):
+            if self.hud is None:
+                self.hud = TacticalHUD(self.root, self.config, on_widget_click=self._on_hud_widget_click)
+            self.update_hud()
+        elif self.hud:
+            self.hud.win.destroy()
+            self.hud = None
+
+        if self.config.get("cargo_overlay_enabled", False):
+            if self.cargo_hud is None:
+                self.cargo_hud = CargoHUD(self.root, self.config)
+                self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
+                self.watcher.force_check_cargo()
+        elif self.cargo_hud:
+            self.cargo_hud.win.destroy()
+            self.cargo_hud = None
+
+        if self.config.get("carrier_overlay_enabled", False):
+            if self.carrier_hud is None:
+                self.carrier_hud = CarrierHUD(self.root, self.config, self.carrier_tracker)
+            else:
+                self.carrier_hud.update()
+        elif self.carrier_hud:
+            self.carrier_hud.destroy()
+            self.carrier_hud = None
+
+        if self.config.get("prospector_overlay_enabled", True):
+            if self.prospector_hud is None:
+                self.prospector_hud = ProspectorHUD(self.root, self.config)
+        elif self.prospector_hud:
+            try:
+                self.prospector_hud.win.destroy()
+            except Exception:
+                pass
+            self.prospector_hud = None
+
+        if self.config.get("system_info_enabled", True):
+            if self.system_info_hud is None:
+                self.system_info_hud = SystemInfoHUD(self.root, self.config)
+        elif self.system_info_hud:
+            try:
+                self.system_info_hud.win.destroy()
+            except Exception:
+                pass
+            self.system_info_hud = None
+
+        if self.config.get("colony_overlay_enabled", False):
+            if self.colony_overlay is None or not self.colony_overlay.is_open():
+                self.colony_overlay = ColonyOverlay(
+                    self.root,
+                    self.config,
+                    lambda: self.colonisation_projects,
+                    lambda: self.current_cargo_inventory,
+                    lambda: self.cargo_capacity,
+                )
+            else:
+                self.colony_overlay.update()
+        else:
+            if self.colony_overlay and self.colony_overlay.is_open():
+                self.colony_overlay.win.destroy()
+            self.colony_overlay = None
+
     def open_settings(self):
         def on_save():
             self.log("Configuration saved successfully.")
-
-            # Live Update: Screenshots
-            if self.config.get("screenshots_enabled", False):
-                self.log("Screenshot Converter: ACTIVE")
-            else:
-                self.log("Screenshot Converter: DISABLED")
-
-            # Live Toggle: Tactical HUD
-            if self.config.get("overlay_enabled", True):
-                if self.hud is None:
-                    self.hud = TacticalHUD(self.root, self.config, on_widget_click=self._on_hud_widget_click)
-                self.update_hud()
-            else:
-                if self.hud:
-                    self.hud.win.destroy()
-                    self.hud = None
-
-            # Live Toggle: Cargo HUD
-            if self.config.get("cargo_overlay_enabled", False):
-                if self.cargo_hud is None:
-                    self.cargo_hud = CargoHUD(self.root, self.config)
-                    self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
-                    self.watcher.force_check_cargo()
-            else:
-                if self.cargo_hud:
-                    self.cargo_hud.win.destroy()
-                    self.cargo_hud = None
-
-            # Live Toggle: Fleet Carrier HUD
-            if self.config.get("carrier_overlay_enabled", False):
-                if self.carrier_hud is None:
-                    self.carrier_hud = CarrierHUD(self.root, self.config, self.carrier_tracker)
-                else:
-                    self.carrier_hud.update()
-            else:
-                if self.carrier_hud:
-                    self.carrier_hud.destroy()
-                    self.carrier_hud = None
-
-            # Live Toggle: Colony Overlay
-            if self.config.get("colony_overlay_enabled", False):
-                if self.colony_overlay is None or not self.colony_overlay.is_open():
-                    self.colony_overlay = ColonyOverlay(
-                        self.root,
-                        self.config,
-                        lambda: self.colonisation_projects,
-                        lambda: self.current_cargo_inventory,
-                        lambda: self.cargo_capacity,
-                    )
-                else:
-                    self.colony_overlay.update()
-            else:
-                if self.colony_overlay and self.colony_overlay.is_open():
-                    self.colony_overlay.win.destroy()
-                self.colony_overlay = None
+            self._apply_runtime_feature_toggles()
 
         open_settings(self.root, self.config, on_save, carrier_tracker=self.carrier_tracker)
 
