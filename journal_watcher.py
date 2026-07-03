@@ -110,6 +110,50 @@ class JournalWatcher:
             return 0
         return 0
 
+    @staticmethod
+    def detect_latest_commander(journal_path, tail_bytes=2 * 1024 * 1024):
+        """Best-effort commander/FID detection from the newest journal file."""
+        if not journal_path or not os.path.exists(journal_path):
+            return None
+        try:
+            files = sorted(
+                os.path.join(journal_path, f)
+                for f in os.listdir(journal_path)
+                if f.startswith("Journal.") and f.endswith(".log")
+            )
+            if not files:
+                return None
+            latest = files[-1]
+            size = os.path.getsize(latest)
+            start = max(0, size - int(tail_bytes))
+            with open(latest, "rb") as f:
+                f.seek(start)
+                content = f.read().decode("utf-8", errors="ignore")
+            lines = content.splitlines()
+            if start > 0 and lines:
+                lines = lines[1:]
+            commander = None
+            fid = None
+            for line in reversed(lines):
+                try:
+                    raw = json.loads(line)
+                except Exception:
+                    continue
+                ev = raw.get("event")
+                if ev == "LoadGame":
+                    commander = raw.get("Commander") or commander
+                    fid = raw.get("FID") or fid
+                    if commander:
+                        return {"commander": commander, "fid": fid or "", "journal_file": latest}
+                if ev == "Commander":
+                    commander = raw.get("Name") or commander
+                    fid = raw.get("FID") or fid
+                    if commander:
+                        return {"commander": commander, "fid": fid or "", "journal_file": latest}
+        except Exception:
+            return None
+        return None
+
     def _worker(self):
         while self.is_running:
             t0 = time.perf_counter()
@@ -289,7 +333,8 @@ class JournalWatcher:
                 "type": ev,
                 "raw": data,
                 "data": {
-                    "name": data.get("Name")
+                    "name": data.get("Name"),
+                    "fid": data.get("FID"),
                 }
             }
         if ev == "LoadGame":
@@ -298,6 +343,7 @@ class JournalWatcher:
                 "raw": data,
                 "data": {
                     "commander": data.get("Commander"),
+                    "fid": data.get("FID"),
                     "gameversion": data.get("gameversion"),
                     "build": data.get("build"),
                     "credits": data.get("Credits"),

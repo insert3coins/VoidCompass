@@ -2,6 +2,9 @@ import json
 import os
 import sqlite3
 import time
+import shutil
+
+from config import get_active_profile, get_profile_file
 
 SCAN_HISTORY_FILE = "scan_history.json"
 DB_FILE = "exploration_data.db"
@@ -9,9 +12,27 @@ SCAN_CACHE_FILE = "scan_cache.json"
 
 
 class DashboardDBMixin:
+    def _profile_file(self, filename):
+        return get_profile_file(get_active_profile(self.config), filename)
+
+    def _copy_legacy_profile_file(self, filename):
+        src = os.path.abspath(filename)
+        dst = self._profile_file(filename)
+        if os.path.exists(dst) or not os.path.exists(src):
+            return dst
+        if len(self.config.get("commander_profiles", {})) > 1:
+            return dst
+        try:
+            shutil.copy2(src, dst)
+        except Exception:
+            pass
+        return dst
+
     def init_db(self):
         """Initialize SQLite database and migrate JSON if needed."""
-        self.conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+        db_path = self._copy_legacy_profile_file(DB_FILE)
+        self.db_path = db_path
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self._db_last_commit_ts = time.time()
         self._db_commit_interval_s = max(0.05, float(self.config.get("db_commit_interval_ms", 250)) / 1000.0)
         with self.db_lock:
@@ -72,7 +93,7 @@ class DashboardDBMixin:
             )
             self.conn.commit()
 
-        if os.path.exists(SCAN_HISTORY_FILE):
+        if os.path.exists(self._profile_file(SCAN_HISTORY_FILE)) or os.path.exists(SCAN_HISTORY_FILE):
             self.migrate_json_history()
 
     def _db_commit(self, reason=""):
@@ -96,10 +117,11 @@ class DashboardDBMixin:
             self._db_commit(reason=reason)
 
     def import_scan_cache_json(self):
-        if not os.path.exists(SCAN_CACHE_FILE):
+        scan_cache_file = self._copy_legacy_profile_file(SCAN_CACHE_FILE)
+        if not os.path.exists(scan_cache_file):
             return
         try:
-            with open(SCAN_CACHE_FILE, "r", encoding="utf-8") as f:
+            with open(scan_cache_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except Exception:
             return
@@ -158,7 +180,7 @@ class DashboardDBMixin:
                 return
 
         try:
-            os.rename(SCAN_CACHE_FILE, SCAN_CACHE_FILE + ".bak")
+            os.rename(scan_cache_file, scan_cache_file + ".bak")
         except Exception:
             pass
 
@@ -202,7 +224,8 @@ class DashboardDBMixin:
     def migrate_json_history(self):
         self.log("📦 MIGRATING HISTORY TO DATABASE...")
         try:
-            with open(SCAN_HISTORY_FILE, "r") as f:
+            scan_history_file = self._copy_legacy_profile_file(SCAN_HISTORY_FILE)
+            with open(scan_history_file, "r") as f:
                 data = json.load(f)
 
             with self.db_lock:
@@ -223,7 +246,7 @@ class DashboardDBMixin:
                     self.conn.rollback()
                     raise
 
-            os.rename(SCAN_HISTORY_FILE, SCAN_HISTORY_FILE + ".bak")
+            os.rename(scan_history_file, scan_history_file + ".bak")
             self.log("✅ MIGRATION COMPLETE.")
         except Exception as e:
             self.log(f"❌ MIGRATION FAILED: {e}")

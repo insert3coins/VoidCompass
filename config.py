@@ -1,5 +1,6 @@
 import os
 import json
+import re
 
 
 def _get_config_file():
@@ -9,6 +10,7 @@ def _get_config_file():
 
 
 CONFIG_FILE = _get_config_file()
+PROFILE_DIR = os.path.abspath(os.path.join(os.getcwd(), "profiles"))
 DEPRECATED_CONFIG_KEYS = (
     'scan_overlay_enabled',
     'scan_hud_x',
@@ -51,6 +53,75 @@ COLOR_ACCENT = '#00d1ff'
 COLOR_ORANGE = '#FF7100'
 COLOR_TEXT = '#e0e0e0'
 COLOR_GREEN = '#00ff00'
+
+
+def commander_profile_key(commander_name=None, fid=None):
+    """Return a filesystem-safe stable profile key for a commander."""
+    name = str(commander_name or "Unknown Commander").strip() or "Unknown Commander"
+    fid_text = str(fid or "").strip()
+    base = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("._-").lower()
+    if not base:
+        base = "unknown_commander"
+    if fid_text:
+        fid_slug = re.sub(r"[^A-Za-z0-9._-]+", "_", fid_text).strip("._-").lower()
+        if fid_slug:
+            base = f"{base}_{fid_slug}"
+    return base[:80]
+
+
+def get_profile_dir(profile_key):
+    key = commander_profile_key(profile_key or "Unknown Commander")
+    path = os.path.abspath(os.path.join(PROFILE_DIR, key))
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def get_profile_file(profile_key, filename):
+    return os.path.join(get_profile_dir(profile_key), filename)
+
+
+def get_active_profile(config):
+    key = config.get("active_commander_profile") or commander_profile_key(
+        config.get("active_commander_name") or "Unknown Commander",
+        config.get("active_commander_fid"),
+    )
+    return key
+
+
+def apply_profile_config(config, profile_key=None):
+    """Overlay commander-specific settings onto the mutable runtime config."""
+    key = profile_key or get_active_profile(config)
+    profiles = config.setdefault("commander_profiles", {})
+    profile = profiles.setdefault(key, {})
+    is_new_profile = not bool(profile)
+    config["active_commander_profile"] = key
+    config["active_commander_name"] = profile.get("commander_name", config.get("active_commander_name", "Unknown Commander"))
+    config["active_commander_fid"] = profile.get("fid", config.get("active_commander_fid", ""))
+    if "edsm_cmdr_name" not in profile:
+        profile["edsm_cmdr_name"] = (
+            config.get("edsm_cmdr_name", "") if is_new_profile else profile.get("commander_name", "")
+        )
+    if "edsm_api_key" not in profile:
+        profile["edsm_api_key"] = config.get("edsm_api_key", "") if is_new_profile else ""
+    if "edsm_upload_enabled" not in profile:
+        profile["edsm_upload_enabled"] = bool(config.get("edsm_upload_enabled", False)) if is_new_profile else False
+    for setting in ("edsm_cmdr_name", "edsm_api_key", "edsm_upload_enabled"):
+        config[setting] = profile.get(setting, "" if setting != "edsm_upload_enabled" else False)
+    return config
+
+
+def save_active_profile_config(config):
+    key = get_active_profile(config)
+    profiles = config.setdefault("commander_profiles", {})
+    profile = profiles.setdefault(key, {})
+    profile["commander_name"] = config.get("active_commander_name", "Unknown Commander")
+    profile["fid"] = config.get("active_commander_fid", "")
+    for setting in ("edsm_cmdr_name", "edsm_api_key", "edsm_upload_enabled"):
+        profile[setting] = config.get(setting, "" if setting != "edsm_upload_enabled" else False)
+    config["active_commander_profile"] = key
+    return profile
+
+
 def load_config():
     """Loads configuration from file or returns defaults."""
     defaults = {
@@ -101,6 +172,10 @@ def load_config():
         'edsm_upload_enabled': False,
         'edsm_game_version': '',
         'edsm_game_build': '',
+        'active_commander_profile': 'unknown_commander',
+        'active_commander_name': 'Unknown Commander',
+        'active_commander_fid': '',
+        'commander_profiles': {},
         'engineer_window_geometry': '740x560',
         'bgs_window_geometry': '880x580',
     }
@@ -119,4 +194,5 @@ def load_config():
             default_path = os.path.join(user_profile, 'Saved Games', 'Frontier Developments', 'Elite Dangerous')
             if os.path.exists(default_path):
                 defaults['journal_path'] = default_path
+    apply_profile_config(defaults)
     return defaults

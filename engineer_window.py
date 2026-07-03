@@ -111,8 +111,8 @@ def get_material_category(key: str) -> str:
     return _MAT_CATEGORY.get(key.lower(), "manufactured")
 
 
-def load_engineer_materials() -> dict:
-    path = os.path.join(os.getcwd(), ENGINEER_MATERIALS_FILE)
+def load_engineer_materials(path=None) -> dict:
+    path = path or os.path.join(os.getcwd(), ENGINEER_MATERIALS_FILE)
     if not os.path.exists(path):
         return {"raw": {}, "manufactured": {}, "encoded": {}, "last_updated": None}
     try:
@@ -125,8 +125,8 @@ def load_engineer_materials() -> dict:
         return {"raw": {}, "manufactured": {}, "encoded": {}, "last_updated": None}
 
 
-def save_engineer_materials(materials: dict):
-    path = os.path.join(os.getcwd(), ENGINEER_MATERIALS_FILE)
+def save_engineer_materials(materials: dict, path=None):
+    path = path or os.path.join(os.getcwd(), ENGINEER_MATERIALS_FILE)
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(materials, f, indent=2)
