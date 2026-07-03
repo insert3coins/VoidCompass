@@ -7,11 +7,14 @@ import logging
 import time
 import tkinter as tk
 import webbrowser
+import shutil
 from collections import deque
 
 from config import (
     load_config, CONFIG_FILE,
-    COLOR_BG, COLOR_ACCENT, COLOR_TEXT
+    COLOR_BG, COLOR_ACCENT, COLOR_TEXT,
+    apply_profile_config, commander_profile_key, get_active_profile,
+    get_profile_file, save_active_profile_config,
 )
 from version import APP_VERSION
 from hud import TacticalHUD
@@ -51,9 +54,152 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         except Exception:
             return default
 
+    def _profile_path(self, filename):
+        return get_profile_file(get_active_profile(self.config), filename)
+
+    def _copy_legacy_to_profile(self, filename):
+        src = os.path.abspath(filename)
+        dst = self._profile_path(filename)
+        if os.path.exists(dst) or not os.path.exists(src):
+            return dst
+        if len(self.config.get("commander_profiles", {})) > 1:
+            return dst
+        try:
+            shutil.copy2(src, dst)
+        except Exception:
+            pass
+        return dst
+
+    def _refresh_profile_paths(self):
+        self.config["carrier_state_file"] = self._copy_legacy_to_profile("carrier_state.json")
+        self.config["colonisation_data_file"] = self._copy_legacy_to_profile("colonisation_data.json")
+        self.config["engineer_materials_file"] = self._copy_legacy_to_profile("engineer_materials.json")
+        self.config["mining_db_file"] = self._copy_legacy_to_profile("mining_data.db")
+        self.config["mining_sessions_file"] = self._copy_legacy_to_profile("mining_sessions.json")
+        self.config["waypoints_file"] = self._copy_legacy_to_profile("waypoints.json")
+
+    def _prepare_commander_profile_from_journal(self):
+        detected = JournalWatcher.detect_latest_commander(self.config.get("journal_path"))
+        if detected:
+            name = detected.get("commander") or "Unknown Commander"
+            fid = detected.get("fid") or ""
+            key = commander_profile_key(name, fid)
+            profiles = self.config.setdefault("commander_profiles", {})
+            profile = profiles.setdefault(key, {})
+            profile["commander_name"] = name
+            profile["fid"] = fid
+            if not profile.get("edsm_cmdr_name"):
+                profile["edsm_cmdr_name"] = name
+            self.config["active_commander_profile"] = key
+            self.config["active_commander_name"] = name
+            self.config["active_commander_fid"] = fid
+        apply_profile_config(self.config)
+        self._refresh_profile_paths()
+
+    def _persist_config(self):
+        save_active_profile_config(self.config)
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(self.config, f, indent=4)
+
+    def _save_colonisation_data(self, projects):
+        save_colonisation_data(projects, self.config.get("colonisation_data_file"))
+
+    def _save_engineer_materials(self, materials):
+        save_engineer_materials(materials, self.config.get("engineer_materials_file"))
+
+    def _switch_commander_profile(self, commander_name, fid=None):
+        if not commander_name:
+            return
+        new_key = commander_profile_key(commander_name, fid)
+        old_key = get_active_profile(self.config)
+        if new_key == old_key:
+            self.config["active_commander_name"] = commander_name
+            self.config["active_commander_fid"] = fid or self.config.get("active_commander_fid", "")
+            save_active_profile_config(self.config)
+            return
+
+        try:
+            self.conn.commit()
+            self.conn.close()
+        except Exception:
+            pass
+
+        save_active_profile_config(self.config)
+        profiles = self.config.setdefault("commander_profiles", {})
+        profile = profiles.setdefault(new_key, {})
+        profile["commander_name"] = commander_name
+        profile["fid"] = fid or profile.get("fid", "")
+        if not profile.get("edsm_cmdr_name"):
+            profile["edsm_cmdr_name"] = commander_name
+        if old_key == "unknown_commander":
+            for filename in (
+                "exploration_data.db",
+                "carrier_state.json",
+                "colonisation_data.json",
+                "engineer_materials.json",
+                "mining_data.db",
+                "mining_sessions.json",
+                "waypoints.json",
+            ):
+                src = get_profile_file(old_key, filename)
+                dst = get_profile_file(new_key, filename)
+                if os.path.exists(src) and not os.path.exists(dst):
+                    try:
+                        shutil.copy2(src, dst)
+                    except Exception:
+                        pass
+        self.config["active_commander_profile"] = new_key
+        self.config["active_commander_name"] = commander_name
+        self.config["active_commander_fid"] = fid or profile.get("fid", "")
+        apply_profile_config(self.config, new_key)
+        self._refresh_profile_paths()
+        self.init_db()
+        self.edsm.config = self.config
+        self.edsm.set_db(self.conn, self.db_lock)
+        self.carrier_tracker.set_config(self.config)
+        self.colonisation_projects = self.db_load_colonisation_projects()
+        for mid, jp in load_colonisation_data(self.config.get("colonisation_data_file")).items():
+            if mid in self.colonisation_projects:
+                for k, v in jp.items():
+                    if k not in self.colonisation_projects[mid] or not self.colonisation_projects[mid].get(k):
+                        self.colonisation_projects[mid][k] = v
+            else:
+                self.colonisation_projects[mid] = jp
+        self.engineer_materials = load_engineer_materials(self.config.get("engineer_materials_file"))
+        self.waypoint_manager = WaypointManager(self.config.get("waypoints_file"))
+        for attr in ("mining_window", "colonization_window", "engineer_window", "bgs_window"):
+            win = getattr(self, attr, None)
+            try:
+                if win and win.is_open():
+                    if hasattr(win, "win"):
+                        win.win.destroy()
+                    else:
+                        win.destroy()
+            except Exception:
+                pass
+            setattr(self, attr, None)
+        try:
+            if self.route_plotter and self.route_plotter.win.winfo_exists():
+                self.route_plotter.on_close()
+        except Exception:
+            pass
+        self.route_plotter = None
+        try:
+            if self.carrier_window and self.carrier_window.is_open():
+                self.carrier_window.refresh()
+        except Exception:
+            pass
+        self._persist_config()
+        self.load_system_from_db(self.current_sys)
+        self.update_dashboard_ui()
+        self.update_hud()
+        self.update_carrier_panel()
+        self.add_event_feed_entry("PROFILE", f"Switched to commander profile: {commander_name}", severity="INFO")
+
     def __init__(self, root):
         self.root = root
         self.config = load_config()
+        self._prepare_commander_profile_from_journal()
         self.root.title(f"VOID COMPASS // v{APP_VERSION}")
         self.root.geometry(self.config.get("main_geometry", "1000x700"))
         self.root.configure(bg=COLOR_BG)
@@ -82,6 +228,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.system_undiscovered = False
         self.fss_all_bodies = False
         self.cmdr_name = "CMDR"
+        self.cmdr_fid = ""
         self.cmdr_balance = None
         self.cmdr_loan = None
         self.last_scan_event = None
@@ -170,7 +317,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.runtime_trace.start()
         
         self.setup_layout()
-        self.waypoint_manager = WaypointManager()
+        self.waypoint_manager = WaypointManager(self.config.get("waypoints_file"))
         self.route_plotter = None
         self.target_waypoint = None
         self.waypoint_cache = {}
@@ -193,6 +340,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.bgs_window = None
         self._carrier_panel_tick_job = None
         self.carrier_tracker = CarrierTracker()
+        self._refresh_profile_paths()
         self.carrier_tracker.set_config(self.config)
         self.carrier_tracker.on_panel_updated = self._on_carrier_panel_updated
         self.carrier_tracker.on_status_changed = self._on_carrier_status_changed
@@ -251,7 +399,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.edsm.set_db(self.conn, self.db_lock)
         self.colonisation_projects = self.db_load_colonisation_projects()
         # Merge JSON store (carries notes and any extra fields the DB doesn't have)
-        _json_projects = load_colonisation_data()
+        _json_projects = load_colonisation_data(self.config.get("colonisation_data_file"))
         for mid, jp in _json_projects.items():
             if mid in self.colonisation_projects:
                 # Copy over fields present in JSON but absent in DB (e.g. notes)
@@ -260,7 +408,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.colonisation_projects[mid][k] = v
             else:
                 self.colonisation_projects[mid] = jp
-        self.engineer_materials = load_engineer_materials()
+        self.engineer_materials = load_engineer_materials(self.config.get("engineer_materials_file"))
         self.import_scan_cache_json()
         
         self.watcher = JournalWatcher(
@@ -540,8 +688,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         except Exception:
             pass
         self.config["main_geometry"] = self.root.geometry()
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(self.config, f, indent=4)
+        self._persist_config()
         if hasattr(self, 'conn'):
             try:
                 self.conn.commit()
@@ -558,8 +705,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _save_config_file(self):
         try:
-            with open(CONFIG_FILE, 'w') as f:
-                json.dump(self.config, f, indent=4)
+            self._persist_config()
         except Exception:
             pass
 
@@ -680,7 +826,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.root,
             self.config,
             self.colonisation_projects,
-            save_colonisation_data,
+            self._save_colonisation_data,
             overlay_callback=self.toggle_colony_overlay,
         )
 
@@ -712,7 +858,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.root,
             self.config,
             self.engineer_materials,
-            save_engineer_materials,
+            self._save_engineer_materials,
         )
 
     def open_bgs_window(self):
@@ -1292,6 +1438,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         elif ev == "Commander":
             self.cmdr_name = d.get("name", "CMDR")
+            self.cmdr_fid = d.get("fid") or self.cmdr_fid
+            self._switch_commander_profile(self.cmdr_name, self.cmdr_fid)
             self._queue_edsm_upload(raw, allow_startup=True)
 
         elif ev in ("Rank", "Progress", "Reputation", "Statistics"):
@@ -1313,6 +1461,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         elif ev == "LoadGame":
             self.cmdr_name = d.get("commander", "CMDR")
+            self.cmdr_fid = d.get("fid") or self.cmdr_fid
+            self._switch_commander_profile(self.cmdr_name, self.cmdr_fid)
             game_version = d.get("gameversion")
             game_build = d.get("build")
             if game_version and game_build:
@@ -1807,7 +1957,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 }
                 self.db_save_colonisation_project(self.colonisation_projects[mid])
                 if not self.batch_mode:
-                    save_colonisation_data(self.colonisation_projects)
+                    self._save_colonisation_data(self.colonisation_projects)
                     if self.colonization_window and self.colonization_window.is_open():
                         self.colonization_window.refresh()
                     if self.colony_overlay:
@@ -1826,7 +1976,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         r["provided"] = min(r["required"], r.get("provided", 0) + delta)
                 self.db_save_colonisation_project(proj)
                 if not self.batch_mode:
-                    save_colonisation_data(self.colonisation_projects)
+                    self._save_colonisation_data(self.colonisation_projects)
                     if self.colonization_window and self.colonization_window.is_open():
                         self.colonization_window.refresh()
                     if self.colony_overlay:
@@ -1865,7 +2015,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if key:
                     mats[cat_key][key] = {"name": name, "count": count}
         mats["last_updated"] = time.time()
-        save_engineer_materials(mats)
+        self._save_engineer_materials(mats)
         if self.engineer_window and self.engineer_window.is_open():
             self.engineer_window.refresh()
 
@@ -1880,7 +2030,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif delta > 0:
             cat_data[key] = {"name": name or key.title(), "count": delta}
         self.engineer_materials["last_updated"] = time.time()
-        save_engineer_materials(self.engineer_materials)
+        self._save_engineer_materials(self.engineer_materials)
         if self.engineer_window and self.engineer_window.is_open():
             self.engineer_window.refresh()
 

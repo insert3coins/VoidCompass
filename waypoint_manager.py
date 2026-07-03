@@ -5,14 +5,15 @@ import math
 WAYPOINTS_FILE = "waypoints.json"
 
 class WaypointManager:
-    def __init__(self):
+    def __init__(self, path=None):
+        self.path = path or WAYPOINTS_FILE
         self.waypoints = []
         self.load()
 
     def load(self):
-        if os.path.exists(WAYPOINTS_FILE):
+        if os.path.exists(self.path):
             try:
-                with open(WAYPOINTS_FILE, 'r') as f:
+                with open(self.path, 'r') as f:
                     data = json.load(f)
                     self.waypoints = data
             except:
@@ -20,7 +21,7 @@ class WaypointManager:
 
     def save(self):
         try:
-            with open(WAYPOINTS_FILE, 'w') as f:
+            with open(self.path, 'w') as f:
                 json.dump(self.waypoints, f, indent=4)
         except:
             pass

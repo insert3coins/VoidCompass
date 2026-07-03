@@ -13,11 +13,12 @@ from mining_data import MiningDataStore, normalize_material_name, normalize_ring
 MINING_SESSIONS_FILE = "mining_sessions.json"
 
 
-def load_mining_sessions_json():
+def load_mining_sessions_json(path=None):
     """Load all saved sessions from the JSON file. Returns a list ordered newest-first."""
+    path = path or MINING_SESSIONS_FILE
     try:
-        if os.path.exists(MINING_SESSIONS_FILE):
-            with open(MINING_SESSIONS_FILE, "r", encoding="utf-8") as f:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, list):
                 return data
@@ -26,10 +27,11 @@ def load_mining_sessions_json():
     return []
 
 
-def save_mining_sessions_json(sessions):
+def save_mining_sessions_json(sessions, path=None):
     """Persist the sessions list to the JSON file (newest-first)."""
+    path = path or MINING_SESSIONS_FILE
     try:
-        with open(MINING_SESSIONS_FILE, "w", encoding="utf-8") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(sessions, f, indent=2, ensure_ascii=False)
     except Exception:
         pass
@@ -145,9 +147,10 @@ class MiningWindow:
         self.hotspots = {}
         self.missions = {}
         self.last_status_cargo = None
-        self.data_store = MiningDataStore()
+        self.mining_sessions_file = self.config.get("mining_sessions_file", MINING_SESSIONS_FILE)
+        self.data_store = MiningDataStore(self.config.get("mining_db_file"))
         self.session_id = None
-        self._json_sessions = load_mining_sessions_json()   # in-memory list, newest-first
+        self._json_sessions = load_mining_sessions_json(self.mining_sessions_file)   # in-memory list, newest-first
         self._json_session_key = None                        # started_at key for current session
         self.search_results = []
         self.search_running = False
@@ -528,7 +531,7 @@ class MiningWindow:
             "in_progress": True,
         }
         self._json_sessions.insert(0, record)
-        save_mining_sessions_json(self._json_sessions)
+        save_mining_sessions_json(self._json_sessions, self.mining_sessions_file)
         self._refresh_all()
 
     def stop_session(self):
@@ -1101,7 +1104,7 @@ class MiningWindow:
                 if ended_at:
                     rec["ended_at"] = ended_at
                 break
-        save_mining_sessions_json(self._json_sessions)
+        save_mining_sessions_json(self._json_sessions, self.mining_sessions_file)
 
     def _save_current_session_progress(self):
         if not self.session_active or not self.session_id:

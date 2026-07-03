@@ -24,9 +24,9 @@ from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, CONFIG_FILE
 COLONISATION_DATA_FILE = "colonisation_data.json"
 
 
-def load_colonisation_data() -> dict:
+def load_colonisation_data(path=None) -> dict:
     """Load all tracked projects from JSON.  Returns {market_id(int): project_dict}."""
-    path = os.path.join(os.getcwd(), COLONISATION_DATA_FILE)
+    path = path or os.path.join(os.getcwd(), COLONISATION_DATA_FILE)
     if not os.path.exists(path):
         return {}
     try:
@@ -38,9 +38,9 @@ def load_colonisation_data() -> dict:
         return {}
 
 
-def save_colonisation_data(projects: dict):
+def save_colonisation_data(projects: dict, path=None):
     """Save all tracked projects to JSON."""
-    path = os.path.join(os.getcwd(), COLONISATION_DATA_FILE)
+    path = path or os.path.join(os.getcwd(), COLONISATION_DATA_FILE)
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump({str(k): v for k, v in projects.items()}, f, indent=2)

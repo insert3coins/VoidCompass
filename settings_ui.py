@@ -3,7 +3,7 @@ import os
 import tkinter as tk
 import tkinter.messagebox
 
-from config import CONFIG_FILE, DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
+from config import CONFIG_FILE, DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_active_profile_config
 
 
 UI_BG = "#080a0d"
@@ -240,6 +240,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
             "edsm_upload_enabled": edsm_upload_var.get(),
             "settings_geometry": win.geometry(),
         })
+        save_active_profile_config(config)
         remove_deprecated_keys()
 
         with open(CONFIG_FILE, "w") as f:
@@ -250,6 +251,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
 
     def close_window():
         config["settings_geometry"] = win.geometry()
+        save_active_profile_config(config)
         remove_deprecated_keys()
         with open(CONFIG_FILE, "w") as f:
             json.dump(config, f, indent=4)

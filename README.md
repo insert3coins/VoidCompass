@@ -26,6 +26,7 @@ Void Compass is a real-time Elite Dangerous companion app with a desktop dashboa
 - Auto-copy waypoint support (including startup behavior).
 - Screenshot converter (BMP -> PNG) with system/timestamp naming and optional BMP cleanup.
 - Auto-saved window positions/geometries for dashboard, settings, overlays, and route tools.
+- Multi-commander profiles detected from `LoadGame` / `Commander` journal events, with separate exploration DB, carrier state, colonisation data, engineer materials, mining data, waypoint state, and EDSM credentials per commander.
 
 ![Tactical HUD](https://raw.githubusercontent.com/insert3coins/VoidCompass-Release/main/NavHud.PNG "Tactical HUD")
 
@@ -47,6 +48,9 @@ Use the in-app **[ CONFIGURATION ]** panel or edit `config.json` directly.
 - `cargo_hud_x`, `cargo_hud_y`: Cargo HUD position.
 - `scan_hud_x`, `scan_hud_y`: Scan HUD position.
 - `main_geometry`, `settings_geometry`: Saved window geometry.
+- `commander_profiles`: Per-commander profile settings. Void Compass manages this automatically from journal commander/FID data.
+
+Commander-specific data is stored under `profiles\<commander>_<fid>\`. On first run after upgrading, existing single-account state files are copied into the first detected profile.
 
 Default journal path target:
 
