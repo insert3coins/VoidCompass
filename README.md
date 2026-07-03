@@ -17,6 +17,7 @@ Void Compass is a real-time Elite Dangerous companion app with a desktop dashboa
 - Cargo overlay for live inventory/capacity.
 - Scan results overlay for exploration/FSS workflow.
 - Route Planner window: waypoint add/edit/delete/reorder and visited-state tracking.
+- Squadron window with journal-derived squadron name/rank and optional Frontier squadron tag lookup.
 - Batch actions: copy, mark done/todo, delete.
 - Duplicate handling modes: `skip`, `append note`, `keep both`.
 - Route health indicators: pending, visited, missing coords, duplicates.

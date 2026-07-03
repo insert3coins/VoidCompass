@@ -350,6 +350,33 @@ class JournalWatcher:
                     "loan": data.get("Loan"),
                 }
             }
+        if ev == "SquadronStartup":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "squadron_name": data.get("SquadronName"),
+                    "current_rank": data.get("CurrentRank"),
+                }
+            }
+        if ev in ("SquadronPromotion", "SquadronDemotion"):
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "squadron_name": data.get("SquadronName"),
+                    "old_rank": data.get("OldRank"),
+                    "new_rank": data.get("NewRank"),
+                }
+            }
+        if ev in ("AppliedToSquadron", "InvitedToSquadron", "JoinedSquadron", "KickedFromSquadron", "LeftSquadron", "DisbandedSquadron", "WonATrophyForSquadron"):
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "squadron_name": data.get("SquadronName"),
+                }
+            }
         if ev in ("Location", "FSDJump", "StartJump"):
             return {
                 "type": ev,

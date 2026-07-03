@@ -97,7 +97,13 @@ def apply_profile_config(config, profile_key=None):
     config["active_commander_profile"] = key
     config["active_commander_name"] = profile.get("commander_name", config.get("active_commander_name", "Unknown Commander"))
     config["active_commander_fid"] = profile.get("fid", config.get("active_commander_fid", ""))
-    text_profile_settings = ("edsm_cmdr_name", "edsm_api_key", "carrier_discord_webhook_url")
+    text_profile_settings = (
+        "edsm_cmdr_name",
+        "edsm_api_key",
+        "carrier_discord_webhook_url",
+        "squadron_lookup_tag",
+        "squadron_platform",
+    )
     bool_profile_settings = (
         "edsm_upload_enabled",
         "overlay_enabled",
@@ -112,6 +118,8 @@ def apply_profile_config(config, profile_key=None):
         "edsm_cmdr_name": profile.get("commander_name", ""),
         "edsm_api_key": "",
         "carrier_discord_webhook_url": "",
+        "squadron_lookup_tag": "",
+        "squadron_platform": "PC",
     }
     bool_defaults = {
         "edsm_upload_enabled": False,
@@ -142,7 +150,7 @@ def save_active_profile_config(config):
     profile = profiles.setdefault(key, {})
     profile["commander_name"] = config.get("active_commander_name", "Unknown Commander")
     profile["fid"] = config.get("active_commander_fid", "")
-    for setting in ("edsm_cmdr_name", "edsm_api_key", "carrier_discord_webhook_url"):
+    for setting in ("edsm_cmdr_name", "edsm_api_key", "carrier_discord_webhook_url", "squadron_lookup_tag", "squadron_platform"):
         profile[setting] = config.get(setting, "")
     for setting in (
         "edsm_upload_enabled",
@@ -209,12 +217,15 @@ def load_config():
         'edsm_upload_enabled': False,
         'edsm_game_version': '',
         'edsm_game_build': '',
+        'squadron_lookup_tag': '',
+        'squadron_platform': 'PC',
         'active_commander_profile': 'unknown_commander',
         'active_commander_name': 'Unknown Commander',
         'active_commander_fid': '',
         'commander_profiles': {},
         'engineer_window_geometry': '740x560',
         'bgs_window_geometry': '880x580',
+        'squadron_window_geometry': '760x520',
     }
     if os.path.exists(CONFIG_FILE):
         try:
