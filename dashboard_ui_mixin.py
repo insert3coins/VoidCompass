@@ -204,6 +204,16 @@ class DashboardUIMixin:
                                   bg="#0c1014", anchor="w")
         self.alert_lbl.pack(anchor="w")
 
+        cmdr_zone = tk.Frame(cmd_strip, bg="#0c1014")
+        cmdr_zone.pack(side=tk.RIGHT, fill=tk.Y, padx=(14, 6))
+        tk.Frame(cmd_strip, bg=self.UI_BORDER, width=1).pack(side=tk.RIGHT, fill=tk.Y, pady=6)
+        tk.Label(cmdr_zone, text="CMDR", font=("Segoe UI", 7, "bold"),
+                 fg=self.UI_DIM, bg="#0c1014").pack(anchor="e", pady=(3, 0))
+        self.summary_cmdr = tk.Label(cmdr_zone, text="UNKNOWN",
+                                     font=self.UI_MONO_BOLD, fg=COLOR_ACCENT,
+                                     bg="#0c1014", anchor="e")
+        self.summary_cmdr.pack(anchor="e")
+
         tk.Frame(self.root, bg=self.UI_BORDER, height=1).pack(fill=tk.X, padx=12, pady=(6, 0))
 
         # ── BODY ──────────────────────────────────────────────────────────
@@ -1201,6 +1211,12 @@ class DashboardUIMixin:
         self.summary_scan.config(text=f"{self.scanned}/{self.total}")
         self.summary_traffic.config(text=f"{traffic_day}/{traffic_week}/{traffic_total}")
         self.summary_session.config(text=self._get_session_elapsed_text())
+        cmdr_text = (
+            getattr(self, "cmdr_name", None)
+            or self.config.get("active_commander_name")
+            or "UNKNOWN"
+        )
+        self.summary_cmdr.config(text=str(cmdr_text).upper())
 
         # NAVIGATION
         self.card_nav.line1.config(text=f"Target: {self.dest_name or 'NO ROUTE'}")
