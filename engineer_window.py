@@ -12,7 +12,7 @@ import time
 import tkinter as tk
 from datetime import datetime
 
-from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, CONFIG_FILE
+from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 
 ENGINEER_MATERIALS_FILE = "engineer_materials.json"
 
@@ -188,8 +188,7 @@ class EngineerWindow:
     def _on_close(self):
         try:
             self.config["engineer_window_geometry"] = self.win.geometry()
-            with open(CONFIG_FILE, "w") as f:
-                json.dump(self.config, f, indent=4)
+            save_config(self.config)
         except Exception:
             pass
         try:

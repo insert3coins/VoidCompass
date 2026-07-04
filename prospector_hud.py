@@ -6,9 +6,8 @@ refined-since-prospect counter.  Auto-hides after a configurable timeout.
 Follows the same pattern as ScanHUD and CargoHUD.
 """
 
-import json
 import tkinter as tk
-from config import CONFIG_FILE, COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE
+from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, save_config
 
 # Chroma-key colour used for window transparency (must never appear in content)
 _CHROMA = "#ff00ff"
@@ -218,8 +217,7 @@ class ProspectorHUD:
         self.config["prospector_hud_x"] = self.win.winfo_x()
         self.config["prospector_hud_y"] = self.win.winfo_y()
         try:
-            with open(CONFIG_FILE, "w") as f:
-                json.dump(self.config, f, indent=4)
+            save_config(self.config)
         except Exception:
             pass
 

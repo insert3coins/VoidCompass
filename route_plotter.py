@@ -4,7 +4,7 @@ import os
 import csv
 import time
 from tkinter import messagebox, filedialog
-from config import COLOR_BG, COLOR_PANEL, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, CONFIG_FILE
+from config import COLOR_BG, COLOR_PANEL, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 from waypoint_manager import WaypointManager
 
 
@@ -444,8 +444,7 @@ class RoutePlotter:
         def save_geometry():
             self.config["edit_dialog_geometry"] = dlg.geometry()
             try:
-                with open(CONFIG_FILE, "w") as f:
-                    json.dump(self.config, f, indent=4)
+                save_config(self.config)
             except Exception:
                 pass
 
@@ -573,8 +572,7 @@ class RoutePlotter:
         def save_geometry():
             self.config["import_dialog_geometry"] = dlg.geometry()
             try:
-                with open(CONFIG_FILE, "w") as f:
-                    json.dump(self.config, f, indent=4)
+                save_config(self.config)
             except Exception:
                 pass
 
@@ -991,8 +989,7 @@ class RoutePlotter:
         if self.config:
             self.config["route_plotter_geometry"] = self.win.geometry()
             try:
-                with open(CONFIG_FILE, "w") as f:
-                    json.dump(self.config, f, indent=4)
+                save_config(self.config)
             except Exception:
                 pass
         self.win.destroy()

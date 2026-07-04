@@ -7,7 +7,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from datetime import datetime
 
-from config import CONFIG_FILE, COLOR_ACCENT, COLOR_BG, COLOR_GREEN, COLOR_ORANGE, COLOR_TEXT
+from config import COLOR_ACCENT, COLOR_BG, COLOR_GREEN, COLOR_ORANGE, COLOR_TEXT, save_config
 from mining_data import MiningDataStore, normalize_material_name, normalize_ring_type, search_spansh_buyers, search_spansh_rings
 
 MINING_SESSIONS_FILE = "mining_sessions.json"
@@ -498,8 +498,7 @@ class MiningWindow:
         self._save_current_session_progress()
         self.config["mining_geometry"] = self.win.geometry()
         try:
-            with open(CONFIG_FILE, "w") as f:
-                json.dump(self.config, f, indent=4)
+            save_config(self.config)
         except Exception:
             pass
         self.win.destroy()

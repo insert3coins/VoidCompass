@@ -6,7 +6,7 @@ All data comes from CarrierTracker.carrier_data.
 import tkinter as tk
 from datetime import datetime, timezone
 
-from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
+from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 
 # Weekly upkeep rates (active_cr, paused_cr) per service — from EDCM
 _SERVICE_UPKEEP = {
@@ -98,10 +98,7 @@ class CarrierWindow:
     def _on_close(self):
         try:
             self.config["carrier_window_geometry"] = self.win.geometry()
-            from config import CONFIG_FILE
-            import json
-            with open(CONFIG_FILE, "w") as _f:
-                json.dump(self.config, _f, indent=4)
+            save_config(self.config)
         except Exception:
             pass
         self.tracker.on_updated = None

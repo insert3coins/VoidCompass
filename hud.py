@@ -1,8 +1,7 @@
 import tkinter as tk
 import tkinter.font as tkfont
-import json
 import time
-from config import CONFIG_FILE, COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE
+from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, save_config
 
 class TacticalHUD:
     def __init__(self, root, config, on_widget_click=None):
@@ -127,8 +126,7 @@ class TacticalHUD:
         self._write_config()
 
     def _write_config(self):
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(self.config, f, indent=4)
+        save_config(self.config)
 
     def _schedule_config_save(self):
         if self._save_job:
