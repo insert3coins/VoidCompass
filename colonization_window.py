@@ -17,7 +17,7 @@ import tkinter as tk
 from datetime import datetime
 from tkinter import messagebox
 
-from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, CONFIG_FILE
+from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 
 # ── JSON persistence ──────────────────────────────────────────────────────────
 
@@ -127,8 +127,7 @@ class ColonizationWindow:
             self._flush_notes()
         try:
             self.config["colonisation_window_geometry"] = self.win.geometry()
-            with open(CONFIG_FILE, "w") as f:
-                json.dump(self.config, f, indent=4)
+            save_config(self.config)
         except Exception:
             pass
         try:

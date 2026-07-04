@@ -2,7 +2,7 @@ import json
 import math
 import tkinter as tk
 
-from config import CONFIG_FILE, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
+from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 from colonisation_commodities import (
     CATEGORY_ORDER,
     SOURCE_ORDER,
@@ -246,8 +246,7 @@ class ColonyOverlay:
             pass
 
     def _write_config(self):
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(self.config, f, indent=4)
+        save_config(self.config)
 
     def _schedule_config_save(self):
         if self._save_job:

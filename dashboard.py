@@ -1,5 +1,4 @@
 import os
-import json
 import threading
 import math
 import sqlite3
@@ -14,7 +13,7 @@ from config import (
     load_config, CONFIG_FILE,
     COLOR_BG, COLOR_ACCENT, COLOR_TEXT,
     apply_profile_config, commander_profile_key, get_active_profile,
-    get_profile_file, save_active_profile_config,
+    get_profile_file, save_config, save_active_profile_config,
 )
 from version import APP_VERSION
 from hud import TacticalHUD
@@ -42,7 +41,6 @@ from engineer_window import (
     get_material_category,
 )
 from bgs_window import BGSWindow
-from squadron_window import SquadronWindow, load_squadron_state, save_squadron_state, squadron_rank_label
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
@@ -78,7 +76,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.config["mining_db_file"] = self._copy_legacy_to_profile("mining_data.db")
         self.config["mining_sessions_file"] = self._copy_legacy_to_profile("mining_sessions.json")
         self.config["waypoints_file"] = self._copy_legacy_to_profile("waypoints.json")
-        self.config["squadron_state_file"] = self._copy_legacy_to_profile("squadron_state.json")
 
     def _prepare_commander_profile_from_journal(self):
         detected = JournalWatcher.detect_latest_commander(self.config.get("journal_path"))
@@ -99,18 +96,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._refresh_profile_paths()
 
     def _persist_config(self):
-        save_active_profile_config(self.config)
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(self.config, f, indent=4)
+        save_config(self.config)
 
     def _save_colonisation_data(self, projects):
         save_colonisation_data(projects, self.config.get("colonisation_data_file"))
 
     def _save_engineer_materials(self, materials):
         save_engineer_materials(materials, self.config.get("engineer_materials_file"))
-
-    def _save_squadron_state(self, state):
-        save_squadron_state(state, self.config.get("squadron_state_file"))
 
     def _switch_commander_profile(self, commander_name, fid=None):
         if not commander_name:
@@ -150,7 +142,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "mining_data.db",
                 "mining_sessions.json",
                 "waypoints.json",
-                "squadron_state.json",
             ):
                 src = get_profile_file(old_key, filename)
                 dst = get_profile_file(new_key, filename)
@@ -178,8 +169,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.colonisation_projects[mid] = jp
         self.engineer_materials = load_engineer_materials(self.config.get("engineer_materials_file"))
         self.waypoint_manager = WaypointManager(self.config.get("waypoints_file"))
-        self.squadron_state = load_squadron_state(self.config.get("squadron_state_file"))
-        for attr in ("mining_window", "colonization_window", "engineer_window", "bgs_window", "squadron_window"):
+        for attr in ("mining_window", "colonization_window", "engineer_window", "bgs_window"):
             win = getattr(self, attr, None)
             try:
                 if win and win.is_open():
@@ -351,7 +341,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.colonization_window = None
         self.engineer_window = None
         self.bgs_window = None
-        self.squadron_window = None
         self._carrier_panel_tick_job = None
         self.carrier_tracker = CarrierTracker()
         self._refresh_profile_paths()
@@ -423,7 +412,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             else:
                 self.colonisation_projects[mid] = jp
         self.engineer_materials = load_engineer_materials(self.config.get("engineer_materials_file"))
-        self.squadron_state = load_squadron_state(self.config.get("squadron_state_file"))
         self.import_scan_cache_json()
         
         self.watcher = JournalWatcher(
@@ -887,48 +875,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.db_load_bgs_factions,
         )
 
-    def open_squadron_window(self):
-        if self.squadron_window and self.squadron_window.is_open():
-            self.squadron_window.lift()
-            return
-        self.squadron_window = SquadronWindow(
-            self.root,
-            self.config,
-            self.squadron_state,
-            self._save_squadron_state,
-        )
-
-    # ------------------------------------------------------------------
-    # Bio overlay helpers
-    # ------------------------------------------------------------------
-
-    def _update_squadron_state(self, squadron_name=None, current_rank=None, event_type=None, clear=False):
-        if not hasattr(self, "squadron_state") or not isinstance(self.squadron_state, dict):
-            self.squadron_state = {}
-
-        if clear:
-            prev_name = self.squadron_state.get("squadron_name")
-            self.squadron_state.clear()
-            self.squadron_state["last_event"] = event_type or "Squadron"
-            self.squadron_state["last_updated"] = time.time()
-            self._save_squadron_state(self.squadron_state)
-            self.add_event_feed_entry("SQUADRON", f"Squadron cleared: {prev_name or event_type}", severity="WARN")
-        else:
-            if squadron_name:
-                self.squadron_state["squadron_name"] = squadron_name
-            if current_rank is not None:
-                self.squadron_state["current_rank"] = current_rank
-            self.squadron_state["last_event"] = event_type or "Squadron"
-            self.squadron_state["last_updated"] = time.time()
-            self._save_squadron_state(self.squadron_state)
-            label = self.squadron_state.get("squadron_name") or "Squadron"
-            rank = self.squadron_state.get("current_rank")
-            rank_text = f" | {squadron_rank_label(rank)}" if rank is not None else ""
-            self.add_event_feed_entry("SQUADRON", f"{label}{rank_text}", severity="INFO")
-
-        if self.squadron_window and self.squadron_window.is_open():
-            self.squadron_window.refresh()
-
     # ------------------------------------------------------------------
     # Carrier dashboard panel + event-feed callbacks
     # ------------------------------------------------------------------
@@ -1058,6 +1004,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             int(signals.get("bio", 0) or 0)
             for signals in self.body_signals.values()
         )
+
+    def _mark_system_scan_complete(self, total=None):
+        try:
+            total = int(total or 0)
+        except Exception:
+            total = 0
+        if total > 0:
+            self.total = max(self.total, total)
+        if self.total > 0:
+            self.scanned = self.total
+            self.db_update_system(self.current_sys, self.total, self.scanned)
+            if not self.batch_mode:
+                self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+                self.update_hud()
+                self.schedule_dashboard_refresh()
 
     def _apply_runtime_feature_toggles(self):
         if self.config.get("screenshots_enabled", False):
@@ -1512,26 +1473,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev in ("Rank", "Progress", "Reputation", "Statistics"):
             self._queue_edsm_upload(raw, allow_startup=True)
 
-        elif ev == "SquadronStartup":
-            self._update_squadron_state(
-                d.get("squadron_name"),
-                current_rank=d.get("current_rank"),
-                event_type=ev,
-            )
-
-        elif ev in ("SquadronPromotion", "SquadronDemotion"):
-            self._update_squadron_state(
-                d.get("squadron_name"),
-                current_rank=d.get("new_rank"),
-                event_type=ev,
-            )
-
-        elif ev in ("JoinedSquadron", "AppliedToSquadron", "InvitedToSquadron", "WonATrophyForSquadron"):
-            self._update_squadron_state(d.get("squadron_name"), event_type=ev)
-
-        elif ev in ("LeftSquadron", "KickedFromSquadron", "DisbandedSquadron"):
-            self._update_squadron_state(None, current_rank=None, event_type=ev, clear=True)
-
         elif ev == "Materials":
             self._queue_edsm_upload(raw, allow_startup=True)
             self._sync_materials_full(
@@ -1787,12 +1728,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             except (TypeError, ValueError):
                 progress = None
             if progress is not None and progress >= 1.0 and self.total > 0:
-                self.scanned = self.total
-                # Ensure scanned_bodies count is consistent; individual IDs are
-                # populated later as NavBeaconDetail/AutoScan events arrive.
-            self.db_update_system(self.current_sys, self.total, self.scanned)
-            if not self.batch_mode:
-                self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+                self._mark_system_scan_complete(self.total)
+            else:
+                self.db_update_system(self.current_sys, self.total, self.scanned)
+                if not self.batch_mode:
+                    self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
             self.log(f"🔭 HONK: {self.total} bodies detected.")
             self.add_event_feed_entry("SCAN", f"Honk complete: {self.total} bodies", severity="INFO", copy_text=self.current_sys)
             if not self.batch_mode:
@@ -1816,24 +1756,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 return
             count = d.get("num_bodies", 0)
             if isinstance(count, int) and count > 0:
-                self.total = max(self.total, count)
-                self.db_update_system(self.current_sys, self.total, self.scanned)
+                self._mark_system_scan_complete(count)
                 self.add_event_feed_entry("SCAN", f"Nav beacon scan: {count} bodies", severity="INFO", copy_text=self.current_sys)
-                if not self.batch_mode:
-                    self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
-                    self.update_hud()
-                    self.schedule_dashboard_refresh()
 
         elif ev == "FSSAllBodiesFound":
             if not self._matches_current_system_address(d):
                 return
-            if d.get("system_name") and d.get("system_name") == self.current_sys:
+            if not d.get("system_name") or d.get("system_name") == self.current_sys:
                 count = d.get("count", self.total)
-                if count > 0:
-                    self.total = count
+                if count:
                     self._queue_edsm_upload(raw, startup_replay=startup_replay)
-                # All bodies found → mark as fully scanned.
-                self.scanned = self.total
                 # Persist all scan_item body IDs we have so return visits restore correctly.
                 for item in self.scan_items:
                     bid = item.get("body_id")
@@ -1841,14 +1773,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.scanned_bodies.add(bid)
                         self.db_add_body(self.current_sys, bid)
                 self.fss_all_bodies = True
-                self.db_update_system(self.current_sys, self.total, self.scanned)
-                if not self.batch_mode:
-                    self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+                self._mark_system_scan_complete(count)
                 self.log("📡 SYSTEM SCAN COMPLETE: All bodies found.")
                 self.add_event_feed_entry("ALERT", "FSS complete: all bodies found", severity="WARN", copy_text=self.current_sys)
-                if not self.batch_mode:
-                    self.update_hud()
-                    self.schedule_dashboard_refresh()
         
         elif ev == "FSSBodySignals":
             if not self._matches_current_system_address(d):

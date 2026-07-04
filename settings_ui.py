@@ -1,9 +1,8 @@
-import json
 import os
 import tkinter as tk
 import tkinter.messagebox
 
-from config import CONFIG_FILE, DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_active_profile_config
+from config import DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config as persist_config
 
 
 UI_BG = "#080a0d"
@@ -190,15 +189,13 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
     sysinfo_var = tk.BooleanVar(value=config.get("system_info_enabled", True))
     ss_var = tk.BooleanVar(value=config.get("screenshots_enabled", False))
     edsm_upload_var = tk.BooleanVar(value=config.get("edsm_upload_enabled", False))
-    sq_platform_var = tk.StringVar(value=str(config.get("squadron_platform") or "PC").upper())
-
     if "screenshots_path" not in config:
         config["screenshots_path"] = os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous")
 
     # Pages
     core_page = make_page("core", "Core", "Journal and screenshot paths.")
     overlay_page = make_page("overlays", "Overlays", "Runtime modules and display timing.")
-    integrations_page = make_page("integrations", "Integrations", "EDSM, fleet carrier Discord, and squadron lookup.")
+    integrations_page = make_page("integrations", "Integrations", "EDSM upload and fleet carrier Discord.")
 
     nav_button("core", "Core")
     nav_button("overlays", "Overlays")
@@ -290,32 +287,6 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
     carrier_actions = row(carrier_section)
     action_button(carrier_actions, "Send Test Message", _test_discord).pack(side=tk.LEFT)
 
-    squadron_section = section(integrations_page, "Squadron")
-    sq_tag_e = input_row(squadron_section, "Squadron Tag", "squadron_lookup_tag")
-    option_row(squadron_section, "Platform", sq_platform_var, ("PC", "XBOX", "PS4"))
-
-    def _test_squadron():
-        import threading
-        from squadron_window import fetch_squadron_info
-        tag = sq_tag_e.get().strip()
-        platform = sq_platform_var.get().strip().upper() or "PC"
-        if not tag:
-            tk.messagebox.showwarning("Missing tag", "Enter a Squadron Tag first.", parent=win)
-            return
-
-        def _do_test():
-            result = fetch_squadron_info(tag, platform)
-            if result.get("ok"):
-                win.after(0, lambda: tk.messagebox.showinfo("Squadron Lookup", "Squadron info loaded successfully.", parent=win))
-            else:
-                msg = result.get("error") or f"HTTP {result.get('status')}"
-                win.after(0, lambda: tk.messagebox.showwarning("Squadron Lookup", msg, parent=win))
-
-        threading.Thread(target=_do_test, daemon=True).start()
-
-    squadron_actions = row(squadron_section)
-    action_button(squadron_actions, "Test Squadron Lookup", _test_squadron).pack(side=tk.LEFT)
-
     def remove_deprecated_keys():
         for key in DEPRECATED_CONFIG_KEYS:
             config.pop(key, None)
@@ -338,26 +309,20 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
             "screenshots_enabled": ss_var.get(),
             "screenshots_path": ss_e.get().strip(),
             "carrier_discord_webhook_url": fc_wh_e.get().strip(),
-            "squadron_lookup_tag": sq_tag_e.get().strip(),
-            "squadron_platform": sq_platform_var.get().strip().upper() or "PC",
             "edsm_cmdr_name": edsm_cmdr_e.get().strip(),
             "edsm_api_key": edsm_key_e.get().strip(),
             "edsm_upload_enabled": edsm_upload_var.get(),
             "settings_geometry": win.geometry(),
         })
-        save_active_profile_config(config)
         remove_deprecated_keys()
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(config, f, indent=4)
+        persist_config(config)
         on_save_callback()
         win.destroy()
 
     def close_window():
         config["settings_geometry"] = win.geometry()
-        save_active_profile_config(config)
         remove_deprecated_keys()
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(config, f, indent=4)
+        persist_config(config)
         win.destroy()
 
     action_button(footer, "Cancel", close_window, muted=True).pack(side=tk.LEFT)

@@ -6,12 +6,11 @@ Shows live influence %, trend vs. the previous visit, government/allegiance,
 and active/pending BGS states.
 """
 
-import json
 import tkinter as tk
 from datetime import datetime
 from typing import Callable
 
-from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, CONFIG_FILE
+from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 
 # State → colour tag (used in the Text widget)
 _STATE_TAG: dict[str, str] = {
@@ -111,8 +110,7 @@ class BGSWindow:
     def _on_close(self):
         try:
             self.config["bgs_window_geometry"] = self.win.geometry()
-            with open(CONFIG_FILE, "w") as f:
-                json.dump(self.config, f, indent=4)
+            save_config(self.config)
         except Exception:
             pass
         try:

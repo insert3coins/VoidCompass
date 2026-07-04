@@ -1,8 +1,7 @@
-import json
 import tkinter as tk
 from datetime import datetime, timedelta, timezone
 
-from config import CONFIG_FILE, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
+from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 
 
 WIDTH = 380
@@ -281,7 +280,6 @@ class CarrierHUD:
 
     def _write_config(self):
         try:
-            with open(CONFIG_FILE, "w") as f:
-                json.dump(self.config, f, indent=4)
+            save_config(self.config)
         except Exception:
             pass

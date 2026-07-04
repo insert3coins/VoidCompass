@@ -1,6 +1,5 @@
-import json
 import tkinter as tk
-from config import CONFIG_FILE, COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE
+from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, save_config
 
 WIDTH = 460
 
@@ -433,7 +432,6 @@ class SystemInfoHUD:
 
     def _write_config(self):
         try:
-            with open(CONFIG_FILE, "w") as f:
-                json.dump(self.config, f, indent=4)
+            save_config(self.config)
         except Exception:
             pass
