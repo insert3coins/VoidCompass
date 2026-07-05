@@ -501,6 +501,15 @@ class DashboardUIMixin:
         self.sys_stat = self.create_stat(flight_stats, "CURRENT SYSTEM", "---")
         self.nav_stat = self.create_stat(flight_stats, "NAV TARGET", "---")
         self.scan_stat = self.create_stat(flight_stats, "SCAN PROGRESS", "0 / 0")
+        self.flight_strip_canvas = tk.Canvas(
+            flight_card,
+            height=78,
+            bg="#090d12",
+            highlightthickness=0,
+            bd=0,
+        )
+        self.flight_strip_canvas.pack(fill=tk.X, padx=12, pady=(0, 10))
+        self.flight_strip_canvas.bind("<Configure>", self._draw_flight_strip)
 
         self.carrier_panel = self._panel(flight_deck)
         self.carrier_panel.grid(row=0, column=1, sticky="nsew", padx=(0, 8))
@@ -1345,6 +1354,108 @@ class DashboardUIMixin:
         if not self.batch_mode:
             self.root.after(0, lambda: self.nav_stat.config(text=txt))
 
+    def _flight_strip_context(self):
+        current = self.current_sys if self.current_sys and self.current_sys != "---" else "---"
+        previous = getattr(self, "previous_sys", None)
+        next_name = None
+        next_coords = None
+        route_position = None
+
+        route = list(getattr(self, "route_list", None) or [])
+        route_idx = -1
+        if current != "---":
+            try:
+                route_idx = route.index(current)
+            except ValueError:
+                route_idx = -1
+
+        if route_idx > 0:
+            previous = route[route_idx - 1]
+        if route_idx >= 0:
+            route_position = (route_idx + 1, len(route))
+            if route_idx + 1 < len(route):
+                next_name = route[route_idx + 1]
+                entries = getattr(self, "nav_route_entries", None) or []
+                if route_idx + 1 < len(entries):
+                    next_coords = entries[route_idx + 1].get("StarPos")
+
+        target_wp = getattr(self, "target_waypoint", None)
+        if target_wp and target_wp.get("name"):
+            next_name = target_wp.get("name")
+            next_coords = target_wp.get("coords")
+
+        if not next_name:
+            next_name = getattr(self, "dest_name", None)
+        if next_name and not next_coords:
+            for entry in getattr(self, "nav_route_entries", None) or []:
+                if entry.get("StarSystem") == next_name:
+                    next_coords = entry.get("StarPos")
+                    break
+
+        distance_txt = "--"
+        current_coords = getattr(self, "current_coords", None)
+        if current_coords and next_coords:
+            try:
+                dist = math.sqrt(sum((float(a) - float(b)) ** 2 for a, b in zip(current_coords, next_coords)))
+                distance_txt = f"{dist:,.1f} LY"
+            except Exception:
+                distance_txt = "--"
+
+        if route_position:
+            route_txt = f"ROUTE {route_position[0]}/{route_position[1]}"
+        elif route:
+            route_txt = f"ROUTE {len(route)} JUMPS"
+        else:
+            route_txt = "NO NAV ROUTE"
+
+        return {
+            "previous": previous or "---",
+            "current": current,
+            "next": next_name or "---",
+            "route": route_txt,
+            "distance": distance_txt,
+            "has_route": bool(route or next_name),
+        }
+
+    def _draw_flight_strip(self, event=None):
+        canvas = getattr(self, "flight_strip_canvas", None)
+        if not self._widget_alive(canvas):
+            return
+        try:
+            w = max(canvas.winfo_width(), 260)
+            h = max(canvas.winfo_height(), 72)
+            canvas.delete("all")
+
+            ctx = self._flight_strip_context()
+            spine_y = 34
+            left_x = 34
+            center_x = w // 2
+            right_x = max(w - 34, center_x + 34)
+
+            canvas.create_rectangle(0, 0, w, h, fill="#090d12", outline="")
+            canvas.create_line(left_x, spine_y, right_x, spine_y, fill=self.UI_BORDER, width=2)
+            canvas.create_line(left_x, spine_y, center_x, spine_y, fill=COLOR_ACCENT, width=3)
+            if ctx["has_route"]:
+                canvas.create_line(center_x, spine_y, right_x, spine_y, fill=COLOR_ORANGE, width=2, dash=(5, 5))
+
+            nodes = [
+                (left_x, "PREV", ctx["previous"], self.UI_MUTED, 5),
+                (center_x, "CURRENT", ctx["current"], COLOR_ACCENT, 7),
+                (right_x, "NEXT", ctx["next"], COLOR_ORANGE if ctx["has_route"] else self.UI_DIM, 5),
+            ]
+            for x, label, name, color, radius in nodes:
+                canvas.create_oval(x - radius, spine_y - radius, x + radius, spine_y + radius, outline=color, width=2, fill="#090d12")
+                canvas.create_text(x, 14, text=label, fill=color if name != "---" else self.UI_DIM, font=("Segoe UI", 7, "bold"))
+
+            footer = f"{ctx['route']}   NEXT {ctx['distance']}"
+            canvas.create_text(w // 2, h - 16, text=footer, fill=self.UI_MUTED, font=("Consolas", 8))
+        except Exception as exc:
+            try:
+                canvas.delete("all")
+                canvas.create_text(8, 12, anchor="nw", text=f"Flight strip unavailable: {exc}", fill=self.UI_FAIL, font=("Consolas", 8))
+            except Exception:
+                pass
+
     def set_ground_target_from_entries(self):
         if not (self._widget_alive(getattr(self, "ground_lat_entry", None)) and self._widget_alive(getattr(self, "ground_lon_entry", None))):
             self.open_ground_target_window()
@@ -1760,6 +1871,7 @@ class DashboardUIMixin:
             alert_fg = self.UI_WARN
         self.alert_lbl.config(text=alert_text, fg=alert_fg)
 
+        self._draw_flight_strip()
         self._refresh_event_feed()
         self._perf_spike("update_dashboard_panels", t0, threshold_ms=28.0)
 

@@ -258,6 +258,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.is_first_load = True
         
         self.current_sys = "---"
+        self.previous_sys = None
         self.current_system_address = None
         self.star_class = ""
         self.scanned = 0
@@ -1715,6 +1716,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
             # State reset for new system
             incoming_sys = d.get("star_system", "Unknown")
+            outgoing_sys = self.current_sys if self.current_sys not in ("---", "Unknown", incoming_sys) else None
             traffic_before_reset = dict(self.system_traffic or {})
             preserve_startup_traffic = (
                 startup_replay
@@ -1722,6 +1724,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 and traffic_before_reset
             )
             self.current_sys = incoming_sys
+            if outgoing_sys:
+                self.previous_sys = outgoing_sys
             if self.current_sys and self.current_sys not in ("---", "Unknown"):
                 self.session_systems.add(self.current_sys)
             self.current_system_address = self._normalize_system_address(d.get("system_address"))
