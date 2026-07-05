@@ -1,0 +1,1199 @@
+import json
+import math
+import os
+import threading
+import time
+import webbrowser
+import tkinter as tk
+from tkinter import ttk
+
+import requests
+
+from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
+
+
+SCOOPABLE_STAR_CLASSES = {"O", "B", "A", "F", "G", "K", "M"}
+
+
+class ExplorationWindow:
+    UI_BG = "#080a0d"
+    UI_PANEL = "#12161b"
+    UI_PANEL_2 = "#171d23"
+    UI_BORDER = "#26313a"
+    UI_MUTED = "#7d8891"
+    UI_DIM = "#4e5962"
+    UI_OK = "#21d189"
+    UI_WARN = "#ff9a3c"
+
+    def __init__(self, root, app):
+        self.root = root
+        self.app = app
+        self.config = app.config
+        self.body_items_by_iid = {}
+        self._edsm_cache = self._load_edsm_cache()
+        self._edsm_pending = set()
+        self._edsm_lock = threading.Lock()
+        self._edsm_worker_active = False
+        self._edsm_last_request_ts = 0.0
+        self._last_session_stats = {"systems": 0, "bodies": 0, "value": 0, "valuable": 0}
+        self._last_db_stats = {"systems": 0, "visits": 0, "bodies": 0, "value": 0, "valuable": 0}
+        self._last_route_status = {}
+        self._last_ledger_refresh_ts = 0.0
+        self.win = tk.Toplevel(root)
+        self.win.title("Exploration")
+        self.win.geometry(self.config.get("exploration_window_geometry", "1040x680"))
+        self.win.configure(bg=self.UI_BG)
+        self.win.minsize(860, 520)
+        self.win.protocol("WM_DELETE_WINDOW", self._on_close)
+        self._build()
+        self.refresh()
+
+    def is_open(self):
+        try:
+            return bool(self.win and self.win.winfo_exists())
+        except Exception:
+            return False
+
+    def lift(self):
+        self.win.lift()
+        self.win.focus_force()
+
+    def _build(self):
+        header = tk.Frame(self.win, bg="#0c1014", height=76)
+        header.pack(fill=tk.X)
+        header.pack_propagate(False)
+
+        title_box = tk.Frame(header, bg="#0c1014")
+        title_box.pack(side=tk.LEFT, fill=tk.Y, padx=14)
+        tk.Label(
+            title_box,
+            text="EXPLORATION",
+            font=("Segoe UI", 16, "bold"),
+            fg=COLOR_ACCENT,
+            bg="#0c1014",
+            anchor="w",
+        ).pack(anchor="w", pady=(12, 0))
+        self.header_subtitle = tk.Label(
+            title_box,
+            text="System telemetry",
+            font=("Consolas", 8),
+            fg=self.UI_MUTED,
+            bg="#0c1014",
+            anchor="w",
+        )
+        self.header_subtitle.pack(anchor="w", pady=(2, 0))
+
+        self.header_summary = tk.Label(
+            header,
+            text="",
+            font=("Consolas", 9, "bold"),
+            fg=COLOR_TEXT,
+            bg="#0c1014",
+            justify=tk.RIGHT,
+        )
+        self.header_summary.pack(side=tk.RIGHT, padx=14)
+
+        toolbar = tk.Frame(self.win, bg="#10151a")
+        toolbar.pack(fill=tk.X, padx=10, pady=(10, 8))
+        self._button(toolbar, "Refresh", self.refresh).pack(side=tk.LEFT)
+        self._button(toolbar, "Copy Summary", self._copy_summary, accent=True).pack(side=tk.LEFT, padx=(8, 0))
+        self._button(toolbar, "Copy Next Route", self._copy_next_route).pack(side=tk.LEFT, padx=(8, 0))
+        self._button(toolbar, "Open EDSM", self._open_current_edsm).pack(side=tk.LEFT, padx=(8, 0))
+        self._button(toolbar, "Reset Session", self._reset_session).pack(side=tk.RIGHT)
+
+        summary = tk.Frame(self.win, bg=self.UI_BG)
+        summary.pack(fill=tk.X, padx=10, pady=(0, 10))
+        self.system_card = self._summary_card(summary, "SYSTEM", accent=COLOR_ACCENT)
+        self.scan_card = self._summary_card(summary, "SCAN VALUE", accent=self.UI_OK)
+        self.route_card = self._summary_card(summary, "ROUTE", accent=COLOR_ORANGE)
+        self.bio_card = self._summary_card(summary, "BIO SIGNALS", accent="#86efac")
+        self.trip_card = self._summary_card(summary, "SESSION", accent="#a5b4fc")
+
+        style = ttk.Style(self.win)
+        style.theme_use("default")
+        style.configure("Explore.TNotebook", background=self.UI_BG, borderwidth=0)
+        style.configure("Explore.TNotebook.Tab", background=self.UI_PANEL, foreground=COLOR_TEXT, padding=(12, 7), borderwidth=0)
+        style.map("Explore.TNotebook.Tab", background=[("selected", self.UI_PANEL_2)], foreground=[("selected", COLOR_ACCENT)])
+        style.configure("Explore.Treeview", background="#0b0f13", foreground=COLOR_TEXT, fieldbackground="#0b0f13", rowheight=24, borderwidth=0)
+        style.configure("Explore.Treeview.Heading", background=self.UI_PANEL, foreground=COLOR_ORANGE, relief="flat", font=("Segoe UI", 8, "bold"))
+        style.map("Explore.Treeview", background=[("selected", "#12313c")], foreground=[("selected", COLOR_TEXT)])
+
+        self.tabs = ttk.Notebook(self.win, style="Explore.TNotebook")
+        self.tabs.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+        self._build_bodies_tab()
+        self._build_bio_tab()
+        self._build_route_tab()
+        self._build_history_tab()
+        self._build_ledger_tab()
+
+    def _summary_card(self, parent, title, accent=None):
+        accent = accent or COLOR_ACCENT
+        card = tk.Frame(parent, bg=self.UI_PANEL, highlightbackground=self.UI_BORDER, highlightthickness=1, bd=0)
+        card.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
+        tk.Frame(card, bg=accent, height=2).pack(fill=tk.X)
+        tk.Label(card, text=title, fg=COLOR_ORANGE, bg=self.UI_PANEL, font=("Segoe UI", 8, "bold"), anchor="w").pack(fill=tk.X, padx=10, pady=(8, 0))
+        value = tk.Label(card, text="-", fg=COLOR_TEXT, bg=self.UI_PANEL, font=("Consolas", 10, "bold"), anchor="w", justify=tk.LEFT, height=2)
+        value.pack(fill=tk.X, padx=10, pady=(3, 8))
+        return value
+
+    def _build_bodies_tab(self):
+        frame = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.tabs.add(frame, text="Current System")
+        left = tk.Frame(frame, bg=self.UI_BG)
+        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        right = tk.Frame(frame, bg=self.UI_PANEL, highlightbackground=self.UI_BORDER, highlightthickness=1, bd=0, width=300)
+        right.pack(side=tk.RIGHT, fill=tk.Y, padx=(8, 0))
+        right.pack_propagate(False)
+
+        system_bar = tk.Frame(left, bg="#0b0f13", highlightbackground=self.UI_BORDER, highlightthickness=1, bd=0)
+        system_bar.pack(fill=tk.X, pady=(0, 8))
+        self.body_metric_labels = {}
+        for key, title in (
+            ("status", "CURRENT SYSTEM"),
+            ("bodies", "DISCOVERED BODIES"),
+            ("signals", "SIGNALS"),
+            ("value", "EST. VALUE"),
+            ("activity", "CURRENT ACTIVITY"),
+        ):
+            cell = tk.Frame(system_bar, bg="#0b0f13")
+            cell.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=8, pady=7)
+            tk.Label(cell, text=title, fg=COLOR_ORANGE, bg="#0b0f13", font=("Segoe UI", 7, "bold"), anchor="w").pack(fill=tk.X)
+            lbl = tk.Label(cell, text="-", fg=COLOR_ACCENT, bg="#0b0f13", font=("Consolas", 9, "bold"), anchor="w", justify=tk.LEFT)
+            lbl.pack(fill=tk.X, pady=(2, 0))
+            self.body_metric_labels[key] = lbl
+
+        legend = tk.Frame(left, bg=self.UI_BG)
+        legend.pack(fill=tk.X, pady=(0, 6))
+        for text, fg in (
+            ("High value", COLOR_ACCENT),
+            ("Bio/organic", self.UI_OK),
+            ("Star", self.UI_MUTED),
+            ("Mapped/DSS", COLOR_ORANGE),
+        ):
+            tk.Label(legend, text=text, fg=fg, bg=self.UI_BG, font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=(0, 14))
+
+        cols = ("body", "type", "atmosphere", "status", "value", "signals", "discover", "distance")
+        self.bodies_tree = self._tree(left, cols, {
+            "body": ("Name", 215, tk.W),
+            "type": ("Type", 180, tk.W),
+            "atmosphere": ("Atmosphere", 115, tk.W),
+            "status": ("Status", 110, tk.CENTER),
+            "value": ("Value", 90, tk.E),
+            "signals": ("Signals", 95, tk.CENTER),
+            "discover": ("Discovery", 90, tk.CENTER),
+            "distance": ("Distance", 85, tk.E),
+        })
+        self.bodies_tree.tag_configure("valuable", foreground=COLOR_ACCENT)
+        self.bodies_tree.tag_configure("star", foreground=self.UI_MUTED)
+        self.bodies_tree.tag_configure("bio", foreground=self.UI_OK)
+        self.bodies_tree.bind("<<TreeviewSelect>>", self._on_body_selected)
+
+        tk.Frame(right, bg=COLOR_ACCENT, height=2).pack(fill=tk.X)
+        tk.Label(right, text="BODY DETAIL", fg=COLOR_ORANGE, bg=self.UI_PANEL, font=("Segoe UI", 8, "bold"), anchor="w").pack(fill=tk.X, padx=10, pady=(9, 0))
+        self.body_detail_title = tk.Label(right, text="Select a body", fg=COLOR_ACCENT, bg=self.UI_PANEL, font=("Segoe UI", 11, "bold"), anchor="w", wraplength=270, justify=tk.LEFT)
+        self.body_detail_title.pack(fill=tk.X, padx=10, pady=(2, 0))
+        self.body_detail = tk.Text(
+            right,
+            bg=self.UI_PANEL,
+            fg=COLOR_TEXT,
+            insertbackground=COLOR_ACCENT,
+            relief=tk.FLAT,
+            bd=0,
+            padx=10,
+            pady=8,
+            font=("Consolas", 9),
+            wrap=tk.WORD,
+        )
+        self.body_detail.pack(fill=tk.BOTH, expand=True)
+        self.body_detail.configure(state=tk.DISABLED)
+
+    def _build_bio_tab(self):
+        frame = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.tabs.add(frame, text="Bio")
+
+        top = tk.Frame(frame, bg=self.UI_BG)
+        top.pack(fill=tk.X, pady=(0, 8))
+        self.bio_summary_labels = {}
+        for key, title in (
+            ("bodies", "BODIES WITH BIO"),
+            ("signals", "SIGNALS"),
+            ("genus", "BIO TYPES"),
+            ("complete", "COMPLETED SCANS"),
+        ):
+            tile = tk.Frame(top, bg="#0b0f13", highlightbackground=self.UI_BORDER, highlightthickness=1, bd=0)
+            tile.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
+            tk.Label(tile, text=title, fg=COLOR_ORANGE, bg="#0b0f13", font=("Segoe UI", 7, "bold"), anchor="w").pack(fill=tk.X, padx=10, pady=(7, 0))
+            lbl = tk.Label(tile, text="-", fg=COLOR_ACCENT, bg="#0b0f13", font=("Consolas", 11, "bold"), anchor="w")
+            lbl.pack(fill=tk.X, padx=10, pady=(2, 8))
+            self.bio_summary_labels[key] = lbl
+
+        cols = ("body", "class", "bio", "geo", "genus", "samples", "status")
+        self.bio_tree = self._tree(frame, cols, {
+            "body": ("Body", 250, tk.W),
+            "class": ("Class", 190, tk.W),
+            "bio": ("Bio", 70, tk.E),
+            "geo": ("Geo", 70, tk.E),
+            "genus": ("Genus", 230, tk.W),
+            "samples": ("Samples", 100, tk.CENTER),
+            "status": ("Status", 130, tk.W),
+        })
+        self.bio_tree.tag_configure("complete", foreground=self.UI_OK)
+        self.bio_tree.tag_configure("pending", foreground=COLOR_ORANGE)
+        self.bio_tree.tag_configure("empty", foreground=self.UI_MUTED)
+
+    def _build_route_tab(self):
+        frame = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.tabs.add(frame, text="Route")
+        cols = ("idx", "system", "star", "scoop", "distance", "edsm", "valuable", "status")
+        self.route_tree = self._tree(frame, cols, {
+            "idx": ("#", 48, tk.E),
+            "system": ("System", 250, tk.W),
+            "star": ("Star", 90, tk.CENTER),
+            "scoop": ("Scoop", 80, tk.CENTER),
+            "distance": ("Distance", 100, tk.E),
+            "edsm": ("EDSM Value", 105, tk.E),
+            "valuable": ("Valuable", 80, tk.CENTER),
+            "status": ("Status", 150, tk.W),
+        })
+        self.route_tree.tag_configure("current", foreground=COLOR_ACCENT)
+        self.route_tree.tag_configure("next", foreground=COLOR_ORANGE)
+        self.route_tree.tag_configure("pending", foreground=self.UI_MUTED)
+
+    def _build_history_tab(self):
+        frame = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.tabs.add(frame, text="Trip & History")
+        self.history_text = tk.Text(
+            frame,
+            bg="#0b0f13",
+            fg=COLOR_TEXT,
+            insertbackground=COLOR_ACCENT,
+            relief=tk.FLAT,
+            bd=0,
+            padx=12,
+            pady=10,
+            font=("Consolas", 10),
+            wrap=tk.WORD,
+        )
+        self.history_text.pack(fill=tk.BOTH, expand=True)
+        self.history_text.configure(state=tk.DISABLED)
+
+    def _build_ledger_tab(self):
+        frame = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.tabs.add(frame, text="Value Ledger")
+
+        controls = tk.Frame(frame, bg=self.UI_BG)
+        controls.pack(fill=tk.X, padx=10, pady=(10, 6))
+        tk.Label(controls, text="Filter", fg=self.UI_MUTED, bg=self.UI_BG, font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT)
+        self.ledger_filter_var = tk.StringVar()
+        self.ledger_filter_var.trace_add("write", lambda *_: self._render_ledger())
+        tk.Entry(
+            controls,
+            textvariable=self.ledger_filter_var,
+            bg="#0b0f13",
+            fg=COLOR_TEXT,
+            insertbackground=COLOR_ACCENT,
+            relief=tk.FLAT,
+            width=34,
+        ).pack(side=tk.LEFT, padx=(8, 10), ipady=4)
+        self._button(controls, "Copy Ledger", self._copy_ledger_summary, accent=True).pack(side=tk.LEFT)
+        self.ledger_summary = tk.Label(controls, text="", font=("Consolas", 8), fg=self.UI_MUTED, bg=self.UI_BG)
+        self.ledger_summary.pack(side=tk.RIGHT)
+
+        cols = ("system", "body", "class", "value", "mapped", "flags")
+        self.ledger_tree = self._tree(frame, cols, {
+            "system": ("System", 190, tk.W),
+            "body": ("Body", 230, tk.W),
+            "class": ("Class", 180, tk.W),
+            "value": ("Est. Value", 95, tk.E),
+            "mapped": ("Mapped", 75, tk.E),
+            "flags": ("Flags", 180, tk.W),
+        })
+        self.ledger_rows = []
+
+    def _tree(self, parent, cols, specs):
+        wrap = tk.Frame(parent, bg=self.UI_BG)
+        wrap.pack(fill=tk.BOTH, expand=True)
+        tree = ttk.Treeview(wrap, columns=cols, show="headings", style="Explore.Treeview")
+        for col in cols:
+            label, width, anchor = specs[col]
+            tree.heading(col, text=label)
+            tree.column(col, width=width, anchor=anchor)
+        scroll = ttk.Scrollbar(wrap, orient=tk.VERTICAL, command=tree.yview)
+        tree.configure(yscrollcommand=scroll.set)
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        return tree
+
+    def _button(self, parent, text, cmd, accent=False):
+        return tk.Button(
+            parent,
+            text=text,
+            command=cmd,
+            bg=COLOR_ACCENT if accent else self.UI_PANEL,
+            fg="black" if accent else COLOR_TEXT,
+            activebackground=COLOR_ACCENT if accent else "#1a2430",
+            activeforeground="black" if accent else COLOR_ACCENT,
+            relief=tk.FLAT,
+            bd=0,
+            padx=10,
+            pady=5,
+            font=("Segoe UI", 8, "bold"),
+            cursor="hand2",
+        )
+
+    def refresh(self):
+        try:
+            current = getattr(self.app, "current_sys", "---") or "---"
+            scanned = int(getattr(self.app, "scanned", 0) or 0)
+            total = int(getattr(self.app, "total", 0) or 0)
+            bodies = [item for item in list(getattr(self.app, "scan_items", []) or []) if isinstance(item, dict)]
+            current_value = sum(self._item_value(item) for item in bodies)
+            valuable_count = sum(1 for item in bodies if self._is_valuable(item))
+            complete = f"{scanned}/{total}" if total else f"{scanned}/0"
+
+            star = getattr(self.app, "star_class", "") or "-"
+            traffic = getattr(self.app, "system_traffic", {}) or {}
+            cmdr = getattr(self.app, "cmdr_name", None) or self.config.get("active_commander_name") or "Unknown"
+            self.header_summary.config(text=f"CMDR {cmdr} | {current}")
+            self.system_card.config(text=f"{current}\nStar {star} | Traffic {traffic.get('day', 0)}/{traffic.get('week', 0)}/{traffic.get('total', 0)}")
+            self.scan_card.config(text=f"{complete} bodies | {current_value:,} cr\n{valuable_count} valuable bodies")
+            self.route_card.config(text=self._route_card_text())
+            session_stats = self._session_stats()
+            self.trip_card.config(text=self._trip_card_text(session_stats))
+            bio_summary = self._bio_summary(bodies)
+            self.bio_card.config(text=f"{bio_summary['bio_bodies']} bodies | {bio_summary['bio_signals']} signals\n{bio_summary['complete']} complete")
+            self._render_body_metrics(current, bodies, scanned, total, current_value)
+            self._render_bodies(bodies)
+            self._render_bio(bodies, bio_summary)
+            self._request_route_enrichment()
+            self._render_route()
+            self._render_history(current_value, valuable_count, session_stats)
+            self._refresh_ledger()
+        except Exception as exc:
+            self._log_error(f"Exploration refresh failed: {exc}")
+
+    def _log_error(self, message):
+        try:
+            if hasattr(self.app, "log"):
+                self.app.log(message)
+        except Exception:
+            pass
+
+    def _item_value(self, item):
+        try:
+            if item.get("dss_complete"):
+                return int(item.get("dss_reward") or item.get("reward") or 0)
+            return int(item.get("reward") or 0)
+        except Exception:
+            return 0
+
+    def _is_valuable(self, item):
+        planet = item.get("planet_class") or item.get("class") or ""
+        return bool(
+            item.get("terraformable")
+            or planet in ("Earthlike body", "Water world", "Ammonia world")
+            or self._item_value(item) >= 500000
+        )
+
+    def _flag_text(self, item):
+        flags = []
+        if item.get("terraformable"):
+            flags.append("Terraformable")
+        if item.get("landable"):
+            flags.append("Landable")
+        if item.get("was_discovered") is False:
+            flags.append("Undiscovered")
+        if item.get("first_footfall"):
+            flags.append("First footfall")
+        if item.get("was_mapped") is False:
+            flags.append("Unmapped")
+        return ", ".join(flags)
+
+    def _signal_text(self, item):
+        bio = self._safe_int(item.get("bio_count"))
+        geo = self._safe_int(item.get("geo_count"))
+        organic_done = self._safe_int(item.get("organic_complete_count"))
+        signals = []
+        if bio:
+            signals.append(f"Bio {bio}")
+        if geo:
+            signals.append(f"Geo {geo}")
+        if organic_done:
+            signals.append(f"Done {organic_done}")
+        return ", ".join(signals) or "-"
+
+    def _body_status(self, item):
+        if item.get("is_star"):
+            return "Star"
+        if item.get("organic_complete_count"):
+            return "Bio done"
+        if self._safe_int(item.get("bio_count")) > 0:
+            return "Bio"
+        if item.get("dss_complete"):
+            return "Mapped"
+        if self._is_valuable(item):
+            return "High value"
+        if item.get("was_discovered") is False:
+            return "New"
+        return "Scanned"
+
+    def _safe_int(self, value, default=0):
+        try:
+            return int(value or default)
+        except Exception:
+            return default
+
+    def _body_discovery_text(self, item):
+        bits = []
+        if item.get("was_discovered") is False:
+            bits.append("First")
+        else:
+            bits.append("Known")
+        if item.get("dss_complete") or item.get("was_mapped"):
+            bits.append("DSS")
+        elif item.get("was_mapped") is False:
+            bits.append("Unmapped")
+        return " / ".join(bits)
+
+    def _body_distance_text(self, item):
+        value = item.get("distance_to_arrival")
+        if value is None or value == "":
+            return "-"
+        try:
+            return f"{float(value):,.0f} ls"
+        except Exception:
+            return str(value)
+
+    def _render_body_metrics(self, current, bodies, scanned, total, current_value):
+        labels = getattr(self, "body_metric_labels", {})
+        if not labels:
+            return
+        status = "complete" if total and scanned >= total else ("partial" if scanned else "unknown")
+        star = getattr(self.app, "star_class", "") or "-"
+        bio_total = sum(self._safe_int(item.get("bio_count")) for item in bodies)
+        geo_total = sum(self._safe_int(item.get("geo_count")) for item in bodies)
+        edsm = self._edsm_summary(current)
+        edsm_value = "-"
+        if edsm:
+            edsm_value = self._format_credits(edsm.get("estimatedValueMapped") or edsm.get("estimatedValue"))
+        next_route = self._next_route_system()
+        activity = "Exploring system"
+        if next_route:
+            activity = f"Next route: {next_route}"
+        labels["status"].config(text=f"{current}\n{status} | star {star}")
+        labels["bodies"].config(text=f"{scanned} of {total or len(bodies)}")
+        labels["signals"].config(text=f"Bio {bio_total} | Geo {geo_total}")
+        labels["value"].config(text=f"Local {self._format_credits(current_value)}\nEDSM {edsm_value}")
+        labels["activity"].config(text=activity)
+
+    def _render_bodies(self, bodies):
+        for item_id in self.bodies_tree.get_children():
+            self.bodies_tree.delete(item_id)
+        self.body_items_by_iid = {}
+        rows = sorted(bodies, key=lambda item: (item.get("body_id") is None, item.get("body_id") or 99999, item.get("name") or ""))
+        for item in rows:
+            body = item.get("full_name") or item.get("name") or "Body"
+            body_class = item.get("star_type") or item.get("planet_class") or item.get("class") or ""
+            value = self._item_value(item)
+            atmosphere = item.get("atmosphere") or "-"
+            tags = []
+            if item.get("is_star"):
+                tags.append("star")
+            elif item.get("bio_count") or item.get("organic_complete_count"):
+                tags.append("bio")
+            elif self._is_valuable(item):
+                tags.append("valuable")
+            iid = self.bodies_tree.insert(
+                "",
+                tk.END,
+                values=(
+                    body,
+                    body_class,
+                    atmosphere,
+                    self._body_status(item),
+                    self._format_credits(value),
+                    self._signal_text(item),
+                    self._body_discovery_text(item),
+                    self._body_distance_text(item),
+                ),
+                tags=tuple(tags),
+            )
+            self.body_items_by_iid[iid] = item
+        first = self.bodies_tree.get_children()
+        if first:
+            self.bodies_tree.selection_set(first[0])
+            self._show_body_detail(self.body_items_by_iid.get(first[0]))
+        else:
+            self._show_body_detail(None)
+
+    def _genus_labels(self, item):
+        labels = []
+        for genus in item.get("genuses") or []:
+            if isinstance(genus, dict):
+                label = genus.get("Genus_Localised") or genus.get("Name_Localised") or genus.get("Genus") or genus.get("Name")
+            else:
+                label = str(genus)
+            if label and label not in labels:
+                labels.append(label)
+        for scan in (item.get("organic_scans") or {}).values():
+            label = scan.get("genus") or scan.get("species")
+            if label and label not in labels:
+                labels.append(label)
+        return labels
+
+    def _organic_sample_text(self, item):
+        scans = item.get("organic_scans") or {}
+        if not scans:
+            return "-"
+        complete = sum(1 for scan in scans.values() if scan.get("is_complete"))
+        sample_nums = [
+            self._safe_int(scan.get("sample_idx"))
+            for scan in scans.values()
+            if self._safe_int(scan.get("sample_idx")) > 0 and not scan.get("is_complete")
+        ]
+        if complete:
+            return f"{complete} complete"
+        if sample_nums:
+            return f"sample {max(sample_nums)}"
+        return f"{len(scans)} logged"
+
+    def _bio_summary(self, bodies):
+        bio_bodies = 0
+        bio_signals = 0
+        geo_signals = 0
+        genus_names = set()
+        complete = 0
+        for item in bodies:
+            bio = self._safe_int(item.get("bio_count"))
+            geo = self._safe_int(item.get("geo_count"))
+            done = self._safe_int(item.get("organic_complete_count"))
+            genuses = self._genus_labels(item)
+            if bio or geo or done or genuses:
+                bio_bodies += 1
+            bio_signals += bio
+            geo_signals += geo
+            complete += done
+            genus_names.update(genuses)
+        return {
+            "bio_bodies": bio_bodies,
+            "bio_signals": bio_signals,
+            "geo_signals": geo_signals,
+            "genus": len(genus_names),
+            "complete": complete,
+        }
+
+    def _render_bio(self, bodies, summary=None):
+        if not hasattr(self, "bio_tree"):
+            return
+        summary = summary or self._bio_summary(bodies)
+        labels = getattr(self, "bio_summary_labels", {})
+        if labels:
+            labels["bodies"].config(text=str(summary["bio_bodies"]))
+            labels["signals"].config(text=f"Bio {summary['bio_signals']} | Geo {summary['geo_signals']}")
+            labels["genus"].config(text=str(summary["genus"]))
+            labels["complete"].config(text=str(summary["complete"]))
+
+        for item_id in self.bio_tree.get_children():
+            self.bio_tree.delete(item_id)
+        rows = []
+        for item in bodies:
+            genuses = self._genus_labels(item)
+            bio = self._safe_int(item.get("bio_count"))
+            geo = self._safe_int(item.get("geo_count"))
+            done = self._safe_int(item.get("organic_complete_count"))
+            if bio or geo or done or genuses:
+                rows.append((item, genuses, bio, geo, done))
+        rows.sort(key=lambda row: (-(row[2] + row[4]), row[0].get("body_id") or 99999, row[0].get("name") or ""))
+
+        if not rows:
+            self.bio_tree.insert("", tk.END, values=("No biological or geological signals recorded for this system yet.", "", "", "", "", "", ""), tags=("empty",))
+            return
+
+        for item, genuses, bio, geo, done in rows:
+            tags = ("complete",) if done else ("pending",)
+            status = "Complete" if done else ("Signals found" if bio or genuses else "Geo only")
+            self.bio_tree.insert(
+                "",
+                tk.END,
+                values=(
+                    item.get("full_name") or item.get("name") or "Body",
+                    item.get("planet_class") or item.get("class") or "-",
+                    bio,
+                    geo,
+                    ", ".join(genuses[:4]) or "-",
+                    self._organic_sample_text(item),
+                    status,
+                ),
+                tags=tags,
+            )
+
+    def _route_entries(self):
+        entries = list(getattr(self.app, "nav_route_entries", []) or [])
+        if entries:
+            return entries
+        return [{"StarSystem": name} for name in (getattr(self.app, "route_list", []) or [])]
+
+    def _route_names(self):
+        return [entry.get("StarSystem") for entry in self._route_entries() if entry.get("StarSystem")]
+
+    def _next_route_system(self):
+        current = getattr(self.app, "current_sys", None)
+        names = self._route_names()
+        if not names:
+            return None
+        if current in names:
+            idx = names.index(current)
+            return names[idx + 1] if idx + 1 < len(names) else None
+        return names[0]
+
+    def _route_card_text(self):
+        entries = self._route_entries()
+        if not entries:
+            return "No active in-game route\nNavRoute.json is empty"
+        next_name = self._next_route_system() or "Route complete"
+        dest = entries[-1].get("StarSystem") or "-"
+        enriched = sum(1 for entry in entries if self._edsm_summary(entry.get("StarSystem")))
+        return f"{len(entries)} systems | next {next_name}\nEDSM {enriched}/{len(entries)} | dest {dest}"
+
+    def _on_body_selected(self, _event=None):
+        selected = self.bodies_tree.selection()
+        self._show_body_detail(self.body_items_by_iid.get(selected[0]) if selected else None)
+
+    def _fmt_num(self, value, suffix=""):
+        if value is None or value == "":
+            return "-"
+        try:
+            number = float(value)
+            if abs(number) >= 1000:
+                text = f"{number:,.0f}"
+            else:
+                text = f"{number:.2f}".rstrip("0").rstrip(".")
+            return f"{text}{suffix}"
+        except Exception:
+            return str(value)
+
+    def _show_body_detail(self, item):
+        lines = []
+        if item:
+            if hasattr(self, "body_detail_title"):
+                self.body_detail_title.config(text=item.get("full_name") or item.get("name") or "Body")
+            lines.extend([
+                f"Status: {self._body_status(item)}",
+                f"Class: {item.get('star_type') or item.get('planet_class') or item.get('class') or '-'}",
+                f"Estimated value: {self._item_value(item):,} cr",
+                f"DSS value: {int(item.get('dss_reward') or 0):,} cr",
+                f"DSS complete: {'Yes' if item.get('dss_complete') else 'No'}",
+                f"Distance: {self._fmt_num(item.get('distance_to_arrival'), ' ls')}",
+                "",
+                f"Landable: {'Yes' if item.get('landable') else 'No'}",
+                f"Terraforming: {'Terraformable' if item.get('terraformable') else 'No'}",
+                f"Discovered: {'No' if item.get('was_discovered') is False else 'Yes'}",
+                f"Mapped: {'Yes' if item.get('was_mapped') else 'No'}",
+                "",
+                f"Atmosphere: {item.get('atmosphere') or '-'}",
+                f"Volcanism: {item.get('volcanism') or '-'}",
+                f"Gravity: {self._fmt_num(item.get('surface_gravity'), ' G')}",
+                f"Temperature: {self._fmt_num(item.get('surface_temp'), ' K')}",
+                f"Radius: {self._fmt_num(item.get('radius'), ' m')}",
+                f"Mass: {self._fmt_num(item.get('mass'))}",
+                "",
+                f"Signals: {self._signal_text(item)}",
+            ])
+            genuses = item.get("genuses") or []
+            if genuses:
+                lines.append("")
+                lines.append("Detected genus:")
+                for genus in genuses:
+                    if isinstance(genus, dict):
+                        lines.append(f"- {genus.get('Genus_Localised') or genus.get('Name_Localised') or genus.get('Genus') or genus.get('Name') or genus}")
+                    else:
+                        lines.append(f"- {genus}")
+            organic_scans = item.get("organic_scans") or {}
+            if organic_scans:
+                lines.append("")
+                lines.append("Organic scans:")
+                for scan in organic_scans.values():
+                    status = "complete" if scan.get("is_complete") else f"sample {scan.get('sample_idx') or '-'}"
+                    lines.append(f"- {scan.get('species') or scan.get('genus') or 'Organic'} ({status})")
+        else:
+            if hasattr(self, "body_detail_title"):
+                self.body_detail_title.config(text="Select a body")
+            lines = ["Select a body to view scan details."]
+        self.body_detail.configure(state=tk.NORMAL)
+        self.body_detail.delete("1.0", tk.END)
+        self.body_detail.insert(tk.END, "\n".join(lines))
+        self.body_detail.configure(state=tk.DISABLED)
+
+    def _trip_card_text(self, session_stats=None):
+        jumps = int(getattr(self.app, "session_jump_count", 0) or 0)
+        ly = float(getattr(self.app, "session_ly", 0.0) or 0.0)
+        start = float(getattr(self.app, "session_start_ts", time.time()) or time.time())
+        age_min = max(0, int((time.time() - start) / 60))
+        session_stats = session_stats or self._session_stats()
+        return f"{jumps} jumps | {ly:.1f} ly | {session_stats['value']:,} cr\n{session_stats['systems']} systems | {age_min} min"
+
+    def _render_route(self):
+        for item_id in self.route_tree.get_children():
+            self.route_tree.delete(item_id)
+        entries = self._route_entries()
+        current = getattr(self.app, "current_sys", None)
+        next_name = self._next_route_system()
+        local_status = self._route_status_map([entry.get("StarSystem") for entry in entries])
+        for idx, entry in enumerate(entries, 1):
+            name = entry.get("StarSystem") or ""
+            star = entry.get("StarClass") or "-"
+            scoop = "Yes" if star[:1].upper() in SCOOPABLE_STAR_CLASSES else ("-" if star == "-" else "No")
+            distance = self._distance_from_current(entry)
+            edsm = self._edsm_summary(name)
+            edsm_value = self._format_credits(edsm.get("estimatedValueMapped") or edsm.get("estimatedValue")) if edsm else "..."
+            valuable = str(edsm.get("valuableCount", 0)) if edsm else "..."
+            status_parts = [local_status.get(name, "Unvisited")]
+            tags = []
+            if name == current:
+                status_parts.append("Current")
+                tags.append("current")
+            elif name == next_name:
+                status_parts.append("Next")
+                tags.append("next")
+            if not edsm:
+                tags.append("pending")
+            status = " / ".join(part for part in status_parts if part)
+            self.route_tree.insert("", tk.END, values=(idx, name, star, scoop, distance, edsm_value, valuable, status), tags=tuple(tags))
+
+    def _format_credits(self, value):
+        try:
+            value = int(value or 0)
+        except Exception:
+            return "-"
+        if value >= 1_000_000:
+            return f"{value / 1_000_000:.1f}m"
+        if value >= 1_000:
+            return f"{value / 1_000:.0f}k"
+        return str(value)
+
+    def _route_status_map(self, system_names):
+        wanted = [name for name in system_names if name]
+        if not wanted:
+            return {}
+        result = {name: "Unvisited" for name in wanted}
+        acquired = False
+        try:
+            acquired = self.app.db_lock.acquire(blocking=False)
+            if not acquired:
+                cached = getattr(self, "_last_route_status", {}) or {}
+                return {name: cached.get(name, result[name]) for name in wanted}
+            cur = self.app.conn.cursor()
+            for name in wanted:
+                cur.execute("SELECT total, scanned_count FROM systems WHERE name=?", (name,))
+                row = cur.fetchone()
+                if not row:
+                    continue
+                total = int(row[0] or 0)
+                scanned = int(row[1] or 0)
+                if total > 0 and scanned >= total:
+                    result[name] = "Complete"
+                elif scanned > 0 or total > 0:
+                    result[name] = f"Partial {scanned}/{total}"
+                else:
+                    result[name] = "Visited"
+            self._last_route_status = dict(result)
+        except Exception:
+            pass
+        finally:
+            if acquired:
+                try:
+                    self.app.db_lock.release()
+                except Exception:
+                    pass
+        return result
+
+    def _distance_from_current(self, entry):
+        pos = entry.get("StarPos")
+        cur = getattr(self.app, "current_coords", None)
+        if not isinstance(pos, (list, tuple)) or len(pos) < 3:
+            return "-"
+        if not isinstance(cur, (list, tuple)) or len(cur) < 3:
+            return "-"
+        try:
+            dist = math.sqrt(sum((float(a) - float(b)) ** 2 for a, b in zip(pos[:3], cur[:3])))
+            return f"{dist:.1f} ly"
+        except Exception:
+            return "-"
+
+    def _cache_path(self):
+        try:
+            return self.app._profile_path("exploration_edsm_cache.json")
+        except Exception:
+            return os.path.abspath("exploration_edsm_cache.json")
+
+    def _trip_archive_path(self):
+        try:
+            return self.app._profile_path("exploration_trip_archive.json")
+        except Exception:
+            return os.path.abspath("exploration_trip_archive.json")
+
+    def _load_edsm_cache(self):
+        path = self._cache_path()
+        try:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    return data if isinstance(data, dict) else {}
+        except Exception:
+            pass
+        return {}
+
+    def _save_edsm_cache(self):
+        path = self._cache_path()
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self._edsm_cache, f, indent=2)
+        except Exception:
+            pass
+
+    def _edsm_summary(self, system_name):
+        if not system_name:
+            return None
+        entry = self._edsm_cache.get(system_name)
+        if not isinstance(entry, dict) or not entry.get("ok"):
+            return None
+        return entry
+
+    def _request_route_enrichment(self):
+        now = time.time()
+        with self._edsm_lock:
+            if self._edsm_worker_active or (now - self._edsm_last_request_ts) < 2.0:
+                return
+        entries = self._route_entries()
+        current = getattr(self.app, "current_sys", None)
+        if current and current not in ("---", "Unknown"):
+            entries = [{"StarSystem": current}] + entries
+        if not entries:
+            return
+        targets = []
+        with self._edsm_lock:
+            for entry in entries:
+                name = entry.get("StarSystem")
+                if not name or name in self._edsm_pending:
+                    continue
+                cached = self._edsm_cache.get(name) or {}
+                age = now - float(cached.get("updated", 0) or 0)
+                if cached.get("ok") and age < 7 * 24 * 3600:
+                    continue
+                if cached and not cached.get("ok") and age < 3600:
+                    continue
+                targets.append(name)
+                self._edsm_pending.add(name)
+                if len(targets) >= 8:
+                    break
+        if targets:
+            with self._edsm_lock:
+                self._edsm_worker_active = True
+                self._edsm_last_request_ts = now
+            threading.Thread(target=self._fetch_edsm_values, args=(targets,), daemon=True).start()
+
+    def _fetch_edsm_values(self, systems):
+        changed = False
+        try:
+            for system_name in systems:
+                payload = {"updated": time.time(), "ok": False}
+                try:
+                    resp = requests.get(
+                        "https://www.edsm.net/api-system-v1/estimated-value",
+                        params={"systemName": system_name},
+                        timeout=8,
+                        headers={"User-Agent": "VoidCompass"},
+                    )
+                    if resp.ok and "application/json" in resp.headers.get("content-type", ""):
+                        data = resp.json()
+                        valuable = data.get("valuableBodies") or []
+                        payload.update({
+                            "ok": True,
+                            "estimatedValue": int(data.get("estimatedValue") or 0),
+                            "estimatedValueMapped": int(data.get("estimatedValueMapped") or 0),
+                            "valuableCount": len(valuable),
+                            "valuableBodies": valuable[:20],
+                            "url": data.get("url") or "",
+                        })
+                except Exception as exc:
+                    self._log_error(f"EDSM value lookup failed for {system_name}: {exc}")
+                with self._edsm_lock:
+                    self._edsm_cache[system_name] = payload
+                    self._edsm_pending.discard(system_name)
+                    changed = True
+        finally:
+            with self._edsm_lock:
+                self._edsm_worker_active = False
+        if changed:
+            self._save_edsm_cache()
+            try:
+                self.root.after(0, self.refresh)
+            except Exception:
+                pass
+
+    def _load_trip_archive(self):
+        path = self._trip_archive_path()
+        try:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    return data if isinstance(data, list) else []
+        except Exception:
+            pass
+        return []
+
+    def _save_trip_archive(self, archive):
+        path = self._trip_archive_path()
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(archive[-100:], f, indent=2)
+        except Exception:
+            pass
+
+    def _db_stats(self):
+        stats = {
+            "systems": 0,
+            "visits": 0,
+            "bodies": 0,
+            "value": 0,
+            "valuable": 0,
+        }
+        acquired = False
+        try:
+            acquired = self.app.db_lock.acquire(blocking=False)
+            if not acquired:
+                return dict(self._last_db_stats)
+            cur = self.app.conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM systems")
+            stats["systems"] = int(cur.fetchone()[0] or 0)
+            cur.execute("SELECT COUNT(*) FROM visited_systems")
+            stats["visits"] = int(cur.fetchone()[0] or 0)
+            cur.execute("SELECT data_json FROM scan_hud_items")
+            for (payload,) in cur.fetchall():
+                try:
+                    item = json.loads(payload)
+                except Exception:
+                    continue
+                if not isinstance(item, dict):
+                    continue
+                stats["bodies"] += 1
+                value = self._item_value(item)
+                stats["value"] += value
+                if self._is_valuable(item):
+                    stats["valuable"] += 1
+            self._last_db_stats = dict(stats)
+        except Exception:
+            pass
+        finally:
+            if acquired:
+                try:
+                    self.app.db_lock.release()
+                except Exception:
+                    pass
+        return stats
+
+    def _refresh_ledger(self):
+        if not hasattr(self, "ledger_tree"):
+            return
+        now = time.time()
+        if now - getattr(self, "_last_ledger_refresh_ts", 0.0) < 1.5:
+            self._render_ledger()
+            return
+        rows = []
+        acquired = False
+        try:
+            acquired = self.app.db_lock.acquire(blocking=False)
+            if not acquired:
+                self._render_ledger()
+                return
+            cur = self.app.conn.execute("SELECT system_name, data_json FROM scan_hud_items")
+            for system, payload in cur.fetchall():
+                try:
+                    item = json.loads(payload)
+                except Exception:
+                    continue
+                if not isinstance(item, dict) or item.get("is_star"):
+                    continue
+                if not self._is_valuable(item):
+                    continue
+                rows.append({
+                    "system": system,
+                    "body": item.get("full_name") or item.get("name") or "",
+                    "class": item.get("planet_class") or item.get("class") or "",
+                    "value": self._item_value(item),
+                    "mapped": "Yes" if item.get("dss_complete") or item.get("was_mapped") else "No",
+                    "flags": self._flag_text(item),
+                })
+            self._last_ledger_refresh_ts = now
+        except Exception:
+            rows = list(getattr(self, "ledger_rows", []) or [])
+        finally:
+            if acquired:
+                try:
+                    self.app.db_lock.release()
+                except Exception:
+                    pass
+        self.ledger_rows = sorted(rows, key=lambda row: row["value"], reverse=True)
+        self._render_ledger()
+
+    def _render_ledger(self):
+        if not hasattr(self, "ledger_tree"):
+            return
+        for item_id in self.ledger_tree.get_children():
+            self.ledger_tree.delete(item_id)
+        query = (self.ledger_filter_var.get() or "").strip().lower()
+        shown = []
+        for row in self.ledger_rows:
+            haystack = " ".join(str(v) for v in row.values()).lower()
+            if query and query not in haystack:
+                continue
+            shown.append(row)
+            self.ledger_tree.insert(
+                "",
+                tk.END,
+                values=(row["system"], row["body"], row["class"], f"{row['value']:,}", row["mapped"], row["flags"]),
+            )
+        self.ledger_summary.config(text=f"{len(shown)} bodies | {sum(row['value'] for row in shown):,} cr")
+
+    def _copy_ledger_summary(self):
+        lines = ["System Value Ledger"]
+        for row in self.ledger_rows[:40]:
+            lines.append(f"{row['system']} | {row['body']} | {row['class']} | {row['value']:,} cr | {row['flags']}")
+        if len(lines) == 1:
+            lines.append("(nothing tracked yet)")
+        self.root.clipboard_clear()
+        self.root.clipboard_append("\n".join(lines))
+
+    def _session_stats(self):
+        systems = set(getattr(self.app, "session_systems", set()) or set())
+        current = getattr(self.app, "current_sys", None)
+        if current and current not in ("---", "Unknown"):
+            systems.add(current)
+        stats = {"systems": len(systems), "bodies": 0, "value": 0, "valuable": 0}
+        if not systems:
+            self._last_session_stats = dict(stats)
+            return stats
+        acquired = False
+        try:
+            acquired = self.app.db_lock.acquire(blocking=False)
+            if not acquired:
+                cached = dict(self._last_session_stats)
+                cached["systems"] = stats["systems"]
+                return cached
+            cur = self.app.conn.cursor()
+            for system in systems:
+                cur.execute("SELECT data_json FROM scan_hud_items WHERE system_name=?", (system,))
+                for (payload,) in cur.fetchall():
+                    try:
+                        item = json.loads(payload)
+                    except Exception:
+                        continue
+                    if not isinstance(item, dict):
+                        continue
+                    stats["bodies"] += 1
+                    stats["value"] += self._item_value(item)
+                    if self._is_valuable(item):
+                        stats["valuable"] += 1
+            self._last_session_stats = dict(stats)
+        except Exception:
+            pass
+        finally:
+            if acquired:
+                try:
+                    self.app.db_lock.release()
+                except Exception:
+                    pass
+        return stats
+
+    def _render_history(self, current_value, valuable_count, session_stats=None):
+        session_stats = session_stats or self._session_stats()
+        stats = self._db_stats()
+        lines = [
+            f"Current system: {getattr(self.app, 'current_sys', '---')}",
+            f"Current system estimated scan value: {current_value:,} cr",
+            f"Current valuable bodies: {valuable_count}",
+            "",
+            f"Session jumps: {int(getattr(self.app, 'session_jump_count', 0) or 0)}",
+            f"Session distance: {float(getattr(self.app, 'session_ly', 0.0) or 0.0):.1f} ly",
+            f"Session systems: {session_stats['systems']:,}",
+            f"Session scan bodies stored: {session_stats['bodies']:,}",
+            f"Session estimated scan value: {session_stats['value']:,} cr",
+            f"Session valuable bodies: {session_stats['valuable']:,}",
+            "",
+            f"Profile systems stored: {stats['systems']:,}",
+            f"Profile systems visited: {stats['visits']:,}",
+            f"Profile scan bodies stored: {stats['bodies']:,}",
+            f"Profile estimated scan value: {stats['value']:,} cr",
+            f"Profile valuable bodies: {stats['valuable']:,}",
+        ]
+        archive = self._load_trip_archive()
+        if archive:
+            lines.extend(["", "Archived trips:"])
+            for trip in reversed(archive[-8:]):
+                ended = time.strftime("%Y-%m-%d %H:%M", time.localtime(float(trip.get("ended_ts", 0) or 0)))
+                lines.append(
+                    f"- {ended} | {trip.get('systems', 0)} systems | "
+                    f"{trip.get('jumps', 0)} jumps | {float(trip.get('ly', 0.0) or 0.0):.1f} ly | "
+                    f"{int(trip.get('value', 0) or 0):,} cr"
+                )
+        self.history_text.configure(state=tk.NORMAL)
+        self.history_text.delete("1.0", tk.END)
+        self.history_text.insert(tk.END, "\n".join(lines))
+        self.history_text.configure(state=tk.DISABLED)
+
+    def _copy_summary(self):
+        current = getattr(self.app, "current_sys", "---") or "---"
+        lines = [
+            f"Exploration summary: {current}",
+            f"Scan: {getattr(self.app, 'scanned', 0)}/{getattr(self.app, 'total', 0)}",
+            f"Route next: {self._next_route_system() or '-'}",
+            f"Session: {int(getattr(self.app, 'session_jump_count', 0) or 0)} jumps, {float(getattr(self.app, 'session_ly', 0.0) or 0.0):.1f} ly",
+        ]
+        self.root.clipboard_clear()
+        self.root.clipboard_append("\n".join(lines))
+
+    def _reset_session(self):
+        session_stats = self._session_stats()
+        systems = sorted(set(getattr(self.app, "session_systems", set()) or set()))
+        current = getattr(self.app, "current_sys", None)
+        if current and current not in ("---", "Unknown") and current not in systems:
+            systems.append(current)
+        if session_stats["systems"] or int(getattr(self.app, "session_jump_count", 0) or 0):
+            archive = self._load_trip_archive()
+            archive.append({
+                "started_ts": float(getattr(self.app, "session_start_ts", time.time()) or time.time()),
+                "ended_ts": time.time(),
+                "jumps": int(getattr(self.app, "session_jump_count", 0) or 0),
+                "ly": float(getattr(self.app, "session_ly", 0.0) or 0.0),
+                "systems": session_stats["systems"],
+                "bodies": session_stats["bodies"],
+                "value": session_stats["value"],
+                "valuable": session_stats["valuable"],
+                "system_names": systems,
+            })
+            self._save_trip_archive(archive)
+        self.app.session_start_ts = time.time()
+        self.app.session_jump_count = 0
+        self.app.session_ly = 0.0
+        current = getattr(self.app, "current_sys", None)
+        self.app.session_systems = {current} if current and current not in ("---", "Unknown") else set()
+        self.refresh()
+
+    def _copy_next_route(self):
+        next_name = self._next_route_system()
+        if not next_name:
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(next_name)
+
+    def _open_current_edsm(self):
+        current = getattr(self.app, "current_sys", None)
+        if current and current != "---":
+            webbrowser.open(f"https://www.edsm.net/show-system?systemName={current.replace(' ', '+')}")
+
+    def _on_close(self):
+        self.config["exploration_window_geometry"] = self.win.geometry()
+        save_config(self.config)
+        self.win.destroy()

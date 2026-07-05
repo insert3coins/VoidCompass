@@ -68,6 +68,7 @@ VSVersionInfo(
         '--log-level=INFO',
         '--icon=icon.ico',         # Sets the file icon for the .exe
         '--add-data=icon.ico;.',   # Bundles the icon inside the .exe for the GUI
+        '--add-data=Images;Images',
         '--add-data=mining_data.db;.',
         '--add-data=codexRef.json;.',
         '--version-file=version_info.txt'
@@ -90,6 +91,13 @@ VSVersionInfo(
     if os.path.exists('codexRef.json'):
         shutil.copy('codexRef.json', os.path.join(dist_dir, 'codexRef.json'))
         print("Copied codexRef.json to dist/codexRef.json")
+    images_src = os.path.join(os.getcwd(), 'Images')
+    if os.path.isdir(images_src):
+        images_dest = os.path.join(dist_dir, 'Images')
+        if os.path.exists(images_dest):
+            shutil.rmtree(images_dest)
+        shutil.copytree(images_src, images_dest)
+        print("Copied Images to dist/Images")
     col_data_src = os.path.join(os.getcwd(), 'colonisation_data.json')
     if os.path.exists(col_data_src):
         shutil.copy(col_data_src, os.path.join(dist_dir, 'colonisation_data.json'))

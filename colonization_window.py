@@ -15,7 +15,7 @@ import os
 import time
 import tkinter as tk
 from datetime import datetime
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 
@@ -87,6 +87,7 @@ class ColonizationWindow:
 
         self._build_ui()
         self._refresh_list()
+        self._refresh_planner()
 
         # Auto-select most recently updated project
         if self.projects:
@@ -116,6 +117,7 @@ class ColonizationWindow:
 
     def _do_refresh(self):
         self._refresh_list()
+        self._refresh_planner()
         if self._selected_mid is not None:
             if self._selected_mid in self.projects:
                 self._render(self._selected_mid)
@@ -182,9 +184,18 @@ class ColonizationWindow:
         self._list_canvas.bind("<MouseWheel>",
                                lambda e: self._list_canvas.yview_scroll(-1 * (e.delta // 120), "units"))
 
-        # ── Right: detail panel ───────────────────────────────────────────────
+        # ── Right: project detail + planner tabs ─────────────────────────────
         right = tk.Frame(main, bg=self.UI_PANEL)
         right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self._tabs = ttk.Notebook(right)
+        self._tabs.pack(fill=tk.BOTH, expand=True)
+
+        detail_tab = tk.Frame(self._tabs, bg=self.UI_PANEL)
+        planner_tab = tk.Frame(self._tabs, bg=self.UI_BG)
+        self._tabs.add(detail_tab, text="Project Details")
+        self._tabs.add(planner_tab, text="Shopping List")
+        self._build_planner_tab(planner_tab)
+        right = detail_tab
 
         # Site info labels
         info = tk.Frame(right, bg=self.UI_PANEL)
@@ -281,6 +292,119 @@ class ColonizationWindow:
             relief=tk.FLAT, bd=0, padx=10, pady=4,
             font=("Segoe UI", 8), cursor="hand2", highlightthickness=0,
         )
+
+    def _build_planner_tab(self, parent):
+        header = tk.Frame(parent, bg=self.UI_BG)
+        header.pack(fill=tk.X, padx=10, pady=(10, 6))
+        self._planner_summary = tk.Label(
+            header, text="", font=("Consolas", 8),
+            fg=self.UI_MUTED, bg=self.UI_BG,
+        )
+        self._planner_summary.pack(side=tk.RIGHT)
+        self._action_button(
+            header, "Copy Shopping List",
+            self._copy_global_shopping_list, accent=True,
+        ).pack(side=tk.LEFT)
+
+        style = ttk.Style(self.win)
+        style.theme_use("default")
+        style.configure(
+            "ColonyPlanner.Treeview",
+            background="#0b0f13",
+            foreground=COLOR_TEXT,
+            fieldbackground="#0b0f13",
+            rowheight=24,
+            borderwidth=0,
+        )
+        style.configure(
+            "ColonyPlanner.Treeview.Heading",
+            background=self.UI_PANEL,
+            foreground=COLOR_ORANGE,
+            relief="flat",
+            font=("Segoe UI", 8, "bold"),
+        )
+        style.map(
+            "ColonyPlanner.Treeview",
+            background=[("selected", "#12313c")],
+            foreground=[("selected", COLOR_TEXT)],
+        )
+
+        frame = tk.Frame(parent, bg=self.UI_BG)
+        frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+        cols = ("commodity", "remaining", "required", "delivered", "projects")
+        self._planner_tree = ttk.Treeview(frame, columns=cols, show="headings", style="ColonyPlanner.Treeview")
+        specs = (
+            ("commodity", "Commodity", 240, tk.W),
+            ("remaining", "Remaining", 110, tk.E),
+            ("required", "Required", 110, tk.E),
+            ("delivered", "Delivered", 110, tk.E),
+            ("projects", "Projects", 300, tk.W),
+        )
+        for col, label, width, anchor in specs:
+            self._planner_tree.heading(col, text=label)
+            self._planner_tree.column(col, width=width, anchor=anchor)
+        scroll = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self._planner_tree.yview)
+        self._planner_tree.configure(yscrollcommand=scroll.set)
+        self._planner_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+    def _planner_rows(self):
+        totals = {}
+        active_projects = 0
+        for project in self.projects.values():
+            if project.get("complete") or project.get("failed"):
+                continue
+            active_projects += 1
+            project_name = project.get("system_name") or project.get("body_name") or "Unknown"
+            for res in project.get("resources") or []:
+                name = res.get("display") or res.get("name") or "Unknown"
+                required = int(res.get("required") or 0)
+                delivered = min(int(res.get("provided") or 0), required)
+                remaining = max(0, required - delivered)
+                if remaining <= 0:
+                    continue
+                entry = totals.setdefault(
+                    name,
+                    {"commodity": name, "remaining": 0, "required": 0, "delivered": 0, "projects": set()},
+                )
+                entry["remaining"] += remaining
+                entry["required"] += required
+                entry["delivered"] += delivered
+                entry["projects"].add(project_name)
+        rows = sorted(totals.values(), key=lambda row: (-row["remaining"], row["commodity"].lower()))
+        return active_projects, rows
+
+    def _refresh_planner(self):
+        if not hasattr(self, "_planner_tree"):
+            return
+        active_projects, rows = self._planner_rows()
+        for item_id in self._planner_tree.get_children():
+            self._planner_tree.delete(item_id)
+        for row in rows:
+            self._planner_tree.insert(
+                "",
+                tk.END,
+                values=(
+                    row["commodity"],
+                    f"{row['remaining']:,}",
+                    f"{row['required']:,}",
+                    f"{row['delivered']:,}",
+                    ", ".join(sorted(row["projects"])[:4]),
+                ),
+            )
+        self._planner_summary.config(
+            text=f"{active_projects} active projects | {sum(r['remaining'] for r in rows):,} tons remaining"
+        )
+
+    def _copy_global_shopping_list(self):
+        _active_projects, rows = self._planner_rows()
+        lines = ["Colonisation shopping list"]
+        for row in rows:
+            lines.append(f"{row['commodity']}: {row['remaining']:,}")
+        if len(lines) == 1:
+            lines.append("(nothing remaining)")
+        self.root.clipboard_clear()
+        self.root.clipboard_append("\n".join(lines))
 
     def _on_list_configure(self, event):
         self._list_canvas.configure(scrollregion=self._list_canvas.bbox("all"))

@@ -325,7 +325,15 @@ class JournalWatcher:
                 "type": ev,
                 "raw": data,
                 "data": {
-                    "cargo_capacity": data.get("CargoCapacity", 0)
+                    "cargo_capacity": data.get("CargoCapacity", 0),
+                    "ship": data.get("Ship"),
+                    "ship_id": data.get("ShipID"),
+                    "ship_name": data.get("ShipName"),
+                    "ship_ident": data.get("ShipIdent"),
+                    "modules_value": data.get("ModulesValue"),
+                    "hull_health": data.get("HullHealth"),
+                    "max_jump_range": data.get("MaxJumpRange"),
+                    "rebuy": data.get("Rebuy"),
                 }
             }
         if ev == "Commander":
@@ -348,6 +356,24 @@ class JournalWatcher:
                     "build": data.get("build"),
                     "credits": data.get("Credits"),
                     "loan": data.get("Loan"),
+                    "ship": data.get("Ship"),
+                    "ship_localised": data.get("Ship_Localised"),
+                    "ship_id": data.get("ShipID"),
+                    "ship_name": data.get("ShipName"),
+                    "ship_ident": data.get("ShipIdent"),
+                    "fuel_level": data.get("FuelLevel"),
+                    "fuel_capacity": data.get("FuelCapacity"),
+                    "game_mode": data.get("GameMode"),
+                    "group": data.get("Group"),
+                }
+            }
+        if ev in ("Rank", "Progress", "Reputation"):
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    key: value for key, value in data.items()
+                    if key not in ("timestamp", "event")
                 }
             }
         if ev in ("Location", "FSDJump", "StartJump"):

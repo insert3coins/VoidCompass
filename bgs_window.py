@@ -1,11 +1,12 @@
 """
-bgs_window.py — BGS (Background Simulation) Tracker for VoidCompass.
+bgs_window.py - BGS (Background Simulation) visit tracker for VoidCompass.
 
 Stores faction influence snapshots for every inhabited system visited.
 Shows live influence %, trend vs. the previous visit, government/allegiance,
 and active/pending BGS states.
 """
 
+import json
 import tkinter as tk
 from datetime import datetime
 from typing import Callable
@@ -66,7 +67,7 @@ class BGSWindow:
         self._selected_system: str | None = None
 
         self.win = tk.Toplevel(root)
-        self.win.title("BGS Tracker — Void Compass")
+        self.win.title("BGS Visit Tracker - Void Compass")
         self.win.configure(bg=self.UI_BG)
         self.win.geometry(config.get("bgs_window_geometry", "880x580"))
         self.win.resizable(True, True)
@@ -125,7 +126,7 @@ class BGSWindow:
         hdr = tk.Frame(self.win, bg="#0c1014", height=46)
         hdr.pack(fill=tk.X)
         hdr.pack_propagate(False)
-        tk.Label(hdr, text="BGS TRACKER",
+        tk.Label(hdr, text="BGS VISIT TRACKER",
                  font=("Segoe UI", 13, "bold"), fg=COLOR_ACCENT, bg="#0c1014"
                  ).pack(side=tk.LEFT, padx=14, pady=8)
         self._sys_count_lbl = tk.Label(hdr, text="",
