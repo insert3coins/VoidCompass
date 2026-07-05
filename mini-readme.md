@@ -1,5 +1,21 @@
 # VoidCompass // UPDATE LOG
 
+## v3.7.1 // Exploration System History
+**Release Date:** 2026-Jul-05
+
+### Exploration
+*   Added a new **System History** tab to the Exploration window.
+*   System history is read from the active commander's profile-local `exploration_data.db`.
+*   History merges `visited_systems`, `systems`, and `scan_hud_items` data, including system, last visit, star class, body scan progress, estimated value, bio counts, valuable body count, and DB/live source status.
+*   Added filtering and copy support for the system history list.
+*   The current system is overlaid with live in-memory scan data so the tab updates during active scanning without adding another persistence file.
+
+### Navigation + Dashboard
+*   Fixed Current Flight strip next-hop distance handling for Elite's upcoming-only `NavRoute.json` format.
+
+### Version
+*   Bumped app version to **3.7.1**.
+
 ## v3.6.5 // Profile Dashboard + Route Refresh Polish
 **Release Date:** 2026-Jul-05
 

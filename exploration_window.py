@@ -39,6 +39,8 @@ class ExplorationWindow:
         self._last_db_stats = {"systems": 0, "visits": 0, "bodies": 0, "value": 0, "valuable": 0}
         self._last_route_status = {}
         self._last_ledger_refresh_ts = 0.0
+        self.system_history_rows = []
+        self._last_history_refresh_ts = 0.0
         self._closing = False
         self.win = tk.Toplevel(root)
         self.win.title("Exploration")
@@ -134,6 +136,7 @@ class ExplorationWindow:
         self._build_bio_tab()
         self._build_route_tab()
         self._build_history_tab()
+        self._build_system_history_tab()
         self._build_ledger_tab()
 
     def _summary_card(self, parent, title, accent=None):
@@ -287,6 +290,43 @@ class ExplorationWindow:
         self.history_text.pack(fill=tk.BOTH, expand=True)
         self.history_text.configure(state=tk.DISABLED)
 
+    def _build_system_history_tab(self):
+        frame = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.tabs.add(frame, text="System History")
+
+        controls = tk.Frame(frame, bg=self.UI_BG)
+        controls.pack(fill=tk.X, padx=10, pady=(10, 6))
+        tk.Label(controls, text="Filter", fg=self.UI_MUTED, bg=self.UI_BG, font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT)
+        self.system_history_filter_var = tk.StringVar()
+        self.system_history_filter_var.trace_add("write", lambda *_: self._render_system_history())
+        tk.Entry(
+            controls,
+            textvariable=self.system_history_filter_var,
+            bg="#0b0f13",
+            fg=COLOR_TEXT,
+            insertbackground=COLOR_ACCENT,
+            relief=tk.FLAT,
+            width=34,
+        ).pack(side=tk.LEFT, padx=(8, 10), ipady=4)
+        self._button(controls, "Copy History", self._copy_system_history, accent=True).pack(side=tk.LEFT)
+        self.system_history_summary = tk.Label(controls, text="", font=("Consolas", 8), fg=self.UI_MUTED, bg=self.UI_BG)
+        self.system_history_summary.pack(side=tk.RIGHT)
+
+        cols = ("last", "system", "star", "bodies", "value", "bio", "valuable", "source")
+        self.system_history_tree = self._tree(frame, cols, {
+            "last": ("Last Visit", 125, tk.W),
+            "system": ("System", 260, tk.W),
+            "star": ("Star", 70, tk.CENTER),
+            "bodies": ("Bodies", 85, tk.CENTER),
+            "value": ("Value", 95, tk.E),
+            "bio": ("Bio", 75, tk.CENTER),
+            "valuable": ("Valuable", 80, tk.CENTER),
+            "source": ("Source", 65, tk.CENTER),
+        })
+        self.system_history_tree.tag_configure("current", foreground=COLOR_ACCENT)
+        self.system_history_tree.tag_configure("valuable", foreground=COLOR_ORANGE)
+        self.system_history_tree.tag_configure("bio", foreground=self.UI_OK)
+
     def _build_ledger_tab(self):
         frame = tk.Frame(self.tabs, bg=self.UI_BG)
         self.tabs.add(frame, text="Value Ledger")
@@ -377,6 +417,8 @@ class ExplorationWindow:
             self._render_body_metrics(current, bodies, scanned, total, current_value)
             self._render_bodies(bodies)
             self._render_bio(bodies, bio_summary)
+            self._refresh_system_history_rows(current, bodies, current_value, valuable_count, bio_summary, scanned, total)
+            self._render_system_history()
             self._request_route_enrichment()
             self._render_route()
             self._render_history(current_value, valuable_count, session_stats)
@@ -965,6 +1007,129 @@ class ExplorationWindow:
         except Exception:
             pass
 
+    def _history_row_from_items(self, system, address, last_seen, scanned, total, items):
+        stars = sorted({
+            str(item.get("star_type"))
+            for item in items
+            if isinstance(item, dict) and item.get("is_star") and item.get("star_type")
+        })
+        value = 0
+        valuable = 0
+        bio_signals = 0
+        bio_bodies = 0
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            value += self._item_value(item)
+            if self._is_valuable(item):
+                valuable += 1
+            bio_count = self._safe_int(item.get("bio_count"))
+            organic_done = self._safe_int(item.get("organic_complete_count"))
+            if bio_count or organic_done or self._genus_labels(item):
+                bio_bodies += 1
+            bio_signals += bio_count
+        return {
+            "system": system,
+            "system_address": address,
+            "last_seen_ts": float(last_seen or 0),
+            "star_class": stars[0] if stars else "-",
+            "stars": stars,
+            "scanned_bodies": int(scanned or len(items) or 0),
+            "total_bodies": int(total or 0),
+            "estimated_value": int(value or 0),
+            "valuable_bodies": int(valuable or 0),
+            "bio_signals": int(bio_signals or 0),
+            "bio_bodies": int(bio_bodies or 0),
+            "source": "DB",
+        }
+
+    def _refresh_system_history_rows(self, current, bodies, current_value, valuable_count, bio_summary, scanned, total):
+        now = time.time()
+        if (now - getattr(self, "_last_history_refresh_ts", 0.0)) < 1.5 and self.system_history_rows:
+            self._overlay_current_history_row(current, bodies, current_value, valuable_count, bio_summary, scanned, total)
+            return
+        self._last_history_refresh_ts = now
+
+        visits = []
+        system_totals = {}
+        grouped_items = {}
+        acquired = False
+        try:
+            acquired = self.app.db_lock.acquire(blocking=False)
+            if not acquired:
+                self._overlay_current_history_row(current, bodies, current_value, valuable_count, bio_summary, scanned, total)
+                return
+            cur = self.app.conn.cursor()
+            cur.execute("SELECT system_name, system_address, last_visited_at FROM visited_systems")
+            visits = cur.fetchall()
+            cur.execute("SELECT name, total, scanned_count FROM systems")
+            system_totals = {
+                name: (int(total or 0), int(scanned_count or 0))
+                for name, total, scanned_count in cur.fetchall()
+            }
+            cur.execute("SELECT system_name, data_json FROM scan_hud_items")
+            for system_name, payload in cur.fetchall():
+                try:
+                    item = json.loads(payload)
+                except Exception:
+                    continue
+                if isinstance(item, dict):
+                    grouped_items.setdefault(system_name, []).append(item)
+        except Exception:
+            self._overlay_current_history_row(current, bodies, current_value, valuable_count, bio_summary, scanned, total)
+            return
+        finally:
+            if acquired:
+                try:
+                    self.app.db_lock.release()
+                except Exception:
+                    pass
+
+        rows = []
+        for system, address, last_seen in visits:
+            if not system:
+                continue
+            total_count, scanned_count = system_totals.get(system, (0, 0))
+            rows.append(
+                self._history_row_from_items(
+                    system,
+                    address,
+                    last_seen,
+                    scanned_count,
+                    total_count,
+                    grouped_items.get(system, []),
+                )
+            )
+        self.system_history_rows = rows
+        self._overlay_current_history_row(current, bodies, current_value, valuable_count, bio_summary, scanned, total)
+
+    def _overlay_current_history_row(self, current, bodies, current_value, valuable_count, bio_summary, scanned, total):
+        if not current or current in ("---", "Unknown"):
+            return
+        rows = [row for row in self.system_history_rows if row.get("system") != current]
+        stars = sorted({
+            str(item.get("star_type"))
+            for item in bodies
+            if isinstance(item, dict) and item.get("is_star") and item.get("star_type")
+        })
+        if not stars and getattr(self.app, "star_class", None):
+            stars = [str(getattr(self.app, "star_class"))]
+        rows.append({
+            "system": current,
+            "system_address": getattr(self.app, "current_system_address", None),
+            "last_seen_ts": time.time(),
+            "star_class": getattr(self.app, "star_class", "") or (stars[0] if stars else "-"),
+            "stars": stars,
+            "scanned_bodies": int(scanned or 0),
+            "total_bodies": int(total or 0),
+            "estimated_value": int(current_value or 0),
+            "valuable_bodies": int(valuable_count or 0),
+            "bio_signals": int(bio_summary.get("bio_signals", 0) or 0),
+            "bio_bodies": int(bio_summary.get("bio_bodies", 0) or 0),
+            "source": "Live",
+        })
+        self.system_history_rows = rows
+
     def _db_stats(self):
         stats = {
             "systems": 0,
@@ -1155,6 +1320,90 @@ class ExplorationWindow:
         self.history_text.delete("1.0", tk.END)
         self.history_text.insert(tk.END, "\n".join(lines))
         self.history_text.configure(state=tk.DISABLED)
+
+    def _format_history_time(self, ts):
+        try:
+            value = float(ts or 0)
+            if value <= 0:
+                return "-"
+            return time.strftime("%Y-%m-%d %H:%M", time.localtime(value))
+        except Exception:
+            return "-"
+
+    def _render_system_history(self):
+        if not hasattr(self, "system_history_tree"):
+            return
+        for item_id in self.system_history_tree.get_children():
+            self.system_history_tree.delete(item_id)
+        query = (self.system_history_filter_var.get() or "").strip().lower()
+        current = getattr(self.app, "current_sys", None)
+        rows = sorted(
+            self.system_history_rows,
+            key=lambda row: float(row.get("last_seen_ts", 0) or 0),
+            reverse=True,
+        )
+        shown = []
+        for row in rows:
+            haystack = " ".join(
+                str(row.get(key, ""))
+                for key in ("system", "star_class", "stars", "system_address")
+            ).lower()
+            if query and query not in haystack:
+                continue
+            shown.append(row)
+            tags = []
+            if row.get("system") == current:
+                tags.append("current")
+            elif int(row.get("valuable_bodies", 0) or 0) > 0:
+                tags.append("valuable")
+            elif int(row.get("bio_signals", 0) or 0) > 0:
+                tags.append("bio")
+            star = row.get("star_class") or "-"
+            stars = row.get("stars") or []
+            if stars and star in ("", "-"):
+                star = "/".join(stars[:3])
+            bodies = f"{int(row.get('scanned_bodies', 0) or 0)}/{int(row.get('total_bodies', 0) or 0)}"
+            bio = f"{int(row.get('bio_bodies', 0) or 0)}/{int(row.get('bio_signals', 0) or 0)}"
+            self.system_history_tree.insert(
+                "",
+                tk.END,
+                values=(
+                    self._format_history_time(row.get("last_seen_ts")),
+                    row.get("system") or "-",
+                    star,
+                    bodies,
+                    self._format_credits(row.get("estimated_value")),
+                    bio,
+                    int(row.get("valuable_bodies", 0) or 0),
+                    row.get("source") or "DB",
+                ),
+                tags=tuple(tags),
+            )
+        total_value = sum(int(row.get("estimated_value", 0) or 0) for row in shown)
+        self.system_history_summary.config(
+            text=f"{len(shown)} systems | {self._format_credits(total_value)} | profile DB"
+        )
+
+    def _copy_system_history(self):
+        rows = sorted(
+            self.system_history_rows,
+            key=lambda row: float(row.get("last_seen_ts", 0) or 0),
+            reverse=True,
+        )
+        lines = ["Exploration System History"]
+        for row in rows[:80]:
+            lines.append(
+                f"{self._format_history_time(row.get('last_seen_ts'))} | "
+                f"{row.get('system') or '-'} | "
+                f"Star {row.get('star_class') or '-'} | "
+                f"{int(row.get('scanned_bodies', 0) or 0)}/{int(row.get('total_bodies', 0) or 0)} bodies | "
+                f"{self._format_credits(row.get('estimated_value'))} | "
+                f"Bio {int(row.get('bio_bodies', 0) or 0)}/{int(row.get('bio_signals', 0) or 0)}"
+            )
+        if len(lines) == 1:
+            lines.append("(nothing tracked yet)")
+        self.root.clipboard_clear()
+        self.root.clipboard_append("\n".join(lines))
 
     def _copy_summary(self):
         current = getattr(self.app, "current_sys", "---") or "---"
