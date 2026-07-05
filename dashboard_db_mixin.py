@@ -212,13 +212,25 @@ class DashboardDBMixin:
             if body_id is None or ts is None:
                 return
             payload = json.dumps(item)
+            try:
+                body_id = int(body_id)
+            except Exception:
+                return
             with self.db_lock:
                 self.conn.execute(
                     "INSERT OR REPLACE INTO scan_hud_items (system_name, body_id, data_json, ts) VALUES (?, ?, ?, ?)",
-                    (system_name, int(body_id), payload, int(ts)),
+                    (system_name, body_id, payload, int(ts)),
                 )
                 self._db_maybe_commit(reason="scan_item")
-        except sqlite3.Error:
+                if hasattr(self, "_refresh_value_ledger_window"):
+                    self._refresh_value_ledger_window()
+                if hasattr(self, "_refresh_exploration_window"):
+                    self._refresh_exploration_window()
+        except Exception as e:
+            try:
+                self.log(f"Scan item save skipped: {e}")
+            except Exception:
+                pass
             return
 
     def migrate_json_history(self):
@@ -365,6 +377,8 @@ class DashboardDBMixin:
                     (sys_name, total, scanned),
                 )
                 self._db_maybe_commit(reason="system")
+                if hasattr(self, "_refresh_exploration_window"):
+                    self._refresh_exploration_window()
             except sqlite3.Error as e:
                 self.log(f"❌ DB ERROR (System): {e}")
 
@@ -447,6 +461,8 @@ class DashboardDBMixin:
                          active, pending, recovering, event_timestamp, now),
                     )
                 self._db_maybe_commit(reason="bgs")
+                if hasattr(self, "_refresh_bgs_window"):
+                    self._refresh_bgs_window()
             except sqlite3.Error as e:
                 self.log(f"❌ DB ERROR (BGS): {e}")
 
@@ -466,6 +482,10 @@ class DashboardDBMixin:
                     (system_name, system_address, now),
                 )
                 self._db_maybe_commit(reason="visit")
+                if hasattr(self, "_refresh_bgs_window"):
+                    self._refresh_bgs_window()
+                if hasattr(self, "_refresh_exploration_window"):
+                    self._refresh_exploration_window()
             except sqlite3.Error as e:
                 self.log(f"❌ DB ERROR (visit): {e}")
 

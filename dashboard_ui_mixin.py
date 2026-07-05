@@ -1,5 +1,8 @@
 import time
 import math
+import os
+import sys
+import threading
 import tkinter as tk
 import requests
 import webbrowser
@@ -149,13 +152,16 @@ class DashboardUIMixin:
             )
 
         for _text, _cmd in [
+            ("Profile",        self.open_commander_profile_window),
+            ("Explore",        self.open_exploration_window),
+            ("Ground",         self.open_ground_target_window),
             ("Shots",          self.open_screenshots_folder),
             ("Carrier",        self.open_carrier_window),
             ("BGS",            self.open_bgs_window),
             ("Engineer",       self.open_engineer_window),
             ("Colony",         self.open_colonization_window),
             ("Mining",         self.open_mining_window),
-            ("Route Planner",  self.open_route_planner),
+            ("Route",          self.open_route_planner),
         ]:
             _nav_btn(_text, _cmd).pack(side=tk.RIGHT, padx=(0, 2))
 
@@ -215,6 +221,9 @@ class DashboardUIMixin:
         self.summary_cmdr.pack(anchor="e")
 
         tk.Frame(self.root, bg=self.UI_BORDER, height=1).pack(fill=tk.X, padx=12, pady=(6, 0))
+
+        self._build_companion_dashboard_body()
+        return
 
         # ── BODY ──────────────────────────────────────────────────────────
         body = tk.Frame(self.root, bg=self.UI_BG)
@@ -473,6 +482,225 @@ class DashboardUIMixin:
         self.ground_lat_entry.insert(0, f"{getattr(self, 'target_lat', 0.0):.6f}")
         self.ground_lon_entry.insert(0, f"{getattr(self, 'target_lon', 0.0):.6f}")
 
+    def _build_companion_dashboard_body(self):
+        body = tk.Frame(self.root, bg=self.UI_BG)
+        body.pack(fill=tk.BOTH, expand=True, padx=12, pady=8)
+
+        flight_deck = tk.Frame(body, bg=self.UI_BG)
+        flight_deck.pack(fill=tk.X, pady=(0, 8))
+        flight_deck.grid_columnconfigure(0, weight=2, uniform="deck")
+        flight_deck.grid_columnconfigure(1, weight=2, uniform="deck")
+        flight_deck.grid_columnconfigure(2, weight=4, uniform="deck")
+
+        flight_card = self._panel(flight_deck, border=COLOR_ACCENT)
+        flight_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        self._section_label(flight_card, "CURRENT FLIGHT").pack(anchor="w", padx=12, pady=(10, 0))
+        flight_stats = tk.Frame(flight_card, bg=self.UI_PANEL)
+        flight_stats.pack(fill=tk.BOTH, expand=True, padx=0, pady=(0, 8))
+        self.sys_stat = self.create_stat(flight_stats, "CURRENT SYSTEM", "---")
+        self.nav_stat = self.create_stat(flight_stats, "NAV TARGET", "---")
+        self.scan_stat = self.create_stat(flight_stats, "SCAN PROGRESS", "0 / 0")
+
+        self.carrier_panel = self._panel(flight_deck)
+        self.carrier_panel.grid(row=0, column=1, sticky="nsew", padx=(0, 8))
+        carrier_hdr = tk.Frame(self.carrier_panel, bg=self.UI_PANEL)
+        carrier_hdr.pack(fill=tk.X, padx=12, pady=(10, 4))
+        self._section_label(carrier_hdr, "FLEET CARRIER").pack(side=tk.LEFT)
+        self.carrier_panel_badge = tk.Label(carrier_hdr, text="IDLE", fg="black", bg=self.UI_DIM, font=("Segoe UI", 7, "bold"), padx=6, pady=2)
+        self.carrier_panel_badge.pack(side=tk.RIGHT)
+        self.carrier_panel_name = tk.Label(self.carrier_panel, text="Dock at your carrier to sync.", fg=self.UI_DIM, bg=self.UI_PANEL, font=self.UI_MONO_BOLD, anchor="w")
+        self.carrier_panel_name.pack(fill=tk.X, padx=12)
+        self.carrier_panel_loc = tk.Label(self.carrier_panel, text="", fg=self.UI_MUTED, bg=self.UI_PANEL, font=self.UI_MONO, anchor="w")
+        self.carrier_panel_loc.pack(fill=tk.X, padx=12, pady=(1, 0))
+        self.carrier_panel_jump = tk.Label(self.carrier_panel, text="", fg=COLOR_ACCENT, bg=self.UI_PANEL, font=("Segoe UI", 8, "bold"), anchor="w")
+        self.carrier_panel_jump.pack(fill=tk.X, padx=12, pady=(1, 0))
+        fuel_row = tk.Frame(self.carrier_panel, bg=self.UI_PANEL)
+        fuel_row.pack(fill=tk.X, padx=12, pady=(8, 10))
+        self.carrier_fuel_bar_bg = tk.Frame(fuel_row, bg="#1a2430", height=7)
+        self.carrier_fuel_bar_bg.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.carrier_fuel_bar_bg.pack_propagate(False)
+        self.carrier_fuel_fill = tk.Frame(self.carrier_fuel_bar_bg, bg=self.UI_OK, height=7)
+        self.carrier_fuel_fill.place(x=0, y=0, relheight=1.0, width=0)
+        self.carrier_fuel_txt = tk.Label(fuel_row, text="", fg=self.UI_DIM, bg=self.UI_PANEL, font=("Segoe UI", 7))
+        self.carrier_fuel_txt.pack(side=tk.LEFT, padx=(8, 0))
+
+        route_ground = tk.Frame(flight_deck, bg=self.UI_BG)
+        route_ground.grid(row=0, column=2, sticky="nsew")
+        route_ground.grid_columnconfigure(0, weight=1)
+        route_ground.grid_rowconfigure(0, weight=1)
+
+        self.wp_panel = self._panel(route_ground, border=COLOR_ACCENT)
+        self.wp_panel.grid(row=0, column=0, sticky="nsew")
+        wp_head = tk.Frame(self.wp_panel, bg=self.UI_PANEL)
+        wp_head.pack(fill=tk.X, padx=12, pady=(10, 0))
+        self._section_label(wp_head, "ROUTE NOTES").pack(side=tk.LEFT)
+        self.wp_dist_lbl = tk.Label(wp_head, text="", font=self.UI_MONO_BOLD, fg=COLOR_ACCENT, bg=self.UI_PANEL)
+        self.wp_dist_lbl.pack(side=tk.RIGHT)
+        self.wp_name_lbl = tk.Label(self.wp_panel, text="NO ACTIVE ROUTE", font=("Segoe UI", 11, "bold"), fg=COLOR_TEXT, bg=self.UI_PANEL, anchor="w")
+        self.wp_name_lbl.pack(fill=tk.X, padx=12, pady=(6, 0))
+        self.wp_info_wrap = tk.Frame(self.wp_panel, bg=self.UI_PANEL)
+        self.wp_info_wrap.pack(fill=tk.X, padx=12, pady=(2, 8))
+        self.wp_info_scroll = tk.Scrollbar(self.wp_info_wrap, orient=tk.VERTICAL)
+        self.wp_info_text = tk.Text(
+            self.wp_info_wrap,
+            bg=self.UI_PANEL,
+            fg=self.UI_MUTED,
+            font=self.UI_MONO,
+            relief=tk.FLAT,
+            borderwidth=0,
+            highlightthickness=0,
+            wrap=tk.WORD,
+            yscrollcommand=self.wp_info_scroll.set,
+            height=3,
+        )
+        self.wp_info_scroll.config(command=self.wp_info_text.yview)
+        self.wp_info_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.wp_info_text.config(state=tk.DISABLED)
+        self.wp_info_scroll_visible = False
+        self.wp_info_text.bind("<Enter>", lambda e: self._toggle_wp_scrollbar(True))
+        self.wp_info_text.bind("<Leave>", lambda e: self._toggle_wp_scrollbar(False))
+        self.wp_info_text.bind("<MouseWheel>", self._on_wp_info_wheel)
+
+        content = tk.Frame(body, bg=self.UI_BG)
+        content.pack(fill=tk.BOTH, expand=True)
+        content.grid_columnconfigure(0, weight=3, uniform="streams")
+        content.grid_columnconfigure(1, weight=2, uniform="streams")
+        content.grid_rowconfigure(0, weight=1)
+
+        history_panel = self._panel(content, border=COLOR_ACCENT)
+        history_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        history_header = tk.Frame(history_panel, bg=self.UI_PANEL)
+        history_header.pack(fill=tk.X, padx=12, pady=(10, 6))
+        self._section_label(history_header, "JOURNAL HISTORY").pack(side=tk.LEFT)
+        self.journal_history_count_lbl = tk.Label(
+            history_header,
+            text="LIVE",
+            fg=COLOR_ACCENT,
+            bg=self.UI_PANEL,
+            font=("Consolas", 8, "bold"),
+        )
+        self.journal_history_count_lbl.pack(side=tk.RIGHT)
+        tk.Label(
+            history_panel,
+            text="Recent journal activity with event icons and compact context.",
+            fg=self.UI_MUTED,
+            bg=self.UI_PANEL,
+            font=("Segoe UI", 8),
+            anchor="w",
+        ).pack(fill=tk.X, padx=12, pady=(0, 8))
+
+        history_wrap = tk.Frame(history_panel, bg="#0b0f13")
+        history_wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+        self.journal_history_canvas = tk.Canvas(
+            history_wrap,
+            bg="#0b0f13",
+            highlightthickness=0,
+            borderwidth=0,
+        )
+        self.journal_history_scroll = tk.Scrollbar(history_wrap, orient=tk.VERTICAL, command=self.journal_history_canvas.yview)
+        self.journal_history_canvas.configure(yscrollcommand=self.journal_history_scroll.set)
+        self.journal_history_inner = tk.Frame(self.journal_history_canvas, bg="#0b0f13")
+        self.journal_history_window = self.journal_history_canvas.create_window((0, 0), window=self.journal_history_inner, anchor="nw")
+        self.journal_history_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.journal_history_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.journal_history_inner.bind(
+            "<Configure>",
+            lambda _event: self.journal_history_canvas.configure(scrollregion=self.journal_history_canvas.bbox("all")),
+        )
+        self.journal_history_canvas.bind(
+            "<Configure>",
+            lambda event: self.journal_history_canvas.itemconfigure(self.journal_history_window, width=event.width),
+        )
+        self.journal_history_canvas.bind("<MouseWheel>", self._on_journal_history_wheel)
+        self.journal_history_entries = []
+        self._journal_icon_cache = {}
+        self._render_journal_history_empty()
+
+        self.details_drawer = self._panel(content)
+        self.details_drawer.grid(row=0, column=1, sticky="nsew")
+        self._build_live_event_timeline(self.details_drawer)
+
+        footer = tk.Frame(body, bg=self.UI_BG)
+        footer.pack(fill=tk.X, pady=(6, 0))
+        self._action_button(footer, "Rebuild Cache", self.scan_all_logs_threaded, muted=True).pack(side=tk.LEFT)
+        self._action_button(footer, "Ground Target", self.open_ground_target_window, muted=True).pack(side=tk.LEFT, padx=(8, 0))
+        tk.Label(footer, text="2026 insert3coins", font=("Segoe UI", 8), fg=self.UI_DIM, bg=self.UI_BG).pack(side=tk.RIGHT, pady=6)
+        self._console_toggle_btn = tk.Button(
+            footer,
+            text="▶  DEBUG CONSOLE",
+            command=self._toggle_console,
+            bg=self.UI_BG,
+            fg=self.UI_DIM,
+            font=("Segoe UI", 8, "bold"),
+            relief=tk.FLAT,
+            bd=0,
+            cursor="hand2",
+            padx=0,
+        )
+        self._console_toggle_btn.pack(side=tk.LEFT, padx=(10, 0))
+
+        self._console_visible = False
+        self._console_frame = self._panel(body)
+        self.log_box = scrolledtext.ScrolledText(
+            self._console_frame, bg="#050607", fg="#62d66f",
+            font=("Consolas", 8), borderwidth=0, height=4, relief=tk.FLAT,
+        )
+        self.log_box.pack(fill=tk.X, padx=10, pady=10)
+
+    def _build_live_event_timeline(self, parent):
+        feed_wrap = tk.Frame(parent, bg=self.UI_PANEL)
+        feed_wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self._section_label(feed_wrap, "LIVE EVENT TIMELINE").pack(anchor="w")
+        self.event_filter_row = tk.Frame(feed_wrap, bg=self.UI_PANEL)
+        self.event_filter_row.pack(fill=tk.X, pady=(6, 4))
+        for col in range(5):
+            self.event_filter_row.grid_columnconfigure(col, weight=1, uniform="event_filter")
+        self.event_filter_buttons = {}
+        event_filters = (
+            ("ALL", "ALL"), ("VALUABLE", "VALUE"), ("SCAN", "SCAN"), ("ALERT", "ALERT"), ("JUMP", "JUMP"),
+            ("ROUTE", "ROUTE"), ("SYSTEM", "SYSTEM"), ("DSS", "DSS"), ("DOCK", "DOCK"), ("INFO", "INFO"),
+        )
+        for idx, (tag, label) in enumerate(event_filters):
+            btn = tk.Button(
+                self.event_filter_row,
+                text=label,
+                command=lambda t=tag: self.set_event_feed_filter(t),
+                bg=self.UI_PANEL,
+                fg=COLOR_TEXT if tag == "ALL" else "#888",
+                font=("Segoe UI", 8, "bold"),
+                relief=tk.FLAT,
+                bd=0,
+                padx=5,
+                pady=2,
+                activebackground=self.UI_PANEL_2,
+                activeforeground=COLOR_ACCENT,
+            )
+            btn.grid(row=idx // 5, column=idx % 5, sticky="ew", padx=2, pady=2)
+            self.event_filter_buttons[tag] = btn
+        event_text_wrap = tk.Frame(feed_wrap, bg="#0b0f13")
+        event_text_wrap.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
+        self.event_feed_scroll = tk.Scrollbar(event_text_wrap, orient=tk.VERTICAL)
+        self.event_feed_list = tk.Text(
+            event_text_wrap,
+            bg="#0b0f13",
+            fg=COLOR_TEXT,
+            font=self.UI_MONO,
+            height=1,
+            relief=tk.FLAT,
+            highlightthickness=0,
+            borderwidth=0,
+            wrap=tk.WORD,
+            padx=8,
+            pady=6,
+            yscrollcommand=self.event_feed_scroll.set,
+        )
+        self.event_feed_scroll.config(command=self.event_feed_list.yview)
+        self.event_feed_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.event_feed_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.event_feed_list.config(state=tk.DISABLED)
+        self.event_feed_list.bind("<Button-1>", self._select_event_feed_line)
+        self.event_feed_list.bind("<Double-Button-1>", lambda e: self._open_selected_event_feed_link())
+
     def create_stat(self, parent, label, val):
         tk.Label(parent, text=label, font=("Segoe UI", 8, "bold"), fg=self.UI_DIM, bg=parent.cget("bg")).pack(anchor="w", padx=12, pady=(8, 0))
         l = tk.Label(parent, text=val, font=self.UI_MONO_BOLD, fg=COLOR_TEXT, bg=parent.cget("bg"), anchor="w")
@@ -522,6 +750,13 @@ class DashboardUIMixin:
             self._console_toggle_btn.config(text="▶  DEBUG CONSOLE")
 
     def add_event_feed_entry(self, tag, message, severity="INFO", copy_text=None, url=None):
+        if threading.current_thread() is not threading.main_thread():
+            try:
+                with self._event_feed_pending_lock:
+                    self._event_feed_pending.append((tag, message, severity, copy_text, url))
+            except Exception:
+                pass
+            return
         if not message:
             return
         if getattr(self, "batch_mode", False) and getattr(self, "is_first_load", False):
@@ -551,6 +786,186 @@ class DashboardUIMixin:
         if len(self.event_feed_entries) > self.event_feed_max_entries:
             self.event_feed_entries = self.event_feed_entries[:self.event_feed_max_entries]
         self._refresh_event_feed()
+
+    def _tick_event_feed_queue(self):
+        if not getattr(self, "is_running", True):
+            return
+        pending = []
+        history_pending = []
+        try:
+            with self._event_feed_pending_lock:
+                while self._event_feed_pending and len(pending) < 50:
+                    pending.append(self._event_feed_pending.popleft())
+                while getattr(self, "_journal_history_pending", None) and len(history_pending) < 40:
+                    history_pending.append(self._journal_history_pending.popleft())
+        except Exception:
+            pending = []
+            history_pending = []
+        for args in pending:
+            try:
+                self.add_event_feed_entry(*args)
+            except Exception:
+                pass
+        for args in history_pending:
+            try:
+                self.add_journal_history_entry(*args)
+            except Exception:
+                pass
+        try:
+            self.root.after(100, self._tick_event_feed_queue)
+        except Exception:
+            pass
+
+    def _resource_file(self, *parts):
+        base = getattr(sys, "_MEIPASS", os.path.abspath("."))
+        return os.path.join(base, *parts)
+
+    def _journal_icon_for_event(self, event_name):
+        event_name = event_name or "Unknown"
+        cache_key = str(event_name)
+        if cache_key in self._journal_icon_cache:
+            return self._journal_icon_cache[cache_key]
+        candidates = [
+            self._resource_file("Images", "History", "Journal", f"{event_name}.png"),
+            self._resource_file("Images", "History", "Journal", f"{event_name}.PNG"),
+            self._resource_file("Images", "History", "Journal", "Unknown.png"),
+        ]
+        image = None
+        for path in candidates:
+            if not os.path.exists(path):
+                continue
+            try:
+                image = tk.PhotoImage(file=path)
+                if image.width() > 34 or image.height() > 34:
+                    factor = max(1, int(math.ceil(max(image.width() / 34, image.height() / 34))))
+                    image = image.subsample(factor, factor)
+                break
+            except Exception:
+                image = None
+        self._journal_icon_cache[cache_key] = image
+        return image
+
+    def _render_journal_history_empty(self):
+        if not hasattr(self, "journal_history_inner"):
+            return
+        for child in self.journal_history_inner.winfo_children():
+            child.destroy()
+        empty = tk.Frame(self.journal_history_inner, bg="#0b0f13")
+        empty.pack(fill=tk.X, padx=10, pady=16)
+        tk.Label(empty, text="Waiting for live journal events", fg=self.UI_MUTED, bg="#0b0f13", font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        tk.Label(empty, text="Events will appear here as Elite Dangerous writes the journal.", fg=self.UI_DIM, bg="#0b0f13", font=("Segoe UI", 8)).pack(anchor="w", pady=(3, 0))
+
+    def _journal_history_text(self, event_name, payload):
+        payload = payload if isinstance(payload, dict) else {}
+        title = str(event_name or "Journal")
+        detail = ""
+        if event_name in ("FSDJump", "CarrierJump", "Location"):
+            title = payload.get("StarSystem") or payload.get("star_system") or title
+            detail = event_name
+        elif event_name == "StartJump":
+            title = payload.get("StarSystem") or payload.get("star_system") or "Hyperspace"
+            detail = "Jump charging"
+        elif event_name == "Scan":
+            title = payload.get("BodyName") or payload.get("body_name") or "Body scan"
+            detail = payload.get("PlanetClass") or payload.get("StarType") or payload.get("planet_class") or payload.get("star_type") or "Scan"
+        elif event_name in ("FSSDiscoveryScan", "DiscoveryScan"):
+            count = payload.get("BodyCount") or payload.get("body_count") or payload.get("Bodies") or payload.get("bodies")
+            title = "Discovery scan"
+            detail = f"{count} bodies detected" if count else "System honk"
+        elif event_name in ("SAAScanComplete", "SAASignalsFound", "FSSBodySignals"):
+            title = payload.get("BodyName") or payload.get("body_name") or event_name
+            bio = payload.get("Signals", {}).get("$SAA_SignalType_Biological;") if isinstance(payload.get("Signals"), dict) else None
+            bio = bio if bio is not None else payload.get("bio_count")
+            detail = f"Bio signals: {bio}" if bio else event_name
+        elif event_name == "ScanOrganic":
+            title = payload.get("Species_Localised") or payload.get("Species") or payload.get("species") or "Organic scan"
+            sample = payload.get("ScanType") or payload.get("scan_type") or ""
+            detail = f"{sample} sample".strip()
+        elif event_name in ("Docked", "Undocked"):
+            title = payload.get("StationName") or payload.get("station_name") or event_name
+            detail = event_name
+        elif event_name == "LoadGame":
+            title = payload.get("Commander") or payload.get("commander") or "Commander loaded"
+            detail = payload.get("Ship_Localised") or payload.get("Ship") or payload.get("ship") or ""
+        elif event_name == "Commander":
+            title = payload.get("Name") or payload.get("name") or "Commander"
+            detail = payload.get("FID") or payload.get("fid") or ""
+        elif event_name in ("MaterialCollected", "MaterialDiscarded", "MiningRefined", "CollectCargo", "EjectCargo"):
+            title = payload.get("Name_Localised") or payload.get("Name") or payload.get("name") or event_name
+            count = payload.get("Count") or payload.get("count")
+            detail = f"{event_name} x{count}" if count else event_name
+        else:
+            system = payload.get("StarSystem") or payload.get("star_system")
+            body = payload.get("BodyName") or payload.get("body_name")
+            station = payload.get("StationName") or payload.get("station_name")
+            detail = system or body or station or ""
+        return title, detail
+
+    def add_journal_history_entry(self, event_name, payload=None):
+        if threading.current_thread() is not threading.main_thread():
+            try:
+                with self._event_feed_pending_lock:
+                    self._journal_history_pending.append((event_name, payload))
+            except Exception:
+                pass
+            return
+        if not hasattr(self, "journal_history_inner") or not event_name:
+            return
+        title, detail = self._journal_history_text(event_name, payload)
+        entry = {
+            "ts": time.time(),
+            "event": str(event_name),
+            "title": title,
+            "detail": detail,
+        }
+        if self.journal_history_entries:
+            prev = self.journal_history_entries[0]
+            if prev.get("event") == entry["event"] and prev.get("title") == entry["title"] and abs(prev.get("ts", 0) - entry["ts"]) < 1.0:
+                return
+        self.journal_history_entries.insert(0, entry)
+        self.journal_history_entries = self.journal_history_entries[:120]
+        self._render_journal_history_row(entry)
+        if hasattr(self, "journal_history_count_lbl"):
+            self.journal_history_count_lbl.config(text=f"{len(self.journal_history_entries)} EVENTS")
+
+    def _render_journal_history_row(self, entry):
+        if not hasattr(self, "journal_history_inner"):
+            return
+        if len(self.journal_history_entries) == 1:
+            for child in self.journal_history_inner.winfo_children():
+                child.destroy()
+        while len(self.journal_history_inner.winfo_children()) >= 120:
+            self.journal_history_inner.winfo_children()[-1].destroy()
+        first_child = self.journal_history_inner.winfo_children()[0] if self.journal_history_inner.winfo_children() else None
+        row = tk.Frame(self.journal_history_inner, bg="#0d1318", highlightbackground=self.UI_BORDER, highlightthickness=1)
+        pack_kwargs = {"fill": tk.X, "padx": 8, "pady": (8, 0)}
+        if first_child:
+            pack_kwargs["before"] = first_child
+        row.pack(**pack_kwargs)
+        icon = self._journal_icon_for_event(entry.get("event"))
+        if icon:
+            icon_lbl = tk.Label(row, image=icon, bg="#0d1318", width=38)
+            icon_lbl.image = icon
+        else:
+            icon_lbl = tk.Label(row, text="J", fg=COLOR_ACCENT, bg="#0d1318", font=("Segoe UI", 12, "bold"), width=4)
+        icon_lbl.pack(side=tk.LEFT, padx=(8, 6), pady=7)
+        text_box = tk.Frame(row, bg="#0d1318")
+        text_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, pady=6)
+        top = tk.Frame(text_box, bg="#0d1318")
+        top.pack(fill=tk.X)
+        tk.Label(top, text=entry.get("event", "Journal"), fg=COLOR_ORANGE, bg="#0d1318", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT)
+        tk.Label(top, text=datetime.fromtimestamp(entry.get("ts", time.time())).strftime("%H:%M:%S"), fg=self.UI_DIM, bg="#0d1318", font=("Consolas", 8)).pack(side=tk.RIGHT, padx=(8, 8))
+        tk.Label(text_box, text=entry.get("title", ""), fg=COLOR_TEXT, bg="#0d1318", font=("Segoe UI", 10, "bold"), anchor="w").pack(fill=tk.X)
+        detail = entry.get("detail") or ""
+        if detail:
+            tk.Label(text_box, text=detail, fg=self.UI_MUTED, bg="#0d1318", font=("Consolas", 8), anchor="w").pack(fill=tk.X)
+
+    def _on_journal_history_wheel(self, event):
+        try:
+            self.journal_history_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            return "break"
+        except Exception:
+            return None
 
     def _event_feed_matches_filter(self, entry):
         mode = getattr(self, "event_feed_filter", "ALL")
@@ -795,6 +1210,88 @@ class DashboardUIMixin:
         self.wp_info_text.config(state=tk.DISABLED)
         self.wp_info_text.yview_moveto(0.0)
 
+    @staticmethod
+    def _widget_alive(widget):
+        try:
+            return bool(widget and widget.winfo_exists())
+        except Exception:
+            return False
+
+    def open_ground_target_window(self):
+        if self._widget_alive(getattr(self, "ground_target_window", None)):
+            self.ground_target_window.lift()
+            self.ground_target_window.focus_force()
+            return
+
+        win = tk.Toplevel(self.root)
+        self.ground_target_window = win
+        win.title("Ground Target")
+        win.geometry(self.config.get("ground_target_window_geometry", "430x230+1220+260"))
+        win.configure(bg=self.UI_BG)
+        win.minsize(390, 210)
+
+        def _close():
+            try:
+                self.config["ground_target_window_geometry"] = win.geometry()
+                self._save_config_file()
+            except Exception:
+                pass
+            self.ground_target_window = None
+            for attr in ("ground_lat_entry", "ground_lon_entry", "ground_status_lbl", "ground_detail_lbl", "ground_popup_toggle_btn"):
+                try:
+                    setattr(self, attr, None)
+                except Exception:
+                    pass
+            try:
+                win.destroy()
+            except Exception:
+                pass
+
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        panel = self._panel(win, border=COLOR_ACCENT)
+        panel.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        header = tk.Frame(panel, bg=self.UI_PANEL)
+        header.pack(fill=tk.X, padx=12, pady=(10, 4))
+        self._section_label(header, "GROUND TARGET").pack(side=tk.LEFT)
+        self.ground_popup_toggle_btn = tk.Button(
+            header,
+            text="Popup On" if getattr(self, "ground_popup_enabled", True) else "Popup Off",
+            command=self.toggle_ground_popup,
+            bg=self.UI_PANEL,
+            fg=COLOR_TEXT if getattr(self, "ground_popup_enabled", True) else self.UI_MUTED,
+            font=self.UI_FONT_BOLD,
+            relief=tk.FLAT,
+            bd=0,
+            cursor="hand2",
+        )
+        self.ground_popup_toggle_btn.pack(side=tk.RIGHT)
+
+        input_row = tk.Frame(panel, bg=self.UI_PANEL)
+        input_row.pack(fill=tk.X, padx=12, pady=(8, 8))
+        tk.Label(input_row, text="LATITUDE", font=("Segoe UI", 8, "bold"), fg=self.UI_MUTED, bg=self.UI_PANEL).grid(row=0, column=0, sticky="w")
+        tk.Label(input_row, text="LONGITUDE", font=("Segoe UI", 8, "bold"), fg=self.UI_MUTED, bg=self.UI_PANEL).grid(row=0, column=1, sticky="w", padx=(10, 0))
+        self.ground_lat_entry = tk.Entry(input_row, bg="#090c10", fg=COLOR_TEXT, font=self.UI_MONO, insertbackground=COLOR_ACCENT, relief=tk.FLAT)
+        self.ground_lon_entry = tk.Entry(input_row, bg="#090c10", fg=COLOR_TEXT, font=self.UI_MONO, insertbackground=COLOR_ACCENT, relief=tk.FLAT)
+        self.ground_lat_entry.grid(row=1, column=0, sticky="ew", pady=(3, 0))
+        self.ground_lon_entry.grid(row=1, column=1, sticky="ew", padx=(10, 0), pady=(3, 0))
+        input_row.grid_columnconfigure(0, weight=1)
+        input_row.grid_columnconfigure(1, weight=1)
+        self.ground_lat_entry.insert(0, f"{getattr(self, 'target_lat', 0.0):.6f}")
+        self.ground_lon_entry.insert(0, f"{getattr(self, 'target_lon', 0.0):.6f}")
+
+        btn_row = tk.Frame(panel, bg=self.UI_PANEL)
+        btn_row.pack(fill=tk.X, padx=12, pady=(0, 10))
+        self._action_button(btn_row, "Set Target", self.set_ground_target_from_entries, accent=True).pack(side=tk.LEFT)
+        self._action_button(btn_row, "Use Current Position", self.set_ground_target_here).pack(side=tk.LEFT, padx=(8, 0))
+        self._action_button(btn_row, "Clear", self.clear_ground_target, muted=True).pack(side=tk.LEFT, padx=(8, 0))
+
+        self.ground_status_lbl = tk.Label(panel, text="Target: OFF", font=self.UI_MONO_BOLD, fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w")
+        self.ground_status_lbl.pack(fill=tk.X, padx=12)
+        self.ground_detail_lbl = tk.Label(panel, text="Set a lat/lon target to start tracking.", font=self.UI_MONO, fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w")
+        self.ground_detail_lbl.pack(fill=tk.X, padx=12, pady=(3, 12))
+        self.update_ground_target_ui()
+
     def check_updates(self):
         try:
             url = "https://api.github.com/repos/insert3coins/VoidCompass-Release/releases/latest"
@@ -827,17 +1324,24 @@ class DashboardUIMixin:
             self.root.after(0, lambda: self.nav_stat.config(text=txt))
 
     def set_ground_target_from_entries(self):
+        if not (self._widget_alive(getattr(self, "ground_lat_entry", None)) and self._widget_alive(getattr(self, "ground_lon_entry", None))):
+            self.open_ground_target_window()
+            return
         try:
             lat = float(self.ground_lat_entry.get().strip())
             lon = float(self.ground_lon_entry.get().strip())
         except Exception:
-            self.ground_status_lbl.config(text="Target: INVALID LAT/LON", fg="#ff7777")
-            self.ground_detail_lbl.config(text="Use numeric values, e.g. 12.3456 and -98.7654", fg="#ff7777")
+            if self._widget_alive(getattr(self, "ground_status_lbl", None)):
+                self.ground_status_lbl.config(text="Target: INVALID LAT/LON", fg="#ff7777")
+            if self._widget_alive(getattr(self, "ground_detail_lbl", None)):
+                self.ground_detail_lbl.config(text="Use numeric values, e.g. 12.3456 and -98.7654", fg="#ff7777")
             return
 
         if lat < -90.0 or lat > 90.0:
-            self.ground_status_lbl.config(text="Target: INVALID LAT", fg="#ff7777")
-            self.ground_detail_lbl.config(text="Latitude must be between -90 and +90.", fg="#ff7777")
+            if self._widget_alive(getattr(self, "ground_status_lbl", None)):
+                self.ground_status_lbl.config(text="Target: INVALID LAT", fg="#ff7777")
+            if self._widget_alive(getattr(self, "ground_detail_lbl", None)):
+                self.ground_detail_lbl.config(text="Latitude must be between -90 and +90.", fg="#ff7777")
             return
         lon = self._normalize_lon(lon)
 
@@ -853,8 +1357,10 @@ class DashboardUIMixin:
 
     def set_ground_target_here(self):
         if self.current_latitude is None or self.current_longitude is None:
-            self.ground_status_lbl.config(text="Target: NO PLANET POSITION", fg="#ff9a4d")
-            self.ground_detail_lbl.config(text="Current latitude/longitude not available yet.", fg="#ff9a4d")
+            if self._widget_alive(getattr(self, "ground_status_lbl", None)):
+                self.ground_status_lbl.config(text="Target: NO PLANET POSITION", fg="#ff9a4d")
+            if self._widget_alive(getattr(self, "ground_detail_lbl", None)):
+                self.ground_detail_lbl.config(text="Current latitude/longitude not available yet.", fg="#ff9a4d")
             return
 
         self.target_lat = float(self.current_latitude)
@@ -864,10 +1370,12 @@ class DashboardUIMixin:
         self.config["ground_target_lat"] = self.target_lat
         self.config["ground_target_lon"] = self.target_lon
         self._save_config_file()
-        self.ground_lat_entry.delete(0, tk.END)
-        self.ground_lon_entry.delete(0, tk.END)
-        self.ground_lat_entry.insert(0, f"{self.target_lat:.6f}")
-        self.ground_lon_entry.insert(0, f"{self.target_lon:.6f}")
+        if self._widget_alive(getattr(self, "ground_lat_entry", None)):
+            self.ground_lat_entry.delete(0, tk.END)
+            self.ground_lat_entry.insert(0, f"{self.target_lat:.6f}")
+        if self._widget_alive(getattr(self, "ground_lon_entry", None)):
+            self.ground_lon_entry.delete(0, tk.END)
+            self.ground_lon_entry.insert(0, f"{self.target_lon:.6f}")
         self.update_ground_target_ui()
         self.add_event_feed_entry("SYSTEM", "Ground target set to current position", severity="INFO")
 
@@ -882,7 +1390,7 @@ class DashboardUIMixin:
         self.ground_popup_enabled = not bool(self.ground_popup_enabled)
         self.config["ground_popup_enabled"] = bool(self.ground_popup_enabled)
         self._save_config_file()
-        if hasattr(self, "ground_popup_toggle_btn"):
+        if self._widget_alive(getattr(self, "ground_popup_toggle_btn", None)):
             self.ground_popup_toggle_btn.config(
                 text="Popup On" if self.ground_popup_enabled else "Popup Off",
                 fg=COLOR_TEXT if self.ground_popup_enabled else self.UI_MUTED,
@@ -1132,10 +1640,9 @@ class DashboardUIMixin:
 
     def update_ground_target_ui(self):
         t0 = self._perf_start()
-        if not hasattr(self, "ground_status_lbl"):
-            self._perf_spike("update_ground_target_ui", t0, threshold_ms=18.0)
-            return
-        if hasattr(self, "ground_popup_toggle_btn"):
+        has_status = self._widget_alive(getattr(self, "ground_status_lbl", None))
+        has_detail = self._widget_alive(getattr(self, "ground_detail_lbl", None))
+        if self._widget_alive(getattr(self, "ground_popup_toggle_btn", None)):
             self._config_label_if_changed(
                 self.ground_popup_toggle_btn,
                 text="Popup On" if self.ground_popup_enabled else "Popup Off",
@@ -1143,21 +1650,25 @@ class DashboardUIMixin:
             )
 
         if not self.target_latlon_active:
-            self._config_label_if_changed(self.ground_status_lbl, text="Target: OFF", fg="#888")
-            self._config_label_if_changed(self.ground_detail_lbl, text="Set a lat/lon target to start tracking.", fg="#888")
+            if has_status:
+                self._config_label_if_changed(self.ground_status_lbl, text="Target: OFF", fg="#888")
+            if has_detail:
+                self._config_label_if_changed(self.ground_detail_lbl, text="Set a lat/lon target to start tracking.", fg="#888")
             self._update_ground_popup(None)
             self._perf_spike("update_ground_target_ui", t0, threshold_ms=18.0)
             return
 
         solution = self._ground_target_solution()
-        self._config_label_if_changed(
-            self.ground_status_lbl,
-            text=f"Target: {self.target_lat:.6f}, {self.target_lon:.6f}",
-            fg=COLOR_ACCENT,
-        )
+        if has_status:
+            self._config_label_if_changed(
+                self.ground_status_lbl,
+                text=f"Target: {self.target_lat:.6f}, {self.target_lon:.6f}",
+                fg=COLOR_ACCENT,
+            )
 
         if not solution or solution.get("state") != "OK":
-            self._config_label_if_changed(self.ground_detail_lbl, text="Awaiting live planetary coordinates...", fg="#ff9a4d")
+            if has_detail:
+                self._config_label_if_changed(self.ground_detail_lbl, text="Awaiting live planetary coordinates...", fg="#ff9a4d")
             self._update_ground_popup(solution)
             self._perf_spike("update_ground_target_ui", t0, threshold_ms=18.0)
             return
@@ -1169,7 +1680,8 @@ class DashboardUIMixin:
             detail = f"Bearing {bearing:03.0f}° | Distance {distance_txt} | {direction}"
         else:
             detail = f"Bearing {bearing:03.0f}° | Distance {distance_txt} | {direction} {abs(solution['heading_delta']):.0f}°"
-        self._config_label_if_changed(self.ground_detail_lbl, text=detail, fg=COLOR_TEXT)
+        if has_detail:
+            self._config_label_if_changed(self.ground_detail_lbl, text=detail, fg=COLOR_TEXT)
         self._update_ground_popup(solution)
         self._perf_spike("update_ground_target_ui", t0, threshold_ms=18.0)
 
@@ -1186,25 +1698,14 @@ class DashboardUIMixin:
         route_text = "INACTIVE"
         route_total = 0
         route_visited = 0
-        next_waypoint_name = "NONE"
         if self.waypoint_manager.waypoints:
             route_total = len(self.waypoint_manager.waypoints)
             route_visited = sum(1 for wp in self.waypoint_manager.waypoints if wp.get("visited", False))
             route_text = f"{route_visited}/{route_total}"
-            for wp in self.waypoint_manager.waypoints:
-                if not wp.get("visited", False):
-                    next_waypoint_name = wp.get("name", "UNKNOWN")
-                    break
 
         traffic_day = self.system_traffic.get("day", 0)
         traffic_week = self.system_traffic.get("week", 0)
         traffic_total = self.system_traffic.get("total", 0)
-        coords_text = "-"
-        if isinstance(self.current_coords, (list, tuple)) and len(self.current_coords) == 3:
-            try:
-                coords_text = f"{self.current_coords[0]:,.0f},{self.current_coords[1]:,.0f},{self.current_coords[2]:,.0f}"
-            except Exception:
-                coords_text = str(self.current_coords)
 
         self.summary_sys.config(text=self.current_sys or "---")
         self.summary_route.config(text=route_text)
@@ -1217,46 +1718,6 @@ class DashboardUIMixin:
             or "UNKNOWN"
         )
         self.summary_cmdr.config(text=str(cmdr_text).upper())
-
-        # NAVIGATION
-        self.card_nav.line1.config(text=f"Target: {self.dest_name or 'NO ROUTE'}")
-        self.card_nav.line2.config(text=f"Current: {self.current_sys}")
-        gt = self._ground_target_solution()
-        if gt and gt.get("state") == "OK":
-            self.card_nav.line3.config(text=f"Ground: {gt['direction']}  |  {self._format_ground_distance(gt['distance_m'])}")
-        else:
-            self.card_nav.line3.config(text=f"Route Progress: {route_text}")
-
-        # SCAN INTEL
-        scan_ratio = (self.scanned / self.total) if self.total > 0 else 0
-        scan_pct = int(max(0.0, min(1.0, scan_ratio)) * 100)
-        self.card_scan.line1.config(text=f"Scanned: {self.scanned}/{self.total}  ({scan_pct}%)")
-        self.card_scan.line2.config(text=f"Valuable: {len(self.valuable_bodies)}  |  Bio Signals: {self.system_bio_signals}")
-        self.card_scan.line3.config(text=f"FSS: {'ACTIVE' if self.fss_summary_active else 'IDLE'}  |  Bodies tracked: {len(self.scanned_bodies)}")
-
-        # SYSTEM INTEL
-        star_txt = self.star_class if self.star_class else "---"
-        disc_txt = "  UNDISCOVERED" if self.system_undiscovered else ""
-        self.card_system.line1.config(text=f"Star: {star_txt}{disc_txt}")
-        traffic_txt = f"{traffic_day} / {traffic_week} / {traffic_total}" if (traffic_day or traffic_week or traffic_total) else "No traffic data"
-        self.card_system.line2.config(text=f"Traffic (d/w/all): {traffic_txt}")
-        self.card_system.line3.config(text=f"Coords: {coords_text}  |  FSS: {'YES' if self.in_fss else 'NO'}")
-
-        # ECONOMY
-        total_value = 0
-        for item in self.scan_items:
-            reward = item.get("dss_reward") if item.get("dss_complete") else item.get("reward")
-            if isinstance(reward, (int, float)):
-                total_value += int(reward)
-        self.card_value.line1.config(text=f"Est. Value: {self._format_credits(total_value)}")
-        self.card_value.line2.config(text=f"Valuable Bodies: {len(self.valuable_bodies)}")
-        self.card_value.line3.config(text=f"Bio Signals: {self.system_bio_signals}")
-
-        # SESSION
-        self.card_session.line1.config(text=f"Time: {self._get_session_elapsed_text()}")
-        self.card_session.line2.config(text=f"Jumps: {self.session_jump_count}  |  {self.session_ly:,.1f} LY")
-        avg_jump = (self.session_ly / self.session_jump_count) if self.session_jump_count else 0.0
-        self.card_session.line3.config(text=f"Avg jump: {avg_jump:,.1f} LY")
 
         hud_on = "ON" if self.hud else "OFF"
         shots_on = "ON" if self.config.get("screenshots_enabled", False) else "OFF"
@@ -1276,13 +1737,6 @@ class DashboardUIMixin:
         if self.system_undiscovered or self.valuable_bodies:
             alert_fg = self.UI_WARN
         self.alert_lbl.config(text=alert_text, fg=alert_fg)
-
-        # OPERATIONS
-        planner_open = "YES" if (self.route_plotter and self.route_plotter.win.winfo_exists()) else "NO"
-        auto_copy = "ON" if self.config.get("auto_copy_waypoint", False) else "OFF"
-        self.card_ops.line1.config(text=f"Waypoints: {route_total}  |  Pending: {max(route_total - route_visited, 0)}")
-        self.card_ops.line2.config(text=f"Next WP: {next_waypoint_name}")
-        self.card_ops.line3.config(text=f"Auto-Copy: {auto_copy}  |  Planner: {planner_open}")
 
         self._refresh_event_feed()
         self._perf_spike("update_dashboard_panels", t0, threshold_ms=28.0)
@@ -1362,7 +1816,8 @@ class DashboardUIMixin:
         cap  = cd.get("fuel_capacity") or 1000
         if fuel is not None:
             pct   = max(0.0, min(1.0, fuel / cap))
-            bar_w = int(240 * pct)
+            bar_base_w = self.carrier_fuel_bar_bg.winfo_width() or 240
+            bar_w = int(bar_base_w * pct)
             color = self.UI_OK if pct > 0.4 else (self.UI_WARN if pct > 0.15 else self.UI_FAIL)
             self.carrier_fuel_fill.place(x=0, y=0, relheight=1.0, width=bar_w)
             self.carrier_fuel_fill.config(bg=color)

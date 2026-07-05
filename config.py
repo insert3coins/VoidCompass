@@ -97,6 +97,7 @@ PROFILE_VALUE_SETTINGS = (
     "colony_overlay_y",
     "colony_overlay_w",
     "colony_overlay_h",
+    "ground_target_window_geometry",
     "ground_popup_geometry",
     "ground_target_lat",
     "ground_target_lon",
@@ -108,6 +109,10 @@ PROFILE_VALUE_SETTINGS = (
     "route_plotter_geometry",
     "edit_dialog_geometry",
     "import_dialog_geometry",
+    "profile_dashboard_geometry",
+    "value_ledger_geometry",
+    "colonisation_planner_geometry",
+    "exploration_window_geometry",
 )
 
 PROFILE_SETTINGS = PROFILE_TEXT_SETTINGS + PROFILE_BOOL_SETTINGS + PROFILE_VALUE_SETTINGS
@@ -303,6 +308,7 @@ def load_config():
         'colony_overlay_h': 260,
         'main_geometry': '1000x700',
         'settings_geometry': '600x500',
+        'ground_target_window_geometry': '430x230+1220+260',
         'ground_popup_geometry': '340x140+1320+160',
         'ground_popup_enabled': True,
         'ground_target_active': False,
@@ -339,6 +345,10 @@ def load_config():
         'route_plotter_geometry': '920x700',
         'edit_dialog_geometry': '420x220',
         'import_dialog_geometry': '440x540',
+        'profile_dashboard_geometry': '760x520',
+        'value_ledger_geometry': '980x620',
+        'colonisation_planner_geometry': '900x560',
+        'exploration_window_geometry': '1040x680',
         'route_auto_note_from_edsm': True,
         'auto_copy_waypoint': False,
     }

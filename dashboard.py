@@ -41,6 +41,10 @@ from engineer_window import (
     get_material_category,
 )
 from bgs_window import BGSWindow
+from commander_profile_window import CommanderProfileWindow
+from system_value_ledger import SystemValueLedger
+from colonisation_planner import ColonisationPlanner
+from exploration_window import ExplorationWindow
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
@@ -98,6 +102,37 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def _persist_config(self):
         save_config(self.config)
 
+    def _refresh_tool_window(self, attr, method="refresh"):
+        win = getattr(self, attr, None)
+        try:
+            if win and win.is_open():
+                self.root.after(0, getattr(win, method))
+        except Exception:
+            pass
+
+    def _refresh_commander_profile_window(self):
+        self._refresh_tool_window("commander_profile_window")
+
+    def _refresh_value_ledger_window(self):
+        self._refresh_tool_window("value_ledger_window")
+
+    def _refresh_colonisation_planner_window(self):
+        self._refresh_tool_window("colonisation_planner_window")
+
+    def _refresh_exploration_window(self):
+        if getattr(self, "_exploration_refresh_job", None) is not None:
+            return
+        def _run():
+            self._exploration_refresh_job = None
+            self._refresh_tool_window("exploration_window")
+        try:
+            self._exploration_refresh_job = self.root.after(150, _run)
+        except Exception:
+            self._exploration_refresh_job = None
+
+    def _refresh_bgs_window(self):
+        self._refresh_tool_window("bgs_window", "refresh_current")
+
     def _save_colonisation_data(self, projects):
         save_colonisation_data(projects, self.config.get("colonisation_data_file"))
 
@@ -118,6 +153,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.summary_cmdr.config(text=str(commander_name).upper())
             except Exception:
                 pass
+            self._refresh_commander_profile_window()
+            self._refresh_exploration_window()
             return
 
         try:
@@ -169,7 +206,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.colonisation_projects[mid] = jp
         self.engineer_materials = load_engineer_materials(self.config.get("engineer_materials_file"))
         self.waypoint_manager = WaypointManager(self.config.get("waypoints_file"))
-        for attr in ("mining_window", "colonization_window", "engineer_window", "bgs_window"):
+        for attr in (
+            "mining_window",
+            "colonization_window",
+            "engineer_window",
+            "bgs_window",
+            "commander_profile_window",
+            "value_ledger_window",
+            "colonisation_planner_window",
+            "exploration_window",
+        ):
             win = getattr(self, attr, None)
             try:
                 if win and win.is_open():
@@ -191,6 +237,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.carrier_window.refresh()
         except Exception:
             pass
+        self._refresh_commander_profile_window()
         self._persist_config()
         self.load_system_from_db(self.current_sys)
         self.update_dashboard_ui()
@@ -234,6 +281,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.cmdr_fid = self.config.get("active_commander_fid") or ""
         self.cmdr_balance = None
         self.cmdr_loan = None
+        self.cmdr_ranks = {}
+        self.cmdr_rank_progress = {}
+        self.cmdr_reputation = {}
+        self.cmdr_ship = {}
         self.last_scan_event = None
         self.last_bio_scan = {}
         # Bio tracking: star/body scan conditions for prediction
@@ -267,9 +318,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_coords = [0,0,0]
         self.dest_name = None
         self.route_list = []
+        self.nav_route_entries = []
         self.session_start_ts = time.time()
         self.session_jump_count = 0
         self.session_ly = 0.0
+        self.session_systems = set()
         self.target_lat = self._to_float(self.config.get("ground_target_lat"), 0.0)
         self.target_lon = self._to_float(self.config.get("ground_target_lon"), 0.0)
         self.target_latlon_active = bool(self.config.get("ground_target_active", False))
@@ -285,6 +338,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.ground_popup_line2 = None
         self.ground_popup_canvas = None
         self.ground_popup_drag_origin = None
+        self.ground_target_window = None
         self._ground_popup_visible = False
         self._ground_popup_compass_ids = None
         self.ground_popup_enabled = bool(self.config.get("ground_popup_enabled", True))
@@ -297,9 +351,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.event_feed_entries = []
         self.event_feed_filter = "ALL"
         self.event_feed_view = []
+        self._event_feed_pending = deque()
+        self._journal_history_pending = deque()
+        self._event_feed_pending_lock = threading.Lock()
         self.event_feed_max_entries = 150
         self.event_feed_display_limit = 80
         self.dashboard_refresh_job = None
+        self._exploration_refresh_job = None
         self.dashboard_refresh_full_pending = False
         self._hud_refresh_job = None
         self._hud_refresh_requested = False
@@ -341,6 +399,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.colonization_window = None
         self.engineer_window = None
         self.bgs_window = None
+        self.commander_profile_window = None
+        self.value_ledger_window = None
+        self.colonisation_planner_window = None
+        self.exploration_window = None
         self._carrier_panel_tick_job = None
         self.carrier_tracker = CarrierTracker()
         self._refresh_profile_paths()
@@ -453,6 +515,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.update_carrier_panel()
         self._tick_ground_target()
         self._tick_session_clock()
+        self._tick_event_feed_queue()
         self._tick_ui_stall_watchdog()
         self._tick_runtime_trace()
         self._tick_overlay_position_sync()
@@ -656,6 +719,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.engineer_window._on_close()
         if self.bgs_window and self.bgs_window.is_open():
             self.bgs_window._on_close()
+        if self.exploration_window and self.exploration_window.is_open():
+            self.exploration_window._on_close()
             
         self.watcher.stop()
         self.screenshots.stop()
@@ -701,6 +766,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.runtime_trace:
             try:
                 self.runtime_trace.flush(extra={"shutdown": True})
+            except Exception:
+                pass
+        if self.ground_target_window and self.ground_target_window.winfo_exists():
+            try:
+                self.config["ground_target_window_geometry"] = self.ground_target_window.geometry()
+                self._persist_config()
             except Exception:
                 pass
         self._destroy_ground_popup()
@@ -875,6 +946,30 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.db_load_bgs_factions,
         )
 
+    def open_commander_profile_window(self):
+        if self.commander_profile_window and self.commander_profile_window.is_open():
+            self.commander_profile_window.lift()
+            return
+        self.commander_profile_window = CommanderProfileWindow(self.root, self)
+
+    def open_exploration_window(self):
+        if self.exploration_window and self.exploration_window.is_open():
+            self.exploration_window.lift()
+            return
+        self.exploration_window = ExplorationWindow(self.root, self)
+
+    def open_value_ledger_window(self):
+        if self.value_ledger_window and self.value_ledger_window.is_open():
+            self.value_ledger_window.lift()
+            return
+        self.value_ledger_window = SystemValueLedger(self.root, self)
+
+    def open_colonisation_planner_window(self):
+        if self.colonisation_planner_window and self.colonisation_planner_window.is_open():
+            self.colonisation_planner_window.lift()
+            return
+        self.colonisation_planner_window = ColonisationPlanner(self.root, self)
+
     # ------------------------------------------------------------------
     # Carrier dashboard panel + event-feed callbacks
     # ------------------------------------------------------------------
@@ -1019,6 +1114,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                 self.update_hud()
                 self.schedule_dashboard_refresh()
+                self._refresh_exploration_window()
 
     def _apply_runtime_feature_toggles(self):
         if self.config.get("screenshots_enabled", False):
@@ -1413,6 +1509,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         if flush:
             self.edsm.flush_upload_queue()
+        self._refresh_commander_profile_window()
         return True
 
     def process_event(self, data):
@@ -1427,6 +1524,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if current_journal and current_journal != self.last_logged_journal_file:
             self.last_logged_journal_file = current_journal
             self.log(f"Journal file: {os.path.basename(current_journal)}")
+        if ev and not startup_replay:
+            self.add_journal_history_entry(ev, raw if isinstance(raw, dict) else d)
         if self.mining_window and self.mining_window.is_open():
             self.mining_window.process_event(data)
 
@@ -1447,10 +1546,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         elif ev == "Loadout":
             self.cargo_capacity = d.get("cargo_capacity", 0)
+            self.cmdr_ship.update({
+                "ship": d.get("ship") or self.cmdr_ship.get("ship"),
+                "ship_id": d.get("ship_id") or self.cmdr_ship.get("ship_id"),
+                "ship_name": d.get("ship_name") or self.cmdr_ship.get("ship_name"),
+                "ship_ident": d.get("ship_ident") or self.cmdr_ship.get("ship_ident"),
+                "modules_value": d.get("modules_value"),
+                "hull_health": d.get("hull_health"),
+                "max_jump_range": d.get("max_jump_range"),
+                "rebuy": d.get("rebuy"),
+                "cargo_capacity": self.cargo_capacity,
+            })
             self.watcher.force_check_cargo()
             if self.colony_overlay:
                 self.colony_overlay.update()
             self._queue_edsm_upload(raw, allow_startup=True)
+            self._refresh_commander_profile_window()
 
         elif ev == "Cargo":
             # Journal can emit Cargo before/without immediate file polling update.
@@ -1470,7 +1581,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._switch_commander_profile(self.cmdr_name, self.cmdr_fid)
             self._queue_edsm_upload(raw, allow_startup=True)
 
-        elif ev in ("Rank", "Progress", "Reputation", "Statistics"):
+        elif ev == "Rank":
+            self.cmdr_ranks.update(d)
+            self._queue_edsm_upload(raw, allow_startup=True)
+            self._refresh_commander_profile_window()
+
+        elif ev == "Progress":
+            self.cmdr_rank_progress.update(d)
+            self._queue_edsm_upload(raw, allow_startup=True)
+            self._refresh_commander_profile_window()
+
+        elif ev == "Reputation":
+            self.cmdr_reputation.update(d)
+            self._queue_edsm_upload(raw, allow_startup=True)
+            self._refresh_commander_profile_window()
+
+        elif ev == "Statistics":
             self._queue_edsm_upload(raw, allow_startup=True)
 
         elif ev == "Materials":
@@ -1502,6 +1628,19 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.cmdr_balance = credits
                 self.cmdr_loan = loan
                 self._queue_edsm_upload(raw, allow_startup=True, flush=True)
+                self._refresh_commander_profile_window()
+            self.cmdr_ship.update({
+                "ship": d.get("ship") or self.cmdr_ship.get("ship"),
+                "ship_localised": d.get("ship_localised") or self.cmdr_ship.get("ship_localised"),
+                "ship_id": d.get("ship_id") or self.cmdr_ship.get("ship_id"),
+                "ship_name": d.get("ship_name") or self.cmdr_ship.get("ship_name"),
+                "ship_ident": d.get("ship_ident") or self.cmdr_ship.get("ship_ident"),
+                "fuel_level": d.get("fuel_level"),
+                "fuel_capacity": d.get("fuel_capacity"),
+                "game_mode": d.get("game_mode"),
+                "group": d.get("group"),
+            })
+            self._refresh_commander_profile_window()
 
         elif ev == "ScanOrganic":
             if not self._matches_current_system_address(d):
@@ -1542,9 +1681,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 sample_txt = f" sample {sample_idx}" if sample_idx is not None else ""
                 self.add_event_feed_entry("BIO", f"Organic{sample_txt}: {species} ({body_label})", severity="INFO", copy_text=species)
 
+            if body_id is not None:
+                item = self.scan_items_by_id.get(body_id)
+                if item:
+                    organic_scans = item.setdefault("organic_scans", {})
+                    organic_scans[species_key] = dict(self.last_bio_scan[species_key])
+                    item["organic_complete_count"] = sum(1 for scan in organic_scans.values() if scan.get("is_complete"))
+                    if item.get("_ts") is None:
+                        item["_ts"] = int(time.time())
+                    self.save_scan_item_to_db(self.current_sys, item)
+
             if not self.batch_mode:
                 self.update_hud()
                 self.schedule_dashboard_refresh()
+                self._refresh_exploration_window()
 
         elif ev == "Location" or ev == "FSDJump" or ev == "StartJump" or (ev == "CarrierJump" and d.get("docked")):
             # Do not update HUDs during jump charge; wait for arrival.
@@ -1572,6 +1722,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 and traffic_before_reset
             )
             self.current_sys = incoming_sys
+            if self.current_sys and self.current_sys not in ("---", "Unknown"):
+                self.session_systems.add(self.current_sys)
             self.current_system_address = self._normalize_system_address(d.get("system_address"))
             self.current_coords = d.get("star_pos", [0,0,0])
             # Preserve existing class when an event omits StarClass (common on some transitions).
@@ -1692,6 +1844,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 _tot  = self.total
                 self.root.after(0, lambda: self.system_info_hud.on_system_arrival(
                     _sys, _sc, _si, _bs, _tot))
+            self._refresh_exploration_window()
 
         elif ev == "Docked":
             station = d.get("StationName") or d.get("station_name", "Unknown")
@@ -1738,6 +1891,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if not self.batch_mode:
                 self.update_hud()
                 self.schedule_dashboard_refresh()
+                self._refresh_exploration_window()
 
         elif ev == "DiscoveryScan":
             if not self._matches_current_system_address(d):
@@ -1788,6 +1942,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 item = self.scan_items_by_id.get(body_id)
                 if item:
                     item["bio_count"] = bio_count
+                    item["geo_count"] = geo_count
                     item["color"] = COLOR_ACCENT if (bio_count > 0 or (not item.get("is_star") and item.get("dss_reward", 0) > item.get("reward", 0))) else COLOR_TEXT
                     if item.get("_ts") is None:
                         item["_ts"] = int(time.time())
@@ -1795,6 +1950,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
+                        self._refresh_exploration_window()
 
         elif ev == "SAASignalsFound":
             if not self._matches_current_system_address(d):
@@ -1808,6 +1964,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 item = self.scan_items_by_id.get(body_id)
                 if item:
                     item["bio_count"] = bio_count
+                    item["geo_count"] = geo_count
+                    item["genuses"] = d.get("genuses") or item.get("genuses") or []
                     item["color"] = COLOR_ACCENT if (bio_count > 0 or (not item.get("is_star") and item.get("dss_reward", 0) > item.get("reward", 0))) else COLOR_TEXT
                     if item.get("_ts") is None:
                         item["_ts"] = int(time.time())
@@ -1815,6 +1973,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
+                        self._refresh_exploration_window()
         
         elif ev == "SAAScanComplete":
             if not self._matches_current_system_address(d):
@@ -1974,6 +2133,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self._save_colonisation_data(self.colonisation_projects)
                     if self.colonization_window and self.colonization_window.is_open():
                         self.colonization_window.refresh()
+                    self._refresh_colonisation_planner_window()
                     if self.colony_overlay:
                         self.colony_overlay.update()
 
@@ -1993,6 +2153,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self._save_colonisation_data(self.colonisation_projects)
                     if self.colonization_window and self.colonization_window.is_open():
                         self.colonization_window.refresh()
+                    self._refresh_colonisation_planner_window()
                     if self.colony_overlay:
                         self.colony_overlay.update()
 
@@ -2167,6 +2328,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         else:
             self.root.after(0, self.update_dashboard_ui)
             self.root.after(0, self.update_hud)
+        self._refresh_commander_profile_window()
+        self._refresh_value_ledger_window()
+        self._refresh_colonisation_planner_window()
+        self._refresh_exploration_window()
+        self._refresh_bgs_window()
 
     def update_cargo(self, inventory):
         self.last_cargo_event_ts = time.time()
@@ -2177,18 +2343,26 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.root.after(0, lambda: self.cargo_hud.update(inventory, self.cargo_capacity))
         if self.colony_overlay:
             self.root.after(0, self.colony_overlay.update)
+        self._refresh_commander_profile_window()
 
     def update_nav_route(self, data):
         self.last_nav_event_ts = time.time()
-        self.route_list = [r['StarSystem'] for r in data.get('Route', [])]
+        self.nav_route_entries = list(data.get('Route', []) or [])
+        self.route_list = [r['StarSystem'] for r in self.nav_route_entries if r.get('StarSystem')]
         if self.route_list:
-            dest = data['Route'][-1]
-            self.dest_coords = dest['StarPos']
-            self.dest_name = dest['StarSystem']
-            self.add_event_feed_entry("SYSTEM", f"Nav route loaded: {len(self.route_list)} jumps to {self.dest_name}", severity="INFO", copy_text=self.dest_name, url=f"https://www.edsm.net/show-system?systemName={self.dest_name.replace(' ', '+')}")
+            dest = self.nav_route_entries[-1]
+            self.dest_coords = dest.get('StarPos')
+            self.dest_name = dest.get('StarSystem')
+            dest_url_name = (self.dest_name or "").replace(" ", "+")
+            self.add_event_feed_entry("SYSTEM", f"Nav route loaded: {len(self.route_list)} jumps to {self.dest_name}", severity="INFO", copy_text=self.dest_name, url=f"https://www.edsm.net/show-system?systemName={dest_url_name}")
             self.update_nav_label()
             self.update_hud()
+            self._refresh_commander_profile_window()
+            self._refresh_exploration_window()
         else:
+            self.nav_route_entries = []
             self.dest_coords = None
             self.dest_name = None
             self.add_event_feed_entry("SYSTEM", "Nav route cleared", severity="INFO")
+            self._refresh_commander_profile_window()
+            self._refresh_exploration_window()
