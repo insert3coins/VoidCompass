@@ -1357,6 +1357,7 @@ class DashboardUIMixin:
     def _flight_strip_context(self):
         current = self.current_sys if self.current_sys and self.current_sys != "---" else "---"
         previous = getattr(self, "previous_sys", None)
+        previous_coords = getattr(self, "previous_coords", None)
         next_name = None
         next_coords = None
         route_position = None
@@ -1371,6 +1372,9 @@ class DashboardUIMixin:
 
         if route_idx > 0:
             previous = route[route_idx - 1]
+            entries = getattr(self, "nav_route_entries", None) or []
+            if route_idx - 1 < len(entries):
+                previous_coords = entries[route_idx - 1].get("StarPos") or previous_coords
         if route_idx >= 0:
             route_position = (route_idx + 1, len(route))
             if route_idx + 1 < len(route):
@@ -1392,14 +1396,21 @@ class DashboardUIMixin:
                     next_coords = entry.get("StarPos")
                     break
 
-        distance_txt = "--"
+        prev_distance_txt = "--"
+        next_distance_txt = "--"
         current_coords = getattr(self, "current_coords", None)
+        if current_coords and previous_coords:
+            try:
+                dist = math.sqrt(sum((float(a) - float(b)) ** 2 for a, b in zip(previous_coords, current_coords)))
+                prev_distance_txt = f"{dist:,.1f} LY"
+            except Exception:
+                prev_distance_txt = "--"
         if current_coords and next_coords:
             try:
                 dist = math.sqrt(sum((float(a) - float(b)) ** 2 for a, b in zip(current_coords, next_coords)))
-                distance_txt = f"{dist:,.1f} LY"
+                next_distance_txt = f"{dist:,.1f} LY"
             except Exception:
-                distance_txt = "--"
+                next_distance_txt = "--"
 
         if route_position:
             route_txt = f"ROUTE {route_position[0]}/{route_position[1]}"
@@ -1413,7 +1424,8 @@ class DashboardUIMixin:
             "current": current,
             "next": next_name or "---",
             "route": route_txt,
-            "distance": distance_txt,
+            "prev_distance": prev_distance_txt,
+            "next_distance": next_distance_txt,
             "has_route": bool(route or next_name),
         }
 
@@ -1447,7 +1459,10 @@ class DashboardUIMixin:
                 canvas.create_oval(x - radius, spine_y - radius, x + radius, spine_y + radius, outline=color, width=2, fill="#090d12")
                 canvas.create_text(x, 14, text=label, fill=color if name != "---" else self.UI_DIM, font=("Segoe UI", 7, "bold"))
 
-            footer = f"{ctx['route']}   NEXT {ctx['distance']}"
+            canvas.create_text((left_x + center_x) // 2, spine_y - 12, text=ctx["prev_distance"], fill=self.UI_MUTED, font=("Consolas", 8, "bold"))
+            canvas.create_text((center_x + right_x) // 2, spine_y - 12, text=ctx["next_distance"], fill=COLOR_ORANGE if ctx["has_route"] else self.UI_MUTED, font=("Consolas", 8, "bold"))
+
+            footer = ctx["route"]
             canvas.create_text(w // 2, h - 16, text=footer, fill=self.UI_MUTED, font=("Consolas", 8))
         except Exception as exc:
             try:
