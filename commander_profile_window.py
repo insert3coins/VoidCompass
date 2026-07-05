@@ -39,6 +39,7 @@ class CommanderProfileWindow:
         self.win.configure(bg=self.UI_BG)
         self.win.minsize(650, 430)
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
+        self._wheel_bound = False
         self._build()
         self.refresh()
 
@@ -63,12 +64,19 @@ class CommanderProfileWindow:
         body = tk.Frame(self.win, bg=self.UI_BG)
         body.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        self.text = tk.Text(body, bg="#0b0f13", fg=COLOR_TEXT, font=("Consolas", 9), relief=tk.FLAT, padx=8, pady=8, wrap=tk.NONE)
-        self.text.pack(fill=tk.BOTH, expand=True)
-        self.text.tag_config("hdr", foreground=COLOR_ORANGE, font=("Consolas", 9, "bold"))
-        self.text.tag_config("key", foreground=COLOR_ACCENT)
-        self.text.tag_config("muted", foreground=self.UI_MUTED)
-        self.text.config(state=tk.DISABLED)
+        self.canvas = tk.Canvas(body, bg=self.UI_BG, highlightthickness=0, bd=0)
+        self.scrollbar = tk.Scrollbar(body, orient=tk.VERTICAL, command=self.canvas.yview)
+        self.content = tk.Frame(self.canvas, bg=self.UI_BG)
+        self.content_window = self.canvas.create_window((0, 0), window=self.content, anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.content.bind("<Configure>", lambda _e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(self.content_window, width=e.width))
+        self.canvas.bind("<Enter>", self._bind_mousewheel)
+        self.canvas.bind("<Leave>", self._unbind_mousewheel)
+        self.content.bind("<Enter>", self._bind_mousewheel)
+        self.content.bind("<Leave>", self._unbind_mousewheel)
 
         footer = tk.Frame(self.win, bg=self.UI_BG)
         footer.pack(fill=tk.X, padx=10, pady=(0, 10))
@@ -86,6 +94,86 @@ class CommanderProfileWindow:
             relief=tk.FLAT, bd=0, padx=12, pady=6,
             font=("Segoe UI", 8, "bold"), cursor="hand2",
         )
+
+    def _bind_mousewheel(self, _event=None):
+        if not self._wheel_bound:
+            self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+            self._wheel_bound = True
+
+    def _unbind_mousewheel(self, _event=None):
+        if self._wheel_bound:
+            self.canvas.unbind_all("<MouseWheel>")
+            self._wheel_bound = False
+
+    def _on_mousewheel(self, event):
+        if not self.is_open():
+            return
+        try:
+            self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        except Exception:
+            pass
+
+    def _clear_content(self):
+        for child in self.content.winfo_children():
+            child.destroy()
+
+    def _panel(self, parent, border=None):
+        return tk.Frame(
+            parent,
+            bg=self.UI_PANEL,
+            highlightbackground=border or self.UI_BORDER,
+            highlightthickness=1,
+            bd=0,
+        )
+
+    def _section_label(self, parent, text):
+        tk.Label(
+            parent,
+            text=text,
+            font=("Segoe UI", 8, "bold"),
+            fg=COLOR_ORANGE,
+            bg=parent.cget("bg"),
+            anchor="w",
+        ).pack(fill=tk.X, padx=12, pady=(10, 5))
+
+    def _value_label(self, parent, value, fg=COLOR_TEXT, font=None):
+        return tk.Label(
+            parent,
+            text=str(value),
+            font=font or ("Consolas", 10, "bold"),
+            fg=fg,
+            bg=parent.cget("bg"),
+            anchor="w",
+        )
+
+    def _metric_card(self, parent, title, value, detail="", row=0, col=0, accent=False):
+        card = self._panel(parent, border=COLOR_ACCENT if accent else None)
+        card.grid(row=row, column=col, sticky="nsew", padx=5, pady=5)
+        tk.Label(card, text=title, font=("Segoe UI", 7, "bold"), fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w").pack(fill=tk.X, padx=10, pady=(8, 0))
+        self._value_label(card, value, fg=COLOR_ACCENT if accent else COLOR_TEXT, font=("Consolas", 12, "bold")).pack(fill=tk.X, padx=10, pady=(2, 0))
+        tk.Label(card, text=detail or "", font=("Consolas", 8), fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w").pack(fill=tk.X, padx=10, pady=(1, 8))
+        return card
+
+    def _kv_row(self, parent, label, value, fg=COLOR_TEXT):
+        row = tk.Frame(parent, bg=parent.cget("bg"))
+        row.pack(fill=tk.X, padx=12, pady=2)
+        tk.Label(row, text=label.upper(), font=("Segoe UI", 7, "bold"), fg=self.UI_MUTED, bg=row.cget("bg"), width=18, anchor="w").pack(side=tk.LEFT)
+        tk.Label(row, text=str(value), font=("Consolas", 9), fg=fg, bg=row.cget("bg"), anchor="w").pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+    def _bar_row(self, parent, label, value_text, percent=None, color=COLOR_ACCENT):
+        row = tk.Frame(parent, bg=parent.cget("bg"))
+        row.pack(fill=tk.X, padx=12, pady=4)
+        top = tk.Frame(row, bg=row.cget("bg"))
+        top.pack(fill=tk.X)
+        tk.Label(top, text=label.upper(), font=("Segoe UI", 7, "bold"), fg=self.UI_MUTED, bg=top.cget("bg"), anchor="w").pack(side=tk.LEFT)
+        tk.Label(top, text=value_text, font=("Consolas", 8, "bold"), fg=COLOR_TEXT, bg=top.cget("bg"), anchor="e").pack(side=tk.RIGHT)
+        track = tk.Frame(row, bg="#070a0e", height=7)
+        track.pack(fill=tk.X, pady=(3, 0))
+        track.pack_propagate(False)
+        if isinstance(percent, (int, float)):
+            pct = max(0.0, min(100.0, float(percent))) / 100.0
+            fill = tk.Frame(track, bg=color, height=7)
+            fill.place(x=0, y=0, relheight=1.0, relwidth=pct)
 
     def _queue_count(self):
         try:
@@ -251,30 +339,41 @@ class CommanderProfileWindow:
         ]
 
         self.summary.config(text=profile_key)
-        self.text.config(state=tk.NORMAL)
-        self.text.delete("1.0", tk.END)
-        self.text.insert(tk.END, "COMMANDER\n", "hdr")
-        for key, value in (
-            ("Name", name),
-            ("FID", fid or "-"),
-            ("Profile", profile_key),
-            ("Current System", getattr(self.app, "current_sys", "---")),
-            ("Credits", balance_text),
-            ("Loan", loan_text),
-            ("Session Jumps", getattr(self.app, "session_jump_count", 0)),
-            ("Session LY", f"{getattr(self.app, 'session_ly', 0.0):,.1f}"),
-        ):
-            self.text.insert(tk.END, f"  {key:<18}", "key")
-            self.text.insert(tk.END, f"{value}\n")
+        self._clear_content()
 
-        self.text.insert(tk.END, "\nSHIP\n", "hdr")
+        hero = self._panel(self.content, border=COLOR_ACCENT)
+        hero.pack(fill=tk.X, padx=2, pady=(0, 10))
+        hero_grid = tk.Frame(hero, bg=self.UI_PANEL)
+        hero_grid.pack(fill=tk.X, padx=8, pady=8)
+        for col in range(4):
+            hero_grid.grid_columnconfigure(col, weight=1, uniform="profile_metrics")
+        self._metric_card(hero_grid, "COMMANDER", name, fid or "FID unknown", 0, 0, accent=True)
+        self._metric_card(hero_grid, "CREDITS", balance_text, f"Loan {loan_text}", 0, 1)
+        self._metric_card(hero_grid, "LOCATION", getattr(self.app, "current_sys", "---"), "Current journal system", 0, 2)
+        self._metric_card(
+            hero_grid,
+            "SESSION",
+            f"{getattr(self.app, 'session_jump_count', 0)} jumps",
+            f"{getattr(self.app, 'session_ly', 0.0):,.1f} ly travelled",
+            0,
+            3,
+        )
+
+        main = tk.Frame(self.content, bg=self.UI_BG)
+        main.pack(fill=tk.BOTH, expand=True)
+        main.grid_columnconfigure(0, weight=1, uniform="profile_cols")
+        main.grid_columnconfigure(1, weight=1, uniform="profile_cols")
+
         ship_type = ship.get("ship_localised") or ship.get("ship") or "-"
         ship_name = ship.get("ship_name") or "-"
         ship_ident = ship.get("ship_ident") or "-"
+        ship_card = self._panel(main)
+        ship_card.grid(row=0, column=0, sticky="nsew", padx=(2, 5), pady=5)
+        self._section_label(ship_card, "ACTIVE SHIP")
+        self._value_label(ship_card, ship_name if ship_name != "-" else ship_type, fg=COLOR_ACCENT, font=("Consolas", 13, "bold")).pack(fill=tk.X, padx=12)
+        self._kv_row(ship_card, "Type", ship_type)
+        self._kv_row(ship_card, "Ident", ship_ident)
         for key, value in (
-            ("Type", ship_type),
-            ("Name", ship_name),
-            ("Ident", ship_ident),
             ("Ship ID", ship.get("ship_id") or "-"),
             ("Cargo", ship.get("cargo_capacity") if ship.get("cargo_capacity") is not None else "-"),
             ("Jump Range", f"{float(ship.get('max_jump_range')):.2f} ly" if isinstance(ship.get("max_jump_range"), (int, float)) else "-"),
@@ -285,40 +384,56 @@ class CommanderProfileWindow:
             ("Mode", ship.get("game_mode") or "-"),
             ("Group", ship.get("group") or "-"),
         ):
-            self.text.insert(tk.END, f"  {key:<18}", "key")
-            self.text.insert(tk.END, f"{value}\n")
+            self._kv_row(ship_card, key, value)
 
-        self.text.insert(tk.END, "\nRANKS\n", "hdr")
+        rank_card = self._panel(main)
+        rank_card.grid(row=0, column=1, sticky="nsew", padx=(5, 2), pady=5)
+        self._section_label(rank_card, "RANKS")
+        rank_count = 0
         for category in ("Combat", "Trade", "Explore", "Soldier", "Exobiologist", "Empire", "Federation", "CQC"):
             if category not in ranks and category not in progress:
                 continue
             rank_text = self._rank_label(category, ranks.get(category))
-            prog_text = self._fmt_percent(progress.get(category))
-            self.text.insert(tk.END, f"  {category:<18}", "key")
-            self.text.insert(tk.END, f"{rank_text:<22} {prog_text}\n")
+            progress_value = progress.get(category)
+            prog_text = self._fmt_percent(progress_value)
+            self._bar_row(rank_card, category, f"{rank_text}  {prog_text}", progress_value, COLOR_ACCENT)
+            rank_count += 1
+        if rank_count == 0:
+            tk.Label(rank_card, text="No rank data seen yet.", font=("Consolas", 9), fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w").pack(fill=tk.X, padx=12, pady=(0, 12))
 
-        self.text.insert(tk.END, "\nREPUTATION\n", "hdr")
+        rep_card = self._panel(main)
+        rep_card.grid(row=1, column=0, sticky="nsew", padx=(2, 5), pady=5)
+        self._section_label(rep_card, "REPUTATION")
         if reputation:
             for key in ("Federation", "Empire", "Alliance", "Independent"):
                 if key in reputation:
-                    self.text.insert(tk.END, f"  {key:<18}", "key")
-                    self.text.insert(tk.END, f"{self._fmt_percent(reputation.get(key))}\n")
+                    self._bar_row(rep_card, key, self._fmt_percent(reputation.get(key)), reputation.get(key), COLOR_ORANGE)
         else:
-            self.text.insert(tk.END, "  No reputation data seen yet.\n", "muted")
+            tk.Label(rep_card, text="No reputation data seen yet.", font=("Consolas", 9), fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w").pack(fill=tk.X, padx=12, pady=(0, 12))
 
-        self.text.insert(tk.END, "\nPROFILE STORAGE\n", "hdr")
-        self.text.insert(tk.END, f"  {'Folder':<18}{profile_dir}\n", "key")
-        self.text.insert(tk.END, f"  {'Size':<18}{self._fmt_bytes(self._folder_size(profile_dir))}\n", "key")
+        storage_card = self._panel(main)
+        storage_card.grid(row=1, column=1, sticky="nsew", padx=(5, 2), pady=5)
+        self._section_label(storage_card, "PROFILE STORAGE")
+        self._kv_row(storage_card, "Folder", profile_dir)
+        self._kv_row(storage_card, "Size", self._fmt_bytes(self._folder_size(profile_dir)))
         for label, path in paths:
             exists = "OK" if path and os.path.exists(path) else "missing"
-            self.text.insert(tk.END, f"  {label:<18}", "key")
-            self.text.insert(tk.END, f"{exists:<8} {path}\n")
+            fg = COLOR_TEXT if exists == "OK" else "#ff9a3c"
+            self._kv_row(storage_card, label, f"{exists}  {path}", fg=fg)
 
-        self.text.insert(tk.END, "\nINTEGRATIONS\n", "hdr")
-        self.text.insert(tk.END, f"  {'EDSM Upload':<18}{'On' if self.config.get('edsm_upload_enabled') else 'Off'}\n", "key")
-        self.text.insert(tk.END, f"  {'EDSM Queue':<18}{self._queue_count()} event(s)\n", "key")
-        self.text.insert(tk.END, f"  {'Carrier Discord':<18}{'Configured' if self.config.get('carrier_discord_webhook_url') else 'Not configured'}\n", "key")
-        self.text.config(state=tk.DISABLED)
+        integration_card = self._panel(self.content)
+        integration_card.pack(fill=tk.X, padx=2, pady=(5, 2))
+        self._section_label(integration_card, "INTEGRATIONS")
+        integration_grid = tk.Frame(integration_card, bg=self.UI_PANEL)
+        integration_grid.pack(fill=tk.X, padx=7, pady=(0, 8))
+        for col in range(3):
+            integration_grid.grid_columnconfigure(col, weight=1, uniform="profile_integrations")
+        self._metric_card(integration_grid, "EDSM UPLOAD", "ON" if self.config.get("edsm_upload_enabled") else "OFF", "Scan upload setting", 0, 0, accent=bool(self.config.get("edsm_upload_enabled")))
+        self._metric_card(integration_grid, "EDSM QUEUE", f"{self._queue_count()} events", "Pending upload backlog", 0, 1)
+        self._metric_card(integration_grid, "CARRIER DISCORD", "CONFIGURED" if self.config.get("carrier_discord_webhook_url") else "OFF", "Webhook notification setting", 0, 2)
+
+        self.content.update_idletasks()
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
     def _open_profile_folder(self):
         path = get_profile_dir(get_active_profile(self.config))
@@ -347,4 +462,5 @@ class CommanderProfileWindow:
             save_config(self.config)
         except Exception:
             pass
+        self._unbind_mousewheel()
         self.win.destroy()

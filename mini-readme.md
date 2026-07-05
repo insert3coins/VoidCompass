@@ -1,5 +1,21 @@
 # VoidCompass // UPDATE LOG
 
+## v3.6.5 // Profile Dashboard + Route Refresh Polish
+**Release Date:** 2026-Jul-05
+
+### Commander Profile
+*   Reworked the Commander Profile window from a plain text report into a dashboard layout.
+*   Added summary cards for commander identity, credits, current location, and session travel.
+*   Added active ship details, rank progress bars, reputation bars, profile storage status, and integration status cards.
+
+### Navigation + Dashboard
+*   Added a compact Current Flight strip inspired by SrvSurvey-style alignment visuals, showing previous/current/next route state without cramming system names into the strip.
+*   Forced `NavRoute.json` to be checked on startup so existing route data is picked up when the app opens.
+*   Route load/clear updates now refresh the dashboard panels, flight strip, nav label, and HUD immediately.
+
+### Version
+*   Bumped app version to **3.6.5**.
+
 ## v3.6.3 // Commander Profiles, Exploration Companion + Dashboard Rework
 **Release Date:** 2026-Jul-05
 

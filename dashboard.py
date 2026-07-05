@@ -494,6 +494,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.colony_overlay:
             self.colony_overlay.update()
 
+        self.watcher.force_check_nav()
         self.watcher.force_check_status()
 
         journal_path = self.config.get("journal_path") or getattr(self.watcher, "journal_path", None)
@@ -2360,6 +2361,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             dest_url_name = (self.dest_name or "").replace(" ", "+")
             self.add_event_feed_entry("SYSTEM", f"Nav route loaded: {len(self.route_list)} jumps to {self.dest_name}", severity="INFO", copy_text=self.dest_name, url=f"https://www.edsm.net/show-system?systemName={dest_url_name}")
             self.update_nav_label()
+            self.schedule_dashboard_refresh()
             self.update_hud()
             self._refresh_commander_profile_window()
             self._refresh_exploration_window()
@@ -2368,5 +2370,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.dest_coords = None
             self.dest_name = None
             self.add_event_feed_entry("SYSTEM", "Nav route cleared", severity="INFO")
+            self.update_nav_label()
+            self.schedule_dashboard_refresh()
+            self.update_hud()
             self._refresh_commander_profile_window()
             self._refresh_exploration_window()
