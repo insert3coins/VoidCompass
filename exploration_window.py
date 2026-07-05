@@ -39,6 +39,7 @@ class ExplorationWindow:
         self._last_db_stats = {"systems": 0, "visits": 0, "bodies": 0, "value": 0, "valuable": 0}
         self._last_route_status = {}
         self._last_ledger_refresh_ts = 0.0
+        self._closing = False
         self.win = tk.Toplevel(root)
         self.win.title("Exploration")
         self.win.geometry(self.config.get("exploration_window_geometry", "1040x680"))
@@ -50,13 +51,22 @@ class ExplorationWindow:
 
     def is_open(self):
         try:
-            return bool(self.win and self.win.winfo_exists())
+            return bool(not self._closing and self.win and self.win.winfo_exists())
         except Exception:
             return False
 
     def lift(self):
+        if not self.is_open():
+            return
         self.win.lift()
         self.win.focus_force()
+
+    @staticmethod
+    def _widget_alive(widget):
+        try:
+            return bool(widget and widget.winfo_exists())
+        except Exception:
+            return False
 
     def _build(self):
         header = tk.Frame(self.win, bg="#0c1014", height=76)
@@ -342,6 +352,8 @@ class ExplorationWindow:
         )
 
     def refresh(self):
+        if not self.is_open() or not self._widget_alive(getattr(self, "header_summary", None)):
+            return
         try:
             current = getattr(self.app, "current_sys", "---") or "---"
             scanned = int(getattr(self.app, "scanned", 0) or 0)
@@ -928,7 +940,8 @@ class ExplorationWindow:
         if changed:
             self._save_edsm_cache()
             try:
-                self.root.after(0, self.refresh)
+                if hasattr(self.app, "_refresh_exploration_window"):
+                    self.app._refresh_exploration_window()
             except Exception:
                 pass
 
@@ -1194,6 +1207,12 @@ class ExplorationWindow:
             webbrowser.open(f"https://www.edsm.net/show-system?systemName={current.replace(' ', '+')}")
 
     def _on_close(self):
-        self.config["exploration_window_geometry"] = self.win.geometry()
-        save_config(self.config)
-        self.win.destroy()
+        self._closing = True
+        try:
+            if self.win and self.win.winfo_exists():
+                self.config["exploration_window_geometry"] = self.win.geometry()
+                save_config(self.config)
+                self.win.destroy()
+        except Exception:
+            pass
+        self.win = None

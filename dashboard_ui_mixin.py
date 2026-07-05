@@ -49,6 +49,7 @@ def _carrier_countdown(dep_str):
 
 
 class DashboardUIMixin:
+    JOURNAL_HISTORY_LIMIT = 100
     UI_BG = "#080a0d"
     UI_PANEL = "#12161b"
     UI_PANEL_2 = "#171d23"
@@ -599,18 +600,9 @@ class DashboardUIMixin:
         )
         self.journal_history_scroll = tk.Scrollbar(history_wrap, orient=tk.VERTICAL, command=self.journal_history_canvas.yview)
         self.journal_history_canvas.configure(yscrollcommand=self.journal_history_scroll.set)
-        self.journal_history_inner = tk.Frame(self.journal_history_canvas, bg="#0b0f13")
-        self.journal_history_window = self.journal_history_canvas.create_window((0, 0), window=self.journal_history_inner, anchor="nw")
         self.journal_history_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.journal_history_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        self.journal_history_inner.bind(
-            "<Configure>",
-            lambda _event: self.journal_history_canvas.configure(scrollregion=self.journal_history_canvas.bbox("all")),
-        )
-        self.journal_history_canvas.bind(
-            "<Configure>",
-            lambda event: self.journal_history_canvas.itemconfigure(self.journal_history_window, width=event.width),
-        )
+        self.journal_history_canvas.bind("<Configure>", lambda _event: self._render_journal_history_canvas())
         self.journal_history_canvas.bind("<MouseWheel>", self._on_journal_history_wheel)
         self.journal_history_entries = []
         self._journal_icon_cache = {}
@@ -846,14 +838,25 @@ class DashboardUIMixin:
         return image
 
     def _render_journal_history_empty(self):
-        if not hasattr(self, "journal_history_inner"):
+        if not hasattr(self, "journal_history_canvas"):
             return
-        for child in self.journal_history_inner.winfo_children():
-            child.destroy()
-        empty = tk.Frame(self.journal_history_inner, bg="#0b0f13")
-        empty.pack(fill=tk.X, padx=10, pady=16)
-        tk.Label(empty, text="Waiting for live journal events", fg=self.UI_MUTED, bg="#0b0f13", font=("Segoe UI", 10, "bold")).pack(anchor="w")
-        tk.Label(empty, text="Events will appear here as Elite Dangerous writes the journal.", fg=self.UI_DIM, bg="#0b0f13", font=("Segoe UI", 8)).pack(anchor="w", pady=(3, 0))
+        canvas = self.journal_history_canvas
+        canvas.delete("all")
+        canvas.configure(scrollregion=(0, 0, max(canvas.winfo_width(), 1), max(canvas.winfo_height(), 1)))
+        canvas.create_text(
+            16, 20,
+            text="Waiting for live journal events",
+            fill=self.UI_MUTED,
+            font=("Segoe UI", 10, "bold"),
+            anchor="nw",
+        )
+        canvas.create_text(
+            16, 46,
+            text="Events will appear here as Elite Dangerous writes the journal.",
+            fill=self.UI_DIM,
+            font=("Segoe UI", 8),
+            anchor="nw",
+        )
 
     def _journal_history_text(self, event_name, payload):
         payload = payload if isinstance(payload, dict) else {}
@@ -909,7 +912,7 @@ class DashboardUIMixin:
             except Exception:
                 pass
             return
-        if not hasattr(self, "journal_history_inner") or not event_name:
+        if not hasattr(self, "journal_history_canvas") or not event_name:
             return
         title, detail = self._journal_history_text(event_name, payload)
         entry = {
@@ -923,46 +926,65 @@ class DashboardUIMixin:
             if prev.get("event") == entry["event"] and prev.get("title") == entry["title"] and abs(prev.get("ts", 0) - entry["ts"]) < 1.0:
                 return
         self.journal_history_entries.insert(0, entry)
-        self.journal_history_entries = self.journal_history_entries[:120]
-        self._render_journal_history_row(entry)
+        self.journal_history_entries = self.journal_history_entries[:self.JOURNAL_HISTORY_LIMIT]
+        self._render_journal_history_canvas()
         if hasattr(self, "journal_history_count_lbl"):
             self.journal_history_count_lbl.config(text=f"{len(self.journal_history_entries)} EVENTS")
 
-    def _render_journal_history_row(self, entry):
-        if not hasattr(self, "journal_history_inner"):
+    def _render_journal_history_canvas(self):
+        if not hasattr(self, "journal_history_canvas"):
             return
-        if len(self.journal_history_entries) == 1:
-            for child in self.journal_history_inner.winfo_children():
-                child.destroy()
-        while len(self.journal_history_inner.winfo_children()) >= 120:
-            self.journal_history_inner.winfo_children()[-1].destroy()
-        first_child = self.journal_history_inner.winfo_children()[0] if self.journal_history_inner.winfo_children() else None
-        row = tk.Frame(self.journal_history_inner, bg="#0d1318", highlightbackground=self.UI_BORDER, highlightthickness=1)
-        pack_kwargs = {"fill": tk.X, "padx": 8, "pady": (8, 0)}
-        if first_child:
-            pack_kwargs["before"] = first_child
-        row.pack(**pack_kwargs)
-        icon = self._journal_icon_for_event(entry.get("event"))
-        if icon:
-            icon_lbl = tk.Label(row, image=icon, bg="#0d1318", width=38)
-            icon_lbl.image = icon
-        else:
-            icon_lbl = tk.Label(row, text="J", fg=COLOR_ACCENT, bg="#0d1318", font=("Segoe UI", 12, "bold"), width=4)
-        icon_lbl.pack(side=tk.LEFT, padx=(8, 6), pady=7)
-        text_box = tk.Frame(row, bg="#0d1318")
-        text_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, pady=6)
-        top = tk.Frame(text_box, bg="#0d1318")
-        top.pack(fill=tk.X)
-        tk.Label(top, text=entry.get("event", "Journal"), fg=COLOR_ORANGE, bg="#0d1318", font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT)
-        tk.Label(top, text=datetime.fromtimestamp(entry.get("ts", time.time())).strftime("%H:%M:%S"), fg=self.UI_DIM, bg="#0d1318", font=("Consolas", 8)).pack(side=tk.RIGHT, padx=(8, 8))
-        tk.Label(text_box, text=entry.get("title", ""), fg=COLOR_TEXT, bg="#0d1318", font=("Segoe UI", 10, "bold"), anchor="w").pack(fill=tk.X)
-        detail = entry.get("detail") or ""
-        if detail:
-            tk.Label(text_box, text=detail, fg=self.UI_MUTED, bg="#0d1318", font=("Consolas", 8), anchor="w").pack(fill=tk.X)
+        entries = getattr(self, "journal_history_entries", []) or []
+        if not entries:
+            self._render_journal_history_empty()
+            return
+
+        canvas = self.journal_history_canvas
+        width = max(canvas.winfo_width(), 320)
+        row_h = 62
+        pad = 8
+        canvas.delete("all")
+        for idx, entry in enumerate(entries[:self.JOURNAL_HISTORY_LIMIT]):
+            y = pad + idx * row_h
+            canvas.create_rectangle(
+                pad, y, width - pad, y + row_h - 6,
+                fill="#0d1318",
+                outline=self.UI_BORDER,
+            )
+            icon = self._journal_icon_for_event(entry.get("event"))
+            if icon:
+                canvas.create_image(pad + 23, y + 28, image=icon)
+            else:
+                canvas.create_text(pad + 23, y + 28, text="J", fill=COLOR_ACCENT, font=("Segoe UI", 12, "bold"))
+
+            text_x = pad + 50
+            event_name = entry.get("event", "Journal")
+            ts_txt = datetime.fromtimestamp(entry.get("ts", time.time())).strftime("%H:%M:%S")
+            canvas.create_text(text_x, y + 9, text=event_name, fill=COLOR_ORANGE, font=("Segoe UI", 8, "bold"), anchor="nw")
+            canvas.create_text(width - pad - 10, y + 9, text=ts_txt, fill=self.UI_DIM, font=("Consolas", 8), anchor="ne")
+            canvas.create_text(
+                text_x, y + 27,
+                text=str(entry.get("title", ""))[:90],
+                fill=COLOR_TEXT,
+                font=("Segoe UI", 10, "bold"),
+                anchor="nw",
+            )
+            detail = str(entry.get("detail") or "")
+            if detail:
+                canvas.create_text(
+                    text_x, y + 46,
+                    text=detail[:110],
+                    fill=self.UI_MUTED,
+                    font=("Consolas", 8),
+                    anchor="nw",
+                )
+        total_h = pad + len(entries[:self.JOURNAL_HISTORY_LIMIT]) * row_h + pad
+        canvas.configure(scrollregion=(0, 0, width, total_h))
 
     def _on_journal_history_wheel(self, event):
         try:
-            self.journal_history_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            direction = -1 if event.delta > 0 else 1
+            self.journal_history_canvas.yview_scroll(direction * 4, "units")
             return "break"
         except Exception:
             return None
