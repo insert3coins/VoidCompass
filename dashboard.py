@@ -259,6 +259,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         
         self.current_sys = "---"
         self.previous_sys = None
+        self.previous_coords = None
         self.current_system_address = None
         self.star_class = ""
         self.scanned = 0
@@ -1727,6 +1728,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_sys = incoming_sys
             if outgoing_sys:
                 self.previous_sys = outgoing_sys
+                self.previous_coords = prev_coords
             if self.current_sys and self.current_sys not in ("---", "Unknown"):
                 self.session_systems.add(self.current_sys)
             self.current_system_address = self._normalize_system_address(d.get("system_address"))
