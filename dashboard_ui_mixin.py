@@ -1363,6 +1363,7 @@ class DashboardUIMixin:
         route_position = None
 
         route = list(getattr(self, "route_list", None) or [])
+        entries = getattr(self, "nav_route_entries", None) or []
         route_idx = -1
         if current != "---":
             try:
@@ -1370,23 +1371,30 @@ class DashboardUIMixin:
             except ValueError:
                 route_idx = -1
 
-        if route_idx > 0:
-            previous = route[route_idx - 1]
-            entries = getattr(self, "nav_route_entries", None) or []
-            if route_idx - 1 < len(entries):
-                previous_coords = entries[route_idx - 1].get("StarPos") or previous_coords
-        if route_idx >= 0:
-            route_position = (route_idx + 1, len(route))
-            if route_idx + 1 < len(route):
-                next_name = route[route_idx + 1]
-                entries = getattr(self, "nav_route_entries", None) or []
-                if route_idx + 1 < len(entries):
-                    next_coords = entries[route_idx + 1].get("StarPos")
+        if route:
+            if route_idx > 0:
+                previous = route[route_idx - 1]
+                if route_idx - 1 < len(entries):
+                    previous_coords = entries[route_idx - 1].get("StarPos") or previous_coords
+            if route_idx >= 0:
+                route_position = (route_idx + 1, len(route))
+                if route_idx + 1 < len(route):
+                    next_name = route[route_idx + 1]
+                    if route_idx + 1 < len(entries):
+                        next_coords = entries[route_idx + 1].get("StarPos")
+            else:
+                # Elite's NavRoute.json usually lists upcoming hops only, so the
+                # first entry is the real next jump when current is not present.
+                route_position = (0, len(route))
+                next_name = route[0]
+                if entries:
+                    next_coords = entries[0].get("StarPos")
 
-        target_wp = getattr(self, "target_waypoint", None)
-        if target_wp and target_wp.get("name"):
-            next_name = target_wp.get("name")
-            next_coords = target_wp.get("coords")
+        if not next_name:
+            target_wp = getattr(self, "target_waypoint", None)
+            if target_wp and target_wp.get("name"):
+                next_name = target_wp.get("name")
+                next_coords = target_wp.get("coords")
 
         if not next_name:
             next_name = getattr(self, "dest_name", None)
@@ -1412,7 +1420,7 @@ class DashboardUIMixin:
             except Exception:
                 next_distance_txt = "--"
 
-        if route_position:
+        if route_position and route_position[0] > 0:
             route_txt = f"ROUTE {route_position[0]}/{route_position[1]}"
         elif route:
             route_txt = f"ROUTE {len(route)} JUMPS"
