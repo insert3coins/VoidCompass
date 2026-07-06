@@ -313,7 +313,9 @@ class ExplorationWindow:
         self.system_history_summary.pack(side=tk.RIGHT)
 
         cols = ("last", "system", "star", "bodies", "value", "bio", "valuable", "source")
-        self.system_history_tree = self._tree(frame, cols, {
+        list_wrap = tk.Frame(frame, bg=self.UI_BG)
+        list_wrap.pack(fill=tk.BOTH, expand=True)
+        self.system_history_tree = self._tree(list_wrap, cols, {
             "last": ("Last Visit", 125, tk.W),
             "system": ("System", 260, tk.W),
             "star": ("Star", 70, tk.CENTER),
@@ -326,6 +328,28 @@ class ExplorationWindow:
         self.system_history_tree.tag_configure("current", foreground=COLOR_ACCENT)
         self.system_history_tree.tag_configure("valuable", foreground=COLOR_ORANGE)
         self.system_history_tree.tag_configure("bio", foreground=self.UI_OK)
+        self.system_history_tree.bind("<<TreeviewSelect>>", self._on_system_history_selected)
+        self.system_history_by_iid = {}
+
+        detail = tk.Frame(frame, bg=self.UI_PANEL, highlightbackground=self.UI_BORDER, highlightthickness=1, bd=0)
+        detail.pack(fill=tk.X, padx=0, pady=(8, 0))
+        tk.Frame(detail, bg=COLOR_ACCENT, height=2).pack(fill=tk.X)
+        tk.Label(detail, text="SYSTEM DETAIL", fg=COLOR_ORANGE, bg=self.UI_PANEL, font=("Segoe UI", 8, "bold"), anchor="w").pack(fill=tk.X, padx=10, pady=(7, 0))
+        self.system_history_detail = tk.Text(
+            detail,
+            bg=self.UI_PANEL,
+            fg=COLOR_TEXT,
+            insertbackground=COLOR_ACCENT,
+            relief=tk.FLAT,
+            bd=0,
+            padx=10,
+            pady=6,
+            height=7,
+            font=("Consolas", 9),
+            wrap=tk.WORD,
+        )
+        self.system_history_detail.pack(fill=tk.X)
+        self.system_history_detail.configure(state=tk.DISABLED)
 
     def _build_ledger_tab(self):
         frame = tk.Frame(self.tabs, bg=self.UI_BG)
@@ -1007,6 +1031,46 @@ class ExplorationWindow:
         except Exception:
             pass
 
+    def _history_detail_payload(self, items):
+        stars = []
+        bodies = []
+        bio = []
+        valuable = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("full_name") or item.get("name") or "Body"
+            body_class = item.get("star_type") or item.get("planet_class") or item.get("class") or "-"
+            value = self._item_value(item)
+            row = {
+                "name": name,
+                "class": body_class,
+                "value": value,
+                "status": self._body_status(item),
+                "bio_count": self._safe_int(item.get("bio_count")),
+                "geo_count": self._safe_int(item.get("geo_count")),
+                "genus": self._genus_labels(item),
+                "mapped": bool(item.get("dss_complete") or item.get("was_mapped")),
+                "distance": item.get("distance_to_arrival"),
+            }
+            if item.get("is_star"):
+                stars.append(row)
+            else:
+                bodies.append(row)
+                if row["bio_count"] or row["genus"] or self._safe_int(item.get("organic_complete_count")):
+                    bio.append(row)
+                if self._is_valuable(item):
+                    valuable.append(row)
+        bodies.sort(key=lambda row: (row["name"], row["class"]))
+        valuable.sort(key=lambda row: row["value"], reverse=True)
+        bio.sort(key=lambda row: (-row["bio_count"], row["name"]))
+        return {
+            "stars": stars,
+            "bodies": bodies[:80],
+            "bio": bio[:40],
+            "valuable": valuable[:40],
+        }
+
     def _history_row_from_items(self, system, address, last_seen, scanned, total, items):
         stars = sorted({
             str(item.get("star_type"))
@@ -1041,6 +1105,7 @@ class ExplorationWindow:
             "bio_signals": int(bio_signals or 0),
             "bio_bodies": int(bio_bodies or 0),
             "source": "DB",
+            "details": self._history_detail_payload(items),
         }
 
     def _refresh_system_history_rows(self, current, bodies, current_value, valuable_count, bio_summary, scanned, total):
@@ -1127,6 +1192,7 @@ class ExplorationWindow:
             "bio_signals": int(bio_summary.get("bio_signals", 0) or 0),
             "bio_bodies": int(bio_summary.get("bio_bodies", 0) or 0),
             "source": "Live",
+            "details": self._history_detail_payload(bodies),
         })
         self.system_history_rows = rows
 
@@ -1333,8 +1399,17 @@ class ExplorationWindow:
     def _render_system_history(self):
         if not hasattr(self, "system_history_tree"):
             return
+        selected_system = None
+        try:
+            selected = self.system_history_tree.selection()
+            if selected:
+                selected_row = self.system_history_by_iid.get(selected[0])
+                selected_system = selected_row.get("system") if selected_row else None
+        except Exception:
+            selected_system = None
         for item_id in self.system_history_tree.get_children():
             self.system_history_tree.delete(item_id)
+        self.system_history_by_iid = {}
         query = (self.system_history_filter_var.get() or "").strip().lower()
         current = getattr(self.app, "current_sys", None)
         rows = sorted(
@@ -1364,7 +1439,7 @@ class ExplorationWindow:
                 star = "/".join(stars[:3])
             bodies = f"{int(row.get('scanned_bodies', 0) or 0)}/{int(row.get('total_bodies', 0) or 0)}"
             bio = f"{int(row.get('bio_bodies', 0) or 0)}/{int(row.get('bio_signals', 0) or 0)}"
-            self.system_history_tree.insert(
+            iid = self.system_history_tree.insert(
                 "",
                 tk.END,
                 values=(
@@ -1379,10 +1454,85 @@ class ExplorationWindow:
                 ),
                 tags=tuple(tags),
             )
+            self.system_history_by_iid[iid] = row
+            if selected_system and row.get("system") == selected_system:
+                self.system_history_tree.selection_set(iid)
         total_value = sum(int(row.get("estimated_value", 0) or 0) for row in shown)
         self.system_history_summary.config(
             text=f"{len(shown)} systems | {self._format_credits(total_value)} | profile DB"
         )
+        selected = self.system_history_tree.selection()
+        if selected:
+            self._show_system_history_detail(self.system_history_by_iid.get(selected[0]))
+        elif shown:
+            first = self.system_history_tree.get_children()[0]
+            self.system_history_tree.selection_set(first)
+            self._show_system_history_detail(self.system_history_by_iid.get(first))
+        else:
+            self._show_system_history_detail(None)
+
+    def _on_system_history_selected(self, _event=None):
+        selected = self.system_history_tree.selection()
+        self._show_system_history_detail(self.system_history_by_iid.get(selected[0]) if selected else None)
+
+    def _show_system_history_detail(self, row):
+        if not hasattr(self, "system_history_detail"):
+            return
+        lines = []
+        if row:
+            details = row.get("details") or {}
+            lines.extend([
+                f"{row.get('system') or '-'}",
+                f"Last visit: {self._format_history_time(row.get('last_seen_ts'))} | Source: {row.get('source') or 'DB'}",
+                f"Scan: {int(row.get('scanned_bodies', 0) or 0)}/{int(row.get('total_bodies', 0) or 0)} bodies | Value: {self._format_credits(row.get('estimated_value'))}",
+                f"Bio: {int(row.get('bio_bodies', 0) or 0)} bodies / {int(row.get('bio_signals', 0) or 0)} signals | Valuable: {int(row.get('valuable_bodies', 0) or 0)}",
+                "",
+            ])
+            stars = details.get("stars") or []
+            lines.append("Stars:")
+            if stars:
+                for star in stars[:8]:
+                    lines.append(f"- {star.get('name')} | {star.get('class')} | {self._format_credits(star.get('value'))}")
+            else:
+                star_class = row.get("star_class") or "-"
+                lines.append(f"- {star_class}")
+
+            valuable = details.get("valuable") or []
+            lines.append("")
+            lines.append("Valuable bodies:")
+            if valuable:
+                for body in valuable[:10]:
+                    lines.append(f"- {body.get('name')} | {body.get('class')} | {self._format_credits(body.get('value'))} | {body.get('status')}")
+            else:
+                lines.append("- None recorded")
+
+            bio = details.get("bio") or []
+            lines.append("")
+            lines.append("Bio data:")
+            if bio:
+                for body in bio[:12]:
+                    genus = ", ".join(body.get("genus") or []) or "-"
+                    lines.append(f"- {body.get('name')} | bio {body.get('bio_count', 0)} | {genus}")
+            else:
+                lines.append("- None recorded")
+
+            bodies = details.get("bodies") or []
+            lines.append("")
+            lines.append("Scanned bodies:")
+            if bodies:
+                for body in bodies[:18]:
+                    mapped = "mapped" if body.get("mapped") else "scan"
+                    lines.append(f"- {body.get('name')} | {body.get('class')} | {mapped} | {self._format_credits(body.get('value'))}")
+                if len(bodies) > 18:
+                    lines.append(f"- ... {len(bodies) - 18} more")
+            else:
+                lines.append("- None recorded")
+        else:
+            lines = ["Select a system history row to view stars, scans, values, and bio data."]
+        self.system_history_detail.configure(state=tk.NORMAL)
+        self.system_history_detail.delete("1.0", tk.END)
+        self.system_history_detail.insert(tk.END, "\n".join(lines))
+        self.system_history_detail.configure(state=tk.DISABLED)
 
     def _copy_system_history(self):
         rows = sorted(
