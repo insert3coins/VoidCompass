@@ -1,7 +1,8 @@
-import tkinter as tk
-import logging
 import os
 import sys
+
+import tkinter as tk
+import logging
 import atexit
 import tempfile
 import msvcrt

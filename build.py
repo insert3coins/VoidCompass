@@ -71,11 +71,28 @@ VSVersionInfo(
         '--add-data=Images;Images',
         '--add-data=mining_data.db;.',
         '--add-data=codexRef.json;.',
+        '--hidden-import=zmq',
         '--version-file=version_info.txt'
     ]
 
     print("Starting build process...")
     PyInstaller.__main__.run(opts)
+
+    builder_opts = [
+        'market_builder.py',
+        '--name=VoidCompassMarketBuilder',
+        '--onefile',
+        '--windowed',
+        '--clean',
+        '--log-level=INFO',
+        '--icon=icon.ico',
+        '--add-data=icon.ico;.',
+        '--hidden-import=zmq',
+        '--version-file=version_info.txt'
+    ]
+
+    print("Starting market builder build process...")
+    PyInstaller.__main__.run(builder_opts)
     
     if os.path.exists('version_info.txt'):
         os.remove('version_info.txt')
