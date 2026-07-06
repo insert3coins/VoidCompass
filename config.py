@@ -113,6 +113,9 @@ PROFILE_VALUE_SETTINGS = (
     "value_ledger_geometry",
     "colonisation_planner_geometry",
     "exploration_window_geometry",
+    "trade_window_geometry",
+    "trade_route_form",
+    "trade_watchlist",
 )
 
 PROFILE_SETTINGS = PROFILE_TEXT_SETTINGS + PROFILE_BOOL_SETTINGS + PROFILE_VALUE_SETTINGS
@@ -349,6 +352,9 @@ def load_config():
         'value_ledger_geometry': '980x620',
         'colonisation_planner_geometry': '900x560',
         'exploration_window_geometry': '1040x680',
+        'trade_window_geometry': '1080x700',
+        'trade_route_form': {},
+        'trade_watchlist': [],
         'route_auto_note_from_edsm': True,
         'auto_copy_waypoint': False,
     }

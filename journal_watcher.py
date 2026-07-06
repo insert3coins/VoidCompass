@@ -36,10 +36,12 @@ class JournalWatcher:
         self.cargo_callback = None
         self.nav_route_callback = None
         self.status_callback = None
+        self.market_callback = None
         
         self.last_cargo_mtime = 0
         self.last_nav_mtime = 0
         self.last_status_mtime = 0
+        self.last_market_mtime = 0
         self.thread = None
         self._journal_files = []
         self._journal_files_refresh_ts = 0.0
@@ -55,12 +57,13 @@ class JournalWatcher:
     def stop(self):
         self.is_running = False
 
-    def register_callback(self, event_cb=None, batch_cb=None, cargo_cb=None, nav_cb=None, status_cb=None):
+    def register_callback(self, event_cb=None, batch_cb=None, cargo_cb=None, nav_cb=None, status_cb=None, market_cb=None):
         if event_cb: self.event_callback = event_cb
         if batch_cb: self.batch_event_callback = batch_cb
         if cargo_cb: self.cargo_callback = cargo_cb
         if nav_cb: self.nav_route_callback = nav_cb
         if status_cb: self.status_callback = status_cb
+        if market_cb: self.market_callback = market_cb
 
     def force_check_cargo(self):
         self.last_cargo_mtime = 0
@@ -68,6 +71,10 @@ class JournalWatcher:
 
     def force_check_status(self):
         self.last_status_mtime = 0
+        self._force_special_check = True
+
+    def force_check_market(self):
+        self.last_market_mtime = 0
         self._force_special_check = True
 
     def force_check_nav(self):
@@ -733,6 +740,22 @@ class JournalWatcher:
                             data = json.load(f)
                             self.status_callback(data)
                             self.last_status_mtime = mtime
+                except:
+                    pass
+        # Market.json is written when the commodity market screen is opened.
+        if self.market_callback:
+            m_file = os.path.join(self.journal_path, "Market.json")
+            if os.path.exists(m_file):
+                try:
+                    mtime = os.path.getmtime(m_file)
+                    if mtime != self.last_market_mtime:
+                        if (now - mtime) < self.special_file_settle_s and not self._force_special_check:
+                            pass
+                        else:
+                            with open(m_file, 'r', encoding='utf-8') as f:
+                                data = json.load(f)
+                                self.market_callback(data)
+                                self.last_market_mtime = mtime
                 except:
                     pass
         if callable(self.trace_callback):

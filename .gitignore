@@ -27,6 +27,7 @@ dist/
 
 #misc
 resources/
+data/
 
 # Virtual environment
 .venv/

@@ -155,6 +155,7 @@ class DashboardUIMixin:
         for _text, _cmd in [
             ("Profile",        self.open_commander_profile_window),
             ("Explore",        self.open_exploration_window),
+            ("Trade",          self.open_trade_window),
             ("Ground",         self.open_ground_target_window),
             ("Shots",          self.open_screenshots_folder),
             ("Carrier",        self.open_carrier_window),

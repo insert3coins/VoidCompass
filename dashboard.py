@@ -45,6 +45,8 @@ from commander_profile_window import CommanderProfileWindow
 from system_value_ledger import SystemValueLedger
 from colonisation_planner import ColonisationPlanner
 from exploration_window import ExplorationWindow
+from trade_window import TradeWindow
+from trade import marketdb as trade_marketdb
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
@@ -297,8 +299,27 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         # Colonization tracking
         self.colonisation_projects: dict = {}  # market_id → project dict
         self.current_colonisation_market: int | None = None
+        self.current_station_name = None
+        self.current_station_type = None
+        self.current_station_market_id = None
+        self.current_trade_market = None
+        self.current_docked = False
+        self.current_fuel_main = None
+        self.current_fuel_reservoir = None
+        self.current_legal_state = None
+        self.current_destination = None
+        self.trade_jump_history = deque(maxlen=20)
         self.cargo_capacity = 0
+        self.current_cargo_tons = 0
         self.current_cargo_inventory = []
+        self.trade_session = {
+            "bought_units": 0,
+            "sold_units": 0,
+            "spent": 0,
+            "earned": 0,
+            "profit": 0,
+            "events": deque(maxlen=100),
+        }
         self.last_journal_event_ts = 0.0
         self.last_logged_journal_file = None
         self.last_status_event_ts = 0.0
@@ -405,6 +426,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.value_ledger_window = None
         self.colonisation_planner_window = None
         self.exploration_window = None
+        self.trade_window = None
         self._carrier_panel_tick_job = None
         self.carrier_tracker = CarrierTracker()
         self._refresh_profile_paths()
@@ -488,7 +510,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             batch_cb=self.process_batch,
             cargo_cb=self.update_cargo,
             nav_cb=self.update_nav_route,
-            status_cb=self.update_status
+            status_cb=self.update_status,
+            market_cb=self.update_market
         )
         self.watcher.start()
         self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
@@ -497,6 +520,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         self.watcher.force_check_nav()
         self.watcher.force_check_status()
+        self.watcher.force_check_market()
 
         journal_path = self.config.get("journal_path") or getattr(self.watcher, "journal_path", None)
         threading.Thread(
@@ -724,6 +748,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.bgs_window._on_close()
         if self.exploration_window and self.exploration_window.is_open():
             self.exploration_window._on_close()
+        if self.trade_window and self.trade_window.is_open():
+            self.trade_window._on_close()
             
         self.watcher.stop()
         self.screenshots.stop()
@@ -960,6 +986,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.exploration_window.lift()
             return
         self.exploration_window = ExplorationWindow(self.root, self)
+
+    def open_trade_window(self):
+        if self.trade_window and self.trade_window.is_open():
+            self.trade_window.lift()
+            return
+        try:
+            self.trade_window = TradeWindow(self.root, self)
+        except Exception as exc:
+            self.trade_window = None
+            self.log(f"Trade window failed to open: {exc}")
+            self.add_event_feed_entry("TRADE", f"Trade window failed: {exc}", severity="WARN")
 
     def open_value_ledger_window(self):
         if self.value_ledger_window and self.value_ledger_window.is_open():
@@ -1574,6 +1611,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "CargoDepot":
             self._queue_edsm_upload(raw, startup_replay=startup_replay)
 
+        elif ev in ("MarketBuy", "MarketSell"):
+            if not startup_replay:
+                self._record_trade_session_event(ev, raw if isinstance(raw, dict) else d)
+            self._queue_edsm_upload(raw, startup_replay=startup_replay)
+
         elif ev in ("NavRoute", "NavRouteClear"):
             # Nav route details live in NavRoute.json; trigger immediate refresh.
             self.watcher.force_check_nav()
@@ -1745,6 +1787,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     jump_ly = math.sqrt(sum((a - b) ** 2 for a, b in zip(prev_coords, self.current_coords)))
                     self.session_jump_count += 1
                     self.session_ly += jump_ly
+                    self.trade_jump_history.appendleft({
+                        "system": self.current_sys,
+                        "distance": jump_ly,
+                        "timestamp": time.time(),
+                    })
                 except Exception:
                     pass
             
@@ -1856,6 +1903,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "Docked":
             station = d.get("StationName") or d.get("station_name", "Unknown")
             stype = d.get("StationType") or d.get("station_type", "")
+            self.current_docked = True
+            self.current_station_name = station
+            self.current_station_type = stype or None
+            self.current_station_market_id = d.get("MarketID") or d.get("market_id")
             label = f"{station} ({stype})" if stype else station
             self._queue_edsm_upload(raw, startup_replay=startup_replay)
             if not self.batch_mode and not startup_replay:
@@ -1863,6 +1914,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         elif ev == "Undocked":
             station = d.get("StationName") or d.get("station_name", "")
+            self.current_docked = False
+            self.current_station_name = None
+            self.current_station_type = None
+            self.current_station_market_id = None
             self._queue_edsm_upload(raw, startup_replay=startup_replay)
             if not self.batch_mode and not startup_replay:
                 self.add_event_feed_entry("DOCK", f"Undocked: {station}", severity="INFO", copy_text=station)
@@ -2351,6 +2406,89 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.colony_overlay:
             self.root.after(0, self.colony_overlay.update)
         self._refresh_commander_profile_window()
+
+    def _record_trade_session_event(self, ev, data):
+        if not isinstance(data, dict):
+            return
+        commodity = data.get("Type_Localised") or data.get("Type") or data.get("commodity") or "Commodity"
+        count = int(data.get("Count") or data.get("count") or 0)
+        if count <= 0:
+            return
+        if ev == "MarketBuy":
+            price = int(data.get("BuyPrice") or data.get("Price") or 0)
+            total = int(data.get("TotalCost") or (price * count))
+            self.trade_session["bought_units"] += count
+            self.trade_session["spent"] += total
+            event = {
+                "time": time.time(),
+                "event": "BUY",
+                "commodity": commodity,
+                "count": count,
+                "price": price,
+                "profit": -total,
+            }
+        else:
+            price = int(data.get("SellPrice") or data.get("Price") or 0)
+            total = int(data.get("TotalSale") or (price * count))
+            avg_paid = int(data.get("AvgPricePaid") or 0)
+            profit = (price - avg_paid) * count if avg_paid else total
+            self.trade_session["sold_units"] += count
+            self.trade_session["earned"] += total
+            self.trade_session["profit"] += profit
+            event = {
+                "time": time.time(),
+                "event": "SELL",
+                "commodity": commodity,
+                "count": count,
+                "price": price,
+                "profit": profit,
+            }
+        self.trade_session["events"].append(event)
+        if self.trade_window and self.trade_window.is_open():
+            self.root.after(0, self.trade_window.refresh_session)
+
+    def update_market(self, data):
+        if not isinstance(data, dict):
+            return
+        context = {
+            "system_name": data.get("StarSystem") or self.current_sys,
+            "system_address": self.current_system_address,
+            "star_pos": self.current_coords,
+            "station_name": data.get("StationName") or self.current_station_name,
+            "station_type": self.current_station_type,
+        }
+        try:
+            conn = trade_marketdb.connect()
+            try:
+                result = trade_marketdb.import_market_json(conn, data, context)
+            finally:
+                conn.close()
+        except Exception as exc:
+            self.root.after(0, lambda e=exc: self.log(f"Trade market import failed: {e}"))
+            return
+
+        if not result.get("updated"):
+            return
+
+        self.current_trade_market = {
+            "market_id": result.get("market_id"),
+            "station": result.get("station") or context.get("station_name"),
+            "system": result.get("system") or context.get("system_name"),
+            "timestamp": data.get("timestamp"),
+            "items": list(data.get("Items") or []),
+        }
+        station = result.get("station") or context.get("station_name") or "market"
+        system = result.get("system") or context.get("system_name") or self.current_sys
+        count = result.get("commodities", 0)
+        self.root.after(0, lambda: self.add_event_feed_entry(
+            "TRADE",
+            f"Market updated: {station} ({count} commodities)",
+            severity="INFO",
+            copy_text=system,
+        ))
+        if self.trade_window and self.trade_window.is_open():
+            self.root.after(0, self.trade_window.refresh_status)
+            self.root.after(0, self.trade_window.refresh_local)
 
     def update_nav_route(self, data):
         self.last_nav_event_ts = time.time()

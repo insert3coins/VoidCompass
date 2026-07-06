@@ -1,5 +1,32 @@
 # VoidCompass // UPDATE LOG
 
+## v3.8.1 // Trade Companion + Market Builder
+**Release Date:** 2026-Jul-07
+
+### Trade
+*   Added a new **Trade** window with route planning, commodity lookup, local station market data, cargo sell guidance, and database status.
+*   Trade data uses the local Spansh market database, live EDDN updates, and local journal `Market.json` imports when commodity markets are opened in game.
+*   Added Trade Routes support for local loop routes and chain routes, with saved per-commander route form settings.
+*   Added Commodity Search for nearby buy/sell stations with large-pad and carrier filters.
+*   Added a new **Radar** tab with profitable local opportunity scanning and cargo sell finder results.
+*   Added local station market analysis, market freshness indicators, route/watchlist copy actions, and profit-per-ton details.
+*   Added a per-commander Trade Watchlist for quick commodity checks.
+*   Added a live Trade Session tracker from `MarketBuy` and `MarketSell` journal events.
+
+### Market Database
+*   Added a standalone **VoidCompass Market Builder** app for downloading and building the Spansh market database outside the main app.
+*   Build output now packages both `VoidCompass.exe` and `VoidCompassMarketBuilder.exe`.
+*   Added `pyzmq` support for EDDN market updates.
+*   Ignored local generated Trade database files under `data/`.
+
+### Dashboard + Journal
+*   Added a Trade button/window hook to the main dashboard.
+*   Journal watcher now tracks `Market.json` updates and feeds them into the local Trade database.
+*   Dashboard state now tracks docked station, current cargo, fuel, legal state, destination, jump history, and trade session details for the Trade window.
+
+### Version
+*   Bumped app version to **3.8.1**.
+
 ## v3.7.1 // Exploration System History
 **Release Date:** 2026-Jul-05
 

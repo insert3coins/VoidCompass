@@ -20,6 +20,17 @@ class DashboardScanMixin:
         if getattr(self, "mining_window", None) and self.mining_window.is_open():
             self.mining_window.update_status(data)
         was_on_planet = bool(self.on_planet)
+        fuel = data.get("Fuel") or {}
+        self.current_fuel_main = fuel.get("FuelMain")
+        self.current_fuel_reservoir = fuel.get("FuelReservoir")
+        self.current_legal_state = data.get("LegalState")
+        dest = data.get("Destination") or {}
+        self.current_destination = dest.get("Name") or None
+        if data.get("Cargo") is not None:
+            try:
+                self.current_cargo_tons = int(data.get("Cargo") or 0)
+            except Exception:
+                self.current_cargo_tons = data.get("Cargo")
         self.current_latitude = self._to_float(data.get("Latitude"))
         self.current_longitude = self._to_float(data.get("Longitude"))
         self.current_heading = self._to_float(data.get("Heading"))
