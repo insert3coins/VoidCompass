@@ -47,6 +47,7 @@ from colonisation_planner import ColonisationPlanner
 from exploration_window import ExplorationWindow
 from trade_window import TradeWindow
 from trade import marketdb as trade_marketdb
+from trade.eddn_upload import UPLOADER as trade_eddn_uploader
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
@@ -1672,6 +1673,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if credits is not None:
                 self.cmdr_balance = credits
                 self.cmdr_loan = loan
+                trade_marketdb.log_balance(
+                    trade_marketdb.parse_update_time(raw.get("timestamp")) or trade_marketdb.now_epoch(),
+                    credits,
+                )
                 self._queue_edsm_upload(raw, allow_startup=True, flush=True)
                 self._refresh_commander_profile_window()
             self.cmdr_ship.update({
@@ -2444,8 +2449,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "profit": profit,
             }
         self.trade_session["events"].append(event)
+        ts = trade_marketdb.parse_update_time(data.get("timestamp")) or int(time.time())
+        symbol = trade_marketdb.clean_commodity_symbol(data.get("Type") or commodity)
+        trade_marketdb.log_trade(
+            ts,
+            "buy" if ev == "MarketBuy" else "sell",
+            symbol,
+            commodity,
+            count,
+            price,
+            total,
+            event["profit"] if ev == "MarketSell" else None,
+        )
         if self.trade_window and self.trade_window.is_open():
             self.root.after(0, self.trade_window.refresh_session)
+            self.root.after(0, self.trade_window.refresh_analytics)
 
     def update_market(self, data):
         if not isinstance(data, dict):
@@ -2466,6 +2484,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         except Exception as exc:
             self.root.after(0, lambda e=exc: self.log(f"Trade market import failed: {e}"))
             return
+
+        trade_eddn_uploader.set_enabled(bool(self.config.get("trade_eddn_upload_enabled", True)))
+        trade_eddn_uploader.maybe_publish(data, self.cmdr_name)
 
         if not result.get("updated"):
             return

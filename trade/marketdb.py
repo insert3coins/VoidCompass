@@ -57,6 +57,19 @@ CREATE TABLE IF NOT EXISTS commodity_names(
     symbol TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     category TEXT);
+CREATE TABLE IF NOT EXISTS trade_log(
+    ts INTEGER NOT NULL,
+    event TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    name TEXT,
+    count INTEGER NOT NULL DEFAULT 0,
+    price INTEGER NOT NULL DEFAULT 0,
+    total INTEGER NOT NULL DEFAULT 0,
+    profit INTEGER,
+    PRIMARY KEY(ts, event, symbol, total)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS balance_log(
+    ts INTEGER PRIMARY KEY,
+    balance INTEGER NOT NULL);
 """
 
 _init_lock = threading.Lock()
@@ -111,6 +124,78 @@ def get_meta(conn, key, default=None):
 
 def set_meta(conn, key, value):
     conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES(?, ?)", (key, str(value)))
+
+
+def log_trade(ts, event, symbol, name, count, price, total, profit=None):
+    if not ts or not symbol:
+        return
+    conn = connect()
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO trade_log(ts, event, symbol, name, count, price, total, profit)"
+            " VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+            (int(ts), event, symbol, name, int(count or 0), int(price or 0), int(total or 0), profit),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def log_balance(ts, balance):
+    if not ts or balance is None:
+        return
+    conn = connect()
+    try:
+        conn.execute("INSERT OR REPLACE INTO balance_log(ts, balance) VALUES(?, ?)", (int(ts), int(balance)))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def trade_analytics(days=30):
+    days = max(1, min(365, int(days or 30)))
+    now = now_epoch()
+    since = now - days * 86400
+    conn = connect()
+    try:
+        balance = conn.execute(
+            "SELECT ts, balance FROM balance_log WHERE ts >= ? ORDER BY ts", (since,)
+        ).fetchall()
+        if len(balance) > 400:
+            step = len(balance) // 400 + 1
+            balance = balance[::step] + [balance[-1]]
+        daily = conn.execute(
+            """SELECT date(ts, 'unixepoch') AS d,
+                      SUM(CASE WHEN event = 'sell' THEN COALESCE(profit, 0) ELSE 0 END),
+                      SUM(CASE WHEN event = 'sell' THEN count ELSE 0 END)
+               FROM trade_log WHERE ts >= ? GROUP BY d ORDER BY d""",
+            (since,),
+        ).fetchall()
+
+        def profit_since(cutoff):
+            row = conn.execute(
+                "SELECT SUM(COALESCE(profit, 0)), SUM(count), COUNT(*) FROM trade_log"
+                " WHERE event = 'sell' AND ts >= ?", (cutoff,)
+            ).fetchone()
+            return {"profit": row[0] or 0, "tons": row[1] or 0, "sales": row[2] or 0}
+
+        top = conn.execute(
+            """SELECT symbol, name, SUM(COALESCE(profit, 0)) AS p, SUM(count) AS c
+               FROM trade_log WHERE event = 'sell' AND ts >= ?
+               GROUP BY symbol, name ORDER BY p DESC LIMIT 12""",
+            (since,),
+        ).fetchall()
+        day_start = now - (now % 86400)
+        return {
+            "balance": [{"ts": t, "balance": b} for t, b in balance],
+            "daily": [{"date": d, "profit": p or 0, "tons": t or 0} for d, p, t in daily],
+            "today": profit_since(day_start),
+            "week": profit_since(now - 7 * 86400),
+            "period": profit_since(since),
+            "top": [{"symbol": s, "name": n, "profit": p or 0, "tons": c or 0} for s, n, p, c in top],
+        }
+    finally:
+        conn.close()
 
 
 def keep_commodity(buy, sell, supply, demand):

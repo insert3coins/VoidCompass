@@ -78,6 +78,7 @@ PROFILE_BOOL_SETTINGS = (
     "ground_target_active",
     "auto_copy_waypoint",
     "route_auto_note_from_edsm",
+    "trade_eddn_upload_enabled",
 )
 
 PROFILE_VALUE_SETTINGS = (
@@ -216,6 +217,7 @@ def apply_profile_config(config, profile_key=None):
         "ground_target_active": False,
         "auto_copy_waypoint": False,
         "route_auto_note_from_edsm": True,
+        "trade_eddn_upload_enabled": True,
     }
     for setting in PROFILE_TEXT_SETTINGS:
         if setting not in profile:
@@ -357,6 +359,7 @@ def load_config():
         'trade_watchlist': [],
         'route_auto_note_from_edsm': True,
         'auto_copy_waypoint': False,
+        'trade_eddn_upload_enabled': True,
     }
     if os.path.exists(CONFIG_FILE):
         try:

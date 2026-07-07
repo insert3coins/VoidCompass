@@ -28,6 +28,7 @@ dist/
 #misc
 resources/
 data/
+version_info.txt
 
 # Virtual environment
 .venv/
