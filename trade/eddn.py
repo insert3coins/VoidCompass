@@ -7,7 +7,7 @@ import threading
 import time
 import zlib
 
-from . import marketdb
+from . import alerts, marketdb
 
 RELAY = "tcp://eddn.edcd.io:9500"
 COMMODITY_SCHEMA = "https://eddn.edcd.io/schemas/commodity/3"
@@ -122,6 +122,7 @@ class EddnListener:
             conn.commit()
             with self._lock:
                 self.markets_updated += 1
+            alerts.on_market_update(market_id, station_name, rows)
         except Exception:
             conn.rollback()
 

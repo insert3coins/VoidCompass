@@ -9,7 +9,7 @@ from pathlib import Path
 from tkinter import ttk
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
-from trade import eddn, marketdb, routes, seed, spansh
+from trade import alerts, eddn, eddn_upload, marketdb, routes, seed, spansh
 
 
 class TradeWindow:
@@ -31,6 +31,7 @@ class TradeWindow:
         self.config = app.config
         self.route_rows = []
         self.route_detail_by_iid = {}
+        self.route_payload_by_iid = {}
         self.commodity_names = []
         self._seed_poll_after = None
         self._seed_polling = False
@@ -118,6 +119,7 @@ class TradeWindow:
         self._build_commodity_tab()
         self._build_local_tab()
         self._build_watchlist_tab()
+        self._build_analytics_tab()
         self._build_database_tab()
         self._build_footer()
 
@@ -298,14 +300,13 @@ class TradeWindow:
         self._button(row, "Copy", lambda: self._copy_selected_tree(self.cargo_sell_tree, self.cargo_sell_rows, "Cargo sell row")).pack(side=tk.LEFT, padx=(6, 0), pady=(0, 6))
         self.cargo_sell_status = tk.Label(row, text="", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 9), anchor="w")
         self.cargo_sell_status.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=8, pady=(5, 0))
-        self.cargo_sell_tree = self._tree(cargo, ("commodity", "count", "station", "system", "price", "sale", "jump", "age"), {
-            "commodity": ("Cargo", 150, tk.W),
-            "count": ("Tons", 55, tk.E),
-            "station": ("Station", 180, tk.W),
+        self.cargo_sell_tree = self._tree(cargo, ("station", "system", "sale", "items", "jump", "ls", "age"), {
+            "station": ("Station", 190, tk.W),
             "system": ("System", 160, tk.W),
-            "price": ("Sell", 80, tk.E),
-            "sale": ("Est Sale", 90, tk.E),
+            "sale": ("Est Sale", 95, tk.E),
+            "items": ("Cargo Accepted", 260, tk.W),
             "jump": ("Jump", 65, tk.E),
+            "ls": ("Star Dist", 75, tk.E),
             "age": ("Age", 55, tk.E),
         })
 
@@ -358,6 +359,7 @@ class TradeWindow:
         self.unique_route_check.pack(side=tk.LEFT, padx=8, pady=(12, 6))
         self._button(controls, "Find Routes", self.find_routes, accent=True).pack(side=tk.LEFT, padx=(8, 0), pady=(12, 6))
         self._button(controls, "Copy", self._copy_route_detail).pack(side=tk.LEFT, padx=(6, 0), pady=(12, 6))
+        self._button(controls, "Watch Loop", self.watch_selected_loop).pack(side=tk.LEFT, padx=(6, 0), pady=(12, 6))
 
         self.route_status = tk.Label(body, text="", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 9), anchor="w")
         self.route_status.pack(fill=tk.X, pady=(0, 6))
@@ -472,11 +474,59 @@ class TradeWindow:
         self.seed_progress = ttk.Progressbar(panel, mode="determinate", maximum=100)
         self.seed_progress.pack(fill=tk.X, padx=12, pady=(0, 10))
         self.seed_progress.pack_forget()
+        self.eddn_upload_var = tk.BooleanVar(value=bool(self.config.get("trade_eddn_upload_enabled", True)))
+        tk.Checkbutton(
+            panel,
+            text="Publish visited station markets to EDDN",
+            variable=self.eddn_upload_var,
+            command=self._toggle_eddn_upload,
+            bg=self.UI_PANEL,
+            fg=COLOR_TEXT,
+            selectcolor=self.UI_PANEL_2,
+            activebackground=self.UI_PANEL,
+        ).pack(anchor="w", padx=12, pady=(0, 10))
         row = tk.Frame(panel, bg=self.UI_PANEL)
         row.pack(fill=tk.X, padx=12, pady=(0, 12))
         self.seed_btn = self._button(row, "Open Market Builder", self.open_market_builder, accent=True)
         self.seed_btn.pack(side=tk.LEFT)
         self._button(row, "Refresh Status", self.refresh_status).pack(side=tk.LEFT)
+
+    def _build_analytics_tab(self):
+        frame = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.tabs.add(frame, text="Analytics")
+        body = self._card(frame, "TRADE ANALYTICS", "persistent trade and balance history from journal events")
+        controls = tk.Frame(body, bg=self.UI_PANEL)
+        controls.pack(fill=tk.X, pady=(0, 8))
+        self.analytics_days = self._simple_field(controls, "DAYS", 6)
+        self.analytics_days.insert(0, "30")
+        self._button(controls, "Refresh", self.refresh_analytics, accent=True).pack(side=tk.LEFT, padx=(8, 0), pady=(12, 6))
+        self.analytics_summary = tk.Label(body, text="", fg=COLOR_TEXT, bg=self.UI_PANEL, font=("Consolas", 10), justify=tk.LEFT, anchor="w")
+        self.analytics_summary.pack(fill=tk.X, pady=(0, 8))
+        wrap = tk.Frame(body, bg=self.UI_PANEL)
+        wrap.pack(fill=tk.BOTH, expand=True)
+        left = tk.Frame(wrap, bg=self.UI_PANEL)
+        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        right = tk.Frame(wrap, bg=self.UI_PANEL)
+        right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+        tk.Label(left, text="DAILY PROFIT", fg=COLOR_ORANGE, bg=self.UI_PANEL, font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        self.analytics_daily_tree = self._tree(left, ("date", "profit", "tons"), {
+            "date": ("Date", 120, tk.W),
+            "profit": ("Profit", 120, tk.E),
+            "tons": ("Tons", 80, tk.E),
+        })
+        tk.Label(right, text="TOP COMMODITIES", fg=COLOR_ORANGE, bg=self.UI_PANEL, font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        self.analytics_top_tree = self._tree(right, ("commodity", "profit", "tons"), {
+            "commodity": ("Commodity", 180, tk.W),
+            "profit": ("Profit", 120, tk.E),
+            "tons": ("Tons", 80, tk.E),
+        })
+
+    def _toggle_eddn_upload(self):
+        enabled = bool(self.eddn_upload_var.get())
+        self.config["trade_eddn_upload_enabled"] = enabled
+        eddn_upload.UPLOADER.set_enabled(enabled)
+        save_config(self.config)
+        self.refresh_status()
 
     def _seed_defaults(self):
         defaults = {
@@ -522,6 +572,8 @@ class TradeWindow:
         self.refresh_local()
         self.refresh_session()
         self.refresh_watchlist()
+        self.refresh_analytics()
+        self.refresh_route_alerts()
         self._on_route_mode_changed(save=False)
 
     def _save_route_form(self):
@@ -564,6 +616,7 @@ class TradeWindow:
         self.route_entries["system"].insert(0, current)
 
     def _start_eddn(self):
+        eddn_upload.UPLOADER.set_enabled(bool(self.config.get("trade_eddn_upload_enabled", True)))
         if TradeWindow._eddn_started:
             return
         try:
@@ -600,8 +653,9 @@ class TradeWindow:
                 finally:
                     conn.close()
                 eddn_stats = eddn.LISTENER.stats()
+                upload_stats = eddn_upload.UPLOADER.stats()
                 seed_info = seed.SEEDER.progress()
-                self.root.after(0, lambda: self._render_status(info, eddn_stats, seed_info))
+                self.root.after(0, lambda: self._render_status(info, eddn_stats, seed_info, upload_stats))
             except Exception as exc:
                 self.root.after(0, lambda: self._set_db_text(f"Database status failed: {exc}", self.UI_FAIL))
         threading.Thread(target=worker, daemon=True).start()
@@ -623,13 +677,15 @@ class TradeWindow:
         self._refresh_summary()
         self.refresh_local()
         self.refresh_session()
+        self.refresh_route_alerts()
         now = time.time()
         if now - self._last_db_poll >= 5.0:
             self._last_db_poll = now
             self.refresh_status()
         self._schedule_live_poll()
 
-    def _render_status(self, info, eddn_stats, seed_info):
+    def _render_status(self, info, eddn_stats, seed_info, upload_stats=None):
+        upload_stats = upload_stats or {}
         ready = bool(info.get("ready"))
         self.db_badge.config(text="DB READY" if ready else "DB EMPTY", bg=self.UI_OK if ready else self.UI_WARN)
         self.subtitle.config(text=f"{self._current_system() or 'No current system'} | trade data: Spansh dump + EDDN + journal markets")
@@ -642,6 +698,11 @@ class TradeWindow:
             if self.seed_progress.winfo_ismapped():
                 self.seed_progress.pack_forget()
         eddn_txt = "connected" if eddn_stats.get("connected") else "offline/reconnecting"
+        upload_txt = "disabled"
+        if upload_stats.get("enabled"):
+            upload_txt = f"{upload_stats.get('uploads', 0):,} uploaded"
+            if upload_stats.get("last_error"):
+                upload_txt += f" | last error: {upload_stats.get('last_error')}"
         if phase == "starting":
             self.seed_progress.configure(mode="indeterminate")
             self.seed_progress.start(12)
@@ -687,6 +748,7 @@ class TradeWindow:
             f"{info.get('stations', 0):,} stations | {info.get('commodity_rows', 0):,} price rows | {info.get('db_size_mb', 0)} MB\n"
             f"{seed_txt} | mode: {'low impact' if seed_info.get('polite', True) else 'fast'}\n"
             f"EDDN: {eddn_txt} | updated this session: {eddn_stats.get('markets_updated', 0):,} | skipped unknown: {eddn_stats.get('skipped_unknown', 0):,}\n"
+            f"EDDN upload: {upload_txt}\n"
             f"Journal markets: {info.get('journal_market_updated_at') or 'not yet'}\n"
             f"DB: {info.get('db_path')}",
             self.UI_MUTED if ready else self.UI_WARN,
@@ -868,6 +930,16 @@ class TradeWindow:
             "spread": ("Spread", 90, tk.E),
             "age": ("Age", 60, tk.E),
         })
+        alert_row = tk.Frame(body, bg=self.UI_PANEL)
+        alert_row.pack(fill=tk.X, pady=(8, 4))
+        tk.Label(alert_row, text="LIVE ROUTE WATCHES", fg=COLOR_ORANGE, bg=self.UI_PANEL, font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT)
+        self._button(alert_row, "Refresh Alerts", self.refresh_route_alerts).pack(side=tk.LEFT, padx=(8, 0))
+        self._button(alert_row, "Clear Alerts", self.clear_route_alerts).pack(side=tk.LEFT, padx=(6, 0))
+        self.route_watch_tree = self._tree(body, ("kind", "detail", "value"), {
+            "kind": ("Type", 70, tk.CENTER),
+            "detail": ("Watch / Alert", 560, tk.W),
+            "value": ("Value", 120, tk.E),
+        })
 
     def _watchlist(self):
         value = self.config.get("trade_watchlist")
@@ -970,6 +1042,45 @@ class TradeWindow:
         price = row.get("buy_price") if mode == "buy" else row.get("sell_price")
         return f"{row.get('station')} / {row.get('system')} @ {self._credits(price)}"
 
+    def watch_selected_loop(self):
+        selected = self.route_tree.selection()
+        if not selected:
+            self._show_banner("Select a loop route first.")
+            return
+        payload = self.route_payload_by_iid.get(selected[0]) or {}
+        if "a" not in payload or "b" not in payload:
+            self._show_banner("Only loop routes can be watched.")
+            return
+        try:
+            watch = alerts.add_loop_watch(payload)
+            self._show_banner(f"Watching loop: {watch.get('label')}")
+            self.refresh_route_alerts()
+        except Exception as exc:
+            self._show_banner(f"Route watch failed: {exc}")
+
+    def clear_route_alerts(self):
+        alerts.clear_alerts()
+        self.refresh_route_alerts()
+
+    def refresh_route_alerts(self):
+        if not hasattr(self, "route_watch_tree"):
+            return
+        for iid in self.route_watch_tree.get_children():
+            self.route_watch_tree.delete(iid)
+        snap = alerts.snapshot()
+        for watch in snap.get("watches", []):
+            self.route_watch_tree.insert("", tk.END, values=(
+                "WATCH",
+                f"#{watch.get('id')} {watch.get('label')} since {watch.get('created')}",
+                self._credits(watch.get("profit")),
+            ))
+        for alert in snap.get("alerts", []):
+            self.route_watch_tree.insert("", tk.END, values=(
+                "ALERT",
+                f"{alert.get('ts')}  {alert.get('text')}",
+                f"#{alert.get('watch_id')}",
+            ), tags=("old",))
+
     def refresh_radar(self):
         if not self._current_system():
             self.radar_status.config(text="No current system known yet.", fg=self.UI_WARN)
@@ -1031,7 +1142,7 @@ class TradeWindow:
             "requires_large_pad": self.radar_large_pad_var.get(),
             "include_carriers": self.radar_include_carriers_var.get(),
             "max_system_distance": self._get_num(self.route_entries, "max_ls", 1000, int),
-            "limit_per_item": 5,
+            "limit": 10,
         }
 
         def worker():
@@ -1044,14 +1155,20 @@ class TradeWindow:
 
     def _render_cargo_sellers(self, rows):
         for row in rows:
+            item_summary = ", ".join(
+                f"{i.get('name')} {self._num(i.get('units'))}t"
+                + (" partial" if i.get("partial") else "")
+                for i in row.get("items", [])[:3]
+            )
+            if len(row.get("items", []) or []) > 3:
+                item_summary += f" +{len(row.get('items')) - 3} more"
             iid = self.cargo_sell_tree.insert("", tk.END, values=(
-                row.get("commodity"),
-                self._num(row.get("count")),
                 row.get("station"),
                 row.get("system"),
-                self._credits(row.get("sell_price")),
-                self._credits(row.get("est_sale")),
+                self._credits(row.get("total")),
+                item_summary,
                 f"{float(row.get('distance') or 0):.1f} ly",
+                f"{self._num(row.get('dist_ls'))} ls",
                 self._age(row.get("updated_at")),
             ), tags=(self._freshness_tag(row.get("updated_at")),))
             self.cargo_sell_rows[iid] = row
@@ -1111,6 +1228,51 @@ class TradeWindow:
                 self._num(event.get("count")),
                 self._credits(event.get("price")),
                 self._credits(event.get("profit")),
+            ))
+
+    def refresh_analytics(self):
+        if not hasattr(self, "analytics_daily_tree"):
+            return
+        days = self._entry_int(self.analytics_days, 30)
+        self.analytics_summary.config(text="Loading trade analytics...")
+
+        def worker():
+            try:
+                data = marketdb.trade_analytics(days)
+                self.root.after(0, lambda: self._render_analytics(data, days))
+            except Exception as exc:
+                self.root.after(0, lambda: self.analytics_summary.config(text=f"Analytics failed: {exc}"))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _render_analytics(self, data, days):
+        for tree in (self.analytics_daily_tree, self.analytics_top_tree):
+            for iid in tree.get_children():
+                tree.delete(iid)
+        today = data.get("today", {})
+        week = data.get("week", {})
+        period = data.get("period", {})
+        balance = data.get("balance") or []
+        balance_txt = ""
+        if balance:
+            delta = int(balance[-1].get("balance", 0)) - int(balance[0].get("balance", 0))
+            balance_txt = f" | Balance delta: {self._credits(delta)}"
+        self.analytics_summary.config(text=(
+            f"Today: {self._credits(today.get('profit', 0))} / {self._num(today.get('tons', 0))} t   "
+            f"7 days: {self._credits(week.get('profit', 0))} / {self._num(week.get('tons', 0))} t   "
+            f"{days} days: {self._credits(period.get('profit', 0))} / {self._num(period.get('tons', 0))} t"
+            f"{balance_txt}"
+        ))
+        for row in data.get("daily", [])[-60:][::-1]:
+            self.analytics_daily_tree.insert("", tk.END, values=(
+                row.get("date"),
+                self._credits(row.get("profit", 0)),
+                self._num(row.get("tons", 0)),
+            ))
+        for row in data.get("top", []):
+            self.analytics_top_tree.insert("", tk.END, values=(
+                row.get("name") or row.get("symbol"),
+                self._credits(row.get("profit", 0)),
+                self._num(row.get("tons", 0)),
             ))
 
     def sort_market(self, key):
@@ -1234,6 +1396,7 @@ class TradeWindow:
         for iid in self.route_tree.get_children():
             self.route_tree.delete(iid)
         self.route_detail_by_iid = {}
+        self.route_payload_by_iid = {}
         self._set_route_detail("")
 
     def _render_loops(self, loops):
@@ -1247,6 +1410,7 @@ class TradeWindow:
                 f"{self._credits(loop.get('profit_per_hour'))}/hr", f"{loop.get('distance')} ly",
             ))
             self.route_detail_by_iid[iid] = self._loop_detail(loop)
+            self.route_payload_by_iid[iid] = loop
             cards.append(f"LOOP #{idx}\n{self._loop_detail(loop)}")
         self.route_status.config(text=f"{len(loops)} loop route(s), ranked by estimated profit/hour.", fg=self.UI_MUTED)
         self._set_route_detail(("\n\n" + "-" * 72 + "\n\n").join(cards) if cards else "")
@@ -1263,6 +1427,7 @@ class TradeWindow:
                 self._credits(hop.get("cumulative_profit")), f"{float(hop.get('distance') or 0):.1f} ly",
             ))
             self.route_detail_by_iid[iid] = self._hop_detail(hop)
+            self.route_payload_by_iid[iid] = hop
             cards.append(f"HOP {idx}\n{self._hop_detail(hop)}")
         self.route_status.config(text=f"{len(hops)} hop(s) via {source} | total {self._credits(total)}", fg=self.UI_MUTED)
         self._set_route_detail(f"TOTAL {self._credits(total)} via {source}\n\n" + ("\n\n" + "-" * 72 + "\n\n").join(cards) if cards else "")

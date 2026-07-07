@@ -338,6 +338,7 @@ def _format_loops(conn, loops, start):
         return [
             {
                 "name": names.get(c["symbol"], c["symbol"].title()),
+                "symbol": c["symbol"],
                 "amount": c["amount"],
                 "buy_price": c["buy_price"],
                 "sell_price": c["sell_price"],
@@ -351,6 +352,7 @@ def _format_loops(conn, loops, start):
     def endpoint(st):
         return {
             "station": st["station"],
+            "market_id": st["market_id"],
             "system": st["system"],
             "dist_ls": st["dist_ls"],
             "large_pad": st["large_pad"],
@@ -555,8 +557,17 @@ def sell_cargo(
     requires_large_pad=False,
     include_carriers=True,
     max_system_distance=None,
-    limit_per_item=5,
+    limit=10,
 ):
+    items = []
+    for item in cargo_items or []:
+        raw_name = item.get("Name_Localised") or item.get("name") or item.get("Name")
+        count = int(item.get("Count", item.get("count", 0)) or 0)
+        if not raw_name or count <= 0:
+            continue
+        items.append({"raw_name": raw_name, "count": count})
+    if not items:
+        raise RouteError("Cargo hold is empty.")
     conn = marketdb.connect()
     try:
         if not marketdb.status(conn)["ready"]:
@@ -574,46 +585,63 @@ def sell_cargo(
         by_id = {s["market_id"]: s for s in stations}
         if not by_id:
             return []
-        marks = ",".join("?" for _ in by_id)
-        out = []
-        for item in cargo_items or []:
-            raw_name = item.get("Name_Localised") or item.get("name") or item.get("Name")
-            count = int(item.get("Count", item.get("count", 0)) or 0)
-            if not raw_name or count <= 0:
-                continue
+        counts = {}
+        names = {}
+        for item in items:
             try:
-                symbol, display = _resolve_commodity(conn, raw_name)
+                symbol, display = _resolve_commodity(conn, item["raw_name"])
             except RouteError:
-                symbol = marketdb.clean_commodity_symbol(raw_name)
-                names = marketdb.commodity_display_names(conn, [symbol])
-                display = names.get(symbol, str(raw_name).replace("_", " ").title())
-            rows = conn.execute(
-                f"""SELECT market_id, sell_price, demand
-                    FROM commodities
-                    WHERE symbol = ? AND market_id IN ({marks})
-                      AND demand > 0 AND sell_price > 0
-                    ORDER BY sell_price DESC
-                    LIMIT ?""",
-                [symbol, *by_id.keys(), int(limit_per_item)],
-            ).fetchall()
-            for market_id, sell, demand in rows:
-                st = by_id[market_id]
-                units = min(count, int(demand or 0))
-                out.append({
-                    "commodity": display,
-                    "count": count,
-                    "station": st["station"],
-                    "system": st["system"],
-                    "sell_price": int(sell),
-                    "demand": int(demand or 0),
-                    "est_sale": units * int(sell),
-                    "distance": round(_dist(start, st), 1),
-                    "dist_ls": st.get("dist_ls"),
-                    "large_pad": st.get("large_pad"),
-                    "updated_at": st.get("updated_at"),
-                })
-        out.sort(key=lambda r: (r["commodity"], -r["sell_price"]))
-        return out
+                symbol = marketdb.clean_commodity_symbol(item["raw_name"])
+                if not symbol:
+                    continue
+                display_names = marketdb.commodity_display_names(conn, [symbol])
+                display = display_names.get(symbol, str(item["raw_name"]).replace("_", " ").title())
+            counts[symbol] = counts.get(symbol, 0) + item["count"]
+            names[symbol] = display
+        if not counts:
+            raise RouteError("Cargo hold commodities are not known in the local market database.")
+        marks_m = ",".join("?" for _ in by_id)
+        marks_s = ",".join("?" for _ in counts)
+        rows = conn.execute(
+            f"""SELECT market_id, symbol, sell_price, demand FROM commodities
+                WHERE market_id IN ({marks_m}) AND symbol IN ({marks_s})
+                  AND sell_price > 0 AND demand > 0""",
+            [*by_id.keys(), *counts.keys()],
+        ).fetchall()
+        per_station = {}
+        for market_id, symbol, sell, demand in rows:
+            units = min(int(counts[symbol]), int(demand or 0))
+            if units <= 0:
+                continue
+            entry = per_station.setdefault(market_id, {"total": 0, "items": []})
+            payout = units * int(sell)
+            entry["total"] += payout
+            entry["items"].append({
+                "name": names.get(symbol, symbol.replace("_", " ").title()),
+                "symbol": symbol,
+                "units": units,
+                "hold": counts[symbol],
+                "sell_price": int(sell),
+                "demand": int(demand or 0),
+                "payout": payout,
+                "partial": units < counts[symbol],
+            })
+        results = []
+        for market_id, entry in per_station.items():
+            st = by_id[market_id]
+            entry["items"].sort(key=lambda i: -i["payout"])
+            results.append({
+                "station": st["station"],
+                "system": st["system"],
+                "distance": round(_dist(start, st), 1),
+                "dist_ls": st.get("dist_ls"),
+                "large_pad": st.get("large_pad"),
+                "updated_at": st.get("updated_at"),
+                "total": entry["total"],
+                "items": entry["items"],
+            })
+        results.sort(key=lambda r: -r["total"])
+        return results[:int(limit)]
     finally:
         conn.close()
 

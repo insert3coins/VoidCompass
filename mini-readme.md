@@ -1,5 +1,20 @@
 # VoidCompass // UPDATE LOG
 
+## v3.8.2 // Trade Uploads, Analytics + Route Watches
+**Release Date:** 2026-Jul-07
+
+### Trade
+*   Compared against the updated `elite-trader` project and ported the useful non-Autoplot trade improvements.
+*   Added optional EDDN market publishing for fresh local `Market.json` snapshots after visiting station markets.
+*   Added a Trade Database toggle for publishing visited station markets to EDDN, with upload counts and last-error status.
+*   Added persistent trade and balance logging from `MarketBuy`, `MarketSell`, and `LoadGame` journal events.
+*   Added a new Trade **Analytics** tab showing today/week/period profit, daily profit rows, top traded commodities, and balance delta.
+*   Reworked the cargo sell finder to rank stations by total payout for the whole cargo hold instead of listing each commodity separately.
+*   Added live loop route watches: selected loop routes can be watched, and incoming EDDN updates warn when stock, demand, or prices move against the route.
+
+### Version
+*   Bumped app version to **3.8.2**.
+
 ## v3.8.1 // Trade Companion + Market Builder
 **Release Date:** 2026-Jul-07
 
