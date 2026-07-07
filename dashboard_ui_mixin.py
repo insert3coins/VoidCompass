@@ -21,6 +21,7 @@ _FEED_TAG_COLORS = {
     "ROUTE":   "#fde68a",  # gold   — waypoints / routing
     "CARRIER": "#d8b4fe",  # purple — carrier events
     "EDSM":    "#67e8f9",  # teal   — EDSM upload status
+    "EDDN":    "#38bdf8",  # blue   — EDDN market upload status
     "VALUABLE":"#FF7100",  # orange — high-value worlds
     "ALERT":   "#FF7100",  # orange — system alerts
     "DOCK":    "#fb923c",  # amber  — docking / undocking
