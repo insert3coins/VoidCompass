@@ -560,12 +560,8 @@ class TradeWindow:
         self.tabs.add(frame, text="Guides")
         wrap = tk.Frame(frame, bg=self.UI_BG)
         wrap.pack(fill=tk.BOTH, expand=True)
-        left = tk.Frame(wrap, bg=self.UI_BG)
-        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
-        right = tk.Frame(wrap, bg=self.UI_BG)
-        right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
 
-        riches = self._card(left, "ROAD TO RICHES", "high-value scan/mapping targets via Spansh")
+        riches = self._card(wrap, "ROAD TO RICHES", "high-value scan/mapping targets via Spansh")
         controls = tk.Frame(riches, bg=self.UI_PANEL)
         controls.pack(fill=tk.X, pady=(0, 8))
         self.riches_to = self._simple_field(controls, "TO SYSTEM", 18)
@@ -586,27 +582,6 @@ class TradeWindow:
             "jumps": ("Jumps", 70, tk.E),
             "value": ("Value", 110, tk.E),
             "bodies": ("Targets", 320, tk.W),
-        })
-
-        neutron = self._card(right, "NEUTRON ROUTE", "long range waypoint list via Spansh")
-        nctrl = tk.Frame(neutron, bg=self.UI_PANEL)
-        nctrl.pack(fill=tk.X, pady=(0, 8))
-        self.neutron_to = self._simple_field(nctrl, "DESTINATION", 22)
-        self.neutron_to.bind("<Return>", lambda _e: self.find_neutron_route())
-        self.neutron_jump = self._simple_field(nctrl, "JUMP LY", 7)
-        self.neutron_jump.insert(0, str(((getattr(self.app, "cmdr_ship", {}) or {}).get("max_jump_range") or 30)))
-        self.neutron_eff = self._simple_field(nctrl, "EFF %", 6)
-        self.neutron_eff.insert(0, "60")
-        self._button(nctrl, "Plot", self.find_neutron_route, accent=True).pack(side=tk.LEFT, padx=(8, 0), pady=(12, 6))
-        self._button(nctrl, "Copy", lambda: self._copy_selected_tree(self.neutron_tree, getattr(self, "neutron_rows", {}), "Neutron row")).pack(side=tk.LEFT, padx=(6, 0), pady=(12, 6))
-        self.neutron_status = tk.Label(neutron, text="", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 9), anchor="w")
-        self.neutron_status.pack(fill=tk.X, pady=(0, 6))
-        self.neutron_tree = self._tree(neutron, ("system", "jumped", "left", "neutron", "jumps"), {
-            "system": ("System", 220, tk.W),
-            "jumped": ("Jumped", 80, tk.E),
-            "left": ("Left", 80, tk.E),
-            "neutron": ("N", 40, tk.CENTER),
-            "jumps": ("Jumps", 70, tk.E),
         })
 
     def _simple_field(self, parent, label, width=10):
@@ -1357,44 +1332,6 @@ class TradeWindow:
             ))
             self.riches_rows[iid] = row
         self.riches_status.config(text=f"{len(rows)} high-value system(s) found.", fg=self.UI_MUTED)
-
-    def find_neutron_route(self):
-        current = self._current_system()
-        dest = self.neutron_to.get().strip()
-        if not current or not dest:
-            self.neutron_status.config(text="Need current system and destination.", fg=self.UI_WARN)
-            return
-        self.neutron_status.config(text="Computing neutron route...", fg=self.UI_MUTED)
-        for iid in self.neutron_tree.get_children():
-            self.neutron_tree.delete(iid)
-        self.neutron_rows = {}
-        params = {
-            "from_system": current,
-            "to_system": dest,
-            "jump_range": self._entry_float(self.neutron_jump, 30.0),
-            "efficiency": self._entry_int(self.neutron_eff, 60),
-        }
-
-        def worker():
-            try:
-                result = spansh.neutron_route(**params)
-                self.root.after(0, lambda: self._render_neutron(result))
-            except Exception as exc:
-                self.root.after(0, lambda: self.neutron_status.config(text=str(exc), fg=self.UI_FAIL))
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _render_neutron(self, result):
-        rows = result.get("waypoints") or []
-        for row in rows:
-            iid = self.neutron_tree.insert("", tk.END, values=(
-                row.get("system"),
-                f"{float(row.get('distance_jumped') or 0):.1f} ly",
-                f"{float(row.get('distance_left') or 0):.1f} ly",
-                "Y" if row.get("neutron") else "-",
-                self._num(row.get("jumps")),
-            ))
-            self.neutron_rows[iid] = row
-        self.neutron_status.config(text=f"{result.get('total_jumps') or len(rows)} total jump(s).", fg=self.UI_MUTED)
 
     def watch_selected_loop(self):
         selected = self.route_tree.selection()

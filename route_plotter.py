@@ -3,9 +3,23 @@ import json
 import os
 import csv
 import time
+import threading
+import requests
 from tkinter import messagebox, filedialog
+from tkinter import ttk
 from config import COLOR_BG, COLOR_PANEL, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 from waypoint_manager import WaypointManager
+
+
+SPANSH_BASE = "https://spansh.co.uk/api"
+SPANSH_HEADERS = {"User-Agent": "VoidCompass/1.0 (personal ED companion app)"}
+SPANSH_SUBMIT_TIMEOUT = 20
+SPANSH_POLL_TIMEOUT = 20
+SPANSH_MAX_WAIT_SECONDS = 90
+
+
+class SpanshRouteError(Exception):
+    pass
 
 
 class RoutePlotter:
@@ -19,6 +33,8 @@ class RoutePlotter:
         self.on_change_callback = on_change_callback
         self.event_callback = event_callback
         self.route_refresh_running = False
+        self.neutron_route_running = False
+        self.neutron_waypoints = []
         self._route_refresh_state = None
         self.duplicate_mode = self.config.get("route_duplicate_mode", "skip")
         self.pending_import_jobs = {}
@@ -50,8 +66,28 @@ class RoutePlotter:
         self.header_current_lbl = tk.Label(header, text=f"CURRENT: {self.current_sys}", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL)
         self.header_current_lbl.pack(side=tk.RIGHT, padx=10)
 
+        style = ttk.Style(self.win)
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass
+        style.configure("Route.TNotebook", background=COLOR_BG, borderwidth=0)
+        style.configure("Route.TNotebook.Tab", background=COLOR_PANEL, foreground=COLOR_TEXT, padding=(14, 6), font=("Courier", 9, "bold"))
+        style.map("Route.TNotebook.Tab", background=[("selected", "#111111")], foreground=[("selected", COLOR_ACCENT)])
+
+        self.tabs = ttk.Notebook(wrapper, style="Route.TNotebook")
+        self.tabs.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+        route_tab = tk.Frame(self.tabs, bg=COLOR_BG)
+        plotter_tab = tk.Frame(self.tabs, bg=COLOR_BG)
+        self.tabs.add(route_tab, text="Waypoints")
+        self.tabs.add(plotter_tab, text="System Plotter")
+
+        self._build_waypoint_tab(route_tab)
+        self._build_system_plotter_tab(plotter_tab)
+
+    def _build_waypoint_tab(self, wrapper):
         input_panel = tk.Frame(wrapper, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
-        input_panel.pack(fill=tk.X, pady=(8, 0))
+        input_panel.pack(fill=tk.X)
         tk.Label(input_panel, text="SYSTEM:", font=("Courier", 9), fg="#888", bg=COLOR_PANEL).grid(row=0, column=0, sticky="w", padx=(10, 6), pady=8)
         self.entry = tk.Entry(input_panel, bg="#111", fg=COLOR_TEXT, font=("Courier", 10), insertbackground=COLOR_ACCENT, relief=tk.FLAT)
         self.entry.grid(row=0, column=1, sticky="ew", padx=(0, 8), pady=8, ipady=3)
@@ -162,6 +198,274 @@ class RoutePlotter:
             font=("Courier", 8)
         )
         auto_note_cb.pack(side=tk.RIGHT, padx=(4, 10))
+
+    def _entry_box(self, parent, label, width):
+        box = tk.Frame(parent, bg=parent.cget("bg"))
+        box.pack(side=tk.LEFT, padx=(0, 8), pady=(0, 6))
+        tk.Label(box, text=label, font=("Courier", 8, "bold"), fg="#888", bg=parent.cget("bg")).pack(anchor="w")
+        entry = tk.Entry(box, bg="#111", fg=COLOR_TEXT, font=("Courier", 10), insertbackground=COLOR_ACCENT, relief=tk.FLAT, width=width)
+        entry.pack(anchor="w", ipady=3)
+        return entry
+
+    def _build_system_plotter_tab(self, wrapper):
+        controls = tk.Frame(wrapper, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
+        controls.pack(fill=tk.X)
+
+        saved = self.config.get("system_plotter_form") or {}
+        self.neutron_from_entry = self._entry_box(controls, "FROM", 22)
+        self.neutron_from_entry.insert(0, saved.get("from") or (self.current_sys if self.current_sys != "Unknown" else ""))
+        self.neutron_from_entry.bind("<Return>", lambda _e: self.find_neutron_route())
+        self.neutron_to_entry = self._entry_box(controls, "DESTINATION", 24)
+        self.neutron_to_entry.insert(0, saved.get("to") or "")
+        self.neutron_to_entry.bind("<Return>", lambda _e: self.find_neutron_route())
+        self.neutron_range_entry = self._entry_box(controls, "JUMP LY", 8)
+        self.neutron_range_entry.insert(0, str(saved.get("range") or 30))
+        self.neutron_eff_entry = self._entry_box(controls, "EFF %", 7)
+        self.neutron_eff_entry.insert(0, str(saved.get("efficiency") or 60))
+
+        self.neutron_plot_btn = tk.Button(
+            controls, text="[ PLOT ]", command=self.find_neutron_route,
+            bg=COLOR_ACCENT, fg="black", font=("Courier", 9, "bold"), relief=tk.FLAT
+        )
+        self.neutron_plot_btn.pack(side=tk.LEFT, padx=(0, 6), pady=(12, 6))
+        tk.Button(
+            controls, text="[ IMPORT TO ROUTE ]", command=self.import_neutron_route,
+            bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9, "bold"), relief=tk.FLAT
+        ).pack(side=tk.LEFT, padx=(0, 6), pady=(12, 6))
+        tk.Button(
+            controls, text="[ COPY LIST ]", command=self.copy_neutron_route,
+            bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9, "bold"), relief=tk.FLAT
+        ).pack(side=tk.LEFT, padx=(0, 10), pady=(12, 6))
+
+        body = tk.Frame(wrapper, bg=COLOR_BG)
+        body.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+        body.grid_columnconfigure(0, weight=3)
+        body.grid_columnconfigure(1, weight=1)
+        body.grid_rowconfigure(0, weight=1)
+
+        list_wrap = tk.Frame(body, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
+        list_wrap.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        tk.Label(list_wrap, text=f"{'#':<4}{'SYSTEM':<30}{'JUMPED':<10}{'LEFT':<10}{'N':<3}JUMPS", font=("Courier", 9, "bold"), fg="#777", bg=COLOR_PANEL, anchor="w").pack(fill=tk.X, padx=8, pady=(8, 4))
+        list_frame = tk.Frame(list_wrap, bg=COLOR_PANEL)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
+        self.neutron_listbox = tk.Listbox(
+            list_frame, bg="#050505", fg=COLOR_TEXT, font=("Courier", 10), relief=tk.FLAT,
+            highlightthickness=1, highlightbackground="#333", selectbackground=COLOR_ACCENT, selectforeground="black",
+            activestyle="none", selectmode=tk.EXTENDED
+        )
+        self.neutron_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        nsb = tk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.neutron_listbox.yview)
+        nsb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.neutron_listbox.config(yscrollcommand=nsb.set)
+        self.neutron_listbox.bind("<Control-c>", lambda _e: self.copy_neutron_route())
+
+        side = tk.Frame(body, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
+        side.grid(row=0, column=1, sticky="nsew")
+        tk.Label(side, text="PLOT SUMMARY", font=("Courier", 10, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(8, 4))
+        self.neutron_status_lbl = tk.Label(side, text="Ready.", font=("Courier", 9), fg="#aaa", bg=COLOR_PANEL, justify=tk.LEFT, wraplength=230, anchor="w")
+        self.neutron_status_lbl.pack(fill=tk.X, padx=10, pady=2)
+        self.neutron_total_lbl = tk.Label(side, text="Route: -", font=("Courier", 9, "bold"), fg=COLOR_TEXT, bg=COLOR_PANEL, justify=tk.LEFT, wraplength=230, anchor="w")
+        self.neutron_total_lbl.pack(fill=tk.X, padx=10, pady=(8, 2))
+        tk.Label(side, text="IMPORT NOTES", font=("Courier", 8, "bold"), fg="#777", bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(12, 2))
+        tk.Label(
+            side,
+            text="Import sends the plotted systems into the Waypoints tab and resolves coordinates through EDSM. Duplicate handling uses the current route duplicate mode.",
+            font=("Courier", 8), fg="#aaa", bg=COLOR_PANEL, justify=tk.LEFT, wraplength=230, anchor="w"
+        ).pack(fill=tk.X, padx=10, pady=(0, 8))
+
+    def _save_system_plotter_form(self):
+        self.config["system_plotter_form"] = {
+            "from": self.neutron_from_entry.get().strip(),
+            "to": self.neutron_to_entry.get().strip(),
+            "range": self.neutron_range_entry.get().strip(),
+            "efficiency": self.neutron_eff_entry.get().strip(),
+        }
+        try:
+            save_config(self.config)
+        except Exception:
+            pass
+
+    def find_neutron_route(self):
+        if self.neutron_route_running:
+            return
+        from_system = self.neutron_from_entry.get().strip() or self.current_sys
+        to_system = self.neutron_to_entry.get().strip()
+        if not from_system or from_system == "Unknown":
+            messagebox.showwarning("System Plotter", "No starting system known yet.")
+            return
+        if not to_system:
+            messagebox.showwarning("System Plotter", "Enter a destination system.")
+            return
+        try:
+            jump_range = float(self.neutron_range_entry.get().strip())
+            efficiency = int(float(self.neutron_eff_entry.get().strip()))
+        except Exception:
+            messagebox.showwarning("System Plotter", "Jump range and efficiency must be numbers.")
+            return
+
+        self._save_system_plotter_form()
+        self.neutron_route_running = True
+        self.neutron_plot_btn.config(state=tk.DISABLED, text="[ PLOTTING... ]")
+        self.neutron_status_lbl.config(text="Submitting Spansh neutron highway job...")
+        self.neutron_total_lbl.config(text="Route: pending")
+        self.neutron_listbox.delete(0, tk.END)
+        self.neutron_waypoints = []
+        self._emit_event("ROUTE", f"Neutron plot started: {from_system} to {to_system}", "INFO", copy_text=to_system)
+
+        def worker():
+            try:
+                route = self._spansh_neutron_route(from_system, to_system, jump_range, efficiency)
+                self.root.after(0, lambda: self._on_neutron_route_ready(route))
+            except Exception as exc:
+                self.root.after(0, lambda e=exc: self._on_neutron_route_error(e))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_neutron_route_ready(self, route):
+        self.neutron_route_running = False
+        self.neutron_plot_btn.config(state=tk.NORMAL, text="[ PLOT ]")
+        self.neutron_waypoints = route.get("waypoints") or []
+        self.neutron_listbox.delete(0, tk.END)
+        neutron_count = 0
+        for idx, wp in enumerate(self.neutron_waypoints, start=1):
+            if wp.get("neutron"):
+                neutron_count += 1
+            line = (
+                f"{idx:<4}{(wp.get('system') or '-'):<30}"
+                f"{self._fmt_ly(wp.get('distance_jumped')):<10}"
+                f"{self._fmt_ly(wp.get('distance_left')):<10}"
+                f"{'Y' if wp.get('neutron') else '-':<3}{wp.get('jumps') or '-'}"
+            )
+            self.neutron_listbox.insert(tk.END, line)
+            if wp.get("neutron"):
+                self.neutron_listbox.itemconfig(idx - 1, {"fg": COLOR_ORANGE})
+
+        total_jumps = route.get("total_jumps") or len(self.neutron_waypoints)
+        self.neutron_status_lbl.config(text=f"Ready. {len(self.neutron_waypoints)} waypoints, {neutron_count} neutron boosts.")
+        self.neutron_total_lbl.config(text=f"Route: {total_jumps} jumps")
+        self._emit_event("ROUTE", f"Neutron plot ready: {len(self.neutron_waypoints)} waypoints", "INFO")
+
+    def _on_neutron_route_error(self, exc):
+        self.neutron_route_running = False
+        self.neutron_plot_btn.config(state=tk.NORMAL, text="[ PLOT ]")
+        self.neutron_status_lbl.config(text=f"Plot failed: {exc}")
+        self.neutron_total_lbl.config(text="Route: failed")
+        self._emit_event("ROUTE", f"Neutron plot failed: {exc}", "FAIL")
+        messagebox.showerror("System Plotter", f"Neutron route failed:\n{exc}")
+
+    def import_neutron_route(self):
+        if not self.neutron_waypoints:
+            messagebox.showinfo("Import Route", "No plotted system route to import.")
+            return
+        records = []
+        for wp in self.neutron_waypoints:
+            name = wp.get("system")
+            if not name:
+                continue
+            note_parts = ["Spansh neutron route"]
+            if wp.get("neutron"):
+                note_parts.append("neutron")
+            jumped = wp.get("distance_jumped")
+            if jumped is not None:
+                note_parts.append(f"{float(jumped):.1f} LY")
+            records.append({"name": name, "coords": None, "note": " | ".join(note_parts)})
+        if not records:
+            messagebox.showwarning("Import Route", "The plotted route did not contain system names.")
+            return
+        self.tabs.select(0)
+        self._start_import_job(records)
+        self._emit_event("ROUTE", f"Neutron route import queued: {len(records)} systems", "INFO")
+
+    def copy_neutron_route(self):
+        if not self.neutron_waypoints:
+            return
+        selected = list(self.neutron_listbox.curselection())
+        if selected:
+            names = [self.neutron_waypoints[i].get("system") for i in selected if i < len(self.neutron_waypoints)]
+        else:
+            names = [wp.get("system") for wp in self.neutron_waypoints]
+        text = "\n".join(n for n in names if n)
+        if not text:
+            return
+        self.win.clipboard_clear()
+        self.win.clipboard_append(text)
+        self._emit_event("ROUTE", "Copied neutron route systems", "INFO", copy_text=text)
+
+    def _fmt_ly(self, value):
+        try:
+            return f"{float(value):.1f}"
+        except Exception:
+            return "-"
+
+    def _spansh_neutron_route(self, from_system, to_system, jump_range, efficiency):
+        payload = {
+            "from": from_system,
+            "to": to_system,
+            "range": float(jump_range),
+            "efficiency": int(efficiency),
+        }
+        result = self._spansh_submit_and_poll("route", payload)
+        jumps = result.get("system_jumps") if isinstance(result, dict) else None
+        if not jumps:
+            raise SpanshRouteError("Spansh returned no route. Check system names and jump range.")
+        return {
+            "total_jumps": result.get("total_jumps"),
+            "waypoints": [
+                {
+                    "system": j.get("system"),
+                    "distance_jumped": j.get("distance_jumped"),
+                    "distance_left": j.get("distance_left"),
+                    "neutron": bool(j.get("neutron_star")),
+                    "jumps": j.get("jumps"),
+                }
+                for j in jumps
+            ],
+        }
+
+    def _spansh_submit_and_poll(self, path, payload):
+        try:
+            resp = requests.post(
+                f"{SPANSH_BASE}/{path}",
+                data=payload,
+                headers=SPANSH_HEADERS,
+                timeout=SPANSH_SUBMIT_TIMEOUT,
+            )
+        except requests.RequestException as exc:
+            raise SpanshRouteError(f"Could not reach Spansh: {exc}") from exc
+
+        if resp.status_code >= 400:
+            raise SpanshRouteError(self._spansh_error_text(resp))
+        try:
+            job = resp.json().get("job")
+        except ValueError as exc:
+            raise SpanshRouteError(f"Spansh returned invalid JSON: {resp.text[:200]}") from exc
+        if not job:
+            raise SpanshRouteError(f"Spansh did not return a job id: {resp.text[:200]}")
+
+        deadline = time.monotonic() + SPANSH_MAX_WAIT_SECONDS
+        while time.monotonic() < deadline:
+            try:
+                poll = requests.get(f"{SPANSH_BASE}/results/{job}", headers=SPANSH_HEADERS, timeout=SPANSH_POLL_TIMEOUT)
+            except requests.RequestException as exc:
+                raise SpanshRouteError(f"Lost connection to Spansh: {exc}") from exc
+            if poll.status_code >= 400:
+                raise SpanshRouteError(self._spansh_error_text(poll))
+            data = poll.json()
+            status = data.get("status")
+            if status == "ok":
+                return data.get("result")
+            if status in ("queued", "processing"):
+                time.sleep(1.5)
+                continue
+            raise SpanshRouteError(f"Spansh job failed: {data.get('error') or status}")
+        raise SpanshRouteError("Spansh took too long to compute a route; try again.")
+
+    def _spansh_error_text(self, resp):
+        try:
+            detail = resp.json().get("error")
+        except ValueError:
+            detail = None
+        return f"Spansh error ({resp.status_code}): {detail or resp.text[:200]}"
 
     def get_selected_index(self):
         sel = self.listbox.curselection()
@@ -388,8 +692,14 @@ class RoutePlotter:
         self.sel_state_lbl.config(text=f"State: {'VISITED' if visited else 'PENDING'}")
 
     def update_current_system(self, sys_name, coords):
+        old_sys = self.current_sys
         self.current_sys = sys_name
         self.current_coords = coords
+        if hasattr(self, "neutron_from_entry"):
+            from_value = self.neutron_from_entry.get().strip()
+            if not from_value or from_value == "Unknown" or from_value == old_sys:
+                self.neutron_from_entry.delete(0, tk.END)
+                self.neutron_from_entry.insert(0, sys_name if sys_name != "Unknown" else "")
         self.refresh_list()
 
     def move_up(self):
@@ -988,6 +1298,13 @@ class RoutePlotter:
     def on_close(self):
         if self.config:
             self.config["route_plotter_geometry"] = self.win.geometry()
+            if hasattr(self, "neutron_from_entry"):
+                self.config["system_plotter_form"] = {
+                    "from": self.neutron_from_entry.get().strip(),
+                    "to": self.neutron_to_entry.get().strip(),
+                    "range": self.neutron_range_entry.get().strip(),
+                    "efficiency": self.neutron_eff_entry.get().strip(),
+                }
             try:
                 save_config(self.config)
             except Exception:
