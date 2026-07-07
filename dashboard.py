@@ -307,6 +307,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.cmdr_fid = self.config.get("active_commander_fid") or ""
         self.cmdr_balance = None
         self.cmdr_loan = None
+        self.game_version = ""
+        self.game_build = ""
+        self.game_horizons = None
+        self.game_odyssey = None
         self.cmdr_ranks = {}
         self.cmdr_rank_progress = {}
         self.cmdr_reputation = {}
@@ -434,6 +438,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         # Initialize Handlers
         self.edsm = EDSMHandler(self.config)
         self.edsm.set_log_callback(
+            lambda tag, msg, sev: self.root.after(0, lambda: self.add_event_feed_entry(tag, msg, severity=sev))
+        )
+        trade_eddn_uploader.set_log_callback(
             lambda tag, msg, sev: self.root.after(0, lambda: self.add_event_feed_entry(tag, msg, severity=sev))
         )
         self.screenshots = ScreenshotHandler(
@@ -1684,6 +1691,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if ev in ("FileHeader", "Fileheader"):
             game_version = d.get("gameversion")
             game_build = d.get("build")
+            self.game_version = game_version or self.game_version
+            self.game_build = game_build if game_build is not None else self.game_build
             if game_version and game_build:
                 self.edsm.set_game_version(game_version, game_build)
             self.log(f"Game version detected: {game_version} ({game_build})")
@@ -1768,6 +1777,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._switch_commander_profile(self.cmdr_name, self.cmdr_fid)
             game_version = d.get("gameversion")
             game_build = d.get("build")
+            self.game_version = game_version or self.game_version
+            self.game_build = game_build if game_build is not None else self.game_build
+            if d.get("horizons") is not None:
+                self.game_horizons = bool(d.get("horizons"))
+            if d.get("odyssey") is not None:
+                self.game_odyssey = bool(d.get("odyssey"))
             if game_version and game_build:
                 self.edsm.set_game_version(game_version, game_build)
                 self.log(f"Game version detected from LoadGame: {game_version} ({game_build})")
@@ -2582,6 +2597,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "star_pos": self.current_coords,
             "station_name": data.get("StationName") or self.current_station_name,
             "station_type": self.current_station_type,
+            "gameversion": self.game_version or "",
+            "gamebuild": self.game_build or "",
+            "horizons": self.game_horizons,
+            "odyssey": self.game_odyssey,
         }
 
     def _start_market_import_worker(self):
@@ -2637,7 +2656,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 continue
 
             trade_eddn_uploader.set_enabled(bool(self.config.get("trade_eddn_upload_enabled", True)))
-            trade_eddn_uploader.maybe_publish(data, self.cmdr_name)
+            trade_eddn_uploader.maybe_publish(data, self.cmdr_name, context)
 
             if not result.get("updated"):
                 continue

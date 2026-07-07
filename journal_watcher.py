@@ -372,6 +372,8 @@ class JournalWatcher:
                     "fuel_capacity": data.get("FuelCapacity"),
                     "game_mode": data.get("GameMode"),
                     "group": data.get("Group"),
+                    "horizons": data.get("Horizons"),
+                    "odyssey": data.get("Odyssey"),
                 }
             }
         if ev in ("Rank", "Progress", "Reputation"):

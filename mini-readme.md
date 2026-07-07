@@ -1,5 +1,17 @@
 # VoidCompass // UPDATE LOG
 
+## v3.8.5 // EDDN Upload Compliance + Status
+**Release Date:** 2026-Jul-07
+
+### Trade
+*   Hardened EDDN commodity uploads against the live commodity schema.
+*   Added game version/build, expansion flags, station metadata, carrier access, and status flags where available.
+*   Added EDDN upload success/failure notes to the live event timeline/output area.
+*   Kept market upload work asynchronous so journal, cargo, status, and credit updates keep flowing.
+
+### Version
+*   Bumped app version to **3.8.5**.
+
 ## v3.8.4 // Trade Sorting + Mining Cleanup
 **Release Date:** 2026-Jul-07
 
