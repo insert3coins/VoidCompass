@@ -222,6 +222,14 @@ class RoutePlotter:
         self.neutron_range_entry.insert(0, str(saved.get("range") or 30))
         self.neutron_eff_entry = self._entry_box(controls, "EFF %", 7)
         self.neutron_eff_entry.insert(0, str(saved.get("efficiency") or 60))
+        mode_box = tk.Frame(controls, bg=controls.cget("bg"))
+        mode_box.pack(side=tk.LEFT, padx=(0, 8), pady=(0, 6))
+        tk.Label(mode_box, text="SUPERCHARGE", font=("Courier", 8, "bold"), fg="#888", bg=controls.cget("bg")).pack(anchor="w")
+        self.neutron_supercharge_var = tk.StringVar(value=self._supercharge_mode_from_saved(saved.get("supercharge_multiplier")))
+        supercharge_menu = tk.OptionMenu(mode_box, self.neutron_supercharge_var, "Normal 4x", "Overcharge 6x")
+        supercharge_menu.config(bg="#111", fg=COLOR_TEXT, activebackground=COLOR_PANEL, activeforeground=COLOR_ACCENT, relief=tk.FLAT, highlightthickness=0, font=("Courier", 9), width=14)
+        supercharge_menu["menu"].config(bg="#111", fg=COLOR_TEXT, activebackground=COLOR_ACCENT, activeforeground="black", font=("Courier", 9))
+        supercharge_menu.pack(anchor="w")
 
         self.neutron_plot_btn = tk.Button(
             controls, text="[ PLOT ]", command=self.find_neutron_route,
@@ -279,6 +287,7 @@ class RoutePlotter:
             "to": self.neutron_to_entry.get().strip(),
             "range": self.neutron_range_entry.get().strip(),
             "efficiency": self.neutron_eff_entry.get().strip(),
+            "supercharge_multiplier": self._selected_supercharge_multiplier(),
         }
         try:
             save_config(self.config)
@@ -299,6 +308,7 @@ class RoutePlotter:
         try:
             jump_range = float(self.neutron_range_entry.get().strip())
             efficiency = int(float(self.neutron_eff_entry.get().strip()))
+            supercharge_multiplier = self._selected_supercharge_multiplier()
         except Exception:
             messagebox.showwarning("System Plotter", "Jump range and efficiency must be numbers.")
             return
@@ -310,11 +320,11 @@ class RoutePlotter:
         self.neutron_total_lbl.config(text="Route: pending")
         self.neutron_listbox.delete(0, tk.END)
         self.neutron_waypoints = []
-        self._emit_event("ROUTE", f"Neutron plot started: {from_system} to {to_system}", "INFO", copy_text=to_system)
+        self._emit_event("ROUTE", f"Neutron plot started: {from_system} to {to_system} ({supercharge_multiplier}x)", "INFO", copy_text=to_system)
 
         def worker():
             try:
-                route = self._spansh_neutron_route(from_system, to_system, jump_range, efficiency)
+                route = self._spansh_neutron_route(from_system, to_system, jump_range, efficiency, supercharge_multiplier)
                 self.root.after(0, lambda: self._on_neutron_route_ready(route))
             except Exception as exc:
                 self.root.after(0, lambda e=exc: self._on_neutron_route_error(e))
@@ -397,12 +407,24 @@ class RoutePlotter:
         except Exception:
             return "-"
 
-    def _spansh_neutron_route(self, from_system, to_system, jump_range, efficiency):
+    def _supercharge_mode_from_saved(self, value):
+        try:
+            if int(value) == 6:
+                return "Overcharge 6x"
+        except Exception:
+            pass
+        return "Normal 4x"
+
+    def _selected_supercharge_multiplier(self):
+        return 6 if self.neutron_supercharge_var.get().startswith("Overcharge") else 4
+
+    def _spansh_neutron_route(self, from_system, to_system, jump_range, efficiency, supercharge_multiplier=4):
         payload = {
             "from": from_system,
             "to": to_system,
             "range": float(jump_range),
             "efficiency": int(efficiency),
+            "supercharge_multiplier": int(supercharge_multiplier),
         }
         result = self._spansh_submit_and_poll("route", payload)
         jumps = result.get("system_jumps") if isinstance(result, dict) else None
@@ -417,6 +439,7 @@ class RoutePlotter:
                     "distance_left": j.get("distance_left"),
                     "neutron": bool(j.get("neutron_star")),
                     "jumps": j.get("jumps"),
+                    "supercharge_multiplier": int(supercharge_multiplier),
                 }
                 for j in jumps
             ],
@@ -1304,6 +1327,7 @@ class RoutePlotter:
                     "to": self.neutron_to_entry.get().strip(),
                     "range": self.neutron_range_entry.get().strip(),
                     "efficiency": self.neutron_eff_entry.get().strip(),
+                    "supercharge_multiplier": self._selected_supercharge_multiplier(),
                 }
             try:
                 save_config(self.config)
