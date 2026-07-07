@@ -9,6 +9,7 @@ from tkinter import ttk
 
 import requests
 
+import bio_values
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 
 
@@ -240,15 +241,17 @@ class ExplorationWindow:
             lbl.pack(fill=tk.X, padx=10, pady=(2, 8))
             self.bio_summary_labels[key] = lbl
 
-        cols = ("body", "class", "bio", "geo", "genus", "samples", "status")
+        cols = ("body", "class", "bio", "geo", "genus", "spacing", "value", "samples", "status")
         self.bio_tree = self._tree(frame, cols, {
-            "body": ("Body", 250, tk.W),
-            "class": ("Class", 190, tk.W),
-            "bio": ("Bio", 70, tk.E),
-            "geo": ("Geo", 70, tk.E),
-            "genus": ("Genus", 230, tk.W),
-            "samples": ("Samples", 100, tk.CENTER),
-            "status": ("Status", 130, tk.W),
+            "body": ("Body", 230, tk.W),
+            "class": ("Class", 155, tk.W),
+            "bio": ("Bio", 55, tk.E),
+            "geo": ("Geo", 55, tk.E),
+            "genus": ("Genus / Predicted", 210, tk.W),
+            "spacing": ("Spacing", 80, tk.E),
+            "value": ("Vista", 95, tk.E),
+            "samples": ("Samples", 95, tk.CENTER),
+            "status": ("Status", 120, tk.W),
         })
         self.bio_tree.tag_configure("complete", foreground=self.UI_OK)
         self.bio_tree.tag_configure("pending", foreground=COLOR_ORANGE)
@@ -635,22 +638,74 @@ class ExplorationWindow:
             return f"sample {max(sample_nums)}"
         return f"{len(scans)} logged"
 
+    def _predicted_genus_labels(self, item):
+        labels = []
+        for pred in item.get("predicted_genuses") or []:
+            label = pred.get("name") if isinstance(pred, dict) else str(pred)
+            if label and label not in labels:
+                labels.append(label)
+        return labels
+
+    def _bio_spacing_text(self, item, names):
+        scans = item.get("organic_scans") or {}
+        for scan in scans.values():
+            spacing = scan.get("colony_m")
+            if spacing:
+                return f"{int(spacing):,} m"
+        for name in names:
+            spacing = bio_values.GENUS_COLONY_M.get(name)
+            if spacing:
+                return f"{int(spacing):,} m"
+        return "-"
+
+    def _bio_complete_value(self, item):
+        value = 0
+        for scan in (item.get("organic_scans") or {}).values():
+            if not scan.get("is_complete"):
+                continue
+            try:
+                value += int(scan.get("species_value") or 0)
+            except Exception:
+                pass
+        return value
+
+    def _bio_value_text(self, item, names):
+        complete_value = self._bio_complete_value(item)
+        if complete_value:
+            return self._format_credits(complete_value)
+        ranges = []
+        for name in names:
+            info = bio_values.genus_info(name)
+            lo, hi = info.get("min_value"), info.get("max_value")
+            if lo and hi:
+                ranges.append((int(lo), int(hi)))
+        if not ranges:
+            return "-"
+        lo = min(pair[0] for pair in ranges)
+        hi = max(pair[1] for pair in ranges)
+        if lo == hi:
+            return self._format_credits(lo)
+        return f"{self._format_credits(lo)}-{self._format_credits(hi)}"
+
     def _bio_summary(self, bodies):
         bio_bodies = 0
         bio_signals = 0
         geo_signals = 0
         genus_names = set()
         complete = 0
+        completed_value = 0
         for item in bodies:
             bio = self._safe_int(item.get("bio_count"))
             geo = self._safe_int(item.get("geo_count"))
             done = self._safe_int(item.get("organic_complete_count"))
             genuses = self._genus_labels(item)
-            if bio or geo or done or genuses:
+            predicted = self._predicted_genus_labels(item)
+            if bio or geo or done or genuses or predicted:
                 bio_bodies += 1
             bio_signals += bio
             geo_signals += geo
             complete += done
+            completed_value += self._bio_complete_value(item)
             genus_names.update(genuses)
         return {
             "bio_bodies": bio_bodies,
@@ -658,6 +713,7 @@ class ExplorationWindow:
             "geo_signals": geo_signals,
             "genus": len(genus_names),
             "complete": complete,
+            "completed_value": completed_value,
         }
 
     def _render_bio(self, bodies, summary=None):
@@ -669,27 +725,38 @@ class ExplorationWindow:
             labels["bodies"].config(text=str(summary["bio_bodies"]))
             labels["signals"].config(text=f"Bio {summary['bio_signals']} | Geo {summary['geo_signals']}")
             labels["genus"].config(text=str(summary["genus"]))
-            labels["complete"].config(text=str(summary["complete"]))
+            value_text = self._format_credits(summary.get("completed_value", 0))
+            labels["complete"].config(text=f"{summary['complete']} | {value_text}")
 
         for item_id in self.bio_tree.get_children():
             self.bio_tree.delete(item_id)
         rows = []
         for item in bodies:
             genuses = self._genus_labels(item)
+            predicted = self._predicted_genus_labels(item)
             bio = self._safe_int(item.get("bio_count"))
             geo = self._safe_int(item.get("geo_count"))
             done = self._safe_int(item.get("organic_complete_count"))
-            if bio or geo or done or genuses:
-                rows.append((item, genuses, bio, geo, done))
-        rows.sort(key=lambda row: (-(row[2] + row[4]), row[0].get("body_id") or 99999, row[0].get("name") or ""))
+            if bio or geo or done or genuses or predicted:
+                rows.append((item, genuses, predicted, bio, geo, done))
+        rows.sort(key=lambda row: (-(row[3] + row[5]), row[0].get("body_id") or 99999, row[0].get("name") or ""))
 
         if not rows:
-            self.bio_tree.insert("", tk.END, values=("No biological or geological signals recorded for this system yet.", "", "", "", "", "", ""), tags=("empty",))
+            self.bio_tree.insert("", tk.END, values=("No biological or geological signals recorded for this system yet.", "", "", "", "", "", "", "", ""), tags=("empty",))
             return
 
-        for item, genuses, bio, geo, done in rows:
+        for item, genuses, predicted, bio, geo, done in rows:
+            names = genuses or predicted
             tags = ("complete",) if done else ("pending",)
-            status = "Complete" if done else ("Signals found" if bio or genuses else "Geo only")
+            if done:
+                status = "Complete"
+            elif genuses or bio:
+                status = "Signals found"
+            elif predicted:
+                status = "Predicted"
+            else:
+                status = "Geo only"
+            genus_text = ", ".join(genuses[:4]) if genuses else ("Pred: " + ", ".join(predicted[:3]) if predicted else "-")
             self.bio_tree.insert(
                 "",
                 tk.END,
@@ -698,7 +765,9 @@ class ExplorationWindow:
                     item.get("planet_class") or item.get("class") or "-",
                     bio,
                     geo,
-                    ", ".join(genuses[:4]) or "-",
+                    genus_text,
+                    self._bio_spacing_text(item, names),
+                    self._bio_value_text(item, names),
                     self._organic_sample_text(item),
                     status,
                 ),
@@ -792,7 +861,23 @@ class ExplorationWindow:
                 lines.append("Organic scans:")
                 for scan in organic_scans.values():
                     status = "complete" if scan.get("is_complete") else f"sample {scan.get('sample_idx') or '-'}"
-                    lines.append(f"- {scan.get('species') or scan.get('genus') or 'Organic'} ({status})")
+                    details = [status]
+                    if scan.get("colony_m"):
+                        details.append(f"{int(scan.get('colony_m')):,} m spacing")
+                    if scan.get("species_value"):
+                        details.append(self._format_credits(scan.get("species_value")))
+                    lines.append(f"- {scan.get('species') or scan.get('genus') or 'Organic'} ({', '.join(details)})")
+            predictions = item.get("predicted_genuses") or []
+            if predictions:
+                lines.append("")
+                lines.append("Predicted genus candidates:")
+                for pred in predictions[:8]:
+                    value = "-"
+                    lo, hi = pred.get("min_value"), pred.get("max_value")
+                    if lo and hi:
+                        value = self._format_credits(lo) if lo == hi else f"{self._format_credits(lo)}-{self._format_credits(hi)}"
+                    spacing = f"{int(pred.get('colony_m')):,} m" if pred.get("colony_m") else "-"
+                    lines.append(f"- {pred.get('name') or 'Organic'} | {spacing} spacing | {value}")
         else:
             if hasattr(self, "body_detail_title"):
                 self.body_detail_title.config(text="Select a body")

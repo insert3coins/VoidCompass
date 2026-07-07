@@ -1,6 +1,7 @@
 """Client for the Spansh trade-route planner API (async job: submit then poll)."""
 
 import time
+import re
 
 import requests
 
@@ -9,6 +10,7 @@ HEADERS = {"User-Agent": "EliteTrader/1.0 (personal ED companion app)"}
 SUBMIT_TIMEOUT = 20
 POLL_TIMEOUT = 20
 MAX_WAIT_SECONDS = 90
+MODULE_RE = None
 
 
 class SpanshError(Exception):
@@ -79,6 +81,161 @@ def plan_route(
             continue
         raise SpanshError(f"Spansh job failed: {data.get('error') or status}")
     raise SpanshError("Spansh took too long to compute a route; try again.")
+
+
+def submit_and_poll(path, payload):
+    """Spansh's async job pattern: POST form payload, then poll results."""
+    try:
+        resp = requests.post(f"{BASE}/{path}", data=payload, headers=HEADERS, timeout=SUBMIT_TIMEOUT)
+    except requests.RequestException as exc:
+        raise SpanshError(f"Could not reach Spansh: {exc}") from exc
+    if resp.status_code >= 400:
+        raise SpanshError(_error_text(resp))
+    job = resp.json().get("job")
+    if not job:
+        raise SpanshError(f"Spansh did not return a job id: {resp.text[:200]}")
+
+    deadline = time.monotonic() + MAX_WAIT_SECONDS
+    while time.monotonic() < deadline:
+        try:
+            poll = requests.get(f"{BASE}/results/{job}", headers=HEADERS, timeout=POLL_TIMEOUT)
+        except requests.RequestException as exc:
+            raise SpanshError(f"Lost connection to Spansh: {exc}") from exc
+        if poll.status_code >= 400:
+            raise SpanshError(_error_text(poll))
+        data = poll.json()
+        status = data.get("status")
+        if status == "ok":
+            return data.get("result")
+        if status in ("queued", "processing"):
+            time.sleep(1.5)
+            continue
+        raise SpanshError(f"Spansh job failed: {data.get('error') or status}")
+    raise SpanshError("Spansh took too long to compute a route; try again.")
+
+
+def riches_route(
+    from_system,
+    to_system=None,
+    jump_range=30.0,
+    radius=50,
+    max_results=30,
+    max_distance=1000,
+    min_value=300000,
+    use_mapping_value=True,
+    loop=True,
+):
+    if not from_system:
+        raise SpanshError("No starting system known yet.")
+    payload = {
+        "from": from_system,
+        "to": to_system or from_system,
+        "range": float(jump_range),
+        "radius": int(radius),
+        "max_results": int(max_results),
+        "max_distance": int(max_distance),
+        "min_value": int(min_value),
+        "use_mapping_value": 1 if use_mapping_value else 0,
+        "loop": 1 if loop else 0,
+    }
+    result = submit_and_poll("riches/route", payload)
+    systems = []
+    for hop in result if isinstance(result, list) else []:
+        bodies = []
+        for body in hop.get("bodies") or []:
+            bodies.append({
+                "name": body.get("name"),
+                "type": body.get("subtype") or body.get("type"),
+                "terraformable": bool(body.get("is_terraformable")),
+                "dist_ls": body.get("distance_to_arrival"),
+                "map_value": body.get("estimated_mapping_value"),
+                "scan_value": body.get("estimated_scan_value"),
+            })
+        systems.append({
+            "system": hop.get("name") or hop.get("system_name"),
+            "jumps": hop.get("jumps"),
+            "bodies": bodies,
+            "total_value": sum((b["map_value"] or b["scan_value"] or 0) for b in bodies),
+        })
+    return systems
+
+
+def neutron_route(from_system, to_system, jump_range, efficiency=60):
+    if not from_system:
+        raise SpanshError("No starting system known yet.")
+    if not to_system:
+        raise SpanshError("No destination system given.")
+    payload = {
+        "from": from_system,
+        "to": to_system,
+        "range": float(jump_range),
+        "efficiency": int(efficiency),
+    }
+    result = submit_and_poll("route", payload)
+    jumps = result.get("system_jumps") if isinstance(result, dict) else None
+    if not jumps:
+        raise SpanshError("Spansh returned no route.")
+    return {
+        "total_jumps": result.get("total_jumps"),
+        "waypoints": [
+            {
+                "system": j.get("system"),
+                "distance_jumped": j.get("distance_jumped"),
+                "distance_left": j.get("distance_left"),
+                "neutron": bool(j.get("neutron_star")),
+                "jumps": j.get("jumps"),
+            }
+            for j in jumps
+        ],
+    }
+
+
+def station_search(reference_system, module=None, ship=None, size=20):
+    global MODULE_RE
+    if not reference_system:
+        raise SpanshError("No reference system known yet.")
+    if MODULE_RE is None:
+        MODULE_RE = re.compile(r"^(\d)\s*([A-EI])\s+(.+)$", re.IGNORECASE)
+    filters = {}
+    if module:
+        match = MODULE_RE.match(module.strip())
+        if match:
+            filters["modules"] = [{
+                "class": [match.group(1)],
+                "rating": [match.group(2).upper()],
+                "name": [match.group(3).strip().title()],
+            }]
+        else:
+            filters["modules"] = [{"name": [module.strip().title()]}]
+    elif ship:
+        filters["ships"] = {"value": [ship.strip()]}
+    else:
+        raise SpanshError("Give a module or ship to search for.")
+    body = {
+        "filters": filters,
+        "sort": [{"distance": {"direction": "asc"}}],
+        "size": int(size),
+        "page": 0,
+        "reference_system": reference_system,
+    }
+    try:
+        resp = requests.post(f"{BASE}/stations/search", json=body, headers=HEADERS, timeout=SUBMIT_TIMEOUT)
+    except requests.RequestException as exc:
+        raise SpanshError(f"Could not reach Spansh: {exc}") from exc
+    if resp.status_code >= 400:
+        raise SpanshError(_error_text(resp))
+    return [
+        {
+            "station": s.get("name"),
+            "system": s.get("system_name"),
+            "distance": round(s.get("distance") or 0, 1),
+            "dist_ls": s.get("distance_to_arrival"),
+            "type": s.get("type"),
+            "large_pad": bool(s.get("has_large_pad")),
+            "updated_at": s.get("outfitting_updated_at") or s.get("shipyard_updated_at") or s.get("updated_at"),
+        }
+        for s in resp.json().get("results") or []
+    ]
 
 
 def _error_text(resp):

@@ -16,6 +16,7 @@ from config import (
     get_profile_file, save_config, save_active_profile_config,
 )
 from version import APP_VERSION
+import bio_values
 from hud import TacticalHUD
 from cargo_hud import CargoHUD
 from carrier_hud import CarrierHUD
@@ -59,6 +60,25 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return float(value)
         except Exception:
             return default
+
+    @staticmethod
+    def _gravity_to_g(value):
+        try:
+            g = float(value)
+            return round(g / 9.80665, 2) if g > 5 else round(g, 2)
+        except Exception:
+            return None
+
+    def _bio_predictions_for_scan(self, scan_data):
+        if not scan_data:
+            return []
+        return bio_values.predict_genera(
+            scan_data.get("planet_class"),
+            scan_data.get("atmosphere_type") or scan_data.get("atmosphere"),
+            scan_data.get("surface_temp") or scan_data.get("temp_k"),
+            scan_data.get("gravity_g") or self._gravity_to_g(scan_data.get("surface_gravity")),
+            scan_data.get("volcanism"),
+        )
 
     def _profile_path(self, filename):
         return get_profile_file(get_active_profile(self.config), filename)
@@ -1714,6 +1734,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "body_name":      body_label,
                 "species":        species,
                 "genus":          d.get("genus"),
+                "species_value":  bio_values.species_value(species),
+                "genus_value":    bio_values.genus_info(d.get("genus") or species),
+                "colony_m":       bio_values.GENUS_COLONY_M.get(d.get("genus") or species),
                 "sample_idx":     d.get("sample_idx"),
                 "max_samples":    d.get("max_samples", 3),
                 "scan_type":      d.get("scan_type"),
@@ -2087,7 +2110,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.body_scan_data[body_id] = {
                     "body_name":        body_name,
                     "planet_class":     d.get("planet_class", ""),
+                    "landable":         bool(d.get("landable")),
                     "surface_gravity":  d.get("surface_gravity"),
+                    "gravity_g":        self._gravity_to_g(d.get("surface_gravity")),
                     "surface_temp":     d.get("surface_temp"),
                     "surface_pressure": d.get("surface_pressure"),
                     "atmosphere_type":  d.get("atmosphere_type", ""),
@@ -2097,6 +2122,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     "parents":          d.get("parents") or [],
                     "bio_signals_count": d.get("bio_signals_count", 0),
                 }
+                self.body_scan_data[body_id]["predicted_genuses"] = self._bio_predictions_for_scan(self.body_scan_data[body_id])
             
             # Only count scans of stars or planets/moons, not belts.
             if d.get("is_body_scan"):

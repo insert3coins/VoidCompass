@@ -117,6 +117,8 @@ class TradeWindow:
         self._build_radar_tab()
         self._build_routes_tab()
         self._build_commodity_tab()
+        self._build_station_search_tab()
+        self._build_guides_tab()
         self._build_local_tab()
         self._build_watchlist_tab()
         self._build_analytics_tab()
@@ -412,6 +414,89 @@ class TradeWindow:
             "ls": ("Star Dist", 90, tk.E),
             "age": ("Age", 70, tk.E),
             "pad": ("Pad", 50, tk.CENTER),
+        })
+
+    def _build_station_search_tab(self):
+        frame = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.tabs.add(frame, text="Station Search")
+        body = self._card(frame, "OUTFITTING + SHIPYARD SEARCH", "Spansh station search near your current system")
+        controls = tk.Frame(body, bg=self.UI_PANEL)
+        controls.pack(fill=tk.X, pady=(0, 8))
+        self.station_search_mode = tk.StringVar(value="module")
+        mode_box = tk.Frame(controls, bg=self.UI_PANEL)
+        mode_box.pack(side=tk.LEFT, padx=(0, 8), pady=(0, 6))
+        tk.Label(mode_box, text="TYPE", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Segoe UI", 7, "bold")).pack(anchor="w")
+        self._style_option(tk.OptionMenu(mode_box, self.station_search_mode, "module", "ship")).pack(anchor="w")
+        self.station_search_query = self._simple_field(controls, "SEARCH", 26)
+        self.station_search_query.bind("<Return>", lambda _e: self.search_station_inventory())
+        self.station_search_limit = self._simple_field(controls, "RESULTS", 6)
+        self.station_search_limit.insert(0, "20")
+        self._button(controls, "Search", self.search_station_inventory, accent=True).pack(side=tk.LEFT, padx=(8, 0), pady=(12, 6))
+        self._button(controls, "Copy", lambda: self._copy_selected_tree(self.station_search_tree, getattr(self, "station_search_rows", {}), "Station search row")).pack(side=tk.LEFT, padx=(6, 0), pady=(12, 6))
+        self.station_search_status = tk.Label(body, text="Try a module like '6A Fuel Scoop' or a ship like 'Python'.", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 9), anchor="w")
+        self.station_search_status.pack(fill=tk.X, pady=(0, 6))
+        self.station_search_tree = self._tree(body, ("station", "system", "distance", "ls", "type", "pad", "updated"), {
+            "station": ("Station", 240, tk.W),
+            "system": ("System", 190, tk.W),
+            "distance": ("Jump", 80, tk.E),
+            "ls": ("Star Dist", 90, tk.E),
+            "type": ("Type", 120, tk.W),
+            "pad": ("Pad", 50, tk.CENTER),
+            "updated": ("Updated", 130, tk.W),
+        })
+
+    def _build_guides_tab(self):
+        frame = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.tabs.add(frame, text="Guides")
+        wrap = tk.Frame(frame, bg=self.UI_BG)
+        wrap.pack(fill=tk.BOTH, expand=True)
+        left = tk.Frame(wrap, bg=self.UI_BG)
+        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        right = tk.Frame(wrap, bg=self.UI_BG)
+        right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+
+        riches = self._card(left, "ROAD TO RICHES", "high-value scan/mapping targets via Spansh")
+        controls = tk.Frame(riches, bg=self.UI_PANEL)
+        controls.pack(fill=tk.X, pady=(0, 8))
+        self.riches_to = self._simple_field(controls, "TO SYSTEM", 18)
+        self.riches_jump = self._simple_field(controls, "JUMP LY", 7)
+        self.riches_jump.insert(0, str(((getattr(self.app, "cmdr_ship", {}) or {}).get("max_jump_range") or 30)))
+        self.riches_radius = self._simple_field(controls, "RADIUS", 7)
+        self.riches_radius.insert(0, "50")
+        self.riches_results = self._simple_field(controls, "RESULTS", 7)
+        self.riches_results.insert(0, "30")
+        self.riches_min_value = self._simple_field(controls, "MIN VALUE", 9)
+        self.riches_min_value.insert(0, "300000")
+        self._button(controls, "Find", self.find_riches_route, accent=True).pack(side=tk.LEFT, padx=(8, 0), pady=(12, 6))
+        self._button(controls, "Copy", lambda: self._copy_selected_tree(self.riches_tree, getattr(self, "riches_rows", {}), "Riches row")).pack(side=tk.LEFT, padx=(6, 0), pady=(12, 6))
+        self.riches_status = tk.Label(riches, text="", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 9), anchor="w")
+        self.riches_status.pack(fill=tk.X, pady=(0, 6))
+        self.riches_tree = self._tree(riches, ("system", "jumps", "value", "bodies"), {
+            "system": ("System", 220, tk.W),
+            "jumps": ("Jumps", 70, tk.E),
+            "value": ("Value", 110, tk.E),
+            "bodies": ("Targets", 320, tk.W),
+        })
+
+        neutron = self._card(right, "NEUTRON ROUTE", "long range waypoint list via Spansh")
+        nctrl = tk.Frame(neutron, bg=self.UI_PANEL)
+        nctrl.pack(fill=tk.X, pady=(0, 8))
+        self.neutron_to = self._simple_field(nctrl, "DESTINATION", 22)
+        self.neutron_to.bind("<Return>", lambda _e: self.find_neutron_route())
+        self.neutron_jump = self._simple_field(nctrl, "JUMP LY", 7)
+        self.neutron_jump.insert(0, str(((getattr(self.app, "cmdr_ship", {}) or {}).get("max_jump_range") or 30)))
+        self.neutron_eff = self._simple_field(nctrl, "EFF %", 6)
+        self.neutron_eff.insert(0, "60")
+        self._button(nctrl, "Plot", self.find_neutron_route, accent=True).pack(side=tk.LEFT, padx=(8, 0), pady=(12, 6))
+        self._button(nctrl, "Copy", lambda: self._copy_selected_tree(self.neutron_tree, getattr(self, "neutron_rows", {}), "Neutron row")).pack(side=tk.LEFT, padx=(6, 0), pady=(12, 6))
+        self.neutron_status = tk.Label(neutron, text="", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 9), anchor="w")
+        self.neutron_status.pack(fill=tk.X, pady=(0, 6))
+        self.neutron_tree = self._tree(neutron, ("system", "jumped", "left", "neutron", "jumps"), {
+            "system": ("System", 220, tk.W),
+            "jumped": ("Jumped", 80, tk.E),
+            "left": ("Left", 80, tk.E),
+            "neutron": ("N", 40, tk.CENTER),
+            "jumps": ("Jumps", 70, tk.E),
         })
 
     def _simple_field(self, parent, label, width=10):
@@ -935,6 +1020,7 @@ class TradeWindow:
         tk.Label(alert_row, text="LIVE ROUTE WATCHES", fg=COLOR_ORANGE, bg=self.UI_PANEL, font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT)
         self._button(alert_row, "Refresh Alerts", self.refresh_route_alerts).pack(side=tk.LEFT, padx=(8, 0))
         self._button(alert_row, "Clear Alerts", self.clear_route_alerts).pack(side=tk.LEFT, padx=(6, 0))
+        self._button(alert_row, "Remove Watch", self.remove_selected_route_watch).pack(side=tk.LEFT, padx=(6, 0))
         self.route_watch_tree = self._tree(body, ("kind", "detail", "value"), {
             "kind": ("Type", 70, tk.CENTER),
             "detail": ("Watch / Alert", 560, tk.W),
@@ -1042,6 +1128,132 @@ class TradeWindow:
         price = row.get("buy_price") if mode == "buy" else row.get("sell_price")
         return f"{row.get('station')} / {row.get('system')} @ {self._credits(price)}"
 
+    def search_station_inventory(self):
+        query = self.station_search_query.get().strip()
+        if not query:
+            self.station_search_status.config(text="Enter a module or ship name.", fg=self.UI_WARN)
+            return
+        system = self._current_system()
+        if not system:
+            self.station_search_status.config(text="No current system known yet.", fg=self.UI_WARN)
+            return
+        self.station_search_status.config(text="Searching Spansh station data...", fg=self.UI_MUTED)
+        for iid in self.station_search_tree.get_children():
+            self.station_search_tree.delete(iid)
+        self.station_search_rows = {}
+        mode = self.station_search_mode.get()
+        params = {
+            "reference_system": system,
+            "module": query if mode == "module" else None,
+            "ship": query if mode == "ship" else None,
+            "size": self._entry_int(self.station_search_limit, 20),
+        }
+
+        def worker():
+            try:
+                rows = spansh.station_search(**params)
+                self.root.after(0, lambda: self._render_station_search(rows))
+            except Exception as exc:
+                self.root.after(0, lambda: self.station_search_status.config(text=str(exc), fg=self.UI_FAIL))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _render_station_search(self, rows):
+        for row in rows:
+            iid = self.station_search_tree.insert("", tk.END, values=(
+                row.get("station"),
+                row.get("system"),
+                f"{float(row.get('distance') or 0):.1f} ly",
+                f"{self._num(row.get('dist_ls'))} ls",
+                row.get("type") or "-",
+                "L" if row.get("large_pad") else "-",
+                row.get("updated_at") or "-",
+            ))
+            self.station_search_rows[iid] = row
+        self.station_search_status.config(text=f"{len(rows)} station(s) found.", fg=self.UI_MUTED)
+
+    def find_riches_route(self):
+        system = self._current_system()
+        if not system:
+            self.riches_status.config(text="No current system known yet.", fg=self.UI_WARN)
+            return
+        self.riches_status.config(text="Computing Road to Riches route...", fg=self.UI_MUTED)
+        for iid in self.riches_tree.get_children():
+            self.riches_tree.delete(iid)
+        self.riches_rows = {}
+        params = {
+            "from_system": system,
+            "to_system": self.riches_to.get().strip() or None,
+            "jump_range": self._entry_float(self.riches_jump, 30.0),
+            "radius": self._entry_int(self.riches_radius, 50),
+            "max_results": self._entry_int(self.riches_results, 30),
+            "min_value": self._entry_int(self.riches_min_value, 300000),
+            "loop": not bool(self.riches_to.get().strip()),
+        }
+
+        def worker():
+            try:
+                rows = spansh.riches_route(**params)
+                self.root.after(0, lambda: self._render_riches(rows))
+            except Exception as exc:
+                self.root.after(0, lambda: self.riches_status.config(text=str(exc), fg=self.UI_FAIL))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _render_riches(self, rows):
+        for row in rows:
+            bodies = row.get("bodies") or []
+            body_text = ", ".join(
+                f"{b.get('name')} {self._credits(b.get('map_value') or b.get('scan_value') or 0)}"
+                for b in bodies[:2]
+            )
+            if len(bodies) > 2:
+                body_text += f" +{len(bodies) - 2} more"
+            iid = self.riches_tree.insert("", tk.END, values=(
+                row.get("system"),
+                self._num(row.get("jumps")),
+                self._credits(row.get("total_value")),
+                body_text,
+            ))
+            self.riches_rows[iid] = row
+        self.riches_status.config(text=f"{len(rows)} high-value system(s) found.", fg=self.UI_MUTED)
+
+    def find_neutron_route(self):
+        current = self._current_system()
+        dest = self.neutron_to.get().strip()
+        if not current or not dest:
+            self.neutron_status.config(text="Need current system and destination.", fg=self.UI_WARN)
+            return
+        self.neutron_status.config(text="Computing neutron route...", fg=self.UI_MUTED)
+        for iid in self.neutron_tree.get_children():
+            self.neutron_tree.delete(iid)
+        self.neutron_rows = {}
+        params = {
+            "from_system": current,
+            "to_system": dest,
+            "jump_range": self._entry_float(self.neutron_jump, 30.0),
+            "efficiency": self._entry_int(self.neutron_eff, 60),
+        }
+
+        def worker():
+            try:
+                result = spansh.neutron_route(**params)
+                self.root.after(0, lambda: self._render_neutron(result))
+            except Exception as exc:
+                self.root.after(0, lambda: self.neutron_status.config(text=str(exc), fg=self.UI_FAIL))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _render_neutron(self, result):
+        rows = result.get("waypoints") or []
+        for row in rows:
+            iid = self.neutron_tree.insert("", tk.END, values=(
+                row.get("system"),
+                f"{float(row.get('distance_jumped') or 0):.1f} ly",
+                f"{float(row.get('distance_left') or 0):.1f} ly",
+                "Y" if row.get("neutron") else "-",
+                self._num(row.get("jumps")),
+            ))
+            self.neutron_rows[iid] = row
+        self.neutron_status.config(text=f"{result.get('total_jumps') or len(rows)} total jump(s).", fg=self.UI_MUTED)
+
     def watch_selected_loop(self):
         selected = self.route_tree.selection()
         if not selected:
@@ -1062,18 +1274,33 @@ class TradeWindow:
         alerts.clear_alerts()
         self.refresh_route_alerts()
 
+    def remove_selected_route_watch(self):
+        selected = self.route_watch_tree.selection()
+        if not selected:
+            self._show_banner("Select a watch row first.")
+            return
+        wid = getattr(self, "route_watch_ids", {}).get(selected[0])
+        if not wid:
+            self._show_banner("Select a WATCH row, not an alert.")
+            return
+        if alerts.remove_watch(wid):
+            self._show_banner(f"Removed route watch #{wid}.")
+        self.refresh_route_alerts()
+
     def refresh_route_alerts(self):
         if not hasattr(self, "route_watch_tree"):
             return
         for iid in self.route_watch_tree.get_children():
             self.route_watch_tree.delete(iid)
+        self.route_watch_ids = {}
         snap = alerts.snapshot()
         for watch in snap.get("watches", []):
-            self.route_watch_tree.insert("", tk.END, values=(
+            iid = self.route_watch_tree.insert("", tk.END, values=(
                 "WATCH",
                 f"#{watch.get('id')} {watch.get('label')} since {watch.get('created')}",
                 self._credits(watch.get("profit")),
             ))
+            self.route_watch_ids[iid] = watch.get("id")
         for alert in snap.get("alerts", []):
             self.route_watch_tree.insert("", tk.END, values=(
                 "ALERT",

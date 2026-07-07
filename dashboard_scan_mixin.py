@@ -2,6 +2,7 @@ import math
 import time
 import threading
 
+import bio_values
 from config import COLOR_ACCENT, COLOR_TEXT
 
 
@@ -498,7 +499,9 @@ class DashboardScanMixin:
             "distance_to_arrival": data.get("DistanceFromArrivalLS"),
             "surface_temp": data.get("SurfaceTemperature"),
             "surface_gravity": data.get("SurfaceGravity"),
+            "gravity_g": self._gravity_to_g(data.get("SurfaceGravity")),
             "atmosphere": data.get("Atmosphere") or data.get("AtmosphereType"),
+            "atmosphere_type": data.get("AtmosphereType") or data.get("Atmosphere"),
             "volcanism": data.get("Volcanism"),
             "icons": icons,
             "color": color,
@@ -512,6 +515,13 @@ class DashboardScanMixin:
             "first_footfall": first_footfall,
             "_ts": ts
         }
+        item["predicted_genuses"] = bio_values.predict_genera(
+            planet_class,
+            item.get("atmosphere_type"),
+            item.get("surface_temp"),
+            item.get("gravity_g"),
+            item.get("volcanism"),
+        )
 
         existing = None
         if body_id is not None:
