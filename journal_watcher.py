@@ -77,6 +77,17 @@ class JournalWatcher:
         self.last_market_mtime = 0
         self._force_special_check = True
 
+    def prime_market_file(self):
+        """Treat the current Market.json as already seen so startup does not publish it."""
+        if not self.journal_path:
+            return
+        m_file = os.path.join(self.journal_path, "Market.json")
+        try:
+            if os.path.exists(m_file):
+                self.last_market_mtime = os.path.getmtime(m_file)
+        except Exception:
+            pass
+
     def force_check_nav(self):
         self.last_nav_mtime = 0
         self._force_special_check = True
