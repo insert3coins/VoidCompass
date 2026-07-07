@@ -1,5 +1,23 @@
 # VoidCompass // UPDATE LOG
 
+## v3.8.3 // Trade Polish + Exploration Bio Values
+**Release Date:** 2026-Jul-07
+
+### Trade
+*   Added the remaining useful non-Autoplot pieces from the updated `elite-trader` project.
+*   Added Trade guides for Road to Riches and neutron routing reference data.
+*   Added station lookup/search tools and colonisation source finding from local market data.
+*   Added watch removal controls for live trade route watches.
+
+### Exploration
+*   Added exobiology reference value data from `elite-trader` for Vista Genomics estimates.
+*   Enriched `ScanOrganic` tracking with species value, genus value range, and colony/sample spacing.
+*   Updated the Exploration Bio tab to show genus/sample spacing, estimated Vista value, and predicted genus candidates when body conditions are available.
+*   The Bio summary now includes completed organic scan value alongside completed scan count.
+
+### Version
+*   Bumped app version to **3.8.3**.
+
 ## v3.8.2 // Trade Uploads, Analytics + Route Watches
 **Release Date:** 2026-Jul-07
 
