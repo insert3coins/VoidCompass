@@ -7,6 +7,9 @@ greedily with the most profitable commodities (respecting supply, demand and
 capital), and the best few partial routes are extended each round."""
 
 import math
+import threading
+import time
+from collections import OrderedDict
 
 from . import marketdb
 
@@ -21,12 +24,17 @@ LOOP_FLOW_LIMIT = 30000      # top commodity flows pulled from SQL
 LOOP_FLOWS_PER_PAIR = 12
 LOOP_RESULTS = 8
 LOOP_CANDIDATES = 250        # loops kept for time-weighted ranking
+NEAR_CACHE_TTL_S = 90.0
+NEAR_CACHE_MAX = 24
 
 # Travel-time model for profit/hour (rough but consistent across candidates).
 JUMP_TIME_S = 50.0           # one hyperspace jump incl. align/scoop average
 DOCK_OVERHEAD_S = 180.0      # request dock, land, trade, launch
 SC_BASE_S = 60.0             # drop from jump + initial acceleration
 UNKNOWN_DIST_LS = 500.0      # assumed when a station's star distance is unknown
+
+_near_cache = OrderedDict()
+_near_cache_lock = threading.Lock()
 
 
 def _supercruise_time_s(dist_ls):
@@ -41,6 +49,62 @@ def _leg_time_s(distance_ly, dest_dist_ls, jump_range):
 
 class RouteError(Exception):
     pass
+
+
+def _near_cache_key(start, radius, max_price_age_days, requires_large_pad, include_carriers, max_system_distance):
+    # Bucket the time-based freshness cutoff so repeated searches reuse work,
+    # while still refreshing often enough for EDDN/live journal updates.
+    return (
+        int(start.get("id64") or 0),
+        round(float(start["x"]), 3),
+        round(float(start["y"]), 3),
+        round(float(start["z"]), 3),
+        round(float(radius), 2),
+        int(max_price_age_days),
+        bool(requires_large_pad),
+        bool(include_carriers),
+        round(float(max_system_distance), 2) if max_system_distance else None,
+        int(time.time() // 300),
+    )
+
+
+def _nearby_station_pool(
+    conn,
+    start,
+    radius,
+    max_price_age_days,
+    requires_large_pad=False,
+    include_carriers=True,
+    max_system_distance=None,
+    cap=None,
+):
+    key = _near_cache_key(start, radius, max_price_age_days, requires_large_pad, include_carriers, max_system_distance)
+    now = time.monotonic()
+    with _near_cache_lock:
+        cached = _near_cache.get(key)
+        if cached and now - cached[0] < NEAR_CACHE_TTL_S:
+            _near_cache.move_to_end(key)
+            stations = cached[1]
+            return list(stations[:cap]) if cap else list(stations)
+
+    stations = marketdb.stations_near(
+        conn,
+        start["x"],
+        start["y"],
+        start["z"],
+        float(radius),
+        min_updated=marketdb.now_epoch() - int(max_price_age_days) * 86400,
+        require_large_pad=bool(requires_large_pad),
+        max_dist_ls=float(max_system_distance) if max_system_distance else None,
+    )
+    stations = _filter_carriers(stations, include_carriers)
+    stations.sort(key=lambda s: _dist(start, s))
+
+    with _near_cache_lock:
+        _near_cache[key] = (now, tuple(stations))
+        while len(_near_cache) > NEAR_CACHE_MAX:
+            _near_cache.popitem(last=False)
+    return stations[:cap] if cap else stations
 
 
 def plan_route_local(
@@ -111,7 +175,7 @@ def _resolve_start(conn, system, star_pos):
     if system:
         row = marketdb.find_system(conn, system)
         if row:
-            return {"system": row[1], "x": row[2], "y": row[3], "z": row[4]}
+            return {"id64": row[0], "system": row[1], "x": row[2], "y": row[3], "z": row[4]}
     if star_pos and len(star_pos) == 3:
         return {"system": system or "current position", "x": star_pos[0], "y": star_pos[1], "z": star_pos[2]}
     raise RouteError(f"Start system '{system}' not found in the local database.")
@@ -239,16 +303,17 @@ def plan_loops(
             raise RouteError("Local market database is empty - build it from the Market Database panel first.")
         start = _resolve_start(conn, system, star_pos)
 
-        stations = marketdb.stations_near(
-            conn, start["x"], start["y"], start["z"], float(radius),
-            min_updated=marketdb.now_epoch() - int(max_price_age_days) * 86400,
-            require_large_pad=bool(requires_large_pad),
-            max_dist_ls=float(max_system_distance) if max_system_distance else None,
+        stations = _nearby_station_pool(
+            conn,
+            start,
+            radius,
+            max_price_age_days,
+            requires_large_pad,
+            include_carriers,
+            max_system_distance,
         )
-        stations = _filter_carriers(stations, include_carriers)
         if len(stations) < 2:
             raise RouteError("Fewer than two market stations in range - increase the radius or price age.")
-        stations.sort(key=lambda s: _dist(s, start))
         stations = stations[:LOOP_STATION_CAP]
         by_id = {s["market_id"]: s for s in stations}
 
@@ -419,15 +484,16 @@ def search_commodity(
         symbol, display = _resolve_commodity(conn, query)
         start = _resolve_start(conn, system, star_pos)
 
-        stations = marketdb.stations_near(
-            conn, start["x"], start["y"], start["z"], float(radius),
-            min_updated=marketdb.now_epoch() - int(max_price_age_days) * 86400,
-            require_large_pad=bool(requires_large_pad),
-            max_dist_ls=float(max_system_distance) if max_system_distance else None,
+        stations = _nearby_station_pool(
+            conn,
+            start,
+            radius,
+            max_price_age_days,
+            requires_large_pad,
+            include_carriers,
+            max_system_distance,
+            cap=900,
         )
-        stations = _filter_carriers(stations, include_carriers)
-        stations.sort(key=lambda s: _dist(start, s))
-        stations = stations[:900]
         by_id = {s["market_id"]: s for s in stations}
         if not by_id:
             return {"commodity": display, "results": []}
@@ -482,15 +548,16 @@ def find_opportunities(
         if not marketdb.status(conn)["ready"]:
             raise RouteError("Local market database is empty - build it from the Database tab first.")
         start = _resolve_start(conn, system, star_pos)
-        stations = marketdb.stations_near(
-            conn, start["x"], start["y"], start["z"], float(radius),
-            min_updated=marketdb.now_epoch() - int(max_price_age_days) * 86400,
-            require_large_pad=bool(requires_large_pad),
-            max_dist_ls=float(max_system_distance) if max_system_distance else None,
+        stations = _nearby_station_pool(
+            conn,
+            start,
+            radius,
+            max_price_age_days,
+            requires_large_pad,
+            include_carriers,
+            max_system_distance,
+            cap=450,
         )
-        stations = _filter_carriers(stations, include_carriers)
-        stations.sort(key=lambda s: _dist(start, s))
-        stations = stations[:450]
         by_id = {s["market_id"]: s for s in stations}
         if len(by_id) < 2:
             return []
@@ -573,15 +640,16 @@ def sell_cargo(
         if not marketdb.status(conn)["ready"]:
             raise RouteError("Local market database is empty - build it from the Database tab first.")
         start = _resolve_start(conn, system, star_pos)
-        stations = marketdb.stations_near(
-            conn, start["x"], start["y"], start["z"], float(radius),
-            min_updated=marketdb.now_epoch() - int(max_price_age_days) * 86400,
-            require_large_pad=bool(requires_large_pad),
-            max_dist_ls=float(max_system_distance) if max_system_distance else None,
+        stations = _nearby_station_pool(
+            conn,
+            start,
+            radius,
+            max_price_age_days,
+            requires_large_pad,
+            include_carriers,
+            max_system_distance,
+            cap=900,
         )
-        stations = _filter_carriers(stations, include_carriers)
-        stations.sort(key=lambda s: _dist(start, s))
-        stations = stations[:900]
         by_id = {s["market_id"]: s for s in stations}
         if not by_id:
             return []
@@ -662,15 +730,16 @@ def analyze_station_market(
         if not marketdb.status(conn)["ready"]:
             raise RouteError("Local market database is empty - build it from the Database tab first.")
         start = _resolve_start(conn, system, star_pos)
-        stations = marketdb.stations_near(
-            conn, start["x"], start["y"], start["z"], float(radius),
-            min_updated=marketdb.now_epoch() - int(max_price_age_days) * 86400,
-            require_large_pad=bool(requires_large_pad),
-            max_dist_ls=float(max_system_distance) if max_system_distance else None,
+        stations = _nearby_station_pool(
+            conn,
+            start,
+            radius,
+            max_price_age_days,
+            requires_large_pad,
+            include_carriers,
+            max_system_distance,
+            cap=900,
         )
-        stations = _filter_carriers(stations, include_carriers)
-        stations.sort(key=lambda s: _dist(start, s))
-        stations = stations[:900]
         by_id = {s["market_id"]: s for s in stations}
         if not by_id:
             return {}

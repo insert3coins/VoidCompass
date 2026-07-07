@@ -1,5 +1,18 @@
 # VoidCompass // UPDATE LOG
 
+## v3.8.4 // Trade Sorting + Mining Cleanup
+**Release Date:** 2026-Jul-07
+
+### Trade
+*   Added clickable sorting to Trade table headers, including commodity search and station search results.
+*   Added short-lived nearby-station caching and extra SQLite indexes to make repeated Trade searches smoother.
+
+### Mining
+*   Removed the Mining window's Market tab now that buyer/market workflows live in the Trade window.
+
+### Version
+*   Bumped app version to **3.8.4**.
+
 ## v3.8.3 // Trade Polish + Exploration Bio Values
 **Release Date:** 2026-Jul-07
 

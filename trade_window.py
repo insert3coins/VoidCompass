@@ -44,6 +44,7 @@ class TradeWindow:
         self.radar_rows = {}
         self.cargo_sell_rows = {}
         self.watchlist_rows = {}
+        self._tree_sort_state = {}
         self.loop_mode = tk.StringVar(value="loop")
         self.search_mode = tk.StringVar(value="sell")
         self.allow_planetary_var = tk.BooleanVar(value=True)
@@ -209,9 +210,11 @@ class TradeWindow:
         wrap = tk.Frame(parent, bg=parent.cget("bg"))
         wrap.pack(fill=tk.BOTH, expand=True)
         tree = ttk.Treeview(wrap, columns=cols, show="headings", style="Trade.Treeview")
+        tree._vc_heading_labels = {}
         for col in cols:
             label, width, anchor = specs[col]
-            tree.heading(col, text=label)
+            tree._vc_heading_labels[col] = label
+            tree.heading(col, text=label, command=lambda c=col, t=tree: self._sort_tree_by_column(t, c))
             tree.column(col, width=width, anchor=anchor)
         scroll = ttk.Scrollbar(wrap, orient=tk.VERTICAL, command=tree.yview)
         tree.configure(yscrollcommand=scroll.set)
@@ -219,6 +222,109 @@ class TradeWindow:
         scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self._configure_tree_tags(tree)
         return tree
+
+    def _sort_tree_by_column(self, tree, col):
+        try:
+            children = list(tree.get_children(""))
+        except Exception:
+            return
+        if not children:
+            return
+        previous = self._tree_sort_state.get(id(tree))
+        if previous and previous[0] == col:
+            reverse = not previous[1]
+        else:
+            reverse = self._default_tree_sort_reverse(col, [tree.set(iid, col) for iid in children])
+        self._tree_sort_state[id(tree)] = (col, reverse)
+
+        valued = []
+        missing = []
+        for iid in children:
+            value = tree.set(iid, col)
+            parsed, is_missing = self._tree_sort_value(col, value)
+            if is_missing:
+                missing.append(iid)
+            else:
+                valued.append((parsed, iid))
+        valued.sort(key=lambda row: row[0], reverse=reverse)
+        for index, (_value, iid) in enumerate(valued + [(None, iid) for iid in missing]):
+            tree.move(iid, "", index)
+        self._update_tree_sort_headings(tree, col, reverse)
+
+    def _default_tree_sort_reverse(self, col, values):
+        key = str(col).lower()
+        if key in {"station", "system", "commodity", "name", "type", "pad", "signal", "note"}:
+            return False
+        if key in {"age", "when"}:
+            return False
+        if key in {"updated", "last"}:
+            return True
+        return any(not self._tree_sort_value(col, value)[1] and self._tree_sort_value(col, value)[0][0] == 0 for value in values)
+
+    def _tree_sort_value(self, col, value):
+        text = str(value or "").strip()
+        if not text or text in {"-", "?", "? cr"}:
+            return ((2, ""), True)
+        key = str(col).lower()
+        if key in {"age", "when"}:
+            age = self._sort_age_minutes(text)
+            if age is not None:
+                return ((0, age), False)
+        numeric = self._sort_number(text)
+        if numeric is not None:
+            return ((0, numeric), False)
+        return ((1, text.lower()), False)
+
+    @staticmethod
+    def _sort_number(text):
+        cleaned = (
+            str(text).lower()
+            .replace(",", "")
+            .replace("cr", "")
+            .replace("ly", "")
+            .replace("ls", "")
+            .replace("/t", "")
+            .replace("%", "")
+            .strip()
+        )
+        if cleaned.startswith("+"):
+            cleaned = cleaned[1:]
+        parts = cleaned.split()
+        if parts:
+            cleaned = parts[0]
+        try:
+            return float(cleaned)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _sort_age_minutes(text):
+        raw = str(text).strip().lower()
+        if raw == "now":
+            return 0.0
+        try:
+            unit = raw[-1]
+            value = float(raw[:-1])
+            if unit == "m":
+                return value
+            if unit == "h":
+                return value * 60.0
+            if unit == "d":
+                return value * 1440.0
+        except Exception:
+            return None
+        return None
+
+    def _update_tree_sort_headings(self, tree, active_col, reverse):
+        labels = getattr(tree, "_vc_heading_labels", {}) or {}
+        for col, label in labels.items():
+            suffix = ""
+            if col == active_col:
+                suffix = " v" if reverse else " ^"
+            try:
+                tree.heading(col, text=f"{label}{suffix}", command=lambda c=col, t=tree: self._sort_tree_by_column(t, c))
+            except Exception:
+                pass
 
     def _configure_tree_tags(self, tree):
         tree.tag_configure("fresh", foreground=COLOR_TEXT)
