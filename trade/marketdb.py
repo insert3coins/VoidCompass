@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS systems(
     x REAL NOT NULL, y REAL NOT NULL, z REAL NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_systems_name ON systems(name COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_systems_x ON systems(x);
+CREATE INDEX IF NOT EXISTS idx_systems_xyz ON systems(x, y, z);
 CREATE TABLE IF NOT EXISTS stations(
     market_id INTEGER PRIMARY KEY,
     system_id64 INTEGER NOT NULL,
@@ -45,6 +46,7 @@ CREATE TABLE IF NOT EXISTS stations(
     large_pad INTEGER NOT NULL DEFAULT 0,
     updated_at INTEGER);
 CREATE INDEX IF NOT EXISTS idx_stations_system ON stations(system_id64);
+CREATE INDEX IF NOT EXISTS idx_stations_system_updated ON stations(system_id64, updated_at);
 CREATE INDEX IF NOT EXISTS idx_stations_updated ON stations(updated_at);
 CREATE INDEX IF NOT EXISTS idx_stations_pad_updated ON stations(large_pad, updated_at);
 CREATE TABLE IF NOT EXISTS commodities(
@@ -62,6 +64,7 @@ CREATE TABLE IF NOT EXISTS commodity_names(
     symbol TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     category TEXT);
+CREATE INDEX IF NOT EXISTS idx_commodity_names_name ON commodity_names(name COLLATE NOCASE);
 CREATE TABLE IF NOT EXISTS trade_log(
     ts INTEGER NOT NULL,
     event TEXT NOT NULL,

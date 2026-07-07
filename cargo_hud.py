@@ -34,6 +34,7 @@ class CargoHUD:
         
         self.force_topmost()
         self._save_job = None
+        self.update([], 0)
 
     @staticmethod
     def _safe_int(value, default):
@@ -103,6 +104,7 @@ class CargoHUD:
         self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor)
 
     def update(self, inventory, capacity=0):
+        inventory = list(inventory or [])
         self.canvas.delete("all")
         
         w = 300
