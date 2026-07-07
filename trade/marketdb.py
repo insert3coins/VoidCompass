@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS stations(
     large_pad INTEGER NOT NULL DEFAULT 0,
     updated_at INTEGER);
 CREATE INDEX IF NOT EXISTS idx_stations_system ON stations(system_id64);
+CREATE INDEX IF NOT EXISTS idx_stations_updated ON stations(updated_at);
+CREATE INDEX IF NOT EXISTS idx_stations_pad_updated ON stations(large_pad, updated_at);
 CREATE TABLE IF NOT EXISTS commodities(
     market_id INTEGER NOT NULL,
     symbol TEXT NOT NULL,
@@ -53,6 +55,9 @@ CREATE TABLE IF NOT EXISTS commodities(
     supply INTEGER NOT NULL DEFAULT 0,
     demand INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY(market_id, symbol)) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_commodities_symbol_market ON commodities(symbol, market_id);
+CREATE INDEX IF NOT EXISTS idx_commodities_symbol_supply ON commodities(symbol, supply, buy_price);
+CREATE INDEX IF NOT EXISTS idx_commodities_symbol_demand ON commodities(symbol, demand, sell_price);
 CREATE TABLE IF NOT EXISTS commodity_names(
     symbol TEXT PRIMARY KEY,
     name TEXT NOT NULL,

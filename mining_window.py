@@ -8,7 +8,7 @@ from tkinter import filedialog, messagebox, ttk
 from datetime import datetime
 
 from config import COLOR_ACCENT, COLOR_BG, COLOR_GREEN, COLOR_ORANGE, COLOR_TEXT, save_config
-from mining_data import MiningDataStore, normalize_material_name, normalize_ring_type, search_spansh_buyers, search_spansh_rings
+from mining_data import MiningDataStore, normalize_material_name, normalize_ring_type, search_spansh_rings
 
 MINING_SESSIONS_FILE = "mining_sessions.json"
 
@@ -154,7 +154,6 @@ class MiningWindow:
         self._json_session_key = None                        # started_at key for current session
         self.search_results = []
         self.search_running = False
-        self.market_running = False
 
         self._build_style()
         self._build_layout()
@@ -229,7 +228,6 @@ class MiningWindow:
         self._build_prospector_tab()
         self._build_cargo_tab()
         self._build_hotspots_tab()
-        self._build_market_tab()
         self._build_missions_tab()
         self._build_reports_tab()
 
@@ -409,40 +407,6 @@ class MiningWindow:
             ("progress", "Progress", 120),
             ("destination", "Destination", 220),
             ("expires", "Expires", 170),
-        ])
-
-    def _build_market_tab(self):
-        tab = tk.Frame(self.notebook, bg=COLOR_BG)
-        self.notebook.add(tab, text="Market")
-        frame = self._panel(tab)
-        frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
-        tk.Label(frame, text="COMMODITY SELL FINDER", bg="#11161c", fg=COLOR_ACCENT, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=10, pady=(8, 4))
-
-        controls = tk.Frame(frame, bg="#11161c")
-        controls.pack(fill=tk.X, padx=10, pady=(0, 8))
-        tk.Label(controls, text="Commodity", bg="#11161c", fg="#7d8891", font=("Segoe UI", 8, "bold")).grid(row=0, column=0, sticky="w")
-        tk.Label(controls, text="Range LY", bg="#11161c", fg="#7d8891", font=("Segoe UI", 8, "bold")).grid(row=0, column=1, sticky="w", padx=(8, 0))
-        self.market_commodity_var = tk.StringVar(value="Platinum")
-        self.market_range_var = tk.StringVar(value="500")
-        ttk.Combobox(controls, textvariable=self.market_commodity_var, values=["All"] + sorted(MINING_MATERIALS), width=24, state="readonly").grid(row=1, column=0, sticky="ew")
-        tk.Entry(controls, textvariable=self.market_range_var, width=8, bg="#090c10", fg=COLOR_TEXT, insertbackground=COLOR_ACCENT, relief=tk.FLAT).grid(row=1, column=1, sticky="ew", padx=(8, 0), ipady=4)
-        self._button(controls, "Find Buyers", self.search_market_buyers, accent=True).grid(row=1, column=2, padx=(10, 0))
-        controls.grid_columnconfigure(0, weight=1)
-
-        self.market_status_label = tk.Label(frame, text="Uses Spansh station market data and sorts by best sell price.", bg="#11161c", fg="#7d8891", font=("Consolas", 8), anchor="w")
-        self.market_status_label.pack(fill=tk.X, padx=10, pady=(0, 6))
-
-        tree_frame = tk.Frame(frame, bg="#11161c")
-        tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
-        self.market_tree = self._tree(tree_frame, [
-            ("system", "System", 170),
-            ("station", "Station", 220),
-            ("price", "Price", 90),
-            ("demand", "Demand", 90),
-            ("distance", "LY", 70),
-            ("ls", "LS", 70),
-            ("type", "Type", 130),
-            ("updated", "Updated", 150),
         ])
 
     def _build_reports_tab(self):
@@ -979,79 +943,6 @@ class MiningWindow:
             messagebox.showinfo("Import Complete", f"Imported {count} hotspot rows.")
         except Exception as exc:
             messagebox.showerror("Import Failed", str(exc))
-
-    def search_market_buyers(self):
-        if self.market_running:
-            return
-        commodity = self.market_commodity_var.get()
-        if not commodity or commodity == "All":
-            commodity = self._best_current_cargo_commodity() or "Platinum"
-            self.market_commodity_var.set(commodity)
-        try:
-            max_distance = float(self.market_range_var.get())
-        except Exception:
-            max_distance = 500
-        self.market_running = True
-        self.market_status_label.config(text=f"Searching buyers for {commodity}...")
-
-        def worker():
-            rows = []
-            error = None
-            try:
-                rows = search_spansh_buyers(
-                    commodity,
-                    reference_system=self.current_system if self.current_system != "---" else None,
-                    max_distance=max_distance,
-                    max_results=100,
-                )
-            except Exception as exc:
-                error = str(exc)
-            self.root.after(0, lambda: self._finish_market_search(rows, error))
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _finish_market_search(self, rows, error):
-        self.market_running = False
-        self._clear_tree(self.market_tree)
-        for row in rows:
-            distance = row.get("distance_ly")
-            try:
-                distance = f"{float(distance):.1f}"
-            except Exception:
-                distance = "-"
-            try:
-                ls_distance = f"{float(row.get('ls_distance') or 0):.0f}"
-            except Exception:
-                ls_distance = "-"
-            self.market_tree.insert(
-                "",
-                tk.END,
-                values=(
-                    row.get("system_name") or "-",
-                    row.get("station_name") or "-",
-                    f"{int(row.get('price') or 0):,}",
-                    f"{int(row.get('demand') or 0):,}",
-                    distance,
-                    ls_distance,
-                    row.get("station_type") or "",
-                    row.get("updated_at") or "",
-                ),
-            )
-        if error:
-            self.market_status_label.config(text=f"Market search failed: {error}")
-        else:
-            self.market_status_label.config(text=f"Found {len(rows)} buyer stations.")
-
-    def _best_current_cargo_commodity(self):
-        best = None
-        best_count = -1
-        for item in self.cargo_inventory:
-            name = _clean_name(item.get("Name_Localised") or item.get("Name"))
-            count = int(item.get("Count") or 0)
-            if name in MINING_MATERIALS and count > best_count:
-                best = name
-                best_count = count
-        return best
 
     def _finish_current_session(self):
         if not self.session_id:
