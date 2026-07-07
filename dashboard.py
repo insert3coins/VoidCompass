@@ -7,6 +7,7 @@ import time
 import tkinter as tk
 import webbrowser
 import shutil
+import queue
 from collections import deque
 
 from config import (
@@ -341,6 +342,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "profit": 0,
             "events": deque(maxlen=100),
         }
+        self._market_import_queue = queue.Queue(maxsize=1)
+        self._market_import_stop = threading.Event()
+        self._market_import_thread = None
         self.last_journal_event_ts = 0.0
         self.last_logged_journal_file = None
         self.last_status_event_ts = 0.0
@@ -474,6 +478,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.cargo_hud.win.geometry(f"+{cx}+{cy}")
             except Exception:
                 pass
+            try:
+                self.cargo_hud.update(self.current_cargo_inventory, self.cargo_capacity)
+                self.cargo_hud.win.deiconify()
+                self.cargo_hud.win.attributes("-topmost", True)
+                self.cargo_hud.win.lift()
+            except Exception:
+                pass
         else:
             self.cargo_hud = None
 
@@ -534,6 +545,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             status_cb=self.update_status,
             market_cb=self.update_market
         )
+        self._start_market_import_worker()
         self.watcher.start()
         self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
         if self.colony_overlay:
@@ -772,6 +784,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.trade_window and self.trade_window.is_open():
             self.trade_window._on_close()
             
+        self._stop_market_import_worker()
         self.watcher.stop()
         self.screenshots.stop()
         try:
@@ -1196,6 +1209,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.cargo_hud = CargoHUD(self.root, self.config)
                 self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
                 self.watcher.force_check_cargo()
+            self.cargo_hud.update(self.current_cargo_inventory, self.cargo_capacity)
+            try:
+                self.cargo_hud.win.deiconify()
+                self.cargo_hud.win.attributes("-topmost", True)
+                self.cargo_hud.win.lift()
+            except Exception:
+                pass
         elif self.cargo_hud:
             self.cargo_hud.win.destroy()
             self.cargo_hud = None
@@ -1573,12 +1593,75 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._refresh_commander_profile_window()
         return True
 
+    def _log_balance_async(self, timestamp, balance):
+        if balance is None:
+            return
+        ts = trade_marketdb.parse_update_time(timestamp) or trade_marketdb.now_epoch()
+
+        def worker():
+            try:
+                trade_marketdb.log_balance(ts, balance)
+            except Exception:
+                pass
+
+        threading.Thread(target=worker, name="trade-balance-log", daemon=True).start()
+
+    def _set_commander_balance(self, balance, loan=None, timestamp=None, log=True):
+        try:
+            balance = int(balance)
+        except Exception:
+            return False
+        changed = self.cmdr_balance != balance or (loan is not None and self.cmdr_loan != loan)
+        self.cmdr_balance = balance
+        if loan is not None:
+            self.cmdr_loan = loan
+        if log:
+            self._log_balance_async(timestamp, balance)
+        if changed:
+            self._refresh_commander_profile_window()
+            if self.trade_window and self.trade_window.is_open():
+                self.root.after(0, self.trade_window._refresh_summary)
+        return changed
+
+    def _apply_credit_event(self, ev, raw, log=True):
+        if not isinstance(raw, dict):
+            return False
+        timestamp = raw.get("timestamp")
+        for key in ("Credits", "Balance"):
+            if raw.get(key) is not None:
+                return self._set_commander_balance(raw.get(key), timestamp=timestamp, log=log)
+        if self.cmdr_balance is None:
+            return False
+
+        delta = 0
+        if ev == "MarketBuy":
+            delta -= int(raw.get("TotalCost") or ((raw.get("BuyPrice") or raw.get("Price") or 0) * (raw.get("Count") or 0)) or 0)
+        elif ev == "MarketSell":
+            delta += int(raw.get("TotalSale") or ((raw.get("SellPrice") or raw.get("Price") or 0) * (raw.get("Count") or 0)) or 0)
+        elif ev == "MissionCompleted":
+            delta += int(raw.get("Reward") or 0)
+        elif ev in ("RedeemVoucher", "SellExplorationData", "MultiSellExplorationData"):
+            delta += int(raw.get("Amount") or raw.get("TotalEarnings") or raw.get("TotalSale") or 0)
+        elif ev == "SellOrganicData":
+            delta += int(raw.get("TotalSale") or raw.get("TotalValue") or 0)
+        elif ev in ("PayFines", "PayBounties", "BuyExplorationData", "BuyTradeData", "RefuelAll", "RefuelPartial", "Repair", "RepairAll", "BuyAmmo"):
+            delta -= int(raw.get("Amount") or raw.get("Cost") or 0)
+        elif ev in ("ModuleBuy", "ShipyardBuy"):
+            delta -= int(raw.get("BuyPrice") or raw.get("ShipPrice") or raw.get("Price") or 0)
+        elif ev in ("ModuleSell", "ShipyardSell"):
+            delta += int(raw.get("SellPrice") or raw.get("ShipPrice") or raw.get("Price") or 0)
+        if not delta:
+            return False
+        return self._set_commander_balance(int(self.cmdr_balance or 0) + delta, timestamp=timestamp, log=log)
+
     def process_event(self, data):
         ev = data.get("type") or data.get("event")
         raw = data.get("raw", data)
         d = data.get("data", data)
         startup_replay = bool(data.get("startup_catchup"))
         self._record_journal_event()
+        if ev != "LoadGame":
+            self._apply_credit_event(ev, raw if isinstance(raw, dict) else d, log=not startup_replay)
         if ev != "LoadGame" and self.edsm.is_credit_event(ev):
             self._queue_edsm_upload(raw, flush=True, startup_replay=startup_replay)
         current_journal = getattr(self.watcher, "last_journal", None)
@@ -1691,14 +1774,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             credits = d.get("credits")
             loan = d.get("loan")
             if credits is not None:
-                self.cmdr_balance = credits
-                self.cmdr_loan = loan
-                trade_marketdb.log_balance(
-                    trade_marketdb.parse_update_time(raw.get("timestamp")) or trade_marketdb.now_epoch(),
-                    credits,
-                )
+                self._set_commander_balance(credits, loan=loan, timestamp=raw.get("timestamp"))
                 self._queue_edsm_upload(raw, allow_startup=True, flush=True)
-                self._refresh_commander_profile_window()
             self.cmdr_ship.update({
                 "ship": d.get("ship") or self.cmdr_ship.get("ship"),
                 "ship_localised": d.get("ship_localised") or self.cmdr_ship.get("ship_localised"),
@@ -2430,10 +2507,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def update_cargo(self, inventory):
         self.last_cargo_event_ts = time.time()
         self.current_cargo_inventory = list(inventory or [])
+        self.current_cargo_tons = sum(
+            int(item.get("Count", item.get("count", 0)) or 0)
+            for item in self.current_cargo_inventory
+            if isinstance(item, dict)
+        )
         if self.mining_window and self.mining_window.is_open():
-            self.mining_window.update_cargo(inventory, self.cargo_capacity)
+            self.mining_window.update_cargo(self.current_cargo_inventory, self.cargo_capacity)
         if self.cargo_hud:
-            self.root.after(0, lambda: self.cargo_hud.update(inventory, self.cargo_capacity))
+            inv = list(self.current_cargo_inventory)
+            cap = self.cargo_capacity
+            self.root.after(0, lambda: self.cargo_hud.update(inv, cap))
         if self.colony_overlay:
             self.root.after(0, self.colony_overlay.update)
         self._refresh_commander_profile_window()
@@ -2477,46 +2561,89 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.trade_session["events"].append(event)
         ts = trade_marketdb.parse_update_time(data.get("timestamp")) or int(time.time())
         symbol = trade_marketdb.clean_commodity_symbol(data.get("Type") or commodity)
-        trade_marketdb.log_trade(
-            ts,
-            "buy" if ev == "MarketBuy" else "sell",
-            symbol,
-            commodity,
-            count,
-            price,
-            total,
-            event["profit"] if ev == "MarketSell" else None,
-        )
+        log_event = "buy" if ev == "MarketBuy" else "sell"
+        profit = event["profit"] if ev == "MarketSell" else None
+
+        def worker():
+            try:
+                trade_marketdb.log_trade(ts, log_event, symbol, commodity, count, price, total, profit)
+            except Exception:
+                pass
+
+        threading.Thread(target=worker, name="trade-log", daemon=True).start()
         if self.trade_window and self.trade_window.is_open():
             self.root.after(0, self.trade_window.refresh_session)
             self.root.after(0, self.trade_window.refresh_analytics)
 
-    def update_market(self, data):
-        if not isinstance(data, dict):
-            return
-        context = {
+    def _market_import_context(self, data):
+        return {
             "system_name": data.get("StarSystem") or self.current_sys,
             "system_address": self.current_system_address,
             "star_pos": self.current_coords,
             "station_name": data.get("StationName") or self.current_station_name,
             "station_type": self.current_station_type,
         }
+
+    def _start_market_import_worker(self):
+        if self._market_import_thread and self._market_import_thread.is_alive():
+            return
+        self._market_import_stop.clear()
+        self._market_import_thread = threading.Thread(
+            target=self._market_import_worker,
+            name="trade-market-import",
+            daemon=True,
+        )
+        self._market_import_thread.start()
+
+    def _stop_market_import_worker(self):
         try:
-            conn = trade_marketdb.connect()
+            self._market_import_stop.set()
+            self._market_import_queue.put_nowait(None)
+        except Exception:
+            pass
+
+    def _enqueue_market_import(self, snapshot):
+        try:
+            self._market_import_queue.put_nowait(snapshot)
+            return
+        except queue.Full:
+            pass
+        try:
+            self._market_import_queue.get_nowait()
+        except Exception:
+            pass
+        try:
+            self._market_import_queue.put_nowait(snapshot)
+        except Exception:
+            pass
+
+    def _market_import_worker(self):
+        while not self._market_import_stop.is_set():
             try:
-                result = trade_marketdb.import_market_json(conn, data, context)
-            finally:
-                conn.close()
-        except Exception as exc:
-            self.root.after(0, lambda e=exc: self.log(f"Trade market import failed: {e}"))
-            return
+                item = self._market_import_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            if item is None:
+                continue
+            data, context = item
+            try:
+                conn = trade_marketdb.connect()
+                try:
+                    result = trade_marketdb.import_market_json(conn, data, context)
+                finally:
+                    conn.close()
+            except Exception as exc:
+                self.root.after(0, lambda e=exc: self.log(f"Trade market import failed: {e}"))
+                continue
 
-        trade_eddn_uploader.set_enabled(bool(self.config.get("trade_eddn_upload_enabled", True)))
-        trade_eddn_uploader.maybe_publish(data, self.cmdr_name)
+            trade_eddn_uploader.set_enabled(bool(self.config.get("trade_eddn_upload_enabled", True)))
+            trade_eddn_uploader.maybe_publish(data, self.cmdr_name)
 
-        if not result.get("updated"):
-            return
+            if not result.get("updated"):
+                continue
+            self.root.after(0, lambda d=data, c=context, r=result: self._apply_market_import_result(d, c, r))
 
+    def _apply_market_import_result(self, data, context, result):
         self.current_trade_market = {
             "market_id": result.get("market_id"),
             "station": result.get("station") or context.get("station_name"),
@@ -2527,15 +2654,30 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         station = result.get("station") or context.get("station_name") or "market"
         system = result.get("system") or context.get("system_name") or self.current_sys
         count = result.get("commodities", 0)
-        self.root.after(0, lambda: self.add_event_feed_entry(
+        self.add_event_feed_entry(
             "TRADE",
             f"Market updated: {station} ({count} commodities)",
             severity="INFO",
             copy_text=system,
-        ))
+        )
         if self.trade_window and self.trade_window.is_open():
-            self.root.after(0, self.trade_window.refresh_status)
+            self.trade_window.refresh_status()
+            self.trade_window.refresh_local()
+
+    def update_market(self, data):
+        if not isinstance(data, dict):
+            return
+        context = self._market_import_context(data)
+        self.current_trade_market = {
+            "market_id": data.get("MarketID"),
+            "station": data.get("StationName") or context.get("station_name"),
+            "system": data.get("StarSystem") or context.get("system_name"),
+            "timestamp": data.get("timestamp"),
+            "items": list(data.get("Items") or []),
+        }
+        if self.trade_window and self.trade_window.is_open():
             self.root.after(0, self.trade_window.refresh_local)
+        self._enqueue_market_import((dict(data), dict(context)))
 
     def update_nav_route(self, data):
         self.last_nav_event_ts = time.time()

@@ -37,10 +37,12 @@ class TradeWindow:
         self._seed_polling = False
         self._live_poll_after = None
         self._last_db_poll = 0
+        self._status_refresh_running = False
         self.market_sort = ("sell", -1)
         self.market_analysis = {}
         self.market_rows = {}
         self.commodity_rows = {}
+        self.commodity_name_values = []
         self.radar_rows = {}
         self.cargo_sell_rows = {}
         self.watchlist_rows = {}
@@ -496,6 +498,8 @@ class TradeWindow:
         self.commodity_entry = ttk.Combobox(combo_box, width=24, values=[], state="normal")
         self.commodity_entry.pack(anchor="w")
         self.commodity_entry.bind("<Return>", lambda _e: self.search_commodity())
+        self.commodity_entry.bind("<KeyRelease>", self._on_commodity_typing)
+        self.commodity_entry.bind("<FocusIn>", lambda _e: self._refresh_commodity_suggestions())
         mode_box = tk.Frame(controls, bg=self.UI_PANEL)
         mode_box.pack(side=tk.LEFT, padx=(0, 8), pady=(0, 6))
         tk.Label(mode_box, text="I WANT TO", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Segoe UI", 7, "bold")).pack(anchor="w")
@@ -836,6 +840,9 @@ class TradeWindow:
 
     def refresh_status(self):
         self._refresh_summary()
+        if self._status_refresh_running:
+            return
+        self._status_refresh_running = True
         def worker():
             try:
                 conn = marketdb.connect()
@@ -849,6 +856,8 @@ class TradeWindow:
                 self.root.after(0, lambda: self._render_status(info, eddn_stats, seed_info, upload_stats))
             except Exception as exc:
                 self.root.after(0, lambda: self._set_db_text(f"Database status failed: {exc}", self.UI_FAIL))
+            finally:
+                self._status_refresh_running = False
         threading.Thread(target=worker, daemon=True).start()
 
     def _schedule_live_poll(self, delay_ms=1500):
@@ -1035,12 +1044,39 @@ class TradeWindow:
 
     def _render_commodity_names(self, names):
         self.commodity_names = list(names or [])
+        self.commodity_name_values = sorted(
+            {c.get("name") for c in self.commodity_names if c.get("name")},
+            key=str.lower,
+        )
         try:
-            self.commodity_entry.configure(values=[c.get("name") for c in self.commodity_names if c.get("name")])
+            self.commodity_entry.configure(values=self.commodity_name_values)
         except Exception:
             pass
         if self.commodity_names and not self.commodity_entry.get().strip():
             self.commodity_status.config(text=f"{len(self.commodity_names):,} commodities loaded. Type a name, e.g. Gold.", fg=self.UI_MUTED)
+
+    def _on_commodity_typing(self, event=None):
+        if event and event.keysym in {"Return", "Escape", "Tab", "Up", "Down", "Left", "Right", "Home", "End"}:
+            return
+        self._refresh_commodity_suggestions()
+
+    def _refresh_commodity_suggestions(self):
+        if not hasattr(self, "commodity_entry"):
+            return
+        names = self.commodity_name_values or []
+        query = self.commodity_entry.get().strip().lower()
+        if not query:
+            matches = names[:80]
+        else:
+            starts = [name for name in names if name.lower().startswith(query)]
+            contains = [name for name in names if query in name.lower() and name not in starts]
+            matches = (starts + contains)[:80]
+        try:
+            self.commodity_entry.configure(values=matches)
+        except Exception:
+            return
+        if query and hasattr(self, "commodity_status"):
+            self.commodity_status.config(text=f"{len(matches)} commodity suggestion(s). Press Down to pick one, or Enter to search.", fg=self.UI_MUTED)
 
     def refresh_local(self):
         if not hasattr(self, "market_tree"):
