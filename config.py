@@ -116,6 +116,7 @@ PROFILE_VALUE_SETTINGS = (
     "exploration_window_geometry",
     "trade_window_geometry",
     "trade_route_form",
+    "system_plotter_form",
     "trade_watchlist",
 )
 
@@ -356,6 +357,7 @@ def load_config():
         'exploration_window_geometry': '1040x680',
         'trade_window_geometry': '1080x700',
         'trade_route_form': {},
+        'system_plotter_form': {},
         'trade_watchlist': [],
         'route_auto_note_from_edsm': True,
         'auto_copy_waypoint': False,
