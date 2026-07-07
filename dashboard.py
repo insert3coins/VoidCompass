@@ -552,6 +552,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             status_cb=self.update_status,
             market_cb=self.update_market
         )
+        self.watcher.prime_market_file()
         self._start_market_import_worker()
         self.watcher.start()
         self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
@@ -560,7 +561,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         self.watcher.force_check_nav()
         self.watcher.force_check_status()
-        self.watcher.force_check_market()
 
         journal_path = self.config.get("journal_path") or getattr(self.watcher, "journal_path", None)
         threading.Thread(
@@ -2601,6 +2601,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "gamebuild": self.game_build or "",
             "horizons": self.game_horizons,
             "odyssey": self.game_odyssey,
+            "docked": bool(self.current_docked),
         }
 
     def _start_market_import_worker(self):
@@ -2655,8 +2656,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.root.after(0, lambda e=exc: self.log(f"Trade market import failed: {e}"))
                 continue
 
-            trade_eddn_uploader.set_enabled(bool(self.config.get("trade_eddn_upload_enabled", True)))
-            trade_eddn_uploader.maybe_publish(data, self.cmdr_name, context)
+            if context.get("docked"):
+                trade_eddn_uploader.set_enabled(bool(self.config.get("trade_eddn_upload_enabled", True)))
+                trade_eddn_uploader.maybe_publish(data, self.cmdr_name, context)
 
             if not result.get("updated"):
                 continue
