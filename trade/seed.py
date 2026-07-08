@@ -20,10 +20,24 @@ DUMP_PATH = marketdb.DATA_DIR / "galaxy_populated.json.gz"
 PROGRESS_PATH = marketdb.DATA_DIR / "market_seed_progress.json"
 BUILD_DB_PATH = marketdb.DATA_DIR / "market_build.db"
 HEADERS = {"User-Agent": "EliteTrader/1.0 (personal ED companion app)"}
-COMMIT_EVERY = 250  # smaller transactions keep the app responsive during rebuilds
-DOWNLOAD_THROTTLE_S = 0.015
-IMPORT_YIELD_EVERY = 25
-IMPORT_THROTTLE_S = 0.003
+COMMIT_EVERY = 2000  # build DB runs in its own process; larger batches are much faster
+DOWNLOAD_THROTTLE_S = 0.008
+IMPORT_YIELD_EVERY = 250
+IMPORT_THROTTLE_S = 0.001
+
+MARKET_INDEXES = (
+    "CREATE INDEX IF NOT EXISTS idx_systems_name ON systems(name COLLATE NOCASE)",
+    "CREATE INDEX IF NOT EXISTS idx_systems_x ON systems(x)",
+    "CREATE INDEX IF NOT EXISTS idx_systems_xyz ON systems(x, y, z)",
+    "CREATE INDEX IF NOT EXISTS idx_stations_system ON stations(system_id64)",
+    "CREATE INDEX IF NOT EXISTS idx_stations_system_updated ON stations(system_id64, updated_at)",
+    "CREATE INDEX IF NOT EXISTS idx_stations_updated ON stations(updated_at)",
+    "CREATE INDEX IF NOT EXISTS idx_stations_pad_updated ON stations(large_pad, updated_at)",
+    "CREATE INDEX IF NOT EXISTS idx_commodities_symbol_market ON commodities(symbol, market_id)",
+    "CREATE INDEX IF NOT EXISTS idx_commodities_symbol_supply ON commodities(symbol, supply, buy_price)",
+    "CREATE INDEX IF NOT EXISTS idx_commodities_symbol_demand ON commodities(symbol, demand, sell_price)",
+    "CREATE INDEX IF NOT EXISTS idx_commodity_names_name ON commodity_names(name COLLATE NOCASE)",
+)
 
 
 class Seeder:
@@ -36,7 +50,7 @@ class Seeder:
         self.reset()
 
     def reset(self):
-        self.phase = "idle"  # idle | downloading | importing | done | error
+        self.phase = "idle"  # idle | downloading | importing | indexing | done | error
         self.error = None
         self.downloaded = 0
         self.total_bytes = 0
@@ -204,6 +218,7 @@ class Seeder:
         self._remove_build_db()
         conn = marketdb.connect(BUILD_DB_PATH)
         try:
+            self._prepare_build_connection(conn)
             cur = conn.cursor()
             names_seen = set()
             in_batch = 0
@@ -233,9 +248,43 @@ class Seeder:
             marketdb.set_meta(cur, "seeded_at", marketdb.utc_now_iso())
             marketdb.set_meta(cur, "seed_source", DUMP_URL)
             conn.commit()
+            self._create_build_indexes(conn)
         finally:
             conn.close()
         self._swap_build_db()
+
+    def _prepare_build_connection(self, conn):
+        try:
+            conn.execute("PRAGMA journal_mode = OFF")
+            conn.execute("PRAGMA synchronous = OFF")
+            conn.execute("PRAGMA temp_store = MEMORY")
+            conn.execute("PRAGMA locking_mode = EXCLUSIVE")
+            conn.execute("PRAGMA cache_size = -131072")
+        except Exception:
+            pass
+        cur = conn.cursor()
+        for name in (
+            "idx_systems_name",
+            "idx_systems_x",
+            "idx_systems_xyz",
+            "idx_stations_system",
+            "idx_stations_system_updated",
+            "idx_stations_updated",
+            "idx_stations_pad_updated",
+            "idx_commodities_symbol_market",
+            "idx_commodities_symbol_supply",
+            "idx_commodities_symbol_demand",
+            "idx_commodity_names_name",
+        ):
+            cur.execute(f"DROP INDEX IF EXISTS {name}")
+        conn.commit()
+
+    def _create_build_indexes(self, conn):
+        self._set(phase="indexing")
+        cur = conn.cursor()
+        for sql in MARKET_INDEXES:
+            cur.execute(sql)
+        conn.commit()
 
     def _remove_build_db(self):
         for suffix in ("", "-wal", "-shm"):
@@ -330,7 +379,11 @@ class Seeder:
                 (market_id, id64, st.get("name"), st.get("type"),
                  st.get("distanceToArrival"), 1 if (pads.get("large") or 0) > 0 else 0, updated)
             )
-            marketdb.replace_market(cur, market_id, rows)
+            cur.executemany(
+                "INSERT OR REPLACE INTO commodities(market_id, symbol, buy_price, sell_price, supply, demand)"
+                " VALUES(?, ?, ?, ?, ?, ?)",
+                [(market_id, s, b, sl, sp, d) for (s, b, sl, sp, d) in rows],
+            )
 
         if not station_rows:
             return
