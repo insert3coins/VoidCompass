@@ -83,7 +83,7 @@ class DashboardScanMixin:
         )
         if vehicle_state_changed and not self.batch_mode:
             if self.current_in_fighter:
-                self.hud_flight_state = "FIGHTER"
+                self.hud_flight_state = self.current_vehicle_name or "FIGHTER"
             elif self.current_in_srv:
                 self.hud_flight_state = "SRV"
             elif self.current_landed:

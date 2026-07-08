@@ -280,6 +280,9 @@ class TacticalHUD:
             self.draw_text(x, 130, text=label, fill=color, font=("Courier", 7, "bold"), anchor="center")
         self.draw_text((left_x + center_x) // 2, 98, text=nav_context.get("prev_distance", "--"), fill="#7d8891", font=("Courier", 8, "bold"), anchor="center")
         self.draw_text((center_x + right_x) // 2, 98, text=nav_context.get("next_distance", "--"), fill=COLOR_ORANGE, font=("Courier", 8, "bold"), anchor="center")
+        remaining = nav_context.get("route_remaining")
+        if isinstance(remaining, int):
+            self.draw_text(center_x, 98, text=f"{remaining} JUMPS", fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="center")
 
         pct = (scanned / total) if total > 0 else 0
         pct = max(0.0, min(1.0, pct))
@@ -310,12 +313,15 @@ class TacticalHUD:
         t_week = system_traffic.get('week', 0)
         t_total = system_traffic.get('total', 0)
         flight_state = str(nav_context.get("flight_state") or "").upper()
+        vehicle_name = str(nav_context.get("vehicle_name") or "").upper()
         if flight_state in ("HYPERSPACE", "SUPERCRUISE", "JUMPING"):
             state_text = flight_state
         elif nav_context.get("docked") and nav_context.get("station"):
             state_text = "DOCKED"
         elif nav_context.get("in_fss"):
             state_text = "FSS"
+        elif flight_state == "NOMAD" or vehicle_name == "NOMAD":
+            state_text = "NOMAD"
         elif flight_state == "FIGHTER" or nav_context.get("in_fighter"):
             state_text = "FIGHTER"
         elif flight_state == "SRV" or nav_context.get("in_srv"):
@@ -328,7 +334,7 @@ class TacticalHUD:
         bottom_top = 192
         self.canvas.create_line(16, bottom_top - 5, self.width - 16, bottom_top - 5, fill="#26313a", width=1)
         self._draw_status_pill(18, bottom_top, "Traffic", f"{t_day}/{t_week}/{t_total}", "#7d8891", width=92)
-        state_color = COLOR_ACCENT if state_text in ("DOCKED", "LANDED", "FSS", "FIGHTER", "SRV") else (COLOR_ORANGE if state_text in ("HYPERSPACE", "SUPERCRUISE", "JUMPING") else "#7d8891")
+        state_color = COLOR_ACCENT if state_text in ("DOCKED", "LANDED", "FSS", "FIGHTER", "SRV", "NOMAD") else (COLOR_ORANGE if state_text in ("HYPERSPACE", "SUPERCRUISE", "JUMPING") else "#7d8891")
         self._draw_status_pill(116, bottom_top, "State", state_text, state_color, width=118)
 
         x = 244
@@ -342,27 +348,41 @@ class TacticalHUD:
 
         route_pct = 0.0
         route_count_txt = "NO ROUTE"
-        if route_counts and route_counts[1] > 0:
+        show_route_pct = False
+        if isinstance(remaining, int):
+            route_count_txt = ""
+        elif route_counts and route_counts[1] > 0:
             route_pct = max(0.0, min(1.0, route_counts[0] / route_counts[1]))
+            show_route_pct = True
             route_count_txt = f"ROUTE {route_counts[0]}/{route_counts[1]}"
         elif game_r_pos and game_r_pos[1] > 0:
             route_pct = max(0.0, min(1.0, game_r_pos[0] / game_r_pos[1]))
+            show_route_pct = True
             route_count_txt = f"GAME {game_r_pos[0]}/{game_r_pos[1]}"
-        route_text = f"{route_count_txt} {int(route_pct * 100)}%"
-        if r_pos and len(r_pos) > 2 and r_pos[2]:
-            route_text = f"{route_text} {r_pos[2].replace(' ', '')}"
+        route_text = f"{route_count_txt} {int(route_pct * 100)}%" if show_route_pct else route_count_txt
 
-        self.draw_text(self.width - 18, bottom_top + 16, text=route_text, fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="e")
+        if route_text:
+            self.draw_text(self.width - 18, bottom_top + 16, text=route_text, fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="e")
 
         footer_y = h - 30
         self.canvas.create_rectangle(16, footer_y, self.width - 16, h - 8, outline="#111820", fill="#03070b", width=1)
+        footer_progress = ""
         if route_waypoint:
             footer_label = "WAYPOINT"
             footer_value = route_waypoint.upper()
             footer_color = COLOR_ORANGE
+            if route_counts and route_counts[1] > 0:
+                route_parts = [f"ROUTE {route_counts[0]}/{route_counts[1]}"]
+                route_parts.append(f"{int(max(0.0, min(1.0, route_counts[0] / route_counts[1])) * 100)}%")
+                if r_pos and len(r_pos) > 2 and r_pos[2]:
+                    route_parts.append(r_pos[2].replace(" ", ""))
+                footer_progress = " ".join(route_parts)
         else:
             footer_label = "ROUTE MODE"
             footer_value = route_mode
             footer_color = COLOR_ORANGE if route_mode != "NO ROUTE" else "#7d8891"
         self.draw_text(28, footer_y + 15, text=footer_label, fill="#7d8891", font=("Courier", 8, "bold"), anchor="w")
-        self.draw_fitted_text(116, footer_y + 15, footer_value, footer_color, size=8, max_width=self.width - 148)
+        progress_width = 158 if footer_progress else 0
+        self.draw_fitted_text(116, footer_y + 15, footer_value, footer_color, size=8, max_width=self.width - 148 - progress_width)
+        if footer_progress:
+            self.draw_text(self.width - 28, footer_y + 15, text=footer_progress, fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="e")
