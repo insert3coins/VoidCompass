@@ -330,6 +330,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_station_market_id = None
         self.current_trade_market = None
         self.current_docked = False
+        self.hud_flight_state = "FLIGHT"
         self.current_fuel_main = None
         self.current_fuel_reservoir = None
         self.current_legal_state = None
@@ -1564,6 +1565,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "credits": self._format_hud_credits(self._latest_hud_balance()),
             "station": self.current_station_name or "",
             "docked": bool(self.current_docked),
+            "landed": bool(getattr(self, "on_planet", False)),
+            "in_fss": bool(getattr(self, "in_fss", False)),
+            "flight_state": getattr(self, "hud_flight_state", "FLIGHT"),
             "badges": badges[:6],
         }
 
@@ -1993,6 +1997,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if ev == "StartJump":
                 self.in_fss = False
                 self.fss_summary_active = False
+                jump_type = d.get("jump_type") or (raw.get("JumpType") if isinstance(raw, dict) else "")
+                jump_type = str(jump_type or "").lower()
+                self.hud_flight_state = "SUPERCRUISE" if jump_type == "supercruise" else "HYPERSPACE"
+                self.update_hud()
                 return
 
             # CarrierJump counts as a jump for the player when they are docked on board.
@@ -2002,6 +2010,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if is_jump:
                 self.in_fss = False
                 self.fss_summary_active = False
+                self.hud_flight_state = "FLIGHT"
 
             prev_coords = self.current_coords if isinstance(self.current_coords, list) else None
 
@@ -2151,23 +2160,36 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             station = d.get("StationName") or d.get("station_name", "Unknown")
             stype = d.get("StationType") or d.get("station_type", "")
             self.current_docked = True
+            self.hud_flight_state = "DOCKED"
             self.current_station_name = station
             self.current_station_type = stype or None
             self.current_station_market_id = d.get("MarketID") or d.get("market_id")
             label = f"{station} ({stype})" if stype else station
             self._queue_edsm_upload(raw, startup_replay=startup_replay)
+            self.update_hud()
             if not self.batch_mode and not startup_replay:
                 self.add_event_feed_entry("DOCK", f"Docked: {label}", severity="INFO", copy_text=station)
 
         elif ev == "Undocked":
             station = d.get("StationName") or d.get("station_name", "")
             self.current_docked = False
+            self.hud_flight_state = "FLIGHT"
             self.current_station_name = None
             self.current_station_type = None
             self.current_station_market_id = None
             self._queue_edsm_upload(raw, startup_replay=startup_replay)
+            self.update_hud()
             if not self.batch_mode and not startup_replay:
                 self.add_event_feed_entry("DOCK", f"Undocked: {station}", severity="INFO", copy_text=station)
+
+        elif ev == "SupercruiseEntry":
+            self.hud_flight_state = "SUPERCRUISE"
+            self.current_docked = False
+            self.update_hud()
+
+        elif ev == "SupercruiseExit":
+            self.hud_flight_state = "FLIGHT"
+            self.update_hud()
 
         elif ev == "FSSDiscoveryScan":
             if not self._matches_current_system_address(d):
