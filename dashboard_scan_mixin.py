@@ -24,6 +24,7 @@ class DashboardScanMixin:
         was_landed = bool(getattr(self, "current_landed", False))
         was_in_fighter = bool(getattr(self, "current_in_fighter", False))
         was_in_srv = bool(getattr(self, "current_in_srv", False))
+        was_on_foot = bool(getattr(self, "current_on_foot", False))
         fuel = data.get("Fuel") or {}
         self.current_fuel_main = fuel.get("FuelMain")
         self.current_fuel_reservoir = fuel.get("FuelReservoir")
@@ -50,6 +51,9 @@ class DashboardScanMixin:
             self.current_landed = bool(flags & 0x00000002)
             self.current_in_fighter = bool(flags & 0x02000000)
             self.current_in_srv = bool(flags & 0x04000000)
+        flags2 = data.get("Flags2")
+        if isinstance(flags2, int):
+            self.current_on_foot = bool(flags2 & 0x0001)
 
         gui_focus = data.get("GuiFocus", -1)
         in_fss = gui_focus == 9 or gui_focus == "FSS"
@@ -80,9 +84,12 @@ class DashboardScanMixin:
             was_landed != bool(getattr(self, "current_landed", False))
             or was_in_fighter != bool(getattr(self, "current_in_fighter", False))
             or was_in_srv != bool(getattr(self, "current_in_srv", False))
+            or was_on_foot != bool(getattr(self, "current_on_foot", False))
         )
         if vehicle_state_changed and not self.batch_mode:
-            if self.current_in_fighter:
+            if getattr(self, "current_on_foot", False):
+                self.hud_flight_state = "ONFOOT"
+            elif self.current_in_fighter:
                 self.hud_flight_state = self.current_vehicle_name or "FIGHTER"
             elif self.current_in_srv:
                 self.hud_flight_state = "SRV"
