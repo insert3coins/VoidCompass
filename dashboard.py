@@ -334,6 +334,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_landed = False
         self.current_in_fighter = False
         self.current_in_srv = False
+        self.current_on_foot = False
         self.current_vehicle_name = ""
         self.current_music_track = ""
         self.current_music_mode = ""
@@ -1580,6 +1581,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "landed": bool(getattr(self, "current_landed", False)),
             "in_fighter": bool(getattr(self, "current_in_fighter", False)),
             "in_srv": bool(getattr(self, "current_in_srv", False)),
+            "on_foot": bool(getattr(self, "current_on_foot", False)),
             "vehicle_name": getattr(self, "current_vehicle_name", ""),
             "in_fss": bool(getattr(self, "in_fss", False)),
             "flight_state": getattr(self, "hud_flight_state", "FLIGHT"),
@@ -1595,6 +1597,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         label = raw.replace("_", " ").strip() or "No Track"
         if not key or key == "notrack":
             return "", "No Track", False, "INFO"
+        if key == "onfoot":
+            return "ONFOOT", "On Foot", True, "INFO"
         if key in ("galaxymap", "systemmap", "galacticpowers"):
             return "MAP", label, True, "INFO"
         if key in ("supercruise", "destinationfromsupercruise", "destinationfromhyperspace"):
@@ -1632,6 +1636,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_music_mode = mode
         self.current_music_label = label
         self._last_music_event_ts = time.time()
+        if mode == "ONFOOT":
+            self.current_on_foot = True
         if mode != previous_mode:
             self.update_hud()
 
@@ -2227,6 +2233,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             station = d.get("StationName") or d.get("station_name", "Unknown")
             stype = d.get("StationType") or d.get("station_type", "")
             self.current_docked = True
+            self.current_on_foot = False
             self.hud_flight_state = "DOCKED"
             self.current_station_name = station
             self.current_station_type = stype or None
@@ -2240,6 +2247,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "Undocked":
             station = d.get("StationName") or d.get("station_name", "")
             self.current_docked = False
+            self.current_on_foot = False
             self.hud_flight_state = "FLIGHT"
             self.current_station_name = None
             self.current_station_type = None
@@ -2252,6 +2260,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "SupercruiseEntry":
             self.hud_flight_state = "SUPERCRUISE"
             self.current_docked = False
+            self.current_on_foot = False
             self.update_hud()
 
         elif ev == "SupercruiseExit":
@@ -2261,8 +2270,27 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "Music":
             self._handle_music_event(raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
 
+        elif ev == "Disembark":
+            self.current_on_foot = True
+            self.current_in_srv = False
+            self.current_in_fighter = False
+            self.current_vehicle_name = ""
+            self.hud_flight_state = "ONFOOT"
+            self.update_hud()
+
+        elif ev == "Embark":
+            self.current_on_foot = False
+            if self.current_docked:
+                self.hud_flight_state = "DOCKED"
+            elif self.current_landed:
+                self.hud_flight_state = "LANDED"
+            else:
+                self.hud_flight_state = "FLIGHT"
+            self.update_hud()
+
         elif ev == "LaunchFighter":
             self.current_in_fighter = True
+            self.current_on_foot = False
             loadout = d.get("Loadout") or (raw.get("Loadout") if isinstance(raw, dict) else "")
             loadout = str(loadout or "").lower()
             self.current_vehicle_name = "NOMAD" if loadout == "galactic" else "FIGHTER"
@@ -2280,6 +2308,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if str(vehicle_name).lower() == "nomad":
                 self.current_vehicle_name = ""
                 self.current_in_fighter = False
+            self.current_on_foot = False
             self.hud_flight_state = "LANDED" if self.current_landed else "FLIGHT"
             self.update_hud()
 

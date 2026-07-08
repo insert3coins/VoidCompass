@@ -317,6 +317,8 @@ class TacticalHUD:
         music_mode = str(nav_context.get("music_mode") or "").upper()
         if flight_state in ("HYPERSPACE", "SUPERCRUISE", "JUMPING"):
             state_text = flight_state
+        elif flight_state == "ONFOOT" or nav_context.get("on_foot") or music_mode == "ONFOOT":
+            state_text = "ONFOOT"
         elif nav_context.get("docked") and nav_context.get("station"):
             state_text = "DOCKED"
         elif nav_context.get("in_fss"):
@@ -337,7 +339,7 @@ class TacticalHUD:
         bottom_top = 192
         self.canvas.create_line(16, bottom_top - 5, self.width - 16, bottom_top - 5, fill="#26313a", width=1)
         self._draw_status_pill(18, bottom_top, "Traffic", f"{t_day}/{t_week}/{t_total}", "#7d8891", width=92)
-        state_color = COLOR_ACCENT if state_text in ("DOCKED", "LANDED", "FSS", "FIGHTER", "SRV", "NOMAD", "MAP", "EXPLORATION", "STATION") else (COLOR_ORANGE if state_text in ("HYPERSPACE", "SUPERCRUISE", "JUMPING", "COMBAT") else "#7d8891")
+        state_color = COLOR_ACCENT if state_text in ("DOCKED", "LANDED", "FSS", "FIGHTER", "SRV", "NOMAD", "ONFOOT", "MAP", "EXPLORATION", "STATION") else (COLOR_ORANGE if state_text in ("HYPERSPACE", "SUPERCRUISE", "JUMPING", "COMBAT") else "#7d8891")
         self._draw_status_pill(116, bottom_top, "State", state_text, state_color, width=118)
 
         x = 244
