@@ -21,6 +21,9 @@ class DashboardScanMixin:
         if getattr(self, "mining_window", None) and self.mining_window.is_open():
             self.mining_window.update_status(data)
         was_on_planet = bool(self.on_planet)
+        was_landed = bool(getattr(self, "current_landed", False))
+        was_in_fighter = bool(getattr(self, "current_in_fighter", False))
+        was_in_srv = bool(getattr(self, "current_in_srv", False))
         fuel = data.get("Fuel") or {}
         self.current_fuel_main = fuel.get("FuelMain")
         self.current_fuel_reservoir = fuel.get("FuelReservoir")
@@ -42,6 +45,11 @@ class DashboardScanMixin:
             and self.current_planet_radius is not None
             and self.current_planet_radius > 0
         )
+        flags = data.get("Flags")
+        if isinstance(flags, int):
+            self.current_landed = bool(flags & 0x00000002)
+            self.current_in_fighter = bool(flags & 0x02000000)
+            self.current_in_srv = bool(flags & 0x04000000)
 
         gui_focus = data.get("GuiFocus", -1)
         in_fss = gui_focus == 9 or gui_focus == "FSS"
@@ -68,8 +76,20 @@ class DashboardScanMixin:
         needs_live_ground_update = bool(self.on_planet and self.target_latlon_active and moved)
         if on_planet_changed or needs_live_ground_update:
             self._ground_ui_needs_update = True
-        if on_planet_changed and not self.batch_mode:
-            self.hud_flight_state = "LANDED" if self.on_planet else "FLIGHT"
+        vehicle_state_changed = (
+            was_landed != bool(getattr(self, "current_landed", False))
+            or was_in_fighter != bool(getattr(self, "current_in_fighter", False))
+            or was_in_srv != bool(getattr(self, "current_in_srv", False))
+        )
+        if vehicle_state_changed and not self.batch_mode:
+            if self.current_in_fighter:
+                self.hud_flight_state = "FIGHTER"
+            elif self.current_in_srv:
+                self.hud_flight_state = "SRV"
+            elif self.current_landed:
+                self.hud_flight_state = "LANDED"
+            else:
+                self.hud_flight_state = "FLIGHT"
             self.update_hud()
         self._perf_spike("_apply_status_update", t0, threshold_ms=20.0)
 
