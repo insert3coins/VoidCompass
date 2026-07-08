@@ -878,6 +878,7 @@ class TradeWindow:
             upload_txt = f"{upload_stats.get('uploads', 0):,} uploaded"
             if upload_stats.get("last_error"):
                 upload_txt += f" | last error: {upload_stats.get('last_error')}"
+        rate_txt = "--"
         if phase == "starting":
             self.seed_progress.configure(mode="indeterminate")
             self.seed_progress.start(12)
@@ -894,16 +895,19 @@ class TradeWindow:
             self.seed_progress.configure(mode="determinate", value=pct)
             seed_txt = f"Downloading Spansh dump: {done} / {total} MB ({pct}%)"
             self.seed_btn.config(text=f"Downloading {pct}%")
+            rate_txt = f"{(seed_info.get('rate') or 0) / 1_000_000:.1f} MB/s"
         elif phase == "importing":
             self.seed_progress.configure(mode="indeterminate")
             self.seed_progress.start(12)
             seed_txt = f"Importing: {seed_info.get('systems_done'):,} systems, {seed_info.get('stations_done'):,} stations"
             self.seed_btn.config(text=f"Importing {seed_info.get('stations_done'):,} markets")
+            rate_txt = f"{seed_info.get('rate', 0):.1f} systems/s"
         elif phase == "indexing":
             self.seed_progress.configure(mode="indeterminate")
             self.seed_progress.start(12)
             seed_txt = "Creating search indexes"
             self.seed_btn.config(text="Indexing...")
+            rate_txt = "index build"
         elif phase == "error":
             try:
                 self.seed_progress.stop()
@@ -919,14 +923,20 @@ class TradeWindow:
             seed_txt = f"Seeded: {info.get('seeded_at') or 'not yet'}"
         if phase in ("starting", "downloading", "importing", "indexing"):
             mode_txt = "low impact" if seed_info.get("polite", True) else "fast"
-            self._show_banner(f"{seed_txt} ({mode_txt} mode)")
+            timing_txt = (
+                f"elapsed {self._duration(seed_info.get('elapsed_s'))}, "
+                f"ETA {self._duration(seed_info.get('eta_s'))}, {rate_txt}"
+            )
+            self._show_banner(f"{seed_txt} ({mode_txt} mode, {timing_txt})")
         elif not ready:
             self._show_banner("Market database is empty. Chain routes can use Spansh, but loops and commodity search need the local database.")
         else:
             self._hide_banner()
         self._set_db_text(
             f"{info.get('stations', 0):,} stations | {info.get('commodity_rows', 0):,} price rows | {info.get('db_size_mb', 0)} MB\n"
-            f"{seed_txt} | mode: {'low impact' if seed_info.get('polite', True) else 'fast'}\n"
+            f"{seed_txt} | mode: {'low impact' if seed_info.get('polite', True) else 'fast'}"
+            + (f" | elapsed {self._duration(seed_info.get('elapsed_s'))} | ETA {self._duration(seed_info.get('eta_s'))} | {rate_txt}" if phase in ("starting", "downloading", "importing", "indexing") else "")
+            + "\n"
             f"EDDN: {eddn_txt} | updated this session: {eddn_stats.get('markets_updated', 0):,} | skipped unknown: {eddn_stats.get('skipped_unknown', 0):,}\n"
             f"EDDN upload: {upload_txt}\n"
             f"Journal markets: {info.get('journal_market_updated_at') or 'not yet'}\n"
@@ -1861,6 +1871,19 @@ class TradeWindow:
             return f"{int(value):,} cr"
         except Exception:
             return "? cr"
+
+    def _duration(self, seconds):
+        if seconds is None:
+            return "--"
+        try:
+            seconds = max(0, int(seconds))
+        except Exception:
+            return "--"
+        h, rem = divmod(seconds, 3600)
+        m, s = divmod(rem, 60)
+        if h:
+            return f"{h:d}:{m:02d}:{s:02d}"
+        return f"{m:d}:{s:02d}"
 
     def _age(self, epoch):
         try:
