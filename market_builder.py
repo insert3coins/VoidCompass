@@ -123,7 +123,7 @@ class MarketBuilderApp:
             pass
         progress = seed.SEEDER.progress()
         phase = progress.get("phase")
-        if phase in ("starting", "downloading", "importing"):
+        if phase in ("starting", "downloading", "importing", "indexing"):
             self.build_btn.configure(state=tk.DISABLED)
         else:
             self.build_btn.configure(state=tk.NORMAL, text="Rebuild Database" if info.get("ready") else "Build Database")
@@ -138,6 +138,10 @@ class MarketBuilderApp:
             self.progress.configure(mode="indeterminate")
             self.progress.start(12)
             phase_text = f"Importing: {progress.get('systems_done', 0):,} systems, {progress.get('stations_done', 0):,} station markets"
+        elif phase == "indexing":
+            self.progress.configure(mode="indeterminate")
+            self.progress.start(12)
+            phase_text = "Creating trade search indexes..."
         elif phase == "starting":
             self.progress.configure(mode="indeterminate")
             self.progress.start(12)

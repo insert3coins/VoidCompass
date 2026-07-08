@@ -865,7 +865,7 @@ class TradeWindow:
         self.db_badge.config(text="DB READY" if ready else "DB EMPTY", bg=self.UI_OK if ready else self.UI_WARN)
         self.subtitle.config(text=f"{self._current_system() or 'No current system'} | trade data: Spansh dump + EDDN + journal markets")
         phase = seed_info.get("phase")
-        if phase in ("starting", "downloading", "importing"):
+        if phase in ("starting", "downloading", "importing", "indexing"):
             self.seed_btn.config(state=tk.DISABLED)
             self._show_seed_progress()
         else:
@@ -899,6 +899,11 @@ class TradeWindow:
             self.seed_progress.start(12)
             seed_txt = f"Importing: {seed_info.get('systems_done'):,} systems, {seed_info.get('stations_done'):,} stations"
             self.seed_btn.config(text=f"Importing {seed_info.get('stations_done'):,} markets")
+        elif phase == "indexing":
+            self.seed_progress.configure(mode="indeterminate")
+            self.seed_progress.start(12)
+            seed_txt = "Creating search indexes"
+            self.seed_btn.config(text="Indexing...")
         elif phase == "error":
             try:
                 self.seed_progress.stop()
@@ -912,7 +917,7 @@ class TradeWindow:
             except Exception:
                 pass
             seed_txt = f"Seeded: {info.get('seeded_at') or 'not yet'}"
-        if phase in ("starting", "downloading", "importing"):
+        if phase in ("starting", "downloading", "importing", "indexing"):
             mode_txt = "low impact" if seed_info.get("polite", True) else "fast"
             self._show_banner(f"{seed_txt} ({mode_txt} mode)")
         elif not ready:
@@ -954,7 +959,7 @@ class TradeWindow:
         self._seed_poll_after = None
         self.refresh_status()
         phase = seed.SEEDER.progress().get("phase")
-        if phase in ("starting", "downloading", "importing", "idle"):
+        if phase in ("starting", "downloading", "importing", "indexing", "idle"):
             self._schedule_seed_poll(1000)
         else:
             self._seed_polling = False
