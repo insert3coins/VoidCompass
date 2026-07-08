@@ -346,6 +346,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "profit": 0,
             "events": deque(maxlen=100),
         }
+        self._hud_balance_cache = {"ts": 0.0, "balance": None}
         self._market_import_queue = queue.Queue(maxsize=1)
         self._market_import_stop = threading.Event()
         self._market_import_thread = None
@@ -1421,26 +1422,150 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.route_list and self.current_sys in self.route_list:
             game_r_pos = (self.route_list.index(self.current_sys)+1, len(self.route_list))
 
-        hud_health = self._build_hud_health()
-        hud_status = hud_health.get("status", "OK")
-        if not self.is_running or not self.watcher or not self.watcher.is_running:
-            hud_status = "FAIL"
-        else:
-            has_alerts = (
-                self.system_undiscovered
-                or self.system_bio_signals > 0
-                or bool(self.valuable_bodies)
-                or self.fss_summary_active
-            )
-            if has_alerts:
-                hud_status = "ALERT"
         self.root.after(0, lambda: self.hud.update(
             self.current_sys, self.dest_name, dist, 
             self.scanned, self.total, custom_r_pos, self.organic_count, self.system_traffic, game_r_pos,
-            route_waypoint, route_counts, hud_status, hud_health
+            route_waypoint, route_counts, "OK", None, self._build_navigation_hud_context()
         ))
         self.update_scan_hud()
         self._perf_spike("_perform_hud_update", t0, threshold_ms=30.0)
+
+    @staticmethod
+    def _format_hud_credits(value):
+        try:
+            value = int(value or 0)
+        except Exception:
+            return "---"
+        sign = "-" if value < 0 else ""
+        value = abs(value)
+        for suffix, divisor in (("B", 1_000_000_000), ("M", 1_000_000), ("K", 1_000)):
+            if value >= divisor:
+                return f"{sign}{value / divisor:.1f}{suffix} CR"
+        return f"{sign}{value:,} CR"
+
+    @staticmethod
+    def _format_hud_distance(coords_a, coords_b):
+        if not coords_a or not coords_b:
+            return "--"
+        try:
+            dist = math.sqrt(sum((float(a) - float(b)) ** 2 for a, b in zip(coords_a, coords_b)))
+            return f"{dist:,.1f} LY"
+        except Exception:
+            return "--"
+
+    def _latest_hud_balance(self):
+        if self.cmdr_balance is not None:
+            self._hud_balance_cache = {"ts": time.time(), "balance": self.cmdr_balance}
+            return self.cmdr_balance
+        now = time.time()
+        if now - float(self._hud_balance_cache.get("ts") or 0) < 5.0:
+            return self._hud_balance_cache.get("balance")
+        balance = None
+        try:
+            conn = trade_marketdb.connect()
+            try:
+                row = conn.execute("SELECT balance FROM balance_log ORDER BY ts DESC LIMIT 1").fetchone()
+            finally:
+                conn.close()
+            if row:
+                balance = row[0]
+        except Exception:
+            balance = None
+        self._hud_balance_cache = {"ts": now, "balance": balance}
+        return balance
+
+    def _build_navigation_hud_context(self):
+        current = self.current_sys if self.current_sys and self.current_sys != "---" else "---"
+        previous = getattr(self, "previous_sys", None) or "---"
+        previous_coords = getattr(self, "previous_coords", None)
+        next_name = None
+        next_coords = None
+        route = list(getattr(self, "route_list", None) or [])
+        entries = getattr(self, "nav_route_entries", None) or []
+        route_idx = -1
+
+        if current != "---":
+            try:
+                route_idx = route.index(current)
+            except ValueError:
+                route_idx = -1
+
+        if route:
+            if route_idx > 0:
+                previous = route[route_idx - 1]
+                if route_idx - 1 < len(entries):
+                    previous_coords = entries[route_idx - 1].get("StarPos") or previous_coords
+            if route_idx >= 0:
+                if route_idx + 1 < len(route):
+                    next_name = route[route_idx + 1]
+                    if route_idx + 1 < len(entries):
+                        next_coords = entries[route_idx + 1].get("StarPos")
+            else:
+                next_name = route[0]
+                if entries:
+                    next_coords = entries[0].get("StarPos")
+
+        if not next_name and getattr(self, "target_waypoint", None):
+            next_name = self.target_waypoint.get("name")
+            next_coords = self.target_waypoint.get("coords")
+        if not next_name:
+            next_name = self.dest_name
+        if next_name and not next_coords:
+            for entry in entries:
+                if entry.get("StarSystem") == next_name:
+                    next_coords = entry.get("StarPos")
+                    break
+
+        waypoint_manager = getattr(self, "waypoint_manager", None)
+        if waypoint_manager and waypoint_manager.waypoints:
+            route_mode = "WAYPOINTS"
+        elif route:
+            route_mode = "GAME NAV ROUTE"
+        elif self.dest_name:
+            route_mode = "VOID ROUTE"
+        else:
+            route_mode = "NO ROUTE"
+
+        cargo_tons = int(getattr(self, "current_cargo_tons", 0) or 0)
+        if not cargo_tons and getattr(self, "current_cargo_inventory", None):
+            try:
+                cargo_tons = sum(int(item.get("Count", item.get("count", 0)) or 0) for item in self.current_cargo_inventory)
+            except Exception:
+                cargo_tons = 0
+        cargo_cap = int(getattr(self, "cargo_capacity", 0) or 0)
+        trade_profit = int((getattr(self, "trade_session", {}) or {}).get("profit", 0) or 0)
+        badges = []
+        if self.system_undiscovered:
+            badges.append(("UNDISC", "alert"))
+        if self.system_bio_signals > 0:
+            badges.append((f"BIO {self.system_bio_signals}", "alert"))
+        elif self.organic_count:
+            badges.append((f"BIO {self.organic_count}", "ok"))
+        if self.valuable_bodies:
+            badges.append((f"VALUE {len(self.valuable_bodies)}", "alert"))
+        if self.fss_summary_active:
+            badges.append(("FSS", "alert"))
+        if self.system_traffic.get("day", 0):
+            badges.append((f"TRAF {self.system_traffic.get('day', 0)}", "ok"))
+        if self.current_docked:
+            badges.append(("DOCKED", "ok"))
+        if not badges:
+            badges.append(("CLEAR", "muted"))
+
+        return {
+            "route_mode": route_mode,
+            "previous": previous,
+            "current": current,
+            "next": next_name or "---",
+            "prev_distance": self._format_hud_distance(previous_coords, self.current_coords),
+            "next_distance": self._format_hud_distance(self.current_coords, next_coords),
+            "cargo": f"{cargo_tons}/{cargo_cap}T" if cargo_cap else f"{cargo_tons}T",
+            "trade_profit": self._format_hud_credits(trade_profit),
+            "credits": self._format_hud_credits(self._latest_hud_balance()),
+            "station": self.current_station_name or "",
+            "docked": bool(self.current_docked),
+            "badges": badges[:6],
+        }
 
     def _record_journal_event(self):
         now = time.time()
@@ -1620,6 +1745,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return False
         changed = self.cmdr_balance != balance or (loan is not None and self.cmdr_loan != loan)
         self.cmdr_balance = balance
+        self._hud_balance_cache = {"ts": time.time(), "balance": balance}
         if loan is not None:
             self.cmdr_loan = loan
         if log:
@@ -1628,6 +1754,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._refresh_commander_profile_window()
             if self.trade_window and self.trade_window.is_open():
                 self.root.after(0, self.trade_window._refresh_summary)
+            self.update_hud()
         return changed
 
     def _apply_credit_event(self, ev, raw, log=True):
