@@ -314,6 +314,7 @@ class TacticalHUD:
         t_total = system_traffic.get('total', 0)
         flight_state = str(nav_context.get("flight_state") or "").upper()
         vehicle_name = str(nav_context.get("vehicle_name") or "").upper()
+        music_mode = str(nav_context.get("music_mode") or "").upper()
         if flight_state in ("HYPERSPACE", "SUPERCRUISE", "JUMPING"):
             state_text = flight_state
         elif nav_context.get("docked") and nav_context.get("station"):
@@ -328,13 +329,15 @@ class TacticalHUD:
             state_text = "SRV"
         elif flight_state == "LANDED" or nav_context.get("landed"):
             state_text = "LANDED"
+        elif music_mode in ("MAP", "COMBAT", "EXPLORATION", "STATION"):
+            state_text = music_mode
         else:
             state_text = "FLIGHT"
 
         bottom_top = 192
         self.canvas.create_line(16, bottom_top - 5, self.width - 16, bottom_top - 5, fill="#26313a", width=1)
         self._draw_status_pill(18, bottom_top, "Traffic", f"{t_day}/{t_week}/{t_total}", "#7d8891", width=92)
-        state_color = COLOR_ACCENT if state_text in ("DOCKED", "LANDED", "FSS", "FIGHTER", "SRV", "NOMAD") else (COLOR_ORANGE if state_text in ("HYPERSPACE", "SUPERCRUISE", "JUMPING") else "#7d8891")
+        state_color = COLOR_ACCENT if state_text in ("DOCKED", "LANDED", "FSS", "FIGHTER", "SRV", "NOMAD", "MAP", "EXPLORATION", "STATION") else (COLOR_ORANGE if state_text in ("HYPERSPACE", "SUPERCRUISE", "JUMPING", "COMBAT") else "#7d8891")
         self._draw_status_pill(116, bottom_top, "State", state_text, state_color, width=118)
 
         x = 244
