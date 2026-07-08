@@ -22,6 +22,7 @@ _FEED_TAG_COLORS = {
     "CARRIER": "#d8b4fe",  # purple — carrier events
     "EDSM":    "#67e8f9",  # teal   — EDSM upload status
     "EDDN":    "#38bdf8",  # blue   — EDDN market upload status
+    "MUSIC":   "#22d3ee",  # cyan   — music mood / soft state
     "VALUABLE":"#FF7100",  # orange — high-value worlds
     "ALERT":   "#FF7100",  # orange — system alerts
     "DOCK":    "#fb923c",  # amber  — docking / undocking
@@ -435,6 +436,7 @@ class DashboardUIMixin:
             ("JUMP",    "JUMP"),
             ("ROUTE",   "ROUTE"),
             ("SYSTEM",  "SYSTEM"),
+            ("MUSIC",   "MUSIC"),
             ("DSS",     "DSS"),
             ("DOCK",    "DOCK"),
             ("INFO",    "INFO"),
@@ -661,7 +663,8 @@ class DashboardUIMixin:
         self.event_filter_buttons = {}
         event_filters = (
             ("ALL", "ALL"), ("VALUABLE", "VALUE"), ("SCAN", "SCAN"), ("ALERT", "ALERT"), ("JUMP", "JUMP"),
-            ("ROUTE", "ROUTE"), ("SYSTEM", "SYSTEM"), ("DSS", "DSS"), ("DOCK", "DOCK"), ("INFO", "INFO"),
+            ("ROUTE", "ROUTE"), ("SYSTEM", "SYSTEM"), ("MUSIC", "MUSIC"), ("DSS", "DSS"), ("DOCK", "DOCK"),
+            ("INFO", "INFO"),
         )
         for idx, (tag, label) in enumerate(event_filters):
             btn = tk.Button(
@@ -904,6 +907,10 @@ class DashboardUIMixin:
         elif event_name == "Commander":
             title = payload.get("Name") or payload.get("name") or "Commander"
             detail = payload.get("FID") or payload.get("fid") or ""
+        elif event_name == "Music":
+            track = payload.get("MusicTrack") or payload.get("music_track") or "No Track"
+            title = str(track).replace("_", " ")
+            detail = "Music mood"
         elif event_name in ("MaterialCollected", "MaterialDiscarded", "MiningRefined", "CollectCargo", "EjectCargo"):
             title = payload.get("Name_Localised") or payload.get("Name") or payload.get("name") or event_name
             count = payload.get("Count") or payload.get("count")

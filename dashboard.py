@@ -335,6 +335,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_in_fighter = False
         self.current_in_srv = False
         self.current_vehicle_name = ""
+        self.current_music_track = ""
+        self.current_music_mode = ""
+        self.current_music_label = ""
+        self._last_music_event_ts = 0.0
         self.current_fuel_main = None
         self.current_fuel_reservoir = None
         self.current_legal_state = None
@@ -1579,8 +1583,60 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "vehicle_name": getattr(self, "current_vehicle_name", ""),
             "in_fss": bool(getattr(self, "in_fss", False)),
             "flight_state": getattr(self, "hud_flight_state", "FLIGHT"),
+            "music_mode": getattr(self, "current_music_mode", ""),
+            "music_track": getattr(self, "current_music_track", ""),
             "badges": badges[:6],
         }
+
+    @staticmethod
+    def _classify_music_track(track):
+        raw = str(track or "").strip()
+        key = raw.replace(" ", "").replace("-", "_").lower()
+        label = raw.replace("_", " ").strip() or "No Track"
+        if not key or key == "notrack":
+            return "", "No Track", False, "INFO"
+        if key in ("galaxymap", "systemmap", "galacticpowers"):
+            return "MAP", label, True, "INFO"
+        if key in ("supercruise", "destinationfromsupercruise", "destinationfromhyperspace"):
+            return "SUPERCRUISE", label, False, "INFO"
+        if key in ("starport", "dockingcomputer"):
+            return "STATION", label, True, "INFO"
+        if key in ("exploration", "unknown_exploration"):
+            return "EXPLORATION", label, True, "INFO"
+        if "combat" in key or key in ("capitalship", "unknown_encounter"):
+            severity = "WARN" if key in ("capitalship", "unknown_encounter") else "INFO"
+            return "COMBAT", label, True, severity
+        return "MUSIC", label, False, "INFO"
+
+    def _is_redundant_music_event(self, event_name, payload):
+        if event_name != "Music":
+            return False
+        payload = payload if isinstance(payload, dict) else {}
+        track = str(payload.get("MusicTrack") or payload.get("music_track") or "").strip()
+        if not track:
+            return True
+        return track == getattr(self, "current_music_track", "")
+
+    def _handle_music_event(self, payload, startup_replay=False):
+        payload = payload if isinstance(payload, dict) else {}
+        track = str(payload.get("MusicTrack") or payload.get("music_track") or "").strip()
+        mode, label, visible, severity = self._classify_music_track(track)
+        if not track:
+            return
+        previous_track = getattr(self, "current_music_track", "")
+        previous_mode = getattr(self, "current_music_mode", "")
+        if track == previous_track:
+            return
+
+        self.current_music_track = track
+        self.current_music_mode = mode
+        self.current_music_label = label
+        self._last_music_event_ts = time.time()
+        if mode != previous_mode:
+            self.update_hud()
+
+        if visible and not self.batch_mode and not startup_replay:
+            self.add_event_feed_entry("MUSIC", f"{mode.title()}: {label}", severity=severity, copy_text=track)
 
     def _record_journal_event(self):
         now = time.time()
@@ -1817,7 +1873,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if current_journal and current_journal != self.last_logged_journal_file:
             self.last_logged_journal_file = current_journal
             self.log(f"Journal file: {os.path.basename(current_journal)}")
-        if ev and not startup_replay:
+        if ev and not startup_replay and not self._is_redundant_music_event(ev, raw if isinstance(raw, dict) else d):
             self.add_journal_history_entry(ev, raw if isinstance(raw, dict) else d)
         if self.mining_window and self.mining_window.is_open():
             self.mining_window.process_event(data)
@@ -2201,6 +2257,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "SupercruiseExit":
             self.hud_flight_state = "FLIGHT"
             self.update_hud()
+
+        elif ev == "Music":
+            self._handle_music_event(raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
 
         elif ev == "LaunchFighter":
             self.current_in_fighter = True
