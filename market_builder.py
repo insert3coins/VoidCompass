@@ -1,4 +1,6 @@
 import sys
+import threading
+import time
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -19,6 +21,20 @@ class MarketBuilderApp:
     UI_FAIL = "#ff5c5c"
     UI_OK = "#21d189"
 
+    @staticmethod
+    def _duration(seconds):
+        if seconds is None:
+            return "--"
+        try:
+            seconds = max(0, int(seconds))
+        except Exception:
+            return "--"
+        h, rem = divmod(seconds, 3600)
+        m, s = divmod(rem, 60)
+        if h:
+            return f"{h:d}:{m:02d}:{s:02d}"
+        return f"{m:d}:{s:02d}"
+
     def __init__(self, root):
         self.root = root
         self.root.title("Void Compass Market Builder")
@@ -29,6 +45,9 @@ class MarketBuilderApp:
         self.include_carriers = tk.BooleanVar(value=False)
         self.low_impact = tk.BooleanVar(value=True)
         self.keep_dump = tk.BooleanVar(value=False)
+        self._db_info = {}
+        self._db_info_loading = False
+        self._db_info_last = 0.0
         self._build()
         self.refresh()
         self.poll()
@@ -112,17 +131,12 @@ class MarketBuilderApp:
         self.refresh()
 
     def refresh(self):
-        info = {}
-        try:
-            conn = marketdb.connect()
-            try:
-                info = marketdb.status(conn)
-            finally:
-                conn.close()
-        except Exception:
-            pass
         progress = seed.SEEDER.progress()
         phase = progress.get("phase")
+        running = phase in ("starting", "downloading", "importing", "indexing")
+        if not running:
+            self._refresh_db_info_async()
+        info = dict(self._db_info)
         if phase in ("starting", "downloading", "importing", "indexing"):
             self.build_btn.configure(state=tk.DISABLED)
         else:
@@ -134,18 +148,22 @@ class MarketBuilderApp:
             pct = int(done * 100 / total) if total else 0
             self.progress.configure(mode="determinate", value=pct)
             phase_text = f"Downloading Spansh dump: {done} / {total} MB ({pct}%)"
+            rate_text = f"{(progress.get('rate', 0) or 0) / 1_000_000:.1f} MB/s"
         elif phase == "importing":
             self.progress.configure(mode="indeterminate")
             self.progress.start(12)
             phase_text = f"Importing: {progress.get('systems_done', 0):,} systems, {progress.get('stations_done', 0):,} station markets"
+            rate_text = f"{progress.get('rate', 0):.1f} systems/s"
         elif phase == "indexing":
             self.progress.configure(mode="indeterminate")
             self.progress.start(12)
             phase_text = "Creating trade search indexes..."
+            rate_text = "index build"
         elif phase == "starting":
             self.progress.configure(mode="indeterminate")
             self.progress.start(12)
             phase_text = "Starting worker process..."
+            rate_text = "--"
         else:
             try:
                 self.progress.stop()
@@ -158,17 +176,57 @@ class MarketBuilderApp:
                 phase_text = "Build complete."
             else:
                 phase_text = "Idle."
+            rate_text = "--"
+
+        timing_text = ""
+        if running:
+            timing_text = (
+                f"Elapsed: {self._duration(progress.get('elapsed_s'))} | "
+                f"ETA: {self._duration(progress.get('eta_s'))} | "
+                f"Rate: {rate_text}\n"
+            )
 
         self.status.configure(
             text=(
                 f"{phase_text}\n\n"
                 f"Mode: {'low impact' if progress.get('polite', True) else 'fast'}\n"
-                f"Current DB: {info.get('stations', 0):,} stations | {info.get('commodity_rows', 0):,} price rows | {info.get('db_size_mb', 0)} MB\n"
+                f"{timing_text}"
+                f"Current DB: {info.get('stations', 0):,} stations | {info.get('commodity_rows', 0):,} price rows | {info.get('db_size_mb', 0)} MB"
+                f"{' (refreshing)' if self._db_info_loading else ''}\n"
                 f"Seeded: {info.get('seeded_at') or 'not yet'}\n"
                 f"Path: {info.get('db_path') or marketdb.DB_PATH}"
             ),
             fg=self.UI_FAIL if phase == "error" else COLOR_TEXT,
         )
+
+    def _refresh_db_info_async(self, min_interval=5.0):
+        now = time.monotonic()
+        if self._db_info_loading or (now - self._db_info_last) < min_interval:
+            return
+        self._db_info_loading = True
+
+        def worker():
+            info = {}
+            try:
+                conn = marketdb.connect()
+                try:
+                    info = marketdb.status(conn)
+                finally:
+                    conn.close()
+            except Exception:
+                pass
+
+            def apply():
+                self._db_info = info
+                self._db_info_last = time.monotonic()
+                self._db_info_loading = False
+
+            try:
+                self.root.after(0, apply)
+            except Exception:
+                self._db_info_loading = False
+
+        threading.Thread(target=worker, name="market-builder-status", daemon=True).start()
 
     def poll(self):
         self.refresh()

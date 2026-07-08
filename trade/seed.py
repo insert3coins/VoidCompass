@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from datetime import datetime
 
 import requests
 
@@ -19,11 +20,13 @@ DUMP_URL = "https://downloads.spansh.co.uk/galaxy_populated.json.gz"
 DUMP_PATH = marketdb.DATA_DIR / "galaxy_populated.json.gz"
 PROGRESS_PATH = marketdb.DATA_DIR / "market_seed_progress.json"
 BUILD_DB_PATH = marketdb.DATA_DIR / "market_build.db"
+LOCK_PATH = marketdb.DATA_DIR / "market_seed.lock"
 HEADERS = {"User-Agent": "EliteTrader/1.0 (personal ED companion app)"}
 COMMIT_EVERY = 2000  # build DB runs in its own process; larger batches are much faster
 DOWNLOAD_THROTTLE_S = 0.008
 IMPORT_YIELD_EVERY = 250
 IMPORT_THROTTLE_S = 0.001
+ESTIMATED_SYSTEMS = 113858
 
 MARKET_INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_systems_name ON systems(name COLLATE NOCASE)",
@@ -47,6 +50,7 @@ class Seeder:
         self._process = None
         self._progress_file_enabled = False
         self._last_progress_write = 0.0
+        self._lock_handle = None
         self.reset()
 
     def reset(self):
@@ -80,7 +84,37 @@ class Seeder:
                 "started_at": self.started_at,
                 "finished_at": self.finished_at,
                 "polite": self.polite,
+                **self._timing_snapshot(),
             }
+
+    def _timing_snapshot(self):
+        started = self.started_at
+        try:
+            if not started:
+                return {"elapsed_s": 0, "eta_s": None, "rate": 0}
+            started_ts = datetime.fromisoformat(started.replace("Z", "+00:00")).timestamp()
+            elapsed = max(0.0, time.time() - started_ts)
+        except Exception:
+            return {"elapsed_s": 0, "eta_s": None, "rate": 0}
+
+        phase = self.phase
+        eta = None
+        rate = 0.0
+        if phase == "downloading":
+            done = float(self.downloaded or 0)
+            total = float(self.total_bytes or 0)
+            rate = done / elapsed if elapsed > 0 else 0.0
+            if done > 0 and total > done and rate > 0:
+                eta = (total - done) / rate
+        elif phase == "importing":
+            done = float(self.systems_done or 0)
+            total = float(ESTIMATED_SYSTEMS)
+            rate = done / elapsed if elapsed > 0 else 0.0
+            if done > 0 and total > done and rate > 0:
+                eta = (total - done) / rate
+        elif phase == "indexing":
+            eta = None
+        return {"elapsed_s": round(elapsed), "eta_s": round(eta) if eta is not None else None, "rate": round(rate, 1)}
 
     def running(self):
         if self._process is not None:
@@ -155,11 +189,25 @@ class Seeder:
             if not PROGRESS_PATH.exists():
                 return None
             with open(PROGRESS_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
+                progress = json.load(f)
+            if progress.get("phase") in ("starting", "downloading", "importing", "indexing"):
+                try:
+                    age = time.time() - PROGRESS_PATH.stat().st_mtime
+                except Exception:
+                    age = 0
+                if age > 30 and not self.running():
+                    progress["phase"] = "error"
+                    progress["error"] = "Market database build was interrupted."
+            return progress
         except Exception:
             return None
 
     def _run(self, include_carriers, keep_dump, polite):
+        if not self._acquire_build_lock():
+            self._set(phase="error", error="Another market database build is already running.")
+            if self._progress_file_enabled:
+                self._write_progress(force=True)
+            return
         if polite:
             self._lower_thread_priority()
         self._set(started_at=marketdb.utc_now_iso())
@@ -172,8 +220,48 @@ class Seeder:
         except Exception as exc:  # surfaced to the UI, not raised into the void
             self._set(phase="error", error=f"{type(exc).__name__}: {exc}")
         finally:
+            self._release_build_lock()
             if self._progress_file_enabled:
                 self._write_progress(force=True)
+
+    def _acquire_build_lock(self):
+        marketdb.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            if os.name == "nt":
+                import msvcrt
+                fh = open(LOCK_PATH, "a+b")
+                try:
+                    msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+                except OSError:
+                    fh.close()
+                    return False
+                fh.seek(0)
+                fh.truncate()
+                fh.write(str(os.getpid()).encode("ascii", errors="ignore"))
+                fh.flush()
+                self._lock_handle = fh
+                return True
+            fd = os.open(LOCK_PATH, os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            os.write(fd, str(os.getpid()).encode("ascii", errors="ignore"))
+            self._lock_handle = fd
+            return True
+        except Exception:
+            return False
+
+    def _release_build_lock(self):
+        try:
+            if os.name == "nt":
+                import msvcrt
+                if self._lock_handle:
+                    self._lock_handle.seek(0)
+                    msvcrt.locking(self._lock_handle.fileno(), msvcrt.LK_UNLCK, 1)
+                    self._lock_handle.close()
+            elif self._lock_handle is not None:
+                os.close(self._lock_handle)
+            self._lock_handle = None
+            LOCK_PATH.unlink(missing_ok=True)
+        except Exception:
+            pass
 
     def _lower_thread_priority(self):
         if os.name != "nt":
