@@ -335,7 +335,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_in_fighter = False
         self.current_in_srv = False
         self.current_on_foot = False
+        self.current_vehicle_id = None
         self.current_vehicle_name = ""
+        self._vehicle_name_by_id = {}
+        self._last_surface_vehicle_name = ""
         self.current_music_track = ""
         self.current_music_mode = ""
         self.current_music_label = ""
@@ -2271,44 +2274,74 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._handle_music_event(raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
 
         elif ev == "Disembark":
+            vehicle_id = d.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
+            if vehicle_id is not None and self.current_vehicle_name:
+                self._vehicle_name_by_id[vehicle_id] = self.current_vehicle_name
+            if self.current_vehicle_name:
+                self._last_surface_vehicle_name = self.current_vehicle_name
             self.current_on_foot = True
             self.current_in_srv = False
             self.current_in_fighter = False
-            self.current_vehicle_name = ""
             self.hud_flight_state = "ONFOOT"
             self.update_hud()
 
         elif ev == "Embark":
+            vehicle_id = d.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
+            from_srv = bool(d.get("SRV") or (raw.get("SRV") if isinstance(raw, dict) else False))
             self.current_on_foot = False
-            if self.current_docked:
+            if from_srv:
+                remembered_vehicle = self._vehicle_name_by_id.get(vehicle_id) if vehicle_id is not None else ""
+                self.current_vehicle_id = vehicle_id
+                self.current_vehicle_name = remembered_vehicle or self.current_vehicle_name or self._last_surface_vehicle_name or "SRV"
+                self.current_in_srv = True
+                self.current_in_fighter = False
+                self.hud_flight_state = "NOMAD" if self.current_vehicle_name == "NOMAD" else "SRV"
+            elif self.current_docked:
+                self.current_vehicle_id = None
+                self.current_vehicle_name = ""
                 self.hud_flight_state = "DOCKED"
             elif self.current_landed:
+                self.current_vehicle_id = None
+                self.current_vehicle_name = ""
                 self.hud_flight_state = "LANDED"
             else:
+                self.current_vehicle_id = None
+                self.current_vehicle_name = ""
                 self.hud_flight_state = "FLIGHT"
             self.update_hud()
 
         elif ev == "LaunchFighter":
             self.current_in_fighter = True
             self.current_on_foot = False
+            vehicle_id = d.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
             loadout = d.get("Loadout") or (raw.get("Loadout") if isinstance(raw, dict) else "")
             loadout = str(loadout or "").lower()
             self.current_vehicle_name = "NOMAD" if loadout == "galactic" else "FIGHTER"
+            self.current_vehicle_id = vehicle_id
+            if vehicle_id is not None:
+                self._vehicle_name_by_id[vehicle_id] = self.current_vehicle_name
+            self._last_surface_vehicle_name = self.current_vehicle_name
             self.hud_flight_state = self.current_vehicle_name
             self.update_hud()
 
         elif ev in ("DockFighter", "FighterDestroyed"):
             self.current_in_fighter = False
+            self.current_vehicle_id = None
             self.current_vehicle_name = ""
             self.hud_flight_state = "LANDED" if self.current_landed else "FLIGHT"
             self.update_hud()
 
         elif ev == "DockSRV":
+            vehicle_id = d.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
             vehicle_name = d.get("SRVType_Localised") or d.get("SRVType") or (raw.get("SRVType_Localised") if isinstance(raw, dict) else "")
-            if str(vehicle_name).lower() == "nomad":
+            is_nomad = str(vehicle_name).lower() == "nomad"
+            if vehicle_id is not None:
+                self._vehicle_name_by_id[vehicle_id] = "NOMAD" if is_nomad else "SRV"
+            if is_nomad:
                 self.current_vehicle_name = ""
                 self.current_in_fighter = False
             self.current_on_foot = False
+            self.current_vehicle_id = None
             self.hud_flight_state = "LANDED" if self.current_landed else "FLIGHT"
             self.update_hud()
 
