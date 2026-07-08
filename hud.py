@@ -316,6 +316,10 @@ class TacticalHUD:
             state_text = "DOCKED"
         elif nav_context.get("in_fss"):
             state_text = "FSS"
+        elif flight_state == "FIGHTER" or nav_context.get("in_fighter"):
+            state_text = "FIGHTER"
+        elif flight_state == "SRV" or nav_context.get("in_srv"):
+            state_text = "SRV"
         elif flight_state == "LANDED" or nav_context.get("landed"):
             state_text = "LANDED"
         else:
@@ -324,11 +328,13 @@ class TacticalHUD:
         bottom_top = 192
         self.canvas.create_line(16, bottom_top - 5, self.width - 16, bottom_top - 5, fill="#26313a", width=1)
         self._draw_status_pill(18, bottom_top, "Traffic", f"{t_day}/{t_week}/{t_total}", "#7d8891", width=92)
-        state_color = COLOR_ACCENT if state_text in ("DOCKED", "LANDED", "FSS") else (COLOR_ORANGE if state_text in ("HYPERSPACE", "SUPERCRUISE", "JUMPING") else "#7d8891")
+        state_color = COLOR_ACCENT if state_text in ("DOCKED", "LANDED", "FSS", "FIGHTER", "SRV") else (COLOR_ORANGE if state_text in ("HYPERSPACE", "SUPERCRUISE", "JUMPING") else "#7d8891")
         self._draw_status_pill(116, bottom_top, "State", state_text, state_color, width=118)
 
         x = 244
         for badge, state in nav_context.get("badges", []):
+            if str(badge).startswith("BIO"):
+                continue
             width = self._draw_badge(x, bottom_top + 3, str(badge), state)
             x += width + 6
             if x > self.width - 210:
@@ -348,11 +354,15 @@ class TacticalHUD:
 
         self.draw_text(self.width - 18, bottom_top + 16, text=route_text, fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="e")
 
-        self.canvas.create_line(16, h - 28, self.width - 16, h - 28, fill="#111820", width=1)
-        route_y = h - 14
+        footer_y = h - 30
+        self.canvas.create_rectangle(16, footer_y, self.width - 16, h - 8, outline="#111820", fill="#03070b", width=1)
         if route_waypoint:
-            waypoint_text = f"WP: {route_waypoint.upper()}"
-            waypoint_width = max(40, self.width - 72)
-            self.draw_fitted_text(28, route_y, waypoint_text, COLOR_ORANGE, max_width=waypoint_width)
+            footer_label = "WAYPOINT"
+            footer_value = route_waypoint.upper()
+            footer_color = COLOR_ORANGE
         else:
-            self.draw_text(28, route_y, text=route_mode, fill=COLOR_ORANGE, font=("Courier", 8, "bold"), anchor="w")
+            footer_label = "ROUTE MODE"
+            footer_value = route_mode
+            footer_color = COLOR_ORANGE if route_mode != "NO ROUTE" else "#7d8891"
+        self.draw_text(28, footer_y + 15, text=footer_label, fill="#7d8891", font=("Courier", 8, "bold"), anchor="w")
+        self.draw_fitted_text(116, footer_y + 15, footer_value, footer_color, size=8, max_width=self.width - 148)

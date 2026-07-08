@@ -331,6 +331,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_trade_market = None
         self.current_docked = False
         self.hud_flight_state = "FLIGHT"
+        self.current_landed = False
+        self.current_in_fighter = False
+        self.current_in_srv = False
         self.current_fuel_main = None
         self.current_fuel_reservoir = None
         self.current_legal_state = None
@@ -1565,7 +1568,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "credits": self._format_hud_credits(self._latest_hud_balance()),
             "station": self.current_station_name or "",
             "docked": bool(self.current_docked),
-            "landed": bool(getattr(self, "on_planet", False)),
+            "landed": bool(getattr(self, "current_landed", False)),
+            "in_fighter": bool(getattr(self, "current_in_fighter", False)),
+            "in_srv": bool(getattr(self, "current_in_srv", False)),
             "in_fss": bool(getattr(self, "in_fss", False)),
             "flight_state": getattr(self, "hud_flight_state", "FLIGHT"),
             "badges": badges[:6],
@@ -2189,6 +2194,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         elif ev == "SupercruiseExit":
             self.hud_flight_state = "FLIGHT"
+            self.update_hud()
+
+        elif ev == "LaunchFighter":
+            self.current_in_fighter = True
+            self.hud_flight_state = "FIGHTER"
+            self.update_hud()
+
+        elif ev in ("DockFighter", "FighterDestroyed"):
+            self.current_in_fighter = False
+            self.hud_flight_state = "LANDED" if self.current_landed else "FLIGHT"
             self.update_hud()
 
         elif ev == "FSSDiscoveryScan":
