@@ -68,6 +68,9 @@ class DashboardScanMixin:
         needs_live_ground_update = bool(self.on_planet and self.target_latlon_active and moved)
         if on_planet_changed or needs_live_ground_update:
             self._ground_ui_needs_update = True
+        if on_planet_changed and not self.batch_mode:
+            self.hud_flight_state = "LANDED" if self.on_planet else "FLIGHT"
+            self.update_hud()
         self._perf_spike("_apply_status_update", t0, threshold_ms=20.0)
 
     def update_scan_hud(self):
