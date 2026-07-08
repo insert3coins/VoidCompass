@@ -1,5 +1,20 @@
 # VoidCompass // UPDATE LOG
 
+## v3.9.1 // Navigation HUD Refresh
+**Release Date:** 2026-Jul-08
+
+### Navigation HUD
+*   Expanded the Navigation HUD into a larger in-flight companion overlay.
+*   Added a compact previous/current/next route strip with jump-distance readouts.
+*   Added route mode context for game NavRoute, waypoint routes, VoidCompass routes, and no-route state.
+*   Added scan, bio, value, cargo, traffic, trade session, docked/station, and commander credit readouts.
+*   Added system opportunity badges for states like bio signals, valuable bodies, FSS summaries, traffic, docking, and undiscovered systems.
+*   Removed noisy route system-name labels and HUD health text after testing so the overlay stays readable.
+*   Commander credit changes now refresh the HUD, with a latest balance-log fallback when live balance is not populated yet.
+
+### Version
+*   Bumped app version to **3.9.1**.
+
 ## v3.8.6 // Route System Plotter
 **Release Date:** 2026-Jul-08
 
