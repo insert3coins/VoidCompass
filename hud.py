@@ -13,8 +13,8 @@ class TacticalHUD:
         self.win.overrideredirect(True)
         self.win.config(bg="#ff00ff")
         
-        self.width = 540
-        self.base_height = 224
+        self.width = 560
+        self.base_height = 220
         self.canvas = tk.Canvas(self.win, width=self.width, height=self.base_height, bg="#ff00ff", highlightthickness=0)
         self.canvas.pack()
 
@@ -196,6 +196,10 @@ class TacticalHUD:
         self.draw_text(x + 7, y + 9, text=text, fill=color, font=("Courier", 8, "bold"), anchor="w")
         return width
 
+    def _draw_panel(self, x1, y1, x2, y2, outline="#26313a", fill="#05080c"):
+        self.canvas.create_rectangle(x1, y1, x2, y2, fill=fill, outline=outline, width=1)
+        self.canvas.create_line(x1, y1, x2, y1, fill=outline, width=1)
+
     def update(
         self,
         current_sys,
@@ -223,36 +227,37 @@ class TacticalHUD:
         self.canvas.delete("all")
         
         h = target_h
-        self.canvas.create_rectangle(5, 5, self.width - 5, h - 5, fill="#010101", outline=COLOR_ACCENT, width=2)
-        self.canvas.create_line(5, 35, self.width - 5, 35, fill=COLOR_ACCENT, width=1)
-        
-        self.draw_text(20, 20, text="NAVIGATION HUD", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
-        self._draw_title_anim()
-        self.draw_text(self.width - 58, 20, text=f"CRED {nav_context.get('credits', '---')}", fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="e")
-
-        current_display = nav_context.get("current") or current_sys or "---"
-        self.draw_fitted_text(20, 50, f"SYS: {str(current_display).upper()}", COLOR_TEXT, size=10, max_width=320)
-        
         route_mode = str(nav_context.get("route_mode", "NO ROUTE"))
-        if route_mode == "GAME NAV ROUTE":
-            dest_txt = "NAV: GAME ROUTE"
-        else:
-            dest_txt = f"NAV: {dest_name.upper() if dest_name else '---'}"
-        if game_r_pos:
-            dest_txt += f" [{game_r_pos[0]}/{game_r_pos[1]}]"
-        self.draw_fitted_text(20, 68, dest_txt, COLOR_ORANGE, size=10, max_width=360)
-        self.draw_text(self.width - 20, 68, text=dist_ly, fill=COLOR_ORANGE, font=("Courier", 10, "bold"), anchor="e")
-        
-        self.draw_text(self.width - 20, 50, text=str(nav_context.get("route_mode", "NO ROUTE")), fill="#7d8891", font=("Courier", 8, "bold"), anchor="e")
-        self.canvas.create_line(20, 84, self.width - 20, 84, fill="#333", width=1)
+        current_display = nav_context.get("current") or current_sys or "---"
+        credits = nav_context.get("credits", "---")
+        cargo = nav_context.get("cargo", "0T")
+        trade_profit = nav_context.get("trade_profit", "---")
 
-        strip_y = 106
-        left_x = 52
+        self.canvas.create_rectangle(5, 5, self.width - 5, h - 5, fill="#010101", outline=COLOR_ACCENT, width=2)
+        self.canvas.create_line(5, 34, self.width - 5, 34, fill=COLOR_ACCENT, width=1)
+        self.canvas.create_line(16, 86, self.width - 16, 86, fill="#26313a", width=1)
+
+        self.draw_text(18, 20, text="NAVIGATION HUD", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
+        self._draw_title_anim()
+
+        self._draw_panel(16, 42, self.width - 178, 78, outline="#26313a", fill="#03070b")
+        self.draw_text(28, 54, text="CURRENT SYSTEM", fill="#7d8891", font=("Courier", 7, "bold"), anchor="w")
+        self.draw_fitted_text(28, 70, str(current_display).upper(), COLOR_TEXT, size=14, max_width=self.width - 230)
+
+        self._draw_panel(self.width - 166, 42, self.width - 16, 78, outline="#26313a", fill="#03070b")
+        self.draw_text(self.width - 154, 54, text="CRED", fill="#7d8891", font=("Courier", 7, "bold"), anchor="w")
+        self.draw_text(self.width - 26, 54, text=str(credits), fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="e")
+        self.draw_text(self.width - 154, 70, text=f"CARGO {cargo}", fill=COLOR_TEXT, font=("Courier", 8, "bold"), anchor="w")
+        self.draw_text(self.width - 26, 70, text=f"{trade_profit}", fill=COLOR_ORANGE, font=("Courier", 8, "bold"), anchor="e")
+
+        strip_y = 112
+        left_x = 58
         center_x = self.width // 2
-        right_x = self.width - 52
-        self.canvas.create_line(left_x, strip_y, right_x, strip_y, fill="#26313a", width=2)
-        self.canvas.create_line(left_x, strip_y, center_x, strip_y, fill=COLOR_ACCENT, width=3)
-        self.canvas.create_line(center_x, strip_y, right_x, strip_y, fill=COLOR_ORANGE, width=2, dash=(5, 5))
+        right_x = self.width - 58
+        self.canvas.create_line(left_x, strip_y, right_x, strip_y, fill="#26313a", width=3)
+        self.canvas.create_line(left_x, strip_y, center_x, strip_y, fill=COLOR_ACCENT, width=4)
+        self.canvas.create_line(center_x, strip_y, right_x, strip_y, fill=COLOR_ORANGE, width=3, dash=(6, 4))
+        self.canvas.create_line(left_x, strip_y + 14, right_x, strip_y + 14, fill="#111820", width=1)
         nodes = (
             (left_x, "PREV", "#7d8891", 5),
             (center_x, "CURRENT", COLOR_ACCENT, 7),
@@ -260,15 +265,15 @@ class TacticalHUD:
         )
         for x, label, color, radius in nodes:
             self.canvas.create_oval(x - radius, strip_y - radius, x + radius, strip_y + radius, outline=color, width=2, fill="#010101")
-            self.draw_text(x, 120, text=label, fill=color, font=("Courier", 7, "bold"), anchor="center")
-        self.draw_text((left_x + center_x) // 2, 92, text=nav_context.get("prev_distance", "--"), fill="#7d8891", font=("Courier", 8, "bold"), anchor="center")
-        self.draw_text((center_x + right_x) // 2, 92, text=nav_context.get("next_distance", "--"), fill=COLOR_ORANGE, font=("Courier", 8, "bold"), anchor="center")
-        
+            self.draw_text(x, 130, text=label, fill=color, font=("Courier", 7, "bold"), anchor="center")
+        self.draw_text((left_x + center_x) // 2, 98, text=nav_context.get("prev_distance", "--"), fill="#7d8891", font=("Courier", 8, "bold"), anchor="center")
+        self.draw_text((center_x + right_x) // 2, 98, text=nav_context.get("next_distance", "--"), fill=COLOR_ORANGE, font=("Courier", 8, "bold"), anchor="center")
+
         pct = (scanned / total) if total > 0 else 0
         pct = max(0.0, min(1.0, pct))
-        self.canvas.create_rectangle(20, 126, self.width - 20, 140, outline="#333", width=1)
+        self.canvas.create_rectangle(18, 148, self.width - 18, 158, outline="#26313a", width=1)
         if pct > 0:
-            self.canvas.create_rectangle(20, 126, 20 + ((self.width - 40) * pct), 140, fill=COLOR_ACCENT, outline=COLOR_ACCENT)
+            self.canvas.create_rectangle(18, 148, 18 + ((self.width - 36) * pct), 158, fill=COLOR_ACCENT, outline=COLOR_ACCENT)
         
         bio_text = f"BIO {organic_count}"
         if nav_context.get("badges"):
@@ -283,28 +288,27 @@ class TacticalHUD:
                     value_count = int(str(badge).split(" ", 1)[1])
                 except Exception:
                     value_count = 0
-        scan_line = f"SCAN {scanned}/{total} | {bio_text} | VALUE {value_count}"
-        self.draw_text(20, 154, text=scan_line, fill=COLOR_TEXT, font=("Courier", 9, "bold"), anchor="w")
-        self.draw_text(self.width - 20, 154, text=f"{int(pct*100)}%", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="e")
+        scan_line = f"SCAN {scanned}/{total}  {bio_text}  VALUE {value_count}"
+        self.draw_text(18, 174, text=scan_line, fill=COLOR_TEXT, font=("Courier", 9, "bold"), anchor="w")
+        self.draw_text(self.width - 18, 174, text=f"{int(pct*100)}%", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="e")
 
         t_day = system_traffic.get('day', 0)
         t_week = system_traffic.get('week', 0)
         t_total = system_traffic.get('total', 0)
-        traffic_line = f"TRAFFIC {t_day}D/{t_week}W/{t_total}T"
-        cargo_line = f"CARGO {nav_context.get('cargo', '0T')} | TRADE {nav_context.get('trade_profit', '---')}"
+        traffic_line = f"TRAF {t_day}D/{t_week}W/{t_total}T"
+        station_line = ""
         if nav_context.get("docked") and nav_context.get("station"):
-            cargo_line = f"DOCKED {str(nav_context.get('station')).upper()} | {cargo_line}"
-        self.draw_fitted_text(20, 172, cargo_line, COLOR_TEXT, size=8, max_width=self.width - 40)
-        self.draw_text(20, 190, text=traffic_line, fill="#7d8891", font=("Courier", 8, "bold"), anchor="w")
+            station_line = f"DOCKED {str(nav_context.get('station')).upper()}"
+        else:
+            station_line = "IN FLIGHT"
+        self.draw_fitted_text(18, 194, f"{traffic_line}  {station_line}", "#7d8891", size=8, max_width=210)
 
-        x = 190
+        x = 230
         for badge, state in nav_context.get("badges", []):
-            width = self._draw_badge(x, 181, str(badge), state)
+            width = self._draw_badge(x, 184, str(badge), state)
             x += width + 6
-            if x > self.width - 70:
+            if x > self.width - 55:
                 break
-
-        route_y = h - 18
 
         route_pct = 0.0
         route_count_txt = "NO ROUTE"
@@ -318,12 +322,13 @@ class TacticalHUD:
         if r_pos and len(r_pos) > 2 and r_pos[2]:
             route_text = f"{route_text} {r_pos[2].replace(' ', '')}"
 
+        route_y = h - 14
         if route_waypoint:
             waypoint_text = f"WP: {route_waypoint.upper()}"
             route_font = tkfont.Font(family="Courier", size=9, weight="bold")
             route_width = route_font.measure(route_text)
             waypoint_width = max(40, self.width - 40 - route_width - 28)
-            self.draw_fitted_text(20, route_y, waypoint_text, COLOR_ORANGE, max_width=waypoint_width)
+            self.draw_fitted_text(18, route_y, waypoint_text, COLOR_ORANGE, max_width=waypoint_width)
         else:
-            self.draw_text(20, route_y, text=str(nav_context.get("route_mode", "NO ROUTE")), fill=COLOR_ORANGE, font=("Courier", 9, "bold"), anchor="w")
-        self.draw_text(self.width - 20, route_y, text=route_text, fill=COLOR_ACCENT, font=("Courier", 9, "bold"), anchor="e")
+            self.draw_text(18, route_y, text=route_mode, fill=COLOR_ORANGE, font=("Courier", 9, "bold"), anchor="w")
+        self.draw_text(self.width - 18, route_y, text=route_text, fill=COLOR_ACCENT, font=("Courier", 9, "bold"), anchor="e")
