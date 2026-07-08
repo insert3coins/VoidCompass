@@ -92,7 +92,7 @@ class DashboardScanMixin:
             elif self.current_in_fighter:
                 self.hud_flight_state = self.current_vehicle_name or "FIGHTER"
             elif self.current_in_srv:
-                self.hud_flight_state = "SRV"
+                self.hud_flight_state = "NOMAD" if getattr(self, "current_vehicle_name", "") == "NOMAD" else "SRV"
             elif self.current_landed:
                 self.hud_flight_state = "LANDED"
             else:
