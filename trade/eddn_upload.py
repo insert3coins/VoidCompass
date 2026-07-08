@@ -14,7 +14,6 @@ UPLOAD_URL = "https://eddn.edcd.io:4430/upload/"
 SCHEMA = "https://eddn.edcd.io/schemas/commodity/3"
 SOFTWARE_NAME = "VoidCompass"
 MAX_AGE_S = 120
-SKIP_CATEGORIES = {"nonmarketable"}
 
 
 def _symbol(raw):
@@ -95,9 +94,6 @@ class EddnUploader:
         context = context or {}
         commodities = []
         for item in market.get("Items") or []:
-            category = _symbol(item.get("Category"))
-            if category in SKIP_CATEGORIES or item.get("Legality"):
-                continue
             name = _symbol(item.get("Name"))
             if not name:
                 continue
@@ -157,6 +153,7 @@ class EddnUploader:
                 headers={
                     "Content-Type": "application/json; charset=utf-8",
                     "Content-Encoding": "gzip",
+                    "User-Agent": f"{SOFTWARE_NAME}/{APP_VERSION}",
                 },
                 timeout=20,
             )
