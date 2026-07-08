@@ -334,6 +334,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_landed = False
         self.current_in_fighter = False
         self.current_in_srv = False
+        self.current_vehicle_name = ""
         self.current_fuel_main = None
         self.current_fuel_reservoir = None
         self.current_legal_state = None
@@ -1487,6 +1488,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         route = list(getattr(self, "route_list", None) or [])
         entries = getattr(self, "nav_route_entries", None) or []
         route_idx = -1
+        route_remaining = None
 
         if current != "---":
             try:
@@ -1500,11 +1502,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if route_idx - 1 < len(entries):
                     previous_coords = entries[route_idx - 1].get("StarPos") or previous_coords
             if route_idx >= 0:
+                route_remaining = max(0, len(route) - route_idx - 1)
                 if route_idx + 1 < len(route):
                     next_name = route[route_idx + 1]
                     if route_idx + 1 < len(entries):
                         next_coords = entries[route_idx + 1].get("StarPos")
             else:
+                route_remaining = len(route)
                 next_name = route[0]
                 if entries:
                     next_coords = entries[0].get("StarPos")
@@ -1563,6 +1567,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "next": next_name or "---",
             "prev_distance": self._format_hud_distance(previous_coords, self.current_coords),
             "next_distance": self._format_hud_distance(self.current_coords, next_coords),
+            "route_remaining": route_remaining,
             "cargo": f"{cargo_tons}/{cargo_cap}T" if cargo_cap else f"{cargo_tons}T",
             "trade_profit": self._format_hud_credits(trade_profit),
             "credits": self._format_hud_credits(self._latest_hud_balance()),
@@ -1571,6 +1576,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "landed": bool(getattr(self, "current_landed", False)),
             "in_fighter": bool(getattr(self, "current_in_fighter", False)),
             "in_srv": bool(getattr(self, "current_in_srv", False)),
+            "vehicle_name": getattr(self, "current_vehicle_name", ""),
             "in_fss": bool(getattr(self, "in_fss", False)),
             "flight_state": getattr(self, "hud_flight_state", "FLIGHT"),
             "badges": badges[:6],
@@ -2198,11 +2204,23 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         elif ev == "LaunchFighter":
             self.current_in_fighter = True
-            self.hud_flight_state = "FIGHTER"
+            loadout = d.get("Loadout") or (raw.get("Loadout") if isinstance(raw, dict) else "")
+            loadout = str(loadout or "").lower()
+            self.current_vehicle_name = "NOMAD" if loadout == "galactic" else "FIGHTER"
+            self.hud_flight_state = self.current_vehicle_name
             self.update_hud()
 
         elif ev in ("DockFighter", "FighterDestroyed"):
             self.current_in_fighter = False
+            self.current_vehicle_name = ""
+            self.hud_flight_state = "LANDED" if self.current_landed else "FLIGHT"
+            self.update_hud()
+
+        elif ev == "DockSRV":
+            vehicle_name = d.get("SRVType_Localised") or d.get("SRVType") or (raw.get("SRVType_Localised") if isinstance(raw, dict) else "")
+            if str(vehicle_name).lower() == "nomad":
+                self.current_vehicle_name = ""
+                self.current_in_fighter = False
             self.hud_flight_state = "LANDED" if self.current_landed else "FLIGHT"
             self.update_hud()
 
