@@ -13,8 +13,11 @@ class TacticalHUD:
         self.win.overrideredirect(True)
         self.win.config(bg="#ff00ff")
         
-        self.width = 560
-        self.base_height = 246
+        self.full_width = 560
+        self.full_height = 246
+        self.compact_width = 450
+        self.compact_height = 190
+        self.width, self.base_height = self._target_dimensions()
         self.canvas = tk.Canvas(self.win, width=self.width, height=self.base_height, bg="#ff00ff", highlightthickness=0)
         self.canvas.pack()
 
@@ -81,6 +84,23 @@ class TacticalHUD:
             return int(float(value))
         except Exception:
             return int(default)
+
+    def _is_compact(self):
+        return bool(self.config.get("hud_compact_mode", False))
+
+    def _target_dimensions(self):
+        if self._is_compact():
+            return self.compact_width, self.compact_height
+        return self.full_width, self.full_height
+
+    def _ensure_dimensions(self, width, height):
+        self.width = width
+        self.base_height = height
+        if self.canvas.winfo_width() != width or self.canvas.winfo_height() != height:
+            self.canvas.config(width=width, height=height)
+            x = self.win.winfo_x()
+            y = self.win.winfo_y()
+            self.win.geometry(f"{width}x{height}+{x}+{y}")
 
     def force_topmost(self):
         """Keeps the window on top of the game."""
@@ -212,6 +232,134 @@ class TacticalHUD:
         self.draw_text(x + width - 7, y + 17, text=value, fill=color, font=("Courier", 8, "bold"), anchor="e")
         return width
 
+    def _state_text(self, nav_context):
+        flight_state = str(nav_context.get("flight_state") or "").upper()
+        vehicle_name = str(nav_context.get("vehicle_name") or "").upper()
+        music_mode = str(nav_context.get("music_mode") or "").upper()
+        if flight_state in ("HYPERSPACE", "SUPERCRUISE", "JUMPING"):
+            return flight_state
+        if flight_state == "ONFOOT" or nav_context.get("on_foot") or music_mode == "ONFOOT":
+            return "ONFOOT"
+        if nav_context.get("docked") and nav_context.get("station"):
+            return "DOCKED"
+        if nav_context.get("in_fss"):
+            return "FSS"
+        if flight_state == "NOMAD" or vehicle_name == "NOMAD":
+            return "NOMAD"
+        if flight_state == "FIGHTER" or nav_context.get("in_fighter"):
+            return "FIGHTER"
+        if flight_state == "SRV" or nav_context.get("in_srv"):
+            return "SRV"
+        if flight_state == "LANDED" or nav_context.get("landed"):
+            return "LANDED"
+        if music_mode in ("MAP", "COMBAT", "EXPLORATION", "STATION"):
+            return music_mode
+        return "FLIGHT"
+
+    def _state_color(self, state_text):
+        if state_text in ("DOCKED", "LANDED", "FSS", "FIGHTER", "SRV", "NOMAD", "ONFOOT", "MAP", "EXPLORATION", "STATION"):
+            return COLOR_ACCENT
+        if state_text in ("HYPERSPACE", "SUPERCRUISE", "JUMPING", "COMBAT"):
+            return COLOR_ORANGE
+        return "#7d8891"
+
+    def _bio_value_counts(self, organic_count, nav_context):
+        bio_text = f"BIO {organic_count}"
+        value_count = 0
+        for badge, _state in nav_context.get("badges", []):
+            badge_text = str(badge)
+            if badge_text.startswith("BIO"):
+                bio_text = badge_text
+            elif badge_text.startswith("VALUE"):
+                try:
+                    value_count = int(badge_text.split(" ", 1)[1])
+                except Exception:
+                    value_count = 0
+        return bio_text.replace("BIO ", ""), value_count
+
+    def _waypoint_progress_text(self, route_counts, r_pos):
+        if not route_counts or route_counts[1] <= 0:
+            return ""
+        route_parts = [f"ROUTE {route_counts[0]}/{route_counts[1]}"]
+        route_parts.append(f"{int(max(0.0, min(1.0, route_counts[0] / route_counts[1])) * 100)}%")
+        if r_pos and len(r_pos) > 2 and r_pos[2]:
+            route_parts.append(r_pos[2].replace(" ", ""))
+        return " ".join(route_parts)
+
+    def _draw_compact(
+        self,
+        current_sys,
+        scanned,
+        total,
+        r_pos,
+        organic_count,
+        system_traffic,
+        game_r_pos=None,
+        route_waypoint=None,
+        route_counts=None,
+        nav_context=None,
+    ):
+        nav_context = nav_context or {}
+        h = self.compact_height
+        current_display = nav_context.get("current") or current_sys or "---"
+        state_text = self._state_text(nav_context)
+        state_color = self._state_color(state_text)
+        route_mode = str(nav_context.get("route_mode", "NO ROUTE"))
+        remaining = nav_context.get("route_remaining")
+
+        pct = (scanned / total) if total > 0 else 0
+        pct = max(0.0, min(1.0, pct))
+        bio_count, value_count = self._bio_value_counts(organic_count, nav_context)
+        traffic_text = f"{system_traffic.get('day', 0)}/{system_traffic.get('week', 0)}/{system_traffic.get('total', 0)}"
+        progress_text = self._waypoint_progress_text(route_counts, r_pos)
+
+        self.canvas.create_rectangle(5, 5, self.width - 5, h - 5, fill="#010101", outline=COLOR_ACCENT, width=2)
+        self.canvas.create_line(5, 34, self.width - 5, 34, fill=COLOR_ACCENT, width=1)
+        self.draw_text(18, 20, text="NAVIGATION HUD", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
+        self._draw_title_anim()
+
+        self.draw_text(18, 52, text="SYS:", fill=COLOR_TEXT, font=("Courier", 9, "bold"), anchor="w")
+        self.draw_fitted_text(60, 52, str(current_display).upper(), COLOR_TEXT, size=10, max_width=self.width - 76)
+
+        route_label = "NAV:"
+        route_value = (route_waypoint or route_mode or "NO ROUTE").upper()
+        self.draw_text(18, 72, text=route_label, fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="w")
+        progress_width = 0
+        if progress_text:
+            progress_font = tkfont.Font(family="Courier", size=8, weight="bold")
+            progress_width = min(196, max(148, progress_font.measure(progress_text) + 12))
+        self.draw_fitted_text(60, 72, route_value, COLOR_ORANGE, size=8, max_width=self.width - 76 - progress_width)
+        if progress_text:
+            self.draw_text(self.width - 18, 72, text=progress_text, fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="e")
+
+        strip_y = 98
+        left_x = 54
+        center_x = self.width // 2
+        right_x = self.width - 54
+        self.canvas.create_line(left_x, strip_y, right_x, strip_y, fill="#26313a", width=3)
+        self.canvas.create_line(left_x, strip_y, center_x, strip_y, fill=COLOR_ACCENT, width=4)
+        self.canvas.create_line(center_x, strip_y, right_x, strip_y, fill=COLOR_ORANGE, width=3, dash=(5, 4))
+        for x, color, radius in ((left_x, "#7d8891", 4), (center_x, COLOR_ACCENT, 6), (right_x, COLOR_ORANGE, 4)):
+            self.canvas.create_oval(x - radius, strip_y - radius, x + radius, strip_y + radius, outline=color, width=2, fill="#010101")
+        self.draw_text((left_x + center_x) // 2, 86, text=nav_context.get("prev_distance", "--"), fill="#7d8891", font=("Courier", 8, "bold"), anchor="center")
+        self.draw_text((center_x + right_x) // 2, 86, text=nav_context.get("next_distance", "--"), fill=COLOR_ORANGE, font=("Courier", 8, "bold"), anchor="center")
+        if isinstance(remaining, int):
+            self.draw_text(center_x, 86, text=f"{remaining} JUMPS", fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="center")
+        self.draw_text(left_x, 111, text="PREV", fill="#7d8891", font=("Courier", 6, "bold"), anchor="center")
+        self.draw_text(center_x, 111, text="CURRENT", fill=COLOR_ACCENT, font=("Courier", 6, "bold"), anchor="center")
+        self.draw_text(right_x, 111, text="NEXT", fill=COLOR_ORANGE, font=("Courier", 6, "bold"), anchor="center")
+
+        self.canvas.create_rectangle(18, 123, self.width - 18, 132, outline="#26313a", width=1)
+        if pct > 0:
+            self.canvas.create_rectangle(18, 123, 18 + ((self.width - 36) * pct), 132, fill=COLOR_ACCENT, outline=COLOR_ACCENT)
+
+        self.draw_text(18, 148, text=f"SCAN {scanned}/{total}", fill=COLOR_TEXT, font=("Courier", 8, "bold"), anchor="w")
+        self.draw_text(110, 148, text=f"BIO {bio_count}", fill=COLOR_ORANGE if str(bio_count) != "0" else "#7d8891", font=("Courier", 8, "bold"), anchor="w")
+        self.draw_text(178, 148, text=f"VALUE {value_count}", fill=COLOR_ORANGE if value_count else "#7d8891", font=("Courier", 8, "bold"), anchor="w")
+        self.draw_text(self.width - 18, 148, text=f"{int(pct * 100)}%", fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="e")
+        self.draw_text(18, 168, text=f"TRAFFIC {traffic_text}", fill="#7d8891", font=("Courier", 8, "bold"), anchor="w")
+        self.draw_text(self.width - 18, 168, text=f"STATE {state_text}", fill=state_color, font=("Courier", 8, "bold"), anchor="e")
+
     def update(
         self,
         current_sys,
@@ -230,13 +378,23 @@ class TacticalHUD:
         nav_context=None,
     ):
         nav_context = nav_context or {}
-        target_h = self.base_height
-        if self.canvas.winfo_height() != target_h:
-            self.canvas.config(height=target_h)
-            x = self.win.winfo_x()
-            y = self.win.winfo_y()
-            self.win.geometry(f"{self.width}x{target_h}+{x}+{y}")
+        target_w, target_h = self._target_dimensions()
+        self._ensure_dimensions(target_w, target_h)
         self.canvas.delete("all")
+        if self._is_compact():
+            self._draw_compact(
+                current_sys,
+                scanned,
+                total,
+                r_pos,
+                organic_count,
+                system_traffic,
+                game_r_pos=game_r_pos,
+                route_waypoint=route_waypoint,
+                route_counts=route_counts,
+                nav_context=nav_context,
+            )
+            return
         
         h = target_h
         route_mode = str(nav_context.get("route_mode", "NO ROUTE"))
