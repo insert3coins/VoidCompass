@@ -1858,6 +1858,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             delta += int(raw.get("Amount") or raw.get("TotalEarnings") or raw.get("TotalSale") or 0)
         elif ev == "SellOrganicData":
             delta += int(raw.get("TotalSale") or raw.get("TotalValue") or 0)
+            if not delta:
+                for sample in raw.get("BioData") or ():
+                    if not isinstance(sample, dict):
+                        continue
+                    delta += int(sample.get("Value") or 0)
+                    delta += int(sample.get("Bonus") or 0)
         elif ev in ("PayFines", "PayBounties", "BuyExplorationData", "BuyTradeData", "RefuelAll", "RefuelPartial", "Repair", "RepairAll", "BuyAmmo"):
             delta -= int(raw.get("Amount") or raw.get("Cost") or 0)
         elif ev in ("ModuleBuy", "ShipyardBuy"):

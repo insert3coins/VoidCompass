@@ -182,6 +182,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
 
     # Variables
     ov_var = tk.BooleanVar(value=config.get("overlay_enabled", True))
+    hud_compact_var = tk.BooleanVar(value=config.get("hud_compact_mode", False))
     cargo_var = tk.BooleanVar(value=config.get("cargo_overlay_enabled", False))
     carrier_overlay_var = tk.BooleanVar(value=config.get("carrier_overlay_enabled", False))
     colony_var = tk.BooleanVar(value=config.get("colony_overlay_enabled", False))
@@ -210,6 +211,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
 
     overlay_modules = section(overlay_page, "Modules")
     toggle_row(overlay_modules, "Tactical Overlay", ov_var)
+    toggle_row(overlay_modules, "Compact Tactical HUD", hud_compact_var)
     toggle_row(overlay_modules, "Cargo Manifest Overlay", cargo_var)
     toggle_row(overlay_modules, "Fleet Carrier Overlay", carrier_overlay_var)
     toggle_row(overlay_modules, "Colony Shopping Overlay", colony_var)
@@ -295,6 +297,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
         config.update({
             "journal_path": j_e.get().strip(),
             "overlay_enabled": ov_var.get(),
+            "hud_compact_mode": hud_compact_var.get(),
             "cargo_overlay_enabled": cargo_var.get(),
             "carrier_overlay_enabled": carrier_overlay_var.get(),
             "colony_overlay_enabled": colony_var.get(),

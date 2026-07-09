@@ -68,6 +68,7 @@ PROFILE_TEXT_SETTINGS = (
 PROFILE_BOOL_SETTINGS = (
     "edsm_upload_enabled",
     "overlay_enabled",
+    "hud_compact_mode",
     "cargo_overlay_enabled",
     "carrier_overlay_enabled",
     "colony_overlay_enabled",
@@ -208,6 +209,7 @@ def apply_profile_config(config, profile_key=None):
     bool_defaults = {
         "edsm_upload_enabled": False,
         "overlay_enabled": True,
+        "hud_compact_mode": False,
         "cargo_overlay_enabled": False,
         "carrier_overlay_enabled": False,
         "colony_overlay_enabled": False,
@@ -291,6 +293,7 @@ def load_config():
     defaults = {
         'journal_path': '',
         'overlay_enabled': True,
+        'hud_compact_mode': False,
         'cargo_overlay_enabled': False,
         'carrier_overlay_enabled': False,
         'colony_overlay_enabled': False,
