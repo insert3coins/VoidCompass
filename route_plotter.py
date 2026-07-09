@@ -372,18 +372,12 @@ class RoutePlotter:
             name = wp.get("system")
             if not name:
                 continue
-            note_parts = ["Spansh neutron route"]
-            if wp.get("neutron"):
-                note_parts.append("neutron")
-            jumped = wp.get("distance_jumped")
-            if jumped is not None:
-                note_parts.append(f"{float(jumped):.1f} LY")
-            records.append({"name": name, "coords": None, "note": " | ".join(note_parts)})
+            records.append({"name": name, "coords": None, "note": None})
         if not records:
             messagebox.showwarning("Import Route", "The plotted route did not contain system names.")
             return
         self.tabs.select(0)
-        self._start_import_job(records)
+        self._start_import_job(records, enrich_notes=False)
         self._emit_event("ROUTE", f"Neutron route import queued: {len(records)} systems", "INFO")
 
     def copy_neutron_route(self):
@@ -940,7 +934,7 @@ class RoutePlotter:
                 records.append({"name": name, "coords": None, "note": note})
         self._start_import_job(records)
 
-    def _start_import_job(self, records):
+    def _start_import_job(self, records, enrich_notes=True):
         if not records:
             return
         job_id = str(time.time())
@@ -953,6 +947,7 @@ class RoutePlotter:
             "remaining": len(records),
             "records": records,
             "results": [None] * len(records),
+            "enrich_notes": enrich_notes,
         }
         for idx, rec in enumerate(records):
             coords = rec.get("coords")
@@ -1005,7 +1000,8 @@ class RoutePlotter:
                 job["merged"] += 1
             else:
                 job["skipped"] += 1
-            self._fetch_edsm_note(name, lambda edsm_note, n=name: self._apply_edsm_note_to_waypoints(n, edsm_note))
+            if job["enrich_notes"]:
+                self._fetch_edsm_note(name, lambda edsm_note, n=name: self._apply_edsm_note_to_waypoints(n, edsm_note))
 
         self.refresh_list()
         self._finalize_import_job(job_id)
