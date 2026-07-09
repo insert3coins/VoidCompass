@@ -830,7 +830,7 @@ class TradeWindow:
                 seed_info = seed.SEEDER.progress()
                 self.root.after(0, lambda: self._render_status(info, eddn_stats, seed_info, upload_stats))
             except Exception as exc:
-                self.root.after(0, lambda: self._set_db_text(f"Database status failed: {exc}", self.UI_FAIL))
+                self.root.after(0, lambda text=str(exc): self._set_db_text(f"Database status failed: {text}", self.UI_FAIL))
             finally:
                 self._status_refresh_running = False
         threading.Thread(target=worker, daemon=True).start()
@@ -1221,7 +1221,7 @@ class TradeWindow:
                     rows.append((item, buy[0] if buy else None, sell[0] if sell else None))
                 self.root.after(0, lambda: self._render_watchlist(rows))
             except Exception as exc:
-                self.root.after(0, lambda: self.watch_status.config(text=str(exc), fg=self.UI_FAIL))
+                self.root.after(0, lambda text=str(exc): self.watch_status.config(text=text, fg=self.UI_FAIL))
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_watchlist(self, rows):
@@ -1286,7 +1286,7 @@ class TradeWindow:
                 rows = spansh.station_search(**params)
                 self.root.after(0, lambda: self._render_station_search(rows))
             except Exception as exc:
-                self.root.after(0, lambda: self.station_search_status.config(text=str(exc), fg=self.UI_FAIL))
+                self.root.after(0, lambda text=str(exc): self.station_search_status.config(text=text, fg=self.UI_FAIL))
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_station_search(self, rows):
@@ -1327,7 +1327,7 @@ class TradeWindow:
                 rows = spansh.riches_route(**params)
                 self.root.after(0, lambda: self._render_riches(rows))
             except Exception as exc:
-                self.root.after(0, lambda: self.riches_status.config(text=str(exc), fg=self.UI_FAIL))
+                self.root.after(0, lambda text=str(exc): self.riches_status.config(text=text, fg=self.UI_FAIL))
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_riches(self, rows):
@@ -1428,7 +1428,7 @@ class TradeWindow:
                 rows = routes.find_opportunities(**params)
                 self.root.after(0, lambda: self._render_radar(rows))
             except Exception as exc:
-                self.root.after(0, lambda: self.radar_status.config(text=str(exc), fg=self.UI_FAIL))
+                self.root.after(0, lambda text=str(exc): self.radar_status.config(text=text, fg=self.UI_FAIL))
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_radar(self, rows):
@@ -1471,7 +1471,7 @@ class TradeWindow:
                 rows = routes.sell_cargo(**params)
                 self.root.after(0, lambda: self._render_cargo_sellers(rows))
             except Exception as exc:
-                self.root.after(0, lambda: self.cargo_sell_status.config(text=str(exc), fg=self.UI_FAIL))
+                self.root.after(0, lambda text=str(exc): self.cargo_sell_status.config(text=text, fg=self.UI_FAIL))
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_cargo_sellers(self, rows):
@@ -1518,7 +1518,7 @@ class TradeWindow:
                 result = routes.analyze_station_market(**params)
                 self.root.after(0, lambda: self._render_market_analysis(result))
             except Exception as exc:
-                self.root.after(0, lambda: self.local_market_status.config(text=str(exc), fg=self.UI_FAIL))
+                self.root.after(0, lambda text=str(exc): self.local_market_status.config(text=text, fg=self.UI_FAIL))
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_market_analysis(self, result):
@@ -1562,7 +1562,7 @@ class TradeWindow:
                 data = marketdb.trade_analytics(days)
                 self.root.after(0, lambda: self._render_analytics(data, days))
             except Exception as exc:
-                self.root.after(0, lambda: self.analytics_summary.config(text=f"Analytics failed: {exc}"))
+                self.root.after(0, lambda text=str(exc): self.analytics_summary.config(text=f"Analytics failed: {text}"))
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_analytics(self, data, days):
@@ -1623,6 +1623,7 @@ class TradeWindow:
     def find_routes(self):
         self.route_status.config(text="Searching trade routes...", fg=self.UI_MUTED)
         self._clear_route_results()
+        search_started = time.monotonic()
         system_value = self.route_entries["system"].get().strip() or self._current_system()
         current = self._current_system()
         star_pos = self._current_coords() if current and system_value and system_value.lower() == current.lower() else None
@@ -1655,7 +1656,7 @@ class TradeWindow:
             try:
                 conn = marketdb.connect()
                 try:
-                    ready = marketdb.status(conn)["ready"]
+                    ready = marketdb.is_ready(conn)
                 finally:
                     conn.close()
                 if mode == "loop":
@@ -1676,7 +1677,8 @@ class TradeWindow:
                         max_leg=params["max_leg"],
                         top_n=params["top_n"],
                     )
-                    self.root.after(0, lambda: self._render_loops(result))
+                    elapsed = time.monotonic() - search_started
+                    self.root.after(0, lambda r=result, seconds=elapsed: self._render_loops(r, seconds))
                 else:
                     if ready:
                         result = routes.plan_route_local(
@@ -1693,7 +1695,11 @@ class TradeWindow:
                             include_carriers=params["include_carriers"],
                             min_supply=params["min_supply"],
                         )
-                        self.root.after(0, lambda: self._render_chain(result, "local database"))
+                        elapsed = time.monotonic() - search_started
+                        self.root.after(
+                            0,
+                            lambda r=result, seconds=elapsed: self._render_chain(r, "local database", seconds),
+                        )
                     else:
                         result = spansh.plan_route(
                             system=params["system"],
@@ -1708,10 +1714,19 @@ class TradeWindow:
                             allow_planetary=self.allow_planetary_var.get(),
                             unique=self.unique_route_var.get(),
                         )
-                        self.root.after(0, lambda: self._render_chain(result, "Spansh API"))
+                        elapsed = time.monotonic() - search_started
+                        self.root.after(
+                            0,
+                            lambda r=result, seconds=elapsed: self._render_chain(r, "Spansh API", seconds),
+                        )
             except Exception as exc:
-                self.root.after(0, lambda: self.route_status.config(text=str(exc), fg=self.UI_FAIL))
+                message = str(exc) or exc.__class__.__name__
+                self.root.after(0, lambda text=message: self._render_route_error(text))
         threading.Thread(target=worker, daemon=True).start()
+
+    def _render_route_error(self, message):
+        self.route_status.config(text=message, fg=self.UI_FAIL)
+        self._log(f"Trade route search failed: {message}")
 
     def _clear_route_results(self):
         for iid in self.route_tree.get_children():
@@ -1720,7 +1735,7 @@ class TradeWindow:
         self.route_payload_by_iid = {}
         self._set_route_detail("")
 
-    def _render_loops(self, loops):
+    def _render_loops(self, loops, elapsed=None):
         self._clear_route_results()
         cards = []
         for idx, loop in enumerate(loops, 1):
@@ -1733,10 +1748,14 @@ class TradeWindow:
             self.route_detail_by_iid[iid] = self._loop_detail(loop)
             self.route_payload_by_iid[iid] = loop
             cards.append(f"LOOP #{idx}\n{self._loop_detail(loop)}")
-        self.route_status.config(text=f"{len(loops)} loop route(s), ranked by estimated profit/hour.", fg=self.UI_MUTED)
+        timing = f" in {elapsed:.1f}s" if elapsed is not None else ""
+        self.route_status.config(
+            text=f"{len(loops)} loop route(s){timing}, ranked by estimated profit/hour.",
+            fg=self.UI_MUTED,
+        )
         self._set_route_detail(("\n\n" + "-" * 72 + "\n\n").join(cards) if cards else "")
 
-    def _render_chain(self, hops, source):
+    def _render_chain(self, hops, source, elapsed=None):
         self._clear_route_results()
         total = sum(int(h.get("profit") or 0) for h in hops)
         cards = []
@@ -1750,7 +1769,11 @@ class TradeWindow:
             self.route_detail_by_iid[iid] = self._hop_detail(hop)
             self.route_payload_by_iid[iid] = hop
             cards.append(f"HOP {idx}\n{self._hop_detail(hop)}")
-        self.route_status.config(text=f"{len(hops)} hop(s) via {source} | total {self._credits(total)}", fg=self.UI_MUTED)
+        timing = f" in {elapsed:.1f}s" if elapsed is not None else ""
+        self.route_status.config(
+            text=f"{len(hops)} hop(s) via {source}{timing} | total {self._credits(total)}",
+            fg=self.UI_MUTED,
+        )
         self._set_route_detail(f"TOTAL {self._credits(total)} via {source}\n\n" + ("\n\n" + "-" * 72 + "\n\n").join(cards) if cards else "")
 
     def _on_route_selected(self, _event=None):
@@ -1825,7 +1848,7 @@ class TradeWindow:
                 result = routes.search_commodity(**params)
                 self.root.after(0, lambda: self._render_commodity_result(result, params["mode"]))
             except Exception as exc:
-                self.root.after(0, lambda: self.commodity_status.config(text=str(exc), fg=self.UI_FAIL))
+                self.root.after(0, lambda text=str(exc): self.commodity_status.config(text=text, fg=self.UI_FAIL))
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_commodity_result(self, result, mode):

@@ -16,7 +16,9 @@ from . import marketdb
 BEAM_WIDTH = 6
 DESTS_PER_HOP = 5
 MAX_COMMODITIES_PER_HOP = 3
-MAX_SOURCE_CANDIDATES = 60
+MAX_SOURCE_CANDIDATES = 8
+MAX_SOURCE_POOL = 60
+MAX_DEST_CANDIDATES = 250
 PAIR_QUERY_LIMIT = 600
 
 LOOP_STATION_CAP = 900       # nearest stations considered in loop mode
@@ -123,7 +125,7 @@ def plan_route_local(
 ):
     conn = marketdb.connect()
     try:
-        if not marketdb.status(conn)["ready"]:
+        if not marketdb.is_ready(conn):
             raise RouteError("Local market database is empty - build it from the Market Database panel first.")
 
         start = _resolve_start(conn, system, star_pos)
@@ -136,6 +138,7 @@ def plan_route_local(
 
         sources = _source_candidates(conn, start, station, float(max_hop_distance), filters)
         sources = _filter_carriers(sources, include_carriers)
+        sources = sources[:MAX_SOURCE_CANDIDATES]
         if not sources:
             raise RouteError(
                 "No market stations found near the start with fresh enough prices - "
@@ -193,13 +196,16 @@ def _source_candidates(conn, start, station_name, max_hop, filters):
             return exact
     # Prefer close-by stations as the first buy point.
     near.sort(key=lambda s: (s["x"] - start["x"]) ** 2 + (s["y"] - start["y"]) ** 2 + (s["z"] - start["z"]) ** 2)
-    return near[:MAX_SOURCE_CANDIDATES]
+    return near[:MAX_SOURCE_POOL]
 
 
 def _extend(conn, route, max_hop, max_cargo, filters, min_supply=1, include_carriers=True):
     src = route["at"]
     dests = marketdb.stations_near(conn, src["x"], src["y"], src["z"], max_hop, **filters)
     dests = _filter_carriers(dests, include_carriers)
+    if len(dests) > MAX_DEST_CANDIDATES:
+        dests.sort(key=lambda station: _dist(src, station))
+        dests = dests[:MAX_DEST_CANDIDATES]
     dest_by_id = {
         d["market_id"]: d for d in dests
         if d["market_id"] != src["market_id"] and d["market_id"] not in route["seen"]
@@ -208,10 +214,11 @@ def _extend(conn, route, max_hop, max_cargo, filters, min_supply=1, include_carr
         return []
 
     marks = ",".join("?" for _ in dest_by_id)
+    dest_index = " INDEXED BY sqlite_autoindex_commodities_1" if len(dest_by_id) <= 1000 else ""
     pairs = conn.execute(
         f"""SELECT cd.market_id, cs.symbol, cs.buy_price, cd.sell_price, cs.supply, cd.demand
             FROM commodities cs
-            JOIN commodities cd ON cd.symbol = cs.symbol
+            JOIN commodities cd{dest_index} ON cd.symbol = cs.symbol
             WHERE cs.market_id = ?
               AND cd.market_id IN ({marks})
               AND cs.supply > 0 AND cs.buy_price > 0
@@ -299,7 +306,7 @@ def plan_loops(
     the max distance between the two loop stations (defaults to radius)."""
     conn = marketdb.connect()
     try:
-        if not marketdb.status(conn)["ready"]:
+        if not marketdb.is_ready(conn):
             raise RouteError("Local market database is empty - build it from the Market Database panel first.")
         start = _resolve_start(conn, system, star_pos)
 
@@ -479,7 +486,7 @@ def search_commodity(
         raise RouteError("mode must be 'buy' or 'sell'.")
     conn = marketdb.connect()
     try:
-        if not marketdb.status(conn)["ready"]:
+        if not marketdb.is_ready(conn):
             raise RouteError("Local market database is empty - build it from the Market Database panel first.")
         symbol, display = _resolve_commodity(conn, query)
         start = _resolve_start(conn, system, star_pos)
@@ -502,7 +509,7 @@ def search_commodity(
         condition = "supply >= ? AND buy_price > 0" if mode == "buy" else "demand >= ? AND sell_price > 0"
         rows = conn.execute(
             f"""SELECT market_id, buy_price, sell_price, supply, demand
-                FROM commodities
+                FROM commodities INDEXED BY sqlite_autoindex_commodities_1
                 WHERE symbol = ? AND market_id IN ({marks}) AND {condition}""",
             [symbol, *by_id.keys(), max(1, int(min_units))],
         ).fetchall()
@@ -545,7 +552,7 @@ def find_opportunities(
 ):
     conn = marketdb.connect()
     try:
-        if not marketdb.status(conn)["ready"]:
+        if not marketdb.is_ready(conn):
             raise RouteError("Local market database is empty - build it from the Database tab first.")
         start = _resolve_start(conn, system, star_pos)
         stations = _nearby_station_pool(
@@ -565,8 +572,9 @@ def find_opportunities(
         rows = conn.execute(
             f"""SELECT buy.market_id, sell.market_id, buy.symbol, buy.buy_price, sell.sell_price,
                        buy.supply, sell.demand
-                FROM commodities buy
-                JOIN commodities sell ON sell.symbol = buy.symbol
+                FROM commodities buy INDEXED BY sqlite_autoindex_commodities_1
+                JOIN commodities sell INDEXED BY sqlite_autoindex_commodities_1
+                  ON sell.symbol = buy.symbol
                 WHERE buy.market_id IN ({marks}) AND sell.market_id IN ({marks})
                   AND buy.market_id != sell.market_id
                   AND buy.supply >= ? AND sell.demand >= ?
@@ -637,7 +645,7 @@ def sell_cargo(
         raise RouteError("Cargo hold is empty.")
     conn = marketdb.connect()
     try:
-        if not marketdb.status(conn)["ready"]:
+        if not marketdb.is_ready(conn):
             raise RouteError("Local market database is empty - build it from the Database tab first.")
         start = _resolve_start(conn, system, star_pos)
         stations = _nearby_station_pool(
@@ -727,7 +735,7 @@ def analyze_station_market(
 ):
     conn = marketdb.connect()
     try:
-        if not marketdb.status(conn)["ready"]:
+        if not marketdb.is_ready(conn):
             raise RouteError("Local market database is empty - build it from the Database tab first.")
         start = _resolve_start(conn, system, star_pos)
         stations = _nearby_station_pool(
@@ -757,7 +765,8 @@ def analyze_station_market(
             best = None
             if stock > 0 and buy_price > 0:
                 row = conn.execute(
-                    f"""SELECT market_id, sell_price, demand FROM commodities
+                    f"""SELECT market_id, sell_price, demand
+                        FROM commodities INDEXED BY sqlite_autoindex_commodities_1
                         WHERE symbol = ? AND market_id IN ({marks})
                           AND demand > 0 AND sell_price > ?
                         ORDER BY sell_price DESC LIMIT 1""",
@@ -772,7 +781,8 @@ def analyze_station_market(
                     }
             if best is None and demand > 0 and sell_price > 0:
                 row = conn.execute(
-                    f"""SELECT market_id, buy_price, supply FROM commodities
+                    f"""SELECT market_id, buy_price, supply
+                        FROM commodities INDEXED BY sqlite_autoindex_commodities_1
                         WHERE symbol = ? AND market_id IN ({marks})
                           AND supply > 0 AND buy_price > 0 AND buy_price < ?
                         ORDER BY buy_price ASC LIMIT 1""",
