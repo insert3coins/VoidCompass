@@ -82,6 +82,10 @@ CREATE TABLE IF NOT EXISTS balance_log(
 
 _init_lock = threading.Lock()
 _initialized = False
+_status_lock = threading.Lock()
+_status_cache = None
+_status_cache_at = 0.0
+STATUS_CACHE_TTL_S = 30.0
 
 
 def connect(db_path=None):
@@ -365,11 +369,21 @@ def commodity_display_names(conn, symbols):
     return dict(rows)
 
 
-def status(conn):
+def is_ready(conn):
+    return conn.execute("SELECT 1 FROM stations LIMIT 1").fetchone() is not None
+
+
+def status(conn, force=False):
+    global _status_cache, _status_cache_at
+    now = time.monotonic()
+    with _status_lock:
+        if not force and _status_cache is not None and now - _status_cache_at < STATUS_CACHE_TTL_S:
+            return dict(_status_cache)
+
     counts = {}
     for table in ("systems", "stations", "commodities"):
         counts[table] = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-    return {
+    result = {
         "db_path": str(DB_PATH),
         "db_size_mb": round(DB_PATH.stat().st_size / 1e6, 1) if DB_PATH.exists() else 0,
         "systems": counts["systems"],
@@ -379,6 +393,10 @@ def status(conn):
         "journal_market_updated_at": get_meta(conn, "journal_market_updated_at"),
         "ready": counts["stations"] > 0,
     }
+    with _status_lock:
+        _status_cache = dict(result)
+        _status_cache_at = now
+    return result
 
 
 def now_epoch():
