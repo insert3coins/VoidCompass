@@ -491,52 +491,65 @@ class DashboardDBMixin:
 
     def db_load_bgs_systems(self) -> list:
         """Return [(system_name, last_visited_at, has_factions)] for all visited systems."""
+        cached = list(getattr(self, "_bgs_systems_cache", []))
+        if not self.db_lock.acquire(blocking=False):
+            return cached
         results = []
         try:
-            with self.db_lock:
-                cur = self.conn.cursor()
-                cur.execute(
-                    "SELECT v.system_name, v.last_visited_at, "
-                    "       CASE WHEN COUNT(b.id) > 0 THEN 1 ELSE 0 END "
-                    "FROM visited_systems v "
-                    "LEFT JOIN bgs_snapshots b ON b.system_name = v.system_name "
-                    "GROUP BY v.system_name "
-                    "ORDER BY v.last_visited_at DESC"
-                )
-                results = [(row[0], row[1], bool(row[2])) for row in cur.fetchall()]
+            cur = self.conn.cursor()
+            cur.execute(
+                "SELECT v.system_name, v.last_visited_at, "
+                "       CASE WHEN COUNT(b.id) > 0 THEN 1 ELSE 0 END "
+                "FROM visited_systems v "
+                "LEFT JOIN bgs_snapshots b ON b.system_name = v.system_name "
+                "GROUP BY v.system_name "
+                "ORDER BY v.last_visited_at DESC"
+            )
+            results = [(row[0], row[1], bool(row[2])) for row in cur.fetchall()]
+            self._bgs_systems_cache = list(results)
         except sqlite3.Error:
-            pass
+            return cached
+        finally:
+            self.db_lock.release()
         return results
 
     def db_load_bgs_factions(self, system_name: str) -> list:
         """Return all snapshots for system_name, newest first (up to 500 rows)."""
+        cache = getattr(self, "_bgs_factions_cache", {})
+        cached = list(cache.get(system_name, []))
+        if not self.db_lock.acquire(blocking=False):
+            return cached
         results = []
         try:
-            with self.db_lock:
-                cur = self.conn.cursor()
-                cur.execute(
-                    "SELECT faction_name, influence, government, allegiance, happiness, "
-                    "active_states, pending_states, recovering_states, recorded_at "
-                    "FROM bgs_snapshots "
-                    "WHERE system_name=? "
-                    "ORDER BY recorded_at DESC "
-                    "LIMIT 500",
-                    (system_name,),
-                )
-                for row in cur.fetchall():
-                    results.append({
-                        "faction_name":      row[0],
-                        "influence":         row[1],
-                        "government":        row[2],
-                        "allegiance":        row[3],
-                        "happiness":         row[4],
-                        "active_states":     row[5],
-                        "pending_states":    row[6],
-                        "recovering_states": row[7],
-                        "recorded_at":       row[8],
-                    })
+            cur = self.conn.cursor()
+            cur.execute(
+                "SELECT faction_name, influence, government, allegiance, happiness, "
+                "active_states, pending_states, recovering_states, recorded_at "
+                "FROM bgs_snapshots "
+                "WHERE system_name=? "
+                "ORDER BY recorded_at DESC "
+                "LIMIT 500",
+                (system_name,),
+            )
+            for row in cur.fetchall():
+                results.append({
+                    "faction_name":      row[0],
+                    "influence":         row[1],
+                    "government":        row[2],
+                    "allegiance":        row[3],
+                    "happiness":         row[4],
+                    "active_states":     row[5],
+                    "pending_states":    row[6],
+                    "recovering_states": row[7],
+                    "recorded_at":       row[8],
+                })
+            cache = dict(cache)
+            cache[system_name] = list(results)
+            self._bgs_factions_cache = cache
         except sqlite3.Error:
-            pass
+            return cached
+        finally:
+            self.db_lock.release()
         return results
 
     def db_load_colonisation_projects(self) -> dict:

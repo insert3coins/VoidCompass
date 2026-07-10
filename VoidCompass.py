@@ -7,12 +7,12 @@ import atexit
 import tempfile
 import msvcrt
 import crash_reporter
+from config import load_config
 from dashboard import MainDashboard
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 _INSTANCE_LOCK_FILE = None
-CRASH_REPORTING_ENABLED = False
 
 def acquire_single_instance_lock():
     global _INSTANCE_LOCK_FILE
@@ -53,18 +53,20 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 if __name__ == "__main__":
-    if CRASH_REPORTING_ENABLED:
+    startup_config = load_config()
+    crash_reporting_enabled = bool(startup_config.get("crash_reporting_enabled", True))
+    if crash_reporting_enabled:
         crash_reporter.install()
     if not acquire_single_instance_lock():
         logging.warning("Void Compass is already running. Exiting duplicate instance.")
         sys.exit(0)
     atexit.register(release_single_instance_lock)
-    if CRASH_REPORTING_ENABLED:
+    if crash_reporting_enabled:
         atexit.register(crash_reporter.close)
 
     try:
         root = tk.Tk()
-        if CRASH_REPORTING_ENABLED:
+        if crash_reporting_enabled:
             crash_reporter.install_tk(root)
             root.bind_all("<Control-Alt-d>", lambda _event: crash_reporter.dump_stacks("manual Ctrl+Alt+D"))
 
@@ -77,6 +79,6 @@ if __name__ == "__main__":
         app = MainDashboard(root)
         root.mainloop()
     except BaseException:
-        if CRASH_REPORTING_ENABLED:
+        if crash_reporting_enabled:
             crash_reporter.log_exception(*sys.exc_info(), source="main")
         raise

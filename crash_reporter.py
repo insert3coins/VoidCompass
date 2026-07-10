@@ -120,7 +120,10 @@ def install(root=None):
     _CRASH_PATH = crash_log_path()
     try:
         os.makedirs(os.path.dirname(_CRASH_PATH), exist_ok=True)
-        _CRASH_FILE = open(_CRASH_PATH, "a", encoding="utf-8")
+        # Each launch starts a fresh diagnostic session. Keep all exceptions
+        # and stack dumps from the current run together without allowing the
+        # log to grow indefinitely across restarts.
+        _CRASH_FILE = open(_CRASH_PATH, "w", encoding="utf-8")
         _write_header(_CRASH_FILE)
         faulthandler.enable(file=_CRASH_FILE, all_threads=True)
     except Exception:
