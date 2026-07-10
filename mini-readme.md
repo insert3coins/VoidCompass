@@ -1,5 +1,22 @@
 # VoidCompass // UPDATE LOG
 
+## v4.1.8 // Overlay Polish Pass
+**Release Date:** 2026-Jul-11
+
+### Navigation HUD
+*   Fixed hard-to-read alert badges (UNDISC, BIO, VALUE, FSS) — the hazard-stripe diagonal lines were cutting straight through the text at the same color. A flat backdrop now sits behind the letters, so the stripes stay confined to the badge's margins instead of fighting the text for contrast.
+
+### Overlay Layout
+*   Gravity warning and bio value strip no longer default to the same crowded left-edge column as system info / carrier / station info / survey status — both can fire together (a high-gravity body can also carry bio signals), so they now default to the right edge instead, spaced clear of each other.
+*   Fixed a config default that was silently overriding those position fixes on every launch.
+
+### Survey Status Strip
+*   Fixed the body list rendering as a single line that truncated to "+N more" almost immediately on any system with more than a handful of unmapped bodies. It now wraps across up to 4 lines and sizes the panel to fit, so it actually shows what it claims to track instead of mostly blank space.
+*   Fixed the "+N more" counter itself overflowing past the panel's right edge on very crowded systems.
+
+### Version
+*   Bumped app version to **4.1.8**.
+
 ## v4.1.6 // Proactive Toasts + Journal Heartbeat
 **Release Date:** 2026-Jul-11
 
