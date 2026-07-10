@@ -1,5 +1,23 @@
 # VoidCompass // UPDATE LOG
 
+## v4.1.6 // Proactive Toasts + Journal Heartbeat
+**Release Date:** 2026-Jul-11
+
+### New Toast Notifications
+*   **Fleet carrier jumps** — "Carrier Jumped" and "Carrier Ready" toasts on arrival and cooldown-complete, alongside the existing Discord webhook notifications.
+*   **Colonization project complete** — fires once when a construction project crosses 100%.
+*   **Big trade profit** — fires when a single sale's profit crosses a configurable threshold (default 1M CR).
+*   **Low fuel warning** — new percentage-based main-tank threshold check (added fuel-capacity tracking from the Loadout event, since only raw tonnage was tracked before); silent while docked, on foot, or in an SRV/fighter, with hysteresis so it doesn't spam right at the threshold edge.
+
+### Journal Heartbeat Overlay
+*   Added a small always-on corner pulse, modeled on SrvSurvey's PlotPulse, that flashes on every processed status update and turns red if nothing's come through for 15 seconds — a quick visual "is the watcher still alive" check that complements the existing freeze-diagnostics work.
+
+### Settings
+*   Added a toggle for the new heartbeat overlay alongside the existing overlay switches.
+
+### Version
+*   Bumped app version to **4.1.6**.
+
 ## v4.1.5 // Overlay Settings + Survey Strip Cleanup
 **Release Date:** 2026-Jul-11
 

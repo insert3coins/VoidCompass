@@ -188,6 +188,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     station_info_var = tk.BooleanVar(value=config.get("station_info_overlay_enabled", True))
     survey_status_var = tk.BooleanVar(value=config.get("survey_status_overlay_enabled", True))
     toast_var = tk.BooleanVar(value=config.get("toast_overlay_enabled", True))
+    heartbeat_var = tk.BooleanVar(value=config.get("heartbeat_overlay_enabled", True))
     ss_var = tk.BooleanVar(value=config.get("screenshots_enabled", False))
     edsm_upload_var = tk.BooleanVar(value=config.get("edsm_upload_enabled", False))
     runtime_trace_var = tk.BooleanVar(value=config.get("runtime_trace_enabled", True))
@@ -226,6 +227,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     toggle_row(overlay_modules, "Station Info Overlay", station_info_var)
     toggle_row(overlay_modules, "Survey Status Strip", survey_status_var)
     toggle_row(overlay_modules, "Toast Notifications", toast_var)
+    toggle_row(overlay_modules, "Journal Heartbeat Pulse", heartbeat_var)
 
     overlay_timing = section(overlay_page, "Timing")
     prosp_timeout_e = input_row(overlay_timing, "Prospector Auto-Hide", "prospector_hud_timeout_s")
@@ -339,6 +341,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "station_info_overlay_enabled": station_info_var.get(),
             "survey_status_overlay_enabled": survey_status_var.get(),
             "toast_overlay_enabled": toast_var.get(),
+            "heartbeat_overlay_enabled": heartbeat_var.get(),
             "screenshots_enabled": ss_var.get(),
             "screenshots_path": ss_e.get().strip(),
             "carrier_discord_webhook_url": fc_wh_e.get().strip(),
