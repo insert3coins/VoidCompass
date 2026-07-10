@@ -143,9 +143,59 @@ class SurveyStatusHUD:
         self.canvas.create_text(x + 1, y + 1, text=text, fill="black", font=font, anchor=anchor)
         self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor)
 
+    _MAX_LINES = 4
+    _MAX_CONSIDERED = 30
+
+    def _wrap_names(self, shown):
+        """Greedily packs (name, has_bio) tuples into up to _MAX_LINES lines
+        that each fit WIDTH, returning (lines, extra_count) where lines is a
+        list of lists of (name, has_bio, display_text)."""
+        measurer = tkfont.Font(family="Courier", size=8, weight="bold")
+        max_x = WIDTH - 36
+        lines = []
+        current = []
+        cur_w = 0
+        i = 0
+        n = len(shown)
+        while i < n and len(lines) < self._MAX_LINES:
+            name, has_bio = shown[i]
+            text = name if i == n - 1 else f"{name},"
+            w = measurer.measure(text + " ")
+            if current and cur_w + w > max_x:
+                lines.append(current)
+                current = []
+                cur_w = 0
+                continue
+            current.append((name, has_bio, text))
+            cur_w += w
+            i += 1
+        if current:
+            lines.append(current)
+        return lines, n - i
+
     def _redraw(self, system_name, remaining, bio_remaining):
         w = WIDTH
-        h = 66
+        shown = remaining[:self._MAX_CONSIDERED]
+        lines, extra_from_wrap = self._wrap_names(shown)
+        extra_count = extra_from_wrap + (len(remaining) - len(shown))
+
+        if extra_count and lines:
+            measurer = tkfont.Font(family="Courier", size=8, weight="bold")
+            max_x = WIDTH - 36
+            last_line = lines[-1]
+
+            def _line_w(line):
+                return sum(measurer.measure(t + " ") for _, _, t in line)
+
+            while last_line and _line_w(last_line) + measurer.measure(f"+{extra_count} more") > max_x:
+                last_line.pop()
+                extra_count += 1
+            if not last_line:
+                lines.pop()
+
+        header_h, label_h, line_h, bottom_pad = 30, 16, 16, 10
+        h = header_h + label_h + max(1, len(lines)) * line_h + bottom_pad
+
         self.canvas.config(width=w, height=h)
         self.win.geometry(f"{w}x{h}")
         self.canvas.delete("all")
@@ -155,27 +205,21 @@ class SurveyStatusHUD:
         self._text(w - 18, 18, _truncate((system_name or "").upper(), 30), COLOR_TEXT, ("Courier", 9, "bold"), anchor="e")
         self.canvas.create_line(18, 28, w - 18, 28, fill="#1a2530", width=1)
 
-        names_y = 42
+        label_y = 42
         label = f"DSS REMAINING ({len(remaining)})"
-        self._text(18, names_y, label, _DIM, ("Courier", 7, "bold"))
+        self._text(18, label_y, label, _DIM, ("Courier", 7, "bold"))
         if bio_remaining:
-            self._text(w - 18, names_y, f"BIO REMAINING {bio_remaining}", COLOR_ORANGE, ("Courier", 7, "bold"), anchor="e")
+            self._text(w - 18, label_y, f"BIO REMAINING {bio_remaining}", COLOR_ORANGE, ("Courier", 7, "bold"), anchor="e")
 
-        shown = remaining[:10]
-        self._draw_name_list(18, 56, shown, len(remaining) - len(shown))
-
-    def _draw_name_list(self, x, y, shown, extra_count):
-        cur_x = x
-        max_x = WIDTH - 18
         font = ("Courier", 8, "bold")
         measurer = tkfont.Font(family="Courier", size=8, weight="bold")
-        for i, (name, has_bio) in enumerate(shown):
-            color = COLOR_ORANGE if has_bio else _DIM
-            text = name if i == len(shown) - 1 and not extra_count else f"{name},"
-            width = measurer.measure(text + " ")
-            if cur_x + width > max_x:
-                break
-            self._text(cur_x, y, text, color, font)
-            cur_x += width
-        if extra_count:
-            self._text(min(cur_x, max_x), y, f" +{extra_count} more", _DIM, font)
+        y = label_y + line_h
+        for line_idx, line in enumerate(lines):
+            x = 18
+            for name, has_bio, text in line:
+                color = COLOR_ORANGE if has_bio else _DIM
+                self._text(x, y, text, color, font)
+                x += measurer.measure(text + " ")
+            if line_idx == len(lines) - 1 and extra_count:
+                self._text(x, y, f"+{extra_count} more", _DIM, font)
+            y += line_h
