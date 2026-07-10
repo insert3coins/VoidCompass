@@ -75,7 +75,6 @@ PROFILE_BOOL_SETTINGS = (
     "prospector_overlay_enabled",
     "system_info_enabled",
     "gravity_warning_overlay_enabled",
-    "bio_strip_overlay_enabled",
     "station_info_overlay_enabled",
     "survey_status_overlay_enabled",
     "toast_overlay_enabled",
@@ -109,9 +108,6 @@ PROFILE_VALUE_SETTINGS = (
     "gravity_warning_hud_y",
     "gravity_warning_hud_timeout_s",
     "gravity_warning_threshold_g",
-    "bio_strip_hud_x",
-    "bio_strip_hud_y",
-    "bio_strip_hud_timeout_s",
     "station_info_hud_x",
     "station_info_hud_y",
     "station_info_timeout_s",
@@ -241,7 +237,6 @@ def apply_profile_config(config, profile_key=None):
         "prospector_overlay_enabled": True,
         "system_info_enabled": True,
         "gravity_warning_overlay_enabled": True,
-        "bio_strip_overlay_enabled": True,
         "station_info_overlay_enabled": True,
         "survey_status_overlay_enabled": True,
         "toast_overlay_enabled": True,
@@ -346,14 +341,12 @@ def load_config():
         'colony_overlay_y': 40,
         'colony_overlay_w': 380,
         'colony_overlay_h': 260,
-        # gravity_warning_hud_x / bio_strip_hud_x intentionally omitted —
-        # both default to a screen-width-relative right-edge position
-        # computed in their own constructors (matches toast_hud_x/_y).
+        # gravity_warning_hud_x intentionally omitted — defaults to a
+        # screen-width-relative right-edge position computed in its own
+        # constructor (matches toast_hud_x/_y).
         'gravity_warning_hud_y': 530,
         'gravity_warning_hud_timeout_s': 20,
         'gravity_warning_threshold_g': 3.0,
-        'bio_strip_hud_y': 320,
-        'bio_strip_hud_timeout_s': 30,
         'station_info_hud_x': 30,
         'station_info_hud_y': 380,
         'station_info_timeout_s': 25,
