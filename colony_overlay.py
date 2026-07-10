@@ -28,15 +28,17 @@ class ColonyOverlay:
     DIM = "#46525d"
     BLUE = COLOR_ACCENT
 
-    def __init__(self, root, config, projects_getter, cargo_getter, capacity_getter):
+    def __init__(self, root, config, projects_getter, cargo_getter, capacity_getter, site_getter=None):
         self.root = root
         self.config = config
         self.projects_getter = projects_getter
         self.cargo_getter = cargo_getter
         self.capacity_getter = capacity_getter
+        self.site_getter = site_getter
         self._font_scale = 1.0
         self._sort_mode = "alpha"
         self._show_trips = True
+        self._site_only = False
         self._save_job = None
         self._drag_x = 0
         self._drag_y = 0
@@ -49,7 +51,7 @@ class ColonyOverlay:
 
         x = self._safe_int(config.get("colony_overlay_x"), 40)
         y = self._safe_int(config.get("colony_overlay_y"), 40)
-        w = self._safe_int(config.get("colony_overlay_w"), 300)
+        w = self._safe_int(config.get("colony_overlay_w"), 380)
         h = self._safe_int(config.get("colony_overlay_h"), 260)
         self.win.geometry(f"{w}x{h}+{x}+{y}")
 
@@ -103,6 +105,7 @@ class ColonyOverlay:
                 data = json.load(f)
             self._sort_mode = str(data.get("sort_mode") or "alpha")
             self._show_trips = bool(data.get("show_trips", True))
+            self._site_only = bool(data.get("site_only", False))
             self._font_scale = max(0.8, min(1.8, float(data.get("font_scale", 1.0))))
         except Exception:
             pass
@@ -113,6 +116,7 @@ class ColonyOverlay:
                 json.dump({
                     "sort_mode": self._sort_mode,
                     "show_trips": self._show_trips,
+                    "site_only": self._site_only,
                     "font_scale": self._font_scale,
                 }, f, indent=2)
         except Exception:
@@ -141,6 +145,14 @@ class ColonyOverlay:
         self.trips_var = tk.BooleanVar(value=self._show_trips)
         tk.Checkbutton(
             header, text="Trips", variable=self.trips_var, command=self._toggle_trips,
+            bg=self.PANEL, fg=self.MUTED, selectcolor=self.PANEL,
+            activebackground=self.PANEL, activeforeground=COLOR_ACCENT,
+            highlightthickness=0, font=("Courier", self._font(8), "bold"),
+        ).pack(side=tk.RIGHT, padx=(6, 0), pady=(6, 4))
+
+        self.site_only_var = tk.BooleanVar(value=self._site_only)
+        tk.Checkbutton(
+            header, text="Site", variable=self.site_only_var, command=self._toggle_site_only,
             bg=self.PANEL, fg=self.MUTED, selectcolor=self.PANEL,
             activebackground=self.PANEL, activeforeground=COLOR_ACCENT,
             highlightthickness=0, font=("Courier", self._font(8), "bold"),
@@ -196,6 +208,11 @@ class ColonyOverlay:
 
     def _toggle_trips(self):
         self._show_trips = bool(self.trips_var.get())
+        self._save_prefs()
+        self.update()
+
+    def _toggle_site_only(self):
+        self._site_only = bool(self.site_only_var.get())
         self._save_prefs()
         self.update()
 
@@ -277,9 +294,22 @@ class ColonyOverlay:
             counts[key] = counts.get(key, 0) + count
         return counts
 
+    def _current_site_project(self):
+        if not self.site_getter:
+            return None
+        market_id = self.site_getter()
+        if market_id is None:
+            return None
+        return (self.projects_getter() or {}).get(market_id)
+
     def _shopping_items(self):
         totals = {}
-        for proj in (self.projects_getter() or {}).values():
+        if self._site_only:
+            proj = self._current_site_project()
+            projects = [proj] if proj else []
+        else:
+            projects = list((self.projects_getter() or {}).values())
+        for proj in projects:
             if proj.get("complete") or proj.get("failed"):
                 continue
             for res in proj.get("resources") or []:
@@ -341,6 +371,7 @@ class ColonyOverlay:
             for child in list(self.body.children.values()):
                 child.destroy()
 
+            self.title_label.config(text="SITE CHECKLIST" if self._site_only else "COLONY SHOPPING")
             items = self._shopping_items()
             total_needed = sum(int(i.get("needed") or 0) for i in items)
             capacity = int(self.capacity_getter() or 0)
@@ -352,8 +383,12 @@ class ColonyOverlay:
                 self.summary_label.config(text="")
 
             if not items:
+                if self._site_only and not self._current_site_project():
+                    empty_text = "Not docked at a colonisation site"
+                else:
+                    empty_text = "No colony resources needed"
                 tk.Label(
-                    self.body, text="No colony resources needed", fg=self.MUTED,
+                    self.body, text=empty_text, fg=self.MUTED,
                     bg=self.PANEL, font=("Courier", self._font(9), "bold"),
                 ).pack(anchor="nw")
                 self._fit_height(150)
@@ -391,12 +426,21 @@ class ColonyOverlay:
     def _fit_height(self, fallback=None):
         try:
             self.win.update_idletasks()
-            width = max(280, int(self.win.winfo_width() or 300))
+            # Floor matches the header row's minimum required width (title +
+            # Site/Trips checkboxes + A-/A+/X, ~367px measured) so a narrower
+            # persisted width from an older version can't clip the header.
+            min_width = max(380, int(self.panel.winfo_reqwidth() or 0) + 14)
+            width = max(min_width, int(self.win.winfo_width() or min_width))
             panel_h = fallback or int(self.panel.winfo_reqheight() or 160)
             screen_h = int(self.win.winfo_screenheight() or 900)
             height = max(130, min(screen_h - 80, panel_h + 14))
             x = int(self.win.winfo_x())
             y = int(self.win.winfo_y())
             self.win.geometry(f"{width}x{height}+{x}+{y}")
+            # Geometry changes reach the canvas via a <Configure> event on the
+            # next mainloop tick; sync the embedded panel's width immediately
+            # so the header controls aren't clipped for a frame after resize.
+            self.win.update_idletasks()
+            self._redraw_background()
         except Exception:
             pass

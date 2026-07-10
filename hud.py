@@ -2,17 +2,18 @@ import tkinter as tk
 import tkinter.font as tkfont
 import time
 from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, save_config
+import route_strip
 
 class TacticalHUD:
     def __init__(self, root, config, on_widget_click=None):
         self.win = tk.Toplevel(root)
         self.config = config
         self.on_widget_click = on_widget_click
-        
+
         self.win.attributes("-topmost", True, "-transparentcolor", "#ff00ff", "-toolwindow", True)
         self.win.overrideredirect(True)
         self.win.config(bg="#ff00ff")
-        
+
         self.full_width = 560
         self.full_height = 246
         self.compact_width = 450
@@ -32,9 +33,9 @@ class TacticalHUD:
         self.win.after(0, self._apply_initial_position)
         self.win.after(250, self._apply_initial_position)
         self.win.after(700, self._apply_initial_position)
-        
+
         self.force_topmost()
-        
+
         self.anim_step = 0
         self.anim_frames = [
             "⢄",
@@ -190,16 +191,46 @@ class TacticalHUD:
         if not self.anim_frames:
             return
         frame = self.anim_frames[self.anim_step]
-        self.draw_text(self.width - 20, 20, text=frame, fill=COLOR_ACCENT, font=("Courier", 12, "bold"), anchor="e", tags="anim_title")
+        self.draw_text(self.width - 20, 18, text=frame, fill=COLOR_ACCENT, font=("Courier", 12, "bold"), anchor="e", tags="anim_title")
 
-    def draw_fitted_text(self, x, y, text, fill, family="Courier", size=9, weight="bold", max_width=300, min_size=4):
+    def draw_fitted_text(self, x, y, text, fill, family="Courier", size=9, weight="bold", max_width=300, min_size=4, anchor="w"):
         font_size = size
         while font_size > min_size:
             font = tkfont.Font(family=family, size=font_size, weight=weight)
             if font.measure(text) <= max_width:
                 break
             font_size -= 1
-        self.draw_text(x, y, text=text, fill=fill, font=(family, font_size, weight), anchor="w")
+        self.draw_text(x, y, text=text, fill=fill, font=(family, font_size, weight), anchor=anchor)
+
+    # ── Chrome (SrvSurvey-style tri-line stripe border + corner brackets) ──
+
+    @staticmethod
+    def _dim_color(hexcolor, factor=0.35):
+        hexcolor = hexcolor.lstrip("#")
+        r, g, b = int(hexcolor[0:2], 16), int(hexcolor[2:4], 16), int(hexcolor[4:6], 16)
+        return f"#{int(r*factor):02x}{int(g*factor):02x}{int(b*factor):02x}"
+
+    def _draw_chrome(self, accent=COLOR_ACCENT, bracket_len=12):
+        w, h = self.width, self.base_height
+        self.canvas.create_rectangle(0, 0, w, h, fill="#010101", outline="")
+        for yy in range(0, h, 3):
+            self.canvas.create_line(0, yy, w, yy, fill="#0a0f14", width=1)
+
+        dim = self._dim_color(accent)
+        for yy, c in ((3, dim), (4, accent), (5, dim)):
+            self.canvas.create_line(4, yy, w - 4, yy, fill=c, width=1)
+        for yy, c in ((h - 6, dim), (h - 5, accent), (h - 4, dim)):
+            self.canvas.create_line(4, yy, w - 4, yy, fill=c, width=1)
+        self.canvas.create_line(2, 2, 2, h - 2, fill=dim, width=1)
+        self.canvas.create_line(w - 2, 2, w - 2, h - 2, fill=dim, width=1)
+
+        for x0, y0, dx, dy in ((3, 3, 1, 1), (w - 3, 3, -1, 1), (3, h - 3, 1, -1), (w - 3, h - 3, -1, -1)):
+            self.canvas.create_line(x0, y0, x0 + dx * bracket_len, y0, fill=accent, width=2)
+            self.canvas.create_line(x0, y0, x0, y0 + dy * bracket_len, fill=accent, width=2)
+
+    def _draw_stat(self, x, y, label, value, color=COLOR_TEXT, anchor="w", label_size=6, value_size=9, value_gap=13):
+        self.draw_text(x, y, text=str(label).upper(), fill="#7d8891", font=("Courier", label_size, "bold"), anchor=anchor)
+        self.draw_text(x, y + value_gap, text=str(value), fill=color, font=("Courier", value_size, "bold"), anchor=anchor)
 
     def _badge_color(self, state):
         if state == "alert":
@@ -208,28 +239,25 @@ class TacticalHUD:
             return COLOR_ACCENT
         return "#7d8891"
 
-    def _draw_badge(self, x, y, text, state="muted"):
+    def _draw_badge(self, x, y, text, state="muted", height=18):
         color = self._badge_color(state)
         font = tkfont.Font(family="Courier", size=8, weight="bold")
-        width = max(48, font.measure(text) + 14)
-        self.canvas.create_rectangle(x, y, x + width, y + 18, outline=color, fill="#05080c", width=1)
-        self.draw_text(x + 7, y + 9, text=text, fill=color, font=("Courier", 8, "bold"), anchor="w")
-        return width
-
-    def _draw_panel(self, x1, y1, x2, y2, outline="#26313a", fill="#05080c"):
-        self.canvas.create_rectangle(x1, y1, x2, y2, fill=fill, outline=outline, width=1)
-        self.canvas.create_line(x1, y1, x2, y1, fill=outline, width=1)
-
-    def _draw_status_pill(self, x, y, label, value, color=COLOR_TEXT, width=96):
-        self.canvas.create_rectangle(x, y, x + width, y + 24, outline="#26313a", fill="#03070b", width=1)
-        self.draw_text(x + 7, y + 9, text=label.upper(), fill="#7d8891", font=("Courier", 6, "bold"), anchor="w")
-        self.draw_text(x + width - 7, y + 17, text=value, fill=color, font=("Courier", 8, "bold"), anchor="e")
-        return width
-
-    def _draw_metric_block(self, x, y, label, value, color=COLOR_TEXT, width=92):
-        self.canvas.create_rectangle(x, y, x + width, y + 24, outline="#26313a", fill="#03070b", width=1)
-        self.draw_text(x + 7, y + 9, text=label.upper(), fill="#7d8891", font=("Courier", 6, "bold"), anchor="w")
-        self.draw_text(x + width - 7, y + 17, text=value, fill=color, font=("Courier", 8, "bold"), anchor="e")
+        width = max(52, font.measure(text) + 16)
+        if state == "alert":
+            # Hazard-stripe treatment for genuine alerts (undiscovered, valuable, bio signals).
+            self.canvas.create_rectangle(x, y, x + width, y + height, fill="#05080c", outline="")
+            step = 6
+            xx = x - height
+            while xx < x + width:
+                x0, x1 = max(x, xx), min(x + width, xx + height)
+                if x1 > x0:
+                    self.canvas.create_line(x0, y + height, x1, y, fill=color, width=1)
+                xx += step
+            self.canvas.create_rectangle(x + 1, y + 1, x + width - 1, y + height - 1, fill="", outline="")
+        else:
+            self.canvas.create_rectangle(x, y, x + width, y + height, fill="#05080c", outline="")
+        self.canvas.create_rectangle(x, y, x + width, y + height, outline=color, width=1)
+        self.draw_text(x + width / 2, y + height / 2, text=text, fill=color, font=("Courier", 8, "bold"), anchor="center")
         return width
 
     def _state_text(self, nav_context):
@@ -277,14 +305,42 @@ class TacticalHUD:
                     value_count = 0
         return bio_text.replace("BIO ", ""), value_count
 
-    def _waypoint_progress_text(self, route_counts, r_pos):
-        if not route_counts or route_counts[1] <= 0:
-            return ""
-        route_parts = [f"ROUTE {route_counts[0]}/{route_counts[1]}"]
-        route_parts.append(f"{int(max(0.0, min(1.0, route_counts[0] / route_counts[1])) * 100)}%")
-        if r_pos and len(r_pos) > 2 and r_pos[2]:
-            route_parts.append(r_pos[2].replace(" ", ""))
-        return " ".join(route_parts)
+    def _route_header(self, nav_context, route_waypoint, route_counts, game_r_pos, remaining):
+        """A single consolidated route-status string: what we're following, plus
+        how far through it we are — replaces the old duplicated ROUTE/WAYPOINT
+        footer and the separate GAME/ROUTE progress readout."""
+        route_mode = str(nav_context.get("route_mode", "NO ROUTE"))
+        if route_waypoint:
+            label = route_waypoint.upper()
+            color = COLOR_ORANGE
+        else:
+            label = route_mode
+            color = COLOR_ORANGE if route_mode != "NO ROUTE" else "#7d8891"
+
+        progress = ""
+        if isinstance(remaining, int):
+            progress = f"{remaining} JUMPS"
+        elif route_counts and route_counts[1] > 0:
+            pct = int(max(0.0, min(1.0, route_counts[0] / route_counts[1])) * 100)
+            progress = f"{route_counts[0]}/{route_counts[1]} {pct}%"
+        elif game_r_pos and game_r_pos[1] > 0:
+            pct = int(max(0.0, min(1.0, game_r_pos[0] / game_r_pos[1])) * 100)
+            progress = f"{game_r_pos[0]}/{game_r_pos[1]} {pct}%"
+
+        if progress:
+            label = f"{label}  ·  {progress}" if label else progress
+        return label, color
+
+    def _draw_route_strip(self, x1, x2, strip_y, nav_context, header_color, dot_radius):
+        hops = nav_context.get("hops") or []
+        self.canvas.create_line(x1, strip_y, x2, strip_y, fill="#1a2530", width=2)
+        theme = {"accent": COLOR_ACCENT, "orange": COLOR_ORANGE}
+        if hops:
+            route_strip.draw_pip_line(self.canvas, x1, x2, strip_y, hops, theme, dot_radius=dot_radius, bg="#010101")
+        self.canvas.create_oval(x1 - dot_radius - 1, strip_y - dot_radius - 1, x1 + dot_radius + 1, strip_y + dot_radius + 1,
+                                 outline=COLOR_ACCENT, width=2, fill="#010101")
+        dest_color = COLOR_ORANGE if hops else "#7d8891"
+        return dest_color
 
     def _draw_compact(
         self,
@@ -300,65 +356,59 @@ class TacticalHUD:
         nav_context=None,
     ):
         nav_context = nav_context or {}
-        h = self.compact_height
+        w = self.width
         current_display = nav_context.get("current") or current_sys or "---"
         state_text = self._state_text(nav_context)
         state_color = self._state_color(state_text)
-        route_mode = str(nav_context.get("route_mode", "NO ROUTE"))
         remaining = nav_context.get("route_remaining")
 
         pct = (scanned / total) if total > 0 else 0
         pct = max(0.0, min(1.0, pct))
         bio_count, value_count = self._bio_value_counts(organic_count, nav_context)
         traffic_text = f"{system_traffic.get('day', 0)}/{system_traffic.get('week', 0)}/{system_traffic.get('total', 0)}"
-        progress_text = self._waypoint_progress_text(route_counts, r_pos)
 
-        self.canvas.create_rectangle(5, 5, self.width - 5, h - 5, fill="#010101", outline=COLOR_ACCENT, width=2)
-        self.canvas.create_line(5, 34, self.width - 5, 34, fill=COLOR_ACCENT, width=1)
-        self.draw_text(18, 20, text="NAVIGATION HUD", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
+        self._draw_chrome(bracket_len=10)
+        self.draw_text(16, 14, text="NAVIGATION HUD", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
         self._draw_title_anim()
+        self.canvas.create_line(16, 26, w - 16, 26, fill="#1a2530", width=1)
 
-        self.draw_text(18, 52, text="SYS:", fill=COLOR_TEXT, font=("Courier", 9, "bold"), anchor="w")
-        self.draw_fitted_text(60, 52, str(current_display).upper(), COLOR_TEXT, size=10, max_width=self.width - 76)
+        self.draw_text(16, 36, text="CURRENT SYSTEM", fill="#7d8891", font=("Courier", 6, "bold"), anchor="w")
+        self.draw_text(w - 16, 36, text="STATE", fill="#7d8891", font=("Courier", 6, "bold"), anchor="e")
+        self.draw_fitted_text(16, 50, str(current_display).upper(), COLOR_TEXT, size=10, max_width=w - 160, anchor="w")
+        self.draw_fitted_text(w - 16, 50, state_text, state_color, size=9, max_width=130, anchor="e")
+        self.canvas.create_line(16, 58, w - 16, 58, fill="#1a2530", width=1)
 
-        route_label = "NAV:"
-        route_value = (route_waypoint or route_mode or "NO ROUTE").upper()
-        self.draw_text(18, 72, text=route_label, fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="w")
-        progress_width = 0
-        if progress_text:
-            progress_font = tkfont.Font(family="Courier", size=8, weight="bold")
-            progress_width = min(196, max(148, progress_font.measure(progress_text) + 12))
-        self.draw_fitted_text(60, 72, route_value, COLOR_ORANGE, size=8, max_width=self.width - 76 - progress_width)
-        if progress_text:
-            self.draw_text(self.width - 18, 72, text=progress_text, fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="e")
+        header_label, header_color = self._route_header(nav_context, route_waypoint, route_counts, game_r_pos, remaining)
+        left_x, right_x = 16, w - 16
+        strip_y = 82
+        self.draw_fitted_text(left_x, 68, header_label, header_color, size=7, max_width=(right_x - left_x) - 80, anchor="w")
+        dest_color = self._draw_route_strip(left_x, right_x, strip_y, nav_context, header_color, dot_radius=4)
+        self.draw_text((left_x + right_x) // 2, 68, text=nav_context.get("next_distance", "--"), fill=dest_color, font=("Courier", 7, "bold"), anchor="center")
+        total_dist_text = nav_context.get("total_distance_text")
+        if total_dist_text:
+            self.draw_text(right_x, 68, text=total_dist_text, fill=COLOR_ORANGE, font=("Courier", 7, "bold"), anchor="e")
+        self.draw_text(left_x, 94, text="CURRENT", fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="w")
+        self.draw_text(right_x, 94, text="DEST" if (nav_context.get("hops") or []) else "NEXT", fill=dest_color, font=("Courier", 8, "bold"), anchor="e")
+        self.canvas.create_line(16, 102, w - 16, 102, fill="#1a2530", width=1)
 
-        strip_y = 98
-        left_x = 54
-        center_x = self.width // 2
-        right_x = self.width - 54
-        self.canvas.create_line(left_x, strip_y, right_x, strip_y, fill="#26313a", width=3)
-        self.canvas.create_line(left_x, strip_y, center_x, strip_y, fill=COLOR_ACCENT, width=4)
-        self.canvas.create_line(center_x, strip_y, right_x, strip_y, fill=COLOR_ORANGE, width=3, dash=(5, 4))
-        for x, color, radius in ((left_x, "#7d8891", 4), (center_x, COLOR_ACCENT, 6), (right_x, COLOR_ORANGE, 4)):
-            self.canvas.create_oval(x - radius, strip_y - radius, x + radius, strip_y + radius, outline=color, width=2, fill="#010101")
-        self.draw_text((left_x + center_x) // 2, 86, text=nav_context.get("prev_distance", "--"), fill="#7d8891", font=("Courier", 8, "bold"), anchor="center")
-        self.draw_text((center_x + right_x) // 2, 86, text=nav_context.get("next_distance", "--"), fill=COLOR_ORANGE, font=("Courier", 8, "bold"), anchor="center")
-        if isinstance(remaining, int):
-            self.draw_text(center_x, 86, text=f"{remaining} JUMPS", fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="center")
-        self.draw_text(left_x, 111, text="PREV", fill="#7d8891", font=("Courier", 6, "bold"), anchor="center")
-        self.draw_text(center_x, 111, text="CURRENT", fill=COLOR_ACCENT, font=("Courier", 6, "bold"), anchor="center")
-        self.draw_text(right_x, 111, text="NEXT", fill=COLOR_ORANGE, font=("Courier", 6, "bold"), anchor="center")
-
-        self.canvas.create_rectangle(18, 123, self.width - 18, 132, outline="#26313a", width=1)
+        self.draw_text(16, 112, text="SCAN PROGRESS", fill="#7d8891", font=("Courier", 7, "bold"), anchor="w")
+        self.draw_text(w - 16, 112, text=f"{scanned}/{total}  ·  {int(pct*100)}%", fill=COLOR_TEXT, font=("Courier", 8, "bold"), anchor="e")
+        self.canvas.create_rectangle(16, 120, w - 16, 126, outline="#26313a", width=1)
         if pct > 0:
-            self.canvas.create_rectangle(18, 123, 18 + ((self.width - 36) * pct), 132, fill=COLOR_ACCENT, outline=COLOR_ACCENT)
+            self.canvas.create_rectangle(16, 120, 16 + ((w - 32) * pct), 126, fill=COLOR_ACCENT, outline=COLOR_ACCENT)
+        self.canvas.create_line(16, 134, w - 16, 134, fill="#1a2530", width=1)
 
-        self.draw_text(18, 148, text=f"SCAN {scanned}/{total}", fill=COLOR_TEXT, font=("Courier", 8, "bold"), anchor="w")
-        self.draw_text(110, 148, text=f"BIO {bio_count}", fill=COLOR_ORANGE if str(bio_count) != "0" else "#7d8891", font=("Courier", 8, "bold"), anchor="w")
-        self.draw_text(178, 148, text=f"VALUE {value_count}", fill=COLOR_ORANGE if value_count else "#7d8891", font=("Courier", 8, "bold"), anchor="w")
-        self.draw_text(self.width - 18, 148, text=f"{int(pct * 100)}%", fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="e")
-        self.draw_text(18, 168, text=f"TRAFFIC {traffic_text}", fill="#7d8891", font=("Courier", 8, "bold"), anchor="w")
-        self.draw_text(self.width - 18, 168, text=f"STATE {state_text}", fill=state_color, font=("Courier", 8, "bold"), anchor="e")
+        self.draw_text(16, 144, text=f"TRAFFIC {traffic_text}", fill="#7d8891", font=("Courier", 8, "bold"), anchor="w")
+        self.draw_text(w - 16, 144, text=f"BIO {bio_count}  VALUE {value_count}", fill=COLOR_ORANGE if (bio_count not in ("0", 0) or value_count) else "#7d8891", font=("Courier", 8, "bold"), anchor="e")
+
+        badges = [b for b in nav_context.get("badges", []) if not str(b[0]).startswith(("BIO", "VALUE"))]
+        x = 16
+        y = 154
+        for badge, state in badges:
+            bw = self._draw_badge(x, y, str(badge), state, height=16)
+            x += bw + 5
+            if x > w - 70:
+                break
 
     def update(
         self,
@@ -395,157 +445,70 @@ class TacticalHUD:
                 nav_context=nav_context,
             )
             return
-        
-        h = target_h
-        route_mode = str(nav_context.get("route_mode", "NO ROUTE"))
+
+        w = self.width
         current_display = nav_context.get("current") or current_sys or "---"
         credits = nav_context.get("credits", "---")
         cargo = nav_context.get("cargo", "0T")
         trade_profit = nav_context.get("trade_profit", "---")
-
-        self.canvas.create_rectangle(5, 5, self.width - 5, h - 5, fill="#010101", outline=COLOR_ACCENT, width=2)
-        self.canvas.create_line(5, 34, self.width - 5, 34, fill=COLOR_ACCENT, width=1)
-        self.canvas.create_line(16, 86, self.width - 16, 86, fill="#26313a", width=1)
-
-        self.draw_text(18, 20, text="NAVIGATION HUD", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
-        self._draw_title_anim()
-
-        self._draw_panel(16, 42, self.width - 178, 78, outline="#26313a", fill="#03070b")
-        self.draw_text(28, 54, text="CURRENT SYSTEM", fill="#7d8891", font=("Courier", 7, "bold"), anchor="w")
-        self.draw_fitted_text(28, 70, str(current_display).upper(), COLOR_TEXT, size=12, max_width=self.width - 230)
-
-        self._draw_panel(self.width - 166, 42, self.width - 16, 78, outline="#26313a", fill="#03070b")
-        self.draw_text(self.width - 154, 54, text="CRED", fill="#7d8891", font=("Courier", 7, "bold"), anchor="w")
-        self.draw_text(self.width - 26, 54, text=str(credits), fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="e")
-        self.draw_text(self.width - 154, 70, text=f"CARGO {cargo}", fill=COLOR_TEXT, font=("Courier", 8, "bold"), anchor="w")
-        self.draw_text(self.width - 26, 70, text=f"{trade_profit}", fill=COLOR_ORANGE, font=("Courier", 8, "bold"), anchor="e")
-
-        strip_y = 112
-        left_x = 58
-        center_x = self.width // 2
-        right_x = self.width - 58
-        self.canvas.create_line(left_x, strip_y, right_x, strip_y, fill="#26313a", width=3)
-        self.canvas.create_line(left_x, strip_y, center_x, strip_y, fill=COLOR_ACCENT, width=4)
-        self.canvas.create_line(center_x, strip_y, right_x, strip_y, fill=COLOR_ORANGE, width=3, dash=(6, 4))
-        self.canvas.create_line(left_x, strip_y + 14, right_x, strip_y + 14, fill="#111820", width=1)
-        nodes = (
-            (left_x, "PREV", "#7d8891", 5),
-            (center_x, "CURRENT", COLOR_ACCENT, 7),
-            (right_x, "NEXT", COLOR_ORANGE, 5),
-        )
-        for x, label, color, radius in nodes:
-            self.canvas.create_oval(x - radius, strip_y - radius, x + radius, strip_y + radius, outline=color, width=2, fill="#010101")
-            self.draw_text(x, 130, text=label, fill=color, font=("Courier", 7, "bold"), anchor="center")
-        self.draw_text((left_x + center_x) // 2, 98, text=nav_context.get("prev_distance", "--"), fill="#7d8891", font=("Courier", 8, "bold"), anchor="center")
-        self.draw_text((center_x + right_x) // 2, 98, text=nav_context.get("next_distance", "--"), fill=COLOR_ORANGE, font=("Courier", 8, "bold"), anchor="center")
+        state_text = self._state_text(nav_context)
+        state_color = self._state_color(state_text)
         remaining = nav_context.get("route_remaining")
-        if isinstance(remaining, int):
-            self.draw_text(center_x, 98, text=f"{remaining} JUMPS", fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="center")
-
-        pct = (scanned / total) if total > 0 else 0
-        pct = max(0.0, min(1.0, pct))
-        self.canvas.create_rectangle(18, 148, self.width - 18, 158, outline="#26313a", width=1)
-        if pct > 0:
-            self.canvas.create_rectangle(18, 148, 18 + ((self.width - 36) * pct), 158, fill=COLOR_ACCENT, outline=COLOR_ACCENT)
-        
-        bio_text = f"BIO {organic_count}"
-        if nav_context.get("badges"):
-            for badge, _state in nav_context.get("badges", []):
-                if str(badge).startswith("BIO"):
-                    bio_text = str(badge)
-                    break
-        value_count = 0
-        for badge, _state in nav_context.get("badges", []):
-            if str(badge).startswith("VALUE"):
-                try:
-                    value_count = int(str(badge).split(" ", 1)[1])
-                except Exception:
-                    value_count = 0
-        metrics_y = 164
-        self._draw_metric_block(18, metrics_y, "Scan", f"{scanned}/{total}", COLOR_TEXT, width=92)
-        self._draw_metric_block(116, metrics_y, "Bio", bio_text.replace("BIO ", ""), COLOR_ORANGE if bio_text != "BIO 0" else "#7d8891", width=76)
-        self._draw_metric_block(198, metrics_y, "Value", str(value_count), COLOR_ORANGE if value_count else "#7d8891", width=82)
-        self._draw_metric_block(self.width - 92, metrics_y, "Complete", f"{int(pct*100)}%", COLOR_ACCENT, width=74)
-
         t_day = system_traffic.get('day', 0)
         t_week = system_traffic.get('week', 0)
         t_total = system_traffic.get('total', 0)
-        flight_state = str(nav_context.get("flight_state") or "").upper()
-        vehicle_name = str(nav_context.get("vehicle_name") or "").upper()
-        music_mode = str(nav_context.get("music_mode") or "").upper()
-        if flight_state in ("HYPERSPACE", "SUPERCRUISE", "JUMPING"):
-            state_text = flight_state
-        elif flight_state == "ONFOOT" or nav_context.get("on_foot") or music_mode == "ONFOOT":
-            state_text = "ONFOOT"
-        elif nav_context.get("docked") and nav_context.get("station"):
-            state_text = "DOCKED"
-        elif nav_context.get("in_fss"):
-            state_text = "FSS"
-        elif flight_state == "NOMAD" or vehicle_name == "NOMAD":
-            state_text = "NOMAD"
-        elif flight_state == "FIGHTER" or nav_context.get("in_fighter"):
-            state_text = "FIGHTER"
-        elif flight_state == "SRV" or nav_context.get("in_srv"):
-            state_text = "SRV"
-        elif flight_state == "LANDED" or nav_context.get("landed"):
-            state_text = "LANDED"
-        elif music_mode in ("MAP", "COMBAT", "EXPLORATION", "STATION"):
-            state_text = music_mode
-        else:
-            state_text = "FLIGHT"
 
-        bottom_top = 192
-        self.canvas.create_line(16, bottom_top - 5, self.width - 16, bottom_top - 5, fill="#26313a", width=1)
-        self._draw_status_pill(18, bottom_top, "Traffic", f"{t_day}/{t_week}/{t_total}", "#7d8891", width=92)
-        state_color = COLOR_ACCENT if state_text in ("DOCKED", "LANDED", "FSS", "FIGHTER", "SRV", "NOMAD", "ONFOOT", "MAP", "EXPLORATION", "STATION") else (COLOR_ORANGE if state_text in ("HYPERSPACE", "SUPERCRUISE", "JUMPING", "COMBAT") else "#7d8891")
-        self._draw_status_pill(116, bottom_top, "State", state_text, state_color, width=118)
+        self._draw_chrome(bracket_len=14)
+        self.draw_text(20, 18, text="NAVIGATION HUD", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
+        self._draw_title_anim()
+        self.canvas.create_line(20, 32, w - 20, 32, fill="#1a2530", width=1)
 
-        x = 244
+        # ── System / State ──────────────────────────────────────────────
+        self._draw_stat(20, 44, "CURRENT SYSTEM", "", COLOR_TEXT)
+        self.draw_text(w - 20, 44, text="STATE", fill="#7d8891", font=("Courier", 6, "bold"), anchor="e")
+        self.draw_fitted_text(20, 60, str(current_display).upper(), COLOR_TEXT, size=13, max_width=w - 260, anchor="w")
+        self.draw_fitted_text(w - 20, 60, state_text, state_color, size=11, max_width=200, anchor="e")
+        self.canvas.create_line(20, 72, w - 20, 72, fill="#1a2530", width=1)
+
+        # ── Stat grid ────────────────────────────────────────────────────
+        col_xs = (20, 160, 300, 430)
+        for x, label, value, color in (
+            (col_xs[0], "CREDITS", str(credits), COLOR_ACCENT),
+            (col_xs[1], "CARGO", str(cargo), COLOR_TEXT),
+            (col_xs[2], "PROFIT", str(trade_profit), COLOR_ORANGE),
+            (col_xs[3], "TRAFFIC", f"{t_day}/{t_week}/{t_total}", "#7d8891"),
+        ):
+            self._draw_stat(x, 84, label, value, color)
+        self.canvas.create_line(20, 108, w - 20, 108, fill="#1a2530", width=1)
+
+        # ── Route header + pip line ─────────────────────────────────────
+        header_label, header_color = self._route_header(nav_context, route_waypoint, route_counts, game_r_pos, remaining)
+        left_x, right_x = 20, w - 20
+        strip_y = 136
+        self.draw_fitted_text(left_x, 120, header_label, header_color, size=8, max_width=(right_x - left_x) * 0.4, anchor="w")
+        dest_color = self._draw_route_strip(left_x, right_x, strip_y, nav_context, header_color, dot_radius=5)
+        self.draw_text((left_x + right_x) // 2, 120, text=nav_context.get("next_distance", "--"), fill=dest_color, font=("Courier", 8, "bold"), anchor="center")
+        total_dist_text = nav_context.get("total_distance_text")
+        if total_dist_text:
+            self.draw_text(right_x, 120, text=total_dist_text, fill=COLOR_ORANGE, font=("Courier", 8, "bold"), anchor="e")
+        self.draw_text(left_x, 152, text="CURRENT", fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="w")
+        self.draw_text(right_x, 152, text="DEST" if (nav_context.get("hops") or []) else "NEXT", fill=dest_color, font=("Courier", 8, "bold"), anchor="e")
+        self.canvas.create_line(20, 162, w - 20, 162, fill="#1a2530", width=1)
+
+        # ── Scan progress ────────────────────────────────────────────────
+        pct = (scanned / total) if total > 0 else 0
+        pct = max(0.0, min(1.0, pct))
+        self.draw_text(20, 174, text="SCAN PROGRESS", fill="#7d8891", font=("Courier", 7, "bold"), anchor="w")
+        self.draw_text(w - 20, 174, text=f"{scanned}/{total}  ·  {int(pct*100)}%", fill=COLOR_TEXT, font=("Courier", 8, "bold"), anchor="e")
+        self.canvas.create_rectangle(20, 182, w - 20, 190, outline="#26313a", width=1)
+        if pct > 0:
+            self.canvas.create_rectangle(20, 182, 20 + ((w - 40) * pct), 190, fill=COLOR_ACCENT, outline=COLOR_ACCENT)
+        self.canvas.create_line(20, 200, w - 20, 200, fill="#1a2530", width=1)
+
+        # ── Badges ───────────────────────────────────────────────────────
+        x = 20
         for badge, state in nav_context.get("badges", []):
-            if str(badge).startswith("BIO"):
-                continue
-            width = self._draw_badge(x, bottom_top + 3, str(badge), state)
-            x += width + 6
-            if x > self.width - 210:
+            bw = self._draw_badge(x, 208, str(badge), state)
+            x += bw + 6
+            if x > w - 60:
                 break
-
-        route_pct = 0.0
-        route_count_txt = "NO ROUTE"
-        show_route_pct = False
-        if isinstance(remaining, int):
-            route_count_txt = ""
-        elif route_counts and route_counts[1] > 0:
-            route_pct = max(0.0, min(1.0, route_counts[0] / route_counts[1]))
-            show_route_pct = True
-            route_count_txt = f"ROUTE {route_counts[0]}/{route_counts[1]}"
-        elif game_r_pos and game_r_pos[1] > 0:
-            route_pct = max(0.0, min(1.0, game_r_pos[0] / game_r_pos[1]))
-            show_route_pct = True
-            route_count_txt = f"GAME {game_r_pos[0]}/{game_r_pos[1]}"
-        route_text = f"{route_count_txt} {int(route_pct * 100)}%" if show_route_pct else route_count_txt
-
-        if route_text:
-            self.draw_text(self.width - 18, bottom_top + 16, text=route_text, fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="e")
-
-        footer_y = h - 30
-        self.canvas.create_rectangle(16, footer_y, self.width - 16, h - 8, outline="#111820", fill="#03070b", width=1)
-        footer_progress = ""
-        if route_waypoint:
-            footer_label = "WAYPOINT"
-            footer_value = route_waypoint.upper()
-            footer_color = COLOR_ORANGE
-            if route_counts and route_counts[1] > 0:
-                route_parts = [f"ROUTE {route_counts[0]}/{route_counts[1]}"]
-                route_parts.append(f"{int(max(0.0, min(1.0, route_counts[0] / route_counts[1])) * 100)}%")
-                if r_pos and len(r_pos) > 2 and r_pos[2]:
-                    route_parts.append(r_pos[2].replace(" ", ""))
-                footer_progress = " ".join(route_parts)
-        else:
-            footer_label = "ROUTE MODE"
-            footer_value = route_mode
-            footer_color = COLOR_ORANGE if route_mode != "NO ROUTE" else "#7d8891"
-        self.draw_text(28, footer_y + 15, text=footer_label, fill="#7d8891", font=("Courier", 8, "bold"), anchor="w")
-        progress_width = 158 if footer_progress else 0
-        self.draw_fitted_text(116, footer_y + 15, footer_value, footer_color, size=8, max_width=self.width - 148 - progress_width)
-        if footer_progress:
-            self.draw_text(self.width - 28, footer_y + 15, text=footer_progress, fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="e")

@@ -26,6 +26,7 @@ from screenshot_handler import ScreenshotHandler
 from settings_ui import open_settings
 from route_plotter import RoutePlotter
 from waypoint_manager import WaypointManager
+import route_strip
 from journal_watcher import JournalWatcher
 from mining_window import MiningWindow
 from carrier_tracker import CarrierTracker
@@ -33,6 +34,9 @@ from carrier_window import CarrierWindow
 from prospector_hud import ProspectorHUD
 from system_info_hud import SystemInfoHUD
 from colony_overlay import ColonyOverlay
+from gravity_warning_hud import GravityWarningHUD
+from bio_strip_hud import BioStripHUD
+from station_info_hud import StationInfoHUD
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
@@ -156,6 +160,35 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _refresh_bgs_window(self):
         self._refresh_tool_window("bgs_window", "refresh_current")
+
+    def _refresh_system_info_progress(self):
+        if not getattr(self, "system_info_hud", None):
+            return
+        if getattr(self, "_system_info_refresh_job", None) is not None:
+            return
+        def _run():
+            self._system_info_refresh_job = None
+            if self.system_info_hud:
+                self.system_info_hud.update_scan_progress(self.scan_items, self.body_signals, self.total)
+        try:
+            self._system_info_refresh_job = self.root.after(150, _run)
+        except Exception:
+            self._system_info_refresh_job = None
+
+    def _refresh_bio_strip_hud(self, body_id):
+        if not getattr(self, "bio_strip_hud", None) or body_id is None:
+            return
+        item = self.scan_items_by_id.get(body_id)
+        if item:
+            self.bio_strip_hud.update_from_item(item.get("name"), item)
+
+    def _refresh_gravity_warning(self, body_id, body_name=None):
+        if not getattr(self, "gravity_warning_hud", None) or body_id is None:
+            return
+        item = self.scan_items_by_id.get(body_id)
+        gravity_g = item.get("gravity_g") if item else None
+        name = body_name or (item.get("name") if item else None)
+        self.gravity_warning_hud.check_body(name, gravity_g)
 
     def _save_colonisation_data(self, projects):
         save_colonisation_data(projects, self.config.get("colonisation_data_file"))
@@ -329,6 +362,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_station_name = None
         self.current_station_type = None
         self.current_station_market_id = None
+        self.current_station_economy = None
+        self.current_station_economies = []
+        self.current_station_government = None
+        self.current_station_faction = None
+        self.current_station_allegiance = None
+        self.current_station_services = []
+        self.current_station_dist_ls = None
+        self.current_station_landing_pads = None
         self.current_trade_market = None
         self.current_docked = False
         self.hud_flight_state = "FLIGHT"
@@ -525,6 +566,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         else:
             self.system_info_hud = None
 
+        if self.config.get("gravity_warning_overlay_enabled", True):
+            self.gravity_warning_hud = GravityWarningHUD(self.root, self.config)
+        else:
+            self.gravity_warning_hud = None
+
+        if self.config.get("bio_strip_overlay_enabled", True):
+            self.bio_strip_hud = BioStripHUD(self.root, self.config)
+        else:
+            self.bio_strip_hud = None
+
+        if self.config.get("station_info_overlay_enabled", True):
+            self.station_info_hud = StationInfoHUD(self.root, self.config)
+        else:
+            self.station_info_hud = None
+
         if self.config.get("colony_overlay_enabled", False):
             self.colony_overlay = ColonyOverlay(
                 self.root,
@@ -532,6 +588,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 lambda: self.colonisation_projects,
                 lambda: self.current_cargo_inventory,
                 lambda: self.cargo_capacity,
+                lambda: self.current_colonisation_market,
             )
         else:
             self.colony_overlay = None
@@ -1012,6 +1069,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             lambda: self.colonisation_projects,
             lambda: self.current_cargo_inventory,
             lambda: self.cargo_capacity,
+            lambda: self.current_colonisation_market,
         )
         self.config["colony_overlay_enabled"] = True
         self._save_config_file()
@@ -1285,6 +1343,36 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 pass
             self.system_info_hud = None
 
+        if self.config.get("gravity_warning_overlay_enabled", True):
+            if self.gravity_warning_hud is None:
+                self.gravity_warning_hud = GravityWarningHUD(self.root, self.config)
+        elif self.gravity_warning_hud:
+            try:
+                self.gravity_warning_hud.win.destroy()
+            except Exception:
+                pass
+            self.gravity_warning_hud = None
+
+        if self.config.get("bio_strip_overlay_enabled", True):
+            if self.bio_strip_hud is None:
+                self.bio_strip_hud = BioStripHUD(self.root, self.config)
+        elif self.bio_strip_hud:
+            try:
+                self.bio_strip_hud.win.destroy()
+            except Exception:
+                pass
+            self.bio_strip_hud = None
+
+        if self.config.get("station_info_overlay_enabled", True):
+            if self.station_info_hud is None:
+                self.station_info_hud = StationInfoHUD(self.root, self.config)
+        elif self.station_info_hud:
+            try:
+                self.station_info_hud.win.destroy()
+            except Exception:
+                pass
+            self.station_info_hud = None
+
         if self.config.get("colony_overlay_enabled", False):
             if self.colony_overlay is None or not self.colony_overlay.is_open():
                 self.colony_overlay = ColonyOverlay(
@@ -1293,6 +1381,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     lambda: self.colonisation_projects,
                     lambda: self.current_cargo_inventory,
                     lambda: self.cargo_capacity,
+                    lambda: self.current_colonisation_market,
                 )
             else:
                 self.colony_overlay.update()
@@ -1567,6 +1656,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     break
 
         waypoint_manager = getattr(self, "waypoint_manager", None)
+        hops, hops_truncated = route_strip.build_route_hops(
+            self.current_coords, route, entries, current, waypoint_manager=waypoint_manager
+        )
+
         if waypoint_manager and waypoint_manager.waypoints:
             route_mode = "WAYPOINTS"
         elif route:
@@ -1610,6 +1703,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "prev_distance": self._format_hud_distance(previous_coords, self.current_coords),
             "next_distance": self._format_hud_distance(self.current_coords, next_coords),
             "route_remaining": route_remaining,
+            "hops": hops,
+            "hops_truncated": hops_truncated,
+            "total_distance_text": route_strip.total_distance_text(hops, hops_truncated),
             "cargo": f"{cargo_tons}/{cargo_cap}T" if cargo_cap else f"{cargo_tons}T",
             "trade_profit": self._format_hud_credits(trade_profit),
             "credits": self._format_hud_credits(self._latest_hud_balance()),
@@ -2107,6 +2203,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.update_hud()
                 self.schedule_dashboard_refresh()
                 self._refresh_exploration_window()
+                self._refresh_bio_strip_hud(body_id)
 
         elif ev == "Location" or ev == "FSDJump" or ev == "StartJump" or (ev == "CarrierJump" and d.get("docked")):
             # Do not update HUDs during jump charge; wait for arrival.
@@ -2281,9 +2378,25 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_station_name = station
             self.current_station_type = stype or None
             self.current_station_market_id = d.get("MarketID") or d.get("market_id")
+            # Docked has no dedicated journal_watcher normalization, so `d` here
+            # is the raw ED journal dict — these fields are already present on it.
+            self.current_station_economy = d.get("StationEconomy_Localised") or d.get("StationEconomy")
+            self.current_station_economies = d.get("StationEconomies") or []
+            faction = d.get("StationFaction") or {}
+            self.current_station_government = d.get("StationGovernment_Localised") or d.get("StationGovernment")
+            self.current_station_faction = {
+                "name": faction.get("Name"),
+                "state": faction.get("FactionState"),
+            } if faction.get("Name") else None
+            self.current_station_allegiance = d.get("StationAllegiance")
+            self.current_station_services = d.get("StationServices") or []
+            self.current_station_dist_ls = d.get("DistFromStarLS")
+            self.current_station_landing_pads = d.get("LandingPads")
             label = f"{station} ({stype})" if stype else station
             self._queue_edsm_upload(raw, startup_replay=startup_replay)
             self.update_hud()
+            if self.station_info_hud and not self.batch_mode and not startup_replay:
+                self.station_info_hud.on_docked(self)
             if not self.batch_mode and not startup_replay:
                 self.add_event_feed_entry("DOCK", f"Docked: {label}", severity="INFO", copy_text=station)
 
@@ -2295,8 +2408,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_station_name = None
             self.current_station_type = None
             self.current_station_market_id = None
+            self.current_station_economy = None
+            self.current_station_economies = []
+            self.current_station_government = None
+            self.current_station_faction = None
+            self.current_station_allegiance = None
+            self.current_station_services = []
+            self.current_station_dist_ls = None
+            self.current_station_landing_pads = None
             self._queue_edsm_upload(raw, startup_replay=startup_replay)
             self.update_hud()
+            if self.station_info_hud:
+                self.station_info_hud.hide()
             if not self.batch_mode and not startup_replay:
                 self.add_event_feed_entry("DOCK", f"Undocked: {station}", severity="INFO", copy_text=station)
 
@@ -2476,6 +2599,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.update_hud()
                         self.schedule_dashboard_refresh()
                         self._refresh_exploration_window()
+                        self._refresh_system_info_progress()
+                        self._refresh_bio_strip_hud(body_id)
 
         elif ev == "SAASignalsFound":
             if not self._matches_current_system_address(d):
@@ -2499,7 +2624,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.update_hud()
                         self.schedule_dashboard_refresh()
                         self._refresh_exploration_window()
-        
+                        self._refresh_system_info_progress()
+                        self._refresh_bio_strip_hud(body_id)
+
         elif ev == "SAAScanComplete":
             if not self._matches_current_system_address(d):
                 return
@@ -2518,7 +2645,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
-        
+                        self._refresh_system_info_progress()
+
         elif ev == "Scan":
             if not self._matches_current_system_address(d):
                 return
@@ -2589,6 +2717,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
+                        self._refresh_system_info_progress()
 
                     body_label = body_name or "Unknown Body"
                     landable_marker = " 🚀" if d.get("landable") else ""
@@ -2613,6 +2742,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.add_event_feed_entry("VALUABLE", f"{icon} Valuable world: {body_name_str}", severity="WARN", copy_text=body_name_str)
                     if is_system_star_scan and d.get("was_discovered") is False:
                         self.add_event_feed_entry("ALERT", "Undiscovered system star scanned", severity="WARN", copy_text=self.current_sys)
+                    if not self.batch_mode:
+                        self._refresh_bio_strip_hud(body_id)
                 else:
                     # Later detailed/nav-beacon scans can add fields missing from an initial basic scan.
                     self.last_scan_event = data
@@ -2637,6 +2768,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
+                        self._refresh_system_info_progress()
+                        self._refresh_bio_strip_hud(body_id)
 
         # ── Colonization ──────────────────────────────────────────────────────────
         if ev == "ColonisationConstructionDepot":
@@ -2689,9 +2822,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if ev == "ApproachBody" and not self.batch_mode:
             self.current_body_id   = self._normalize_body_id(d.get("body_id"))
             self.current_body_name = d.get("body_name") or ""
+            self._refresh_gravity_warning(self.current_body_id, self.current_body_name)
         elif ev == "LeaveBody" and not self.batch_mode:
             self.current_body_id   = None
             self.current_body_name = ""
+            if self.gravity_warning_hud:
+                self.gravity_warning_hud.clear()
 
         # ── Prospector overlay — live events only, skip journal replay on startup ──
         # Use startup_replay (not batch_mode) so rapid-fire limpets that land in
