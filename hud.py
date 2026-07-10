@@ -222,7 +222,9 @@ class TacticalHUD:
     def _draw_badge(self, x, y, text, state="muted", height=18):
         color = self._badge_color(state)
         font = tkfont.Font(family="Courier", size=8, weight="bold")
-        width = max(52, font.measure(text) + 16)
+        text_w = font.measure(text)
+        width = max(52, text_w + 16)
+        cx, cy = x + width / 2, y + height / 2
         if state == "alert":
             # Hazard-stripe treatment for genuine alerts (undiscovered, valuable, bio signals).
             self.canvas.create_rectangle(x, y, x + width, y + height, fill="#05080c", outline="")
@@ -233,11 +235,18 @@ class TacticalHUD:
                 if x1 > x0:
                     self.canvas.create_line(x0, y + height, x1, y, fill=color, width=1)
                 xx += step
-            self.canvas.create_rectangle(x + 1, y + 1, x + width - 1, y + height - 1, fill="", outline="")
+            # Clear a flat backdrop directly behind the text — otherwise the
+            # stripes cross the letters and wreck legibility. Stripes stay
+            # visible in the badge's margins/corners around the text.
+            pad_x = 4
+            self.canvas.create_rectangle(
+                cx - text_w / 2 - pad_x, y + 2, cx + text_w / 2 + pad_x, y + height - 2,
+                fill="#05080c", outline="",
+            )
         else:
             self.canvas.create_rectangle(x, y, x + width, y + height, fill="#05080c", outline="")
         self.canvas.create_rectangle(x, y, x + width, y + height, outline=color, width=1)
-        self.draw_text(x + width / 2, y + height / 2, text=text, fill=color, font=("Courier", 8, "bold"), anchor="center")
+        self.draw_text(cx, cy, text=text, fill=color, font=("Courier", 8, "bold"), anchor="center")
         return width
 
     def _state_text(self, nav_context):

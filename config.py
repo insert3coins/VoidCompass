@@ -346,18 +346,19 @@ def load_config():
         'colony_overlay_y': 40,
         'colony_overlay_w': 380,
         'colony_overlay_h': 260,
-        'gravity_warning_hud_x': 30,
-        'gravity_warning_hud_y': 400,
+        # gravity_warning_hud_x / bio_strip_hud_x intentionally omitted —
+        # both default to a screen-width-relative right-edge position
+        # computed in their own constructors (matches toast_hud_x/_y).
+        'gravity_warning_hud_y': 530,
         'gravity_warning_hud_timeout_s': 20,
         'gravity_warning_threshold_g': 3.0,
-        'bio_strip_hud_x': 30,
         'bio_strip_hud_y': 320,
         'bio_strip_hud_timeout_s': 30,
         'station_info_hud_x': 30,
         'station_info_hud_y': 380,
         'station_info_timeout_s': 25,
         'survey_status_hud_x': 30,
-        'survey_status_hud_y': 500,
+        'survey_status_hud_y': 520,
         'low_fuel_threshold_pct': 0.25,
         'big_trade_profit_threshold': 1000000,
         'main_geometry': '1000x700',
