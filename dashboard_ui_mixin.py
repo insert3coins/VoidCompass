@@ -1154,7 +1154,6 @@ class DashboardUIMixin(ThemedWindowMixin):
             return
         self.root.clipboard_clear()
         self.root.clipboard_append(str(payload))
-        self.root.update()
 
     def _open_selected_event_feed_link(self):
         if not hasattr(self, "event_feed_list"):
