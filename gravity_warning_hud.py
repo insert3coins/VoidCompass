@@ -37,9 +37,12 @@ class GravityWarningHUD:
         self.canvas.bind("<B1-Motion>", self._drag_move)
         self.canvas.bind("<ButtonRelease-1>", self._drag_end)
 
-        screen_h = root.winfo_screenheight()
-        x = self._safe_int(config.get("gravity_warning_hud_x"), 30)
-        y = self._safe_int(config.get("gravity_warning_hud_y"), max(30, screen_h - 420))
+        # Right side, below bio_strip_hud's typical extent (both can fire
+        # together — a high-gravity body can also carry bio signals).
+        screen_w = root.winfo_screenwidth()
+        default_x = max(30, screen_w - self.WIDTH - 30)
+        x = self._safe_int(config.get("gravity_warning_hud_x"), default_x)
+        y = self._safe_int(config.get("gravity_warning_hud_y"), 530)
         self.win.geometry(f"+{x}+{y}")
 
         self._force_topmost()

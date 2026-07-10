@@ -57,7 +57,12 @@ class BioStripHUD:
         self.canvas.bind("<B1-Motion>", self._drag_move)
         self.canvas.bind("<ButtonRelease-1>", self._drag_end)
 
-        x = self._safe_int(config.get("bio_strip_hud_x"), 30)
+        # Right side by default — gravity_warning_hud shares this column
+        # below it, keeping both clear of the left-edge overlay stack
+        # (system info / carrier / station info / survey status).
+        screen_w = root.winfo_screenwidth()
+        default_x = max(30, screen_w - self.WIDTH - 30)
+        x = self._safe_int(config.get("bio_strip_hud_x"), default_x)
         y = self._safe_int(config.get("bio_strip_hud_y"), 320)
         self.win.geometry(f"+{x}+{y}")
 

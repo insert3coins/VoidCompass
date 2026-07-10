@@ -45,7 +45,7 @@ class SurveyStatusHUD:
         self.canvas.bind("<ButtonRelease-1>", self._drag_end)
 
         x = self._safe_int(config.get("survey_status_hud_x"), 30)
-        y = self._safe_int(config.get("survey_status_hud_y"), 500)
+        y = self._safe_int(config.get("survey_status_hud_y"), 520)
         self.win.geometry(f"+{x}+{y}")
 
         self._force_topmost()
