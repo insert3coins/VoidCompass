@@ -11,6 +11,7 @@ from colonisation_commodities import (
     get_primary_source,
     normalize_commodity_name,
 )
+import overlay_chrome
 
 
 class ColonyOverlay:
@@ -240,12 +241,12 @@ class ColonyOverlay:
         try:
             w = max(int(self.canvas.winfo_width()), 50)
             h = max(int(self.canvas.winfo_height()), 50)
-            m = 5
+            m = 12
             self.canvas.delete("bg")
-            self.canvas.create_rectangle(m, m, w - m, h - m, fill=self.PANEL, outline=COLOR_ACCENT, width=2, tags="bg")
+            overlay_chrome.draw_chrome(self.canvas, w, h, bracket_len=10, bg=self.PANEL, tags="bg")
             self.canvas.tag_lower("bg")
-            self.canvas.coords(self.panel_window, m + 2, m + 2)
-            self.canvas.itemconfig(self.panel_window, width=max(0, w - (2 * m + 4)), height=max(0, h - (2 * m + 4)))
+            self.canvas.coords(self.panel_window, m, m)
+            self.canvas.itemconfig(self.panel_window, width=max(0, w - 2 * m), height=max(0, h - 2 * m))
         except Exception:
             pass
 

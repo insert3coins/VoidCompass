@@ -37,6 +37,8 @@ from colony_overlay import ColonyOverlay
 from gravity_warning_hud import GravityWarningHUD
 from bio_strip_hud import BioStripHUD
 from station_info_hud import StationInfoHUD
+from survey_status_hud import SurveyStatusHUD
+from toast_hud import ToastHUD
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
@@ -162,7 +164,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._refresh_tool_window("bgs_window", "refresh_current")
 
     def _refresh_system_info_progress(self):
-        if not getattr(self, "system_info_hud", None):
+        if not getattr(self, "system_info_hud", None) and not getattr(self, "survey_status_hud", None):
             return
         if getattr(self, "_system_info_refresh_job", None) is not None:
             return
@@ -170,6 +172,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._system_info_refresh_job = None
             if self.system_info_hud:
                 self.system_info_hud.update_scan_progress(self.scan_items, self.body_signals, self.total)
+            if self.survey_status_hud:
+                self.survey_status_hud.update(self.current_sys, self.scanned, self.total, self.scan_items, self.body_signals)
         try:
             self._system_info_refresh_job = self.root.after(150, _run)
         except Exception:
@@ -189,6 +193,33 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         gravity_g = item.get("gravity_g") if item else None
         name = body_name or (item.get("name") if item else None)
         self.gravity_warning_hud.check_body(name, gravity_g)
+
+    def _check_stale_bio_scans(self, body_id):
+        """Warn if we're leaving a body with an in-progress (not yet 3-sample
+        complete) organic scan sequence still on it — those samples are lost
+        once you leave the body's vicinity, same warning SrvSurvey gives."""
+        if body_id is None or not getattr(self, "toast_hud", None):
+            return
+        warned = getattr(self, "_stale_bio_warned", None)
+        if warned is None:
+            warned = self._stale_bio_warned = set()
+        for key, entry in self.last_bio_scan.items():
+            if entry.get("body_id") != body_id or entry.get("is_complete"):
+                continue
+            if key in warned:
+                continue
+            warned.add(key)
+            species = entry.get("species") or "Organic"
+            sample_idx = entry.get("sample_idx")
+            max_samples = entry.get("max_samples") or 3
+            body_label = entry.get("body_name") or "this body"
+            progress = f"{sample_idx}/{max_samples}" if sample_idx is not None else "in progress"
+            self.toast_hud.push(
+                "STALE SAMPLE",
+                f"{species} ({progress}) left behind on {body_label}",
+                severity="warn",
+                duration_s=15,
+            )
 
     def _save_colonisation_data(self, projects):
         save_colonisation_data(projects, self.config.get("colonisation_data_file"))
@@ -351,6 +382,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.cmdr_ship = {}
         self.last_scan_event = None
         self.last_bio_scan = {}
+        self._stale_bio_warned = set()
         # Bio tracking: star/body scan conditions for prediction
         self.system_stars: dict  = {}   # body_id → star_type str
         self.body_scan_data: dict = {}  # body_id → conditions dict
@@ -580,6 +612,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.station_info_hud = StationInfoHUD(self.root, self.config)
         else:
             self.station_info_hud = None
+
+        if self.config.get("survey_status_overlay_enabled", True):
+            self.survey_status_hud = SurveyStatusHUD(self.root, self.config)
+        else:
+            self.survey_status_hud = None
+
+        if self.config.get("toast_overlay_enabled", True):
+            self.toast_hud = ToastHUD(self.root, self.config)
+        else:
+            self.toast_hud = None
 
         if self.config.get("colony_overlay_enabled", False):
             self.colony_overlay = ColonyOverlay(
@@ -1372,6 +1414,26 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             except Exception:
                 pass
             self.station_info_hud = None
+
+        if self.config.get("survey_status_overlay_enabled", True):
+            if self.survey_status_hud is None:
+                self.survey_status_hud = SurveyStatusHUD(self.root, self.config)
+        elif self.survey_status_hud:
+            try:
+                self.survey_status_hud.win.destroy()
+            except Exception:
+                pass
+            self.survey_status_hud = None
+
+        if self.config.get("toast_overlay_enabled", True):
+            if self.toast_hud is None:
+                self.toast_hud = ToastHUD(self.root, self.config)
+        elif self.toast_hud:
+            try:
+                self.toast_hud.win.destroy()
+            except Exception:
+                pass
+            self.toast_hud = None
 
         if self.config.get("colony_overlay_enabled", False):
             if self.colony_overlay is None or not self.colony_overlay.is_open():
@@ -2271,6 +2333,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.system_bio_signals = 0
             self.last_scan_event = None
             self.last_bio_scan = {}
+            self._stale_bio_warned = set()
             self.system_stars.clear()
             self.body_scan_data.clear()
             self.current_body_id   = None
@@ -2367,6 +2430,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 _tot  = self.total
                 self.root.after(0, lambda: self.system_info_hud.on_system_arrival(
                     _sys, _sc, _si, _bs, _tot))
+            if self.survey_status_hud and not startup_replay:
+                self.root.after(0, lambda: self.survey_status_hud.update(
+                    self.current_sys, self.scanned, self.total, self.scan_items, self.body_signals))
             self._refresh_exploration_window()
 
         elif ev == "Docked":
@@ -2824,6 +2890,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_body_name = d.get("body_name") or ""
             self._refresh_gravity_warning(self.current_body_id, self.current_body_name)
         elif ev == "LeaveBody" and not self.batch_mode:
+            self._check_stale_bio_scans(self.current_body_id)
             self.current_body_id   = None
             self.current_body_name = ""
             if self.gravity_warning_hud:

@@ -1,5 +1,6 @@
 import tkinter as tk
 from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, save_config
+import overlay_chrome
 
 WIDTH = 460
 
@@ -333,11 +334,8 @@ class SystemInfoHUD:
         self.win.geometry(f"{WIDTH}x{total_h}")
         self.canvas.delete("all")
 
-        self.canvas.create_rectangle(
-            5, 5, WIDTH - 5, total_h - 5,
-            fill="#010101", outline=COLOR_ACCENT, width=2,
-        )
-        self.canvas.create_line(5, 35, WIDTH - 5, 35, fill=COLOR_ACCENT, width=1)
+        overlay_chrome.draw_chrome(self.canvas, WIDTH, total_h)
+        self.canvas.create_line(20, 35, WIDTH - 20, 35, fill="#1a2530", width=1)
         self._draw_text(20, 20, "SYSTEM INFO", COLOR_ACCENT, ("Courier", 10, "bold"))
 
         y = 44

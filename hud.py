@@ -3,6 +3,7 @@ import tkinter.font as tkfont
 import time
 from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, save_config
 import route_strip
+import overlay_chrome
 
 class TacticalHUD:
     def __init__(self, root, config, on_widget_click=None):
@@ -204,29 +205,8 @@ class TacticalHUD:
 
     # ── Chrome (SrvSurvey-style tri-line stripe border + corner brackets) ──
 
-    @staticmethod
-    def _dim_color(hexcolor, factor=0.35):
-        hexcolor = hexcolor.lstrip("#")
-        r, g, b = int(hexcolor[0:2], 16), int(hexcolor[2:4], 16), int(hexcolor[4:6], 16)
-        return f"#{int(r*factor):02x}{int(g*factor):02x}{int(b*factor):02x}"
-
     def _draw_chrome(self, accent=COLOR_ACCENT, bracket_len=12):
-        w, h = self.width, self.base_height
-        self.canvas.create_rectangle(0, 0, w, h, fill="#010101", outline="")
-        for yy in range(0, h, 3):
-            self.canvas.create_line(0, yy, w, yy, fill="#0a0f14", width=1)
-
-        dim = self._dim_color(accent)
-        for yy, c in ((3, dim), (4, accent), (5, dim)):
-            self.canvas.create_line(4, yy, w - 4, yy, fill=c, width=1)
-        for yy, c in ((h - 6, dim), (h - 5, accent), (h - 4, dim)):
-            self.canvas.create_line(4, yy, w - 4, yy, fill=c, width=1)
-        self.canvas.create_line(2, 2, 2, h - 2, fill=dim, width=1)
-        self.canvas.create_line(w - 2, 2, w - 2, h - 2, fill=dim, width=1)
-
-        for x0, y0, dx, dy in ((3, 3, 1, 1), (w - 3, 3, -1, 1), (3, h - 3, 1, -1), (w - 3, h - 3, -1, -1)):
-            self.canvas.create_line(x0, y0, x0 + dx * bracket_len, y0, fill=accent, width=2)
-            self.canvas.create_line(x0, y0, x0, y0 + dy * bracket_len, fill=accent, width=2)
+        overlay_chrome.draw_chrome(self.canvas, self.width, self.base_height, accent=accent, bracket_len=bracket_len)
 
     def _draw_stat(self, x, y, label, value, color=COLOR_TEXT, anchor="w", label_size=6, value_size=9, value_gap=13):
         self.draw_text(x, y, text=str(label).upper(), fill="#7d8891", font=("Courier", label_size, "bold"), anchor=anchor)

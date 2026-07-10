@@ -8,6 +8,7 @@ as ProspectorHUD.
 
 import tkinter as tk
 from config import COLOR_TEXT, COLOR_ORANGE, save_config
+import overlay_chrome
 
 _CHROMA = "#ff00ff"
 _RED = "#ff5a5a"
@@ -162,8 +163,8 @@ class GravityWarningHUD:
     def _redraw(self, body_name, gravity_g):
         w, h = self.WIDTH, self.HEIGHT
         self.canvas.delete("all")
-        self.canvas.create_rectangle(4, 4, w - 4, h - 4, fill="#010101", outline=_RED, width=3)
-        self.canvas.create_line(4, 30, w - 4, 30, fill=_RED, width=1)
+        overlay_chrome.draw_chrome(self.canvas, w, h, accent=_RED, bracket_len=10)
+        self.canvas.create_line(16, 30, w - 16, 30, fill=_RED, width=1)
         self._text(w / 2, 18, "⚠  HIGH GRAVITY WORLD  ⚠", _RED, ("Courier", 10, "bold"), anchor="center")
         self._text(w / 2, 48, body_name.upper() if len(body_name) <= 30 else body_name[:29].upper() + "…",
                     COLOR_TEXT, ("Courier", 11, "bold"), anchor="center")

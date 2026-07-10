@@ -824,6 +824,10 @@ class DashboardUIMixin(ThemedWindowMixin):
             self.event_feed_entries = self.event_feed_entries[:self.event_feed_max_entries]
         self._refresh_event_feed()
 
+        toast_hud = getattr(self, "toast_hud", None)
+        if toast_hud and sev in ("WARN", "FAIL"):
+            toast_hud.push(entry["tag"], msg_clean, severity=sev.lower())
+
     def _tick_event_feed_queue(self):
         if not getattr(self, "is_running", True):
             return

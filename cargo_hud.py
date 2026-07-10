@@ -1,5 +1,6 @@
 import tkinter as tk
 from config import COLOR_ACCENT, COLOR_GREEN, COLOR_TEXT, COLOR_ORANGE, save_config
+import overlay_chrome
 
 class CargoHUD:
     def __init__(self, root, config):
@@ -110,13 +111,13 @@ class CargoHUD:
         w = 300
         h = 400
         
-        # Border
-        self.canvas.create_rectangle(5, 5, w-5, h-5, fill="#010101", outline=COLOR_ACCENT, width=2)
+        # Chrome
+        overlay_chrome.draw_chrome(self.canvas, w, h)
         # Header separator
-        self.canvas.create_line(5, 45, w-5, 45, fill=COLOR_ACCENT, width=1)
-        
+        self.canvas.create_line(16, 45, w-16, 45, fill="#1a2530", width=1)
+
         # Title + total (line 1)
-        self.draw_text(15, 20, text="CARGO MANIFEST", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
+        self.draw_text(16, 20, text="CARGO MANIFEST", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
         
         # Total Count
         total = sum(item.get("Count", 0) for item in inventory)
@@ -139,13 +140,13 @@ class CargoHUD:
             if pct > 1.0: pct = 1.0
             idx = int(pct * 10)
             idx = max(0, min(idx, 10))
-            self.draw_text(w-15, 35, text=bars[idx], fill=COLOR_ORANGE, font=("Segoe UI Symbol", 10), anchor="e")
+            self.draw_text(w-16, 35, text=bars[idx], fill=COLOR_ORANGE, font=("Segoe UI Symbol", 10), anchor="e")
             total_str = f"TOTAL: {total}/{capacity}"
         else:
             total_str = f"TOTAL: {total}"
-            self.draw_text(w-15, 35, text=bars[0], fill="#777", font=("Segoe UI Symbol", 10), anchor="e")
+            self.draw_text(w-16, 35, text=bars[0], fill="#777", font=("Segoe UI Symbol", 10), anchor="e")
 
-        self.draw_text(w-15, 20, text=total_str, fill=COLOR_ORANGE, font=("Courier", 10, "bold"), anchor="e")
+        self.draw_text(w-16, 20, text=total_str, fill=COLOR_ORANGE, font=("Courier", 10, "bold"), anchor="e")
         
         y_pos = 60
         if not inventory:
@@ -165,7 +166,7 @@ class CargoHUD:
                 # Truncate name
                 display_name = (name[:22] + '..') if len(name) > 22 else name
                 
-                self.draw_text(15, y_pos, text=display_name, fill=COLOR_TEXT, font=("Courier", 9), anchor="w")
-                self.draw_text(w-15, y_pos, text=str(count), fill=COLOR_GREEN, font=("Courier", 9, "bold"), anchor="e")
+                self.draw_text(16, y_pos, text=display_name, fill=COLOR_TEXT, font=("Courier", 9), anchor="w")
+                self.draw_text(w-16, y_pos, text=str(count), fill=COLOR_GREEN, font=("Courier", 9, "bold"), anchor="e")
                 
                 y_pos += 20
