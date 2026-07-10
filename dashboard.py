@@ -1371,10 +1371,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def _copy_waypoint_to_clipboard(self, waypoint_name, log_label="NEXT WAYPOINT"):
         if not waypoint_name:
             return False
+        if threading.current_thread() is not threading.main_thread():
+            # Journal batches run on the watcher thread. Tk clipboard work
+            # must remain on the UI thread; the old nested root.update() call
+            # could freeze startup while replay callbacks accumulated.
+            self.root.after(
+                0,
+                lambda name=waypoint_name, label=log_label: self._copy_waypoint_to_clipboard(name, label),
+            )
+            return True
         try:
             self.root.clipboard_clear()
             self.root.clipboard_append(waypoint_name)
-            self.root.update()
             self.log(f"📋 COPIED {log_label}: {waypoint_name}")
             self.add_event_feed_entry("ROUTE", f"Copied {log_label}: {waypoint_name}", severity="INFO", copy_text=waypoint_name)
             return True
