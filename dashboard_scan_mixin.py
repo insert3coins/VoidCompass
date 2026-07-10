@@ -18,6 +18,8 @@ class DashboardScanMixin:
     def _apply_status_update(self, data):
         t0 = self._perf_start()
         self.last_status_event_ts = time.time()
+        if getattr(self, "heartbeat_hud", None):
+            self.heartbeat_hud.pulse()
         if getattr(self, "mining_window", None) and self.mining_window.is_open():
             self.mining_window.update_status(data)
         was_on_planet = bool(self.on_planet)
@@ -98,7 +100,31 @@ class DashboardScanMixin:
             else:
                 self.hud_flight_state = "FLIGHT"
             self.update_hud()
+        if not self.batch_mode:
+            self._check_low_fuel()
         self._perf_spike("_apply_status_update", t0, threshold_ms=20.0)
+
+    def _check_low_fuel(self):
+        """Toast once when main tank drops below threshold; re-arms once it
+        recovers past the threshold with a small hysteresis band, and stays
+        silent while docked/on-foot/in SRV or fighter where it's not urgent."""
+        cap = getattr(self, "fuel_capacity_main", None)
+        main = getattr(self, "current_fuel_main", None)
+        if not cap or cap <= 0 or main is None:
+            return
+        if self.current_docked or self.current_on_foot or self.current_in_srv or self.current_in_fighter:
+            return
+        toast_hud = getattr(self, "toast_hud", None)
+        if not toast_hud:
+            return
+        pct = main / cap
+        threshold = float(self.config.get("low_fuel_threshold_pct", 0.25) or 0.25)
+        if pct < threshold:
+            if not self._low_fuel_warned:
+                self._low_fuel_warned = True
+                toast_hud.push("LOW FUEL", f"Main tank at {int(pct*100)}%  ({main:.1f}/{cap:.1f}T)", severity="warn", duration_s=15)
+        elif pct > threshold + 0.05:
+            self._low_fuel_warned = False
 
     def update_scan_hud(self):
         pass  # ScanHUD overlay removed — scan data now lives on the main dashboard

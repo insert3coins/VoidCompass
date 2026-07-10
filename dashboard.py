@@ -39,6 +39,7 @@ from bio_strip_hud import BioStripHUD
 from station_info_hud import StationInfoHUD
 from survey_status_hud import SurveyStatusHUD
 from toast_hud import ToastHUD
+from heartbeat_hud import HeartbeatHUD
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
@@ -419,6 +420,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._last_music_event_ts = 0.0
         self.current_fuel_main = None
         self.current_fuel_reservoir = None
+        self.fuel_capacity_main = None
+        self._low_fuel_warned = False
         self.current_legal_state = None
         self.current_destination = None
         self.trade_jump_history = deque(maxlen=20)
@@ -622,6 +625,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.toast_hud = ToastHUD(self.root, self.config)
         else:
             self.toast_hud = None
+
+        if self.config.get("heartbeat_overlay_enabled", True):
+            self.heartbeat_hud = HeartbeatHUD(self.root, self.config)
+        else:
+            self.heartbeat_hud = None
 
         if self.config.get("colony_overlay_enabled", False):
             self.colony_overlay = ColonyOverlay(
@@ -1211,6 +1219,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 system = carrier_data.get("system") or "?"
                 msg = f"FC {label}: arrived at {system}"
                 self.root.after(0, lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="INFO"))
+                if self.toast_hud:
+                    self.root.after(0, lambda m=msg: self.toast_hud.push("CARRIER JUMPED", m, severity="success"))
 
             elif new_status == "cooldown_cancel":
                 msg = f"FC {label}: jump cancelled"
@@ -1220,6 +1230,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 system = carrier_data.get("system") or "?"
                 msg = f"FC {label}: cooldown complete @ {system}"
                 self.root.after(0, lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="INFO"))
+                if self.toast_hud:
+                    self.root.after(0, lambda m=msg: self.toast_hud.push("CARRIER READY", m, severity="success"))
         except Exception:
             pass
 
@@ -1434,6 +1446,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             except Exception:
                 pass
             self.toast_hud = None
+
+        if self.config.get("heartbeat_overlay_enabled", True):
+            if self.heartbeat_hud is None:
+                self.heartbeat_hud = HeartbeatHUD(self.root, self.config)
+        elif self.heartbeat_hud:
+            self.heartbeat_hud.destroy()
+            self.heartbeat_hud = None
 
         if self.config.get("colony_overlay_enabled", False):
             if self.colony_overlay is None or not self.colony_overlay.is_open():
@@ -2104,6 +2123,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         elif ev == "Loadout":
             self.cargo_capacity = d.get("cargo_capacity", 0)
+            fuel_cap = (raw.get("FuelCapacity") or {}) if isinstance(raw, dict) else {}
+            self.fuel_capacity_main = fuel_cap.get("Main")
+            self._low_fuel_warned = False
             self.cmdr_ship.update({
                 "ship": d.get("ship") or self.cmdr_ship.get("ship"),
                 "ship_id": d.get("ship_id") or self.cmdr_ship.get("ship_id"),
@@ -2844,6 +2866,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.current_colonisation_market = mid
                 # Preserve existing notes when refreshing from depot event
                 _existing = self.colonisation_projects.get(mid, {})
+                was_complete = bool(_existing.get("complete"))
                 self.colonisation_projects[mid] = {
                     "market_id":    mid,
                     "system_name":  d.get("system_name", ""),
@@ -2863,6 +2886,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self._refresh_colonisation_planner_window()
                     if self.colony_overlay:
                         self.colony_overlay.update()
+                    if not was_complete and self.colonisation_projects[mid]["complete"] and self.toast_hud:
+                        site = d.get("body_name") or d.get("system_name") or "construction site"
+                        self.toast_hud.push("CONSTRUCTION COMPLETE", site, severity="success", duration_s=15)
 
         elif ev == "ColonisationContribution":
             mid = d.get("market_id")
@@ -3119,6 +3145,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "price": price,
                 "profit": profit,
             }
+            big_trade_threshold = int(self.config.get("big_trade_profit_threshold", 1_000_000) or 1_000_000)
+            if profit >= big_trade_threshold and self.toast_hud:
+                self.toast_hud.push(
+                    "BIG TRADE",
+                    f"{commodity} x{count}  +{profit:,} CR",
+                    severity="success",
+                    duration_s=12,
+                )
         self.trade_session["events"].append(event)
         ts = trade_marketdb.parse_update_time(data.get("timestamp")) or int(time.time())
         symbol = trade_marketdb.clean_commodity_symbol(data.get("Type") or commodity)
