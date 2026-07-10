@@ -8,7 +8,14 @@ import requests
 from tkinter import messagebox, filedialog
 from tkinter import ttk
 from config import COLOR_BG, COLOR_PANEL, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
+from ui_theme import THEME, ThemedWindowMixin, apply_window, configure_ttk, window_surface
 from waypoint_manager import WaypointManager
+
+COLOR_BG = THEME.bg
+COLOR_PANEL = THEME.panel
+COLOR_ACCENT = THEME.accent
+COLOR_ORANGE = THEME.orange
+COLOR_TEXT = THEME.text
 
 
 SPANSH_BASE = "https://spansh.co.uk/api"
@@ -22,8 +29,8 @@ class SpanshRouteError(Exception):
     pass
 
 
-class RoutePlotter:
-    def __init__(self, root, edsm_handler, current_coords=None, current_sys="Unknown", config=None, manager=None, on_change_callback=None, event_callback=None):
+class RoutePlotter(ThemedWindowMixin):
+    def __init__(self, root, edsm_handler, current_coords=None, current_sys="Unknown", config=None, manager=None, on_change_callback=None, event_callback=None, embedded=False):
         self.root = root
         self.edsm = edsm_handler
         self.manager = manager if manager else WaypointManager()
@@ -39,10 +46,11 @@ class RoutePlotter:
         self.duplicate_mode = self.config.get("route_duplicate_mode", "skip")
         self.pending_import_jobs = {}
 
-        self.win = tk.Toplevel(root)
+        self.embedded = embedded
+        self.win = window_surface(root, embedded=embedded)
         self.win.title("ROUTE & WAYPOINT MANAGER")
         self.win.geometry(self.config.get("route_plotter_geometry", "1020x700"))
-        self.win.configure(bg=COLOR_BG)
+        apply_window(self.win)
         self.win.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.setup_ui()
@@ -66,11 +74,7 @@ class RoutePlotter:
         self.header_current_lbl = tk.Label(header, text=f"CURRENT: {self.current_sys}", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL)
         self.header_current_lbl.pack(side=tk.RIGHT, padx=10)
 
-        style = ttk.Style(self.win)
-        try:
-            style.theme_use("clam")
-        except Exception:
-            pass
+        style = configure_ttk(self.win, "Route")
         style.configure("Route.TNotebook", background=COLOR_BG, borderwidth=0)
         style.configure("Route.TNotebook.Tab", background=COLOR_PANEL, foreground=COLOR_TEXT, padding=(14, 6), font=("Courier", 9, "bold"))
         style.map("Route.TNotebook.Tab", background=[("selected", "#111111")], foreground=[("selected", COLOR_ACCENT)])

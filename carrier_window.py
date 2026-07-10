@@ -7,6 +7,11 @@ import tkinter as tk
 from datetime import datetime, timezone
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
+from ui_theme import THEME, ThemedWindowMixin, apply_window, window_surface
+
+COLOR_ACCENT = THEME.accent
+COLOR_ORANGE = THEME.orange
+COLOR_TEXT = THEME.text
 
 # Weekly upkeep rates (active_cr, paused_cr) per service — from EDCM
 _SERVICE_UPKEEP = {
@@ -56,29 +61,22 @@ def _fmt_dt(ts_str):
         return ts_str
 
 
-class CarrierWindow:
-    UI_BG    = "#080a0d"
-    UI_PANEL = "#12161b"
-    UI_BORDER= "#26313a"
-    UI_MUTED = "#7d8891"
-    UI_DIM   = "#4e5962"
-    UI_OK    = "#21d189"
-    UI_WARN  = "#ff9a3c"
-    UI_FAIL  = "#ff5c5c"
+class CarrierWindow(ThemedWindowMixin):
     UI_FONT  = ("Segoe UI", 9)
     UI_BOLD  = ("Segoe UI", 9, "bold")
     UI_MONO  = ("Consolas", 9)
     UI_MONO_B= ("Consolas", 10, "bold")
 
-    def __init__(self, root, config, tracker):
+    def __init__(self, root, config, tracker, embedded=False):
         self.root = root
         self.config = config
         self.tracker = tracker
         self._after_job = None
 
-        self.win = tk.Toplevel(root)
+        self.embedded = embedded
+        self.win = window_surface(root, embedded=embedded)
         self.win.title("Fleet Carrier")
-        self.win.configure(bg=self.UI_BG)
+        apply_window(self.win)
         self.win.geometry(config.get("carrier_window_geometry", "480x560"))
         self.win.resizable(True, True)
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)

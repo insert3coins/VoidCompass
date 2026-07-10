@@ -7,6 +7,11 @@ from tkinter import filedialog, messagebox
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, get_active_profile, get_profile_dir, save_config
 from trade import marketdb as trade_marketdb
+from ui_theme import THEME, ThemedWindowMixin, apply_window, window_surface
+
+COLOR_ACCENT = THEME.accent
+COLOR_ORANGE = THEME.orange
+COLOR_TEXT = THEME.text
 
 
 CORE_RANKS = {
@@ -24,21 +29,17 @@ NAVY_RANKS = {
 }
 
 
-class CommanderProfileWindow:
-    UI_BG = "#080a0d"
-    UI_PANEL = "#12161b"
-    UI_PANEL_2 = "#171d23"
-    UI_BORDER = "#26313a"
-    UI_MUTED = "#7d8891"
+class CommanderProfileWindow(ThemedWindowMixin):
 
-    def __init__(self, root, app):
+    def __init__(self, root, app, embedded=False):
         self.root = root
         self.app = app
         self.config = app.config
-        self.win = tk.Toplevel(root)
+        self.embedded = embedded
+        self.win = window_surface(root, embedded=embedded)
         self.win.title("Commander Profile")
         self.win.geometry(self.config.get("profile_dashboard_geometry", "980x680"))
-        self.win.configure(bg=self.UI_BG)
+        apply_window(self.win)
         self.win.minsize(860, 560)
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
         self._wheel_bound = False

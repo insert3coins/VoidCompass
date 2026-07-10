@@ -1,5 +1,22 @@
 # VoidCompass // UPDATE LOG
 
+## v4.0.2 // Native Commander Console
+**Release Date:** 2026-Jul-10
+
+### Unified Native Interface
+*   Added a shared native Tk theme and component library based on the VoidCompass commander-console design.
+*   Restyled the dashboard and application tools with a consistent palette, typography, cards, controls, notebooks, and data tables.
+*   Added the persistent left navigation rail, command strip, holographic card details, active cyan page marker, and an inset application frame.
+
+### Integrated Dashboard Pages
+*   Profile, Explore, Trade, Mining, Route, Carrier, Colony, BGS, Engineer, and Settings now open inside the main dashboard workspace.
+*   Navigation switches pages without creating additional tool windows and keeps the rail and live command strip visible.
+*   Existing page calculations, refresh hooks, and actions remain connected to the live application state.
+*   Native HUD and overlay windows remain independent and retain their existing styling and behavior.
+
+### Version
+*   Bumped app version to **4.0.2**.
+
 ## v3.9.1 // Navigation HUD Refresh
 **Release Date:** 2026-Jul-08
 

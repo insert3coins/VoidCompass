@@ -10,7 +10,12 @@ from datetime import datetime, timezone
 from tkinter import scrolledtext
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
+from ui_theme import THEME, ThemedWindowMixin, apply_window, button, panel, section_label
 from version import APP_VERSION
+
+COLOR_ACCENT = THEME.accent
+COLOR_ORANGE = THEME.orange
+COLOR_TEXT = THEME.text
 
 _FEED_TAG_COLORS = {
     "JUMP":    "#00d1ff",  # cyan   — hyperspace jumps
@@ -50,23 +55,8 @@ def _carrier_countdown(dep_str):
         return ""
 
 
-class DashboardUIMixin:
+class DashboardUIMixin(ThemedWindowMixin):
     JOURNAL_HISTORY_LIMIT = 100
-    UI_BG = "#080a0d"
-    UI_PANEL = "#12161b"
-    UI_PANEL_2 = "#171d23"
-    UI_BORDER = "#26313a"
-    UI_MUTED = "#7d8891"
-    UI_DIM = "#4e5962"
-    UI_FAIL = "#ff5c5c"
-    UI_WARN = "#ff9a3c"
-    UI_OK = "#21d189"
-    UI_FONT = ("Segoe UI", 9)
-    UI_FONT_BOLD = ("Segoe UI", 9, "bold")
-    UI_FONT_TITLE = ("Segoe UI", 13, "bold")
-    UI_MONO = ("Consolas", 9)
-    UI_MONO_BOLD = ("Consolas", 10, "bold")
-
     def _config_label_if_changed(self, widget, text=None, fg=None):
         try:
             current_text = widget.cget("text")
@@ -86,115 +76,124 @@ class DashboardUIMixin:
             widget.config(**kwargs)
 
     def _panel(self, parent, bg=None, border=None):
-        return tk.Frame(
-            parent,
-            bg=bg or self.UI_PANEL,
-            highlightbackground=border or self.UI_BORDER,
-            highlightthickness=1,
-            bd=0,
-        )
+        return panel(parent, background=bg, border=border)
 
     def _section_label(self, parent, text, fg=None, bg=None):
-        return tk.Label(
-            parent,
-            text=text,
-            font=self.UI_FONT_BOLD,
-            fg=fg or COLOR_ORANGE,
-            bg=bg or parent.cget("bg"),
-            anchor="w",
-        )
+        return section_label(parent, text, foreground=fg, background=bg)
 
     def _action_button(self, parent, text, command, accent=False, muted=False):
-        bg = COLOR_ACCENT if accent else parent.cget("bg")
-        fg = "black" if accent else (self.UI_DIM if muted else COLOR_TEXT)
-        return tk.Button(
-            parent,
-            text=text,
-            command=command,
-            bg=bg,
-            fg=fg,
-            activebackground=COLOR_ACCENT if accent else self.UI_PANEL_2,
-            activeforeground="black" if accent else COLOR_TEXT,
-            font=self.UI_FONT_BOLD,
-            relief=tk.FLAT,
-            bd=0,
-            padx=10,
-            pady=4,
-            cursor="hand2",
-        )
+        return button(parent, text, command, accent=accent, muted=muted, pady=4)
 
     def setup_layout(self):
-        self.root.configure(bg=self.UI_BG)
+        apply_window(self.root)
 
-        # ── HEADER: brand row + module toolbar ────────────────────────────
-        self.nav = tk.Frame(self.root, bg="#0c1014")
-        self.nav.pack(fill=tk.X)
+        # Match the web console's defining composition: persistent navigation
+        # rail at left, command strip above the working area, content at right.
+        shell = tk.Frame(self.root, bg=self.UI_BG)
+        shell.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
-        self.brand_row = tk.Frame(self.nav, bg="#0c1014", height=48)
-        self.brand_row.pack(fill=tk.X, padx=12)
-        self.brand_row.pack_propagate(False)
+        self.nav = tk.Frame(
+            shell, bg=THEME.header, width=232,
+            highlightbackground=self.UI_BORDER, highlightthickness=0,
+        )
+        self.nav.pack(side=tk.LEFT, fill=tk.Y)
+        self.nav.pack_propagate(False)
+        tk.Frame(shell, bg=self.UI_BORDER, width=1).pack(side=tk.LEFT, fill=tk.Y)
 
-        brand = tk.Frame(self.brand_row, bg="#0c1014")
-        brand.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 0))
-        title_row = tk.Frame(brand, bg="#0c1014")
-        title_row.pack(anchor="w", pady=(10, 0))
-        tk.Label(title_row, text="VOID COMPASS", font=("Segoe UI", 15, "bold"), fg=COLOR_ACCENT, bg="#0c1014").pack(side=tk.LEFT)
-        tk.Label(title_row, text=f"  v{APP_VERSION}", font=("Segoe UI", 8), fg=self.UI_DIM, bg="#0c1014").pack(side=tk.LEFT, anchor="s", pady=(0, 2))
+        self.brand_row = tk.Frame(self.nav, bg=THEME.header)
+        self.brand_row.pack(fill=tk.X, padx=12, pady=(18, 0))
 
-        # Configuration (rightmost), then module buttons to its left
-        self._action_button(self.brand_row, "Configuration", self.open_settings, accent=True).pack(side=tk.RIGHT, pady=10)
-        tk.Frame(self.brand_row, bg=self.UI_BORDER, width=1).pack(side=tk.RIGHT, fill=tk.Y, pady=8)
+        tk.Label(
+            self.brand_row, text="VOID COMPASS", font=("Bahnschrift SemiCondensed", 17, "bold"),
+            fg=THEME.accent, bg=THEME.header, anchor="w",
+        ).pack(fill=tk.X, padx=8)
+        tk.Label(
+            self.brand_row, text="COMMANDER CONSOLE", font=("Cascadia Mono", 8, "bold"),
+            fg=THEME.orange, bg=THEME.header, anchor="w",
+        ).pack(fill=tk.X, padx=8, pady=(3, 14))
+        tk.Frame(self.brand_row, bg=THEME.accent, height=1).pack(fill=tk.X, padx=8)
 
-        def _nav_btn(text, cmd):
-            return tk.Button(
-                self.brand_row, text=text, command=cmd,
-                bg="#0c1014", fg=self.UI_MUTED,
-                activebackground="#111820", activeforeground=COLOR_TEXT,
-                font=("Segoe UI", 8, "bold"),
-                relief=tk.FLAT, bd=0, padx=6, pady=6, cursor="hand2",
+        nav_items = (
+            ("⌖", "DASHBOARD", self.show_dashboard_page),
+            ("◉", "PROFILE", self.open_commander_profile_window),
+            ("✦", "EXPLORE", self.open_exploration_window),
+            ("⇌", "TRADE", self.open_trade_window),
+            ("◆", "MINING", self.open_mining_window),
+            ("➤", "ROUTE", self.open_route_planner),
+            ("⬢", "CARRIER", self.open_carrier_window),
+            ("⌂", "COLONY", self.open_colonization_window),
+            ("⚑", "BGS", self.open_bgs_window),
+            ("⚙", "ENGINEER", self.open_engineer_window),
+        )
+        self.nav_buttons = {}
+        self.nav_indicators = {}
+        nav_list = tk.Frame(self.nav, bg=THEME.header)
+        nav_list.pack(fill=tk.X, padx=12, pady=(18, 0))
+        for icon, label, command in nav_items:
+            active = label == "DASHBOARD"
+            row = tk.Frame(nav_list, bg=THEME.panel_alt if active else THEME.header, height=34)
+            row.pack(fill=tk.X, pady=1)
+            row.pack_propagate(False)
+            indicator = tk.Frame(row, bg=THEME.accent if active else row.cget("bg"), width=3)
+            indicator.pack(side=tk.LEFT, fill=tk.Y)
+            btn = tk.Button(
+                row, text=f"{icon}   {label}", command=command,
+                bg=row.cget("bg"), fg=THEME.accent if active else THEME.muted,
+                activebackground=THEME.panel_alt, activeforeground=THEME.accent,
+                font=("Bahnschrift SemiCondensed", 9, "bold"), anchor="w",
+                relief=tk.FLAT, bd=0, padx=12, pady=7, cursor="arrow" if active else "hand2",
             )
+            btn.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            self.nav_buttons[label] = btn
+            self.nav_indicators[label] = indicator
 
-        for _text, _cmd in [
-            ("Profile",        self.open_commander_profile_window),
-            ("Explore",        self.open_exploration_window),
-            ("Trade",          self.open_trade_window),
-            ("Ground",         self.open_ground_target_window),
-            ("Shots",          self.open_screenshots_folder),
-            ("Carrier",        self.open_carrier_window),
-            ("BGS",            self.open_bgs_window),
-            ("Engineer",       self.open_engineer_window),
-            ("Colony",         self.open_colonization_window),
-            ("Mining",         self.open_mining_window),
-            ("Route",          self.open_route_planner),
-        ]:
-            _nav_btn(_text, _cmd).pack(side=tk.RIGHT, padx=(0, 2))
+        utilities = tk.Frame(self.nav, bg=THEME.header)
+        self.nav_utilities = utilities
+        utilities.pack(side=tk.BOTTOM, fill=tk.X, padx=12, pady=14)
+        settings_row = tk.Frame(utilities, bg=THEME.header, height=34)
+        settings_row.pack(fill=tk.X, pady=(0, 4))
+        settings_row.pack_propagate(False)
+        self.settings_nav_indicator = tk.Frame(settings_row, bg=THEME.header, width=3)
+        self.settings_nav_indicator.pack(side=tk.LEFT, fill=tk.Y)
+        self.settings_nav_btn = self._action_button(settings_row, "≡   SETTINGS", self.open_settings)
+        self.settings_nav_btn.configure(anchor="w")
+        self.settings_nav_btn.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        utility_row = tk.Frame(utilities, bg=THEME.header)
+        utility_row.pack(fill=tk.X)
+        self._action_button(utility_row, "GROUND", self.open_ground_target_window, muted=True).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self._action_button(utility_row, "SHOTS", self.open_screenshots_folder, muted=True).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 0))
+        tk.Label(
+            utilities, text=f"v{APP_VERSION}  //  NATIVE", font=("Cascadia Mono", 7),
+            fg=THEME.dim, bg=THEME.header, anchor="w",
+        ).pack(fill=tk.X, pady=(10, 0))
 
-        tk.Frame(self.root, bg=self.UI_BORDER, height=1).pack(fill=tk.X)
+        self.workspace = tk.Frame(shell, bg=self.UI_BG)
+        self.workspace.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # ── COMMAND STRIP ─────────────────────────────────────────────────
-        cmd_strip = tk.Frame(self.root, bg="#0c1014", height=58)
-        cmd_strip.pack(fill=tk.X, padx=12, pady=(8, 0))
+        cmd_strip = tk.Frame(self.workspace, bg=THEME.header, height=76)
+        cmd_strip.pack(fill=tk.X)
         cmd_strip.pack_propagate(False)
 
-        sys_zone = tk.Frame(cmd_strip, bg="#0c1014")
+        sys_zone = tk.Frame(cmd_strip, bg=THEME.header)
         sys_zone.pack(side=tk.LEFT, fill=tk.Y, padx=(6, 12))
         self.summary_sys = tk.Label(sys_zone, text="---",
                                     font=("Segoe UI", 18, "bold"),
-                                    fg=COLOR_ACCENT, bg="#0c1014", anchor="w")
+                                    fg=COLOR_ACCENT, bg=THEME.header, anchor="w")
         self.summary_sys.pack(anchor="w", pady=(3, 0))
         self.integration_lbl = tk.Label(sys_zone, text="HUD: ON | SHOTS: OFF",
                                         font=("Consolas", 8), fg=self.UI_DIM,
-                                        bg="#0c1014", anchor="w")
+                                        bg=THEME.header, anchor="w")
         self.integration_lbl.pack(anchor="w")
 
         tk.Frame(cmd_strip, bg=self.UI_BORDER, width=1).pack(side=tk.LEFT, fill=tk.Y, pady=6, padx=(0, 14))
 
         def _strip_stat(parent, label):
-            f = tk.Frame(parent, bg="#0c1014")
+            f = tk.Frame(parent, bg=THEME.header)
             f.pack(side=tk.LEFT, padx=(0, 18), fill=tk.Y)
             tk.Label(f, text=label, font=("Segoe UI", 7, "bold"),
-                     fg=self.UI_DIM, bg="#0c1014").pack(anchor="w", pady=(3, 0))
-            lbl = tk.Label(f, text="—", font=self.UI_MONO_BOLD, fg=COLOR_TEXT, bg="#0c1014")
+                     fg=self.UI_DIM, bg=THEME.header).pack(anchor="w", pady=(3, 0))
+            lbl = tk.Label(f, text="—", font=self.UI_MONO_BOLD, fg=COLOR_TEXT, bg=THEME.header)
             lbl.pack(anchor="w")
             return lbl
 
@@ -205,26 +204,30 @@ class DashboardUIMixin:
 
         tk.Frame(cmd_strip, bg=self.UI_BORDER, width=1).pack(side=tk.LEFT, fill=tk.Y, pady=6, padx=(0, 14))
 
-        alert_zone = tk.Frame(cmd_strip, bg="#0c1014")
+        alert_zone = tk.Frame(cmd_strip, bg=THEME.header)
         alert_zone.pack(side=tk.LEFT, fill=tk.Y)
         tk.Label(alert_zone, text="ALERTS", font=("Segoe UI", 7, "bold"),
-                 fg=self.UI_DIM, bg="#0c1014").pack(anchor="w", pady=(3, 0))
+                 fg=self.UI_DIM, bg=THEME.header).pack(anchor="w", pady=(3, 0))
         self.alert_lbl = tk.Label(alert_zone, text="NONE",
                                   font=self.UI_MONO_BOLD, fg=self.UI_MUTED,
-                                  bg="#0c1014", anchor="w")
+                                  bg=THEME.header, anchor="w")
         self.alert_lbl.pack(anchor="w")
 
-        cmdr_zone = tk.Frame(cmd_strip, bg="#0c1014")
+        cmdr_zone = tk.Frame(cmd_strip, bg=THEME.header)
         cmdr_zone.pack(side=tk.RIGHT, fill=tk.Y, padx=(14, 6))
         tk.Frame(cmd_strip, bg=self.UI_BORDER, width=1).pack(side=tk.RIGHT, fill=tk.Y, pady=6)
         tk.Label(cmdr_zone, text="CMDR", font=("Segoe UI", 7, "bold"),
-                 fg=self.UI_DIM, bg="#0c1014").pack(anchor="e", pady=(3, 0))
+                 fg=self.UI_DIM, bg=THEME.header).pack(anchor="e", pady=(3, 0))
         self.summary_cmdr = tk.Label(cmdr_zone, text="UNKNOWN",
                                      font=self.UI_MONO_BOLD, fg=COLOR_ACCENT,
-                                     bg="#0c1014", anchor="e")
+                                     bg=THEME.header, anchor="e")
         self.summary_cmdr.pack(anchor="e")
 
-        tk.Frame(self.root, bg=self.UI_BORDER, height=1).pack(fill=tk.X, padx=12, pady=(6, 0))
+        tk.Frame(self.workspace, bg=self.UI_BORDER, height=1).pack(fill=tk.X)
+
+        self.dashboard_host = tk.Frame(self.workspace, bg=self.UI_BG)
+        self.dashboard_host.pack(fill=tk.BOTH, expand=True)
+        self._active_page = "DASHBOARD"
 
         self._build_companion_dashboard_body()
         return
@@ -488,8 +491,9 @@ class DashboardUIMixin:
         self.ground_lon_entry.insert(0, f"{getattr(self, 'target_lon', 0.0):.6f}")
 
     def _build_companion_dashboard_body(self):
-        body = tk.Frame(self.root, bg=self.UI_BG)
-        body.pack(fill=tk.BOTH, expand=True, padx=12, pady=8)
+        body = tk.Frame(self.dashboard_host, bg=self.UI_BG)
+        self.dashboard_page = body
+        body.pack(fill=tk.BOTH, expand=True, padx=18, pady=14)
 
         flight_deck = tk.Frame(body, bg=self.UI_BG)
         flight_deck.pack(fill=tk.X, pady=(0, 8))
@@ -651,6 +655,32 @@ class DashboardUIMixin:
             font=("Consolas", 8), borderwidth=0, height=4, relief=tk.FLAT,
         )
         self.log_box.pack(fill=tk.X, padx=10, pady=10)
+
+    def _show_embedded_page(self, label, page):
+        """Display one native application page in the persistent workspace."""
+        for child in self.dashboard_host.winfo_children():
+            child.pack_forget()
+        page.pack(fill=tk.BOTH, expand=True)
+        page.tkraise()
+        self._active_page = label
+        for name, btn in self.nav_buttons.items():
+            active = name == label
+            bg = THEME.panel_alt if active else THEME.header
+            btn.master.configure(bg=bg)
+            btn.configure(bg=bg, fg=THEME.accent if active else THEME.muted)
+            self.nav_indicators[name].configure(bg=THEME.accent if active else bg)
+        if hasattr(self, "settings_nav_btn"):
+            settings_active = label == "SETTINGS"
+            settings_bg = THEME.panel_alt if settings_active else THEME.header
+            self.settings_nav_btn.master.configure(bg=settings_bg)
+            self.settings_nav_indicator.configure(bg=THEME.accent if settings_active else settings_bg)
+            self.settings_nav_btn.configure(
+                bg=settings_bg,
+                fg=THEME.accent if settings_active else THEME.text,
+            )
+
+    def show_dashboard_page(self):
+        self._show_embedded_page("DASHBOARD", self.dashboard_page)
 
     def _build_live_event_timeline(self, parent):
         feed_wrap = tk.Frame(parent, bg=self.UI_PANEL)
@@ -1351,9 +1381,9 @@ class DashboardUIMixin:
 
     def show_update_btn(self, url, tag):
         self.log(f"✨ UPDATE AVAILABLE: v{tag}")
-        target = getattr(self, "brand_row", self.nav)
+        target = getattr(self, "nav_utilities", self.nav)
         btn = self._action_button(target, f"Update v{tag}", lambda: webbrowser.open(url), accent=True)
-        btn.pack(side=tk.RIGHT, padx=(8, 0), pady=10)
+        btn.pack(fill=tk.X, pady=(6, 0))
 
     def update_nav_label(self):
         txt = "NO ROUTE"

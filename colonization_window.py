@@ -20,6 +20,11 @@ from tkinter import messagebox, ttk
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 from trade import routes
+from ui_theme import THEME, ThemedWindowMixin, apply_window, configure_ttk, window_surface
+
+COLOR_ACCENT = THEME.accent
+COLOR_ORANGE = THEME.orange
+COLOR_TEXT = THEME.text
 
 # ── JSON persistence ──────────────────────────────────────────────────────────
 
@@ -52,21 +57,14 @@ def save_colonisation_data(projects: dict, path=None):
 
 # ── Window ────────────────────────────────────────────────────────────────────
 
-class ColonizationWindow:
+class ColonizationWindow(ThemedWindowMixin):
     # Theme — matches VoidCompass dark palette
-    UI_BG     = "#080a0d"
-    UI_PANEL  = "#12161b"
-    UI_BORDER = "#26313a"
-    UI_MUTED  = "#7d8891"
-    UI_DIM    = "#4e5962"
-    UI_OK     = "#21d189"
-    UI_WARN   = "#ff9a3c"
     UI_FONT   = ("Segoe UI", 9)
     UI_BOLD   = ("Segoe UI", 9, "bold")
     UI_MONO   = ("Consolas", 9)
     UI_MONO_B = ("Consolas", 10, "bold")
 
-    def __init__(self, root, config: dict, projects: dict, save_callback, overlay_callback=None):
+    def __init__(self, root, config: dict, projects: dict, save_callback, overlay_callback=None, embedded=False):
         """
         projects     – live reference to dashboard's colonisation_projects dict
         save_callback – callable(projects) that persists changes to JSON
@@ -80,9 +78,10 @@ class ColonizationWindow:
         self._notes_dirty  = False
         self._planner_sources = {}
 
-        self.win = tk.Toplevel(root)
+        self.embedded = embedded
+        self.win = window_surface(root, embedded=embedded)
         self.win.title("Colonization Tracker — Void Compass")
-        self.win.configure(bg=self.UI_BG)
+        apply_window(self.win)
         self.win.geometry(config.get("colonisation_window_geometry", "740x560"))
         self.win.resizable(True, True)
         self.win.minsize(560, 420)
@@ -313,7 +312,7 @@ class ColonizationWindow:
             self._find_planner_sources,
         ).pack(side=tk.LEFT, padx=(6, 0))
 
-        style = ttk.Style(self.win)
+        style = configure_ttk(self.win, "Colony")
         style.theme_use("default")
         style.configure(
             "ColonyPlanner.Treeview",

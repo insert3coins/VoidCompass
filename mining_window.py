@@ -9,6 +9,13 @@ from datetime import datetime
 
 from config import COLOR_ACCENT, COLOR_BG, COLOR_GREEN, COLOR_ORANGE, COLOR_TEXT, save_config
 from mining_data import MiningDataStore, normalize_material_name, normalize_ring_type, search_spansh_rings
+from ui_theme import THEME, ThemedWindowMixin, apply_window, configure_ttk, window_surface
+
+COLOR_BG = THEME.bg
+COLOR_ACCENT = THEME.accent
+COLOR_ORANGE = THEME.orange
+COLOR_TEXT = THEME.text
+COLOR_GREEN = THEME.green
 
 MINING_SESSIONS_FILE = "mining_sessions.json"
 
@@ -118,18 +125,19 @@ def _ring_body_name(full_body_name, system_name):
     return " ".join(body.split()) or full_body_name or "-"
 
 
-class MiningWindow:
-    def __init__(self, root, config, get_current_system=None, get_cargo_capacity=None, get_current_coords=None):
+class MiningWindow(ThemedWindowMixin):
+    def __init__(self, root, config, get_current_system=None, get_cargo_capacity=None, get_current_coords=None, embedded=False):
         self.root = root
         self.config = config
         self.get_current_system = get_current_system or (lambda: "---")
         self.get_cargo_capacity = get_cargo_capacity or (lambda: 0)
         self.get_current_coords = get_current_coords or (lambda: None)
 
-        self.win = tk.Toplevel(root)
+        self.embedded = embedded
+        self.win = window_surface(root, embedded=embedded)
         self.win.title("VOID COMPASS // MINING")
         self.win.geometry(self.config.get("mining_geometry", "980x680"))
-        self.win.configure(bg=COLOR_BG)
+        apply_window(self.win)
         self.win.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.session_active = False
@@ -162,7 +170,7 @@ class MiningWindow:
         self._tick()
 
     def _build_style(self):
-        self.style = ttk.Style(self.win)
+        self.style = configure_ttk(self.win, "Mining")
         try:
             self.style.theme_use("clam")
         except Exception:
