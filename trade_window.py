@@ -10,22 +10,18 @@ from tkinter import ttk
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 from trade import alerts, eddn, eddn_upload, marketdb, routes, seed, spansh
+from ui_theme import THEME, ThemedWindowMixin, apply_window, configure_ttk, window_surface
+
+COLOR_ACCENT = THEME.accent
+COLOR_ORANGE = THEME.orange
+COLOR_TEXT = THEME.text
 
 
-class TradeWindow:
-    UI_BG = "#080a0d"
-    UI_PANEL = "#12161b"
-    UI_PANEL_2 = "#171d23"
-    UI_BORDER = "#26313a"
-    UI_MUTED = "#7d8891"
-    UI_DIM = "#2a333b"
-    UI_OK = "#21d189"
-    UI_WARN = "#ff9a3c"
-    UI_FAIL = "#ff5c5c"
+class TradeWindow(ThemedWindowMixin):
 
     _eddn_started = False
 
-    def __init__(self, root, app):
+    def __init__(self, root, app, embedded=False):
         self.root = root
         self.app = app
         self.config = app.config
@@ -54,10 +50,11 @@ class TradeWindow:
         self.include_carriers_var = tk.BooleanVar(value=False)
         self.radar_large_pad_var = tk.BooleanVar(value=False)
         self.radar_include_carriers_var = tk.BooleanVar(value=False)
-        self.win = tk.Toplevel(root)
+        self.embedded = embedded
+        self.win = window_surface(root, embedded=embedded)
         self.win.title("Trade")
         self.win.geometry(self.config.get("trade_window_geometry", "1080x700"))
-        self.win.configure(bg=self.UI_BG)
+        apply_window(self.win)
         self.win.minsize(900, 560)
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
         self._build()
@@ -92,8 +89,7 @@ class TradeWindow:
 
         self.banner = tk.Label(self.win, text="", bg="#4a2c00", fg=self.UI_WARN, font=("Segoe UI", 9), anchor="w", padx=14, pady=6)
 
-        style = ttk.Style(self.win)
-        style.theme_use("default")
+        style = configure_ttk(self.win, "Trade")
         style.configure("Trade.TNotebook", background=self.UI_BG, borderwidth=0)
         style.configure("Trade.TNotebook.Tab", background=self.UI_PANEL, foreground=COLOR_TEXT, padding=(12, 7), borderwidth=0)
         style.map("Trade.TNotebook.Tab", background=[("selected", self.UI_PANEL_2)], foreground=[("selected", COLOR_ACCENT)])

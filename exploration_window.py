@@ -11,22 +11,19 @@ import requests
 
 import bio_values
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
+from ui_theme import THEME, ThemedWindowMixin, apply_window, configure_ttk, window_surface
+
+COLOR_ACCENT = THEME.accent
+COLOR_ORANGE = THEME.orange
+COLOR_TEXT = THEME.text
 
 
 SCOOPABLE_STAR_CLASSES = {"O", "B", "A", "F", "G", "K", "M"}
 
 
-class ExplorationWindow:
-    UI_BG = "#080a0d"
-    UI_PANEL = "#12161b"
-    UI_PANEL_2 = "#171d23"
-    UI_BORDER = "#26313a"
-    UI_MUTED = "#7d8891"
-    UI_DIM = "#4e5962"
-    UI_OK = "#21d189"
-    UI_WARN = "#ff9a3c"
+class ExplorationWindow(ThemedWindowMixin):
 
-    def __init__(self, root, app):
+    def __init__(self, root, app, embedded=False):
         self.root = root
         self.app = app
         self.config = app.config
@@ -43,10 +40,11 @@ class ExplorationWindow:
         self.system_history_rows = []
         self._last_history_refresh_ts = 0.0
         self._closing = False
-        self.win = tk.Toplevel(root)
+        self.embedded = embedded
+        self.win = window_surface(root, embedded=embedded)
         self.win.title("Exploration")
         self.win.geometry(self.config.get("exploration_window_geometry", "1040x680"))
-        self.win.configure(bg=self.UI_BG)
+        apply_window(self.win)
         self.win.minsize(860, 520)
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
         self._build()
@@ -122,7 +120,7 @@ class ExplorationWindow:
         self.bio_card = self._summary_card(summary, "BIO SIGNALS", accent="#86efac")
         self.trip_card = self._summary_card(summary, "SESSION", accent="#a5b4fc")
 
-        style = ttk.Style(self.win)
+        style = configure_ttk(self.win, "Explore")
         style.theme_use("default")
         style.configure("Explore.TNotebook", background=self.UI_BG, borderwidth=0)
         style.configure("Explore.TNotebook.Tab", background=self.UI_PANEL, foreground=COLOR_TEXT, padding=(12, 7), borderwidth=0)

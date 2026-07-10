@@ -3,27 +3,32 @@ import tkinter as tk
 import tkinter.messagebox
 
 from config import DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config as persist_config
+from ui_theme import THEME, FONT_MONO, FONT_TITLE, FONT_UI, FONT_UI_BOLD, apply_window, window_surface
+
+COLOR_ACCENT = THEME.accent
+COLOR_ORANGE = THEME.orange
+COLOR_TEXT = THEME.text
 
 
-UI_BG = "#080a0d"
-UI_PANEL = "#12161b"
-UI_PANEL_2 = "#171d23"
-UI_BORDER = "#26313a"
-UI_MUTED = "#7d8891"
-UI_DIM = "#4e5962"
-UI_INPUT = "#090c10"
-UI_FONT = ("Segoe UI", 9)
-UI_FONT_BOLD = ("Segoe UI", 9, "bold")
-UI_FONT_TITLE = ("Segoe UI", 13, "bold")
-UI_MONO = ("Consolas", 9)
+UI_BG = THEME.bg
+UI_PANEL = THEME.panel
+UI_PANEL_2 = THEME.panel_alt
+UI_BORDER = THEME.border
+UI_MUTED = THEME.muted
+UI_DIM = THEME.dim
+UI_INPUT = THEME.input
+UI_FONT = FONT_UI
+UI_FONT_BOLD = FONT_UI_BOLD
+UI_FONT_TITLE = FONT_TITLE
+UI_MONO = FONT_MONO
 
 
-def open_settings(root, config, on_save_callback, carrier_tracker=None):
-    win = tk.Toplevel(root)
+def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded=False, on_close_callback=None):
+    win = window_surface(root, embedded=embedded)
     win.title("SYSTEM CONFIGURATION")
     win.geometry(config.get("settings_geometry", "980x680"))
     win.minsize(880, 600)
-    win.configure(bg=UI_BG)
+    apply_window(win)
     win.attributes("-topmost", True)
 
     shell = tk.Frame(win, bg=UI_BG)
@@ -320,16 +325,25 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None):
         remove_deprecated_keys()
         persist_config(config)
         on_save_callback()
-        win.destroy()
+        if embedded:
+            win.pack_forget()
+        else:
+            win.destroy()
 
     def close_window():
         config["settings_geometry"] = win.geometry()
         remove_deprecated_keys()
         persist_config(config)
-        win.destroy()
+        if embedded:
+            win.pack_forget()
+            if callable(on_close_callback):
+                on_close_callback()
+        else:
+            win.destroy()
 
     action_button(footer, "Cancel", close_window, muted=True).pack(side=tk.LEFT)
     action_button(footer, "Save Settings", save_config, accent=True).pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
 
     win.protocol("WM_DELETE_WINDOW", close_window)
     show_page("core")
+    return win

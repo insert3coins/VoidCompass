@@ -12,6 +12,11 @@ from datetime import datetime
 from typing import Callable
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
+from ui_theme import THEME, ThemedWindowMixin, apply_window, window_surface
+
+COLOR_ACCENT = THEME.accent
+COLOR_ORANGE = THEME.orange
+COLOR_TEXT = THEME.text
 
 # State → colour tag (used in the Text widget)
 _STATE_TAG: dict[str, str] = {
@@ -42,12 +47,7 @@ _ALLEGIANCE_TAG: dict[str, str] = {
 }
 
 
-class BGSWindow:
-    UI_BG     = "#080a0d"
-    UI_PANEL  = "#12161b"
-    UI_BORDER = "#26313a"
-    UI_MUTED  = "#7d8891"
-    UI_DIM    = "#4e5962"
+class BGSWindow(ThemedWindowMixin):
 
     def __init__(
         self,
@@ -55,6 +55,7 @@ class BGSWindow:
         config: dict,
         load_systems_cb:  Callable[[], list],
         load_factions_cb: Callable[[str], list],
+        embedded=False,
     ):
         """
         load_systems_cb  — () → [(system_name, last_updated_epoch)]
@@ -66,9 +67,10 @@ class BGSWindow:
         self._load_factions    = load_factions_cb
         self._selected_system: str | None = None
 
-        self.win = tk.Toplevel(root)
+        self.embedded = embedded
+        self.win = window_surface(root, embedded=embedded)
         self.win.title("BGS Visit Tracker - Void Compass")
-        self.win.configure(bg=self.UI_BG)
+        apply_window(self.win)
         self.win.geometry(config.get("bgs_window_geometry", "880x580"))
         self.win.resizable(True, True)
         self.win.minsize(660, 420)

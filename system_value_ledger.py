@@ -3,23 +3,25 @@ import tkinter as tk
 from tkinter import ttk
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
+from ui_theme import THEME, ThemedWindowMixin, apply_window, configure_ttk, window_surface
+
+COLOR_ACCENT = THEME.accent
+COLOR_ORANGE = THEME.orange
+COLOR_TEXT = THEME.text
 
 
-class SystemValueLedger:
-    UI_BG = "#080a0d"
-    UI_PANEL = "#12161b"
-    UI_BORDER = "#26313a"
-    UI_MUTED = "#7d8891"
+class SystemValueLedger(ThemedWindowMixin):
 
-    def __init__(self, root, app):
+    def __init__(self, root, app, embedded=False):
         self.root = root
         self.app = app
         self.config = app.config
         self.rows = []
-        self.win = tk.Toplevel(root)
+        self.embedded = embedded
+        self.win = window_surface(root, embedded=embedded)
         self.win.title("System Value Ledger")
         self.win.geometry(self.config.get("value_ledger_geometry", "980x620"))
-        self.win.configure(bg=self.UI_BG)
+        apply_window(self.win)
         self.win.minsize(780, 460)
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
         self._build()
@@ -52,7 +54,7 @@ class SystemValueLedger:
         self._button(controls, "Refresh", self.refresh).pack(side=tk.LEFT)
         self._button(controls, "Copy Summary", self._copy_summary, accent=True).pack(side=tk.LEFT, padx=(8, 0))
 
-        style = ttk.Style(self.win)
+        style = configure_ttk(self.win, "Ledger")
         style.theme_use("default")
         style.configure("Ledger.Treeview", background="#0b0f13", foreground=COLOR_TEXT, fieldbackground="#0b0f13", rowheight=24, borderwidth=0)
         style.configure("Ledger.Treeview.Heading", background=self.UI_PANEL, foreground=COLOR_ORANGE, relief="flat", font=("Segoe UI", 8, "bold"))

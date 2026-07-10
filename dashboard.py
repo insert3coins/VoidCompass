@@ -275,7 +275,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.config = load_config()
         self._prepare_commander_profile_from_journal()
         self.root.title(f"VOID COMPASS // v{APP_VERSION}")
-        self.root.geometry(self.config.get("main_geometry", "1000x700"))
+        self.root.geometry(self.config.get("main_geometry", "1320x820"))
+        self.root.minsize(1080, 700)
         self.root.configure(bg=COLOR_BG)
         
         self.is_running = True
@@ -940,10 +941,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def open_route_planner(self):
         if self.route_plotter and self.route_plotter.win.winfo_exists():
-            self.route_plotter.win.lift()
+            self._show_embedded_page("ROUTE", self.route_plotter.win)
             return
         self.route_plotter = RoutePlotter(
-            self.root,
+            self.dashboard_host,
             self.edsm,
             self.current_coords,
             self.current_sys,
@@ -951,19 +952,23 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.waypoint_manager,
             on_change_callback=self.update_waypoint_display,
             event_callback=self._on_route_event,
+            embedded=True,
         )
+        self._show_embedded_page("ROUTE", self.route_plotter.win)
 
     def open_mining_window(self):
         if self.mining_window and self.mining_window.is_open():
-            self.mining_window.lift()
+            self._show_embedded_page("MINING", self.mining_window.win)
             return
         self.mining_window = MiningWindow(
-            self.root,
+            self.dashboard_host,
             self.config,
             get_current_system=lambda: self.current_sys,
             get_cargo_capacity=lambda: self.cargo_capacity,
             get_current_coords=lambda: self.current_coords,
+            embedded=True,
         )
+        self._show_embedded_page("MINING", self.mining_window.win)
         try:
             self.watcher.force_check_cargo()
             self.watcher.force_check_status()
@@ -972,21 +977,24 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def open_carrier_window(self):
         if self.carrier_window and self.carrier_window.is_open():
-            self.carrier_window.win.lift()
+            self._show_embedded_page("CARRIER", self.carrier_window.win)
             return
-        self.carrier_window = CarrierWindow(self.root, self.config, self.carrier_tracker)
+        self.carrier_window = CarrierWindow(self.dashboard_host, self.config, self.carrier_tracker, embedded=True)
+        self._show_embedded_page("CARRIER", self.carrier_window.win)
 
     def open_colonization_window(self):
         if self.colonization_window and self.colonization_window.is_open():
-            self.colonization_window.lift()
+            self._show_embedded_page("COLONY", self.colonization_window.win)
             return
         self.colonization_window = ColonizationWindow(
-            self.root,
+            self.dashboard_host,
             self.config,
             self.colonisation_projects,
             self._save_colonisation_data,
             overlay_callback=self.toggle_colony_overlay,
+            embedded=True,
         )
+        self._show_embedded_page("COLONY", self.colonization_window.win)
 
     def toggle_colony_overlay(self):
         try:
@@ -1010,44 +1018,51 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def open_engineer_window(self):
         if self.engineer_window and self.engineer_window.is_open():
-            self.engineer_window.lift()
+            self._show_embedded_page("ENGINEER", self.engineer_window.win)
             return
         self.engineer_window = EngineerWindow(
-            self.root,
+            self.dashboard_host,
             self.config,
             self.engineer_materials,
             self._save_engineer_materials,
+            embedded=True,
         )
+        self._show_embedded_page("ENGINEER", self.engineer_window.win)
 
     def open_bgs_window(self):
         if self.bgs_window and self.bgs_window.is_open():
-            self.bgs_window.lift()
+            self._show_embedded_page("BGS", self.bgs_window.win)
             return
         self.bgs_window = BGSWindow(
-            self.root,
+            self.dashboard_host,
             self.config,
             self.db_load_bgs_systems,
             self.db_load_bgs_factions,
+            embedded=True,
         )
+        self._show_embedded_page("BGS", self.bgs_window.win)
 
     def open_commander_profile_window(self):
         if self.commander_profile_window and self.commander_profile_window.is_open():
-            self.commander_profile_window.lift()
+            self._show_embedded_page("PROFILE", self.commander_profile_window.win)
             return
-        self.commander_profile_window = CommanderProfileWindow(self.root, self)
+        self.commander_profile_window = CommanderProfileWindow(self.dashboard_host, self, embedded=True)
+        self._show_embedded_page("PROFILE", self.commander_profile_window.win)
 
     def open_exploration_window(self):
         if self.exploration_window and self.exploration_window.is_open():
-            self.exploration_window.lift()
+            self._show_embedded_page("EXPLORE", self.exploration_window.win)
             return
-        self.exploration_window = ExplorationWindow(self.root, self)
+        self.exploration_window = ExplorationWindow(self.dashboard_host, self, embedded=True)
+        self._show_embedded_page("EXPLORE", self.exploration_window.win)
 
     def open_trade_window(self):
         if self.trade_window and self.trade_window.is_open():
-            self.trade_window.lift()
+            self._show_embedded_page("TRADE", self.trade_window.win)
             return
         try:
-            self.trade_window = TradeWindow(self.root, self)
+            self.trade_window = TradeWindow(self.dashboard_host, self, embedded=True)
+            self._show_embedded_page("TRADE", self.trade_window.win)
         except Exception as exc:
             self.trade_window = None
             self.log(f"Trade window failed to open: {exc}")
@@ -1290,8 +1305,19 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         def on_save():
             self.log("Configuration saved successfully.")
             self._apply_runtime_feature_toggles()
+            self.show_dashboard_page()
 
-        open_settings(self.root, self.config, on_save, carrier_tracker=self.carrier_tracker)
+        page = getattr(self, "settings_page", None)
+        if page is None or not page.winfo_exists():
+            self.settings_page = open_settings(
+                self.dashboard_host,
+                self.config,
+                on_save,
+                carrier_tracker=self.carrier_tracker,
+                embedded=True,
+                on_close_callback=self.show_dashboard_page,
+            )
+        self._show_embedded_page("SETTINGS", self.settings_page)
 
     def fetch_system_traffic(self, system_name):
         self.last_edsm_request_ts = time.time()

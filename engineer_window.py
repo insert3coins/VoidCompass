@@ -13,6 +13,11 @@ import tkinter as tk
 from datetime import datetime
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
+from ui_theme import THEME, ThemedWindowMixin, apply_window, window_surface
+
+COLOR_ACCENT = THEME.accent
+COLOR_ORANGE = THEME.orange
+COLOR_TEXT = THEME.text
 
 ENGINEER_MATERIALS_FILE = "engineer_materials.json"
 
@@ -134,12 +139,7 @@ def save_engineer_materials(materials: dict, path=None):
         pass
 
 
-class EngineerWindow:
-    UI_BG     = "#080a0d"
-    UI_PANEL  = "#12161b"
-    UI_BORDER = "#26313a"
-    UI_MUTED  = "#7d8891"
-    UI_DIM    = "#4e5962"
+class EngineerWindow(ThemedWindowMixin):
 
     _TABS = [
         ("raw",          "RAW",          "#b0d8a0"),
@@ -147,16 +147,17 @@ class EngineerWindow:
         ("encoded",      "ENCODED",      "#fde68a"),
     ]
 
-    def __init__(self, root, config: dict, materials: dict, save_callback):
+    def __init__(self, root, config: dict, materials: dict, save_callback, embedded=False):
         self.root          = root
         self.config        = config
         self.materials     = materials
         self.save_callback = save_callback
         self._active_tab   = "raw"
 
-        self.win = tk.Toplevel(root)
+        self.embedded = embedded
+        self.win = window_surface(root, embedded=embedded)
         self.win.title("Engineer Materials — Void Compass")
-        self.win.configure(bg=self.UI_BG)
+        apply_window(self.win)
         self.win.geometry(config.get("engineer_window_geometry", "740x560"))
         self.win.resizable(True, True)
         self.win.minsize(560, 380)
