@@ -353,7 +353,7 @@ def load_config():
         'survey_status_hud_x': 30,
         'survey_status_hud_y': 500,
         'main_geometry': '1000x700',
-        'settings_geometry': '600x500',
+        'settings_geometry': '980x800',
         'ground_target_window_geometry': '430x230+1220+260',
         'ground_popup_geometry': '340x140+1320+160',
         'ground_popup_enabled': True,

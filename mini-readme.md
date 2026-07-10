@@ -1,5 +1,20 @@
 # VoidCompass // UPDATE LOG
 
+## v4.1.5 // Overlay Settings + Survey Strip Cleanup
+**Release Date:** 2026-Jul-11
+
+### Settings
+*   Added Overlays toggles for the Gravity Warning, Bio Value Strip, Station Info, Survey Status Strip, and Toast Notification overlays — previously always-on with no way to disable them from the UI.
+*   Exposed the gravity warning's trigger threshold (g) as an editable setting.
+*   Increased the default Settings window size so the now-longer Overlays page doesn't need a manual resize to see everything.
+
+### Survey Status Strip
+*   Removed the scanned/total percentage and progress bar, which duplicated the navigation HUD's own SCAN PROGRESS row.
+*   Now shows only what the nav HUD doesn't: the list of bodies still needing DSS mapping (bio-bearing ones highlighted) and the bio-remaining count. Hides itself once nothing's left instead of sitting at 100%.
+
+### Version
+*   Bumped app version to **4.1.5**.
+
 ## v4.1.4 // Unified Overlay Chrome + Survey Alerts
 **Release Date:** 2026-Jul-11
 
