@@ -184,7 +184,6 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     prosp_var = tk.BooleanVar(value=config.get("prospector_overlay_enabled", True))
     sysinfo_var = tk.BooleanVar(value=config.get("system_info_enabled", True))
     gravity_var = tk.BooleanVar(value=config.get("gravity_warning_overlay_enabled", True))
-    bio_strip_var = tk.BooleanVar(value=config.get("bio_strip_overlay_enabled", True))
     station_info_var = tk.BooleanVar(value=config.get("station_info_overlay_enabled", True))
     survey_status_var = tk.BooleanVar(value=config.get("survey_status_overlay_enabled", True))
     toast_var = tk.BooleanVar(value=config.get("toast_overlay_enabled", True))
@@ -223,7 +222,6 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     toggle_row(overlay_modules, "Prospector Result Overlay", prosp_var)
     toggle_row(overlay_modules, "System Info Overlay", sysinfo_var)
     toggle_row(overlay_modules, "Gravity Warning Overlay", gravity_var)
-    toggle_row(overlay_modules, "Bio Value Strip Overlay", bio_strip_var)
     toggle_row(overlay_modules, "Station Info Overlay", station_info_var)
     toggle_row(overlay_modules, "Survey Status Strip", survey_status_var)
     toggle_row(overlay_modules, "Toast Notifications", toast_var)
@@ -337,7 +335,6 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
                 config.get("system_info_timeout_s", 30),
             "gravity_warning_overlay_enabled": gravity_var.get(),
             "gravity_warning_threshold_g": _parse_float(gravity_threshold_e.get(), config.get("gravity_warning_threshold_g", 3.0)),
-            "bio_strip_overlay_enabled": bio_strip_var.get(),
             "station_info_overlay_enabled": station_info_var.get(),
             "survey_status_overlay_enabled": survey_status_var.get(),
             "toast_overlay_enabled": toast_var.get(),

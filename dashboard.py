@@ -35,7 +35,6 @@ from prospector_hud import ProspectorHUD
 from system_info_hud import SystemInfoHUD
 from colony_overlay import ColonyOverlay
 from gravity_warning_hud import GravityWarningHUD
-from bio_strip_hud import BioStripHUD
 from station_info_hud import StationInfoHUD
 from survey_status_hud import SurveyStatusHUD
 from toast_hud import ToastHUD
@@ -179,13 +178,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._system_info_refresh_job = self.root.after(150, _run)
         except Exception:
             self._system_info_refresh_job = None
-
-    def _refresh_bio_strip_hud(self, body_id):
-        if not getattr(self, "bio_strip_hud", None) or body_id is None:
-            return
-        item = self.scan_items_by_id.get(body_id)
-        if item:
-            self.bio_strip_hud.update_from_item(item.get("name"), item)
 
     def _refresh_gravity_warning(self, body_id, body_name=None):
         if not getattr(self, "gravity_warning_hud", None) or body_id is None:
@@ -605,11 +597,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.gravity_warning_hud = GravityWarningHUD(self.root, self.config)
         else:
             self.gravity_warning_hud = None
-
-        if self.config.get("bio_strip_overlay_enabled", True):
-            self.bio_strip_hud = BioStripHUD(self.root, self.config)
-        else:
-            self.bio_strip_hud = None
 
         if self.config.get("station_info_overlay_enabled", True):
             self.station_info_hud = StationInfoHUD(self.root, self.config)
@@ -1406,16 +1393,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             except Exception:
                 pass
             self.gravity_warning_hud = None
-
-        if self.config.get("bio_strip_overlay_enabled", True):
-            if self.bio_strip_hud is None:
-                self.bio_strip_hud = BioStripHUD(self.root, self.config)
-        elif self.bio_strip_hud:
-            try:
-                self.bio_strip_hud.win.destroy()
-            except Exception:
-                pass
-            self.bio_strip_hud = None
 
         if self.config.get("station_info_overlay_enabled", True):
             if self.station_info_hud is None:
@@ -2287,7 +2264,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.update_hud()
                 self.schedule_dashboard_refresh()
                 self._refresh_exploration_window()
-                self._refresh_bio_strip_hud(body_id)
 
         elif ev == "Location" or ev == "FSDJump" or ev == "StartJump" or (ev == "CarrierJump" and d.get("docked")):
             # Do not update HUDs during jump charge; wait for arrival.
@@ -2688,7 +2664,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.schedule_dashboard_refresh()
                         self._refresh_exploration_window()
                         self._refresh_system_info_progress()
-                        self._refresh_bio_strip_hud(body_id)
 
         elif ev == "SAASignalsFound":
             if not self._matches_current_system_address(d):
@@ -2713,7 +2688,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.schedule_dashboard_refresh()
                         self._refresh_exploration_window()
                         self._refresh_system_info_progress()
-                        self._refresh_bio_strip_hud(body_id)
 
         elif ev == "SAAScanComplete":
             if not self._matches_current_system_address(d):
@@ -2830,8 +2804,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.add_event_feed_entry("VALUABLE", f"{icon} Valuable world: {body_name_str}", severity="WARN", copy_text=body_name_str)
                     if is_system_star_scan and d.get("was_discovered") is False:
                         self.add_event_feed_entry("ALERT", "Undiscovered system star scanned", severity="WARN", copy_text=self.current_sys)
-                    if not self.batch_mode:
-                        self._refresh_bio_strip_hud(body_id)
                 else:
                     # Later detailed/nav-beacon scans can add fields missing from an initial basic scan.
                     self.last_scan_event = data
@@ -2857,7 +2829,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.update_hud()
                         self.schedule_dashboard_refresh()
                         self._refresh_system_info_progress()
-                        self._refresh_bio_strip_hud(body_id)
 
         # ── Colonization ──────────────────────────────────────────────────────────
         if ev == "ColonisationConstructionDepot":

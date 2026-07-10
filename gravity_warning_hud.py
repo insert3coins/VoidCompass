@@ -37,8 +37,8 @@ class GravityWarningHUD:
         self.canvas.bind("<B1-Motion>", self._drag_move)
         self.canvas.bind("<ButtonRelease-1>", self._drag_end)
 
-        # Right side, below bio_strip_hud's typical extent (both can fire
-        # together — a high-gravity body can also carry bio signals).
+        # Right side, clear of the left-edge overlay stack (system info /
+        # carrier / station info / survey status).
         screen_w = root.winfo_screenwidth()
         default_x = max(30, screen_w - self.WIDTH - 30)
         x = self._safe_int(config.get("gravity_warning_hud_x"), default_x)
