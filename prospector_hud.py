@@ -8,6 +8,7 @@ Follows the same pattern as ScanHUD and CargoHUD.
 
 import tkinter as tk
 from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, save_config
+import overlay_chrome
 
 # Chroma-key colour used for window transparency (must never appear in content)
 _CHROMA = "#ff00ff"
@@ -282,29 +283,26 @@ class ProspectorHUD:
         # ── Background & border ───────────────────────────────────────────
 
         border_col = COLOR_ORANGE if core_mat else COLOR_ACCENT
-        self.canvas.create_rectangle(
-            4, 4, w - 4, height - 4,
-            fill="#010101", outline=border_col, width=2,
-        )
+        overlay_chrome.draw_chrome(self.canvas, w, height, accent=border_col, bracket_len=10)
 
         # ── Header ───────────────────────────────────────────────────────
 
         header_lbl = "◆  CORE ASTEROID  ◆" if core_mat else "⛏  PROSPECTOR RESULT"
         header_col = COLOR_ORANGE if core_mat else COLOR_ACCENT
-        self._text(12, 16, header_lbl, header_col, ("Courier", 10, "bold"))
+        self._text(16, 16, header_lbl, header_col, ("Courier", 10, "bold"))
 
         subtitle = f"{m_type}  ·  {content_lbl}  ·  {remaining_txt} remaining"
-        self._text(12, 33, subtitle, content_col, ("Courier", 9))
+        self._text(16, 33, subtitle, content_col, ("Courier", 9))
 
         sep_y = self._HEADER_H - 2
-        self.canvas.create_line(4, sep_y, w - 4, sep_y, fill=border_col, width=1)
+        self.canvas.create_line(16, sep_y, w - 16, sep_y, fill="#1a2530", width=1)
 
         y = self._HEADER_H + 2
 
         # ── Core material row ─────────────────────────────────────────────
 
         if core_mat:
-            self._text(12, y + 9, f"★  Motherlode:  {core_mat}", COLOR_ORANGE,
+            self._text(16, y + 9, f"★  Motherlode:  {core_mat}", COLOR_ORANGE,
                        ("Courier", 10, "bold"))
             y += self._CORE_H
             self.canvas.create_line(4, y - 2, w - 4, y - 2, fill=_DARK_SEP, width=1)
@@ -327,7 +325,7 @@ class ProspectorHUD:
 
             # Truncate long names
             display = name if len(name) <= 17 else name[:16] + "…"
-            self._text(12, row_y + 4, display, name_col, ("Courier", 9))
+            self._text(16, row_y + 4, display, name_col, ("Courier", 9))
 
             # Bar track (background)
             self.canvas.create_rectangle(
@@ -353,8 +351,8 @@ class ProspectorHUD:
         refined_total = sum(self._refined.values())
         if refined_total > 0:
             parts = "  ".join(f"{v}t {k}" for k, v in self._refined.items())
-            self._text(12, y + 18, f"~{refined_total} t refined:  {parts}",
+            self._text(16, y + 18, f"~{refined_total} t refined:  {parts}",
                        COLOR_ORANGE, ("Courier", 8))
         else:
-            self._text(12, y + 18, "Awaiting refinement…",
+            self._text(16, y + 18, "Awaiting refinement…",
                        "#444444", ("Courier", 8))

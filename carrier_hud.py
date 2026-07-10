@@ -2,6 +2,7 @@ import tkinter as tk
 from datetime import datetime, timedelta, timezone
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
+import overlay_chrome
 
 
 WIDTH = 380
@@ -116,7 +117,7 @@ class CarrierHUD:
     def _apply_initial_position(self):
         try:
             x, y = self._desired_pos
-            self.win.geometry(f"{WIDTH}x{self.canvas.winfo_height()}+{x}+{y}")
+            self.win.geometry(f"{WIDTH}x{getattr(self, '_height', 140)}+{x}+{y}")
         except Exception:
             pass
 
@@ -151,21 +152,19 @@ class CarrierHUD:
 
         line_h = 19
         height = max(116, 43 + len(rows) * line_h + 10)
+        self._height = height
         self.canvas.config(width=WIDTH, height=height)
         self.win.geometry(f"{WIDTH}x{height}")
         self.canvas.delete("all")
 
-        self.canvas.create_rectangle(
-            5, 5, WIDTH - 5, height - 5,
-            fill="#010101", outline=COLOR_ACCENT, width=2,
-        )
-        self.canvas.create_line(5, 35, WIDTH - 5, 35, fill=COLOR_ACCENT, width=1)
-        self._draw_text(18, 20, "FLEET CARRIER", COLOR_ACCENT, ("Courier", 10, "bold"))
-        self._draw_text(WIDTH - 18, 20, status_text, status_color, ("Courier", 10, "bold"), anchor="e")
+        overlay_chrome.draw_chrome(self.canvas, WIDTH, height)
+        self.canvas.create_line(20, 35, WIDTH - 20, 35, fill="#1a2530", width=1)
+        self._draw_text(20, 20, "FLEET CARRIER", COLOR_ACCENT, ("Courier", 10, "bold"))
+        self._draw_text(WIDTH - 20, 20, status_text, status_color, ("Courier", 10, "bold"), anchor="e")
 
         y = 47
         for text, color in rows:
-            self._draw_text(18, y, text, color, ("Courier", 9, "bold"))
+            self._draw_text(20, y, text, color, ("Courier", 9, "bold"))
             y += line_h
 
     def _build_rows(self, cd):

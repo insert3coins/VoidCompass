@@ -1,5 +1,22 @@
 # VoidCompass // UPDATE LOG
 
+## v4.1.4 // Unified Overlay Chrome + Survey Alerts
+**Release Date:** 2026-Jul-11
+
+### Overlay Visual Consistency
+*   Extracted the navigation HUD's chrome (tri-line accent stripe border, corner brackets, scanline texture) into a shared helper and applied it to every overlay: system info, prospector, cargo, carrier, gravity warning, bio strip, station info, survey status, and the colony shopping list.
+*   Fixed a pre-existing bug in the fleet carrier overlay where its window briefly collapsed to 1px tall after opening due to a geometry race condition.
+
+### New Overlays
+*   **Survey status strip** — persistent (non-auto-hiding) readout of scan progress for the current system, listing bodies still needing DSS mapping with bio-bearing ones highlighted.
+*   **Toast notifications** — a generic transient popup stack for warnings and alerts (valuable worlds, undiscovered systems, etc.), reusing the existing event feed's severity plumbing so no new call sites were needed app-wide.
+
+### Exploration Safety
+*   Added a stale bio-sample warning: leaving a body with an incomplete (not yet 3-sample) organic scan sequence now pops a toast so in-progress samples aren't abandoned unnoticed.
+
+### Version
+*   Bumped app version to **4.1.4**.
+
 ## v4.1.3 // SrvSurvey-Inspired Overlay Suite
 **Release Date:** 2026-Jul-11
 

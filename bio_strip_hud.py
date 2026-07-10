@@ -13,6 +13,7 @@ Auto-hides after a timeout, same pattern as ProspectorHUD.
 import tkinter as tk
 from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, save_config
 import bio_values
+import overlay_chrome
 
 _CHROMA = "#ff00ff"
 _DIM = "#7a8a98"
@@ -212,15 +213,15 @@ class BioStripHUD:
         self.win.geometry(f"{w}x{h}")
         self.canvas.delete("all")
 
-        self.canvas.create_rectangle(4, 4, w - 4, h - 4, fill="#010101", outline=COLOR_ACCENT, width=2)
-        self._text(12, 16, "☘  BIO SIGNALS", COLOR_ACCENT, ("Courier", 10, "bold"))
+        overlay_chrome.draw_chrome(self.canvas, w, h, bracket_len=10)
+        self._text(16, 16, "☘  BIO SIGNALS", COLOR_ACCENT, ("Courier", 10, "bold"))
         body_label = (self._body_name or "").upper()
-        self._text(w - 12, 16, body_label if len(body_label) <= 22 else body_label[:21] + "…",
+        self._text(w - 16, 16, body_label if len(body_label) <= 22 else body_label[:21] + "…",
                     COLOR_TEXT, ("Courier", 8, "bold"), anchor="e")
-        self.canvas.create_line(4, 28, w - 4, 28, fill="#1a2228", width=1)
+        self.canvas.create_line(16, 28, w - 16, 28, fill="#1a2530", width=1)
 
         y = self._HEADER_H
         for name, detail, color in self._rows:
-            self._text(12, y, name, color, ("Courier", 9, "bold"))
-            self._text(w - 12, y, detail, color, ("Courier", 8, "bold"), anchor="e")
+            self._text(16, y, name, color, ("Courier", 9, "bold"))
+            self._text(w - 16, y, detail, color, ("Courier", 8, "bold"), anchor="e")
             y += self._ROW_H
