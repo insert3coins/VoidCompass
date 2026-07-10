@@ -12,6 +12,7 @@ from tkinter import scrolledtext
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
 from ui_theme import THEME, ThemedWindowMixin, apply_window, button, panel, scrollbar, section_label
 from version import APP_VERSION
+import route_strip
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -1465,6 +1466,10 @@ class DashboardUIMixin(ThemedWindowMixin):
         else:
             route_txt = "NO NAV ROUTE"
 
+        hops, hops_truncated = route_strip.build_route_hops(
+            current_coords, route, entries, current, waypoint_manager=getattr(self, "waypoint_manager", None), max_hops=10
+        )
+
         return {
             "previous": previous or "---",
             "current": current,
@@ -1473,6 +1478,9 @@ class DashboardUIMixin(ThemedWindowMixin):
             "prev_distance": prev_distance_txt,
             "next_distance": next_distance_txt,
             "has_route": bool(route or next_name),
+            "hops": hops,
+            "hops_truncated": hops_truncated,
+            "total_distance_text": route_strip.total_distance_text(hops, hops_truncated),
         }
 
     def _draw_flight_strip(self, event=None):
@@ -1487,28 +1495,32 @@ class DashboardUIMixin(ThemedWindowMixin):
             ctx = self._flight_strip_context()
             spine_y = 34
             left_x = 34
-            center_x = w // 2
-            right_x = max(w - 34, center_x + 34)
+            right_x = max(w - 34, left_x + 34)
+            hops = ctx.get("hops") or []
 
             canvas.create_rectangle(0, 0, w, h, fill="#090d12", outline="")
             canvas.create_line(left_x, spine_y, right_x, spine_y, fill=self.UI_BORDER, width=2)
-            canvas.create_line(left_x, spine_y, center_x, spine_y, fill=COLOR_ACCENT, width=3)
-            if ctx["has_route"]:
-                canvas.create_line(center_x, spine_y, right_x, spine_y, fill=COLOR_ORANGE, width=2, dash=(5, 5))
 
-            nodes = [
-                (left_x, "PREV", ctx["previous"], self.UI_MUTED, 5),
-                (center_x, "CURRENT", ctx["current"], COLOR_ACCENT, 7),
-                (right_x, "NEXT", ctx["next"], COLOR_ORANGE if ctx["has_route"] else self.UI_DIM, 5),
-            ]
-            for x, label, name, color, radius in nodes:
-                canvas.create_oval(x - radius, spine_y - radius, x + radius, spine_y + radius, outline=color, width=2, fill="#090d12")
-                canvas.create_text(x, 14, text=label, fill=color if name != "---" else self.UI_DIM, font=("Segoe UI", 7, "bold"))
+            theme = {"accent": COLOR_ACCENT, "orange": COLOR_ORANGE}
+            if hops:
+                route_strip.draw_pip_line(canvas, left_x, right_x, spine_y, hops, theme, dot_radius=4, bg="#090d12")
 
-            canvas.create_text((left_x + center_x) // 2, spine_y - 12, text=ctx["prev_distance"], fill=self.UI_MUTED, font=("Consolas", 8, "bold"))
-            canvas.create_text((center_x + right_x) // 2, spine_y - 12, text=ctx["next_distance"], fill=COLOR_ORANGE if ctx["has_route"] else self.UI_MUTED, font=("Consolas", 8, "bold"))
+            current_radius = 6
+            canvas.create_oval(
+                left_x - current_radius, spine_y - current_radius, left_x + current_radius, spine_y + current_radius,
+                outline=COLOR_ACCENT, width=2, fill="#090d12",
+            )
+            canvas.create_text(left_x, 14, text="CURRENT", fill=COLOR_ACCENT, font=("Segoe UI", 7, "bold"))
+            dest_label = "DEST" if hops else "---"
+            dest_color = COLOR_ORANGE if hops else self.UI_DIM
+            canvas.create_text(right_x, 14, text=dest_label, fill=dest_color, font=("Segoe UI", 7, "bold"))
+
+            canvas.create_text((left_x + right_x) // 2, spine_y - 12, text=ctx["next_distance"], fill=COLOR_ORANGE if ctx["has_route"] else self.UI_MUTED, font=("Consolas", 8, "bold"))
 
             footer = ctx["route"]
+            total_txt = ctx.get("total_distance_text")
+            if total_txt:
+                footer = f"{footer}  •  {total_txt}"
             canvas.create_text(w // 2, h - 16, text=footer, fill=self.UI_MUTED, font=("Consolas", 8))
         except Exception as exc:
             try:
