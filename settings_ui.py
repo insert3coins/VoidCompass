@@ -179,6 +179,8 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     sysinfo_var = tk.BooleanVar(value=config.get("system_info_enabled", True))
     ss_var = tk.BooleanVar(value=config.get("screenshots_enabled", False))
     edsm_upload_var = tk.BooleanVar(value=config.get("edsm_upload_enabled", False))
+    runtime_trace_var = tk.BooleanVar(value=config.get("runtime_trace_enabled", True))
+    crash_reporting_var = tk.BooleanVar(value=config.get("crash_reporting_enabled", True))
     if "screenshots_path" not in config:
         config["screenshots_path"] = os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous")
 
@@ -186,10 +188,12 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     core_page = make_page("core", "Core", "Journal and screenshot paths.")
     overlay_page = make_page("overlays", "Overlays", "Runtime modules and display timing.")
     integrations_page = make_page("integrations", "Integrations", "EDSM upload and fleet carrier Discord.")
+    diagnostics_page = make_page("diagnostics", "Diagnostics", "Runtime tracing and automatic crash or UI-freeze reports.")
 
     nav_button("core", "Core")
     nav_button("overlays", "Overlays")
     nav_button("integrations", "Integrations")
+    nav_button("diagnostics", "Diagnostics")
 
     core_paths = section(core_page, "Paths")
     j_e = input_row(core_paths, "Journal Path", "journal_path")
@@ -278,6 +282,20 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     carrier_actions = row(carrier_section)
     action_button(carrier_actions, "Send Test Message", _test_discord).pack(side=tk.LEFT)
 
+    diagnostics_section = section(diagnostics_page, "Runtime Diagnostics")
+    toggle_row(diagnostics_section, "Runtime performance trace log", runtime_trace_var)
+    toggle_row(diagnostics_section, "Crash and UI-freeze reporter", crash_reporting_var)
+    tk.Label(
+        diagnostics_section,
+        text="Changes take effect after restarting VoidCompass. Ctrl+Alt+D writes a manual stack dump when crash reporting is enabled.",
+        font=UI_FONT,
+        fg=UI_MUTED,
+        bg=UI_PANEL,
+        anchor="w",
+        justify=tk.LEFT,
+        wraplength=620,
+    ).pack(fill=tk.X, padx=12, pady=(2, 12))
+
     def remove_deprecated_keys():
         for key in DEPRECATED_CONFIG_KEYS:
             config.pop(key, None)
@@ -304,6 +322,8 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "edsm_cmdr_name": edsm_cmdr_e.get().strip(),
             "edsm_api_key": edsm_key_e.get().strip(),
             "edsm_upload_enabled": edsm_upload_var.get(),
+            "runtime_trace_enabled": runtime_trace_var.get(),
+            "crash_reporting_enabled": crash_reporting_var.get(),
             "settings_geometry": win.geometry(),
         })
         remove_deprecated_keys()

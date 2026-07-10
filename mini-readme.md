@@ -1,5 +1,22 @@
 # VoidCompass // UPDATE LOG
 
+## v4.0.4 // Freeze Diagnostics + Deadlock Fixes
+**Release Date:** 2026-Jul-10
+
+### Dashboard Reliability
+*   Prevented Profile and BGS pages from blocking Tk while the journal watcher owns the shared database lock.
+*   Added cached, non-blocking reads for the EDSM upload queue and BGS system/faction lists.
+*   Verified every integrated page can be opened in sequence without creating a persistent Not Responding state.
+
+### Diagnostics
+*   Re-enabled automatic crash and UI-freeze reporting by default.
+*   Added independent runtime-trace and crash-reporter controls under Settings → Diagnostics.
+*   Added automatic thread stack dumps after a sustained UI heartbeat stall and retained the Ctrl+Alt+D manual dump shortcut.
+*   Crash logs now start fresh on every application launch to prevent indefinite file growth.
+
+### Version
+*   Bumped app version to **4.0.4**.
+
 ## v4.0.3 // Themed Native Controls
 **Release Date:** 2026-Jul-10
 

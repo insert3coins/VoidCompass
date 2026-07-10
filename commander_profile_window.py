@@ -43,6 +43,7 @@ class CommanderProfileWindow(ThemedWindowMixin):
         self.win.minsize(860, 560)
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
         self._wheel_bound = False
+        self._last_queue_count = 0
         self._build()
         self.refresh()
 
@@ -185,11 +186,22 @@ class CommanderProfileWindow(ThemedWindowMixin):
             fill.place(x=0, y=0, relheight=1.0, relwidth=pct)
 
     def _queue_count(self):
+        lock = getattr(self.app, "db_lock", None)
+        if lock is None or not lock.acquire(blocking=False):
+            # The watcher processes journal batches while holding db_lock. It
+            # can also be waiting for Tk to service a queued callback. Waiting
+            # for that lock on the Tk thread creates a lock inversion and a
+            # permanent Not Responding window, so show the last known count.
+            return self._last_queue_count
         try:
-            with self.app.db_lock:
-                return self.app.conn.execute("SELECT COUNT(*) FROM edsm_queue").fetchone()[0]
+            self._last_queue_count = self.app.conn.execute(
+                "SELECT COUNT(*) FROM edsm_queue"
+            ).fetchone()[0]
+            return self._last_queue_count
         except Exception:
-            return 0
+            return self._last_queue_count
+        finally:
+            lock.release()
 
     def _session_credit_delta(self):
         if not isinstance(getattr(self.app, "cmdr_balance", None), (int, float)):
