@@ -26,7 +26,7 @@ UI_MONO = FONT_MONO
 def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded=False, on_close_callback=None):
     win = window_surface(root, embedded=embedded)
     win.title("SYSTEM CONFIGURATION")
-    win.geometry(config.get("settings_geometry", "980x680"))
+    win.geometry(config.get("settings_geometry", "980x800"))
     win.minsize(880, 600)
     apply_window(win)
     win.attributes("-topmost", True)
@@ -110,6 +110,12 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         frame.pack(fill=tk.X, padx=12, pady=(5, 6))
         return frame
 
+    def _parse_float(text, fallback):
+        try:
+            return max(0.5, float(str(text).strip()))
+        except Exception:
+            return fallback
+
     def input_row(parent, label, key, is_password=False):
         frame = row(parent)
         tk.Label(frame, text=label, font=UI_FONT_BOLD, fg=UI_MUTED, bg=UI_PANEL, anchor="w", width=24).pack(side=tk.LEFT)
@@ -177,6 +183,11 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     colony_var = tk.BooleanVar(value=config.get("colony_overlay_enabled", False))
     prosp_var = tk.BooleanVar(value=config.get("prospector_overlay_enabled", True))
     sysinfo_var = tk.BooleanVar(value=config.get("system_info_enabled", True))
+    gravity_var = tk.BooleanVar(value=config.get("gravity_warning_overlay_enabled", True))
+    bio_strip_var = tk.BooleanVar(value=config.get("bio_strip_overlay_enabled", True))
+    station_info_var = tk.BooleanVar(value=config.get("station_info_overlay_enabled", True))
+    survey_status_var = tk.BooleanVar(value=config.get("survey_status_overlay_enabled", True))
+    toast_var = tk.BooleanVar(value=config.get("toast_overlay_enabled", True))
     ss_var = tk.BooleanVar(value=config.get("screenshots_enabled", False))
     edsm_upload_var = tk.BooleanVar(value=config.get("edsm_upload_enabled", False))
     runtime_trace_var = tk.BooleanVar(value=config.get("runtime_trace_enabled", True))
@@ -210,10 +221,16 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     toggle_row(overlay_modules, "Colony Shopping Overlay", colony_var)
     toggle_row(overlay_modules, "Prospector Result Overlay", prosp_var)
     toggle_row(overlay_modules, "System Info Overlay", sysinfo_var)
+    toggle_row(overlay_modules, "Gravity Warning Overlay", gravity_var)
+    toggle_row(overlay_modules, "Bio Value Strip Overlay", bio_strip_var)
+    toggle_row(overlay_modules, "Station Info Overlay", station_info_var)
+    toggle_row(overlay_modules, "Survey Status Strip", survey_status_var)
+    toggle_row(overlay_modules, "Toast Notifications", toast_var)
 
     overlay_timing = section(overlay_page, "Timing")
     prosp_timeout_e = input_row(overlay_timing, "Prospector Auto-Hide", "prospector_hud_timeout_s")
     sysinfo_timeout_e = input_row(overlay_timing, "System Info Auto-Hide", "system_info_timeout_s")
+    gravity_threshold_e = input_row(overlay_timing, "Gravity Warning Threshold (g)", "gravity_warning_threshold_g")
 
     edsm_section = section(integrations_page, "EDSM Upload")
     edsm_cmdr_e = input_row(edsm_section, "Commander Name", "edsm_cmdr_name")
@@ -316,6 +333,12 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "system_info_timeout_s": max(5, int(sysinfo_timeout_e.get().strip() or 30))
                 if sysinfo_timeout_e.get().strip().isdigit() else
                 config.get("system_info_timeout_s", 30),
+            "gravity_warning_overlay_enabled": gravity_var.get(),
+            "gravity_warning_threshold_g": _parse_float(gravity_threshold_e.get(), config.get("gravity_warning_threshold_g", 3.0)),
+            "bio_strip_overlay_enabled": bio_strip_var.get(),
+            "station_info_overlay_enabled": station_info_var.get(),
+            "survey_status_overlay_enabled": survey_status_var.get(),
+            "toast_overlay_enabled": toast_var.get(),
             "screenshots_enabled": ss_var.get(),
             "screenshots_path": ss_e.get().strip(),
             "carrier_discord_webhook_url": fc_wh_e.get().strip(),

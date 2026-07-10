@@ -2,9 +2,11 @@
 strip for the current system, modeled on SrvSurvey's PlotSysStatus.
 
 Unlike the other chroma-key overlays in this app, this one stays visible
-for the whole time a system has bodies to survey rather than auto-hiding —
-it's meant to sit on-screen as a running progress readout, not a transient
-event popup.
+for the whole time a system has un-DSS-mapped bodies rather than
+auto-hiding. It deliberately does NOT repeat the scanned/total percentage
+already shown on the navigation HUD's SCAN PROGRESS row — its only job is
+to name which specific bodies still need mapping and flag the bio-bearing
+ones, so it hides itself once nothing is left to add.
 """
 
 import tkinter as tk
@@ -91,13 +93,9 @@ class SurveyStatusHUD:
     # ── Data interface ───────────────────────────────────────────────────
 
     def update(self, system_name, scanned, total, scan_items, body_signals):
-        total = int(total or 0)
-        if total <= 0:
+        if int(total or 0) <= 0:
             self.hide()
             return
-
-        scanned = int(scanned or 0)
-        pct = max(0.0, min(1.0, scanned / total)) if total else 0.0
 
         remaining = []
         bio_remaining = 0
@@ -111,7 +109,13 @@ class SurveyStatusHUD:
             if not item.get("dss_complete"):
                 remaining.append((item.get("name") or "?", bio_count > 0))
 
-        self._redraw(system_name, scanned, total, pct, remaining, bio_remaining)
+        if not remaining:
+            # Nothing left to map — the nav HUD's own progress readout
+            # already communicates "100%"; no unique info left to show here.
+            self.hide()
+            return
+
+        self._redraw(system_name, remaining, bio_remaining)
         self.show()
 
     # ── Drag-to-move ─────────────────────────────────────────────────────
@@ -139,9 +143,9 @@ class SurveyStatusHUD:
         self.canvas.create_text(x + 1, y + 1, text=text, fill="black", font=font, anchor=anchor)
         self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor)
 
-    def _redraw(self, system_name, scanned, total, pct, remaining, bio_remaining):
+    def _redraw(self, system_name, remaining, bio_remaining):
         w = WIDTH
-        h = 90 if remaining else 66
+        h = 66
         self.canvas.config(width=w, height=h)
         self.win.geometry(f"{w}x{h}")
         self.canvas.delete("all")
@@ -149,22 +153,16 @@ class SurveyStatusHUD:
         overlay_chrome.draw_chrome(self.canvas, w, h, bracket_len=10)
         self._text(18, 18, "SURVEY STATUS", COLOR_ACCENT, ("Courier", 9, "bold"))
         self._text(w - 18, 18, _truncate((system_name or "").upper(), 30), COLOR_TEXT, ("Courier", 9, "bold"), anchor="e")
+        self.canvas.create_line(18, 28, w - 18, 28, fill="#1a2530", width=1)
 
-        self._text(18, 36, f"{scanned}/{total} SCANNED", COLOR_TEXT, ("Courier", 8, "bold"))
-        self._text(w - 18, 36, f"{int(pct*100)}%", COLOR_ACCENT, ("Courier", 8, "bold"), anchor="e")
-        self.canvas.create_rectangle(18, 43, w - 18, 49, outline="#26313a", width=1)
-        if pct > 0:
-            self.canvas.create_rectangle(18, 43, 18 + (w - 36) * pct, 49, fill=COLOR_ACCENT, outline=COLOR_ACCENT)
+        names_y = 42
+        label = f"DSS REMAINING ({len(remaining)})"
+        self._text(18, names_y, label, _DIM, ("Courier", 7, "bold"))
+        if bio_remaining:
+            self._text(w - 18, names_y, f"BIO REMAINING {bio_remaining}", COLOR_ORANGE, ("Courier", 7, "bold"), anchor="e")
 
-        if remaining:
-            names_y = 64
-            label = f"DSS REMAINING ({len(remaining)})"
-            self._text(18, names_y, label, _DIM, ("Courier", 7, "bold"))
-            if bio_remaining:
-                self._text(w - 18, names_y, f"BIO REMAINING {bio_remaining}", COLOR_ORANGE, ("Courier", 7, "bold"), anchor="e")
-
-            shown = remaining[:10]
-            self._draw_name_list(18, 78, shown, len(remaining) - len(shown))
+        shown = remaining[:10]
+        self._draw_name_list(18, 56, shown, len(remaining) - len(shown))
 
     def _draw_name_list(self, x, y, shown, extra_count):
         cur_x = x
