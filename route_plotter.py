@@ -8,7 +8,7 @@ import requests
 from tkinter import messagebox, filedialog
 from tkinter import ttk
 from config import COLOR_BG, COLOR_PANEL, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
-from ui_theme import THEME, ThemedWindowMixin, apply_window, configure_ttk, window_surface
+from ui_theme import THEME, ThemedWindowMixin, apply_window, button, configure_ttk, scrollbar, window_surface
 from waypoint_manager import WaypointManager
 
 COLOR_BG = THEME.bg
@@ -101,10 +101,10 @@ class RoutePlotter(ThemedWindowMixin):
         self.note_entry = tk.Entry(input_panel, bg="#111", fg=COLOR_TEXT, font=("Courier", 10), insertbackground=COLOR_ACCENT, relief=tk.FLAT)
         self.note_entry.grid(row=0, column=3, sticky="ew", padx=(0, 8), pady=8, ipady=3)
 
-        tk.Button(input_panel, text="[ ADD ]", command=self.add_system, bg=COLOR_ACCENT, fg="black", font=("Courier", 9, "bold"), relief=tk.FLAT).grid(row=0, column=4, padx=(0, 6))
-        tk.Button(input_panel, text="[ IMPORT ]", command=self.open_import_dialog, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9, "bold"), relief=tk.FLAT).grid(row=0, column=5, padx=(0, 10))
-        tk.Button(input_panel, text="[ IMPORT SPANSH CSV ]", command=self.import_spansh_csv, bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9, "bold"), relief=tk.FLAT).grid(row=0, column=6, padx=(0, 10))
-        self.dup_btn = tk.Button(input_panel, text="", command=self.cycle_duplicate_mode, bg=COLOR_PANEL, fg="#aaa", font=("Courier", 8, "bold"), relief=tk.FLAT)
+        button(input_panel, "ADD", self.add_system, accent=True).grid(row=0, column=4, padx=(0, 6))
+        button(input_panel, "IMPORT", self.open_import_dialog).grid(row=0, column=5, padx=(0, 10))
+        button(input_panel, "IMPORT SPANSH CSV", self.import_spansh_csv).grid(row=0, column=6, padx=(0, 10))
+        self.dup_btn = button(input_panel, "", self.cycle_duplicate_mode, muted=True)
         self.dup_btn.grid(row=0, column=7, padx=(0, 10))
         input_panel.grid_columnconfigure(1, weight=2)
         input_panel.grid_columnconfigure(3, weight=1)
@@ -128,7 +128,7 @@ class RoutePlotter(ThemedWindowMixin):
             activestyle="none", selectmode=tk.EXTENDED
         )
         self.listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        sb = tk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.listbox.yview)
+        sb = scrollbar(list_frame, orient=tk.VERTICAL, command=self.listbox.yview)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
         self.listbox.config(yscrollcommand=sb.set)
         self.listbox.bind("<<ListboxSelect>>", lambda e: self._update_selection_panel())
@@ -157,7 +157,7 @@ class RoutePlotter(ThemedWindowMixin):
         self.health_lbl.pack(fill=tk.X, padx=10, pady=(0, 8))
 
         def mk_btn(parent, text, cmd, bg=COLOR_PANEL, fg=COLOR_TEXT):
-            return tk.Button(parent, text=text, command=cmd, bg=bg, fg=fg, font=("Courier", 9, "bold"), relief=tk.FLAT, width=22)
+            return button(parent, text, cmd, accent=bg == COLOR_ACCENT, danger=fg == "red", width=22)
 
         def section(title):
             tk.Label(side, text=title, font=("Courier", 8, "bold"), fg="#777", bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(8, 2))
@@ -235,19 +235,10 @@ class RoutePlotter(ThemedWindowMixin):
         supercharge_menu["menu"].config(bg="#111", fg=COLOR_TEXT, activebackground=COLOR_ACCENT, activeforeground="black", font=("Courier", 9))
         supercharge_menu.pack(anchor="w")
 
-        self.neutron_plot_btn = tk.Button(
-            controls, text="[ PLOT ]", command=self.find_neutron_route,
-            bg=COLOR_ACCENT, fg="black", font=("Courier", 9, "bold"), relief=tk.FLAT
-        )
+        self.neutron_plot_btn = button(controls, "PLOT", self.find_neutron_route, accent=True)
         self.neutron_plot_btn.pack(side=tk.LEFT, padx=(0, 6), pady=(12, 6))
-        tk.Button(
-            controls, text="[ IMPORT TO ROUTE ]", command=self.import_neutron_route,
-            bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9, "bold"), relief=tk.FLAT
-        ).pack(side=tk.LEFT, padx=(0, 6), pady=(12, 6))
-        tk.Button(
-            controls, text="[ COPY LIST ]", command=self.copy_neutron_route,
-            bg=COLOR_PANEL, fg=COLOR_TEXT, font=("Courier", 9, "bold"), relief=tk.FLAT
-        ).pack(side=tk.LEFT, padx=(0, 10), pady=(12, 6))
+        button(controls, "IMPORT TO ROUTE", self.import_neutron_route).pack(side=tk.LEFT, padx=(0, 6), pady=(12, 6))
+        button(controls, "COPY LIST", self.copy_neutron_route).pack(side=tk.LEFT, padx=(0, 10), pady=(12, 6))
 
         body = tk.Frame(wrapper, bg=COLOR_BG)
         body.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
@@ -266,7 +257,7 @@ class RoutePlotter(ThemedWindowMixin):
             activestyle="none", selectmode=tk.EXTENDED
         )
         self.neutron_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        nsb = tk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.neutron_listbox.yview)
+        nsb = scrollbar(list_frame, orient=tk.VERTICAL, command=self.neutron_listbox.yview)
         nsb.pack(side=tk.RIGHT, fill=tk.Y)
         self.neutron_listbox.config(yscrollcommand=nsb.set)
         self.neutron_listbox.bind("<Control-c>", lambda _e: self.copy_neutron_route())
@@ -802,8 +793,8 @@ class RoutePlotter(ThemedWindowMixin):
 
         btn_row = tk.Frame(dlg, bg=COLOR_BG)
         btn_row.pack(fill=tk.X, padx=20, pady=16)
-        tk.Button(btn_row, text="CANCEL", command=lambda: (save_geometry(), dlg.destroy()), bg="#222", fg="#888", font=("Courier", 9, "bold"), relief=tk.FLAT, width=10).pack(side=tk.LEFT)
-        tk.Button(btn_row, text="SAVE", command=on_save, bg=COLOR_ACCENT, fg="black", font=("Courier", 9, "bold"), relief=tk.FLAT, width=10).pack(side=tk.RIGHT)
+        button(btn_row, "CANCEL", lambda: (save_geometry(), dlg.destroy()), muted=True, width=10).pack(side=tk.LEFT)
+        button(btn_row, "SAVE", on_save, accent=True, width=10).pack(side=tk.RIGHT)
         dlg.bind("<Return>", lambda event: on_save())
         dlg.protocol("WM_DELETE_WINDOW", lambda: (save_geometry(), dlg.destroy()))
 
@@ -920,7 +911,7 @@ class RoutePlotter(ThemedWindowMixin):
             dlg.destroy()
             self.process_bulk_list(lines)
 
-        tk.Button(dlg, text="[ PROCESS LIST ]", command=do_import, bg=COLOR_ACCENT, fg="black", font=("Courier", 10, "bold"), relief=tk.FLAT).pack(fill=tk.X, padx=10, pady=10)
+        button(dlg, "PROCESS LIST", do_import, accent=True).pack(fill=tk.X, padx=10, pady=10)
 
     def process_bulk_list(self, systems):
         if not systems:

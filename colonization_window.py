@@ -20,7 +20,7 @@ from tkinter import messagebox, ttk
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 from trade import routes
-from ui_theme import THEME, ThemedWindowMixin, apply_window, configure_ttk, window_surface
+from ui_theme import THEME, ThemedWindowMixin, apply_window, button, configure_ttk, scrollbar, window_surface
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -169,7 +169,7 @@ class ColonizationWindow(ThemedWindowMixin):
         list_wrap = tk.Frame(left, bg=self.UI_PANEL)
         list_wrap.pack(fill=tk.BOTH, expand=True, padx=4)
 
-        list_scroll = tk.Scrollbar(list_wrap, orient=tk.VERTICAL)
+        list_scroll = scrollbar(list_wrap, orient=tk.VERTICAL)
         self._list_canvas = tk.Canvas(list_wrap, bg=self.UI_PANEL,
                                        highlightthickness=0,
                                        yscrollcommand=list_scroll.set)
@@ -231,7 +231,7 @@ class ColonizationWindow(ThemedWindowMixin):
         # Commodity table
         tbl_wrap = tk.Frame(right, bg="#0b0f13")
         tbl_wrap.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 4))
-        tbl_scroll = tk.Scrollbar(tbl_wrap, orient=tk.VERTICAL)
+        tbl_scroll = scrollbar(tbl_wrap, orient=tk.VERTICAL)
         self._table = tk.Text(
             tbl_wrap,
             bg="#0b0f13", fg=COLOR_TEXT,
@@ -286,14 +286,7 @@ class ColonizationWindow(ThemedWindowMixin):
         self._updated_lbl.pack(side=tk.RIGHT)
 
     def _action_button(self, parent, text, cmd, accent=False, muted=False):
-        fg = COLOR_ACCENT if accent else ("#4a5560" if muted else COLOR_TEXT)
-        return tk.Button(
-            parent, text=text, command=cmd,
-            bg=self.UI_PANEL, fg=fg,
-            activebackground="#1a2430", activeforeground=COLOR_ACCENT,
-            relief=tk.FLAT, bd=0, padx=10, pady=4,
-            font=("Segoe UI", 8), cursor="hand2", highlightthickness=0,
-        )
+        return button(parent, text, cmd, accent=accent, muted=muted, pady=4)
 
     def _build_planner_tab(self, parent):
         header = tk.Frame(parent, bg=self.UI_BG)
@@ -350,7 +343,7 @@ class ColonizationWindow(ThemedWindowMixin):
         for col, label, width, anchor in specs:
             self._planner_tree.heading(col, text=label)
             self._planner_tree.column(col, width=width, anchor=anchor)
-        scroll = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self._planner_tree.yview)
+        scroll = scrollbar(frame, orient=tk.VERTICAL, command=self._planner_tree.yview)
         self._planner_tree.configure(yscrollcommand=scroll.set)
         self._planner_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scroll.pack(side=tk.RIGHT, fill=tk.Y)

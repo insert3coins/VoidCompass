@@ -10,7 +10,7 @@ from tkinter import ttk
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 from trade import alerts, eddn, eddn_upload, marketdb, routes, seed, spansh
-from ui_theme import THEME, ThemedWindowMixin, apply_window, configure_ttk, window_surface
+from ui_theme import THEME, ThemedWindowMixin, apply_window, button, configure_ttk, scrollbar, window_surface
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -165,15 +165,7 @@ class TradeWindow(ThemedWindowMixin):
         ).pack(side=tk.RIGHT)
 
     def _button(self, parent, text, cmd, accent=False):
-        return tk.Button(
-            parent, text=text, command=cmd,
-            bg=COLOR_ACCENT if accent else self.UI_PANEL,
-            fg="black" if accent else COLOR_TEXT,
-            activebackground=COLOR_ACCENT if accent else self.UI_PANEL_2,
-            activeforeground="black" if accent else COLOR_ACCENT,
-            relief=tk.FLAT, bd=0, padx=10, pady=5,
-            font=("Segoe UI", 8, "bold"), cursor="hand2",
-        )
+        return button(parent, text, cmd, accent=accent)
 
     def _entry(self, parent, width=10):
         return tk.Entry(parent, width=width, bg=self.UI_PANEL_2, fg=COLOR_TEXT, insertbackground=COLOR_ACCENT, relief=tk.FLAT, highlightthickness=1, highlightbackground=self.UI_BORDER, highlightcolor=COLOR_ACCENT)
@@ -214,7 +206,7 @@ class TradeWindow(ThemedWindowMixin):
             tree._vc_heading_labels[col] = label
             tree.heading(col, text=label, command=lambda c=col, t=tree: self._sort_tree_by_column(t, c))
             tree.column(col, width=width, anchor=anchor)
-        scroll = ttk.Scrollbar(wrap, orient=tk.VERTICAL, command=tree.yview)
+        scroll = scrollbar(wrap, orient=tk.VERTICAL, command=tree.yview)
         tree.configure(yscrollcommand=scroll.set)
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scroll.pack(side=tk.RIGHT, fill=tk.Y)

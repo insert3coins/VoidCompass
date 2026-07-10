@@ -3,7 +3,7 @@ import tkinter as tk
 import tkinter.messagebox
 
 from config import DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config as persist_config
-from ui_theme import THEME, FONT_MONO, FONT_TITLE, FONT_UI, FONT_UI_BOLD, apply_window, window_surface
+from ui_theme import THEME, FONT_MONO, FONT_TITLE, FONT_UI, FONT_UI_BOLD, apply_window, button, window_surface
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -57,23 +57,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     nav_buttons = {}
 
     def action_button(parent, text, command, accent=False, muted=False):
-        bg = COLOR_ACCENT if accent else parent.cget("bg")
-        fg = "black" if accent else (UI_DIM if muted else COLOR_TEXT)
-        return tk.Button(
-            parent,
-            text=text,
-            command=command,
-            bg=bg,
-            fg=fg,
-            activebackground=COLOR_ACCENT if accent else UI_PANEL_2,
-            activeforeground="black" if accent else COLOR_TEXT,
-            font=UI_FONT_BOLD,
-            relief=tk.FLAT,
-            bd=0,
-            padx=12,
-            pady=7,
-            cursor="hand2",
-        )
+        return button(parent, text, command, accent=accent, muted=muted, padx=12, pady=7)
 
     def make_page(key, title, subtitle):
         page = tk.Frame(content, bg=UI_BG)

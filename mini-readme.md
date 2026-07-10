@@ -1,5 +1,17 @@
 # VoidCompass // UPDATE LOG
 
+## v4.0.3 // Themed Native Controls
+**Release Date:** 2026-Jul-10
+
+### Interface Controls
+*   Reworked page actions around shared primary, standard, muted, and destructive button treatments.
+*   Added consistent hover, pressed, disabled, and active-subtab states across the integrated application pages.
+*   Replaced native page scrollbars with narrow, square, arrowless controls that use the VoidCompass palette and cyan interaction feedback.
+*   Preserved specialised Settings toggles and section navigation while keeping them tied to the shared theme colours.
+
+### Version
+*   Bumped app version to **4.0.3**.
+
 ## v4.0.2 // Native Commander Console
 **Release Date:** 2026-Jul-10
 

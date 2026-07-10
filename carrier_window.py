@@ -7,7 +7,7 @@ import tkinter as tk
 from datetime import datetime, timezone
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
-from ui_theme import THEME, ThemedWindowMixin, apply_window, window_surface
+from ui_theme import THEME, ThemedWindowMixin, apply_window, button, window_surface
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -135,11 +135,7 @@ class CarrierWindow(ThemedWindowMixin):
         self._tabs = {}
         self._tab_frames = {}
         for name in ("Overview", "Finance", "Services"):
-            btn = tk.Button(tab_bar, text=name, relief=tk.FLAT, bd=0,
-                            font=self.UI_BOLD, bg="#0c1014", fg=self.UI_MUTED,
-                            activebackground=self.UI_PANEL, activeforeground=COLOR_TEXT,
-                            padx=14, pady=6, cursor="hand2",
-                            command=lambda n=name: self._show_tab(n))
+            btn = button(tab_bar, name, lambda n=name: self._show_tab(n), muted=True, padx=14, pady=6)
             btn.pack(side=tk.LEFT)
             self._tabs[name] = btn
 
@@ -156,8 +152,12 @@ class CarrierWindow(ThemedWindowMixin):
         for n, frame in self._tab_frames.items():
             frame.pack_forget()
             self._tabs[n].config(fg=self.UI_MUTED, bg="#0c1014")
+            self._tabs[n]._theme_resting_bg = "#0c1014"
+            self._tabs[n]._theme_resting_fg = self.UI_MUTED
         self._tab_frames[name].pack(fill=tk.BOTH, expand=True)
         self._tabs[name].config(fg=COLOR_TEXT, bg=self.UI_PANEL)
+        self._tabs[name]._theme_resting_bg = self.UI_PANEL
+        self._tabs[name]._theme_resting_fg = COLOR_TEXT
 
     def _section(self, parent, title):
         tk.Label(parent, text=title, font=self.UI_BOLD, fg=COLOR_ORANGE,
@@ -199,13 +199,7 @@ class CarrierWindow(ThemedWindowMixin):
         self.jmp_prev    = self._row(f, "Previous System")
 
         # Copy countdown button
-        self._copy_btn = tk.Button(f, text="Copy <t:…:R> to clipboard",
-                                   font=self.UI_FONT, fg=self.UI_MUTED,
-                                   bg=self.UI_PANEL, relief=tk.FLAT, bd=0,
-                                   activebackground=self.UI_PANEL,
-                                   activeforeground=COLOR_ACCENT,
-                                   cursor="hand2",
-                                   command=self._copy_countdown)
+        self._copy_btn = button(f, "Copy <t:…:R> to clipboard", self._copy_countdown, muted=True)
         self._copy_btn.pack(anchor="w", padx=10, pady=(2, 0))
 
         self._section(f, "CARRIER STATS")
@@ -230,14 +224,7 @@ class CarrierWindow(ThemedWindowMixin):
             highlightcolor=COLOR_ACCENT,
         )
         self.dest_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=5)
-        dest_btn = tk.Button(
-            dest_row, text="Set",
-            bg=self.UI_PANEL, fg=COLOR_ACCENT,
-            activebackground=self.UI_BORDER, activeforeground=COLOR_ACCENT,
-            font=self.UI_BOLD, relief=tk.FLAT, bd=0,
-            padx=10, cursor="hand2",
-            command=self._save_destination,
-        )
+        dest_btn = button(dest_row, "SET", self._save_destination)
         dest_btn.pack(side=tk.LEFT, padx=(6, 0))
         self.dest_entry.bind("<Return>", lambda _e: self._save_destination())
 
@@ -257,14 +244,7 @@ class CarrierWindow(ThemedWindowMixin):
             highlightcolor=COLOR_ACCENT,
         )
         self.note_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=5)
-        note_btn = tk.Button(
-            note_row, text="Set",
-            bg=self.UI_PANEL, fg=COLOR_ACCENT,
-            activebackground=self.UI_BORDER, activeforeground=COLOR_ACCENT,
-            font=self.UI_BOLD, relief=tk.FLAT, bd=0,
-            padx=10, cursor="hand2",
-            command=self._save_note,
-        )
+        note_btn = button(note_row, "SET", self._save_note)
         note_btn.pack(side=tk.LEFT, padx=(6, 0))
         self.note_entry.bind("<Return>", lambda _e: self._save_note())
 
@@ -288,26 +268,12 @@ class CarrierWindow(ThemedWindowMixin):
             highlightcolor=COLOR_ACCENT,
         )
         self.dep_time_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=5)
-        tk.Button(
-            dep_time_row, text="Clear",
-            bg=self.UI_PANEL, fg=self.UI_MUTED,
-            activebackground=self.UI_BORDER, activeforeground=COLOR_TEXT,
-            font=self.UI_FONT, relief=tk.FLAT, bd=0,
-            padx=8, cursor="hand2",
-            command=lambda: self.dep_time_var.set(""),
-        ).pack(side=tk.LEFT, padx=(6, 0))
+        button(dep_time_row, "CLEAR", lambda: self.dep_time_var.set(""), muted=True, padx=8).pack(side=tk.LEFT, padx=(6, 0))
 
         # Post button + feedback
         post_row = tk.Frame(f, bg=self.UI_PANEL)
         post_row.pack(fill=tk.X, padx=10, pady=(2, 12))
-        self.post_discord_btn = tk.Button(
-            post_row, text="📢  Post Status to Discord",
-            bg=self.UI_PANEL, fg=COLOR_ACCENT,
-            activebackground=self.UI_BORDER, activeforeground=COLOR_ACCENT,
-            font=self.UI_BOLD, relief=tk.FLAT, bd=0,
-            padx=12, pady=6, cursor="hand2",
-            command=self._post_status_to_discord,
-        )
+        self.post_discord_btn = button(post_row, "📢  POST STATUS TO DISCORD", self._post_status_to_discord, accent=True, padx=12, pady=6)
         self.post_discord_btn.pack(side=tk.LEFT)
         self.post_discord_status_lbl = tk.Label(
             post_row, text="", font=("Segoe UI", 8),

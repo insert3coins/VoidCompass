@@ -110,7 +110,58 @@ def configure_ttk(window, prefix="Void"):
         lightcolor=THEME.border,
         darkcolor=THEME.border,
     )
+    _configure_scrollbar_styles(style, prefix)
     return style
+
+
+def _configure_scrollbar_styles(style, prefix="Void"):
+    vertical = f"{prefix}.Vertical.TScrollbar"
+    horizontal = f"{prefix}.Horizontal.TScrollbar"
+    style.layout(vertical, [
+        ("Vertical.Scrollbar.trough", {
+            "sticky": "ns",
+            "children": [("Vertical.Scrollbar.thumb", {"expand": "1", "sticky": "nswe"})],
+        }),
+    ])
+    style.layout(horizontal, [
+        ("Horizontal.Scrollbar.trough", {
+            "sticky": "ew",
+            "children": [("Horizontal.Scrollbar.thumb", {"expand": "1", "sticky": "nswe"})],
+        }),
+    ])
+    for name in (vertical, horizontal):
+        style.configure(
+            name,
+            background=THEME.border,
+            troughcolor=THEME.inset,
+            bordercolor=THEME.inset,
+            lightcolor=THEME.border,
+            darkcolor=THEME.border,
+            relief="flat",
+            borderwidth=0,
+            gripcount=0,
+            width=9,
+        )
+        style.map(
+            name,
+            background=[("pressed", THEME.accent), ("active", THEME.accent)],
+            lightcolor=[("pressed", THEME.accent), ("active", THEME.accent)],
+            darkcolor=[("pressed", THEME.accent), ("active", THEME.accent)],
+        )
+
+
+def scrollbar(parent, *, orient=tk.VERTICAL, command=None, prefix="Void", **kwargs):
+    """Square, arrowless themed scrollbar used throughout application pages."""
+    style = ttk.Style(parent)
+    _configure_scrollbar_styles(style, prefix)
+    axis = "Vertical" if orient in (tk.VERTICAL, "vertical") else "Horizontal"
+    return ttk.Scrollbar(
+        parent,
+        orient=orient,
+        command=command,
+        style=f"{prefix}.{axis}.TScrollbar",
+        **kwargs,
+    )
 
 
 def panel(parent, *, background=None, border=None, accent=False, **kwargs):
@@ -175,7 +226,7 @@ def button(parent, text, command, *, accent=False, muted=False, danger=False, **
         bg, fg = THEME.panel_raised, THEME.dim if muted else THEME.text
     padx = kwargs.pop("padx", 10)
     pady = kwargs.pop("pady", 5)
-    return tk.Button(
+    widget = tk.Button(
         parent,
         text=text,
         command=command,
@@ -191,6 +242,37 @@ def button(parent, text, command, *, accent=False, muted=False, danger=False, **
         cursor="hand2",
         **kwargs,
     )
+    widget._theme_resting_bg = bg
+    widget._theme_resting_fg = fg
+
+    def _hover(_event):
+        if str(widget.cget("state")) != tk.DISABLED:
+            widget.configure(
+                bg=THEME.accent if accent else THEME.panel_alt,
+                fg=THEME.bg if accent else (THEME.red if danger else THEME.accent),
+            )
+
+    def _leave(_event):
+        if str(widget.cget("state")) != tk.DISABLED:
+            widget.configure(
+                bg=getattr(widget, "_theme_resting_bg", bg),
+                fg=getattr(widget, "_theme_resting_fg", fg),
+            )
+
+    widget.bind("<Enter>", _hover, add="+")
+    widget.bind("<Leave>", _leave, add="+")
+    return widget
+
+
+def subtab_button(parent, text, command, *, selected=False, **kwargs):
+    """Compact page-local navigation button with an orange active underline."""
+    wrap = tk.Frame(parent, bg=parent.cget("bg"))
+    control = button(wrap, text, command, muted=not selected, padx=11, pady=6, **kwargs)
+    control.pack(fill=tk.X)
+    underline = tk.Frame(wrap, bg=THEME.orange if selected else parent.cget("bg"), height=2)
+    underline.pack(fill=tk.X)
+    control._theme_underline = underline
+    return wrap, control
 
 
 def entry(parent, **kwargs):

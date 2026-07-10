@@ -9,7 +9,7 @@ from datetime import datetime
 
 from config import COLOR_ACCENT, COLOR_BG, COLOR_GREEN, COLOR_ORANGE, COLOR_TEXT, save_config
 from mining_data import MiningDataStore, normalize_material_name, normalize_ring_type, search_spansh_rings
-from ui_theme import THEME, ThemedWindowMixin, apply_window, configure_ttk, window_surface
+from ui_theme import THEME, ThemedWindowMixin, apply_window, button, configure_ttk, scrollbar, window_surface
 
 COLOR_BG = THEME.bg
 COLOR_ACCENT = THEME.accent
@@ -240,21 +240,7 @@ class MiningWindow(ThemedWindowMixin):
         self._build_reports_tab()
 
     def _button(self, parent, text, command, accent=False):
-        return tk.Button(
-            parent,
-            text=text,
-            command=command,
-            bg=COLOR_ACCENT if accent else "#121920",
-            fg="black" if accent else COLOR_TEXT,
-            activebackground=COLOR_ACCENT if accent else "#1a2630",
-            activeforeground="black" if accent else COLOR_TEXT,
-            font=("Segoe UI", 9, "bold"),
-            relief=tk.FLAT,
-            bd=0,
-            padx=10,
-            pady=4,
-            cursor="hand2",
-        )
+        return button(parent, text, command, accent=accent, pady=4)
 
     def _panel(self, parent):
         return tk.Frame(parent, bg="#11161c", highlightbackground="#26313a", highlightthickness=1, bd=0)
@@ -271,7 +257,7 @@ class MiningWindow(ThemedWindowMixin):
         for key, label, width in columns:
             tree.heading(key, text=label)
             tree.column(key, width=width, anchor=tk.W)
-        scroll = tk.Scrollbar(parent, orient=tk.VERTICAL, command=tree.yview)
+        scroll = scrollbar(parent, orient=tk.VERTICAL, command=tree.yview)
         tree.configure(yscrollcommand=scroll.set)
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scroll.pack(side=tk.RIGHT, fill=tk.Y)
