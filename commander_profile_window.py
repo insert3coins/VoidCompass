@@ -7,7 +7,7 @@ from tkinter import filedialog, messagebox
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, get_active_profile, get_profile_dir, save_config
 from trade import marketdb as trade_marketdb
-from ui_theme import THEME, ThemedWindowMixin, apply_window, window_surface
+from ui_theme import THEME, ThemedWindowMixin, apply_window, button, scrollbar, window_surface
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -71,7 +71,7 @@ class CommanderProfileWindow(ThemedWindowMixin):
         body.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         self.canvas = tk.Canvas(body, bg=self.UI_BG, highlightthickness=0, bd=0)
-        self.scrollbar = tk.Scrollbar(body, orient=tk.VERTICAL, command=self.canvas.yview)
+        self.scrollbar = scrollbar(body, orient=tk.VERTICAL, command=self.canvas.yview)
         self.content = tk.Frame(self.canvas, bg=self.UI_BG)
         self.content_window = self.canvas.create_window((0, 0), window=self.content, anchor="nw")
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
@@ -91,15 +91,7 @@ class CommanderProfileWindow(ThemedWindowMixin):
         self._button(footer, "Backup Profile", self._backup_profile).pack(side=tk.LEFT, padx=(8, 0))
 
     def _button(self, parent, text, cmd, accent=False):
-        return tk.Button(
-            parent, text=text, command=cmd,
-            bg=COLOR_ACCENT if accent else self.UI_PANEL,
-            fg="black" if accent else COLOR_TEXT,
-            activebackground=COLOR_ACCENT if accent else "#1a2430",
-            activeforeground="black" if accent else COLOR_ACCENT,
-            relief=tk.FLAT, bd=0, padx=12, pady=6,
-            font=("Segoe UI", 8, "bold"), cursor="hand2",
-        )
+        return button(parent, text, cmd, accent=accent, padx=12, pady=6)
 
     def _bind_mousewheel(self, _event=None):
         if not self._wheel_bound:

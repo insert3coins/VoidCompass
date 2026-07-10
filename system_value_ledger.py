@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
-from ui_theme import THEME, ThemedWindowMixin, apply_window, configure_ttk, window_surface
+from ui_theme import THEME, ThemedWindowMixin, apply_window, button, configure_ttk, scrollbar, window_surface
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -69,13 +69,13 @@ class SystemValueLedger(ThemedWindowMixin):
         for col in cols:
             self.tree.heading(col, text=labels[col], command=lambda c=col: self._sort(c))
             self.tree.column(col, width=widths[col], anchor=tk.W if col not in ("value", "mapped") else tk.E)
-        scroll = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.tree.yview)
+        scroll = scrollbar(frame, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=scroll.set)
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
     def _button(self, parent, text, cmd, accent=False):
-        return tk.Button(parent, text=text, command=cmd, bg=COLOR_ACCENT if accent else self.UI_PANEL, fg="black" if accent else COLOR_TEXT, activebackground=COLOR_ACCENT if accent else "#1a2430", activeforeground="black" if accent else COLOR_ACCENT, relief=tk.FLAT, bd=0, padx=10, pady=5, font=("Segoe UI", 8, "bold"), cursor="hand2")
+        return button(parent, text, cmd, accent=accent)
 
     def _valuable(self, item):
         planet = item.get("planet_class") or item.get("class") or ""

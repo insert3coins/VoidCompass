@@ -13,7 +13,7 @@ import tkinter as tk
 from datetime import datetime
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
-from ui_theme import THEME, ThemedWindowMixin, apply_window, window_surface
+from ui_theme import THEME, ThemedWindowMixin, apply_window, button, scrollbar, window_surface
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -218,12 +218,7 @@ class EngineerWindow(ThemedWindowMixin):
         tab_bar.pack_propagate(False)
         self._tab_btns: dict[str, tk.Button] = {}
         for key, label, _ in self._TABS:
-            btn = tk.Button(
-                tab_bar, text=label,
-                font=("Segoe UI", 9, "bold"),
-                relief=tk.FLAT, bd=0, padx=18, pady=6, cursor="hand2",
-                command=lambda k=key: self._select_tab(k),
-            )
+            btn = button(tab_bar, label, lambda k=key: self._select_tab(k), muted=True, padx=18, pady=6)
             btn.pack(side=tk.LEFT)
             self._tab_btns[key] = btn
         self._style_tabs()
@@ -232,13 +227,13 @@ class EngineerWindow(ThemedWindowMixin):
         body = tk.Frame(self.win, bg=self.UI_BG)
         body.pack(fill=tk.BOTH, expand=True, padx=8, pady=(6, 0))
 
-        scrollbar = tk.Scrollbar(body, orient=tk.VERTICAL)
+        page_scroll = scrollbar(body, orient=tk.VERTICAL)
         self._canvas = tk.Canvas(body, bg=self.UI_PANEL,
                                   highlightthickness=0,
-                                  yscrollcommand=scrollbar.set)
-        scrollbar.config(command=self._canvas.yview)
+                                  yscrollcommand=page_scroll.set)
+        page_scroll.config(command=self._canvas.yview)
         self._canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        page_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
         self._inner = tk.Frame(self._canvas, bg=self.UI_PANEL)
         self._inner_id = self._canvas.create_window((0, 0), window=self._inner, anchor="nw")
@@ -272,8 +267,12 @@ class EngineerWindow(ThemedWindowMixin):
         for key, btn in self._tab_btns.items():
             if key == self._active_tab:
                 btn.config(bg=self.UI_PANEL, fg=tab_colors[key])
+                btn._theme_resting_bg = self.UI_PANEL
+                btn._theme_resting_fg = tab_colors[key]
             else:
                 btn.config(bg="#0c1014", fg=self.UI_DIM)
+                btn._theme_resting_bg = "#0c1014"
+                btn._theme_resting_fg = self.UI_DIM
 
     # ── Rendering ─────────────────────────────────────────────────────────────
 

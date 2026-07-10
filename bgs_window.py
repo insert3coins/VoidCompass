@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Callable
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
-from ui_theme import THEME, ThemedWindowMixin, apply_window, window_surface
+from ui_theme import THEME, ThemedWindowMixin, apply_window, scrollbar, window_surface
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -164,7 +164,7 @@ class BGSWindow(ThemedWindowMixin):
         list_wrap = tk.Frame(left, bg=self.UI_PANEL)
         list_wrap.pack(fill=tk.BOTH, expand=True, padx=4)
 
-        list_scroll = tk.Scrollbar(list_wrap, orient=tk.VERTICAL)
+        list_scroll = scrollbar(list_wrap, orient=tk.VERTICAL)
         self._list_canvas = tk.Canvas(list_wrap, bg=self.UI_PANEL,
                                        highlightthickness=0,
                                        yscrollcommand=list_scroll.set)
@@ -204,7 +204,7 @@ class BGSWindow(ThemedWindowMixin):
 
         detail_wrap = tk.Frame(right, bg="#0b0f13")
         detail_wrap.pack(fill=tk.BOTH, expand=True, padx=12, pady=(6, 4))
-        detail_scroll = tk.Scrollbar(detail_wrap, orient=tk.VERTICAL)
+        detail_scroll = scrollbar(detail_wrap, orient=tk.VERTICAL)
         self._detail = tk.Text(
             detail_wrap,
             bg="#0b0f13", fg=COLOR_TEXT,

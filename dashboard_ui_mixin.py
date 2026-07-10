@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from tkinter import scrolledtext
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
-from ui_theme import THEME, ThemedWindowMixin, apply_window, button, panel, section_label
+from ui_theme import THEME, ThemedWindowMixin, apply_window, button, panel, scrollbar, section_label
 from version import APP_VERSION
 
 COLOR_ACCENT = THEME.accent
@@ -347,7 +347,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.wp_name_lbl.pack(fill=tk.X, padx=12, pady=(6, 0))
         self.wp_info_wrap = tk.Frame(self.wp_panel, bg=self.UI_PANEL)
         self.wp_info_wrap.pack(fill=tk.BOTH, expand=True, padx=12, pady=(2, 8))
-        self.wp_info_scroll = tk.Scrollbar(self.wp_info_wrap, orient=tk.VERTICAL)
+        self.wp_info_scroll = scrollbar(self.wp_info_wrap, orient=tk.VERTICAL)
         self.wp_info_text = tk.Text(
             self.wp_info_wrap,
             bg=self.UI_PANEL,
@@ -463,7 +463,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             self.event_filter_buttons[tag] = btn
         event_text_wrap = tk.Frame(feed_wrap, bg="#0b0f13")
         event_text_wrap.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
-        self.event_feed_scroll = tk.Scrollbar(event_text_wrap, orient=tk.VERTICAL)
+        self.event_feed_scroll = scrollbar(event_text_wrap, orient=tk.VERTICAL)
         self.event_feed_list = tk.Text(
             event_text_wrap,
             bg="#0b0f13",
@@ -558,7 +558,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.wp_name_lbl.pack(fill=tk.X, padx=12, pady=(6, 0))
         self.wp_info_wrap = tk.Frame(self.wp_panel, bg=self.UI_PANEL)
         self.wp_info_wrap.pack(fill=tk.X, padx=12, pady=(2, 8))
-        self.wp_info_scroll = tk.Scrollbar(self.wp_info_wrap, orient=tk.VERTICAL)
+        self.wp_info_scroll = scrollbar(self.wp_info_wrap, orient=tk.VERTICAL)
         self.wp_info_text = tk.Text(
             self.wp_info_wrap,
             bg=self.UI_PANEL,
@@ -615,7 +615,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             highlightthickness=0,
             borderwidth=0,
         )
-        self.journal_history_scroll = tk.Scrollbar(history_wrap, orient=tk.VERTICAL, command=self.journal_history_canvas.yview)
+        self.journal_history_scroll = scrollbar(history_wrap, orient=tk.VERTICAL, command=self.journal_history_canvas.yview)
         self.journal_history_canvas.configure(yscrollcommand=self.journal_history_scroll.set)
         self.journal_history_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.journal_history_scroll.pack(side=tk.RIGHT, fill=tk.Y)
@@ -715,7 +715,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             self.event_filter_buttons[tag] = btn
         event_text_wrap = tk.Frame(feed_wrap, bg="#0b0f13")
         event_text_wrap.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
-        self.event_feed_scroll = tk.Scrollbar(event_text_wrap, orient=tk.VERTICAL)
+        self.event_feed_scroll = scrollbar(event_text_wrap, orient=tk.VERTICAL)
         self.event_feed_list = tk.Text(
             event_text_wrap,
             bg="#0b0f13",
