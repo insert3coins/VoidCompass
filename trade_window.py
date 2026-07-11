@@ -755,10 +755,13 @@ class TradeWindow(ThemedWindowMixin):
 
     def _on_route_mode_changed(self, save=True):
         mode = self.loop_mode.get()
-        for key in ("max_leg", "jump", "results"):
+        for key in ("max_leg", "results"):
             self._set_route_field_enabled(key, mode == "loop")
         for key in ("hops",):
             self._set_route_field_enabled(key, mode == "chain")
+        # Jump range feeds the travel-time model in BOTH modes now that
+        # chain routes are ranked by profit/hour like loops.
+        self._set_route_field_enabled("jump", True)
         state = tk.NORMAL if mode == "chain" else tk.DISABLED
         self.allow_planetary_check.configure(state=state)
         self.unique_route_check.configure(state=state)
@@ -1682,6 +1685,7 @@ class TradeWindow(ThemedWindowMixin):
                             requires_large_pad=params["requires_large_pad"],
                             include_carriers=params["include_carriers"],
                             min_supply=params["min_supply"],
+                            jump_range=params["jump_range"],
                         )
                         elapsed = time.monotonic() - search_started
                         self.root.after(

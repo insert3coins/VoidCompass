@@ -1,5 +1,29 @@
 # VoidCompass // UPDATE LOG
 
+## v4.2.1 // Color Themes + Trustworthy Trade Routes
+**Release Date:** 2026-Jul-12
+
+### Color Themes
+*   Added 10 built-in color themes (Void Cyan, Elite Orange, Emerald, Amber Terminal, Ice, Synthwave, Crimson, Solar Gold, Nebula Purple, Graphite) covering the whole app — native windows and the chroma-key overlays alike.
+*   New Settings → Theme page: theme picker with live swatch preview, a full 18-slot color editor with system color-picker integration, and save/delete for named custom themes.
+*   Themes apply instantly on Save Settings — the running UI, open tool windows, and on-screen overlays all recolor in place, no restart.
+*   Theme choice and custom themes are saved per commander profile.
+
+### Trade Route Quality
+*   Multi-hop chain routes are now ranked by estimated profit per hour using the same travel-time model as loops (jumps at your ship's range + supercruise + docking) instead of raw profit; the Jump Range field now applies to both route modes.
+*   Loop, chain, and opportunity-radar rankings are now freshness-weighted: an hour-old price beats a marginally better month-old one. Displayed prices stay raw.
+*   Wide-radius searches no longer risk crashing on SQLite parameter limits (station sets are staged in a temp table instead of unbounded IN lists).
+
+### Trade Watches & Data
+*   Price watches now persist across restarts, and fired alerts re-anchor their baseline so continued price decay produces a fresh alert per further 10% step instead of one alert ever.
+*   Watch alerts now pop a toast the moment they fire instead of waiting for the Watchlist tab to be opened.
+*   The EDDN live listener starts with the app (when the market DB is seeded) rather than on first Trade-window open, so prices stay fresh all session.
+*   EDDN uploads are schema-compliant again: station-illegal and nonmarketable items are excluded (regression vs. the original implementation).
+*   Fixed a market database rebuild silently wiping trade analytics history and balance logs — user data now survives re-seeds on both swap paths.
+
+### Version
+*   Bumped app version to **4.2.1**.
+
 ## v4.1.8 // Overlay Polish Pass
 **Release Date:** 2026-Jul-11
 

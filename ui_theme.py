@@ -9,6 +9,8 @@ from dataclasses import dataclass
 import tkinter as tk
 from tkinter import ttk
 
+import themes as _themes
+
 
 @dataclass(frozen=True)
 class Palette:
@@ -32,7 +34,9 @@ class Palette:
     red: str = "#ff6b70"
 
 
-THEME = Palette()
+# Built from the active commander profile's theme, resolved once at startup
+# (themes.py). Theme changes apply on the next launch.
+THEME = Palette(**_themes.normalize_theme(_themes.ACTIVE_PALETTE))
 
 FONT_UI = ("Segoe UI", 9)
 FONT_UI_BOLD = ("Segoe UI", 9, "bold")
@@ -51,8 +55,12 @@ def apply_window(window, *, background=None):
     window.option_add("*selectForeground", THEME.text)
 
 
+_CONFIGURED_TTK_PREFIXES = set()
+
+
 def configure_ttk(window, prefix="Void"):
     """Create consistently named notebook, tree, input, and scrollbar styles."""
+    _CONFIGURED_TTK_PREFIXES.add(prefix)
     style = ttk.Style(window)
     try:
         style.theme_use("clam")
@@ -373,3 +381,139 @@ class EmbeddedPage(tk.Frame):
 def window_surface(parent, *, embedded=False):
     """Return either an embedded application page or a real native Toplevel."""
     return EmbeddedPage(parent) if embedded else tk.Toplevel(parent)
+
+
+# ---------------------------------------------------------------------------
+# Live re-theming
+#
+# Every themed color in the app comes from one palette, so a theme switch is
+# a color-for-color substitution: mutate THEME in place (widgets built later
+# pick it up), rebind the value-imported module constants (COLOR_*/UI_*), and
+# walk the live widget tree remapping any option whose current color is in
+# the old palette. Chroma-key overlays are safe by construction — their
+# transparent key and hand-tuned greys are not palette colors, so the walker
+# never touches them; their accent-colored elements redraw from the swapped
+# module globals on their next update.
+# ---------------------------------------------------------------------------
+
+_WIDGET_COLOR_OPTIONS = (
+    "background", "foreground", "activebackground", "activeforeground",
+    "highlightbackground", "highlightcolor", "selectbackground",
+    "selectforeground", "insertbackground", "disabledforeground",
+    "troughcolor", "selectcolor", "readonlybackground",
+)
+_CANVAS_ITEM_OPTIONS = ("fill", "outline", "activefill", "activeoutline")
+
+
+def _remap_widget(widget, mapping):
+    for option in _WIDGET_COLOR_OPTIONS:
+        try:
+            current = str(widget.cget(option))
+        except Exception:
+            continue
+        new = mapping.get(current.lower())
+        if new:
+            try:
+                widget.configure({option: new})
+            except Exception:
+                pass
+    for attr in ("_theme_resting_bg", "_theme_resting_fg"):
+        value = getattr(widget, attr, None)
+        if isinstance(value, str) and value.lower() in mapping:
+            setattr(widget, attr, mapping[value.lower()])
+    if isinstance(widget, tk.Canvas):
+        try:
+            for item in widget.find_all():
+                for option in _CANVAS_ITEM_OPTIONS:
+                    try:
+                        current = str(widget.itemcget(item, option))
+                    except Exception:
+                        continue
+                    new = mapping.get(current.lower())
+                    if new:
+                        try:
+                            widget.itemconfigure(item, {option: new})
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+
+def _walk_widgets(widget, mapping):
+    _remap_widget(widget, mapping)
+    try:
+        children = widget.winfo_children()
+    except Exception:
+        return
+    for child in children:
+        _walk_widgets(child, mapping)
+
+
+def apply_theme_live(root, theme_name, palette):
+    """Switch the running app to `palette` without a restart."""
+    import sys as _sys
+    import themes as _th
+
+    palette = _th.normalize_theme(palette)
+    mapping = {}
+    for key in _th.THEME_KEYS:
+        old = str(getattr(THEME, key)).lower()
+        new = palette[key]
+        if old != new.lower() and old not in mapping:
+            mapping[old] = new
+    # Overlay constants may predate THEME (config.COLOR_* seeds) — map those too.
+    try:
+        import config as _cfg
+        for attr, key in (("COLOR_BG", "bg"), ("COLOR_PANEL", "panel"), ("COLOR_ACCENT", "accent"),
+                          ("COLOR_ORANGE", "orange"), ("COLOR_TEXT", "text"), ("COLOR_GREEN", "green")):
+            old = str(getattr(_cfg, attr, "")).lower()
+            if old and old != palette[key].lower() and old not in mapping:
+                mapping[old] = palette[key]
+    except Exception:
+        pass
+
+    # 1. The live palette: widgets built from now on use the new colors.
+    for key in _th.THEME_KEYS:
+        object.__setattr__(THEME, key, palette[key])
+    _th.ACTIVE_THEME_NAME = theme_name
+    _th.ACTIVE_PALETTE = dict(palette)
+
+    if not mapping:
+        return
+
+    # 2. Value-bound copies: every loaded module's ALL-CAPS string constants
+    # that hold an old palette color (COLOR_*, UI_*, module-level aliases).
+    for module in list(_sys.modules.values()):
+        module_vars = getattr(module, "__dict__", None)
+        if not isinstance(module_vars, dict):
+            continue
+        for name, value in list(module_vars.items()):
+            if name.isupper() and isinstance(value, str) and value.lower() in mapping:
+                try:
+                    setattr(module, name, mapping[value.lower()])
+                except Exception:
+                    pass
+    for name in dir(ThemedWindowMixin):
+        if name.startswith("UI_"):
+            value = getattr(ThemedWindowMixin, name)
+            if isinstance(value, str) and value.lower() in mapping:
+                setattr(ThemedWindowMixin, name, mapping[value.lower()])
+
+    # 3. Everything already on screen.
+    try:
+        _walk_widgets(root, mapping)
+    except Exception:
+        pass
+
+    # 4. ttk styles (notebooks, trees, scrollbars) under every prefix used so far.
+    for prefix in list(_CONFIGURED_TTK_PREFIXES):
+        try:
+            configure_ttk(root, prefix)
+        except Exception:
+            pass
+    try:
+        root.option_add("*insertBackground", THEME.accent)
+        root.option_add("*selectBackground", THEME.selection)
+        root.option_add("*selectForeground", THEME.text)
+    except Exception:
+        pass

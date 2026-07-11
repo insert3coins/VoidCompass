@@ -48,12 +48,17 @@ DEPRECATED_CONFIG_KEYS = (
     'bio_hud_x',
     'bio_hud_y',
 )
-COLOR_BG = '#0b0b0b'
-COLOR_PANEL = '#1e1e1e'
-COLOR_ACCENT = '#00d1ff'
-COLOR_ORANGE = '#FF7100'
-COLOR_TEXT = '#e0e0e0'
-COLOR_GREEN = '#00ff00'
+# Overlay/HUD colors come from the active theme, resolved once at startup
+# (themes.py reads the active commander profile's config from disk before
+# any UI module binds these). Theme changes apply on next launch.
+import themes as _themes
+
+COLOR_BG = _themes.ACTIVE_PALETTE["bg"]
+COLOR_PANEL = _themes.ACTIVE_PALETTE["panel"]
+COLOR_ACCENT = _themes.ACTIVE_PALETTE["accent"]
+COLOR_ORANGE = _themes.ACTIVE_PALETTE["orange"]
+COLOR_TEXT = _themes.ACTIVE_PALETTE["text"]
+COLOR_GREEN = _themes.ACTIVE_PALETTE["green"]
 
 
 PROFILE_TEXT_SETTINGS = (
@@ -63,6 +68,7 @@ PROFILE_TEXT_SETTINGS = (
     "edsm_game_build",
     "carrier_discord_webhook_url",
     "screenshots_path",
+    "ui_theme_name",
 )
 
 PROFILE_BOOL_SETTINGS = (
@@ -139,6 +145,7 @@ PROFILE_VALUE_SETTINGS = (
     "trade_route_form",
     "system_plotter_form",
     "trade_watchlist",
+    "ui_custom_themes",
 )
 
 PROFILE_SETTINGS = PROFILE_TEXT_SETTINGS + PROFILE_BOOL_SETTINGS + PROFILE_VALUE_SETTINGS
@@ -226,6 +233,7 @@ def apply_profile_config(config, profile_key=None):
         "edsm_game_build": "",
         "carrier_discord_webhook_url": "",
         "screenshots_path": os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous"),
+        "ui_theme_name": _themes.DEFAULT_THEME_NAME,
     }
     bool_defaults = {
         "edsm_upload_enabled": False,
@@ -405,6 +413,8 @@ def load_config():
         'route_auto_note_from_edsm': True,
         'auto_copy_waypoint': False,
         'trade_eddn_upload_enabled': True,
+        'ui_theme_name': _themes.DEFAULT_THEME_NAME,
+        'ui_custom_themes': {},
     }
     if os.path.exists(CONFIG_FILE):
         try:

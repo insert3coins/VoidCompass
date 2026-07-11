@@ -49,6 +49,29 @@ def _leg_time_s(distance_ly, dest_dist_ls, jump_range):
     return jumps * JUMP_TIME_S + _supercruise_time_s(dest_dist_ls) + DOCK_OVERHEAD_S
 
 
+FRESHNESS_HALF_LIFE_DAYS = 7.0
+
+
+def _freshness_factor(updated_at):
+    """Ranking weight for price age: 1.0 now, 0.5 at one week, ~0.06 at a
+    month. Displayed prices/profits stay raw — this only orders candidates so
+    an hour-old quote outranks a marginally better month-old one."""
+    if not updated_at:
+        return 0.5
+    age_days = max(0.0, (marketdb.now_epoch() - int(updated_at)) / 86400.0)
+    return 0.5 ** (age_days / FRESHNESS_HALF_LIFE_DAYS)
+
+
+def _load_temp_ids(conn, ids):
+    """Stage station ids in a per-connection temp table so queries can say
+    `market_id IN (SELECT market_id FROM temp.near_ids)` instead of building
+    unbounded ?-placeholder lists — SQLite builds compiled with the old
+    999-variable limit crash on wide-radius searches otherwise."""
+    conn.execute("DROP TABLE IF EXISTS temp.near_ids")
+    conn.execute("CREATE TEMP TABLE near_ids(market_id INTEGER PRIMARY KEY)")
+    conn.executemany("INSERT OR IGNORE INTO temp.near_ids VALUES(?)", ((i,) for i in ids))
+
+
 class RouteError(Exception):
     pass
 
@@ -122,6 +145,7 @@ def plan_route_local(
     requires_large_pad=False,
     include_carriers=True,
     min_supply=1,
+    jump_range=20.0,
 ):
     conn = marketdb.connect()
     try:
@@ -146,22 +170,28 @@ def plan_route_local(
             )
 
         beam = [
-            {"hops": [], "profit": 0, "capital": int(capital), "at": src, "seen": {src["market_id"]}}
+            {"hops": [], "profit": 0, "score": 0.0, "time_s": 0.0,
+             "capital": int(capital), "at": src, "seen": {src["market_id"]}}
             for src in sources
         ]
+        # Rank by freshness-weighted profit PER HOUR, same economics as loops:
+        # a long detour hop has to out-earn its extra jumps and supercruise.
+        def _rate(route):
+            return route["score"] * 3600.0 / max(1.0, route["time_s"])
+
         best = None
         for _ in range(max(1, int(max_hops))):
             candidates = []
             for route in beam:
                 candidates.extend(
                     _extend(conn, route, float(max_hop_distance), int(max_cargo), filters,
-                            max(1, int(min_supply)), include_carriers)
+                            max(1, int(min_supply)), include_carriers, float(jump_range))
                 )
             if not candidates:
                 break
-            candidates.sort(key=lambda r: r["profit"], reverse=True)
+            candidates.sort(key=_rate, reverse=True)
             beam = candidates[:BEAM_WIDTH]
-            if best is None or beam[0]["profit"] > best["profit"]:
+            if best is None or _rate(beam[0]) > _rate(best):
                 best = beam[0]
 
         if not best or not best["hops"]:
@@ -199,7 +229,7 @@ def _source_candidates(conn, start, station_name, max_hop, filters):
     return near[:MAX_SOURCE_POOL]
 
 
-def _extend(conn, route, max_hop, max_cargo, filters, min_supply=1, include_carriers=True):
+def _extend(conn, route, max_hop, max_cargo, filters, min_supply=1, include_carriers=True, jump_range=20.0):
     src = route["at"]
     dests = marketdb.stations_near(conn, src["x"], src["y"], src["z"], max_hop, **filters)
     dests = _filter_carriers(dests, include_carriers)
@@ -239,18 +269,22 @@ def _extend(conn, route, max_hop, max_cargo, filters, min_supply=1, include_carr
             continue
         dest = dest_by_id[market_id]
         hop_profit = sum(c["profit"] for c in load)
+        hop_dist = _dist(src, dest)
+        hop_time = _leg_time_s(hop_dist, dest.get("dist_ls"), jump_range)
         extensions.append(
             {
                 "hops": route["hops"]
                 + [{"from": src, "to": dest, "commodities": load, "profit": hop_profit,
-                    "distance": _dist(src, dest)}],
+                    "distance": hop_dist}],
                 "profit": route["profit"] + hop_profit,
+                "score": route["score"] + hop_profit * _freshness_factor(dest.get("updated_at")),
+                "time_s": route["time_s"] + hop_time,
                 "capital": route["capital"] + hop_profit,
                 "at": dest,
                 "seen": route["seen"] | {market_id},
             }
         )
-    extensions.sort(key=lambda r: r["profit"], reverse=True)
+    extensions.sort(key=lambda r: r["score"] * 3600.0 / max(1.0, r["time_s"]), reverse=True)
     return extensions[:DESTS_PER_HOP]
 
 
@@ -328,18 +362,19 @@ def plan_loops(
         conn.execute("DROP TABLE IF EXISTS temp.near_sell")
         conn.execute("CREATE TEMP TABLE near_buy(market_id INTEGER, symbol TEXT, buy INTEGER, supply INTEGER)")
         conn.execute("CREATE TEMP TABLE near_sell(market_id INTEGER, symbol TEXT, sell INTEGER, demand INTEGER)")
-        marks = ",".join("?" for _ in by_id)
-        ids = list(by_id.keys())
+        _load_temp_ids(conn, by_id.keys())
         min_units = max(1, int(min_supply))
         conn.execute(
-            f"INSERT INTO temp.near_buy SELECT market_id, symbol, buy_price, supply"
-            f" FROM commodities WHERE market_id IN ({marks}) AND supply >= ? AND buy_price > 0",
-            ids + [min_units],
+            "INSERT INTO temp.near_buy SELECT market_id, symbol, buy_price, supply"
+            " FROM commodities WHERE market_id IN (SELECT market_id FROM temp.near_ids)"
+            " AND supply >= ? AND buy_price > 0",
+            (min_units,),
         )
         conn.execute(
-            f"INSERT INTO temp.near_sell SELECT market_id, symbol, sell_price, demand"
-            f" FROM commodities WHERE market_id IN ({marks}) AND demand >= ? AND sell_price > 0",
-            ids + [min_units],
+            "INSERT INTO temp.near_sell SELECT market_id, symbol, sell_price, demand"
+            " FROM commodities WHERE market_id IN (SELECT market_id FROM temp.near_ids)"
+            " AND demand >= ? AND sell_price > 0",
+            (min_units,),
         )
         conn.execute("CREATE INDEX temp.idx_nearsell_sym ON near_sell(symbol)")
 
@@ -392,8 +427,15 @@ def plan_loops(
                  "trip_s": trip_s, "profit_per_hour": (out_p + back_p) * 3600.0 / trip_s}
             )
         # Rank by earnings rate: a 4M loop that takes an hour loses to a 2M
-        # loop that takes 20 minutes.
-        loops.sort(key=lambda l: l["profit_per_hour"], reverse=True)
+        # loop that takes 20 minutes. Weighted by price freshness so a
+        # month-old quote can't outrank a live one on nominal margin alone.
+        loops.sort(
+            key=lambda l: l["profit_per_hour"] * min(
+                _freshness_factor(l["a"].get("updated_at")),
+                _freshness_factor(l["b"].get("updated_at")),
+            ),
+            reverse=True,
+        )
         loops = loops[:top_n]
         if not loops:
             raise RouteError("No profitable loop found with those settings.")
@@ -505,13 +547,14 @@ def search_commodity(
         if not by_id:
             return {"commodity": display, "results": []}
 
-        marks = ",".join("?" for _ in by_id)
+        _load_temp_ids(conn, by_id.keys())
         condition = "supply >= ? AND buy_price > 0" if mode == "buy" else "demand >= ? AND sell_price > 0"
         rows = conn.execute(
             f"""SELECT market_id, buy_price, sell_price, supply, demand
-                FROM commodities INDEXED BY sqlite_autoindex_commodities_1
-                WHERE symbol = ? AND market_id IN ({marks}) AND {condition}""",
-            [symbol, *by_id.keys(), max(1, int(min_units))],
+                FROM commodities
+                WHERE symbol = ? AND market_id IN (SELECT market_id FROM temp.near_ids)
+                  AND {condition}""",
+            [symbol, max(1, int(min_units))],
         ).fetchall()
 
         results = []
@@ -568,21 +611,21 @@ def find_opportunities(
         by_id = {s["market_id"]: s for s in stations}
         if len(by_id) < 2:
             return []
-        marks = ",".join("?" for _ in by_id)
+        _load_temp_ids(conn, by_id.keys())
         rows = conn.execute(
             f"""SELECT buy.market_id, sell.market_id, buy.symbol, buy.buy_price, sell.sell_price,
                        buy.supply, sell.demand
-                FROM commodities buy INDEXED BY sqlite_autoindex_commodities_1
-                JOIN commodities sell INDEXED BY sqlite_autoindex_commodities_1
-                  ON sell.symbol = buy.symbol
-                WHERE buy.market_id IN ({marks}) AND sell.market_id IN ({marks})
+                FROM commodities buy
+                JOIN commodities sell ON sell.symbol = buy.symbol
+                WHERE buy.market_id IN (SELECT market_id FROM temp.near_ids)
+                  AND sell.market_id IN (SELECT market_id FROM temp.near_ids)
                   AND buy.market_id != sell.market_id
                   AND buy.supply >= ? AND sell.demand >= ?
                   AND buy.buy_price > 0 AND sell.sell_price > buy.buy_price
                   AND (sell.sell_price - buy.buy_price) >= ?
                 ORDER BY (sell.sell_price - buy.buy_price) DESC
                 LIMIT ?""",
-            [*by_id.keys(), *by_id.keys(), max(1, int(min_units)), max(1, int(min_units)), int(min_profit), int(limit) * 4],
+            [max(1, int(min_units)), max(1, int(min_units)), int(min_profit), int(limit) * 4],
         ).fetchall()
         names = marketdb.commodity_display_names(conn, {r[2] for r in rows})
         out = []
@@ -598,6 +641,7 @@ def find_opportunities(
             seen.add(key)
             units = min(int(supply or 0), int(demand or 0))
             profit_each = int(sell) - int(buy)
+            updated_at = min(src.get("updated_at") or 0, dst.get("updated_at") or 0)
             out.append({
                 "commodity": names.get(symbol, symbol.replace("_", " ").title()),
                 "symbol": symbol,
@@ -614,10 +658,14 @@ def find_opportunities(
                 "distance": round(_dist(src, dst), 1),
                 "from_player": round(_dist(start, src), 1),
                 "large_pad": bool(src.get("large_pad") and dst.get("large_pad")),
-                "updated_at": min(src.get("updated_at") or 0, dst.get("updated_at") or 0),
+                "updated_at": updated_at,
+                "_rank": profit_each * _freshness_factor(updated_at),
             })
-            if len(out) >= int(limit):
-                break
+        # Freshness-weighted ordering: nominal margin alone no longer wins.
+        out.sort(key=lambda r: r["_rank"], reverse=True)
+        out = out[:int(limit)]
+        for r in out:
+            r.pop("_rank", None)
         return out
     finally:
         conn.close()
@@ -676,13 +724,14 @@ def sell_cargo(
             names[symbol] = display
         if not counts:
             raise RouteError("Cargo hold commodities are not known in the local market database.")
-        marks_m = ",".join("?" for _ in by_id)
+        _load_temp_ids(conn, by_id.keys())
         marks_s = ",".join("?" for _ in counts)
         rows = conn.execute(
             f"""SELECT market_id, symbol, sell_price, demand FROM commodities
-                WHERE market_id IN ({marks_m}) AND symbol IN ({marks_s})
+                WHERE market_id IN (SELECT market_id FROM temp.near_ids)
+                  AND symbol IN ({marks_s})
                   AND sell_price > 0 AND demand > 0""",
-            [*by_id.keys(), *counts.keys()],
+            [*counts.keys()],
         ).fetchall()
         per_station = {}
         for market_id, symbol, sell, demand in rows:
@@ -751,7 +800,7 @@ def analyze_station_market(
         by_id = {s["market_id"]: s for s in stations}
         if not by_id:
             return {}
-        marks = ",".join("?" for _ in by_id)
+        _load_temp_ids(conn, by_id.keys())
         analysis = {}
         for item in market_items or []:
             symbol = marketdb.clean_commodity_symbol(item.get("Name") or item.get("Name_Localised"))
@@ -765,12 +814,12 @@ def analyze_station_market(
             best = None
             if stock > 0 and buy_price > 0:
                 row = conn.execute(
-                    f"""SELECT market_id, sell_price, demand
-                        FROM commodities INDEXED BY sqlite_autoindex_commodities_1
-                        WHERE symbol = ? AND market_id IN ({marks})
+                    """SELECT market_id, sell_price, demand
+                        FROM commodities
+                        WHERE symbol = ? AND market_id IN (SELECT market_id FROM temp.near_ids)
                           AND demand > 0 AND sell_price > ?
                         ORDER BY sell_price DESC LIMIT 1""",
-                    [symbol, *by_id.keys(), buy_price],
+                    [symbol, buy_price],
                 ).fetchone()
                 if row:
                     st = by_id[row[0]]
@@ -781,12 +830,12 @@ def analyze_station_market(
                     }
             if best is None and demand > 0 and sell_price > 0:
                 row = conn.execute(
-                    f"""SELECT market_id, buy_price, supply
-                        FROM commodities INDEXED BY sqlite_autoindex_commodities_1
-                        WHERE symbol = ? AND market_id IN ({marks})
+                    """SELECT market_id, buy_price, supply
+                        FROM commodities
+                        WHERE symbol = ? AND market_id IN (SELECT market_id FROM temp.near_ids)
                           AND supply > 0 AND buy_price > 0 AND buy_price < ?
                         ORDER BY buy_price ASC LIMIT 1""",
-                    [symbol, *by_id.keys(), sell_price],
+                    [symbol, sell_price],
                 ).fetchone()
                 if row:
                     st = by_id[row[0]]

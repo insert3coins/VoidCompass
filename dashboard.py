@@ -55,6 +55,7 @@ from colonisation_planner import ColonisationPlanner
 from exploration_window import ExplorationWindow
 from trade_window import TradeWindow
 from trade import marketdb as trade_marketdb
+from trade import alerts as trade_alerts
 from trade.eddn_upload import UPLOADER as trade_eddn_uploader
 
 
@@ -178,6 +179,32 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._system_info_refresh_job = self.root.after(150, _run)
         except Exception:
             self._system_info_refresh_job = None
+
+    def _start_trade_live_services(self):
+        """Start the EDDN listener at app startup (not first Trade-window open,
+        which let the market DB silently age) and surface fired trade-watch
+        alerts as toasts instead of waiting for the Watchlist tab."""
+        def _on_trade_alert(alert):
+            toast = getattr(self, "toast_hud", None)
+            if toast:
+                # Called from the EDDN thread — hop to the Tk main loop.
+                self.root.after(0, lambda a=alert: toast.push(
+                    "TRADE WATCH", a.get("text") or "", severity="warn", duration_s=15))
+        try:
+            trade_alerts.set_notify_callback(_on_trade_alert)
+        except Exception:
+            pass
+        try:
+            conn = trade_marketdb.connect()
+            try:
+                seeded = trade_marketdb.is_ready(conn)
+            finally:
+                conn.close()
+            if seeded:
+                from trade import eddn as trade_eddn
+                trade_eddn.LISTENER.start()
+        except Exception:
+            pass  # no zmq / no DB yet — Trade window can still start it later
 
     def _refresh_gravity_warning(self, body_id, body_name=None):
         if not getattr(self, "gravity_warning_hud", None) or body_id is None:
@@ -668,6 +695,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.watcher.prime_market_file()
         self._start_market_import_worker()
         self.watcher.start()
+        self._start_trade_live_services()
         self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
         if self.colony_overlay:
             self.colony_overlay.update()

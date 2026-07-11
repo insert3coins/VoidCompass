@@ -339,6 +339,7 @@ class Seeder:
             self._create_build_indexes(conn)
         finally:
             conn.close()
+        self._preserve_user_tables()
         self._swap_build_db()
 
     def _prepare_build_connection(self, conn):
@@ -373,6 +374,38 @@ class Seeder:
         for sql in MARKET_INDEXES:
             cur.execute(sql)
         conn.commit()
+
+    # User-owned tables that must survive a re-seed. The swap replaces the
+    # whole DB file, so without this copy a rebuild silently wiped trade
+    # analytics history and price watches (the _copy_build_into_live fallback
+    # never touched them — the two swap paths disagreed until now).
+    USER_TABLES = ("trade_log", "balance_log", "watches")
+
+    def _preserve_user_tables(self):
+        if not marketdb.DB_PATH.exists():
+            return  # first seed - nothing to carry over
+        conn = marketdb.connect(BUILD_DB_PATH)
+        try:
+            cur = conn.cursor()
+            cur.execute("ATTACH DATABASE ? AS live", (str(marketdb.DB_PATH),))
+            try:
+                for table in self.USER_TABLES:
+                    exists = cur.execute(
+                        "SELECT 1 FROM live.sqlite_master WHERE type='table' AND name=?", (table,)
+                    ).fetchone()
+                    if not exists:
+                        continue  # live DB predates this table
+                    try:
+                        cur.execute(f"INSERT OR IGNORE INTO main.{table} SELECT * FROM live.{table}")
+                    except Exception:
+                        pass  # never let history-carryover break the rebuild
+                conn.commit()
+            finally:
+                cur.execute("DETACH DATABASE live")
+        except Exception:
+            pass
+        finally:
+            conn.close()
 
     def _remove_build_db(self):
         for suffix in ("", "-wal", "-shm"):

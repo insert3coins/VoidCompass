@@ -1,7 +1,9 @@
 import os
 import tkinter as tk
 import tkinter.messagebox
+from tkinter import colorchooser
 
+import themes
 from config import DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config as persist_config
 from ui_theme import THEME, FONT_MONO, FONT_TITLE, FONT_UI, FONT_UI_BOLD, apply_window, button, window_surface
 
@@ -198,11 +200,13 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     # Pages
     core_page = make_page("core", "Core", "Journal and screenshot paths.")
     overlay_page = make_page("overlays", "Overlays", "Runtime modules and display timing.")
+    theme_page = make_page("theme", "Theme", "Color theme for this commander profile. Applies when you save.")
     integrations_page = make_page("integrations", "Integrations", "EDSM upload and fleet carrier Discord.")
     diagnostics_page = make_page("diagnostics", "Diagnostics", "Runtime tracing and automatic crash or UI-freeze reports.")
 
     nav_button("core", "Core")
     nav_button("overlays", "Overlays")
+    nav_button("theme", "Theme")
     nav_button("integrations", "Integrations")
     nav_button("diagnostics", "Diagnostics")
 
@@ -231,6 +235,158 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     prosp_timeout_e = input_row(overlay_timing, "Prospector Auto-Hide", "prospector_hud_timeout_s")
     sysinfo_timeout_e = input_row(overlay_timing, "System Info Auto-Hide", "system_info_timeout_s")
     gravity_threshold_e = input_row(overlay_timing, "Gravity Warning Threshold (g)", "gravity_warning_threshold_g")
+
+    # ---- Theme page ----
+    custom_themes = {
+        str(name): themes.normalize_theme(palette)
+        for name, palette in (config.get("ui_custom_themes") or {}).items()
+        if isinstance(palette, dict)
+    }
+    saved_theme_name = str(config.get("ui_theme_name") or themes.DEFAULT_THEME_NAME)
+
+    def _all_theme_names():
+        return list(themes.BUILTIN_THEMES.keys()) + sorted(custom_themes.keys())
+
+    def _theme_palette(name):
+        if name in custom_themes:
+            return dict(custom_themes[name])
+        return dict(themes.BUILTIN_THEMES.get(name) or themes.BUILTIN_THEMES[themes.DEFAULT_THEME_NAME])
+
+    theme_var = tk.StringVar(value=saved_theme_name if saved_theme_name in _all_theme_names() else themes.DEFAULT_THEME_NAME)
+    editor_vars = {}     # color key -> tk.StringVar (hex)
+    editor_swatches = {} # color key -> swatch Label
+
+    pick_section = section(theme_page, "Active Theme")
+    pick_row = row(pick_section)
+    tk.Label(pick_row, text="Theme", font=UI_FONT_BOLD, fg=UI_MUTED, bg=UI_PANEL, anchor="w", width=24).pack(side=tk.LEFT)
+    theme_menu = tk.OptionMenu(pick_row, theme_var, *_all_theme_names())
+    theme_menu.config(
+        bg=UI_PANEL_2, fg=COLOR_TEXT, activebackground=UI_PANEL_2, activeforeground=COLOR_ACCENT,
+        relief=tk.FLAT, bd=0, highlightthickness=0, font=UI_FONT, width=18,
+    )
+    theme_menu["menu"].config(bg=UI_PANEL_2, fg=COLOR_TEXT)
+    theme_menu.pack(side=tk.LEFT)
+    preview_row = tk.Frame(pick_section, bg=UI_PANEL)
+    preview_row.pack(fill=tk.X, padx=12, pady=(2, 10))
+
+    def _rebuild_theme_menu():
+        menu = theme_menu["menu"]
+        menu.delete(0, tk.END)
+        for name in _all_theme_names():
+            menu.add_command(label=name, command=lambda n=name: (theme_var.set(n), _on_theme_selected()))
+
+    def _refresh_preview(palette):
+        for child in preview_row.winfo_children():
+            child.destroy()
+        for key in ("bg", "panel", "border", "accent", "orange", "text", "muted", "green", "yellow", "red"):
+            cell = tk.Frame(preview_row, bg=UI_PANEL)
+            cell.pack(side=tk.LEFT, padx=(0, 6))
+            tk.Frame(cell, bg=palette[key], width=34, height=20,
+                     highlightbackground=UI_BORDER, highlightthickness=1).pack()
+            tk.Label(cell, text=key, font=("Segoe UI", 7), fg=UI_DIM, bg=UI_PANEL).pack()
+
+    def _load_editor(palette):
+        for key in themes.THEME_KEYS:
+            editor_vars[key].set(palette[key])
+            editor_swatches[key].config(bg=palette[key])
+
+    def _on_theme_selected(*_args):
+        palette = _theme_palette(theme_var.get())
+        _refresh_preview(palette)
+        _load_editor(palette)
+        _refresh_delete_state()
+
+    editor_section = section(theme_page, "Theme Editor")
+    grid = tk.Frame(editor_section, bg=UI_PANEL)
+    grid.pack(fill=tk.X, padx=12, pady=(2, 8))
+
+    def _editor_palette():
+        return themes.normalize_theme(
+            {key: var.get().strip() for key, var in editor_vars.items()},
+            base=_theme_palette(theme_var.get()),
+        )
+
+    def _make_color_row(parent, key, col_row, col):
+        holder = tk.Frame(parent, bg=UI_PANEL)
+        holder.grid(row=col_row, column=col, sticky="w", padx=(0, 24), pady=2)
+        tk.Label(holder, text=key, font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, width=12, anchor="w").pack(side=tk.LEFT)
+        var = tk.StringVar()
+        editor_vars[key] = var
+        ent = tk.Entry(holder, textvariable=var, width=9, bg=UI_INPUT, fg=COLOR_TEXT, font=UI_MONO,
+                       insertbackground=COLOR_ACCENT, relief=tk.FLAT,
+                       highlightthickness=1, highlightbackground=UI_BORDER, highlightcolor=COLOR_ACCENT)
+        ent.pack(side=tk.LEFT, ipady=2)
+        swatch = tk.Label(holder, width=3, bg=UI_PANEL_2, relief=tk.FLAT, cursor="hand2")
+        swatch.pack(side=tk.LEFT, padx=(6, 0), ipady=2)
+        editor_swatches[key] = swatch
+
+        def _pick(_event=None):
+            initial = var.get() if themes.is_hex_color(var.get()) else "#808080"
+            _rgb, hex_value = colorchooser.askcolor(color=initial, parent=win, title=f"Pick {key}")
+            if hex_value:
+                var.set(hex_value)
+                swatch.config(bg=hex_value)
+                _refresh_preview(_editor_palette())
+
+        def _typed(_event=None):
+            if themes.is_hex_color(var.get().strip()):
+                swatch.config(bg=var.get().strip())
+                _refresh_preview(_editor_palette())
+
+        swatch.bind("<Button-1>", _pick)
+        ent.bind("<KeyRelease>", _typed)
+
+    half = (len(themes.THEME_KEYS) + 1) // 2
+    for i, key in enumerate(themes.THEME_KEYS):
+        _make_color_row(grid, key, i % half, i // half)
+
+    actions = row(editor_section)
+    name_entry = tk.Entry(actions, width=22, bg=UI_INPUT, fg=COLOR_TEXT, font=UI_MONO,
+                          insertbackground=COLOR_ACCENT, relief=tk.FLAT,
+                          highlightthickness=1, highlightbackground=UI_BORDER, highlightcolor=COLOR_ACCENT)
+    name_entry.insert(0, "My Theme")
+
+    def _save_custom():
+        name = name_entry.get().strip()
+        if not name:
+            tk.messagebox.showwarning("Theme name", "Give the custom theme a name first.", parent=win)
+            return
+        if name in themes.BUILTIN_THEMES:
+            tk.messagebox.showwarning("Theme name", f"'{name}' is a built-in theme - pick another name.", parent=win)
+            return
+        custom_themes[name] = _editor_palette()
+        _rebuild_theme_menu()
+        theme_var.set(name)
+        _on_theme_selected()
+
+    def _delete_custom():
+        name = theme_var.get()
+        if name not in custom_themes:
+            return
+        if not tk.messagebox.askyesno("Delete theme", f"Delete custom theme '{name}'?", parent=win):
+            return
+        custom_themes.pop(name, None)
+        _rebuild_theme_menu()
+        theme_var.set(themes.DEFAULT_THEME_NAME)
+        _on_theme_selected()
+
+    action_button(actions, "Save as Custom Theme", _save_custom).pack(side=tk.LEFT)
+    name_entry.pack(side=tk.LEFT, padx=(8, 0), ipady=3)
+    delete_btn = action_button(actions, "Delete Custom Theme", _delete_custom, muted=True)
+    delete_btn.pack(side=tk.RIGHT)
+
+    def _refresh_delete_state():
+        deletable = theme_var.get() in custom_themes
+        delete_btn.configure(state=tk.NORMAL if deletable else tk.DISABLED)
+
+    tk.Label(
+        theme_page,
+        text="The selected theme is saved per commander profile and applies to the app and overlays when you hit Save Settings.",
+        font=UI_FONT, fg=UI_MUTED, bg=UI_BG, anchor="w", justify=tk.LEFT, wraplength=640,
+    ).pack(fill=tk.X, pady=(2, 0))
+
+    _rebuild_theme_menu()
+    _on_theme_selected()
 
     edsm_section = section(integrations_page, "EDSM Upload")
     edsm_cmdr_e = input_row(edsm_section, "Commander Name", "edsm_cmdr_name")
@@ -339,6 +495,8 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "survey_status_overlay_enabled": survey_status_var.get(),
             "toast_overlay_enabled": toast_var.get(),
             "heartbeat_overlay_enabled": heartbeat_var.get(),
+            "ui_theme_name": theme_var.get(),
+            "ui_custom_themes": dict(custom_themes),
             "screenshots_enabled": ss_var.get(),
             "screenshots_path": ss_e.get().strip(),
             "carrier_discord_webhook_url": fc_wh_e.get().strip(),
@@ -351,6 +509,14 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         })
         remove_deprecated_keys()
         persist_config(config)
+        saved_name = theme_var.get()
+        saved_palette = _theme_palette(saved_name)
+        if saved_name != themes.ACTIVE_THEME_NAME or saved_palette != themes.ACTIVE_PALETTE:
+            from ui_theme import apply_theme_live
+            try:
+                apply_theme_live(root, saved_name, saved_palette)
+            except Exception:
+                pass
         on_save_callback()
         if embedded:
             win.pack_forget()
