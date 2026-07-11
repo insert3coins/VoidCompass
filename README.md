@@ -28,6 +28,7 @@ Void Compass is a real-time Elite Dangerous companion app with a desktop dashboa
 - Screenshot converter (BMP -> PNG) with system/timestamp naming and optional BMP cleanup.
 - Auto-saved window positions/geometries for dashboard, settings, overlays, and route tools.
 - Multi-commander profiles detected from `LoadGame` / `Commander` journal events, with separate exploration DB, carrier state, colonisation data, engineer materials, mining data, waypoint state, and EDSM credentials per commander.
+- Native achievement system with 1,023 journal-driven milestones, per-commander progress, live Toast HUD unlocks, category packs, legacy state import, and full journal-history rebuild.
 
 ![Tactical HUD](https://raw.githubusercontent.com/insert3coins/VoidCompass-Release/main/NavHud.PNG "Tactical HUD")
 
@@ -50,6 +51,7 @@ Use the in-app **[ CONFIGURATION ]** panel or edit `config.json` directly.
 - `scan_hud_x`, `scan_hud_y`: Scan HUD position.
 - `main_geometry`, `settings_geometry`: Saved window geometry.
 - `commander_profiles`: Per-commander profile settings. Void Compass manages this automatically from journal commander/FID data.
+- Achievement tracking, unlock notifications, category packs, legacy import, reset controls, and journal rebuild are managed from the in-app **ACHIEVEMENTS > Configuration** page.
 
 Commander-specific data is stored under `profiles\<commander>_<fid>\`. On first run after upgrading, existing single-account state files are copied into the first detected profile.
 

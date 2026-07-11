@@ -118,6 +118,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             ("⌖", "DASHBOARD", self.show_dashboard_page),
             ("◉", "PROFILE", self.open_commander_profile_window),
             ("✦", "EXPLORE", self.open_exploration_window),
+            ("★", "ACHIEVE", self.open_achievement_window),
             ("⇌", "TRADE", self.open_trade_window),
             ("◆", "MINING", self.open_mining_window),
             ("➤", "ROUTE", self.open_route_planner),
@@ -682,6 +683,9 @@ class DashboardUIMixin(ThemedWindowMixin):
 
     def show_dashboard_page(self):
         self._show_embedded_page("DASHBOARD", self.dashboard_page)
+        if hasattr(self, "summary_session"):
+            self.summary_session.config(text=self._get_session_elapsed_text())
+        self._flush_dashboard_stream_views(force=True)
 
     def _build_live_event_timeline(self, parent):
         feed_wrap = tk.Frame(parent, bg=self.UI_PANEL)
@@ -822,7 +826,10 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.event_feed_entries.insert(0, entry)
         if len(self.event_feed_entries) > self.event_feed_max_entries:
             self.event_feed_entries = self.event_feed_entries[:self.event_feed_max_entries]
-        self._refresh_event_feed()
+        self._event_feed_dirty = True
+        if self._dashboard_streams_visible() and not getattr(self, "_defer_dashboard_stream_render", False):
+            self._refresh_event_feed()
+            self._event_feed_dirty = False
 
         toast_hud = getattr(self, "toast_hud", None)
         if toast_hud and sev in ("WARN", "FAIL"):
@@ -842,20 +849,50 @@ class DashboardUIMixin(ThemedWindowMixin):
         except Exception:
             pending = []
             history_pending = []
-        for args in pending:
-            try:
-                self.add_event_feed_entry(*args)
-            except Exception:
-                pass
-        for args in history_pending:
-            try:
-                self.add_journal_history_entry(*args)
-            except Exception:
-                pass
+        self._defer_dashboard_stream_render = True
         try:
-            self.root.after(100, self._tick_event_feed_queue)
+            for args in pending:
+                try:
+                    self.add_event_feed_entry(*args)
+                except Exception:
+                    pass
+            for args in history_pending:
+                try:
+                    self.add_journal_history_entry(*args)
+                except Exception:
+                    pass
+        finally:
+            self._defer_dashboard_stream_render = False
+        if pending or history_pending:
+            self._flush_dashboard_stream_views()
+        more_pending = False
+        try:
+            with self._event_feed_pending_lock:
+                more_pending = bool(self._event_feed_pending or self._journal_history_pending)
         except Exception:
             pass
+        try:
+            self.root.after(50 if more_pending else 200, self._tick_event_feed_queue)
+        except Exception:
+            pass
+
+    def _dashboard_streams_visible(self):
+        return getattr(self, "_active_page", "DASHBOARD") == "DASHBOARD"
+
+    def _refresh_journal_history_view(self):
+        self._render_journal_history_canvas()
+        if hasattr(self, "journal_history_count_lbl"):
+            self.journal_history_count_lbl.config(text=f"{len(self.journal_history_entries)} EVENTS")
+
+    def _flush_dashboard_stream_views(self, force=False):
+        if not force and not self._dashboard_streams_visible():
+            return
+        if force or getattr(self, "_event_feed_dirty", False):
+            self._refresh_event_feed()
+            self._event_feed_dirty = False
+        if force or getattr(self, "_journal_history_dirty", False):
+            self._refresh_journal_history_view()
+            self._journal_history_dirty = False
 
     def _resource_file(self, *parts):
         base = getattr(sys, "_MEIPASS", os.path.abspath("."))
@@ -980,9 +1017,10 @@ class DashboardUIMixin(ThemedWindowMixin):
                 return
         self.journal_history_entries.insert(0, entry)
         self.journal_history_entries = self.journal_history_entries[:self.JOURNAL_HISTORY_LIMIT]
-        self._render_journal_history_canvas()
-        if hasattr(self, "journal_history_count_lbl"):
-            self.journal_history_count_lbl.config(text=f"{len(self.journal_history_entries)} EVENTS")
+        self._journal_history_dirty = True
+        if self._dashboard_streams_visible() and not getattr(self, "_defer_dashboard_stream_render", False):
+            self._refresh_journal_history_view()
+            self._journal_history_dirty = False
 
     def _render_journal_history_canvas(self):
         if not hasattr(self, "journal_history_canvas"):
@@ -1257,9 +1295,21 @@ class DashboardUIMixin(ThemedWindowMixin):
     def _tick_session_clock(self):
         if not self.is_running:
             return
-        if hasattr(self, "summary_session"):
-            self.summary_session.config(text=self._get_session_elapsed_text())
-        self._recolor_event_feed_rows()
+        achievement_engine = getattr(self, "achievement_engine", None)
+        if achievement_engine:
+            try:
+                achievement_engine.tick_playtime()
+            except Exception:
+                pass
+        if self._dashboard_streams_visible():
+            if hasattr(self, "summary_session"):
+                self.summary_session.config(text=self._get_session_elapsed_text())
+            newest_until = max(
+                (row.get("new_until", 0) for row in getattr(self, "event_feed_view", [])),
+                default=0,
+            )
+            if time.time() <= newest_until + 1.1:
+                self._recolor_event_feed_rows()
         self.root.after(1000, self._tick_session_clock)
 
     def _toggle_wp_scrollbar(self, show):

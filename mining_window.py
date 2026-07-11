@@ -126,12 +126,15 @@ def _ring_body_name(full_body_name, system_name):
 
 
 class MiningWindow(ThemedWindowMixin):
-    def __init__(self, root, config, get_current_system=None, get_cargo_capacity=None, get_current_coords=None, embedded=False):
+    def __init__(self, root, config, get_current_system=None, get_cargo_capacity=None, get_current_coords=None,
+                 embedded=False, is_active_callback=None):
         self.root = root
         self.config = config
         self.get_current_system = get_current_system or (lambda: "---")
         self.get_cargo_capacity = get_cargo_capacity or (lambda: 0)
         self.get_current_coords = get_current_coords or (lambda: None)
+        self.is_active_callback = is_active_callback
+        self._view_dirty = False
 
         self.embedded = embedded
         self.win = window_surface(root, embedded=embedded)
@@ -452,6 +455,28 @@ class MiningWindow(ThemedWindowMixin):
         self.win.deiconify()
         self.win.lift()
 
+    def _is_active_view(self):
+        if not self.embedded or not callable(self.is_active_callback):
+            return True
+        try:
+            return bool(self.is_active_callback())
+        except Exception:
+            return True
+
+    def _refresh_or_defer(self):
+        if self._is_active_view():
+            self._refresh_all()
+            self._view_dirty = False
+        else:
+            self._view_dirty = True
+
+    def on_shown(self):
+        if self._view_dirty:
+            self._refresh_all()
+            self._view_dirty = False
+        else:
+            self._refresh_metrics()
+
     def on_close(self):
         self._save_current_session_progress()
         self.config["mining_geometry"] = self.win.geometry()
@@ -489,12 +514,12 @@ class MiningWindow(ThemedWindowMixin):
         }
         self._json_sessions.insert(0, record)
         save_mining_sessions_json(self._json_sessions, self.mining_sessions_file)
-        self._refresh_all()
+        self._refresh_or_defer()
 
     def stop_session(self):
         self.session_active = False
         self._finish_current_session()
-        self._refresh_all()
+        self._refresh_or_defer()
 
     def reset_session(self):
         if self.session_active:
@@ -550,29 +575,40 @@ class MiningWindow(ThemedWindowMixin):
         elif ev == "CargoDepot":
             self._process_cargo_depot(raw)
 
-        self._refresh_all()
+        self._refresh_or_defer()
 
     def update_cargo(self, inventory, capacity=None):
         if threading.current_thread() is not threading.main_thread():
             self.root.after(0, lambda i=list(inventory or []), c=capacity: self.update_cargo(i, c))
             return
-        self.cargo_inventory = list(inventory or [])
+        inventory = list(inventory or [])
+        changed = inventory != self.cargo_inventory
+        self.cargo_inventory = inventory
         if capacity:
-            self.cargo_capacity = int(capacity)
-        self._refresh_all()
+            new_capacity = int(capacity)
+            changed = changed or new_capacity != self.cargo_capacity
+            self.cargo_capacity = new_capacity
+        if changed:
+            self._refresh_or_defer()
 
     def update_status(self, status):
         if threading.current_thread() is not threading.main_thread():
             self.root.after(0, lambda s=dict(status or {}): self.update_status(s))
             return
+        changed = False
         try:
             if status.get("CargoCapacity") is not None:
-                self.cargo_capacity = int(status.get("CargoCapacity") or self.cargo_capacity or 0)
+                capacity = int(status.get("CargoCapacity") or self.cargo_capacity or 0)
+                changed = changed or capacity != self.cargo_capacity
+                self.cargo_capacity = capacity
             if status.get("Cargo") is not None:
-                self.last_status_cargo = int(status.get("Cargo") or 0)
+                cargo = int(status.get("Cargo") or 0)
+                changed = changed or cargo != self.last_status_cargo
+                self.last_status_cargo = cargo
         except Exception:
             pass
-        self._refresh_all()
+        if changed:
+            self._refresh_or_defer()
 
     def _process_scan(self, raw):
         system = raw.get("StarSystem") or self.current_system
@@ -1113,5 +1149,6 @@ class MiningWindow(ThemedWindowMixin):
     def _tick(self):
         if not self.is_open():
             return
-        self._refresh_metrics()
+        if self._is_active_view():
+            self._refresh_metrics()
         self.win.after(1000, self._tick)

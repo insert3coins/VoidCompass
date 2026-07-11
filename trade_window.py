@@ -69,6 +69,16 @@ class TradeWindow(ThemedWindowMixin):
         except Exception:
             return False
 
+    def _is_active_view(self):
+        return not self.embedded or getattr(self.app, "_active_page", None) == "TRADE"
+
+    def on_shown(self):
+        self._refresh_summary()
+        self.refresh_local()
+        self.refresh_session()
+        self.refresh_route_alerts()
+        self._schedule_live_poll()
+
     def lift(self):
         self.win.lift()
         self.win.focus_force()
@@ -839,6 +849,9 @@ class TradeWindow(ThemedWindowMixin):
     def _live_poll_tick(self):
         self._live_poll_after = None
         if not self.is_open():
+            return
+        if not self._is_active_view():
+            self._schedule_live_poll(750)
             return
         self._refresh_summary()
         self.refresh_local()
