@@ -1247,9 +1247,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if self.config.get("achievement_notifications_enabled", True) and self.toast_hud:
                 self.toast_hud.push(
                     "ACHIEVEMENT UNLOCKED",
-                    f"{icon} {title}  //  +{points:,} pts",
+                    f"{title}  //  +{points:,} pts",
                     severity="success",
                     duration_s=15,
+                    icon=icon,
                 )
             window = getattr(self, "achievement_window", None)
             if window and window.is_open() and getattr(self, "_active_page", None) == "ACHIEVE":

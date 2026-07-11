@@ -2,7 +2,7 @@
 SrvSurvey's PlotFloatie.
 
 Not exploration-specific: any part of the app can call push(title, message,
-severity) to show a short-lived popup. Toasts stack vertically from a
+severity, icon) to show a short-lived popup. Toasts stack vertically from a
 corner anchor and auto-dismiss individually after their own timeout.
 """
 
@@ -77,12 +77,13 @@ class ToastHUD:
 
     # ── Data interface ───────────────────────────────────────────────────
 
-    def push(self, title, message="", severity="info", duration_s=6.0):
+    def push(self, title, message="", severity="info", duration_s=6.0, icon=None):
         """Queue a new toast. Oldest is dropped if the stack is already full."""
         toast = {
             "id": self._next_id,
             "title": str(title or ""),
             "message": str(message or ""),
+            "icon": str(icon or ""),
             "severity": severity if severity in _SEVERITY_COLOR else "info",
             "expire_at": time.time() + max(2.0, float(duration_s or 6.0)),
         }
@@ -166,7 +167,30 @@ class ToastHUD:
             self.canvas.create_rectangle(0, y, w, y + _TOAST_H, fill="#010101", outline="")
             self.canvas.create_rectangle(0, y, 4, y + _TOAST_H, fill=color, outline="")
             self.canvas.create_rectangle(4, y, w, y + _TOAST_H, outline=color, width=1)
-            self._text(14, y + 15, self._truncate(toast["title"], 40), color, ("Courier", 9, "bold"))
+            has_icon = bool(toast.get("icon"))
+            text_x = 52 if has_icon else 14
+            if has_icon:
+                self._text(
+                    27,
+                    y + (_TOAST_H // 2),
+                    toast["icon"],
+                    COLOR_TEXT,
+                    ("Segoe UI Emoji", 18),
+                    anchor="center",
+                )
+            self._text(
+                text_x,
+                y + 15,
+                self._truncate(toast["title"], 34 if has_icon else 40),
+                color,
+                ("Courier", 9, "bold"),
+            )
             if toast["message"]:
-                self._text(14, y + 32, self._truncate(toast["message"], 46), COLOR_TEXT, ("Courier", 8))
+                self._text(
+                    text_x,
+                    y + 32,
+                    self._truncate(toast["message"], 39 if has_icon else 46),
+                    COLOR_TEXT,
+                    ("Courier", 8),
+                )
             y += _TOAST_H + _GAP
