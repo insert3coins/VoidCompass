@@ -10,6 +10,7 @@
 - Integrated the achievement engine directly into VoidCompass. It uses the existing journal watcher and runs inside the main Python application with no webserver, browser panel, Node process, or additional port.
 - Achievement progress and settings are stored separately for each commander profile.
 - Live unlocks appear in the event feed and use the existing Toast HUD notification system.
+- Achievement icons render in a dedicated emoji column in unlock toasts instead of being lost in the standard monospace message font.
 
 ### Achievement Centre
 
