@@ -91,6 +91,8 @@ PROFILE_BOOL_SETTINGS = (
     "auto_copy_waypoint",
     "route_auto_note_from_edsm",
     "trade_eddn_upload_enabled",
+    "achievements_enabled",
+    "achievement_notifications_enabled",
 )
 
 PROFILE_VALUE_SETTINGS = (
@@ -146,6 +148,8 @@ PROFILE_VALUE_SETTINGS = (
     "system_plotter_form",
     "trade_watchlist",
     "ui_custom_themes",
+    "achievements_disabled_categories",
+    "achievement_window_geometry",
 )
 
 PROFILE_SETTINGS = PROFILE_TEXT_SETTINGS + PROFILE_BOOL_SETTINGS + PROFILE_VALUE_SETTINGS
@@ -255,6 +259,8 @@ def apply_profile_config(config, profile_key=None):
         "auto_copy_waypoint": False,
         "route_auto_note_from_edsm": True,
         "trade_eddn_upload_enabled": True,
+        "achievements_enabled": True,
+        "achievement_notifications_enabled": True,
     }
     for setting in PROFILE_TEXT_SETTINGS:
         if setting not in profile:
@@ -413,6 +419,10 @@ def load_config():
         'route_auto_note_from_edsm': True,
         'auto_copy_waypoint': False,
         'trade_eddn_upload_enabled': True,
+        'achievements_enabled': True,
+        'achievement_notifications_enabled': True,
+        'achievements_disabled_categories': [],
+        'achievement_window_geometry': '1080x700',
         'ui_theme_name': _themes.DEFAULT_THEME_NAME,
         'ui_custom_themes': {},
     }

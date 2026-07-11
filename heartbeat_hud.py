@@ -32,6 +32,7 @@ class HeartbeatHUD:
         self._pulse_level = 0
         self._last_pulse_ts = time.time()
         self._tick_job = None
+        self._last_render_key = None
 
         self.win = tk.Toplevel(root)
         self.win.attributes("-topmost", True, "-transparentcolor", _CHROMA, "-toolwindow", True)
@@ -83,13 +84,16 @@ class HeartbeatHUD:
         except Exception:
             pass
 
-    def _schedule_tick(self):
-        self._tick_job = self.win.after(150, self._tick)
+    def _schedule_tick(self, delay_ms=None):
+        delay_ms = 150 if self._pulse_level > 0 else 750 if delay_ms is None else delay_ms
+        self._tick_job = self.win.after(delay_ms, self._tick)
 
     def _tick(self):
         if self._pulse_level > 0:
             self._pulse_level -= 1
-        self._redraw()
+        render_key = (self._pulse_level, (time.time() - self._last_pulse_ts) > _STALL_AFTER_S)
+        if render_key != self._last_render_key:
+            self._redraw()
         self._schedule_tick()
 
     # ── Data interface ───────────────────────────────────────────────────
@@ -98,6 +102,8 @@ class HeartbeatHUD:
         """Call on every status/journal update processed — resets the flash."""
         self._pulse_level = _MAX_GROWTH
         self._last_pulse_ts = time.time()
+        if self._last_render_key != (self._pulse_level, False):
+            self._redraw()
 
     # ── Drag-to-move ─────────────────────────────────────────────────────
 
@@ -124,6 +130,7 @@ class HeartbeatHUD:
         self.canvas.delete("all")
         cx = cy = _SIZE // 2
         stalled = (time.time() - self._last_pulse_ts) > _STALL_AFTER_S
+        self._last_render_key = (self._pulse_level, stalled)
         color = _STALL_COLOR if stalled else COLOR_ACCENT
         base_r = 5
         r = base_r if stalled else base_r + self._pulse_level

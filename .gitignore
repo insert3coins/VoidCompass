@@ -28,6 +28,9 @@ dist/
 #misc
 resources/
 data/
+!data/
+data/*
+!data/achievements.json
 version_info.txt
 
 # Virtual environment

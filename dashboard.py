@@ -57,6 +57,8 @@ from trade_window import TradeWindow
 from trade import marketdb as trade_marketdb
 from trade import alerts as trade_alerts
 from trade.eddn_upload import UPLOADER as trade_eddn_uploader
+from achievement_engine import AchievementEngine
+from achievement_window import AchievementWindow
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
@@ -300,6 +302,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.config["active_commander_fid"] = fid or profile.get("fid", "")
         apply_profile_config(self.config, new_key)
         self._refresh_profile_paths()
+        if getattr(self, "achievement_engine", None):
+            self.achievement_engine.switch_profile(
+                self._profile_path("achievements_state.json"),
+                enabled=self.config.get("achievements_enabled", True),
+                disabled_categories=self.config.get("achievements_disabled_categories", []),
+            )
         self.init_db()
         self.edsm.config = self.config
         self.edsm.set_db(self.conn, self.db_lock)
@@ -323,6 +331,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "value_ledger_window",
             "colonisation_planner_window",
             "exploration_window",
+            "achievement_window",
         ):
             win = getattr(self, attr, None)
             try:
@@ -520,6 +529,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._event_feed_pending = deque()
         self._journal_history_pending = deque()
         self._event_feed_pending_lock = threading.Lock()
+        self._event_feed_dirty = False
+        self._journal_history_dirty = False
+        self._defer_dashboard_stream_render = False
         self.event_feed_max_entries = 150
         self.event_feed_display_limit = 80
         self.dashboard_refresh_job = None
@@ -573,12 +585,19 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.colonisation_planner_window = None
         self.exploration_window = None
         self.trade_window = None
+        self.achievement_window = None
         self._carrier_panel_tick_job = None
         self.carrier_tracker = CarrierTracker()
         self._refresh_profile_paths()
         self.carrier_tracker.set_config(self.config)
         self.carrier_tracker.on_panel_updated = self._on_carrier_panel_updated
         self.carrier_tracker.on_status_changed = self._on_carrier_status_changed
+        self.achievement_engine = AchievementEngine(
+            self._profile_path("achievements_state.json"),
+            enabled=self.config.get("achievements_enabled", True),
+            disabled_categories=self.config.get("achievements_disabled_categories", []),
+            on_unlock=self._on_achievement_unlocked,
+        )
 
         if self.config.get("overlay_enabled", True):
             self.hud = TacticalHUD(self.root, self.config, on_widget_click=self._on_hud_widget_click)
@@ -931,6 +950,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.exploration_window._on_close()
         if self.trade_window and self.trade_window.is_open():
             self.trade_window._on_close()
+        if self.achievement_engine:
+            self.achievement_engine.flush()
             
         self._stop_market_import_worker()
         self.watcher.stop()
@@ -1085,6 +1106,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def open_mining_window(self):
         if self.mining_window and self.mining_window.is_open():
             self._show_embedded_page("MINING", self.mining_window.win)
+            self.mining_window.on_shown()
             return
         self.mining_window = MiningWindow(
             self.dashboard_host,
@@ -1093,8 +1115,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             get_cargo_capacity=lambda: self.cargo_capacity,
             get_current_coords=lambda: self.current_coords,
             embedded=True,
+            is_active_callback=lambda: getattr(self, "_active_page", None) == "MINING",
         )
         self._show_embedded_page("MINING", self.mining_window.win)
+        self.mining_window.on_shown()
         try:
             self.watcher.force_check_cargo()
             self.watcher.force_check_status()
@@ -1186,14 +1210,55 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def open_trade_window(self):
         if self.trade_window and self.trade_window.is_open():
             self._show_embedded_page("TRADE", self.trade_window.win)
+            self.trade_window.on_shown()
             return
         try:
             self.trade_window = TradeWindow(self.dashboard_host, self, embedded=True)
             self._show_embedded_page("TRADE", self.trade_window.win)
+            self.trade_window.on_shown()
         except Exception as exc:
             self.trade_window = None
             self.log(f"Trade window failed to open: {exc}")
             self.add_event_feed_entry("TRADE", f"Trade window failed: {exc}", severity="WARN")
+
+    def open_achievement_window(self):
+        if self.achievement_window and self.achievement_window.is_open():
+            self.achievement_window.refresh()
+            self._show_embedded_page("ACHIEVE", self.achievement_window.win)
+            return
+        self.achievement_window = AchievementWindow(
+            self.dashboard_host,
+            self,
+            self.achievement_engine,
+            embedded=True,
+        )
+        self._show_embedded_page("ACHIEVE", self.achievement_window.win)
+
+    def _on_achievement_unlocked(self, achievement):
+        def apply_unlock():
+            title = achievement.get("title") or achievement.get("id") or "Achievement"
+            icon = achievement.get("icon") or "★"
+            points = int(achievement.get("points") or 0)
+            self.add_event_feed_entry(
+                "ACHIEVEMENT",
+                f"Unlocked: {title} (+{points:,} pts)",
+                severity="INFO",
+            )
+            if self.config.get("achievement_notifications_enabled", True) and self.toast_hud:
+                self.toast_hud.push(
+                    "ACHIEVEMENT UNLOCKED",
+                    f"{icon} {title}  //  +{points:,} pts",
+                    severity="success",
+                    duration_s=15,
+                )
+            window = getattr(self, "achievement_window", None)
+            if window and window.is_open() and getattr(self, "_active_page", None) == "ACHIEVE":
+                window.refresh()
+
+        try:
+            self.root.after(0, apply_unlock)
+        except Exception:
+            pass
 
     def open_value_ledger_window(self):
         if self.value_ledger_window and self.value_ledger_window.is_open():
@@ -2177,6 +2242,19 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         raw = data.get("raw", data)
         d = data.get("data", data)
         startup_replay = bool(data.get("startup_catchup"))
+        if ev in ("Commander", "LoadGame"):
+            commander = d.get("name") if ev == "Commander" else d.get("commander")
+            fid = d.get("fid")
+            if commander:
+                self._switch_commander_profile(commander, fid)
+        try:
+            self.achievement_engine.process_event(
+                data,
+                notify=not startup_replay,
+                historical=startup_replay,
+            )
+        except Exception as exc:
+            logging.warning(f"Achievement engine event error [{ev}]: {exc}")
         self._record_journal_event()
         self._handle_live_journal_toast(ev, raw, d, startup_replay=startup_replay)
         if ev != "LoadGame":
@@ -2251,7 +2329,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "Commander":
             self.cmdr_name = d.get("name", "CMDR")
             self.cmdr_fid = d.get("fid") or self.cmdr_fid
-            self._switch_commander_profile(self.cmdr_name, self.cmdr_fid)
             self._queue_edsm_upload(raw, allow_startup=True)
 
         elif ev == "Rank":
@@ -2289,7 +2366,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "LoadGame":
             self.cmdr_name = d.get("commander", "CMDR")
             self.cmdr_fid = d.get("fid") or self.cmdr_fid
-            self._switch_commander_profile(self.cmdr_name, self.cmdr_fid)
             game_version = d.get("gameversion")
             game_build = d.get("build")
             self.game_version = game_version or self.game_version

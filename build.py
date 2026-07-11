@@ -71,6 +71,7 @@ VSVersionInfo(
         '--add-data=Images;Images',
         '--add-data=mining_data.db;.',
         '--add-data=codexRef.json;.',
+        '--add-data=data/achievements.json;data',
         '--hidden-import=zmq',
         '--version-file=version_info.txt'
     ]
