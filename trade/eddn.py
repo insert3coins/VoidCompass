@@ -19,6 +19,7 @@ class EddnListener:
     def __init__(self, include_carriers=False):
         self.include_carriers = include_carriers
         self._lock = threading.Lock()
+        self._thread = None
         self.connected = False
         self.last_message_at = None
         self.markets_updated = 0
@@ -34,7 +35,12 @@ class EddnListener:
             }
 
     def start(self):
-        thread = threading.Thread(target=self._run_forever, name="eddn-listener", daemon=True)
+        """Idempotent: callers (app startup, Trade window) can all invoke this."""
+        with self._lock:
+            if self._thread is not None and self._thread.is_alive():
+                return self._thread
+            thread = threading.Thread(target=self._run_forever, name="eddn-listener", daemon=True)
+            self._thread = thread
         thread.start()
         return thread
 
@@ -122,9 +128,16 @@ class EddnListener:
             conn.commit()
             with self._lock:
                 self.markets_updated += 1
-            alerts.on_market_update(market_id, station_name, rows)
         except Exception:
             conn.rollback()
+            return
+        # Alerting is a nicety layered on top of ingestion — keep it outside
+        # the DB try/except so an alert bug can't roll back a committed write
+        # or mask itself as an ingestion failure.
+        try:
+            alerts.on_market_update(market_id, station_name, rows)
+        except Exception:
+            pass
 
 
 LISTENER = EddnListener()

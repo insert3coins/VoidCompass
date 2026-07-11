@@ -78,6 +78,10 @@ CREATE TABLE IF NOT EXISTS trade_log(
 CREATE TABLE IF NOT EXISTS balance_log(
     ts INTEGER PRIMARY KEY,
     balance INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS watches(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created TEXT NOT NULL,
+    payload TEXT NOT NULL);
 """
 
 _init_lock = threading.Lock()

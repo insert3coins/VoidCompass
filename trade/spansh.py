@@ -195,7 +195,9 @@ def station_search(reference_system, module=None, ship=None, size=20):
     if not reference_system:
         raise SpanshError("No reference system known yet.")
     if MODULE_RE is None:
-        MODULE_RE = re.compile(r"^(\d)\s*([A-EI])\s+(.+)$", re.IGNORECASE)
+        # (\S.*) instead of (.+): the latter can backtrack polynomially against
+        # the preceding \s+ on pathological all-whitespace input (ReDoS).
+        MODULE_RE = re.compile(r"^(\d)\s*([A-EI])\s+(\S.*)$", re.IGNORECASE)
     filters = {}
     if module:
         match = MODULE_RE.match(module.strip())

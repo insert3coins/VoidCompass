@@ -97,6 +97,13 @@ class EddnUploader:
             name = _symbol(item.get("Name"))
             if not name:
                 continue
+            # Match EDMC/EDDN conventions: station-illegal goods and
+            # non-marketable items (limpets etc.) must not be published.
+            if str(item.get("Legality") or "").strip():
+                continue
+            category = str(item.get("Category") or "").lower()
+            if "nonmarketable" in category or name.lower() == "drones":
+                continue
             commodity = {
                 "name": name,
                 "meanPrice": _clean_int(item.get("MeanPrice", 0)),
