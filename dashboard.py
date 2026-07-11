@@ -414,6 +414,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_fuel_reservoir = None
         self.fuel_capacity_main = None
         self._low_fuel_warned = False
+        self._toast_hull_thresholds_seen = set()
+        self._toast_status_alerts = set()
+        self._toast_legal_state = None
+        self._toast_shields_up = None
         self.current_legal_state = None
         self.current_destination = None
         self.trade_jump_history = deque(maxlen=20)
@@ -2062,12 +2066,93 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return False
         return self._set_commander_balance(int(self.cmdr_balance or 0) + delta, timestamp=timestamp, log=log)
 
+    def _push_live_toast(self, title, message="", severity="info", duration_s=10):
+        toast = getattr(self, "toast_hud", None)
+        if toast:
+            toast.push(title, message, severity=severity, duration_s=duration_s)
+
+    def _handle_live_journal_toast(self, ev, raw, d, startup_replay=False):
+        """Surface selected, actionable journal events without replay noise."""
+        if startup_replay or getattr(self, "is_first_load", False):
+            return
+        raw = raw if isinstance(raw, dict) else {}
+        d = d if isinstance(d, dict) else raw
+
+        if ev in ("Touchdown", "Liftoff"):
+            body = d.get("body") or raw.get("Body") or "surface"
+            coords = ""
+            lat, lon = d.get("latitude"), d.get("longitude")
+            if lat is not None and lon is not None:
+                coords = f"  {float(lat):.4f}, {float(lon):.4f}"
+            self._push_live_toast(ev.upper(), f"{body}{coords}", "success" if ev == "Touchdown" else "info")
+        elif ev == "Disembark":
+            where = raw.get("Body") or raw.get("StationName") or raw.get("SettlementName") or "On foot"
+            self._push_live_toast("ON FOOT", where, "info")
+        elif ev == "Embark":
+            vehicle = "SRV" if raw.get("SRV") else (raw.get("Taxi") and "taxi") or "ship"
+            self._push_live_toast("EMBARKED", str(vehicle), "info")
+        elif ev == "HeatWarning":
+            self._push_live_toast("OVERHEATING", "Ship temperature critical", "warn", 15)
+        elif ev == "HeatDamage":
+            self._push_live_toast("HEAT DAMAGE", "Modules are taking heat damage", "fail", 15)
+        elif ev == "UnderAttack":
+            target = raw.get("Target") or raw.get("Target_Localised") or "Hostile fire detected"
+            self._push_live_toast("UNDER ATTACK", target, "fail", 15)
+        elif ev == "ShieldState":
+            shields_up = bool(raw.get("ShieldsUp"))
+            if shields_up != self._toast_shields_up:
+                self._toast_shields_up = shields_up
+                self._push_live_toast("SHIELDS RESTORED" if shields_up else "SHIELDS OFFLINE", "", "success" if shields_up else "fail", 12)
+        elif ev == "HullDamage":
+            health = float(raw.get("Health", 1.0) or 0.0)
+            if health > 0.80:
+                self._toast_hull_thresholds_seen.clear()
+            crossed = [n for n in (75, 50, 25, 10) if health * 100 <= n and n not in self._toast_hull_thresholds_seen]
+            if crossed:
+                self._toast_hull_thresholds_seen.update(crossed)
+                threshold = min(crossed)
+                self._push_live_toast("HULL CRITICAL" if threshold <= 25 else "HULL DAMAGE", f"Integrity at {health * 100:.0f}%", "fail" if threshold <= 25 else "warn", 15)
+        elif ev in ("Interdicted", "EscapeInterdiction"):
+            escaped = ev == "EscapeInterdiction" or bool(raw.get("Submitted") is False)
+            actor = raw.get("Interdictor") or raw.get("Interdictor_Localised") or raw.get("InterdictorName") or "Unknown contact"
+            self._push_live_toast("INTERDICTION ESCAPED" if escaped else "INTERDICTED", actor, "success" if escaped else "warn", 15)
+        elif ev == "JetConeBoost":
+            self._push_live_toast("FSD SUPERCHARGED", "Jet-cone boost acquired", "success", 10)
+        elif ev == "JetConeDamage":
+            self._push_live_toast("JET CONE DAMAGE", "Exit the cone immediately", "fail", 18)
+        elif ev in ("FighterDestroyed", "SRVDestroyed"):
+            self._push_live_toast("FIGHTER DESTROYED" if ev == "FighterDestroyed" else "SRV DESTROYED", "", "fail", 15)
+        elif ev == "Died":
+            killer = raw.get("KillerName_Localised") or raw.get("KillerName") or "Commander lost"
+            self._push_live_toast("DESTRUCTION", killer, "fail", 20)
+        elif ev in ("MissionAccepted", "MissionCompleted", "MissionFailed", "MissionAbandoned"):
+            name = raw.get("LocalisedName") or raw.get("Name_Localised") or raw.get("Name") or "Mission"
+            titles = {"MissionAccepted": "MISSION ACCEPTED", "MissionCompleted": "MISSION COMPLETE", "MissionFailed": "MISSION FAILED", "MissionAbandoned": "MISSION ABANDONED"}
+            sev = "success" if ev == "MissionCompleted" else ("fail" if ev in ("MissionFailed", "MissionAbandoned") else "info")
+            self._push_live_toast(titles[ev], name, sev, 15)
+        elif ev == "ScanOrganic":
+            species = d.get("species") or d.get("genus") or "Organic"
+            scan_type = str(d.get("scan_type") or raw.get("ScanType") or "").lower()
+            complete = bool(d.get("is_complete")) or scan_type == "analyse"
+            sample = d.get("sample_idx")
+            max_samples = d.get("max_samples") or 3
+            detail = "Analysis complete" if complete else (f"Sample {sample}/{max_samples}" if sample else "Sample registered")
+            self._push_live_toast("BIO COMPLETE" if complete else "BIO SAMPLE", f"{species}: {detail}", "success" if complete else "info", 12)
+        elif ev == "CodexEntry":
+            name = d.get("name") or raw.get("Name_Localised") or raw.get("Name") or "New Codex entry"
+            category = d.get("category") or raw.get("Category_Localised") or "Discovery"
+            self._push_live_toast("CODEX DISCOVERY", f"{category}: {name}", "success", 15)
+        elif ev in ("CommitCrime", "Bounty"):
+            detail = raw.get("CrimeType_Localised") or raw.get("CrimeType") or raw.get("Victim") or raw.get("Target_Localised") or raw.get("Target") or "Legal status changed"
+            self._push_live_toast("CRIME REPORTED" if ev == "CommitCrime" else "BOUNTY AWARDED", str(detail), "warn", 15)
+
     def process_event(self, data):
         ev = data.get("type") or data.get("event")
         raw = data.get("raw", data)
         d = data.get("data", data)
         startup_replay = bool(data.get("startup_catchup"))
         self._record_journal_event()
+        self._handle_live_journal_toast(ev, raw, d, startup_replay=startup_replay)
         if ev != "LoadGame":
             self._apply_credit_event(ev, raw if isinstance(raw, dict) else d, log=not startup_replay)
         if ev != "LoadGame" and self.edsm.is_credit_event(ev):
@@ -2604,6 +2689,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.update_hud()
                 self.schedule_dashboard_refresh()
                 self._refresh_exploration_window()
+                self._refresh_system_info_progress()
 
         elif ev == "DiscoveryScan":
             if not self._matches_current_system_address(d):
@@ -2624,6 +2710,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if isinstance(count, int) and count > 0:
                 self._mark_system_scan_complete(count)
                 self.add_event_feed_entry("SCAN", f"Nav beacon scan: {count} bodies", severity="INFO", copy_text=self.current_sys)
+                if not self.batch_mode:
+                    self._refresh_system_info_progress()
 
         elif ev == "FSSAllBodiesFound":
             if not self._matches_current_system_address(d):
@@ -2642,7 +2730,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self._mark_system_scan_complete(count)
                 self.log("📡 SYSTEM SCAN COMPLETE: All bodies found.")
                 self.add_event_feed_entry("ALERT", "FSS complete: all bodies found", severity="WARN", copy_text=self.current_sys)
-        
+                if not self.batch_mode:
+                    self._refresh_system_info_progress()
+
         elif ev == "FSSBodySignals":
             if not self._matches_current_system_address(d):
                 return
@@ -2650,6 +2740,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if body_id is not None:
                 bio_count = d.get("bio_count", 0)
                 geo_count = d.get("geo_count", 0)
+                if not startup_replay and (bio_count or geo_count):
+                    body = d.get("body_name") or f"Body {body_id}"
+                    parts = []
+                    if bio_count:
+                        parts.append(f"{bio_count} biological")
+                    if geo_count:
+                        parts.append(f"{geo_count} geological")
+                    self._push_live_toast("SURFACE SIGNALS", f"{body}: {', '.join(parts)}", "success", 12)
                 self._set_body_signals(body_id, bio_count, geo_count)
                 item = self.scan_items_by_id.get(body_id)
                 if item:
@@ -2672,6 +2770,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if body_id is not None:
                 bio_count = d.get("bio_count", 0)
                 geo_count = d.get("geo_count", 0)
+                if not startup_replay and (bio_count or geo_count):
+                    body = d.get("body_name") or f"Body {body_id}"
+                    parts = []
+                    if bio_count:
+                        parts.append(f"{bio_count} biological")
+                    if geo_count:
+                        parts.append(f"{geo_count} geological")
+                    self._push_live_toast("DSS SIGNALS", f"{body}: {', '.join(parts)}", "success", 12)
                 if bio_count or geo_count:
                     self._set_body_signals(body_id, bio_count, geo_count)
                 item = self.scan_items_by_id.get(body_id)
