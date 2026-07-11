@@ -192,7 +192,14 @@ class TacticalHUD:
         if not self.anim_frames:
             return
         frame = self.anim_frames[self.anim_step]
-        self.draw_text(self.width - 20, 18, text=frame, fill=COLOR_ACCENT, font=("Courier", 12, "bold"), anchor="e", tags="anim_title")
+        # Match the title row's baseline and margin per mode (compact draws
+        # its header at y=14/x=16; full at y=18/x=20) so the spinner sits
+        # optically centered on the same line as "NAVIGATION HUD".
+        if self._is_compact():
+            x, y = self.width - 16, 14
+        else:
+            x, y = self.width - 20, 18
+        self.draw_text(x, y, text=frame, fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="e", tags="anim_title")
 
     def draw_fitted_text(self, x, y, text, fill, family="Courier", size=9, weight="bold", max_width=300, min_size=4, anchor="w"):
         font_size = size
