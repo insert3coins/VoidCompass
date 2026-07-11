@@ -102,7 +102,64 @@ class DashboardScanMixin:
             self.update_hud()
         if not self.batch_mode:
             self._check_low_fuel()
+            self._check_status_toasts(data, flags, flags2)
         self._perf_spike("_apply_status_update", t0, threshold_ms=20.0)
+
+    def _check_status_toasts(self, data, flags, flags2):
+        toast = getattr(self, "toast_hud", None)
+        if not toast:
+            return
+        active = getattr(self, "_toast_status_alerts", set())
+
+        checks = (
+            ("overheat", isinstance(flags, int) and bool(flags & 0x00100000), "OVERHEATING", "Ship temperature above 100%", "warn"),
+            ("danger", isinstance(flags, int) and bool(flags & 0x00400000), "DANGER", "Ship is in danger", "warn"),
+            ("interdicted", isinstance(flags, int) and bool(flags & 0x00800000), "INTERDICTION", "Interdiction in progress", "warn"),
+        )
+        for key, enabled, title, message, severity in checks:
+            if enabled and key not in active:
+                active.add(key)
+                toast.push(title, message, severity=severity, duration_s=12)
+            elif not enabled:
+                active.discard(key)
+
+        if isinstance(flags2, int) and flags2 & 0x0001:
+            for key, label, value in (
+                ("oxygen", "OXYGEN", data.get("Oxygen")),
+                ("health", "SUIT HEALTH", data.get("Health")),
+            ):
+                try:
+                    pct = float(value) * 100
+                except (TypeError, ValueError):
+                    continue
+                triggered = next((n for n in (10, 25, 50) if pct <= n), None)
+                state_key = f"{key}_{triggered}" if triggered else None
+                old_keys = {item for item in active if item.startswith(f"{key}_")}
+                if state_key and state_key not in active:
+                    active.difference_update(old_keys)
+                    active.add(state_key)
+                    toast.push(f"LOW {label}" if key == "oxygen" else f"LOW {label}", f"{pct:.0f}% remaining", severity="fail" if pct <= 25 else "warn", duration_s=15)
+                elif not state_key and pct > 55:
+                    active.difference_update(old_keys)
+
+            try:
+                temperature = float(data.get("Temperature"))
+            except (TypeError, ValueError):
+                temperature = None
+            temp_danger = temperature is not None and (temperature < 180 or temperature > 330)
+            if temp_danger and "suit_temperature" not in active:
+                active.add("suit_temperature")
+                toast.push("SUIT TEMPERATURE", f"{temperature:.0f} K — environmental hazard", severity="warn", duration_s=15)
+            elif temperature is not None and 190 <= temperature <= 320:
+                active.discard("suit_temperature")
+
+        legal = data.get("LegalState")
+        previous = getattr(self, "_toast_legal_state", None)
+        if previous is not None and legal and legal != previous and legal not in ("Clean", "Allied"):
+            toast.push("LEGAL STATUS", str(legal).replace("PassengerWanted", "Passenger Wanted"), severity="warn", duration_s=15)
+        if legal:
+            self._toast_legal_state = legal
+        self._toast_status_alerts = active
 
     def _check_low_fuel(self):
         """Toast once when main tank drops below threshold; re-arms once it
@@ -589,4 +646,3 @@ class DashboardScanMixin:
         if body_id is not None:
             self.scan_items_by_id[body_id] = item
         self.save_scan_item_to_db(self.current_sys, item)
-
