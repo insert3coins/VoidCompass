@@ -21,7 +21,12 @@ MAX_SOURCE_POOL = 60
 MAX_DEST_CANDIDATES = 250
 PAIR_QUERY_LIMIT = 600
 
-LOOP_STATION_CAP = 900       # nearest stations considered in loop mode
+# Dense inhabited regions can have many hundreds of stations inside the
+# default radius.  The commodity flow join grows roughly with the square of
+# this pool, so 900 candidates made otherwise valid searches (for example,
+# Deciat at 100 ly) appear hung for tens of seconds.  The nearest 400 keeps a
+# broad search area while bounding the expensive pair ranking.
+LOOP_STATION_CAP = 400       # nearest stations considered in loop mode
 LOOP_FLOW_LIMIT = 30000      # top commodity flows pulled from SQL
 LOOP_FLOWS_PER_PAIR = 12
 LOOP_RESULTS = 8

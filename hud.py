@@ -212,7 +212,8 @@ class TacticalHUD:
 
     # ── Chrome (SrvSurvey-style tri-line stripe border + corner brackets) ──
 
-    def _draw_chrome(self, accent=COLOR_ACCENT, bracket_len=12):
+    def _draw_chrome(self, accent=None, bracket_len=12):
+        accent = accent or COLOR_ACCENT
         overlay_chrome.draw_chrome(self.canvas, self.width, self.base_height, accent=accent, bracket_len=bracket_len)
 
     def _draw_stat(self, x, y, label, value, color=COLOR_TEXT, anchor="w", label_size=6, value_size=9, value_gap=13):

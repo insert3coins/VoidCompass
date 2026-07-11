@@ -472,6 +472,20 @@ def apply_theme_live(root, theme_name, palette):
     except Exception:
         pass
 
+    # Overlay chrome also draws a derived dim accent around its bright border.
+    # Include that color in the live canvas remap so open overlays change
+    # immediately instead of retaining their old dim stripes until a redraw.
+    try:
+        import overlay_chrome as _chrome
+        old_accent = str(getattr(_chrome, "COLOR_ACCENT", ""))
+        if old_accent:
+            old_dim = _chrome.dim_color(old_accent).lower()
+            new_dim = _chrome.dim_color(palette["accent"])
+            if old_dim != new_dim.lower() and old_dim not in mapping:
+                mapping[old_dim] = new_dim
+    except Exception:
+        pass
+
     # 1. The live palette: widgets built from now on use the new colors.
     for key in _th.THEME_KEYS:
         object.__setattr__(THEME, key, palette[key])

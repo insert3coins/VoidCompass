@@ -1778,8 +1778,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             badges.append((f"VALUE {len(self.valuable_bodies)}", "alert"))
         if self.fss_summary_active:
             badges.append(("FSS", "alert"))
-        if self.system_traffic.get("day", 0):
-            badges.append((f"TRAF {self.system_traffic.get('day', 0)}", "ok"))
         if self.current_docked:
             badges.append(("DOCKED", "ok"))
         if not badges:
