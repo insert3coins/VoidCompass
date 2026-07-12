@@ -239,6 +239,14 @@ class ExplorationWindow(ThemedWindowMixin):
             lbl.pack(fill=tk.X, padx=10, pady=(2, 8))
             self.bio_summary_labels[key] = lbl
 
+        self.sampling_banner = tk.Label(
+            frame, text="", fg=COLOR_TEXT, bg="#0b0f13", font=("Consolas", 10, "bold"),
+            anchor="w", padx=12, pady=9, highlightbackground=self.UI_BORDER,
+            highlightthickness=1,
+        )
+        self.sampling_banner.pack(fill=tk.X, pady=(0, 8))
+        self.sampling_banner.pack_forget()
+
         cols = ("body", "class", "bio", "geo", "genus", "spacing", "value", "samples", "status")
         self.bio_tree = self._tree(frame, cols, {
             "body": ("Body", 230, tk.W),
@@ -428,6 +436,7 @@ class ExplorationWindow(ThemedWindowMixin):
             self._render_body_metrics(current, bodies, scanned, total, current_value)
             self._render_bodies(bodies)
             self._render_bio(bodies, bio_summary)
+            self._render_sampling()
             self._refresh_system_history_rows(current, bodies, current_value, valuable_count, bio_summary, scanned, total)
             self._render_system_history()
             self._request_route_enrichment()
@@ -757,6 +766,32 @@ class ExplorationWindow(ThemedWindowMixin):
                 ),
                 tags=tags,
             )
+
+    def _render_sampling(self):
+        banner = getattr(self, "sampling_banner", None)
+        if not banner:
+            return
+        sample = self.app._sampling_snapshot() if hasattr(self.app, "_sampling_snapshot") else None
+        if not sample:
+            banner.pack_forget()
+            return
+        if not banner.winfo_manager():
+            banner.pack(fill=tk.X, pady=(0, 8), before=self.bio_tree)
+        minimum = sample.get("min_distance_m")
+        colony = sample.get("colony_m")
+        if sample.get("clear"):
+            status = "CLEAR TO SAMPLE"
+            color = self.UI_OK
+        elif minimum is not None and colony:
+            status = f"MOVE · {minimum:,} / {colony:,} m"
+            color = COLOR_ORANGE
+        else:
+            status = "MOVE TO THE NEXT SAMPLE SITE"
+            color = COLOR_ORANGE
+        banner.config(
+            text=f"GENETIC SAMPLER · {sample.get('species')} · sample {sample.get('progress', 1)}/3 · {status}",
+            fg=color,
+        )
 
     def _route_entries(self):
         entries = list(getattr(self.app, "nav_route_entries", []) or [])

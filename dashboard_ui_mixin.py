@@ -130,7 +130,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             ("➤", "ROUTE", self.open_route_planner),
             ("⬢", "CARRIER", self.open_carrier_window),
             ("⌂", "COLONY", self.open_colonization_window),
-            ("⚑", "BGS", self.open_bgs_window),
+            ("⚑", "GALAXY", self.open_bgs_window),
             ("⚙", "ENGINEER", self.open_engineer_window),
         )
         self.nav_buttons = {}

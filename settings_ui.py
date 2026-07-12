@@ -189,6 +189,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     station_info_var = tk.BooleanVar(value=config.get("station_info_overlay_enabled", True))
     survey_status_var = tk.BooleanVar(value=config.get("survey_status_overlay_enabled", True))
     toast_var = tk.BooleanVar(value=config.get("toast_overlay_enabled", True))
+    sample_clear_var = tk.BooleanVar(value=config.get("sample_clear_notifications_enabled", True))
+    rebuy_warning_var = tk.BooleanVar(value=config.get("rebuy_warnings_enabled", True))
+    data_risk_var = tk.BooleanVar(value=config.get("data_risk_warnings_enabled", True))
     heartbeat_var = tk.BooleanVar(value=config.get("heartbeat_overlay_enabled", True))
     ss_var = tk.BooleanVar(value=config.get("screenshots_enabled", False))
     edsm_upload_var = tk.BooleanVar(value=config.get("edsm_upload_enabled", False))
@@ -230,6 +233,11 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     toggle_row(overlay_modules, "Survey Status Strip", survey_status_var)
     toggle_row(overlay_modules, "Toast Notifications", toast_var)
     toggle_row(overlay_modules, "Journal Heartbeat Pulse", heartbeat_var)
+
+    overlay_alerts = section(overlay_page, "Actionable Alerts")
+    toggle_row(overlay_alerts, "Clear-to-sample notifications", sample_clear_var)
+    toggle_row(overlay_alerts, "Rebuy coverage warnings", rebuy_warning_var)
+    toggle_row(overlay_alerts, "Unsold exploration-data risk warnings", data_risk_var)
 
     overlay_timing = section(overlay_page, "Timing")
     prosp_timeout_e = input_row(overlay_timing, "Prospector Auto-Hide", "prospector_hud_timeout_s")
@@ -494,6 +502,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "station_info_overlay_enabled": station_info_var.get(),
             "survey_status_overlay_enabled": survey_status_var.get(),
             "toast_overlay_enabled": toast_var.get(),
+            "sample_clear_notifications_enabled": sample_clear_var.get(),
+            "rebuy_warnings_enabled": rebuy_warning_var.get(),
+            "data_risk_warnings_enabled": data_risk_var.get(),
             "heartbeat_overlay_enabled": heartbeat_var.get(),
             "ui_theme_name": theme_var.get(),
             "ui_custom_themes": dict(custom_themes),

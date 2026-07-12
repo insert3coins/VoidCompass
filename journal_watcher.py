@@ -37,11 +37,13 @@ class JournalWatcher:
         self.nav_route_callback = None
         self.status_callback = None
         self.market_callback = None
+        self.ship_locker_callback = None
         
         self.last_cargo_mtime = 0
         self.last_nav_mtime = 0
         self.last_status_mtime = 0
         self.last_market_mtime = 0
+        self.last_ship_locker_mtime = 0
         self.thread = None
         self._journal_files = []
         self._journal_files_refresh_ts = 0.0
@@ -57,13 +59,15 @@ class JournalWatcher:
     def stop(self):
         self.is_running = False
 
-    def register_callback(self, event_cb=None, batch_cb=None, cargo_cb=None, nav_cb=None, status_cb=None, market_cb=None):
+    def register_callback(self, event_cb=None, batch_cb=None, cargo_cb=None, nav_cb=None,
+                          status_cb=None, market_cb=None, ship_locker_cb=None):
         if event_cb: self.event_callback = event_cb
         if batch_cb: self.batch_event_callback = batch_cb
         if cargo_cb: self.cargo_callback = cargo_cb
         if nav_cb: self.nav_route_callback = nav_cb
         if status_cb: self.status_callback = status_cb
         if market_cb: self.market_callback = market_cb
+        if ship_locker_cb: self.ship_locker_callback = ship_locker_cb
 
     def force_check_cargo(self):
         self.last_cargo_mtime = 0
@@ -75,6 +79,10 @@ class JournalWatcher:
 
     def force_check_market(self):
         self.last_market_mtime = 0
+        self._force_special_check = True
+
+    def force_check_ship_locker(self):
+        self.last_ship_locker_mtime = 0
         self._force_special_check = True
 
     def prime_market_file(self):
@@ -771,6 +779,22 @@ class JournalWatcher:
                                 self.market_callback(data)
                                 self.last_market_mtime = mtime
                 except:
+                    pass
+        # ShipLocker.json is the complete Odyssey goods/assets/data snapshot.
+        if self.ship_locker_callback:
+            locker_file = os.path.join(self.journal_path, "ShipLocker.json")
+            if os.path.exists(locker_file):
+                try:
+                    mtime = os.path.getmtime(locker_file)
+                    if mtime != self.last_ship_locker_mtime:
+                        if (now - mtime) < self.special_file_settle_s and not self._force_special_check:
+                            pass
+                        else:
+                            with open(locker_file, "r", encoding="utf-8") as f:
+                                data = json.load(f)
+                            self.ship_locker_callback(data)
+                            self.last_ship_locker_mtime = mtime
+                except Exception:
                     pass
         if callable(self.trace_callback):
             try:

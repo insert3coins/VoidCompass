@@ -1,5 +1,28 @@
 # VoidCompass // UPDATE LOG
 
+## v4.4.1 // Engineering + Galaxy Companion Expansion
+**Release Date:** 2026-Jul-13
+
+### Engineering
+*   Expanded the native Engineering page with blueprint grades, material requirements, pinned-blueprint tracking, material inventory coverage, missing-material totals, and synthesis/jumponium readiness.
+*   Added engineer discovery, unlock, invitation, and reputation progress sourced from commander journals and cached profile data.
+*   Added focused material filtering and clearer readiness states without introducing automatic route plotting.
+
+### Galaxy + BGS
+*   Replaced the old standalone BGS navigation entry with an integrated **GALAXY** page.
+*   Added a **GALAXY OVERVIEW** tab showing the current system and controlling faction, faction influence and states, commander reputation, conflicts, Powerplay status, squadron information, and community goals.
+*   Preserved the existing visit and faction records under the **BGS HISTORY** tab.
+*   Galaxy information updates from live journal events and remains commander-local; it does not depend on a browser panel or external web service.
+
+### Commander Companion
+*   Added native fleet, mission, massacre-stack, community-goal, Powerplay, squadron, and conflict summaries to the existing commander surfaces.
+*   Added ship loadout export and station-service lookup support.
+*   Added jumponium availability plus rebuy and unsold exploration-data risk warnings.
+*   Added sampling-clearance guidance to the Exploration page and Survey HUD, with settings controls for the new companion alerts.
+
+### Version
+*   Bumped app version to **4.4.1**.
+
 ## v4.3.4 // Achievement Fixes + Progress Bars
 **Release Date:** 2026-Jul-12
 
