@@ -61,6 +61,7 @@ from trade import alerts as trade_alerts
 from trade.eddn_upload import UPLOADER as trade_eddn_uploader
 from achievement_engine import AchievementEngine
 from achievement_window import AchievementWindow
+from voice_callouts import VoiceCalloutManager
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
@@ -379,6 +380,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.root = root
         self.config = load_config()
         self._prepare_commander_profile_from_journal()
+        self.voice_callouts = VoiceCalloutManager(self.config)
         self.root.title(f"VOID COMPASS // v{APP_VERSION}")
         self.root.geometry(self.config.get("main_geometry", "1320x820"))
         self.root.minsize(1080, 700)
@@ -466,6 +468,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_fuel_main = None
         self.current_fuel_reservoir = None
         self.fuel_capacity_main = None
+        self._fuel_used_samples = deque(maxlen=8)
+        self._fuel_advisory_signature = None
         self._low_fuel_warned = False
         self._toast_hull_thresholds_seen = set()
         self._toast_status_alerts = set()
@@ -954,6 +958,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def on_close(self):
         """Save state and exit."""
         self.is_running = False
+        self.voice_callouts.stop()
         
         if self.route_plotter and self.route_plotter.win.winfo_exists():
             self.route_plotter.on_close()
@@ -1604,6 +1609,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 carrier_tracker=self.carrier_tracker,
                 embedded=True,
                 on_close_callback=self.show_dashboard_page,
+                voice_manager=self.voice_callouts,
             )
         self._show_embedded_page("SETTINGS", self.settings_page)
 
@@ -2201,10 +2207,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return False
         return self._set_commander_balance(int(self.cmdr_balance or 0) + delta, timestamp=timestamp, log=log)
 
-    def _push_live_toast(self, title, message="", severity="info", duration_s=10):
+    def _speak(self, text, category="safety", cooldown_s=20, key=None):
+        try:
+            return self.voice_callouts.say(text, category=category, cooldown_s=cooldown_s, key=key)
+        except Exception as exc:
+            logging.debug("Voice callout skipped: %s", exc)
+            return False
+
+    def _push_live_toast(self, title, message="", severity="info", duration_s=10,
+                         voice_text=None, voice_category="safety", voice_key=None):
         toast = getattr(self, "toast_hud", None)
         if toast:
             toast.push(title, message, severity=severity, duration_s=duration_s)
+        if voice_text:
+            self._speak(voice_text, category=voice_category, key=voice_key)
 
     def _handle_live_journal_toast(self, ev, raw, d, startup_replay=False):
         """Surface selected, actionable journal events without replay noise."""
@@ -2227,17 +2243,24 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             vehicle = "SRV" if raw.get("SRV") else (raw.get("Taxi") and "taxi") or "ship"
             self._push_live_toast("EMBARKED", str(vehicle), "info")
         elif ev == "HeatWarning":
-            self._push_live_toast("OVERHEATING", "Ship temperature critical", "warn", 15)
+            self._push_live_toast("OVERHEATING", "Ship temperature critical", "warn", 15,
+                                  "Warning. Ship temperature critical.", voice_key="ship-overheat")
         elif ev == "HeatDamage":
-            self._push_live_toast("HEAT DAMAGE", "Modules are taking heat damage", "fail", 15)
+            self._push_live_toast("HEAT DAMAGE", "Modules are taking heat damage", "fail", 15,
+                                  "Heat damage. Modules are taking damage.", voice_key="heat-damage")
         elif ev == "UnderAttack":
             target = raw.get("Target") or raw.get("Target_Localised") or "Hostile fire detected"
-            self._push_live_toast("UNDER ATTACK", target, "fail", 15)
+            self._push_live_toast("UNDER ATTACK", target, "fail", 15,
+                                  "Warning. Under attack.", voice_key="under-attack")
         elif ev == "ShieldState":
             shields_up = bool(raw.get("ShieldsUp"))
             if shields_up != self._toast_shields_up:
                 self._toast_shields_up = shields_up
-                self._push_live_toast("SHIELDS RESTORED" if shields_up else "SHIELDS OFFLINE", "", "success" if shields_up else "fail", 12)
+                self._push_live_toast(
+                    "SHIELDS RESTORED" if shields_up else "SHIELDS OFFLINE", "",
+                    "success" if shields_up else "fail", 12,
+                    None if shields_up else "Warning. Shields offline.", voice_key="shields-offline",
+                )
         elif ev == "HullDamage":
             health = float(raw.get("Health", 1.0) or 0.0)
             if health > 0.80:
@@ -2246,20 +2269,34 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if crossed:
                 self._toast_hull_thresholds_seen.update(crossed)
                 threshold = min(crossed)
-                self._push_live_toast("HULL CRITICAL" if threshold <= 25 else "HULL DAMAGE", f"Integrity at {health * 100:.0f}%", "fail" if threshold <= 25 else "warn", 15)
+                self._push_live_toast(
+                    "HULL CRITICAL" if threshold <= 25 else "HULL DAMAGE",
+                    f"Integrity at {health * 100:.0f}%", "fail" if threshold <= 25 else "warn", 15,
+                    f"Hull critical. Integrity at {health * 100:.0f} percent." if threshold <= 25 else None,
+                    voice_key=f"hull-{threshold}",
+                )
         elif ev in ("Interdicted", "EscapeInterdiction"):
             escaped = ev == "EscapeInterdiction" or bool(raw.get("Submitted") is False)
             actor = raw.get("Interdictor") or raw.get("Interdictor_Localised") or raw.get("InterdictorName") or "Unknown contact"
-            self._push_live_toast("INTERDICTION ESCAPED" if escaped else "INTERDICTED", actor, "success" if escaped else "warn", 15)
+            self._push_live_toast(
+                "INTERDICTION ESCAPED" if escaped else "INTERDICTED", actor,
+                "success" if escaped else "warn", 15,
+                None if escaped else "Warning. Interdiction detected.", voice_key="interdiction",
+            )
         elif ev == "JetConeBoost":
-            self._push_live_toast("FSD SUPERCHARGED", "Jet-cone boost acquired", "success", 10)
+            self._push_live_toast(
+                "FSD SUPERCHARGED", "Jet-cone boost acquired", "success", 10,
+                "Frame shift drive supercharged.", voice_category="navigation", voice_key="fsd-supercharged",
+            )
         elif ev == "JetConeDamage":
-            self._push_live_toast("JET CONE DAMAGE", "Exit the cone immediately", "fail", 18)
+            self._push_live_toast("JET CONE DAMAGE", "Exit the cone immediately", "fail", 18,
+                                  "Jet cone damage. Exit immediately.", voice_key="jet-cone-damage")
         elif ev in ("FighterDestroyed", "SRVDestroyed"):
             self._push_live_toast("FIGHTER DESTROYED" if ev == "FighterDestroyed" else "SRV DESTROYED", "", "fail", 15)
         elif ev == "Died":
             killer = raw.get("KillerName_Localised") or raw.get("KillerName") or "Commander lost"
-            self._push_live_toast("DESTRUCTION", killer, "fail", 20)
+            self._push_live_toast("DESTRUCTION", killer, "fail", 20,
+                                  "Ship destroyed.", voice_key="ship-destroyed")
         elif ev in ("MissionAccepted", "MissionCompleted", "MissionFailed", "MissionAbandoned"):
             name = raw.get("LocalisedName") or raw.get("Name_Localised") or raw.get("Name") or "Mission"
             titles = {"MissionAccepted": "MISSION ACCEPTED", "MissionCompleted": "MISSION COMPLETE", "MissionFailed": "MISSION FAILED", "MissionAbandoned": "MISSION ABANDONED"}
@@ -2272,11 +2309,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             sample = d.get("sample_idx")
             max_samples = d.get("max_samples") or 3
             detail = "Analysis complete" if complete else (f"Sample {sample}/{max_samples}" if sample else "Sample registered")
-            self._push_live_toast("BIO COMPLETE" if complete else "BIO SAMPLE", f"{species}: {detail}", "success" if complete else "info", 12)
+            self._push_live_toast(
+                "BIO COMPLETE" if complete else "BIO SAMPLE", f"{species}: {detail}",
+                "success" if complete else "info", 12,
+                f"Biological analysis complete. {species}." if complete else None,
+                voice_category="exploration", voice_key=f"bio-complete:{species}",
+            )
         elif ev == "CodexEntry":
             name = d.get("name") or raw.get("Name_Localised") or raw.get("Name") or "New Codex entry"
             category = d.get("category") or raw.get("Category_Localised") or "Discovery"
-            self._push_live_toast("CODEX DISCOVERY", f"{category}: {name}", "success", 15)
+            self._push_live_toast("CODEX DISCOVERY", f"{category}: {name}", "success", 15,
+                                  f"Codex discovery. {name}.", voice_category="exploration",
+                                  voice_key=f"codex:{name}")
         elif ev in ("CommitCrime", "Bounty"):
             detail = raw.get("CrimeType_Localised") or raw.get("CrimeType") or raw.get("Victim") or raw.get("Target_Localised") or raw.get("Target") or "Legal status changed"
             self._push_live_toast("CRIME REPORTED" if ev == "CommitCrime" else "BOUNTY AWARDED", str(detail), "warn", 15)
@@ -2533,6 +2577,24 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 and traffic_before_reset
             )
             self.current_sys = incoming_sys
+            if is_jump and not startup_replay and outgoing_sys and self.route_list:
+                route_index = next(
+                    (idx for idx, name in enumerate(self.route_list)
+                     if str(name).casefold() == str(incoming_sys).casefold()),
+                    -1,
+                )
+                if route_index == len(self.route_list) - 1:
+                    self._speak(
+                        f"Route destination reached. {incoming_sys}.", category="navigation",
+                        cooldown_s=300, key=f"route-arrival:{incoming_sys}",
+                    )
+                elif route_index >= 0:
+                    next_system = self.route_list[route_index + 1]
+                    self._speak(
+                        f"Waypoint {route_index + 1} of {len(self.route_list)} reached. Next, {next_system}.",
+                        category="navigation", cooldown_s=300,
+                        key=f"route-waypoint:{incoming_sys}",
+                    )
             if outgoing_sys:
                 self.previous_sys = outgoing_sys
                 self.previous_coords = prev_coords
@@ -2546,6 +2608,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 next_star_class = raw.get("StarClass") if isinstance(raw, dict) else None
             if next_star_class:
                 self.star_class = next_star_class
+
+            if is_jump and isinstance(raw, dict):
+                try:
+                    fuel_used = float(raw.get("FuelUsed") or 0)
+                    if fuel_used > 0:
+                        self._fuel_used_samples.append(fuel_used)
+                except (TypeError, ValueError):
+                    pass
+                try:
+                    fuel_level = raw.get("FuelLevel")
+                    if fuel_level is not None:
+                        self.current_fuel_main = float(fuel_level)
+                except (TypeError, ValueError):
+                    pass
 
             if is_jump and prev_coords and self.current_coords:
                 try:
@@ -3034,6 +3110,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self._queue_edsm_upload(raw, startup_replay=startup_replay)
                     if is_system_star_scan and d.get("was_discovered") is False:
                         self.system_undiscovered = True
+                        if not startup_replay:
+                            self._speak(
+                                f"First discovery. {self.current_sys} is undiscovered.",
+                                category="exploration", cooldown_s=600,
+                                key=f"first-discovery:{self.current_sys}",
+                            )
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
@@ -3188,12 +3270,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         except Exception:
             self._companion_refresh_job = None
 
-    def _toast_on_main(self, title, message, severity="info", duration=12):
-        if not self.toast_hud:
-            return
-        self.root.after(0, lambda: self.toast_hud.push(
-            title, message, severity=severity, duration_s=duration,
-        ))
+    def _toast_on_main(self, title, message, severity="info", duration=12,
+                       voice_text=None, voice_category="safety", voice_key=None):
+        if self.toast_hud:
+            self.root.after(0, lambda: self.toast_hud.push(
+                title, message, severity=severity, duration_s=duration,
+            ))
+        if voice_text:
+            self._speak(voice_text, category=voice_category, key=voice_key)
 
     def _toggle_galaxy_faction_watch(self, faction_name):
         enabled = companion_features.toggle_faction_watch(self.companion_state, faction_name)
@@ -3284,7 +3368,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                               if row["faction"] == victim), None)
                 changed = True
                 if before and after and not before["complete"] and after["complete"]:
-                    self._toast_on_main("STACK COMPLETE", f"All massacre missions against {victim} are ready", "success", 15)
+                    self._toast_on_main(
+                        "STACK COMPLETE", f"All massacre missions against {victim} are ready", "success", 15,
+                        f"Massacre stack complete. All missions against {victim} are ready.",
+                        "objectives", f"massacre-complete:{victim}",
+                    )
 
         elif ev in ("Powerplay", "PowerplayJoin", "PowerplayDefect", "PowerplayLeave",
                     "PowerplayRank", "PowerplayMerits"):
@@ -3506,7 +3594,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if (sample and sample.get("clear") and not self._sample_clear_announced
                 and self.config.get("sample_clear_notifications_enabled", True)):
             self._sample_clear_announced = True
-            self._toast_on_main("CLEAR TO SAMPLE", f"{sample['species']} · {sample.get('min_distance_m', 0):,} m", "success", 10)
+            self._toast_on_main(
+                "CLEAR TO SAMPLE", f"{sample['species']} · {sample.get('min_distance_m', 0):,} m", "success", 10,
+                f"Clear to sample {sample['species']}.", "exploration", "clear-to-sample",
+            )
         if self.survey_status_hud:
             self.root.after(0, lambda s=sample: self.survey_status_hud.update(
                 self.current_sys, self.scanned, self.total, self.scan_items, self.body_signals, sampling=s,
@@ -3526,9 +3617,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         level = 2 if credits < rebuy else (1 if credits < rebuy * 2 else 0)
         if notify and level > self._rebuy_warning_level:
             if level == 2:
-                self._toast_on_main("REBUY NOT COVERED", "Current balance cannot cover ship insurance", "fail", 18)
+                self._toast_on_main(
+                    "REBUY NOT COVERED", "Current balance cannot cover ship insurance", "fail", 18,
+                    "Warning. Current balance cannot cover ship insurance.", voice_key="rebuy-uncovered",
+                )
             else:
-                self._toast_on_main("LOW REBUY COVER", "Current balance is below two rebuys", "warn", 15)
+                self._toast_on_main(
+                    "LOW REBUY COVER", "Current balance is below two rebuys", "warn", 15,
+                    "Warning. Current balance is below two rebuys.", voice_key="rebuy-low",
+                )
         self._rebuy_warning_level = level
 
     def _check_data_risk(self, notify=True):
@@ -3542,8 +3639,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         ratio = total / rebuy
         level = 3 if ratio >= 50 else 2 if ratio >= 25 else 1 if ratio >= 10 else 0
         if notify and level > self._data_risk_level:
-            self._toast_on_main("DATA AT RISK", f"Approximately {total / 1_000_000:.0f}M CR unsold · {ratio:.0f}× rebuy",
-                                "fail" if level == 3 else "warn", 18)
+            self._toast_on_main(
+                "DATA AT RISK", f"Approximately {total / 1_000_000:.0f}M CR unsold · {ratio:.0f}× rebuy",
+                "fail" if level == 3 else "warn", 18,
+                "Warning. Valuable exploration data is at risk.", voice_key=f"data-risk-{level}",
+            )
         self._data_risk_level = level
 
     # ── Engineer material helpers ─────────────────────────────────────────────
@@ -3710,6 +3810,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         severity="info",
                         duration_s=12,
                     ))
+                self._speak(
+                    f"Materials complete for {blueprint}, grade {grade}.",
+                    category="objectives", cooldown_s=300,
+                    key=f"engineering-ready:{blueprint}:{grade}",
+                )
 
     def process_batch(self, events):
         self.batch_mode = True

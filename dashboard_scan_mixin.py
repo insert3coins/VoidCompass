@@ -3,6 +3,8 @@ import time
 import threading
 
 import bio_values
+import companion_features
+import flight_callouts
 from config import COLOR_ACCENT, COLOR_TEXT
 
 
@@ -104,12 +106,14 @@ class DashboardScanMixin:
             self.update_hud()
         if not self.batch_mode:
             self._check_low_fuel()
+            self._check_route_fuel_callout()
             self._check_status_toasts(data, flags, flags2)
         self._perf_spike("_apply_status_update", t0, threshold_ms=20.0)
 
     def _check_status_toasts(self, data, flags, flags2):
         toast = getattr(self, "toast_hud", None)
-        if not toast:
+        voice_enabled = bool(self.config.get("voice_callouts_enabled", False))
+        if not toast and not voice_enabled:
             return
         active = getattr(self, "_toast_status_alerts", set())
 
@@ -121,7 +125,11 @@ class DashboardScanMixin:
         for key, enabled, title, message, severity in checks:
             if enabled and key not in active:
                 active.add(key)
-                toast.push(title, message, severity=severity, duration_s=12)
+                if toast:
+                    toast.push(title, message, severity=severity, duration_s=12)
+                if key in ("overheat", "interdicted"):
+                    spoken = "Warning. Ship overheating." if key == "overheat" else "Warning. Interdiction detected."
+                    self._speak(spoken, key="ship-overheat" if key == "overheat" else "interdiction")
             elif not enabled:
                 active.discard(key)
 
@@ -140,7 +148,10 @@ class DashboardScanMixin:
                 if state_key and state_key not in active:
                     active.difference_update(old_keys)
                     active.add(state_key)
-                    toast.push(f"LOW {label}" if key == "oxygen" else f"LOW {label}", f"{pct:.0f}% remaining", severity="fail" if pct <= 25 else "warn", duration_s=15)
+                    if toast:
+                        toast.push(f"LOW {label}" if key == "oxygen" else f"LOW {label}", f"{pct:.0f}% remaining", severity="fail" if pct <= 25 else "warn", duration_s=15)
+                    if pct <= 25:
+                        self._speak(f"Warning. {label.lower()} at {pct:.0f} percent.", key=state_key)
                 elif not state_key and pct > 55:
                     active.difference_update(old_keys)
 
@@ -151,14 +162,17 @@ class DashboardScanMixin:
             temp_danger = temperature is not None and (temperature < 180 or temperature > 330)
             if temp_danger and "suit_temperature" not in active:
                 active.add("suit_temperature")
-                toast.push("SUIT TEMPERATURE", f"{temperature:.0f} K — environmental hazard", severity="warn", duration_s=15)
+                if toast:
+                    toast.push("SUIT TEMPERATURE", f"{temperature:.0f} K — environmental hazard", severity="warn", duration_s=15)
+                self._speak("Warning. Hazardous suit temperature.", key="suit-temperature")
             elif temperature is not None and 190 <= temperature <= 320:
                 active.discard("suit_temperature")
 
         legal = data.get("LegalState")
         previous = getattr(self, "_toast_legal_state", None)
         if previous is not None and legal and legal != previous and legal not in ("Clean", "Allied"):
-            toast.push("LEGAL STATUS", str(legal).replace("PassengerWanted", "Passenger Wanted"), severity="warn", duration_s=15)
+            if toast:
+                toast.push("LEGAL STATUS", str(legal).replace("PassengerWanted", "Passenger Wanted"), severity="warn", duration_s=15)
         if legal:
             self._toast_legal_state = legal
         self._toast_status_alerts = active
@@ -174,16 +188,59 @@ class DashboardScanMixin:
         if self.current_docked or self.current_on_foot or self.current_in_srv or self.current_in_fighter:
             return
         toast_hud = getattr(self, "toast_hud", None)
-        if not toast_hud:
+        if not toast_hud and not self.config.get("voice_callouts_enabled", False):
             return
         pct = main / cap
         threshold = float(self.config.get("low_fuel_threshold_pct", 0.25) or 0.25)
         if pct < threshold:
             if not self._low_fuel_warned:
                 self._low_fuel_warned = True
-                toast_hud.push("LOW FUEL", f"Main tank at {int(pct*100)}%  ({main:.1f}/{cap:.1f}T)", severity="warn", duration_s=15)
+                if toast_hud:
+                    toast_hud.push("LOW FUEL", f"Main tank at {int(pct*100)}%  ({main:.1f}/{cap:.1f}T)", severity="warn", duration_s=15)
         elif pct > threshold + 0.05:
             self._low_fuel_warned = False
+
+    def _check_route_fuel_callout(self):
+        """Speak only when the most important route/fuel situation changes."""
+        if (not self.config.get("voice_callouts_enabled", False)
+                or not self.config.get("voice_safety_enabled", True)):
+            return
+        if getattr(self, "is_first_load", True):
+            return
+        ahead = flight_callouts.route_ahead(
+            getattr(self, "nav_route_entries", None),
+            getattr(self, "current_sys", None),
+            getattr(self, "star_class", None),
+        )
+        samples = list(getattr(self, "_fuel_used_samples", ()) or ())
+        fuel_per_jump = max(samples) if samples else None
+        raw_counts = {
+            symbol: int(item.get("count", 0) if isinstance(item, dict) else item or 0)
+            for symbol, item in ((getattr(self, "engineer_materials", None) or {}).get("raw") or {}).items()
+        }
+        synthesis = companion_features.fsd_injections(raw_counts)
+        advisory = flight_callouts.fuel_advisory(
+            ahead,
+            getattr(self, "current_fuel_main", None),
+            getattr(self, "fuel_capacity_main", None),
+            fuel_per_jump,
+            synthesis,
+        )
+        signature = (
+            f"{advisory['code']}|{getattr(self, 'current_sys', '')}"
+            if advisory else None
+        )
+        if signature == getattr(self, "_fuel_advisory_signature", None):
+            return
+        if advisory:
+            spoken = self._speak(
+                advisory["say"], category="safety", cooldown_s=300,
+                key=f"fuel-route:{signature}",
+            )
+            if spoken:
+                self._fuel_advisory_signature = signature
+        else:
+            self._fuel_advisory_signature = None
 
     def update_scan_hud(self):
         pass  # ScanHUD overlay removed — scan data now lives on the main dashboard
