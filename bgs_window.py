@@ -9,7 +9,7 @@ and active/pending BGS states.
 import json
 import tkinter as tk
 from datetime import datetime
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from typing import Callable
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
@@ -56,6 +56,9 @@ class BGSWindow(ThemedWindowMixin):
         config: dict,
         load_systems_cb:  Callable[[], list],
         load_factions_cb: Callable[[str], list],
+        delete_system_cb: Callable[[str], bool] | None = None,
+        purge_cb: Callable[[], bool] | None = None,
+        purge_empty_cb: Callable[[], int | None] | None = None,
         embedded=False,
     ):
         """
@@ -66,6 +69,9 @@ class BGSWindow(ThemedWindowMixin):
         self.config            = config
         self._load_systems     = load_systems_cb
         self._load_factions    = load_factions_cb
+        self._delete_system    = delete_system_cb
+        self._purge_bgs        = purge_cb
+        self._purge_empty_bgs  = purge_empty_cb
         self._selected_system: str | None = None
         self._all_systems: list = []
         self._system_iids: dict[str, str] = {}
@@ -192,6 +198,22 @@ class BGSWindow(ThemedWindowMixin):
         self._system_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         list_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
+        actions = tk.Frame(left, bg=self.UI_PANEL)
+        actions.pack(fill=tk.X, padx=4, pady=(5, 5))
+        self._delete_btn = self._action_button(
+            actions, "DELETE", self._delete_selected, danger=True, padx=7, pady=4
+        )
+        self._delete_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 2))
+        self._purge_empty_btn = self._action_button(
+            actions, "PURGE EMPTY", self._purge_empty, danger=True, padx=7, pady=4
+        )
+        self._purge_empty_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(2, 0))
+
+        self._purge_btn = self._action_button(
+            actions, "PURGE ALL", self._purge_all, danger=True, padx=7, pady=4
+        )
+        self._purge_btn.pack(fill=tk.X, pady=(4, 0))
+
         # ── Right: faction detail ─────────────────────────────────────────────
         right = tk.Frame(main, bg=self.UI_PANEL)
         right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -316,6 +338,7 @@ class BGSWindow(ThemedWindowMixin):
         total = len(systems)
         self._sys_count_lbl.config(
             text=f"{total} system{'s' if total != 1 else ''}")
+        self._update_action_states()
 
     def _on_tree_select(self, _event=None):
         selection = self._system_tree.selection()
@@ -340,6 +363,106 @@ class BGSWindow(ThemedWindowMixin):
             self._system_tree.selection_set(iid)
             self._system_tree.see(iid)
         self._render_factions(sys_name)
+        self._update_action_states()
+
+    def _update_action_states(self):
+        can_delete = bool(
+            self._delete_system
+            and self._selected_system
+            and any(row[0] == self._selected_system for row in self._all_systems)
+        )
+        can_purge_empty = bool(
+            self._purge_empty_bgs
+            and any(len(row) > 2 and not row[2] for row in self._all_systems)
+        )
+        can_purge = bool(self._purge_bgs and self._all_systems)
+        self._delete_btn.config(state=tk.NORMAL if can_delete else tk.DISABLED)
+        self._purge_empty_btn.config(state=tk.NORMAL if can_purge_empty else tk.DISABLED)
+        self._purge_btn.config(state=tk.NORMAL if can_purge else tk.DISABLED)
+
+    def _clear_detail(self):
+        self._detail_sys_lbl.config(text="Select a system →")
+        self._detail_date_lbl.config(text="")
+        self._detail.config(state=tk.NORMAL)
+        self._detail.delete("1.0", tk.END)
+        self._detail.insert(tk.END, "  No BGS system selected.\n", "muted")
+        self._detail.config(state=tk.DISABLED)
+
+    def _reload_after_delete(self):
+        self._selected_system = None
+        self._all_systems = self._load_systems()
+        self._reload_list()
+        if self._all_systems:
+            self._select_system(self._all_systems[0][0], reload_list=False)
+        else:
+            self._clear_detail()
+            self._update_action_states()
+
+    def _delete_selected(self):
+        system_name = self._selected_system
+        if not system_name or not self._delete_system:
+            return
+        if not messagebox.askyesno(
+            "Delete BGS System",
+            f"Remove {system_name} from BGS and delete its faction snapshots?\n\n"
+            "Exploration history is retained. The system will return to BGS if you revisit it.",
+            parent=self.win,
+        ):
+            return
+        if not self._delete_system(system_name):
+            messagebox.showwarning(
+                "BGS Database Busy",
+                "The BGS database is busy. Nothing was deleted; please try again.",
+                parent=self.win,
+            )
+            return
+        self._reload_after_delete()
+
+    def _purge_empty(self):
+        if not self._purge_empty_bgs:
+            return
+        empty_count = sum(
+            1 for row in self._all_systems if len(row) > 2 and not row[2]
+        )
+        if not empty_count:
+            return
+        if not messagebox.askyesno(
+            "Purge Empty BGS Systems",
+            f"Remove {empty_count} system{'s' if empty_count != 1 else ''} with no faction snapshots?\n\n"
+            "Populated BGS systems and Exploration History are retained. Removed systems return if revisited.",
+            parent=self.win,
+        ):
+            return
+        removed = self._purge_empty_bgs()
+        if removed is None:
+            messagebox.showwarning(
+                "BGS Database Busy",
+                "The BGS database is busy. Nothing was purged; please try again.",
+                parent=self.win,
+            )
+            return
+        self._reload_after_delete()
+
+    def _purge_all(self):
+        if not self._all_systems or not self._purge_bgs:
+            return
+        count = len(self._all_systems)
+        if not messagebox.askyesno(
+            "Purge BGS History",
+            f"Remove all {count} systems from BGS and delete every faction snapshot?\n\n"
+            "Exploration history is retained. Revisited systems will be added to BGS again.\n\n"
+            "This cannot be undone.",
+            parent=self.win,
+        ):
+            return
+        if not self._purge_bgs():
+            messagebox.showwarning(
+                "BGS Database Busy",
+                "The BGS database is busy. Nothing was purged; please try again.",
+                parent=self.win,
+            )
+            return
+        self._reload_after_delete()
 
     def _render_factions(self, sys_name: str):
         snapshots = self._load_factions(sys_name)
