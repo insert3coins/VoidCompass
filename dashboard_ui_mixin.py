@@ -145,7 +145,9 @@ class DashboardUIMixin(ThemedWindowMixin):
             indicator = tk.Frame(row, bg=THEME.accent if active else row.cget("bg"), width=3)
             indicator.pack(side=tk.LEFT, fill=tk.Y)
             btn = tk.Button(
-                row, text=f"{icon}   {label}", command=command,
+                row,
+                text=f"{icon}   {label}",
+                command=lambda name=label, callback=command: self._run_nav_command(name, callback),
                 bg=row.cget("bg"), fg=THEME.accent if active else THEME.muted,
                 activebackground=THEME.panel_alt, activeforeground=THEME.accent,
                 font=("Bahnschrift SemiCondensed", 9, "bold"), anchor="w",
@@ -163,7 +165,11 @@ class DashboardUIMixin(ThemedWindowMixin):
         settings_row.pack_propagate(False)
         self.settings_nav_indicator = tk.Frame(settings_row, bg=THEME.header, width=3)
         self.settings_nav_indicator.pack(side=tk.LEFT, fill=tk.Y)
-        self.settings_nav_btn = self._action_button(settings_row, "≡   SETTINGS", self.open_settings)
+        self.settings_nav_btn = self._action_button(
+            settings_row,
+            "≡   SETTINGS",
+            lambda: self._run_nav_command("SETTINGS", self.open_settings),
+        )
         self.settings_nav_btn.configure(anchor="w")
         self.settings_nav_btn.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         utility_row = tk.Frame(utilities, bg=THEME.header)
@@ -664,6 +670,19 @@ class DashboardUIMixin(ThemedWindowMixin):
         )
         self.log_box.pack(fill=tk.X, padx=10, pady=10)
 
+    def _run_nav_command(self, label, command):
+        """Run a page action and add its full open/switch cost to runtime tracing."""
+        started = time.perf_counter()
+        try:
+            return command()
+        finally:
+            recorder = getattr(self, "_trace_record_ms", None)
+            if callable(recorder):
+                try:
+                    recorder(f"page_open:{str(label).lower()}", (time.perf_counter() - started) * 1000.0)
+                except Exception:
+                    pass
+
     def _show_embedded_page(self, label, page):
         """Display one native application page in the persistent workspace."""
         for child in self.dashboard_host.winfo_children():
@@ -691,7 +710,9 @@ class DashboardUIMixin(ThemedWindowMixin):
         self._show_embedded_page("DASHBOARD", self.dashboard_page)
         if hasattr(self, "summary_session"):
             self.summary_session.config(text=self._get_session_elapsed_text())
-        self._flush_dashboard_stream_views(force=True)
+        # Hidden pages already mark these views dirty as new events arrive.
+        # Avoid rebuilding both timelines on every unchanged dashboard return.
+        self._flush_dashboard_stream_views()
 
     def _build_live_event_timeline(self, parent):
         feed_wrap = tk.Frame(parent, bg=self.UI_PANEL)
@@ -2185,13 +2206,13 @@ class DashboardUIMixin(ThemedWindowMixin):
                     gov = info.get("government", "None")
                     alg = info.get("allegiance", "Independent")
                     
-                    info_text = f"⭐ {p_star}  🏛️ {gov}  🚩 {alg}"
+                    info_text = f"STAR {p_star}  //  GOV {gov}  //  ALLEGIANCE {alg}"
             
             if note:
                 if info_text == "Fetching data..." or info_text == "EDSM Data Unavailable":
-                     info_text = f"📝 {note}"
+                     info_text = f"NOTE // {note}"
                 else:
-                     info_text = f"📝 {note}  {info_text}"
+                     info_text = f"NOTE // {note}  //  {info_text}"
 
             self.wp_name_lbl.config(text=name)
             self.wp_dist_lbl.config(text=dist_str)

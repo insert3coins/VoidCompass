@@ -11,9 +11,18 @@ import os
 import time
 import tkinter as tk
 from datetime import datetime
+from tkinter import ttk
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
-from ui_theme import THEME, ThemedWindowMixin, apply_window, button, scrollbar, window_surface
+from ui_theme import (
+    THEME,
+    ThemedWindowMixin,
+    apply_window,
+    button,
+    configure_ttk,
+    scrollbar,
+    window_surface,
+)
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -200,6 +209,8 @@ class EngineerWindow(ThemedWindowMixin):
     # ── UI construction ───────────────────────────────────────────────────────
 
     def _build_ui(self):
+        configure_ttk(self.win, "Engineer")
+
         # Header
         hdr = tk.Frame(self.win, bg="#0c1014", height=46)
         hdr.pack(fill=tk.X)
@@ -223,26 +234,44 @@ class EngineerWindow(ThemedWindowMixin):
             self._tab_btns[key] = btn
         self._style_tabs()
 
-        # Scrollable list
+        # Reusable native table. The old canvas rebuilt several widgets per
+        # material on every tab click, making page switches visibly stall.
         body = tk.Frame(self.win, bg=self.UI_BG)
         body.pack(fill=tk.BOTH, expand=True, padx=8, pady=(6, 0))
 
-        page_scroll = scrollbar(body, orient=tk.VERTICAL)
-        self._canvas = tk.Canvas(body, bg=self.UI_PANEL,
-                                  highlightthickness=0,
-                                  yscrollcommand=page_scroll.set)
-        page_scroll.config(command=self._canvas.yview)
-        self._canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        page_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        columns = ("grade", "material", "stock", "capacity")
+        self._material_tree = ttk.Treeview(
+            body,
+            columns=columns,
+            show="headings",
+            style="Engineer.Treeview",
+            selectmode="none",
+        )
+        headings = {
+            "grade": ("GRADE", 55, tk.CENTER, False),
+            "material": ("MATERIAL", 220, tk.W, True),
+            "stock": ("COUNT / CAP", 100, tk.E, False),
+            "capacity": ("CAPACITY", 150, tk.W, False),
+        }
+        for column, (label, width, anchor, stretch) in headings.items():
+            self._material_tree.heading(column, text=label)
+            self._material_tree.column(
+                column,
+                width=width,
+                minwidth=55,
+                anchor=anchor,
+                stretch=stretch,
+            )
+        self._material_tree.tag_configure("grade_header", foreground=self.UI_DIM)
+        self._material_tree.tag_configure("near_cap", foreground="#e05050")
+        self._material_tree.tag_configure("mid_cap", foreground=COLOR_ACCENT)
+        self._material_tree.tag_configure("low_cap", foreground=COLOR_TEXT)
+        self._material_tree.tag_configure("empty", foreground=self.UI_MUTED)
 
-        self._inner = tk.Frame(self._canvas, bg=self.UI_PANEL)
-        self._inner_id = self._canvas.create_window((0, 0), window=self._inner, anchor="nw")
-        self._inner.bind("<Configure>",
-                         lambda e: self._canvas.configure(scrollregion=self._canvas.bbox("all")))
-        self._canvas.bind("<Configure>",
-                          lambda e: self._canvas.itemconfig(self._inner_id, width=e.width))
-        self._canvas.bind("<MouseWheel>",
-                          lambda e: self._canvas.yview_scroll(-1 * (e.delta // 120), "units"))
+        page_scroll = scrollbar(body, orient=tk.VERTICAL, command=self._material_tree.yview)
+        self._material_tree.configure(yscrollcommand=page_scroll.set)
+        self._material_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        page_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
         # Footer
         foot = tk.Frame(self.win, bg="#0c1014", height=32)
@@ -277,8 +306,9 @@ class EngineerWindow(ThemedWindowMixin):
     # ── Rendering ─────────────────────────────────────────────────────────────
 
     def _redraw(self):
-        for w in self._inner.winfo_children():
-            w.destroy()
+        rows = self._material_tree.get_children()
+        if rows:
+            self._material_tree.delete(*rows)
 
         cat      = self._active_tab
         cat_data = self.materials.get(cat, {})
@@ -291,16 +321,12 @@ class EngineerWindow(ThemedWindowMixin):
                 items_with_count.append((key, item, count))
 
         if not items_with_count:
-            tk.Label(
-                self._inner,
-                text=(
-                    f"No {cat.upper()} materials on record.\n\n"
-                    "Log into Elite Dangerous — the app will\n"
-                    "sync your inventory from the journal."
-                ),
-                font=("Consolas", 9), fg=self.UI_MUTED, bg=self.UI_PANEL,
-                justify=tk.LEFT,
-            ).pack(anchor="w", padx=16, pady=16)
+            self._material_tree.insert(
+                "",
+                tk.END,
+                values=("", f"No {cat.upper()} materials on record", "", "Log into Elite Dangerous to sync"),
+                tags=("empty",),
+            )
             self._update_footer(cat, cat_data)
             self._update_sync_label()
             return
@@ -311,68 +337,38 @@ class EngineerWindow(ThemedWindowMixin):
             g = _GRADE.get(key, 3)
             by_grade.setdefault(g, []).append((key, item, count, g))
 
-        # Column header row
-        hdr_row = tk.Frame(self._inner, bg="#0b0e12")
-        hdr_row.pack(fill=tk.X, padx=8, pady=(4, 0))
-        tk.Label(hdr_row, text=" G ", font=("Consolas", 8, "bold"),
-                 fg=self.UI_DIM, bg="#0b0e12", width=3).pack(side=tk.LEFT)
-        tk.Label(hdr_row, text="MATERIAL", font=("Consolas", 8, "bold"),
-                 fg=COLOR_ORANGE, bg="#0b0e12", anchor="w").pack(side=tk.LEFT, padx=(4, 0))
-        tk.Label(hdr_row, text="COUNT / CAP", font=("Consolas", 8, "bold"),
-                 fg=COLOR_ORANGE, bg="#0b0e12").pack(side=tk.RIGHT, padx=12)
-        tk.Frame(self._inner, bg="#1a2228", height=1).pack(fill=tk.X, padx=8, pady=(2, 0))
-
         for grade in sorted(by_grade.keys()):
             cap = _GRADE_CAP.get(grade, 200)
             rows = sorted(by_grade[grade], key=lambda x: (-(x[2]), (
                 x[1].get("name") if isinstance(x[1], dict) else x[0]).lower()))
 
-            # Grade section separator
-            g_hdr = tk.Frame(self._inner, bg="#0f1318")
-            g_hdr.pack(fill=tk.X, padx=8, pady=(6, 0))
-            tk.Label(g_hdr, text=f"  G{grade}  —  individual cap: {cap:,}",
-                     font=("Consolas", 8, "bold"), fg=self.UI_DIM, bg="#0f1318",
-                     anchor="w").pack(side=tk.LEFT, padx=4, pady=2)
+            self._material_tree.insert(
+                "",
+                tk.END,
+                values=(f"G{grade}", f"GRADE {grade}  —  individual cap {cap:,}", "", ""),
+                tags=("grade_header",),
+            )
 
             for key, item, count, g in rows:
                 name  = (item.get("name") if isinstance(item, dict) else None) or key.replace("_", " ").title()
                 fill  = min(1.0, count / cap)
 
                 if fill >= 0.85:
-                    bar_col = "#e05050"    # near cap — warn red
+                    row_tag = "near_cap"
                 elif fill >= 0.50:
-                    bar_col = COLOR_ACCENT # half full — cyan
+                    row_tag = "mid_cap"
                 else:
-                    bar_col = "#3a7d9e"    # low — dim blue
+                    row_tag = "low_cap"
 
-                row_frame = tk.Frame(self._inner, bg=self.UI_PANEL)
-                row_frame.pack(fill=tk.X, padx=8, pady=(1, 0))
-
-                # Grade badge
-                tk.Label(row_frame, text=f" G{g}",
-                         font=("Consolas", 8), fg=self.UI_DIM,
-                         bg=self.UI_PANEL, width=3, anchor="w").pack(side=tk.LEFT)
-
-                # Material name (fixed-width, truncated)
-                name_disp = name if len(name) <= 34 else name[:33] + "…"
-                tk.Label(row_frame, text=name_disp,
-                         font=("Consolas", 9), fg=COLOR_TEXT,
-                         bg=self.UI_PANEL, anchor="w", width=34,
-                         ).pack(side=tk.LEFT, padx=(4, 8))
-
-                # Count / cap text (right-aligned)
-                count_txt = f"{count:>4} / {cap}"
-                tk.Label(row_frame, text=count_txt,
-                         font=("Consolas", 9, "bold"),
-                         fg=bar_col if fill >= 0.85 else COLOR_TEXT,
-                         bg=self.UI_PANEL).pack(side=tk.RIGHT, padx=(0, 12))
-
-                # Fill bar
-                bar_bg = tk.Frame(row_frame, bg="#1a2430", height=8, width=110)
-                bar_bg.pack(side=tk.RIGHT, pady=5, padx=(0, 8))
-                bar_bg.pack_propagate(False)
-                tk.Frame(bar_bg, bg=bar_col, height=8).place(
-                    x=0, y=0, relheight=1.0, relwidth=fill)
+                segments = 10
+                filled = max(0, min(segments, round(fill * segments)))
+                capacity = "█" * filled + "░" * (segments - filled) + f"  {fill * 100:>3.0f}%"
+                self._material_tree.insert(
+                    "",
+                    tk.END,
+                    values=(f"G{g}", name, f"{count:,} / {cap:,}", capacity),
+                    tags=(row_tag,),
+                )
 
         self._update_footer(cat, cat_data)
         self._update_sync_label()
