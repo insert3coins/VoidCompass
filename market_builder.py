@@ -38,7 +38,7 @@ class MarketBuilderApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Void Compass Market Builder")
-        self.root.geometry("620x360")
+        self.root.geometry("760x430")
         self.root.configure(bg=COLOR_BG)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.poll_after = None
@@ -58,14 +58,14 @@ class MarketBuilderApp:
         header.pack_propagate(False)
         tk.Label(
             header,
-            text="MARKET BUILDER",
+            text="MARKET DATABASE",
             fg=COLOR_ACCENT,
             bg="#0c1014",
             font=("Segoe UI", 16, "bold"),
         ).pack(anchor="w", padx=14, pady=(10, 0))
         tk.Label(
             header,
-            text="Spansh nightly dump -> local trade database",
+            text="Full Spansh baseline once · EDDN and Market.json updates thereafter",
             fg=self.UI_MUTED,
             bg="#0c1014",
             font=("Consolas", 8),
@@ -91,7 +91,7 @@ class MarketBuilderApp:
 
         row = tk.Frame(panel, bg=self.UI_PANEL)
         row.pack(fill=tk.X, padx=12, pady=(0, 12))
-        self.build_btn = self._button(row, "Build Database", self.start_build, accent=True)
+        self.build_btn = self._button(row, "FIRST FULL BUILD", self.start_build, accent=True)
         self.build_btn.pack(side=tk.LEFT)
         tk.Checkbutton(row, text="Low impact", variable=self.low_impact, bg=self.UI_PANEL, fg=COLOR_TEXT, selectcolor=self.UI_PANEL_2, activebackground=self.UI_PANEL).pack(side=tk.LEFT, padx=10)
         tk.Checkbutton(row, text="Include carriers", variable=self.include_carriers, bg=self.UI_PANEL, fg=COLOR_TEXT, selectcolor=self.UI_PANEL_2, activebackground=self.UI_PANEL).pack(side=tk.LEFT, padx=10)
@@ -114,10 +114,24 @@ class MarketBuilderApp:
         )
 
     def start_build(self):
+        existing = bool(self._db_info.get("ready"))
+        if existing:
+            prompt = (
+                "Download the full Spansh populated-galaxy snapshot and rebase the local market database?\n\n"
+                "This is an occasional maintenance operation of roughly 4+ GB, not the normal update path. "
+                "EDDN and visited Market.json files already update prices incrementally while VoidCompass runs.\n\n"
+                "Any local market rows newer than the dump will be preserved. The existing database remains "
+                "available until the replacement is ready."
+            )
+        else:
+            prompt = (
+                "Download the full Spansh populated-galaxy snapshot and create the first local market database?\n\n"
+                "This initial download is roughly 4+ GB. Afterwards VoidCompass maintains prices incrementally "
+                "from EDDN and visited Market.json files; another full download is only occasional maintenance."
+            )
         if not messagebox.askyesno(
-            "Build Market Database",
-            "Download the Spansh populated galaxy dump and rebuild the local market database?\n\n"
-            "The existing market database remains available until the new one is ready.",
+            "Full Spansh Market Build",
+            prompt,
             parent=self.root,
         ):
             return
@@ -140,7 +154,10 @@ class MarketBuilderApp:
         if phase in ("starting", "downloading", "importing", "indexing"):
             self.build_btn.configure(state=tk.DISABLED)
         else:
-            self.build_btn.configure(state=tk.NORMAL, text="Rebuild Database" if info.get("ready") else "Build Database")
+            self.build_btn.configure(
+                state=tk.NORMAL,
+                text="FULL SPANSH REBUILD" if info.get("ready") else "FIRST FULL BUILD",
+            )
 
         if phase == "downloading":
             done = progress.get("downloaded_mb") or 0
@@ -193,7 +210,14 @@ class MarketBuilderApp:
                 f"{timing_text}"
                 f"Current DB: {info.get('stations', 0):,} stations | {info.get('commodity_rows', 0):,} price rows | {info.get('db_size_mb', 0)} MB"
                 f"{' (refreshing)' if self._db_info_loading else ''}\n"
-                f"Seeded: {info.get('seeded_at') or 'not yet'}\n"
+                f"Full baseline: {info.get('seeded_at') or 'not yet'}\n"
+                f"Latest market: {info.get('latest_market_updated_at') or 'not yet'}\n"
+                f"Fresh <24h: {info.get('fresh_markets_1d', 0):,} | "
+                f"Stale >7d: {info.get('stale_markets_7d', 0):,} | "
+                f"Stale >30d: {info.get('stale_markets_30d', 0):,}\n"
+                f"Normal maintenance: automatic EDDN + visited Market.json updates.\n"
+                f"Full rebuild: first installation, then occasional/manual rebase only.\n"
+                f"Newer live markets preserved on last rebuild: {info.get('live_markets_preserved', 0):,}\n"
                 f"Path: {info.get('db_path') or marketdb.DB_PATH}"
             ),
             fg=self.UI_FAIL if phase == "error" else COLOR_TEXT,

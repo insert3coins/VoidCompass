@@ -375,10 +375,10 @@ class Seeder:
             cur.execute(sql)
         conn.commit()
 
-    # User-owned tables that must survive a re-seed. The swap replaces the
-    # whole DB file, so without this copy a rebuild silently wiped trade
-    # analytics history and price watches (the _copy_build_into_live fallback
-    # never touched them — the two swap paths disagreed until now).
+    # User-owned tables and locally fresher markets must survive a re-seed. The
+    # Spansh file is a snapshot generated before it is downloaded and imported;
+    # EDDN and Market.json can update the live DB in the meantime. Copying newer
+    # live rows into the completed build avoids moving prices backwards at swap.
     USER_TABLES = ("trade_log", "balance_log", "watches")
 
     def _preserve_user_tables(self):
@@ -399,6 +399,67 @@ class Seeder:
                         cur.execute(f"INSERT OR IGNORE INTO main.{table} SELECT * FROM live.{table}")
                     except Exception:
                         pass  # never let history-carryover break the rebuild
+                cur.execute("DROP TABLE IF EXISTS temp.newer_live_markets")
+                cur.execute(
+                    """CREATE TEMP TABLE newer_live_markets(
+                           market_id INTEGER PRIMARY KEY
+                       ) WITHOUT ROWID"""
+                )
+                cur.execute(
+                    """INSERT INTO newer_live_markets(market_id)
+                       SELECT live_station.market_id
+                       FROM live.stations AS live_station
+                       LEFT JOIN main.stations AS built_station
+                              ON built_station.market_id = live_station.market_id
+                       WHERE live_station.updated_at IS NOT NULL
+                         AND live_station.updated_at > COALESCE(built_station.updated_at, 0)"""
+                )
+                preserved = int(cur.execute(
+                    "SELECT COUNT(*) FROM newer_live_markets"
+                ).fetchone()[0])
+                if preserved:
+                    # A journal-discovered system/station may not exist in the
+                    # dump yet, so carry its system coordinates before station
+                    # and commodity rows.
+                    cur.execute(
+                        """INSERT OR IGNORE INTO main.systems
+                           SELECT live_system.* FROM live.systems AS live_system
+                           WHERE live_system.id64 IN (
+                               SELECT live_station.system_id64
+                               FROM live.stations AS live_station
+                               JOIN newer_live_markets AS newer
+                                 ON newer.market_id = live_station.market_id
+                           )"""
+                    )
+                    cur.execute(
+                        """INSERT OR REPLACE INTO main.stations
+                           SELECT live_station.* FROM live.stations AS live_station
+                           JOIN newer_live_markets AS newer
+                             ON newer.market_id = live_station.market_id"""
+                    )
+                    cur.execute(
+                        "DELETE FROM main.commodities WHERE market_id IN "
+                        "(SELECT market_id FROM newer_live_markets)"
+                    )
+                    cur.execute(
+                        """INSERT OR REPLACE INTO main.commodities
+                           SELECT live_commodity.* FROM live.commodities AS live_commodity
+                           JOIN newer_live_markets AS newer
+                             ON newer.market_id = live_commodity.market_id"""
+                    )
+                    cur.execute(
+                        "INSERT OR REPLACE INTO main.commodity_names "
+                        "SELECT * FROM live.commodity_names"
+                    )
+                journal_meta = cur.execute(
+                    "SELECT value FROM live.meta WHERE key='journal_market_updated_at'"
+                ).fetchone()
+                if journal_meta:
+                    cur.execute(
+                        "INSERT OR REPLACE INTO main.meta(key, value) VALUES(?, ?)",
+                        ("journal_market_updated_at", journal_meta[0]),
+                    )
+                marketdb.set_meta(cur, "live_markets_preserved", preserved)
                 conn.commit()
             finally:
                 cur.execute("DETACH DATABASE live")

@@ -636,7 +636,9 @@ class TradeWindow(ThemedWindowMixin):
     def _build_database_tab(self):
         frame = tk.Frame(self.tabs, bg=self.UI_BG)
         self.tabs.add(frame, text="Database")
-        panel = self._card(frame, "MARKET DATABASE", "local trade data seeded from Spansh and updated by EDDN/journal markets")
+        panel = self._card(
+            frame, "MARKET DATABASE",
+            "full Spansh baseline once; incremental EDDN and journal-market updates thereafter")
         self.db_status = tk.Label(panel, text="", fg=COLOR_TEXT, bg=self.UI_PANEL, font=("Consolas", 9), justify=tk.LEFT, anchor="w")
         self.db_status.pack(fill=tk.X, padx=12, pady=8)
         self.seed_progress = ttk.Progressbar(panel, mode="determinate", maximum=100)
@@ -924,7 +926,7 @@ class TradeWindow(ThemedWindowMixin):
                 self.seed_progress.stop()
             except Exception:
                 pass
-            seed_txt = f"Seeded: {info.get('seeded_at') or 'not yet'}"
+            seed_txt = f"Full baseline: {info.get('seeded_at') or 'not yet'}"
         if phase in ("starting", "downloading", "importing", "indexing"):
             mode_txt = "low impact" if seed_info.get("polite", True) else "fast"
             timing_txt = (
@@ -944,6 +946,12 @@ class TradeWindow(ThemedWindowMixin):
             f"EDDN: {eddn_txt} | updated this session: {eddn_stats.get('markets_updated', 0):,} | skipped unknown: {eddn_stats.get('skipped_unknown', 0):,}\n"
             f"EDDN upload: {upload_txt}\n"
             f"Journal markets: {info.get('journal_market_updated_at') or 'not yet'}\n"
+            f"Latest market: {info.get('latest_market_updated_at') or 'not yet'} | "
+            f"fresh <24h: {info.get('fresh_markets_1d', 0):,} | "
+            f"stale >7d: {info.get('stale_markets_7d', 0):,} | "
+            f">30d: {info.get('stale_markets_30d', 0):,}\n"
+            f"Full Spansh rebuilds are occasional maintenance; newer live rows preserved: "
+            f"{info.get('live_markets_preserved', 0):,}\n"
             f"DB: {info.get('db_path')}",
             self.UI_MUTED if ready else self.UI_WARN,
         )
