@@ -56,6 +56,12 @@ def _carrier_countdown(dep_str):
         return ""
 
 
+# How stale the journal/Status.json streams may get before we treat Elite as
+# closed for playtime-accrual purposes. Generous: the watcher only fires on
+# file changes, so an idle docked commander can be quiet for a while.
+GAME_ACTIVE_GRACE_S = 300.0
+
+
 class DashboardUIMixin(ThemedWindowMixin):
     JOURNAL_HISTORY_LIMIT = 100
     def _config_label_if_changed(self, widget, text=None, fg=None):
@@ -1292,13 +1298,29 @@ class DashboardUIMixin(ThemedWindowMixin):
         secs = elapsed % 60
         return f"{hrs:02d}:{mins:02d}:{secs:02d}"
 
+    def _game_is_active(self):
+        """True while Elite Dangerous looks like it is actually running.
+
+        Status.json and the journal are only written by the live game, so
+        recent activity on either is our "game is up" signal. The window is
+        generous because the watcher only fires on file changes, and a docked
+        or menu-idle commander can go a while without producing either.
+        """
+        newest = max(
+            float(getattr(self, "last_status_event_ts", 0) or 0),
+            float(getattr(self, "last_journal_event_ts", 0) or 0),
+        )
+        if not newest:
+            return False
+        return (time.time() - newest) <= GAME_ACTIVE_GRACE_S
+
     def _tick_session_clock(self):
         if not self.is_running:
             return
         achievement_engine = getattr(self, "achievement_engine", None)
         if achievement_engine:
             try:
-                achievement_engine.tick_playtime()
+                achievement_engine.tick_playtime(active=self._game_is_active())
             except Exception:
                 pass
         if self._dashboard_streams_visible():

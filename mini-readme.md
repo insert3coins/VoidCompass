@@ -1,5 +1,22 @@
 # VoidCompass // UPDATE LOG
 
+## v4.3.4 // Achievement Fixes + Progress Bars
+**Release Date:** 2026-Jul-12
+
+### Data Safety
+*   **"Rebuild from Journals" no longer destroys unlocks it cannot re-derive.** A rebuild previously reset all progress before re-scanning, so imported, manually granted, and long-ago unlocks — earned from journals that have since rotated away — were permanently lost. Progress is now monotonic: prior unlocks are carried forward, counters and lifetime totals only ever move up, and original unlock timestamps survive (the rebuild used to re-stamp them with the rebuild time). Use Reset All for an actual wipe; the confirmation dialog now says so.
+
+### Fixes
+*   Resetting a route achievement now clears its route progress. It was left at 100%, so the achievement instantly re-fired on the next jump (affected all 81 route achievements).
+*   Playtime now only accrues while Elite Dangerous is actually running, instead of counting VoidCompass uptime. The four `played_*_hours` achievements were unlocking far faster than intended.
+
+### Interface
+*   Added progress bars: a drawn bar in the detail pane (green at 100%) and a bar in the catalogue's progress column, alongside the existing percentage and counter.
+*   The achievement catalogue now uses the app's standard monospace table font, aligning the progress column.
+
+### Version
+*   Bumped app version to **4.3.4**.
+
 ## v4.3.2 // Native Achievement System
 
 **Release Date:** 2026-Jul-12
