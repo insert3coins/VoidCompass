@@ -1,5 +1,23 @@
 # VoidCompass // UPDATE LOG
 
+## v4.4.2 // Galaxy Intelligence + Faction Watches
+**Release Date:** 2026-Jul-13
+
+### Galaxy Overview
+*   Added current-versus-previous influence movement to faction rows and made systems and factions open their matching records directly in **BGS HISTORY**.
+*   Added journal freshness and source indicators, stale-data highlighting, and a manual refresh control.
+*   Expanded conflicts with their leader and both faction stakes, and expanded Community Goals with galaxy totals, contributor counts, bonuses, and top-rank status.
+
+### Faction Watches
+*   Added persistent per-commander faction watches using the star control beside each current-system faction.
+*   Watched factions produce one low-noise alert when a later journal update reports a meaningful influence change, active-state change, or gain/loss of system control.
+
+### Interface
+*   Added compact single-column reflow for narrow Galaxy pages, mouse-wheel overview scrolling, and horizontal scrolling for detailed BGS history.
+
+### Version
+*   Bumped app version to **4.4.2**.
+
 ## v4.4.1 // Engineering + Galaxy Companion Expansion
 **Release Date:** 2026-Jul-13
 

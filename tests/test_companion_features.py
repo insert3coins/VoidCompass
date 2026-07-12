@@ -9,6 +9,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import companion_features as features  # noqa: E402
+from bgs_window import BGSWindow  # noqa: E402
 from dashboard import MainDashboard  # noqa: E402
 
 
@@ -52,6 +53,31 @@ def test_massacre_stack_math():
     assert stack["kills_needed"] == 18 and stack["reward"] == 15_000_000
     state["faction_kills"]["Pirates"] = 18
     assert features.massacre_stacks(state)[0]["complete"]
+
+
+def test_faction_watch_changes_and_history_delta():
+    state = features.fresh_state()
+    assert features.toggle_faction_watch(state, "Test Controllers")
+    baseline = [{"name": "Test Controllers", "influence": 0.50,
+                 "active_states": ["Boom"]}]
+    assert features.update_faction_watch_snapshots(
+        state, "Test", baseline, "Test Controllers", notify=False) == []
+    changed = [{"name": "Test Controllers", "influence": 0.52,
+                "active_states": ["Expansion"]}]
+    notices = features.update_faction_watch_snapshots(
+        state, "Test", changed, None, notify=True)
+    assert len(notices) == 1
+    assert "influence +2.0%" in notices[0][1]
+    assert "state Expansion" in notices[0][1]
+    assert "lost system control" in notices[0][1]
+
+    window = BGSWindow.__new__(BGSWindow)
+    window._load_factions = lambda _system: [
+        {"faction_name": "Test Controllers", "influence": 0.52, "recorded_at": 2},
+        {"faction_name": "Test Controllers", "influence": 0.50, "recorded_at": 1},
+    ]
+    deltas = window._faction_history_deltas("Test", changed)
+    assert round(deltas["Test Controllers"], 4) == 0.02
 
 
 def test_dashboard_companion_journal_integration():
@@ -129,6 +155,19 @@ def test_dashboard_companion_journal_integration():
     assert app.companion_state["controlling_faction"] == "Test Controllers"
     assert app.companion_state["factions"][0]["recovering_states"] == ["War"]
     assert app.companion_state["conflicts"][0]["faction1"]["stake"] == "Port"
+    assert app.companion_state["galaxy_source"] == "FSDJump"
+    assert app.companion_state["galaxy_system_updated"]
+
+    app._toggle_galaxy_faction_watch("Test Controllers")
+    app._process_companion_event("FSDJump", {
+        "timestamp": "2026-07-13T12:00:00Z", "StarSystem": "Test",
+        "SystemFaction": {"Name": "Other Controllers"},
+        "Factions": [{
+            "Name": "Test Controllers", "Influence": 0.62,
+            "ActiveStates": [{"State": "Expansion"}],
+        }],
+    }, {}, False)
+    assert any(row[0][0] == "FACTION WATCH" for row in app.toast_hud.rows)
 
     app.cmdr_balance = 15_000_000
     app._process_companion_event("Loadout", {"event": "Loadout", "Ship": "krait_mkii", "Rebuy": 10_000_000}, {}, False)
@@ -150,5 +189,6 @@ if __name__ == "__main__":
     test_ship_export_round_trip()
     test_synthesis_and_sampling_math()
     test_massacre_stack_math()
+    test_faction_watch_changes_and_history_delta()
     test_dashboard_companion_journal_integration()
     print("ALL COMPANION FEATURE TESTS PASSED")

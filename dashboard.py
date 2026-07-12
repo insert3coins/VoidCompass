@@ -1231,6 +1231,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.db_purge_bgs,
             self.db_purge_empty_bgs_systems,
             get_galaxy_state_cb=lambda: self.companion_state,
+            toggle_faction_watch_cb=self._toggle_galaxy_faction_watch,
             embedded=True,
         )
         self._show_embedded_page("GALAXY", self.bgs_window.win)
@@ -3194,9 +3195,25 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             title, message, severity=severity, duration_s=duration,
         ))
 
+    def _toggle_galaxy_faction_watch(self, faction_name):
+        enabled = companion_features.toggle_faction_watch(self.companion_state, faction_name)
+        # Establish the current system as the baseline so enabling a watch never
+        # creates an immediate false-positive alert.
+        companion_features.update_faction_watch_snapshots(
+            self.companion_state,
+            self.companion_state.get("galaxy_system"),
+            self.companion_state.get("factions") or [],
+            self.companion_state.get("controlling_faction"),
+            notify=False,
+        )
+        self._save_companion_state()
+        self._refresh_companion_surfaces()
+        return enabled
+
     def _process_companion_event(self, ev, raw, data, startup_replay=False):
         state = self.companion_state
         changed = False
+        galaxy_changed = False
 
         if ev == "Loadout":
             state["loadout"] = dict(raw)
@@ -3273,6 +3290,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     "PowerplayRank", "PowerplayMerits"):
             self._update_powerplay_state(ev, raw)
             changed = True
+            galaxy_changed = True
 
         elif ev == "CommunityGoal":
             goals = {}
@@ -3293,13 +3311,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 }
             state["community_goals"] = goals
             changed = True
+            galaxy_changed = True
 
         elif ev == "SquadronStartup":
             state["squadron"] = {"name": raw.get("SquadronName"), "rank": raw.get("CurrentRank")}
             changed = True
+            galaxy_changed = True
         elif ev in ("LeftSquadron", "DisbandedSquadron"):
             state["squadron"] = None
             changed = True
+            galaxy_changed = True
 
         elif ev == "LeaveBody":
             self.bio_sampling = None
@@ -3329,7 +3350,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 }
             else:
                 state["pp_system"] = None
+            state["galaxy_system_updated"] = raw.get("timestamp") or time.strftime(
+                "%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            state["galaxy_system_source"] = ev
+            for faction_name, detail in companion_features.update_faction_watch_snapshots(
+                    state, state["galaxy_system"], state["factions"],
+                    state["controlling_faction"], notify=not startup_replay):
+                self._toast_on_main("FACTION WATCH", f"{faction_name}: {detail}", "info", 14)
             changed = True
+            galaxy_changed = True
+
+        if galaxy_changed:
+            state["galaxy_updated"] = raw.get("timestamp") or time.strftime(
+                "%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            state["galaxy_source"] = ev
 
         if not startup_replay:
             if ev == "Scan":
