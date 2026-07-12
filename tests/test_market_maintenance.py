@@ -7,7 +7,7 @@ import time
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from trade import marketdb, seed  # noqa: E402
+from trade import marketdb  # noqa: E402
 
 
 def _insert_market(conn, system_id, system_name, market_id, station_name, updated, price):
@@ -36,7 +36,6 @@ def _insert_market(conn, system_id, system_name, market_id, station_name, update
 
 def test_full_rebuild_preserves_newer_live_markets():
     original_db_path = marketdb.DB_PATH
-    original_build_path = seed.BUILD_DB_PATH
     original_status_cache = marketdb._status_cache
     try:
         with tempfile.TemporaryDirectory() as folder:
@@ -59,8 +58,7 @@ def test_full_rebuild_preserves_newer_live_markets():
                 build.close()
 
             marketdb.DB_PATH = live_path
-            seed.BUILD_DB_PATH = build_path
-            seed.Seeder()._preserve_user_tables()
+            marketdb.preserve_live_data(build_path, live_path)
 
             merged = marketdb.connect(build_path)
             try:
@@ -95,9 +93,19 @@ def test_full_rebuild_preserves_newer_live_markets():
                 assert status["live_markets_preserved"] == 2
             finally:
                 merged.close()
+
+            marketdb.swap_in(build_path)
+            assert not build_path.exists()
+            promoted = marketdb.connect(live_path)
+            try:
+                assert promoted.execute(
+                    "SELECT buy_price FROM commodities WHERE market_id=100 AND symbol='gold'"
+                ).fetchone() == (2000,)
+                assert promoted.execute("SELECT COUNT(*) FROM watches").fetchone() == (1,)
+            finally:
+                promoted.close()
     finally:
         marketdb.DB_PATH = original_db_path
-        seed.BUILD_DB_PATH = original_build_path
         marketdb._status_cache = original_status_cache
 
 

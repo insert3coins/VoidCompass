@@ -90,6 +90,7 @@ _status_lock = threading.Lock()
 _status_cache = None
 _status_cache_at = 0.0
 STATUS_CACHE_TTL_S = 30.0
+_swap_lock = threading.Lock()
 
 
 def connect(db_path=None):
@@ -140,6 +141,154 @@ def get_meta(conn, key, default=None):
 
 def set_meta(conn, key, value):
     conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES(?, ?)", (key, str(value)))
+
+
+def build_path():
+    """Sidecar path used while creating a replacement market database."""
+    return DATA_DIR / "market_build.db"
+
+
+def preserve_live_data(build_db_path, live_db_path=None):
+    """Merge user-owned tables and newer live markets into a finished build.
+
+    The Spansh snapshot can be older than EDDN or Market.json rows received
+    during the long import. This keeps those rows, including journal-discovered
+    systems and stations, before the replacement database is promoted.
+    """
+    live_path = Path(live_db_path or DB_PATH)
+    if not live_path.exists():
+        return 0
+    conn = connect(build_db_path)
+    try:
+        cur = conn.cursor()
+        cur.execute("ATTACH DATABASE ? AS live", (str(live_path),))
+        try:
+            for table in ("trade_log", "balance_log", "watches"):
+                exists = cur.execute(
+                    "SELECT 1 FROM live.sqlite_master WHERE type='table' AND name=?", (table,)
+                ).fetchone()
+                if not exists:
+                    continue
+                try:
+                    cur.execute(f"INSERT OR IGNORE INTO main.{table} SELECT * FROM live.{table}")
+                except Exception:
+                    pass
+
+            cur.execute("DROP TABLE IF EXISTS temp.newer_live_markets")
+            cur.execute(
+                "CREATE TEMP TABLE newer_live_markets(market_id INTEGER PRIMARY KEY) WITHOUT ROWID"
+            )
+            cur.execute(
+                """INSERT INTO newer_live_markets(market_id)
+                   SELECT live_station.market_id
+                   FROM live.stations AS live_station
+                   LEFT JOIN main.stations AS built_station
+                          ON built_station.market_id = live_station.market_id
+                   WHERE live_station.updated_at IS NOT NULL
+                     AND live_station.updated_at > COALESCE(built_station.updated_at, 0)"""
+            )
+            preserved = int(cur.execute(
+                "SELECT COUNT(*) FROM newer_live_markets"
+            ).fetchone()[0])
+            if preserved:
+                cur.execute(
+                    """INSERT OR IGNORE INTO main.systems
+                       SELECT live_system.* FROM live.systems AS live_system
+                       WHERE live_system.id64 IN (
+                           SELECT live_station.system_id64
+                           FROM live.stations AS live_station
+                           JOIN newer_live_markets AS newer
+                             ON newer.market_id = live_station.market_id
+                       )"""
+                )
+                cur.execute(
+                    """INSERT OR REPLACE INTO main.stations
+                       SELECT live_station.* FROM live.stations AS live_station
+                       JOIN newer_live_markets AS newer
+                         ON newer.market_id = live_station.market_id"""
+                )
+                cur.execute(
+                    "DELETE FROM main.commodities WHERE market_id IN "
+                    "(SELECT market_id FROM newer_live_markets)"
+                )
+                cur.execute(
+                    """INSERT OR REPLACE INTO main.commodities
+                       SELECT live_commodity.* FROM live.commodities AS live_commodity
+                       JOIN newer_live_markets AS newer
+                         ON newer.market_id = live_commodity.market_id"""
+                )
+                cur.execute(
+                    "INSERT OR REPLACE INTO main.commodity_names SELECT * FROM live.commodity_names"
+                )
+            journal_meta = cur.execute(
+                "SELECT value FROM live.meta WHERE key='journal_market_updated_at'"
+            ).fetchone()
+            if journal_meta:
+                set_meta(cur, "journal_market_updated_at", journal_meta[0])
+            set_meta(cur, "live_markets_preserved", preserved)
+            conn.commit()
+            return preserved
+        finally:
+            cur.execute("DETACH DATABASE live")
+    finally:
+        conn.close()
+
+
+def swap_in(new_path):
+    """Promote a completed build, with an in-place fallback for open Windows DBs."""
+    new_path = Path(new_path)
+    backup = DB_PATH.with_suffix(".db.bak")
+    with _swap_lock:
+        try:
+            backup.unlink(missing_ok=True)
+        except Exception:
+            pass
+        if DB_PATH.exists():
+            try:
+                DB_PATH.replace(backup)
+                new_path.replace(DB_PATH)
+            except OSError:
+                _copy_into_live(new_path)
+                try:
+                    new_path.unlink(missing_ok=True)
+                    backup.unlink(missing_ok=True)
+                except Exception:
+                    pass
+                invalidate_status_cache()
+                return
+        else:
+            new_path.replace(DB_PATH)
+        try:
+            backup.unlink(missing_ok=True)
+        except Exception:
+            pass
+        invalidate_status_cache()
+
+
+def _copy_into_live(build_db_path):
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        cur.execute("ATTACH DATABASE ? AS build", (str(build_db_path),))
+        try:
+            for table in (
+                "commodities", "stations", "systems", "commodity_names", "meta",
+                "trade_log", "balance_log", "watches",
+            ):
+                cur.execute(f"DELETE FROM main.{table}")
+                cur.execute(f"INSERT INTO main.{table} SELECT * FROM build.{table}")
+            conn.commit()
+        finally:
+            cur.execute("DETACH DATABASE build")
+    finally:
+        conn.close()
+
+
+def invalidate_status_cache():
+    global _status_cache, _status_cache_at
+    with _status_lock:
+        _status_cache = None
+        _status_cache_at = 0.0
 
 
 def log_trade(ts, event, symbol, name, count, price, total, profit=None):

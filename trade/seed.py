@@ -19,7 +19,7 @@ from . import marketdb
 DUMP_URL = "https://downloads.spansh.co.uk/galaxy_populated.json.gz"
 DUMP_PATH = marketdb.DATA_DIR / "galaxy_populated.json.gz"
 PROGRESS_PATH = marketdb.DATA_DIR / "market_seed_progress.json"
-BUILD_DB_PATH = marketdb.DATA_DIR / "market_build.db"
+BUILD_DB_PATH = marketdb.build_path()
 LOCK_PATH = marketdb.DATA_DIR / "market_seed.lock"
 HEADERS = {"User-Agent": "EliteTrader/1.0 (personal ED companion app)"}
 COMMIT_EVERY = 2000  # build DB runs in its own process; larger batches are much faster
@@ -149,7 +149,11 @@ class Seeder:
         marketdb.DATA_DIR.mkdir(parents=True, exist_ok=True)
         script = os.environ.get("VC_TRADE_SEED_WORKER_SCRIPT") or str(Path(__file__).resolve().parent.parent / "market_builder.py")
         if getattr(sys, "frozen", False):
-            cmd = [sys.executable, "--trade-seed-worker"]
+            configured = os.environ.get("VC_TRADE_SEED_WORKER_EXE")
+            builder = Path(configured) if configured else Path(sys.executable).resolve().parent / "VoidCompassMarketBuilder.exe"
+            # The main app delegates heavy imports to the companion worker exe;
+            # when already running inside that exe, this resolves to itself.
+            cmd = [str(builder if builder.exists() else sys.executable), "--trade-seed-worker"]
         else:
             cmd = [sys.executable, script, "--trade-seed-worker"]
         cmd.extend([
@@ -339,8 +343,10 @@ class Seeder:
             self._create_build_indexes(conn)
         finally:
             conn.close()
-        self._preserve_user_tables()
-        self._swap_build_db()
+        marketdb.preserve_live_data(BUILD_DB_PATH)
+        for suffix in ("-wal", "-shm"):
+            Path(str(BUILD_DB_PATH) + suffix).unlink(missing_ok=True)
+        marketdb.swap_in(BUILD_DB_PATH)
 
     def _prepare_build_connection(self, conn):
         try:
@@ -375,148 +381,12 @@ class Seeder:
             cur.execute(sql)
         conn.commit()
 
-    # User-owned tables and locally fresher markets must survive a re-seed. The
-    # Spansh file is a snapshot generated before it is downloaded and imported;
-    # EDDN and Market.json can update the live DB in the meantime. Copying newer
-    # live rows into the completed build avoids moving prices backwards at swap.
-    USER_TABLES = ("trade_log", "balance_log", "watches")
-
-    def _preserve_user_tables(self):
-        if not marketdb.DB_PATH.exists():
-            return  # first seed - nothing to carry over
-        conn = marketdb.connect(BUILD_DB_PATH)
-        try:
-            cur = conn.cursor()
-            cur.execute("ATTACH DATABASE ? AS live", (str(marketdb.DB_PATH),))
-            try:
-                for table in self.USER_TABLES:
-                    exists = cur.execute(
-                        "SELECT 1 FROM live.sqlite_master WHERE type='table' AND name=?", (table,)
-                    ).fetchone()
-                    if not exists:
-                        continue  # live DB predates this table
-                    try:
-                        cur.execute(f"INSERT OR IGNORE INTO main.{table} SELECT * FROM live.{table}")
-                    except Exception:
-                        pass  # never let history-carryover break the rebuild
-                cur.execute("DROP TABLE IF EXISTS temp.newer_live_markets")
-                cur.execute(
-                    """CREATE TEMP TABLE newer_live_markets(
-                           market_id INTEGER PRIMARY KEY
-                       ) WITHOUT ROWID"""
-                )
-                cur.execute(
-                    """INSERT INTO newer_live_markets(market_id)
-                       SELECT live_station.market_id
-                       FROM live.stations AS live_station
-                       LEFT JOIN main.stations AS built_station
-                              ON built_station.market_id = live_station.market_id
-                       WHERE live_station.updated_at IS NOT NULL
-                         AND live_station.updated_at > COALESCE(built_station.updated_at, 0)"""
-                )
-                preserved = int(cur.execute(
-                    "SELECT COUNT(*) FROM newer_live_markets"
-                ).fetchone()[0])
-                if preserved:
-                    # A journal-discovered system/station may not exist in the
-                    # dump yet, so carry its system coordinates before station
-                    # and commodity rows.
-                    cur.execute(
-                        """INSERT OR IGNORE INTO main.systems
-                           SELECT live_system.* FROM live.systems AS live_system
-                           WHERE live_system.id64 IN (
-                               SELECT live_station.system_id64
-                               FROM live.stations AS live_station
-                               JOIN newer_live_markets AS newer
-                                 ON newer.market_id = live_station.market_id
-                           )"""
-                    )
-                    cur.execute(
-                        """INSERT OR REPLACE INTO main.stations
-                           SELECT live_station.* FROM live.stations AS live_station
-                           JOIN newer_live_markets AS newer
-                             ON newer.market_id = live_station.market_id"""
-                    )
-                    cur.execute(
-                        "DELETE FROM main.commodities WHERE market_id IN "
-                        "(SELECT market_id FROM newer_live_markets)"
-                    )
-                    cur.execute(
-                        """INSERT OR REPLACE INTO main.commodities
-                           SELECT live_commodity.* FROM live.commodities AS live_commodity
-                           JOIN newer_live_markets AS newer
-                             ON newer.market_id = live_commodity.market_id"""
-                    )
-                    cur.execute(
-                        "INSERT OR REPLACE INTO main.commodity_names "
-                        "SELECT * FROM live.commodity_names"
-                    )
-                journal_meta = cur.execute(
-                    "SELECT value FROM live.meta WHERE key='journal_market_updated_at'"
-                ).fetchone()
-                if journal_meta:
-                    cur.execute(
-                        "INSERT OR REPLACE INTO main.meta(key, value) VALUES(?, ?)",
-                        ("journal_market_updated_at", journal_meta[0]),
-                    )
-                marketdb.set_meta(cur, "live_markets_preserved", preserved)
-                conn.commit()
-            finally:
-                cur.execute("DETACH DATABASE live")
-        except Exception:
-            pass
-        finally:
-            conn.close()
-
     def _remove_build_db(self):
         for suffix in ("", "-wal", "-shm"):
             try:
                 Path(str(BUILD_DB_PATH) + suffix).unlink(missing_ok=True)
             except Exception:
                 pass
-
-    def _swap_build_db(self):
-        for suffix in ("-wal", "-shm"):
-            try:
-                Path(str(BUILD_DB_PATH) + suffix).unlink(missing_ok=True)
-            except Exception:
-                pass
-        backup = marketdb.DB_PATH.with_suffix(".db.bak")
-        try:
-            backup.unlink(missing_ok=True)
-        except Exception:
-            pass
-        if marketdb.DB_PATH.exists():
-            try:
-                marketdb.DB_PATH.replace(backup)
-                BUILD_DB_PATH.replace(marketdb.DB_PATH)
-            except OSError:
-                self._copy_build_into_live()
-                self._remove_build_db()
-                try:
-                    backup.unlink(missing_ok=True)
-                except Exception:
-                    pass
-                return
-        else:
-            BUILD_DB_PATH.replace(marketdb.DB_PATH)
-        try:
-            backup.unlink(missing_ok=True)
-        except Exception:
-            pass
-
-    def _copy_build_into_live(self):
-        conn = marketdb.connect()
-        try:
-            cur = conn.cursor()
-            cur.execute("ATTACH DATABASE ? AS build", (str(BUILD_DB_PATH),))
-            for table in ("commodities", "stations", "systems", "commodity_names", "meta"):
-                cur.execute(f"DELETE FROM main.{table}")
-                cur.execute(f"INSERT INTO main.{table} SELECT * FROM build.{table}")
-            conn.commit()
-            cur.execute("DETACH DATABASE build")
-        finally:
-            conn.close()
 
     def _import_system(self, cur, system, include_carriers, names_seen):
         coords = system.get("coords") or {}
