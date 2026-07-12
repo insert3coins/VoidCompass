@@ -259,7 +259,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         metrics_card.pack(fill=tk.X, pady=(0, 8))
         self._section_label(metrics_card, "PRIMARY TELEMETRY").pack(anchor="w", padx=12, pady=(9, 0))
         self.sys_stat = self.create_stat(metrics_card, "CURRENT SYSTEM", "---")
-        self.nav_stat = None
+        self.nav_stat = self.create_stat(metrics_card, "NAV TARGET", "---")
         self.scan_stat = self.create_stat(metrics_card, "SCAN PROGRESS", "0 / 0")
         tk.Frame(metrics_card, bg=self.UI_PANEL, height=8).pack()
 
@@ -521,20 +521,9 @@ class DashboardUIMixin(ThemedWindowMixin):
         flight_stats = tk.Frame(flight_card, bg=self.UI_PANEL)
         flight_stats.pack(fill=tk.BOTH, expand=True, padx=0, pady=(0, 8))
         self.sys_stat = self.create_stat(flight_stats, "CURRENT SYSTEM", "---")
-        # Navigation target/next-hop detail already lives in the dedicated HUD.
-        # Keeping a second destination here caused the dashboard to disagree
-        # with the HUD when NavRoute and Status.json updated at different times.
-        self.nav_stat = None
+        self.nav_stat = self.create_stat(flight_stats, "NAV TARGET", "---")
         self.scan_stat = self.create_stat(flight_stats, "SCAN PROGRESS", "0 / 0")
-        self.flight_strip_canvas = tk.Canvas(
-            flight_card,
-            height=78,
-            bg="#090d12",
-            highlightthickness=0,
-            bd=0,
-        )
-        self.flight_strip_canvas.pack(fill=tk.X, padx=12, pady=(0, 10))
-        self.flight_strip_canvas.bind("<Configure>", self._draw_flight_strip)
+        self.flight_strip_canvas = None
 
         self.carrier_panel = self._panel(flight_deck)
         self.carrier_panel.grid(row=0, column=1, sticky="nsew", padx=(0, 8))
