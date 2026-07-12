@@ -1189,6 +1189,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.config,
             self.db_load_bgs_systems,
             self.db_load_bgs_factions,
+            self.db_delete_bgs_system,
+            self.db_purge_bgs,
+            self.db_purge_empty_bgs_systems,
             embedded=True,
         )
         self._show_embedded_page("BGS", self.bgs_window.win)

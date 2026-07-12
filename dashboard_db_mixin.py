@@ -85,6 +85,12 @@ class DashboardDBMixin:
                 " last_visited_at REAL NOT NULL"
                 ")"
             )
+            self.conn.execute(
+                "CREATE TABLE IF NOT EXISTS bgs_hidden_systems ("
+                " system_name TEXT PRIMARY KEY,"
+                " hidden_at REAL NOT NULL"
+                ")"
+            )
             # Seed visited_systems from existing bgs_snapshots so previously
             # tracked inhabited systems aren't lost after the migration.
             self.conn.execute(
@@ -431,6 +437,13 @@ class DashboardDBMixin:
         now = time.time()
         with self.db_lock:
             try:
+                if self.batch_mode:
+                    hidden = self.conn.execute(
+                        "SELECT 1 FROM bgs_hidden_systems WHERE system_name=?",
+                        (system_name,),
+                    ).fetchone()
+                    if hidden:
+                        return
                 for f in factions:
                     fname = f.get("Name") or f.get("faction_name")
                     if not fname:
@@ -473,6 +486,13 @@ class DashboardDBMixin:
         now = ts or time.time()
         with self.db_lock:
             try:
+                if not self.batch_mode:
+                    # A real revisit restores a system that was explicitly
+                    # removed from BGS. Startup journal replay leaves it hidden.
+                    self.conn.execute(
+                        "DELETE FROM bgs_hidden_systems WHERE system_name=?",
+                        (system_name,),
+                    )
                 self.conn.execute(
                     "INSERT INTO visited_systems (system_name, system_address, last_visited_at) "
                     "VALUES (?, ?, ?) "
@@ -502,6 +522,8 @@ class DashboardDBMixin:
                 "       EXISTS(SELECT 1 FROM bgs_snapshots b "
                 "              WHERE b.system_name = v.system_name) "
                 "FROM visited_systems v "
+                "WHERE NOT EXISTS(SELECT 1 FROM bgs_hidden_systems h "
+                "                 WHERE h.system_name = v.system_name) "
                 "ORDER BY v.last_visited_at DESC"
             )
             results = [(row[0], row[1], bool(row[2])) for row in cur.fetchall()]
@@ -511,6 +533,92 @@ class DashboardDBMixin:
         finally:
             self.db_lock.release()
         return results
+
+    def db_delete_bgs_system(self, system_name: str) -> bool:
+        """Remove one system from BGS without deleting shared exploration history."""
+        if not system_name or not self.db_lock.acquire(blocking=False):
+            return False
+        try:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO bgs_hidden_systems (system_name, hidden_at) VALUES (?, ?)",
+                (system_name, time.time()),
+            )
+            self.conn.execute("DELETE FROM bgs_snapshots WHERE system_name=?", (system_name,))
+            self._db_commit(reason="bgs_delete")
+            self._bgs_systems_cache = [
+                row for row in getattr(self, "_bgs_systems_cache", [])
+                if row[0] != system_name
+            ]
+            cache = dict(getattr(self, "_bgs_factions_cache", {}))
+            cache.pop(system_name, None)
+            self._bgs_factions_cache = cache
+            return True
+        except sqlite3.Error as exc:
+            try:
+                self.conn.rollback()
+            except sqlite3.Error:
+                pass
+            self.log(f"❌ DB ERROR (BGS delete): {exc}")
+            return False
+        finally:
+            self.db_lock.release()
+
+    def db_purge_bgs(self) -> bool:
+        """Clear the BGS list and snapshots while retaining exploration visits."""
+        if not self.db_lock.acquire(blocking=False):
+            return False
+        try:
+            now = time.time()
+            self.conn.execute(
+                "INSERT OR REPLACE INTO bgs_hidden_systems (system_name, hidden_at) "
+                "SELECT system_name, ? FROM visited_systems",
+                (now,),
+            )
+            self.conn.execute("DELETE FROM bgs_snapshots")
+            self._db_commit(reason="bgs_purge")
+            self._bgs_systems_cache = []
+            self._bgs_factions_cache = {}
+            return True
+        except sqlite3.Error as exc:
+            try:
+                self.conn.rollback()
+            except sqlite3.Error:
+                pass
+            self.log(f"❌ DB ERROR (BGS purge): {exc}")
+            return False
+        finally:
+            self.db_lock.release()
+
+    def db_purge_empty_bgs_systems(self) -> int | None:
+        """Hide visible BGS systems with no faction snapshots; return the count."""
+        if not self.db_lock.acquire(blocking=False):
+            return None
+        try:
+            cursor = self.conn.execute(
+                "INSERT OR REPLACE INTO bgs_hidden_systems (system_name, hidden_at) "
+                "SELECT v.system_name, ? FROM visited_systems v "
+                "WHERE NOT EXISTS(SELECT 1 FROM bgs_snapshots b "
+                "                 WHERE b.system_name = v.system_name) "
+                "  AND NOT EXISTS(SELECT 1 FROM bgs_hidden_systems h "
+                "                 WHERE h.system_name = v.system_name)",
+                (time.time(),),
+            )
+            removed = max(0, int(cursor.rowcount or 0))
+            self._db_commit(reason="bgs_purge_empty")
+            self._bgs_systems_cache = [
+                row for row in getattr(self, "_bgs_systems_cache", [])
+                if len(row) > 2 and row[2]
+            ]
+            return removed
+        except sqlite3.Error as exc:
+            try:
+                self.conn.rollback()
+            except sqlite3.Error:
+                pass
+            self.log(f"❌ DB ERROR (BGS purge empty): {exc}")
+            return None
+        finally:
+            self.db_lock.release()
 
     def db_load_bgs_factions(self, system_name: str) -> list:
         """Return all snapshots for system_name, newest first (up to 500 rows)."""
