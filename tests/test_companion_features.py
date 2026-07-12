@@ -93,10 +93,19 @@ def test_dashboard_companion_journal_integration():
         def push(self, *args, **kwargs):
             self.rows.append((args, kwargs))
 
+    class Voice:
+        def __init__(self):
+            self.rows = []
+
+        def say(self, text, **kwargs):
+            self.rows.append((text, kwargs))
+            return True
+
     app = MainDashboard.__new__(MainDashboard)
     app.root = Root()
     app.config = {}
     app.toast_hud = Toast()
+    app.voice_callouts = Voice()
     app.commander_profile_window = None
     app.bgs_window = None
     app.survey_status_hud = None
@@ -124,6 +133,7 @@ def test_dashboard_companion_journal_integration():
         app._process_companion_event("Bounty", {"VictimFaction": "Pirates"}, {}, False)
     assert features.massacre_stacks(app.companion_state)[0]["complete"]
     assert any(row[0][0] == "STACK COMPLETE" for row in app.toast_hud.rows)
+    assert any("Massacre stack complete" in row[0] for row in app.voice_callouts.rows)
 
     app._process_companion_event("StoredShips", {
         "StationName": "Jameson Memorial", "StarSystem": "Shinrarta Dezhra",

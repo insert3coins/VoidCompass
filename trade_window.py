@@ -1834,6 +1834,15 @@ class TradeWindow(ThemedWindowMixin):
             fg=self.UI_MUTED,
         )
         self._set_route_detail(("\n\n" + "-" * 72 + "\n\n").join(cards) if cards else "")
+        if loops and callable(getattr(self.app, "_speak", None)):
+            best = loops[0]
+            hourly_m = int(best.get("profit_per_hour") or 0) / 1_000_000
+            self.app._speak(
+                f"Best trade loop found. {best['a']['station']} to {best['b']['station']}. "
+                f"Estimated {hourly_m:.1f} million credits per hour.",
+                category="objectives", cooldown_s=60,
+                key=f"best-trade-loop:{best['a']['station']}:{best['b']['station']}",
+            )
 
     def _render_chain(self, hops, source, elapsed=None):
         self._clear_route_results()
@@ -1855,6 +1864,15 @@ class TradeWindow(ThemedWindowMixin):
             fg=self.UI_MUTED,
         )
         self._set_route_detail(f"TOTAL {self._credits(total)} via {source}\n\n" + ("\n\n" + "-" * 72 + "\n\n").join(cards) if cards else "")
+        if hops and callable(getattr(self.app, "_speak", None)):
+            first, last = hops[0], hops[-1]
+            total_m = total / 1_000_000
+            self.app._speak(
+                f"Trade route found. {len(hops)} hops from {first.get('from_station')} "
+                f"to {last.get('to_station')}. Estimated {total_m:.1f} million credits total.",
+                category="objectives", cooldown_s=60,
+                key=f"best-trade-route:{first.get('from_station')}:{last.get('to_station')}",
+            )
 
     def _on_route_selected(self, _event=None):
         selected = self.route_tree.selection()

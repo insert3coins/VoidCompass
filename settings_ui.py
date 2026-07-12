@@ -4,6 +4,7 @@ import tkinter.messagebox
 from tkinter import colorchooser
 
 import themes
+import voice_callouts
 from config import DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config as persist_config
 from ui_theme import THEME, FONT_MONO, FONT_TITLE, FONT_UI, FONT_UI_BOLD, apply_window, button, window_surface
 
@@ -25,7 +26,8 @@ UI_FONT_TITLE = FONT_TITLE
 UI_MONO = FONT_MONO
 
 
-def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded=False, on_close_callback=None):
+def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded=False,
+                  on_close_callback=None, voice_manager=None):
     win = window_surface(root, embedded=embedded)
     win.title("SYSTEM CONFIGURATION")
     win.geometry(config.get("settings_geometry", "980x800"))
@@ -197,18 +199,27 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     edsm_upload_var = tk.BooleanVar(value=config.get("edsm_upload_enabled", False))
     runtime_trace_var = tk.BooleanVar(value=config.get("runtime_trace_enabled", True))
     crash_reporting_var = tk.BooleanVar(value=config.get("crash_reporting_enabled", True))
+    voice_enabled_var = tk.BooleanVar(value=config.get("voice_callouts_enabled", False))
+    voice_safety_var = tk.BooleanVar(value=config.get("voice_safety_enabled", True))
+    voice_exploration_var = tk.BooleanVar(value=config.get("voice_exploration_enabled", True))
+    voice_navigation_var = tk.BooleanVar(value=config.get("voice_navigation_enabled", True))
+    voice_objectives_var = tk.BooleanVar(value=config.get("voice_objectives_enabled", True))
+    voice_cache_var = tk.BooleanVar(value=config.get("voice_cache_enabled", True))
+    voice_volume_var = tk.DoubleVar(value=float(config.get("voice_volume", 0.8) or 0.8))
     if "screenshots_path" not in config:
         config["screenshots_path"] = os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous")
 
     # Pages
     core_page = make_page("core", "Core", "Journal and screenshot paths.")
     overlay_page = make_page("overlays", "Overlays", "Runtime modules and display timing.")
+    voice_page = make_page("voice", "Voice", "Optional local neural callouts. Voice audio never leaves this computer.")
     theme_page = make_page("theme", "Theme", "Color theme for this commander profile. Applies when you save.")
     integrations_page = make_page("integrations", "Integrations", "EDSM upload and fleet carrier Discord.")
     diagnostics_page = make_page("diagnostics", "Diagnostics", "Runtime tracing and automatic crash or UI-freeze reports.")
 
     nav_button("core", "Core")
     nav_button("overlays", "Overlays")
+    nav_button("voice", "Voice")
     nav_button("theme", "Theme")
     nav_button("integrations", "Integrations")
     nav_button("diagnostics", "Diagnostics")
@@ -243,6 +254,125 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     prosp_timeout_e = input_row(overlay_timing, "Prospector Auto-Hide", "prospector_hud_timeout_s")
     sysinfo_timeout_e = input_row(overlay_timing, "System Info Auto-Hide", "system_info_timeout_s")
     gravity_threshold_e = input_row(overlay_timing, "Gravity Warning Threshold (g)", "gravity_warning_threshold_g")
+
+    # ---- Voice page ----
+    voice_general = section(voice_page, "Voice Callouts")
+    toggle_row(voice_general, "Enable voice callouts", voice_enabled_var)
+    toggle_row(voice_general, "Safety and danger", voice_safety_var)
+    toggle_row(voice_general, "Exploration and biology", voice_exploration_var)
+    toggle_row(voice_general, "Navigation milestones", voice_navigation_var)
+    toggle_row(voice_general, "Trade, Engineering, and missions", voice_objectives_var)
+    toggle_row(voice_general, "Cache generated callouts", voice_cache_var)
+
+    voice_catalog = section(voice_page, "Neural Voice Pack")
+    voice_names = list(voice_callouts.VOICES)
+    voice_labels = {
+        name: f"{item['label']} ({item['mb']} MB)"
+        for name, item in voice_callouts.VOICES.items()
+    }
+    label_to_voice = {label: name for name, label in voice_labels.items()}
+    initial_voice = voice_callouts.selected_voice(config)
+    voice_choice_var = tk.StringVar(value=voice_labels[initial_voice])
+    voice_menu = option_row(voice_catalog, "Voice", voice_choice_var, [voice_labels[name] for name in voice_names])
+    voice_menu.configure(width=34)
+
+    volume_frame = row(voice_catalog)
+    tk.Label(volume_frame, text="Volume", font=UI_FONT_BOLD, fg=UI_MUTED,
+             bg=UI_PANEL, anchor="w", width=24).pack(side=tk.LEFT)
+    volume_scale = tk.Scale(
+        volume_frame, from_=0.1, to=1.0, resolution=0.05, orient=tk.HORIZONTAL,
+        variable=voice_volume_var, showvalue=True, length=260,
+        bg=UI_PANEL, fg=COLOR_TEXT, troughcolor=UI_PANEL_2,
+        activebackground=COLOR_ACCENT, highlightthickness=0, bd=0,
+    )
+    volume_scale.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+    voice_status_var = tk.StringVar(value="Checking installed voice packs...")
+    voice_status_label = tk.Label(
+        voice_catalog, textvariable=voice_status_var, font=UI_FONT, fg=UI_MUTED,
+        bg=UI_PANEL, anchor="w", justify=tk.LEFT, wraplength=620,
+    )
+    voice_status_label.pack(fill=tk.X, padx=12, pady=(2, 6))
+    voice_cache_status_var = tk.StringVar(value="")
+    tk.Label(
+        voice_catalog, textvariable=voice_cache_status_var, font=UI_FONT,
+        fg=UI_DIM, bg=UI_PANEL, anchor="w",
+    ).pack(fill=tk.X, padx=12, pady=(0, 2))
+    voice_actions = row(voice_catalog)
+
+    def _chosen_voice():
+        return label_to_voice.get(voice_choice_var.get(), voice_callouts.DEFAULT_VOICE)
+
+    def _install_voice():
+        try:
+            voice_callouts.start_download(_chosen_voice())
+            _refresh_voice_status(False)
+        except voice_callouts.VoiceError as exc:
+            tk.messagebox.showwarning("Voice Pack", str(exc), parent=win)
+
+    def _test_voice():
+        chosen = _chosen_voice()
+        if not voice_callouts.ready(chosen):
+            tk.messagebox.showwarning("Voice Test", "Install the selected voice pack first.", parent=win)
+            return
+        try:
+            if voice_manager is None:
+                raise voice_callouts.VoiceError("Voice playback is not connected. Restart VoidCompass and try again.")
+            voice_manager.test(chosen, voice_volume_var.get(), voice_cache_var.get())
+            voice_status_var.set("Test callout queued.")
+        except voice_callouts.VoiceError as exc:
+            tk.messagebox.showwarning("Voice Test", str(exc), parent=win)
+
+    install_voice_btn = action_button(voice_actions, "Download Voice Pack", _install_voice, accent=True)
+    install_voice_btn.pack(side=tk.LEFT)
+    test_voice_btn = action_button(voice_actions, "Test Voice", _test_voice)
+    test_voice_btn.pack(side=tk.LEFT, padx=(8, 0))
+
+    def _clear_voice_cache():
+        result = voice_callouts.clear_cache()
+        freed_mb = result["bytes"] / (1024 * 1024)
+        voice_cache_status_var.set(f"Cleared {result['files']} cached files ({freed_mb:.1f} MB).")
+
+    action_button(voice_actions, "Clear Cache", _clear_voice_cache, muted=True).pack(side=tk.RIGHT)
+
+    def _refresh_voice_status(schedule=True):
+        if not win.winfo_exists():
+            return
+        chosen = _chosen_voice()
+        state = voice_callouts.status(chosen)
+        cache = voice_callouts.cache_status()
+        voice_cache_status_var.set(
+            f"Audio cache: {cache['files']} files · {cache['bytes'] / (1024 * 1024):.1f} MB "
+            f"· maximum {cache['limit']} files"
+        )
+        if state["downloading"]:
+            active = state.get("download_voice") or chosen
+            label = voice_callouts.VOICES.get(active, {}).get("label", active)
+            voice_status_var.set(f"Downloading {label}: {state['progress'] * 100:.0f}%")
+            install_voice_btn.configure(state=tk.DISABLED, text="Downloading...")
+        elif state["ready"]:
+            playback_error = getattr(voice_manager, "last_error", None) if voice_manager else None
+            voice_status_var.set(
+                f"Playback error: {playback_error}" if playback_error
+                else "Selected voice pack is installed and ready."
+            )
+            install_voice_btn.configure(state=tk.DISABLED, text="Installed")
+        elif state["error"] and state.get("download_voice") == chosen:
+            voice_status_var.set(state["error"])
+            install_voice_btn.configure(state=tk.NORMAL, text="Retry Download")
+        else:
+            size = voice_callouts.VOICES[chosen]["mb"]
+            voice_status_var.set(f"Not installed. Download size is approximately {size} MB, plus the Piper runtime on first install.")
+            install_voice_btn.configure(state=tk.NORMAL, text="Download Voice Pack")
+        test_voice_btn.configure(state=tk.NORMAL if state["ready"] else tk.DISABLED)
+        if schedule:
+            try:
+                win.after(750, _refresh_voice_status)
+            except tk.TclError:
+                pass
+
+    voice_choice_var.trace_add("write", lambda *_args: _refresh_voice_status(False))
+    _refresh_voice_status()
 
     # ---- Theme page ----
     custom_themes = {
@@ -516,6 +646,14 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "edsm_upload_enabled": edsm_upload_var.get(),
             "runtime_trace_enabled": runtime_trace_var.get(),
             "crash_reporting_enabled": crash_reporting_var.get(),
+            "voice_callouts_enabled": voice_enabled_var.get(),
+            "voice_safety_enabled": voice_safety_var.get(),
+            "voice_exploration_enabled": voice_exploration_var.get(),
+            "voice_navigation_enabled": voice_navigation_var.get(),
+            "voice_objectives_enabled": voice_objectives_var.get(),
+            "voice_cache_enabled": voice_cache_var.get(),
+            "voice_name": _chosen_voice(),
+            "voice_volume": float(voice_volume_var.get()),
             "settings_geometry": win.geometry(),
         })
         remove_deprecated_keys()

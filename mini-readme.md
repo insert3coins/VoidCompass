@@ -1,5 +1,24 @@
 # VoidCompass // UPDATE LOG
 
+## v4.5.2 // Neural Voice Callouts
+**Release Date:** 2026-Jul-13
+
+### Voice Packs
+*   Added six optional Piper neural voices with native download progress, pinned SHA-256 verification, voice selection, volume, testing, and per-commander controls under **Settings → Voice**.
+*   Voice synthesis and Windows playback run in the background and remain disabled until explicitly enabled.
+*   Added an optional persistent audio cache for repeated callouts, including live file/size reporting and a **Clear Cache** action. When disabled, generated WAV files are deleted immediately after playback.
+
+### Callouts
+*   Added low-noise safety announcements for route-aware fuel and scoop risks, dry star stretches, interdictions, heat, shields, hull, suit hazards, rebuy coverage, and unsold data risk.
+*   Added navigation and exploration announcements for route waypoints, route completion, FSD supercharging, undiscovered systems, biological completion, Codex discoveries, and clear-to-sample guidance.
+*   Added Engineering-ready, massacre-stack-complete, and best trade-route result announcements, each controlled by callout category settings and one-shot cooldowns.
+
+### Dashboard
+*   Removed the duplicate **NAV TARGET** value from the Dashboard flight card because it represented the final route destination and could disagree with the Navigation HUD's actual next hop.
+
+### Version
+*   Updated app version to **4.5.2**.
+
 ## v4.4.4 // Interactive Galaxy Details
 **Release Date:** 2026-Jul-13
 

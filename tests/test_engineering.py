@@ -79,10 +79,19 @@ def test_dashboard_engineering_journal_integration():
         def push(self, *args, **kwargs):
             self.rows.append((args, kwargs))
 
+    class Voice:
+        def __init__(self):
+            self.rows = []
+
+        def say(self, text, **kwargs):
+            self.rows.append((text, kwargs))
+            return True
+
     app = MainDashboard.__new__(MainDashboard)
     app.root = ImmediateRoot()
     app.engineer_window = None
     app.toast_hud = Toast()
+    app.voice_callouts = Voice()
     app._save_engineer_materials = lambda _state: None
     app.engineer_materials = {
         "raw": {}, "manufactured": {},
@@ -99,6 +108,7 @@ def test_dashboard_engineering_journal_integration():
         "Name_Localised": "Atypical Disrupted Wake Echoes", "Count": 1,
     })
     assert len(app.toast_hud.rows) == 1
+    assert any("Materials complete" in row[0] for row in app.voice_callouts.rows)
     app._apply_ship_locker({
         "Items": [{"Name": "test_item", "Count": 2}, {"Name": "test_item", "Count": 3}],
         "Components": [], "Data": [], "Consumables": [],

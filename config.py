@@ -69,6 +69,7 @@ PROFILE_TEXT_SETTINGS = (
     "carrier_discord_webhook_url",
     "screenshots_path",
     "ui_theme_name",
+    "voice_name",
 )
 
 PROFILE_BOOL_SETTINGS = (
@@ -96,6 +97,12 @@ PROFILE_BOOL_SETTINGS = (
     "trade_eddn_upload_enabled",
     "achievements_enabled",
     "achievement_notifications_enabled",
+    "voice_callouts_enabled",
+    "voice_safety_enabled",
+    "voice_exploration_enabled",
+    "voice_navigation_enabled",
+    "voice_objectives_enabled",
+    "voice_cache_enabled",
 )
 
 PROFILE_VALUE_SETTINGS = (
@@ -153,6 +160,7 @@ PROFILE_VALUE_SETTINGS = (
     "ui_custom_themes",
     "achievements_disabled_categories",
     "achievement_window_geometry",
+    "voice_volume",
 )
 
 PROFILE_SETTINGS = PROFILE_TEXT_SETTINGS + PROFILE_BOOL_SETTINGS + PROFILE_VALUE_SETTINGS
@@ -241,6 +249,7 @@ def apply_profile_config(config, profile_key=None):
         "carrier_discord_webhook_url": "",
         "screenshots_path": os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous"),
         "ui_theme_name": _themes.DEFAULT_THEME_NAME,
+        "voice_name": "en_GB-alba-medium",
     }
     bool_defaults = {
         "edsm_upload_enabled": False,
@@ -267,6 +276,12 @@ def apply_profile_config(config, profile_key=None):
         "trade_eddn_upload_enabled": True,
         "achievements_enabled": True,
         "achievement_notifications_enabled": True,
+        "voice_callouts_enabled": False,
+        "voice_safety_enabled": True,
+        "voice_exploration_enabled": True,
+        "voice_navigation_enabled": True,
+        "voice_objectives_enabled": True,
+        "voice_cache_enabled": True,
     }
     for setting in PROFILE_TEXT_SETTINGS:
         if setting not in profile:
@@ -276,7 +291,10 @@ def apply_profile_config(config, profile_key=None):
             profile[setting] = bool(config.get(setting, bool_defaults.get(setting, False))) if is_initial_profile else bool_defaults.get(setting, False)
     for setting in PROFILE_VALUE_SETTINGS:
         if setting not in profile and setting in config:
-            profile[setting] = config.get(setting)
+            profile[setting] = (
+                0.8 if setting == "voice_volume" and not is_initial_profile
+                else config.get(setting)
+            )
     for setting in PROFILE_TEXT_SETTINGS:
         config[setting] = profile.get(setting, "")
     for setting in PROFILE_BOOL_SETTINGS:
@@ -429,6 +447,14 @@ def load_config():
         'achievement_notifications_enabled': True,
         'achievements_disabled_categories': [],
         'achievement_window_geometry': '1080x700',
+        'voice_callouts_enabled': False,
+        'voice_safety_enabled': True,
+        'voice_exploration_enabled': True,
+        'voice_navigation_enabled': True,
+        'voice_objectives_enabled': True,
+        'voice_cache_enabled': True,
+        'voice_name': 'en_GB-alba-medium',
+        'voice_volume': 0.8,
         'ui_theme_name': _themes.DEFAULT_THEME_NAME,
         'ui_custom_themes': {},
     }
