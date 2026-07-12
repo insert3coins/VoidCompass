@@ -14,7 +14,7 @@
 *   Added Engineering-ready, massacre-stack-complete, and best trade-route result announcements, each controlled by callout category settings and one-shot cooldowns.
 
 ### Dashboard
-*   Removed the duplicate **NAV TARGET** value from the Dashboard flight card because it represented the final route destination and could disagree with the Navigation HUD's actual next hop.
+*   Removed the duplicate graphical route strip from the Dashboard flight card—the CURRENT/DEST pips, route state, and distance remain available in the dedicated Navigation HUD.
 
 ### Version
 *   Updated app version to **4.5.2**.
