@@ -2,11 +2,7 @@ import threading
 import time
 import tkinter as tk
 import webbrowser
-import os
-import subprocess
-import sys
-from pathlib import Path
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 from trade import alerts, eddn, eddn_upload, marketdb, routes, seed, spansh
@@ -34,6 +30,7 @@ class TradeWindow(ThemedWindowMixin):
         self._live_poll_after = None
         self._last_db_poll = 0
         self._status_refresh_running = False
+        self._market_db_ready = False
         self.market_sort = ("sell", -1)
         self.market_analysis = {}
         self.market_rows = {}
@@ -103,6 +100,11 @@ class TradeWindow(ThemedWindowMixin):
         style.configure("Trade.TNotebook", background=self.UI_BG, borderwidth=0)
         style.configure("Trade.TNotebook.Tab", background=self.UI_PANEL, foreground=COLOR_TEXT, padding=(12, 7), borderwidth=0)
         style.map("Trade.TNotebook.Tab", background=[("selected", self.UI_PANEL_2)], foreground=[("selected", COLOR_ACCENT)])
+        style.configure("Trade.Sub.TNotebook", background=self.UI_BG, borderwidth=0)
+        style.configure("Trade.Sub.TNotebook.Tab", background="#0e1318", foreground=self.UI_MUTED,
+                        padding=(10, 5), borderwidth=0)
+        style.map("Trade.Sub.TNotebook.Tab", background=[("selected", self.UI_PANEL)],
+                  foreground=[("selected", COLOR_ORANGE)])
         style.configure("Trade.Treeview", background="#0b0f13", foreground=COLOR_TEXT, fieldbackground="#0b0f13", rowheight=24, borderwidth=0)
         style.configure("Trade.Treeview.Heading", background=self.UI_PANEL, foreground=COLOR_ORANGE, relief="flat", font=("Segoe UI", 8, "bold"))
         style.map("Trade.Treeview", background=[("selected", "#12313c")], foreground=[("selected", COLOR_TEXT)])
@@ -123,16 +125,39 @@ class TradeWindow(ThemedWindowMixin):
 
         self.tabs = ttk.Notebook(self.win, style="Trade.TNotebook")
         self.tabs.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        self._build_radar_tab()
-        self._build_routes_tab()
-        self._build_commodity_tab()
-        self._build_station_search_tab()
-        self._build_guides_tab()
+        self._build_routes_group()
+        self._build_markets_group()
         self._build_local_tab()
-        self._build_watchlist_tab()
-        self._build_analytics_tab()
+        self._build_tracking_group()
         self._build_database_tab()
         self._build_footer()
+
+    def _sub_notebook(self, parent):
+        notebook = ttk.Notebook(parent, style="Trade.Sub.TNotebook")
+        notebook.pack(fill=tk.BOTH, expand=True)
+        return notebook
+
+    def _build_routes_group(self):
+        frame = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.tabs.add(frame, text="Routes")
+        self.route_tabs = self._sub_notebook(frame)
+        self._build_routes_tab(self.route_tabs, "TRADE ROUTES")
+        self._build_guides_tab(self.route_tabs, "ROAD TO RICHES")
+
+    def _build_markets_group(self):
+        frame = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.tabs.add(frame, text="Markets")
+        self.market_tabs = self._sub_notebook(frame)
+        self._build_radar_tab(self.market_tabs, "RADAR + CARGO")
+        self._build_commodity_tab(self.market_tabs, "COMMODITIES")
+        self._build_station_search_tab(self.market_tabs, "STATIONS")
+
+    def _build_tracking_group(self):
+        frame = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.tabs.add(frame, text="Tracking")
+        self.tracking_tabs = self._sub_notebook(frame)
+        self._build_watchlist_tab(self.tracking_tabs, "WATCHLIST")
+        self._build_analytics_tab(self.tracking_tabs, "ANALYTICS")
 
     def _summary_stat(self, parent, label, value, fg):
         box = tk.Frame(parent, bg=self.UI_PANEL)
@@ -368,9 +393,10 @@ class TradeWindow(ThemedWindowMixin):
         text = self.route_detail_by_iid.get(selected[0], "") if selected else self.route_detail.get("1.0", tk.END).strip()
         self._copy_text(text, "Route detail")
 
-    def _build_radar_tab(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="Radar")
+    def _build_radar_tab(self, notebook=None, text="Radar"):
+        notebook = notebook or self.tabs
+        frame = tk.Frame(notebook, bg=self.UI_BG)
+        notebook.add(frame, text=text)
         wrap = tk.Frame(frame, bg=self.UI_BG)
         wrap.pack(fill=tk.BOTH, expand=True)
         left = tk.Frame(wrap, bg=self.UI_BG)
@@ -430,9 +456,10 @@ class TradeWindow(ThemedWindowMixin):
             "profit": ("Profit", 90, tk.E),
         })
 
-    def _build_routes_tab(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="Trade Routes")
+    def _build_routes_tab(self, notebook=None, text="Trade Routes"):
+        notebook = notebook or self.tabs
+        frame = tk.Frame(notebook, bg=self.UI_BG)
+        notebook.add(frame, text=text)
         body = self._card(frame, "TRADE ROUTES", "computed locally, with Spansh fallback for chain routes")
         controls = tk.Frame(body, bg=self.UI_PANEL)
         controls.pack(fill=tk.X, pady=(0, 8))
@@ -484,9 +511,10 @@ class TradeWindow(ThemedWindowMixin):
         self.route_detail.pack(fill=tk.X, pady=(8, 0))
         self.route_detail.configure(state=tk.DISABLED)
 
-    def _build_commodity_tab(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="Commodities")
+    def _build_commodity_tab(self, notebook=None, text="Commodities"):
+        notebook = notebook or self.tabs
+        frame = tk.Frame(notebook, bg=self.UI_BG)
+        notebook.add(frame, text=text)
         body = self._card(frame, "COMMODITY SEARCH", "local database: where to buy or sell near you")
         controls = tk.Frame(body, bg=self.UI_PANEL)
         controls.pack(fill=tk.X, pady=(0, 8))
@@ -524,9 +552,10 @@ class TradeWindow(ThemedWindowMixin):
             "pad": ("Pad", 50, tk.CENTER),
         })
 
-    def _build_station_search_tab(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="Station Search")
+    def _build_station_search_tab(self, notebook=None, text="Station Search"):
+        notebook = notebook or self.tabs
+        frame = tk.Frame(notebook, bg=self.UI_BG)
+        notebook.add(frame, text=text)
         body = self._card(frame, "OUTFITTING + SHIPYARD SEARCH", "Spansh station search near your current system")
         controls = tk.Frame(body, bg=self.UI_PANEL)
         controls.pack(fill=tk.X, pady=(0, 8))
@@ -553,9 +582,10 @@ class TradeWindow(ThemedWindowMixin):
             "updated": ("Updated", 130, tk.W),
         })
 
-    def _build_guides_tab(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="Guides")
+    def _build_guides_tab(self, notebook=None, text="Guides"):
+        notebook = notebook or self.tabs
+        frame = tk.Frame(notebook, bg=self.UI_BG)
+        notebook.add(frame, text=text)
         wrap = tk.Frame(frame, bg=self.UI_BG)
         wrap.pack(fill=tk.BOTH, expand=True)
 
@@ -590,9 +620,10 @@ class TradeWindow(ThemedWindowMixin):
         ent.pack(anchor="w")
         return ent
 
-    def _build_local_tab(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="Local")
+    def _build_local_tab(self, notebook=None, text="Local"):
+        notebook = notebook or self.tabs
+        frame = tk.Frame(notebook, bg=self.UI_BG)
+        notebook.add(frame, text=text)
         wrap = tk.Frame(frame, bg=self.UI_BG)
         wrap.pack(fill=tk.BOTH, expand=True)
         left_col = tk.Frame(wrap, bg=self.UI_BG)
@@ -633,9 +664,10 @@ class TradeWindow(ThemedWindowMixin):
             "count": ("Units", 80, tk.E),
         })
 
-    def _build_database_tab(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="Database")
+    def _build_database_tab(self, notebook=None, text="Database"):
+        notebook = notebook or self.tabs
+        frame = tk.Frame(notebook, bg=self.UI_BG)
+        notebook.add(frame, text=text)
         panel = self._card(
             frame, "MARKET DATABASE",
             "full Spansh baseline once; incremental EDDN and journal-market updates thereafter")
@@ -645,6 +677,9 @@ class TradeWindow(ThemedWindowMixin):
         self.seed_progress.pack(fill=tk.X, padx=12, pady=(0, 10))
         self.seed_progress.pack_forget()
         self.eddn_upload_var = tk.BooleanVar(value=bool(self.config.get("trade_eddn_upload_enabled", True)))
+        self.seed_low_impact_var = tk.BooleanVar(value=True)
+        self.seed_include_carriers_var = tk.BooleanVar(value=False)
+        self.seed_keep_dump_var = tk.BooleanVar(value=False)
         tk.Checkbutton(
             panel,
             text="Publish visited station markets to EDDN",
@@ -657,13 +692,23 @@ class TradeWindow(ThemedWindowMixin):
         ).pack(anchor="w", padx=12, pady=(0, 10))
         row = tk.Frame(panel, bg=self.UI_PANEL)
         row.pack(fill=tk.X, padx=12, pady=(0, 12))
-        self.seed_btn = self._button(row, "Open Market Builder", self.open_market_builder, accent=True)
+        self.seed_btn = self._button(row, "FIRST FULL BUILD", self._start_full_market_build, accent=True)
         self.seed_btn.pack(side=tk.LEFT)
-        self._button(row, "Refresh Status", self.refresh_status).pack(side=tk.LEFT)
+        self._button(row, "Refresh Status", self.refresh_status).pack(side=tk.LEFT, padx=(6, 10))
+        for text, variable in (
+            ("Low impact", self.seed_low_impact_var),
+            ("Include carriers", self.seed_include_carriers_var),
+            ("Keep 4+ GB dump", self.seed_keep_dump_var),
+        ):
+            tk.Checkbutton(
+                row, text=text, variable=variable, bg=self.UI_PANEL, fg=COLOR_TEXT,
+                selectcolor=self.UI_PANEL_2, activebackground=self.UI_PANEL,
+            ).pack(side=tk.LEFT, padx=(0, 10))
 
-    def _build_analytics_tab(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="Analytics")
+    def _build_analytics_tab(self, notebook=None, text="Analytics"):
+        notebook = notebook or self.tabs
+        frame = tk.Frame(notebook, bg=self.UI_BG)
+        notebook.add(frame, text=text)
         body = self._card(frame, "TRADE ANALYTICS", "persistent trade and balance history from journal events")
         controls = tk.Frame(body, bg=self.UI_PANEL)
         controls.pack(fill=tk.X, pady=(0, 8))
@@ -696,6 +741,36 @@ class TradeWindow(ThemedWindowMixin):
         self.config["trade_eddn_upload_enabled"] = enabled
         eddn_upload.UPLOADER.set_enabled(enabled)
         save_config(self.config)
+        self.refresh_status()
+
+    def _start_full_market_build(self):
+        phase = seed.SEEDER.progress().get("phase")
+        if phase in ("starting", "downloading", "importing", "indexing"):
+            self._show_banner("A full market database build is already running.")
+            return
+        if self._market_db_ready:
+            prompt = (
+                "Download the full Spansh populated-galaxy snapshot and rebase the local database?\n\n"
+                "This is an occasional 4+ GB maintenance operation, not the normal update path. "
+                "EDDN and visited Market.json files already maintain prices incrementally.\n\n"
+                "Newer local market rows will be preserved."
+            )
+        else:
+            prompt = (
+                "Download the full Spansh populated-galaxy snapshot and create the first market database?\n\n"
+                "This initial download is roughly 4+ GB. Normal updates afterwards are automatic through "
+                "EDDN and visited Market.json files."
+            )
+        if not messagebox.askyesno("Full Spansh Market Build", prompt, parent=self.win):
+            return
+        if not seed.SEEDER.start(
+                include_carriers=self.seed_include_carriers_var.get(),
+                keep_dump=self.seed_keep_dump_var.get(),
+                polite=self.seed_low_impact_var.get()):
+            self._show_banner("The market database worker could not be started.")
+            return
+        self._show_banner("Full market database worker started. The current database remains available.")
+        self._schedule_seed_poll(300)
         self.refresh_status()
 
     def _seed_defaults(self):
@@ -868,6 +943,7 @@ class TradeWindow(ThemedWindowMixin):
     def _render_status(self, info, eddn_stats, seed_info, upload_stats=None):
         upload_stats = upload_stats or {}
         ready = bool(info.get("ready"))
+        self._market_db_ready = ready
         self.db_badge.config(text="DB READY" if ready else "DB EMPTY", bg=self.UI_OK if ready else self.UI_WARN)
         self.subtitle.config(text=f"{self._current_system() or 'No current system'} | trade data: Spansh dump + EDDN + journal markets")
         phase = seed_info.get("phase")
@@ -875,7 +951,10 @@ class TradeWindow(ThemedWindowMixin):
             self.seed_btn.config(state=tk.DISABLED)
             self._show_seed_progress()
         else:
-            self.seed_btn.config(state=tk.NORMAL, text="Open Market Builder")
+            self.seed_btn.config(
+                state=tk.NORMAL,
+                text="FULL SPANSH REBUILD" if ready else "FIRST FULL BUILD",
+            )
             if self.seed_progress.winfo_ismapped():
                 self.seed_progress.pack_forget()
         eddn_txt = "connected" if eddn_stats.get("connected") else "offline/reconnecting"
@@ -920,7 +999,7 @@ class TradeWindow(ThemedWindowMixin):
             except Exception:
                 pass
             seed_txt = f"Seed error: {seed_info.get('error')}"
-            self.seed_btn.config(text="Open Market Builder")
+            self.seed_btn.config(text="FULL SPANSH REBUILD" if ready else "FIRST FULL BUILD")
         else:
             try:
                 self.seed_progress.stop()
@@ -1137,9 +1216,10 @@ class TradeWindow(ThemedWindowMixin):
             count = item.get("Count", item.get("count", 0))
             self.cargo_tree.insert("", tk.END, values=(name, self._num(count)))
 
-    def _build_watchlist_tab(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="Watchlist")
+    def _build_watchlist_tab(self, notebook=None, text="Watchlist"):
+        notebook = notebook or self.tabs
+        frame = tk.Frame(notebook, bg=self.UI_BG)
+        notebook.add(frame, text=text)
         body = self._card(frame, "ROUTE WATCHLIST", "saved commodities, systems, and station pairs for quick checks")
         controls = tk.Frame(body, bg=self.UI_PANEL)
         controls.pack(fill=tk.X, pady=(0, 8))
@@ -1618,25 +1698,6 @@ class TradeWindow(ThemedWindowMixin):
         current_key, current_dir = self.market_sort
         self.market_sort = (key, -current_dir if key == current_key else (1 if key == "name" else -1))
         self.refresh_local()
-
-    def open_market_builder(self):
-        try:
-            if getattr(sys, "frozen", False):
-                exe_dir = Path(sys.executable).resolve().parent
-                builder = exe_dir / "VoidCompassMarketBuilder.exe"
-                if builder.exists():
-                    subprocess.Popen([str(builder)], cwd=str(exe_dir))
-                    return
-            script = Path(__file__).resolve().parent / "market_builder.py"
-            if script.exists():
-                env = os.environ.copy()
-                env["VC_TRADE_SEED_WORKER_SCRIPT"] = str(script)
-                subprocess.Popen([sys.executable, str(script)], cwd=str(script.parent), env=env)
-                return
-            raise FileNotFoundError("market_builder.py not found")
-        except Exception as exc:
-            self._show_banner(f"Market Builder launch failed: {exc}")
-            self._set_db_text(f"Market Builder launch failed: {exc}", self.UI_FAIL)
 
     def find_routes(self):
         self.route_status.config(text="Searching trade routes...", fg=self.UI_MUTED)
