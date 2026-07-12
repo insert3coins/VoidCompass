@@ -576,12 +576,21 @@ class AchievementEngine:
             except Exception:
                 pass
 
-    def tick_playtime(self) -> list[dict[str, Any]]:
+    def tick_playtime(self, active: bool = True) -> list[dict[str, Any]]:
+        """Accrue playtime minutes.
+
+        `active` must be True only while Elite Dangerous is actually running
+        (the caller decides, from journal/Status.json freshness). The
+        played_*_hours achievements measure time in the game, not time with
+        VoidCompass open — so while the game is closed we park the baseline
+        at `now`, which both stops accrual and prevents the idle gap from
+        being banked the moment the game comes back.
+        """
         if not self.enabled:
             return []
         now = time.monotonic()
         with self.lock:
-            if self._rebuilding:
+            if self._rebuilding or not active:
                 self._last_playtime_tick = now
                 return []
         elapsed_minutes = int((now - self._last_playtime_tick) // 60)
@@ -670,10 +679,15 @@ class AchievementEngine:
 
     def reset_achievement(self, achievement_id: str) -> bool:
         with self.lock:
-            existed = self.state["unlocked"].pop(str(achievement_id), None) is not None
-            self.state["counters"].pop(str(achievement_id), None)
-            self.state["sumcounters"].pop(str(achievement_id), None)
-            self.state["uniquesets"].pop(str(achievement_id), None)
+            achievement_id = str(achievement_id)
+            existed = self.state["unlocked"].pop(achievement_id, None) is not None
+            self.state["counters"].pop(achievement_id, None)
+            self.state["sumcounters"].pop(achievement_id, None)
+            self.state["uniquesets"].pop(achievement_id, None)
+            # Route progress lives on the session, not the persisted state.
+            # Leaving it behind kept a reset route achievement sitting at 100%,
+            # so it re-fired on the very next jump.
+            self.session["routeProgress"].pop(achievement_id, None)
             self._dirty = True
             self.save(force=True)
             return existed
@@ -711,6 +725,47 @@ class AchievementEngine:
                 "totalUnlocked": len(self.state["unlocked"]),
             }
 
+    def _merge_prior_progress(self, previous: dict[str, Any]) -> int:
+        """Fold pre-rebuild progress back into the freshly-derived state.
+
+        A rebuild can only recreate what the journals still on disk prove.
+        Unlocks earned live months ago (or imported from the old app, or
+        granted manually) are not re-derivable once those journals rotate
+        away, so a bare re-scan silently destroyed them. Progress is treated
+        as monotonic: we keep the better of the two everywhere, and prefer the
+        ORIGINAL unlock records so their real timestamps survive (a rebuild
+        re-stamps everything it re-derives with the time of the rebuild).
+
+        Returns the number of unlocks that only the prior state knew about.
+        """
+        if not isinstance(previous, dict):
+            return 0
+        preserved = 0
+        for achievement_id, record in (previous.get("unlocked") or {}).items():
+            if achievement_id not in self.state["unlocked"]:
+                preserved += 1
+            # Prior record wins either way: it carries the true unlock time.
+            self.state["unlocked"][achievement_id] = record
+        for key in ("counters", "sumcounters"):
+            for achievement_id, value in (previous.get(key) or {}).items():
+                self.state[key][achievement_id] = max(
+                    _number(self.state[key].get(achievement_id)), _number(value)
+                )
+        for achievement_id, values in (previous.get("uniquesets") or {}).items():
+            self.state["uniquesets"].setdefault(achievement_id, set()).update(values or [])
+        # Monotonic lifetime totals: never let a rebuild walk them backwards.
+        for key in ("playtimeMinutes", "travelledLy", "maxDistanceFromSol"):
+            self.state[key] = max(_number(self.state.get(key)), _number(previous.get(key)))
+        # Point-in-time values: trust the rebuild, fall back to the old value.
+        for key in ("credits", "distanceLy", "currentDistanceFromSol"):
+            if not _number(self.state.get(key)) and previous.get(key) is not None:
+                self.state[key] = previous.get(key)
+        if not self.state.get("startCoords") and previous.get("startCoords"):
+            self.state["startCoords"] = previous.get("startCoords")
+        if not self.state.get("lastAchievement") and previous.get("lastAchievement"):
+            self.state["lastAchievement"] = previous.get("lastAchievement")
+        return preserved
+
     def rebuild_history(
         self,
         journal_dir: str | os.PathLike[str],
@@ -735,6 +790,7 @@ class AchievementEngine:
             self._dirty = True
 
         processed = 0
+        preserved = 0
         queued_unlocks: list[dict[str, Any]] = []
         scanned_recent: deque[str] = deque(maxlen=6000)
         try:
@@ -763,6 +819,10 @@ class AchievementEngine:
 
             recent_set = set(scanned_recent)
             with self.lock:
+                # Carry forward anything the journals on disk can no longer
+                # prove (imported/manual/long-ago unlocks) before we accept the
+                # rebuilt state as the new truth.
+                preserved = self._merge_prior_progress(previous_state)
                 queued = list(self._queued_live_events)
                 self._queued_live_events = []
                 self._rebuilding = False
@@ -791,4 +851,9 @@ class AchievementEngine:
             with self.lock:
                 self._rebuilding = False
         self._dispatch_unlocks(queued_unlocks)
-        return {"files": len(snapshots), "events": processed, "unlocked": len(self.state["unlocked"])}
+        return {
+            "files": len(snapshots),
+            "events": processed,
+            "unlocked": len(self.state["unlocked"]),
+            "preserved": preserved,
+        }

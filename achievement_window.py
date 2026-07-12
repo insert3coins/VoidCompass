@@ -5,7 +5,7 @@ from datetime import datetime
 from tkinter import filedialog, messagebox, ttk
 
 from config import save_config
-from ui_theme import THEME, ThemedWindowMixin, apply_window, configure_ttk, window_surface
+from ui_theme import FONT_MONO, THEME, ThemedWindowMixin, apply_window, configure_ttk, window_surface
 
 
 class AchievementWindow(ThemedWindowMixin):
@@ -101,6 +101,10 @@ class AchievementWindow(ThemedWindowMixin):
             fieldbackground="#0b0f13",
             rowheight=25,
             borderwidth=0,
+            # Monospace matches the app's other data tables (ui_theme uses
+            # FONT_MONO for Treeviews) and keeps the progress bars, percentages
+            # and counters aligned in their column.
+            font=FONT_MONO,
         )
         style.configure(
             "Achievements.Treeview.Heading",
@@ -192,7 +196,7 @@ class AchievementWindow(ThemedWindowMixin):
             "status": ("STATE", 72, tk.CENTER),
             "title": ("ACHIEVEMENT", 285, tk.W),
             "category": ("CATEGORY", 120, tk.W),
-            "progress": ("PROGRESS", 130, tk.E),
+            "progress": ("PROGRESS", 250, tk.W),
             "points": ("PTS", 55, tk.E),
         }
         for column, (title, width, anchor) in headings.items():
@@ -222,6 +226,12 @@ class AchievementWindow(ThemedWindowMixin):
             font=("Consolas", 8, "bold"), anchor="w", justify=tk.LEFT,
         )
         self.detail_meta.pack(fill=tk.X, padx=12, pady=(4, 0))
+        self.detail_bar = tk.Canvas(
+            right, height=14, bg=self.UI_PANEL, highlightthickness=0, bd=0,
+        )
+        self.detail_bar.pack(fill=tk.X, padx=12, pady=(8, 0))
+        self.detail_bar.bind("<Configure>", lambda _e: self._draw_detail_bar())
+        self._detail_progress = None
         self.detail_text = tk.Text(
             right, bg=self.UI_PANEL, fg=THEME.text, insertbackground=THEME.accent,
             relief=tk.FLAT, bd=0, padx=12, pady=10, font=("Segoe UI", 9), wrap=tk.WORD,
@@ -389,6 +399,62 @@ class AchievementWindow(ThemedWindowMixin):
             target = int(target)
         return f"{current:,} / {target:,}" if isinstance(current, (int, float)) and isinstance(target, (int, float)) else f"{current} / {target}"
 
+    @staticmethod
+    def _progress_fraction(progress, unlocked=False):
+        """0.0-1.0, or None when the achievement has no measurable progress
+        (flag-type achievements are all-or-nothing)."""
+        if unlocked:
+            return 1.0
+        if not progress:
+            return None
+        current = progress.get("current", 0)
+        target = progress.get("target", 0)
+        if not isinstance(current, (int, float)) or not isinstance(target, (int, float)):
+            return None
+        if target <= 0:
+            return None
+        return max(0.0, min(1.0, current / target))
+
+    _BAR_CELLS = 12
+
+    @classmethod
+    def _progress_cell(cls, progress, unlocked=False):
+        """Treeview cells can't hold widgets, so the in-tree bar is drawn with
+        block characters: '[####------]  32%  32 / 100'.
+
+        Uses ━/─ rather than █/░: the shaded block renders as unreadable mush
+        at the tree's font size, while the heavy/light lines stay crisp.
+        """
+        fraction = cls._progress_fraction(progress, unlocked)
+        if fraction is None:
+            return "-"
+        filled = int(round(fraction * cls._BAR_CELLS))
+        bar = "━" * filled + "─" * (cls._BAR_CELLS - filled)
+        cell = f"{bar} {fraction * 100:3.0f}%"
+        # Flag-type achievements have no counter to show alongside the bar.
+        if progress:
+            cell = f"{cell}  {cls._progress_text(progress)}"
+        return cell
+
+    def _draw_detail_bar(self):
+        canvas = getattr(self, "detail_bar", None)
+        if canvas is None:
+            return
+        canvas.delete("all")
+        fraction = self._detail_progress
+        if fraction is None:
+            return
+        width = max(canvas.winfo_width(), 1)
+        height = int(canvas.cget("height"))
+        canvas.create_rectangle(
+            0, 3, width, height - 3, fill=THEME.input, outline=THEME.border,
+        )
+        if fraction > 0:
+            fill = THEME.green if fraction >= 1.0 else THEME.accent
+            canvas.create_rectangle(
+                0, 3, max(2, int(width * fraction)), height - 3, fill=fill, outline=fill,
+            )
+
     def refresh(self):
         if not self.is_open():
             return
@@ -471,7 +537,7 @@ class AchievementWindow(ThemedWindowMixin):
                     state,
                     f"{item.get('icon') or '★'}  {item.get('title') or item.get('id')}",
                     item.get("category") or "-",
-                    self._progress_text(item.get("progress")),
+                    self._progress_cell(item.get("progress"), bool(item.get("unlocked"))),
                     f"{int(item.get('points') or 0):,}",
                 ),
                 tags=tags,
@@ -510,6 +576,8 @@ class AchievementWindow(ThemedWindowMixin):
                 unlocked_at = datetime.fromisoformat(unlocked_at.replace("Z", "+00:00")).astimezone().strftime("%Y-%m-%d %H:%M")
             except Exception:
                 pass
+        self._detail_progress = self._progress_fraction(item.get("progress"), bool(item.get("unlocked")))
+        self._draw_detail_bar()
         body = [item.get("desc") or "No description.", "", f"Progress: {self._progress_text(item.get('progress'))}"]
         if unlocked_at:
             body.append(f"Unlocked: {unlocked_at}")
@@ -595,7 +663,11 @@ class AchievementWindow(ThemedWindowMixin):
             return
         if not messagebox.askyesno(
             "Rebuild achievement history",
-            "Reset derived progress and rebuild it from all journal files? Old unlock notifications will stay silent.",
+            "Re-derive progress from every journal file on disk?\n\n"
+            "Existing unlocks are kept — including imported and manually granted "
+            "ones that these journals can no longer prove. Counters only ever move "
+            "up. Rebuilt unlocks stay silent (no toasts).\n\n"
+            "To wipe everything instead, use Reset All.",
             parent=self.win,
         ):
             return
@@ -615,10 +687,12 @@ class AchievementWindow(ThemedWindowMixin):
                 return
 
             def complete():
+                preserved = result.get("preserved", 0)
+                kept = f"\n{preserved:,} kept from before the rebuild" if preserved else ""
                 self.operation_status.config(
                     text=(
                         f"Rebuild complete\n{result['files']:,} files / {result['events']:,} events\n"
-                        f"{result['unlocked']:,} achievements unlocked"
+                        f"{result['unlocked']:,} achievements unlocked{kept}"
                     )
                 )
                 self.refresh()
