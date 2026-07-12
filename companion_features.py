@@ -24,9 +24,15 @@ DEFAULT_STATE = {
     "powerplay": None,
     "pp_system": None,
     "galaxy_system": None,
+    "galaxy_updated": None,
+    "galaxy_system_updated": None,
+    "galaxy_source": None,
+    "galaxy_system_source": None,
     "controlling_faction": None,
     "factions": [],
     "conflicts": [],
+    "watched_factions": [],
+    "faction_watch_snapshots": {},
     "community_goals": {},
     "squadron": None,
     "unsold_exploration_cr": 0,
@@ -79,6 +85,73 @@ def save_state(path, state):
         os.replace(temp, path)
     except Exception:
         pass
+
+
+def toggle_faction_watch(state, faction_name):
+    """Toggle a faction watch and return its new watched state."""
+    name = str(faction_name or "").strip()
+    if not name:
+        return False
+    watched = {str(value) for value in state.get("watched_factions") or [] if value}
+    if name in watched:
+        watched.remove(name)
+        snapshots = state.setdefault("faction_watch_snapshots", {})
+        suffix = f"\n{name}"
+        for key in [key for key in snapshots if key.endswith(suffix)]:
+            snapshots.pop(key, None)
+        enabled = False
+    else:
+        watched.add(name)
+        enabled = True
+    state["watched_factions"] = sorted(watched, key=str.casefold)
+    return enabled
+
+
+def update_faction_watch_snapshots(state, system_name, factions, controlling_faction,
+                                   min_delta=0.01, notify=True):
+    """Update persistent watched-faction baselines and return concise changes.
+
+    Each returned item is ``(faction_name, detail_text)``. A faction generates at
+    most one item per journal update so influence, state, and control changes do
+    not turn into a burst of separate alerts.
+    """
+    system = str(system_name or "").strip()
+    watched = {str(value) for value in state.get("watched_factions") or [] if value}
+    snapshots = state.setdefault("faction_watch_snapshots", {})
+    if not system or not watched:
+        return []
+    changes = []
+    for faction in factions or []:
+        name = str(faction.get("name") or "").strip()
+        if not name or name not in watched:
+            continue
+        key = f"{system}\n{name}"
+        current = {
+            "influence": float(faction.get("influence") or 0),
+            "active_states": sorted(str(value) for value in faction.get("active_states") or []),
+            "controls": name == controlling_faction,
+        }
+        previous = snapshots.get(key)
+        details = []
+        if notify and isinstance(previous, dict):
+            delta = current["influence"] - float(previous.get("influence") or 0)
+            if abs(delta) >= float(min_delta):
+                details.append(f"influence {delta * 100:+.1f}%")
+            old_states = set(previous.get("active_states") or [])
+            new_states = set(current["active_states"])
+            if old_states != new_states:
+                entered = sorted(new_states - old_states)
+                ended = sorted(old_states - new_states)
+                if entered:
+                    details.append("state " + ", ".join(entered))
+                if ended:
+                    details.append("ended " + ", ".join(ended))
+            if bool(previous.get("controls")) != current["controls"]:
+                details.append("now controls system" if current["controls"] else "lost system control")
+        snapshots[key] = current
+        if details:
+            changes.append((name, " · ".join(details)))
+    return changes
 
 
 def edsy_url(loadout):

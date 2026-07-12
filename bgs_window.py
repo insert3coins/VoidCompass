@@ -60,6 +60,7 @@ class BGSWindow(ThemedWindowMixin):
         purge_cb: Callable[[], bool] | None = None,
         purge_empty_cb: Callable[[], int | None] | None = None,
         get_galaxy_state_cb: Callable[[], dict] | None = None,
+        toggle_faction_watch_cb: Callable[[str], bool] | None = None,
         embedded=False,
     ):
         """
@@ -74,10 +75,13 @@ class BGSWindow(ThemedWindowMixin):
         self._purge_bgs        = purge_cb
         self._purge_empty_bgs  = purge_empty_cb
         self._get_galaxy_state = get_galaxy_state_cb or (lambda: {})
+        self._toggle_faction_watch = toggle_faction_watch_cb
         self._selected_system: str | None = None
         self._all_systems: list = []
         self._system_iids: dict[str, str] = {}
         self._initial_retry_job = None
+        self._galaxy_resize_job = None
+        self._galaxy_compact = None
 
         self.embedded = embedded
         self.win = window_surface(root, embedded=embedded)
@@ -127,6 +131,12 @@ class BGSWindow(ThemedWindowMixin):
             except Exception:
                 pass
             self._initial_retry_job = None
+        if self._galaxy_resize_job is not None:
+            try:
+                self.win.after_cancel(self._galaxy_resize_job)
+            except Exception:
+                pass
+            self._galaxy_resize_job = None
         try:
             self.config["bgs_window_geometry"] = self.win.geometry()
             save_config(self.config)
@@ -153,6 +163,9 @@ class BGSWindow(ThemedWindowMixin):
                                         fg=self.UI_DIM, bg="#0c1014",
                                         font=("Consolas", 8))
         self._sys_count_lbl.pack(side=tk.RIGHT, padx=14)
+        self._refresh_btn = self._action_button(
+            hdr, "REFRESH", self.refresh_current, muted=True, padx=9, pady=3)
+        self._refresh_btn.pack(side=tk.RIGHT, padx=(0, 4), pady=7)
 
         self._tabs = ttk.Notebook(self.win, style="BGS.TNotebook")
         self._tabs.pack(fill=tk.BOTH, expand=True, padx=8, pady=(6, 8))
@@ -244,6 +257,7 @@ class BGSWindow(ThemedWindowMixin):
         detail_wrap = tk.Frame(right, bg="#0b0f13")
         detail_wrap.pack(fill=tk.BOTH, expand=True, padx=12, pady=(6, 4))
         detail_scroll = scrollbar(detail_wrap, orient=tk.VERTICAL)
+        detail_hscroll = scrollbar(detail_wrap, orient=tk.HORIZONTAL)
         self._detail = tk.Text(
             detail_wrap,
             bg="#0b0f13", fg=COLOR_TEXT,
@@ -251,9 +265,12 @@ class BGSWindow(ThemedWindowMixin):
             relief=tk.FLAT, highlightthickness=0, borderwidth=0,
             wrap=tk.NONE, padx=6, pady=4,
             yscrollcommand=detail_scroll.set,
+            xscrollcommand=detail_hscroll.set,
             state=tk.DISABLED,
         )
         detail_scroll.config(command=self._detail.yview)
+        detail_hscroll.config(command=self._detail.xview)
+        detail_hscroll.pack(side=tk.BOTTOM, fill=tk.X)
         self._detail.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         detail_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
@@ -298,9 +315,38 @@ class BGSWindow(ThemedWindowMixin):
         scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self._galaxy_content.bind(
             "<Configure>", lambda _event: self._galaxy_canvas.configure(scrollregion=self._galaxy_canvas.bbox("all")))
-        self._galaxy_canvas.bind(
-            "<Configure>", lambda event: self._galaxy_canvas.itemconfigure(window, width=event.width))
+        self._galaxy_window = window
+        self._galaxy_canvas.bind("<Configure>", self._on_galaxy_canvas_configure)
+        self._bind_galaxy_scroll(self._galaxy_canvas)
+        self._bind_galaxy_scroll(self._galaxy_content)
         self._render_galaxy_overview()
+
+    def _bind_galaxy_scroll(self, widget):
+        widget.bind("<MouseWheel>", self._on_galaxy_mousewheel, add="+")
+
+    def _on_galaxy_mousewheel(self, event):
+        if self._galaxy_canvas.bbox("all"):
+            self._galaxy_canvas.yview_scroll(int(-event.delta / 120), "units")
+        return "break"
+
+    def _on_galaxy_canvas_configure(self, event):
+        self._galaxy_canvas.itemconfigure(self._galaxy_window, width=event.width)
+        compact = event.width < 760
+        previous = self._galaxy_compact
+        self._galaxy_compact = compact
+        if previous is None:
+            if not compact:
+                return
+            # The first layout is rendered as two columns before Tk reports its
+            # actual width, so a compact initial width still needs one reflow.
+        elif compact == previous:
+            return
+        if self._galaxy_resize_job is not None:
+            try:
+                self.win.after_cancel(self._galaxy_resize_job)
+            except Exception:
+                pass
+        self._galaxy_resize_job = self.win.after(80, self._render_galaxy_overview)
 
     def _galaxy_card(self, parent, title, row, column, columnspan=1, accent=None):
         card = tk.Frame(parent, bg=self.UI_PANEL, highlightbackground=accent or self.UI_BORDER,
@@ -309,17 +355,27 @@ class BGSWindow(ThemedWindowMixin):
         tk.Frame(card, bg=accent or COLOR_ORANGE, height=2).pack(fill=tk.X)
         tk.Label(card, text=title, fg=accent or COLOR_ORANGE, bg=self.UI_PANEL,
                  font=("Segoe UI", 8, "bold"), anchor="w").pack(fill=tk.X, padx=12, pady=(9, 5))
+        self._bind_galaxy_scroll(card)
+        for child in card.winfo_children():
+            self._bind_galaxy_scroll(child)
         return card
 
     def _galaxy_line(self, parent, title, detail="", fg=COLOR_TEXT):
         row = tk.Frame(parent, bg=self.UI_PANEL)
         row.pack(fill=tk.X, padx=12, pady=3)
-        tk.Label(row, text=str(title), fg=fg, bg=self.UI_PANEL,
-                 font=("Consolas", 9, "bold"), anchor="w").pack(side=tk.LEFT)
+        title_label = tk.Label(row, text=str(title), fg=fg, bg=self.UI_PANEL,
+                               font=("Consolas", 9, "bold"), anchor="w")
+        title_label.pack(side=tk.LEFT)
+        detail_label = None
         if detail:
-            tk.Label(row, text=str(detail), fg=self.UI_MUTED, bg=self.UI_PANEL,
-                     font=("Consolas", 8), anchor="e", justify=tk.RIGHT,
-                     wraplength=480).pack(side=tk.RIGHT, fill=tk.X, expand=True)
+            detail_label = tk.Label(row, text=str(detail), fg=self.UI_MUTED, bg=self.UI_PANEL,
+                                    font=("Consolas", 8), anchor="e", justify=tk.RIGHT,
+                                    wraplength=250 if self._galaxy_compact else 480)
+            detail_label.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+        self._bind_galaxy_scroll(row)
+        self._bind_galaxy_scroll(title_label)
+        if detail_label:
+            self._bind_galaxy_scroll(detail_label)
         return row
 
     @staticmethod
@@ -352,21 +408,93 @@ class BGSWindow(ThemedWindowMixin):
         except Exception:
             return str(value)
 
+    @staticmethod
+    def _freshness_text(value):
+        if not value:
+            return "No journal timestamp · cached state"
+        try:
+            updated = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            if updated.tzinfo is None:
+                updated = updated.replace(tzinfo=timezone.utc)
+            seconds = max(0, int((datetime.now(timezone.utc) - updated).total_seconds()))
+            if seconds < 60:
+                age = "just now"
+            elif seconds < 3600:
+                age = f"{seconds // 60}m ago"
+            elif seconds < 86400:
+                age = f"{seconds // 3600}h ago"
+            else:
+                age = f"{seconds // 86400}d ago"
+            status = "STALE" if seconds >= 1800 else "CURRENT"
+            return f"{status} · {age} · {updated.astimezone().strftime('%Y-%m-%d %H:%M')}"
+        except Exception:
+            return f"Cached · {value}"
+
+    def _faction_history_deltas(self, system_name, factions):
+        """Compare current journal influence with the preceding stored visit."""
+        snapshots = self._load_factions(system_name) if system_name else []
+        by_name = {}
+        for snapshot in snapshots:
+            by_name.setdefault(snapshot.get("faction_name"), []).append(snapshot)
+        deltas = {}
+        for faction in factions or []:
+            name = faction.get("name")
+            current = float(faction.get("influence") or 0)
+            history = by_name.get(name) or []
+            if not history:
+                continue
+            # The newest DB record normally represents the event being rendered.
+            # If it does, compare with the next record; otherwise compare with the
+            # newest cached record returned by the non-blocking loader.
+            previous_index = 1 if abs(float(history[0].get("influence") or 0) - current) < 1e-9 else 0
+            if previous_index < len(history):
+                deltas[name] = current - float(history[previous_index].get("influence") or 0)
+        return deltas
+
+    @staticmethod
+    def _bind_click(widget, callback):
+        widget.configure(cursor="hand2")
+        widget.bind("<Button-1>", lambda _event: callback(), add="+")
+        for child in widget.winfo_children():
+            child.configure(cursor="hand2")
+            child.bind("<Button-1>", lambda _event: callback(), add="+")
+
+    def _open_history_for_system(self, system_name):
+        if not system_name or system_name == "No current system":
+            return
+        self._tabs.select(self._history_tab)
+        self._all_systems = self._load_systems()
+        self._reload_list()
+        if system_name in self._system_iids:
+            self._select_system(system_name, reload_list=False)
+
     def _render_galaxy_overview(self):
+        self._galaxy_resize_job = None
         content = getattr(self, "_galaxy_content", None)
         if not content:
             return
         for child in content.winfo_children():
             child.destroy()
+        compact = bool(self._galaxy_compact)
         content.grid_columnconfigure(0, weight=1, uniform="galaxy")
-        content.grid_columnconfigure(1, weight=1, uniform="galaxy")
+        content.grid_columnconfigure(1, weight=0 if compact else 1,
+                                     uniform="" if compact else "galaxy")
         state = self._get_galaxy_state() or {}
         system = state.get("galaxy_system") or "No current system"
 
-        hero = self._galaxy_card(content, "CURRENT GALAXY CONTEXT", 0, 0, 2, COLOR_ACCENT)
-        self._galaxy_line(hero, system.upper(),
-                          f"Controlling faction: {state.get('controlling_faction') or 'Unknown'}",
-                          COLOR_ACCENT)
+        hero = self._galaxy_card(content, "CURRENT GALAXY CONTEXT", 0, 0, 1 if compact else 2, COLOR_ACCENT)
+        hero_line = self._galaxy_line(
+            hero, system.upper(),
+            f"Controlling faction: {state.get('controlling_faction') or 'Unknown'}",
+            COLOR_ACCENT)
+        self._bind_click(hero_line, lambda s=system: self._open_history_for_system(s))
+        freshness = self._freshness_text(state.get("galaxy_system_updated") or state.get("galaxy_updated"))
+        self._galaxy_line(
+            hero,
+            freshness,
+            f"Source: {state.get('galaxy_system_source') or state.get('galaxy_source') or 'saved companion state'} · click system for history",
+            "#ff7777" if freshness.startswith("STALE") else "#21d189" if state.get("galaxy_system_updated") else self.UI_MUTED,
+        )
 
         powerplay = state.get("powerplay") or {}
         pp_system = state.get("pp_system") or {}
@@ -391,7 +519,8 @@ class BGSWindow(ThemedWindowMixin):
             self._galaxy_line(pp_card, f"▲ {int(pp_system.get('reinforcement') or 0):,} reinforced",
                               f"▼ {int(pp_system.get('undermining') or 0):,} undermined")
 
-        squad_card = self._galaxy_card(content, "SQUADRON", 1, 1, accent="#c4b5fd")
+        squad_card = self._galaxy_card(content, "SQUADRON", 2 if compact else 1,
+                                        0 if compact else 1, accent="#c4b5fd")
         squadron = state.get("squadron") or {}
         if squadron:
             self._galaxy_line(squad_card, squadron.get("name") or "Unknown Squadron",
@@ -399,8 +528,11 @@ class BGSWindow(ThemedWindowMixin):
         else:
             self._galaxy_line(squad_card, "No squadron recorded", "SquadronStartup journal data", self.UI_MUTED)
 
-        faction_card = self._galaxy_card(content, "CURRENT SYSTEM FACTIONS", 2, 0, 2, COLOR_ORANGE)
+        faction_card = self._galaxy_card(content, "CURRENT SYSTEM FACTIONS · ★ WATCH ALERTS", 3 if compact else 2,
+                                         0, 1 if compact else 2, COLOR_ORANGE)
         factions = state.get("factions") or []
+        watched = set(state.get("watched_factions") or [])
+        deltas = self._faction_history_deltas(system, factions)
         if not factions:
             self._galaxy_line(faction_card, "No faction data", "Jump into or load inside a populated system", self.UI_MUTED)
         for faction in factions:
@@ -411,11 +543,29 @@ class BGSWindow(ThemedWindowMixin):
                       + [f"{value} (pending)" for value in faction.get("pending_states") or []]
                       + [f"{value} (recovering)" for value in faction.get("recovering_states") or []])
             detail = f"{influence * 100:.1f}% · {faction.get('government') or '—'} · {faction.get('allegiance') or '—'}"
+            delta = deltas.get(faction.get("name"))
+            if delta is not None:
+                arrow = "▲" if delta > 0.0005 else "▼" if delta < -0.0005 else "═"
+                detail += f" · {arrow} {delta * 100:+.2f}% since previous visit"
             if controls:
                 detail += " · CONTROLS"
             if states:
                 detail += " · " + ", ".join(states)
-            line = self._galaxy_line(faction_card, faction.get("name") or "Unknown faction", detail)
+            faction_name = faction.get("name") or "Unknown faction"
+            line = self._galaxy_line(
+                faction_card, faction_name, detail,
+                "#fde68a" if faction_name in watched else COLOR_TEXT)
+            self._bind_click(line, lambda s=system: self._open_history_for_system(s))
+            if self._toggle_faction_watch and faction.get("name"):
+                watch_button = tk.Button(
+                    line, text="★" if faction_name in watched else "☆",
+                    command=lambda name=faction_name: self._toggle_watch_and_render(name),
+                    bg=self.UI_PANEL, fg="#fde68a" if faction_name in watched else self.UI_DIM,
+                    activebackground=self.UI_PANEL, activeforeground="#fde68a",
+                    relief=tk.FLAT, bd=0, padx=4, cursor="hand2",
+                    font=("Segoe UI Symbol", 10))
+                watch_button.pack(side=tk.RIGHT, padx=(5, 0))
+                self._bind_galaxy_scroll(watch_button)
             if rep:
                 tk.Label(line, text=rep, fg=rep_color, bg=self.UI_PANEL,
                          font=("Segoe UI", 7, "bold"), padx=6).pack(side=tk.RIGHT, padx=(8, 0))
@@ -423,19 +573,33 @@ class BGSWindow(ThemedWindowMixin):
             bar.pack(fill=tk.X, padx=12, pady=(0, 5))
             tk.Frame(bar, bg="#21d189" if controls else COLOR_ACCENT).place(
                 x=0, y=0, relheight=1, relwidth=max(0.0, min(1.0, influence)))
+            self._bind_click(bar, lambda s=system: self._open_history_for_system(s))
 
-        conflict_card = self._galaxy_card(content, "CONFLICTS", 3, 0, accent="#ff7777")
+        conflict_card = self._galaxy_card(content, "CONFLICTS", 4 if compact else 3, 0, accent="#ff7777")
         conflicts = state.get("conflicts") or []
         if not conflicts:
             self._galaxy_line(conflict_card, "No active conflicts", "Wars and elections appear here", self.UI_MUTED)
         for conflict in conflicts:
             one, two = conflict.get("faction1") or {}, conflict.get("faction2") or {}
-            score = f"{one.get('won_days') or 0}–{two.get('won_days') or 0}"
+            one_score = int(one.get("won_days") or 0)
+            two_score = int(two.get("won_days") or 0)
+            score = f"{one_score}–{two_score}"
+            leader = one.get("name") if one_score > two_score else two.get("name") if two_score > one_score else None
+            conflict_detail = f"{str(conflict.get('war_type') or 'Conflict').title()} · {str(conflict.get('status') or 'active').title()}"
+            if leader:
+                conflict_detail += f" · Leader: {leader}"
             self._galaxy_line(conflict_card,
                               f"{one.get('name') or '?'}  {score}  {two.get('name') or '?'}",
-                              f"{str(conflict.get('war_type') or 'Conflict').title()} · {one.get('stake') or two.get('stake') or 'No stake'}")
+                              conflict_detail,
+                              "#21d189" if leader else COLOR_TEXT)
+            self._galaxy_line(
+                conflict_card,
+                f"{one.get('name') or '?'} stake: {one.get('stake') or '—'}",
+                f"{two.get('name') or '?'} stake: {two.get('stake') or '—'}",
+                self.UI_MUTED)
 
-        goal_card = self._galaxy_card(content, "COMMUNITY GOALS", 3, 1, accent="#fde68a")
+        goal_card = self._galaxy_card(content, "COMMUNITY GOALS", 5 if compact else 3,
+                                      0 if compact else 1, accent="#fde68a")
         goals = list((state.get("community_goals") or {}).values())
         if not goals:
             self._galaxy_line(goal_card, "No joined community goals", "Join at the named station mission board", self.UI_MUTED)
@@ -449,9 +613,22 @@ class BGSWindow(ThemedWindowMixin):
                 detail += " · COMPLETE"
             self._galaxy_line(goal_card, goal.get("title") or "Community Goal", detail,
                               "#21d189" if goal.get("complete") else COLOR_TEXT)
+            extra = f"Galaxy total {int(goal.get('current_total') or 0):,} · {int(goal.get('contributors') or 0):,} contributors"
+            if goal.get("top_rank"):
+                extra += " · TOP RANK"
+            if goal.get("bonus"):
+                extra += f" · Bonus {goal.get('bonus')}"
+            self._galaxy_line(goal_card, extra,
+                              f"{goal.get('system') or '—'} · {goal.get('market') or '—'}",
+                              self.UI_MUTED)
 
         content.update_idletasks()
         self._galaxy_canvas.configure(scrollregion=self._galaxy_canvas.bbox("all"))
+
+    def _toggle_watch_and_render(self, faction_name):
+        if self._toggle_faction_watch:
+            self._toggle_faction_watch(faction_name)
+            self._render_galaxy_overview()
 
     # ── System list ───────────────────────────────────────────────────────────
 
