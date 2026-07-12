@@ -1,65 +1,29 @@
 # Void Compass
 
-Void Compass is a real-time Elite Dangerous companion app with a desktop dashboard, in-game overlays, route planning tools, EDSM integration, and screenshot tooling.
+Real-time Elite Dangerous companion app — desktop dashboard, in-game overlays, route planning, EDSM integration, and a native achievement system.
 
-![Dashboard Screenshot](https://raw.githubusercontent.com/insert3coins/VoidCompass-Release/main/DashBoard.PNG "Dashboard Screenshot")
+![Dashboard](DashBoard.PNG)
 
-## Current Features
+## Features
 
-- Live journal ingestion for `Location`, `FSDJump`, `Scan`, `FSS`, `SAA`, cargo, nav route, and status data.
-- Single-instance lock to prevent duplicate app launches.
-- Dashboard summary strip for `SYS`, `ROUTE`, `SCAN`, `TRAFFIC`, and `SESSION`.
-- Alert bar with live system-state warnings.
-- Activity log with filters: `ALL`, `JUMP`, `SCAN`, `ALERT`, `ERROR`.
-- Event Feed panel replacing old split drawers, with color-coded entries.
-- Tactical Navigation HUD overlay: current system, nav target, distance, scan progress bar, traffic, destination, route progress, and remaining LY.
-- Top-right status blip (`OK`, `ALERT`, `FAIL`) for quick health/attention status.
-- Cargo overlay for live inventory/capacity.
-- Scan results overlay for exploration/FSS workflow.
-- Route Planner window: waypoint add/edit/delete/reorder and visited-state tracking.
-- Squadron window with journal-derived squadron name/rank and optional Frontier squadron tag lookup.
-- Batch actions: copy, mark done/todo, delete.
-- Duplicate handling modes: `skip`, `append note`, `keep both`.
-- Route health indicators: pending, visited, missing coords, duplicates.
-- EDSM route refresh and optional automatic EDSM note enrichment.
-- Bulk import from pasted lists and Spansh CSV import.
-- Route CSV export with segment and cumulative LY.
-- Auto-copy waypoint support (including startup behavior).
-- Screenshot converter (BMP -> PNG) with system/timestamp naming and optional BMP cleanup.
-- Auto-saved window positions/geometries for dashboard, settings, overlays, and route tools.
-- Multi-commander profiles detected from `LoadGame` / `Commander` journal events, with separate exploration DB, carrier state, colonisation data, engineer materials, mining data, waypoint state, and EDSM credentials per commander.
-- Native achievement system with 1,023 journal-driven milestones, per-commander progress, live Toast HUD unlocks, category packs, legacy state import, and full journal-history rebuild.
+- **Live dashboard** — current system, nav route, scan progress, fleet carrier, traffic, and a live event timeline, all driven off the journal in real time.
+- **Overlays** — tactical navigation HUD, cargo, scan results, station info, gravity warnings, and more, each independently toggleable.
+- **Route planning** — waypoint management, EDSM sync, Spansh/CSV import, duplicate handling, and CSV export with cumulative LY.
+- **Career tools** — trade, mining, colonisation, BGS, carrier, and engineer material tracking.
+- **Achievements** — 1,023 journal-driven milestones with per-commander progress and live toast unlocks.
+- **Multi-commander** — separate profiles, data, and EDSM credentials per commander, detected automatically from the journal.
+- **Themes** — 10 built-in themes plus a full custom theme editor.
 
-![Tactical HUD](https://raw.githubusercontent.com/insert3coins/VoidCompass-Release/main/NavHud.PNG "Tactical HUD")
+![Navigation HUD](NavHud.PNG)
+![Achievements](Achievements.PNG)
 
-![Route Planner](https://raw.githubusercontent.com/insert3coins/VoidCompass-Release/main/RoutePlanner.PNG "Route Planner")
+## Setup
 
-On first launch, `config.json` is created automatically.
+```
+pip install -r requirements.txt
+python VoidCompass.py
+```
 
-## Configuration
+`config.json` is created automatically on first launch. If journal auto-detect fails, set `journal_path` (default: `C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous`). Everything else is configurable in-app via **[ CONFIGURATION ]** and **SETTINGS**.
 
-Use the in-app **[ CONFIGURATION ]** panel or edit `config.json` directly.
-
-- `journal_path`: Elite journal folder path. If blank, Void Compass tries auto-detect.
-- `overlay_enabled`: Enable/disable tactical nav HUD.
-- `cargo_overlay_enabled`: Enable/disable cargo overlay.
-- `scan_overlay_enabled`: Enable/disable scan overlay.
-- `screenshots_enabled`: Enable/disable screenshot conversion.
-- `screenshots_path`: Folder to watch for BMP screenshots.
-- `hud_x`, `hud_y`: Tactical HUD position.
-- `cargo_hud_x`, `cargo_hud_y`: Cargo HUD position.
-- `scan_hud_x`, `scan_hud_y`: Scan HUD position.
-- `main_geometry`, `settings_geometry`: Saved window geometry.
-- `commander_profiles`: Per-commander profile settings. Void Compass manages this automatically from journal commander/FID data.
-- Achievement tracking, unlock notifications, category packs, legacy import, reset controls, and journal rebuild are managed from the in-app **ACHIEVEMENTS > Configuration** page.
-
-Commander-specific data is stored under `profiles\<commander>_<fid>\`. On first run after upgrading, existing single-account state files are copied into the first detected profile.
-
-Default journal path target:
-
-`C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous`
-
-## Notes
-
-- Pillow (`PIL`) is required for screenshot conversion. If missing, that feature auto-disables and logs an error.
 o7

@@ -705,6 +705,49 @@ class DashboardUIMixin(ThemedWindowMixin):
                 bg=settings_bg,
                 fg=THEME.accent if settings_active else THEME.text,
             )
+        self._schedule_overlay_z_order_restore()
+
+    def _schedule_overlay_z_order_restore(self):
+        """Keep visible native overlays above the dashboard after page changes."""
+        try:
+            # The idle pass covers normal Tk stacking; the short delayed pass
+            # covers Windows applying the clicked page's z-order afterward.
+            self.root.after_idle(self._restore_overlay_z_order)
+            self.root.after(120, self._restore_overlay_z_order)
+        except Exception:
+            pass
+
+    def _restore_overlay_z_order(self):
+        overlay_attrs = (
+            "hud",
+            "cargo_hud",
+            "carrier_hud",
+            "colony_overlay",
+            "heartbeat_hud",
+            "prospector_hud",
+            "system_info_hud",
+            "gravity_warning_hud",
+            "station_info_hud",
+            "survey_status_hud",
+            "toast_hud",
+            "ground_popup",
+        )
+        for attr in overlay_attrs:
+            overlay = getattr(self, attr, None)
+            window = getattr(overlay, "win", overlay)
+            if window is None:
+                continue
+            try:
+                if not window.winfo_exists():
+                    continue
+                # Do not reveal context-sensitive overlays that deliberately
+                # hide themselves until their next relevant game event.
+                if str(window.state()).lower() in ("withdrawn", "iconic"):
+                    continue
+                window.attributes("-topmost", True)
+                window.lift()
+            except Exception:
+                continue
 
     def show_dashboard_page(self):
         self._show_embedded_page("DASHBOARD", self.dashboard_page)
