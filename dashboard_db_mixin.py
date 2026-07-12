@@ -499,10 +499,9 @@ class DashboardDBMixin:
             cur = self.conn.cursor()
             cur.execute(
                 "SELECT v.system_name, v.last_visited_at, "
-                "       CASE WHEN COUNT(b.id) > 0 THEN 1 ELSE 0 END "
+                "       EXISTS(SELECT 1 FROM bgs_snapshots b "
+                "              WHERE b.system_name = v.system_name) "
                 "FROM visited_systems v "
-                "LEFT JOIN bgs_snapshots b ON b.system_name = v.system_name "
-                "GROUP BY v.system_name "
                 "ORDER BY v.last_visited_at DESC"
             )
             results = [(row[0], row[1], bool(row[2])) for row in cur.fetchall()]

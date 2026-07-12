@@ -25,6 +25,10 @@ WIDTH = 320
 _TOAST_H = 46
 _GAP = 6
 _MAX_STACK = 4
+_TEXT_X = 14
+_ICON_X = WIDTH - 25
+_TITLE_CHARS = 34
+_MESSAGE_CHARS = 39
 
 
 class ToastHUD:
@@ -167,11 +171,9 @@ class ToastHUD:
             self.canvas.create_rectangle(0, y, w, y + _TOAST_H, fill="#010101", outline="")
             self.canvas.create_rectangle(0, y, 4, y + _TOAST_H, fill=color, outline="")
             self.canvas.create_rectangle(4, y, w, y + _TOAST_H, outline=color, width=1)
-            has_icon = bool(toast.get("icon"))
-            text_x = 52 if has_icon else 14
-            if has_icon:
+            if toast.get("icon"):
                 self._text(
-                    27,
+                    _ICON_X,
                     y + (_TOAST_H // 2),
                     toast["icon"],
                     COLOR_TEXT,
@@ -179,17 +181,17 @@ class ToastHUD:
                     anchor="center",
                 )
             self._text(
-                text_x,
+                _TEXT_X,
                 y + 15,
-                self._truncate(toast["title"], 34 if has_icon else 40),
+                self._truncate(toast["title"], _TITLE_CHARS),
                 color,
                 ("Courier", 9, "bold"),
             )
             if toast["message"]:
                 self._text(
-                    text_x,
+                    _TEXT_X,
                     y + 32,
-                    self._truncate(toast["message"], 39 if has_icon else 46),
+                    self._truncate(toast["message"], _MESSAGE_CHARS),
                     COLOR_TEXT,
                     ("Courier", 8),
                 )
