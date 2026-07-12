@@ -9,10 +9,11 @@ and active/pending BGS states.
 import json
 import tkinter as tk
 from datetime import datetime
+from tkinter import ttk
 from typing import Callable
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
-from ui_theme import THEME, ThemedWindowMixin, apply_window, scrollbar, window_surface
+from ui_theme import THEME, ThemedWindowMixin, apply_window, configure_ttk, scrollbar, window_surface
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -66,6 +67,9 @@ class BGSWindow(ThemedWindowMixin):
         self._load_systems     = load_systems_cb
         self._load_factions    = load_factions_cb
         self._selected_system: str | None = None
+        self._all_systems: list = []
+        self._system_iids: dict[str, str] = {}
+        self._initial_retry_job = None
 
         self.embedded = embedded
         self.win = window_surface(root, embedded=embedded)
@@ -77,12 +81,8 @@ class BGSWindow(ThemedWindowMixin):
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
 
         self._build_ui()
-        self._reload_list()
-
-        # Auto-select the most recently updated system
-        systems = self._load_systems()
-        if systems:
-            self._select_system(systems[0][0])
+        # Let the dashboard display the page before querying and populating BGS.
+        self.win.after_idle(self._initial_load)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -106,11 +106,18 @@ class BGSWindow(ThemedWindowMixin):
         self.win.after(0, self._do_refresh)
 
     def _do_refresh(self):
+        self._all_systems = self._load_systems()
         self._reload_list()
         if self._selected_system:
             self._render_factions(self._selected_system)
 
     def _on_close(self):
+        if self._initial_retry_job is not None:
+            try:
+                self.win.after_cancel(self._initial_retry_job)
+            except Exception:
+                pass
+            self._initial_retry_job = None
         try:
             self.config["bgs_window_geometry"] = self.win.geometry()
             save_config(self.config)
@@ -124,6 +131,8 @@ class BGSWindow(ThemedWindowMixin):
     # ── UI construction ───────────────────────────────────────────────────────
 
     def _build_ui(self):
+        configure_ttk(self.win, "BGS")
+
         # Header bar
         hdr = tk.Frame(self.win, bg="#0c1014", height=46)
         hdr.pack(fill=tk.X)
@@ -164,27 +173,24 @@ class BGSWindow(ThemedWindowMixin):
         list_wrap = tk.Frame(left, bg=self.UI_PANEL)
         list_wrap.pack(fill=tk.BOTH, expand=True, padx=4)
 
-        list_scroll = scrollbar(list_wrap, orient=tk.VERTICAL)
-        self._list_canvas = tk.Canvas(list_wrap, bg=self.UI_PANEL,
-                                       highlightthickness=0,
-                                       yscrollcommand=list_scroll.set)
-        list_scroll.config(command=self._list_canvas.yview)
-        self._list_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        list_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self._system_tree = ttk.Treeview(
+            list_wrap,
+            columns=("system", "updated"),
+            show="headings",
+            style="BGS.Treeview",
+            selectmode="browse",
+        )
+        self._system_tree.heading("system", text="SYSTEM")
+        self._system_tree.heading("updated", text="UPDATED")
+        self._system_tree.column("system", width=137, minwidth=90, anchor=tk.W, stretch=True)
+        self._system_tree.column("updated", width=72, minwidth=68, anchor=tk.E, stretch=False)
+        self._system_tree.tag_configure("no_factions", foreground=self.UI_DIM)
+        self._system_tree.bind("<<TreeviewSelect>>", self._on_tree_select)
 
-        self._list_inner = tk.Frame(self._list_canvas, bg=self.UI_PANEL)
-        self._list_wid = self._list_canvas.create_window(
-            (0, 0), window=self._list_inner, anchor="nw")
-        self._list_inner.bind(
-            "<Configure>",
-            lambda e: self._list_canvas.configure(
-                scrollregion=self._list_canvas.bbox("all")))
-        self._list_canvas.bind(
-            "<Configure>",
-            lambda e: self._list_canvas.itemconfig(self._list_wid, width=e.width))
-        self._list_canvas.bind(
-            "<MouseWheel>",
-            lambda e: self._list_canvas.yview_scroll(-1 * (e.delta // 120), "units"))
+        list_scroll = scrollbar(list_wrap, orient=tk.VERTICAL, command=self._system_tree.yview)
+        self._system_tree.configure(yscrollcommand=list_scroll.set)
+        self._system_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        list_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
         # ── Right: faction detail ─────────────────────────────────────────────
         right = tk.Frame(main, bg=self.UI_PANEL)
@@ -247,12 +253,35 @@ class BGSWindow(ThemedWindowMixin):
 
     # ── System list ───────────────────────────────────────────────────────────
 
+    def _initial_load(self, attempt=0):
+        if not self.is_open():
+            return
+        self._initial_retry_job = None
+        self._all_systems = self._load_systems()
+        self._reload_list()
+
+        if self._all_systems:
+            first_system = self._selected_system or self._all_systems[0][0]
+            self._select_system(first_system, reload_list=False)
+            return
+
+        # A startup journal replay may briefly own the shared DB lock. The DB
+        # callbacks intentionally return their cache instead of blocking Tk, so
+        # retry a few times to replace an empty first read as soon as it is free.
+        if attempt < 4:
+            delay_ms = 150 * (2 ** attempt)
+            self._initial_retry_job = self.win.after(
+                delay_ms, lambda: self._initial_load(attempt + 1)
+            )
+
     def _reload_list(self):
-        systems = self._load_systems()
+        systems = self._all_systems
         query   = (self._search_var.get() or "").strip().lower()
 
-        for w in self._list_inner.winfo_children():
-            w.destroy()
+        children = self._system_tree.get_children()
+        if children:
+            self._system_tree.delete(*children)
+        self._system_iids = {}
 
         shown = 0
         for row in systems:
@@ -261,61 +290,55 @@ class BGSWindow(ThemedWindowMixin):
             if query and query not in sys_name.lower():
                 continue
             shown += 1
-            self._add_list_row(sys_name, last_updated, has_factions)
+            ts_str = ""
+            if last_updated:
+                try:
+                    ts_str = datetime.fromtimestamp(float(last_updated)).strftime("%d %b")
+                except Exception:
+                    pass
+            iid = self._system_tree.insert(
+                "",
+                tk.END,
+                values=(sys_name, ts_str),
+                tags=() if has_factions else ("no_factions",),
+            )
+            self._system_iids[sys_name] = iid
 
         if not shown:
-            if query:
-                msg = f'No match for "{query}".'
-            else:
-                msg = "No systems visited yet.\n\nJump to any system\nto start tracking."
-            tk.Label(self._list_inner, text=msg,
-                     font=("Consolas", 8), fg=self.UI_MUTED, bg=self.UI_PANEL,
-                     justify=tk.LEFT
-                     ).pack(anchor="w", padx=8, pady=10)
+            message = f'No match for "{query}".' if query else "No systems visited yet"
+            self._system_tree.insert("", tk.END, values=(message, ""), tags=("no_factions",))
+
+        selected_iid = self._system_iids.get(self._selected_system)
+        if selected_iid:
+            self._system_tree.selection_set(selected_iid)
+            self._system_tree.see(selected_iid)
 
         total = len(systems)
         self._sys_count_lbl.config(
             text=f"{total} system{'s' if total != 1 else ''}")
 
-    def _add_list_row(self, sys_name: str, last_updated, has_factions: bool = True):
-        is_sel  = (sys_name == self._selected_system)
-        row_bg  = "#0d1317" if is_sel else self.UI_PANEL
-        bdr_col = COLOR_ACCENT if is_sel else self.UI_BORDER
-
-        row = tk.Frame(self._list_inner, bg=row_bg, cursor="hand2",
-                       highlightbackground=bdr_col, highlightthickness=1)
-        row.pack(fill=tk.X, pady=(0, 3))
-
-        name_disp = sys_name if len(sys_name) <= 23 else sys_name[:22] + "…"
-        name_color = (COLOR_ACCENT if is_sel else COLOR_TEXT) if has_factions else self.UI_DIM
-        tk.Label(row, text=name_disp,
-                 font=("Segoe UI", 9, "bold" if is_sel else "normal"),
-                 fg=name_color,
-                 bg=row_bg, anchor="w"
-                 ).pack(fill=tk.X, padx=8, pady=(4, 0))
-
-        ts_str = ""
-        if last_updated:
-            try:
-                ts_str = datetime.fromtimestamp(float(last_updated)).strftime("%d %b  %H:%M")
-            except Exception:
-                pass
-        tk.Label(row, text=ts_str,
-                 font=("Consolas", 8), fg=self.UI_DIM, bg=row_bg, anchor="w"
-                 ).pack(fill=tk.X, padx=8, pady=(0, 4))
-
-        def _click(e, s=sys_name):
-            self._select_system(s)
-
-        row.bind("<Button-1>", _click)
-        for child in row.winfo_children():
-            child.bind("<Button-1>", _click)
+    def _on_tree_select(self, _event=None):
+        selection = self._system_tree.selection()
+        if not selection:
+            return
+        values = self._system_tree.item(selection[0], "values")
+        sys_name = values[0] if values else ""
+        if sys_name not in self._system_iids:
+            return
+        if sys_name == self._selected_system:
+            return
+        self._select_system(sys_name, reload_list=False)
 
     # ── Faction detail ────────────────────────────────────────────────────────
 
-    def _select_system(self, sys_name: str):
+    def _select_system(self, sys_name: str, reload_list=True):
         self._selected_system = sys_name
-        self._reload_list()
+        if reload_list:
+            self._reload_list()
+        iid = self._system_iids.get(sys_name)
+        if iid and self._system_tree.selection() != (iid,):
+            self._system_tree.selection_set(iid)
+            self._system_tree.see(iid)
         self._render_factions(sys_name)
 
     def _render_factions(self, sys_name: str):
