@@ -189,7 +189,7 @@ class CarrierWindow(ThemedWindowMixin):
         self.id_last_synced    = self._row(f, "Last Synced")
 
         # Pending decommission warning
-        self.decom_warning_lbl = tk.Label(f, text="⚠  PENDING DECOMMISSION",
+        self.decom_warning_lbl = tk.Label(f, text="WARNING // PENDING DECOMMISSION",
                                           font=self.UI_BOLD, fg=self.UI_WARN,
                                           bg=self.UI_PANEL, anchor="w")
 
@@ -209,7 +209,7 @@ class CarrierWindow(ThemedWindowMixin):
         self.stat_docking    = self._row(f, "Docking Access")
 
         self._section(f, "PLANNED DESTINATION")
-        tk.Label(f, text="Shown as 📌 Destination in Discord. Leave blank to show \"TBD\".",
+        tk.Label(f, text="Shown as Destination in Discord. Leave blank to show \"TBD\".",
                  font=("Segoe UI", 8), fg=self.UI_MUTED, bg=self.UI_PANEL,
                  anchor="w", wraplength=420).pack(fill=tk.X, padx=10, pady=(0, 4))
         dest_row = tk.Frame(f, bg=self.UI_PANEL)
@@ -229,7 +229,7 @@ class CarrierWindow(ThemedWindowMixin):
         self.dest_entry.bind("<Return>", lambda _e: self._save_destination())
 
         self._section(f, "STATUS NOTE")
-        tk.Label(f, text="Shown as ℹ️  in Discord notifications.",
+        tk.Label(f, text="Shown as information in Discord notifications.",
                  font=("Segoe UI", 8), fg=self.UI_MUTED, bg=self.UI_PANEL,
                  anchor="w", wraplength=420).pack(fill=tk.X, padx=10, pady=(0, 4))
         note_row = tk.Frame(f, bg=self.UI_PANEL)
@@ -251,7 +251,7 @@ class CarrierWindow(ThemedWindowMixin):
         # Manual Discord post — departure time
         self._section(f, "MANUAL DEPARTURE TIME")
         tk.Label(f,
-                 text="Optional — shown as 🕐 in the manual post, auto-converts to each reader's local time.\n"
+                 text="Optional — shown as a local time in the manual post and converted for each reader.\n"
                       "Format:  18:30  or  26/05 18:30  or  2026-05-27 20:00  (your local time)",
                  font=("Segoe UI", 8), fg=self.UI_MUTED, bg=self.UI_PANEL,
                  anchor="w", justify=tk.LEFT, wraplength=420,
@@ -273,7 +273,7 @@ class CarrierWindow(ThemedWindowMixin):
         # Post button + feedback
         post_row = tk.Frame(f, bg=self.UI_PANEL)
         post_row.pack(fill=tk.X, padx=10, pady=(2, 12))
-        self.post_discord_btn = button(post_row, "📢  POST STATUS TO DISCORD", self._post_status_to_discord, accent=True, padx=12, pady=6)
+        self.post_discord_btn = button(post_row, "POST STATUS TO DISCORD", self._post_status_to_discord, accent=True, padx=12, pady=6)
         self.post_discord_btn.pack(side=tk.LEFT)
         self.post_discord_status_lbl = tk.Label(
             post_row, text="", font=("Segoe UI", 8),
@@ -378,17 +378,17 @@ class CarrierWindow(ThemedWindowMixin):
                 dep_ts = self._parse_departure_time(raw_time)
             except ValueError as exc:
                 self.post_discord_status_lbl.config(
-                    text=f"✗ Bad time: {exc}", fg=self.UI_FAIL)
+                    text=f"ERROR: Bad time: {exc}", fg=self.UI_FAIL)
                 self.win.after(5000, lambda: self.post_discord_status_lbl.config(
                     text="") if self.is_open() else None)
                 return
 
         ok, err = self.tracker.send_status_update(departure_ts=dep_ts)
         if ok:
-            self.post_discord_status_lbl.config(text="✓ Sent", fg=self.UI_OK)
+            self.post_discord_status_lbl.config(text="SENT", fg=self.UI_OK)
         else:
             msg = err or "No webhook URL set in Configuration."
-            self.post_discord_status_lbl.config(text=f"✗ {msg}", fg=self.UI_FAIL)
+            self.post_discord_status_lbl.config(text=f"ERROR: {msg}", fg=self.UI_FAIL)
         self.win.after(4000, lambda: self.post_discord_status_lbl.config(
             text="") if self.is_open() else None)
 
@@ -548,7 +548,7 @@ class CarrierWindow(ThemedWindowMixin):
                 funded_txt = f"{weeks_funded:.0f} weeks"
                 funded_fg = self.UI_OK
             else:
-                funded_txt = f"{weeks_funded:.1f} weeks  ⚠ LOW"
+                funded_txt = f"{weeks_funded:.1f} weeks  [LOW]"
                 funded_fg = self.UI_WARN if weeks_funded >= 1 else self.UI_FAIL
             self.upkeep_funded.config(text=funded_txt, fg=funded_fg)
         else:

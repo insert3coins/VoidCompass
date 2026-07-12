@@ -533,7 +533,7 @@ class ColonizationWindow(ThemedWindowMixin):
             status_txt = "✗ Failed"
             status_fg  = "#cc0000"
         else:
-            notes_mark = "  📝" if (proj.get("notes") or "").strip() else ""
+            notes_mark = "  [NOTE]" if (proj.get("notes") or "").strip() else ""
             status_txt = f"{pct}% delivered{notes_mark}"
             status_fg  = COLOR_ACCENT if pct > 0 else self.UI_MUTED
 
