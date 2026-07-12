@@ -1,5 +1,32 @@
 # VoidCompass // UPDATE LOG
 
+## v4.4.4 // Interactive Galaxy Details
+**Release Date:** 2026-Jul-13
+
+### Galaxy Drill-Downs
+*   Made the current system, factions, Powerplay, squadron, conflicts, and Community Goals interactive inside **GALAXY OVERVIEW**.
+*   Added expanded in-page detail cards with full available journal values, influence movement, reputation, faction states, conflict scores and stakes, Powerplay progress, and Community Goal participation.
+*   Retained explicit **OPEN BGS HISTORY** and faction-watch actions inside the expanded views without adding pop-up windows.
+
+### Version
+*   Bumped app version to **4.4.4**.
+
+## v4.4.3 // Simplified Trade + Market Maintenance
+**Release Date:** 2026-Jul-13
+
+### Trade Interface
+*   Consolidated the Trade workspace into five primary areas: Routes, Markets, Local, Tracking, and Database.
+*   Grouped Road to Riches under Routes; Radar, cargo, commodity, and station tools under Markets; and watchlists and analytics under Tracking.
+*   Integrated full database controls directly into Trade and reduced the separate Market Builder to an isolated worker process.
+
+### Market Database
+*   Changed normal price maintenance to live EDDN and visited `Market.json` updates after the initial full Spansh baseline.
+*   Full rebuilds now preserve locally newer prices, journal-discovered systems and stations, trade history, and watches.
+*   Added market freshness and stale-station status information while retaining occasional manual full rebuilds.
+
+### Version
+*   Bumped app version to **4.4.3**.
+
 ## v4.4.2 // Galaxy Intelligence + Faction Watches
 **Release Date:** 2026-Jul-13
 
