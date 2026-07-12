@@ -387,6 +387,16 @@ def status(conn, force=False):
     counts = {}
     for table in ("systems", "stations", "commodities"):
         counts[table] = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+    epoch = now_epoch()
+    freshness = conn.execute(
+        """SELECT MAX(updated_at),
+                  SUM(CASE WHEN updated_at >= ? THEN 1 ELSE 0 END),
+                  SUM(CASE WHEN updated_at < ? THEN 1 ELSE 0 END),
+                  SUM(CASE WHEN updated_at < ? THEN 1 ELSE 0 END)
+           FROM stations""",
+        (epoch - 86400, epoch - 7 * 86400, epoch - 30 * 86400),
+    ).fetchone() or (None, 0, 0, 0)
+    latest_market_epoch = int(freshness[0]) if freshness[0] is not None else None
     result = {
         "db_path": str(DB_PATH),
         "db_size_mb": round(DB_PATH.stat().st_size / 1e6, 1) if DB_PATH.exists() else 0,
@@ -395,6 +405,14 @@ def status(conn, force=False):
         "commodity_rows": counts["commodities"],
         "seeded_at": get_meta(conn, "seeded_at"),
         "journal_market_updated_at": get_meta(conn, "journal_market_updated_at"),
+        "latest_market_updated_at": (
+            datetime.fromtimestamp(latest_market_epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            if latest_market_epoch is not None else None
+        ),
+        "fresh_markets_1d": int(freshness[1] or 0),
+        "stale_markets_7d": int(freshness[2] or 0),
+        "stale_markets_30d": int(freshness[3] or 0),
+        "live_markets_preserved": int(get_meta(conn, "live_markets_preserved", 0) or 0),
         "ready": counts["stations"] > 0,
     }
     with _status_lock:
