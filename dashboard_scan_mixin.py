@@ -77,6 +77,8 @@ class DashboardScanMixin:
             )
         moved = status_key != getattr(self, "_ground_last_status_key", None)
         self._ground_last_status_key = status_key
+        if moved and getattr(self, "bio_sampling", None):
+            self._update_sampling_clearance()
 
         # Only request live ground updates while target tracking is active.
         needs_live_ground_update = bool(self.on_planet and self.target_latlon_active and moved)

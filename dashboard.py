@@ -48,6 +48,8 @@ from engineer_window import (
     EngineerWindow, load_engineer_materials, save_engineer_materials,
     get_material_category,
 )
+from engineering_data import ready_blueprints
+import companion_features
 from bgs_window import BGSWindow
 from commander_profile_window import CommanderProfileWindow
 from system_value_ledger import SystemValueLedger
@@ -110,6 +112,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.config["carrier_state_file"] = self._copy_legacy_to_profile("carrier_state.json")
         self.config["colonisation_data_file"] = self._copy_legacy_to_profile("colonisation_data.json")
         self.config["engineer_materials_file"] = self._copy_legacy_to_profile("engineer_materials.json")
+        self.config["companion_state_file"] = self._copy_legacy_to_profile("companion_state.json")
         self.config["mining_db_file"] = self._copy_legacy_to_profile("mining_data.db")
         self.config["mining_sessions_file"] = self._copy_legacy_to_profile("mining_sessions.json")
         self.config["waypoints_file"] = self._copy_legacy_to_profile("waypoints.json")
@@ -176,7 +179,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if self.system_info_hud:
                 self.system_info_hud.update_scan_progress(self.scan_items, self.body_signals, self.total)
             if self.survey_status_hud:
-                self.survey_status_hud.update(self.current_sys, self.scanned, self.total, self.scan_items, self.body_signals)
+                self.survey_status_hud.update(
+                    self.current_sys, self.scanned, self.total, self.scan_items,
+                    self.body_signals, sampling=self._sampling_snapshot(),
+                )
         try:
             self._system_info_refresh_job = self.root.after(150, _run)
         except Exception:
@@ -248,6 +254,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _save_engineer_materials(self, materials):
         save_engineer_materials(materials, self.config.get("engineer_materials_file"))
+
+    def _save_companion_state(self):
+        companion_features.save_state(self.config.get("companion_state_file"), self.companion_state)
 
     def _switch_commander_profile(self, commander_name, fid=None):
         if not commander_name:
@@ -321,6 +330,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             else:
                 self.colonisation_projects[mid] = jp
         self.engineer_materials = load_engineer_materials(self.config.get("engineer_materials_file"))
+        self.companion_state = companion_features.load_state(self.config.get("companion_state_file"))
+        if getattr(self, "watcher", None):
+            self.watcher.force_check_ship_locker()
         self.waypoint_manager = WaypointManager(self.config.get("waypoints_file"))
         for attr in (
             "mining_window",
@@ -411,6 +423,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.cmdr_ship = {}
         self.last_scan_event = None
         self.last_bio_scan = {}
+        self.bio_sampling = None
+        self.bio_sample_points = []
+        self._sample_clear_announced = False
+        self._rebuy_warning_level = 0
+        self._data_risk_level = 0
         self._stale_bio_warned = set()
         # Bio tracking: star/body scan conditions for prediction
         self.system_stars: dict  = {}   # body_id → star_type str
@@ -696,6 +713,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             else:
                 self.colonisation_projects[mid] = jp
         self.engineer_materials = load_engineer_materials(self.config.get("engineer_materials_file"))
+        self.companion_state = companion_features.load_state(self.config.get("companion_state_file"))
         self.import_scan_cache_json()
         
         self.watcher = JournalWatcher(
@@ -709,7 +727,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             cargo_cb=self.update_cargo,
             nav_cb=self.update_nav_route,
             status_cb=self.update_status,
-            market_cb=self.update_market
+            market_cb=self.update_market,
+            ship_locker_cb=self.update_ship_locker,
         )
         self.watcher.prime_market_file()
         self._start_market_import_worker()
@@ -1176,13 +1195,32 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.config,
             self.engineer_materials,
             self._save_engineer_materials,
+            get_current_system=lambda: self.current_sys if self.current_sys != "---" else "",
+            get_current_coords=lambda: self.current_coords,
+            plot_system_callback=self._route_engineering_system,
             embedded=True,
         )
         self._show_embedded_page("ENGINEER", self.engineer_window.win)
 
+    def _route_engineering_system(self, system):
+        """Hand an engineer/trader destination to the existing route page."""
+        if not system:
+            return
+        self.open_route_planner()
+        try:
+            entry = self.route_plotter.neutron_to_entry
+            entry.delete(0, tk.END)
+            entry.insert(0, system)
+            entry.focus_set()
+            self.route_plotter.neutron_status_lbl.config(
+                text=f"Destination loaded from Engineering: {system}. Check jump range, then PLOT."
+            )
+        except Exception:
+            pass
+
     def open_bgs_window(self):
         if self.bgs_window and self.bgs_window.is_open():
-            self._show_embedded_page("BGS", self.bgs_window.win)
+            self._show_embedded_page("GALAXY", self.bgs_window.win)
             return
         self.bgs_window = BGSWindow(
             self.dashboard_host,
@@ -1192,9 +1230,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.db_delete_bgs_system,
             self.db_purge_bgs,
             self.db_purge_empty_bgs_systems,
+            get_galaxy_state_cb=lambda: self.companion_state,
             embedded=True,
         )
-        self._show_embedded_page("BGS", self.bgs_window.win)
+        self._show_embedded_page("GALAXY", self.bgs_window.win)
 
     def open_commander_profile_window(self):
         if self.commander_profile_window and self.commander_profile_window.is_open():
@@ -2263,6 +2302,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._handle_live_journal_toast(ev, raw, d, startup_replay=startup_replay)
         if ev != "LoadGame":
             self._apply_credit_event(ev, raw if isinstance(raw, dict) else d, log=not startup_replay)
+        self._process_companion_event(ev, raw if isinstance(raw, dict) else {}, d,
+                                      startup_replay=startup_replay)
         if ev != "LoadGame" and self.edsm.is_credit_event(ev):
             self._queue_edsm_upload(raw, flush=True, startup_replay=startup_replay)
         current_journal = getattr(self.watcher, "last_journal", None)
@@ -2360,6 +2401,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 raw.get("Manufactured") or [],
                 raw.get("Encoded") or [],
             )
+
+        elif ev == "EngineerProgress":
+            self._process_engineer_progress(raw)
 
         elif ev in ("MaterialCollected", "MaterialDiscarded", "MaterialTrade",
                     "EngineerCraft", "Synthesis", "TechnologyBroker"):
@@ -2621,7 +2665,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     _sys, _sc, _si, _bs, _tot))
             if self.survey_status_hud and not startup_replay:
                 self.root.after(0, lambda: self.survey_status_hud.update(
-                    self.current_sys, self.scanned, self.total, self.scan_items, self.body_signals))
+                    self.current_sys, self.scanned, self.total, self.scan_items,
+                    self.body_signals, sampling=self._sampling_snapshot()))
             self._refresh_exploration_window()
 
         elif ev == "Docked":
@@ -3116,7 +3161,412 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 mat = raw.get("Type_Localised") or raw.get("Type") or ""
                 self.root.after(0, lambda m=mat: self.prospector_hud.add_refined(m))
 
+    # ── Companion feature state ───────────────────────────────────────────────
+
+    @staticmethod
+    def _companion_mission_key(mission_id):
+        return str(mission_id) if mission_id is not None else None
+
+    def _refresh_companion_surfaces(self):
+        if getattr(self, "_companion_refresh_job", None) is not None:
+            return
+        def run():
+            self._companion_refresh_job = None
+            try:
+                if self.commander_profile_window and self.commander_profile_window.is_open():
+                    self.commander_profile_window.refresh()
+            except Exception:
+                pass
+            try:
+                if self.bgs_window and self.bgs_window.is_open():
+                    self.bgs_window.refresh_current()
+            except Exception:
+                pass
+        try:
+            self._companion_refresh_job = self.root.after(200, run)
+        except Exception:
+            self._companion_refresh_job = None
+
+    def _toast_on_main(self, title, message, severity="info", duration=12):
+        if not self.toast_hud:
+            return
+        self.root.after(0, lambda: self.toast_hud.push(
+            title, message, severity=severity, duration_s=duration,
+        ))
+
+    def _process_companion_event(self, ev, raw, data, startup_replay=False):
+        state = self.companion_state
+        changed = False
+
+        if ev == "Loadout":
+            state["loadout"] = dict(raw)
+            changed = True
+
+        elif ev == "LoadGame":
+            if state.get("powerplay"):
+                state["powerplay"]["session_merits"] = 0
+                changed = True
+
+        elif ev == "StoredShips":
+            state["stored_ships"] = {
+                "station": raw.get("StationName"), "system": raw.get("StarSystem"),
+                "here": [companion_features.normalise_stored_ship(row) for row in raw.get("ShipsHere") or []],
+                "remote": [companion_features.normalise_stored_ship(row) for row in raw.get("ShipsRemote") or []],
+                "updated": raw.get("timestamp"),
+            }
+            changed = True
+
+        elif ev == "MissionAccepted":
+            mission = companion_features.mission_from_event(raw)
+            if mission:
+                state.setdefault("missions", {})[self._companion_mission_key(mission["id"])] = mission
+                changed = True
+
+        elif ev in ("MissionCompleted", "MissionFailed", "MissionAbandoned"):
+            key = self._companion_mission_key(raw.get("MissionID"))
+            if key and state.setdefault("missions", {}).pop(key, None) is not None:
+                changed = True
+                self._prune_massacre_kills()
+
+        elif ev == "Missions":
+            active = {self._companion_mission_key(row.get("MissionID")) for row in raw.get("Active") or []}
+            missions = state.setdefault("missions", {})
+            reconciled = {key: row for key, row in missions.items() if key in active}
+            if len(reconciled) != len(missions):
+                state["missions"] = reconciled
+                changed = True
+                self._prune_massacre_kills()
+
+        elif ev == "CargoDepot":
+            mission = state.setdefault("missions", {}).get(self._companion_mission_key(raw.get("MissionID")))
+            if mission:
+                mission.update({
+                    "collected": raw.get("ItemsCollected"), "delivered": raw.get("ItemsDelivered"),
+                    "to_deliver": raw.get("TotalItemsToDeliver"),
+                })
+                changed = True
+
+        elif ev == "MissionRedirected":
+            mission = state.setdefault("missions", {}).get(self._companion_mission_key(raw.get("MissionID")))
+            if mission:
+                if raw.get("NewDestinationSystem"):
+                    mission["destination_system"] = raw["NewDestinationSystem"]
+                if raw.get("NewDestinationStation"):
+                    mission["destination_station"] = raw["NewDestinationStation"]
+                changed = True
+
+        elif ev in ("Bounty", "FactionKillBond"):
+            victim = raw.get("VictimFaction")
+            active_targets = {row["faction"] for row in companion_features.massacre_stacks(state)}
+            if victim and victim in active_targets and not startup_replay:
+                before = next((row for row in companion_features.massacre_stacks(state)
+                               if row["faction"] == victim), None)
+                kills = state.setdefault("faction_kills", {})
+                kills[victim] = int(kills.get(victim, 0)) + 1
+                after = next((row for row in companion_features.massacre_stacks(state)
+                              if row["faction"] == victim), None)
+                changed = True
+                if before and after and not before["complete"] and after["complete"]:
+                    self._toast_on_main("STACK COMPLETE", f"All massacre missions against {victim} are ready", "success", 15)
+
+        elif ev in ("Powerplay", "PowerplayJoin", "PowerplayDefect", "PowerplayLeave",
+                    "PowerplayRank", "PowerplayMerits"):
+            self._update_powerplay_state(ev, raw)
+            changed = True
+
+        elif ev == "CommunityGoal":
+            goals = {}
+            for goal in raw.get("CurrentGoals") or []:
+                if goal.get("CGID") is None:
+                    continue
+                goals[str(goal["CGID"])] = {
+                    "title": goal.get("Title"), "system": goal.get("SystemName"),
+                    "market": goal.get("MarketName"), "expiry": goal.get("Expiry"),
+                    "complete": bool(goal.get("IsComplete")),
+                    "current_total": goal.get("CurrentTotal"),
+                    "contribution": goal.get("PlayerContribution"),
+                    "contributors": goal.get("NumContributors"),
+                    "percentile": goal.get("PlayerPercentileBand"),
+                    "tier": (goal.get("TierReached") or "").replace("Tier ", "") or None,
+                    "top_rank": bool(goal.get("PlayerInTopRank")),
+                    "bonus": goal.get("Bonus"),
+                }
+            state["community_goals"] = goals
+            changed = True
+
+        elif ev == "SquadronStartup":
+            state["squadron"] = {"name": raw.get("SquadronName"), "rank": raw.get("CurrentRank")}
+            changed = True
+        elif ev in ("LeftSquadron", "DisbandedSquadron"):
+            state["squadron"] = None
+            changed = True
+
+        elif ev == "LeaveBody":
+            self.bio_sampling = None
+            self.bio_sample_points = []
+            self._sample_clear_announced = False
+            self._update_sampling_clearance()
+
+        elif ev == "Died" and not startup_replay:
+            state["unsold_exploration_cr"] = 0
+            state["unsold_bio_cr"] = 0
+            state["unsold_scan_keys"] = []
+            self._data_risk_level = 0
+            changed = True
+
+        if ev in ("Location", "FSDJump", "CarrierJump"):
+            state["galaxy_system"] = raw.get("StarSystem") or self.current_sys
+            state["controlling_faction"] = (raw.get("SystemFaction") or {}).get("Name")
+            state["factions"] = self._normalise_galaxy_factions(raw.get("Factions") or [])
+            state["conflicts"] = self._normalise_conflicts(raw.get("Conflicts") or [])
+            if raw.get("ControllingPower") or raw.get("Powers"):
+                state["pp_system"] = {
+                    "controlling": raw.get("ControllingPower"), "powers": raw.get("Powers") or [],
+                    "state": raw.get("PowerplayState"),
+                    "control_progress": raw.get("PowerplayStateControlProgress"),
+                    "reinforcement": raw.get("PowerplayStateReinforcement"),
+                    "undermining": raw.get("PowerplayStateUndermining"),
+                }
+            else:
+                state["pp_system"] = None
+            changed = True
+
+        if not startup_replay:
+            if ev == "Scan":
+                changed = self._record_unsold_scan(raw) or changed
+            elif ev == "ScanOrganic":
+                changed = self._process_sampling_event(raw, data) or changed
+            elif ev in ("SellExplorationData", "MultiSellExplorationData"):
+                state["unsold_exploration_cr"] = 0
+                state["unsold_scan_keys"] = []
+                self._data_risk_level = 0
+                changed = True
+            elif ev == "SellOrganicData":
+                state["unsold_bio_cr"] = 0
+                self._data_risk_level = 0
+                changed = True
+
+        if changed:
+            self._save_companion_state()
+            self._refresh_companion_surfaces()
+        self._check_rebuy_warning(raw if ev in ("Loadout", "LoadGame") else None,
+                                  notify=not startup_replay)
+        self._check_data_risk(notify=not startup_replay)
+
+    def _prune_massacre_kills(self):
+        active = {row["faction"] for row in companion_features.massacre_stacks(self.companion_state)}
+        self.companion_state["faction_kills"] = {
+            faction: count for faction, count in self.companion_state.get("faction_kills", {}).items()
+            if faction in active
+        }
+
+    def _update_powerplay_state(self, ev, raw):
+        if ev == "PowerplayLeave":
+            self.companion_state["powerplay"] = None
+            return
+        current = dict(self.companion_state.get("powerplay") or {"session_merits": 0})
+        if ev == "Powerplay":
+            current.update(power=raw.get("Power"), rank=raw.get("Rank"), merits=raw.get("Merits"),
+                           time_pledged_s=raw.get("TimePledged"))
+        elif ev in ("PowerplayJoin", "PowerplayDefect"):
+            current = {"power": raw.get("ToPower") or raw.get("Power"), "rank": 0,
+                       "merits": 0, "time_pledged_s": 0, "session_merits": 0}
+        elif ev == "PowerplayRank":
+            current.update(power=raw.get("Power"), rank=raw.get("Rank"))
+        elif ev == "PowerplayMerits":
+            current.update(power=raw.get("Power"), merits=raw.get("TotalMerits"),
+                           session_merits=int(current.get("session_merits") or 0) + int(raw.get("MeritsGained") or 0))
+        self.companion_state["powerplay"] = current
+
+    @staticmethod
+    def _normalise_galaxy_factions(factions):
+        rows = []
+        for faction in factions:
+            rows.append({
+                "name": faction.get("Name"), "state": faction.get("FactionState"),
+                "government": faction.get("Government"), "influence": faction.get("Influence"),
+                "allegiance": faction.get("Allegiance"), "my_reputation": faction.get("MyReputation"),
+                "active_states": [row.get("State") for row in faction.get("ActiveStates") or []],
+                "pending_states": [row.get("State") for row in faction.get("PendingStates") or []],
+                "recovering_states": [row.get("State") for row in faction.get("RecoveringStates") or []],
+            })
+        return sorted(rows, key=lambda row: -(row.get("influence") or 0))
+
+    @staticmethod
+    def _normalise_conflicts(conflicts):
+        def side(row):
+            row = row or {}
+            return {"name": row.get("Name"), "stake": row.get("Stake"), "won_days": row.get("WonDays")}
+        return [{"war_type": row.get("WarType"), "status": row.get("Status"),
+                 "faction1": side(row.get("Faction1")), "faction2": side(row.get("Faction2"))}
+                for row in conflicts]
+
+    def _record_unsold_scan(self, raw):
+        body_id = raw.get("BodyID")
+        key = f"{raw.get('SystemAddress')}:{body_id}"
+        keys = self.companion_state.setdefault("unsold_scan_keys", [])
+        if body_id is None or key in keys:
+            return False
+        planet_class = raw.get("PlanetClass")
+        star_type = raw.get("StarType")
+        terraformable = raw.get("TerraformState") == "Terraformable"
+        mass = raw.get("MassEM") or raw.get("StellarMass") or 0
+        value = self._get_body_value(
+            planet_class, star_type, terraformable, mass,
+            not bool(raw.get("WasDiscovered")), bool(raw.get("WasMapped")),
+            not bool(raw.get("WasMapped")), True,
+        )
+        keys.append(key)
+        self.companion_state["unsold_exploration_cr"] = int(self.companion_state.get("unsold_exploration_cr") or 0) + int(value or 0)
+        return True
+
+    def _process_sampling_event(self, raw, data):
+        scan_type = str(raw.get("ScanType") or data.get("scan_type") or "").lower()
+        species = data.get("species") or raw.get("Species_Localised") or raw.get("Species") or "Organic"
+        genus = data.get("genus") or raw.get("Genus_Localised") or raw.get("Genus") or species.split(" ")[0]
+        body = data.get("body_id") if data.get("body_id") is not None else raw.get("Body")
+        point = None
+        if self.current_latitude is not None and self.current_longitude is not None:
+            point = {"lat": self.current_latitude, "lon": self.current_longitude, "body": body}
+        if scan_type in ("log", "sample"):
+            if not self.bio_sampling or self.bio_sampling.get("species") != species or self.bio_sampling.get("body") != body:
+                self.bio_sample_points = []
+            if point:
+                self.bio_sample_points.append(point)
+            self.bio_sampling = {
+                "species": species, "genus": genus, "body": body,
+                "progress": 1 if scan_type == "log" else 2,
+                "colony_m": bio_values.GENUS_COLONY_M.get(genus),
+            }
+            self._sample_clear_announced = False
+            self._update_sampling_clearance()
+            return False
+        if scan_type == "analyse" or data.get("is_complete"):
+            body_item = self.scan_items_by_id.get(self._normalize_body_id(body), {})
+            multiplier = 5 if body_item.get("first_footfall") else 1
+            self.companion_state["unsold_bio_cr"] = int(self.companion_state.get("unsold_bio_cr") or 0) + int(bio_values.species_value(species) or 0) * multiplier
+            self.bio_sampling = None
+            self.bio_sample_points = []
+            self._sample_clear_announced = False
+            self._update_sampling_clearance()
+            return True
+        return False
+
+    def _sampling_snapshot(self):
+        if not self.bio_sampling:
+            return None
+        snapshot = dict(self.bio_sampling)
+        position = {
+            "lat": self.current_latitude, "lon": self.current_longitude,
+            "body": self.bio_sampling.get("body"), "radius_m": self.current_planet_radius,
+        }
+        clearance = companion_features.sample_clearance(
+            self.bio_sample_points, position, snapshot.get("colony_m"),
+        )
+        if clearance:
+            snapshot.update(clearance)
+        return snapshot
+
+    def _update_sampling_clearance(self):
+        sample = self._sampling_snapshot()
+        if (sample and sample.get("clear") and not self._sample_clear_announced
+                and self.config.get("sample_clear_notifications_enabled", True)):
+            self._sample_clear_announced = True
+            self._toast_on_main("CLEAR TO SAMPLE", f"{sample['species']} · {sample.get('min_distance_m', 0):,} m", "success", 10)
+        if self.survey_status_hud:
+            self.root.after(0, lambda s=sample: self.survey_status_hud.update(
+                self.current_sys, self.scanned, self.total, self.scan_items, self.body_signals, sampling=s,
+            ))
+        if getattr(self, "exploration_window", None) and self.exploration_window.is_open():
+            self.root.after(0, self.exploration_window._render_sampling)
+
+    def _check_rebuy_warning(self, event=None, notify=True):
+        notify = bool(notify and self.config.get("rebuy_warnings_enabled", True))
+        loadout = self.companion_state.get("loadout") or {}
+        rebuy = (event or {}).get("Rebuy") or loadout.get("Rebuy") or self.cmdr_ship.get("rebuy")
+        credits = (event or {}).get("Credits")
+        if credits is None:
+            credits = self.cmdr_balance
+        if not rebuy or credits is None:
+            return
+        level = 2 if credits < rebuy else (1 if credits < rebuy * 2 else 0)
+        if notify and level > self._rebuy_warning_level:
+            if level == 2:
+                self._toast_on_main("REBUY NOT COVERED", "Current balance cannot cover ship insurance", "fail", 18)
+            else:
+                self._toast_on_main("LOW REBUY COVER", "Current balance is below two rebuys", "warn", 15)
+        self._rebuy_warning_level = level
+
+    def _check_data_risk(self, notify=True):
+        notify = bool(notify and self.config.get("data_risk_warnings_enabled", True))
+        loadout = self.companion_state.get("loadout") or {}
+        rebuy = loadout.get("Rebuy") or self.cmdr_ship.get("rebuy")
+        total = int(self.companion_state.get("unsold_exploration_cr") or 0) + int(self.companion_state.get("unsold_bio_cr") or 0)
+        if not rebuy or total < 20_000_000:
+            self._data_risk_level = 0 if total < 20_000_000 else self._data_risk_level
+            return
+        ratio = total / rebuy
+        level = 3 if ratio >= 50 else 2 if ratio >= 25 else 1 if ratio >= 10 else 0
+        if notify and level > self._data_risk_level:
+            self._toast_on_main("DATA AT RISK", f"Approximately {total / 1_000_000:.0f}M CR unsold · {ratio:.0f}× rebuy",
+                                "fail" if level == 3 else "warn", 18)
+        self._data_risk_level = level
+
     # ── Engineer material helpers ─────────────────────────────────────────────
+
+    def _process_engineer_progress(self, raw: dict):
+        """Persist EngineerProgress batch snapshots and live rank/access updates."""
+        engineers = self.engineer_materials.setdefault("engineers", {})
+
+        def entry(item):
+            return {
+                "progress": item.get("Progress"),
+                "rank": item.get("Rank"),
+                "rank_progress": item.get("RankProgress"),
+            }
+
+        if raw.get("Engineers") is not None:
+            engineers.clear()
+            engineers.update({
+                item["Engineer"]: entry(item)
+                for item in (raw.get("Engineers") or []) if item.get("Engineer")
+            })
+        elif raw.get("Engineer"):
+            engineers[raw["Engineer"]] = entry(raw)
+        else:
+            return
+        self._save_engineer_materials(self.engineer_materials)
+        if self.engineer_window and self.engineer_window.is_open():
+            self.root.after(0, self.engineer_window.refresh)
+
+    def update_ship_locker(self, data):
+        """Marshal ShipLocker.json updates from the watcher onto the Tk thread."""
+        try:
+            self.root.after(0, lambda payload=dict(data or {}): self._apply_ship_locker(payload))
+        except Exception:
+            pass
+
+    def _apply_ship_locker(self, data: dict):
+        groups = {"items": "Items", "components": "Components",
+                  "data": "Data", "consumables": "Consumables"}
+        locker = {}
+        for out_key, source_key in groups.items():
+            rows = data.get(source_key)
+            if rows is None:
+                return
+            counts = {}
+            for item in rows:
+                name = item.get("Name_Localised") or (item.get("Name") or "").replace("_", " ").title()
+                if name:
+                    counts[name] = counts.get(name, 0) + int(item.get("Count") or 0)
+            locker[out_key] = [
+                {"name": name, "count": count}
+                for name, count in sorted(counts.items(), key=lambda pair: (-pair[1], pair[0]))
+            ]
+        self.engineer_materials["ship_locker"] = locker
+        self._save_engineer_materials(self.engineer_materials)
+        if self.engineer_window and self.engineer_window.is_open():
+            self.engineer_window.refresh()
 
     def _sync_materials_full(self, raw_list: list, mfg_list: list, enc_list: list):
         """Rebuild engineer_materials from a Materials journal event (complete snapshot)."""
@@ -3151,6 +3601,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _process_material_change(self, ev: str, raw: dict):
         """Apply live material collection/consumption events to engineer_materials."""
+        ready_before = ready_blueprints(self.engineer_materials) if ev == "MaterialCollected" else set()
+
         def _cat(s: str) -> str:
             s = s.lower()
             if s.startswith("enc"):
@@ -3211,6 +3663,19 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     mat.get("Name_Localised") or mat.get("Name") or "",
                     -int(mat.get("Quantity") or mat.get("Count") or 0),
                 )
+
+        if ev == "MaterialCollected":
+            for blueprint in sorted(ready_blueprints(self.engineer_materials) - ready_before):
+                pin = next((row for row in self.engineer_materials.get("pinned_blueprints", [])
+                            if row.get("name") == blueprint), {})
+                grade = int(pin.get("grade", 5))
+                if self.toast_hud:
+                    self.root.after(0, lambda name=blueprint, target_grade=grade: self.toast_hud.push(
+                        "READY TO ENGINEER",
+                        f"{name} G{target_grade} materials complete",
+                        severity="info",
+                        duration_s=12,
+                    ))
 
     def process_batch(self, events):
         self.batch_mode = True

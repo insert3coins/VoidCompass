@@ -3,11 +3,14 @@ import os
 import shutil
 import time
 import tkinter as tk
+import webbrowser
+from datetime import datetime, timezone
 from tkinter import filedialog, messagebox
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, get_active_profile, get_profile_dir, save_config
 from trade import marketdb as trade_marketdb
 from ui_theme import THEME, ThemedWindowMixin, apply_window, button, scrollbar, window_surface
+import companion_features
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -254,6 +257,21 @@ class CommanderProfileWindow(ThemedWindowMixin):
         sign = "+" if value >= 0 else "-"
         return f"{sign}{abs(int(value)):,} cr"
 
+    @staticmethod
+    def _mission_expiry_text(value):
+        if not value:
+            return ""
+        try:
+            expiry = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            remaining = int((expiry - datetime.now(timezone.utc)).total_seconds())
+            if remaining <= 0:
+                return "EXPIRED"
+            hours, rem = divmod(remaining, 3600)
+            minutes = rem // 60
+            return f"{hours}h {minutes}m left"
+        except Exception:
+            return str(value)
+
     def _session_elapsed_text(self):
         try:
             elapsed = max(0, int(time.time() - float(getattr(self.app, "session_start_ts", time.time()))))
@@ -425,6 +443,7 @@ class CommanderProfileWindow(ThemedWindowMixin):
         name = self.config.get("active_commander_name") or "Unknown Commander"
         fid = self.config.get("active_commander_fid") or ""
         journal_snapshot = self._latest_journal_snapshot()
+        companion_state = getattr(self.app, "companion_state", {}) or {}
         balance = self.app.cmdr_balance
         loan = self.app.cmdr_loan
         if balance is None:
@@ -452,6 +471,7 @@ class CommanderProfileWindow(ThemedWindowMixin):
             ("Carrier State", self.config.get("carrier_state_file", "")),
             ("Colonisation", self.config.get("colonisation_data_file", "")),
             ("Engineer Materials", self.config.get("engineer_materials_file", "")),
+            ("Companion State", self.config.get("companion_state_file", "")),
         ]
 
         self.summary.config(text=profile_key)
@@ -528,6 +548,69 @@ class CommanderProfileWindow(ThemedWindowMixin):
             ("Group", ship.get("group") or "-"),
         ):
             self._kv_row(ship_card, key, value)
+        ship_actions = tk.Frame(ship_card, bg=self.UI_PANEL)
+        ship_actions.pack(fill=tk.X, padx=12, pady=(8, 10))
+        has_loadout = bool(companion_state.get("loadout"))
+        edsy_btn = self._button(ship_actions, "Open in EDSY", self._open_loadout_edsy, accent=True)
+        edsy_btn.pack(side=tk.LEFT)
+        slef_btn = self._button(ship_actions, "Copy SLEF", self._copy_loadout_slef)
+        slef_btn.pack(side=tk.LEFT, padx=(8, 0))
+        if not has_loadout:
+            edsy_btn.config(state=tk.DISABLED)
+            slef_btn.config(state=tk.DISABLED)
+
+        fleet = companion_state.get("stored_ships") or {}
+        fleet_card = self._panel(left)
+        fleet_card.pack(fill=tk.X, pady=(0, 8))
+        self._section_label(fleet_card, "STORED SHIPS")
+        fleet_rows = list(fleet.get("here") or []) + list(fleet.get("remote") or [])
+        if fleet_rows:
+            for stored in fleet_rows:
+                location = stored.get("system") or fleet.get("system") or fleet.get("station") or "Local shipyard"
+                detail = location
+                if stored.get("in_transit"):
+                    detail += " · IN TRANSIT"
+                elif stored.get("transfer_cr"):
+                    detail += f" · transfer {self._fmt_credits(stored.get('transfer_cr'))}"
+                self._kv_row(fleet_card, stored.get("name") or stored.get("type"), detail,
+                             fg="#ff7777" if stored.get("hot") else COLOR_TEXT)
+        else:
+            self._kv_row(fleet_card, "Fleet", "Open a shipyard in Elite to sync stored ships", fg=self.UI_MUTED)
+
+        missions = list((companion_state.get("missions") or {}).values())
+        cargo_by_symbol = {}
+        for item in getattr(self.app, "current_cargo_inventory", []) or []:
+            symbol = str(item.get("Name") or item.get("name") or "").strip("$;").lower()
+            symbol = symbol.removesuffix("_name")
+            cargo_by_symbol[symbol] = cargo_by_symbol.get(symbol, 0) + int(item.get("Count", item.get("count", 0)) or 0)
+        mission_card = self._panel(left)
+        mission_card.pack(fill=tk.X, pady=(0, 8))
+        self._section_label(mission_card, "ACTIVE MISSIONS")
+        if missions:
+            for mission in sorted(missions, key=lambda row: row.get("expiry") or "")[:12]:
+                destination = " · ".join(value for value in (
+                    mission.get("destination_system"), mission.get("destination_station")) if value)
+                progress = ""
+                if mission.get("to_deliver"):
+                    progress = f" · {mission.get('delivered') or 0}/{mission['to_deliver']} delivered"
+                elif mission.get("commodity_symbol") and mission.get("count"):
+                    held = cargo_by_symbol.get(mission["commodity_symbol"], 0)
+                    progress = f" · cargo {held}/{mission['count']}"
+                expiry = self._mission_expiry_text(mission.get("expiry"))
+                if expiry:
+                    progress += f" · {expiry}"
+                self._kv_row(mission_card, mission.get("kind") or "Mission",
+                             f"{mission.get('name') or 'Mission'} · {destination or 'No destination'}{progress}",
+                             fg=COLOR_ORANGE if "EXPIRED" in expiry else COLOR_TEXT)
+        else:
+            self._kv_row(mission_card, "Missions", "No active tracked missions", fg=self.UI_MUTED)
+        for stack in companion_features.massacre_stacks(companion_state):
+            self._bar_row(
+                mission_card, f"Massacre · {stack['faction']}",
+                f"{stack['kills_done']}/{stack['kills_needed']} kills · {self._fmt_credits(stack['reward'])}",
+                (stack["kills_done"] / stack["kills_needed"] * 100) if stack["kills_needed"] else 0,
+                "#21d189" if stack["complete"] else COLOR_ORANGE,
+            )
 
         rank_card = self._band(right, border=COLOR_ORANGE)
         rank_card.pack(fill=tk.X, pady=(0, 8))
@@ -583,6 +666,23 @@ class CommanderProfileWindow(ThemedWindowMixin):
 
         self.content.update_idletasks()
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def _open_loadout_edsy(self):
+        loadout = (getattr(self.app, "companion_state", {}) or {}).get("loadout")
+        if not loadout:
+            messagebox.showinfo("Ship Export", "No full Loadout event has been received yet.", parent=self.win)
+            return
+        webbrowser.open(companion_features.edsy_url(loadout))
+
+    def _copy_loadout_slef(self):
+        loadout = (getattr(self.app, "companion_state", {}) or {}).get("loadout")
+        if not loadout:
+            messagebox.showinfo("Ship Export", "No full Loadout event has been received yet.", parent=self.win)
+            return
+        self.win.clipboard_clear()
+        self.win.clipboard_append(companion_features.slef(loadout))
+        self.win.update_idletasks()
+        messagebox.showinfo("Ship Export", "SLEF copied for Coriolis, Inara or EDSY.", parent=self.win)
 
     def _open_profile_folder(self):
         path = get_profile_dir(get_active_profile(self.config))

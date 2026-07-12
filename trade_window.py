@@ -534,14 +534,14 @@ class TradeWindow(ThemedWindowMixin):
         mode_box = tk.Frame(controls, bg=self.UI_PANEL)
         mode_box.pack(side=tk.LEFT, padx=(0, 8), pady=(0, 6))
         tk.Label(mode_box, text="TYPE", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Segoe UI", 7, "bold")).pack(anchor="w")
-        self._style_option(tk.OptionMenu(mode_box, self.station_search_mode, "module", "ship")).pack(anchor="w")
+        self._style_option(tk.OptionMenu(mode_box, self.station_search_mode, "module", "ship", "service")).pack(anchor="w")
         self.station_search_query = self._simple_field(controls, "SEARCH", 26)
         self.station_search_query.bind("<Return>", lambda _e: self.search_station_inventory())
         self.station_search_limit = self._simple_field(controls, "RESULTS", 6)
         self.station_search_limit.insert(0, "20")
         self._button(controls, "Search", self.search_station_inventory, accent=True).pack(side=tk.LEFT, padx=(8, 0), pady=(12, 6))
         self._button(controls, "Copy", lambda: self._copy_selected_tree(self.station_search_tree, getattr(self, "station_search_rows", {}), "Station search row")).pack(side=tk.LEFT, padx=(6, 0), pady=(12, 6))
-        self.station_search_status = tk.Label(body, text="Try a module like '6A Fuel Scoop' or a ship like 'Python'.", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 9), anchor="w")
+        self.station_search_status = tk.Label(body, text="Try '6A Fuel Scoop', 'Python', or service names such as Interstellar Factors / Vista Genomics.", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 9), anchor="w")
         self.station_search_status.pack(fill=tk.X, pady=(0, 6))
         self.station_search_tree = self._tree(body, ("station", "system", "distance", "ls", "type", "pad", "updated"), {
             "station": ("Station", 240, tk.W),
@@ -1267,7 +1267,7 @@ class TradeWindow(ThemedWindowMixin):
     def search_station_inventory(self):
         query = self.station_search_query.get().strip()
         if not query:
-            self.station_search_status.config(text="Enter a module or ship name.", fg=self.UI_WARN)
+            self.station_search_status.config(text="Enter a module, ship, or service name.", fg=self.UI_WARN)
             return
         system = self._current_system()
         if not system:
@@ -1278,16 +1278,22 @@ class TradeWindow(ThemedWindowMixin):
             self.station_search_tree.delete(iid)
         self.station_search_rows = {}
         mode = self.station_search_mode.get()
-        params = {
-            "reference_system": system,
-            "module": query if mode == "module" else None,
-            "ship": query if mode == "ship" else None,
-            "size": self._entry_int(self.station_search_limit, 20),
-        }
+        params = {"reference_system": system, "size": self._entry_int(self.station_search_limit, 20)}
 
         def worker():
             try:
-                rows = spansh.station_search(**params)
+                if mode == "service":
+                    rows = spansh.service_stations(
+                        service=query,
+                        coords=getattr(self.app, "current_coords", None),
+                        **params,
+                    )
+                else:
+                    rows = spansh.station_search(
+                        module=query if mode == "module" else None,
+                        ship=query if mode == "ship" else None,
+                        **params,
+                    )
                 self.root.after(0, lambda: self._render_station_search(rows))
             except Exception as exc:
                 self.root.after(0, lambda text=str(exc): self.station_search_status.config(text=text, fg=self.UI_FAIL))

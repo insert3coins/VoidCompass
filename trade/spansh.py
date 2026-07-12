@@ -240,6 +240,76 @@ def station_search(reference_system, module=None, ship=None, size=20):
     ]
 
 
+def material_traders(reference_system, kind, size=8, coords=None):
+    """Return nearby Raw, Manufactured, or Encoded material traders."""
+    if not reference_system and not (coords and len(coords) == 3):
+        raise SpanshError("No reference system known yet.")
+    body = {
+        "filters": {"material_trader": {"value": [str(kind).title()]}},
+        "sort": [{"distance": {"direction": "asc"}}],
+        "size": int(size),
+        "page": 0,
+    }
+    if reference_system:
+        body["reference_system"] = reference_system
+    else:
+        body["reference_coords"] = {"x": coords[0], "y": coords[1], "z": coords[2]}
+    try:
+        resp = requests.post(f"{BASE}/stations/search", json=body, headers=HEADERS, timeout=SUBMIT_TIMEOUT)
+        if resp.status_code >= 400 and coords and len(coords) == 3 and reference_system:
+            body.pop("reference_system", None)
+            body["reference_coords"] = {"x": coords[0], "y": coords[1], "z": coords[2]}
+            resp = requests.post(f"{BASE}/stations/search", json=body, headers=HEADERS, timeout=SUBMIT_TIMEOUT)
+    except requests.RequestException as exc:
+        raise SpanshError(f"Could not reach Spansh: {exc}") from exc
+    if resp.status_code >= 400:
+        raise SpanshError(_error_text(resp))
+    return [
+        {
+            "station": row.get("name"),
+            "system": row.get("system_name"),
+            "distance": round(row.get("distance") or 0, 1),
+            "dist_ls": row.get("distance_to_arrival"),
+            "large_pad": bool(row.get("has_large_pad")),
+        }
+        for row in resp.json().get("results") or []
+    ]
+
+
+def service_stations(reference_system, service, size=8, coords=None):
+    """Return nearby stations offering a named service."""
+    if not reference_system and not (coords and len(coords) == 3):
+        raise SpanshError("No reference system known yet.")
+    if not service:
+        raise SpanshError("Enter a station service to search for.")
+    body = {
+        "filters": {"services": [{"name": [service]}]},
+        "sort": [{"distance": {"direction": "asc"}}],
+        "size": int(size), "page": 0,
+    }
+    if reference_system:
+        body["reference_system"] = reference_system
+    else:
+        body["reference_coords"] = {"x": coords[0], "y": coords[1], "z": coords[2]}
+    try:
+        resp = requests.post(f"{BASE}/stations/search", json=body, headers=HEADERS, timeout=SUBMIT_TIMEOUT)
+        if resp.status_code >= 400 and coords and len(coords) == 3 and reference_system:
+            body.pop("reference_system", None)
+            body["reference_coords"] = {"x": coords[0], "y": coords[1], "z": coords[2]}
+            resp = requests.post(f"{BASE}/stations/search", json=body, headers=HEADERS, timeout=SUBMIT_TIMEOUT)
+    except requests.RequestException as exc:
+        raise SpanshError(f"Could not reach Spansh: {exc}") from exc
+    if resp.status_code >= 400:
+        raise SpanshError(_error_text(resp))
+    return [{
+        "station": row.get("name"), "system": row.get("system_name"),
+        "distance": round(row.get("distance") or 0, 1),
+        "dist_ls": row.get("distance_to_arrival"), "type": row.get("type"),
+        "large_pad": bool(row.get("has_large_pad")), "updated_at": row.get("updated_at"),
+        "carrier": (row.get("type") or "") == "Drake-Class Carrier",
+    } for row in resp.json().get("results") or []]
+
+
 def _error_text(resp):
     try:
         detail = resp.json().get("error")

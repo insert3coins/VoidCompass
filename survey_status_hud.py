@@ -92,11 +92,7 @@ class SurveyStatusHUD:
 
     # ── Data interface ───────────────────────────────────────────────────
 
-    def update(self, system_name, scanned, total, scan_items, body_signals):
-        if int(total or 0) <= 0:
-            self.hide()
-            return
-
+    def update(self, system_name, scanned, total, scan_items, body_signals, sampling=None):
         remaining = []
         bio_remaining = 0
         for item in (scan_items or []):
@@ -109,13 +105,13 @@ class SurveyStatusHUD:
             if not item.get("dss_complete"):
                 remaining.append((item.get("name") or "?", bio_count > 0))
 
-        if not remaining:
+        if not remaining and not sampling:
             # Nothing left to map — the nav HUD's own progress readout
             # already communicates "100%"; no unique info left to show here.
             self.hide()
             return
 
-        self._redraw(system_name, remaining, bio_remaining)
+        self._redraw(system_name, remaining, bio_remaining, sampling=sampling)
         self.show()
 
     # ── Drag-to-move ─────────────────────────────────────────────────────
@@ -173,7 +169,7 @@ class SurveyStatusHUD:
             lines.append(current)
         return lines, n - i
 
-    def _redraw(self, system_name, remaining, bio_remaining):
+    def _redraw(self, system_name, remaining, bio_remaining, sampling=None):
         w = WIDTH
         shown = remaining[:self._MAX_CONSIDERED]
         lines, extra_from_wrap = self._wrap_names(shown)
@@ -194,7 +190,9 @@ class SurveyStatusHUD:
                 lines.pop()
 
         header_h, label_h, line_h, bottom_pad = 30, 16, 16, 10
-        h = header_h + label_h + max(1, len(lines)) * line_h + bottom_pad
+        sample_h = 18 if sampling else 0
+        remaining_h = (label_h + max(1, len(lines)) * line_h) if remaining else 0
+        h = header_h + sample_h + remaining_h + bottom_pad
 
         self.canvas.config(width=w, height=h)
         self.win.geometry(f"{w}x{h}")
@@ -206,10 +204,22 @@ class SurveyStatusHUD:
         self.canvas.create_line(18, 28, w - 18, 28, fill="#1a2530", width=1)
 
         label_y = 42
-        label = f"DSS REMAINING ({len(remaining)})"
-        self._text(18, label_y, label, _DIM, ("Courier", 7, "bold"))
-        if bio_remaining:
-            self._text(w - 18, label_y, f"BIO REMAINING {bio_remaining}", COLOR_ORANGE, ("Courier", 7, "bold"), anchor="e")
+        if sampling:
+            progress = int(sampling.get("progress") or 1)
+            colony = sampling.get("colony_m")
+            minimum = sampling.get("min_distance_m")
+            clear = sampling.get("clear")
+            status = "CLEAR" if clear else (f"{minimum:,}/{colony:,} M" if minimum is not None and colony else "MOVE TO NEXT SAMPLE")
+            self._text(18, label_y, f"SAMPLE {progress}/3 · {_truncate(sampling.get('species'), 28)}", COLOR_ORANGE, ("Courier", 8, "bold"))
+            self._text(w - 18, label_y, status, "#21d189" if clear else COLOR_TEXT,
+                       ("Courier", 8, "bold"), anchor="e")
+            label_y += 18
+
+        if remaining:
+            label = f"DSS REMAINING ({len(remaining)})"
+            self._text(18, label_y, label, _DIM, ("Courier", 7, "bold"))
+            if bio_remaining:
+                self._text(w - 18, label_y, f"BIO REMAINING {bio_remaining}", COLOR_ORANGE, ("Courier", 7, "bold"), anchor="e")
 
         font = ("Courier", 8, "bold")
         measurer = tkfont.Font(family="Courier", size=8, weight="bold")

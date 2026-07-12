@@ -8,12 +8,23 @@ Persisted to engineer_materials.json next to the executable.
 
 import json
 import os
+import threading
 import time
 import tkinter as tk
 from datetime import datetime
 from tkinter import ttk
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
+from engineering_data import (
+    BLUEPRINTS,
+    BLUEPRINT_INFO,
+    ENGINEERS,
+    GRADE_CAP,
+    material_info,
+    pinned_plans,
+)
+from trade import spansh
+from companion_features import fsd_injections
 from ui_theme import (
     THEME,
     ThemedWindowMixin,
@@ -30,113 +41,28 @@ COLOR_TEXT = THEME.text
 
 ENGINEER_MATERIALS_FILE = "engineer_materials.json"
 
-# Individual material cap by grade
-_GRADE_CAP = {1: 300, 2: 250, 3: 200, 4: 150, 5: 100}
-
-# Total capacity per category
-_CAT_CAP = {"raw": 1000, "manufactured": 1000, "encoded": 500}
-
-# internal journal name (lowercase, no spaces) → grade
-_RAW_GRADES: dict[str, int] = {
-    # G1
-    "carbon": 1, "iron": 1, "lead": 1, "nickel": 1,
-    "phosphorus": 1, "rhenium": 1, "sulphur": 1,
-    # G2
-    "arsenic": 2, "chromium": 2, "germanium": 2, "manganese": 2,
-    "vanadium": 2, "zinc": 2, "zirconium": 2,
-    # G3
-    "mercury": 3, "molybdenum": 3, "niobium": 3, "tin": 3, "tungsten": 3,
-    # G4
-    "antimony": 4, "cadmium": 4, "polonium": 4, "ruthenium": 4,
-    "selenium": 4, "technetium": 4, "tellurium": 4, "yttrium": 4,
-}
-
-_MFD_GRADES: dict[str, int] = {
-    # G1
-    "basicconductors": 1, "chemicalstorage": 1, "compactcomposites": 1,
-    "crystalshards": 1, "gridresistors": 1, "heatconductionwiring": 1,
-    "mechanicalscrap": 1, "salvagedalloys": 1, "wornshieldemitters": 1,
-    # G2
-    "chemicalprocessors": 2, "conductivecomponents": 2, "filamentcomposites": 2,
-    "galvanisingalloys": 2, "heatdispersionplate": 2, "hybridcapacitors": 2,
-    "mechanicalequipment": 2, "shieldemitters": 2,
-    # G3
-    "chemicaldistillery": 3, "conductiveceramics": 3, "electrochemicalarrays": 3,
-    "highdensitycomposites": 3, "heatexchangers": 3, "mechanicalcomponents": 3,
-    "phasealloys": 3, "precipitatedalloys": 3, "shieldingsensors": 3,
-    # G4
-    "chemicalmanipulators": 4, "compoundshielding": 4, "conductivepolymers": 4,
-    "configurablecomponents": 4, "heatvanes": 4, "polymercapacitors": 4,
-    "proprietarycomposites": 4, "protolightalloys": 4, "refinedfocuscrystals": 4,
-    "temperedalloys": 4,
-    # G5
-    "biotechconductors": 5, "coredynamicscomposites": 5, "exquisitefocuscrystals": 5,
-    "imperialshielding": 5, "improvisedcomponents": 5, "militarygradealloys": 5,
-    "militarysupercapacitors": 5, "pharmaceuticalisolators": 5,
-    "protoheatradiators": 5, "protoradiolicalloys": 5,
-}
-
-_ENC_GRADES: dict[str, int] = {
-    # G1
-    "bulkscandata": 1, "disruptedwakeechoes": 1, "encodedscandata": 1,
-    "scandatabanks": 1, "scrambledemissiondata": 1, "shieldcyclerecordings": 1,
-    "shieldfrequencydata": 1, "unidentifiedscanarchives": 1,
-    # G2
-    "aberrantshieldpatternanalysis": 2, "atypicaldisruptedwakeechoes": 2,
-    "classifiedscandata": 2, "divergentscandata": 2,
-    "inconsistentshieldsoakanalysis": 2, "irregularemissiondata": 2,
-    "modifiedconsumerfirmware": 2, "strangewakesolutions": 2,
-    "unexpectedemissiondata": 2,
-    # G3
-    "classifiedscanfragment": 3, "crackedindustrialfirmware": 3,
-    "dataminedwakeexceptions": 3, "disorganisedfeedbackloop": 3,
-    "modifiedembeddedfirmware": 3, "opensymmetrickeys": 3,
-    "securityfirmwarepatch": 3, "specialisedlegacyfirmware": 3,
-    "unusualencryptedfiles": 3, "untypicalshieldscans": 3,
-    # G4
-    "abnormalcompactemissionsdata": 4, "atypicalencryptionarchives": 4,
-    "embeddedfirmware": 4, "hyperspacetrajectories": 4,
-    "smearedshieldpatternanalysis": 4, "symmetrickeys": 4,
-    "wakesolutions": 4,
-    # G5
-    "adaptiveencryptors": 5, "classifiedscanfragments": 5,
-    "encryptedscandatabanks": 5, "legacyfirmware": 5,
-    "securitykeys": 5,
-}
-
-# Combined lookup: internal_name → category
-_MAT_CATEGORY: dict[str, str] = {}
-for _k in _RAW_GRADES:
-    _MAT_CATEGORY[_k] = "raw"
-for _k in _MFD_GRADES:
-    _MAT_CATEGORY[_k] = "manufactured"
-for _k in _ENC_GRADES:
-    _MAT_CATEGORY[_k] = "encoded"
-
-# Combined grade lookup across all categories
-_GRADE: dict[str, int] = {}
-_GRADE.update(_RAW_GRADES)
-_GRADE.update(_MFD_GRADES)
-_GRADE.update(_ENC_GRADES)
-
-
 def get_material_category(key: str) -> str:
     """Return 'raw', 'manufactured', or 'encoded' for an internal material name."""
-    return _MAT_CATEGORY.get(key.lower(), "manufactured")
+    return material_info(key).get("category", "manufactured")
 
 
 def load_engineer_materials(path=None) -> dict:
     path = path or os.path.join(os.getcwd(), ENGINEER_MATERIALS_FILE)
     if not os.path.exists(path):
-        return {"raw": {}, "manufactured": {}, "encoded": {}, "last_updated": None}
+        return {"raw": {}, "manufactured": {}, "encoded": {}, "engineers": {},
+                "pinned_blueprints": [], "ship_locker": {}, "last_updated": None}
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         for cat in ("raw", "manufactured", "encoded"):
             data.setdefault(cat, {})
+        data.setdefault("engineers", {})
+        data.setdefault("pinned_blueprints", [])
+        data.setdefault("ship_locker", {})
         return data
     except Exception:
-        return {"raw": {}, "manufactured": {}, "encoded": {}, "last_updated": None}
+        return {"raw": {}, "manufactured": {}, "encoded": {}, "engineers": {},
+                "pinned_blueprints": [], "ship_locker": {}, "last_updated": None}
 
 
 def save_engineer_materials(materials: dict, path=None):
@@ -154,14 +80,23 @@ class EngineerWindow(ThemedWindowMixin):
         ("raw",          "RAW",          "#b0d8a0"),
         ("manufactured", "MANUFACTURED", "#93c5fd"),
         ("encoded",      "ENCODED",      "#fde68a"),
+        ("engineers",    "ENGINEERS",    "#c4b5fd"),
+        ("planner",      "PLANNER",      "#67e8f9"),
+        ("odyssey",      "ODYSSEY",      "#f9a8d4"),
     ]
 
-    def __init__(self, root, config: dict, materials: dict, save_callback, embedded=False):
+    def __init__(self, root, config: dict, materials: dict, save_callback,
+                 get_current_system=None, get_current_coords=None,
+                 plot_system_callback=None, embedded=False):
         self.root          = root
         self.config        = config
         self.materials     = materials
         self.save_callback = save_callback
+        self.get_current_system = get_current_system or (lambda: "")
+        self.get_current_coords = get_current_coords or (lambda: None)
+        self.plot_system_callback = plot_system_callback
         self._active_tab   = "raw"
+        self._row_meta = {}
 
         self.embedded = embedded
         self.win = window_surface(root, embedded=embedded)
@@ -222,6 +157,8 @@ class EngineerWindow(ThemedWindowMixin):
                                    fg=self.UI_DIM, bg="#0c1014",
                                    font=("Consolas", 8))
         self._sync_lbl.pack(side=tk.RIGHT, padx=14)
+        button(hdr, "ROUTE SELECTED", self._plot_selected, muted=True,
+               padx=8, pady=4).pack(side=tk.RIGHT, padx=4, pady=7)
 
         # Tab bar
         tab_bar = tk.Frame(self.win, bg="#0c1014", height=36)
@@ -234,9 +171,32 @@ class EngineerWindow(ThemedWindowMixin):
             self._tab_btns[key] = btn
         self._style_tabs()
 
+        self._planner_controls = tk.Frame(self.win, bg=self.UI_PANEL)
+        tk.Label(self._planner_controls, text="BLUEPRINT", bg=self.UI_PANEL,
+                 fg=self.UI_DIM, font=("Consolas", 8, "bold")).pack(side=tk.LEFT, padx=(12, 5), pady=7)
+        self._blueprint_var = tk.StringVar(value=next(iter(BLUEPRINTS)))
+        self._blueprint_combo = ttk.Combobox(
+            self._planner_controls, textvariable=self._blueprint_var,
+            values=sorted(BLUEPRINTS), state="readonly", width=27,
+        )
+        self._blueprint_combo.pack(side=tk.LEFT, padx=4, pady=6)
+        self._blueprint_combo.bind("<<ComboboxSelected>>", lambda _event: self._redraw())
+        tk.Label(self._planner_controls, text="GRADE", bg=self.UI_PANEL,
+                 fg=self.UI_DIM, font=("Consolas", 8, "bold")).pack(side=tk.LEFT, padx=(8, 4))
+        self._grade_var = tk.StringVar(value="5")
+        ttk.Combobox(self._planner_controls, textvariable=self._grade_var,
+                     values=("1", "2", "3", "4", "5"), state="readonly", width=3).pack(side=tk.LEFT, pady=6)
+        button(self._planner_controls, "PIN", self._pin_blueprint,
+               padx=10, pady=5).pack(side=tk.LEFT, padx=8, pady=5)
+        button(self._planner_controls, "UNPIN", self._unpin_selected,
+               muted=True, padx=10, pady=5).pack(side=tk.LEFT, padx=2, pady=5)
+        button(self._planner_controls, "FIND TRADERS", self._find_traders,
+               muted=True, padx=10, pady=5).pack(side=tk.RIGHT, padx=10, pady=5)
+
         # Reusable native table. The old canvas rebuilt several widgets per
         # material on every tab click, making page switches visibly stall.
         body = tk.Frame(self.win, bg=self.UI_BG)
+        self._body = body
         body.pack(fill=tk.BOTH, expand=True, padx=8, pady=(6, 0))
 
         columns = ("grade", "material", "stock", "capacity")
@@ -245,7 +205,7 @@ class EngineerWindow(ThemedWindowMixin):
             columns=columns,
             show="headings",
             style="Engineer.Treeview",
-            selectmode="none",
+            selectmode="browse",
         )
         headings = {
             "grade": ("GRADE", 55, tk.CENTER, False),
@@ -289,6 +249,11 @@ class EngineerWindow(ThemedWindowMixin):
     def _select_tab(self, category: str):
         self._active_tab = category
         self._style_tabs()
+        if category == "planner":
+            if not self._planner_controls.winfo_manager():
+                self._planner_controls.pack(fill=tk.X, before=self._body)
+        else:
+            self._planner_controls.pack_forget()
         self._redraw()
 
     def _style_tabs(self):
@@ -309,11 +274,33 @@ class EngineerWindow(ThemedWindowMixin):
         rows = self._material_tree.get_children()
         if rows:
             self._material_tree.delete(*rows)
+        self._row_meta = {}
 
-        cat      = self._active_tab
+        if self._active_tab in ("raw", "manufactured", "encoded"):
+            self._redraw_materials(self._active_tab)
+        elif self._active_tab == "engineers":
+            self._redraw_engineers()
+        elif self._active_tab == "planner":
+            self._redraw_planner()
+        else:
+            self._redraw_odyssey()
+        self._update_sync_label()
+
+    def _configure_columns(self, headings):
+        for column, (label, width, anchor, stretch) in headings.items():
+            self._material_tree.heading(column, text=label)
+            self._material_tree.column(column, width=width, minwidth=50,
+                                       anchor=anchor, stretch=stretch)
+
+    def _redraw_materials(self, cat):
+        self._configure_columns({
+            "grade": ("GRADE", 55, tk.CENTER, False),
+            "material": ("MATERIAL", 235, tk.W, True),
+            "stock": ("COUNT / CAP", 105, tk.E, False),
+            "capacity": ("CAPACITY", 155, tk.W, False),
+        })
         cat_data = self.materials.get(cat, {})
 
-        # Collect only materials with count > 0
         items_with_count = []
         for key, item in cat_data.items():
             count = int(item.get("count", 0) if isinstance(item, dict) else item)
@@ -328,61 +315,235 @@ class EngineerWindow(ThemedWindowMixin):
                 tags=("empty",),
             )
             self._update_footer(cat, cat_data)
-            self._update_sync_label()
             return
 
-        # Group by grade
-        by_grade: dict[int, list] = {}
+        by_grade: dict[int | None, list] = {}
         for key, item, count in items_with_count:
-            g = _GRADE.get(key, 3)
+            g = material_info(key).get("grade")
             by_grade.setdefault(g, []).append((key, item, count, g))
 
-        for grade in sorted(by_grade.keys()):
-            cap = _GRADE_CAP.get(grade, 200)
+        for grade in sorted(by_grade.keys(), key=lambda value: value if value is not None else 99):
+            cap = GRADE_CAP.get(grade)
             rows = sorted(by_grade[grade], key=lambda x: (-(x[2]), (
                 x[1].get("name") if isinstance(x[1], dict) else x[0]).lower()))
 
             self._material_tree.insert(
                 "",
                 tk.END,
-                values=(f"G{grade}", f"GRADE {grade}  —  individual cap {cap:,}", "", ""),
+                values=((f"G{grade}" if grade else "—"),
+                        (f"GRADE {grade}  —  individual cap {cap:,}" if grade else "SPECIAL MATERIALS"), "", ""),
                 tags=("grade_header",),
             )
 
             for key, item, count, g in rows:
-                name  = (item.get("name") if isinstance(item, dict) else None) or key.replace("_", " ").title()
-                fill  = min(1.0, count / cap)
+                ref = material_info(key)
+                name = (item.get("name") if isinstance(item, dict) else None) or ref["name"]
+                fill = min(1.0, count / cap) if cap else 0
 
-                if fill >= 0.85:
+                if cap and fill >= 0.85:
                     row_tag = "near_cap"
-                elif fill >= 0.50:
+                elif cap and fill >= 0.50:
                     row_tag = "mid_cap"
                 else:
                     row_tag = "low_cap"
 
-                segments = 10
-                filled = max(0, min(segments, round(fill * segments)))
-                capacity = "█" * filled + "░" * (segments - filled) + f"  {fill * 100:>3.0f}%"
+                if cap:
+                    segments = 10
+                    filled = max(0, min(segments, round(fill * segments)))
+                    capacity = "█" * filled + "░" * (segments - filled) + f"  {fill * 100:>3.0f}%"
+                    stock = f"{count:,} / {cap:,}"
+                else:
+                    capacity, stock = "Not material-trader stock", f"{count:,}"
                 self._material_tree.insert(
                     "",
                     tk.END,
-                    values=(f"G{g}", name, f"{count:,} / {cap:,}", capacity),
+                    values=((f"G{g}" if g else "—"), name, stock, capacity),
                     tags=(row_tag,),
                 )
 
         self._update_footer(cat, cat_data)
-        self._update_sync_label()
+
+    def _redraw_engineers(self):
+        self._configure_columns({
+            "grade": ("STATUS", 90, tk.CENTER, False),
+            "material": ("ENGINEER", 190, tk.W, True),
+            "stock": ("ACCESS", 90, tk.CENTER, False),
+            "capacity": ("SYSTEM · SPECIALTY", 300, tk.W, True),
+        })
+        records = self.materials.get("engineers") or {}
+        order = {"Unlocked": 0, "Invited": 1, "Known": 2}
+        rows = sorted(records.items(), key=lambda pair: (
+            order.get(pair[1].get("progress"), 3), -int(pair[1].get("rank") or 0), pair[0]
+        ))
+        if not rows:
+            self._material_tree.insert("", tk.END, values=("", "No engineer progress recorded", "", "Launch Elite Dangerous to sync"), tags=("empty",))
+        for name, rec in rows:
+            system, offers, on_foot = ENGINEERS.get(name, ("", "", False))
+            progress = rec.get("progress") or "Unknown"
+            rank = int(rec.get("rank") or 0)
+            access = f"G{rank} / 5" if progress == "Unlocked" and rank else progress.upper()
+            label = f"{name}  [ON-FOOT]" if on_foot else name
+            iid = self._material_tree.insert("", tk.END, values=(progress.upper(), label, access,
+                                             " · ".join(value for value in (system, offers) if value)),
+                                             tags=("mid_cap" if progress == "Unlocked" else "low_cap",))
+            if system:
+                self._row_meta[iid] = {"system": system}
+        unlocked = sum(1 for rec in records.values() if rec.get("progress") == "Unlocked")
+        self._total_lbl.config(text=f"Unlocked: {unlocked} / {len(records)} recorded")
+        self._type_lbl.config(text="EngineerProgress journal data")
+
+    def _redraw_planner(self):
+        self._configure_columns({
+            "grade": ("GRADE", 55, tk.CENTER, False),
+            "material": ("BLUEPRINT / MATERIAL", 235, tk.W, True),
+            "stock": ("HAVE / NEED", 110, tk.E, False),
+            "capacity": ("SHORTFALL / TRADER OPTION", 330, tk.W, True),
+        })
+        raw_counts = {
+            symbol: int(item.get("count", 0) if isinstance(item, dict) else item)
+            for symbol, item in (self.materials.get("raw") or {}).items()
+        }
+        synth = fsd_injections(raw_counts)
+        self._material_tree.insert(
+            "", tk.END,
+            values=("FSD", "Jumponium synthesis readiness",
+                    f"B {synth['basic']} · S {synth['standard']} · P {synth['premium']}",
+                    "Basic +25% · Standard +50% · Premium +100%"),
+            tags=("mid_cap" if any(synth.values()) else "grade_header",),
+        )
+        plans = pinned_plans(self.materials)
+        if not plans:
+            self._material_tree.insert("", tk.END, values=("", "Nothing pinned yet", "", "Choose a blueprint and grade above, then PIN"), tags=("empty",))
+        for plan_row in plans:
+            total = sum(row["need"] for row in plan_row["materials"])
+            have = sum(min(row["have"], row["need"]) for row in plan_row["materials"])
+            pct = round(have / total * 100) if total else 100
+            status = "READY TO ENGINEER" if plan_row["craftable"] else f"{pct}% collected"
+            iid = self._material_tree.insert("", tk.END,
+                values=(f"G{plan_row['grade']}", plan_row["blueprint"], f"{have} / {total}", status),
+                tags=("near_cap" if plan_row["craftable"] else "grade_header",))
+            self._row_meta[iid] = {"blueprint": plan_row["blueprint"]}
+            for row in plan_row["materials"]:
+                if row["deficit"]:
+                    detail = f"Need {row['deficit']} more"
+                    if row.get("trade"):
+                        trade = row["trade"]
+                        detail += f" · trade {trade['spend']}× {trade['from']} for {trade['covers']}"
+                    tag = "near_cap"
+                else:
+                    detail, tag = "Complete", "mid_cap"
+                self._material_tree.insert("", tk.END,
+                    values=(f"G{row['grade']}", f"  {row['name']}", f"{row['have']} / {row['need']}", detail),
+                    tags=(tag,))
+        self._total_lbl.config(text=f"Pinned blueprints: {len(plans)}")
+        selected = self._blueprint_var.get()
+        info = BLUEPRINT_INFO.get(selected, {})
+        self._type_lbl.config(text=info.get("what", "Verified starter recipe set"))
+
+    def _redraw_odyssey(self):
+        self._configure_columns({
+            "grade": ("TYPE", 100, tk.CENTER, False),
+            "material": ("LOCKER ITEM", 280, tk.W, True),
+            "stock": ("COUNT", 90, tk.E, False),
+            "capacity": ("USE", 260, tk.W, True),
+        })
+        locker = self.materials.get("ship_locker") or {}
+        total = 0
+        for group in ("items", "components", "data", "consumables"):
+            rows = locker.get(group) or []
+            if not rows:
+                continue
+            self._material_tree.insert("", tk.END, values=(group.upper(), f"{group.upper()} · {len(rows)} types", "", ""), tags=("grade_header",))
+            for item in rows:
+                count = int(item.get("count") or 0)
+                total += count
+                self._material_tree.insert("", tk.END, values=(group.upper(), item.get("name"), count,
+                                          "Bartenders / on-foot engineering"), tags=("low_cap",))
+        if not total:
+            self._material_tree.insert("", tk.END, values=("", "No Odyssey locker data", "", "ShipLocker.json syncs automatically"), tags=("empty",))
+        self._total_lbl.config(text=f"Locker total: {total:,}")
+        self._type_lbl.config(text="Goods · assets · data · consumables")
+
+    def _pin_blueprint(self):
+        name = self._blueprint_var.get()
+        if name not in BLUEPRINTS:
+            return
+        grade = max(1, min(5, int(self._grade_var.get() or 5)))
+        pins = [pin for pin in (self.materials.get("pinned_blueprints") or []) if pin.get("name") != name]
+        pins.append({"name": name, "grade": grade})
+        self.materials["pinned_blueprints"] = pins
+        self.save_callback(self.materials)
+        self._redraw()
+
+    def _unpin_selected(self):
+        selected = self._material_tree.selection()
+        if not selected:
+            return
+        name = (self._row_meta.get(selected[0]) or {}).get("blueprint")
+        if not name:
+            return
+        self.materials["pinned_blueprints"] = [
+            pin for pin in (self.materials.get("pinned_blueprints") or []) if pin.get("name") != name
+        ]
+        self.save_callback(self.materials)
+        self._redraw()
+
+    def _find_traders(self):
+        system = self.get_current_system() or ""
+        coords = self.get_current_coords()
+        if not system and not coords:
+            self._total_lbl.config(text="No current system available for trader search")
+            return
+        self._total_lbl.config(text="Searching for nearby material traders…")
+
+        def worker():
+            try:
+                found = []
+                for kind in ("raw", "manufactured", "encoded"):
+                    rows = spansh.material_traders(system, kind, size=1, coords=coords)
+                    found.append((kind, rows[0] if rows else None))
+                self.win.after(0, lambda: self._show_traders(found))
+            except Exception as exc:
+                message = str(exc)
+                self.win.after(0, lambda msg=message: self._total_lbl.config(text=f"Trader search failed: {msg}"))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _plot_selected(self):
+        selected = self._material_tree.selection()
+        system = (self._row_meta.get(selected[0]) or {}).get("system") if selected else None
+        if not system or not self.plot_system_callback:
+            self._total_lbl.config(text="Select an engineer or trader row with a system first")
+            return
+        self.plot_system_callback(system)
+
+    def _show_traders(self, found):
+        if not self.is_open():
+            return
+        rows = self._material_tree.get_children()
+        if rows:
+            self._material_tree.delete(*rows)
+        self._row_meta = {}
+        for kind, trader in found:
+            if trader:
+                detail = f"{trader.get('distance', 0):,.1f} ly · {trader.get('dist_ls') or '?'} ls"
+                if trader.get("large_pad"):
+                    detail += " · L pad"
+                iid = self._material_tree.insert("", tk.END, values=(kind.upper(), trader.get("station"), trader.get("system"), detail), tags=("mid_cap",))
+                self._row_meta[iid] = {"system": trader.get("system")}
+            else:
+                self._material_tree.insert("", tk.END, values=(kind.upper(), "No trader found", "", ""), tags=("empty",))
+        self._total_lbl.config(text="Nearest material traders from Spansh")
+        self._type_lbl.config(text="Select PLANNER again to restore blueprint plans")
 
     def _update_footer(self, cat: str, cat_data: dict):
         total  = sum(
             int(v.get("count", 0) if isinstance(v, dict) else v)
             for v in cat_data.values()
         )
-        cap    = _CAT_CAP.get(cat, 1000)
         n_mats = sum(1 for v in cat_data.values()
                      if int(v.get("count", 0) if isinstance(v, dict) else v) > 0)
-        pct    = int(total / cap * 100) if cap else 0
-        self._total_lbl.config(text=f"Total: {total:,} / {cap:,}  ({pct}%)")
+        self._total_lbl.config(text=f"Total held: {total:,}")
         self._type_lbl.config(
             text=f"{n_mats} material type{'s' if n_mats != 1 else ''}")
 

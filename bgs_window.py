@@ -8,7 +8,7 @@ and active/pending BGS states.
 
 import json
 import tkinter as tk
-from datetime import datetime
+from datetime import datetime, timezone
 from tkinter import messagebox, ttk
 from typing import Callable
 
@@ -59,6 +59,7 @@ class BGSWindow(ThemedWindowMixin):
         delete_system_cb: Callable[[str], bool] | None = None,
         purge_cb: Callable[[], bool] | None = None,
         purge_empty_cb: Callable[[], int | None] | None = None,
+        get_galaxy_state_cb: Callable[[], dict] | None = None,
         embedded=False,
     ):
         """
@@ -72,6 +73,7 @@ class BGSWindow(ThemedWindowMixin):
         self._delete_system    = delete_system_cb
         self._purge_bgs        = purge_cb
         self._purge_empty_bgs  = purge_empty_cb
+        self._get_galaxy_state = get_galaxy_state_cb or (lambda: {})
         self._selected_system: str | None = None
         self._all_systems: list = []
         self._system_iids: dict[str, str] = {}
@@ -79,7 +81,7 @@ class BGSWindow(ThemedWindowMixin):
 
         self.embedded = embedded
         self.win = window_surface(root, embedded=embedded)
-        self.win.title("BGS Visit Tracker - Void Compass")
+        self.win.title("Galaxy - Void Compass")
         apply_window(self.win)
         self.win.geometry(config.get("bgs_window_geometry", "880x580"))
         self.win.resizable(True, True)
@@ -112,6 +114,7 @@ class BGSWindow(ThemedWindowMixin):
         self.win.after(0, self._do_refresh)
 
     def _do_refresh(self):
+        self._render_galaxy_overview()
         self._all_systems = self._load_systems()
         self._reload_list()
         if self._selected_system:
@@ -143,7 +146,7 @@ class BGSWindow(ThemedWindowMixin):
         hdr = tk.Frame(self.win, bg="#0c1014", height=46)
         hdr.pack(fill=tk.X)
         hdr.pack_propagate(False)
-        tk.Label(hdr, text="BGS VISIT TRACKER",
+        tk.Label(hdr, text="GALAXY",
                  font=("Segoe UI", 13, "bold"), fg=COLOR_ACCENT, bg="#0c1014"
                  ).pack(side=tk.LEFT, padx=14, pady=8)
         self._sys_count_lbl = tk.Label(hdr, text="",
@@ -151,8 +154,16 @@ class BGSWindow(ThemedWindowMixin):
                                         font=("Consolas", 8))
         self._sys_count_lbl.pack(side=tk.RIGHT, padx=14)
 
+        self._tabs = ttk.Notebook(self.win, style="BGS.TNotebook")
+        self._tabs.pack(fill=tk.BOTH, expand=True, padx=8, pady=(6, 8))
+        self._galaxy_tab = tk.Frame(self._tabs, bg=self.UI_BG)
+        self._history_tab = tk.Frame(self._tabs, bg=self.UI_BG)
+        self._tabs.add(self._galaxy_tab, text="GALAXY OVERVIEW")
+        self._tabs.add(self._history_tab, text="BGS HISTORY")
+        self._build_galaxy_overview()
+
         # Main split: left list + right detail
-        main = tk.Frame(self.win, bg=self.UI_BG)
+        main = tk.Frame(self._history_tab, bg=self.UI_BG)
         main.pack(fill=tk.BOTH, expand=True, padx=8, pady=(6, 8))
 
         # ── Left: system list ─────────────────────────────────────────────────
@@ -273,12 +284,182 @@ class BGSWindow(ThemedWindowMixin):
         self._detail.tag_config("bar_mid",  foreground=COLOR_ACCENT)
         self._detail.tag_config("bar_lo",   foreground="#3a7d9e")
 
+    # ── Live Galaxy overview ─────────────────────────────────────────────────
+
+    def _build_galaxy_overview(self):
+        body = tk.Frame(self._galaxy_tab, bg=self.UI_BG)
+        body.pack(fill=tk.BOTH, expand=True)
+        self._galaxy_canvas = tk.Canvas(body, bg=self.UI_BG, highlightthickness=0, bd=0)
+        scroll = scrollbar(body, orient=tk.VERTICAL, command=self._galaxy_canvas.yview)
+        self._galaxy_content = tk.Frame(self._galaxy_canvas, bg=self.UI_BG)
+        window = self._galaxy_canvas.create_window((0, 0), window=self._galaxy_content, anchor="nw")
+        self._galaxy_canvas.configure(yscrollcommand=scroll.set)
+        self._galaxy_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self._galaxy_content.bind(
+            "<Configure>", lambda _event: self._galaxy_canvas.configure(scrollregion=self._galaxy_canvas.bbox("all")))
+        self._galaxy_canvas.bind(
+            "<Configure>", lambda event: self._galaxy_canvas.itemconfigure(window, width=event.width))
+        self._render_galaxy_overview()
+
+    def _galaxy_card(self, parent, title, row, column, columnspan=1, accent=None):
+        card = tk.Frame(parent, bg=self.UI_PANEL, highlightbackground=accent or self.UI_BORDER,
+                        highlightthickness=1, bd=0)
+        card.grid(row=row, column=column, columnspan=columnspan, sticky="nsew", padx=5, pady=5)
+        tk.Frame(card, bg=accent or COLOR_ORANGE, height=2).pack(fill=tk.X)
+        tk.Label(card, text=title, fg=accent or COLOR_ORANGE, bg=self.UI_PANEL,
+                 font=("Segoe UI", 8, "bold"), anchor="w").pack(fill=tk.X, padx=12, pady=(9, 5))
+        return card
+
+    def _galaxy_line(self, parent, title, detail="", fg=COLOR_TEXT):
+        row = tk.Frame(parent, bg=self.UI_PANEL)
+        row.pack(fill=tk.X, padx=12, pady=3)
+        tk.Label(row, text=str(title), fg=fg, bg=self.UI_PANEL,
+                 font=("Consolas", 9, "bold"), anchor="w").pack(side=tk.LEFT)
+        if detail:
+            tk.Label(row, text=str(detail), fg=self.UI_MUTED, bg=self.UI_PANEL,
+                     font=("Consolas", 8), anchor="e", justify=tk.RIGHT,
+                     wraplength=480).pack(side=tk.RIGHT, fill=tk.X, expand=True)
+        return row
+
+    @staticmethod
+    def _reputation_band(value):
+        if value is None:
+            return "", "#7a8a98"
+        if value <= -35:
+            return "HOSTILE", "#ff5c5c"
+        if value <= -10:
+            return "UNFRIENDLY", "#ff7777"
+        if value < 10:
+            return "NEUTRAL", "#7a8a98"
+        if value < 35:
+            return "CORDIAL", "#93c5fd"
+        if value < 90:
+            return "FRIENDLY", "#21d189"
+        return "ALLIED", "#21d189"
+
+    @staticmethod
+    def _goal_expiry(value):
+        if not value:
+            return ""
+        try:
+            expiry = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            seconds = int((expiry - datetime.now(timezone.utc)).total_seconds())
+            if seconds <= 0:
+                return "ENDED"
+            hours = seconds // 3600
+            return f"{hours // 24}d {hours % 24}h left" if hours >= 24 else f"{hours}h left"
+        except Exception:
+            return str(value)
+
+    def _render_galaxy_overview(self):
+        content = getattr(self, "_galaxy_content", None)
+        if not content:
+            return
+        for child in content.winfo_children():
+            child.destroy()
+        content.grid_columnconfigure(0, weight=1, uniform="galaxy")
+        content.grid_columnconfigure(1, weight=1, uniform="galaxy")
+        state = self._get_galaxy_state() or {}
+        system = state.get("galaxy_system") or "No current system"
+
+        hero = self._galaxy_card(content, "CURRENT GALAXY CONTEXT", 0, 0, 2, COLOR_ACCENT)
+        self._galaxy_line(hero, system.upper(),
+                          f"Controlling faction: {state.get('controlling_faction') or 'Unknown'}",
+                          COLOR_ACCENT)
+
+        powerplay = state.get("powerplay") or {}
+        pp_system = state.get("pp_system") or {}
+        pp_card = self._galaxy_card(content, "POWERPLAY", 1, 0, accent="#93c5fd")
+        if powerplay:
+            pledged_seconds = int(powerplay.get("time_pledged_s") or 0)
+            pledged = f"{pledged_seconds // 604800} week(s) pledged" if pledged_seconds else "Pledge active"
+            self._galaxy_line(pp_card, powerplay.get("power") or "Unknown Power",
+                              f"Rating {powerplay.get('rank') or 0} · {int(powerplay.get('merits') or 0):,} merits")
+            self._galaxy_line(pp_card, f"+{int(powerplay.get('session_merits') or 0):,} this session", pledged,
+                              "#21d189")
+        else:
+            self._galaxy_line(pp_card, "Not pledged", "Powerplay progress appears after the game reports it", self.UI_MUTED)
+        if pp_system:
+            control = pp_system.get("control_progress")
+            control_text = f"Control {float(control) * 100:.1f}%" if isinstance(control, (int, float)) else "Control unknown"
+            self._galaxy_line(pp_card, pp_system.get("controlling") or "Uncontrolled",
+                              f"{pp_system.get('state') or 'Unknown'} · {control_text}")
+            powers = pp_system.get("powers") or []
+            if len(powers) > 1:
+                self._galaxy_line(pp_card, "Contested", ", ".join(powers), COLOR_ORANGE)
+            self._galaxy_line(pp_card, f"▲ {int(pp_system.get('reinforcement') or 0):,} reinforced",
+                              f"▼ {int(pp_system.get('undermining') or 0):,} undermined")
+
+        squad_card = self._galaxy_card(content, "SQUADRON", 1, 1, accent="#c4b5fd")
+        squadron = state.get("squadron") or {}
+        if squadron:
+            self._galaxy_line(squad_card, squadron.get("name") or "Unknown Squadron",
+                              f"Rank {squadron.get('rank') or 0}")
+        else:
+            self._galaxy_line(squad_card, "No squadron recorded", "SquadronStartup journal data", self.UI_MUTED)
+
+        faction_card = self._galaxy_card(content, "CURRENT SYSTEM FACTIONS", 2, 0, 2, COLOR_ORANGE)
+        factions = state.get("factions") or []
+        if not factions:
+            self._galaxy_line(faction_card, "No faction data", "Jump into or load inside a populated system", self.UI_MUTED)
+        for faction in factions:
+            influence = float(faction.get("influence") or 0)
+            controls = faction.get("name") == state.get("controlling_faction")
+            rep, rep_color = self._reputation_band(faction.get("my_reputation"))
+            states = ([str(value) for value in faction.get("active_states") or []]
+                      + [f"{value} (pending)" for value in faction.get("pending_states") or []]
+                      + [f"{value} (recovering)" for value in faction.get("recovering_states") or []])
+            detail = f"{influence * 100:.1f}% · {faction.get('government') or '—'} · {faction.get('allegiance') or '—'}"
+            if controls:
+                detail += " · CONTROLS"
+            if states:
+                detail += " · " + ", ".join(states)
+            line = self._galaxy_line(faction_card, faction.get("name") or "Unknown faction", detail)
+            if rep:
+                tk.Label(line, text=rep, fg=rep_color, bg=self.UI_PANEL,
+                         font=("Segoe UI", 7, "bold"), padx=6).pack(side=tk.RIGHT, padx=(8, 0))
+            bar = tk.Frame(faction_card, bg="#070a0e", height=5)
+            bar.pack(fill=tk.X, padx=12, pady=(0, 5))
+            tk.Frame(bar, bg="#21d189" if controls else COLOR_ACCENT).place(
+                x=0, y=0, relheight=1, relwidth=max(0.0, min(1.0, influence)))
+
+        conflict_card = self._galaxy_card(content, "CONFLICTS", 3, 0, accent="#ff7777")
+        conflicts = state.get("conflicts") or []
+        if not conflicts:
+            self._galaxy_line(conflict_card, "No active conflicts", "Wars and elections appear here", self.UI_MUTED)
+        for conflict in conflicts:
+            one, two = conflict.get("faction1") or {}, conflict.get("faction2") or {}
+            score = f"{one.get('won_days') or 0}–{two.get('won_days') or 0}"
+            self._galaxy_line(conflict_card,
+                              f"{one.get('name') or '?'}  {score}  {two.get('name') or '?'}",
+                              f"{str(conflict.get('war_type') or 'Conflict').title()} · {one.get('stake') or two.get('stake') or 'No stake'}")
+
+        goal_card = self._galaxy_card(content, "COMMUNITY GOALS", 3, 1, accent="#fde68a")
+        goals = list((state.get("community_goals") or {}).values())
+        if not goals:
+            self._galaxy_line(goal_card, "No joined community goals", "Join at the named station mission board", self.UI_MUTED)
+        for goal in goals:
+            detail = (f"{int(goal.get('contribution') or 0):,} contributed · Tier {goal.get('tier') or '—'}"
+                      f" · Top {goal.get('percentile') or '—'}%")
+            expiry = self._goal_expiry(goal.get("expiry"))
+            if expiry:
+                detail += f" · {expiry}"
+            if goal.get("complete"):
+                detail += " · COMPLETE"
+            self._galaxy_line(goal_card, goal.get("title") or "Community Goal", detail,
+                              "#21d189" if goal.get("complete") else COLOR_TEXT)
+
+        content.update_idletasks()
+        self._galaxy_canvas.configure(scrollregion=self._galaxy_canvas.bbox("all"))
+
     # ── System list ───────────────────────────────────────────────────────────
 
     def _initial_load(self, attempt=0):
         if not self.is_open():
             return
         self._initial_retry_job = None
+        self._render_galaxy_overview()
         self._all_systems = self._load_systems()
         self._reload_list()
 
@@ -483,6 +664,7 @@ class BGSWindow(ThemedWindowMixin):
         t = self._detail
         t.config(state=tk.NORMAL)
         t.delete("1.0", tk.END)
+        self._render_galaxy_summary(t, sys_name)
 
         if not snapshots:
             t.insert(tk.END, "  No faction data for this system.\n", "muted")
@@ -582,3 +764,42 @@ class BGSWindow(ThemedWindowMixin):
             t.insert(tk.END, bar_str, bar_tag)
 
         t.config(state=tk.DISABLED)
+
+    def _render_galaxy_summary(self, text, system_name):
+        state = self._get_galaxy_state() or {}
+        powerplay = state.get("powerplay") or {}
+        goals = list((state.get("community_goals") or {}).values())
+        squadron = state.get("squadron") or {}
+        same_system = state.get("galaxy_system") == system_name
+        pp_system = state.get("pp_system") if same_system else None
+        conflicts = state.get("conflicts") if same_system else []
+        if not any((powerplay, goals, squadron, pp_system, conflicts)):
+            return
+        text.insert(tk.END, "  GALAXY STATUS\n", "hdr")
+        if powerplay:
+            text.insert(tk.END,
+                        f"  POWERPLAY  {powerplay.get('power') or '—'}  |  Rank {powerplay.get('rank') or 0}"
+                        f"  |  {int(powerplay.get('merits') or 0):,} merits"
+                        f"  |  +{int(powerplay.get('session_merits') or 0):,} this session\n",
+                        "name")
+        if pp_system:
+            text.insert(tk.END,
+                        f"  SYSTEM     {pp_system.get('controlling') or '—'}  |  {pp_system.get('state') or 'Unknown'}"
+                        f"  |  Reinforcement {pp_system.get('reinforcement') or 0}"
+                        f"  |  Undermining {pp_system.get('undermining') or 0}\n",
+                        "name")
+        for conflict in conflicts or []:
+            one, two = conflict.get("faction1") or {}, conflict.get("faction2") or {}
+            text.insert(tk.END,
+                        f"  {str(conflict.get('war_type') or 'CONFLICT').upper():<10} "
+                        f"{one.get('name') or '?'} {one.get('won_days') or 0}–{two.get('won_days') or 0} "
+                        f"{two.get('name') or '?'}  |  {one.get('stake') or two.get('stake') or 'No stake'}\n",
+                        "state_war")
+        if squadron:
+            text.insert(tk.END, f"  SQUADRON   {squadron.get('name') or '—'}  |  Rank {squadron.get('rank') or 0}\n", "name")
+        for goal in goals:
+            text.insert(tk.END,
+                        f"  COMMUNITY  {goal.get('title') or 'Goal'}  |  {int(goal.get('contribution') or 0):,} contributed"
+                        f"  |  Tier {goal.get('tier') or '—'}  |  Top {goal.get('percentile') or '—'}%\n",
+                        "name")
+        text.insert(tk.END, "  " + "─" * 82 + "\n", "sep")
