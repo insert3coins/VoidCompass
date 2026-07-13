@@ -63,6 +63,7 @@ from achievement_engine import AchievementEngine
 from achievement_window import AchievementWindow
 from voice_callouts import VoiceCalloutManager, choose_line
 from cockpit_ai_memory import CockpitMemory, ordinal
+from compass_llm import CompassLLM
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
@@ -366,6 +367,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.config["active_commander_name"] = commander_name
         self.config["active_commander_fid"] = fid or profile.get("fid", "")
         apply_profile_config(self.config, new_key)
+        if getattr(self, "compass_llm", None):
+            self.compass_llm.configure()
+        self._compass_advisor_last = {}
+        self._compass_advisor_last_any = 0.0
+        self._compass_advisor_cargo_level = 0
+        self._compass_advisor_trade_level = 0
         self._refresh_profile_paths()
         if getattr(self, "cockpit_memory", None):
             self.cockpit_memory.session_debrief("Profile changed", close=True)
@@ -444,6 +451,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.config = load_config()
         self._prepare_commander_profile_from_journal()
         self.voice_callouts = VoiceCalloutManager(self.config)
+        self.compass_llm = CompassLLM(self.config)
         self.cockpit_memory = CockpitMemory(
             get_profile_file(get_active_profile(self.config), "cockpit_ai_memory.json"),
             limits=self._cockpit_memory_limits(),
@@ -500,6 +508,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._sample_clear_announced = False
         self._rebuy_warning_level = 0
         self._data_risk_level = 0
+        self._compass_advisor_last = {}
+        self._compass_advisor_last_any = 0.0
+        self._compass_advisor_cargo_level = 0
+        self._compass_advisor_trade_level = 0
         self._stale_bio_warned = set()
         # Bio tracking: star/body scan conditions for prediction
         self.system_stars: dict  = {}   # body_id → star_type str
@@ -1054,6 +1066,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.cockpit_memory.session_debrief("Session complete", close=True)
             except Exception:
                 pass
+        if getattr(self, "compass_llm", None):
+            self.compass_llm.stop()
         self.voice_callouts.stop()
         
         if self.route_plotter and self.route_plotter.win.winfo_exists():
@@ -1693,6 +1707,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def open_settings(self):
         def on_save():
             self.log("Configuration saved successfully.")
+            if getattr(self, "compass_llm", None):
+                self.compass_llm.configure()
             self._apply_runtime_feature_toggles()
             self.show_dashboard_page()
 
@@ -1707,6 +1723,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 on_close_callback=self.show_dashboard_page,
                 voice_manager=self.voice_callouts,
                 cockpit_memory=self.cockpit_memory,
+                compass_llm=self.compass_llm,
             )
         self._show_embedded_page("SETTINGS", self.settings_page)
 
@@ -2456,6 +2473,299 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return False
         return self._set_commander_balance(int(self.cmdr_balance or 0) + delta, timestamp=timestamp, log=log)
 
+    def _compass_gameplay_snapshot(self):
+        """Return a compact set of verified live facts suitable for local generation."""
+        def number(value, digits=1):
+            try:
+                return round(float(value), digits)
+            except (TypeError, ValueError):
+                return None
+
+        memory = getattr(self, "cockpit_memory", None)
+        state = getattr(self, "companion_state", {}) or {}
+        current_system = getattr(self, "current_sys", None)
+        route = list(getattr(self, "route_list", None) or [])
+        route_index = next(
+            (idx for idx, name in enumerate(route)
+             if str(name).casefold() == str(current_system).casefold()),
+            -1,
+        )
+        route_remaining = (
+            max(0, len(route) - route_index - 1) if route_index >= 0 else len(route)
+        )
+        next_system = (
+            route[route_index + 1] if 0 <= route_index < len(route) - 1
+            else (route[0] if route and route_index < 0 else None)
+        )
+
+        fuel_main = getattr(self, "current_fuel_main", None)
+        fuel_capacity = getattr(self, "fuel_capacity_main", None)
+        fuel_percent = None
+        try:
+            if fuel_capacity and float(fuel_capacity) > 0 and fuel_main is not None:
+                fuel_percent = round(float(fuel_main) * 100 / float(fuel_capacity))
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
+        cargo_tons = int(getattr(self, "current_cargo_tons", 0) or 0)
+        cargo_capacity = int(getattr(self, "cargo_capacity", 0) or 0)
+        cargo_percent = round(cargo_tons * 100 / cargo_capacity) if cargo_capacity else None
+
+        missions = state.get("missions") or {}
+        mission_rows = list(missions.values()) if isinstance(missions, dict) else list(missions)
+        mission_destinations = []
+        for mission in mission_rows:
+            if not isinstance(mission, dict):
+                continue
+            system = mission.get("destination_system")
+            station = mission.get("destination_station")
+            if system and not any(row.get("system") == system for row in mission_destinations):
+                mission_destinations.append({"system": system, "station": station})
+
+        valuable_names = []
+        for row in getattr(self, "valuable_bodies", None) or ():
+            parts = str(row).split(" ", 2)
+            valuable_names.append(parts[2] if len(parts) == 3 else str(row).lstrip("- "))
+
+        unsold_exploration = int(state.get("unsold_exploration_cr") or 0)
+        unsold_biology = int(state.get("unsold_bio_cr") or 0)
+        trade = getattr(self, "trade_session", {}) or {}
+        sample = self._sampling_snapshot() if getattr(self, "bio_sampling", None) else None
+        snapshot = {
+            "flight": {
+                "state": getattr(self, "hud_flight_state", "FLIGHT"),
+                "ship": (getattr(self, "cmdr_ship", {}) or {}).get("ship_name")
+                        or (getattr(self, "cmdr_ship", {}) or {}).get("ship"),
+                "fuel_percent": fuel_percent,
+                "fuel_main_t": number(fuel_main),
+                "fuel_capacity_t": number(fuel_capacity),
+                "cargo_t": cargo_tons,
+                "cargo_capacity_t": cargo_capacity,
+                "cargo_percent": cargo_percent,
+                "legal_state": getattr(self, "current_legal_state", None),
+            },
+            "navigation": {
+                "current_system": current_system,
+                "star_class": getattr(self, "star_class", None),
+                "next_system": next_system,
+                "final_destination": route[-1] if route else getattr(self, "dest_name", None),
+                "remaining_jumps": route_remaining,
+                "hud_destination": getattr(self, "current_destination", None),
+            },
+            "survey": {
+                "scanned_bodies": int(getattr(self, "scanned", 0) or 0),
+                "total_bodies": int(getattr(self, "total", 0) or 0),
+                "system_undiscovered": bool(getattr(self, "system_undiscovered", False)),
+                "valuable_bodies": valuable_names[:5],
+                "biological_signals": int(getattr(self, "system_bio_signals", 0) or 0),
+                "completed_biological_analyses": int(getattr(self, "organic_count", 0) or 0),
+                "focused_body": getattr(self, "current_body_name", None),
+            },
+            "biology": dict(sample) if isinstance(sample, dict) else None,
+            "objectives": {
+                "active_missions": len(mission_rows),
+                "mission_destinations": mission_destinations[:6],
+                "unsold_exploration_cr": unsold_exploration,
+                "unsold_biology_cr": unsold_biology,
+                "unsold_data_total_cr": unsold_exploration + unsold_biology,
+                "pinned_engineering": list(
+                    (getattr(self, "engineer_materials", {}) or {}).get("pinned_blueprints") or []
+                )[:5],
+            },
+            "station": {
+                "name": getattr(self, "current_station_name", None),
+                "services": list(getattr(self, "current_station_services", None) or [])[:20],
+            } if getattr(self, "current_docked", False) else None,
+            "session": {
+                "jumps": int(getattr(self, "session_jump_count", 0) or 0),
+                "distance_ly": number(getattr(self, "session_ly", 0)) or 0.0,
+                "trade_profit_cr": int(trade.get("profit") or 0),
+                "mined_units": memory.count("mining_refined") if memory else 0,
+            },
+            "learned_gameplay": memory.gameplay_awareness() if memory else {},
+        }
+        return snapshot
+
+    def _compass_advisor_intervals(self):
+        level = str(self.config.get("cockpit_llm_advisor_level", "Balanced")).casefold()
+        return {
+            "quiet": (900.0, 450.0),
+            "proactive": (180.0, 90.0),
+        }.get(level, (420.0, 210.0))
+
+    def _compass_advisor_available(self, topic):
+        if not self.config.get("cockpit_llm_advisor_enabled", True):
+            return False
+        topic_gap, global_gap = self._compass_advisor_intervals()
+        now = time.monotonic()
+        last_topic = self._compass_advisor_last.get(topic)
+        last_any = self._compass_advisor_last_any
+        return (
+            (last_topic is None or now - float(last_topic) >= topic_gap)
+            and (not last_any or now - float(last_any) >= global_gap)
+        )
+
+    def _mark_compass_advisor(self, topic):
+        if not topic:
+            return
+        now = time.monotonic()
+        self._compass_advisor_last[topic] = now
+        self._compass_advisor_last_any = now
+
+    def _compass_advisory_point(self, snapshot, key):
+        """Select at most one useful verified observation for an existing callout."""
+        key_text = str(key or "")
+        if key_text.startswith("advisor:"):
+            return None
+        nav = snapshot.get("navigation") or {}
+        survey = snapshot.get("survey") or {}
+        objectives = snapshot.get("objectives") or {}
+        flight = snapshot.get("flight") or {}
+        biology = snapshot.get("biology") or {}
+        current_system = nav.get("current_system")
+
+        candidates = []
+        matching_missions = [
+            row for row in objectives.get("mission_destinations") or []
+            if current_system and str(row.get("system")).casefold() == str(current_system).casefold()
+        ]
+        if matching_missions and key_text.startswith(("system-arrival:", "route-arrival:", "route-waypoint:")):
+            count = len(matching_missions)
+            candidates.append({
+                "topic": "mission-destination",
+                "line": f"{count} active mission objective{'s' if count != 1 else ''} reference this system.",
+                "terms": (str(current_system),),
+            })
+        remaining_bodies = max(
+            0, int(survey.get("total_bodies") or 0) - int(survey.get("scanned_bodies") or 0)
+        )
+        if remaining_bodies and key_text.startswith(("system-arrival:", "first-discovery:", "cockpit-context:")):
+            candidates.append({
+                "topic": "survey-progress",
+                "line": f"The survey record still has {remaining_bodies} bodies unresolved.",
+                "terms": (),
+            })
+        unresolved_biology = max(
+            0, int(survey.get("biological_signals") or 0)
+            - int(survey.get("completed_biological_analyses") or 0)
+        )
+        if unresolved_biology and key_text.startswith(("system-arrival:", "valuable-world:", "cockpit-context:")):
+            candidates.append({
+                "topic": "biology-progress",
+                "line": f"{unresolved_biology} biological signal{'s remain' if unresolved_biology != 1 else ' remains'} unresolved here.",
+                "terms": (),
+            })
+        if biology and key_text.startswith("cockpit-context:"):
+            species = biology.get("species")
+            progress = int(biology.get("progress") or 0)
+            if species and progress:
+                candidates.append({
+                    "topic": "active-biology",
+                    "line": f"The active {species} analysis is at sample {progress} of 3.",
+                    "terms": (str(species),),
+                })
+        unsold = int(objectives.get("unsold_data_total_cr") or 0)
+        if unsold >= 5_000_000 and key_text.startswith((
+                "cockpit-context:", "cockpit-shutdown", "route-arrival:", "bio-complete:")):
+            candidates.append({
+                "topic": "unsold-data",
+                "line": f"Our unsold survey archive is estimated at {unsold} credits.",
+                "terms": (),
+            })
+        cargo_percent = flight.get("cargo_percent")
+        if cargo_percent is not None and cargo_percent >= 80 and key_text.startswith((
+                "cockpit-context:", "engineering-ready:", "massacre-complete:")):
+            candidates.append({
+                "topic": "cargo-capacity",
+                "line": f"The cargo hold is {cargo_percent} percent full.",
+                "terms": (),
+            })
+        for candidate in candidates:
+            if self._compass_advisor_available(candidate["topic"]):
+                return candidate
+        return None
+
+    def _compass_llm_context(self, fallback, category, key):
+        memory = getattr(self, "cockpit_memory", None)
+        details = memory.status_details() if memory else {}
+        mood = details.get("mood") or {}
+        current_system = getattr(self, "current_sys", None)
+        gameplay = self._compass_gameplay_snapshot()
+        context = {
+            "purpose": str(key or category or "cockpit speech").split(":", 1)[0],
+            "mood": mood.get("name", "calm"),
+            "mood_reason": mood.get("reason", "systems nominal"),
+            "relationship": details.get("relationship", "flight companion"),
+            "voice_stage": details.get("voice_stage", "new"),
+            "traits": list(details.get("traits") or []),
+            "habits": list(details.get("habits") or [])[:4],
+            "verified_gameplay": gameplay,
+        }
+        if current_system not in (None, "", "---", "Unknown"):
+            context["current_system"] = current_system
+            context["recorded_visits"] = memory.system_visits(current_system) if memory else 0
+            memories = memory.memories_for_system(current_system, limit=2) if memory else []
+            if memories:
+                context["relevant_memories"] = [row.get("text") for row in memories if row.get("text")]
+        traffic = details.get("current_system_traffic") or {}
+        if traffic:
+            context["traffic"] = {
+                "day": int(traffic.get("day") or 0),
+                "week": int(traffic.get("week") or 0),
+                "total": int(traffic.get("total") or 0),
+            }
+        biology = details.get("biology_awareness") or {}
+        if biology:
+            context["biology"] = {
+                "known_genera": int(biology.get("genera") or 0),
+                "completed_analyses": int(biology.get("analyses") or 0),
+            }
+        active_expedition = details.get("active_expedition")
+        if isinstance(active_expedition, dict):
+            context["expedition"] = {
+                "name": active_expedition.get("name"),
+                "jumps": int(active_expedition.get("jumps") or 0),
+            }
+
+        candidates = []
+        if current_system:
+            candidates.append(str(current_system))
+        route = list(getattr(self, "route_list", None) or [])
+        if route:
+            candidates.append(str(route[-1]))
+            current_index = next(
+                (idx for idx, name in enumerate(route)
+                 if str(name).casefold() == str(current_system).casefold()),
+                -1,
+            )
+            if 0 <= current_index < len(route) - 1:
+                candidates.append(str(route[current_index + 1]))
+        active_sample = biology.get("active_sample") if isinstance(biology, dict) else None
+        if isinstance(active_sample, dict):
+            candidates.extend((active_sample.get("species"), active_sample.get("body")))
+        key_text = str(key or "")
+        for prefix in ("system-arrival:", "route-arrival:", "bio-complete:", "codex:"):
+            if key_text.startswith(prefix):
+                candidates.append(key_text[len(prefix):])
+        if key_text.startswith("valuable-world:"):
+            candidates.extend(key_text[len("valuable-world:"):].split(":", 1))
+        if key_text.startswith("engineering-ready:"):
+            candidates.append(key_text[len("engineering-ready:"):].rsplit(":", 1)[0])
+        if key_text.startswith("advisor:"):
+            advisor_parts = key_text.split(":", 2)
+            if len(advisor_parts) == 3:
+                candidates.extend(advisor_parts[2].split("|"))
+        advice = self._compass_advisory_point(gameplay, key)
+        if advice:
+            candidates.extend(advice.get("terms") or ())
+            context["selected_advice"] = advice["line"]
+        required = []
+        fallback_lower = f"{fallback} {advice['line'] if advice else ''}".casefold()
+        for value in candidates:
+            value = str(value or "").strip()
+            if len(value) >= 3 and value.casefold() in fallback_lower and value not in required:
+                required.append(value)
+        return context, tuple(required), advice
+
     def _speak(self, text, category="safety", cooldown_s=20, key=None):
         try:
             if (self.config.get("cockpit_memory_enabled", True)
@@ -2465,6 +2775,42 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     personality_level=self.config.get("cockpit_personality_level", "Balanced"),
                 )
             text = choose_line(text, key=key)
+            llm = getattr(self, "compass_llm", None)
+            eligible = (
+                category in ("navigation", "exploration", "objectives", "ambient")
+                and self.config.get("voice_callouts_enabled", False)
+                and self.config.get("cockpit_llm_enabled", False)
+                and llm is not None
+                and self.voice_callouts.can_say(category)
+            )
+            if eligible:
+                context, required_terms, advice = self._compass_llm_context(text, category, key)
+                llm_text = text
+                if advice:
+                    llm_text = f"{str(text).rstrip('.!')}; {advice['line'].rstrip('.!')}."
+
+                def generated(result):
+                    line = result.get("line") if isinstance(result, dict) else llm_text
+
+                    def deliver():
+                        if not getattr(self, "is_running", False):
+                            return
+                        spoken_result = self.voice_callouts.say(
+                            line or llm_text, category=category, cooldown_s=cooldown_s, key=key,
+                        )
+                        if spoken_result:
+                            self._pulse_cockpit_ai()
+                    try:
+                        self.root.after(0, deliver)
+                    except Exception:
+                        pass
+
+                if llm.enqueue(
+                        llm_text, context=context, required_terms=required_terms, callback=generated):
+                    if advice:
+                        self._mark_compass_advisor(advice["topic"])
+                    self._pulse_cockpit_ai()
+                    return True
             spoken = self.voice_callouts.say(text, category=category, cooldown_s=cooldown_s, key=key)
             if spoken:
                 self._pulse_cockpit_ai()
@@ -2486,6 +2832,103 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             remark["lines"], category=remark["category"], cooldown_s=30,
             key=f"cockpit-context:{remark['topic']}",
         )
+
+    def _maybe_speak_compass_advice(self, event, raw, data, startup_replay=False):
+        """Emit sparse, actionable observations only when the LLM adviser is enabled."""
+        if (startup_replay or getattr(self, "is_first_load", False)
+                or not self.config.get("cockpit_llm_enabled", False)
+                or not self.config.get("cockpit_llm_advisor_enabled", True)):
+            return False
+        raw = raw if isinstance(raw, dict) else {}
+        data = data if isinstance(data, dict) else raw
+        snapshot = self._compass_gameplay_snapshot()
+        objectives = snapshot.get("objectives") or {}
+        survey = snapshot.get("survey") or {}
+        station = snapshot.get("station") or {}
+        flight = snapshot.get("flight") or {}
+        topic = None
+        line = None
+        category = "objectives"
+        protected = []
+        milestone_update = None
+
+        if event == "MissionAccepted":
+            destination = raw.get("DestinationSystem") or data.get("destination_system")
+            destination_station = raw.get("DestinationStation") or data.get("destination_station")
+            if destination:
+                topic = "mission-log"
+                protected.append(str(destination))
+                line = f"Mission logged for {destination}"
+                if destination_station:
+                    line += f", with the objective at {destination_station}"
+                    protected.append(str(destination_station))
+                line += "."
+
+        elif event == "Docked":
+            services = " ".join(str(item).casefold() for item in station.get("services") or [])
+            exploration = int(objectives.get("unsold_exploration_cr") or 0)
+            biology = int(objectives.get("unsold_biology_cr") or 0)
+            station_name = station.get("name")
+            if biology and "vista" in services:
+                topic = "sell-biology"
+                line = f"Vista Genomics is available here for our {biology} credits of biological data."
+            elif exploration and "cartograph" in services:
+                topic = "sell-exploration"
+                line = f"Universal Cartographics is available here for our {exploration} credits of exploration data."
+            if line and station_name:
+                protected.append(str(station_name))
+                line = f"At {station_name}, {line[0].lower()}{line[1:]}"
+
+        elif event == "FSSAllBodiesFound":
+            valuable = list(survey.get("valuable_bodies") or [])
+            signals = int(survey.get("biological_signals") or 0)
+            total = int(survey.get("total_bodies") or 0)
+            if valuable or signals:
+                topic = "survey-briefing"
+                category = "exploration"
+                parts = [f"Full spectrum survey complete with {total} bodies"]
+                if valuable:
+                    parts.append(f"{len(valuable)} high-value mapping target{'s' if len(valuable) != 1 else ''}")
+                if signals:
+                    parts.append(f"{signals} biological signal{'s' if signals != 1 else ''}")
+                line = "; ".join(parts) + "."
+
+        elif event == "MiningRefined":
+            cargo_percent = flight.get("cargo_percent")
+            if cargo_percent is not None:
+                level = 95 if cargo_percent >= 95 else 80 if cargo_percent >= 80 else 0
+                if cargo_percent < 70:
+                    self._compass_advisor_cargo_level = 0
+                elif level > self._compass_advisor_cargo_level:
+                    topic = f"mining-cargo-{level}"
+                    milestone_update = ("cargo", level)
+                    line = (
+                        f"Mining hold is {cargo_percent} percent full at "
+                        f"{flight.get('cargo_t')} of {flight.get('cargo_capacity_t')} tonnes."
+                    )
+
+        elif event == "MarketSell":
+            profit = int((snapshot.get("session") or {}).get("trade_profit_cr") or 0)
+            milestones = (1_000_000, 5_000_000, 10_000_000, 50_000_000, 100_000_000)
+            level = max((mark for mark in milestones if profit >= mark), default=0)
+            if level > self._compass_advisor_trade_level:
+                topic = f"trade-profit-{level}"
+                milestone_update = ("trade", level)
+                line = f"The trade ledger has reached {profit} credits of session profit."
+
+        if not topic or not line or not self._compass_advisor_available(topic):
+            return False
+        key = f"advisor:{topic}:{'|'.join(protected)}" if protected else f"advisor:{topic}"
+        spoken = self._speak(line, category=category, cooldown_s=0, key=key)
+        if spoken:
+            if milestone_update:
+                kind, level = milestone_update
+                if kind == "cargo":
+                    self._compass_advisor_cargo_level = level
+                elif kind == "trade":
+                    self._compass_advisor_trade_level = level
+            self._mark_compass_advisor(topic)
+        return bool(spoken)
 
     def _sync_cockpit_intentions(self):
         if (not self.config.get("cockpit_memory_enabled", True)
@@ -2526,6 +2969,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return None
         mood = memory.current_mood()
         biology = memory.biology_awareness()
+        llm_status = (
+            self.compass_llm.status()
+            if getattr(self, "compass_llm", None) else {"enabled": False}
+        )
         active = memory.state.get("active_expedition")
         return {
             "mood": str(mood.get("name") or "calm"),
@@ -2546,6 +2993,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "bio_samples": biology["samples"],
             "bio_analyses": biology["analyses"],
             "bio_codex": biology["codex_entries"],
+            "llm_enabled": bool(llm_status.get("enabled")),
+            "llm_phase": str(llm_status.get("phase") or "disabled"),
+            "llm_model": str(llm_status.get("model") or ""),
+            "llm_processor": str(llm_status.get("processor") or ""),
             "awareness_domains": tuple(memory.knowledge_domains()),
             "limits": dict(memory.limits),
             "expedition_id": active.get("id") if isinstance(active, dict) else None,
@@ -2576,6 +3027,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         ]
         if new_domains:
             messages.append(f"New operational awareness: {', '.join(new_domains)}")
+
+        old_llm_phase = str(before.get("llm_phase") or "disabled")
+        new_llm_phase = str(after.get("llm_phase") or "disabled")
+        if after.get("llm_enabled") and new_llm_phase != old_llm_phase:
+            if new_llm_phase == "ready":
+                processor = f" · {after['llm_processor']}" if after.get("llm_processor") else ""
+                messages.append(
+                    f"Generative language online: {after.get('llm_model') or 'local model'}{processor}"
+                )
+            elif new_llm_phase in ("error", "degraded"):
+                messages.append("Generative language unavailable: deterministic Compass speech remains active")
 
         growth = []
         for key, label in (("systems", "systems"), ("species", "species"), ("memories", "notable memories")):
@@ -2643,6 +3105,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if not snapshot:
             return
         limits = snapshot["limits"]
+        language = ""
+        if snapshot.get("llm_enabled"):
+            language = f" | language {snapshot['llm_model']} {snapshot['llm_phase']}"
         self.add_event_feed_entry(
             "AI",
             (
@@ -2652,7 +3117,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 f"{snapshot['memories']:,}/{limits['memories']:,} notable | "
                 f"survey {snapshot['fss_completed']:,} FSS, {snapshot['dss_maps']:,} DSS | "
                 f"biology {snapshot['bio_genera']:,} genera, {snapshot['bio_analyses']:,} analyses | "
-                f"{len(snapshot['awareness_domains'])} gameplay domains"
+                f"{len(snapshot['awareness_domains'])} gameplay domains{language}"
             ),
             severity="INFO",
         )
@@ -2666,6 +3131,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _handle_cockpit_load_game(self, raw, data, startup_replay=False):
         """Use LoadGame as the preferred session start, retaining automatic fallback."""
+        if (not startup_replay and self.config.get("cockpit_llm_enabled", False)
+                and getattr(self, "compass_llm", None)):
+            self.compass_llm.warm_async()
         memory = getattr(self, "cockpit_memory", None)
         if not memory or not self.config.get("cockpit_memory_enabled", True):
             return False
@@ -2996,6 +3464,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                                       startup_replay=startup_replay)
         if not startup_replay:
             self._sync_cockpit_intentions()
+            self._maybe_speak_compass_advice(ev, raw, d, startup_replay=startup_replay)
         if ev != "LoadGame" and self.edsm.is_credit_event(ev):
             self._queue_edsm_upload(raw, flush=True, startup_replay=startup_replay)
         current_journal = getattr(self.watcher, "last_journal", None)
