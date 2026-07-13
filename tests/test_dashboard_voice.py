@@ -172,6 +172,74 @@ class DashboardVoiceTests(unittest.TestCase):
         self.assertIn("Engineering", awareness)
         self.assertNotIn("Missions", awareness)
 
+    def test_loadgame_starts_one_known_session_and_shutdown_closes_it_once(self):
+        app = MainDashboard.__new__(MainDashboard)
+        app.config = {"cockpit_memory_enabled": True}
+        app.current_sys = "Sol"
+        app.entries = []
+        app.pulses = []
+        app.spoken = []
+        app._cockpit_feed_state = None
+        app.add_event_feed_entry = lambda tag, message, severity="INFO", **kw: app.entries.append(
+            (tag, message, severity)
+        )
+        app._pulse_cockpit_ai = lambda: app.pulses.append("ai")
+        app._speak = lambda text, **kwargs: app.spoken.append((text, kwargs)) or True
+        app._cockpit_ai_feed_snapshot = lambda: {"closed": True}
+
+        class Memory:
+            def __init__(self):
+                self.state = {"current_session": None}
+
+            def start_session(self, system=None, ship=None):
+                if self.state["current_session"]:
+                    return self.state["current_session"]
+                self.state["current_session"] = {
+                    "id": "session-1", "start_system": system, "ship": ship,
+                }
+                return self.state["current_session"]
+
+            def session_debrief(self, reason, close=False):
+                if not self.state["current_session"]:
+                    return ""
+                self.state["current_session"] = None
+                return f"{reason}. 4 jumps, 2 full FSS surveys."
+
+        app.cockpit_memory = Memory()
+
+        self.assertTrue(app._handle_cockpit_load_game({}, {"ship_name": "Wayfarer"}))
+        self.assertFalse(app._handle_cockpit_load_game({}, {"ship_name": "Wayfarer"}))
+        self.assertTrue(app._handle_cockpit_shutdown())
+        self.assertFalse(app._handle_cockpit_shutdown())
+        self.assertEqual(len(app.entries), 2)
+        self.assertIn("Wayfarer", app.entries[0][1])
+        self.assertEqual(app.entries[1][0], "AI")
+        self.assertEqual(len(app.spoken), 2)
+        self.assertEqual(app.pulses, ["ai", "ai"])
+
+    def test_startup_loadgame_only_restores_session_context(self):
+        app = MainDashboard.__new__(MainDashboard)
+        app.config = {"cockpit_memory_enabled": True}
+        app.current_sys = "---"
+        app.add_event_feed_entry = lambda *args, **kwargs: self.fail("startup replay must stay silent")
+        app._pulse_cockpit_ai = lambda: self.fail("startup replay must not pulse")
+        app._speak = lambda *args, **kwargs: self.fail("startup replay must not speak")
+
+        class Memory:
+            def __init__(self):
+                self.state = {"current_session": None}
+
+            def start_session(self, system=None, ship=None):
+                self.state["current_session"] = {"id": "startup", "ship": ship}
+                return self.state["current_session"]
+
+        app.cockpit_memory = Memory()
+
+        self.assertFalse(app._handle_cockpit_load_game(
+            {"ShipName": "Wayfarer"}, {}, startup_replay=True,
+        ))
+        self.assertEqual(app.cockpit_memory.state["current_session"]["ship"], "Wayfarer")
+
 
 if __name__ == "__main__":
     unittest.main()

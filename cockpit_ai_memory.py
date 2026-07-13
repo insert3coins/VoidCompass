@@ -249,6 +249,9 @@ class CockpitMemory:
         self.state["systems"].setdefault(
             system, {"count": 0, "first_seen": _now(), "last_seen": _now()}
         )
+        session = self.state.get("current_session")
+        if isinstance(session, dict) and not session.get("start_system"):
+            session["start_system"] = system
         self._save()
         return True
 
@@ -268,7 +271,19 @@ class CockpitMemory:
 
     def start_session(self, system=None, ship=None):
         if self.state.get("current_session"):
-            return self.state["current_session"]
+            session = self.state["current_session"]
+            changed = False
+            system = _safe_name(system, "")
+            ship = _safe_name(ship, "")
+            if system and not session.get("start_system"):
+                session["start_system"] = system
+                changed = True
+            if ship and not session.get("ship"):
+                session["ship"] = ship
+                changed = True
+            if changed:
+                self._save()
+            return session
         self.state["current_session"] = {
             "id": uuid.uuid4().hex,
             "started_at": _now(),
@@ -312,9 +327,17 @@ class CockpitMemory:
         engineering_crafts = delta.get("engineering_crafts", 0)
         ground_events = delta.get("odyssey_events", 0)
         colony_events = delta.get("colonisation_events", 0)
+        trades = delta.get("market_trades", 0)
+        mining = delta.get("mining_refined", 0)
+        carrier_events = delta.get("carrier_events", 0)
+        career_events = delta.get("career_events", 0)
+        strategy_events = delta.get("strategy_events", 0)
+        fleet_events = delta.get("fleet_events", 0)
         danger = delta.get("heat_warnings", 0) + delta.get("interdictions", 0) + delta.get("heat_damage", 0)
         activity = (jumps + scans + bios + missions + fss_surveys + dss_maps + signal_bodies
-                    + combat_victories + engineering_crafts + ground_events + colony_events + danger)
+                    + combat_victories + engineering_crafts + ground_events + colony_events
+                    + trades + mining + carrier_events + career_events + strategy_events
+                    + fleet_events + danger)
         if activity <= 0:
             if close:
                 self.state["current_session"] = None
@@ -332,6 +355,12 @@ class CockpitMemory:
             (engineering_crafts, "engineering modification", "engineering modifications"),
             (ground_events, "ground operation", "ground operations"),
             (colony_events, "colonisation operation", "colonisation operations"),
+            (trades, "market transaction", "market transactions"),
+            (mining, "refined mineral", "refined minerals"),
+            (carrier_events, "fleet carrier operation", "fleet carrier operations"),
+            (career_events, "career update", "career updates"),
+            (strategy_events, "strategic operation", "strategic operations"),
+            (fleet_events, "fleet configuration change", "fleet configuration changes"),
         ):
             if count:
                 parts.append(f"{count:,} {singular if count == 1 else plural}")
