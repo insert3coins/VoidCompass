@@ -1,5 +1,11 @@
 # VoidCompass // UPDATE LOG
 
+## v4.7.2 // Living Compass Personas
+**Release Date:** 2026-Jul-14
+
+### Compass Personas
+*   Added 15 per-commander Ollama personas: **Compass, Tactical, Guardian, Scientific, Exobiologist, Engineer, Wayfarer, Pathfinder, Veteran, Deadpan, Stoic, Optimist, Archivist, Companion,** and **Emergent**. Persona controls tone, cadence, humour, initiative, and memory emphasis inside the working brain but cannot override factual validation or deterministic safety speech. Settings now separates persona from Quiet/Balanced/Chatty presence, explains every selection, previews unsaved choices through **Test Persona**, and reports the active persona in Compass Intelligence State and the Live Feed.
+
 ## v4.7.1 // Local Generative Compass Language
 **Release Date:** 2026-Jul-14
 
@@ -14,6 +20,7 @@
 *   Made the expanded **Compass AI** Settings page vertically scrollable while keeping its navigation and Save/Cancel controls fixed. The mouse wheel and visible scrollbar now reach the language controls, intelligence state, and full memory timeline at smaller window sizes.
 *   Added automatic generated-voice cache pruning, enabled by default with a **7-day unused-audio retention** setting. Cached WAV hits refresh their last-used timestamp, pruning runs off the UI thread at startup, after playback, and after Settings changes, and the existing 300-file ceiling remains as a secondary cap. Downloaded Piper runtimes and voice packs are never included. The expanded Voice page now scrolls so all retention and voice-pack controls remain reachable.
 *   Fixed Survey Status retaining a stale FSS count such as `SCAN 10/11` after `FSSAllBodiesFound`. Batched journal processing now performs one final coalesced overlay refresh after the committed scan state reaches `11/11`.
+*   Evolved Ollama from a wording layer into a persisted per-commander **working brain**. `cockpit_ai_brain.json` compiles Compass's identity rules, learned pilot model, mood, intentions, relevant long-term memories, current session/live gameplay, and recent language decisions without exposing the full autobiographical archive to the model. In one structured request Ollama can now choose useful speech or intentional silence for optional thoughts, avoid recent repetition, and produce the contextual line; required callouts, factual validation, deterministic safety speech, and immediate fallback remain enforced by Python.
 *   On the development RX 6800, warmed `qwen3.5:9b` responses validated at roughly 1.2–1.4 seconds and remained fully GPU-resident. The model is unloaded on VoidCompass exit by default so VRAM is returned to the game.
 
 ## v4.6.6 // Navigation HUD Refinements

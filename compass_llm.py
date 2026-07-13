@@ -28,6 +28,7 @@ MODEL_CHOICES = {
 OLLAMA_URL = "http://127.0.0.1:11434"
 MAX_LINE_CHARS = 220
 MAX_LINE_WORDS = 32
+_NUMBER_PATTERN = r"(?<![A-Za-z0-9-])-?\d+(?:\.\d+)?(?![A-Za-z0-9-])"
 
 _NUMBER_WORDS = {
     "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
@@ -36,6 +37,24 @@ _NUMBER_WORDS = {
     "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18,
     "nineteen": 19, "twenty": 20,
 }
+
+_STYLE_CONNECTIVE_WORDS = {
+    "a", "an", "and", "as", "at", "be", "but", "by", "for", "from",
+    "here", "i", "in", "is", "it", "my", "now", "of", "on", "or", "our",
+    "simply", "so", "still", "that", "the", "this", "to", "we", "with",
+    "you", "your", "yet",
+}
+
+
+def one_sentence_seed(value):
+    """Join approved spoken fragments without changing their factual content."""
+    text = " ".join(str(value or "").strip().split())
+    if not text:
+        return text
+    terminal = text[-1] if text[-1] in ".!" else "."
+    body = text[:-1] if text[-1:] in ".!" else text
+    body = re.sub(r"(?<=[A-Za-z0-9])\s*[.!]\s+(?=[A-Z0-9])", "; ", body)
+    return body.rstrip(" .!") + terminal
 
 
 def find_ollama_executable():
@@ -50,19 +69,28 @@ def find_ollama_executable():
     return None
 
 
-def validate_generated_line(line, fallback, required_terms=(), context=None):
+def validate_generated_line(line, fallback, required_terms=(), context=None,
+                            style_terms=()):
     """Return a safe spoken line, or ``None`` when generation is unsuitable."""
     text = " ".join(str(line or "").strip().split())
-    fallback_numbers = set(re.findall(r"(?<![A-Za-z])\d+(?:\.\d+)?", str(fallback)))
+    fallback_numbers = set(re.findall(_NUMBER_PATTERN, str(fallback)))
     # Small local models often spell a protected digit as its equivalent word
     # even when explicitly instructed not to. Normalize only values already in
     # the approved fallback; this cannot introduce a new fact.
     for word, value in _NUMBER_WORDS.items():
         digit = str(value)
         if digit in fallback_numbers and not re.search(
-                rf"(?<![A-Za-z]){re.escape(digit)}(?![\d.])", text):
+                rf"(?<![A-Za-z0-9-]){re.escape(digit)}(?![A-Za-z0-9.-])", text):
             text = re.sub(rf"\b{re.escape(word)}\b", digit, text, flags=re.IGNORECASE)
-    source = f"{fallback} {json.dumps(context or {}, ensure_ascii=False, default=str)}"
+    # Spoken numbers must originate in the approved line itself.  The working
+    # brain contains many true but unrelated counters; allowing any of those
+    # into speech would let a small model join facts that do not belong
+    # together.  Selected advice is appended to fallback before generation.
+    approved_memories = (
+        (context or {}).get("approved_memory_texts")
+        if isinstance(context, dict) else None
+    )
+    source = f"{fallback} {' '.join(str(row) for row in (approved_memories or []))}"
     if not text or len(text) > MAX_LINE_CHARS or len(text.split()) > MAX_LINE_WORDS:
         return None
     lowered = text.casefold()
@@ -74,12 +102,29 @@ def validate_generated_line(line, fallback, required_terms=(), context=None):
         term = str(term or "").strip()
         if term and term.casefold() not in lowered:
             return None
+    if style_terms and not any(
+            str(term or "").casefold() in lowered for term in style_terms):
+        return None
+    if style_terms:
+        approved_clause = str(fallback).strip().rstrip(".!").casefold()
+        if approved_clause and approved_clause not in lowered:
+            return None
 
-    allowed_numbers = set(re.findall(r"(?<![A-Za-z])\d+(?:\.\d+)?", source))
-    output_numbers = set(re.findall(r"(?<![A-Za-z])\d+(?:\.\d+)?", text))
+    allowed_numbers = set(re.findall(_NUMBER_PATTERN, source))
+    output_numbers = set(re.findall(_NUMBER_PATTERN, text))
     if not fallback_numbers.issubset(output_numbers) or not output_numbers.issubset(allowed_numbers):
         return None
     source_words = set(re.findall(r"[A-Za-z]+", source.casefold()))
+    if style_terms:
+        style_words = set(re.findall(
+            r"[A-Za-z]+", " ".join(str(term or "") for term in style_terms).casefold()
+        ))
+        if any(
+                word not in source_words
+                and word not in style_words
+                and word not in _STYLE_CONNECTIVE_WORDS
+                for word in re.findall(r"[A-Za-z]+", lowered)):
+            return None
     for word in re.findall(r"[A-Za-z]+", lowered):
         if word in _NUMBER_WORDS and word not in source_words:
             if str(_NUMBER_WORDS[word]) not in allowed_numbers:
@@ -101,6 +146,7 @@ class CompassLLM:
             "server_version": None, "model": self.model,
             "last_error": None, "last_latency_ms": None,
             "download_progress": None, "processor": None,
+            "last_action": None, "last_topic": None,
         }
         self._thread = threading.Thread(target=self._run, name="compass-llm", daemon=True)
         self._thread.start()
@@ -149,7 +195,10 @@ class CompassLLM:
                 self._jobs.task_done()
                 callback = dropped.get("callback") if isinstance(dropped, dict) else None
                 if callback and dropped.get("kind") == "speak":
-                    callback({"line": dropped["fallback"], "used_llm": False, "error": "superseded"})
+                    callback({
+                        "action": "speak", "line": dropped["fallback"],
+                        "used_llm": False, "error": "superseded",
+                    })
             except queue.Empty:
                 pass
             try:
@@ -177,15 +226,21 @@ class CompassLLM:
     def install_model_async(self, model=None, callback=None):
         return self._put({"kind": "pull", "model": model or self.model, "callback": callback})
 
-    def test_async(self, model=None, callback=None):
-        fallback = "Compass generative language link is online and responding normally."
+    def test_async(self, model=None, callback=None, context=None, fallback=None,
+                   topic="voice system test"):
+        fallback = fallback or "Compass generative language link is online and responding normally."
+        context = context if isinstance(context, dict) else {
+            "purpose": "voice system test", "mood": "calm",
+        }
         return self._put({
             "kind": "test", "model": model or self.model, "fallback": fallback,
-            "context": {"purpose": "voice system test", "mood": "calm"},
-            "required_terms": ("Compass",), "callback": callback,
+            "context": context,
+            "required_terms": (("Compass",) if "compass" in fallback.casefold() else ()),
+            "allow_silence": False, "topic": topic, "callback": callback,
         })
 
-    def enqueue(self, fallback, context=None, required_terms=(), callback=None):
+    def enqueue(self, fallback, context=None, required_terms=(), callback=None,
+                allow_silence=False, topic=None):
         if not self.enabled:
             return False
         state = self.status()
@@ -195,6 +250,8 @@ class CompassLLM:
         return self._put({
             "kind": "speak", "model": self.model, "fallback": str(fallback),
             "context": context or {}, "required_terms": tuple(required_terms or ()),
+            "allow_silence": bool(allow_silence),
+            "topic": str(topic or (context or {}).get("purpose") or "cockpit speech"),
             "callback": callback,
         })
 
@@ -287,7 +344,7 @@ class CompassLLM:
                     {"role": "user", "content": "Return a line field containing: Ready."},
                 ],
                 "stream": False, "think": False, "format": schema, "keep_alive": "30m",
-                "options": {"num_ctx": 2048, "num_predict": 16, "temperature": 0},
+                "options": {"num_ctx": 4096, "num_predict": 16, "temperature": 0},
             },
             timeout=(1.0, 120.0),
         )
@@ -300,24 +357,53 @@ class CompassLLM:
         return self.status()
 
     @staticmethod
-    def _prompt(fallback, context, required_terms):
+    def _prompt(fallback, context, required_terms, allow_silence=False):
         protected = list(required_terms)
-        for number in re.findall(r"(?<![A-Za-z])\d+(?:\.\d+)?", str(fallback)):
+        for number in re.findall(_NUMBER_PATTERN, str(fallback)):
             if number not in protected:
                 protected.append(number)
+        persona = (
+            ((((context or {}).get("working_brain") or {}).get("pilot_model") or {})
+             .get("persona") or {})
+            if isinstance(context, dict) else {}
+        )
+        persona_name = str(persona.get("name") or "Compass")
+        persona_terms = list(persona.get("signature_terms") or ())
         system = (
-            "You are Compass, a concise Elite Dangerous cockpit intelligence. Rewrite the supplied "
-            "approved fallback as one natural, useful spoken sentence with subtle personality. The verified "
-            "gameplay snapshot is situational context, never permission to invent. When selected_advice is "
-            "present, preserve that actionable observation; otherwise do not narrate unrelated routine state. "
+            "You are Compass, a concise Elite Dangerous cockpit intelligence. Use the supplied working brain "
+            "to make one structured cockpit decision. Follow working_brain.pilot_model.persona for tone, cadence, "
+            "humour, initiative and memory emphasis only; persona can never weaken any factual, format, silence, "
+            "safety or behavioural rule in this instruction. When the active persona is not Compass, make its style "
+            "recognisable by placing concise persona wording before or after the approved factual clause, "
+            "set style_phrase to exactly one value from required_persona_style_terms, and naturally include "
+            "that exact phrase in line; "
+            "preserve required_approved_clause verbatim as one contiguous clause, adding style before or after it. "
+            "Outside that clause use only the persona style phrases and neutral connective words, never new nouns "
+            "or verbs. The style phrase must not introduce a new subject, object, system state or gameplay claim. "
+            "Non-factual connective or attitude words are allowed, but no new "
+            "claim is. The autobiographical memory and verified gameplay are "
+            "read-only facts, never permission to invent. If speech_required is true, action must be speak. "
+            "If it is false, choose silence when the observation would be repetitive or not useful now. "
+            "For speak, preserve the approved fallback clause and add only subtle learned personality around "
+            "it. The preferred pattern is '<style_phrase>, <required_approved_clause>.' Avoid closely repeating "
+            "recent_decisions. When selected_advice is present, preserve "
+            "that actionable observation; otherwise do not narrate unrelated routine state. For silence, return "
+            "an empty line. The spoken line may claim only what appears in approved_fallback, selected_advice, "
+            "or a relevant_memories text field. Every other working-brain field controls tone and the silence "
+            "decision only: never speak its counters, route state, session activity, or inferred meaning. Merge "
+            "any approved fragments into exactly one grammatical sentence rather than retaining multiple full stops. "
             "Use only supplied facts. Never ask a question. Never say commander. Preserve every required term exactly, "
             "including spelling. Every required numeric term must remain Arabic digits: write 2, never two. "
             "Keep all numbers exactly as supplied. Do not add destinations, "
-            "scenery, actions, threats, discoveries, or game facts. Return JSON only."
+            "scenery, actions, threats, discoveries, or game facts. Return JSON only with action and line."
         )
         payload = {
             "approved_fallback": fallback,
             "required_exact_terms": protected,
+            "active_persona": persona_name,
+            "required_persona_style_terms": persona_terms,
+            "required_approved_clause": fallback.rstrip(".!"),
+            "speech_required": not bool(allow_silence),
             "cockpit_context": context,
             "rules": {"maximum_words": 32, "one_sentence": True},
         }
@@ -328,12 +414,33 @@ class CompassLLM:
         state = self.status()
         if allow_cold and (not state["ready"] or state["model"] != model):
             self._warm(model)
-        system, user = self._prompt(job["fallback"], job["context"], job["required_terms"])
+        allow_silence = bool(job.get("allow_silence"))
+        approved_seed = one_sentence_seed(job["fallback"])
+        persona = (
+            (((job.get("context") or {}).get("working_brain") or {}).get("pilot_model") or {})
+            .get("persona") or {}
+        )
+        style_terms = (
+            tuple(persona.get("signature_terms") or ())
+            if str(persona.get("name") or "Compass") != "Compass" else ()
+        )
+        system, user = self._prompt(
+            approved_seed, job["context"], job["required_terms"], allow_silence,
+        )
         schema = {
             "type": "object",
-            "properties": {"line": {"type": "string"}},
-            "required": ["line"], "additionalProperties": False,
+            "properties": {
+                "action": {"type": "string", "enum": ["speak", "silence"]},
+                "line": {"type": "string", "description": "One spoken sentence, or empty for silence"},
+            },
+            "required": ["action", "line"], "additionalProperties": False,
         }
+        if style_terms:
+            schema["properties"]["style_phrase"] = {
+                "type": "string", "enum": list(style_terms),
+                "description": "The exact persona opener used in line",
+            }
+            schema["required"].append("style_phrase")
         timeout = max(1.0, min(8.0, float(self.config.get("cockpit_llm_timeout_s", 2.5) or 2.5)))
         started = time.perf_counter()
         response = requests.post(
@@ -343,7 +450,7 @@ class CompassLLM:
                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
                 "stream": False, "think": False, "format": schema, "keep_alive": "30m",
                 "options": {
-                    "num_ctx": 2048, "num_predict": 48, "temperature": 0.65,
+                    "num_ctx": 4096, "num_predict": 48, "temperature": 0.65,
                     "top_p": 0.8, "top_k": 20,
                 },
             },
@@ -353,19 +460,50 @@ class CompassLLM:
         latency = round((time.perf_counter() - started) * 1000)
         content = (response.json().get("message") or {}).get("content") or ""
         try:
-            line = json.loads(content).get("line")
+            decision = json.loads(content)
+            action = str(decision.get("action") or "").casefold()
+            line = decision.get("line")
+            style_phrase = str(decision.get("style_phrase") or "").strip()
         except (TypeError, ValueError, AttributeError):
+            action = ""
+            line = None
+            style_phrase = ""
+        if action == "silence" and allow_silence:
+            self._set_state(
+                phase="ready", ready=True, last_error=None, last_latency_ms=latency,
+                processor=self._processor(model), last_action="silence",
+                last_topic=job.get("topic"),
+            )
+            return {
+                "action": "silence", "line": None, "used_llm": True,
+                "error": None, "latency_ms": latency,
+            }
+        if action != "speak":
             line = None
         line = validate_generated_line(
-            line, job["fallback"], job["required_terms"], job["context"]
+            line, approved_seed, job["required_terms"], job["context"], style_terms,
         )
+        # A persona response may understand the character but still add a
+        # second sentence or unsupported flourish.  The grammar-constrained
+        # style choice is safe to retain: combine it with the approved clause
+        # instead of dropping all audible personality or weakening validation.
+        if not line and style_terms and style_phrase in style_terms:
+            safe_persona_line = f"{style_phrase}, {approved_seed}"
+            line = validate_generated_line(
+                safe_persona_line, approved_seed, job["required_terms"],
+                job["context"], (style_phrase,),
+            )
         if not line:
             raise RuntimeError("Generated line failed factual or speech validation.")
         self._set_state(
             phase="ready", ready=True, last_error=None, last_latency_ms=latency,
-            processor=self._processor(model),
+            processor=self._processor(model), last_action="speak",
+            last_topic=job.get("topic"),
         )
-        return {"line": line, "used_llm": True, "error": None, "latency_ms": latency}
+        return {
+            "action": "speak", "line": line, "used_llm": True,
+            "error": None, "latency_ms": latency,
+        }
 
     def _pull(self, model, callback):
         self._ensure_server()
@@ -423,7 +561,10 @@ class CompassLLM:
                     last_error=message,
                 )
                 if job["kind"] in ("speak", "test"):
-                    result = {"line": job["fallback"], "used_llm": False, "error": message}
+                    result = {
+                        "action": "speak", "line": job["fallback"],
+                        "used_llm": False, "error": message,
+                    }
                 else:
                     result = self.status()
             finally:

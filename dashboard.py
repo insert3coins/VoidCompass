@@ -63,6 +63,7 @@ from achievement_engine import AchievementEngine
 from achievement_window import AchievementWindow
 from voice_callouts import VoiceCalloutManager, choose_line
 from cockpit_ai_memory import CockpitMemory, ordinal
+from cockpit_ai_brain import CockpitBrain
 from compass_llm import CompassLLM
 
 
@@ -380,6 +381,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 get_profile_file(new_key, "cockpit_ai_memory.json"),
                 limits=self._cockpit_memory_limits(),
             )
+            if getattr(self, "cockpit_brain", None):
+                self.cockpit_brain.switch(
+                    get_profile_file(new_key, "cockpit_ai_brain.json")
+                )
             self.cockpit_memory.begin_app_session()
             self._publish_cockpit_ai_online()
         if getattr(self, "achievement_engine", None):
@@ -455,6 +460,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.cockpit_memory = CockpitMemory(
             get_profile_file(get_active_profile(self.config), "cockpit_ai_memory.json"),
             limits=self._cockpit_memory_limits(),
+        )
+        self.cockpit_brain = CockpitBrain(
+            get_profile_file(get_active_profile(self.config), "cockpit_ai_brain.json")
         )
         self.cockpit_memory.begin_app_session()
         self.root.title(f"VOID COMPASS // v{APP_VERSION}")
@@ -1064,6 +1072,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if getattr(self, "cockpit_memory", None):
             try:
                 self.cockpit_memory.session_debrief("Session complete", close=True)
+                self._refresh_cockpit_brain(event="app_close")
             except Exception:
                 pass
         if getattr(self, "compass_llm", None):
@@ -1710,6 +1719,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if getattr(self, "compass_llm", None):
                 self.compass_llm.configure()
             self._apply_runtime_feature_toggles()
+            self._refresh_cockpit_brain(event="settings_saved")
+            self._publish_cockpit_ai_changes()
             self.show_dashboard_page()
 
         page = getattr(self, "settings_page", None)
@@ -1723,6 +1734,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 on_close_callback=self.show_dashboard_page,
                 voice_manager=self.voice_callouts,
                 cockpit_memory=self.cockpit_memory,
+                cockpit_brain=self.cockpit_brain,
                 compass_llm=self.compass_llm,
             )
         self._show_embedded_page("SETTINGS", self.settings_page)
@@ -2585,6 +2597,28 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         }
         return snapshot
 
+    def _refresh_cockpit_brain(self, purpose=None, event=None, gameplay=None):
+        """Persist and return the compact, verified state supplied to Ollama."""
+        memory = getattr(self, "cockpit_memory", None)
+        brain = getattr(self, "cockpit_brain", None)
+        if not memory or not brain or not self.config.get("cockpit_memory_enabled", True):
+            return {}
+        try:
+            return brain.update(
+                memory,
+                gameplay=(
+                    gameplay if isinstance(gameplay, dict)
+                    else self._compass_gameplay_snapshot()
+                ),
+                purpose=purpose,
+                event=event,
+                personality_level=self.config.get("cockpit_personality_level", "Balanced"),
+                persona_name=self.config.get("cockpit_persona", "Compass"),
+            )
+        except Exception as exc:
+            logging.debug("Cockpit working brain refresh skipped: %s", exc)
+            return {}
+
     def _compass_advisor_intervals(self):
         level = str(self.config.get("cockpit_llm_advisor_level", "Balanced")).casefold()
         return {
@@ -2690,41 +2724,33 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         mood = details.get("mood") or {}
         current_system = getattr(self, "current_sys", None)
         gameplay = self._compass_gameplay_snapshot()
+        purpose = str(key or category or "cockpit speech").split(":", 1)[0]
+        working_brain = self._refresh_cockpit_brain(
+            purpose=purpose, event=key, gameplay=gameplay,
+        )
+        brain_model_context = (
+            self.cockpit_brain.model_context()
+            if working_brain and getattr(self, "cockpit_brain", None) else {}
+        )
+        approved_memory_texts = [
+            row.get("text")
+            for row in (
+                (brain_model_context.get("working_memory") or {}).get("relevant_memories") or []
+            )
+            if isinstance(row, dict) and row.get("text")
+        ]
         context = {
-            "purpose": str(key or category or "cockpit speech").split(":", 1)[0],
+            "purpose": purpose,
             "mood": mood.get("name", "calm"),
             "mood_reason": mood.get("reason", "systems nominal"),
             "relationship": details.get("relationship", "flight companion"),
             "voice_stage": details.get("voice_stage", "new"),
             "traits": list(details.get("traits") or []),
             "habits": list(details.get("habits") or [])[:4],
-            "verified_gameplay": gameplay,
+            "working_brain": brain_model_context,
+            "approved_memory_texts": approved_memory_texts,
         }
-        if current_system not in (None, "", "---", "Unknown"):
-            context["current_system"] = current_system
-            context["recorded_visits"] = memory.system_visits(current_system) if memory else 0
-            memories = memory.memories_for_system(current_system, limit=2) if memory else []
-            if memories:
-                context["relevant_memories"] = [row.get("text") for row in memories if row.get("text")]
-        traffic = details.get("current_system_traffic") or {}
-        if traffic:
-            context["traffic"] = {
-                "day": int(traffic.get("day") or 0),
-                "week": int(traffic.get("week") or 0),
-                "total": int(traffic.get("total") or 0),
-            }
         biology = details.get("biology_awareness") or {}
-        if biology:
-            context["biology"] = {
-                "known_genera": int(biology.get("genera") or 0),
-                "completed_analyses": int(biology.get("analyses") or 0),
-            }
-        active_expedition = details.get("active_expedition")
-        if isinstance(active_expedition, dict):
-            context["expedition"] = {
-                "name": active_expedition.get("name"),
-                "jumps": int(active_expedition.get("jumps") or 0),
-            }
 
         candidates = []
         if current_system:
@@ -2788,12 +2814,33 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 llm_text = text
                 if advice:
                     llm_text = f"{str(text).rstrip('.!')}; {advice['line'].rstrip('.!')}."
+                allow_silence = (
+                    category == "ambient"
+                    or str(key or "").startswith(("advisor:", "cockpit-context:"))
+                )
 
                 def generated(result):
                     line = result.get("line") if isinstance(result, dict) else llm_text
+                    action = (
+                        str(result.get("action") or "speak").casefold()
+                        if isinstance(result, dict) else "speak"
+                    )
 
                     def deliver():
                         if not getattr(self, "is_running", False):
+                            return
+                        brain = getattr(self, "cockpit_brain", None)
+                        if brain:
+                            brain.record_decision(
+                                action, key or category, line,
+                                used_llm=bool(
+                                    isinstance(result, dict) and result.get("used_llm")
+                                ),
+                                error=(
+                                    result.get("error") if isinstance(result, dict) else None
+                                ),
+                            )
+                        if action == "silence":
                             return
                         spoken_result = self.voice_callouts.say(
                             line or llm_text, category=category, cooldown_s=cooldown_s, key=key,
@@ -2806,13 +2853,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         pass
 
                 if llm.enqueue(
-                        llm_text, context=context, required_terms=required_terms, callback=generated):
+                        llm_text, context=context, required_terms=required_terms,
+                        callback=generated, allow_silence=allow_silence,
+                        topic=key or category):
                     if advice:
                         self._mark_compass_advisor(advice["topic"])
                     self._pulse_cockpit_ai()
                     return True
             spoken = self.voice_callouts.say(text, category=category, cooldown_s=cooldown_s, key=key)
             if spoken:
+                if eligible and getattr(self, "cockpit_brain", None):
+                    self.cockpit_brain.record_decision(
+                        "speak", key or category, text, used_llm=False,
+                        error="language worker not ready",
+                    )
                 self._pulse_cockpit_ai()
             return spoken
         except Exception as exc:
@@ -2973,6 +3027,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.compass_llm.status()
             if getattr(self, "compass_llm", None) else {"enabled": False}
         )
+        brain_status = (
+            self.cockpit_brain.status()
+            if getattr(self, "cockpit_brain", None) else {}
+        )
         active = memory.state.get("active_expedition")
         return {
             "mood": str(mood.get("name") or "calm"),
@@ -2980,6 +3038,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "voice_stage": memory.voice_stage(
                 self.config.get("cockpit_personality_level", "Balanced")
             ),
+            "persona": str(self.config.get("cockpit_persona") or "Compass"),
             "habits": tuple(memory.habits()),
             "systems": len(memory.state.get("systems", {})),
             "species": len(memory.state.get("species", {})),
@@ -2997,6 +3056,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "llm_phase": str(llm_status.get("phase") or "disabled"),
             "llm_model": str(llm_status.get("model") or ""),
             "llm_processor": str(llm_status.get("processor") or ""),
+            "brain_decisions": int(brain_status.get("decisions") or 0),
             "awareness_domains": tuple(memory.knowledge_domains()),
             "limits": dict(memory.limits),
             "expedition_id": active.get("id") if isinstance(active, dict) else None,
@@ -3018,6 +3078,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             messages.append(
                 f"Relationship evolved: {after['voice_stage'].title()} flight companion"
             )
+        if after.get("persona") != before.get("persona"):
+            messages.append(f"Persona selected: {after.get('persona') or 'Compass'}")
         learned = [habit for habit in after["habits"] if habit not in before["habits"]]
         if learned:
             messages.append(f"Learned flight habit: {', '.join(learned)}")
@@ -3107,11 +3169,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         limits = snapshot["limits"]
         language = ""
         if snapshot.get("llm_enabled"):
-            language = f" | language {snapshot['llm_model']} {snapshot['llm_phase']}"
+            language = (
+                f" | working brain ready ({snapshot['brain_decisions']} recent decisions)"
+                f" | language {snapshot['llm_model']} {snapshot['llm_phase']}"
+            )
         self.add_event_feed_entry(
             "AI",
             (
                 f"Compass online: {snapshot['voice_stage'].title()} | mood {snapshot['mood']} | "
+                f"persona {snapshot['persona']} | "
                 f"memory {snapshot['systems']:,}/{limits['systems']:,} systems, "
                 f"{snapshot['species']:,}/{limits['species']:,} species, "
                 f"{snapshot['memories']:,}/{limits['memories']:,} notable | "
@@ -5013,6 +5079,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         # authoritative (for example, after FSSAllBodiesFound changes 10/11 to
         # 11/11).
         self._refresh_system_info_progress()
+        self._refresh_cockpit_brain(event="journal_batch")
         self._refresh_commander_profile_window()
         self._refresh_value_ledger_window()
         self._refresh_colonisation_planner_window()
