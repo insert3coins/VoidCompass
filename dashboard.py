@@ -183,6 +183,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.survey_status_hud.update(
                     self.current_sys, self.scanned, self.total, self.scan_items,
                     self.body_signals, sampling=self._sampling_snapshot(),
+                    focused_body_id=self.current_body_id,
+                    focused_body_name=self.current_body_name,
                 )
         try:
             self._system_info_refresh_job = self.root.after(150, _run)
@@ -2743,7 +2745,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if self.survey_status_hud and not startup_replay:
                 self.root.after(0, lambda: self.survey_status_hud.update(
                     self.current_sys, self.scanned, self.total, self.scan_items,
-                    self.body_signals, sampling=self._sampling_snapshot()))
+                    self.body_signals, sampling=self._sampling_snapshot(),
+                    focused_body_id=self.current_body_id,
+                    focused_body_name=self.current_body_name))
             self._refresh_exploration_window()
 
         elif ev == "Docked":
@@ -3226,12 +3230,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_body_id   = self._normalize_body_id(d.get("body_id"))
             self.current_body_name = d.get("body_name") or ""
             self._refresh_gravity_warning(self.current_body_id, self.current_body_name)
+            self._refresh_system_info_progress()
         elif ev == "LeaveBody" and not self.batch_mode:
             self._check_stale_bio_scans(self.current_body_id)
             self.current_body_id   = None
             self.current_body_name = ""
             if self.gravity_warning_hud:
                 self.gravity_warning_hud.clear()
+            self._refresh_system_info_progress()
 
         # ── Prospector overlay — live events only, skip journal replay on startup ──
         # Use startup_replay (not batch_mode) so rapid-fire limpets that land in
@@ -3601,6 +3607,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.survey_status_hud:
             self.root.after(0, lambda s=sample: self.survey_status_hud.update(
                 self.current_sys, self.scanned, self.total, self.scan_items, self.body_signals, sampling=s,
+                focused_body_id=self.current_body_id,
+                focused_body_name=self.current_body_name,
             ))
         if getattr(self, "exploration_window", None) and self.exploration_window.is_open():
             self.root.after(0, self.exploration_window._render_sampling)

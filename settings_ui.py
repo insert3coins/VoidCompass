@@ -191,6 +191,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     station_info_var = tk.BooleanVar(value=config.get("station_info_overlay_enabled", True))
     survey_status_var = tk.BooleanVar(value=config.get("survey_status_overlay_enabled", True))
     toast_var = tk.BooleanVar(value=config.get("toast_overlay_enabled", True))
+    hud_crt_var = tk.BooleanVar(value=config.get("hud_crt_enabled", True))
+    hud_crt_motion_var = tk.BooleanVar(value=config.get("hud_crt_motion_enabled", True))
+    hud_crt_intensity_var = tk.StringVar(value=str(config.get("hud_crt_intensity", "Subtle") or "Subtle"))
     sample_clear_var = tk.BooleanVar(value=config.get("sample_clear_notifications_enabled", True))
     rebuy_warning_var = tk.BooleanVar(value=config.get("rebuy_warnings_enabled", True))
     data_risk_var = tk.BooleanVar(value=config.get("data_risk_warnings_enabled", True))
@@ -212,6 +215,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     # Pages
     core_page = make_page("core", "Core", "Journal and screenshot paths.")
     overlay_page = make_page("overlays", "Overlays", "Runtime modules and display timing.")
+    crt_page = make_page("crt", "HUD Effects", "CRT styling for the native Navigation HUD.")
     voice_page = make_page("voice", "Voice", "Optional local neural callouts. Voice audio never leaves this computer.")
     theme_page = make_page("theme", "Theme", "Color theme for this commander profile. Applies when you save.")
     integrations_page = make_page("integrations", "Integrations", "EDSM upload and fleet carrier Discord.")
@@ -219,6 +223,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
 
     nav_button("core", "Core")
     nav_button("overlays", "Overlays")
+    nav_button("crt", "HUD Effects")
     nav_button("voice", "Voice")
     nav_button("theme", "Theme")
     nav_button("integrations", "Integrations")
@@ -254,6 +259,11 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     prosp_timeout_e = input_row(overlay_timing, "Prospector Auto-Hide", "prospector_hud_timeout_s")
     sysinfo_timeout_e = input_row(overlay_timing, "System Info Auto-Hide", "system_info_timeout_s")
     gravity_threshold_e = input_row(overlay_timing, "Gravity Warning Threshold (g)", "gravity_warning_threshold_g")
+
+    overlay_crt = section(crt_page, "Navigation HUD CRT")
+    toggle_row(overlay_crt, "CRT effects", hud_crt_var)
+    toggle_row(overlay_crt, "Moving refresh and flicker", hud_crt_motion_var)
+    option_row(overlay_crt, "CRT intensity", hud_crt_intensity_var, ("Subtle", "Standard", "Strong"))
 
     # ---- Voice page ----
     voice_general = section(voice_page, "Voice Callouts")
@@ -632,6 +642,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "station_info_overlay_enabled": station_info_var.get(),
             "survey_status_overlay_enabled": survey_status_var.get(),
             "toast_overlay_enabled": toast_var.get(),
+            "hud_crt_enabled": hud_crt_var.get(),
+            "hud_crt_motion_enabled": hud_crt_motion_var.get(),
+            "hud_crt_intensity": hud_crt_intensity_var.get(),
             "sample_clear_notifications_enabled": sample_clear_var.get(),
             "rebuy_warnings_enabled": rebuy_warning_var.get(),
             "data_risk_warnings_enabled": data_risk_var.get(),

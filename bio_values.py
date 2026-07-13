@@ -1,5 +1,7 @@
 """Exobiology reference values and lightweight genus prediction helpers."""
 
+import bio_reference
+
 GENUS_COLONY_M = {
     "Aleoida": 150, "Bacterium": 500, "Cactoida": 300, "Clypeus": 150,
     "Concha": 150, "Electricae": 1000, "Fonticulua": 500, "Frutexa": 150,
@@ -79,11 +81,18 @@ PREDICTION_RULES = {
 
 
 def species_value(species_localised):
+    reference = bio_reference.species_info(species_localised)
+    if reference and reference.get("value") is not None:
+        return reference["value"]
     return SPECIES_VALUES.get(species_localised)
 
 
 def genus_info(genus_localised):
     lo, hi = GENUS_VALUE_RANGE.get(genus_localised, (None, None))
+    reference = bio_reference.genus_info(genus_localised)
+    if reference:
+        lo = reference.get("min_value") if reference.get("min_value") is not None else lo
+        hi = reference.get("max_value") if reference.get("max_value") is not None else hi
     return {
         "name": genus_localised,
         "min_value": lo,
