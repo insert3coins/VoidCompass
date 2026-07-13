@@ -6,6 +6,7 @@
 ### Navigation HUD
 *   `FSS` is no longer styled as a hazard alert. Badges now have a fourth state, `info` (theme yellow, plain outline, no hazard stripes), reserved for mode indicators rather than genuine warnings — so `FSS` reads clearly instead of blurring into neighbouring `UNDISC`/`BIO` alert badges that share the same orange hazard-stripe treatment.
 *   Badge colors are now fully theme-driven end to end, including the muted state, so switching the app's color theme carries through to every badge automatically.
+*   Compact layout: `TRAFFIC` now sits right-aligned on the same row as the badges, vertically centered against them, instead of its own mostly-empty row above — the badge row dynamically reserves exactly the space `TRAFFIC` needs so a full badge row never overlaps it. The freed vertical space is reclaimed too: the compact HUD is 10px shorter, tightening the gap that opened up at the bottom.
 
 ## v4.6.5 // Accurate Exobiology Tracking + HUD Polish
 **Release Date:** 2026-Jul-13
