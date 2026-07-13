@@ -2230,6 +2230,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _speak(self, text, category="safety", cooldown_s=20, key=None):
         try:
+            if (self.config.get("cockpit_memory_enabled", True)
+                    and getattr(self, "cockpit_memory", None)):
+                text = self.cockpit_memory.voice_pool(
+                    text, key=key,
+                    personality_level=self.config.get("cockpit_personality_level", "Balanced"),
+                )
             text = choose_line(text, key=key)
             return self.voice_callouts.say(text, category=category, cooldown_s=cooldown_s, key=key)
         except Exception as exc:

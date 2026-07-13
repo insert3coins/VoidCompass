@@ -22,6 +22,7 @@
 *   Familiar systems and repeated biological analyses can now produce contextual remarks based on real shared history; startup journal replay is excluded so old events are never learned twice.
 *   Added evolving relationship and activity traits such as Explorer, Exobiologist, Trader, Miner, and Traveller, derived from actual play rather than a fixed personality choice.
 *   Added **Quiet**, **Balanced**, and **Chatty** personality levels plus a live learned-history summary and a confirmed **Forget Learned History** action under **Settings → Voice**.
+*   Compass now evolves its spoken vocabulary through Newly Activated, Developing, Familiar, Trusted, and Veteran stages. Each stage unlocks a larger phrase pool, warmer shared-language, behavioural observations, restrained humour, and long-term callbacks; personality level can slow or accelerate those unlocks while direct safety wording remains available throughout.
 *   Added per-commander memory-cap controls for systems, biological species, ships, and notable episodes. Defaults remain 300/200/30/80, each category can be reduced to zero, and guarded maximums allow up to 5,000 systems, 2,000 species, 250 ships, and 1,000 episodes; reducing a cap immediately retains the most useful records and prunes the excess.
 
 ### Dashboard

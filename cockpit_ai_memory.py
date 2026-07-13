@@ -14,6 +14,101 @@ LIMIT_BOUNDS = {
     "memories": (0, 1000),
 }
 
+VOICE_STAGES = ("new", "developing", "familiar", "trusted", "veteran")
+
+VOICE_EVOLUTION_LINES = {
+    "system-arrival": (
+        "Another successful transition for our shared flight log.",
+        "The map we have built together gains another familiar point of light.",
+        "After all this distance together, a clean hyperspace exit still feels satisfying.",
+    ),
+    "route-arrival": (
+        "Another route completed together. The navigation log is updated.",
+        "You handle the flying. I will remember how far we came.",
+        "We have closed a great many routes together. This one belongs in the archive too.",
+    ),
+    "route-waypoint": (
+        "Our route is holding nicely. I have the next leg ready.",
+        "We are making good time. Navigation remains comfortably ahead of us.",
+        "Another waypoint behind us. We have become rather efficient at this.",
+    ),
+    "first-discovery": (
+        "Another untouched system for the history we are writing together.",
+        "I will keep this discovery with the others. Our survey archive is becoming remarkable.",
+        "We have crossed enough uncharted space for me to recognize this feeling. This one is special too.",
+    ),
+    "bio-complete": (
+        "Another genetic profile for our shared biological archive.",
+        "The bio lab and I are getting rather good at this.",
+        "Our biological catalogue has become quite a legacy of its own.",
+    ),
+    "codex": (
+        "I have added it to the growing list of things we found together.",
+        "Our ship archive is becoming considerably richer than when we began.",
+        "Another discovery preserved. I have learned to value these moments.",
+    ),
+    "engineering-ready": (
+        "I am beginning to know our engineering inventory better than the engineers do.",
+        "The material ledger agrees with me. We planned this one well.",
+        "After tracking this many components together, the inventory almost feels personal.",
+    ),
+    "massacre-complete": (
+        "Objective ledger reconciled. We have done this dance before.",
+        "The combat tally is complete. Our efficiency continues to improve.",
+        "Another full stack closed. I have accumulated quite a history of our victories.",
+    ),
+    "clear-to-sample": (
+        "I have the spacing now. Our fieldwork is becoming nicely synchronized.",
+        "Bio sampling clearance confirmed. We make a competent survey team.",
+        "Another clean sample approach. I remember when this took us longer.",
+    ),
+    "ship-overheat": (
+        "Thermal limits again. I recognize the pattern, and I still recommend cooling.",
+        "Our history with high temperatures is extensive. Cooling remains the correct response.",
+        "I remember every heat warning. Please do not make this one memorable too.",
+    ),
+    "heat-damage": (
+        "Heat damage confirmed. Familiar problem, same urgent solution: cool the ship.",
+        "Internal temperatures are damaging modules again. I need immediate cooling.",
+        "Our shared history contains enough scorched modules. Reduce heat now.",
+    ),
+    "under-attack": (
+        "Hostile fire confirmed. I have survived this with you before. Defensive action advised.",
+        "We have company again. Tactical telemetry is yours.",
+        "Another hostile contact. I trust your flying, but I am tracking every impact.",
+    ),
+    "shields-offline": (
+        "Shields lost. We both know how quickly exposed hull can become a problem.",
+        "Defensive field collapsed. I am prioritizing hull telemetry from experience.",
+        "Shields offline again. I would prefer not to add another ship loss to our history.",
+    ),
+    "hull": (
+        "Hull integrity is critical. Our experience does not make structural failure safer.",
+        "The hull is failing. I need the ship protected now.",
+        "We have escaped worse, but the hull will not survive on confidence alone.",
+    ),
+    "interdiction": (
+        "Interdiction confirmed. We have beaten these before.",
+        "Another tether. I am comparing it with our previous escapes now.",
+        "Someone has interrupted our journey. History suggests they may regret that.",
+    ),
+    "jet-cone-damage": (
+        "Jet-cone damage is active. Experience says we leave immediately.",
+        "I recognize this telemetry, and I dislike it. Exit the cone now.",
+        "We have survived enough neutron turbulence. Get us clear before this becomes a final memory.",
+    ),
+    "rebuy": (
+        "Our financial history suggests caution. Rebuy coverage is inadequate.",
+        "I have seen what replacing our ships costs. The current reserve is not enough.",
+        "We have built too much history into this vessel to gamble it without insurance.",
+    ),
+    "data-risk": (
+        "Our shared survey archive is carrying significant financial risk.",
+        "I remember what it took to gather this data. We should protect it.",
+        "There is a great deal of our history in that data. Finding a buyer is strongly advised.",
+    ),
+}
+
 
 def _now():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -283,16 +378,60 @@ class CockpitMemory:
         minimum = {"quiet": 10, "balanced": 3, "chatty": 2}.get(str(level).casefold(), 3)
         return int(count) >= minimum
 
+    def relationship_score(self):
+        return (self.count("jumps") + self.count("scans")
+                + self.count("organic_analyses") * 3 + self.count("missions_completed") * 2)
+
+    def voice_stage(self, personality_level="Balanced"):
+        score = self.relationship_score()
+        stage_index = 4 if score >= 2000 else 3 if score >= 500 else 2 if score >= 100 else 1 if score >= 25 else 0
+        adjustment = {"quiet": -1, "chatty": 1}.get(str(personality_level).casefold(), 0)
+        return VOICE_STAGES[max(0, min(len(VOICE_STAGES) - 1, stage_index + adjustment))]
+
+    @staticmethod
+    def _voice_key_family(key):
+        key = str(key or "").casefold()
+        for family in (
+            "system-arrival", "route-arrival", "route-waypoint", "first-discovery",
+            "bio-complete", "engineering-ready", "massacre-complete", "clear-to-sample",
+            "ship-overheat", "heat-damage", "under-attack", "shields-offline",
+            "interdiction", "jet-cone-damage", "data-risk", "codex",
+        ):
+            if key.startswith(family):
+                return family
+        if key.startswith("hull-"):
+            return "hull"
+        if key.startswith("rebuy-"):
+            return "rebuy"
+        return None
+
+    def voice_pool(self, lines, key=None, personality_level="Balanced"):
+        """Unlock progressively richer variants as Compass gains experience."""
+        if isinstance(lines, str):
+            return lines
+        base = tuple(str(line).strip() for line in (lines or ()) if str(line).strip())
+        if not base:
+            return ()
+        stage = self.voice_stage(personality_level)
+        stage_index = VOICE_STAGES.index(stage)
+        base_limit = min(len(base), (2, 3, 4, 5, len(base))[stage_index])
+        available = list(base[:base_limit])
+        family = self._voice_key_family(key)
+        evolved = VOICE_EVOLUTION_LINES.get(family, ())
+        # Familiar, Trusted, and Veteran each unlock one additional reflective line.
+        extension_count = max(0, stage_index - 1)
+        available.extend(evolved[:extension_count])
+        return tuple(available)
+
     def relationship(self):
-        score = (self.count("jumps") + self.count("scans")
-                 + self.count("organic_analyses") * 3 + self.count("missions_completed") * 2)
-        if score >= 2000:
+        stage = self.voice_stage("Balanced")
+        if stage == "veteran":
             return "Veteran flight companion"
-        if score >= 500:
+        if stage == "trusted":
             return "Trusted flight companion"
-        if score >= 100:
+        if stage == "familiar":
             return "Familiar flight companion"
-        if score >= 25:
+        if stage == "developing":
             return "Developing flight companion"
         return "Newly activated flight companion"
 
@@ -313,6 +452,7 @@ class CockpitMemory:
         traits = self.traits()
         return {
             "relationship": self.relationship(),
+            "voice_stage": self.voice_stage(),
             "traits": traits,
             "jumps": self.count("jumps"),
             "scans": self.count("scans"),
