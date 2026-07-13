@@ -1,7 +1,7 @@
 import tkinter as tk
 import tkinter.font as tkfont
 import time
-from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, COLOR_MUTED, save_config
+from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, COLOR_MUTED, COLOR_YELLOW, save_config
 import route_strip
 import overlay_chrome
 
@@ -289,9 +289,11 @@ class TacticalHUD:
             return COLOR_ORANGE
         if state == "ok":
             return COLOR_ACCENT
+        if state == "info":
+            return COLOR_YELLOW
         return COLOR_MUTED
 
-    _BADGE_GLYPHS = {"alert": "●", "ok": "✓", "muted": "○"}
+    _BADGE_GLYPHS = {"alert": "●", "ok": "✓", "info": "◆", "muted": "○"}
 
     def _draw_badge(self, x, y, text, state="muted", height=18):
         color = self._badge_color(state)
