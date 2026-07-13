@@ -83,6 +83,11 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
                 activebackground=UI_PANEL_2,
                 activeforeground=COLOR_ACCENT,
             )
+        if key == "compass":
+            try:
+                _refresh_compass_page()
+            except (NameError, tk.TclError):
+                pass
 
     def nav_button(key, text):
         btn = tk.Button(
@@ -228,6 +233,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     overlay_page = make_page("overlays", "Overlays", "Runtime modules and display timing.")
     crt_page = make_page("crt", "HUD Effects", "CRT styling for the native Navigation HUD.")
     voice_page = make_page("voice", "Voice", "Optional local neural callouts. Voice audio never leaves this computer.")
+    compass_page = make_page("compass", "Compass AI", "Review and curate the local history Compass has learned from this commander.")
     theme_page = make_page("theme", "Theme", "Color theme for this commander profile. Applies when you save.")
     integrations_page = make_page("integrations", "Integrations", "EDSM upload and fleet carrier Discord.")
     diagnostics_page = make_page("diagnostics", "Diagnostics", "Runtime tracing and automatic crash or UI-freeze reports.")
@@ -236,6 +242,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     nav_button("overlays", "Overlays")
     nav_button("crt", "HUD Effects")
     nav_button("voice", "Voice")
+    nav_button("compass", "Compass AI")
     nav_button("theme", "Theme")
     nav_button("integrations", "Integrations")
     nav_button("diagnostics", "Diagnostics")
@@ -484,6 +491,117 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
 
     voice_choice_var.trace_add("write", _voice_changed)
     _refresh_voice_status()
+
+    # ---- Compass memory browser ----
+    compass_overview = section(compass_page, "Current Intelligence State")
+    compass_status_var = tk.StringVar(value="Compass memory is unavailable.")
+    tk.Label(
+        compass_overview, textvariable=compass_status_var, font=UI_FONT,
+        fg=COLOR_TEXT, bg=UI_PANEL, anchor="w", justify=tk.LEFT, wraplength=650,
+    ).pack(fill=tk.X, padx=12, pady=(4, 10))
+    expedition_name_var = tk.StringVar(value="")
+    expedition_row = row(compass_overview)
+    tk.Label(expedition_row, text="Active expedition", font=UI_FONT_BOLD, fg=UI_MUTED,
+             bg=UI_PANEL).pack(side=tk.LEFT, padx=(0, 8))
+    tk.Entry(
+        expedition_row, textvariable=expedition_name_var, bg=UI_INPUT, fg=COLOR_TEXT,
+        insertbackground=COLOR_ACCENT, font=UI_FONT, relief=tk.FLAT,
+        highlightthickness=1, highlightbackground=UI_BORDER,
+        highlightcolor=COLOR_ACCENT,
+    ).pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=4)
+
+    def _rename_expedition():
+        if cockpit_memory and cockpit_memory.rename_active_expedition(expedition_name_var.get()):
+            _refresh_compass_page()
+
+    action_button(expedition_row, "Rename", _rename_expedition).pack(side=tk.RIGHT, padx=(8, 0))
+
+    compass_history = section(compass_page, "Notable Memory Timeline")
+    memory_list = tk.Listbox(
+        compass_history, height=12, bg=UI_INPUT, fg=COLOR_TEXT,
+        selectbackground=COLOR_ACCENT, selectforeground="black",
+        font=UI_MONO, relief=tk.FLAT, bd=0, highlightthickness=1,
+        highlightbackground=UI_BORDER, highlightcolor=COLOR_ACCENT,
+    )
+    memory_list.pack(fill=tk.BOTH, expand=True, padx=12, pady=(4, 6))
+    memory_ids = []
+    memory_edit_var = tk.StringVar(value="")
+    edit_row = row(compass_history)
+    tk.Label(edit_row, text="Selected memory", font=UI_FONT_BOLD, fg=UI_MUTED,
+             bg=UI_PANEL).pack(side=tk.LEFT, padx=(0, 8))
+    memory_edit = tk.Entry(
+        edit_row, textvariable=memory_edit_var, bg=UI_INPUT, fg=COLOR_TEXT,
+        insertbackground=COLOR_ACCENT, font=UI_FONT, relief=tk.FLAT,
+        highlightthickness=1, highlightbackground=UI_BORDER,
+        highlightcolor=COLOR_ACCENT,
+    )
+    memory_edit.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=4)
+
+    def _selected_memory_id():
+        selected = memory_list.curselection()
+        return memory_ids[selected[0]] if selected and selected[0] < len(memory_ids) else None
+
+    def _memory_selected(_event=None):
+        memory_id = _selected_memory_id()
+        row_data = cockpit_memory.get_memory(memory_id) if cockpit_memory and memory_id else None
+        memory_edit_var.set(row_data.get("text", "") if row_data else "")
+
+    memory_list.bind("<<ListboxSelect>>", _memory_selected)
+
+    def _refresh_compass_page():
+        memory_list.delete(0, tk.END)
+        memory_ids.clear()
+        if cockpit_memory is None:
+            compass_status_var.set("Compass memory is unavailable in this session.")
+            return
+        details = cockpit_memory.status_details()
+        mood = details["mood"]
+        habits = ", ".join(details["habits"]) if details["habits"] else "still learning flight habits"
+        intentions = details["intentions"]
+        intention_text = ", ".join(str(key).replace("_", " ") for key in intentions) if intentions else "no unfinished intentions"
+        expedition = details.get("active_expedition")
+        expedition_name_var.set(expedition.get("name", "") if expedition else "")
+        expedition_text = (
+            f"Active expedition: {expedition.get('name')} · {int(expedition.get('jumps') or 0):,} jumps"
+            if expedition else f"Completed expeditions: {details['completed_expeditions']:,}"
+        )
+        compass_status_var.set(
+            f"{details['relationship']} · Voice stage: {str(details['voice_stage']).title()}\n"
+            f"Mood: {mood['name']} ({mood['reason']}) · Habits: {habits}\n"
+            f"Intentions: {intention_text} · {expedition_text} · Sessions: {details['sessions']:,}\n"
+            f"Familiar system: {details['most_visited_system'] or 'none yet'} · "
+            f"Most-used ship: {details['favorite_ship'] or 'none yet'}"
+        )
+        for memory_row in cockpit_memory.memory_rows():
+            marker = "[PIN]" if memory_row.get("pinned") else "     "
+            stamp = str(memory_row.get("timestamp") or "")[:10]
+            memory_list.insert(tk.END, f"{marker} {stamp}  {memory_row.get('text', '')}")
+            memory_ids.append(memory_row.get("id"))
+        memory_edit_var.set("")
+
+    def _pin_selected_memory():
+        memory_id = _selected_memory_id()
+        if memory_id and cockpit_memory.pin_memory(memory_id):
+            _refresh_compass_page()
+
+    def _save_selected_memory():
+        memory_id = _selected_memory_id()
+        if memory_id and cockpit_memory.rename_memory(memory_id, memory_edit_var.get()):
+            _refresh_compass_page()
+
+    def _delete_selected_memory():
+        memory_id = _selected_memory_id()
+        if not memory_id:
+            return
+        if tk.messagebox.askyesno("Delete Compass Memory", "Permanently forget the selected memory?", parent=win):
+            cockpit_memory.delete_memory(memory_id)
+            _refresh_compass_page()
+
+    browser_actions = row(compass_history)
+    action_button(browser_actions, "Refresh", _refresh_compass_page, muted=True).pack(side=tk.LEFT)
+    action_button(browser_actions, "Pin / Unpin", _pin_selected_memory).pack(side=tk.LEFT, padx=(8, 0))
+    action_button(browser_actions, "Save Edit", _save_selected_memory).pack(side=tk.LEFT, padx=(8, 0))
+    action_button(browser_actions, "Delete", _delete_selected_memory, muted=True).pack(side=tk.RIGHT)
 
     # ---- Theme page ----
     custom_themes = {

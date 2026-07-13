@@ -324,10 +324,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         apply_profile_config(self.config, new_key)
         self._refresh_profile_paths()
         if getattr(self, "cockpit_memory", None):
+            self.cockpit_memory.session_debrief("Profile changed", close=True)
             self.cockpit_memory.switch(
                 get_profile_file(new_key, "cockpit_ai_memory.json"),
                 limits=self._cockpit_memory_limits(),
             )
+            self.cockpit_memory.begin_app_session()
         if getattr(self, "achievement_engine", None):
             self.achievement_engine.switch_profile(
                 self._profile_path("achievements_state.json"),
@@ -401,6 +403,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             get_profile_file(get_active_profile(self.config), "cockpit_ai_memory.json"),
             limits=self._cockpit_memory_limits(),
         )
+        self.cockpit_memory.begin_app_session()
         self.root.title(f"VOID COMPASS // v{APP_VERSION}")
         self.root.geometry(self.config.get("main_geometry", "1320x820"))
         self.root.minsize(1080, 700)
@@ -978,6 +981,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def on_close(self):
         """Save state and exit."""
         self.is_running = False
+        if getattr(self, "cockpit_memory", None):
+            try:
+                self.cockpit_memory.session_debrief("Session complete", close=True)
+            except Exception:
+                pass
         self.voice_callouts.stop()
         
         if self.route_plotter and self.route_plotter.win.winfo_exists():
@@ -2242,6 +2250,53 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             logging.debug("Voice callout skipped: %s", exc)
             return False
 
+    def _speak_pending_cockpit_remark(self, force=False):
+        if (not self.config.get("cockpit_memory_enabled", True)
+                or not getattr(self, "cockpit_memory", None)):
+            return False
+        remark = self.cockpit_memory.pop_remark(
+            self.config.get("cockpit_personality_level", "Balanced"), force=force,
+        )
+        if not remark:
+            return False
+        return self._speak(
+            remark["lines"], category=remark["category"], cooldown_s=30,
+            key=f"cockpit-context:{remark['topic']}",
+        )
+
+    def _sync_cockpit_intentions(self):
+        if (not self.config.get("cockpit_memory_enabled", True)
+                or not getattr(self, "cockpit_memory", None)):
+            return
+        state = getattr(self, "companion_state", {}) or {}
+        intentions = {}
+        route = list(getattr(self, "route_list", None) or [])
+        if route:
+            intentions["route"] = {
+                "destination": route[-1],
+                "remaining_systems": sum(
+                    1 for name in route if str(name).casefold() != str(self.current_sys).casefold()
+                ),
+            }
+        unsold = int(state.get("unsold_exploration_cr") or 0) + int(state.get("unsold_bio_cr") or 0)
+        if unsold:
+            intentions["unsold_data_cr"] = unsold
+        sample = self._sampling_snapshot()
+        if sample:
+            intentions["biological_sampling"] = {
+                "species": sample.get("species"), "progress": sample.get("progress"),
+            }
+        missions = state.get("missions") or []
+        if missions:
+            intentions["active_missions"] = len(missions)
+        pinned = (getattr(self, "engineer_materials", {}) or {}).get("pinned_blueprints") or []
+        if pinned:
+            intentions["engineering"] = [
+                {"blueprint": row.get("name"), "grade": row.get("grade", 5)}
+                for row in pinned[:5] if row.get("name")
+            ]
+        self.cockpit_memory.update_intentions(intentions)
+
     def _announce_system_arrival(self, system_name, startup_replay=False):
         """Announce a live jump once, preferring useful route context."""
         if startup_replay or not system_name or system_name in ("---", "Unknown"):
@@ -2476,6 +2531,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._apply_credit_event(ev, raw if isinstance(raw, dict) else d, log=not startup_replay)
         self._process_companion_event(ev, raw if isinstance(raw, dict) else {}, d,
                                       startup_replay=startup_replay)
+        if not startup_replay:
+            self._sync_cockpit_intentions()
         if ev != "LoadGame" and self.edsm.is_credit_event(ev):
             self._queue_edsm_upload(raw, flush=True, startup_replay=startup_replay)
         current_journal = getattr(self.watcher, "last_journal", None)
@@ -2706,6 +2763,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_sys = incoming_sys
             if is_jump:
                 self._announce_system_arrival(incoming_sys, startup_replay=startup_replay)
+                if not startup_replay:
+                    self._speak_pending_cockpit_remark()
             if outgoing_sys:
                 self.previous_sys = outgoing_sys
                 self.previous_coords = prev_coords
@@ -2860,6 +2919,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._refresh_exploration_window()
 
         elif ev == "Docked":
+            if not startup_replay:
+                self._speak_pending_cockpit_remark()
             station = d.get("StationName") or d.get("station_name", "Unknown")
             stype = d.get("StationType") or d.get("station_type", "")
             self.current_docked = True

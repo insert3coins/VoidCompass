@@ -1,6 +1,6 @@
 # VoidCompass // UPDATE LOG
 
-## v4.5.5 // Compass Cockpit Intelligence
+## v4.5.7 // Autonomous Compass Intelligence
 **Release Date:** 2026-Jul-13
 
 ### Voice Packs
@@ -24,6 +24,14 @@
 *   Added **Quiet**, **Balanced**, and **Chatty** personality levels plus a live learned-history summary and a confirmed **Forget Learned History** action under **Settings → Voice**.
 *   Compass now evolves its spoken vocabulary through Newly Activated, Developing, Familiar, Trusted, and Veteran stages. Each stage unlocks a larger phrase pool, warmer shared-language, behavioural observations, restrained humour, and long-term callbacks; personality level can slow or accelerate those unlocks while direct safety wording remains available throughout.
 *   Added per-commander memory-cap controls for systems, biological species, ships, and notable episodes. Defaults remain 300/200/30/80, each category can be reduced to zero, and guarded maximums allow up to 5,000 systems, 2,000 species, 250 ships, and 1,000 episodes; reducing a cap immediately retains the most useful records and prunes the excess.
+*   Added temporary operational moods that react to discovery, biology, danger, loss, and safe docking, then decay naturally back to calm instead of becoming permanent personality changes.
+*   Added learned flight habits and contextual predictions for thorough surveying, fast travel, biological fieldwork, trading, mining, thermal risk, route experience, and accumulated discoveries.
+*   Added intention memory for active routes, unsold exploration data, biological sampling, missions, and pinned Engineering work so unfinished business survives as structured context.
+*   Added automatic expedition detection from journey length and displacement, dedicated jump/discovery/bio milestones, resumable expedition records, automatic completion on docking, and editable expedition names.
+*   Added bounded session history and spoken docking debriefs covering jumps, scans, biological analyses, missions, hazardous events, and the current operational mood.
+*   Added adaptive contextual timing: Quiet/Balanced/Chatty control remark priority and spacing, repeated topics are coalesced, and personality chatter is suppressed while Compass is alert or shaken.
+*   Added an integrated **Compass AI** settings page showing mood, habits, intentions, favourite systems and ships, sessions, and expedition state, plus a notable-memory browser with pin, edit, delete, and refresh controls.
+*   Compass remains autonomous and journal-driven: no microphone, push-to-talk, chat prompt, external AI service, or Ollama dependency is used.
 
 ### Dashboard
 *   Removed the duplicate graphical route strip from the Dashboard flight card—the CURRENT/DEST pips, route state, and distance remain available in the dedicated Navigation HUD.
@@ -40,7 +48,7 @@
 *   Survey system and organism lists expand to show every available row instead of collapsing additional entries behind a `+more` count.
 
 ### Version
-*   Updated app version to **4.5.5**.
+*   Updated app version to **4.5.7**.
 
 ## v4.4.4 // Interactive Galaxy Details
 **Release Date:** 2026-Jul-13
