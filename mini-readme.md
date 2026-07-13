@@ -54,8 +54,8 @@
 *   Removed the duplicate graphical route strip from the Dashboard flight card—the CURRENT/DEST pips, route state, and distance remain available in the dedicated Navigation HUD.
 
 ### Navigation HUD CRT
-*   Added configurable phosphor text glow, scanline strength, edge vignette, stable noise texture, route-line bloom, and a lightweight rolling refresh/flicker treatment.
-*   Added **HUD Effects** settings for enabling CRT rendering, selecting Subtle/Standard/Strong intensity, and disabling moving effects independently.
+*   Added configurable phosphor text glow, scanline strength, edge vignette, stable noise texture, route-line bloom, and a lightweight phosphor shimmer without a full-width refresh bar sweeping down the display.
+*   Added **HUD Effects** settings for enabling CRT rendering, selecting Subtle/Standard/Strong intensity, and disabling the phosphor shimmer independently.
 
 ### Biological Survey HUD
 *   Expanded the existing Survey Status strip into a system overview showing unfinished DSS work, biological completion counts, and estimated exobiology values per body.
