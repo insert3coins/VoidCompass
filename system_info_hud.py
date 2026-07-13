@@ -14,36 +14,6 @@ _STARPORT_TYPES = {
     "Asteroid base", "Planetary Port", "Planetary Outpost",
 }
 
-_NOTABLE_PLANET_CLASSES = {"earthlike body", "water world", "ammonia world"}
-_DEFAULT_MIN_VALUE = 50_000
-MAX_VISIBLE_BODIES = 5
-_BODY_ROW_H = 34
-
-
-def _is_interesting_body(item, min_value):
-    if item.get("is_star"):
-        return False
-    if (item.get("bio_count") or 0) > 0:
-        return True
-    if item.get("terraformable"):
-        return True
-    if (item.get("planet_class") or "").lower() in _NOTABLE_PLANET_CLASSES:
-        return True
-    best_value = max(item.get("reward") or 0, item.get("dss_reward") or 0)
-    return best_value >= min_value
-
-
-def _fmt_credits(n):
-    try:
-        n = int(n or 0)
-    except Exception:
-        return "--"
-    for suffix, div in (("B", 1_000_000_000), ("M", 1_000_000), ("K", 1_000)):
-        if n >= div:
-            return f"{n/div:.1f}{suffix}"
-    return f"{n:,}"
-
-
 def _fmt_pop(n):
     try:
         n = int(n)
@@ -65,35 +35,6 @@ def _truncate(text, max_chars):
     return text if len(text) <= max_chars else text[:max_chars - 1] + "…"
 
 
-def build_notable_body_rows(scan_items, min_value=_DEFAULT_MIN_VALUE):
-    """Return the shared notable-body model used by transient and persistent HUDs."""
-    bodies = []
-    for item in (scan_items or []):
-        if not _is_interesting_body(item, min_value):
-            continue
-        icons = "".join(ic for ic in (item.get("icons") or []) if ic != "★")
-        reward = item.get("reward") or 0
-        dss_reward = item.get("dss_reward") or 0
-        bio_count = item.get("bio_count") or 0
-        if item.get("dss_complete") or dss_reward <= reward:
-            value_line = f"{_fmt_credits(reward)} CR"
-        else:
-            value_line = f"{_fmt_credits(reward)} CR  ·  DSS {_fmt_credits(dss_reward)} CR"
-        if bio_count:
-            value_line += f"  ·  BIO {bio_count}"
-        bodies.append({
-            "body_id": item.get("body_id"),
-            "name": item.get("name") or "Body",
-            "icons": icons,
-            "planet_class": item.get("planet_class") or "",
-            "terraformable": bool(item.get("terraformable")),
-            "name_color": COLOR_ACCENT if bio_count else COLOR_ORANGE,
-            "value_line": value_line,
-            "value_color": _COL_GOLD if max(reward, dss_reward) >= min_value else _COL_DIM,
-        })
-    return bodies
-
-
 class SystemInfoHUD:
     def __init__(self, root, config):
         self.root   = root
@@ -113,7 +54,6 @@ class SystemInfoHUD:
         self.canvas.bind("<Button-1>",        self._on_mouse_down)
         self.canvas.bind("<B1-Motion>",       self._on_mouse_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_mouse_up)
-        self.canvas.bind("<MouseWheel>",      self._on_mousewheel)
 
         x = int(config.get("system_info_hud_x", 30))
         y = int(config.get("system_info_hud_y", 30))
@@ -130,8 +70,6 @@ class SystemInfoHUD:
         self._body_count    = 0
         self._scanned_count = 0
         self._bio_total     = 0
-        self._bodies        = []   # filtered/formatted notable-body rows
-        self._scroll_offset = 0
         self._edsm_info     = None
         self._spansh        = None  # parsed station/service summary
 
@@ -185,10 +123,6 @@ class SystemInfoHUD:
 
     # ── Data interface ────────────────────────────────────────────────────
 
-    def _compute_bodies(self, scan_items):
-        min_value = int(self.config.get("system_info_min_value", _DEFAULT_MIN_VALUE) or _DEFAULT_MIN_VALUE)
-        return build_notable_body_rows(scan_items, min_value)
-
     def _apply_scan_progress(self, scan_items, body_signals, total_bodies):
         self._body_count    = int(total_bodies or 0)
         self._scanned_count = sum(
@@ -197,7 +131,6 @@ class SystemInfoHUD:
         self._bio_total = sum(
             s.get("bio", 0) for s in (body_signals or {}).values()
         )
-        self._bodies = self._compute_bodies(scan_items)
 
     def on_system_arrival(self, system_name, star_class,
                           scan_items, body_signals, total_bodies):
@@ -205,7 +138,6 @@ class SystemInfoHUD:
         self._star_class    = star_class or ""
         self._edsm_info     = None
         self._spansh        = None
-        self._scroll_offset = 0
         self._apply_scan_progress(scan_items, body_signals, total_bodies)
         self.show()
 
@@ -250,14 +182,6 @@ class SystemInfoHUD:
         star_classes = []   # spectral class strings, e.g. ["G", "M"]
         planet_count = 0
         landable_count = 0
-        spansh_notable = []  # (tag, subType) for notable planet types
-
-        _NOTABLE_SUBTYPES = {
-            "Earthlike body": "Earthlike",
-            "Water world":    "Water World",
-            "Ammonia world":  "Ammonia World",
-        }
-
         for body in bodies:
             btype = (body.get("type") or "").lower()
             if btype == "star":
@@ -271,14 +195,6 @@ class SystemInfoHUD:
                 planet_count += 1
                 if body.get("isLandable"):
                     landable_count += 1
-                sub = body.get("subType") or ""
-                tag = _NOTABLE_SUBTYPES.get(sub)
-                if tag:
-                    spansh_notable.append(tag)
-                elif (body.get("terraformingState") or "").lower() in (
-                    "candidate for terraforming", "terraformable",
-                ):
-                    spansh_notable.append("Terraformable")
 
         # ── Stations ─────────────────────────────────────────────────────
         all_stations = list(system.get("stations") or [])
@@ -315,7 +231,6 @@ class SystemInfoHUD:
             "star_classes":   star_classes,
             "planet_count":   planet_count,
             "landable_count": landable_count,
-            "spansh_notable": spansh_notable,
         }
         try:
             if self.win.state() != "withdrawn":
@@ -330,12 +245,6 @@ class SystemInfoHUD:
         LINE_H  = 20
         total_h = 35 + len(rows) * LINE_H + 10
 
-        body_count = len(self._bodies)
-        max_offset = max(0, body_count - MAX_VISIBLE_BODIES)
-        self._scroll_offset = max(0, min(self._scroll_offset, max_offset))
-        if body_count:
-            visible = min(MAX_VISIBLE_BODIES, body_count)
-            total_h += 14 + LINE_H + visible * _BODY_ROW_H
         total_h = max(total_h, 60)
 
         self.canvas.config(width=WIDTH, height=total_h)
@@ -353,26 +262,6 @@ class SystemInfoHUD:
                 self._draw_text(WIDTH - 20, y, f"[{self._star_class}]", _COL_GOLD,
                                 ("Courier", 10, "bold"), anchor="e")
             y += LINE_H
-
-        if body_count:
-            y += 4
-            self.canvas.create_line(20, y, WIDTH - 20, y, fill="#26313a", width=1)
-            y += 14
-            self._draw_text(20, y, f"NOTABLE BODIES ({body_count})", _COL_DIM, ("Courier", 8, "bold"))
-            if max_offset > 0:
-                shown_from = self._scroll_offset + 1
-                shown_to = self._scroll_offset + min(MAX_VISIBLE_BODIES, body_count - self._scroll_offset)
-                self._draw_text(WIDTH - 20, y, f"{shown_from}-{shown_to}/{body_count}  ⇅ SCROLL", _COL_DIM,
-                                ("Courier", 7, "bold"), anchor="e")
-            y += LINE_H
-
-            visible_bodies = self._bodies[self._scroll_offset:self._scroll_offset + MAX_VISIBLE_BODIES]
-            for body in visible_bodies:
-                name_line = f"{body['icons']} {body['name']}" if body["icons"] else body["name"]
-                self._draw_text(20, y, _truncate(name_line, 36), body["name_color"], ("Courier", 9, "bold"))
-                y += 16
-                self._draw_text(28, y, body["value_line"], body["value_color"], ("Courier", 8, "bold"))
-                y += _BODY_ROW_H - 16
 
     def _build_rows(self):
         rows = []
@@ -412,12 +301,6 @@ class SystemInfoHUD:
                 scan_parts.append(f"{self._bio_total} Bio Signals")
             if scan_parts:
                 rows.append(("  ·  ".join(scan_parts), _COL_DIM))
-
-        # Notable-tag fallback from Spansh, only while local scan data hasn't
-        # produced any interesting bodies of its own for the full list below.
-        if not self._bodies and self._spansh and self._spansh["spansh_notable"]:
-            tags = sorted(set(self._spansh["spansh_notable"]))
-            rows.append(("  ·  ".join(tags[:4]), COLOR_ORANGE))
 
         if self._spansh:
             c = self._spansh["counts"]
@@ -497,19 +380,6 @@ class SystemInfoHUD:
         self.config["system_info_hud_x"] = x
         self.config["system_info_hud_y"] = y
         self._schedule_config_save()
-
-    def _on_mousewheel(self, event):
-        if not self._bodies:
-            return
-        max_offset = max(0, len(self._bodies) - MAX_VISIBLE_BODIES)
-        if max_offset <= 0:
-            return
-        step = -1 if event.delta > 0 else 1
-        new_offset = max(0, min(max_offset, self._scroll_offset + step))
-        if new_offset != self._scroll_offset:
-            self._scroll_offset = new_offset
-            self._redraw()
-            self._schedule_hide()
 
     def _on_mouse_up(self, event):
         x, y = self.win.winfo_x(), self.win.winfo_y()

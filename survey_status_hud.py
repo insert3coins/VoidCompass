@@ -5,7 +5,7 @@ import tkinter as tk
 import bio_values
 from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, save_config
 import overlay_chrome
-from system_info_hud import build_notable_body_rows
+from notable_bodies import build_notable_body_rows
 
 _CHROMA = "#ff00ff"
 _DIM = "#7a8a98"
