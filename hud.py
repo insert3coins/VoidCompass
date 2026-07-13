@@ -18,7 +18,7 @@ class TacticalHUD:
         self.full_width = 560
         self.full_height = 246
         self.compact_width = 450
-        self.compact_height = 190
+        self.compact_height = 180
         self.width, self.base_height = self._target_dimensions()
         self.canvas = tk.Canvas(self.win, width=self.width, height=self.base_height, bg="#ff00ff", highlightthickness=0)
         self.canvas.pack()
@@ -463,15 +463,21 @@ class TacticalHUD:
             self.canvas.create_rectangle(16, 120, 16 + ((w - 32) * pct), 126, fill=COLOR_ACCENT, outline=COLOR_ACCENT)
         self.canvas.create_line(16, 134, w - 16, 134, fill="#1a2530", width=1)
 
-        self.draw_text(16, 144, text=f"TRAFFIC {traffic_text}", fill="#7d8891", font=("Courier", 8, "bold"), anchor="w")
+        badge_row_y = 144
+        badge_row_h = 16
+        traffic_label = f"TRAFFIC {traffic_text}"
+        traffic_font = tkfont.Font(family="Courier", size=8, weight="bold")
+        traffic_reserve = traffic_font.measure(traffic_label) + 16
+        self.draw_text(w - 16, badge_row_y + badge_row_h / 2, text=traffic_label,
+                        fill="#7d8891", font=("Courier", 8, "bold"), anchor="e")
 
         badges = nav_context.get("badges", [])
         x = 16
-        y = 154
+        badge_limit = w - 16 - traffic_reserve
         for badge, state in badges:
-            bw = self._draw_badge(x, y, str(badge), state, height=16)
+            bw = self._draw_badge(x, badge_row_y, str(badge), state, height=badge_row_h)
             x += bw + 5
-            if x > w - 70:
+            if x > badge_limit:
                 break
 
     def update(
