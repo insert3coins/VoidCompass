@@ -51,6 +51,47 @@ VOICES = {
         "onnx_sha": "57a219ae8e638873db7d18893304be5069c42868f392bb95c3ff17f0690d0689",
         "config_sha": "69557ed3d974463453e9b0c09dd99a7ed0e52b8b87b64b357dbeeb2540a97d47",
     },
+    "en_GB-alan-medium": {
+        "label": "Alan - British male", "hf": "en_GB/alan/medium", "mb": 60,
+        "onnx_sha": "0a309668932205e762801f1efc2736cd4b0120329622adf62be09e56339d3330",
+        "config_sha": "c0f0d124e5895c00e7c03b35dcc8287f319a6998a365b182deb5c8e752ee8c1e",
+    },
+    "en_GB-jenny_dioco-medium": {
+        "label": "Jenny Dioco - British female", "hf": "en_GB/jenny_dioco/medium", "mb": 60,
+        "onnx_sha": "469c630d209e139dd392a66bf4abde4ab86390a0269c1e47b4e5d7ce81526b01",
+        "config_sha": "a9a7a93a317c9a3cb6563e37eb057df9ef09c06188a8a4341b0fcb58cba54dd4",
+    },
+    "en_GB-southern_english_female-low": {
+        "label": "Southern English female (low)", "hf": "en_GB/southern_english_female/low", "mb": 60,
+        "onnx_sha": "f2f37aed1b3a093476f719d1379ba0c0b1b1cf6f1ef99288e2ebf502971a07c3",
+        "config_sha": "a1af43310f8756161506e849a2863d342a98b0853af9e2437581d39e9922d0e5",
+    },
+    # Regional accents from Piper's official VCTK multi-speaker model. These
+    # four choices share one model download and differ only by speaker ID.
+    "en_AU-vctk-p326-medium": {
+        "label": "Sydney - Australian male", "hf": "en_GB/vctk/medium", "mb": 73,
+        "model": "en_GB-vctk-medium", "speaker_id": 71,
+        "onnx_sha": "4e9fc85ab9009385319fc6bae7f55577f8a2d7ee77fd9159a5500eb6531f41e6",
+        "config_sha": "7f85e6391ed0f7f46e4abd19345929a16be931a0c9945086f96692dce2087fa8",
+    },
+    "en_NZ-vctk-p335-medium": {
+        "label": "New Zealand female (VCTK p335)", "hf": "en_GB/vctk/medium", "mb": 73,
+        "model": "en_GB-vctk-medium", "speaker_id": 42,
+        "onnx_sha": "4e9fc85ab9009385319fc6bae7f55577f8a2d7ee77fd9159a5500eb6531f41e6",
+        "config_sha": "7f85e6391ed0f7f46e4abd19345929a16be931a0c9945086f96692dce2087fa8",
+    },
+    "en_IE-vctk-p245-medium": {
+        "label": "Dublin - Irish male", "hf": "en_GB/vctk/medium", "mb": 73,
+        "model": "en_GB-vctk-medium", "speaker_id": 97,
+        "onnx_sha": "4e9fc85ab9009385319fc6bae7f55577f8a2d7ee77fd9159a5500eb6531f41e6",
+        "config_sha": "7f85e6391ed0f7f46e4abd19345929a16be931a0c9945086f96692dce2087fa8",
+    },
+    "en_IE-vctk-p283-medium": {
+        "label": "Cork - Irish female", "hf": "en_GB/vctk/medium", "mb": 73,
+        "model": "en_GB-vctk-medium", "speaker_id": 8,
+        "onnx_sha": "4e9fc85ab9009385319fc6bae7f55577f8a2d7ee77fd9159a5500eb6531f41e6",
+        "config_sha": "7f85e6391ed0f7f46e4abd19345929a16be931a0c9945086f96692dce2087fa8",
+    },
     "en_US-lessac-medium": {
         "label": "Lessac - American female", "hf": "en_US/lessac/medium", "mb": 60,
         "onnx_sha": "5efe09e69902187827af646e1a6e9d269dee769f9877d17b16b1b46eeaaf019f",
@@ -65,6 +106,31 @@ VOICES = {
         "label": "Amy - American female", "hf": "en_US/amy/medium", "mb": 60,
         "onnx_sha": "b3a6e47b57b8c7fbe6a0ce2518161a50f59a9cdd8a50835c02cb02bdd6206c18",
         "config_sha": "95a23eb4d42909d38df73bb9ac7f45f597dbfcde2d1bf9526fdeaf5466977d77",
+    },
+    "en_US-hfc_male-medium": {
+        "label": "HFC - American male", "hf": "en_US/hfc_male/medium", "mb": 60,
+        "onnx_sha": "d11e403a02bdf5a670c877b3dc56e0e1c8cece6fb30289586314dffdc0a78cb0",
+        "config_sha": "f66847424aed0bf99ecbb5d7cfde47c0a906f426a0daf7c46f305e7d21afd886",
+    },
+    "en_US-hfc_female-medium": {
+        "label": "HFC - American female", "hf": "en_US/hfc_female/medium", "mb": 60,
+        "onnx_sha": "914c473788fc1fa8b63ace1cdcdb44588f4ae523d3ab37df1536616835a140b7",
+        "config_sha": "03f1fa0622b80463283592d97aca9f6e89aec345a5c56b7257723e0093c58b6c",
+    },
+    "en_US-bryce-medium": {
+        "label": "Bryce - American", "hf": "en_US/bryce/medium", "mb": 61,
+        "onnx_sha": "dc9caa6c313199ffb5ac698b6e542fa6cba388aeaf2731e25262e33b9810aef1",
+        "config_sha": "7ceb1bc4af6d4e41b6d1edbb86c67e91e01eaa71f66db4cd0ae92ac704d415be",
+    },
+    "en_US-ljspeech-high": {
+        "label": "LJSpeech - American female (high)", "hf": "en_US/ljspeech/high", "mb": 109,
+        "onnx_sha": "5d4f08ba6a2a48c44592eed3ce56bf85e9de3dd4e20df90541ae68a8310c029a",
+        "config_sha": "7e1f4634af596d83cca997fb7a931ba80b70f8a316a2655ee69c55365e0ace14",
+    },
+    "en_US-lessac-high": {
+        "label": "Lessac - American female (high)", "hf": "en_US/lessac/high", "mb": 109,
+        "onnx_sha": "4cabf7c3a638017137f34a1516522032d4fe3f38228a843cc9b764ddcbcd9e09",
+        "config_sha": "db42b97d9859f257bc1561b8ed980e7fb2398402050a74ddd6cbec931a92412f",
     },
 }
 
@@ -81,12 +147,17 @@ def selected_voice(config):
     return canonical_voice(config.get("voice_name")) or DEFAULT_VOICE
 
 
+def _model_name(voice):
+    item = VOICES.get(voice) or {}
+    return item.get("model") or voice
+
+
 def model_path(voice):
-    return TTS_DIR / f"{voice}.onnx"
+    return TTS_DIR / f"{_model_name(voice)}.onnx"
 
 
 def model_config_path(voice):
-    return TTS_DIR / f"{voice}.onnx.json"
+    return TTS_DIR / f"{_model_name(voice)}.onnx.json"
 
 
 def binary_path():
@@ -107,9 +178,10 @@ def _binary_artifact():
 
 def _voice_artifacts(voice):
     item = VOICES[voice]
+    model = _model_name(voice)
     return [
-        (f"{_VOICE_BASE}/{item['hf']}/{voice}.onnx", model_path(voice), item["onnx_sha"]),
-        (f"{_VOICE_BASE}/{item['hf']}/{voice}.onnx.json", model_config_path(voice), item["config_sha"]),
+        (f"{_VOICE_BASE}/{item['hf']}/{model}.onnx", model_path(voice), item["onnx_sha"]),
+        (f"{_VOICE_BASE}/{item['hf']}/{model}.onnx.json", model_config_path(voice), item["config_sha"]),
     ]
 
 
@@ -282,6 +354,14 @@ def clear_cache():
     return {"files": removed, "bytes": freed}
 
 
+def _synthesis_payload(text, output, voice):
+    payload = {"text": text, "output_file": str(output)}
+    speaker_id = VOICES[voice].get("speaker_id")
+    if speaker_id is not None:
+        payload["speaker_id"] = int(speaker_id)
+    return payload
+
+
 def synthesize(text, voice, cancel_event=None, use_cache=True):
     voice = canonical_voice(voice)
     if voice is None:
@@ -301,7 +381,7 @@ def synthesize(text, voice, cancel_event=None, use_cache=True):
             return output
         process = _ensure_process(voice)
         try:
-            line = json.dumps({"text": text, "output_file": str(output)}) + "\n"
+            line = json.dumps(_synthesis_payload(text, output, voice)) + "\n"
             process.stdin.write(line.encode("utf-8"))
             process.stdin.flush()
         except OSError as exc:
