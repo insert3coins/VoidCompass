@@ -166,6 +166,10 @@ PROFILE_VALUE_SETTINGS = (
     "achievements_disabled_categories",
     "achievement_window_geometry",
     "voice_volume",
+    "cockpit_memory_system_limit",
+    "cockpit_memory_species_limit",
+    "cockpit_memory_ship_limit",
+    "cockpit_memory_episode_limit",
 )
 
 PROFILE_SETTINGS = PROFILE_TEXT_SETTINGS + PROFILE_BOOL_SETTINGS + PROFILE_VALUE_SETTINGS
@@ -301,8 +305,15 @@ def apply_profile_config(config, profile_key=None):
             profile[setting] = bool(config.get(setting, bool_defaults.get(setting, False))) if is_initial_profile else bool_defaults.get(setting, False)
     for setting in PROFILE_VALUE_SETTINGS:
         if setting not in profile and setting in config:
+            profile_defaults = {
+                "voice_volume": 0.8,
+                "cockpit_memory_system_limit": 300,
+                "cockpit_memory_species_limit": 200,
+                "cockpit_memory_ship_limit": 30,
+                "cockpit_memory_episode_limit": 80,
+            }
             profile[setting] = (
-                0.8 if setting == "voice_volume" and not is_initial_profile
+                profile_defaults[setting] if not is_initial_profile and setting in profile_defaults
                 else config.get(setting)
             )
     for setting in PROFILE_TEXT_SETTINGS:
@@ -470,6 +481,10 @@ def load_config():
         'voice_name': 'en_GB-alba-medium',
         'cockpit_personality_level': 'Balanced',
         'voice_volume': 0.8,
+        'cockpit_memory_system_limit': 300,
+        'cockpit_memory_species_limit': 200,
+        'cockpit_memory_ship_limit': 30,
+        'cockpit_memory_episode_limit': 80,
         'ui_theme_name': _themes.DEFAULT_THEME_NAME,
         'ui_custom_themes': {},
     }

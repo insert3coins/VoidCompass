@@ -5,6 +5,7 @@ from tkinter import colorchooser
 
 import themes
 import voice_callouts
+from cockpit_ai_memory import DEFAULT_LIMITS as COCKPIT_MEMORY_DEFAULTS, LIMIT_BOUNDS as COCKPIT_MEMORY_BOUNDS
 from config import DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config as persist_config
 from ui_theme import THEME, FONT_MONO, FONT_TITLE, FONT_UI, FONT_UI_BOLD, apply_window, button, window_surface
 
@@ -212,6 +213,12 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     cockpit_personality_var = tk.StringVar(
         value=str(config.get("cockpit_personality_level", "Balanced") or "Balanced")
     )
+    cockpit_limit_vars = {
+        "systems": tk.StringVar(value=str(config.get("cockpit_memory_system_limit", 300))),
+        "species": tk.StringVar(value=str(config.get("cockpit_memory_species_limit", 200))),
+        "ships": tk.StringVar(value=str(config.get("cockpit_memory_ship_limit", 30))),
+        "memories": tk.StringVar(value=str(config.get("cockpit_memory_episode_limit", 80))),
+    }
     voice_volume_var = tk.DoubleVar(value=float(config.get("voice_volume", 0.8) or 0.8))
     if "screenshots_path" not in config:
         config["screenshots_path"] = os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous")
@@ -334,6 +341,20 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
 
     memory_actions = row(memory_panel)
     action_button(memory_actions, "Forget Learned History", _reset_cockpit_memory, muted=True).pack(side=tk.RIGHT)
+    tk.Label(memory_actions, text="Caps", font=UI_FONT_BOLD, fg=UI_MUTED,
+             bg=UI_PANEL).pack(side=tk.LEFT, padx=(0, 7))
+    for limit_key, label in (("systems", "SYS"), ("species", "BIO"),
+                             ("ships", "SHIPS"), ("memories", "NOTES")):
+        tk.Label(memory_actions, text=label, font=("Segoe UI", 7, "bold"), fg=UI_DIM,
+                 bg=UI_PANEL).pack(side=tk.LEFT, padx=(5, 2))
+        entry = tk.Entry(
+            memory_actions, textvariable=cockpit_limit_vars[limit_key], width=5,
+            bg=UI_INPUT, fg=COLOR_TEXT, insertbackground=COLOR_ACCENT,
+            font=UI_MONO, relief=tk.FLAT, justify=tk.CENTER,
+            highlightthickness=1, highlightbackground=UI_BORDER,
+            highlightcolor=COLOR_ACCENT,
+        )
+        entry.pack(side=tk.LEFT, ipady=3)
 
     voice_catalog = section(voice_page, "Neural Voice Pack")
     voice_names = list(voice_callouts.VOICES)
@@ -702,6 +723,15 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             config.pop(key, None)
 
     def save_config():
+        memory_limits = {}
+        for key, variable in cockpit_limit_vars.items():
+            low, high = COCKPIT_MEMORY_BOUNDS[key]
+            try:
+                value = int(float(variable.get().strip()))
+            except (TypeError, ValueError):
+                value = COCKPIT_MEMORY_DEFAULTS[key]
+            memory_limits[key] = max(low, min(high, value))
+            variable.set(str(memory_limits[key]))
         config.update({
             "journal_path": j_e.get().strip(),
             "overlay_enabled": ov_var.get(),
@@ -747,10 +777,17 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "voice_cache_enabled": voice_cache_var.get(),
             "cockpit_memory_enabled": cockpit_memory_var.get(),
             "cockpit_personality_level": cockpit_personality_var.get(),
+            "cockpit_memory_system_limit": memory_limits["systems"],
+            "cockpit_memory_species_limit": memory_limits["species"],
+            "cockpit_memory_ship_limit": memory_limits["ships"],
+            "cockpit_memory_episode_limit": memory_limits["memories"],
             "voice_name": _chosen_voice(),
             "voice_volume": float(voice_volume_var.get()),
             "settings_geometry": win.geometry(),
         })
+        if cockpit_memory is not None:
+            cockpit_memory.configure_limits(memory_limits, save=True)
+            memory_summary_var.set(cockpit_memory.summary_text())
         remove_deprecated_keys()
         persist_config(config)
         saved_name = theme_var.get()
