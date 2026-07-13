@@ -70,6 +70,7 @@ PROFILE_TEXT_SETTINGS = (
     "screenshots_path",
     "ui_theme_name",
     "voice_name",
+    "hud_crt_intensity",
 )
 
 PROFILE_BOOL_SETTINGS = (
@@ -103,6 +104,8 @@ PROFILE_BOOL_SETTINGS = (
     "voice_navigation_enabled",
     "voice_objectives_enabled",
     "voice_cache_enabled",
+    "hud_crt_enabled",
+    "hud_crt_motion_enabled",
 )
 
 PROFILE_VALUE_SETTINGS = (
@@ -250,6 +253,7 @@ def apply_profile_config(config, profile_key=None):
         "screenshots_path": os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous"),
         "ui_theme_name": _themes.DEFAULT_THEME_NAME,
         "voice_name": "en_GB-alba-medium",
+        "hud_crt_intensity": "Subtle",
     }
     bool_defaults = {
         "edsm_upload_enabled": False,
@@ -282,6 +286,8 @@ def apply_profile_config(config, profile_key=None):
         "voice_navigation_enabled": True,
         "voice_objectives_enabled": True,
         "voice_cache_enabled": True,
+        "hud_crt_enabled": True,
+        "hud_crt_motion_enabled": True,
     }
     for setting in PROFILE_TEXT_SETTINGS:
         if setting not in profile:
@@ -453,6 +459,9 @@ def load_config():
         'voice_navigation_enabled': True,
         'voice_objectives_enabled': True,
         'voice_cache_enabled': True,
+        'hud_crt_enabled': True,
+        'hud_crt_motion_enabled': True,
+        'hud_crt_intensity': 'Subtle',
         'voice_name': 'en_GB-alba-medium',
         'voice_volume': 0.8,
         'ui_theme_name': _themes.DEFAULT_THEME_NAME,

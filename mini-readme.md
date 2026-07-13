@@ -1,6 +1,6 @@
 # VoidCompass // UPDATE LOG
 
-## v4.5.2 // Neural Voice Callouts
+## v4.5.4 // HUD Effects + Biological Survey
 **Release Date:** 2026-Jul-13
 
 ### Voice Packs
@@ -17,8 +17,18 @@
 ### Dashboard
 *   Removed the duplicate graphical route strip from the Dashboard flight card—the CURRENT/DEST pips, route state, and distance remain available in the dedicated Navigation HUD.
 
+### Navigation HUD CRT
+*   Added configurable phosphor text glow, scanline strength, edge vignette, stable noise texture, route-line bloom, and a lightweight rolling refresh/flicker treatment.
+*   Added **HUD Effects** settings for enabling CRT rendering, selecting Subtle/Standard/Strong intensity, and disabling moving effects independently.
+
+### Biological Survey HUD
+*   Expanded the existing Survey Status strip into a system overview showing unfinished DSS work, biological completion counts, and estimated exobiology values per body.
+*   Approaching a bio-bearing body now switches the same strip to a focused organism view with completed samples, active samples, DSS-detected genera, predicted genera, and reward ranges.
+*   Wired the packaged SrvSurvey Codex biological catalogue into VoidCompass, including more than 800 species/variant entries and current reward values; the previous built-in value table remains an offline fallback.
+*   The focused view keeps the existing sampling-distance guidance and returns to the system overview when leaving the body—no additional overlay window is created.
+
 ### Version
-*   Updated app version to **4.5.2**.
+*   Updated app version to **4.5.4**.
 
 ## v4.4.4 // Interactive Galaxy Details
 **Release Date:** 2026-Jul-13

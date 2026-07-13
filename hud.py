@@ -38,6 +38,7 @@ class TacticalHUD:
         self.force_topmost()
 
         self.anim_step = 0
+        self._crt_phase = 0
         self.anim_frames = [
             "⢄",
             "⢂",
@@ -118,6 +119,7 @@ class TacticalHUD:
     def animate_ui(self):
         try:
             self._draw_title_anim()
+            self._draw_crt_animation()
             self.anim_step = (self.anim_step + 1) % len(self.anim_frames)
         except Exception:
             pass
@@ -183,9 +185,61 @@ class TacticalHUD:
         self._mouse_down = None
         self._mouse_dragging = False
 
+    def _crt_enabled(self):
+        return bool(self.config.get("hud_crt_enabled", True))
+
+    def _crt_intensity(self):
+        value = str(self.config.get("hud_crt_intensity", "Subtle") or "Subtle").title()
+        return value if value in ("Subtle", "Standard", "Strong") else "Subtle"
+
+    @staticmethod
+    def _glow_color(fill, factor):
+        try:
+            text = str(fill).lstrip("#")
+            if len(text) != 6:
+                return "#101820"
+            red, green, blue = int(text[0:2], 16), int(text[2:4], 16), int(text[4:6], 16)
+            return f"#{int(red * factor):02x}{int(green * factor):02x}{int(blue * factor):02x}"
+        except Exception:
+            return "#101820"
+
     def draw_text(self, x, y, text, fill, font, anchor="w", tags=None):
+        if self._crt_enabled():
+            intensity = self._crt_intensity()
+            factor = {"Subtle": 0.18, "Standard": 0.26, "Strong": 0.34}[intensity]
+            glow = self._glow_color(fill, factor)
+            offsets = [(-1, 0), (1, 0)]
+            if intensity in ("Standard", "Strong"):
+                offsets += [(0, -1), (0, 1)]
+            if intensity == "Strong":
+                offsets += [(-1, -1), (1, 1)]
+            for dx, dy in offsets:
+                self.canvas.create_text(x + dx, y + dy, text=text, fill=glow, font=font, anchor=anchor, tags=tags)
         self.canvas.create_text(x+1, y+1, text=text, fill="black", font=font, anchor=anchor, tags=tags)
         self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor, tags=tags)
+
+    def _draw_crt_animation(self):
+        self.canvas.delete("crt_motion")
+        if not self._crt_enabled() or not self.config.get("hud_crt_motion_enabled", True):
+            return
+        intensity = self._crt_intensity()
+        step = {"Subtle": 3, "Standard": 5, "Strong": 7}[intensity]
+        color = {"Subtle": "#092027", "Standard": "#0d3038", "Strong": "#12434d"}[intensity]
+        y = 8 + (self._crt_phase % max(1, self.base_height - 16))
+        self.canvas.create_line(8, y, self.width - 8, y, fill=color, width=1, tags="crt_motion")
+        if intensity == "Strong":
+            self.canvas.create_line(12, y + 1, self.width - 12, y + 1, fill="#0a252c", width=1, tags="crt_motion")
+        # A brief, short horizontal phosphor disturbance creates a restrained
+        # flicker without shifting text or making the overlay difficult to read.
+        if self.anim_step % 9 == 0:
+            burst_y = 18 + ((self._crt_phase * 7) % max(1, self.base_height - 36))
+            burst_w = {"Subtle": 34, "Standard": 62, "Strong": 96}[intensity]
+            burst_x = 18 + ((self._crt_phase * 13) % max(1, self.width - burst_w - 36))
+            self.canvas.create_line(
+                burst_x, burst_y, burst_x + burst_w, burst_y,
+                fill=color, width=1, tags="crt_motion",
+            )
+        self._crt_phase = (self._crt_phase + step) % max(1, self.base_height)
 
     def _draw_title_anim(self):
         self.canvas.delete("anim_title")
@@ -214,7 +268,18 @@ class TacticalHUD:
 
     def _draw_chrome(self, accent=None, bracket_len=12):
         accent = accent or COLOR_ACCENT
-        overlay_chrome.draw_chrome(self.canvas, self.width, self.base_height, accent=accent, bracket_len=bracket_len)
+        crt_enabled = self._crt_enabled()
+        intensity = self._crt_intensity()
+        step = {"Subtle": 4, "Standard": 3, "Strong": 2}[intensity]
+        scanline = {"Subtle": "#070c11", "Standard": "#0a1117", "Strong": "#0d171e"}[intensity]
+        overlay_chrome.draw_chrome(
+            self.canvas, self.width, self.base_height, accent=accent,
+            bracket_len=bracket_len, scanlines=crt_enabled,
+            scanline_step=step, scanline_color=scanline,
+        )
+        if crt_enabled:
+            overlay_chrome.draw_crt_vignette(self.canvas, self.width, self.base_height, intensity)
+            overlay_chrome.draw_crt_noise(self.canvas, self.width, self.base_height, intensity)
 
     def _draw_stat(self, x, y, label, value, color=COLOR_TEXT, anchor="w", label_size=6, value_size=9, value_gap=13):
         self.draw_text(x, y, text=str(label).upper(), fill="#7d8891", font=("Courier", label_size, "bold"), anchor=anchor)
@@ -330,6 +395,9 @@ class TacticalHUD:
 
     def _draw_route_strip(self, x1, x2, strip_y, nav_context, header_color, dot_radius):
         hops = nav_context.get("hops") or []
+        if self._crt_enabled():
+            glow = self._glow_color(header_color, 0.22 if self._crt_intensity() == "Subtle" else 0.32)
+            self.canvas.create_line(x1, strip_y, x2, strip_y, fill=glow, width=5)
         self.canvas.create_line(x1, strip_y, x2, strip_y, fill="#1a2530", width=2)
         theme = {"accent": COLOR_ACCENT, "orange": COLOR_ORANGE}
         if hops:
