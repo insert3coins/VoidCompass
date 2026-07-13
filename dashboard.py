@@ -794,6 +794,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.db_lock = threading.RLock()
         self.batch_mode = False
         self._publish_cockpit_ai_online()
+        self.compass_llm.set_state_callback(
+            self._on_compass_llm_state, emit_current=True,
+        )
         self.init_db()
         self.edsm.set_db(self.conn, self.db_lock)
         self.colonisation_projects = self.db_load_colonisation_projects()
@@ -3056,6 +3059,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "llm_phase": str(llm_status.get("phase") or "disabled"),
             "llm_model": str(llm_status.get("model") or ""),
             "llm_processor": str(llm_status.get("processor") or ""),
+            "llm_error": str(llm_status.get("last_error") or ""),
             "brain_decisions": int(brain_status.get("decisions") or 0),
             "awareness_domains": tuple(memory.knowledge_domains()),
             "limits": dict(memory.limits),
@@ -3098,8 +3102,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 messages.append(
                     f"Generative language online: {after.get('llm_model') or 'local model'}{processor}"
                 )
-            elif new_llm_phase in ("error", "degraded"):
-                messages.append("Generative language unavailable: deterministic Compass speech remains active")
+            elif new_llm_phase == "error":
+                reason = str(after.get("llm_error") or "warm-up failed")
+                messages.append(
+                    f"Generative language warm-up failed: {reason} · "
+                    "deterministic Compass speech remains active"
+                )
+            elif new_llm_phase == "degraded":
+                reason = str(after.get("llm_error") or "response rejected")
+                messages.append(
+                    f"Generative language fallback for one callout: {reason}"
+                )
 
         growth = []
         for key, label in (("systems", "systems"), ("species", "species"), ("memories", "notable memories")):
@@ -3194,6 +3207,28 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._cockpit_feed_state = after
         for message in self._cockpit_ai_state_events(before, after):
             self.add_event_feed_entry("AI", message, severity="INFO")
+
+    def _on_compass_llm_state(self, _status):
+        """Publish worker completion immediately instead of awaiting a journal event."""
+        if not getattr(self, "is_running", False):
+            return
+        if getattr(self, "_compass_llm_feed_pending", False):
+            return
+        self._compass_llm_feed_pending = True
+
+        def publish():
+            self._compass_llm_feed_pending = False
+            if not getattr(self, "is_running", False):
+                return
+            self._publish_cockpit_ai_changes()
+            status = self.compass_llm.status()
+            if str(status.get("phase") or "") in ("ready", "error", "degraded"):
+                self._pulse_cockpit_ai()
+
+        try:
+            self.root.after(0, publish)
+        except Exception:
+            self._compass_llm_feed_pending = False
 
     def _handle_cockpit_load_game(self, raw, data, startup_replay=False):
         """Use LoadGame as the preferred session start, retaining automatic fallback."""

@@ -4,7 +4,7 @@
 **Release Date:** 2026-Jul-14
 
 ### Compass Personas
-*   Added 15 per-commander Ollama personas: **Compass, Tactical, Guardian, Scientific, Exobiologist, Engineer, Wayfarer, Pathfinder, Veteran, Deadpan, Stoic, Optimist, Archivist, Companion,** and **Emergent**. Persona controls tone, cadence, humour, initiative, and memory emphasis inside the working brain but cannot override factual validation or deterministic safety speech. Settings now separates persona from Quiet/Balanced/Chatty presence, explains every selection, previews unsaved choices through **Test Persona**, and reports the active persona in Compass Intelligence State and the Live Feed.
+*   Added 15 per-commander Ollama personas: **Compass, Tactical, Guardian, Scientific, Exobiologist, Engineer, Wayfarer, Pathfinder, Veteran, Deadpan, Stoic, Optimist, Archivist, Companion,** and **Emergent**. Persona controls tone, cadence, humour, initiative, and memory emphasis inside the working brain but cannot override factual validation or deterministic safety speech. Settings now separates persona from Quiet/Balanced/Chatty presence, explains every selection, previews unsaved choices through **Test Persona**, and reports the active persona in Compass Intelligence State and the Live Feed. Ollama warm-up completion now immediately announces that generative language is online and pulses the AI heartbeat; failures include their real reason, while a rejected or timed-out individual callout is accurately reported as a one-callout fallback rather than declaring the whole language layer unavailable.
 
 ## v4.7.1 // Local Generative Compass Language
 **Release Date:** 2026-Jul-14
