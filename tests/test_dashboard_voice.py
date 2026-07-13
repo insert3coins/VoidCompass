@@ -133,6 +133,45 @@ class DashboardVoiceTests(unittest.TestCase):
         self.assertTrue(any("Relationship evolved: Trusted" in event for event in events))
         self.assertTrue(any("Expedition log opened" in event for event in events))
 
+    def test_ai_feed_reports_sparse_survey_awareness_milestones(self):
+        before = {
+            "mood": "calm", "mood_reason": "systems nominal",
+            "voice_stage": "familiar", "habits": (),
+            "systems": 40, "species": 2, "ships": 1, "memories": 15,
+            "honks": 24, "fss_completed": 9, "dss_maps": 9, "signal_bodies": 9,
+            "limits": {"systems": 300, "species": 200, "ships": 30, "memories": 80},
+            "expedition_id": None, "expedition_name": None, "expedition_jumps": 0,
+        }
+        after = dict(before)
+        after.update(honks=25, fss_completed=10, dss_maps=10, signal_bodies=10)
+
+        events = MainDashboard._cockpit_ai_state_events(before, after)
+
+        survey = next(event for event in events if event.startswith("Survey awareness:"))
+        self.assertIn("25 system honks", survey)
+        self.assertIn("10 full FSS surveys", survey)
+        self.assertIn("10 DSS maps", survey)
+        self.assertIn("10 signal-bearing bodies", survey)
+
+    def test_ai_feed_announces_each_new_gameplay_domain_once(self):
+        before = {
+            "mood": "calm", "mood_reason": "systems nominal",
+            "voice_stage": "familiar", "habits": (),
+            "systems": 40, "species": 2, "ships": 1, "memories": 15,
+            "awareness_domains": ("Missions",),
+            "limits": {"systems": 300, "species": 200, "ships": 30, "memories": 80},
+            "expedition_id": None, "expedition_name": None, "expedition_jumps": 0,
+        }
+        after = dict(before)
+        after["awareness_domains"] = ("Missions", "Combat", "Engineering")
+
+        events = MainDashboard._cockpit_ai_state_events(before, after)
+
+        awareness = next(event for event in events if event.startswith("New operational awareness:"))
+        self.assertIn("Combat", awareness)
+        self.assertIn("Engineering", awareness)
+        self.assertNotIn("Missions", awareness)
+
 
 if __name__ == "__main__":
     unittest.main()

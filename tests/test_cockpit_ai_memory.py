@@ -44,6 +44,151 @@ class CockpitMemoryTests(unittest.TestCase):
             self.assertEqual(memory.count("jumps"), 0)
             self.assertEqual(memory.system_visits("Achenar"), 0)
 
+    def test_complete_exploration_workflow_grows_system_awareness(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = CockpitMemory(pathlib.Path(folder) / "memory.json")
+            memory.observe(
+                "FSDJump", {"StarSystem": "Survey Test"},
+                {"star_system": "Survey Test"},
+            )
+            memory.observe(
+                "FSSDiscoveryScan", {"SystemName": "Survey Test", "BodyCount": 12},
+                {"system_name": "Survey Test", "body_count": 12, "progress": 0.25},
+            )
+            memory.observe(
+                "Scan", {"BodyName": "Survey Test A 1", "WasDiscovered": False},
+                {"body_name": "Survey Test A 1", "was_discovered": False},
+            )
+            memory.observe(
+                "FSSBodySignals", {"BodyName": "Survey Test A 1"},
+                {"body_name": "Survey Test A 1", "bio_count": 4, "geo_count": 2},
+            )
+            # The DSS signal event refines the same body rather than double-counting it.
+            memory.observe(
+                "SAASignalsFound", {"BodyName": "Survey Test A 1"},
+                {"body_name": "Survey Test A 1", "bio_count": 4, "geo_count": 2},
+            )
+            memory.observe(
+                "SAAScanComplete",
+                {"BodyName": "Survey Test A 1", "ProbesUsed": 4, "EfficiencyTarget": 6},
+                {"body_name": "Survey Test A 1", "body_id": 2},
+            )
+            memory.observe(
+                "FSSAllBodiesFound", {"SystemName": "Survey Test", "Count": 12},
+                {"system_name": "Survey Test", "count": 12},
+            )
+
+            details = memory.status_details()
+            system = memory.state["systems"]["Survey Test"]
+            self.assertEqual(details["honks"], 1)
+            self.assertEqual(details["fss_completed"], 1)
+            self.assertEqual(details["dss_maps"], 1)
+            self.assertEqual(details["signal_bodies"], 1)
+            self.assertEqual(memory.count("biological_signals_found"), 4)
+            self.assertEqual(memory.count("geological_signals_found"), 2)
+            self.assertEqual(memory.count("efficient_dss_maps"), 1)
+            self.assertEqual(system["body_count"], 12)
+            self.assertEqual(system["body_scans"], 1)
+            self.assertIn("Survey Test A 1", system["mapped_bodies"])
+            self.assertTrue(system["fss_complete"])
+
+    def test_preknown_system_progress_counts_as_complete_fss_once(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = CockpitMemory(pathlib.Path(folder) / "memory.json")
+            memory.observe("FSDJump", {"StarSystem": "Sol"}, {"star_system": "Sol"})
+            event = {"system_name": "Sol", "body_count": 50, "progress": 1.0}
+
+            memory.observe("FSSDiscoveryScan", {}, event)
+            memory.observe("FSSDiscoveryScan", {}, event)
+
+            self.assertEqual(memory.count("system_honks"), 2)
+            self.assertEqual(memory.count("fss_systems_completed"), 1)
+
+    def test_location_context_can_be_restored_without_counting_a_visit(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = CockpitMemory(pathlib.Path(folder) / "memory.json")
+
+            self.assertTrue(memory.set_current_system("Colonia"))
+            self.assertFalse(memory.set_current_system("Colonia"))
+            memory.observe(
+                "SAAScanComplete", {"BodyName": "Colonia 2"},
+                {"body_name": "Colonia 2", "body_id": 2},
+            )
+
+            self.assertEqual(memory.system_visits("Colonia"), 0)
+            self.assertIn("Colonia 2", memory.state["systems"]["Colonia"]["mapped_bodies"])
+
+    def test_operational_domains_learn_patterns_instead_of_raw_events(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = CockpitMemory(pathlib.Path(folder) / "memory.json")
+            memory.set_current_system("Shinrarta Dezhra")
+
+            memory.observe("MissionAccepted", {"Name_Localised": "Courier Job", "Faction": "Pilots Federation"})
+            memory.observe("MissionCompleted", {
+                "Name_Localised": "Courier Job", "Faction": "Pilots Federation", "Reward": 250_000,
+            })
+            memory.observe("MarketBuy", {
+                "Type_Localised": "Gold", "Count": 10, "TotalCost": 450_000,
+            })
+            memory.observe("MarketSell", {
+                "Type_Localised": "Gold", "Count": 10, "TotalSale": 600_000, "AvgPricePaid": 45_000,
+            })
+            memory.observe("Bounty", {"Target_Localised": "Anaconda", "TotalReward": 125_000})
+            memory.observe("MiningRefined", {"Type_Localised": "Painite"})
+            memory.observe("EngineerCraft", {"BlueprintName": "Long Range FSD"})
+            memory.observe("Disembark", {"StarSystem": "Shinrarta Dezhra"})
+
+            awareness = memory.gameplay_awareness()
+            knowledge = memory.state["knowledge"]
+            self.assertEqual(awareness["missions_completed"], 1)
+            self.assertEqual(awareness["combat_victories"], 1)
+            self.assertEqual(awareness["trade_profit_cr"], 150_000)
+            self.assertEqual(awareness["engineering_crafts"], 1)
+            self.assertIn("Gold", knowledge["trade"]["commodities_sold"])
+            self.assertIn("Anaconda", knowledge["combat"]["targets"])
+            self.assertIn("Painite", knowledge["mining"]["minerals"])
+            self.assertIn("Long Range Fsd", knowledge["engineering"]["blueprints"])
+            self.assertIn("Odyssey", awareness["domains"])
+
+    def test_strategic_fleet_and_colonisation_domains_are_retained(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = CockpitMemory(pathlib.Path(folder) / "memory.json")
+            events = (
+                ("PowerplayJoin", {"Power": "Aisling Duval"}),
+                ("CommunityGoalJoin", {"Name": "Repair the station"}),
+                ("CarrierStats", {"Callsign": "ABC-123"}),
+                ("CarrierBankTransfer", {"CarrierBalance": 1_000_000}),
+                ("ColonisationContribution", {"Commodity_Localised": "Steel", "Amount": 400}),
+                ("ShipyardBuy", {"ShipType_Localised": "Krait Mk II"}),
+                ("SquadronStartup", {"SquadronName": "Explorers"}),
+                ("CommitCrime", {"CrimeType_Localised": "Trespass", "Fine": 500}),
+                ("Promotion", {"Explore": 5}),
+            )
+            for event, payload in events:
+                memory.observe(event, payload)
+
+            domains = set(memory.knowledge_domains())
+            self.assertTrue({
+                "Powerplay and BGS", "Fleet carrier", "Colonisation", "Fleet",
+                "Social and squadrons", "Crime and legal", "Career",
+            }.issubset(domains))
+            self.assertEqual(memory.gameplay_awareness()["colony_contributions"], 1)
+            self.assertEqual(memory.state["knowledge"]["carrier"]["carrier"], "ABC-123")
+
+    def test_named_domain_patterns_remain_bounded(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = CockpitMemory(pathlib.Path(folder) / "memory.json")
+            for index in range(75):
+                memory.observe("MarketBuy", {
+                    "Type_Localised": f"Commodity {index:02d}", "Count": index + 1,
+                    "TotalCost": 100,
+                })
+
+            commodities = memory.state["knowledge"]["trade"]["commodities_bought"]
+            self.assertEqual(len(commodities), 40)
+            self.assertIn("Commodity 74", commodities)
+            self.assertNotIn("Commodity 00", commodities)
+
     def test_personality_levels_control_familiar_system_threshold(self):
         with tempfile.TemporaryDirectory() as folder:
             memory = CockpitMemory(pathlib.Path(folder) / "memory.json")

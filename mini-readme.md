@@ -4,6 +4,8 @@
 
 - Compass AI now has a violet `AI` category in the Live Event Timeline. It posts one compact online brain summary, then only meaningful mood, relationship, learned-habit, expedition, and memory-capacity milestones; routine voice lines and ordinary learning stay out of the feed.
 - The journal heartbeat now gives a larger violet AI pulse whenever Compass learns from a live event or delivers a cockpit callout. Its normal journal pulse continues underneath and cannot immediately overwrite the short AI activity indication.
+- Compass exploration awareness now covers system honks and detected body totals, unique completed FSS surveys, biological/geological signal bodies, Nav Beacon scans, and unique DSS surface maps including efficient-probe results. Per-system memory retains survey depth without turning routine scans into feed spam.
+- Compass now builds bounded operational knowledge across missions, combat, trade, mining, Engineering, Odyssey ground activity, career progression, crime/legal history, Powerplay/BGS, fleet carriers, colonisation, ships/modules, squadrons, and community goals. It learns top recurring targets, commodities, minerals, blueprints, factions, settlements, and outcomes while keeping only compact domain summaries; each newly understood gameplay domain appears once in the AI feed.
 **Release Date:** 2026-Jul-13
 
 ### Voice Packs
