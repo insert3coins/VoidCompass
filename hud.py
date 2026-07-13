@@ -224,20 +224,19 @@ class TacticalHUD:
             return
         intensity = self._crt_intensity()
         step = {"Subtle": 3, "Standard": 5, "Strong": 7}[intensity]
-        color = {"Subtle": "#092027", "Standard": "#0d3038", "Strong": "#12434d"}[intensity]
-        y = 8 + (self._crt_phase % max(1, self.base_height - 16))
-        self.canvas.create_line(8, y, self.width - 8, y, fill=color, width=1, tags="crt_motion")
-        if intensity == "Strong":
-            self.canvas.create_line(12, y + 1, self.width - 12, y + 1, fill="#0a252c", width=1, tags="crt_motion")
-        # A brief, short horizontal phosphor disturbance creates a restrained
-        # flicker without shifting text or making the overlay difficult to read.
-        if self.anim_step % 9 == 0:
-            burst_y = 18 + ((self._crt_phase * 7) % max(1, self.base_height - 36))
-            burst_w = {"Subtle": 34, "Standard": 62, "Strong": 96}[intensity]
-            burst_x = 18 + ((self._crt_phase * 13) % max(1, self.width - burst_w - 36))
-            self.canvas.create_line(
-                burst_x, burst_y, burst_x + burst_w, burst_y,
-                fill=color, width=1, tags="crt_motion",
+        color = {"Subtle": "#0a2025", "Standard": "#0d2a31", "Strong": "#123841"}[intensity]
+        speck_count = {"Subtle": 1, "Standard": 3, "Strong": 5}[intensity]
+        # Keep the display gently alive without a conspicuous refresh bar
+        # sweeping from the top of the HUD to the bottom.
+        inner_w = max(1, self.width - 36)
+        inner_h = max(1, self.base_height - 36)
+        for index in range(speck_count):
+            x = 18 + ((self._crt_phase * (17 + index * 4) + index * 73) % inner_w)
+            y = 18 + ((self._crt_phase * (11 + index * 6) + index * 41) % inner_h)
+            size = 2 if intensity == "Strong" and index == 0 else 1
+            self.canvas.create_rectangle(
+                x, y, x + size, y + size,
+                fill=color, outline="", tags="crt_motion",
             )
         self._crt_phase = (self._crt_phase + step) % max(1, self.base_height)
 

@@ -62,7 +62,7 @@ class HudCrtTests(unittest.TestCase):
         hud.draw_text(10, 10, "TEST", "#00ffff", ("Courier", 8))
         self.assertEqual(sum(1 for call in hud.canvas.calls if call[0] == "text"), 2)
 
-    def test_motion_updates_only_tagged_crt_elements(self):
+    def test_motion_uses_tagged_specks_without_a_sweeping_line(self):
         hud = TacticalHUD.__new__(TacticalHUD)
         hud.canvas = FakeCanvas()
         hud.config = {
@@ -76,14 +76,16 @@ class HudCrtTests(unittest.TestCase):
         hud.anim_step = 0
         hud._draw_crt_animation()
         lines = [call for call in hud.canvas.calls if call[0] == "line"]
-        self.assertTrue(lines)
-        self.assertTrue(all(call[2].get("tags") == "crt_motion" for call in lines))
+        specks = [call for call in hud.canvas.calls if call[0] == "rectangle"]
+        self.assertFalse(lines)
+        self.assertEqual(len(specks), 3)
+        self.assertTrue(all(call[2].get("tags") == "crt_motion" for call in specks))
         self.assertEqual(hud._crt_phase, 5)
 
         hud.canvas = FakeCanvas()
         hud.config["hud_crt_motion_enabled"] = False
         hud._draw_crt_animation()
-        self.assertFalse(any(call[0] == "line" for call in hud.canvas.calls))
+        self.assertFalse(any(call[0] in ("line", "rectangle") for call in hud.canvas.calls))
 
 
 if __name__ == "__main__":

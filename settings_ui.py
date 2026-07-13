@@ -280,7 +280,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
 
     overlay_crt = section(crt_page, "Navigation HUD CRT")
     toggle_row(overlay_crt, "CRT effects", hud_crt_var)
-    toggle_row(overlay_crt, "Moving refresh and flicker", hud_crt_motion_var)
+    toggle_row(overlay_crt, "Subtle phosphor shimmer", hud_crt_motion_var)
     option_row(overlay_crt, "CRT intensity", hud_crt_intensity_var, ("Subtle", "Standard", "Strong"))
 
     # ---- Voice page ----
