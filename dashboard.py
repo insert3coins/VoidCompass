@@ -2325,6 +2325,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "species": len(memory.state.get("species", {})),
             "ships": len(memory.state.get("ships", {})),
             "memories": len(memory.state.get("memories", [])),
+            "honks": memory.count("system_honks"),
+            "fss_completed": memory.count("fss_systems_completed"),
+            "dss_maps": memory.count("dss_maps_completed"),
+            "signal_bodies": memory.count("signal_bodies_found"),
+            "awareness_domains": tuple(memory.knowledge_domains()),
             "limits": dict(memory.limits),
             "expedition_id": active.get("id") if isinstance(active, dict) else None,
             "expedition_name": active.get("name") if isinstance(active, dict) else None,
@@ -2348,6 +2353,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         learned = [habit for habit in after["habits"] if habit not in before["habits"]]
         if learned:
             messages.append(f"Learned flight habit: {', '.join(learned)}")
+        new_domains = [
+            domain for domain in after.get("awareness_domains", ())
+            if domain not in before.get("awareness_domains", ())
+        ]
+        if new_domains:
+            messages.append(f"New operational awareness: {', '.join(new_domains)}")
 
         growth = []
         for key, label in (("systems", "systems"), ("species", "species"), ("memories", "notable memories")):
@@ -2362,6 +2373,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 growth.append(f"{new_count:,}{suffix} {label}")
         if growth:
             messages.append(f"Memory growth: {' | '.join(growth)}")
+
+        survey_growth = []
+        for key, label, milestones in (
+            ("honks", "system honks", (25, 100, 250, 500, 1000, 5000)),
+            ("fss_completed", "full FSS surveys", (10, 25, 50, 100, 250, 500, 1000)),
+            ("dss_maps", "DSS maps", (10, 25, 50, 100, 250, 500, 1000, 5000)),
+            ("signal_bodies", "signal-bearing bodies", (10, 25, 50, 100, 250, 500, 1000)),
+        ):
+            old_count = int(before.get(key) or 0)
+            new_count = int(after.get(key) or 0)
+            if any(old_count < mark <= new_count for mark in milestones):
+                survey_growth.append(f"{new_count:,} {label}")
+        if survey_growth:
+            messages.append(f"Survey awareness: {' | '.join(survey_growth)}")
 
         old_expedition = before.get("expedition_id")
         new_expedition = after.get("expedition_id")
@@ -2393,7 +2418,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 f"Compass online: {snapshot['voice_stage'].title()} | mood {snapshot['mood']} | "
                 f"memory {snapshot['systems']:,}/{limits['systems']:,} systems, "
                 f"{snapshot['species']:,}/{limits['species']:,} species, "
-                f"{snapshot['memories']:,}/{limits['memories']:,} notable"
+                f"{snapshot['memories']:,}/{limits['memories']:,} notable | "
+                f"survey {snapshot['fss_completed']:,} FSS, {snapshot['dss_maps']:,} DSS | "
+                f"{len(snapshot['awareness_domains'])} gameplay domains"
             ),
             severity="INFO",
         )
@@ -2637,6 +2664,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if (self.config.get("cockpit_memory_enabled", True)
                 and getattr(self, "cockpit_memory", None)):
             try:
+                self.cockpit_memory.set_current_system(getattr(self, "current_sys", None))
                 learned = self.cockpit_memory.observe(ev, raw, d, startup_replay=startup_replay)
                 if not startup_replay:
                     self._publish_cockpit_ai_changes()

@@ -8,7 +8,7 @@ import time
 import uuid
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 4
 DEFAULT_LIMITS = {"systems": 300, "species": 200, "ships": 30, "memories": 80}
 LIMIT_BOUNDS = {
     "systems": (0, 5000),
@@ -145,7 +145,9 @@ def _initial_state():
         "systems": {},
         "species": {},
         "ships": {},
+        "knowledge": {},
         "current_voice": None,
+        "current_system": None,
         "memories": [],
         "intentions": {},
         "mood": {"name": "calm", "intensity": 0.2, "reason": "systems nominal", "updated_at": now},
@@ -201,7 +203,7 @@ class CockpitMemory:
             if isinstance(saved, dict):
                 base = _initial_state()
                 base.update(saved)
-                for key in ("counters", "systems", "species", "ships", "intentions"):
+                for key in ("counters", "systems", "species", "ships", "intentions", "knowledge"):
                     if not isinstance(base.get(key), dict):
                         base[key] = {}
                 if not isinstance(base.get("memories"), list):
@@ -237,6 +239,18 @@ class CockpitMemory:
     def reset(self):
         self.state = _initial_state()
         self._save()
+
+    def set_current_system(self, system_name):
+        """Update location context without counting a visit or other learned activity."""
+        system = _safe_name(system_name, "")
+        if not system or system in ("---", "Unknown") or system == self.state.get("current_system"):
+            return False
+        self.state["current_system"] = system
+        self.state["systems"].setdefault(
+            system, {"count": 0, "first_seen": _now(), "last_seen": _now()}
+        )
+        self._save()
+        return True
 
     def voice_selected(self, voice_name, label=None):
         voice_name = _safe_name(voice_name, "")
@@ -291,8 +305,16 @@ class CockpitMemory:
         scans = delta.get("scans", 0)
         bios = delta.get("organic_analyses", 0)
         missions = delta.get("missions_completed", 0)
+        fss_surveys = delta.get("fss_systems_completed", 0)
+        dss_maps = delta.get("dss_maps_completed", 0)
+        signal_bodies = delta.get("signal_bodies_found", 0)
+        combat_victories = delta.get("combat_victories", 0)
+        engineering_crafts = delta.get("engineering_crafts", 0)
+        ground_events = delta.get("odyssey_events", 0)
+        colony_events = delta.get("colonisation_events", 0)
         danger = delta.get("heat_warnings", 0) + delta.get("interdictions", 0) + delta.get("heat_damage", 0)
-        activity = jumps + scans + bios + missions + danger
+        activity = (jumps + scans + bios + missions + fss_surveys + dss_maps + signal_bodies
+                    + combat_victories + engineering_crafts + ground_events + colony_events + danger)
         if activity <= 0:
             if close:
                 self.state["current_session"] = None
@@ -303,6 +325,13 @@ class CockpitMemory:
             (jumps, "jump", "jumps"), (scans, "scan", "scans"),
             (bios, "biological analysis", "biological analyses"),
             (missions, "completed mission", "completed missions"),
+            (fss_surveys, "full FSS survey", "full FSS surveys"),
+            (dss_maps, "DSS surface map", "DSS surface maps"),
+            (signal_bodies, "signal-bearing body", "signal-bearing bodies"),
+            (combat_victories, "combat victory", "combat victories"),
+            (engineering_crafts, "engineering modification", "engineering modifications"),
+            (ground_events, "ground operation", "ground operations"),
+            (colony_events, "colonisation operation", "colonisation operations"),
         ):
             if count:
                 parts.append(f"{count:,} {singular if count == 1 else plural}")
@@ -445,6 +474,375 @@ class CockpitMemory:
         })
         self._trim_memories()
 
+    @staticmethod
+    def _number(value, default=0):
+        try:
+            return int(float(value or 0))
+        except (TypeError, ValueError):
+            return int(default)
+
+    @staticmethod
+    def _event_label(raw, data, *keys, fallback="Unknown"):
+        for key in keys:
+            value = data.get(key) if isinstance(data, dict) else None
+            if value in (None, "") and isinstance(raw, dict):
+                value = raw.get(key)
+            if value not in (None, ""):
+                text = str(value).replace("$", "").replace(";", "").replace("_name", "")
+                return _safe_name(text.replace("_", " ").strip().title(), fallback)
+        return fallback
+
+    def _knowledge_domain(self, name, event, timestamp):
+        knowledge = self.state.setdefault("knowledge", {})
+        domain = knowledge.setdefault(name, {"events": 0, "first_seen": timestamp})
+        domain["events"] = int(domain.get("events") or 0) + 1
+        domain["last_event"] = str(event)
+        domain["last_seen"] = timestamp
+        return domain
+
+    @staticmethod
+    def _knowledge_named(domain, bucket, name, amount=1, timestamp=None, maximum=40):
+        name = _safe_name(name, "Unknown")
+        values = domain.setdefault(bucket, {})
+        row = values.setdefault(name, {"count": 0, "first_seen": timestamp or _now()})
+        row["count"] = int(row.get("count") or 0) + int(amount)
+        row["last_seen"] = timestamp or _now()
+        if len(values) > maximum:
+            keep = sorted(
+                values.items(),
+                key=lambda pair: (int(pair[1].get("count") or 0), pair[1].get("last_seen") or ""),
+                reverse=True,
+            )[:maximum]
+            values.clear()
+            values.update(keep)
+        return row["count"]
+
+    def _domain_milestone(self, kind, label, count, timestamp, points=(10, 25, 50, 100, 250, 500, 1000)):
+        if int(count) in points:
+            self._remember(kind, f"{label}: {int(count):,}", 3, timestamp)
+
+    def _observe_gameplay_domain(self, event, raw, data, timestamp):
+        """Learn bounded patterns from non-exploration gameplay journal events."""
+        mission_events = {"MissionAccepted", "MissionCompleted", "MissionFailed", "MissionAbandoned", "MissionRedirected"}
+        combat_events = {
+            "Bounty", "FactionKillBond", "PVPKill", "UnderAttack", "FighterDestroyed",
+            "SRVDestroyed", "EscapeInterdiction", "Interdiction", "Interdicted",
+            "ShieldState", "HullDamage", "JetConeDamage",
+        }
+        trade_events = {"MarketBuy", "MarketSell", "BuyTradeData"}
+        mining_events = {"MiningRefined", "ProspectedAsteroid", "AsteroidCracked"}
+        engineering_events = {
+            "MaterialCollected", "MaterialDiscarded", "MaterialTrade", "EngineerCraft",
+            "Synthesis", "EngineerProgress", "TechnologyBroker",
+        }
+        odyssey_events = {
+            "Disembark", "Embark", "ApproachSettlement", "BookDropship", "BookTaxi",
+            "DropshipDeploy", "BuySuit", "BuyWeapon", "UpgradeSuit", "UpgradeWeapon",
+            "SellOrganicData", "CollectItems", "DropItems",
+        }
+        career_events = {"Rank", "Promotion", "Progress", "Reputation", "CodexEntry", "Statistics"}
+        crime_events = {"CommitCrime", "CrimeVictim", "Fine", "PayFines", "PayBounties", "ClearImpound"}
+        strategy_events = {
+            "Powerplay", "PowerplayJoin", "PowerplayDefect", "PowerplayLeave",
+            "PowerplayRank", "PowerplayMerits", "CommunityGoal", "CommunityGoalJoin",
+            "CommunityGoalReward", "FactionState",
+        }
+        carrier_events = {
+            "CarrierBuy", "CarrierStats", "CarrierJump", "CarrierDepositFuel", "CarrierFinance",
+            "CarrierBankTransfer", "CarrierTradeOrder", "CarrierCrewServices", "CarrierNameChange",
+            "CarrierDecommission", "CarrierCancelDecommission", "CarrierDockingPermission",
+        }
+        colony_events = {"ColonisationConstructionDepot", "ColonisationContribution", "ColonisationSystemClaimed"}
+        fleet_events = {
+            "ShipyardBuy", "ShipyardSell", "ShipyardTransfer", "StoredShips", "ModuleBuy",
+            "ModuleSell", "ModuleStore", "ModuleRetrieve", "ModuleSwap",
+        }
+        social_events = {
+            "SquadronStartup", "LeftSquadron", "DisbandedSquadron", "WingJoin", "WingLeave",
+            "CrewMemberJoins", "CrewMemberQuits", "Friends",
+        }
+
+        if event in mission_events:
+            domain_name = "missions"
+        elif event in combat_events:
+            domain_name = "combat"
+        elif event in trade_events:
+            domain_name = "trade"
+        elif event in mining_events:
+            domain_name = "mining"
+        elif event in engineering_events:
+            domain_name = "engineering"
+        elif event in odyssey_events:
+            domain_name = "odyssey"
+        elif event in career_events:
+            domain_name = "career"
+        elif event in crime_events:
+            domain_name = "crime"
+        elif event in strategy_events:
+            domain_name = "strategy"
+        elif event in carrier_events:
+            domain_name = "carrier"
+        elif event in colony_events:
+            domain_name = "colonisation"
+        elif event in fleet_events:
+            domain_name = "fleet"
+        elif event in social_events:
+            domain_name = "social"
+        else:
+            return False
+
+        domain = self._knowledge_domain(domain_name, event, timestamp)
+        self._increment("awareness_events")
+        self._increment(f"{domain_name}_events")
+
+        if domain_name == "missions":
+            outcome = {
+                "MissionAccepted": "accepted", "MissionCompleted": "completed",
+                "MissionFailed": "failed", "MissionAbandoned": "abandoned",
+                "MissionRedirected": "redirected",
+            }[event]
+            domain[outcome] = int(domain.get(outcome) or 0) + 1
+            mission = self._event_label(raw, data, "Name_Localised", "name", "Name", fallback="Mission")
+            faction = self._event_label(raw, data, "Faction", "faction", fallback="Unknown faction")
+            self._knowledge_named(domain, "types", mission, timestamp=timestamp)
+            if faction != "Unknown faction":
+                self._knowledge_named(domain, "factions", faction, timestamp=timestamp)
+            reward = self._number(raw.get("Reward") or data.get("reward"))
+            if event == "MissionCompleted" and reward:
+                domain["rewards_cr"] = int(domain.get("rewards_cr") or 0) + reward
+            self._domain_milestone("mission", "Missions completed", domain.get("completed", 0), timestamp)
+
+        elif domain_name == "combat":
+            if event in ("Bounty", "FactionKillBond", "PVPKill"):
+                domain["victories"] = int(domain.get("victories") or 0) + 1
+                self._increment("combat_victories")
+                target = self._event_label(
+                    raw, data, "Target_Localised", "Target", "Victim", "victim", fallback="Hostile contact"
+                )
+                self._knowledge_named(domain, "targets", target, timestamp=timestamp)
+                reward = self._number(raw.get("TotalReward") or raw.get("Reward") or data.get("reward"))
+                domain["rewards_cr"] = int(domain.get("rewards_cr") or 0) + reward
+                self._domain_milestone("combat", "Combat victories", domain["victories"], timestamp)
+            else:
+                key = {
+                    "UnderAttack": "attacks", "FighterDestroyed": "fighters_lost",
+                    "SRVDestroyed": "srvs_lost", "EscapeInterdiction": "interdictions_escaped",
+                    "Interdiction": "interdictions_attempted", "Interdicted": "interdictions_suffered",
+                    "JetConeDamage": "jet_cone_damage",
+                }.get(event)
+                if key:
+                    domain[key] = int(domain.get(key) or 0) + 1
+                elif event == "ShieldState" and not bool(raw.get("ShieldsUp", data.get("shields_up", True))):
+                    domain["shield_failures"] = int(domain.get("shield_failures") or 0) + 1
+                elif event == "HullDamage":
+                    domain["hull_damage_events"] = int(domain.get("hull_damage_events") or 0) + 1
+                    health = raw.get("Health", data.get("health"))
+                    try:
+                        health_pct = round(float(health) * 100 if float(health) <= 1 else float(health), 1)
+                        previous = domain.get("lowest_hull_pct")
+                        domain["lowest_hull_pct"] = health_pct if previous is None else min(float(previous), health_pct)
+                    except (TypeError, ValueError):
+                        pass
+
+        elif domain_name == "trade":
+            if event in ("MarketBuy", "MarketSell"):
+                commodity = self._event_label(
+                    raw, data, "Type_Localised", "Type", "type", fallback="Commodity"
+                )
+                count = max(1, self._number(raw.get("Count") or data.get("count"), 1))
+                side = "bought" if event == "MarketBuy" else "sold"
+                self._knowledge_named(domain, f"commodities_{side}", commodity, count, timestamp)
+                total = self._number(raw.get("TotalCost") if event == "MarketBuy" else raw.get("TotalSale"))
+                domain[f"{side}_units"] = int(domain.get(f"{side}_units") or 0) + count
+                domain["spent_cr" if event == "MarketBuy" else "revenue_cr"] = int(
+                    domain.get("spent_cr" if event == "MarketBuy" else "revenue_cr") or 0
+                ) + total
+                if event == "MarketSell":
+                    average = self._number(raw.get("AvgPricePaid"))
+                    if average:
+                        domain["realised_profit_cr"] = int(domain.get("realised_profit_cr") or 0) + total - average * count
+                system = self.state.get("current_system")
+                if system:
+                    self._knowledge_named(domain, "market_systems", system, timestamp=timestamp)
+                self._domain_milestone("trade", "Market transactions", domain["events"], timestamp, (25, 100, 250, 500, 1000))
+
+        elif domain_name == "mining":
+            if event == "MiningRefined":
+                mineral = self._event_label(raw, data, "Type_Localised", "Type", fallback="Mineral")
+                refined = int(domain.get("refined") or 0) + 1
+                domain["refined"] = refined
+                self._knowledge_named(domain, "minerals", mineral, timestamp=timestamp)
+                self._domain_milestone("mining", "Minerals refined", refined, timestamp, (25, 100, 250, 500, 1000))
+            elif event == "ProspectedAsteroid":
+                domain["prospected"] = int(domain.get("prospected") or 0) + 1
+                for material in raw.get("Materials") or data.get("Materials") or ():
+                    if isinstance(material, dict):
+                        name = material.get("Name_Localised") or material.get("Name")
+                        if name:
+                            self._knowledge_named(domain, "prospected_materials", name, timestamp=timestamp)
+            elif event == "AsteroidCracked":
+                domain["cores_cracked"] = int(domain.get("cores_cracked") or 0) + 1
+
+        elif domain_name == "engineering":
+            if event in ("MaterialCollected", "MaterialDiscarded"):
+                material = self._event_label(raw, data, "Name_Localised", "Name", fallback="Material")
+                amount = max(1, self._number(raw.get("Count") or data.get("count"), 1))
+                bucket = "materials_collected" if event == "MaterialCollected" else "materials_discarded"
+                self._knowledge_named(domain, bucket, material, amount, timestamp)
+            elif event == "MaterialTrade":
+                domain["trades"] = int(domain.get("trades") or 0) + 1
+                for bucket, payload in (("materials_paid", raw.get("Paid")), ("materials_received", raw.get("Received"))):
+                    rows = payload if isinstance(payload, list) else (payload,) if isinstance(payload, dict) else ()
+                    for row in rows:
+                        name = row.get("Material_Localised") or row.get("Material")
+                        if name:
+                            self._knowledge_named(
+                                domain, bucket, name, max(1, self._number(row.get("Quantity"), 1)), timestamp
+                            )
+            elif event == "EngineerCraft":
+                domain["crafts"] = int(domain.get("crafts") or 0) + 1
+                self._increment("engineering_crafts")
+                blueprint = self._event_label(raw, data, "BlueprintName", "BlueprintName_Localised", fallback="Blueprint")
+                self._knowledge_named(domain, "blueprints", blueprint, timestamp=timestamp)
+                self._domain_milestone("engineering", "Engineering modifications crafted", domain["crafts"], timestamp)
+            elif event == "Synthesis":
+                domain["synthesis"] = int(domain.get("synthesis") or 0) + 1
+                recipe = self._event_label(raw, data, "Name", fallback="Synthesis")
+                self._knowledge_named(domain, "synthesis_recipes", recipe, timestamp=timestamp)
+            elif event == "EngineerProgress":
+                engineer = self._event_label(raw, data, "Engineer", "EngineerName", fallback="Engineer")
+                rank = self._number(raw.get("Rank") or data.get("rank"))
+                domain.setdefault("engineers", {})[engineer] = {"rank": rank, "last_seen": timestamp}
+            elif event == "TechnologyBroker":
+                domain["broker_unlocks"] = int(domain.get("broker_unlocks") or 0) + 1
+
+        elif domain_name == "odyssey":
+            key = {
+                "Disembark": "disembarks", "Embark": "embarks", "ApproachSettlement": "settlements",
+                "DropshipDeploy": "combat_deployments", "BookDropship": "dropships_booked",
+                "BookTaxi": "taxis_booked", "BuySuit": "suits_bought", "BuyWeapon": "weapons_bought",
+                "UpgradeSuit": "suits_upgraded", "UpgradeWeapon": "weapons_upgraded",
+                "SellOrganicData": "bio_sales", "CollectItems": "items_collected", "DropItems": "items_dropped",
+            }.get(event)
+            if key:
+                domain[key] = int(domain.get(key) or 0) + 1
+            settlement = raw.get("Name") if event == "ApproachSettlement" else None
+            if settlement:
+                self._knowledge_named(domain, "visited_settlements", settlement, timestamp=timestamp)
+            if event in ("CollectItems", "DropItems"):
+                item = raw.get("Name_Localised") or raw.get("Name")
+                if item:
+                    self._knowledge_named(
+                        domain, "ground_items", item, max(1, self._number(raw.get("Count"), 1)), timestamp
+                    )
+
+        elif domain_name == "career":
+            if event in ("Rank", "Promotion", "Progress"):
+                ranks = domain.setdefault("ranks", {})
+                for key, value in raw.items():
+                    if key not in ("timestamp", "event") and isinstance(value, (int, float, str)):
+                        ranks[str(key)] = value
+                if event == "Promotion":
+                    domain["promotions"] = int(domain.get("promotions") or 0) + 1
+                    self._remember("career", "Earned a new career promotion", 4, timestamp)
+            elif event == "Reputation":
+                domain["reputation_updates"] = int(domain.get("reputation_updates") or 0) + 1
+            elif event == "CodexEntry":
+                domain["codex_entries"] = int(domain.get("codex_entries") or 0) + 1
+                category = self._event_label(raw, data, "Category_Localised", "Category", fallback="Codex")
+                self._knowledge_named(domain, "codex_categories", category, timestamp=timestamp)
+                self._domain_milestone("codex", "Codex discoveries", domain["codex_entries"], timestamp)
+
+        elif domain_name == "crime":
+            key = {
+                "CommitCrime": "crimes", "CrimeVictim": "victims", "Fine": "fines_received",
+                "PayFines": "fines_paid", "PayBounties": "bounties_paid", "ClearImpound": "impounds_cleared",
+            }.get(event)
+            if key:
+                domain[key] = int(domain.get(key) or 0) + 1
+            crime = raw.get("CrimeType_Localised") or raw.get("CrimeType")
+            if crime:
+                self._knowledge_named(domain, "crime_types", crime, timestamp=timestamp)
+            amount = self._number(raw.get("Amount") or raw.get("Cost") or raw.get("Fine"))
+            if amount:
+                domain["cost_cr"] = int(domain.get("cost_cr") or 0) + amount
+
+        elif domain_name == "strategy":
+            if event.startswith("Powerplay"):
+                domain["powerplay_events"] = int(domain.get("powerplay_events") or 0) + 1
+                power = raw.get("Power") or raw.get("FromPower") or raw.get("ToPower")
+                if power:
+                    domain["power"] = _safe_name(power)
+                merits = self._number(raw.get("Merits") or raw.get("TotalMerits"))
+                if merits:
+                    domain["merits"] = max(int(domain.get("merits") or 0), merits)
+            elif event.startswith("CommunityGoal") or event == "CommunityGoal":
+                domain["community_goal_events"] = int(domain.get("community_goal_events") or 0) + 1
+            elif event == "FactionState":
+                domain["faction_state_updates"] = int(domain.get("faction_state_updates") or 0) + 1
+
+        elif domain_name == "carrier":
+            key = {
+                "CarrierBuy": "purchases", "CarrierJump": "jumps", "CarrierDepositFuel": "fuel_deposits",
+                "CarrierBankTransfer": "bank_transfers", "CarrierTradeOrder": "trade_orders",
+                "CarrierNameChange": "renames", "CarrierDecommission": "decommissions",
+                "CarrierCancelDecommission": "decommissions_cancelled",
+            }.get(event)
+            if key:
+                domain[key] = int(domain.get(key) or 0) + 1
+            callsign = raw.get("Callsign") or raw.get("CarrierID")
+            if callsign:
+                domain["carrier"] = str(callsign)
+            self._domain_milestone("carrier", "Fleet carrier jumps", domain.get("jumps", 0), timestamp, (10, 25, 50, 100, 250, 500))
+
+        elif domain_name == "colonisation":
+            key = {
+                "ColonisationConstructionDepot": "depot_updates",
+                "ColonisationContribution": "contributions",
+                "ColonisationSystemClaimed": "systems_claimed",
+            }[event]
+            domain[key] = int(domain.get(key) or 0) + 1
+            if event == "ColonisationContribution":
+                contributions = data.get("contributions") or raw.get("Contributions") or ()
+                for contribution in contributions:
+                    if not isinstance(contribution, dict):
+                        continue
+                    commodity = (contribution.get("display") or contribution.get("Name_Localised")
+                                 or contribution.get("name") or contribution.get("Name"))
+                    amount = self._number(contribution.get("count") or contribution.get("Count"))
+                    if commodity:
+                        self._knowledge_named(domain, "commodities", commodity, max(1, amount), timestamp)
+            elif event == "ColonisationConstructionDepot":
+                for resource in data.get("resources") or ():
+                    if isinstance(resource, dict) and resource.get("display"):
+                        self._knowledge_named(
+                            domain, "required_resources", resource["display"],
+                            max(1, self._number(resource.get("required"))), timestamp,
+                        )
+            if event == "ColonisationSystemClaimed":
+                system = raw.get("StarSystem") or data.get("star_system") or self.state.get("current_system")
+                self._remember("colonisation", f"Helped claim {system or 'a new system'}", 5, timestamp)
+
+        elif domain_name == "fleet":
+            if event in ("ShipyardBuy", "ShipyardSell", "ShipyardTransfer"):
+                domain[event] = int(domain.get(event) or 0) + 1
+                ship = self._event_label(raw, data, "ShipType_Localised", "ShipType", fallback="Ship")
+                self._knowledge_named(domain, "ships", ship, timestamp=timestamp)
+            elif event.startswith("Module"):
+                domain["module_changes"] = int(domain.get("module_changes") or 0) + 1
+                module = self._event_label(raw, data, "BuyItem_Localised", "SellItem_Localised", "StoredItem_Localised", fallback="Module")
+                self._knowledge_named(domain, "modules", module, timestamp=timestamp)
+            elif event == "StoredShips":
+                domain["fleet_reviews"] = int(domain.get("fleet_reviews") or 0) + 1
+
+        elif domain_name == "social":
+            domain[event] = int(domain.get(event) or 0) + 1
+            group = raw.get("SquadronName") or raw.get("Name")
+            if group:
+                domain["last_group"] = _safe_name(group)
+
+        return True
+
     def observe(self, event, raw=None, normalized=None, startup_replay=False):
         """Learn from one live journal event. Returns True when state changed."""
         if startup_replay or not event:
@@ -464,10 +862,20 @@ class CockpitMemory:
             changed = True
             return self._increment(key, amount)
 
-        if event in ("FSDJump", "CarrierJump"):
+        if event == "Location":
+            system = _safe_name(data.get("star_system") or raw.get("StarSystem"), "")
+            if system and system != self.state.get("current_system"):
+                self.state["current_system"] = system
+                self.state["systems"].setdefault(
+                    system, {"count": 0, "first_seen": timestamp, "last_seen": timestamp}
+                )
+                changed = True
+
+        elif event in ("FSDJump", "CarrierJump"):
             if event == "CarrierJump" and not (data.get("docked") or raw.get("Docked")):
                 return False
             system = _safe_name(data.get("star_system") or raw.get("StarSystem"))
+            self.state["current_system"] = system
             visits = self.state["systems"].setdefault(system, {"count": 0, "first_seen": timestamp})
             visits["count"] = int(visits.get("count") or 0) + 1
             visits["last_seen"] = timestamp
@@ -497,7 +905,7 @@ class CockpitMemory:
                     "start_system": session.get("start_system") or system,
                     "jumps": session_jumps,
                     "distance_ly": session.get("distance_ly", 0),
-                    "discoveries": 0, "bios": 0,
+                    "discoveries": 0, "bios": 0, "fss_surveys": 0, "dss_maps": 0,
                 }
                 self.state["active_expedition"] = active
                 self._remember("expedition", f"Began {active['name']} from {active['start_system']}", 4, timestamp)
@@ -523,8 +931,19 @@ class CockpitMemory:
         elif event == "Scan":
             scans = inc("scans")
             body = _safe_name(raw.get("BodyName") or data.get("body_name"), "a celestial body")
+            system = _safe_name(
+                data.get("system_name") or raw.get("SystemName") or self.state.get("current_system"), ""
+            )
+            if system:
+                system_entry = self.state["systems"].setdefault(
+                    system, {"count": 0, "first_seen": timestamp}
+                )
+                system_entry["body_scans"] = int(system_entry.get("body_scans") or 0) + 1
+                system_entry["last_seen"] = timestamp
             if raw.get("WasDiscovered") is False or data.get("was_discovered") is False:
                 discoveries = inc("first_discoveries")
+                if system:
+                    system_entry["first_discoveries"] = int(system_entry.get("first_discoveries") or 0) + 1
                 self._remember("discovery", f"First discovered {body}", 3, timestamp)
                 if self.state.get("active_expedition"):
                     self.state["active_expedition"]["discoveries"] = int(
@@ -534,6 +953,157 @@ class CockpitMemory:
                     self._remember("milestone", f"Made {discoveries:,} first discoveries together", 4, timestamp)
             if scans in (100, 500, 1000, 5000):
                 self._remember("milestone", f"Recorded {scans:,} body scans", 3, timestamp)
+
+        elif event in ("FSSDiscoveryScan", "DiscoveryScan"):
+            system = _safe_name(
+                data.get("system_name") or raw.get("SystemName") or self.state.get("current_system"),
+                "Unknown system",
+            )
+            if system != "Unknown system":
+                self.state["current_system"] = system
+            body_count = int(
+                data.get("body_count") or data.get("bodies")
+                or raw.get("BodyCount") or raw.get("Bodies") or 0
+            )
+            entry = self.state["systems"].setdefault(
+                system, {"count": 0, "first_seen": timestamp}
+            )
+            entry["last_seen"] = timestamp
+            previous_bodies = int(entry.get("body_count") or 0)
+            entry["body_count"] = max(previous_bodies, body_count)
+            entry["honks"] = int(entry.get("honks") or 0) + 1
+            entry["last_honk"] = timestamp
+            honks = inc("system_honks")
+            if body_count >= 30 and previous_bodies < 30:
+                self._remember(
+                    "survey", f"Detected {body_count:,} bodies in {system}", 2, timestamp
+                )
+            if honks in (25, 100, 250, 500, 1000, 5000):
+                self._remember("milestone", f"Honked {honks:,} systems", 3, timestamp)
+
+            progress = data.get("progress", raw.get("Progress"))
+            try:
+                already_complete = float(progress) >= 1.0
+            except (TypeError, ValueError):
+                already_complete = False
+            if already_complete and not entry.get("fss_complete"):
+                entry["fss_complete"] = timestamp
+                completed = inc("fss_systems_completed")
+                if self.state.get("active_expedition"):
+                    self.state["active_expedition"]["fss_surveys"] = int(
+                        self.state["active_expedition"].get("fss_surveys") or 0
+                    ) + 1
+                if completed in (1, 10, 25, 50, 100, 250, 500, 1000):
+                    self._remember(
+                        "survey", f"Completed full FSS surveys of {completed:,} systems", 3, timestamp
+                    )
+
+        elif event == "FSSAllBodiesFound":
+            system = _safe_name(
+                data.get("system_name") or raw.get("SystemName") or self.state.get("current_system"),
+                "Unknown system",
+            )
+            if system != "Unknown system":
+                self.state["current_system"] = system
+            entry = self.state["systems"].setdefault(
+                system, {"count": 0, "first_seen": timestamp}
+            )
+            entry["last_seen"] = timestamp
+            count = int(data.get("count") or raw.get("Count") or entry.get("body_count") or 0)
+            entry["body_count"] = max(int(entry.get("body_count") or 0), count)
+            if not entry.get("fss_complete"):
+                entry["fss_complete"] = timestamp
+                completed = inc("fss_systems_completed")
+                if self.state.get("active_expedition"):
+                    self.state["active_expedition"]["fss_surveys"] = int(
+                        self.state["active_expedition"].get("fss_surveys") or 0
+                    ) + 1
+                if completed in (1, 10, 25, 50, 100, 250, 500, 1000):
+                    self._remember(
+                        "survey", f"Completed full FSS surveys of {completed:,} systems", 3, timestamp
+                    )
+                if completed in (10, 50, 100, 250, 500, 1000):
+                    self._queue_remark((
+                        f"Survey milestone. We have now completed full FSS surveys of {completed:,} systems.",
+                        f"The exploration archive now contains {completed:,} fully surveyed systems.",
+                    ), "exploration", "fss-survey-milestone", 2)
+            changed = True
+
+        elif event in ("FSSBodySignals", "SAASignalsFound"):
+            system = _safe_name(self.state.get("current_system"), "Unknown system")
+            entry = self.state["systems"].setdefault(
+                system, {"count": 0, "first_seen": timestamp}
+            )
+            entry["last_seen"] = timestamp
+            body = _safe_name(
+                data.get("body_name") or raw.get("BodyName")
+                or data.get("body_id") or raw.get("BodyID"), "Unknown body"
+            )
+            bio_count = int(data.get("bio_count") or 0)
+            geo_count = int(data.get("geo_count") or 0)
+            signal_bodies = entry.setdefault("signal_bodies", {})
+            previous = signal_bodies.get(body, {})
+            previous_bio = int(previous.get("bio") or 0)
+            previous_geo = int(previous.get("geo") or 0)
+            signal_bodies[body] = {
+                "bio": max(previous_bio, bio_count),
+                "geo": max(previous_geo, geo_count),
+                "last_seen": timestamp,
+            }
+            if len(signal_bodies) > 128:
+                oldest = min(signal_bodies, key=lambda key: signal_bodies[key].get("last_seen") or "")
+                signal_bodies.pop(oldest, None)
+            if not previous and (bio_count or geo_count):
+                inc("signal_bodies_found")
+            bio_delta = max(0, bio_count - previous_bio)
+            geo_delta = max(0, geo_count - previous_geo)
+            if bio_delta:
+                inc("biological_signals_found", bio_delta)
+            if geo_delta:
+                inc("geological_signals_found", geo_delta)
+            if bio_count and not previous_bio:
+                self._remember(
+                    "biology", f"Detected {bio_count:,} biological signals on {body}", 2, timestamp
+                )
+            if bio_count or geo_count:
+                changed = True
+
+        elif event == "SAAScanComplete":
+            system = _safe_name(self.state.get("current_system"), "Unknown system")
+            entry = self.state["systems"].setdefault(
+                system, {"count": 0, "first_seen": timestamp}
+            )
+            entry["last_seen"] = timestamp
+            body = _safe_name(
+                data.get("body_name") or raw.get("BodyName")
+                or data.get("body_id") or raw.get("BodyID"), "Unknown body"
+            )
+            mapped = entry.setdefault("mapped_bodies", [])
+            if body not in mapped:
+                mapped.append(body)
+                del mapped[:-128]
+                maps = inc("dss_maps_completed")
+                if self.state.get("active_expedition"):
+                    self.state["active_expedition"]["dss_maps"] = int(
+                        self.state["active_expedition"].get("dss_maps") or 0
+                    ) + 1
+                probes = int(raw.get("ProbesUsed") or 0)
+                target = int(raw.get("EfficiencyTarget") or 0)
+                if probes and target and probes <= target:
+                    inc("efficient_dss_maps")
+                if maps in (1, 10, 25, 50, 100, 250, 500, 1000, 5000):
+                    self._remember("mapping", f"Completed {maps:,} DSS surface maps", 3, timestamp)
+
+        elif event == "NavBeaconScan":
+            system = _safe_name(self.state.get("current_system"), "Unknown system")
+            entry = self.state["systems"].setdefault(
+                system, {"count": 0, "first_seen": timestamp}
+            )
+            entry["last_seen"] = timestamp
+            entry["nav_beacon_scans"] = int(entry.get("nav_beacon_scans") or 0) + 1
+            count = int(data.get("num_bodies") or raw.get("NumBodies") or 0)
+            entry["body_count"] = max(int(entry.get("body_count") or 0), count)
+            inc("nav_beacon_scans")
 
         elif event == "ScanOrganic":
             complete = bool(data.get("is_complete")) or str(raw.get("ScanType") or "").casefold() == "analyse"
@@ -602,7 +1172,11 @@ class CockpitMemory:
         elif event == "Scan" and (raw.get("WasDiscovered") is False or data.get("was_discovered") is False):
             self._set_mood("curious", 0.6, "first discovery")
 
+        if self._observe_gameplay_domain(event, raw, data, timestamp):
+            changed = True
+
         if changed:
+            self._apply_limits()
             self._save()
         return changed
 
@@ -621,8 +1195,15 @@ class CockpitMemory:
         return int(count) >= minimum
 
     def relationship_score(self):
+        knowledge_events = sum(
+            int(domain.get("events") or 0)
+            for domain in self.state.get("knowledge", {}).values()
+            if isinstance(domain, dict)
+        )
         return (self.count("jumps") + self.count("scans")
-                + self.count("organic_analyses") * 3 + self.count("missions_completed") * 2)
+                + self.count("organic_analyses") * 3 + self.count("missions_completed") * 2
+                + self.count("system_honks") + self.count("fss_systems_completed") * 3
+                + self.count("dss_maps_completed") * 2 + knowledge_events)
 
     def voice_stage(self, personality_level="Balanced"):
         score = self.relationship_score()
@@ -700,6 +1281,7 @@ class CockpitMemory:
 
     def traits(self):
         c = self.state.get("counters", {})
+        knowledge = self.state.get("knowledge", {})
         scores = {
             "Explorer": int(c.get("scans") or 0) + int(c.get("first_discoveries") or 0) * 4,
             "Exobiologist": int(c.get("organic_analyses") or 0) * 5,
@@ -707,6 +1289,11 @@ class CockpitMemory:
             "Mission Runner": int(c.get("missions_completed") or 0) * 2,
             "Miner": int(c.get("mining_refined") or 0) * 3,
             "Traveller": int(c.get("jumps") or 0),
+            "Combat Pilot": int((knowledge.get("combat") or {}).get("victories") or 0) * 5,
+            "Engineer": int((knowledge.get("engineering") or {}).get("crafts") or 0) * 5,
+            "Ground Operative": int((knowledge.get("odyssey") or {}).get("events") or 0) * 2,
+            "Colony Builder": int((knowledge.get("colonisation") or {}).get("contributions") or 0) * 4,
+            "Carrier Operator": int((knowledge.get("carrier") or {}).get("jumps") or 0) * 3,
         }
         return [name for name, score in sorted(scores.items(), key=lambda pair: pair[1], reverse=True)
                 if score > 0][:2]
@@ -720,6 +1307,11 @@ class CockpitMemory:
             "jumps": self.count("jumps"),
             "scans": self.count("scans"),
             "organics": self.count("organic_analyses"),
+            "honks": self.count("system_honks"),
+            "fss_completed": self.count("fss_systems_completed"),
+            "dss_maps": self.count("dss_maps_completed"),
+            "signal_bodies": self.count("signal_bodies_found"),
+            "awareness_domains": len(self.knowledge_domains()),
             "systems": len(self.state.get("systems", {})),
             "memories": len(self.state.get("memories", [])),
             "activated_at": self.state.get("activated_at"),
@@ -732,11 +1324,13 @@ class CockpitMemory:
             f"{info['relationship']} · {traits}\n"
             f"{info['jumps']:,} jumps · {info['systems']:,} remembered systems · "
             f"{info['scans']:,} scans · {info['organics']:,} bio analyses · "
+            f"{info['fss_completed']:,} full FSS surveys · {info['dss_maps']:,} DSS maps · "
             f"{info['memories']:,} notable memories"
         )
 
     def habits(self):
         jumps = max(1, self.count("jumps"))
+        knowledge = self.state.get("knowledge", {})
         habits = []
         if self.count("scans") / jumps >= 2.5:
             habits.append("Thorough system surveyor")
@@ -744,13 +1338,61 @@ class CockpitMemory:
             habits.append("Fast-moving traveller")
         if self.count("organic_analyses") >= 10:
             habits.append("Persistent biological fieldwork")
+        if self.count("fss_systems_completed") >= 10 and self.count("fss_systems_completed") / jumps >= 0.35:
+            habits.append("Methodical FSS surveyor")
+        if self.count("dss_maps_completed") >= 25:
+            habits.append("Dedicated planetary mapper")
         if self.count("heat_warnings") >= max(5, self.count("jumps") // 20):
             habits.append("Comfortable near thermal limits")
         if self.count("market_trades") >= 20:
             habits.append("Regular market operator")
         if self.count("mining_refined") >= 20:
             habits.append("Experienced miner")
-        return habits[:4]
+        if int((knowledge.get("combat") or {}).get("victories") or 0) >= 20:
+            habits.append("Combat-tested pilot")
+        if int((knowledge.get("missions") or {}).get("completed") or 0) >= 20:
+            habits.append("Reliable mission contractor")
+        if int((knowledge.get("engineering") or {}).get("crafts") or 0) >= 10:
+            habits.append("Methodical ship engineer")
+        if int((knowledge.get("odyssey") or {}).get("combat_deployments") or 0) >= 10:
+            habits.append("Experienced ground operative")
+        if int((knowledge.get("colonisation") or {}).get("contributions") or 0) >= 5:
+            habits.append("Colony builder")
+        if int((knowledge.get("carrier") or {}).get("jumps") or 0) >= 10:
+            habits.append("Fleet carrier operator")
+        return habits[:6]
+
+    def knowledge_domains(self):
+        labels = {
+            "missions": "Missions", "combat": "Combat", "trade": "Trade",
+            "mining": "Mining", "engineering": "Engineering", "odyssey": "Odyssey",
+            "career": "Career", "crime": "Crime and legal", "strategy": "Powerplay and BGS",
+            "carrier": "Fleet carrier", "colonisation": "Colonisation", "fleet": "Fleet",
+            "social": "Social and squadrons",
+        }
+        knowledge = self.state.get("knowledge", {})
+        return [labels.get(name, name.title()) for name, domain in knowledge.items()
+                if isinstance(domain, dict) and int(domain.get("events") or 0) > 0]
+
+    def gameplay_awareness(self):
+        knowledge = self.state.get("knowledge", {})
+        missions = knowledge.get("missions") or {}
+        combat = knowledge.get("combat") or {}
+        trade = knowledge.get("trade") or {}
+        engineering = knowledge.get("engineering") or {}
+        odyssey = knowledge.get("odyssey") or {}
+        carrier = knowledge.get("carrier") or {}
+        colony = knowledge.get("colonisation") or {}
+        return {
+            "domains": self.knowledge_domains(),
+            "missions_completed": int(missions.get("completed") or 0),
+            "combat_victories": int(combat.get("victories") or 0),
+            "trade_profit_cr": int(trade.get("realised_profit_cr") or 0),
+            "engineering_crafts": int(engineering.get("crafts") or 0),
+            "ground_operations": int(odyssey.get("events") or 0),
+            "carrier_jumps": int(carrier.get("jumps") or 0),
+            "colony_contributions": int(colony.get("contributions") or 0),
+        }
 
     def memory_rows(self):
         return sorted(
@@ -819,6 +1461,7 @@ class CockpitMemory:
             "mood": mood,
             "habits": self.habits(),
             "intentions": dict(intentions),
+            "gameplay_awareness": self.gameplay_awareness(),
             "active_expedition": dict(active) if isinstance(active, dict) else None,
             "completed_expeditions": len(self.state.get("expeditions", [])),
             "sessions": len(self.state.get("sessions", [])),

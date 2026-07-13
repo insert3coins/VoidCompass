@@ -565,10 +565,22 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             f"Active expedition: {expedition.get('name')} · {int(expedition.get('jumps') or 0):,} jumps"
             if expedition else f"Completed expeditions: {details['completed_expeditions']:,}"
         )
+        awareness = details["gameplay_awareness"]
+        awareness_domains = ", ".join(awareness["domains"]) if awareness["domains"] else "still observing"
         compass_status_var.set(
             f"{details['relationship']} · Voice stage: {str(details['voice_stage']).title()}\n"
             f"Mood: {mood['name']} ({mood['reason']}) · Habits: {habits}\n"
             f"Intentions: {intention_text} · {expedition_text} · Sessions: {details['sessions']:,}\n"
+            f"Exploration memory: {details['honks']:,} honks · "
+            f"{details['fss_completed']:,} full FSS surveys · {details['dss_maps']:,} DSS maps · "
+            f"{details['signal_bodies']:,} signal bodies\n"
+            f"Gameplay awareness: {awareness_domains}\n"
+            f"Operational memory: {awareness['missions_completed']:,} missions · "
+            f"{awareness['combat_victories']:,} combat victories · "
+            f"{awareness['engineering_crafts']:,} engineering crafts · "
+            f"{awareness['ground_operations']:,} ground events · "
+            f"{awareness['carrier_jumps']:,} carrier jumps · "
+            f"{awareness['colony_contributions']:,} colony contributions\n"
             f"Familiar system: {details['most_visited_system'] or 'none yet'} · "
             f"Most-used ship: {details['favorite_ship'] or 'none yet'}"
         )
