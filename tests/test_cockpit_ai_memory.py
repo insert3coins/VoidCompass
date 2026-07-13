@@ -92,6 +92,78 @@ class CockpitMemoryTests(unittest.TestCase):
             self.assertIn("Survey Test A 1", system["mapped_bodies"])
             self.assertTrue(system["fss_complete"])
 
+    def test_biology_awareness_combines_genera_predictions_samples_and_codex(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = pathlib.Path(folder) / "memory.json"
+            memory = CockpitMemory(path)
+            memory.set_current_system("Biology Test")
+
+            memory.observe(
+                "SAASignalsFound", {"BodyName": "Biology Test A 1"},
+                {
+                    "body_name": "Biology Test A 1", "bio_count": 2, "geo_count": 1,
+                    "genuses": [
+                        {"Genus_Localised": "Bacterium"},
+                        {"Genus_Localised": "Stratum"},
+                    ],
+                },
+            )
+            self.assertTrue(memory.observe_bio_predictions(
+                "Biology Test", "Biology Test A 1",
+                [{"name": "Bacterium"}, {"name": "Tussock"}],
+            ))
+
+            for scan_type, sample in (("Log", 1), ("Sample", 2), ("Analyse", 3)):
+                memory.observe(
+                    "ScanOrganic", {"ScanType": scan_type, "Body": 4},
+                    {
+                        "species": "Bacterium Acies", "genus": "Bacterium",
+                        "body_id": 4, "body_name": "Biology Test A 1",
+                        "sample_idx": sample, "max_samples": 3,
+                        "scan_type": scan_type, "is_new_sample": True,
+                        "is_complete": scan_type == "Analyse",
+                        "species_value": 1_000_000, "colony_m": 500,
+                    },
+                )
+            # A repeated journal notification must not duplicate the analysis.
+            memory.observe(
+                "ScanOrganic", {"ScanType": "Analyse", "Body": 4},
+                {
+                    "species": "Bacterium Acies", "genus": "Bacterium",
+                    "body_id": 4, "body_name": "Biology Test A 1",
+                    "sample_idx": 3, "scan_type": "Analyse", "is_complete": True,
+                },
+            )
+            memory.observe(
+                "CodexEntry", {"Category_Localised": "Biology", "Name_Localised": "Bacterium Acies"},
+                {"category": "Biology", "name": "Bacterium Acies"},
+            )
+            memory.observe(
+                "CodexEntry", {"Category_Localised": "Biology", "Name_Localised": "Bacterium Acies"},
+                {"category": "Biology", "name": "Bacterium Acies"},
+            )
+
+            biology = memory.biology_awareness()
+            self.assertEqual(biology["genera"], 3)
+            self.assertEqual(biology["detected_genera"], 2)
+            self.assertEqual(biology["predicted_genera"], 2)
+            self.assertEqual(biology["analysed_genera"], 1)
+            self.assertEqual(biology["samples"], 3)
+            self.assertEqual(biology["analyses"], 1)
+            self.assertEqual(biology["codex_entries"], 1)
+            self.assertEqual(biology["biological_signals"], 2)
+            self.assertEqual(biology["geological_signals"], 1)
+            self.assertIsNone(biology["active_sample"])
+            self.assertEqual(memory.state["species"]["Bacterium Acies"]["value_cr"], 1_000_000)
+            self.assertEqual(memory.state["species"]["Bacterium Acies"]["colony_m"], 500)
+            self.assertEqual(
+                memory.state["systems"]["Biology Test"]["organic_bodies"]["Biology Test A 1"],
+                ["Bacterium Acies"],
+            )
+
+            restored = CockpitMemory(path)
+            self.assertEqual(restored.biology_awareness(), biology)
+
     def test_preknown_system_progress_counts_as_complete_fss_once(self):
         with tempfile.TemporaryDirectory() as folder:
             memory = CockpitMemory(pathlib.Path(folder) / "memory.json")

@@ -108,6 +108,31 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             scan_data.get("volcanism"),
         )
 
+    def _enrich_bio_event_context(self, data):
+        """Add the richer Survey Status context missing from ScanOrganic journals."""
+        if not isinstance(data, dict):
+            return data
+        body_id = self._normalize_body_id(data.get("body_id"))
+        scan_item = self.scan_items_by_id.get(body_id, {}) if body_id is not None else {}
+        scan_data = self.body_scan_data.get(body_id, {}) if body_id is not None else {}
+        body_name = data.get("body_name") or scan_item.get("name") or scan_data.get("body_name")
+        if body_name:
+            data["body_name"] = body_name
+        genus = data.get("genus") or data.get("species")
+        if data.get("species"):
+            value = bio_values.species_value(data["species"])
+            if value is not None:
+                data["species_value"] = value
+        if genus:
+            genus_info = bio_values.genus_info(genus)
+            if genus_info.get("min_value") is not None:
+                data["genus_min_value"] = genus_info["min_value"]
+            if genus_info.get("max_value") is not None:
+                data["genus_max_value"] = genus_info["max_value"]
+            if genus_info.get("colony_m") is not None:
+                data["colony_m"] = genus_info["colony_m"]
+        return data
+
     def _profile_path(self, filename):
         return get_profile_file(get_active_profile(self.config), filename)
 
@@ -2484,6 +2509,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if not memory:
             return None
         mood = memory.current_mood()
+        biology = memory.biology_awareness()
         active = memory.state.get("active_expedition")
         return {
             "mood": str(mood.get("name") or "calm"),
@@ -2500,6 +2526,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "fss_completed": memory.count("fss_systems_completed"),
             "dss_maps": memory.count("dss_maps_completed"),
             "signal_bodies": memory.count("signal_bodies_found"),
+            "bio_genera": biology["genera"],
+            "bio_samples": biology["samples"],
+            "bio_analyses": biology["analyses"],
+            "bio_codex": biology["codex_entries"],
             "awareness_domains": tuple(memory.knowledge_domains()),
             "limits": dict(memory.limits),
             "expedition_id": active.get("id") if isinstance(active, dict) else None,
@@ -2559,6 +2589,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if survey_growth:
             messages.append(f"Survey awareness: {' | '.join(survey_growth)}")
 
+        biology_growth = []
+        for key, label, milestones in (
+            ("bio_genera", "genera", (5, 10, 15, 20, 25)),
+            ("bio_samples", "samples", (25, 100, 250, 500, 1000, 2500)),
+            ("bio_analyses", "analyses", (10, 25, 50, 100, 250, 500, 1000)),
+            ("bio_codex", "biological Codex entries", (10, 25, 50, 100, 250, 500)),
+        ):
+            old_count = int(before.get(key) or 0)
+            new_count = int(after.get(key) or 0)
+            if any(old_count < mark <= new_count for mark in milestones):
+                biology_growth.append(f"{new_count:,} {label}")
+        if biology_growth:
+            messages.append(f"Biology awareness: {' | '.join(biology_growth)}")
+
         old_expedition = before.get("expedition_id")
         new_expedition = after.get("expedition_id")
         if new_expedition and new_expedition != old_expedition:
@@ -2591,6 +2635,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 f"{snapshot['species']:,}/{limits['species']:,} species, "
                 f"{snapshot['memories']:,}/{limits['memories']:,} notable | "
                 f"survey {snapshot['fss_completed']:,} FSS, {snapshot['dss_maps']:,} DSS | "
+                f"biology {snapshot['bio_genera']:,} genera, {snapshot['bio_analyses']:,} analyses | "
                 f"{len(snapshot['awareness_domains'])} gameplay domains"
             ),
             severity="INFO",
@@ -2876,6 +2921,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         raw = data.get("raw", data)
         d = data.get("data", data)
         startup_replay = bool(data.get("startup_catchup"))
+        if ev == "ScanOrganic":
+            d = self._enrich_bio_event_context(d)
         if ev in ("Commander", "LoadGame"):
             commander = d.get("name") if ev == "Commander" else d.get("commander")
             fid = d.get("fid")
@@ -3638,6 +3685,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     "bio_signals_count": d.get("bio_signals_count", 0),
                 }
                 self.body_scan_data[body_id]["predicted_genuses"] = self._bio_predictions_for_scan(self.body_scan_data[body_id])
+                if (not startup_replay
+                        and self.config.get("cockpit_memory_enabled", True)
+                        and getattr(self, "cockpit_memory", None)):
+                    predictions_learned = self.cockpit_memory.observe_bio_predictions(
+                        self.current_sys,
+                        body_name or f"Body {body_id}",
+                        self.body_scan_data[body_id]["predicted_genuses"],
+                    )
+                    if predictions_learned:
+                        self._publish_cockpit_ai_changes()
+                        self._pulse_cockpit_ai()
             
             # Only count scans of stars or planets/moons, not belts.
             if d.get("is_body_scan"):

@@ -8,7 +8,7 @@ import time
 import uuid
 
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 DEFAULT_LIMITS = {"systems": 300, "species": 200, "ships": 30, "memories": 80}
 LIMIT_BOUNDS = {
     "systems": (0, 5000),
@@ -151,6 +151,7 @@ def _initial_state():
         "species": {},
         "ships": {},
         "knowledge": {},
+        "biology": {"genera": {}, "codex": {}, "active_sample": None},
         "current_voice": None,
         "current_system": None,
         "memories": [],
@@ -208,9 +209,14 @@ class CockpitMemory:
             if isinstance(saved, dict):
                 base = _initial_state()
                 base.update(saved)
-                for key in ("counters", "systems", "species", "ships", "intentions", "knowledge"):
+                for key in ("counters", "systems", "species", "ships", "intentions", "knowledge", "biology"):
                     if not isinstance(base.get(key), dict):
                         base[key] = {}
+                biology = base.setdefault("biology", {})
+                for key in ("genera", "codex"):
+                    if not isinstance(biology.get(key), dict):
+                        biology[key] = {}
+                biology.setdefault("active_sample", None)
                 if not isinstance(base.get("memories"), list):
                     base["memories"] = []
                 for key in ("sessions", "expeditions"):
@@ -582,6 +588,77 @@ class CockpitMemory:
                 text = str(value).replace("$", "").replace(";", "").replace("_name", "")
                 return _safe_name(text.replace("_", " ").strip().title(), fallback)
         return fallback
+
+    @staticmethod
+    def _genus_label(value):
+        if isinstance(value, dict):
+            value = (value.get("Genus_Localised") or value.get("Name_Localised")
+                     or value.get("Genus") or value.get("Name") or value.get("name"))
+        text = str(value or "").strip()
+        if text.startswith("$") and text.endswith(";"):
+            text = text[1:-1].replace("Codex_Ent_", "").replace("_Genus_Name", "")
+            text = text.replace("_", " ")
+        return _safe_name(text, "")
+
+    def _biology_genus_entry(self, genus, timestamp):
+        genus = self._genus_label(genus)
+        if not genus:
+            return None
+        genera = self.state.setdefault("biology", {}).setdefault("genera", {})
+        entry = genera.setdefault(genus, {
+            "count": 0, "samples": 0, "analyses": 0,
+            "detections": 0, "predictions": 0,
+            "species": [], "first_seen": timestamp,
+        })
+        entry["last_seen"] = timestamp
+        return entry
+
+    def observe_bio_predictions(self, system_name, body_name, predicted_genera):
+        """Remember local Survey Status genus predictions without inventing journal events."""
+        system = _safe_name(system_name, "")
+        body = _safe_name(body_name, "Unknown body")
+        genera = []
+        for value in predicted_genera or ():
+            genus = self._genus_label(value)
+            if genus and genus not in genera:
+                genera.append(genus)
+        if not system or system in ("---", "Unknown") or not genera:
+            return False
+
+        timestamp = _now()
+        system_entry = self.state["systems"].setdefault(
+            system, {"count": 0, "first_seen": timestamp}
+        )
+        predictions = system_entry.setdefault("bio_predictions", {})
+        previous = predictions.get(body) if isinstance(predictions.get(body), dict) else {}
+        previous_genera = list(previous.get("genera") or [])
+        merged = list(previous_genera)
+        changed = False
+        context = f"{system}|{body}"
+        for genus in genera:
+            if genus not in merged:
+                merged.append(genus)
+                changed = True
+            genus_entry = self._biology_genus_entry(genus, timestamp)
+            contexts = genus_entry.setdefault("prediction_contexts", [])
+            if context not in contexts:
+                contexts.append(context)
+                del contexts[:-128]
+                genus_entry["predictions"] = int(genus_entry.get("predictions") or 0) + 1
+                genus_entry["count"] = max(1, int(genus_entry.get("count") or 0))
+                self._increment("bio_genus_predictions")
+                changed = True
+        if not changed:
+            return False
+        predictions[body] = {"genera": merged[-32:], "updated_at": timestamp}
+        if len(predictions) > 128:
+            oldest = min(predictions, key=lambda key: predictions[key].get("updated_at") or "")
+            predictions.pop(oldest, None)
+        system_entry["last_seen"] = timestamp
+        self._trim(self.state["biology"]["genera"], 80)
+        self._apply_limits()
+        self._save()
+        return True
 
     def _knowledge_domain(self, name, event, timestamp):
         knowledge = self.state.setdefault("knowledge", {})
@@ -1169,9 +1246,19 @@ class CockpitMemory:
             previous = signal_bodies.get(body, {})
             previous_bio = int(previous.get("bio") or 0)
             previous_geo = int(previous.get("geo") or 0)
+            detected_genera = []
+            for value in data.get("genuses") or raw.get("Genuses") or ():
+                genus = self._genus_label(value)
+                if genus and genus not in detected_genera:
+                    detected_genera.append(genus)
+            merged_genera = list(previous.get("genera") or [])
+            for genus in detected_genera:
+                if genus not in merged_genera:
+                    merged_genera.append(genus)
             signal_bodies[body] = {
                 "bio": max(previous_bio, bio_count),
                 "geo": max(previous_geo, geo_count),
+                "genera": merged_genera[-32:],
                 "last_seen": timestamp,
             }
             if len(signal_bodies) > 128:
@@ -1189,7 +1276,20 @@ class CockpitMemory:
                 self._remember(
                     "biology", f"Detected {bio_count:,} biological signals on {body}", 2, timestamp
                 )
-            if bio_count or geo_count:
+            context = f"{system}|{body}"
+            previous_genera = set(previous.get("genera") or [])
+            for genus in detected_genera:
+                genus_entry = self._biology_genus_entry(genus, timestamp)
+                contexts = genus_entry.setdefault("detection_contexts", [])
+                if context not in contexts:
+                    contexts.append(context)
+                    del contexts[:-128]
+                    genus_entry["detections"] = int(genus_entry.get("detections") or 0) + 1
+                    genus_entry["count"] = max(1, int(genus_entry.get("count") or 0))
+                    inc("organic_genus_detections")
+                if genus not in previous_genera:
+                    changed = True
+            if bio_count or geo_count or detected_genera:
                 changed = True
 
         elif event == "SAAScanComplete":
@@ -1231,22 +1331,118 @@ class CockpitMemory:
 
         elif event == "ScanOrganic":
             complete = bool(data.get("is_complete")) or str(raw.get("ScanType") or "").casefold() == "analyse"
-            if complete:
-                species = _safe_name(data.get("species") or raw.get("Species_Localised") or raw.get("Species"), "Organic")
-                entry = self.state["species"].setdefault(species, {"count": 0, "first_seen": timestamp})
-                entry["count"] = int(entry.get("count") or 0) + 1
-                entry["last_seen"] = timestamp
-                organics = inc("organic_analyses")
+            scan_type = str(data.get("scan_type") or raw.get("ScanType") or "").casefold()
+            species = _safe_name(
+                data.get("species") or raw.get("Species_Localised") or raw.get("Species"), "Organic"
+            )
+            genus = self._genus_label(
+                data.get("genus") or raw.get("Genus_Localised") or raw.get("Genus")
+                or species.split(" ", 1)[0]
+            )
+            system = _safe_name(self.state.get("current_system"), "Unknown system")
+            body = _safe_name(
+                data.get("body_name") or raw.get("BodyName")
+                or data.get("body_id") or raw.get("Body"), "Unknown body"
+            )
+            species_entry = self.state["species"].setdefault(
+                species, {"count": 0, "samples": 0, "first_seen": timestamp}
+            )
+            species_entry["genus"] = genus or species_entry.get("genus")
+            species_entry["last_seen"] = timestamp
+            species_entry["last_system"] = system
+            species_entry["last_body"] = body
+            if data.get("species_value") is not None:
+                species_entry["value_cr"] = self._number(data.get("species_value"))
+            if data.get("colony_m") is not None:
+                species_entry["colony_m"] = self._number(data.get("colony_m"))
+
+            genus_entry = self._biology_genus_entry(genus, timestamp)
+            if genus_entry is not None:
+                known_species = genus_entry.setdefault("species", [])
+                if species not in known_species:
+                    known_species.append(species)
+                    del known_species[:-80]
+                    changed = True
+
+            sample_index = self._number(data.get("sample_idx") or raw.get("Sample"))
+            max_samples = max(1, self._number(data.get("max_samples") or raw.get("MaxSamples"), 3))
+            is_sample = bool(data.get("is_new_sample")) or scan_type in ("log", "sample", "analyse") or complete
+            sample_signature = f"{system}|{body}|{sample_index or scan_type or timestamp}"
+            sample_keys = species_entry.setdefault("sample_keys", [])
+            if is_sample and sample_signature not in sample_keys:
+                sample_keys.append(sample_signature)
+                del sample_keys[:-64]
+                species_entry["samples"] = int(species_entry.get("samples") or 0) + 1
+                inc("organic_samples")
+                if genus_entry is not None:
+                    genus_entry["samples"] = int(genus_entry.get("samples") or 0) + 1
+                    genus_entry["count"] = max(1, int(genus_entry.get("count") or 0))
+
+            biology = self.state.setdefault("biology", {})
+            if not complete:
+                biology["active_sample"] = {
+                    "species": species, "genus": genus, "system": system, "body": body,
+                    "progress": sample_index or (2 if scan_type == "sample" else 1),
+                    "max_samples": max_samples, "updated_at": timestamp,
+                }
                 changed = True
-                if entry["count"] == 1:
-                    self._remember("biology", f"First analysed {species}", 2, timestamp)
-                if self.state.get("active_expedition"):
-                    self.state["active_expedition"]["bios"] = int(
-                        self.state["active_expedition"].get("bios") or 0
-                    ) + 1
-                if organics in (25, 50, 100, 250, 500, 1000):
-                    self._remember("milestone", f"Completed {organics:,} biological analyses", 4, timestamp)
-                self._trim(self.state["species"], self.limits["species"])
+
+            system_entry = self.state["systems"].setdefault(
+                system, {"count": 0, "first_seen": timestamp}
+            )
+            sampled_bodies = system_entry.setdefault("organic_bodies", {})
+            body_species = sampled_bodies.setdefault(body, [])
+            if species not in body_species:
+                body_species.append(species)
+                del body_species[:-64]
+                changed = True
+            system_entry["last_seen"] = timestamp
+
+            if complete:
+                analysis_signature = f"{system}|{body}"
+                analysis_keys = species_entry.setdefault("analysis_keys", [])
+                if analysis_signature not in analysis_keys:
+                    analysis_keys.append(analysis_signature)
+                    del analysis_keys[:-64]
+                    entry = species_entry
+                    entry["count"] = int(entry.get("count") or 0) + 1
+                    entry["last_seen"] = timestamp
+                    organics = inc("organic_analyses")
+                    changed = True
+                    if genus_entry is not None:
+                        genus_entry["analyses"] = int(genus_entry.get("analyses") or 0) + 1
+                        genus_entry["count"] = max(1, int(genus_entry.get("count") or 0))
+                    if entry["count"] == 1:
+                        self._remember("biology", f"First analysed {species}", 2, timestamp)
+                    if self.state.get("active_expedition"):
+                        self.state["active_expedition"]["bios"] = int(
+                            self.state["active_expedition"].get("bios") or 0
+                        ) + 1
+                    if organics in (25, 50, 100, 250, 500, 1000):
+                        self._remember("milestone", f"Completed {organics:,} biological analyses", 4, timestamp)
+                biology["active_sample"] = None
+                changed = True
+            self._trim(self.state["species"], self.limits["species"])
+            self._trim(self.state["biology"]["genera"], 80)
+
+        elif event == "CodexEntry":
+            category = str(
+                data.get("category") or raw.get("Category_Localised") or raw.get("Category") or ""
+            ).casefold()
+            if "biolog" in category:
+                name = _safe_name(
+                    data.get("name") or raw.get("Name_Localised") or raw.get("Name"), "Biological Codex entry"
+                )
+                codex = self.state.setdefault("biology", {}).setdefault("codex", {})
+                is_new_codex_entry = name not in codex
+                codex_entry = codex.setdefault(name, {"count": 0, "first_seen": timestamp})
+                codex_entry["count"] = int(codex_entry.get("count") or 0) + 1
+                codex_entry["last_seen"] = timestamp
+                if is_new_codex_entry:
+                    inc("biological_codex_entries")
+                else:
+                    changed = True
+                self._trim(codex, 80)
 
         elif event == "Loadout":
             ship = _safe_name(data.get("ship_name") or raw.get("ShipName")
@@ -1384,8 +1580,15 @@ class CockpitMemory:
                 return "Navigation is already preparing the next jump. We rarely stay still for long."
         if family in ("ship-overheat", "heat-damage") and self.count("heat_warnings") >= 10:
             return f"Thermal warning recorded. This is number {self.count('heat_warnings'):,} in our shared log."
-        if family == "bio-complete" and self.count("organic_analyses") >= 25:
-            return f"Our biological archive now contains {self.count('organic_analyses'):,} completed analyses."
+        if family == "bio-complete":
+            biology = self.biology_awareness()
+            if biology["genera"] >= 5 and biology["analyses"] >= 10:
+                return (
+                    f"Our biological catalogue now spans {biology['genera']:,} genera and "
+                    f"{biology['analyses']:,} completed analyses."
+                )
+            if biology["analyses"] >= 25:
+                return f"Our biological archive now contains {biology['analyses']:,} completed analyses."
         if family == "valuable-world" and self.count("valuable_worlds") >= 10:
             return f"Our shared survey archive now includes {self.count('valuable_worlds'):,} high-value worlds."
         if family in ("route-arrival", "route-waypoint") and self.count("jumps") >= 100:
@@ -1427,6 +1630,7 @@ class CockpitMemory:
 
     def summary(self):
         traits = self.traits()
+        biology = self.biology_awareness()
         return {
             "relationship": self.relationship(),
             "voice_stage": self.voice_stage(),
@@ -1434,6 +1638,9 @@ class CockpitMemory:
             "jumps": self.count("jumps"),
             "scans": self.count("scans"),
             "organics": self.count("organic_analyses"),
+            "bio_samples": biology["samples"],
+            "bio_genera": biology["genera"],
+            "bio_codex": biology["codex_entries"],
             "honks": self.count("system_honks"),
             "fss_completed": self.count("fss_systems_completed"),
             "dss_maps": self.count("dss_maps_completed"),
@@ -1451,7 +1658,8 @@ class CockpitMemory:
         return (
             f"{info['relationship']} · {traits}\n"
             f"{info['jumps']:,} jumps · {info['systems']:,} remembered systems · "
-            f"{info['scans']:,} scans · {info['organics']:,} bio analyses · "
+            f"{info['scans']:,} scans · {info['bio_genera']:,} bio genera · "
+            f"{info['organics']:,} bio analyses · "
             f"{info['fss_completed']:,} full FSS surveys · {info['dss_maps']:,} DSS maps · "
             f"{info['memories']:,} notable memories"
         )
@@ -1520,6 +1728,36 @@ class CockpitMemory:
             "ground_operations": int(odyssey.get("events") or 0),
             "carrier_jumps": int(carrier.get("jumps") or 0),
             "colony_contributions": int(colony.get("contributions") or 0),
+        }
+
+    def biology_awareness(self):
+        """Return compact, display-safe biological knowledge totals."""
+        biology = self.state.get("biology") or {}
+        genera = biology.get("genera") or {}
+        return {
+            "genera": len(genera),
+            "detected_genera": sum(
+                1 for row in genera.values()
+                if isinstance(row, dict) and int(row.get("detections") or 0) > 0
+            ),
+            "predicted_genera": sum(
+                1 for row in genera.values()
+                if isinstance(row, dict) and int(row.get("predictions") or 0) > 0
+            ),
+            "analysed_genera": sum(
+                1 for row in genera.values()
+                if isinstance(row, dict) and int(row.get("analyses") or 0) > 0
+            ),
+            "species": len(self.state.get("species") or {}),
+            "samples": self.count("organic_samples"),
+            "analyses": self.count("organic_analyses"),
+            "codex_entries": self.count("biological_codex_entries"),
+            "biological_signals": self.count("biological_signals_found"),
+            "geological_signals": self.count("geological_signals_found"),
+            "active_sample": (
+                dict(biology.get("active_sample"))
+                if isinstance(biology.get("active_sample"), dict) else None
+            ),
         }
 
     def memory_rows(self):
@@ -1591,6 +1829,7 @@ class CockpitMemory:
             "habits": self.habits(),
             "intentions": dict(intentions),
             "gameplay_awareness": self.gameplay_awareness(),
+            "biology_awareness": self.biology_awareness(),
             "active_expedition": dict(active) if isinstance(active, dict) else None,
             "completed_expeditions": len(self.state.get("expeditions", [])),
             "sessions": len(self.state.get("sessions", [])),
