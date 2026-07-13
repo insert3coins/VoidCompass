@@ -40,6 +40,11 @@ VOICE_EVOLUTION_LINES = {
         "I will keep this discovery with the others. Our survey archive is becoming remarkable.",
         "We have crossed enough uncharted space for me to recognize this feeling. This one is special too.",
     ),
+    "valuable-world": (
+        "A valuable world for our shared survey archive. I have marked it for mapping.",
+        "Another exceptional planet in our records. These are still my favourite sensor returns.",
+        "The exploration ledger just became more interesting. We have found quite a collection together.",
+    ),
     "bio-complete": (
         "Another genetic profile for our shared biological archive.",
         "The bio lab and I are getting rather good at this.",
@@ -1037,6 +1042,39 @@ class CockpitMemory:
                     ) + 1
                 if discoveries in (10, 50, 100, 500, 1000):
                     self._remember("milestone", f"Made {discoveries:,} first discoveries together", 4, timestamp)
+            planet_class = _safe_name(
+                data.get("planet_class") or raw.get("PlanetClass"), ""
+            )
+            terraformable = (
+                data.get("terraform_state") == "Terraformable"
+                or raw.get("TerraformState") == "Terraformable"
+            )
+            valuable_class = planet_class in (
+                "Earthlike body", "Water world", "Ammonia world"
+            )
+            if valuable_class or terraformable:
+                valuable_bodies = system_entry.setdefault("valuable_bodies", []) if system else []
+                if body not in valuable_bodies:
+                    valuable_bodies.append(body)
+                    del valuable_bodies[:-128]
+                    valuable_count = inc("valuable_worlds")
+                    class_counter = {
+                        "Earthlike body": "earthlike_worlds",
+                        "Water world": "water_worlds",
+                        "Ammonia world": "ammonia_worlds",
+                    }.get(planet_class)
+                    if class_counter:
+                        inc(class_counter)
+                    if terraformable:
+                        inc("terraformable_worlds")
+                    if system:
+                        system_entry["valuable_world_count"] = len(valuable_bodies)
+                    if planet_class == "Earthlike body":
+                        self._remember("discovery", f"Located Earth-like world {body}", 4, timestamp)
+                    elif valuable_count in (10, 25, 50, 100, 250, 500, 1000):
+                        self._remember(
+                            "survey", f"Catalogued {valuable_count:,} high-value worlds", 3, timestamp
+                        )
             if scans in (100, 500, 1000, 5000):
                 self._remember("milestone", f"Recorded {scans:,} body scans", 3, timestamp)
 
@@ -1303,6 +1341,7 @@ class CockpitMemory:
         for family in (
             "system-arrival", "route-arrival", "route-waypoint", "first-discovery",
             "bio-complete", "engineering-ready", "massacre-complete", "clear-to-sample",
+            "valuable-world",
             "ship-overheat", "heat-damage", "under-attack", "shields-offline",
             "interdiction", "jet-cone-damage", "data-risk", "codex",
         ):
@@ -1347,6 +1386,8 @@ class CockpitMemory:
             return f"Thermal warning recorded. This is number {self.count('heat_warnings'):,} in our shared log."
         if family == "bio-complete" and self.count("organic_analyses") >= 25:
             return f"Our biological archive now contains {self.count('organic_analyses'):,} completed analyses."
+        if family == "valuable-world" and self.count("valuable_worlds") >= 10:
+            return f"Our shared survey archive now includes {self.count('valuable_worlds'):,} high-value worlds."
         if family in ("route-arrival", "route-waypoint") and self.count("jumps") >= 100:
             return f"Navigation history now spans {self.count('jumps'):,} jumps together."
         if family == "data-risk" and self.count("exploration_sales") >= 3:
@@ -1397,6 +1438,7 @@ class CockpitMemory:
             "fss_completed": self.count("fss_systems_completed"),
             "dss_maps": self.count("dss_maps_completed"),
             "signal_bodies": self.count("signal_bodies_found"),
+            "valuable_worlds": self.count("valuable_worlds"),
             "awareness_domains": len(self.knowledge_domains()),
             "systems": len(self.state.get("systems", {})),
             "memories": len(self.state.get("memories", [])),
