@@ -13,6 +13,7 @@
 *   Added **Quiet**, **Balanced**, and **Proactive** advice frequencies with per-topic and global cooldowns. Startup journal replay remains silent, repeated events are suppressed, and the adviser can be disabled independently without disabling natural LLM wording.
 *   Made the expanded **Compass AI** Settings page vertically scrollable while keeping its navigation and Save/Cancel controls fixed. The mouse wheel and visible scrollbar now reach the language controls, intelligence state, and full memory timeline at smaller window sizes.
 *   Added automatic generated-voice cache pruning, enabled by default with a **7-day unused-audio retention** setting. Cached WAV hits refresh their last-used timestamp, pruning runs off the UI thread at startup, after playback, and after Settings changes, and the existing 300-file ceiling remains as a secondary cap. Downloaded Piper runtimes and voice packs are never included. The expanded Voice page now scrolls so all retention and voice-pack controls remain reachable.
+*   Fixed Survey Status retaining a stale FSS count such as `SCAN 10/11` after `FSSAllBodiesFound`. Batched journal processing now performs one final coalesced overlay refresh after the committed scan state reaches `11/11`.
 *   On the development RX 6800, warmed `qwen3.5:9b` responses validated at roughly 1.2–1.4 seconds and remained fully GPU-resident. The model is unloaded on VoidCompass exit by default so VRAM is returned to the game.
 
 ## v4.6.6 // Navigation HUD Refinements

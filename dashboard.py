@@ -5007,6 +5007,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         else:
             self.root.after(0, self.update_dashboard_ui)
             self.root.after(0, self.update_hud)
+        # Journal events commonly arrive in batches.  Per-event Survey Status
+        # redraws are deliberately suppressed while a batch is active, so
+        # perform one coalesced refresh now that the committed scan totals are
+        # authoritative (for example, after FSSAllBodiesFound changes 10/11 to
+        # 11/11).
+        self._refresh_system_info_progress()
         self._refresh_commander_profile_window()
         self._refresh_value_ledger_window()
         self._refresh_colonisation_planner_window()
