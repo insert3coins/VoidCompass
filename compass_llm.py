@@ -141,6 +141,7 @@ class CompassLLM:
         self._stop = threading.Event()
         self._lock = threading.Lock()
         self._owned_process = None
+        self._state_callback = None
         self._state = {
             "phase": "disabled", "ready": False, "installed": False,
             "server_version": None, "model": self.model,
@@ -181,9 +182,33 @@ class CompassLLM:
         status["model_label"] = MODEL_CHOICES.get(status["model"], {}).get("label", status["model"])
         return status
 
+    def set_state_callback(self, callback, emit_current=False):
+        """Notify the UI when worker state changes without coupling it to Tk."""
+        with self._lock:
+            self._state_callback = callback
+        if emit_current and callback:
+            try:
+                callback(self.status())
+            except Exception:
+                pass
+
     def _set_state(self, **values):
         with self._lock:
+            before = tuple(
+                self._state.get(key)
+                for key in ("phase", "ready", "model", "processor", "last_error")
+            )
             self._state.update(values)
+            after = tuple(
+                self._state.get(key)
+                for key in ("phase", "ready", "model", "processor", "last_error")
+            )
+            callback = self._state_callback if after != before else None
+        if callback:
+            try:
+                callback(self.status())
+            except Exception:
+                pass
 
     def _put(self, job):
         try:
