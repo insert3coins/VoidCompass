@@ -2173,6 +2173,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "music_mode": getattr(self, "current_music_mode", ""),
             "music_track": getattr(self, "current_music_track", ""),
             "badges": badges[:6],
+            "session_jumps": int(getattr(self, "session_jump_count", 0) or 0),
+            "session_ly": float(getattr(self, "session_ly", 0.0) or 0.0),
         }
 
     @staticmethod
