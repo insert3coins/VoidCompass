@@ -147,6 +147,15 @@ def selected_voice(config):
     return canonical_voice(config.get("voice_name")) or DEFAULT_VOICE
 
 
+def set_selected_voice(config, voice):
+    """Apply a catalogue voice immediately to the mutable runtime config."""
+    voice = canonical_voice(voice)
+    if voice is None:
+        raise VoiceError("Unknown voice pack.")
+    config["voice_name"] = voice
+    return voice
+
+
 def _model_name(voice):
     item = VOICES.get(voice) or {}
     return item.get("model") or voice

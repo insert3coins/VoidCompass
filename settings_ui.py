@@ -364,7 +364,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             playback_error = getattr(voice_manager, "last_error", None) if voice_manager else None
             voice_status_var.set(
                 f"Playback error: {playback_error}" if playback_error
-                else "Selected voice pack is installed and ready."
+                else "Selected voice pack is installed and active for live callouts."
             )
             install_voice_btn.configure(state=tk.DISABLED, text="Installed")
         elif state["error"] and state.get("download_voice") == chosen:
@@ -381,7 +381,20 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             except tk.TclError:
                 pass
 
-    voice_choice_var.trace_add("write", lambda *_args: _refresh_voice_status(False))
+    def _voice_changed(*_args):
+        try:
+            voice_callouts.set_selected_voice(config, _chosen_voice())
+            # Voice choice is a live setting: the callout manager holds this
+            # same config object, so future queued calls use it immediately.
+            # Persist it now so closing Settings without Save does not silently
+            # restore the previous voice on restart.
+            persist_config(config)
+        except voice_callouts.VoiceError as exc:
+            voice_status_var.set(str(exc))
+            return
+        _refresh_voice_status(False)
+
+    voice_choice_var.trace_add("write", _voice_changed)
     _refresh_voice_status()
 
     # ---- Theme page ----

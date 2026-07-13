@@ -8,6 +8,7 @@
 *   Expanded the catalogue with additional British and American voices plus Australian, New Zealand, and Irish accents selected from Piper's shared VCTK multi-speaker model.
 *   Voice synthesis and Windows playback run in the background and remain disabled until explicitly enabled.
 *   Added an optional persistent audio cache for repeated callouts, including live file/size reporting and a **Clear Cache** action. When disabled, generated WAV files are deleted immediately after playback.
+*   Voice changes now become active for live callouts immediately and are saved to the commander profile without requiring a separate **Save Settings** click.
 
 ### Callouts
 *   Added low-noise safety announcements for route-aware fuel and scoop risks, dry star stretches, interdictions, heat, shields, hull, suit hazards, rebuy coverage, and unsold data risk.
