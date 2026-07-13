@@ -15,13 +15,29 @@ import voice_callouts  # noqa: E402
 class VoiceCalloutTests(unittest.TestCase):
     def test_voice_catalog_uses_pinned_artifacts(self):
         self.assertIn(voice_callouts.DEFAULT_VOICE, voice_callouts.VOICES)
-        self.assertEqual(len(voice_callouts.VOICES), 6)
+        self.assertEqual(len(voice_callouts.VOICES), 18)
         for name, item in voice_callouts.VOICES.items():
             self.assertEqual(voice_callouts.canonical_voice(name), name)
             self.assertEqual(len(item["onnx_sha"]), 64)
             self.assertEqual(len(item["config_sha"]), 64)
             int(item["onnx_sha"], 16)
             int(item["config_sha"], 16)
+
+    def test_regional_vctk_choices_share_one_pinned_model(self):
+        regional = (
+            "en_AU-vctk-p326-medium", "en_NZ-vctk-p335-medium",
+            "en_IE-vctk-p245-medium", "en_IE-vctk-p283-medium",
+        )
+        paths = {voice_callouts.model_path(voice) for voice in regional}
+        configs = {voice_callouts.model_config_path(voice) for voice in regional}
+        self.assertEqual(len(paths), 1)
+        self.assertEqual(len(configs), 1)
+        self.assertEqual(
+            {voice_callouts.VOICES[voice]["speaker_id"] for voice in regional},
+            {71, 42, 97, 8},
+        )
+        payload = voice_callouts._synthesis_payload("Test", pathlib.Path("test.wav"), regional[0])
+        self.assertEqual(payload["speaker_id"], 71)
 
     def test_unknown_voice_is_rejected_before_download(self):
         with self.assertRaisesRegex(voice_callouts.VoiceError, "Unknown voice"):

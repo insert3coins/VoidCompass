@@ -4,7 +4,8 @@
 **Release Date:** 2026-Jul-13
 
 ### Voice Packs
-*   Added six optional Piper neural voices with native download progress, pinned SHA-256 verification, voice selection, volume, testing, and per-commander controls under **Settings → Voice**.
+*   Added eighteen optional Piper neural voice choices with native download progress, pinned SHA-256 verification, voice selection, volume, testing, and per-commander controls under **Settings → Voice**.
+*   Expanded the catalogue with additional British and American voices plus Australian, New Zealand, and Irish accents selected from Piper's shared VCTK multi-speaker model.
 *   Voice synthesis and Windows playback run in the background and remain disabled until explicitly enabled.
 *   Added an optional persistent audio cache for repeated callouts, including live file/size reporting and a **Clear Cache** action. When disabled, generated WAV files are deleted immediately after playback.
 
