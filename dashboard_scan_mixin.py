@@ -165,7 +165,11 @@ class DashboardScanMixin:
                 if toast:
                     toast.push("SUIT TEMPERATURE", f"{temperature:.0f} K — environmental hazard", severity="warn", duration_s=15)
                 self._speak("Warning. Hazardous suit temperature.", key="suit-temperature")
-            elif temperature is not None and 190 <= temperature <= 320:
+            # Wide recovery band (matching the oxygen/health checks' generous
+            # margin above) so ambient temperature hovering near the trigger
+            # on a hot/cold world can't flap in and out of a narrow gap and
+            # re-toast repeatedly.
+            elif temperature is not None and 210 <= temperature <= 300:
                 active.discard("suit_temperature")
 
         legal = data.get("LegalState")
@@ -206,6 +210,12 @@ class DashboardScanMixin:
                 or not self.config.get("voice_safety_enabled", True)):
             return
         if getattr(self, "is_first_load", True):
+            return
+        # current_fuel_main reflects whichever vehicle is currently controlled —
+        # in SRV/fighter/on-foot it's that vehicle's tiny fuel reading, not the
+        # mothership's, so it reads as near-empty against fuel_capacity_main and
+        # falsely triggers route/scoop warnings. Same guard as _check_low_fuel.
+        if self.current_docked or self.current_on_foot or self.current_in_srv or self.current_in_fighter:
             return
         ahead = flight_callouts.route_ahead(
             getattr(self, "nav_route_entries", None),
