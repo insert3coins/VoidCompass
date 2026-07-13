@@ -10,6 +10,7 @@ import atexit
 import hashlib
 import json
 import queue
+import random
 import re
 import shutil
 import subprocess
@@ -31,6 +32,13 @@ CACHE_DIR = TTS_DIR / "cache"
 DEFAULT_VOICE = "en_GB-alba-medium"
 MAX_TEXT = 400
 CACHE_KEEP = 300
+
+COCKPIT_TEST_LINES = (
+    "Cockpit intelligence online. All voice systems are responding, Commander.",
+    "Compass online, Commander. Navigation, telemetry, and tactical voice links are ready.",
+    "Voice interface synchronized. I am ready when you are, Commander.",
+    "Ship intelligence active. It is good to have you aboard, Commander.",
+)
 
 _PIPER_RELEASE = "https://github.com/rhasspy/piper/releases/download/2023.11.14-2"
 _VOICE_BASE = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en"
@@ -154,6 +162,28 @@ def set_selected_voice(config, voice):
         raise VoiceError("Unknown voice pack.")
     config["voice_name"] = voice
     return voice
+
+
+_line_lock = threading.Lock()
+_last_line = {}
+
+
+def choose_line(lines, key=None):
+    """Choose a phrase without repeating the previous phrase for that event."""
+    if isinstance(lines, str):
+        return lines
+    choices = tuple(str(line).strip() for line in (lines or ()) if str(line).strip())
+    if not choices:
+        return ""
+    if len(choices) == 1:
+        return choices[0]
+    identity = str(key or choices)
+    with _line_lock:
+        previous = _last_line.get(identity)
+        available = tuple(line for line in choices if line != previous) or choices
+        selected = random.choice(available)
+        _last_line[identity] = selected
+    return selected
 
 
 def _model_name(voice):
@@ -479,7 +509,7 @@ class VoiceCalloutManager:
     def test(self, voice=None, volume=None, use_cache=None):
         voice = canonical_voice(voice) or selected_voice(self.config)
         return self._enqueue(
-            "Voice systems online, Commander.", voice,
+            choose_line(COCKPIT_TEST_LINES, key="cockpit-ai-test"), voice,
             self.config.get("voice_volume", 0.8) if volume is None else volume,
             self.config.get("voice_cache_enabled", True) if use_cache is None else use_cache,
         )

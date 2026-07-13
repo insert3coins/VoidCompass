@@ -53,6 +53,16 @@ class VoiceCalloutTests(unittest.TestCase):
             voice_callouts.set_selected_voice(config, "not-a-voice")
         self.assertEqual(voice_callouts.selected_voice(config), chosen)
 
+    def test_personality_lines_do_not_repeat_immediately(self):
+        lines = ("Line one.", "Line two.", "Line three.")
+        results = [voice_callouts.choose_line(lines, key="test-personality-lines")
+                   for _ in range(20)]
+
+        self.assertTrue(all(line in lines for line in results))
+        self.assertTrue(all(current != previous
+                            for previous, current in zip(results, results[1:])))
+        self.assertGreaterEqual(len(set(results)), 2)
+
     def test_status_reports_only_complete_voice_install(self):
         with tempfile.TemporaryDirectory() as folder, mock.patch.object(
             voice_callouts, "TTS_DIR", pathlib.Path(folder)

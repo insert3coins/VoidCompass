@@ -70,6 +70,7 @@ PROFILE_TEXT_SETTINGS = (
     "screenshots_path",
     "ui_theme_name",
     "voice_name",
+    "cockpit_personality_level",
     "hud_crt_intensity",
 )
 
@@ -104,6 +105,7 @@ PROFILE_BOOL_SETTINGS = (
     "voice_navigation_enabled",
     "voice_objectives_enabled",
     "voice_cache_enabled",
+    "cockpit_memory_enabled",
     "hud_crt_enabled",
     "hud_crt_motion_enabled",
 )
@@ -253,6 +255,7 @@ def apply_profile_config(config, profile_key=None):
         "screenshots_path": os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous"),
         "ui_theme_name": _themes.DEFAULT_THEME_NAME,
         "voice_name": "en_GB-alba-medium",
+        "cockpit_personality_level": "Balanced",
         "hud_crt_intensity": "Subtle",
     }
     bool_defaults = {
@@ -286,6 +289,7 @@ def apply_profile_config(config, profile_key=None):
         "voice_navigation_enabled": True,
         "voice_objectives_enabled": True,
         "voice_cache_enabled": True,
+        "cockpit_memory_enabled": True,
         "hud_crt_enabled": True,
         "hud_crt_motion_enabled": True,
     }
@@ -459,10 +463,12 @@ def load_config():
         'voice_navigation_enabled': True,
         'voice_objectives_enabled': True,
         'voice_cache_enabled': True,
+        'cockpit_memory_enabled': True,
         'hud_crt_enabled': True,
         'hud_crt_motion_enabled': True,
         'hud_crt_intensity': 'Subtle',
         'voice_name': 'en_GB-alba-medium',
+        'cockpit_personality_level': 'Balanced',
         'voice_volume': 0.8,
         'ui_theme_name': _themes.DEFAULT_THEME_NAME,
         'ui_custom_themes': {},
