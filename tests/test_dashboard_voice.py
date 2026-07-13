@@ -118,6 +118,42 @@ class DashboardVoiceTests(unittest.TestCase):
         self.assertEqual(len(app.entries), 1)
         self.assertIn("Undiscovered system", app.entries[0][0][1])
 
+    def test_earthlike_world_gets_one_personality_callout_per_body(self):
+        app = self._app()
+        app.current_sys = "Treasure Test"
+        app.valuable_system = False
+        app.valuable_bodies = []
+        app.entries = []
+        app.add_event_feed_entry = lambda *args, **kwargs: app.entries.append((args, kwargs))
+
+        self.assertTrue(app._track_valuable_world(
+            "Treasure Test A 2", "Earthlike body",
+        ))
+        self.assertFalse(app._track_valuable_world(
+            "Treasure Test A 2", "Earthlike body",
+        ))
+
+        self.assertTrue(app.valuable_system)
+        self.assertEqual(app.valuable_bodies, ["- 🌍 Treasure Test A 2"])
+        self.assertEqual(len(app.entries), 1)
+        self.assertEqual(len(app.spoken), 1)
+        self.assertIn("Earth-like", app.spoken[0][0])
+        self.assertEqual(app.spoken[0][1]["category"], "exploration")
+
+    def test_startup_valuable_world_rebuild_stays_silent(self):
+        app = self._app()
+        app.current_sys = "History Test"
+        app.valuable_system = False
+        app.valuable_bodies = []
+        app.entries = []
+        app.add_event_feed_entry = lambda *args, **kwargs: app.entries.append((args, kwargs))
+
+        self.assertTrue(app._track_valuable_world(
+            "History Test A 1", "Water world", startup_replay=True,
+        ))
+        self.assertEqual(app.spoken, [])
+        self.assertEqual(len(app.entries), 1)
+
     def test_jet_cone_boost_keeps_toast_but_has_no_voice(self):
         app = self._app()
         app.is_first_load = False

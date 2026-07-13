@@ -149,6 +149,48 @@ class CockpitMemoryTests(unittest.TestCase):
             self.assertEqual(memory.system_traffic("Zero Traffic Test")["total"], 0)
             self.assertFalse(memory.system_has_traffic("Zero Traffic Test"))
 
+    def test_valuable_world_memory_counts_unique_bodies_and_evolves_voice(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = CockpitMemory(pathlib.Path(folder) / "memory.json")
+            memory.set_current_system("Treasure Test")
+            earthlike = {
+                "BodyName": "Treasure Test A 2",
+                "PlanetClass": "Earthlike body",
+            }
+            earthlike_data = {
+                "body_name": "Treasure Test A 2",
+                "planet_class": "Earthlike body",
+            }
+
+            memory.observe("Scan", earthlike, earthlike_data)
+            memory.observe("Scan", earthlike, earthlike_data)
+            memory.observe(
+                "Scan",
+                {"BodyName": "Treasure Test A 3", "PlanetClass": "Water world",
+                 "TerraformState": "Terraformable"},
+                {"body_name": "Treasure Test A 3", "planet_class": "Water world",
+                 "terraform_state": "Terraformable"},
+            )
+
+            self.assertEqual(memory.count("valuable_worlds"), 2)
+            self.assertEqual(memory.count("earthlike_worlds"), 1)
+            self.assertEqual(memory.count("water_worlds"), 1)
+            self.assertEqual(memory.count("terraformable_worlds"), 1)
+            self.assertEqual(memory.status_details()["valuable_worlds"], 2)
+            self.assertEqual(
+                memory.state["systems"]["Treasure Test"]["valuable_bodies"],
+                ["Treasure Test A 2", "Treasure Test A 3"],
+            )
+
+            memory.state["counters"]["valuable_worlds"] = 10
+            memory.state["counters"]["scans"] = 500
+            pool = memory.voice_pool(
+                ("Valuable world confirmed.",),
+                key="valuable-world:Treasure Test:Treasure Test A 2",
+                personality_level="Balanced",
+            )
+            self.assertTrue(any("10 high-value worlds" in line for line in pool))
+
     def test_operational_domains_learn_patterns_instead_of_raw_events(self):
         with tempfile.TemporaryDirectory() as folder:
             memory = CockpitMemory(pathlib.Path(folder) / "memory.json")

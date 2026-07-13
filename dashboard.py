@@ -1785,6 +1785,78 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         return True
 
+    @staticmethod
+    def _valuable_world_voice_lines(body_name, planet_class, terraformable=False):
+        body_name = str(body_name or "this body")
+        if planet_class == "Earthlike body":
+            return (
+                f"Earth-like world confirmed at {body_name}. That is a rare and valuable find.",
+                f"Sensors identify {body_name} as an Earth-like world. This one deserves a full surface map.",
+                f"Now that is worth slowing down for. Earth-like world at {body_name}.",
+                f"A blue-green world in the black. {body_name} is Earth-like.",
+            )
+        if planet_class == "Water world":
+            if terraformable:
+                return (
+                    f"Terraformable water world detected at {body_name}. High-value mapping target confirmed.",
+                    f"Water world at {body_name}, and the atmosphere is suitable for terraforming. An excellent find.",
+                    f"The survey just became profitable. {body_name} is a terraformable water world.",
+                    f"Blue planet confirmed at {body_name}. Terraformable, valuable, and well worth mapping.",
+                )
+            return (
+                f"Water world detected at {body_name}. High-value mapping target confirmed.",
+                f"Sensors show a water world at {body_name}. Worth a closer look before we leave.",
+                f"A valuable blue world at {body_name}. I have marked it for surface mapping.",
+                f"Water world confirmed. {body_name} is a strong addition to our survey data.",
+            )
+        if planet_class == "Ammonia world":
+            return (
+                f"Ammonia world confirmed at {body_name}. A rare and valuable survey target.",
+                f"Sensors identify an ammonia world at {body_name}. I recommend a full surface map.",
+                f"Unusual chemistry at {body_name}. Ammonia world, and worth recording properly.",
+                f"High-value ammonia world detected at {body_name}. The exploration ledger approves.",
+            )
+        return (
+            f"Terraformable world detected at {body_name}. Worth mapping before we leave.",
+            f"The survey data marks {body_name} as terraformable. That makes it a valuable target.",
+            f"Promising world at {body_name}. Terraforming candidate confirmed.",
+            f"{body_name} has long-term potential. I have flagged it as a high-value mapping target.",
+        )
+
+    @staticmethod
+    def _valuable_body_is_tracked(rows, body_name):
+        for row in rows or ():
+            parts = str(row).split(" ", 2)
+            if len(parts) == 3 and parts[2] == body_name:
+                return True
+        return False
+
+    def _track_valuable_world(self, body_name, planet_class, terraformable=False,
+                              startup_replay=False):
+        if planet_class not in ("Earthlike body", "Water world", "Ammonia world") and not terraformable:
+            return False
+        body_name = body_name or "Unknown"
+        if self._valuable_body_is_tracked(self.valuable_bodies, body_name):
+            return False
+        self.valuable_system = True
+        icon = {
+            "Earthlike body": "🌍",
+            "Water world": "💧",
+            "Ammonia world": "☣️",
+        }.get(planet_class, "🛠️")
+        self.valuable_bodies.append(f"- {icon} {body_name}")
+        self.add_event_feed_entry(
+            "VALUABLE", f"{icon} Valuable world: {body_name}",
+            severity="WARN", copy_text=body_name,
+        )
+        if not startup_replay:
+            self._speak(
+                self._valuable_world_voice_lines(body_name, planet_class, terraformable),
+                category="exploration", cooldown_s=86_400,
+                key=f"valuable-world:{self.current_sys}:{body_name}",
+            )
+        return True
+
     def _show_system_info_for_current_system(self):
         if not self.system_info_hud:
             return
@@ -3610,16 +3682,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     # Check for valuable bodies
                     p_class = d.get("planet_class", "")
                     terraformable = d.get("terraform_state") == "Terraformable"
-                    if p_class in ["Earthlike body", "Water world", "Ammonia world"] or terraformable:
-                        self.valuable_system = True
-                        body_name_str = body_name or "Unknown"
-                        icon = "✨"
-                        if p_class == "Earthlike body": icon = "🌍"
-                        elif p_class == "Water world": icon = "💧"
-                        elif p_class == "Ammonia world": icon = "☣️"
-                        elif terraformable: icon = "🛠️"
-                        self.valuable_bodies.append(f"- {icon} {body_name_str}")
-                        self.add_event_feed_entry("VALUABLE", f"{icon} Valuable world: {body_name_str}", severity="WARN", copy_text=body_name_str)
+                    self._track_valuable_world(
+                        body_name, p_class, terraformable, startup_replay=startup_replay,
+                    )
                 else:
                     # Later detailed/nav-beacon scans can add fields missing from an initial basic scan.
                     self.last_scan_event = data
@@ -3628,18 +3693,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
                     p_class = d.get("planet_class", "")
                     terraformable = d.get("terraform_state") == "Terraformable"
-                    if p_class in ["Earthlike body", "Water world", "Ammonia world"] or terraformable:
-                        body_name_str = body_name or "Unknown"
-                        already_tracked = any(body_name_str in body for body in self.valuable_bodies)
-                        if not already_tracked:
-                            self.valuable_system = True
-                            icon = "✨"
-                            if p_class == "Earthlike body": icon = "🌍"
-                            elif p_class == "Water world": icon = "💧"
-                            elif p_class == "Ammonia world": icon = "☣️"
-                            elif terraformable: icon = "🛠️"
-                            self.valuable_bodies.append(f"- {icon} {body_name_str}")
-                            self.add_event_feed_entry("VALUABLE", f"{icon} Valuable world: {body_name_str}", severity="WARN", copy_text=body_name_str)
+                    self._track_valuable_world(
+                        body_name, p_class, terraformable, startup_replay=startup_replay,
+                    )
 
                     if not self.batch_mode:
                         self.update_hud()
