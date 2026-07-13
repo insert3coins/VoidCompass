@@ -464,6 +464,11 @@ class TacticalHUD:
         self.canvas.create_line(16, 134, w - 16, 134, fill="#1a2530", width=1)
 
         self.draw_text(16, 144, text=f"TRAFFIC {traffic_text}", fill="#7d8891", font=("Courier", 8, "bold"), anchor="w")
+        session_jumps = nav_context.get("session_jumps") or 0
+        session_ly = nav_context.get("session_ly") or 0.0
+        if session_jumps:
+            self.draw_text(w - 16, 144, text=f"SESSION {session_jumps}J · {session_ly:,.0f}LY",
+                            fill=COLOR_TEXT, font=("Courier", 8, "bold"), anchor="e")
 
         badges = nav_context.get("badges", [])
         x = 16
@@ -567,10 +572,21 @@ class TacticalHUD:
             self.canvas.create_rectangle(20, 182, 20 + ((w - 40) * pct), 190, fill=COLOR_ACCENT, outline=COLOR_ACCENT)
         self.canvas.create_line(20, 200, w - 20, 200, fill="#1a2530", width=1)
 
+        session_jumps = nav_context.get("session_jumps") or 0
+        session_ly = nav_context.get("session_ly") or 0.0
+        session_reserve = 0
+        if session_jumps:
+            session_text = f"SESSION {session_jumps} JUMPS · {session_ly:,.0f} LY"
+            session_font = tkfont.Font(family="Courier", size=9, weight="bold")
+            session_reserve = session_font.measure(session_text) + 16
+            self.draw_text(w - 20, 217, text=session_text,
+                            fill=COLOR_TEXT, font=("Courier", 9, "bold"), anchor="e")
+
         # ── Badges ───────────────────────────────────────────────────────
         x = 20
+        badge_limit = w - 60 - session_reserve
         for badge, state in nav_context.get("badges", []):
             bw = self._draw_badge(x, 208, str(badge), state)
             x += bw + 6
-            if x > w - 60:
+            if x > badge_limit:
                 break
