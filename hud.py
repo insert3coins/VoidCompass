@@ -1,7 +1,7 @@
 import tkinter as tk
 import tkinter.font as tkfont
 import time
-from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, save_config
+from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, COLOR_MUTED, save_config
 import route_strip
 import overlay_chrome
 
@@ -289,14 +289,25 @@ class TacticalHUD:
             return COLOR_ORANGE
         if state == "ok":
             return COLOR_ACCENT
-        return "#7d8891"
+        return COLOR_MUTED
+
+    _BADGE_GLYPHS = {"alert": "●", "ok": "✓", "muted": "○"}
 
     def _draw_badge(self, x, y, text, state="muted", height=18):
         color = self._badge_color(state)
+        label = f"{self._BADGE_GLYPHS.get(state, '○')} {text}"
         font = tkfont.Font(family="Courier", size=8, weight="bold")
-        text_w = font.measure(text)
+        text_w = font.measure(label)
         width = max(52, text_w + 16)
         cx, cy = x + width / 2, y + height / 2
+
+        if self._crt_enabled():
+            # Match the soft glow already used on chrome brackets and text so
+            # badges read as part of the same lit display, not a flat overlay.
+            glow_factor = 0.30 if self._crt_intensity() == "Subtle" else 0.42
+            glow = self._glow_color(color, glow_factor)
+            self.canvas.create_rectangle(x - 2, y - 2, x + width + 2, y + height + 2, outline=glow, width=3)
+
         if state == "alert":
             # Hazard-stripe treatment for genuine alerts (undiscovered, valuable, bio signals).
             self.canvas.create_rectangle(x, y, x + width, y + height, fill="#05080c", outline="")
@@ -315,10 +326,14 @@ class TacticalHUD:
                 cx - text_w / 2 - pad_x, y + 2, cx + text_w / 2 + pad_x, y + height - 2,
                 fill="#05080c", outline="",
             )
+        elif state == "ok":
+            # Backlit solid fill so a resolved/positive badge reads differently
+            # from a plain empty outline at a glance.
+            self.canvas.create_rectangle(x, y, x + width, y + height, fill=self._glow_color(color, 0.35), outline="")
         else:
             self.canvas.create_rectangle(x, y, x + width, y + height, fill="#05080c", outline="")
         self.canvas.create_rectangle(x, y, x + width, y + height, outline=color, width=1)
-        self.draw_text(cx, cy, text=text, fill=color, font=("Courier", 8, "bold"), anchor="center")
+        self.draw_text(cx, cy, text=label, fill=color, font=("Courier", 8, "bold"), anchor="center")
         return width
 
     def _state_text(self, nav_context):

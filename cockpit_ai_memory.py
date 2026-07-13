@@ -1420,12 +1420,23 @@ class CockpitMemory:
                     del known_species[:-80]
                     changed = True
 
-            sample_index = self._number(data.get("sample_idx") or raw.get("Sample"))
+            # Live ScanOrganic events carry no Sample/MaxSamples field — progress
+            # has to be tracked from ScanType position (Log=1, Sample=2, Sample=3),
+            # continuing whatever the currently active sample (if it matches this
+            # species/body/system) already reached. Analyse finalizes the existing
+            # count rather than adding a new sample.
+            biology = self.state.setdefault("biology", {})
+            active = biology.get("active_sample") or {}
+            active_matches = (active.get("species") == species and active.get("body") == body
+                               and active.get("system") == system)
+            previous_progress = int(active.get("progress") or 0) if active_matches else 0
             max_samples = max(1, self._number(data.get("max_samples") or raw.get("MaxSamples"), 3))
-            is_sample = bool(data.get("is_new_sample")) or scan_type in ("log", "sample", "analyse") or complete
-            sample_signature = f"{system}|{body}|{sample_index or scan_type or timestamp}"
+            is_new_physical_sample = scan_type in ("log", "sample")
+            sample_index = previous_progress + 1 if is_new_physical_sample else (previous_progress or max_samples)
+
+            sample_signature = f"{system}|{body}|{species}|{sample_index}"
             sample_keys = species_entry.setdefault("sample_keys", [])
-            if is_sample and sample_signature not in sample_keys:
+            if is_new_physical_sample and sample_signature not in sample_keys:
                 sample_keys.append(sample_signature)
                 del sample_keys[:-64]
                 species_entry["samples"] = int(species_entry.get("samples") or 0) + 1
@@ -1434,11 +1445,10 @@ class CockpitMemory:
                     genus_entry["samples"] = int(genus_entry.get("samples") or 0) + 1
                     genus_entry["count"] = max(1, int(genus_entry.get("count") or 0))
 
-            biology = self.state.setdefault("biology", {})
             if not complete:
                 biology["active_sample"] = {
                     "species": species, "genus": genus, "system": system, "body": body,
-                    "progress": sample_index or (2 if scan_type == "sample" else 1),
+                    "progress": sample_index,
                     "max_samples": max_samples, "updated_at": timestamp,
                 }
                 changed = True
