@@ -206,6 +206,19 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         except Exception:
             self._system_info_refresh_job = None
 
+    def _hide_survey_status_for_jump(self):
+        """Hide current-system survey data and prevent a queued stale redraw."""
+        job = getattr(self, "_system_info_refresh_job", None)
+        if job is not None:
+            try:
+                self.root.after_cancel(job)
+            except Exception:
+                pass
+            self._system_info_refresh_job = None
+        survey = getattr(self, "survey_status_hud", None)
+        if survey:
+            survey.hide()
+
     def _start_trade_live_services(self):
         """Start the EDDN listener at app startup (not first Trade-window open,
         which let the market DB silently age) and surface fired trade-watch
@@ -2942,6 +2955,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if ev == "StartJump":
                 self.in_fss = False
                 self.fss_summary_active = False
+                self._hide_survey_status_for_jump()
                 jump_type = d.get("jump_type") or (raw.get("JumpType") if isinstance(raw, dict) else "")
                 jump_type = str(jump_type or "").lower()
                 self.hud_flight_state = "SUPERCRUISE" if jump_type == "supercruise" else "HYPERSPACE"

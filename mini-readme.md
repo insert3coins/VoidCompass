@@ -9,6 +9,7 @@
 - Elite's `LoadGame` and `Shutdown` journal events now form Compass's preferred session lifecycle. `LoadGame` starts or enriches one known flight session, while `Shutdown` closes it and posts/speaks one whole-gameplay debrief; automatic activity start and application close remain duplicate-safe fallbacks when either journal boundary is absent.
 - Notable bodies now remain in the persistent Survey Status overlay as scan data arrives, using the same valuable-world, terraformable, biological-signal, icon, and reward rules as the temporary System Summary. Completed notable bodies no longer disappear with the System Summary timer, while ordinary completed bodies still clear from the overlay.
 - Survey Status body labels now combine the compact orbital designation with the known planet class, such as `A 2 · Water world` or `4 b · High metal content · TF`, so the persistent list identifies both the body number and what kind of world it is.
+- Survey Status now hides immediately on every live `StartJump` event and cancels any queued stale scan refresh, preventing the departing system's bodies from reappearing during supercruise or hyperspace.
 **Release Date:** 2026-Jul-13
 
 ### Voice Packs
