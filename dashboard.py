@@ -2140,8 +2140,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             badges.append(("UNDISC", "alert"))
         if self.system_bio_signals > 0:
             badges.append(("BIO", "ok" if self.organic_count >= self.system_bio_signals else "alert"))
-        if self.fss_summary_active:
-            badges.append(("FSS", "info"))
+        if self.total > 0:
+            badges.append(("FSS", "ok" if self.scanned >= self.total else "info"))
         if self.current_docked:
             badges.append(("DOCKED", "ok"))
         if not badges:
