@@ -215,6 +215,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     voice_objectives_var = tk.BooleanVar(value=config.get("voice_objectives_enabled", True))
     voice_cache_var = tk.BooleanVar(value=config.get("voice_cache_enabled", True))
     cockpit_memory_var = tk.BooleanVar(value=config.get("cockpit_memory_enabled", True))
+    cockpit_ambient_var = tk.BooleanVar(value=config.get("cockpit_ambient_chatter_enabled", True))
+    cockpit_greetings_var = tk.BooleanVar(value=config.get("cockpit_session_greetings_enabled", True))
+    cockpit_callbacks_var = tk.BooleanVar(value=config.get("cockpit_memory_callbacks_enabled", True))
     cockpit_personality_var = tk.StringVar(
         value=str(config.get("cockpit_personality_level", "Balanced") or "Balanced")
     )
@@ -328,6 +331,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     tk.Label(memory_controls, text="Personality", font=UI_FONT_BOLD, fg=UI_MUTED,
              bg=UI_PANEL).pack(side=tk.RIGHT)
     _refresh_memory_toggle()
+    toggle_row(memory_panel, "Ambient chatter while cruising", cockpit_ambient_var)
+    toggle_row(memory_panel, "Session greetings (welcome back / new day)", cockpit_greetings_var)
+    toggle_row(memory_panel, "Memory callbacks in system remarks", cockpit_callbacks_var)
     memory_summary_var = tk.StringVar(value="Compass has not created a memory profile yet.")
     tk.Label(
         memory_panel, textvariable=memory_summary_var, font=UI_FONT,
@@ -920,6 +926,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "voice_objectives_enabled": voice_objectives_var.get(),
             "voice_cache_enabled": voice_cache_var.get(),
             "cockpit_memory_enabled": cockpit_memory_var.get(),
+            "cockpit_ambient_chatter_enabled": cockpit_ambient_var.get(),
+            "cockpit_session_greetings_enabled": cockpit_greetings_var.get(),
+            "cockpit_memory_callbacks_enabled": cockpit_callbacks_var.get(),
             "cockpit_personality_level": cockpit_personality_var.get(),
             "cockpit_memory_system_limit": memory_limits["systems"],
             "cockpit_memory_species_limit": memory_limits["species"],

@@ -20,6 +20,9 @@ waypoints.json
 __pycache__/
 *.log
 
+# Local-only test scaffolding (not shipped/tracked)
+tests/
+
 # PyInstaller
 build/
 dist/

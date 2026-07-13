@@ -840,6 +840,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._tick_ui_stall_watchdog()
         self._tick_runtime_trace()
         self._tick_overlay_position_sync()
+        self._tick_cockpit_ambient()
 
     def _reapply_overlay_positions(self):
         try:
@@ -904,6 +905,25 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.runtime_trace:
             self.runtime_trace.flush(extra=extra)
         self.root.after(1000, self._tick_runtime_trace)
+
+    def _tick_cockpit_ambient(self):
+        if not self.is_running:
+            return
+        self._maybe_speak_ambient_chatter()
+        self.root.after(60000, self._tick_cockpit_ambient)
+
+    def _maybe_speak_ambient_chatter(self):
+        if (not self.config.get("cockpit_memory_enabled", True)
+                or not self.config.get("cockpit_ambient_chatter_enabled", True)
+                or not getattr(self, "cockpit_memory", None)):
+            return
+        if getattr(self, "hud_flight_state", None) not in ("FLIGHT", "SUPERCRUISE"):
+            return
+        last_event = getattr(self, "last_journal_event_ts", None)
+        if not last_event or (time.time() - last_event) < 480:
+            return
+        if self.cockpit_memory.queue_ambient_remark():
+            self._speak_pending_cockpit_remark()
 
     def _tick_overlay_position_sync(self):
         if not self.is_running:
@@ -2672,6 +2692,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             or data.get("ship_localised") or raw.get("Ship_Localised")
             or data.get("ship") or raw.get("Ship")
         )
+        previous_updated_at = memory.state.get("updated_at")
         session = memory.start_session(system, ship)
         if was_active or startup_replay:
             return False
@@ -2682,8 +2703,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             detail += f" in {system}"
         self.add_event_feed_entry("AI", detail, severity="INFO")
         self._pulse_cockpit_ai()
+        greeting_lines = (detail + ".", "Compass session initialized. I am ready.")
+        if self.config.get("cockpit_session_greetings_enabled", True):
+            context = memory.session_open_context(previous_updated_at)
+            if context == "long-absence":
+                greeting_lines = (
+                    "It has been some time since our last flight together. Systems are ready when you are.",
+                    f"{detail}. Welcome back — I was beginning to wonder about you.",
+                )
+            elif context == "new-day":
+                greeting_lines = (
+                    "A new day, a fresh flight log. Good to have you back in the seat.",
+                    f"{detail}. Another day in the black together.",
+                )
         self._speak(
-            (detail + ".", "Compass session initialized. I am ready."),
+            greeting_lines,
             category="navigation",
             cooldown_s=0,
             key=f"cockpit-loadgame-session:{session.get('id') or 'session'}",
@@ -2950,6 +2984,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 and getattr(self, "cockpit_memory", None)):
             try:
                 self.cockpit_memory.set_current_system(getattr(self, "current_sys", None))
+                self.cockpit_memory.memory_callbacks_enabled = self.config.get("cockpit_memory_callbacks_enabled", True)
                 learned = self.cockpit_memory.observe(ev, raw, d, startup_replay=startup_replay)
                 if not startup_replay:
                     self._publish_cockpit_ai_changes()
@@ -3161,6 +3196,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.schedule_dashboard_refresh()
                 self._refresh_exploration_window()
                 self._refresh_system_info_progress()
+                self._speak_pending_cockpit_remark()
 
         elif ev == "Location" or ev == "FSDJump" or ev == "StartJump" or (ev == "CarrierJump" and d.get("docked")):
             # Do not update HUDs during jump charge; wait for arrival.
@@ -4060,13 +4096,19 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 changed = self._record_unsold_scan(raw) or changed
             elif ev == "ScanOrganic":
                 changed = self._process_sampling_event(raw, data) or changed
+                if getattr(self, "cockpit_memory", None):
+                    self.cockpit_memory.check_bio_sell_anticipation(state.get("unsold_bio_samples"))
             elif ev in ("SellExplorationData", "MultiSellExplorationData"):
                 state["unsold_exploration_cr"] = 0
                 state["unsold_scan_keys"] = []
                 self._data_risk_level = 0
                 changed = True
             elif ev == "SellOrganicData":
+                sold_count = int(state.get("unsold_bio_samples") or 0)
+                if sold_count > 0 and getattr(self, "cockpit_memory", None):
+                    self.cockpit_memory.record_bio_sale(sold_count)
                 state["unsold_bio_cr"] = 0
+                state["unsold_bio_samples"] = 0
                 self._data_risk_level = 0
                 changed = True
 
@@ -4169,6 +4211,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             body_item = self.scan_items_by_id.get(self._normalize_body_id(body), {})
             multiplier = 5 if body_item.get("first_footfall") else 1
             self.companion_state["unsold_bio_cr"] = int(self.companion_state.get("unsold_bio_cr") or 0) + int(bio_values.species_value(species) or 0) * multiplier
+            self.companion_state["unsold_bio_samples"] = int(self.companion_state.get("unsold_bio_samples") or 0) + 1
             self.bio_sampling = None
             self.bio_sample_points = []
             self._sample_clear_announced = False
