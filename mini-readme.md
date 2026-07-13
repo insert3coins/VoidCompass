@@ -8,6 +8,7 @@
 - Compass now builds bounded operational knowledge across missions, combat, trade, mining, Engineering, Odyssey ground activity, career progression, crime/legal history, Powerplay/BGS, fleet carriers, colonisation, ships/modules, squadrons, and community goals. It learns top recurring targets, commodities, minerals, blueprints, factions, settlements, and outcomes while keeping only compact domain summaries; each newly understood gameplay domain appears once in the AI feed.
 - Elite's `LoadGame` and `Shutdown` journal events now form Compass's preferred session lifecycle. `LoadGame` starts or enriches one known flight session, while `Shutdown` closes it and posts/speaks one whole-gameplay debrief; automatic activity start and application close remain duplicate-safe fallbacks when either journal boundary is absent.
 - Notable bodies now remain in the persistent Survey Status overlay as scan data arrives, using the same valuable-world, terraformable, biological-signal, icon, and reward rules as the temporary System Summary. Completed notable bodies no longer disappear with the System Summary timer, while ordinary completed bodies still clear from the overlay.
+- Survey Status body labels now combine the compact orbital designation with the known planet class, such as `A 2 · Water world` or `4 b · High metal content · TF`, so the persistent list identifies both the body number and what kind of world it is.
 **Release Date:** 2026-Jul-13
 
 ### Voice Packs
