@@ -5,6 +5,7 @@ import tkinter as tk
 import bio_values
 from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, save_config
 import overlay_chrome
+from system_info_hud import build_notable_body_rows
 
 _CHROMA = "#ff00ff"
 _DIM = "#7a8a98"
@@ -103,9 +104,11 @@ def _body_detail_rows(item):
 
 
 def build_survey_model(system_name, scan_items, focused_body_id=None,
-                       focused_body_name=None, sampling=None):
+                       focused_body_name=None, sampling=None, scanned=0, total=0,
+                       min_notable_value=50_000):
     """Build a renderer-neutral survey model for the overlay and tests."""
     bodies = [row for row in (scan_items or []) if not row.get("is_star")]
+    notable_rows = build_notable_body_rows(scan_items, min_notable_value)
     focused = next((row for row in bodies if _body_matches(
         row, focused_body_id, focused_body_name)), None)
     if focused and (_safe_int(focused.get("bio_count")) > 0 or sampling):
@@ -116,6 +119,8 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
                 "mode": "body", "system": system_name or "", "body": focused,
                 "rows": _body_detail_rows(focused), "sampling": sampling,
                 "min_value": lo, "max_value": hi,
+                "notable_rows": notable_rows,
+                "scanned": _safe_int(scanned), "total": _safe_int(total),
             }
 
     rows = []
@@ -136,9 +141,31 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
             "first_footfall": bool(body.get("first_footfall")),
         })
     rows.sort(key=lambda row: (not bool(row["bio_count"]), row["name"]))
-    if not rows and not sampling:
+    notable_by_id = {
+        str(row.get("body_id")): row for row in notable_rows if row.get("body_id") is not None
+    }
+    notable_by_name = {str(row.get("name") or "").casefold(): row for row in notable_rows}
+    represented = set()
+    for row in rows:
+        body = next((item for item in bodies if str(item.get("name") or "").casefold()
+                     == str(row["name"]).casefold()), {})
+        notable = notable_by_id.get(str(body.get("body_id"))) if body.get("body_id") is not None else None
+        notable = notable or notable_by_name.get(str(row["name"]).casefold())
+        if notable:
+            row["notable"] = notable
+            represented.add((str(notable.get("body_id")), str(notable.get("name") or "").casefold()))
+    remaining_notable = [
+        row for row in notable_rows
+        if (str(row.get("body_id")), str(row.get("name") or "").casefold()) not in represented
+    ]
+    if not rows and not remaining_notable and not sampling:
         return None
-    return {"mode": "system", "system": system_name or "", "rows": rows, "sampling": sampling}
+    return {
+        "mode": "system", "system": system_name or "", "rows": rows,
+        "notable_rows": remaining_notable, "sampling": sampling,
+        "scanned": _safe_int(scanned), "total": _safe_int(total),
+        "notable_count": len(notable_rows),
+    }
 
 
 class SurveyStatusHUD:
@@ -193,7 +220,8 @@ class SurveyStatusHUD:
     def update(self, system_name, scanned, total, scan_items, body_signals,
                sampling=None, focused_body_id=None, focused_body_name=None):
         model = build_survey_model(system_name, scan_items, focused_body_id,
-                                   focused_body_name, sampling)
+                                   focused_body_name, sampling, scanned, total,
+                                   _safe_int(self.config.get("system_info_min_value"), 50_000))
         if not model:
             self.hide()
             return
@@ -230,11 +258,27 @@ class SurveyStatusHUD:
         self._text(WIDTH - 18, y, status, _GREEN if clear else COLOR_TEXT, ("Courier", 8, "bold"), "e")
         return y + 19
 
+    def _notable_row(self, row, y):
+        name = f"{row['icons']} {row['name']}" if row.get("icons") else row["name"]
+        self._text(20, y, _truncate(name, 36), row["name_color"], ("Courier", 8, "bold"))
+        detail = row.get("planet_class") or ("Terraformable" if row.get("terraformable") else "Notable body")
+        if row.get("terraformable") and "terraform" not in detail.casefold():
+            detail += " · Terraformable"
+        self._text(28, y + 15, _truncate(detail, 31), _DIM, ("Courier", 7, "bold"))
+        self._text(WIDTH - 18, y + 15, row["value_line"], row["value_color"], ("Courier", 7, "bold"), "e")
+        return y + 34
+
     def _redraw(self, model):
         is_body = model["mode"] == "body"
         rows = model["rows"]
+        notable_rows = model.get("notable_rows") or []
         sample_h = 19 if model.get("sampling") else 0
-        h = 48 + sample_h + max(1, len(rows)) * 19 + 25
+        if is_body:
+            content_h = 20 + max(1, len(rows)) * 19
+        else:
+            content_h = (20 + sum(19 + (15 if row.get("notable") else 0) for row in rows)) if rows else 0
+        notable_h = (20 + len(notable_rows) * 34) if notable_rows else 0
+        h = 48 + sample_h + content_h + notable_h + 27
         self.canvas.config(width=WIDTH, height=h)
         self.win.geometry(f"{WIDTH}x{h}")
         self.canvas.delete("all")
@@ -267,9 +311,10 @@ class SurveyStatusHUD:
                 self._text(WIDTH - 18, y, value_text, color, ("Courier", 8, "bold"), "e")
                 y += 19
         else:
-            self._text(18, y, "BODY", _DIM, ("Courier", 7, "bold"))
-            self._text(WIDTH - 18, y, "STATUS / EST. VALUE", _DIM, ("Courier", 7, "bold"), "e")
-            y += 20
+            if rows:
+                self._text(18, y, "SURVEY TARGETS", _DIM, ("Courier", 7, "bold"))
+                self._text(WIDTH - 18, y, "STATUS / EST. VALUE", _DIM, ("Courier", 7, "bold"), "e")
+                y += 20
             for row in rows:
                 bio = row["bio_count"]
                 if bio:
@@ -279,12 +324,29 @@ class SurveyStatusHUD:
                     state, color = "DSS REQUIRED", _DIM
                 lo, hi = row["min_value"], row["max_value"]
                 estimate = "" if not hi else (f" · {_credits(lo)}" if lo == hi else f" · {_credits(lo)}–{_credits(hi)}")
-                self._text(20, y, _truncate(row["name"], 29), color, ("Courier", 8, "bold"))
+                notable = row.get("notable")
+                name = f"{notable['icons']} {row['name']}" if notable and notable.get("icons") else row["name"]
+                self._text(20, y, _truncate(name, 29), color, ("Courier", 8, "bold"))
                 self._text(WIDTH - 18, y, state + estimate, color, ("Courier", 8, "bold"), "e")
                 y += 19
+                if notable:
+                    self._text(28, y, _truncate(notable.get("planet_class") or "Notable body", 28), _DIM, ("Courier", 7, "bold"))
+                    self._text(WIDTH - 18, y, notable["value_line"], notable["value_color"], ("Courier", 7, "bold"), "e")
+                    y += 15
+
+        if notable_rows:
+            self.canvas.create_line(18, y - 2, WIDTH - 18, y - 2, fill="#26313a", width=1)
+            self._text(18, y + 8, f"NOTABLE BODIES ({len(notable_rows)})", _DIM, ("Courier", 7, "bold"))
+            y += 24
+            for row in notable_rows:
+                y = self._notable_row(row, y)
 
         if is_body:
             lo, hi = model["min_value"], model["max_value"]
             total = _credits(lo) if lo == hi else f"{_credits(lo)}–{_credits(hi)}"
             self._text(18, h - 15, "ESTIMATED BASE", _DIM, ("Courier", 7, "bold"))
             self._text(WIDTH - 18, h - 15, total, COLOR_ORANGE, ("Courier", 8, "bold"), "e")
+        else:
+            progress = f"SCAN {model.get('scanned', 0)}/{model.get('total', 0)}"
+            self._text(18, h - 15, progress, _DIM, ("Courier", 7, "bold"))
+            self._text(WIDTH - 18, h - 15, f"NOTABLE {model.get('notable_count', 0)}", COLOR_ORANGE, ("Courier", 7, "bold"), "e")
