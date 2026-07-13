@@ -567,6 +567,11 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         )
         awareness = details["gameplay_awareness"]
         awareness_domains = ", ".join(awareness["domains"]) if awareness["domains"] else "still observing"
+        traffic = details.get("current_system_traffic") or {}
+        traffic_text = (
+            f"D/W/T {int(traffic.get('day') or 0):,}/{int(traffic.get('week') or 0):,}/{int(traffic.get('total') or 0):,}"
+            if traffic else "not checked"
+        )
         compass_status_var.set(
             f"{details['relationship']} · Voice stage: {str(details['voice_stage']).title()}\n"
             f"Mood: {mood['name']} ({mood['reason']}) · Habits: {habits}\n"
@@ -574,6 +579,8 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             f"Exploration memory: {details['honks']:,} honks · "
             f"{details['fss_completed']:,} full FSS surveys · {details['dss_maps']:,} DSS maps · "
             f"{details['signal_bodies']:,} signal bodies\n"
+            f"Traffic awareness: {details.get('traffic_known_systems', 0):,} travelled systems · "
+            f"Current {traffic_text}\n"
             f"Gameplay awareness: {awareness_domains}\n"
             f"Operational memory: {awareness['missions_completed']:,} missions · "
             f"{awareness['combat_victories']:,} combat victories · "

@@ -118,6 +118,37 @@ class CockpitMemoryTests(unittest.TestCase):
             self.assertEqual(memory.system_visits("Colonia"), 0)
             self.assertIn("Colonia 2", memory.state["systems"]["Colonia"]["mapped_bodies"])
 
+    def test_hud_traffic_becomes_system_context_without_erasing_body_discoveries(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = pathlib.Path(folder) / "memory.json"
+            memory = CockpitMemory(path)
+            memory.set_current_system("Traffic Test")
+
+            self.assertTrue(memory.observe_system_traffic(
+                "Traffic Test", {"day": 2, "week": 7, "total": 42},
+            ))
+            memory.observe(
+                "Scan", {"BodyName": "Traffic Test A 1", "WasDiscovered": False},
+                {"body_name": "Traffic Test A 1", "was_discovered": False},
+            )
+            # A later zero response must not erase durable evidence of prior traffic.
+            self.assertTrue(memory.observe_system_traffic(
+                "Traffic Test", {"day": 0, "week": 0, "total": 0},
+            ))
+
+            self.assertTrue(memory.system_has_traffic("Traffic Test"))
+            self.assertEqual(memory.system_traffic("Traffic Test")["total"], 42)
+            self.assertEqual(memory.system_visits("Traffic Test"), 0)
+            self.assertEqual(memory.count("first_discoveries"), 1)
+            self.assertEqual(memory.status_details()["traffic_known_systems"], 1)
+            self.assertEqual(CockpitMemory(path).system_traffic("Traffic Test")["total"], 42)
+
+            self.assertTrue(memory.observe_system_traffic(
+                "Zero Traffic Test", {"day": 0, "week": 0, "total": 0},
+            ))
+            self.assertEqual(memory.system_traffic("Zero Traffic Test")["total"], 0)
+            self.assertFalse(memory.system_has_traffic("Zero Traffic Test"))
+
     def test_operational_domains_learn_patterns_instead_of_raw_events(self):
         with tempfile.TemporaryDirectory() as folder:
             memory = CockpitMemory(pathlib.Path(folder) / "memory.json")

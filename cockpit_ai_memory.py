@@ -255,6 +255,63 @@ class CockpitMemory:
         self._save()
         return True
 
+    @staticmethod
+    def _normalize_traffic(traffic):
+        traffic = traffic if isinstance(traffic, dict) else {}
+        normalized = {}
+        for key in ("day", "week", "total"):
+            try:
+                normalized[key] = max(0, int(float(traffic.get(key) or 0)))
+            except (TypeError, ValueError):
+                normalized[key] = 0
+        return normalized
+
+    def observe_system_traffic(self, system_name, traffic):
+        """Remember the HUD's EDSM traffic context without counting a player visit."""
+        system = _safe_name(system_name, "")
+        if not system or system in ("---", "Unknown") or not isinstance(traffic, dict):
+            return False
+        incoming = self._normalize_traffic(traffic)
+        timestamp = _now()
+        entry = self.state["systems"].setdefault(
+            system, {"count": 0, "first_seen": timestamp, "last_seen": timestamp}
+        )
+        had_traffic_record = isinstance(entry.get("traffic"), dict)
+        previous = entry.get("traffic") if had_traffic_record else {}
+        remembered_total = max(int(previous.get("total") or 0), incoming["total"])
+        has_traffic = bool(
+            entry.get("has_traffic") or incoming["day"] or incoming["week"] or remembered_total
+        )
+        updated = {
+            "day": incoming["day"],
+            "week": incoming["week"],
+            "total": remembered_total,
+        }
+        changed = not had_traffic_record
+        changed = changed or updated != {key: int(previous.get(key) or 0) for key in updated}
+        changed = changed or has_traffic != bool(entry.get("has_traffic"))
+        if not changed:
+            return False
+        updated["observed_at"] = timestamp
+        entry["traffic"] = updated
+        entry["has_traffic"] = has_traffic
+        entry["last_seen"] = timestamp
+        self._trim(self.state["systems"], self.limits["systems"])
+        self._save()
+        return True
+
+    def system_traffic(self, system_name):
+        entry = self.state.get("systems", {}).get(str(system_name)) or {}
+        traffic = entry.get("traffic")
+        return dict(traffic) if isinstance(traffic, dict) else None
+
+    def system_has_traffic(self, system_name):
+        entry = self.state.get("systems", {}).get(str(system_name)) or {}
+        if entry.get("has_traffic"):
+            return True
+        traffic = self._normalize_traffic(entry.get("traffic"))
+        return any(traffic[key] > 0 for key in ("day", "week", "total"))
+
     def voice_selected(self, voice_name, label=None):
         voice_name = _safe_name(voice_name, "")
         if not voice_name:
@@ -1483,6 +1540,7 @@ class CockpitMemory:
         active = self.state.get("active_expedition")
         ships = self.state.get("ships", {})
         systems = self.state.get("systems", {})
+        current_system = self.state.get("current_system")
         favorite_ship = max(ships.items(), key=lambda pair: int(pair[1].get("count") or 0))[0] if ships else None
         familiar_system = max(systems.items(), key=lambda pair: int(pair[1].get("count") or 0))[0] if systems else None
         return {
@@ -1496,6 +1554,10 @@ class CockpitMemory:
             "sessions": len(self.state.get("sessions", [])),
             "favorite_ship": favorite_ship,
             "most_visited_system": familiar_system,
+            "traffic_known_systems": sum(
+                1 for system in systems if self.system_has_traffic(system)
+            ),
+            "current_system_traffic": self.system_traffic(current_system) if current_system else None,
         }
 
     def arrival_lines(self, system_name, level="Balanced"):

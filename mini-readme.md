@@ -1,5 +1,11 @@
 # VoidCompass // UPDATE LOG
 
+## v4.6.1 // Traffic-Aware Compass Intelligence
+
+- Compass now consumes the same EDSM day/week/total traffic shown on the HUD and retains it per remembered system. Prior traffic suppresses contradictory whole-system `UNDISC` state, alerts, and voice lines, while genuine first discoveries of individual bodies remain part of its exploration memory.
+- The Compass AI Intelligence State now shows how many travelled systems it remembers plus the current system's traffic context.
+**Release Date:** 2026-Jul-13
+
 ## v4.5.9 // Autonomous Compass Intelligence
 
 - Compass AI now has a violet `AI` category in the Live Event Timeline. It posts one compact online brain summary, then only meaningful mood, relationship, learned-habit, expedition, and memory-capacity milestones; routine voice lines and ordinary learning stay out of the feed.

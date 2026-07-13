@@ -49,6 +49,75 @@ class DashboardVoiceTests(unittest.TestCase):
         self.assertFalse(app._announce_system_arrival("Sol", startup_replay=True))
         self.assertEqual(app.spoken, [])
 
+    def test_hud_traffic_suppresses_pending_whole_system_discovery_callout(self):
+        app = self._app()
+        app.current_sys = "Traffic Test"
+        app.system_traffic = {"day": 0, "week": 0, "total": 0}
+        app._system_traffic_resolved = False
+        app._pending_system_discovery = None
+        app.system_undiscovered = False
+        app.entries = []
+        app.add_event_feed_entry = lambda *args, **kwargs: app.entries.append((args, kwargs))
+
+        class Memory:
+            def __init__(self):
+                self.traffic = {}
+
+            def observe_system_traffic(self, system, traffic):
+                self.traffic[system] = dict(traffic)
+
+            def system_has_traffic(self, system):
+                return any(self.traffic.get(system, {}).values())
+
+        app.cockpit_memory = Memory()
+
+        self.assertFalse(app._consider_system_undiscovered())
+        self.assertIsNotNone(app._pending_system_discovery)
+        app._apply_system_traffic_context(
+            "Traffic Test", {"day": 1, "week": 5, "total": 88},
+        )
+
+        self.assertFalse(app.system_undiscovered)
+        self.assertIsNone(app._pending_system_discovery)
+        self.assertEqual(app.spoken, [])
+        self.assertEqual(app.entries, [])
+        self.assertEqual(app.cockpit_memory.traffic["Traffic Test"]["total"], 88)
+
+    def test_zero_traffic_resolves_pending_system_discovery_normally(self):
+        app = self._app()
+        app.current_sys = "Uncharted Test"
+        app.system_traffic = {"day": 0, "week": 0, "total": 0}
+        app._system_traffic_resolved = False
+        app._pending_system_discovery = None
+        app.system_undiscovered = False
+        app.entries = []
+        app.add_event_feed_entry = lambda *args, **kwargs: app.entries.append((args, kwargs))
+
+        class Memory:
+            def observe_system_traffic(self, _system, _traffic):
+                return True
+
+            def system_has_traffic(self, _system):
+                return False
+
+            def count(self, _key):
+                return 1
+
+            def should_reference_repeat(self, _count, _level):
+                return False
+
+        app.cockpit_memory = Memory()
+
+        self.assertFalse(app._consider_system_undiscovered())
+        app._apply_system_traffic_context(
+            "Uncharted Test", {"day": 0, "week": 0, "total": 0},
+        )
+
+        self.assertTrue(app.system_undiscovered)
+        self.assertEqual(len(app.spoken), 1)
+        self.assertEqual(len(app.entries), 1)
+        self.assertIn("Undiscovered system", app.entries[0][0][1])
+
     def test_jet_cone_boost_keeps_toast_but_has_no_voice(self):
         app = self._app()
         app.is_first_load = False
