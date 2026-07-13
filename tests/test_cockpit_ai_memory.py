@@ -56,6 +56,49 @@ class CockpitMemoryTests(unittest.TestCase):
             self.assertFalse(memory.should_reference_repeat(2, "Balanced"))
             self.assertTrue(memory.should_reference_repeat(2, "Chatty"))
 
+    def test_voice_pool_expands_through_relationship_stages(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = CockpitMemory(pathlib.Path(folder) / "memory.json")
+            base = tuple(f"Arrival line {index}" for index in range(5))
+            expected = {
+                0: ("new", 2),
+                25: ("developing", 3),
+                100: ("familiar", 5),
+                500: ("trusted", 7),
+                2000: ("veteran", 8),
+            }
+
+            for score, (stage, size) in expected.items():
+                memory.state["counters"] = {"jumps": score}
+                self.assertEqual(memory.voice_stage(), stage)
+                pool = memory.voice_pool(base, key="system-arrival:Sol")
+                self.assertEqual(len(pool), size)
+                self.assertEqual(pool[0], base[0])
+
+    def test_personality_setting_advances_or_restrains_voice_evolution(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = CockpitMemory(pathlib.Path(folder) / "memory.json")
+            memory.state["counters"] = {"jumps": 100}
+
+            self.assertEqual(memory.voice_stage("Quiet"), "developing")
+            self.assertEqual(memory.voice_stage("Balanced"), "familiar")
+            self.assertEqual(memory.voice_stage("Chatty"), "trusted")
+
+    def test_evolved_safety_pool_retains_direct_warning(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = CockpitMemory(pathlib.Path(folder) / "memory.json")
+            memory.state["counters"] = {"jumps": 2500}
+            warning = "Warning. Ship temperature critical."
+            pool = memory.voice_pool(
+                (warning, "Thermal telemetry critical.", "Immediate cooling recommended."),
+                key="ship-overheat",
+            )
+
+            self.assertIn(warning, pool)
+            self.assertGreater(len(pool), 3)
+            self.assertTrue(any("cool" in line.casefold() or "thermal" in line.casefold()
+                                for line in pool[3:]))
+
     def test_configurable_caps_prune_existing_memory_immediately(self):
         with tempfile.TemporaryDirectory() as folder:
             path = pathlib.Path(folder) / "memory.json"
