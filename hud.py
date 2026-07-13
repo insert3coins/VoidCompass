@@ -354,17 +354,14 @@ class TacticalHUD:
 
     def _bio_value_counts(self, organic_count, nav_context):
         bio_text = f"BIO {organic_count}"
-        value_count = 0
+        value_text = ""
         for badge, _state in nav_context.get("badges", []):
             badge_text = str(badge)
             if badge_text.startswith("BIO"):
                 bio_text = badge_text
             elif badge_text.startswith("VALUE"):
-                try:
-                    value_count = int(badge_text.split(" ", 1)[1])
-                except Exception:
-                    value_count = 0
-        return bio_text.replace("BIO ", ""), value_count
+                value_text = badge_text.split(" ", 1)[1] if " " in badge_text else ""
+        return bio_text.replace("BIO ", ""), value_text
 
     def _route_header(self, nav_context, route_waypoint, route_counts, game_r_pos, remaining):
         """A single consolidated route-status string: what we're following, plus
@@ -463,7 +460,8 @@ class TacticalHUD:
         self.canvas.create_line(16, 134, w - 16, 134, fill="#1a2530", width=1)
 
         self.draw_text(16, 144, text=f"TRAFFIC {traffic_text}", fill="#7d8891", font=("Courier", 8, "bold"), anchor="w")
-        self.draw_text(w - 16, 144, text=f"BIO {bio_count}  VALUE {value_count}", fill=COLOR_ORANGE if (bio_count not in ("0", 0) or value_count) else "#7d8891", font=("Courier", 8, "bold"), anchor="e")
+        value_display = value_count or "-"
+        self.draw_text(w - 16, 144, text=f"BIO {bio_count}  VALUE {value_display}", fill=COLOR_ORANGE if (bio_count not in ("0", 0) or value_count) else "#7d8891", font=("Courier", 8, "bold"), anchor="e")
 
         badges = [b for b in nav_context.get("badges", []) if not str(b[0]).startswith(("BIO", "VALUE"))]
         x = 16

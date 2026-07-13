@@ -2115,15 +2115,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 cargo_tons = 0
         cargo_cap = int(getattr(self, "cargo_capacity", 0) or 0)
         trade_profit = int((getattr(self, "trade_session", {}) or {}).get("profit", 0) or 0)
+        bio_scanned_value = sum(
+            int(bio_values.species_value(scan.get("species")) or scan.get("species_value") or 0)
+            for scan in self.last_bio_scan.values()
+            if scan.get("is_complete")
+        )
         badges = []
         if self.system_undiscovered:
             badges.append(("UNDISC", "alert"))
         if self.system_bio_signals > 0:
-            badges.append((f"BIO {self.system_bio_signals}", "alert"))
+            badges.append((f"BIO {self.organic_count}/{self.system_bio_signals}",
+                            "ok" if self.organic_count >= self.system_bio_signals else "alert"))
         elif self.organic_count:
             badges.append((f"BIO {self.organic_count}", "ok"))
-        if self.valuable_bodies:
-            badges.append((f"VALUE {len(self.valuable_bodies)}", "alert"))
+        if bio_scanned_value:
+            badges.append((f"VALUE {self._format_hud_credits(bio_scanned_value)}", "ok"))
         if self.fss_summary_active:
             badges.append(("FSS", "alert"))
         if self.current_docked:
@@ -3154,6 +3160,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.update_hud()
                 self.schedule_dashboard_refresh()
                 self._refresh_exploration_window()
+                self._refresh_system_info_progress()
 
         elif ev == "Location" or ev == "FSDJump" or ev == "StartJump" or (ev == "CarrierJump" and d.get("docked")):
             # Do not update HUDs during jump charge; wait for arrival.
