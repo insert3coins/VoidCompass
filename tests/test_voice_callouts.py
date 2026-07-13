@@ -43,6 +43,16 @@ class VoiceCalloutTests(unittest.TestCase):
         with self.assertRaisesRegex(voice_callouts.VoiceError, "Unknown voice"):
             voice_callouts.start_download("../../not-a-voice")
 
+    def test_selected_voice_can_be_applied_to_live_config(self):
+        config = {"voice_name": voice_callouts.DEFAULT_VOICE}
+        chosen = "en_NZ-vctk-p335-medium"
+
+        self.assertEqual(voice_callouts.set_selected_voice(config, chosen), chosen)
+        self.assertEqual(voice_callouts.selected_voice(config), chosen)
+        with self.assertRaisesRegex(voice_callouts.VoiceError, "Unknown voice"):
+            voice_callouts.set_selected_voice(config, "not-a-voice")
+        self.assertEqual(voice_callouts.selected_voice(config), chosen)
+
     def test_status_reports_only_complete_voice_install(self):
         with tempfile.TemporaryDirectory() as folder, mock.patch.object(
             voice_callouts, "TTS_DIR", pathlib.Path(folder)
