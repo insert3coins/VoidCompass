@@ -25,6 +25,31 @@ def _truncate(text, max_chars):
     return text if len(text) <= max_chars else text[:max_chars - 1] + "…"
 
 
+def _short_body_name(name, system_name):
+    name = str(name or "Unknown body").strip()
+    system = str(system_name or "").strip()
+    prefix = system + " "
+    if system and name.casefold().startswith(prefix.casefold()):
+        return name[len(prefix):].strip() or name
+    return name
+
+
+def _planet_label(value):
+    label = str(value or "").strip()
+    if label.casefold().endswith(" body"):
+        label = label[:-5]
+    return label
+
+
+def _body_display_name(name, system_name, planet_class=None, terraformable=False):
+    designation = _short_body_name(name, system_name)
+    planet = _planet_label(planet_class)
+    label = f"{designation} · {planet}" if planet else designation
+    if terraformable:
+        label += " · TF"
+    return label
+
+
 def _body_matches(item, body_id, body_name):
     if body_id is not None and str(item.get("body_id")) == str(body_id):
         return True
@@ -109,6 +134,10 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
     """Build a renderer-neutral survey model for the overlay and tests."""
     bodies = [row for row in (scan_items or []) if not row.get("is_star")]
     notable_rows = build_notable_body_rows(scan_items, min_notable_value)
+    for row in notable_rows:
+        row["display_name"] = _body_display_name(
+            row.get("name"), system_name, row.get("planet_class"), row.get("terraformable")
+        )
     focused = next((row for row in bodies if _body_matches(
         row, focused_body_id, focused_body_name)), None)
     if focused and (_safe_int(focused.get("bio_count")) > 0 or sampling):
@@ -117,6 +146,10 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
             lo, hi = _body_value_range(focused)
             return {
                 "mode": "body", "system": system_name or "", "body": focused,
+                "body_display": _body_display_name(
+                    focused.get("name"), system_name, focused.get("planet_class"),
+                    focused.get("terraformable"),
+                ),
                 "rows": _body_detail_rows(focused), "sampling": sampling,
                 "min_value": lo, "max_value": hi,
                 "notable_rows": notable_rows,
@@ -133,6 +166,11 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
         lo, hi = _body_value_range(body)
         rows.append({
             "name": body.get("name") or "Unknown body",
+            "display_name": _body_display_name(
+                body.get("name"), system_name, body.get("planet_class"), body.get("terraformable")
+            ),
+            "planet_class": body.get("planet_class") or "",
+            "terraformable": bool(body.get("terraformable")),
             "bio_count": bio_count,
             "complete": complete,
             "needs_dss": needs_dss,
@@ -259,12 +297,10 @@ class SurveyStatusHUD:
         return y + 19
 
     def _notable_row(self, row, y):
-        name = f"{row['icons']} {row['name']}" if row.get("icons") else row["name"]
+        label = row.get("display_name") or row["name"]
+        name = f"{row['icons']} {label}" if row.get("icons") else label
         self._text(20, y, _truncate(name, 36), row["name_color"], ("Courier", 8, "bold"))
-        detail = row.get("planet_class") or ("Terraformable" if row.get("terraformable") else "Notable body")
-        if row.get("terraformable") and "terraform" not in detail.casefold():
-            detail += " · Terraformable"
-        self._text(28, y + 15, _truncate(detail, 31), _DIM, ("Courier", 7, "bold"))
+        self._text(28, y + 15, "SURVEY VALUE", _DIM, ("Courier", 7, "bold"))
         self._text(WIDTH - 18, y + 15, row["value_line"], row["value_color"], ("Courier", 7, "bold"), "e")
         return y + 34
 
@@ -293,7 +329,7 @@ class SurveyStatusHUD:
             body = model["body"]
             count = _safe_int(body.get("bio_count"))
             done = _safe_int(body.get("organic_complete_count"))
-            self._text(18, y, _truncate(body.get("name"), 34), COLOR_ORANGE, ("Courier", 8, "bold"))
+            self._text(18, y, _truncate(model.get("body_display") or body.get("name"), 38), COLOR_ORANGE, ("Courier", 8, "bold"))
             self._text(WIDTH - 18, y, f"BIO {done}/{count}", COLOR_TEXT, ("Courier", 8, "bold"), "e")
             y += 20
             for row in rows:
@@ -325,12 +361,13 @@ class SurveyStatusHUD:
                 lo, hi = row["min_value"], row["max_value"]
                 estimate = "" if not hi else (f" · {_credits(lo)}" if lo == hi else f" · {_credits(lo)}–{_credits(hi)}")
                 notable = row.get("notable")
-                name = f"{notable['icons']} {row['name']}" if notable and notable.get("icons") else row["name"]
-                self._text(20, y, _truncate(name, 29), color, ("Courier", 8, "bold"))
+                label = row.get("display_name") or row["name"]
+                name = f"{notable['icons']} {label}" if notable and notable.get("icons") else label
+                self._text(20, y, _truncate(name, 34), color, ("Courier", 8, "bold"))
                 self._text(WIDTH - 18, y, state + estimate, color, ("Courier", 8, "bold"), "e")
                 y += 19
                 if notable:
-                    self._text(28, y, _truncate(notable.get("planet_class") or "Notable body", 28), _DIM, ("Courier", 7, "bold"))
+                    self._text(28, y, "NOTABLE BODY", _DIM, ("Courier", 7, "bold"))
                     self._text(WIDTH - 18, y, notable["value_line"], notable["value_color"], ("Courier", 7, "bold"), "e")
                     y += 15
 

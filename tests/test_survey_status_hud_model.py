@@ -45,6 +45,23 @@ class SurveyStatusModelTests(unittest.TestCase):
         self.assertEqual(model["rows"][0]["bio_count"], 3)
         self.assertTrue(model["rows"][1]["needs_dss"])
 
+    def test_body_designation_is_combined_with_compact_planet_class(self):
+        body = _body(
+            name="Test AB A 2", planet_class="High metal content body",
+            terraformable=True,
+        )
+
+        model = build_survey_model("Test AB", [body])
+
+        self.assertEqual(model["rows"][0]["display_name"], "A 2 · High metal content · TF")
+
+    def test_focused_body_header_keeps_number_and_planet_class(self):
+        body = _body(name="Test AB 4 b", planet_class="Water world")
+
+        model = build_survey_model("Test AB", [body], focused_body_id=7)
+
+        self.assertEqual(model["body_display"], "4 b · Water world")
+
     def test_completed_bio_body_remains_as_persistent_notable_body(self):
         model = build_survey_model(
             "Test AB", [_body(organic_complete_count=3)], scanned=1, total=4,
@@ -53,6 +70,7 @@ class SurveyStatusModelTests(unittest.TestCase):
         self.assertEqual(model["mode"], "system")
         self.assertEqual(model["rows"], [])
         self.assertEqual(model["notable_rows"][0]["name"], "Test AB 1 c")
+        self.assertEqual(model["notable_rows"][0]["display_name"], "1 c")
         self.assertIn("BIO 3", model["notable_rows"][0]["value_line"])
         self.assertEqual((model["scanned"], model["total"]), (1, 4))
 
