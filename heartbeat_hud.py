@@ -21,8 +21,11 @@ from config import COLOR_ACCENT, save_config
 _CHROMA = "#ff00ff"
 _SIZE = 34
 _STALL_COLOR = "#ff5a5a"
+_AI_COLOR = "#c084fc"
 _STALL_AFTER_S = 15
 _MAX_GROWTH = 6
+_AI_MAX_GROWTH = 8
+_AI_HOLD_S = 2.0
 
 
 class HeartbeatHUD:
@@ -30,6 +33,8 @@ class HeartbeatHUD:
         self.root = root
         self.config = config
         self._pulse_level = 0
+        self._pulse_kind = "journal"
+        self._special_until = 0.0
         self._last_pulse_ts = time.time()
         self._tick_job = None
         self._last_render_key = None
@@ -91,18 +96,34 @@ class HeartbeatHUD:
     def _tick(self):
         if self._pulse_level > 0:
             self._pulse_level -= 1
-        render_key = (self._pulse_level, (time.time() - self._last_pulse_ts) > _STALL_AFTER_S)
+        if self._pulse_kind == "ai" and time.monotonic() >= self._special_until:
+            self._pulse_kind = "journal"
+        render_key = (
+            self._pulse_level,
+            (time.time() - self._last_pulse_ts) > _STALL_AFTER_S,
+            self._pulse_kind,
+        )
         if render_key != self._last_render_key:
             self._redraw()
         self._schedule_tick()
 
     # ── Data interface ───────────────────────────────────────────────────
 
-    def pulse(self):
-        """Call on every status/journal update processed — resets the flash."""
-        self._pulse_level = _MAX_GROWTH
+    def pulse(self, kind="journal"):
+        """Flash for stream activity; AI work gets a brief distinct violet pulse."""
+        now = time.monotonic()
+        if str(kind).casefold() == "ai":
+            self._pulse_kind = "ai"
+            self._special_until = now + _AI_HOLD_S
+            self._pulse_level = _AI_MAX_GROWTH
+        elif self._pulse_kind == "ai" and now < self._special_until:
+            # Frequent Status.json writes must not immediately hide AI activity.
+            self._pulse_level = max(self._pulse_level, _AI_MAX_GROWTH)
+        else:
+            self._pulse_kind = "journal"
+            self._pulse_level = _MAX_GROWTH
         self._last_pulse_ts = time.time()
-        if self._last_render_key != (self._pulse_level, False):
+        if self._last_render_key != (self._pulse_level, False, self._pulse_kind):
             self._redraw()
 
     # ── Drag-to-move ─────────────────────────────────────────────────────
@@ -130,11 +151,14 @@ class HeartbeatHUD:
         self.canvas.delete("all")
         cx = cy = _SIZE // 2
         stalled = (time.time() - self._last_pulse_ts) > _STALL_AFTER_S
-        self._last_render_key = (self._pulse_level, stalled)
-        color = _STALL_COLOR if stalled else COLOR_ACCENT
+        pulse_kind = getattr(self, "_pulse_kind", "journal")
+        self._last_render_key = (self._pulse_level, stalled, pulse_kind)
+        color = _STALL_COLOR if stalled else _AI_COLOR if pulse_kind == "ai" else COLOR_ACCENT
         base_r = 5
         r = base_r if stalled else base_r + self._pulse_level
         self.canvas.create_oval(cx - r - 2, cy - r - 2, cx + r + 2, cy + r + 2, outline=color, width=1)
         self.canvas.create_oval(cx - base_r, cy - base_r, cx + base_r, cy + base_r, outline=color, width=2, fill="#010101")
         if not stalled and self._pulse_level > 0:
             self.canvas.create_oval(cx - 2, cy - 2, cx + 2, cy + 2, fill=color, outline="")
+            if pulse_kind == "ai":
+                self.canvas.create_rectangle(cx - 4, cy - 4, cx + 4, cy + 4, outline=color, width=1)

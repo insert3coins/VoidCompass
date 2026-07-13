@@ -93,6 +93,46 @@ class DashboardVoiceTests(unittest.TestCase):
         self.assertEqual(app.cockpit_memory.intentions["unsold_data_cr"], 15_000_000)
         self.assertEqual(app.cockpit_memory.intentions["engineering"][0]["grade"], 5)
 
+    def test_ai_feed_reports_state_changes_without_reporting_routine_growth(self):
+        before = {
+            "mood": "calm", "mood_reason": "systems nominal",
+            "voice_stage": "developing", "habits": (),
+            "systems": 24, "species": 3, "ships": 1, "memories": 11,
+            "limits": {"systems": 300, "species": 200, "ships": 30, "memories": 80},
+            "expedition_id": None, "expedition_name": None, "expedition_jumps": 0,
+        }
+        after = dict(before)
+        after.update(
+            mood="curious", mood_reason="first discovery", systems=25, memories=12,
+            habits=("Thorough system surveyor",),
+        )
+
+        events = MainDashboard._cockpit_ai_state_events(before, after)
+
+        self.assertTrue(any("Mood changed: Curious" in event for event in events))
+        self.assertTrue(any("Learned flight habit" in event for event in events))
+        self.assertTrue(any("25/300 systems" in event for event in events))
+        self.assertFalse(any("12/80 notable" in event for event in events))
+
+    def test_ai_feed_reports_expeditions_and_relationship_stages(self):
+        before = {
+            "mood": "calm", "mood_reason": "systems nominal",
+            "voice_stage": "familiar", "habits": (),
+            "systems": 40, "species": 2, "ships": 1, "memories": 15,
+            "limits": {"systems": 300, "species": 200, "ships": 30, "memories": 80},
+            "expedition_id": None, "expedition_name": None, "expedition_jumps": 0,
+        }
+        after = dict(before)
+        after.update(
+            voice_stage="trusted", expedition_id="exp-1",
+            expedition_name="Expedition 3309-01-01", expedition_jumps=50,
+        )
+
+        events = MainDashboard._cockpit_ai_state_events(before, after)
+
+        self.assertTrue(any("Relationship evolved: Trusted" in event for event in events))
+        self.assertTrue(any("Expedition log opened" in event for event in events))
+
 
 if __name__ == "__main__":
     unittest.main()

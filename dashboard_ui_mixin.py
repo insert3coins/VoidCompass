@@ -29,6 +29,7 @@ _FEED_TAG_COLORS = {
     "EDSM":    "#67e8f9",  # teal   — EDSM upload status
     "EDDN":    "#38bdf8",  # blue   — EDDN market upload status
     "MUSIC":   "#22d3ee",  # cyan   — music mood / soft state
+    "AI":      "#c084fc",  # violet — Compass mood / memory evolution
     "VALUABLE":"#FF7100",  # orange — high-value worlds
     "ALERT":   "#FF7100",  # orange — system alerts
     "DOCK":    "#fb923c",  # amber  — docking / undocking
@@ -454,6 +455,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             ("ROUTE",   "ROUTE"),
             ("SYSTEM",  "SYSTEM"),
             ("MUSIC",   "MUSIC"),
+            ("AI",      "AI"),
             ("DSS",     "DSS"),
             ("DOCK",    "DOCK"),
             ("INFO",    "INFO"),
@@ -760,7 +762,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.event_filter_buttons = {}
         event_filters = (
             ("ALL", "ALL"), ("VALUABLE", "VALUE"), ("SCAN", "SCAN"), ("ALERT", "ALERT"), ("JUMP", "JUMP"),
-            ("ROUTE", "ROUTE"), ("SYSTEM", "SYSTEM"), ("MUSIC", "MUSIC"), ("DSS", "DSS"), ("DOCK", "DOCK"),
+            ("ROUTE", "ROUTE"), ("SYSTEM", "SYSTEM"), ("MUSIC", "MUSIC"), ("AI", "AI"), ("DSS", "DSS"), ("DOCK", "DOCK"),
             ("INFO", "INFO"),
         )
         for idx, (tag, label) in enumerate(event_filters):
