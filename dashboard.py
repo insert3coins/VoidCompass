@@ -443,6 +443,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.system_bio_signals = 0
         self.system_traffic = {'day': 0, 'week': 0, 'total': 0}
         self.last_traffic_system = None
+        self._system_traffic_resolved = False
+        self._pending_system_discovery = None
         self.valuable_system = False
         self.valuable_bodies = []
         self.scanned_bodies = set()
@@ -1665,16 +1667,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def fetch_system_traffic(self, system_name):
         self.last_edsm_request_ts = time.time()
+        self._system_traffic_resolved = False
         def callback(traffic_data):
             def _apply():
                 if self.current_sys != system_name:
                     return
-                self.last_edsm_event_ts = time.time()
-                self.system_traffic = traffic_data
+                self._apply_system_traffic_context(system_name, traffic_data)
                 self.update_dashboard_ui()
                 self.update_hud()
-                if self.system_info_hud:
-                    self.system_info_hud.update_traffic(traffic_data)
+                if self.system_info_hud and isinstance(traffic_data, dict):
+                    self.system_info_hud.update_traffic(self.system_traffic)
             self.root.after(0, _apply)
         self.edsm.fetch_traffic(system_name, callback)
 
@@ -1698,6 +1700,90 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                             self.system_info_hud.update_spansh(data)
                     self.root.after(0, _apply)
                 self.edsm.fetch_spansh_system(sys_addr, spansh_callback)
+
+    @staticmethod
+    def _traffic_has_visits(traffic):
+        if not isinstance(traffic, dict):
+            return False
+        for key in ("day", "week", "total"):
+            try:
+                if int(float(traffic.get(key) or 0)) > 0:
+                    return True
+            except (TypeError, ValueError):
+                pass
+        return False
+
+    @staticmethod
+    def _normalize_system_traffic(traffic):
+        normalized = {}
+        for key in ("day", "week", "total"):
+            try:
+                normalized[key] = max(0, int(float((traffic or {}).get(key) or 0)))
+            except (AttributeError, TypeError, ValueError):
+                normalized[key] = 0
+        return normalized
+
+    def _system_has_known_traffic(self, system_name=None):
+        system_name = system_name or self.current_sys
+        if system_name == self.current_sys and self._traffic_has_visits(self.system_traffic):
+            return True
+        memory = getattr(self, "cockpit_memory", None)
+        return bool(memory and memory.system_has_traffic(system_name))
+
+    def _apply_system_traffic_context(self, system_name, traffic_data):
+        """Share HUD traffic with Compass and resolve delayed discovery wording."""
+        self._system_traffic_resolved = True
+        if isinstance(traffic_data, dict):
+            self.last_edsm_event_ts = time.time()
+            self.system_traffic = self._normalize_system_traffic(traffic_data)
+            if (self.config.get("cockpit_memory_enabled", True)
+                    and getattr(self, "cockpit_memory", None)):
+                self.cockpit_memory.observe_system_traffic(system_name, self.system_traffic)
+
+        pending = self._pending_system_discovery
+        if pending and pending[0] == system_name:
+            self._pending_system_discovery = None
+            self._consider_system_undiscovered(startup_replay=pending[1], traffic_resolved=True)
+        elif self._system_has_known_traffic(system_name):
+            self.system_undiscovered = False
+
+    def _consider_system_undiscovered(self, startup_replay=False, traffic_resolved=False):
+        """Only describe the whole system as undiscovered after traffic is known."""
+        if self._system_has_known_traffic(self.current_sys):
+            self.system_undiscovered = False
+            self._pending_system_discovery = None
+            return False
+        if not (traffic_resolved or self._system_traffic_resolved):
+            self._pending_system_discovery = (self.current_sys, bool(startup_replay))
+            return False
+
+        self.system_undiscovered = True
+        self.add_event_feed_entry(
+            "ALERT", "Undiscovered system star scanned", severity="WARN", copy_text=self.current_sys
+        )
+        if startup_replay:
+            return True
+
+        discovery_voice = [
+            f"First discovery. {self.current_sys} appears undiscovered.",
+            f"I found no prior survey records or traffic for {self.current_sys}. This one may be ours.",
+            f"Uncharted system confirmed. I am opening a new survey record for {self.current_sys}.",
+            f"Interesting. Neither the Codex nor traffic records show a prior visit to {self.current_sys}.",
+        ]
+        if (self.config.get("cockpit_memory_enabled", True)
+                and getattr(self, "cockpit_memory", None)):
+            discoveries = self.cockpit_memory.count("first_discoveries")
+            if self.cockpit_memory.should_reference_repeat(
+                    discoveries, self.config.get("cockpit_personality_level", "Balanced")):
+                discovery_voice.append(
+                    f"Another uncharted system for our shared record. That makes {discoveries:,} first discoveries together."
+                )
+        self._speak(
+            discovery_voice,
+            category="exploration", cooldown_s=600,
+            key=f"first-discovery:{self.current_sys}",
+        )
+        return True
 
     def _show_system_info_for_current_system(self):
         if not self.system_info_hud:
@@ -3047,6 +3133,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if preserve_startup_traffic
                 else {'day': 0, 'week': 0, 'total': 0}
             )
+            self._system_traffic_resolved = bool(preserve_startup_traffic)
+            self._pending_system_discovery = None
             self.scan_items = self.load_scan_items_from_db(self.current_sys)
             self.body_signals = {}
             self.body_dss_complete = set()
@@ -3505,27 +3593,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.add_scan_item(raw)
                     self._queue_edsm_upload(raw, startup_replay=startup_replay)
                     if is_system_star_scan and d.get("was_discovered") is False:
-                        self.system_undiscovered = True
-                        if not startup_replay:
-                            discovery_voice = [
-                                f"First discovery. {self.current_sys} appears undiscovered.",
-                                f"I found no prior survey records for {self.current_sys}. This one may be ours.",
-                                f"Uncharted system confirmed. I am opening a new survey record for {self.current_sys}.",
-                                f"Interesting. The Codex has no previous discovery for {self.current_sys}.",
-                            ]
-                            if (self.config.get("cockpit_memory_enabled", True)
-                                    and getattr(self, "cockpit_memory", None)):
-                                discoveries = self.cockpit_memory.count("first_discoveries")
-                                if self.cockpit_memory.should_reference_repeat(
-                                        discoveries, self.config.get("cockpit_personality_level", "Balanced")):
-                                    discovery_voice.append(
-                                        f"Another uncharted system for our shared record. That makes {discoveries:,} first discoveries together."
-                                    )
-                            self._speak(
-                                discovery_voice,
-                                category="exploration", cooldown_s=600,
-                                key=f"first-discovery:{self.current_sys}",
-                            )
+                        self._consider_system_undiscovered(startup_replay=startup_replay)
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
@@ -3552,8 +3620,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         elif terraformable: icon = "🛠️"
                         self.valuable_bodies.append(f"- {icon} {body_name_str}")
                         self.add_event_feed_entry("VALUABLE", f"{icon} Valuable world: {body_name_str}", severity="WARN", copy_text=body_name_str)
-                    if is_system_star_scan and d.get("was_discovered") is False:
-                        self.add_event_feed_entry("ALERT", "Undiscovered system star scanned", severity="WARN", copy_text=self.current_sys)
                 else:
                     # Later detailed/nav-beacon scans can add fields missing from an initial basic scan.
                     self.last_scan_event = data

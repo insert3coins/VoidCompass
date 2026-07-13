@@ -442,6 +442,7 @@ class EDSMHandler:
 
     def fetch_traffic(self, system_name, callback):
         def _fetch():
+            result = None
             try:
                 params = {'systemName': system_name}
                 url = "https://www.edsm.net/api-system-v1/traffic"
@@ -449,13 +450,14 @@ class EDSMHandler:
                 data = r.json()
                 if isinstance(data, dict):
                     traffic = data.get("traffic") or {}
-                    callback({
+                    result = {
                         "day": int(traffic.get("day") or 0),
                         "week": int(traffic.get("week") or 0),
                         "total": int(traffic.get("total") or 0),
-                    })
+                    }
             except Exception as e:
                 logging.warning(f"Traffic fetch failed: {e}")
+            callback(result)
         threading.Thread(target=_fetch, daemon=True).start()
 
     def fetch_system_coords(self, system_name, callback):
