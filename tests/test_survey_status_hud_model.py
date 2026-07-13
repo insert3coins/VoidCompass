@@ -1,5 +1,6 @@
 import unittest
 
+from dashboard import MainDashboard
 from survey_status_hud import build_survey_model
 
 
@@ -101,6 +102,33 @@ class SurveyStatusModelTests(unittest.TestCase):
             reward=10_000, dss_reward=20_000, genuses=[], organic_scans={},
         )
         self.assertIsNone(build_survey_model("Test AB", [body]))
+
+    def test_start_jump_hide_cancels_pending_stale_survey_refresh(self):
+        app = MainDashboard.__new__(MainDashboard)
+
+        class Root:
+            def __init__(self):
+                self.cancelled = []
+
+            def after_cancel(self, job):
+                self.cancelled.append(job)
+
+        class Survey:
+            def __init__(self):
+                self.hidden = 0
+
+            def hide(self):
+                self.hidden += 1
+
+        app.root = Root()
+        app.survey_status_hud = Survey()
+        app._system_info_refresh_job = "refresh-1"
+
+        app._hide_survey_status_for_jump()
+
+        self.assertEqual(app.root.cancelled, ["refresh-1"])
+        self.assertEqual(app.survey_status_hud.hidden, 1)
+        self.assertIsNone(app._system_info_refresh_job)
 
 
 if __name__ == "__main__":
