@@ -549,7 +549,11 @@ class JournalWatcher:
                     "scan_type": data.get("ScanType_Localised") or data.get("ScanType"),
                     "is_new_entry": bool(data.get("IsNewEntry")),
                     "is_new_sample": bool(data.get("IsNewSample")),
-                    "is_complete": bool(data.get("IsComplete")),
+                    # Live ScanOrganic events do not actually carry an "IsComplete"
+                    # field (confirmed against real journals) — completion has to
+                    # be derived from ScanType == "Analyse". Keep the flag check
+                    # too in case some journal variant ever does emit it.
+                    "is_complete": bool(data.get("IsComplete")) or str(data.get("ScanType") or "").casefold() == "analyse",
                     # ScanOrganic uses "Body" (integer) for the body ID, not "BodyID".
                     # "BodyName" is not present in this event.
                     "body_name": data.get("BodyName") or "",
