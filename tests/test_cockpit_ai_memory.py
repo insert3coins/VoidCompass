@@ -63,9 +63,9 @@ class CockpitMemoryTests(unittest.TestCase):
             expected = {
                 0: ("new", 2),
                 25: ("developing", 3),
-                100: ("familiar", 5),
-                500: ("trusted", 7),
-                2000: ("veteran", 8),
+                100: ("familiar", 6),
+                500: ("trusted", 8),
+                2000: ("veteran", 9),
             }
 
             for score, (stage, size) in expected.items():
@@ -149,6 +149,106 @@ class CockpitMemoryTests(unittest.TestCase):
 
             self.assertEqual(memory.count("voice_changes"), 1)
             self.assertIn("Voice B", memory.state["memories"][-1]["text"])
+
+    def test_session_mood_intentions_and_docking_debrief(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = CockpitMemory(pathlib.Path(folder) / "memory.json")
+            memory.begin_app_session("Sol", "Wayfarer")
+            memory.update_intentions({"route": {"destination": "Achenar"}, "unsold_data_cr": 25_000_000})
+            memory.observe("FSDJump", {"StarSystem": "Achenar", "StarPos": [10, 0, 0]},
+                           {"star_system": "Achenar", "star_pos": [10, 0, 0]})
+            memory.observe("HeatWarning")
+            self.assertEqual(memory.current_mood()["name"], "alert")
+            memory.observe("Docked", {"StationName": "Dawes Hub"})
+
+            self.assertEqual(memory.current_mood()["name"], "relieved")
+            self.assertIn("route", memory.status_details()["intentions"])
+            remark = memory.pop_remark("Balanced", force=True)
+            self.assertIsNotNone(remark)
+            self.assertIn("report", remark["lines"][0].casefold())
+
+    def test_expedition_detection_milestones_and_completion(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = CockpitMemory(pathlib.Path(folder) / "memory.json")
+            memory.begin_app_session("Origin")
+            for index in range(21):
+                position = [index * 60, 0, 0]
+                memory.observe(
+                    "FSDJump", {"StarSystem": f"System {index}", "StarPos": position},
+                    {"star_system": f"System {index}", "star_pos": position},
+                )
+
+            active = memory.status_details()["active_expedition"]
+            self.assertIsNotNone(active)
+            self.assertGreaterEqual(active["jumps"], 20)
+            self.assertTrue(memory.rename_active_expedition("The Long Way Out"))
+            self.assertEqual(memory.status_details()["active_expedition"]["name"], "The Long Way Out")
+            memory.observe("Docked", {"StationName": "Expedition End"})
+            self.assertIsNone(memory.status_details()["active_expedition"])
+            self.assertEqual(memory.status_details()["completed_expeditions"], 1)
+
+    def test_memory_browser_can_pin_edit_and_delete_an_episode(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = CockpitMemory(pathlib.Path(folder) / "memory.json")
+            memory.observe("Scan", {"BodyName": "New World", "WasDiscovered": False},
+                           {"body_name": "New World", "was_discovered": False})
+            memory_id = memory.memory_rows()[0]["id"]
+
+            self.assertTrue(memory.pin_memory(memory_id, True))
+            self.assertTrue(memory.rename_memory(memory_id, "Our first New World survey"))
+            self.assertTrue(memory.get_memory(memory_id)["pinned"])
+            self.assertEqual(memory.get_memory(memory_id)["text"], "Our first New World survey")
+            self.assertTrue(memory.delete_memory(memory_id))
+            self.assertIsNone(memory.get_memory(memory_id))
+
+    def test_habits_are_inferred_from_accumulated_activity(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = CockpitMemory(pathlib.Path(folder) / "memory.json")
+            memory.state["counters"] = {
+                "jumps": 40, "scans": 140, "organic_analyses": 20,
+                "market_trades": 30,
+            }
+
+            habits = memory.habits()
+            self.assertIn("Thorough system surveyor", habits)
+            self.assertIn("Persistent biological fieldwork", habits)
+            self.assertIn("Regular market operator", habits)
+
+    def test_adaptive_remarks_respect_mood_priority_and_topic_deduplication(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = CockpitMemory(pathlib.Path(folder) / "memory.json")
+            memory._queue_remark(("First version",), topic="survey", priority=2)
+            memory._queue_remark(("Updated version",), topic="survey", priority=2)
+            self.assertEqual(len(memory._pending_remarks), 1)
+            memory._set_mood("alert", 0.9, "hostile contact")
+            self.assertIsNone(memory.pop_remark("Balanced", force=True))
+            memory._set_mood("relieved", 1.0, "safely docked")
+            remark = memory.pop_remark("Balanced", force=True)
+            self.assertEqual(remark["lines"], ("Updated version",))
+
+    def test_session_recovery_closes_interrupted_history(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = pathlib.Path(folder) / "memory.json"
+            memory = CockpitMemory(path)
+            memory.begin_app_session("Sol")
+            memory.observe("FSDJump", {"StarSystem": "Achenar"}, {"star_system": "Achenar"})
+            restored = CockpitMemory(path)
+            restored.begin_app_session("Achenar")
+
+            self.assertEqual(restored.status_details()["sessions"], 1)
+            self.assertEqual(restored.state["current_session"]["start_system"], "Achenar")
+
+    def test_status_details_identify_familiar_system_and_favourite_ship(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = CockpitMemory(pathlib.Path(folder) / "memory.json")
+            for _ in range(3):
+                memory.observe("FSDJump", {"StarSystem": "Sol"}, {"star_system": "Sol"})
+                memory.observe("Loadout", {"ShipName": "Wayfarer"}, {"ship_name": "Wayfarer"})
+            memory.observe("FSDJump", {"StarSystem": "Achenar"}, {"star_system": "Achenar"})
+
+            details = memory.status_details()
+            self.assertEqual(details["most_visited_system"], "Sol")
+            self.assertEqual(details["favorite_ship"], "Wayfarer")
 
     def test_ordinals_are_spoken_naturally(self):
         self.assertEqual([ordinal(n) for n in (1, 2, 3, 4, 11, 12, 13, 21)],

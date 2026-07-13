@@ -67,6 +67,32 @@ class DashboardVoiceTests(unittest.TestCase):
         self.assertEqual(app.toast_hud.messages[0][0][0], "FSD SUPERCHARGED")
         self.assertEqual(app.spoken, [])
 
+    def test_cockpit_intentions_receive_live_route_data_and_engineering_work(self):
+        app = MainDashboard.__new__(MainDashboard)
+        app.config = {"cockpit_memory_enabled": True}
+        app.current_sys = "Sol"
+        app.route_list = ["Sol", "Achenar"]
+        app.companion_state = {
+            "unsold_exploration_cr": 12_000_000,
+            "unsold_bio_cr": 3_000_000,
+            "missions": [{"id": 1}],
+        }
+        app.engineer_materials = {
+            "pinned_blueprints": [{"name": "Frame Shift Drive", "grade": 5}]
+        }
+        app._sampling_snapshot = lambda: {"species": "Bacterium Acies", "progress": 2}
+
+        class Memory:
+            def update_intentions(self, intentions):
+                self.intentions = intentions
+
+        app.cockpit_memory = Memory()
+        app._sync_cockpit_intentions()
+
+        self.assertEqual(app.cockpit_memory.intentions["route"]["destination"], "Achenar")
+        self.assertEqual(app.cockpit_memory.intentions["unsold_data_cr"], 15_000_000)
+        self.assertEqual(app.cockpit_memory.intentions["engineering"][0]["grade"], 5)
+
 
 if __name__ == "__main__":
     unittest.main()
