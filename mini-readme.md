@@ -1,5 +1,11 @@
 # VoidCompass // UPDATE LOG
 
+## v4.6.2 // Bio-Aware Compass Intelligence
+
+- Compass biological awareness now joins journal activity with Survey Status context: it retains bio/geo signal totals, detected and predicted genera, three-stage sample progress, species/body history, reward values, colony spacing, completed analyses, and unique biological Codex records.
+- The Compass AI Intelligence State exposes the growing biology model, while only sparse milestones reach the Live Feed or evolved voice lines so routine sampling does not create chatter.
+**Release Date:** 2026-Jul-13
+
 ## v4.6.1 // Traffic-Aware Compass Intelligence
 
 - Compass now consumes the same EDSM day/week/total traffic shown on the HUD and retains it per remembered system. Prior traffic suppresses contradictory whole-system `UNDISC` state, alerts, and voice lines, while genuine first discoveries of individual bodies remain part of its exploration memory.

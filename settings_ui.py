@@ -566,6 +566,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             if expedition else f"Completed expeditions: {details['completed_expeditions']:,}"
         )
         awareness = details["gameplay_awareness"]
+        biology = details["biology_awareness"]
         awareness_domains = ", ".join(awareness["domains"]) if awareness["domains"] else "still observing"
         traffic = details.get("current_system_traffic") or {}
         traffic_text = (
@@ -580,6 +581,11 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             f"{details['fss_completed']:,} full FSS surveys · {details['dss_maps']:,} DSS maps · "
             f"{details['signal_bodies']:,} signal bodies · "
             f"{details.get('valuable_worlds', 0):,} valuable worlds\n"
+            f"Biology memory: {biology['genera']:,} genera "
+            f"({biology['detected_genera']:,} detected · {biology['predicted_genera']:,} predicted · "
+            f"{biology['analysed_genera']:,} analysed) · {biology['samples']:,} samples · "
+            f"{biology['analyses']:,} analyses · {biology['codex_entries']:,} biological Codex entries · "
+            f"signals {biology['biological_signals']:,} bio / {biology['geological_signals']:,} geo\n"
             f"Traffic awareness: {details.get('traffic_known_systems', 0):,} travelled systems · "
             f"Current {traffic_text}\n"
             f"Gameplay awareness: {awareness_domains}\n"

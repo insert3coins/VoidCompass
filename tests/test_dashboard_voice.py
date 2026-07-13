@@ -258,6 +258,40 @@ class DashboardVoiceTests(unittest.TestCase):
         self.assertIn("10 DSS maps", survey)
         self.assertIn("10 signal-bearing bodies", survey)
 
+    def test_ai_feed_reports_sparse_biology_awareness_milestones(self):
+        before = {
+            "mood": "calm", "mood_reason": "systems nominal",
+            "voice_stage": "familiar", "habits": (),
+            "systems": 40, "species": 9, "ships": 1, "memories": 15,
+            "bio_genera": 4, "bio_samples": 24, "bio_analyses": 9, "bio_codex": 9,
+            "limits": {"systems": 300, "species": 200, "ships": 30, "memories": 80},
+            "expedition_id": None, "expedition_name": None, "expedition_jumps": 0,
+        }
+        after = dict(before)
+        after.update(bio_genera=5, bio_samples=25, bio_analyses=10, bio_codex=10)
+
+        events = MainDashboard._cockpit_ai_state_events(before, after)
+
+        biology = next(event for event in events if event.startswith("Biology awareness:"))
+        self.assertIn("5 genera", biology)
+        self.assertIn("25 samples", biology)
+        self.assertIn("10 analyses", biology)
+        self.assertIn("10 biological Codex entries", biology)
+
+    def test_scanorganic_context_uses_survey_body_name_value_and_spacing(self):
+        app = MainDashboard.__new__(MainDashboard)
+        app.scan_items_by_id = {4: {"name": "Biology Test A 1"}}
+        app.body_scan_data = {4: {"body_name": "Biology Test A 1"}}
+        event = {
+            "body_id": 4, "species": "Bacterium Acies", "genus": "Bacterium",
+        }
+
+        enriched = app._enrich_bio_event_context(event)
+
+        self.assertEqual(enriched["body_name"], "Biology Test A 1")
+        self.assertEqual(enriched["species_value"], 1_000_000)
+        self.assertEqual(enriched["colony_m"], 500)
+
     def test_ai_feed_announces_each_new_gameplay_domain_once(self):
         before = {
             "mood": "calm", "mood_reason": "systems nominal",
