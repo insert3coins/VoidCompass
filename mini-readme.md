@@ -1,5 +1,16 @@
 # VoidCompass // UPDATE LOG
 
+## v4.6.5 // Accurate Exobiology Tracking + HUD Polish
+**Release Date:** 2026-Jul-13
+
+### Fixes
+*   Fixed the real root cause behind lingering incorrect bio progress: live `ScanOrganic` journal events never actually carry `Sample`, `IsComplete`, `IsNewEntry`, `IsNewSample`, `BodyID`, or `MaxSamples` fields, despite the app previously assuming they did. Completion and sample progress (1/3, 2/3, 3/3) are now derived from the event's `ScanType` sequence (`Log`/`Sample`/`Analyse`) instead, fixing Survey Status counts that stuck at `0/1`, a silent sample undercount, and Compass's biology-awareness progress capping at `2/3`.
+*   Corrected the same flawed assumption in the live bio-sample toast and Compass's own memory tracking, so "Sample n/3" toasts and Compass's biological sample tallies now match what actually happened.
+
+### Navigation HUD
+*   Simplified the `BIO`/`VALUE` badges added in 4.6.4 into a single `BIO` presence flag — alert while signals remain unsampled, ok once caught up — since detailed progress and value already live in the Survey Status overlay; removed the redundant `VALUE` badge.
+*   Gave the badge row a facelift: badges now pick up the same CRT glow as the rest of the HUD, an ok badge is a solid backlit fill instead of a flat outline, and each state gets a glyph (`●`/`✓`/`○`) for quicker at-a-glance reading.
+
 ## v4.6.4 // Living Cockpit Companion
 **Release Date:** 2026-Jul-13
 

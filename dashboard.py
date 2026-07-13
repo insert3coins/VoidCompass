@@ -2907,9 +2907,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             species = d.get("species") or d.get("genus") or "Organic"
             scan_type = str(d.get("scan_type") or raw.get("ScanType") or "").lower()
             complete = bool(d.get("is_complete")) or scan_type == "analyse"
-            sample = d.get("sample_idx")
+            body_id = self._normalize_body_id(d.get("body_id"))
+            species_key = f"{body_id}|{species}" if body_id is not None else species
+            existing = self.last_bio_scan.get(species_key, {})
             max_samples = d.get("max_samples") or 3
-            detail = "Analysis complete" if complete else (f"Sample {sample}/{max_samples}" if sample else "Sample registered")
+            if scan_type in ("log", "sample"):
+                sample = int(existing.get("sample_idx") or 0) + 1
+            else:
+                sample = existing.get("sample_idx") or max_samples
+            detail = "Analysis complete" if complete else f"Sample {sample}/{max_samples}"
             bio_voice = None
             if complete:
                 bio_voice = [
