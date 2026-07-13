@@ -1,10 +1,12 @@
 import os
+import time
 import tkinter as tk
 import tkinter.messagebox
 from tkinter import colorchooser
 
 import themes
 import voice_callouts
+import compass_llm as compass_llm_module
 from cockpit_ai_memory import DEFAULT_LIMITS as COCKPIT_MEMORY_DEFAULTS, LIMIT_BOUNDS as COCKPIT_MEMORY_BOUNDS
 from config import DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config as persist_config
 from ui_theme import THEME, FONT_MONO, FONT_TITLE, FONT_UI, FONT_UI_BOLD, apply_window, button, window_surface
@@ -28,7 +30,8 @@ UI_MONO = FONT_MONO
 
 
 def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded=False,
-                  on_close_callback=None, voice_manager=None, cockpit_memory=None):
+                  on_close_callback=None, voice_manager=None, cockpit_memory=None,
+                  compass_llm=None):
     win = window_surface(root, embedded=embedded)
     win.title("SYSTEM CONFIGURATION")
     win.geometry(config.get("settings_geometry", "980x800"))
@@ -60,21 +63,50 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
 
     pages = {}
     nav_buttons = {}
+    scroll_canvases = {}
+    active_page = {"key": None}
 
     def action_button(parent, text, command, accent=False, muted=False):
         return button(parent, text, command, accent=accent, muted=muted, padx=12, pady=7)
 
-    def make_page(key, title, subtitle):
+    def make_page(key, title, subtitle, scrollable=False):
         page = tk.Frame(content, bg=UI_BG)
-        tk.Label(page, text=title, font=UI_FONT_TITLE, fg=COLOR_ACCENT, bg=UI_BG, anchor="w").pack(fill=tk.X)
-        tk.Label(page, text=subtitle, font=("Segoe UI", 8), fg=UI_MUTED, bg=UI_BG, anchor="w").pack(fill=tk.X, pady=(2, 10))
         pages[key] = page
-        return page
+        body = page
+        if scrollable:
+            canvas = tk.Canvas(
+                page, bg=UI_BG, bd=0, highlightthickness=0,
+                takefocus=True,
+            )
+            scrollbar = tk.Scrollbar(
+                page, orient=tk.VERTICAL, command=canvas.yview,
+                bg=UI_PANEL_2, activebackground=COLOR_ACCENT,
+                troughcolor=UI_BG, relief=tk.FLAT, bd=0, width=12,
+            )
+            canvas.configure(yscrollcommand=scrollbar.set)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y, padx=(8, 0))
+            canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            body = tk.Frame(canvas, bg=UI_BG)
+            window_id = canvas.create_window((0, 0), window=body, anchor="nw")
+
+            def fit_content(_event=None, c=canvas, inner=body):
+                c.configure(scrollregion=c.bbox("all"))
+
+            def fit_width(event, c=canvas, item=window_id):
+                c.itemconfigure(item, width=max(1, event.width))
+
+            body.bind("<Configure>", fit_content)
+            canvas.bind("<Configure>", fit_width)
+            scroll_canvases[key] = canvas
+        tk.Label(body, text=title, font=UI_FONT_TITLE, fg=COLOR_ACCENT, bg=UI_BG, anchor="w").pack(fill=tk.X)
+        tk.Label(body, text=subtitle, font=("Segoe UI", 8), fg=UI_MUTED, bg=UI_BG, anchor="w").pack(fill=tk.X, pady=(2, 10))
+        return body
 
     def show_page(key):
         for page in pages.values():
             page.pack_forget()
         pages[key].pack(fill=tk.BOTH, expand=True)
+        active_page["key"] = key
         for name, btn in nav_buttons.items():
             selected = name == key
             btn.config(
@@ -88,6 +120,21 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
                 _refresh_compass_page()
             except (NameError, tk.TclError):
                 pass
+
+    def scroll_active_page(event):
+        canvas = scroll_canvases.get(active_page.get("key"))
+        if canvas is None or not event.delta:
+            return None
+        steps = max(1, abs(int(event.delta)) // 120)
+        canvas.yview_scroll(-steps if event.delta > 0 else steps, "units")
+        return "break"
+
+    def bind_scroll_tree(widget):
+        widget.bind("<MouseWheel>", scroll_active_page, add="+")
+        for child in widget.winfo_children():
+            bind_scroll_tree(child)
+
+    win.bind("<MouseWheel>", scroll_active_page, add="+")
 
     def nav_button(key, text):
         btn = tk.Button(
@@ -214,10 +261,31 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     voice_navigation_var = tk.BooleanVar(value=config.get("voice_navigation_enabled", True))
     voice_objectives_var = tk.BooleanVar(value=config.get("voice_objectives_enabled", True))
     voice_cache_var = tk.BooleanVar(value=config.get("voice_cache_enabled", True))
+    voice_cache_auto_prune_var = tk.BooleanVar(
+        value=config.get("voice_cache_auto_prune_enabled", True)
+    )
+    voice_cache_retention_var = tk.StringVar(
+        value=str(config.get("voice_cache_retention_days", 7))
+    )
     cockpit_memory_var = tk.BooleanVar(value=config.get("cockpit_memory_enabled", True))
     cockpit_ambient_var = tk.BooleanVar(value=config.get("cockpit_ambient_chatter_enabled", True))
     cockpit_greetings_var = tk.BooleanVar(value=config.get("cockpit_session_greetings_enabled", True))
     cockpit_callbacks_var = tk.BooleanVar(value=config.get("cockpit_memory_callbacks_enabled", True))
+    cockpit_llm_var = tk.BooleanVar(value=config.get("cockpit_llm_enabled", False))
+    cockpit_llm_advisor_var = tk.BooleanVar(
+        value=config.get("cockpit_llm_advisor_enabled", True)
+    )
+    cockpit_llm_auto_var = tk.BooleanVar(value=config.get("cockpit_llm_auto_start", True))
+    cockpit_llm_unload_var = tk.BooleanVar(value=config.get("cockpit_llm_unload_on_shutdown", True))
+    cockpit_llm_model_var = tk.StringVar(
+        value=str(config.get("cockpit_llm_model", compass_llm_module.DEFAULT_MODEL))
+    )
+    cockpit_llm_timeout_var = tk.StringVar(
+        value=str(config.get("cockpit_llm_timeout_s", 2.5))
+    )
+    cockpit_llm_advisor_level_var = tk.StringVar(
+        value=str(config.get("cockpit_llm_advisor_level", "Balanced"))
+    )
     cockpit_personality_var = tk.StringVar(
         value=str(config.get("cockpit_personality_level", "Balanced") or "Balanced")
     )
@@ -235,8 +303,15 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     core_page = make_page("core", "Core", "Journal and screenshot paths.")
     overlay_page = make_page("overlays", "Overlays", "Runtime modules and display timing.")
     crt_page = make_page("crt", "HUD Effects", "CRT styling for the native Navigation HUD.")
-    voice_page = make_page("voice", "Voice", "Optional local neural callouts. Voice audio never leaves this computer.")
-    compass_page = make_page("compass", "Compass AI", "Review and curate the local history Compass has learned from this commander.")
+    voice_page = make_page(
+        "voice", "Voice", "Optional local neural callouts. Voice audio never leaves this computer.",
+        scrollable=True,
+    )
+    compass_page = make_page(
+        "compass", "Compass AI",
+        "Review and curate the local history Compass has learned from this commander.",
+        scrollable=True,
+    )
     theme_page = make_page("theme", "Theme", "Color theme for this commander profile. Applies when you save.")
     integrations_page = make_page("integrations", "Integrations", "EDSM upload and fleet carrier Discord.")
     diagnostics_page = make_page("diagnostics", "Diagnostics", "Runtime tracing and automatic crash or UI-freeze reports.")
@@ -294,6 +369,11 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     toggle_row(voice_general, "Navigation milestones", voice_navigation_var)
     toggle_row(voice_general, "Trade, Engineering, and missions", voice_objectives_var)
     toggle_row(voice_general, "Cache generated callouts", voice_cache_var)
+    toggle_row(voice_general, "Automatically prune unused cached audio", voice_cache_auto_prune_var)
+    option_row(
+        voice_general, "Unused audio retention (days)", voice_cache_retention_var,
+        ["1", "3", "7", "14", "30", "60", "90"],
+    )
 
     memory_panel = section(voice_page, "Compass Memory")
     memory_controls = row(memory_panel)
@@ -440,17 +520,28 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
 
     action_button(voice_actions, "Clear Cache", _clear_voice_cache, muted=True).pack(side=tk.RIGHT)
 
+    def _voice_cache_retention_days():
+        try:
+            return max(1, min(365, int(voice_cache_retention_var.get())))
+        except (TypeError, ValueError, tk.TclError):
+            return voice_callouts.DEFAULT_CACHE_RETENTION_DAYS
+
     def _refresh_voice_status(schedule=True):
         if not win.winfo_exists():
             return
         chosen = _chosen_voice()
         state = voice_callouts.status(chosen)
-        cache = voice_callouts.cache_status()
+        retention = _voice_cache_retention_days() if voice_cache_auto_prune_var.get() else None
+        cache = voice_callouts.cache_status(retention)
         if cockpit_memory is not None:
             memory_summary_var.set(cockpit_memory.summary_text())
+        retention_text = (
+            f" · auto-prune after {retention} day{'s' if retention != 1 else ''} unused"
+            if retention is not None else " · age pruning off"
+        )
         voice_cache_status_var.set(
             f"Audio cache: {cache['files']} files · {cache['bytes'] / (1024 * 1024):.1f} MB "
-            f"· maximum {cache['limit']} files"
+            f"· maximum {cache['limit']} files{retention_text}"
         )
         if state["downloading"]:
             active = state.get("download_voice") or chosen
@@ -497,6 +588,118 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
 
     voice_choice_var.trace_add("write", _voice_changed)
     _refresh_voice_status()
+
+    # ---- Compass generative language ----
+    llm_panel = section(compass_page, "Local Generative Language")
+    tk.Label(
+        llm_panel,
+        text=(
+            "Optional Ollama wording layer for non-safety speech. Journal facts, memory, and urgent "
+            "warnings remain deterministic; invalid or slow generations use the existing line immediately."
+        ),
+        font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w", justify=tk.LEFT, wraplength=650,
+    ).pack(fill=tk.X, padx=12, pady=(2, 8))
+    toggle_row(llm_panel, "Enable generative Compass language", cockpit_llm_var)
+    toggle_row(llm_panel, "Enable proactive situational adviser", cockpit_llm_advisor_var)
+    toggle_row(llm_panel, "Start local Ollama automatically", cockpit_llm_auto_var)
+    toggle_row(llm_panel, "Unload model when VoidCompass closes", cockpit_llm_unload_var)
+    llm_model_menu = option_row(
+        llm_panel, "Local model", cockpit_llm_model_var,
+        list(compass_llm_module.MODEL_CHOICES),
+    )
+    llm_model_menu.configure(width=24)
+    option_row(
+        llm_panel, "Fallback timeout", cockpit_llm_timeout_var,
+        ["1.5", "2.5", "4.0"],
+    )
+    option_row(
+        llm_panel, "Advice frequency", cockpit_llm_advisor_level_var,
+        ["Quiet", "Balanced", "Proactive"],
+    )
+    llm_status_var = tk.StringVar(value="Checking local language runtime...")
+    tk.Label(
+        llm_panel, textvariable=llm_status_var, font=UI_FONT, fg=COLOR_TEXT,
+        bg=UI_PANEL, anchor="w", justify=tk.LEFT, wraplength=650,
+    ).pack(fill=tk.X, padx=12, pady=(4, 8))
+
+    def _llm_status_text(status=None):
+        if compass_llm is None:
+            return "Compass language service is unavailable in this session."
+        status = status if isinstance(status, dict) else compass_llm.status()
+        phase = str(status.get("phase") or "unknown").replace("_", " ").title()
+        model = status.get("model") or cockpit_llm_model_var.get()
+        details = [f"{phase} · {model}"]
+        if status.get("installed"):
+            details.append("installed")
+        if status.get("processor"):
+            details.append(str(status["processor"]))
+        if status.get("last_latency_ms") is not None:
+            details.append(f"last response {int(status['last_latency_ms']):,} ms")
+        progress = status.get("download_progress")
+        if progress is not None and status.get("phase") == "downloading":
+            details.append(f"download {float(progress) * 100:.0f}%")
+        text = " · ".join(details)
+        if status.get("last_error"):
+            text += f"\n{status['last_error']}"
+        elif not status.get("executable"):
+            text += "\nOllama is not installed or could not be found."
+        return text
+
+    def _set_llm_status(status=None):
+        def apply():
+            try:
+                llm_status_var.set(_llm_status_text(status))
+            except tk.TclError:
+                pass
+        try:
+            win.after(0, apply)
+        except tk.TclError:
+            pass
+
+    def _install_llm_model():
+        if compass_llm is None:
+            return
+        llm_status_var.set(f"Preparing {cockpit_llm_model_var.get()} download...")
+        compass_llm.install_model_async(cockpit_llm_model_var.get(), callback=_set_llm_status)
+
+    def _warm_llm_model():
+        if compass_llm is None:
+            return
+        llm_status_var.set(f"Loading {cockpit_llm_model_var.get()} into memory...")
+        compass_llm.warm_async(
+            force=True, model=cockpit_llm_model_var.get(), callback=_set_llm_status,
+        )
+
+    def _test_llm_model():
+        if compass_llm is None:
+            return
+        llm_status_var.set("Generating a local Compass test line...")
+
+        def completed(result):
+            if isinstance(result, dict) and result.get("line"):
+                status = compass_llm.status()
+                prefix = "Generated" if result.get("used_llm") else "Fallback"
+                status["last_error"] = (
+                    f"{prefix}: {result['line']}"
+                    + (f" ({result.get('error')})" if result.get("error") else "")
+                )
+                _set_llm_status(status)
+                if result.get("used_llm") and voice_manager is not None:
+                    voice_manager.say(
+                        result["line"], category="ambient", cooldown_s=0,
+                        key=f"compass-llm-test:{time.time_ns()}",
+                    )
+            else:
+                _set_llm_status(result)
+
+        compass_llm.test_async(cockpit_llm_model_var.get(), callback=completed)
+
+    llm_actions = row(llm_panel)
+    action_button(llm_actions, "Install / Update Model", _install_llm_model, accent=True).pack(side=tk.LEFT)
+    action_button(llm_actions, "Warm Up", _warm_llm_model).pack(side=tk.LEFT, padx=(8, 0))
+    action_button(llm_actions, "Test Language", _test_llm_model).pack(side=tk.LEFT, padx=(8, 0))
+    action_button(llm_actions, "Refresh", _set_llm_status, muted=True).pack(side=tk.RIGHT)
+    _set_llm_status()
 
     # ---- Compass memory browser ----
     compass_overview = section(compass_page, "Current Intelligence State")
@@ -555,6 +758,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     memory_list.bind("<<ListboxSelect>>", _memory_selected)
 
     def _refresh_compass_page():
+        _set_llm_status()
         memory_list.delete(0, tk.END)
         memory_ids.clear()
         if cockpit_memory is None:
@@ -925,10 +1129,19 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "voice_navigation_enabled": voice_navigation_var.get(),
             "voice_objectives_enabled": voice_objectives_var.get(),
             "voice_cache_enabled": voice_cache_var.get(),
+            "voice_cache_auto_prune_enabled": voice_cache_auto_prune_var.get(),
+            "voice_cache_retention_days": _voice_cache_retention_days(),
             "cockpit_memory_enabled": cockpit_memory_var.get(),
             "cockpit_ambient_chatter_enabled": cockpit_ambient_var.get(),
             "cockpit_session_greetings_enabled": cockpit_greetings_var.get(),
             "cockpit_memory_callbacks_enabled": cockpit_callbacks_var.get(),
+            "cockpit_llm_enabled": cockpit_llm_var.get(),
+            "cockpit_llm_advisor_enabled": cockpit_llm_advisor_var.get(),
+            "cockpit_llm_auto_start": cockpit_llm_auto_var.get(),
+            "cockpit_llm_unload_on_shutdown": cockpit_llm_unload_var.get(),
+            "cockpit_llm_model": cockpit_llm_model_var.get(),
+            "cockpit_llm_timeout_s": float(cockpit_llm_timeout_var.get()),
+            "cockpit_llm_advisor_level": cockpit_llm_advisor_level_var.get(),
             "cockpit_personality_level": cockpit_personality_var.get(),
             "cockpit_memory_system_limit": memory_limits["systems"],
             "cockpit_memory_species_limit": memory_limits["species"],
@@ -943,6 +1156,8 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             memory_summary_var.set(cockpit_memory.summary_text())
         remove_deprecated_keys()
         persist_config(config)
+        if voice_manager is not None:
+            voice_manager.prune_cache_async()
         saved_name = theme_var.get()
         saved_palette = _theme_palette(saved_name)
         if saved_name != themes.ACTIVE_THEME_NAME or saved_palette != themes.ACTIVE_PALETTE:
@@ -972,5 +1187,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     action_button(footer, "Save Settings", save_config, accent=True).pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
 
     win.protocol("WM_DELETE_WINDOW", close_window)
+    bind_scroll_tree(voice_page)
+    bind_scroll_tree(compass_page)
     show_page("core")
     return win

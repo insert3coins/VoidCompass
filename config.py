@@ -73,6 +73,8 @@ PROFILE_TEXT_SETTINGS = (
     "ui_theme_name",
     "voice_name",
     "cockpit_personality_level",
+    "cockpit_llm_model",
+    "cockpit_llm_advisor_level",
     "hud_crt_intensity",
 )
 
@@ -107,10 +109,15 @@ PROFILE_BOOL_SETTINGS = (
     "voice_navigation_enabled",
     "voice_objectives_enabled",
     "voice_cache_enabled",
+    "voice_cache_auto_prune_enabled",
     "cockpit_memory_enabled",
     "cockpit_ambient_chatter_enabled",
     "cockpit_session_greetings_enabled",
     "cockpit_memory_callbacks_enabled",
+    "cockpit_llm_enabled",
+    "cockpit_llm_advisor_enabled",
+    "cockpit_llm_auto_start",
+    "cockpit_llm_unload_on_shutdown",
     "hud_crt_enabled",
     "hud_crt_motion_enabled",
 )
@@ -171,10 +178,12 @@ PROFILE_VALUE_SETTINGS = (
     "achievements_disabled_categories",
     "achievement_window_geometry",
     "voice_volume",
+    "voice_cache_retention_days",
     "cockpit_memory_system_limit",
     "cockpit_memory_species_limit",
     "cockpit_memory_ship_limit",
     "cockpit_memory_episode_limit",
+    "cockpit_llm_timeout_s",
 )
 
 PROFILE_SETTINGS = PROFILE_TEXT_SETTINGS + PROFILE_BOOL_SETTINGS + PROFILE_VALUE_SETTINGS
@@ -265,6 +274,8 @@ def apply_profile_config(config, profile_key=None):
         "ui_theme_name": _themes.DEFAULT_THEME_NAME,
         "voice_name": "en_GB-alba-medium",
         "cockpit_personality_level": "Balanced",
+        "cockpit_llm_model": "qwen3.5:9b",
+        "cockpit_llm_advisor_level": "Balanced",
         "hud_crt_intensity": "Subtle",
     }
     bool_defaults = {
@@ -298,10 +309,15 @@ def apply_profile_config(config, profile_key=None):
         "voice_navigation_enabled": True,
         "voice_objectives_enabled": True,
         "voice_cache_enabled": True,
+        "voice_cache_auto_prune_enabled": True,
         "cockpit_memory_enabled": True,
         "cockpit_ambient_chatter_enabled": True,
         "cockpit_session_greetings_enabled": True,
         "cockpit_memory_callbacks_enabled": True,
+        "cockpit_llm_enabled": False,
+        "cockpit_llm_advisor_enabled": True,
+        "cockpit_llm_auto_start": True,
+        "cockpit_llm_unload_on_shutdown": True,
         "hud_crt_enabled": True,
         "hud_crt_motion_enabled": True,
     }
@@ -315,10 +331,12 @@ def apply_profile_config(config, profile_key=None):
         if setting not in profile and setting in config:
             profile_defaults = {
                 "voice_volume": 0.8,
+                "voice_cache_retention_days": 7,
                 "cockpit_memory_system_limit": 300,
                 "cockpit_memory_species_limit": 200,
                 "cockpit_memory_ship_limit": 30,
                 "cockpit_memory_episode_limit": 80,
+                "cockpit_llm_timeout_s": 2.5,
             }
             profile[setting] = (
                 profile_defaults[setting] if not is_initial_profile and setting in profile_defaults
@@ -482,10 +500,19 @@ def load_config():
         'voice_navigation_enabled': True,
         'voice_objectives_enabled': True,
         'voice_cache_enabled': True,
+        'voice_cache_auto_prune_enabled': True,
+        'voice_cache_retention_days': 7,
         'cockpit_memory_enabled': True,
         'cockpit_ambient_chatter_enabled': True,
         'cockpit_session_greetings_enabled': True,
         'cockpit_memory_callbacks_enabled': True,
+        'cockpit_llm_enabled': False,
+        'cockpit_llm_advisor_enabled': True,
+        'cockpit_llm_auto_start': True,
+        'cockpit_llm_unload_on_shutdown': True,
+        'cockpit_llm_model': 'qwen3.5:9b',
+        'cockpit_llm_advisor_level': 'Balanced',
+        'cockpit_llm_timeout_s': 2.5,
         'hud_crt_enabled': True,
         'hud_crt_motion_enabled': True,
         'hud_crt_intensity': 'Subtle',

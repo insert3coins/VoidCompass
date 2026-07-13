@@ -32,6 +32,7 @@ CACHE_DIR = TTS_DIR / "cache"
 DEFAULT_VOICE = "en_GB-alba-medium"
 MAX_TEXT = 400
 CACHE_KEEP = 300
+DEFAULT_CACHE_RETENTION_DAYS = 7
 
 COCKPIT_TEST_LINES = (
     "Cockpit intelligence online. All voice systems are responding.",
@@ -328,6 +329,7 @@ def _download_worker(voice):
 _process = None
 _process_voice = None
 _process_lock = threading.RLock()
+_cache_lock = threading.Lock()
 
 
 def _ensure_process(voice):
@@ -358,39 +360,108 @@ def stop_engine():
         _process_voice = None
 
 
+def prune_cache(max_age_days=None, max_files=CACHE_KEEP, now=None):
+    """Remove expired/old generated WAVs without touching voice packs or Piper."""
+    removed = 0
+    expired = 0
+    freed = 0
+    now = time.time() if now is None else float(now)
+    try:
+        retention = float(max_age_days) if max_age_days is not None else None
+    except (TypeError, ValueError):
+        retention = DEFAULT_CACHE_RETENTION_DAYS
+    cutoff = now - max(0.0, retention) * 86400.0 if retention and retention > 0 else None
+    keep = max(0, int(max_files)) if max_files is not None else None
+
+    with _cache_lock:
+        rows = []
+        if CACHE_DIR.is_dir():
+            for path in CACHE_DIR.glob("*.wav"):
+                try:
+                    stat = path.stat()
+                    rows.append((stat.st_mtime, path, stat.st_size))
+                except OSError:
+                    pass
+        rows.sort(key=lambda row: row[0])
+        survivors = []
+        for modified, path, size in rows:
+            if cutoff is not None and modified < cutoff:
+                try:
+                    path.unlink()
+                    removed += 1
+                    expired += 1
+                    freed += size
+                except OSError:
+                    survivors.append((modified, path, size))
+            else:
+                survivors.append((modified, path, size))
+        if keep is not None and len(survivors) > keep:
+            for _modified, path, size in survivors[:len(survivors) - keep]:
+                try:
+                    path.unlink()
+                    removed += 1
+                    freed += size
+                except OSError:
+                    pass
+    return {"files": removed, "expired": expired, "bytes": freed}
+
+
 def _evict_cache():
-    files = sorted(CACHE_DIR.glob("*.wav"), key=lambda path: path.stat().st_mtime)
-    for path in files[:-CACHE_KEEP]:
-        try:
-            path.unlink()
-        except OSError:
-            pass
+    return prune_cache(max_age_days=None, max_files=CACHE_KEEP)
 
 
-def cache_status():
+def cache_status(retention_days=None):
     files = list(CACHE_DIR.glob("*.wav")) if CACHE_DIR.is_dir() else []
     total_bytes = 0
+    oldest_mtime = None
+    expired = 0
+    cutoff = None
+    try:
+        if retention_days is not None and float(retention_days) > 0:
+            cutoff = time.time() - float(retention_days) * 86400.0
+    except (TypeError, ValueError):
+        pass
     for path in files:
         try:
-            total_bytes += path.stat().st_size
+            stat = path.stat()
+            total_bytes += stat.st_size
+            oldest_mtime = stat.st_mtime if oldest_mtime is None else min(oldest_mtime, stat.st_mtime)
+            if cutoff is not None and stat.st_mtime < cutoff:
+                expired += 1
         except OSError:
             pass
-    return {"files": len(files), "bytes": total_bytes, "limit": CACHE_KEEP}
+    oldest_days = max(0.0, (time.time() - oldest_mtime) / 86400.0) if oldest_mtime else 0.0
+    return {
+        "files": len(files), "bytes": total_bytes, "limit": CACHE_KEEP,
+        "expired": expired, "oldest_days": oldest_days,
+    }
 
 
 def clear_cache():
     removed = 0
     freed = 0
-    if CACHE_DIR.is_dir():
-        for path in CACHE_DIR.glob("*.wav"):
-            try:
-                size = path.stat().st_size
-                path.unlink()
-                removed += 1
-                freed += size
-            except OSError:
-                pass
+    with _cache_lock:
+        if CACHE_DIR.is_dir():
+            for path in CACHE_DIR.glob("*.wav"):
+                try:
+                    size = path.stat().st_size
+                    path.unlink()
+                    removed += 1
+                    freed += size
+                except OSError:
+                    pass
     return {"files": removed, "bytes": freed}
+
+
+def _touch_cache_hit(path):
+    with _cache_lock:
+        try:
+            if path.is_file() and path.stat().st_size > 44:
+                path.touch()
+                return True
+        except OSError:
+            pass
+    return False
 
 
 def _synthesis_payload(text, output, voice):
@@ -413,10 +484,10 @@ def synthesize(text, voice, cancel_event=None, use_cache=True):
     key = hashlib.sha1(f"{voice}|{text}".encode("utf-8")).hexdigest()
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     output = CACHE_DIR / (f"{key}.wav" if use_cache else f"temporary-{uuid.uuid4().hex}.wav")
-    if use_cache and output.is_file() and output.stat().st_size > 44:
+    if use_cache and _touch_cache_hit(output):
         return output
     with _process_lock:
-        if use_cache and output.is_file() and output.stat().st_size > 44:
+        if use_cache and _touch_cache_hit(output):
             return output
         process = _ensure_process(voice)
         try:
@@ -451,7 +522,7 @@ def _scaled_wav(source, volume):
     if volume >= 0.995:
         return source
     target = source.with_name(f"{source.stem}-v{int(round(volume * 100)):03d}.wav")
-    if target.is_file() and target.stat().st_size > 44:
+    if _touch_cache_hit(target):
         return target
     with wave.open(str(source), "rb") as reader:
         params = reader.getparams()
@@ -488,23 +559,62 @@ class VoiceCalloutManager:
         self._stop = threading.Event()
         self._last_spoken = {}
         self.last_error = None
+        self.last_cache_prune = None
+        self._prune_thread = None
         self._thread = threading.Thread(target=self._run, name="voice-callouts", daemon=True)
         self._thread.start()
+        self.prune_cache_async()
+
+    def _cache_retention_days(self):
+        if not self.config.get("voice_cache_auto_prune_enabled", True):
+            return None
+        try:
+            return max(1.0, min(
+                365.0,
+                float(self.config.get("voice_cache_retention_days", DEFAULT_CACHE_RETENTION_DAYS)),
+            ))
+        except (TypeError, ValueError):
+            return float(DEFAULT_CACHE_RETENTION_DAYS)
+
+    def prune_cache_async(self):
+        if self._prune_thread is not None and self._prune_thread.is_alive():
+            return False
+
+        def work():
+            try:
+                retention_days = self._cache_retention_days()
+                result = prune_cache(
+                    max_age_days=retention_days, max_files=CACHE_KEEP,
+                )
+                result["retention_days"] = retention_days
+                result["completed_at"] = time.time()
+                self.last_cache_prune = result
+            except Exception as exc:
+                self.last_cache_prune = {"error": str(exc), "completed_at": time.time()}
+
+        self._prune_thread = threading.Thread(
+            target=work, name="voice-cache-prune", daemon=True,
+        )
+        self._prune_thread.start()
+        return True
 
     def say(self, text, category="safety", cooldown_s=20, key=None):
-        if not self.config.get("voice_callouts_enabled", False):
-            return False
-        if not self.config.get(f"voice_{category}_enabled", True):
+        if not self.can_say(category):
             return False
         voice = selected_voice(self.config)
-        if not ready(voice):
-            return False
         dedup_key = key or f"{category}:{text}"
         now = time.monotonic()
         if now - self._last_spoken.get(dedup_key, 0.0) < cooldown_s:
             return False
         self._last_spoken[dedup_key] = now
         return self._enqueue(text, voice, self.config.get("voice_volume", 0.8))
+
+    def can_say(self, category="safety"):
+        return bool(
+            self.config.get("voice_callouts_enabled", False)
+            and self.config.get(f"voice_{category}_enabled", True)
+            and ready(selected_voice(self.config))
+        )
 
     def test(self, voice=None, volume=None, use_cache=None):
         voice = canonical_voice(voice) or selected_voice(self.config)
@@ -544,7 +654,9 @@ class VoiceCalloutManager:
                 playback = _scaled_wav(source, volume)
                 _play_wav(playback)
                 if use_cache:
-                    _evict_cache()
+                    prune_cache(
+                        max_age_days=self._cache_retention_days(), max_files=CACHE_KEEP,
+                    )
                 self.last_error = None
             except Exception as exc:
                 self.last_error = str(exc)
@@ -567,6 +679,8 @@ class VoiceCalloutManager:
             except Exception:
                 pass
         stop_engine()
+        if self._prune_thread is not None:
+            self._prune_thread.join(timeout=0.5)
 
 
 atexit.register(stop_engine)

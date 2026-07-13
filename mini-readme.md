@@ -1,5 +1,20 @@
 # VoidCompass // UPDATE LOG
 
+## v4.7.1 // Local Generative Compass Language
+**Release Date:** 2026-Jul-14
+
+### Optional Local Compass Language
+*   Added an optional Ollama-powered language layer for Compass using explicit `qwen3.5:9b` (recommended) or `qwen3.5:4b` (performance) models. It enriches navigation, exploration, objectives, greetings, debriefs, and ambient remarks while the existing journal brain remains authoritative.
+*   Safety and danger speech never enters the LLM. Every generative request starts from an approved deterministic line, enforces a structured one-sentence response, preserves required system/body/species names and supplied numbers, rejects questions, missing protected terms, and invented numbers, and falls back automatically on any timeout or validation failure.
+*   Model loading and generation run off the Tk thread through a latest-wins worker. `LoadGame` prewarms both model weights and the schema-constrained chat path, hiding the one-time AMD compile delay; the journal heartbeat pulses while Compass is generating.
+*   Added **Settings → Compass AI → Local Generative Language** controls for enable/disable, automatic local Ollama start, 9B/4B selection, fallback timeout, model installation/update, GPU warm-up, live status, and spoken language testing. Disabling the feature immediately restores the original callout path.
+*   Compass's Live Feed reports the language layer coming online or entering fallback once per state transition rather than logging each generation.
+*   Expanded the optional language layer into a low-noise **Situational Adviser**. Compass now receives a compact verified snapshot of route/fuel/cargo state, survey and biology progress, valuable bodies, mission destinations, unsold data, station services, engineering intentions, trade/mining progress, and learned gameplay experience. It can add one useful observation to an existing callout and can proactively brief mission destinations, usable data-sale services, FSS priorities, mining hold thresholds, and trade-profit milestones.
+*   Added **Quiet**, **Balanced**, and **Proactive** advice frequencies with per-topic and global cooldowns. Startup journal replay remains silent, repeated events are suppressed, and the adviser can be disabled independently without disabling natural LLM wording.
+*   Made the expanded **Compass AI** Settings page vertically scrollable while keeping its navigation and Save/Cancel controls fixed. The mouse wheel and visible scrollbar now reach the language controls, intelligence state, and full memory timeline at smaller window sizes.
+*   Added automatic generated-voice cache pruning, enabled by default with a **7-day unused-audio retention** setting. Cached WAV hits refresh their last-used timestamp, pruning runs off the UI thread at startup, after playback, and after Settings changes, and the existing 300-file ceiling remains as a secondary cap. Downloaded Piper runtimes and voice packs are never included. The expanded Voice page now scrolls so all retention and voice-pack controls remain reachable.
+*   On the development RX 6800, warmed `qwen3.5:9b` responses validated at roughly 1.2–1.4 seconds and remained fully GPU-resident. The model is unloaded on VoidCompass exit by default so VRAM is returned to the game.
+
 ## v4.6.6 // Navigation HUD Refinements
 **Release Date:** 2026-Jul-13
 

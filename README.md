@@ -13,6 +13,7 @@ Real-time Elite Dangerous companion app — desktop dashboard, in-game overlays,
 - **Achievements** — 1,023 journal-driven milestones with per-commander progress and live toast unlocks.
 - **Multi-commander** — separate profiles, data, and EDSM credentials per commander, detected automatically from the journal.
 - **Themes** — 10 built-in themes plus a full custom theme editor.
+- **Living Compass AI** — bounded per-commander memory, moods and learned habits, Piper voice callouts, plus an optional local Ollama language layer with deterministic safety fallbacks.
 
 ![Navigation HUD](NavHud.PNG)
 ![Achievements](Achievements.PNG)
@@ -25,5 +26,7 @@ python VoidCompass.py
 ```
 
 `config.json` is created automatically on first launch. If journal auto-detect fails, set `journal_path` (default: `C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous`). Everything else is configurable in-app via **[ CONFIGURATION ]** and **SETTINGS**.
+
+For optional generative Compass speech, install Ollama for Windows and use **Settings → Compass AI → Local Generative Language** to install, warm, test, and enable `qwen3.5:9b` or the lighter `qwen3.5:4b`. Its optional situational adviser can add verified route, survey, biology, mission, trade, mining, engineering, and data-sale context at Quiet, Balanced, or Proactive frequency. Ollama is not required for normal operation; urgent safety callouts and all existing Compass behavior remain local and deterministic without it.
 
 o7
