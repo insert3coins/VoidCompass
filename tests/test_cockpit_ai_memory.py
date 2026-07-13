@@ -312,6 +312,27 @@ class CockpitMemoryTests(unittest.TestCase):
             self.assertIsNotNone(remark)
             self.assertIn("report", remark["lines"][0].casefold())
 
+    def test_shutdown_style_debrief_captures_whole_gameplay_session_once(self):
+        with tempfile.TemporaryDirectory() as folder:
+            memory = CockpitMemory(pathlib.Path(folder) / "memory.json")
+            memory.begin_app_session("Sol", "Wayfarer")
+            memory.observe("FSDJump", {"StarSystem": "Achenar"}, {"star_system": "Achenar"})
+            memory.observe("MarketBuy", {"Type_Localised": "Gold", "Count": 4, "TotalCost": 1000})
+            memory.observe("MiningRefined", {"Type_Localised": "Painite"})
+            memory.observe("CarrierStats", {"Callsign": "ABC-123"})
+            memory.observe("EngineerCraft", {"BlueprintName": "Long Range FSD"})
+
+            summary = memory.session_debrief("Shutdown summary", close=True)
+
+            self.assertIn("1 jump", summary)
+            self.assertIn("1 market transaction", summary)
+            self.assertIn("1 refined mineral", summary)
+            self.assertIn("1 fleet carrier operation", summary)
+            self.assertIn("1 engineering modification", summary)
+            self.assertIsNone(memory.state["current_session"])
+            self.assertEqual(memory.session_debrief("Shutdown summary", close=True), "")
+            self.assertEqual(len(memory.state["sessions"]), 1)
+
     def test_expedition_detection_milestones_and_completion(self):
         with tempfile.TemporaryDirectory() as folder:
             memory = CockpitMemory(pathlib.Path(folder) / "memory.json")

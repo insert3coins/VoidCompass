@@ -2432,6 +2432,65 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         for message in self._cockpit_ai_state_events(before, after):
             self.add_event_feed_entry("AI", message, severity="INFO")
 
+    def _handle_cockpit_load_game(self, raw, data, startup_replay=False):
+        """Use LoadGame as the preferred session start, retaining automatic fallback."""
+        memory = getattr(self, "cockpit_memory", None)
+        if not memory or not self.config.get("cockpit_memory_enabled", True):
+            return False
+        raw = raw if isinstance(raw, dict) else {}
+        data = data if isinstance(data, dict) else raw
+        was_active = bool(memory.state.get("current_session"))
+        current_system = getattr(self, "current_sys", None)
+        system = (
+            data.get("star_system") or raw.get("StarSystem")
+            or (current_system if current_system not in (None, "---", "Unknown") else None)
+        )
+        ship = (
+            data.get("ship_name") or raw.get("ShipName")
+            or data.get("ship_localised") or raw.get("Ship_Localised")
+            or data.get("ship") or raw.get("Ship")
+        )
+        session = memory.start_session(system, ship)
+        if was_active or startup_replay:
+            return False
+        detail = "Flight session started"
+        if ship:
+            detail += f" aboard {ship}"
+        if system:
+            detail += f" in {system}"
+        self.add_event_feed_entry("AI", detail, severity="INFO")
+        self._pulse_cockpit_ai()
+        self._speak(
+            (detail + ".", "Compass session initialized. I am ready."),
+            category="navigation",
+            cooldown_s=0,
+            key=f"cockpit-loadgame-session:{session.get('id') or 'session'}",
+        )
+        return True
+
+    def _handle_cockpit_shutdown(self):
+        """Close the current session once at Elite's natural Shutdown boundary."""
+        memory = getattr(self, "cockpit_memory", None)
+        if not memory or not self.config.get("cockpit_memory_enabled", True):
+            return False
+        session = memory.state.get("current_session")
+        if not session:
+            return False
+        session_id = session.get("id") or "session"
+        summary = memory.session_debrief("Shutdown summary", close=True)
+        self._cockpit_feed_state = self._cockpit_ai_feed_snapshot()
+        if not summary:
+            return False
+        self.add_event_feed_entry("AI", summary, severity="INFO")
+        self._pulse_cockpit_ai()
+        self._speak(
+            summary,
+            category="navigation",
+            cooldown_s=0,
+            key=f"cockpit-shutdown-summary:{session_id}",
+        )
+        return True
+
     def _pulse_cockpit_ai(self):
         heartbeat = getattr(self, "heartbeat_hud", None)
         if heartbeat:
@@ -2661,6 +2720,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             logging.warning(f"Achievement engine event error [{ev}]: {exc}")
         self._record_journal_event()
         self._handle_live_journal_toast(ev, raw, d, startup_replay=startup_replay)
+        if ev == "LoadGame":
+            self._handle_cockpit_load_game(raw, d, startup_replay=startup_replay)
         if (self.config.get("cockpit_memory_enabled", True)
                 and getattr(self, "cockpit_memory", None)):
             try:
@@ -2672,6 +2733,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self._pulse_cockpit_ai()
             except Exception as exc:
                 logging.debug("Cockpit memory event skipped [%s]: %s", ev, exc)
+        if ev == "Shutdown" and not startup_replay:
+            self._handle_cockpit_shutdown()
         if ev != "LoadGame":
             self._apply_credit_event(ev, raw if isinstance(raw, dict) else d, log=not startup_replay)
         self._process_companion_event(ev, raw if isinstance(raw, dict) else {}, d,
