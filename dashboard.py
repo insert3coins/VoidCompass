@@ -2017,8 +2017,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             game_r_pos = (self.route_list.index(self.current_sys)+1, len(self.route_list))
 
         self.root.after(0, lambda: self.hud.update(
-            self.current_sys, self.dest_name, dist, 
-            self.scanned, self.total, custom_r_pos, self.organic_count, self.system_traffic, game_r_pos,
+            self.current_sys, self.dest_name, dist,
+            self.scanned, self.total, custom_r_pos, self.system_traffic, game_r_pos,
             route_waypoint, route_counts, "OK", None, self._build_navigation_hud_context()
         ))
         self.update_scan_hud()
@@ -2135,21 +2135,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 cargo_tons = 0
         cargo_cap = int(getattr(self, "cargo_capacity", 0) or 0)
         trade_profit = int((getattr(self, "trade_session", {}) or {}).get("profit", 0) or 0)
-        bio_scanned_value = sum(
-            int(bio_values.species_value(scan.get("species")) or scan.get("species_value") or 0)
-            for scan in self.last_bio_scan.values()
-            if scan.get("is_complete")
-        )
         badges = []
         if self.system_undiscovered:
             badges.append(("UNDISC", "alert"))
         if self.system_bio_signals > 0:
-            badges.append((f"BIO {self.organic_count}/{self.system_bio_signals}",
-                            "ok" if self.organic_count >= self.system_bio_signals else "alert"))
-        elif self.organic_count:
-            badges.append((f"BIO {self.organic_count}", "ok"))
-        if bio_scanned_value:
-            badges.append((f"VALUE {self._format_hud_credits(bio_scanned_value)}", "ok"))
+            badges.append(("BIO", "ok" if self.organic_count >= self.system_bio_signals else "alert"))
         if self.fss_summary_active:
             badges.append(("FSS", "alert"))
         if self.current_docked:
@@ -3153,8 +3143,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             species_key = f"{body_id}|{species}" if body_id is not None else f"{body_label}|{species}"
 
             existing = self.last_bio_scan.get(species_key, {})
-            is_complete = bool(d.get("is_complete"))
+            # Live ScanOrganic events carry no Sample/IsNewSample field, so sample
+            # progress has to be tracked locally from ScanType position (Log=1,
+            # Sample=2, Sample=3, then Analyse completes without adding a sample).
+            scan_type_norm = str(d.get("scan_type") or "").strip().casefold()
+            max_samples = d.get("max_samples", 3)
+            is_complete = bool(d.get("is_complete")) or scan_type_norm == "analyse"
             was_complete = bool(existing.get("is_complete"))
+            is_new_sample = scan_type_norm in ("log", "sample")
+            if is_new_sample:
+                sample_idx = int(existing.get("sample_idx") or 0) + 1
+            else:
+                sample_idx = existing.get("sample_idx") or max_samples
 
             self.last_bio_scan[species_key] = {
                 "body_id":        body_id,
@@ -3164,11 +3164,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "species_value":  bio_values.species_value(species),
                 "genus_value":    bio_values.genus_info(d.get("genus") or species),
                 "colony_m":       bio_values.GENUS_COLONY_M.get(d.get("genus") or species),
-                "sample_idx":     d.get("sample_idx"),
-                "max_samples":    d.get("max_samples", 3),
+                "sample_idx":     sample_idx,
+                "max_samples":    max_samples,
                 "scan_type":      d.get("scan_type"),
                 "is_new_entry":   bool(d.get("is_new_entry")),
-                "is_new_sample":  bool(d.get("is_new_sample")),
+                "is_new_sample":  is_new_sample,
                 "is_complete":    is_complete,
                 "system_address": self.current_system_address,
             }
@@ -3176,10 +3176,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if is_complete and not was_complete:
                 self.organic_count += 1
                 self.add_event_feed_entry("BIO", f"Organic complete: {species} ({body_label})", severity="INFO", copy_text=species)
-            elif d.get("is_new_sample"):
-                sample_idx = d.get("sample_idx")
-                sample_txt = f" sample {sample_idx}" if sample_idx is not None else ""
-                self.add_event_feed_entry("BIO", f"Organic{sample_txt}: {species} ({body_label})", severity="INFO", copy_text=species)
+            elif is_new_sample:
+                self.add_event_feed_entry("BIO", f"Organic sample {sample_idx}: {species} ({body_label})", severity="INFO", copy_text=species)
 
             if body_id is not None:
                 item = self.scan_items_by_id.get(body_id)

@@ -352,17 +352,6 @@ class TacticalHUD:
             return COLOR_ORANGE
         return "#7d8891"
 
-    def _bio_value_counts(self, organic_count, nav_context):
-        bio_text = f"BIO {organic_count}"
-        value_text = ""
-        for badge, _state in nav_context.get("badges", []):
-            badge_text = str(badge)
-            if badge_text.startswith("BIO"):
-                bio_text = badge_text
-            elif badge_text.startswith("VALUE"):
-                value_text = badge_text.split(" ", 1)[1] if " " in badge_text else ""
-        return bio_text.replace("BIO ", ""), value_text
-
     def _route_header(self, nav_context, route_waypoint, route_counts, game_r_pos, remaining):
         """A single consolidated route-status string: what we're following, plus
         how far through it we are — replaces the old duplicated ROUTE/WAYPOINT
@@ -409,7 +398,6 @@ class TacticalHUD:
         scanned,
         total,
         r_pos,
-        organic_count,
         system_traffic,
         game_r_pos=None,
         route_waypoint=None,
@@ -425,7 +413,6 @@ class TacticalHUD:
 
         pct = (scanned / total) if total > 0 else 0
         pct = max(0.0, min(1.0, pct))
-        bio_count, value_count = self._bio_value_counts(organic_count, nav_context)
         traffic_text = f"{system_traffic.get('day', 0)}/{system_traffic.get('week', 0)}/{system_traffic.get('total', 0)}"
 
         self._draw_chrome(bracket_len=10)
@@ -460,10 +447,8 @@ class TacticalHUD:
         self.canvas.create_line(16, 134, w - 16, 134, fill="#1a2530", width=1)
 
         self.draw_text(16, 144, text=f"TRAFFIC {traffic_text}", fill="#7d8891", font=("Courier", 8, "bold"), anchor="w")
-        value_display = value_count or "-"
-        self.draw_text(w - 16, 144, text=f"BIO {bio_count}  VALUE {value_display}", fill=COLOR_ORANGE if (bio_count not in ("0", 0) or value_count) else "#7d8891", font=("Courier", 8, "bold"), anchor="e")
 
-        badges = [b for b in nav_context.get("badges", []) if not str(b[0]).startswith(("BIO", "VALUE"))]
+        badges = nav_context.get("badges", [])
         x = 16
         y = 154
         for badge, state in badges:
@@ -480,7 +465,6 @@ class TacticalHUD:
         scanned,
         total,
         r_pos,
-        organic_count,
         system_traffic,
         game_r_pos=None,
         route_waypoint=None,
@@ -499,7 +483,6 @@ class TacticalHUD:
                 scanned,
                 total,
                 r_pos,
-                organic_count,
                 system_traffic,
                 game_r_pos=game_r_pos,
                 route_waypoint=route_waypoint,
