@@ -4,7 +4,6 @@
 **Release Date:** 2026-Jul-13
 
 ### Navigation HUD
-*   Added a live session readout — jumps and light-years traveled this session — to the previously empty corner of both the compact and normal layouts, alongside the badge row.
 *   `FSS` is no longer styled as a hazard alert. Badges now have a fourth state, `info` (theme yellow, plain outline, no hazard stripes), reserved for mode indicators rather than genuine warnings — so `FSS` reads clearly instead of blurring into neighbouring `UNDISC`/`BIO` alert badges that share the same orange hazard-stripe treatment.
 *   Badge colors are now fully theme-driven end to end, including the muted state, so switching the app's color theme carries through to every badge automatically.
 
