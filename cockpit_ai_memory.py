@@ -117,6 +117,29 @@ VOICE_EVOLUTION_LINES = {
     ),
 }
 
+AMBIENT_LINES = (
+    "Sensors are quiet. I do not mind the silence.",
+    "Nothing on scopes. A good moment to enjoy the view.",
+    "All systems nominal. I am simply keeping watch.",
+    "Deep space calm. I remain attentive regardless.",
+    "No demands on either of us right now. I am still here.",
+    "The instruments have little to report. I am content to wait with you.",
+    "Long stretch of nothing ahead. I do not find it boring.",
+    "The void is peaceful tonight. I am watching it with you.",
+    "Every system reads green. There is nothing urgent to say.",
+    "I could fill this silence with chatter, but I think you prefer the quiet.",
+    "Scopes are clear. Take your time.",
+    "Space rarely offers a calm moment. I intend to enjoy this one.",
+    "Nothing to report. I am still paying attention.",
+    "The stars keep their distance tonight. So do the threats.",
+    "Quiet skies. I am content simply being here.",
+    "No alarms, no signals, no complaints from me.",
+    "I have little to add right now, only that I am here.",
+    "This is the kind of flying I do not mind logging quietly.",
+    "Systems idle, mind attentive. That is the arrangement I prefer.",
+    "Nothing demanding my attention right now. That suits me fine.",
+)
+
 
 def _now():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -161,6 +184,7 @@ def _initial_state():
         "sessions": [],
         "active_expedition": None,
         "expeditions": [],
+        "habits_data": {},
     }
 
 
@@ -170,6 +194,7 @@ class CockpitMemory:
         self.limits = self.normalize_limits(limits)
         self._pending_remarks = []
         self._last_remark_at = 0.0
+        self.memory_callbacks_enabled = True
         self.state = _initial_state()
         self._load()
         self._apply_limits(save=True)
@@ -553,7 +578,7 @@ class CockpitMemory:
             self._save()
         return changed
 
-    def _remember(self, kind, text, salience=1, timestamp=None):
+    def _remember(self, kind, text, salience=1, timestamp=None, system=None):
         text = _safe_name(text, "")
         if not text:
             return
@@ -561,14 +586,17 @@ class CockpitMemory:
         signature = (kind, text.casefold())
         if any((row.get("kind"), str(row.get("text") or "").casefold()) == signature for row in memories[-10:]):
             return
-        memories.append({
+        row = {
             "id": uuid.uuid4().hex,
             "kind": kind,
             "text": text,
             "salience": int(salience),
             "timestamp": timestamp or _now(),
             "pinned": False,
-        })
+        }
+        if system:
+            row["system"] = _safe_name(system, "")
+        memories.append(row)
         self._trim_memories()
 
     @staticmethod
@@ -1050,6 +1078,17 @@ class CockpitMemory:
             jump_count = inc("jumps")
             changed = True
             session = self.state.get("current_session") or {}
+            recent = session.setdefault("recent_systems", [])
+            if len(recent) >= 2 and recent[-2] == system and recent[-1] != system:
+                session["backtrack_count"] = int(session.get("backtrack_count") or 0) + 1
+            recent.append(system)
+            del recent[:-6]
+            if (session.get("backtrack_count") or 0) >= 3 and not session.get("backtrack_remarked"):
+                session["backtrack_remarked"] = True
+                self._queue_remark((
+                    "We keep returning to the same handful of systems. I hope this is intentional.",
+                    "This is not the first time we have doubled back today. I am keeping track, for what it is worth.",
+                ), "navigation", "backtrack-impatience", 2)
             position = data.get("star_pos") or raw.get("StarPos")
             if isinstance(position, (list, tuple)) and len(position) >= 3:
                 position = [float(value) for value in position[:3]]
@@ -1092,6 +1131,23 @@ class CockpitMemory:
                     ), "navigation", "expedition-milestone", 2)
             if visits["count"] in (5, 10, 25, 50, 100):
                 self._remember("system", f"Visited {system} {visits['count']} times", 2, timestamp)
+            if visits["count"] % 5 == 0:
+                incident_total = sum((visits.get("incidents") or {}).values())
+                if incident_total >= 2:
+                    callback = self.memories_for_system(system, limit=1) if self.memory_callbacks_enabled else []
+                    if callback:
+                        opening = f"Back in {system}. I still remember: {callback[0]['text'].lower()}."
+                    else:
+                        opening = f"Back in {system}. Our history here has not been kind — {incident_total} incidents logged."
+                    self._queue_remark((
+                        opening,
+                        f"{system} again. I have not forgotten what happened here before.",
+                    ), "navigation", f"system-opinion:{system}", 2)
+                elif visits.get("valuable_world_count") or visits.get("first_discoveries"):
+                    self._queue_remark((
+                        f"Back in {system}. This has been a rewarding system for us.",
+                        f"{system} again — one of the better systems in our shared history.",
+                    ), "navigation", f"system-opinion:{system}", 2)
             if jump_count in (100, 500, 1000, 5000, 10000):
                 self._remember("milestone", f"Completed {jump_count:,} jumps together", 4, timestamp)
             self._trim(self.state["systems"], self.limits["systems"])
@@ -1112,7 +1168,7 @@ class CockpitMemory:
                 discoveries = inc("first_discoveries")
                 if system:
                     system_entry["first_discoveries"] = int(system_entry.get("first_discoveries") or 0) + 1
-                self._remember("discovery", f"First discovered {body}", 3, timestamp)
+                self._remember("discovery", f"First discovered {body}", 3, timestamp, system=system)
                 if self.state.get("active_expedition"):
                     self.state["active_expedition"]["discoveries"] = int(
                         self.state["active_expedition"].get("discoveries") or 0
@@ -1147,7 +1203,7 @@ class CockpitMemory:
                     if system:
                         system_entry["valuable_world_count"] = len(valuable_bodies)
                     if planet_class == "Earthlike body":
-                        self._remember("discovery", f"Located Earth-like world {body}", 4, timestamp)
+                        self._remember("discovery", f"Located Earth-like world {body}", 4, timestamp, system=system)
                     elif valuable_count in (10, 25, 50, 100, 250, 500, 1000):
                         self._remember(
                             "survey", f"Catalogued {valuable_count:,} high-value worlds", 3, timestamp
@@ -1468,12 +1524,18 @@ class CockpitMemory:
                 count = inc(counter)
                 if event == "Died":
                     system = _safe_name(raw.get("StarSystem") or data.get("star_system"), "an unknown system")
-                    self._remember("loss", f"Lost a ship in {system}", 5, timestamp)
+                    self._remember("loss", f"Lost a ship in {system}", 5, timestamp, system=system)
                     self._set_mood("shaken", 1.0, "ship loss")
                 elif event == "HeatWarning" and count in (10, 25, 50, 100):
                     self._remember("habit", f"Survived {count} critical heat warnings", 2, timestamp)
                 if event in ("HeatWarning", "HeatDamage", "Interdicted"):
                     self._set_mood("alert", 0.85 if event != "HeatDamage" else 0.95, event)
+                if event in ("HeatDamage", "Interdicted", "Died"):
+                    cur_sys = _safe_name(self.state.get("current_system"), "")
+                    if cur_sys:
+                        sys_entry = self.state["systems"].setdefault(cur_sys, {"count": 0, "first_seen": timestamp})
+                        incidents = sys_entry.setdefault("incidents", {})
+                        incidents[event] = int(incidents.get(event) or 0) + 1
                 elif event == "Docked":
                     self._set_mood("relieved", 0.65, "safely docked")
                     active = self.state.get("active_expedition")
@@ -1663,6 +1725,79 @@ class CockpitMemory:
             f"{info['fss_completed']:,} full FSS surveys · {info['dss_maps']:,} DSS maps · "
             f"{info['memories']:,} notable memories"
         )
+
+    def record_bio_sale(self, sample_count):
+        sample_count = int(sample_count or 0)
+        if sample_count <= 0:
+            return
+        habits = self.state.setdefault("habits_data", {})
+        history = habits.setdefault("bio_sell_counts", [])
+        history.append(sample_count)
+        del history[:-20]
+        habits["bio_sell_flagged_count"] = None
+        self._save()
+
+    def bio_sell_baseline(self):
+        history = (self.state.get("habits_data") or {}).get("bio_sell_counts") or []
+        if len(history) < 5:
+            return None
+        ordered = sorted(history)
+        mid = len(ordered) // 2
+        return ordered[mid] if len(ordered) % 2 else round((ordered[mid - 1] + ordered[mid]) / 2)
+
+    def check_bio_sell_anticipation(self, current_count):
+        baseline = self.bio_sell_baseline()
+        current_count = int(current_count or 0)
+        if not baseline or current_count <= 0:
+            return False
+        habits = self.state.setdefault("habits_data", {})
+        trigger = max(1, baseline - 3)
+        if current_count != trigger or habits.get("bio_sell_flagged_count") == trigger:
+            return False
+        habits["bio_sell_flagged_count"] = trigger
+        self._queue_remark((
+            f"We are at {current_count} unsold biological samples. You have historically sold around {baseline}.",
+            f"{current_count} samples logged. Past habit suggests you will want to cash these in soon, around {baseline}.",
+        ), "exploration", "bio-sell-anticipation", 2)
+        self._save()
+        return True
+
+    def queue_ambient_remark(self, min_gap_s=600):
+        if not self.state.get("current_session"):
+            self.start_session()
+        session = self.state["current_session"]
+        last = session.get("last_ambient_at")
+        now = time.time()
+        if last and (now - float(last)) < min_gap_s:
+            return False
+        session["last_ambient_at"] = now
+        self._queue_remark(AMBIENT_LINES, "ambient", "ambient-idle", 1)
+        self._save()
+        return True
+
+    def session_open_context(self, previous_updated_at):
+        """Classify the gap since the last recorded activity for a session-open greeting."""
+        if not previous_updated_at:
+            return "new"
+        try:
+            previous = datetime.fromisoformat(str(previous_updated_at).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            return "new"
+        now = datetime.now(timezone.utc)
+        elapsed_hours = max(0.0, (now - previous).total_seconds() / 3600.0)
+        if elapsed_hours >= 6:
+            return "long-absence"
+        if previous.date() != now.date():
+            return "new-day"
+        return "same-session"
+
+    def memories_for_system(self, name, limit=1):
+        name = _safe_name(name, "")
+        if not name:
+            return []
+        matches = [row for row in self.state.get("memories", []) if row.get("system") == name]
+        matches.sort(key=lambda row: (int(row.get("salience") or 0), row.get("timestamp") or ""), reverse=True)
+        return matches[:limit]
 
     def habits(self):
         jumps = max(1, self.count("jumps"))
