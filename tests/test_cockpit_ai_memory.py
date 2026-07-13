@@ -56,6 +56,37 @@ class CockpitMemoryTests(unittest.TestCase):
             self.assertFalse(memory.should_reference_repeat(2, "Balanced"))
             self.assertTrue(memory.should_reference_repeat(2, "Chatty"))
 
+    def test_configurable_caps_prune_existing_memory_immediately(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = pathlib.Path(folder) / "memory.json"
+            memory = CockpitMemory(path, limits={"systems": 30, "memories": 20})
+            for index in range(30):
+                system = f"System {index:02d}"
+                memory.observe("FSDJump", {"StarSystem": system}, {"star_system": system})
+            for index in range(15):
+                memory.observe(
+                    "Scan", {"BodyName": f"Body {index}", "WasDiscovered": False},
+                    {"body_name": f"Body {index}", "was_discovered": False},
+                )
+
+            applied = memory.configure_limits({
+                "systems": 25, "species": 25, "ships": 5, "memories": 10,
+            })
+
+            self.assertEqual(applied, {"systems": 25, "species": 25, "ships": 5, "memories": 10})
+            self.assertEqual(len(memory.state["systems"]), 25)
+            self.assertEqual(len(memory.state["memories"]), 10)
+            restored = CockpitMemory(path, limits=applied)
+            self.assertEqual(len(restored.state["systems"]), 25)
+            self.assertEqual(len(restored.state["memories"]), 10)
+
+    def test_memory_caps_are_guarded_against_accidental_extremes(self):
+        limits = CockpitMemory.normalize_limits({
+            "systems": 0, "species": 999999, "ships": "bad", "memories": -20,
+        })
+
+        self.assertEqual(limits, {"systems": 0, "species": 2000, "ships": 30, "memories": 0})
+
     def test_reset_forgets_learned_history(self):
         with tempfile.TemporaryDirectory() as folder:
             path = pathlib.Path(folder) / "memory.json"
@@ -91,6 +122,10 @@ class CockpitMemoryTests(unittest.TestCase):
                 "commander_profiles": {},
                 "cockpit_memory_enabled": False,
                 "cockpit_personality_level": "Quiet",
+                "cockpit_memory_system_limit": 750,
+                "cockpit_memory_species_limit": 500,
+                "cockpit_memory_ship_limit": 60,
+                "cockpit_memory_episode_limit": 240,
             }
             config_module.save_config(settings)
             saved = json.loads(
@@ -99,6 +134,10 @@ class CockpitMemoryTests(unittest.TestCase):
 
             self.assertFalse(saved["cockpit_memory_enabled"])
             self.assertEqual(saved["cockpit_personality_level"], "Quiet")
+            self.assertEqual(saved["cockpit_memory_system_limit"], 750)
+            self.assertEqual(saved["cockpit_memory_species_limit"], 500)
+            self.assertEqual(saved["cockpit_memory_ship_limit"], 60)
+            self.assertEqual(saved["cockpit_memory_episode_limit"], 240)
 
 
 if __name__ == "__main__":

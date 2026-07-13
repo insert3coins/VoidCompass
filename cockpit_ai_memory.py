@@ -1,16 +1,18 @@
 """Bounded, local autobiographical memory for the Compass cockpit persona."""
 
-from collections import Counter
 from datetime import datetime, timezone
 import json
 import os
 
 
 SCHEMA_VERSION = 1
-MAX_SYSTEMS = 300
-MAX_SPECIES = 200
-MAX_SHIPS = 30
-MAX_MEMORIES = 80
+DEFAULT_LIMITS = {"systems": 300, "species": 200, "ships": 30, "memories": 80}
+LIMIT_BOUNDS = {
+    "systems": (0, 5000),
+    "species": (0, 2000),
+    "ships": (0, 250),
+    "memories": (0, 1000),
+}
 
 
 def _now():
@@ -44,15 +46,38 @@ def _initial_state():
 
 
 class CockpitMemory:
-    def __init__(self, path):
+    def __init__(self, path, limits=None):
         self.path = str(path)
+        self.limits = self.normalize_limits(limits)
         self.state = _initial_state()
         self._load()
+        self._apply_limits(save=True)
 
-    def switch(self, path):
+    def switch(self, path, limits=None):
         self.path = str(path)
+        if limits is not None:
+            self.limits = self.normalize_limits(limits)
         self.state = _initial_state()
         self._load()
+        self._apply_limits(save=True)
+
+    @staticmethod
+    def normalize_limits(limits=None):
+        supplied = limits if isinstance(limits, dict) else {}
+        normalized = {}
+        for key, default in DEFAULT_LIMITS.items():
+            low, high = LIMIT_BOUNDS[key]
+            try:
+                value = int(float(supplied.get(key, default)))
+            except (TypeError, ValueError):
+                value = default
+            normalized[key] = max(low, min(high, value))
+        return normalized
+
+    def configure_limits(self, limits, save=True):
+        self.limits = self.normalize_limits(limits)
+        self._apply_limits(save=save)
+        return dict(self.limits)
 
     def _load(self):
         try:
@@ -112,7 +137,7 @@ class CockpitMemory:
     @staticmethod
     def _trim(mapping, maximum, count_key="count"):
         if len(mapping) <= maximum:
-            return
+            return False
         keep = sorted(
             mapping.items(),
             key=lambda pair: (int(pair[1].get(count_key) or 0), pair[1].get("last_seen") or ""),
@@ -120,6 +145,26 @@ class CockpitMemory:
         )[:maximum]
         mapping.clear()
         mapping.update(keep)
+        return True
+
+    def _trim_memories(self):
+        memories = self.state["memories"]
+        maximum = self.limits["memories"]
+        if len(memories) <= maximum:
+            return False
+        memories.sort(key=lambda row: (int(row.get("salience") or 0), row.get("timestamp") or ""))
+        del memories[:len(memories) - maximum]
+        memories.sort(key=lambda row: row.get("timestamp") or "")
+        return True
+
+    def _apply_limits(self, save=False):
+        changed = self._trim(self.state["systems"], self.limits["systems"])
+        changed = self._trim(self.state["species"], self.limits["species"]) or changed
+        changed = self._trim(self.state["ships"], self.limits["ships"]) or changed
+        changed = self._trim_memories() or changed
+        if changed and save:
+            self._save()
+        return changed
 
     def _remember(self, kind, text, salience=1, timestamp=None):
         text = _safe_name(text, "")
@@ -135,10 +180,7 @@ class CockpitMemory:
             "salience": int(salience),
             "timestamp": timestamp or _now(),
         })
-        if len(memories) > MAX_MEMORIES:
-            memories.sort(key=lambda row: (int(row.get("salience") or 0), row.get("timestamp") or ""))
-            del memories[:len(memories) - MAX_MEMORIES]
-            memories.sort(key=lambda row: row.get("timestamp") or "")
+        self._trim_memories()
 
     def observe(self, event, raw=None, normalized=None, startup_replay=False):
         """Learn from one live journal event. Returns True when state changed."""
@@ -167,7 +209,7 @@ class CockpitMemory:
                 self._remember("system", f"Visited {system} {visits['count']} times", 2, timestamp)
             if jump_count in (100, 500, 1000, 5000, 10000):
                 self._remember("milestone", f"Completed {jump_count:,} jumps together", 4, timestamp)
-            self._trim(self.state["systems"], MAX_SYSTEMS)
+            self._trim(self.state["systems"], self.limits["systems"])
 
         elif event == "Scan":
             scans = inc("scans")
@@ -193,7 +235,7 @@ class CockpitMemory:
                     self._remember("biology", f"First analysed {species}", 2, timestamp)
                 if organics in (25, 50, 100, 250, 500, 1000):
                     self._remember("milestone", f"Completed {organics:,} biological analyses", 4, timestamp)
-                self._trim(self.state["species"], MAX_SPECIES)
+                self._trim(self.state["species"], self.limits["species"])
 
         elif event == "Loadout":
             ship = _safe_name(data.get("ship_name") or raw.get("ShipName")
@@ -203,7 +245,7 @@ class CockpitMemory:
             entry["count"] = int(entry.get("count") or 0) + 1
             entry["last_seen"] = timestamp
             inc("loadouts")
-            self._trim(self.state["ships"], MAX_SHIPS)
+            self._trim(self.state["ships"], self.limits["ships"])
 
         else:
             counter_events = {
@@ -295,7 +337,7 @@ class CockpitMemory:
         if not self.should_reference_repeat(visits, level):
             return ()
         return (
-            f"We are back in {system_name}, Commander. This is our {ordinal(visits)} recorded visit.",
+            f"We are back in {system_name}. This is our {ordinal(visits)} recorded visit.",
             f"I remember {system_name}. We have passed through here {visits} times now.",
-            f"A familiar system, Commander. My records show {visits} visits to {system_name}.",
+            f"A familiar system. My records show {visits} visits to {system_name}.",
         )

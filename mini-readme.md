@@ -22,7 +22,7 @@
 *   Familiar systems and repeated biological analyses can now produce contextual remarks based on real shared history; startup journal replay is excluded so old events are never learned twice.
 *   Added evolving relationship and activity traits such as Explorer, Exobiologist, Trader, Miner, and Traveller, derived from actual play rather than a fixed personality choice.
 *   Added **Quiet**, **Balanced**, and **Chatty** personality levels plus a live learned-history summary and a confirmed **Forget Learned History** action under **Settings → Voice**.
-*   Memory is capped at 300 systems, 200 biological species, 30 ships, and 80 notable episodes so it remains lightweight as the relationship grows.
+*   Added per-commander memory-cap controls for systems, biological species, ships, and notable episodes. Defaults remain 300/200/30/80, each category can be reduced to zero, and guarded maximums allow up to 5,000 systems, 2,000 species, 250 ships, and 1,000 episodes; reducing a cap immediately retains the most useful records and prunes the excess.
 
 ### Dashboard
 *   Removed the duplicate graphical route strip from the Dashboard flight card—the CURRENT/DEST pips, route state, and distance remain available in the dedicated Navigation HUD.

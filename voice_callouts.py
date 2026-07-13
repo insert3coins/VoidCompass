@@ -34,10 +34,10 @@ MAX_TEXT = 400
 CACHE_KEEP = 300
 
 COCKPIT_TEST_LINES = (
-    "Cockpit intelligence online. All voice systems are responding, Commander.",
-    "Compass online, Commander. Navigation, telemetry, and tactical voice links are ready.",
-    "Voice interface synchronized. I am ready when you are, Commander.",
-    "Ship intelligence active. It is good to have you aboard, Commander.",
+    "Cockpit intelligence online. All voice systems are responding.",
+    "Compass online. Navigation, telemetry, and tactical voice links are ready.",
+    "Voice interface synchronized. I am ready when you are.",
+    "Ship intelligence active. It is good to have you aboard.",
 )
 
 _PIPER_RELEASE = "https://github.com/rhasspy/piper/releases/download/2023.11.14-2"
