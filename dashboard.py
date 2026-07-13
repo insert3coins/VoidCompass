@@ -2216,6 +2216,33 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             logging.debug("Voice callout skipped: %s", exc)
             return False
 
+    def _announce_system_arrival(self, system_name, startup_replay=False):
+        """Announce a live jump once, preferring useful route context."""
+        if startup_replay or not system_name or system_name in ("---", "Unknown"):
+            return False
+        route = list(getattr(self, "route_list", None) or [])
+        route_index = next(
+            (idx for idx, name in enumerate(route)
+             if str(name).casefold() == str(system_name).casefold()),
+            -1,
+        )
+        if route_index == len(route) - 1 and route:
+            return self._speak(
+                f"Route destination reached. {system_name}.", category="navigation",
+                cooldown_s=300, key=f"route-arrival:{system_name}",
+            )
+        if route_index >= 0:
+            next_system = route[route_index + 1]
+            return self._speak(
+                f"Waypoint {route_index + 1} of {len(route)} reached. Next, {next_system}.",
+                category="navigation", cooldown_s=300,
+                key=f"route-waypoint:{system_name}",
+            )
+        return self._speak(
+            f"Entered system. {system_name}.", category="navigation",
+            cooldown_s=20, key=f"system-arrival:{system_name}",
+        )
+
     def _push_live_toast(self, title, message="", severity="info", duration_s=10,
                          voice_text=None, voice_category="safety", voice_key=None):
         toast = getattr(self, "toast_hud", None)
@@ -2288,7 +2315,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "JetConeBoost":
             self._push_live_toast(
                 "FSD SUPERCHARGED", "Jet-cone boost acquired", "success", 10,
-                "Frame shift drive supercharged.", voice_category="navigation", voice_key="fsd-supercharged",
             )
         elif ev == "JetConeDamage":
             self._push_live_toast("JET CONE DAMAGE", "Exit the cone immediately", "fail", 18,
@@ -2579,24 +2605,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 and traffic_before_reset
             )
             self.current_sys = incoming_sys
-            if is_jump and not startup_replay and outgoing_sys and self.route_list:
-                route_index = next(
-                    (idx for idx, name in enumerate(self.route_list)
-                     if str(name).casefold() == str(incoming_sys).casefold()),
-                    -1,
-                )
-                if route_index == len(self.route_list) - 1:
-                    self._speak(
-                        f"Route destination reached. {incoming_sys}.", category="navigation",
-                        cooldown_s=300, key=f"route-arrival:{incoming_sys}",
-                    )
-                elif route_index >= 0:
-                    next_system = self.route_list[route_index + 1]
-                    self._speak(
-                        f"Waypoint {route_index + 1} of {len(self.route_list)} reached. Next, {next_system}.",
-                        category="navigation", cooldown_s=300,
-                        key=f"route-waypoint:{incoming_sys}",
-                    )
+            if is_jump:
+                self._announce_system_arrival(incoming_sys, startup_replay=startup_replay)
             if outgoing_sys:
                 self.previous_sys = outgoing_sys
                 self.previous_coords = prev_coords

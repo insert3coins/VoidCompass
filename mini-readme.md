@@ -12,7 +12,7 @@
 
 ### Callouts
 *   Added low-noise safety announcements for route-aware fuel and scoop risks, dry star stretches, interdictions, heat, shields, hull, suit hazards, rebuy coverage, and unsold data risk.
-*   Added navigation and exploration announcements for route waypoints, route completion, FSD supercharging, undiscovered systems, biological completion, Codex discoveries, and clear-to-sample guidance.
+*   Added navigation and exploration announcements for entered systems, route waypoints, route completion, undiscovered systems, biological completion, Codex discoveries, and clear-to-sample guidance. Jet-cone supercharge remains a visual notification without a repetitive voice callout.
 *   Added Engineering-ready, massacre-stack-complete, and best trade-route result announcements, each controlled by callout category settings and one-shot cooldowns.
 
 ### Dashboard
@@ -27,6 +27,7 @@
 *   Approaching a bio-bearing body now switches the same strip to a focused organism view with completed samples, active samples, DSS-detected genera, predicted genera, and reward ranges.
 *   Wired the packaged SrvSurvey Codex biological catalogue into VoidCompass, including more than 800 species/variant entries and current reward values; the previous built-in value table remains an offline fallback.
 *   The focused view keeps the existing sampling-distance guidance and returns to the system overview when leaving the body—no additional overlay window is created.
+*   Survey system and organism lists expand to show every available row instead of collapsing additional entries behind a `+more` count.
 
 ### Version
 *   Updated app version to **4.5.4**.

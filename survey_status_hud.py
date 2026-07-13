@@ -10,8 +10,6 @@ _CHROMA = "#ff00ff"
 _DIM = "#7a8a98"
 _GREEN = "#21d189"
 WIDTH = 480
-MAX_BODY_ROWS = 9
-MAX_SYSTEM_ROWS = 8
 
 
 def _safe_int(value, default=0):
@@ -234,10 +232,9 @@ class SurveyStatusHUD:
 
     def _redraw(self, model):
         is_body = model["mode"] == "body"
-        rows = model["rows"][:MAX_BODY_ROWS if is_body else MAX_SYSTEM_ROWS]
-        extra = max(0, len(model["rows"]) - len(rows))
+        rows = model["rows"]
         sample_h = 19 if model.get("sampling") else 0
-        h = 48 + sample_h + max(1, len(rows)) * 19 + (15 if extra else 0) + 25
+        h = 48 + sample_h + max(1, len(rows)) * 19 + 25
         self.canvas.config(width=WIDTH, height=h)
         self.win.geometry(f"{WIDTH}x{h}")
         self.canvas.delete("all")
@@ -286,9 +283,6 @@ class SurveyStatusHUD:
                 self._text(WIDTH - 18, y, state + estimate, color, ("Courier", 8, "bold"), "e")
                 y += 19
 
-        if extra:
-            self._text(38, y, f"+{extra} more", _DIM, ("Courier", 7, "bold"))
-            y += 15
         if is_body:
             lo, hi = model["min_value"], model["max_value"]
             total = _credits(lo) if lo == hi else f"{_credits(lo)}–{_credits(hi)}"
