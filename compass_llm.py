@@ -303,7 +303,7 @@ class CompassLLM:
         env.update(OLLAMA_HOST="127.0.0.1:11434", OLLAMA_NO_CLOUD="1")
         self._owned_process = subprocess.Popen(
             [executable, "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            stdin=subprocess.DEVNULL, creationflags=flags, env=env,
+            stdin=subprocess.DEVNULL, creationflags=flags, env=env, close_fds=True,
         )
         deadline = time.monotonic() + 12.0
         while time.monotonic() < deadline and not self._stop.is_set():
@@ -618,6 +618,7 @@ class CompassLLM:
             except Exception:
                 try:
                     process.kill()
+                    process.wait(timeout=1.0)
                 except Exception:
                     pass
         self._thread.join(timeout=1.0)

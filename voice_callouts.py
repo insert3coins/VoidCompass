@@ -9,6 +9,7 @@ the Tk event loop are never blocked.
 import atexit
 import hashlib
 import json
+import os
 import queue
 import random
 import re
@@ -332,17 +333,78 @@ _process_lock = threading.RLock()
 _cache_lock = threading.Lock()
 
 
+def _spawn_piper(command, **options):
+    """Start external Piper without PyInstaller's private DLL directory."""
+    options.setdefault("close_fds", True)
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return subprocess.Popen(command, **options)
+
+    # PyInstaller uses SetDllDirectory(_MEIPASS) for the frozen child. Windows
+    # passes that search path to subprocesses, which made external piper.exe
+    # load VCRUNTIME*.dll from _MEIPASS and lock the one-file temp directory.
+    import ctypes
+
+    runtime_dir = str(getattr(sys, "_MEIPASS", "") or "")
+    env = dict(options.get("env") or os.environ)
+    if runtime_dir:
+        runtime_key = os.path.normcase(os.path.abspath(runtime_dir))
+        env["PATH"] = os.pathsep.join(
+            entry for entry in env.get("PATH", "").split(os.pathsep)
+            if not entry or os.path.normcase(os.path.abspath(entry)) != runtime_key
+        )
+        options["env"] = env
+    set_dll_directory = ctypes.windll.kernel32.SetDllDirectoryW
+    set_dll_directory.argtypes = [ctypes.c_wchar_p]
+    set_dll_directory.restype = ctypes.c_int
+    set_dll_directory(None)
+    try:
+        return subprocess.Popen(command, **options)
+    finally:
+        if runtime_dir:
+            set_dll_directory(runtime_dir)
+
+
+def _stop_piper_process(process):
+    """Close Piper and wait until Windows has released all loaded DLLs."""
+    if process is None:
+        return
+    stream = getattr(process, "stdin", None)
+    if stream is not None:
+        try:
+            stream.close()
+        except (OSError, ValueError):
+            pass
+    if process.poll() is not None:
+        return
+    try:
+        process.wait(timeout=0.75)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        process.terminate()
+        process.wait(timeout=1.5)
+        return
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    try:
+        process.kill()
+        process.wait(timeout=1.0)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
 def _ensure_process(voice):
     global _process, _process_voice
     if _process is not None and _process.poll() is None and _process_voice == voice:
         return _process
     if _process is not None and _process.poll() is None:
-        _process.kill()
+        _stop_piper_process(_process)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     options = {}
     if sys.platform == "win32":
         options["creationflags"] = subprocess.CREATE_NO_WINDOW
-    _process = subprocess.Popen(
+    _process = _spawn_piper(
         [str(binary_path()), "--model", str(model_path(voice)), "--json-input"],
         cwd=str(binary_path().parent), stdin=subprocess.PIPE,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **options,
@@ -354,8 +416,7 @@ def _ensure_process(voice):
 def stop_engine():
     global _process, _process_voice
     with _process_lock:
-        if _process is not None and _process.poll() is None:
-            _process.kill()
+        _stop_piper_process(_process)
         _process = None
         _process_voice = None
 
