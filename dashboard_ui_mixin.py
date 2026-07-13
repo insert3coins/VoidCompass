@@ -524,6 +524,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         flight_stats.pack(fill=tk.BOTH, expand=True, padx=0, pady=(0, 8))
         self.sys_stat = self.create_stat(flight_stats, "CURRENT SYSTEM", "---")
         self.nav_stat = self.create_stat(flight_stats, "NAV TARGET", "---")
+        self.route_progress_stat = self.create_stat(flight_stats, "ROUTE PROGRESS", "NO ACTIVE ROUTE")
         self.scan_stat = self.create_stat(flight_stats, "SCAN PROGRESS", "0 / 0")
         self.flight_strip_canvas = None
 
@@ -1527,6 +1528,60 @@ class DashboardUIMixin(ThemedWindowMixin):
         if not self.batch_mode and self._widget_alive(getattr(self, "nav_stat", None)):
             self.root.after(0, lambda: self.nav_stat.config(text=txt))
 
+    def _current_route_progress(self):
+        """Return compact, truthful progress for the live route or saved waypoints."""
+        route = list(getattr(self, "route_list", None) or [])
+        current = getattr(self, "current_sys", None)
+        if route:
+            try:
+                current_index = route.index(current)
+            except (ValueError, TypeError):
+                current_index = -1
+            remaining = max(0, len(route) - current_index - 1) if current_index >= 0 else len(route)
+            if remaining <= 0:
+                return {
+                    "mode": "game", "remaining": 0,
+                    "text": "NAV ROUTE · COMPLETE", "summary": "COMPLETE",
+                }
+            noun = "JUMP" if remaining == 1 else "JUMPS"
+            return {
+                "mode": "game", "remaining": remaining,
+                "text": f"NAV ROUTE · {remaining} {noun} LEFT",
+                "summary": f"{remaining} LEFT",
+            }
+
+        waypoint_manager = getattr(self, "waypoint_manager", None)
+        waypoints = list(getattr(waypoint_manager, "waypoints", None) or [])
+        if waypoints:
+            total = len(waypoints)
+            visited = sum(1 for waypoint in waypoints if waypoint.get("visited", False))
+            remaining = max(0, total - visited)
+            if remaining <= 0:
+                return {
+                    "mode": "waypoints", "visited": visited, "total": total, "remaining": 0,
+                    "text": f"WAYPOINTS · {visited}/{total} · COMPLETE", "summary": "COMPLETE",
+                }
+            return {
+                "mode": "waypoints", "visited": visited, "total": total, "remaining": remaining,
+                "text": f"WAYPOINTS · {visited}/{total} · {remaining} LEFT",
+                "summary": f"{visited}/{total}",
+            }
+
+        return {
+            "mode": "none", "remaining": 0,
+            "text": "NO ACTIVE ROUTE", "summary": "INACTIVE",
+        }
+
+    def _refresh_route_progress_labels(self):
+        progress = self._current_route_progress()
+        route_progress_stat = getattr(self, "route_progress_stat", None)
+        if self._widget_alive(route_progress_stat):
+            self._config_label_if_changed(route_progress_stat, text=progress["text"])
+        summary_route = getattr(self, "summary_route", None)
+        if self._widget_alive(summary_route):
+            self._config_label_if_changed(summary_route, text=progress["summary"])
+        return progress
+
     def _flight_strip_context(self):
         current = self.current_sys if self.current_sys and self.current_sys != "---" else "---"
         previous = getattr(self, "previous_sys", None)
@@ -2035,20 +2090,13 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.scan_stat.config(text=f"{self.scanned} / {self.total}")
         self.update_nav_label()
 
-        route_text = "INACTIVE"
-        route_total = 0
-        route_visited = 0
-        if self.waypoint_manager.waypoints:
-            route_total = len(self.waypoint_manager.waypoints)
-            route_visited = sum(1 for wp in self.waypoint_manager.waypoints if wp.get("visited", False))
-            route_text = f"{route_visited}/{route_total}"
+        route_progress = self._refresh_route_progress_labels()
 
         traffic_day = self.system_traffic.get("day", 0)
         traffic_week = self.system_traffic.get("week", 0)
         traffic_total = self.system_traffic.get("total", 0)
 
         self.summary_sys.config(text=self.current_sys or "---")
-        self.summary_route.config(text=route_text)
         self.summary_scan.config(text=f"{self.scanned}/{self.total}")
         self.summary_traffic.config(text=f"{traffic_day}/{traffic_week}/{traffic_total}")
         self.summary_session.config(text=self._get_session_elapsed_text())
@@ -2172,6 +2220,9 @@ class DashboardUIMixin(ThemedWindowMixin):
             self._config_label_if_changed(self.carrier_fuel_txt, text="", fg=self.UI_DIM)
 
     def update_waypoint_display(self):
+        # Route Plotter uses this same manager and callback. Refresh the
+        # Dashboard progress immediately as routes are imported, edited, or cleared.
+        self._refresh_route_progress_labels()
         if not self.waypoint_manager.waypoints:
             self.target_waypoint = None
             self.wp_name_lbl.config(text="NO ACTIVE ROUTE")

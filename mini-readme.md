@@ -5,6 +5,7 @@
 - Compass now consumes the same EDSM day/week/total traffic shown on the HUD and retains it per remembered system. Prior traffic suppresses contradictory whole-system `UNDISC` state, alerts, and voice lines, while genuine first discoveries of individual bodies remain part of its exploration memory.
 - The Compass AI Intelligence State now shows how many travelled systems it remembers plus the current system's traffic context.
 - Compass now announces newly scanned Earth-like, water, ammonia, and terraformable worlds with class-specific personality variants, remembers each unique valuable body, and grows longer-term high-value survey references without repeating detailed scans or startup history.
+- The Dashboard's Current Flight card now shows live route progress as remaining NavRoute jumps, with explicitly labelled visited/total progress for saved waypoint routes and a clear inactive or complete state—without restoring the removed graphical pip strip.
 **Release Date:** 2026-Jul-13
 
 ## v4.5.9 // Autonomous Compass Intelligence
