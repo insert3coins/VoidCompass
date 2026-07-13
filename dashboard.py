@@ -66,6 +66,12 @@ from cockpit_ai_memory import CockpitMemory, ordinal
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
+    _COCKPIT_BRAIN_MILESTONES = {
+        "systems": (10, 25, 50, 100, 250, 500, 1000, 2500, 5000),
+        "species": (10, 25, 50, 100, 250, 500, 1000, 2000),
+        "memories": (10, 25, 50, 80, 100, 250, 500, 1000),
+    }
+
     def _cockpit_memory_limits(self):
         return {
             "systems": self.config.get("cockpit_memory_system_limit", 300),
@@ -330,6 +336,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 limits=self._cockpit_memory_limits(),
             )
             self.cockpit_memory.begin_app_session()
+            self._publish_cockpit_ai_online()
         if getattr(self, "achievement_engine", None):
             self.achievement_engine.switch_profile(
                 self._profile_path("achievements_state.json"),
@@ -726,6 +733,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         self.db_lock = threading.RLock()
         self.batch_mode = False
+        self._publish_cockpit_ai_online()
         self.init_db()
         self.edsm.set_db(self.conn, self.db_lock)
         self.colonisation_projects = self.db_load_colonisation_projects()
@@ -2245,7 +2253,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     personality_level=self.config.get("cockpit_personality_level", "Balanced"),
                 )
             text = choose_line(text, key=key)
-            return self.voice_callouts.say(text, category=category, cooldown_s=cooldown_s, key=key)
+            spoken = self.voice_callouts.say(text, category=category, cooldown_s=cooldown_s, key=key)
+            if spoken:
+                self._pulse_cockpit_ai()
+            return spoken
         except Exception as exc:
             logging.debug("Voice callout skipped: %s", exc)
             return False
@@ -2296,6 +2307,108 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 for row in pinned[:5] if row.get("name")
             ]
         self.cockpit_memory.update_intentions(intentions)
+
+    def _cockpit_ai_feed_snapshot(self):
+        memory = getattr(self, "cockpit_memory", None)
+        if not memory:
+            return None
+        mood = memory.current_mood()
+        active = memory.state.get("active_expedition")
+        return {
+            "mood": str(mood.get("name") or "calm"),
+            "mood_reason": str(mood.get("reason") or "systems nominal"),
+            "voice_stage": memory.voice_stage(
+                self.config.get("cockpit_personality_level", "Balanced")
+            ),
+            "habits": tuple(memory.habits()),
+            "systems": len(memory.state.get("systems", {})),
+            "species": len(memory.state.get("species", {})),
+            "ships": len(memory.state.get("ships", {})),
+            "memories": len(memory.state.get("memories", [])),
+            "limits": dict(memory.limits),
+            "expedition_id": active.get("id") if isinstance(active, dict) else None,
+            "expedition_name": active.get("name") if isinstance(active, dict) else None,
+            "expedition_jumps": int(active.get("jumps") or 0) if isinstance(active, dict) else 0,
+        }
+
+    @classmethod
+    def _cockpit_ai_state_events(cls, before, after):
+        """Return sparse, meaningful feed messages for Compass state transitions."""
+        if not before or not after:
+            return []
+        messages = []
+        if after["mood"] != before["mood"]:
+            messages.append(
+                f"Mood changed: {after['mood'].title()} - {after['mood_reason']}"
+            )
+        if after["voice_stage"] != before["voice_stage"]:
+            messages.append(
+                f"Relationship evolved: {after['voice_stage'].title()} flight companion"
+            )
+        learned = [habit for habit in after["habits"] if habit not in before["habits"]]
+        if learned:
+            messages.append(f"Learned flight habit: {', '.join(learned)}")
+
+        growth = []
+        for key, label in (("systems", "systems"), ("species", "species"), ("memories", "notable memories")):
+            old_count = int(before.get(key) or 0)
+            new_count = int(after.get(key) or 0)
+            milestones = set(cls._COCKPIT_BRAIN_MILESTONES[key])
+            limit = int((after.get("limits") or {}).get(key) or 0)
+            if limit:
+                milestones.add(limit)
+            if any(old_count < mark <= new_count for mark in milestones):
+                suffix = f"/{limit}" if limit else ""
+                growth.append(f"{new_count:,}{suffix} {label}")
+        if growth:
+            messages.append(f"Memory growth: {' | '.join(growth)}")
+
+        old_expedition = before.get("expedition_id")
+        new_expedition = after.get("expedition_id")
+        if new_expedition and new_expedition != old_expedition:
+            messages.append(f"Expedition log opened: {after['expedition_name']}")
+        elif old_expedition and not new_expedition:
+            messages.append(f"Expedition archived: {before.get('expedition_name') or 'journey complete'}")
+        elif new_expedition == old_expedition and new_expedition:
+            old_jumps = int(before.get("expedition_jumps") or 0)
+            new_jumps = int(after.get("expedition_jumps") or 0)
+            if any(old_jumps < mark <= new_jumps for mark in (50, 100, 250, 500, 1000)):
+                messages.append(
+                    f"Expedition milestone: {after['expedition_name']} reached {new_jumps:,} jumps"
+                )
+        return messages
+
+    def _publish_cockpit_ai_online(self):
+        if not self.config.get("cockpit_memory_enabled", True):
+            self._cockpit_feed_state = None
+            return
+        snapshot = self._cockpit_ai_feed_snapshot()
+        self._cockpit_feed_state = snapshot
+        if not snapshot:
+            return
+        limits = snapshot["limits"]
+        self.add_event_feed_entry(
+            "AI",
+            (
+                f"Compass online: {snapshot['voice_stage'].title()} | mood {snapshot['mood']} | "
+                f"memory {snapshot['systems']:,}/{limits['systems']:,} systems, "
+                f"{snapshot['species']:,}/{limits['species']:,} species, "
+                f"{snapshot['memories']:,}/{limits['memories']:,} notable"
+            ),
+            severity="INFO",
+        )
+
+    def _publish_cockpit_ai_changes(self):
+        after = self._cockpit_ai_feed_snapshot()
+        before = getattr(self, "_cockpit_feed_state", None)
+        self._cockpit_feed_state = after
+        for message in self._cockpit_ai_state_events(before, after):
+            self.add_event_feed_entry("AI", message, severity="INFO")
+
+    def _pulse_cockpit_ai(self):
+        heartbeat = getattr(self, "heartbeat_hud", None)
+        if heartbeat:
+            heartbeat.pulse("ai")
 
     def _announce_system_arrival(self, system_name, startup_replay=False):
         """Announce a live jump once, preferring useful route context."""
@@ -2524,7 +2637,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if (self.config.get("cockpit_memory_enabled", True)
                 and getattr(self, "cockpit_memory", None)):
             try:
-                self.cockpit_memory.observe(ev, raw, d, startup_replay=startup_replay)
+                learned = self.cockpit_memory.observe(ev, raw, d, startup_replay=startup_replay)
+                if not startup_replay:
+                    self._publish_cockpit_ai_changes()
+                    if learned:
+                        self._pulse_cockpit_ai()
             except Exception as exc:
                 logging.debug("Cockpit memory event skipped [%s]: %s", ev, exc)
         if ev != "LoadGame":

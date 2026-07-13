@@ -1,6 +1,9 @@
 # VoidCompass // UPDATE LOG
 
-## v4.5.7 // Autonomous Compass Intelligence
+## v4.5.8 // Autonomous Compass Intelligence
+
+- Compass AI now has a violet `AI` category in the Live Event Timeline. It posts one compact online brain summary, then only meaningful mood, relationship, learned-habit, expedition, and memory-capacity milestones; routine voice lines and ordinary learning stay out of the feed.
+- The journal heartbeat now gives a larger violet AI pulse whenever Compass learns from a live event or delivers a cockpit callout. Its normal journal pulse continues underneath and cannot immediately overwrite the short AI activity indication.
 **Release Date:** 2026-Jul-13
 
 ### Voice Packs
