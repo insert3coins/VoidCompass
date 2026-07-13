@@ -45,8 +45,44 @@ class SurveyStatusModelTests(unittest.TestCase):
         self.assertEqual(model["rows"][0]["bio_count"], 3)
         self.assertTrue(model["rows"][1]["needs_dss"])
 
-    def test_completed_system_hides_strip(self):
-        self.assertIsNone(build_survey_model("Test AB", [_body(organic_complete_count=3)]))
+    def test_completed_bio_body_remains_as_persistent_notable_body(self):
+        model = build_survey_model(
+            "Test AB", [_body(organic_complete_count=3)], scanned=1, total=4,
+        )
+
+        self.assertEqual(model["mode"], "system")
+        self.assertEqual(model["rows"], [])
+        self.assertEqual(model["notable_rows"][0]["name"], "Test AB 1 c")
+        self.assertIn("BIO 3", model["notable_rows"][0]["value_line"])
+        self.assertEqual((model["scanned"], model["total"]), (1, 4))
+
+    def test_valuable_and_terraformable_bodies_survive_after_dss_completion(self):
+        bodies = [
+            _body(
+                body_id=8, name="Test AB 2", bio_count=0, organic_complete_count=0,
+                dss_complete=True, planet_class="Water world", reward=900_000,
+                dss_reward=1_200_000, icons=["💧"], genuses=[], organic_scans={},
+            ),
+            _body(
+                body_id=9, name="Test AB 3", bio_count=0, organic_complete_count=0,
+                dss_complete=True, planet_class="High metal content body",
+                terraformable=True, reward=70_000, dss_reward=100_000,
+                icons=["🛠"], genuses=[], organic_scans={},
+            ),
+        ]
+
+        model = build_survey_model("Test AB", bodies, scanned=2, total=2)
+
+        self.assertEqual([row["name"] for row in model["notable_rows"]], ["Test AB 2", "Test AB 3"])
+        self.assertIn("900.0K CR", model["notable_rows"][0]["value_line"])
+        self.assertTrue(model["notable_rows"][1]["terraformable"])
+
+    def test_unremarkable_completed_body_still_allows_strip_to_hide(self):
+        body = _body(
+            bio_count=0, organic_complete_count=0, dss_complete=True,
+            reward=10_000, dss_reward=20_000, genuses=[], organic_scans={},
+        )
+        self.assertIsNone(build_survey_model("Test AB", [body]))
 
 
 if __name__ == "__main__":

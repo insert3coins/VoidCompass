@@ -65,6 +65,35 @@ def _truncate(text, max_chars):
     return text if len(text) <= max_chars else text[:max_chars - 1] + "…"
 
 
+def build_notable_body_rows(scan_items, min_value=_DEFAULT_MIN_VALUE):
+    """Return the shared notable-body model used by transient and persistent HUDs."""
+    bodies = []
+    for item in (scan_items or []):
+        if not _is_interesting_body(item, min_value):
+            continue
+        icons = "".join(ic for ic in (item.get("icons") or []) if ic != "★")
+        reward = item.get("reward") or 0
+        dss_reward = item.get("dss_reward") or 0
+        bio_count = item.get("bio_count") or 0
+        if item.get("dss_complete") or dss_reward <= reward:
+            value_line = f"{_fmt_credits(reward)} CR"
+        else:
+            value_line = f"{_fmt_credits(reward)} CR  ·  DSS {_fmt_credits(dss_reward)} CR"
+        if bio_count:
+            value_line += f"  ·  BIO {bio_count}"
+        bodies.append({
+            "body_id": item.get("body_id"),
+            "name": item.get("name") or "Body",
+            "icons": icons,
+            "planet_class": item.get("planet_class") or "",
+            "terraformable": bool(item.get("terraformable")),
+            "name_color": COLOR_ACCENT if bio_count else COLOR_ORANGE,
+            "value_line": value_line,
+            "value_color": _COL_GOLD if max(reward, dss_reward) >= min_value else _COL_DIM,
+        })
+    return bodies
+
+
 class SystemInfoHUD:
     def __init__(self, root, config):
         self.root   = root
@@ -158,28 +187,7 @@ class SystemInfoHUD:
 
     def _compute_bodies(self, scan_items):
         min_value = int(self.config.get("system_info_min_value", _DEFAULT_MIN_VALUE) or _DEFAULT_MIN_VALUE)
-        bodies = []
-        for item in (scan_items or []):
-            if not _is_interesting_body(item, min_value):
-                continue
-            icons = "".join(ic for ic in (item.get("icons") or []) if ic != "★")
-            reward = item.get("reward") or 0
-            dss_reward = item.get("dss_reward") or 0
-            bio_count = item.get("bio_count") or 0
-            if item.get("dss_complete") or dss_reward <= reward:
-                value_line = f"{_fmt_credits(reward)} CR"
-            else:
-                value_line = f"{_fmt_credits(reward)} CR  ·  DSS {_fmt_credits(dss_reward)} CR"
-            if bio_count:
-                value_line += f"  ·  BIO {bio_count}"
-            bodies.append({
-                "name": item.get("name") or "Body",
-                "icons": icons,
-                "name_color": COLOR_ACCENT if bio_count else COLOR_ORANGE,
-                "value_line": value_line,
-                "value_color": _COL_GOLD if max(reward, dss_reward) >= min_value else _COL_DIM,
-            })
-        return bodies
+        return build_notable_body_rows(scan_items, min_value)
 
     def _apply_scan_progress(self, scan_items, body_signals, total_bodies):
         self._body_count    = int(total_bodies or 0)

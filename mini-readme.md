@@ -1,12 +1,13 @@
 # VoidCompass // UPDATE LOG
 
-## v4.5.8 // Autonomous Compass Intelligence
+## v4.5.9 // Autonomous Compass Intelligence
 
 - Compass AI now has a violet `AI` category in the Live Event Timeline. It posts one compact online brain summary, then only meaningful mood, relationship, learned-habit, expedition, and memory-capacity milestones; routine voice lines and ordinary learning stay out of the feed.
 - The journal heartbeat now gives a larger violet AI pulse whenever Compass learns from a live event or delivers a cockpit callout. Its normal journal pulse continues underneath and cannot immediately overwrite the short AI activity indication.
 - Compass exploration awareness now covers system honks and detected body totals, unique completed FSS surveys, biological/geological signal bodies, Nav Beacon scans, and unique DSS surface maps including efficient-probe results. Per-system memory retains survey depth without turning routine scans into feed spam.
 - Compass now builds bounded operational knowledge across missions, combat, trade, mining, Engineering, Odyssey ground activity, career progression, crime/legal history, Powerplay/BGS, fleet carriers, colonisation, ships/modules, squadrons, and community goals. It learns top recurring targets, commodities, minerals, blueprints, factions, settlements, and outcomes while keeping only compact domain summaries; each newly understood gameplay domain appears once in the AI feed.
 - Elite's `LoadGame` and `Shutdown` journal events now form Compass's preferred session lifecycle. `LoadGame` starts or enriches one known flight session, while `Shutdown` closes it and posts/speaks one whole-gameplay debrief; automatic activity start and application close remain duplicate-safe fallbacks when either journal boundary is absent.
+- Notable bodies now remain in the persistent Survey Status overlay as scan data arrives, using the same valuable-world, terraformable, biological-signal, icon, and reward rules as the temporary System Summary. Completed notable bodies no longer disappear with the System Summary timer, while ordinary completed bodies still clear from the overlay.
 **Release Date:** 2026-Jul-13
 
 ### Voice Packs
