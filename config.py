@@ -60,6 +60,7 @@ COLOR_ORANGE = _themes.ACTIVE_PALETTE["orange"]
 COLOR_TEXT = _themes.ACTIVE_PALETTE["text"]
 COLOR_GREEN = _themes.ACTIVE_PALETTE["green"]
 COLOR_MUTED = _themes.ACTIVE_PALETTE["muted"]
+COLOR_YELLOW = _themes.ACTIVE_PALETTE["yellow"]
 
 
 PROFILE_TEXT_SETTINGS = (
