@@ -1,21 +1,26 @@
 import unittest
 
 from dashboard import MainDashboard
+from voice_callouts import choose_line
 
 
 class DashboardVoiceTests(unittest.TestCase):
     def _app(self, route=None):
         app = MainDashboard.__new__(MainDashboard)
         app.route_list = list(route or [])
+        app.config = {"cockpit_memory_enabled": True, "cockpit_personality_level": "Balanced"}
+        app.cockpit_memory = None
         app.spoken = []
-        app._speak = lambda text, **kwargs: app.spoken.append((text, kwargs)) or True
+        app._speak = lambda text, **kwargs: app.spoken.append(
+            (choose_line(text, key=kwargs.get("key")), kwargs)
+        ) or True
         return app
 
     def test_live_jump_announces_entered_system(self):
         app = self._app()
 
         self.assertTrue(app._announce_system_arrival("Shinrarta Dezhra"))
-        self.assertEqual(app.spoken[0][0], "Entered system. Shinrarta Dezhra.")
+        self.assertIn("Shinrarta Dezhra", app.spoken[0][0])
         self.assertEqual(app.spoken[0][1]["category"], "navigation")
 
     def test_route_arrival_replaces_generic_system_callout(self):
@@ -23,7 +28,20 @@ class DashboardVoiceTests(unittest.TestCase):
 
         app._announce_system_arrival("Sol")
         self.assertEqual(len(app.spoken), 1)
-        self.assertIn("Waypoint 1 of 2 reached", app.spoken[0][0])
+        self.assertIn("Achenar", app.spoken[0][0])
+        self.assertNotIn("Entered system", app.spoken[0][0])
+
+    def test_learned_system_memory_replaces_generic_arrival_wording(self):
+        app = self._app()
+
+        class Memory:
+            def arrival_lines(self, system, level):
+                return (f"I remember {system}. This is visit three.",)
+
+        app.cockpit_memory = Memory()
+        app._announce_system_arrival("Sol")
+
+        self.assertEqual(app.spoken[0][0], "I remember Sol. This is visit three.")
 
     def test_startup_replay_is_silent(self):
         app = self._app()

@@ -61,7 +61,8 @@ from trade import alerts as trade_alerts
 from trade.eddn_upload import UPLOADER as trade_eddn_uploader
 from achievement_engine import AchievementEngine
 from achievement_window import AchievementWindow
-from voice_callouts import VoiceCalloutManager
+from voice_callouts import VoiceCalloutManager, choose_line
+from cockpit_ai_memory import CockpitMemory, ordinal
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
@@ -314,6 +315,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.config["active_commander_fid"] = fid or profile.get("fid", "")
         apply_profile_config(self.config, new_key)
         self._refresh_profile_paths()
+        if getattr(self, "cockpit_memory", None):
+            self.cockpit_memory.switch(get_profile_file(new_key, "cockpit_ai_memory.json"))
         if getattr(self, "achievement_engine", None):
             self.achievement_engine.switch_profile(
                 self._profile_path("achievements_state.json"),
@@ -383,6 +386,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.config = load_config()
         self._prepare_commander_profile_from_journal()
         self.voice_callouts = VoiceCalloutManager(self.config)
+        self.cockpit_memory = CockpitMemory(
+            get_profile_file(get_active_profile(self.config), "cockpit_ai_memory.json")
+        )
         self.root.title(f"VOID COMPASS // v{APP_VERSION}")
         self.root.geometry(self.config.get("main_geometry", "1320x820"))
         self.root.minsize(1080, 700)
@@ -1612,6 +1618,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 embedded=True,
                 on_close_callback=self.show_dashboard_page,
                 voice_manager=self.voice_callouts,
+                cockpit_memory=self.cockpit_memory,
             )
         self._show_embedded_page("SETTINGS", self.settings_page)
 
@@ -2211,6 +2218,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _speak(self, text, category="safety", cooldown_s=20, key=None):
         try:
+            text = choose_line(text, key=key)
             return self.voice_callouts.say(text, category=category, cooldown_s=cooldown_s, key=key)
         except Exception as exc:
             logging.debug("Voice callout skipped: %s", exc)
@@ -2228,18 +2236,44 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         if route_index == len(route) - 1 and route:
             return self._speak(
-                f"Route destination reached. {system_name}.", category="navigation",
+                (
+                    f"Navigation confirms our destination. Welcome to {system_name}, Commander.",
+                    f"We have arrived at {system_name}. I am closing the active route now.",
+                    f"Destination confirmed. {system_name}. Route objectives complete.",
+                    f"Hyperspace transition stable. This is {system_name}, our final destination.",
+                ), category="navigation",
                 cooldown_s=300, key=f"route-arrival:{system_name}",
             )
         if route_index >= 0:
             next_system = route[route_index + 1]
             return self._speak(
-                f"Waypoint {route_index + 1} of {len(route)} reached. Next, {next_system}.",
+                (
+                    f"Waypoint {route_index + 1} of {len(route)} reached. Next, {next_system}.",
+                    f"Navigation checkpoint confirmed. I have {next_system} queued as our next system.",
+                    f"That is waypoint {route_index + 1}. Updating the flight plan for {next_system}.",
+                    f"Route telemetry updated, Commander. Next jump target, {next_system}.",
+                ),
                 category="navigation", cooldown_s=300,
                 key=f"route-waypoint:{system_name}",
             )
+        if (self.config.get("cockpit_memory_enabled", True)
+                and getattr(self, "cockpit_memory", None)):
+            remembered = self.cockpit_memory.arrival_lines(
+                system_name, self.config.get("cockpit_personality_level", "Balanced")
+            )
+            if remembered:
+                return self._speak(
+                    remembered, category="navigation", cooldown_s=20,
+                    key=f"system-arrival:{system_name}",
+                )
         return self._speak(
-            f"Entered system. {system_name}.", category="navigation",
+            (
+                f"Entered system. {system_name}.",
+                f"Welcome to {system_name}, Commander.",
+                f"Hyperspace exit stable. We are now in {system_name}.",
+                f"Jump complete. Navigation identifies this system as {system_name}.",
+                f"Frame shift transition complete, Commander. Welcome to {system_name}.",
+            ), category="navigation",
             cooldown_s=20, key=f"system-arrival:{system_name}",
         )
 
@@ -2273,14 +2307,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._push_live_toast("EMBARKED", str(vehicle), "info")
         elif ev == "HeatWarning":
             self._push_live_toast("OVERHEATING", "Ship temperature critical", "warn", 15,
-                                  "Warning. Ship temperature critical.", voice_key="ship-overheat")
+                                  ("Warning. Ship temperature critical.",
+                                   "Commander, thermal telemetry has entered the critical range.",
+                                   "Thermal limits exceeded. I recommend immediate cooling."),
+                                  voice_key="ship-overheat")
         elif ev == "HeatDamage":
             self._push_live_toast("HEAT DAMAGE", "Modules are taking heat damage", "fail", 15,
-                                  "Heat damage. Modules are taking damage.", voice_key="heat-damage")
+                                  ("Heat damage. Modules are taking damage.",
+                                   "Critical heat exposure. I am detecting module damage.",
+                                   "The ship is cooking, Commander. Internal systems are degrading."),
+                                  voice_key="heat-damage")
         elif ev == "UnderAttack":
             target = raw.get("Target") or raw.get("Target_Localised") or "Hostile fire detected"
             self._push_live_toast("UNDER ATTACK", target, "fail", 15,
-                                  "Warning. Under attack.", voice_key="under-attack")
+                                  ("Warning. We are under attack.",
+                                   "Hostile fire incoming, Commander. Defensive telemetry is active.",
+                                   "Weapons fire detected. It appears we have company."), voice_key="under-attack")
         elif ev == "ShieldState":
             shields_up = bool(raw.get("ShieldsUp"))
             if shields_up != self._toast_shields_up:
@@ -2288,7 +2330,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self._push_live_toast(
                     "SHIELDS RESTORED" if shields_up else "SHIELDS OFFLINE", "",
                     "success" if shields_up else "fail", 12,
-                    None if shields_up else "Warning. Shields offline.", voice_key="shields-offline",
+                    None if shields_up else (
+                        "Warning. Shields offline.",
+                        "Shields have collapsed, Commander. Hull telemetry is now primary.",
+                        "Defensive field lost. I am monitoring the exposed hull.",
+                    ), voice_key="shields-offline",
                 )
         elif ev == "HullDamage":
             health = float(raw.get("Health", 1.0) or 0.0)
@@ -2301,7 +2347,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self._push_live_toast(
                     "HULL CRITICAL" if threshold <= 25 else "HULL DAMAGE",
                     f"Integrity at {health * 100:.0f}%", "fail" if threshold <= 25 else "warn", 15,
-                    f"Hull critical. Integrity at {health * 100:.0f} percent." if threshold <= 25 else None,
+                    ((f"Hull critical. Integrity at {health * 100:.0f} percent.",
+                      f"Commander, hull integrity is down to {health * 100:.0f} percent.",
+                      f"Structural failure risk. My sensors show hull at {health * 100:.0f} percent.")) if threshold <= 25 else None,
                     voice_key=f"hull-{threshold}",
                 )
         elif ev in ("Interdicted", "EscapeInterdiction"):
@@ -2310,7 +2358,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._push_live_toast(
                 "INTERDICTION ESCAPED" if escaped else "INTERDICTED", actor,
                 "success" if escaped else "warn", 15,
-                None if escaped else "Warning. Interdiction detected.", voice_key="interdiction",
+                None if escaped else (
+                    "Warning. Interdiction detected.",
+                    "Interdiction tether engaged, Commander. I am tracking the vector.",
+                    "Someone wants us out of supercruise. I suggest we disappoint them.",
+                ), voice_key="interdiction",
             )
         elif ev == "JetConeBoost":
             self._push_live_toast(
@@ -2318,13 +2370,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             )
         elif ev == "JetConeDamage":
             self._push_live_toast("JET CONE DAMAGE", "Exit the cone immediately", "fail", 18,
-                                  "Jet cone damage. Exit immediately.", voice_key="jet-cone-damage")
+                                  ("Jet cone damage. Exit immediately.",
+                                   "Danger. The jet cone is damaging the ship. I need us clear now.",
+                                   "Unstable cone exposure. Exit now, Commander. I cannot compensate for this."), voice_key="jet-cone-damage")
         elif ev in ("FighterDestroyed", "SRVDestroyed"):
             self._push_live_toast("FIGHTER DESTROYED" if ev == "FighterDestroyed" else "SRV DESTROYED", "", "fail", 15)
         elif ev == "Died":
             killer = raw.get("KillerName_Localised") or raw.get("KillerName") or "Commander lost"
             self._push_live_toast("DESTRUCTION", killer, "fail", 20,
-                                  "Ship destroyed.", voice_key="ship-destroyed")
+                                  ("Ship destroyed.", "Vessel lost, Commander. Initiating recovery protocols.",
+                                   "Catastrophic failure. I am transferring control to emergency recovery."), voice_key="ship-destroyed")
         elif ev in ("MissionAccepted", "MissionCompleted", "MissionFailed", "MissionAbandoned"):
             name = raw.get("LocalisedName") or raw.get("Name_Localised") or raw.get("Name") or "Mission"
             titles = {"MissionAccepted": "MISSION ACCEPTED", "MissionCompleted": "MISSION COMPLETE", "MissionFailed": "MISSION FAILED", "MissionAbandoned": "MISSION ABANDONED"}
@@ -2337,17 +2392,37 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             sample = d.get("sample_idx")
             max_samples = d.get("max_samples") or 3
             detail = "Analysis complete" if complete else (f"Sample {sample}/{max_samples}" if sample else "Sample registered")
+            bio_voice = None
+            if complete:
+                bio_voice = [
+                    f"Biological analysis complete. {species}.",
+                    f"Excellent work, Commander. My bio lab has completed the {species} analysis.",
+                    f"Third sample confirmed. I have prepared {species} for Vista Genomics.",
+                    f"Genetic sequence locked. {species} analysis is complete.",
+                ]
+                if (self.config.get("cockpit_memory_enabled", True)
+                        and getattr(self, "cockpit_memory", None)):
+                    previous = self.cockpit_memory.species_analyses(species)
+                    completed = previous + 1
+                    if self.cockpit_memory.should_reference_repeat(
+                            completed, self.config.get("cockpit_personality_level", "Balanced")):
+                        bio_voice.append(
+                            f"I remember this species, Commander. This is our {ordinal(completed)} completed {species} analysis."
+                        )
             self._push_live_toast(
                 "BIO COMPLETE" if complete else "BIO SAMPLE", f"{species}: {detail}",
                 "success" if complete else "info", 12,
-                f"Biological analysis complete. {species}." if complete else None,
+                bio_voice,
                 voice_category="exploration", voice_key=f"bio-complete:{species}",
             )
         elif ev == "CodexEntry":
             name = d.get("name") or raw.get("Name_Localised") or raw.get("Name") or "New Codex entry"
             category = d.get("category") or raw.get("Category_Localised") or "Discovery"
             self._push_live_toast("CODEX DISCOVERY", f"{category}: {name}", "success", 15,
-                                  f"Codex discovery. {name}.", voice_category="exploration",
+                                  (f"Codex discovery. {name}.",
+                                   f"A new Codex entry, Commander. I have identified {name}.",
+                                   f"Discovery logged to the ship archive. {name}.",
+                                   f"Our Codex just grew a little larger. {name}."), voice_category="exploration",
                                   voice_key=f"codex:{name}")
         elif ev in ("CommitCrime", "Bounty"):
             detail = raw.get("CrimeType_Localised") or raw.get("CrimeType") or raw.get("Victim") or raw.get("Target_Localised") or raw.get("Target") or "Legal status changed"
@@ -2373,6 +2448,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             logging.warning(f"Achievement engine event error [{ev}]: {exc}")
         self._record_journal_event()
         self._handle_live_journal_toast(ev, raw, d, startup_replay=startup_replay)
+        if (self.config.get("cockpit_memory_enabled", True)
+                and getattr(self, "cockpit_memory", None)):
+            try:
+                self.cockpit_memory.observe(ev, raw, d, startup_replay=startup_replay)
+            except Exception as exc:
+                logging.debug("Cockpit memory event skipped [%s]: %s", ev, exc)
         if ev != "LoadGame":
             self._apply_credit_event(ev, raw if isinstance(raw, dict) else d, log=not startup_replay)
         self._process_companion_event(ev, raw if isinstance(raw, dict) else {}, d,
@@ -3125,8 +3206,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     if is_system_star_scan and d.get("was_discovered") is False:
                         self.system_undiscovered = True
                         if not startup_replay:
+                            discovery_voice = [
+                                f"First discovery. {self.current_sys} appears undiscovered.",
+                                f"I found no prior survey records for {self.current_sys}. This one may be ours.",
+                                f"Uncharted system confirmed, Commander. I am opening a new survey record for {self.current_sys}.",
+                                f"Interesting. The Codex has no previous discovery for {self.current_sys}.",
+                            ]
+                            if (self.config.get("cockpit_memory_enabled", True)
+                                    and getattr(self, "cockpit_memory", None)):
+                                discoveries = self.cockpit_memory.count("first_discoveries")
+                                if self.cockpit_memory.should_reference_repeat(
+                                        discoveries, self.config.get("cockpit_personality_level", "Balanced")):
+                                    discovery_voice.append(
+                                        f"Another uncharted system for our shared record. That makes {discoveries:,} first discoveries together."
+                                    )
                             self._speak(
-                                f"First discovery. {self.current_sys} is undiscovered.",
+                                discovery_voice,
                                 category="exploration", cooldown_s=600,
                                 key=f"first-discovery:{self.current_sys}",
                             )
@@ -3386,7 +3481,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if before and after and not before["complete"] and after["complete"]:
                     self._toast_on_main(
                         "STACK COMPLETE", f"All massacre missions against {victim} are ready", "success", 15,
-                        f"Massacre stack complete. All missions against {victim} are ready.",
+                        (f"Massacre stack complete. All missions against {victim} are ready.",
+                         f"Objectives complete, Commander. I have marked the full {victim} mission stack ready for collection.",
+                         f"That was the last target. All missions against {victim} are complete.",
+                         f"Combat tally reconciled. Every active {victim} contract is now complete."),
                         "objectives", f"massacre-complete:{victim}",
                     )
 
@@ -3612,7 +3710,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._sample_clear_announced = True
             self._toast_on_main(
                 "CLEAR TO SAMPLE", f"{sample['species']} · {sample.get('min_distance_m', 0):,} m", "success", 10,
-                f"Clear to sample {sample['species']}.", "exploration", "clear-to-sample",
+                (f"Clear to sample {sample['species']}.",
+                 f"My bio sensors confirm colony spacing. You may sample {sample['species']} again.",
+                 f"We are clear of the previous colony, Commander. I have authorized the next {sample['species']} sample.",
+                 f"Sampling radius clear. The genetic sampler is ready for {sample['species']}."),
+                "exploration", "clear-to-sample",
             )
         if self.survey_status_hud:
             self.root.after(0, lambda s=sample: self.survey_status_hud.update(
@@ -3637,12 +3739,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if level == 2:
                 self._toast_on_main(
                     "REBUY NOT COVERED", "Current balance cannot cover ship insurance", "fail", 18,
-                    "Warning. Current balance cannot cover ship insurance.", voice_key="rebuy-uncovered",
+                    ("Warning. Current balance cannot cover ship insurance.",
+                     "Commander, our credit balance cannot cover a rebuy.",
+                     "Insurance shortfall detected. I strongly recommend protecting the ship."), voice_key="rebuy-uncovered",
                 )
             else:
                 self._toast_on_main(
                     "LOW REBUY COVER", "Current balance is below two rebuys", "warn", 15,
-                    "Warning. Current balance is below two rebuys.", voice_key="rebuy-low",
+                    ("Warning. Current balance is below two rebuys.",
+                     "Our rebuy reserve is getting thin, Commander.",
+                     "A little financial caution from your ship computer. We have less than two rebuys available."), voice_key="rebuy-low",
                 )
         self._rebuy_warning_level = level
 
@@ -3660,7 +3766,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._toast_on_main(
                 "DATA AT RISK", f"Approximately {total / 1_000_000:.0f}M CR unsold · {ratio:.0f}× rebuy",
                 "fail" if level == 3 else "warn", 18,
-                "Warning. Valuable exploration data is at risk.", voice_key=f"data-risk-{level}",
+                ("Warning. Valuable exploration data is at risk.",
+                 "Commander, my ledger shows a fortune in unsold survey data.",
+                 "Our exploration data is worth far more than the ship. I recommend finding a buyer.",
+                 "I would rather not lose this archive, Commander. We should sell our survey data."),
+                voice_key=f"data-risk-{level}",
             )
         self._data_risk_level = level
 
@@ -3829,7 +3939,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         duration_s=12,
                     ))
                 self._speak(
-                    f"Materials complete for {blueprint}, grade {grade}.",
+                    (f"Materials complete for {blueprint}, grade {grade}.",
+                     f"Engineering inventory reconciled. {blueprint}, grade {grade}, is ready.",
+                     f"I have confirmed every material for {blueprint}, grade {grade}, Commander.",
+                     f"Fabrication requirements satisfied. We can engineer {blueprint} to grade {grade}."),
                     category="objectives", cooldown_s=300,
                     key=f"engineering-ready:{blueprint}:{grade}",
                 )

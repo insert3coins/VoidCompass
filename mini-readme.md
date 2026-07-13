@@ -1,6 +1,6 @@
 # VoidCompass // UPDATE LOG
 
-## v4.5.4 // HUD Effects + Biological Survey
+## v4.5.5 // Compass Cockpit Intelligence
 **Release Date:** 2026-Jul-13
 
 ### Voice Packs
@@ -9,11 +9,20 @@
 *   Voice synthesis and Windows playback run in the background and remain disabled until explicitly enabled.
 *   Added an optional persistent audio cache for repeated callouts, including live file/size reporting and a **Clear Cache** action. When disabled, generated WAV files are deleted immediately after playback.
 *   Voice changes now become active for live callouts immediately and are saved to the commander profile without requiring a separate **Save Settings** click.
+*   Added a consistent cockpit-intelligence personality with non-repeating phrase variations across navigation, ship telemetry, exploration, biology, Engineering, and objectives. The assistant stays calm and personable during routine flight while retaining concise, authoritative safety warnings without increasing callout frequency.
 
 ### Callouts
 *   Added low-noise safety announcements for route-aware fuel and scoop risks, dry star stretches, interdictions, heat, shields, hull, suit hazards, rebuy coverage, and unsold data risk.
 *   Added navigation and exploration announcements for entered systems, route waypoints, route completion, undiscovered systems, biological completion, Codex discoveries, and clear-to-sample guidance. Jet-cone supercharge remains a visual notification without a repetitive voice callout.
 *   Added Engineering-ready, massacre-stack-complete, and best trade-route result announcements, each controlled by callout category settings and one-shot cooldowns.
+
+### Compass Memory
+*   Added a bounded, entirely local autobiographical memory for the cockpit assistant, stored separately in each commander's profile as `cockpit_ai_memory.json`.
+*   Compass learns recurring systems, ships, body scans, first discoveries, completed biological species, journeys, missions, market activity, mining, close calls, losses, and notable shared milestones from live journal events.
+*   Familiar systems and repeated biological analyses can now produce contextual remarks based on real shared history; startup journal replay is excluded so old events are never learned twice.
+*   Added evolving relationship and activity traits such as Explorer, Exobiologist, Trader, Miner, and Traveller, derived from actual play rather than a fixed personality choice.
+*   Added **Quiet**, **Balanced**, and **Chatty** personality levels plus a live learned-history summary and a confirmed **Forget Learned History** action under **Settings → Voice**.
+*   Memory is capped at 300 systems, 200 biological species, 30 ships, and 80 notable episodes so it remains lightweight as the relationship grows.
 
 ### Dashboard
 *   Removed the duplicate graphical route strip from the Dashboard flight card—the CURRENT/DEST pips, route state, and distance remain available in the dedicated Navigation HUD.
@@ -30,7 +39,7 @@
 *   Survey system and organism lists expand to show every available row instead of collapsing additional entries behind a `+more` count.
 
 ### Version
-*   Updated app version to **4.5.4**.
+*   Updated app version to **4.5.5**.
 
 ## v4.4.4 // Interactive Galaxy Details
 **Release Date:** 2026-Jul-13

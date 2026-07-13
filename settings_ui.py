@@ -27,7 +27,7 @@ UI_MONO = FONT_MONO
 
 
 def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded=False,
-                  on_close_callback=None, voice_manager=None):
+                  on_close_callback=None, voice_manager=None, cockpit_memory=None):
     win = window_surface(root, embedded=embedded)
     win.title("SYSTEM CONFIGURATION")
     win.geometry(config.get("settings_geometry", "980x800"))
@@ -208,6 +208,10 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     voice_navigation_var = tk.BooleanVar(value=config.get("voice_navigation_enabled", True))
     voice_objectives_var = tk.BooleanVar(value=config.get("voice_objectives_enabled", True))
     voice_cache_var = tk.BooleanVar(value=config.get("voice_cache_enabled", True))
+    cockpit_memory_var = tk.BooleanVar(value=config.get("cockpit_memory_enabled", True))
+    cockpit_personality_var = tk.StringVar(
+        value=str(config.get("cockpit_personality_level", "Balanced") or "Balanced")
+    )
     voice_volume_var = tk.DoubleVar(value=float(config.get("voice_volume", 0.8) or 0.8))
     if "screenshots_path" not in config:
         config["screenshots_path"] = os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous")
@@ -273,6 +277,63 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     toggle_row(voice_general, "Navigation milestones", voice_navigation_var)
     toggle_row(voice_general, "Trade, Engineering, and missions", voice_objectives_var)
     toggle_row(voice_general, "Cache generated callouts", voice_cache_var)
+
+    memory_panel = section(voice_page, "Compass Memory")
+    memory_controls = row(memory_panel)
+    tk.Label(memory_controls, text="Learn from this commander", font=UI_FONT, fg=COLOR_TEXT,
+             bg=UI_PANEL, anchor="w").pack(side=tk.LEFT, fill=tk.X, expand=True)
+    memory_toggle = tk.Button(
+        memory_controls, font=("Segoe UI", 8, "bold"), relief=tk.FLAT,
+        bd=0, width=9, cursor="hand2",
+    )
+
+    def _refresh_memory_toggle():
+        if cockpit_memory_var.get():
+            memory_toggle.config(text="On", bg=COLOR_ACCENT, fg="black",
+                                 activebackground=COLOR_ACCENT, activeforeground="black")
+        else:
+            memory_toggle.config(text="Off", bg=UI_PANEL_2, fg=UI_MUTED,
+                                 activebackground=UI_PANEL_2, activeforeground=COLOR_TEXT)
+
+    def _toggle_cockpit_memory():
+        cockpit_memory_var.set(not cockpit_memory_var.get())
+        _refresh_memory_toggle()
+
+    memory_toggle.config(command=_toggle_cockpit_memory)
+    memory_toggle.pack(side=tk.RIGHT)
+    personality_menu = tk.OptionMenu(
+        memory_controls, cockpit_personality_var, "Quiet", "Balanced", "Chatty"
+    )
+    personality_menu.config(
+        bg=UI_PANEL_2, fg=COLOR_TEXT, activebackground=UI_PANEL_2,
+        activeforeground=COLOR_ACCENT, relief=tk.FLAT, bd=0,
+        highlightthickness=0, font=UI_FONT, width=9,
+    )
+    personality_menu["menu"].config(bg=UI_PANEL_2, fg=COLOR_TEXT)
+    personality_menu.pack(side=tk.RIGHT, padx=(8, 8))
+    tk.Label(memory_controls, text="Personality", font=UI_FONT_BOLD, fg=UI_MUTED,
+             bg=UI_PANEL).pack(side=tk.RIGHT)
+    _refresh_memory_toggle()
+    memory_summary_var = tk.StringVar(value="Compass has not created a memory profile yet.")
+    tk.Label(
+        memory_panel, textvariable=memory_summary_var, font=UI_FONT,
+        fg=UI_MUTED, bg=UI_PANEL, anchor="w", justify=tk.LEFT, wraplength=620,
+    ).pack(fill=tk.X, padx=12, pady=(3, 6))
+
+    def _reset_cockpit_memory():
+        if cockpit_memory is None:
+            return
+        if not tk.messagebox.askyesno(
+            "Reset Compass Memory",
+            "Forget all systems, discoveries, habits, milestones, and shared history for this commander?",
+            parent=win,
+        ):
+            return
+        cockpit_memory.reset()
+        memory_summary_var.set(cockpit_memory.summary_text())
+
+    memory_actions = row(memory_panel)
+    action_button(memory_actions, "Forget Learned History", _reset_cockpit_memory, muted=True).pack(side=tk.RIGHT)
 
     voice_catalog = section(voice_page, "Neural Voice Pack")
     voice_names = list(voice_callouts.VOICES)
@@ -351,6 +412,8 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         chosen = _chosen_voice()
         state = voice_callouts.status(chosen)
         cache = voice_callouts.cache_status()
+        if cockpit_memory is not None:
+            memory_summary_var.set(cockpit_memory.summary_text())
         voice_cache_status_var.set(
             f"Audio cache: {cache['files']} files · {cache['bytes'] / (1024 * 1024):.1f} MB "
             f"· maximum {cache['limit']} files"
@@ -383,7 +446,11 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
 
     def _voice_changed(*_args):
         try:
-            voice_callouts.set_selected_voice(config, _chosen_voice())
+            chosen = voice_callouts.set_selected_voice(config, _chosen_voice())
+            if cockpit_memory is not None and cockpit_memory_var.get():
+                cockpit_memory.voice_selected(
+                    chosen, voice_callouts.VOICES.get(chosen, {}).get("label", chosen)
+                )
             # Voice choice is a live setting: the callout manager holds this
             # same config object, so future queued calls use it immediately.
             # Persist it now so closing Settings without Save does not silently
@@ -678,6 +745,8 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "voice_navigation_enabled": voice_navigation_var.get(),
             "voice_objectives_enabled": voice_objectives_var.get(),
             "voice_cache_enabled": voice_cache_var.get(),
+            "cockpit_memory_enabled": cockpit_memory_var.get(),
+            "cockpit_personality_level": cockpit_personality_var.get(),
             "voice_name": _chosen_voice(),
             "voice_volume": float(voice_volume_var.get()),
             "settings_geometry": win.geometry(),
