@@ -1,6 +1,9 @@
-"""Curated, safety-bounded personas for the local Compass language layer."""
+"""Curated, safety-bounded personas for deterministic Compass speech."""
 
 from __future__ import annotations
+
+import random
+import threading
 
 
 DEFAULT_PERSONA = "Compass"
@@ -132,6 +135,9 @@ PERSONAS = {
 
 PERSONA_NAMES = tuple(PERSONAS)
 
+_style_lock = threading.Lock()
+_last_style = {}
+
 
 def normalize_persona(name):
     text = str(name or "").strip()
@@ -144,3 +150,21 @@ def normalize_persona(name):
 def persona_profile(name):
     selected = normalize_persona(name)
     return {"name": selected, **PERSONAS[selected]}
+
+
+def style_line(line, persona_name, key=None):
+    """Apply a varied persona cue without changing the approved callout facts."""
+    text = str(line or "").strip()
+    profile = persona_profile(persona_name)
+    terms = tuple(profile.get("signature_terms") or ())
+    if not text or not terms:
+        return text
+    identity = f"{profile['name']}:{key or text}"
+    with _style_lock:
+        previous = _last_style.get(identity)
+        available = tuple(term for term in terms if term != previous) or terms
+        term = random.choice(available)
+        _last_style[identity] = term
+    if text.casefold().startswith(term.casefold()):
+        return text
+    return f"{term}: {text}"

@@ -1,4 +1,5 @@
 import PyInstaller.__main__
+import PyInstaller
 import os
 import shutil
 from version import APP_VERSION
@@ -7,6 +8,17 @@ from mining_data import MiningDataStore
 # This script automates the build process for SurveyAnalysis
 
 if __name__ == '__main__':
+    pyinstaller_version = tuple(
+        int(part) for part in PyInstaller.__version__.split('.')[:3]
+    )
+    if pyinstaller_version < (6, 21, 0):
+        raise SystemExit(
+            "PyInstaller 6.21.0 or newer is required. Older Windows one-file "
+            "bootloaders can leak VCRUNTIME DLLs and leave _MEI directories behind. "
+            "Run: python -m pip install -U 'pyinstaller>=6.21.0'"
+        )
+    print(f"Building with PyInstaller {PyInstaller.__version__}")
+
     # Clean up previous build artifacts
     if os.path.exists('build'):
         print("Removing previous build folder...")

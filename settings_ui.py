@@ -6,7 +6,6 @@ from tkinter import colorchooser
 
 import themes
 import voice_callouts
-import compass_llm as compass_llm_module
 import compass_personas
 from cockpit_ai_memory import DEFAULT_LIMITS as COCKPIT_MEMORY_DEFAULTS, LIMIT_BOUNDS as COCKPIT_MEMORY_BOUNDS
 from config import DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config as persist_config
@@ -32,7 +31,7 @@ UI_MONO = FONT_MONO
 
 def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded=False,
                   on_close_callback=None, voice_manager=None, cockpit_memory=None,
-                  cockpit_brain=None, compass_llm=None):
+                  cockpit_brain=None):
     win = window_surface(root, embedded=embedded)
     win.title("SYSTEM CONFIGURATION")
     win.geometry(config.get("settings_geometry", "980x800"))
@@ -272,20 +271,11 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     cockpit_ambient_var = tk.BooleanVar(value=config.get("cockpit_ambient_chatter_enabled", True))
     cockpit_greetings_var = tk.BooleanVar(value=config.get("cockpit_session_greetings_enabled", True))
     cockpit_callbacks_var = tk.BooleanVar(value=config.get("cockpit_memory_callbacks_enabled", True))
-    cockpit_llm_var = tk.BooleanVar(value=config.get("cockpit_llm_enabled", False))
-    cockpit_llm_advisor_var = tk.BooleanVar(
-        value=config.get("cockpit_llm_advisor_enabled", True)
+    cockpit_advisor_var = tk.BooleanVar(
+        value=config.get("cockpit_advisor_enabled", True)
     )
-    cockpit_llm_auto_var = tk.BooleanVar(value=config.get("cockpit_llm_auto_start", True))
-    cockpit_llm_unload_var = tk.BooleanVar(value=config.get("cockpit_llm_unload_on_shutdown", True))
-    cockpit_llm_model_var = tk.StringVar(
-        value=str(config.get("cockpit_llm_model", compass_llm_module.DEFAULT_MODEL))
-    )
-    cockpit_llm_timeout_var = tk.StringVar(
-        value=str(config.get("cockpit_llm_timeout_s", 2.5))
-    )
-    cockpit_llm_advisor_level_var = tk.StringVar(
-        value=str(config.get("cockpit_llm_advisor_level", "Balanced"))
+    cockpit_advisor_level_var = tk.StringVar(
+        value=str(config.get("cockpit_advisor_level", "Balanced"))
     )
     cockpit_personality_var = tk.StringVar(
         value=str(config.get("cockpit_personality_level", "Balanced") or "Balanced")
@@ -598,8 +588,8 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     tk.Label(
         persona_panel,
         text=(
-            "Persona controls Ollama's tone, humour, initiative, and preferred memory emphasis. "
-            "It never changes journal facts, safety warnings, or the separate Chatter frequency setting."
+            "Persona adds a lightweight local style cue to non-safety callouts and controls the "
+            "working brain's preferred memory emphasis. Journal facts and safety warnings are unchanged."
         ),
         font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w", justify=tk.LEFT,
         wraplength=650,
@@ -625,164 +615,42 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     cockpit_persona_var.trace_add("write", _refresh_persona_description)
     _refresh_persona_description()
 
-    # ---- Compass generative language ----
-    llm_panel = section(compass_page, "Local Generative Language")
-    tk.Label(
-        llm_panel,
-        text=(
-            "Optional Ollama working-brain layer for non-safety speech. It receives a compact verified "
-            "pilot model, relevant memories, live state, and recent decisions, then chooses useful speech "
-            "or silence. Urgent warnings remain deterministic; invalid or slow decisions use the existing line."
-        ),
-        font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w", justify=tk.LEFT, wraplength=650,
-    ).pack(fill=tk.X, padx=12, pady=(2, 8))
-    toggle_row(llm_panel, "Enable generative Compass language", cockpit_llm_var)
-    toggle_row(llm_panel, "Enable proactive situational adviser", cockpit_llm_advisor_var)
-    toggle_row(llm_panel, "Start local Ollama automatically", cockpit_llm_auto_var)
-    toggle_row(llm_panel, "Unload model when VoidCompass closes", cockpit_llm_unload_var)
-    llm_model_menu = option_row(
-        llm_panel, "Local model", cockpit_llm_model_var,
-        list(compass_llm_module.MODEL_CHOICES),
-    )
-    llm_model_menu.configure(width=24)
-    option_row(
-        llm_panel, "Fallback timeout", cockpit_llm_timeout_var,
-        ["1.5", "2.5", "4.0"],
-    )
-    option_row(
-        llm_panel, "Advice frequency", cockpit_llm_advisor_level_var,
-        ["Quiet", "Balanced", "Proactive"],
-    )
-    llm_status_var = tk.StringVar(value="Checking local language runtime...")
-    tk.Label(
-        llm_panel, textvariable=llm_status_var, font=UI_FONT, fg=COLOR_TEXT,
-        bg=UI_PANEL, anchor="w", justify=tk.LEFT, wraplength=650,
-    ).pack(fill=tk.X, padx=12, pady=(4, 8))
-
-    def _llm_status_text(status=None):
-        if compass_llm is None:
-            return "Compass language service is unavailable in this session."
-        status = status if isinstance(status, dict) else compass_llm.status()
-        phase = str(status.get("phase") or "unknown").replace("_", " ").title()
-        model = status.get("model") or cockpit_llm_model_var.get()
-        details = [f"{phase} · {model}"]
-        if status.get("installed"):
-            details.append("installed")
-        if status.get("processor"):
-            details.append(str(status["processor"]))
-        if status.get("last_latency_ms") is not None:
-            details.append(f"last response {int(status['last_latency_ms']):,} ms")
-        if status.get("last_action"):
-            details.append(f"last decision {status['last_action']}")
-        progress = status.get("download_progress")
-        if progress is not None and status.get("phase") == "downloading":
-            details.append(f"download {float(progress) * 100:.0f}%")
-        text = " · ".join(details)
-        if status.get("last_error"):
-            text += f"\n{status['last_error']}"
-        elif not status.get("executable"):
-            text += "\nOllama is not installed or could not be found."
-        return text
-
-    def _set_llm_status(status=None):
-        def apply():
-            try:
-                llm_status_var.set(_llm_status_text(status))
-            except tk.TclError:
-                pass
-        try:
-            win.after(0, apply)
-        except tk.TclError:
-            pass
-
-    def _install_llm_model():
-        if compass_llm is None:
-            return
-        llm_status_var.set(f"Preparing {cockpit_llm_model_var.get()} download...")
-        compass_llm.install_model_async(cockpit_llm_model_var.get(), callback=_set_llm_status)
-
-    def _warm_llm_model():
-        if compass_llm is None:
-            return
-        llm_status_var.set(f"Loading {cockpit_llm_model_var.get()} into memory...")
-        compass_llm.warm_async(
-            force=True, model=cockpit_llm_model_var.get(), callback=_set_llm_status,
-        )
-
-    def _test_llm_model():
-        if compass_llm is None:
-            return
-        llm_status_var.set("Generating a local Compass test line...")
-
-        def completed(result):
-            if isinstance(result, dict) and result.get("line"):
-                status = compass_llm.status()
-                prefix = "Generated" if result.get("used_llm") else "Fallback"
-                status["last_error"] = (
-                    f"{prefix}: {result['line']}"
-                    + (f" ({result.get('error')})" if result.get("error") else "")
-                )
-                _set_llm_status(status)
-                if result.get("used_llm") and voice_manager is not None:
-                    voice_manager.say(
-                        result["line"], category="ambient", cooldown_s=0,
-                        key=f"compass-llm-test:{time.time_ns()}",
-                    )
-            else:
-                _set_llm_status(result)
-
-        compass_llm.test_async(cockpit_llm_model_var.get(), callback=completed)
-
+    persona_preview_var = tk.StringVar(value="Persona preview uses the normal local callout path.")
     def _test_persona():
-        if compass_llm is None:
-            return
         profile = compass_personas.persona_profile(cockpit_persona_var.get())
-        llm_status_var.set(f"Generating a {profile['name']} persona preview...")
-        brain_context = cockpit_brain.model_context() if cockpit_brain is not None else {
-            "identity": {"name": "Compass"}, "pilot_model": {},
-            "working_memory": {}, "recent_decisions": [],
-        }
-        pilot = brain_context.setdefault("pilot_model", {})
-        pilot["persona"] = profile
-        brain_context.setdefault("working_memory", {})["purpose"] = "persona-preview"
-        context = {
-            "purpose": "persona-preview",
-            "working_brain": brain_context,
-            "approved_memory_texts": [],
-        }
-
-        def completed(result):
-            if isinstance(result, dict) and result.get("line"):
-                status = compass_llm.status()
-                prefix = "Generated" if result.get("used_llm") else "Fallback"
-                status["last_error"] = (
-                    f"{prefix} {profile['name']}: {result['line']}"
-                    + (f" ({result.get('error')})" if result.get("error") else "")
-                )
-                _set_llm_status(status)
-                if result.get("used_llm") and voice_manager is not None:
-                    voice_manager.say(
-                        result["line"], category="ambient", cooldown_s=0,
-                        key=f"compass-persona-test:{profile['name']}:{time.time_ns()}",
-                    )
-            else:
-                _set_llm_status(result)
-
-        compass_llm.test_async(
-            cockpit_llm_model_var.get(), callback=completed, context=context,
-            fallback="Compass persona preview is online; local language and voice systems are ready.",
-            topic=f"persona-preview:{profile['name']}",
+        preview = compass_personas.style_line(
+            "Navigation systems ready.", profile["name"],
+            key=f"persona-preview:{time.time_ns()}",
         )
+        persona_preview_var.set(preview)
+        if voice_manager is not None:
+            voice_manager.say(
+                preview, category="ambient", cooldown_s=0,
+                key=f"compass-persona-test:{profile['name']}:{time.time_ns()}",
+            )
 
     persona_actions = row(persona_panel)
     action_button(persona_actions, "Test Persona", _test_persona, accent=True).pack(side=tk.LEFT)
+    tk.Label(
+        persona_panel, textvariable=persona_preview_var, font=UI_FONT,
+        fg=UI_MUTED, bg=UI_PANEL, anchor="w", justify=tk.LEFT, wraplength=650,
+    ).pack(fill=tk.X, padx=12, pady=(2, 8))
 
-    llm_actions = row(llm_panel)
-    action_button(llm_actions, "Install / Update Model", _install_llm_model, accent=True).pack(side=tk.LEFT)
-    action_button(llm_actions, "Warm Up", _warm_llm_model).pack(side=tk.LEFT, padx=(8, 0))
-    action_button(llm_actions, "Test Language", _test_llm_model).pack(side=tk.LEFT, padx=(8, 0))
-    action_button(llm_actions, "Refresh", _set_llm_status, muted=True).pack(side=tk.RIGHT)
-    _set_llm_status()
+    # ---- Deterministic situational adviser ----
+    adviser_panel = section(compass_page, "Situational Adviser")
+    tk.Label(
+        adviser_panel,
+        text=(
+            "Lightweight Python rules use verified journal state to call out mission destinations, "
+            "survey priorities, data-sale services, mining hold levels, and trade milestones."
+        ),
+        font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w", justify=tk.LEFT, wraplength=650,
+    ).pack(fill=tk.X, padx=12, pady=(2, 8))
+    toggle_row(adviser_panel, "Enable proactive situational adviser", cockpit_advisor_var)
+    option_row(
+        adviser_panel, "Advice frequency", cockpit_advisor_level_var,
+        ["Quiet", "Balanced", "Proactive"],
+    )
 
     # ---- Compass memory browser ----
     compass_overview = section(compass_page, "Current Intelligence State")
@@ -841,7 +709,6 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     memory_list.bind("<<ListboxSelect>>", _memory_selected)
 
     def _refresh_compass_page():
-        _set_llm_status()
         memory_list.delete(0, tk.END)
         memory_ids.clear()
         if cockpit_memory is None:
@@ -867,11 +734,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             if traffic else "not checked"
         )
         brain_status = cockpit_brain.status() if cockpit_brain is not None else {}
-        brain_last = brain_status.get("last_decision") or {}
-        brain_text = (
-            f"Working brain: {int(brain_status.get('decisions') or 0)} recent decisions"
-            + (f" · last {brain_last.get('action')} for {brain_last.get('topic')}" if brain_last else "")
-        )
+        brain_text = f"Working brain: current · updated {brain_status.get('updated_at') or 'this session'}"
         compass_status_var.set(
             f"{details['relationship']} · Voice stage: {str(details['voice_stage']).title()} · "
             f"Persona: {brain_status.get('persona') or 'Compass'}\n"
@@ -1226,13 +1089,8 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "cockpit_ambient_chatter_enabled": cockpit_ambient_var.get(),
             "cockpit_session_greetings_enabled": cockpit_greetings_var.get(),
             "cockpit_memory_callbacks_enabled": cockpit_callbacks_var.get(),
-            "cockpit_llm_enabled": cockpit_llm_var.get(),
-            "cockpit_llm_advisor_enabled": cockpit_llm_advisor_var.get(),
-            "cockpit_llm_auto_start": cockpit_llm_auto_var.get(),
-            "cockpit_llm_unload_on_shutdown": cockpit_llm_unload_var.get(),
-            "cockpit_llm_model": cockpit_llm_model_var.get(),
-            "cockpit_llm_timeout_s": float(cockpit_llm_timeout_var.get()),
-            "cockpit_llm_advisor_level": cockpit_llm_advisor_level_var.get(),
+            "cockpit_advisor_enabled": cockpit_advisor_var.get(),
+            "cockpit_advisor_level": cockpit_advisor_level_var.get(),
             "cockpit_personality_level": cockpit_personality_var.get(),
             "cockpit_persona": compass_personas.normalize_persona(cockpit_persona_var.get()),
             "cockpit_memory_system_limit": memory_limits["systems"],

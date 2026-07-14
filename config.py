@@ -47,6 +47,14 @@ DEPRECATED_CONFIG_KEYS = (
     'bio_overlay_enabled',
     'bio_hud_x',
     'bio_hud_y',
+    'cockpit_llm_enabled',
+    'cockpit_llm_advisor_enabled',
+    'cockpit_llm_auto_start',
+    'cockpit_llm_unload_on_shutdown',
+    'cockpit_llm_model',
+    'cockpit_llm_inference_profile',
+    'cockpit_llm_advisor_level',
+    'cockpit_llm_timeout_s',
 )
 # Overlay/HUD colors come from the active theme, resolved once at startup
 # (themes.py reads the active commander profile's config from disk before
@@ -74,8 +82,7 @@ PROFILE_TEXT_SETTINGS = (
     "voice_name",
     "cockpit_personality_level",
     "cockpit_persona",
-    "cockpit_llm_model",
-    "cockpit_llm_advisor_level",
+    "cockpit_advisor_level",
     "hud_crt_intensity",
 )
 
@@ -115,10 +122,7 @@ PROFILE_BOOL_SETTINGS = (
     "cockpit_ambient_chatter_enabled",
     "cockpit_session_greetings_enabled",
     "cockpit_memory_callbacks_enabled",
-    "cockpit_llm_enabled",
-    "cockpit_llm_advisor_enabled",
-    "cockpit_llm_auto_start",
-    "cockpit_llm_unload_on_shutdown",
+    "cockpit_advisor_enabled",
     "hud_crt_enabled",
     "hud_crt_motion_enabled",
 )
@@ -184,7 +188,6 @@ PROFILE_VALUE_SETTINGS = (
     "cockpit_memory_species_limit",
     "cockpit_memory_ship_limit",
     "cockpit_memory_episode_limit",
-    "cockpit_llm_timeout_s",
 )
 
 PROFILE_SETTINGS = PROFILE_TEXT_SETTINGS + PROFILE_BOOL_SETTINGS + PROFILE_VALUE_SETTINGS
@@ -261,6 +264,12 @@ def apply_profile_config(config, profile_key=None):
                 profile.update(json.load(f))
         except Exception:
             pass
+    # One-time migration from the retired local-language settings. The adviser
+    # remains a native Python feature, so preserve the commander's preference.
+    if "cockpit_advisor_enabled" not in profile and "cockpit_llm_advisor_enabled" in profile:
+        profile["cockpit_advisor_enabled"] = bool(profile["cockpit_llm_advisor_enabled"])
+    if "cockpit_advisor_level" not in profile and profile.get("cockpit_llm_advisor_level"):
+        profile["cockpit_advisor_level"] = str(profile["cockpit_llm_advisor_level"])
     is_initial_profile = len(profiles) <= 1
     config["active_commander_profile"] = key
     config["active_commander_name"] = profile.get("commander_name", config.get("active_commander_name", "Unknown Commander"))
@@ -276,8 +285,9 @@ def apply_profile_config(config, profile_key=None):
         "voice_name": "en_GB-alba-medium",
         "cockpit_personality_level": "Balanced",
         "cockpit_persona": "Compass",
-        "cockpit_llm_model": "qwen3.5:9b",
-        "cockpit_llm_advisor_level": "Balanced",
+        "cockpit_advisor_level": str(
+            profile.get("cockpit_llm_advisor_level") or "Balanced"
+        ),
         "hud_crt_intensity": "Subtle",
     }
     bool_defaults = {
@@ -316,10 +326,9 @@ def apply_profile_config(config, profile_key=None):
         "cockpit_ambient_chatter_enabled": True,
         "cockpit_session_greetings_enabled": True,
         "cockpit_memory_callbacks_enabled": True,
-        "cockpit_llm_enabled": False,
-        "cockpit_llm_advisor_enabled": True,
-        "cockpit_llm_auto_start": True,
-        "cockpit_llm_unload_on_shutdown": True,
+        "cockpit_advisor_enabled": bool(
+            profile.get("cockpit_llm_advisor_enabled", True)
+        ),
         "hud_crt_enabled": True,
         "hud_crt_motion_enabled": True,
     }
@@ -338,7 +347,6 @@ def apply_profile_config(config, profile_key=None):
                 "cockpit_memory_species_limit": 200,
                 "cockpit_memory_ship_limit": 30,
                 "cockpit_memory_episode_limit": 80,
-                "cockpit_llm_timeout_s": 2.5,
             }
             profile[setting] = (
                 profile_defaults[setting] if not is_initial_profile and setting in profile_defaults
@@ -508,13 +516,8 @@ def load_config():
         'cockpit_ambient_chatter_enabled': True,
         'cockpit_session_greetings_enabled': True,
         'cockpit_memory_callbacks_enabled': True,
-        'cockpit_llm_enabled': False,
-        'cockpit_llm_advisor_enabled': True,
-        'cockpit_llm_auto_start': True,
-        'cockpit_llm_unload_on_shutdown': True,
-        'cockpit_llm_model': 'qwen3.5:9b',
-        'cockpit_llm_advisor_level': 'Balanced',
-        'cockpit_llm_timeout_s': 2.5,
+        'cockpit_advisor_enabled': True,
+        'cockpit_advisor_level': 'Balanced',
         'hud_crt_enabled': True,
         'hud_crt_motion_enabled': True,
         'hud_crt_intensity': 'Subtle',
