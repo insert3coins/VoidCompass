@@ -66,6 +66,7 @@ from cockpit_ai_memory import CockpitMemory, ordinal
 from cockpit_ai_brain import CockpitBrain
 from compass_cognition import CompassCognition
 import compass_personas
+from diagnostic_logs import application_base_dir, resolve_log_path
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
@@ -663,9 +664,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._ui_watchdog_last_ts = time.perf_counter()
         self._overlay_pos_last_saved = {"hud": None, "cargo": None, "carrier": None, "scan": None, "system_info": None, "colony": None}
         self._overlay_sync_grace_until = time.time() + 4.0
+        trace_path = resolve_log_path(
+            "runtime_trace.log",
+            self.config.get("runtime_trace_path", "logs/runtime_trace.log"),
+        )
         self.runtime_trace = RuntimeTrace(
-            self.config.get("runtime_trace_path", "runtime_trace.log"),
+            trace_path,
             enabled=bool(self.config.get("runtime_trace_enabled", True)),
+            legacy_paths=(application_base_dir() / "runtime_trace.log",),
         )
         self.runtime_trace.start()
         

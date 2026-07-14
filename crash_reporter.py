@@ -7,6 +7,8 @@ import threading
 import time
 import traceback
 
+from diagnostic_logs import LOG_ARCHIVE_LIMIT, application_base_dir, prepare_log, resolve_log_path
+
 
 _CRASH_FILE = None
 _CRASH_PATH = None
@@ -17,11 +19,7 @@ _WATCHDOG_LAST_DUMP = 0.0
 
 
 def crash_log_path():
-    if getattr(sys, "frozen", False):
-        base = os.path.dirname(sys.executable)
-    else:
-        base = os.getcwd()
-    return os.path.join(base, "crash_report.log")
+    return resolve_log_path("crash_report.log")
 
 
 def _write_header(fh):
@@ -119,10 +117,14 @@ def install(root=None):
 
     _CRASH_PATH = crash_log_path()
     try:
-        os.makedirs(os.path.dirname(_CRASH_PATH), exist_ok=True)
-        # Each launch starts a fresh diagnostic session. Keep all exceptions
-        # and stack dumps from the current run together without allowing the
-        # log to grow indefinitely across restarts.
+        legacy_path = application_base_dir() / "crash_report.log"
+        _CRASH_PATH = prepare_log(
+            _CRASH_PATH,
+            legacy_paths=(legacy_path,),
+            keep=LOG_ARCHIVE_LIMIT,
+        )
+        # Each launch starts a fresh current log; the previous run has already
+        # been timestamped in logs/ and the archive set is bounded.
         _CRASH_FILE = open(_CRASH_PATH, "w", encoding="utf-8")
         _write_header(_CRASH_FILE)
         faulthandler.enable(file=_CRASH_FILE, all_threads=True)
