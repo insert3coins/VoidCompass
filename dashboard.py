@@ -3003,18 +3003,33 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             detail += f" in {system}"
         self.add_event_feed_entry("AI", detail, severity="INFO")
         self._pulse_cockpit_ai()
-        greeting_lines = (detail + ".", "Compass session initialized. I am ready.")
+        greeting_lines = (
+            detail + ".",
+            "Compass session initialized. I am ready.",
+            "Cockpit intelligence online. The new flight record is open.",
+            "Session telemetry synchronized. I am with you for the next leg.",
+            "Flight systems and memory are online. We can begin when you are ready.",
+            "A fresh session is active. Navigation and ship awareness are standing by.",
+        )
         if self.config.get("cockpit_session_greetings_enabled", True):
             context = memory.session_open_context(previous_updated_at)
             if context == "long-absence":
                 greeting_lines = (
                     "It has been some time since our last flight together. Systems are ready when you are.",
                     f"{detail}. Welcome back — I was beginning to wonder about you.",
+                    "The cockpit has been quiet for a while. I am glad to have our flight record moving again.",
+                    "A longer interval than usual, but every system has come back online cleanly. Welcome back.",
+                    "Our shared log has been waiting. I have restored the last context and opened a new session.",
+                    "You have been away long enough for the silence to become noticeable. Flight systems are ready.",
                 )
             elif context == "new-day":
                 greeting_lines = (
                     "A new day, a fresh flight log. Good to have you back in the seat.",
                     f"{detail}. Another day in the black together.",
+                    "New-day session initialized. I have carried our previous context forward.",
+                    "The date changed; the flight continues. Everything is ready for today's work.",
+                    "Fresh session, familiar cockpit. I have navigation and memory synchronized.",
+                    "Another day in our record begins now. Ship intelligence is standing by.",
                 )
         self._speak(
             greeting_lines,

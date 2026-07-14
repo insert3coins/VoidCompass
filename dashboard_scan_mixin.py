@@ -128,7 +128,19 @@ class DashboardScanMixin:
                 if toast:
                     toast.push(title, message, severity=severity, duration_s=12)
                 if key in ("overheat", "interdicted"):
-                    spoken = "Warning. Ship overheating." if key == "overheat" else "Warning. Interdiction detected."
+                    spoken = (
+                        (
+                            "Warning. Ship overheating.",
+                            "Thermal limit exceeded. Reduce heat now.",
+                            "Ship temperature is above the safe operating range.",
+                            "Heat warning active. Cooling action recommended.",
+                        ) if key == "overheat" else (
+                            "Warning. Interdiction detected.",
+                            "Frame-shift tether detected. Interdiction in progress.",
+                            "Navigation warning. A hostile interdiction is active.",
+                            "Interdiction confirmed. Escape telemetry is live.",
+                        )
+                    )
                     self._speak(spoken, key="ship-overheat" if key == "overheat" else "interdiction")
             elif not enabled:
                 active.discard(key)
@@ -151,7 +163,12 @@ class DashboardScanMixin:
                     if toast:
                         toast.push(f"LOW {label}" if key == "oxygen" else f"LOW {label}", f"{pct:.0f}% remaining", severity="fail" if pct <= 25 else "warn", duration_s=15)
                     if pct <= 25:
-                        self._speak(f"Warning. {label.lower()} at {pct:.0f} percent.", key=state_key)
+                        self._speak((
+                            f"Warning. {label.lower()} at {pct:.0f} percent.",
+                            f"Critical suit alert. {label.lower()} has fallen to {pct:.0f} percent.",
+                            f"Suit telemetry reports {pct:.0f} percent {label.lower()} remaining.",
+                            f"Immediate attention. {label.lower()} reserve is now {pct:.0f} percent.",
+                        ), key=state_key)
                 elif not state_key and pct > 55:
                     active.difference_update(old_keys)
 
@@ -164,7 +181,12 @@ class DashboardScanMixin:
                 active.add("suit_temperature")
                 if toast:
                     toast.push("SUIT TEMPERATURE", f"{temperature:.0f} K — environmental hazard", severity="warn", duration_s=15)
-                self._speak("Warning. Hazardous suit temperature.", key="suit-temperature")
+                self._speak((
+                    "Warning. Hazardous suit temperature.",
+                    "Suit thermal limits are outside the safe range.",
+                    "Environmental temperature is hazardous. Seek protection.",
+                    "Thermal exposure warning. The suit cannot sustain this environment indefinitely.",
+                ), key="suit-temperature")
             # Wide recovery band (matching the oxygen/health checks' generous
             # margin above) so ambient temperature hovering near the trigger
             # on a hot/cold world can't flap in and out of a narrow gap and

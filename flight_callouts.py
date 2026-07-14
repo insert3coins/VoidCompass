@@ -86,29 +86,53 @@ def fuel_advisory(ahead, fuel_main, fuel_capacity, fuel_per_jump, synthesis=None
             if next_scoop is None and jumps_left < len(upcoming):
                 return _advisory(
                     "critical", "no_fuel_on_route",
-                    f"Warning. No scoopable star remains on this route. Fuel lasts about {jumps_left} jumps."
-                    + injection_text,
+                    (
+                        f"Warning. No scoopable star remains on this route. Fuel lasts about {jumps_left} jumps.{injection_text}",
+                        f"Route fuel critical. The plotted course has no remaining fuel star, and reserve is approximately {jumps_left} jumps.{injection_text}",
+                        f"No scoopable primary lies ahead. Current fuel endurance is about {jumps_left} jumps.{injection_text}",
+                        f"Fuel planning alert. This route cannot replenish the tank, with roughly {jumps_left} jumps available.{injection_text}",
+                    ),
                 )
             if next_scoop is not None and next_scoop > jumps_left:
                 if current and current["scoopable"]:
                     return _advisory(
                         "critical", "scoop_now",
-                        f"Scoop now. The next fuel star is {next_scoop} jumps away, and the tank lasts about {jumps_left}.",
+                        (
+                            f"Scoop now. The next fuel star is {next_scoop} jumps away, and the tank lasts about {jumps_left}.",
+                            f"Take fuel before departure. Endurance is about {jumps_left} jumps; the next scoopable star is {next_scoop} away.",
+                            f"This is the safe refuelling point. The following fuel star is {next_scoop} jumps ahead against {jumps_left} jumps of reserve.",
+                            f"Fuel opportunity now. We have roughly {jumps_left} jumps in the tank and {next_scoop} to the next scoopable primary.",
+                        ),
                     )
                 return _advisory(
                     "critical", "strand_risk",
-                    f"Warning. The next fuel star is {next_scoop} jumps away, but fuel lasts about {jumps_left}. Consider replotting."
-                    + injection_text,
+                    (
+                        f"Warning. The next fuel star is {next_scoop} jumps away, but fuel lasts about {jumps_left}. Consider replotting.{injection_text}",
+                        f"Stranding risk. Fuel endurance is {jumps_left} jumps while the next scoopable star is {next_scoop} away.{injection_text}",
+                        f"The route exceeds our current fuel reserve: {next_scoop} jumps to fuel, approximately {jumps_left} available.{injection_text}",
+                        f"Navigation and fuel disagree. Replot or refuel; the next fuel star is {next_scoop} jumps away with only {jumps_left} jumps in reserve.{injection_text}",
+                    ),
                 )
 
         if current and current["scoopable"] and dry >= 2:
             return _advisory(
                 "warn", "dry_stretch",
-                f"Top off before leaving. The next {dry} jumps have no scoopable star.",
+                (
+                    f"Top off before leaving. The next {dry} jumps have no scoopable star.",
+                    f"Refuelling advised here. A dry stretch of {dry} jumps follows.",
+                    f"This is the last immediate fuel opportunity before {dry} non-scoopable jumps.",
+                    f"The next {dry} systems cannot replenish the tank. Consider filling it now.",
+                ),
             )
 
     if fuel_main is not None and fuel_capacity:
         fraction = fuel_main / fuel_capacity
         if fraction < 0.25:
-            return _advisory("warn", "low_fuel", f"Low fuel. {round(fraction * 100)} percent.")
+            percent = round(fraction * 100)
+            return _advisory("warn", "low_fuel", (
+                f"Low fuel. {percent} percent.",
+                f"Main tank reserve has fallen to {percent} percent.",
+                f"Fuel warning. Only {percent} percent remains in the main tank.",
+                f"Current fuel reserve is {percent} percent. Replenishment advised.",
+            ))
     return None

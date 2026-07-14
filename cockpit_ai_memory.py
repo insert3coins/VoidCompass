@@ -24,96 +24,153 @@ VOICE_EVOLUTION_LINES = {
         "Another successful transition for our shared flight log.",
         "The map we have built together gains another familiar point of light.",
         "After all this distance together, a clean hyperspace exit still feels satisfying.",
+        "Hyperspace transition complete. I have added the arrival to our continuing record.",
+        "A new system is beneath our sensors, and another entry joins the journey.",
+        "We are through cleanly. I have already opened the next system record.",
     ),
     "route-arrival": (
         "Another route completed together. The navigation log is updated.",
         "You handle the flying. I will remember how far we came.",
         "We have closed a great many routes together. This one belongs in the archive too.",
+        "Destination reached. I have closed the route and preserved the final leg.",
+        "The last waypoint is behind us. Navigation can stand down for this route.",
+        "Route complete, with every travelled leg accounted for in our log.",
     ),
     "route-waypoint": (
         "Our route is holding nicely. I have the next leg ready.",
         "We are making good time. Navigation remains comfortably ahead of us.",
         "Another waypoint behind us. We have become rather efficient at this.",
+        "Waypoint confirmed. I am carrying the route forward to the next leg.",
+        "Progress is clean and the remaining course is still synchronized.",
+        "That checkpoint is logged. Navigation has the continuation ready.",
     ),
     "first-discovery": (
         "Another untouched system for the history we are writing together.",
         "I will keep this discovery with the others. Our survey archive is becoming remarkable.",
         "We have crossed enough uncharted space for me to recognize this feeling. This one is special too.",
+        "No prior record. This system begins with our name in its survey history.",
+        "The archive had nothing for this place until we arrived.",
+        "Untouched space confirmed. I have marked the discovery as ours to document.",
     ),
     "valuable-world": (
         "A valuable world for our shared survey archive. I have marked it for mapping.",
         "Another exceptional planet in our records. These are still my favourite sensor returns.",
         "The exploration ledger just became more interesting. We have found quite a collection together.",
+        "That world deserves a closer pass. Its survey return stands above the ordinary.",
+        "High-value telemetry confirmed. I have elevated this body in the mapping list.",
+        "The planetary record has produced another worthwhile mapping target.",
     ),
     "bio-complete": (
         "Another genetic profile for our shared biological archive.",
         "The bio lab and I are getting rather good at this.",
         "Our biological catalogue has become quite a legacy of its own.",
+        "Genetic analysis complete. The organism now has a finished place in our catalogue.",
+        "The final sample resolved cleanly. I have sealed the biological record.",
+        "One more species profile is complete, verified, and ready for the archive.",
     ),
     "codex": (
         "I have added it to the growing list of things we found together.",
         "Our ship archive is becoming considerably richer than when we began.",
         "Another discovery preserved. I have learned to value these moments.",
+        "Codex record secured. This observation will not be lost to the flight log.",
+        "The catalogue has accepted another verified discovery from our sensors.",
+        "New Codex evidence recorded. I have linked it to this part of our journey.",
     ),
     "engineering-ready": (
         "I am beginning to know our engineering inventory better than the engineers do.",
         "The material ledger agrees with me. We planned this one well.",
         "After tracking this many components together, the inventory almost feels personal.",
+        "The required components now reconcile. This upgrade can move from plan to workbench.",
+        "Engineering readiness confirmed. Our material collection has reached its purpose.",
+        "The pinned design is actionable now; every required item is accounted for.",
     ),
     "massacre-complete": (
         "Objective ledger reconciled. We have done this dance before.",
         "The combat tally is complete. Our efficiency continues to improve.",
         "Another full stack closed. I have accumulated quite a history of our victories.",
+        "All linked combat objectives now read complete. The board is clear for collection.",
+        "The final target closed the stack. I have balanced every contract against the tally.",
+        "Combat objectives complete across the board. Nothing remains outstanding in this stack.",
     ),
     "clear-to-sample": (
         "I have the spacing now. Our fieldwork is becoming nicely synchronized.",
         "Bio sampling clearance confirmed. We make a competent survey team.",
         "Another clean sample approach. I remember when this took us longer.",
+        "Colony separation is sufficient. The sampler can accept the next genetic point.",
+        "Distance check passed. We are outside the previous sample's exclusion radius.",
+        "The next sample position is valid. Field collection may continue.",
     ),
     "ship-overheat": (
         "Thermal limits again. I recognize the pattern, and I still recommend cooling.",
         "Our history with high temperatures is extensive. Cooling remains the correct response.",
         "I remember every heat warning. Please do not make this one memorable too.",
+        "Core temperature has crossed the safe boundary. Reduce thermal load now.",
+        "Heat trend is no longer nominal. Cooling action is required.",
+        "Thermal margin exhausted. I need the ship brought back inside limits.",
     ),
     "heat-damage": (
         "Heat damage confirmed. Familiar problem, same urgent solution: cool the ship.",
         "Internal temperatures are damaging modules again. I need immediate cooling.",
         "Our shared history contains enough scorched modules. Reduce heat now.",
+        "Thermal damage is active across ship systems. Cool us immediately.",
+        "Module integrity is falling under heat load. End the exposure now.",
+        "The ship is taking direct thermal damage. I cannot classify this as a warning anymore.",
     ),
     "under-attack": (
         "Hostile fire confirmed. I have survived this with you before. Defensive action advised.",
         "We have company again. Tactical telemetry is yours.",
         "Another hostile contact. I trust your flying, but I am tracking every impact.",
+        "Incoming fire registered. I am prioritizing threat and hull telemetry.",
+        "Weapons impact confirmed. Defensive response is now the primary concern.",
+        "A hostile has committed to the attack. I have the damage picture updating live.",
     ),
     "shields-offline": (
         "Shields lost. We both know how quickly exposed hull can become a problem.",
         "Defensive field collapsed. I am prioritizing hull telemetry from experience.",
         "Shields offline again. I would prefer not to add another ship loss to our history.",
+        "Shield envelope has failed. Hull protection is now entirely physical.",
+        "Defensive field down. I am switching the threat display to exposed-hull priority.",
+        "No shield coverage remains. Avoid further fire until the field recovers.",
     ),
     "hull": (
         "Hull integrity is critical. Our experience does not make structural failure safer.",
         "The hull is failing. I need the ship protected now.",
         "We have escaped worse, but the hull will not survive on confidence alone.",
+        "Structural margin is critically low. The next impacts may be decisive.",
+        "Hull condition is outside survivable comfort. Break contact now.",
+        "The frame is close to failure. Every remaining percent matters.",
     ),
     "interdiction": (
         "Interdiction confirmed. We have beaten these before.",
         "Another tether. I am comparing it with our previous escapes now.",
         "Someone has interrupted our journey. History suggests they may regret that.",
+        "Frame-shift tether detected. Escape telemetry is on the primary display.",
+        "Interdiction vector locked. I am tracking alignment and escape progress.",
+        "Hostile navigation interference confirmed. The contest is live.",
     ),
     "jet-cone-damage": (
         "Jet-cone damage is active. Experience says we leave immediately.",
         "I recognize this telemetry, and I dislike it. Exit the cone now.",
         "We have survived enough neutron turbulence. Get us clear before this becomes a final memory.",
+        "Cone turbulence is damaging the ship. Clear the plume without delay.",
+        "Neutron exposure has become destructive. I need an exit vector now.",
+        "The boost zone is no longer controlled. Leave the cone immediately.",
     ),
     "rebuy": (
         "Our financial history suggests caution. Rebuy coverage is inadequate.",
         "I have seen what replacing our ships costs. The current reserve is not enough.",
         "We have built too much history into this vessel to gamble it without insurance.",
+        "Insurance reserve is below the safe replacement threshold.",
+        "Current credits do not adequately protect this ship from a loss.",
+        "The rebuy calculation is unfavourable. Financial caution is strongly advised.",
     ),
     "data-risk": (
         "Our shared survey archive is carrying significant financial risk.",
         "I remember what it took to gather this data. We should protect it.",
         "There is a great deal of our history in that data. Finding a buyer is strongly advised.",
+        "The unsold archive now represents a substantial amount of exposed work.",
+        "Survey value at risk has crossed a level worth protecting at the next safe port.",
+        "Our data ledger is too valuable to treat casually. A secure sale should be a priority.",
     ),
 }
 
@@ -1634,12 +1691,13 @@ class CockpitMemory:
             return ()
         stage = self.voice_stage(personality_level)
         stage_index = VOICE_STAGES.index(stage)
-        base_limit = min(len(base), (2, 3, 4, 5, len(base))[stage_index])
+        base_limit = min(len(base), (4, 5, 6, 8, len(base))[stage_index])
         available = list(base[:base_limit])
         family = self._voice_key_family(key)
         evolved = VOICE_EVOLUTION_LINES.get(family, ())
-        # Familiar, Trusted, and Veteran each unlock one additional reflective line.
-        extension_count = max(0, stage_index - 1)
+        # Relationship growth now opens a much wider pool instead of adding only
+        # one near-identical line per stage.
+        extension_count = (0, 1, 3, 5, 7)[stage_index]
         available.extend(evolved[:extension_count])
         if stage_index >= 2:
             learned = self._learned_voice_line(family)
