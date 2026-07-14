@@ -1,11 +1,20 @@
 # VoidCompass // UPDATE LOG
 
+## v4.7.3 // Lightweight Deterministic Compass
+**Release Date:** 2026-Jul-14
+
+### Compass Runtime
+*   Removed the optional Ollama/local-LLM language layer, model downloads, warm-up worker, GPU inference, background server management, language status events, and all related Settings/configuration controls. Compass no longer starts or communicates with Ollama and cannot contend with Elite for GPU time.
+*   Preserved the full per-commander cockpit memory, learned habits, moods, journal/gameplay awareness, working-brain file, Piper TTS, session greetings, ambient remarks, and AI Live Feed/heartbeat integration.
+*   Kept all 15 personas and moved their recognisable signature cues onto the lightweight deterministic callout path. **Test Persona** now previews and speaks the selected persona locally without model generation; urgent safety speech remains unstyled.
+*   Retained the verified situational adviser as a Python-native feature, including mission destinations, survey and biological priorities, data-sale services, mining hold thresholds, trade milestones, and Quiet/Balanced/Proactive cooldowns. Existing adviser preferences migrate automatically from the retired LLM keys.
+*   Enforced PyInstaller 6.21 or newer for release builds so the corrected Windows one-file bootloader is used. Together with deterministic Piper shutdown, this addresses the remaining `VCRUNTIME140.dll` `_MEI…` cleanup warning on application exit.
+
 ## v4.7.2 // Living Compass Personas
 **Release Date:** 2026-Jul-14
 
 ### Compass Personas
 *   Added 15 per-commander Ollama personas: **Compass, Tactical, Guardian, Scientific, Exobiologist, Engineer, Wayfarer, Pathfinder, Veteran, Deadpan, Stoic, Optimist, Archivist, Companion,** and **Emergent**. Persona controls tone, cadence, humour, initiative, and memory emphasis inside the working brain but cannot override factual validation or deterministic safety speech. Settings now separates persona from Quiet/Balanced/Chatty presence, explains every selection, previews unsaved choices through **Test Persona**, and reports the active persona in Compass Intelligence State and the Live Feed. Ollama warm-up completion now immediately announces that generative language is online and pulses the AI heartbeat; failures include their real reason, while a rejected or timed-out individual callout is accurately reported as a one-callout fallback rather than declaring the whole language layer unavailable.
-*   Fixed packaged shutdown leaving PyInstaller `_MEI…` temporary directories behind with a visible cleanup warning. The persistent Piper engine no longer inherits the frozen app's private DLL search path, and shutdown now closes its pipe and waits for the process to release runtime DLLs before VoidCompass exits; the owned Ollama process receives the same deterministic final wait.
 
 ## v4.7.1 // Local Generative Compass Language
 **Release Date:** 2026-Jul-14

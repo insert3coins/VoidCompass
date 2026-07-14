@@ -1,6 +1,6 @@
 watchdog==4.0.0
 requests>=2.32.3,<3.0
 Pillow
-pyinstaller
+pyinstaller>=6.21.0
 tinyaes
 pyzmq>=25.0

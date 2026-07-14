@@ -1,8 +1,7 @@
 """Compact persisted working state for the Compass cockpit intelligence.
 
-The autobiographical memory remains the source of truth.  This module derives a
-small, model-ready view from it and records recent language decisions so Ollama
-can act consistently without reading or mutating the full memory archive.
+The autobiographical memory remains the source of truth. This module keeps a
+small current view for the deterministic adviser, persona and settings UI.
 """
 
 from __future__ import annotations
@@ -15,9 +14,8 @@ import threading
 from compass_personas import DEFAULT_PERSONA, persona_profile
 
 
-BRAIN_SCHEMA_VERSION = 1
+BRAIN_SCHEMA_VERSION = 2
 MAX_RELEVANT_MEMORIES = 8
-MAX_RECENT_DECISIONS = 12
 
 
 def _now():
@@ -61,7 +59,6 @@ class CockpitBrain:
             "pilot_model": {},
             "experience": {},
             "working_memory": {},
-            "recent_decisions": [],
         }
 
     def _load(self):
@@ -73,8 +70,6 @@ class CockpitBrain:
                 for key in ("identity", "pilot_model", "experience", "working_memory"):
                     if isinstance(saved.get(key), dict):
                         state[key] = saved[key]
-                if isinstance(saved.get("recent_decisions"), list):
-                    state["recent_decisions"] = saved["recent_decisions"][-MAX_RECENT_DECISIONS:]
                 state["updated_at"] = saved.get("updated_at") or state["updated_at"]
         except (OSError, TypeError, ValueError):
             pass
@@ -208,62 +203,12 @@ class CockpitBrain:
             self._save()
             return json.loads(json.dumps(self.state, ensure_ascii=False, default=str))
 
-    def record_decision(self, action, topic, line=None, used_llm=False, error=None):
-        with self._lock:
-            decisions = self.state.setdefault("recent_decisions", [])
-            decisions.append({
-                "timestamp": _now(),
-                "action": "silence" if str(action).casefold() == "silence" else "speak",
-                "topic": str(topic or "cockpit speech")[:120],
-                "line": str(line or "")[:240] or None,
-                "used_llm": bool(used_llm),
-                "fallback_reason": str(error or "")[:240] or None,
-            })
-            del decisions[:-MAX_RECENT_DECISIONS]
-            self.state["updated_at"] = _now()
-            self._save()
-            return dict(decisions[-1])
-
-    def model_context(self):
-        """Return the small read-only brain view safe for language generation.
-
-        The persisted file retains complete verified live state and counters for
-        Python's adviser.  Ollama receives only identity/tone, directly relevant
-        memory text, current purpose/location, and recent decisions so it cannot
-        accidentally combine unrelated metrics into a spoken claim.
-        """
-        with self._lock:
-            pilot = self.state.get("pilot_model") or {}
-            working = self.state.get("working_memory") or {}
-            return {
-                "identity": dict(self.state.get("identity") or {}),
-                "pilot_model": {
-                    "persona": dict(pilot.get("persona") or persona_profile(DEFAULT_PERSONA)),
-                    "relationship": pilot.get("relationship"),
-                    "voice_stage": pilot.get("voice_stage"),
-                    "traits": list(pilot.get("traits") or []),
-                    "habits": list(pilot.get("habits") or []),
-                    "mood": dict(pilot.get("mood") or {}),
-                },
-                "working_memory": {
-                    "purpose": working.get("purpose"),
-                    "current_system": working.get("current_system"),
-                    "relevant_memories": list(working.get("relevant_memories") or []),
-                },
-                "recent_decisions": list(
-                    (self.state.get("recent_decisions") or [])[-6:]
-                ),
-            }
-
     def status(self):
         with self._lock:
-            decisions = self.state.get("recent_decisions") or []
             return {
                 "path": self.path,
                 "updated_at": self.state.get("updated_at"),
                 "persona": (
                     (self.state.get("pilot_model") or {}).get("persona") or {}
                 ).get("name", DEFAULT_PERSONA),
-                "decisions": len(decisions),
-                "last_decision": dict(decisions[-1]) if decisions else None,
             }
