@@ -64,6 +64,7 @@ from achievement_window import AchievementWindow
 from voice_callouts import VoiceCalloutManager, choose_line
 from cockpit_ai_memory import CockpitMemory, ordinal
 from cockpit_ai_brain import CockpitBrain
+from compass_cognition import CompassCognition
 import compass_personas
 
 
@@ -370,11 +371,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         apply_profile_config(self.config, new_key)
         self._compass_advisor_last = {}
         self._compass_advisor_last_any = 0.0
-        self._compass_advisor_cargo_level = 0
-        self._compass_advisor_trade_level = 0
         self._refresh_profile_paths()
         if getattr(self, "cockpit_memory", None):
-            self.cockpit_memory.session_debrief("Profile changed", close=True)
+            insights = (
+                self.compass_cognition.observe_session_close(
+                    self._compass_gameplay_snapshot(), self.cockpit_memory,
+                )
+                if getattr(self, "compass_cognition", None) else []
+            )
+            self.cockpit_memory.session_debrief(
+                "Profile changed", close=True, insights=insights,
+            )
             self.cockpit_memory.switch(
                 get_profile_file(new_key, "cockpit_ai_memory.json"),
                 limits=self._cockpit_memory_limits(),
@@ -461,6 +468,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.cockpit_brain = CockpitBrain(
             get_profile_file(get_active_profile(self.config), "cockpit_ai_brain.json")
         )
+        self.compass_cognition = CompassCognition(self.cockpit_brain, self.config)
         self.cockpit_memory.begin_app_session()
         self.root.title(f"VOID COMPASS // v{APP_VERSION}")
         self.root.geometry(self.config.get("main_geometry", "1320x820"))
@@ -515,8 +523,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._data_risk_level = 0
         self._compass_advisor_last = {}
         self._compass_advisor_last_any = 0.0
-        self._compass_advisor_cargo_level = 0
-        self._compass_advisor_trade_level = 0
         self._stale_bio_warned = set()
         # Bio tracking: star/body scan conditions for prediction
         self.system_stars: dict  = {}   # body_id → star_type str
@@ -1068,7 +1074,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.is_running = False
         if getattr(self, "cockpit_memory", None):
             try:
-                self.cockpit_memory.session_debrief("Session complete", close=True)
+                if self.cockpit_memory.state.get("current_session"):
+                    insights = (
+                        self.compass_cognition.observe_session_close(
+                            self._compass_gameplay_snapshot(), self.cockpit_memory,
+                        )
+                        if getattr(self, "compass_cognition", None) else []
+                    )
+                    self.cockpit_memory.session_debrief(
+                        "Session complete", close=True, insights=insights,
+                    )
                 self._refresh_cockpit_brain(event="app_close")
             except Exception:
                 pass
@@ -1728,6 +1743,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 voice_manager=self.voice_callouts,
                 cockpit_memory=self.cockpit_memory,
                 cockpit_brain=self.cockpit_brain,
+                cockpit_cognition=self.compass_cognition,
             )
         self._show_embedded_page("SETTINGS", self.settings_page)
 
@@ -1739,6 +1755,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if self.current_sys != system_name:
                     return
                 self._apply_system_traffic_context(system_name, traffic_data)
+                self._process_compass_cognition(
+                    "TrafficUpdate", traffic_data, traffic_data,
+                    startup_replay=bool(getattr(self, "is_first_load", False)),
+                )
                 self.update_dashboard_ui()
                 self.update_hud()
                 if self.system_info_hud and isinstance(traffic_data, dict):
@@ -2478,7 +2498,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         return self._set_commander_balance(int(self.cmdr_balance or 0) + delta, timestamp=timestamp, log=log)
 
     def _compass_gameplay_snapshot(self):
-        """Return a compact set of verified live facts suitable for local generation."""
+        """Return compact verified live facts for the local Compass brain."""
         def number(value, digits=1):
             try:
                 return round(float(value), digits)
@@ -2579,6 +2599,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "name": getattr(self, "current_station_name", None),
                 "services": list(getattr(self, "current_station_services", None) or [])[:20],
             } if getattr(self, "current_docked", False) else None,
+            "traffic": {
+                "day": int((getattr(self, "system_traffic", {}) or {}).get("day") or 0),
+                "week": int((getattr(self, "system_traffic", {}) or {}).get("week") or 0),
+                "total": int((getattr(self, "system_traffic", {}) or {}).get("total") or 0),
+            },
             "session": {
                 "jumps": int(getattr(self, "session_jump_count", 0) or 0),
                 "distance_ly": number(getattr(self, "session_ly", 0)) or 0.0,
@@ -2638,77 +2663,25 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._compass_advisor_last_any = now
 
     def _compass_advisory_point(self, snapshot, key):
-        """Select at most one useful verified observation for an existing callout."""
+        """Choose one learned, persona-weighted observation for an existing callout."""
         key_text = str(key or "")
+        # A standalone adviser line has already passed cognitive selection.
+        # Do not append a second observation or learn the same outcome twice.
         if key_text.startswith("advisor:"):
             return None
-        nav = snapshot.get("navigation") or {}
-        survey = snapshot.get("survey") or {}
-        objectives = snapshot.get("objectives") or {}
-        flight = snapshot.get("flight") or {}
-        biology = snapshot.get("biology") or {}
-        current_system = nav.get("current_system")
-
-        candidates = []
-        matching_missions = [
-            row for row in objectives.get("mission_destinations") or []
-            if current_system and str(row.get("system")).casefold() == str(current_system).casefold()
-        ]
-        if matching_missions and key_text.startswith(("system-arrival:", "route-arrival:", "route-waypoint:")):
-            count = len(matching_missions)
-            candidates.append({
-                "topic": "mission-destination",
-                "line": f"{count} active mission objective{'s' if count != 1 else ''} reference this system.",
-                "terms": (str(current_system),),
-            })
-        remaining_bodies = max(
-            0, int(survey.get("total_bodies") or 0) - int(survey.get("scanned_bodies") or 0)
+        cognition = getattr(self, "compass_cognition", None)
+        memory = getattr(self, "cockpit_memory", None)
+        if not cognition or not self._compass_advisor_available("contextual"):
+            return None
+        event = "FSDJump" if key_text.startswith((
+            "system-arrival:", "route-arrival:", "route-waypoint:"
+        )) else "callout"
+        candidate = cognition.select(
+            event, {}, snapshot, memory=memory, key=key, existing=True,
         )
-        if remaining_bodies and key_text.startswith(("system-arrival:", "first-discovery:", "cockpit-context:")):
-            candidates.append({
-                "topic": "survey-progress",
-                "line": f"The survey record still has {remaining_bodies} bodies unresolved.",
-                "terms": (),
-            })
-        unresolved_biology = max(
-            0, int(survey.get("biological_signals") or 0)
-            - int(survey.get("completed_biological_analyses") or 0)
-        )
-        if unresolved_biology and key_text.startswith(("system-arrival:", "valuable-world:", "cockpit-context:")):
-            candidates.append({
-                "topic": "biology-progress",
-                "line": f"{unresolved_biology} biological signal{'s remain' if unresolved_biology != 1 else ' remains'} unresolved here.",
-                "terms": (),
-            })
-        if biology and key_text.startswith("cockpit-context:"):
-            species = biology.get("species")
-            progress = int(biology.get("progress") or 0)
-            if species and progress:
-                candidates.append({
-                    "topic": "active-biology",
-                    "line": f"The active {species} analysis is at sample {progress} of 3.",
-                    "terms": (str(species),),
-                })
-        unsold = int(objectives.get("unsold_data_total_cr") or 0)
-        if unsold >= 5_000_000 and key_text.startswith((
-                "cockpit-context:", "cockpit-shutdown", "route-arrival:", "bio-complete:")):
-            candidates.append({
-                "topic": "unsold-data",
-                "line": f"Our unsold survey archive is estimated at {unsold} credits.",
-                "terms": (),
-            })
-        cargo_percent = flight.get("cargo_percent")
-        if cargo_percent is not None and cargo_percent >= 80 and key_text.startswith((
-                "cockpit-context:", "engineering-ready:", "massacre-complete:")):
-            candidates.append({
-                "topic": "cargo-capacity",
-                "line": f"The cargo hold is {cargo_percent} percent full.",
-                "terms": (),
-            })
-        for candidate in candidates:
-            if self._compass_advisor_available(candidate["topic"]):
-                return candidate
-        return None
+        if candidate and not self._compass_advisor_available(candidate.get("topic")):
+            return None
+        return candidate
 
     def _speak(self, text, category="safety", cooldown_s=20, key=None):
         try:
@@ -2741,6 +2714,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if spoken:
                 if advice:
                     self._mark_compass_advisor(advice["topic"])
+                    self.compass_cognition.record_spoken(advice, line=text)
                 self._pulse_cockpit_ai()
             return spoken
         except Exception as exc:
@@ -2761,101 +2735,53 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             key=f"cockpit-context:{remark['topic']}",
         )
 
-    def _maybe_speak_compass_advice(self, event, raw, data, startup_replay=False):
-        """Emit sparse, actionable observations from verified journal state."""
-        if (startup_replay or getattr(self, "is_first_load", False)
+    def _maybe_speak_compass_advice(self, event, raw, data, startup_replay=False,
+                                    snapshot=None):
+        """Speak the highest-utility learned observation, or intentionally stay quiet."""
+        cognition = getattr(self, "compass_cognition", None)
+        if (startup_replay or getattr(self, "is_first_load", False) or not cognition
                 or not self.config.get("cockpit_advisor_enabled", True)):
             return False
-        raw = raw if isinstance(raw, dict) else {}
-        data = data if isinstance(data, dict) else raw
-        snapshot = self._compass_gameplay_snapshot()
-        objectives = snapshot.get("objectives") or {}
-        survey = snapshot.get("survey") or {}
-        station = snapshot.get("station") or {}
-        flight = snapshot.get("flight") or {}
-        topic = None
-        line = None
-        category = "objectives"
-        protected = []
-        milestone_update = None
-
-        if event == "MissionAccepted":
-            destination = raw.get("DestinationSystem") or data.get("destination_system")
-            destination_station = raw.get("DestinationStation") or data.get("destination_station")
-            if destination:
-                topic = "mission-log"
-                protected.append(str(destination))
-                line = f"Mission logged for {destination}"
-                if destination_station:
-                    line += f", with the objective at {destination_station}"
-                    protected.append(str(destination_station))
-                line += "."
-
-        elif event == "Docked":
-            services = " ".join(str(item).casefold() for item in station.get("services") or [])
-            exploration = int(objectives.get("unsold_exploration_cr") or 0)
-            biology = int(objectives.get("unsold_biology_cr") or 0)
-            station_name = station.get("name")
-            if biology and "vista" in services:
-                topic = "sell-biology"
-                line = f"Vista Genomics is available here for our {biology} credits of biological data."
-            elif exploration and "cartograph" in services:
-                topic = "sell-exploration"
-                line = f"Universal Cartographics is available here for our {exploration} credits of exploration data."
-            if line and station_name:
-                protected.append(str(station_name))
-                line = f"At {station_name}, {line[0].lower()}{line[1:]}"
-
-        elif event == "FSSAllBodiesFound":
-            valuable = list(survey.get("valuable_bodies") or [])
-            signals = int(survey.get("biological_signals") or 0)
-            total = int(survey.get("total_bodies") or 0)
-            if valuable or signals:
-                topic = "survey-briefing"
-                category = "exploration"
-                parts = [f"Full spectrum survey complete with {total} bodies"]
-                if valuable:
-                    parts.append(f"{len(valuable)} high-value mapping target{'s' if len(valuable) != 1 else ''}")
-                if signals:
-                    parts.append(f"{signals} biological signal{'s' if signals != 1 else ''}")
-                line = "; ".join(parts) + "."
-
-        elif event == "MiningRefined":
-            cargo_percent = flight.get("cargo_percent")
-            if cargo_percent is not None:
-                level = 95 if cargo_percent >= 95 else 80 if cargo_percent >= 80 else 0
-                if cargo_percent < 70:
-                    self._compass_advisor_cargo_level = 0
-                elif level > self._compass_advisor_cargo_level:
-                    topic = f"mining-cargo-{level}"
-                    milestone_update = ("cargo", level)
-                    line = (
-                        f"Mining hold is {cargo_percent} percent full at "
-                        f"{flight.get('cargo_t')} of {flight.get('cargo_capacity_t')} tonnes."
-                    )
-
-        elif event == "MarketSell":
-            profit = int((snapshot.get("session") or {}).get("trade_profit_cr") or 0)
-            milestones = (1_000_000, 5_000_000, 10_000_000, 50_000_000, 100_000_000)
-            level = max((mark for mark in milestones if profit >= mark), default=0)
-            if level > self._compass_advisor_trade_level:
-                topic = f"trade-profit-{level}"
-                milestone_update = ("trade", level)
-                line = f"The trade ledger has reached {profit} credits of session profit."
-
-        if not topic or not line or not self._compass_advisor_available(topic):
+        snapshot = snapshot if isinstance(snapshot, dict) else self._compass_gameplay_snapshot()
+        candidate = cognition.select(
+            event, raw if isinstance(raw, dict) else data, snapshot,
+            memory=getattr(self, "cockpit_memory", None),
+        )
+        if not candidate or not self._compass_advisor_available(candidate.get("topic")):
             return False
-        key = f"advisor:{topic}:{'|'.join(protected)}" if protected else f"advisor:{topic}"
-        spoken = self._speak(line, category=category, cooldown_s=0, key=key)
+        key = f"advisor:{candidate['topic']}"
+        spoken = self._speak(
+            candidate["line"], category=candidate.get("category", "objectives"),
+            cooldown_s=0, key=key,
+        )
         if spoken:
-            if milestone_update:
-                kind, level = milestone_update
-                if kind == "cargo":
-                    self._compass_advisor_cargo_level = level
-                elif kind == "trade":
-                    self._compass_advisor_trade_level = level
-            self._mark_compass_advisor(topic)
+            cognition.record_spoken(candidate, line=candidate["line"])
+            self._mark_compass_advisor(candidate["topic"])
         return bool(spoken)
+
+    def _process_compass_cognition(self, event, raw, data, startup_replay=False):
+        """Learn from the settled event state, publish sparse insights, then advise."""
+        cognition = getattr(self, "compass_cognition", None)
+        if not cognition or startup_replay:
+            return False
+        try:
+            snapshot = self._compass_gameplay_snapshot()
+            notices = cognition.observe(
+                event, snapshot, memory=getattr(self, "cockpit_memory", None),
+                raw=raw, startup_replay=startup_replay,
+            )
+            self._publish_cockpit_ai_changes()
+            for notice in notices:
+                self.add_event_feed_entry("AI", notice, severity="INFO")
+            if notices:
+                self._pulse_cockpit_ai()
+            return self._maybe_speak_compass_advice(
+                event, raw, data, startup_replay=startup_replay,
+                snapshot=snapshot,
+            )
+        except Exception as exc:
+            logging.debug("Compass cognition event skipped [%s]: %s", event, exc)
+            return False
 
     def _sync_cockpit_intentions(self):
         if (not self.config.get("cockpit_memory_enabled", True)
@@ -2896,6 +2822,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return None
         mood = memory.current_mood()
         biology = memory.biology_awareness()
+        cognition = (
+            self.compass_cognition.status()
+            if getattr(self, "compass_cognition", None) else {}
+        )
         active = memory.state.get("active_expedition")
         return {
             "mood": str(mood.get("name") or "calm"),
@@ -2917,6 +2847,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "bio_samples": biology["samples"],
             "bio_analyses": biology["analyses"],
             "bio_codex": biology["codex_entries"],
+            "cognition_decisions": int(cognition.get("decisions") or 0),
+            "cognition_predictions": len(cognition.get("predictions") or []),
+            "cognition_goals": len(cognition.get("goals") or []),
+            "cognition_learned_topics": len(cognition.get("learned_topics") or []),
             "awareness_domains": tuple(memory.knowledge_domains()),
             "limits": dict(memory.limits),
             "expedition_id": active.get("id") if isinstance(active, dict) else None,
@@ -3026,7 +2960,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 f"{snapshot['memories']:,}/{limits['memories']:,} notable | "
                 f"survey {snapshot['fss_completed']:,} FSS, {snapshot['dss_maps']:,} DSS | "
                 f"biology {snapshot['bio_genera']:,} genera, {snapshot['bio_analyses']:,} analyses | "
-                f"{len(snapshot['awareness_domains'])} gameplay domains | working brain ready"
+                f"{len(snapshot['awareness_domains'])} gameplay domains | "
+                f"cognition {snapshot['cognition_predictions']} predictions, "
+                f"{snapshot['cognition_goals']} priorities | working brain ready"
             ),
             severity="INFO",
         )
@@ -3097,7 +3033,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if not session:
             return False
         session_id = session.get("id") or "session"
-        summary = memory.session_debrief("Shutdown summary", close=True)
+        insights = (
+            self.compass_cognition.observe_session_close(
+                self._compass_gameplay_snapshot(), memory,
+            )
+            if getattr(self, "compass_cognition", None) else []
+        )
+        summary = memory.session_debrief(
+            "Shutdown summary", close=True, insights=insights,
+        )
         self._cockpit_feed_state = self._cockpit_ai_feed_snapshot()
         if not summary:
             return False
@@ -3370,7 +3314,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                                       startup_replay=startup_replay)
         if not startup_replay:
             self._sync_cockpit_intentions()
-            self._maybe_speak_compass_advice(ev, raw, d, startup_replay=startup_replay)
         if ev != "LoadGame" and self.edsm.is_credit_event(ev):
             self._queue_edsm_upload(raw, flush=True, startup_replay=startup_replay)
         current_journal = getattr(self.watcher, "last_journal", None)
@@ -3587,6 +3530,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 jump_type = str(jump_type or "").lower()
                 self.hud_flight_state = "SUPERCRUISE" if jump_type == "supercruise" else "HYPERSPACE"
                 self.update_hud()
+                self._process_compass_cognition(ev, raw, d, startup_replay=startup_replay)
                 return
 
             # CarrierJump counts as a jump for the player when they are docked on board.
@@ -3610,10 +3554,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 and traffic_before_reset
             )
             self.current_sys = incoming_sys
-            if is_jump:
-                self._announce_system_arrival(incoming_sys, startup_replay=startup_replay)
-                if not startup_replay:
-                    self._speak_pending_cockpit_remark()
             if outgoing_sys:
                 self.previous_sys = outgoing_sys
                 self.previous_coords = prev_coords
@@ -3684,6 +3624,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.fss_summary_active = False
             self._rebuild_scan_index()
             self._rebuild_system_state_from_scan_items()
+            if is_jump:
+                # Speak only after the incoming system's persisted scan state is
+                # loaded; otherwise cognitive context can accidentally describe
+                # unresolved bodies from the system we just left.
+                self._announce_system_arrival(incoming_sys, startup_replay=startup_replay)
+                if not startup_replay:
+                    self._speak_pending_cockpit_remark()
 
             if ev == "CarrierJump":
                 log_msg = f"CARRIER JUMP: {self.current_sys}"
@@ -4257,6 +4204,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             elif ev == "MiningRefined":
                 mat = raw.get("Type_Localised") or raw.get("Type") or ""
                 self.root.after(0, lambda m=mat: self.prospector_hud.add_refined(m))
+
+        self._process_compass_cognition(ev, raw, d, startup_replay=startup_replay)
 
     # ── Companion feature state ───────────────────────────────────────────────
 

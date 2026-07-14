@@ -404,7 +404,7 @@ class CockpitMemory:
         return {key: max(0, int(current.get(key) or 0) - int(baseline.get(key) or 0))
                 for key in set(current) | set(baseline)}
 
-    def session_debrief(self, reason="Session report", close=False):
+    def session_debrief(self, reason="Session report", close=False, insights=None):
         session = self.state.get("current_session")
         if not session:
             return ""
@@ -463,6 +463,10 @@ class CockpitMemory:
         mood = self.current_mood()
         if mood["name"] in ("relieved", "proud", "curious"):
             text += f" I would describe the session as {mood['name']}."
+        for insight in list(insights or [])[:2]:
+            insight = str(insight or "").strip()
+            if insight:
+                text += " " + insight
         if close:
             session["ended_at"] = _now()
             session["summary"] = text

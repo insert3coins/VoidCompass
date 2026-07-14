@@ -123,6 +123,8 @@ PROFILE_BOOL_SETTINGS = (
     "cockpit_session_greetings_enabled",
     "cockpit_memory_callbacks_enabled",
     "cockpit_advisor_enabled",
+    "cockpit_cognition_enabled",
+    "cockpit_cognition_learning_enabled",
     "hud_crt_enabled",
     "hud_crt_motion_enabled",
 )
@@ -329,6 +331,8 @@ def apply_profile_config(config, profile_key=None):
         "cockpit_advisor_enabled": bool(
             profile.get("cockpit_llm_advisor_enabled", True)
         ),
+        "cockpit_cognition_enabled": True,
+        "cockpit_cognition_learning_enabled": True,
         "hud_crt_enabled": True,
         "hud_crt_motion_enabled": True,
     }
@@ -518,6 +522,8 @@ def load_config():
         'cockpit_memory_callbacks_enabled': True,
         'cockpit_advisor_enabled': True,
         'cockpit_advisor_level': 'Balanced',
+        'cockpit_cognition_enabled': True,
+        'cockpit_cognition_learning_enabled': True,
         'hud_crt_enabled': True,
         'hud_crt_motion_enabled': True,
         'hud_crt_intensity': 'Subtle',

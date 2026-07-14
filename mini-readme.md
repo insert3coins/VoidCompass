@@ -1,5 +1,17 @@
 # VoidCompass // UPDATE LOG
 
+## v4.7.4 // Compass Cognitive Engine
+**Release Date:** 2026-Jul-14
+
+### Adaptive Local Intelligence
+*   Added a bounded, Python-only **Compass Cognitive Engine** with no LLM, GPU workload, model download, server, or network dependency. Verified observations compete through utility scoring based on urgency, novelty, active goals, learned usefulness, current mood, relationship context, adviser frequency, recent repetition, and the active persona; low-value candidates become intentional silence.
+*   Evolved all 15 personas from signature prefixes into behavioural policies. Tactical prioritises missions and operational risk, Guardian protects fuel/data/cargo, Scientific and Exobiologist favour survey evidence, Engineer focuses readiness, Pathfinder favours route progress, Archivist recalls history, Companion values shared context, and Emergent favours learning and pattern changes. Curated procedural templates and mood-safe clauses provide substantial line variation without inventing game facts; safety speech remains isolated.
+*   Added outcome learning: Compass remembers whether advice was followed—selling exploration/biology data, continuing surveys or samples, completing missions, clearing cargo, following routes, or performing engineering—and adjusts that topic's future utility. Learning is bounded to 48 topics, 40 recent decisions, 8 pending outcomes, and 24 samples per metric.
+*   Added lightweight pilot predictions for typical session jumps/duration/distance, surveyed-system size, biological yield, fuel reserve at jump, cargo sale point, docking point, survey completion, profitable trade sessions, and biology sale timing. New baselines appear sparsely in the AI Live Feed and pulse the journal heartbeat.
+*   Added anomaly and pattern awareness for unusually large systems, exceptional biological yield, unusually busy EDSM traffic, longer-than-normal sessions, and surveys abandoned earlier than the pilot's normal pattern. Relevant high-salience memories can now be recalled on familiar-system returns using local contextual scoring rather than embeddings.
+*   Added explicit goal awareness for routes, mission counts, incomplete FSS work, unresolved biology, active samples, unsold data, and pinned engineering work. Shutdown/app-close/profile-change debriefs compare the session with learned norms and retain the highest outstanding priority.
+*   Added **Settings → Compass AI → Cognitive State** transparency showing the last speak/silence decision, exact reason and utility score, current priorities, predictions with confidence, learned advice usefulness, and pending outcome checks. Settings can independently disable decision scoring or outcome learning and reset cognitive learning without deleting the wider autobiographical memory.
+
 ## v4.7.3 // Lightweight Deterministic Compass
 **Release Date:** 2026-Jul-14
 
