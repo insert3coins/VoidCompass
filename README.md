@@ -13,7 +13,7 @@ Real-time Elite Dangerous companion app — desktop dashboard, in-game overlays,
 - **Achievements** — 1,023 journal-driven milestones with per-commander progress and live toast unlocks.
 - **Multi-commander** — separate profiles, data, and EDSM credentials per commander, detected automatically from the journal.
 - **Themes** — 10 built-in themes plus a full custom theme editor.
-- **Living Compass AI** — bounded per-commander memory, moods and learned habits, Piper voice callouts, 15 selectable personas, and a lightweight deterministic situational adviser.
+- **Living Compass AI** — bounded per-commander memory, moods and learned habits, Piper voice callouts, 15 behavioural personas, and a GPU-free cognitive adviser that learns personal baselines and advice usefulness.
 
 ![Navigation HUD](NavHud.PNG)
 ![Achievements](Achievements.PNG)
@@ -27,6 +27,6 @@ python VoidCompass.py
 
 `config.json` is created automatically on first launch. If journal auto-detect fails, set `journal_path` (default: `C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous`). Everything else is configurable in-app via **[ CONFIGURATION ]** and **SETTINGS**.
 
-Compass runs entirely locally without an LLM service. Its per-commander working brain combines verified route, survey, biology, mission, trade, mining, engineering, data-sale and learned-personality context. Choose from 15 deterministic personas—from Tactical and Scientific to Deadpan, Companion, or Emergent—and preview the selection with **Test Persona**. The situational adviser retains Quiet, Balanced and Proactive frequencies while urgent safety callouts remain isolated from persona styling.
+Compass runs entirely locally without an LLM service. Its per-commander working brain combines verified route, survey, biology, mission, trade, mining, engineering, data-sale and learned-personality context. A bounded cognition engine ranks observations by utility, chooses useful silence, varies verified wording, recalls relevant episodes, tracks goals, learns personal baselines and whether advice was acted upon, and reports its reasoning in **Settings → Compass AI → Cognitive State**. Choose from 15 deterministic behavioural personas—from Tactical and Scientific to Deadpan, Companion, or Emergent. Urgent safety callouts remain isolated from persona styling and cognitive commentary.
 
 o7

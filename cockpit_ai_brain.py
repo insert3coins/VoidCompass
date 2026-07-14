@@ -14,7 +14,7 @@ import threading
 from compass_personas import DEFAULT_PERSONA, persona_profile
 
 
-BRAIN_SCHEMA_VERSION = 2
+BRAIN_SCHEMA_VERSION = 3
 MAX_RELEVANT_MEMORIES = 8
 
 
@@ -59,6 +59,7 @@ class CockpitBrain:
             "pilot_model": {},
             "experience": {},
             "working_memory": {},
+            "cognition": {},
         }
 
     def _load(self):
@@ -67,7 +68,7 @@ class CockpitBrain:
             with open(self.path, "r", encoding="utf-8") as handle:
                 saved = json.load(handle)
             if isinstance(saved, dict):
-                for key in ("identity", "pilot_model", "experience", "working_memory"):
+                for key in ("identity", "pilot_model", "experience", "working_memory", "cognition"):
                     if isinstance(saved.get(key), dict):
                         state[key] = saved[key]
                 state["updated_at"] = saved.get("updated_at") or state["updated_at"]
@@ -202,6 +203,25 @@ class CockpitBrain:
             })
             self._save()
             return json.loads(json.dumps(self.state, ensure_ascii=False, default=str))
+
+    def cognition_state(self):
+        """Return an isolated copy of the bounded adaptive cognition state."""
+        with self._lock:
+            value = self.state.get("cognition")
+            return json.loads(json.dumps(value if isinstance(value, dict) else {}))
+
+    def set_cognition_state(self, value, save=False):
+        """Replace cognition state without exposing the brain's internal lock."""
+        with self._lock:
+            self.state["cognition"] = json.loads(json.dumps(
+                value if isinstance(value, dict) else {},
+                ensure_ascii=False,
+                default=str,
+            ))
+            self.state["updated_at"] = _now()
+            if save:
+                self._save()
+            return self.cognition_state()
 
     def status(self):
         with self._lock:

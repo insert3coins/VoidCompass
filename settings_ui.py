@@ -31,7 +31,7 @@ UI_MONO = FONT_MONO
 
 def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded=False,
                   on_close_callback=None, voice_manager=None, cockpit_memory=None,
-                  cockpit_brain=None):
+                  cockpit_brain=None, cockpit_cognition=None):
     win = window_surface(root, embedded=embedded)
     win.title("SYSTEM CONFIGURATION")
     win.geometry(config.get("settings_geometry", "980x800"))
@@ -277,6 +277,12 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     cockpit_advisor_level_var = tk.StringVar(
         value=str(config.get("cockpit_advisor_level", "Balanced"))
     )
+    cockpit_cognition_var = tk.BooleanVar(
+        value=config.get("cockpit_cognition_enabled", True)
+    )
+    cockpit_learning_var = tk.BooleanVar(
+        value=config.get("cockpit_cognition_learning_enabled", True)
+    )
     cockpit_personality_var = tk.StringVar(
         value=str(config.get("cockpit_personality_level", "Balanced") or "Balanced")
     )
@@ -424,6 +430,8 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         ):
             return
         cockpit_memory.reset()
+        if cockpit_cognition is not None:
+            cockpit_cognition.reset(save=True)
         memory_summary_var.set(cockpit_memory.summary_text())
 
     memory_actions = row(memory_panel)
@@ -647,10 +655,78 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w", justify=tk.LEFT, wraplength=650,
     ).pack(fill=tk.X, padx=12, pady=(2, 8))
     toggle_row(adviser_panel, "Enable proactive situational adviser", cockpit_advisor_var)
+    toggle_row(adviser_panel, "Enable cognitive decision scoring", cockpit_cognition_var)
+    toggle_row(adviser_panel, "Learn whether advice was acted upon", cockpit_learning_var)
     option_row(
         adviser_panel, "Advice frequency", cockpit_advisor_level_var,
         ["Quiet", "Balanced", "Proactive"],
     )
+
+    cognition_panel = section(compass_page, "Cognitive State")
+    cognition_status_var = tk.StringVar(value="Cognitive state has not been evaluated yet.")
+    tk.Label(
+        cognition_panel, textvariable=cognition_status_var, font=UI_FONT,
+        fg=COLOR_TEXT, bg=UI_PANEL, anchor="w", justify=tk.LEFT, wraplength=650,
+    ).pack(fill=tk.X, padx=12, pady=(4, 8))
+
+    def _refresh_cognition_status():
+        if cockpit_cognition is None:
+            cognition_status_var.set("Cognitive engine is unavailable in this session.")
+            return
+        status = cockpit_cognition.status()
+        last = status.get("last_decision") or {}
+        predictions = status.get("predictions") or []
+        goals = status.get("goals") or []
+        topics = status.get("learned_topics") or []
+        anomalies = status.get("anomalies") or []
+        prediction_text = ", ".join(
+            f"{row['label']} {row['value']:,} {row['unit']} ({float(row['confidence']):.0%})"
+            for row in predictions[:4]
+        ) or "collecting baselines"
+        goal_text = " | ".join(str(row.get("label")) for row in goals[:4]) or "no active priorities"
+        topic_text = ", ".join(
+            f"{row['topic'].replace('-', ' ')} {float(row['confidence']):.0%}"
+            for row in topics[:4]
+        ) or "awaiting advice outcomes"
+        anomaly_text = (
+            str(anomalies[-1].get("topic") or "pattern").replace("-", " ")
+            if anomalies else "none recorded"
+        )
+        if last:
+            last_text = (
+                f"{str(last.get('action') or 'unknown').title()} · "
+                f"{str(last.get('topic') or 'none').replace('-', ' ')}"
+            )
+            if last.get("score") is not None:
+                last_text += f" · utility {float(last['score']):.1f}"
+            last_text += f"\nWhy: {last.get('reason') or 'No useful observation cleared the threshold.'}"
+        else:
+            last_text = "No cognitive decision recorded this session."
+        cognition_status_var.set(
+            f"Last decision: {last_text}\n"
+            f"Active priorities: {goal_text}\n"
+            f"Predictions: {prediction_text}\n"
+            f"Learned usefulness: {topic_text}\n"
+            f"Latest anomaly: {anomaly_text}\n"
+            f"Pending outcome checks: {int(status.get('pending_outcomes') or 0)}"
+        )
+
+    def _reset_cognition():
+        if cockpit_cognition is None:
+            return
+        if not tk.messagebox.askyesno(
+            "Reset Cognitive Learning",
+            "Forget learned advice outcomes, personal baselines, predictions, and recent cognitive decisions?",
+            parent=win,
+        ):
+            return
+        cockpit_cognition.reset(save=True)
+        _refresh_cognition_status()
+
+    cognition_actions = row(cognition_panel)
+    action_button(cognition_actions, "Refresh", _refresh_cognition_status, muted=True).pack(side=tk.LEFT)
+    action_button(cognition_actions, "Reset Cognitive Learning", _reset_cognition, muted=True).pack(side=tk.RIGHT)
+    _refresh_cognition_status()
 
     # ---- Compass memory browser ----
     compass_overview = section(compass_page, "Current Intelligence State")
@@ -709,6 +785,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     memory_list.bind("<<ListboxSelect>>", _memory_selected)
 
     def _refresh_compass_page():
+        _refresh_cognition_status()
         memory_list.delete(0, tk.END)
         memory_ids.clear()
         if cockpit_memory is None:
@@ -1091,6 +1168,8 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "cockpit_memory_callbacks_enabled": cockpit_callbacks_var.get(),
             "cockpit_advisor_enabled": cockpit_advisor_var.get(),
             "cockpit_advisor_level": cockpit_advisor_level_var.get(),
+            "cockpit_cognition_enabled": cockpit_cognition_var.get(),
+            "cockpit_cognition_learning_enabled": cockpit_learning_var.get(),
             "cockpit_personality_level": cockpit_personality_var.get(),
             "cockpit_persona": compass_personas.normalize_persona(cockpit_persona_var.get()),
             "cockpit_memory_system_limit": memory_limits["systems"],
