@@ -468,7 +468,7 @@ def load_config():
         'overlay_topmost_refresh_ms': 12000,
         'hud_anim_interval_ms': 100,
         'runtime_trace_enabled': True,
-        'runtime_trace_path': 'runtime_trace.log',
+        'runtime_trace_path': 'logs/runtime_trace.log',
         'crash_reporting_enabled': True,
         'watcher_max_journal_lines_per_cycle': 40,
         'watcher_startup_max_lines_per_cycle': 20,

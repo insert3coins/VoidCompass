@@ -2,11 +2,15 @@ import json
 import threading
 import time
 
+from diagnostic_logs import LOG_ARCHIVE_LIMIT, prepare_log
+
 
 class RuntimeTrace:
-    def __init__(self, path, enabled=True):
+    def __init__(self, path, enabled=True, legacy_paths=(), archive_limit=LOG_ARCHIVE_LIMIT):
         self.path = path
         self.enabled = bool(enabled)
+        self.legacy_paths = tuple(legacy_paths or ())
+        self.archive_limit = max(0, int(archive_limit))
         self._lock = threading.Lock()
         self._bucket = {}
         self._started = False
@@ -16,6 +20,11 @@ class RuntimeTrace:
             return
         self._started = True
         try:
+            self.path = prepare_log(
+                self.path,
+                legacy_paths=self.legacy_paths,
+                keep=self.archive_limit,
+            )
             with open(self.path, "w", encoding="utf-8") as f:
                 f.write(
                     json.dumps(

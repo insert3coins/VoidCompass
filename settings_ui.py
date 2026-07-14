@@ -9,6 +9,7 @@ import voice_callouts
 import compass_personas
 from cockpit_ai_memory import DEFAULT_LIMITS as COCKPIT_MEMORY_DEFAULTS, LIMIT_BOUNDS as COCKPIT_MEMORY_BOUNDS
 from config import DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config as persist_config
+from diagnostic_logs import application_base_dir
 from ui_theme import THEME, FONT_MONO, FONT_TITLE, FONT_UI, FONT_UI_BOLD, apply_window, button, window_surface
 
 COLOR_ACCENT = THEME.accent
@@ -1092,9 +1093,26 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     diagnostics_section = section(diagnostics_page, "Runtime Diagnostics")
     toggle_row(diagnostics_section, "Runtime performance trace log", runtime_trace_var)
     toggle_row(diagnostics_section, "Crash and UI-freeze reporter", crash_reporting_var)
+
+    def _open_logs_folder():
+        path = application_base_dir() / "logs"
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            os.startfile(str(path))
+        except Exception as exc:
+            tk.messagebox.showerror(
+                "Logs Folder", f"Could not open {path}:\n{exc}", parent=win,
+            )
+
+    diagnostics_actions = row(diagnostics_section)
+    action_button(diagnostics_actions, "Open Logs Folder", _open_logs_folder).pack(side=tk.LEFT)
     tk.Label(
         diagnostics_section,
-        text="Changes take effect after restarting VoidCompass. Ctrl+Alt+D writes a manual stack dump when crash reporting is enabled.",
+        text=(
+            "Current and timestamped previous-run logs are kept in the logs folder. "
+            "Changes take effect after restarting VoidCompass. Ctrl+Alt+D writes a manual "
+            "stack dump when crash reporting is enabled."
+        ),
         font=UI_FONT,
         fg=UI_MUTED,
         bg=UI_PANEL,
