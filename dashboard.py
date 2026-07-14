@@ -3121,6 +3121,33 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if voice_text:
             self._speak(voice_text, category=voice_category, key=voice_key)
 
+    def _srv_toast_vehicle_name(self, raw=None, data=None):
+        """Return NOMAD when Elite's SRV-shaped events belong to the Nomad."""
+        raw = raw if isinstance(raw, dict) else {}
+        data = data if isinstance(data, dict) else {}
+        vehicle_id = data.get("ID") or raw.get("ID")
+        explicit = (
+            data.get("SRVType_Localised") or data.get("SRVType")
+            or raw.get("SRVType_Localised") or raw.get("SRVType")
+            or data.get("VehicleType") or raw.get("VehicleType")
+        )
+        loadout = data.get("Loadout") or raw.get("Loadout")
+        remembered = (
+            (getattr(self, "_vehicle_name_by_id", {}) or {}).get(vehicle_id)
+            if vehicle_id is not None else ""
+        )
+        candidates = (
+            explicit,
+            "NOMAD" if str(loadout or "").casefold() == "galactic" else "",
+            remembered,
+            getattr(self, "current_vehicle_name", ""),
+            getattr(self, "_last_surface_vehicle_name", ""),
+        )
+        return "NOMAD" if any(
+            str(value or "").strip().casefold() == "nomad"
+            for value in candidates
+        ) else "SRV"
+
     def _handle_live_journal_toast(self, ev, raw, d, startup_replay=False):
         """Surface selected, actionable journal events without replay noise."""
         if startup_replay or getattr(self, "is_first_load", False):
@@ -3139,7 +3166,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             where = raw.get("Body") or raw.get("StationName") or raw.get("SettlementName") or "On foot"
             self._push_live_toast("ON FOOT", where, "info")
         elif ev == "Embark":
-            vehicle = "SRV" if raw.get("SRV") else (raw.get("Taxi") and "taxi") or "ship"
+            from_srv = bool(d.get("SRV") or raw.get("SRV"))
+            vehicle = (
+                self._srv_toast_vehicle_name(raw, d)
+                if from_srv else (raw.get("Taxi") and "taxi") or "ship"
+            )
             self._push_live_toast("EMBARKED", str(vehicle), "info")
         elif ev == "HeatWarning":
             self._push_live_toast("OVERHEATING", "Ship temperature critical", "warn", 15,
@@ -3210,7 +3241,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                                    "Danger. The jet cone is damaging the ship. I need us clear now.",
                                    "Unstable cone exposure. Exit now. I cannot compensate for this."), voice_key="jet-cone-damage")
         elif ev in ("FighterDestroyed", "SRVDestroyed"):
-            self._push_live_toast("FIGHTER DESTROYED" if ev == "FighterDestroyed" else "SRV DESTROYED", "", "fail", 15)
+            title = (
+                "FIGHTER DESTROYED" if ev == "FighterDestroyed"
+                else f"{self._srv_toast_vehicle_name(raw, d)} DESTROYED"
+            )
+            self._push_live_toast(title, "", "fail", 15)
         elif ev == "Died":
             killer = raw.get("KillerName_Localised") or raw.get("KillerName") or "Commander lost"
             self._push_live_toast("DESTRUCTION", killer, "fail", 20,
