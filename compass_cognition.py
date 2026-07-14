@@ -24,6 +24,18 @@ MAX_PENDING = 8
 MAX_METRIC_SAMPLES = 24
 MAX_GOALS = 8
 
+MOOD_CLAUSES = {
+    "curious": (
+        "worth a closer look", "the pattern merits attention",
+        "there may be more here", "I would keep the sensors on this",
+        "that stands out in the data", "an interesting result",
+    ),
+    "proud": (
+        "solid progress", "another good result", "nicely handled",
+        "the record is improving", "that moved us forward", "a worthwhile gain",
+    ),
+}
+
 
 PERSONA_TOPIC_WEIGHTS = {
     "Tactical": {"mission": 1.30, "risk": 1.25, "cargo": 1.10, "route": 1.10, "ambient": 0.70},
@@ -426,6 +438,8 @@ class CompassCognition:
                 f"This system connects with an earlier flight entry: {text}.",
                 f"I remember this system from our archive: {text}.",
                 f"Returning here brings one relevant record forward: {text}.",
+                f"A previous visit matters here. The record says: {text}.",
+                f"This system is familiar for a reason: {text}.",
             ), ("memory", "pattern"), category="navigation",
         )
 
@@ -447,6 +461,8 @@ class CompassCognition:
                     (
                         f"This is an unusually large system for our survey history: {bodies} bodies against a typical {round(float(baseline))}.",
                         f"Survey anomaly noted. {bodies} bodies is well above our usual {round(float(baseline))}.",
+                        f"System scale stands out: {bodies} bodies compared with our median of {round(float(baseline))}.",
+                        f"Our normal survey contains about {round(float(baseline))} bodies; this one contains {bodies}.",
                     ), ("anomaly", "survey", "learning"), category="exploration",
                 ))
             signals = int(survey.get("biological_signals") or 0)
@@ -459,6 +475,8 @@ class CompassCognition:
                     (
                         f"Biological yield is unusually high here: {signals} signals against a typical {round(float(bio_base), 1)}.",
                         f"This system stands above our biological baseline with {signals} signals.",
+                        f"The biology count is exceptional for us: {signals} signals against a norm of {round(float(bio_base), 1)}.",
+                        f"Our learned baseline is {round(float(bio_base), 1)} biological signals; this system has {signals}.",
                     ), ("anomaly", "biology", "learning"), outcome="biology", category="exploration",
                 ))
         if event in ("FSDJump", "Location", "TrafficUpdate") and memory:
@@ -476,6 +494,8 @@ class CompassCognition:
                     (
                         f"Traffic is unusually active here: {day} movements today against a typical {round(float(typical))}.",
                         f"This system is busier than our normal route history, with {day} movements today.",
+                        f"Local traffic stands well above our travelled-system norm: {day} movements today.",
+                        f"We usually see about {round(float(typical))} daily movements; this system is reporting {day}.",
                     ), ("anomaly", "route", "pattern"), category="navigation",
                 ))
         typical_jumps = (metrics.get("session_jumps") or {}).get("median")
@@ -487,6 +507,8 @@ class CompassCognition:
                 (
                     f"This flight has reached {jumps} jumps, beyond our usual session of {round(float(typical_jumps))}.",
                     f"We are running longer than usual: {jumps} jumps against a typical {round(float(typical_jumps))}.",
+                    f"Session distance is stretching past our normal pattern at {jumps} jumps.",
+                    f"Our typical session is {round(float(typical_jumps))} jumps; this one has reached {jumps}.",
                 ), ("anomaly", "session", "pattern"), category="ambient",
             ))
         if event == "StartJump" and int(survey.get("total_bodies") or 0) > 0:
@@ -505,6 +527,8 @@ class CompassCognition:
                     (
                         f"We are leaving this system at {round(current_completion)} percent surveyed; your usual completion is {round(float(typical_completion))} percent.",
                         f"This survey ended earlier than your normal pattern: {round(current_completion)} percent against a typical {round(float(typical_completion))}.",
+                        f"Departure survey depth is {round(current_completion)} percent, below your usual {round(float(typical_completion))} percent.",
+                        f"This system closes at {round(current_completion)} percent surveyed; your learned norm is {round(float(typical_completion))} percent.",
                     ), ("anomaly", "survey", "pattern"), category="exploration",
                 ))
         return rows
@@ -550,6 +574,8 @@ class CompassCognition:
                 (
                     f"Vista Genomics is available{at} for our {bio_value:,} credits of biological data.",
                     f"We can secure {bio_value:,} credits of biological data through Vista Genomics{at}.",
+                    f"Our biological archive is worth {bio_value:,} credits, and Vista Genomics is available{at}.",
+                    f"Vista Genomics can receive the current {bio_value:,}-credit biology record{at}.",
                 ), ("biology", "data", "goal"), outcome="sell-biology",
             ))
         if event == "Docked" and exploration and "cartograph" in services:
@@ -559,6 +585,8 @@ class CompassCognition:
                 (
                     f"Universal Cartographics is available{at} for our {exploration:,} credits of exploration data.",
                     f"We can secure {exploration:,} credits of exploration data through Universal Cartographics{at}.",
+                    f"Our {exploration:,}-credit survey archive can be sold through Universal Cartographics{at}.",
+                    f"Universal Cartographics can receive the current exploration record worth approximately {exploration:,} credits{at}.",
                 ), ("survey", "data", "goal"), outcome="sell-exploration",
             ))
 
@@ -591,6 +619,8 @@ class CompassCognition:
                 (
                     f"Mining hold is {int(cargo_percent)} percent full at {flight.get('cargo_t')} of {flight.get('cargo_capacity_t')} tonnes.",
                     f"Cargo threshold reached: {int(cargo_percent)} percent of the mining hold is occupied.",
+                    f"The refined load now occupies {int(cargo_percent)} percent of available cargo capacity.",
+                    f"Mining capacity update: {flight.get('cargo_t')} of {flight.get('cargo_capacity_t')} tonnes loaded, or {int(cargo_percent)} percent.",
                 ), ("cargo", "progress", "mining"), outcome="cargo",
             ))
         profit = int(session.get("trade_profit_cr") or 0)
@@ -619,6 +649,8 @@ class CompassCognition:
                 (
                     f"{count} active mission objective{'s' if count != 1 else ''} reference this system.",
                     f"This system matches {count} active mission objective{'s' if count != 1 else ''}.",
+                    f"Mission cross-check complete: this system is referenced by {count} active objective{'s' if count != 1 else ''}.",
+                    f"We have arrived in a system tied to {count} current mission objective{'s' if count != 1 else ''}.",
                 ), ("mission", "goal", "route"), outcome="mission",
             ))
         remaining_jumps = int(nav.get("remaining_jumps") or 0)
@@ -631,6 +663,8 @@ class CompassCognition:
                 (
                     f"{remaining_jumps} jump{'s' if remaining_jumps != 1 else ''} remain to {final_destination}.",
                     f"Route progress leaves {remaining_jumps} jump{'s' if remaining_jumps != 1 else ''} before {final_destination}.",
+                    f"The plotted course to {final_destination} now has {remaining_jumps} jump{'s' if remaining_jumps != 1 else ''} remaining.",
+                    f"Navigation count: {remaining_jumps} more jump{'s' if remaining_jumps != 1 else ''} to reach {final_destination}.",
                 ), ("route", "goal", "progress"), outcome="route", category="navigation",
             ))
         unresolved = max(0, int(survey.get("total_bodies") or 0) - int(survey.get("scanned_bodies") or 0))
@@ -641,6 +675,8 @@ class CompassCognition:
                 (
                     f"The survey record still has {unresolved} bod{'ies' if unresolved != 1 else 'y'} unresolved.",
                     f"System survey remains incomplete with {unresolved} bod{'ies' if unresolved != 1 else 'y'} outstanding.",
+                    f"There {'are' if unresolved != 1 else 'is'} still {unresolved} unresolved bod{'ies' if unresolved != 1 else 'y'} in the system record.",
+                    f"Survey sensors have {unresolved} bod{'ies' if unresolved != 1 else 'y'} left to resolve here.",
                 ), ("survey", "goal"), outcome="survey", category="exploration",
             ))
         bio_remaining = max(
@@ -654,6 +690,8 @@ class CompassCognition:
                 (
                     f"{bio_remaining} biological signal{'s remain' if bio_remaining != 1 else ' remains'} unresolved here.",
                     f"Biological work remains: {bio_remaining} unresolved signal{'s' if bio_remaining != 1 else ''}.",
+                    f"The current system still holds {bio_remaining} unresolved biological signal{'s' if bio_remaining != 1 else ''}.",
+                    f"Biology ledger: {bio_remaining} signal{'s are' if bio_remaining != 1 else ' is'} not yet complete.",
                 ), ("biology", "goal", "survey"), outcome="biology", category="exploration",
             ))
         if biology.get("species") and int(biology.get("progress") or 0) and key_text.startswith("cockpit-context:"):
@@ -663,6 +701,8 @@ class CompassCognition:
                 (
                     f"The active {biology.get('species')} analysis is at sample {int(biology.get('progress'))} of 3.",
                     f"Sampling remains active for {biology.get('species')}: {int(biology.get('progress'))} of 3 complete.",
+                    f"{biology.get('species')} fieldwork is still open at {int(biology.get('progress'))} of 3 samples.",
+                    f"The genetic sampler has {int(biology.get('progress'))} of 3 required {biology.get('species')} samples.",
                 ), ("biology", "goal", "progress"), outcome="biology", category="exploration",
             ))
         unsold = int(objectives.get("unsold_data_total_cr") or 0)
@@ -673,6 +713,8 @@ class CompassCognition:
                 (
                     f"Our unsold survey archive is estimated at {unsold:,} credits.",
                     f"Survey data currently at risk totals approximately {unsold:,} credits.",
+                    f"The exploration ledger still holds about {unsold:,} credits in unsold data.",
+                    f"We are carrying a survey archive valued near {unsold:,} credits without a completed sale.",
                 ), ("data", "goal", "risk"), category="objectives",
             ))
         if cargo_percent is not None and int(cargo_percent) >= 80 and key_text.startswith(("cockpit-context:", "engineering-ready:", "massacre-complete:")):
@@ -682,6 +724,8 @@ class CompassCognition:
                 (
                     f"The cargo hold is {int(cargo_percent)} percent full.",
                     f"Cargo capacity is currently at {int(cargo_percent)} percent.",
+                    f"Available hold space has fallen to {100 - int(cargo_percent)} percent.",
+                    f"Current cargo load occupies {int(cargo_percent)} percent of the ship's capacity.",
                 ), ("cargo", "goal"), outcome="cargo",
             ))
         if key_text.startswith("engineering-ready:"):
@@ -691,6 +735,8 @@ class CompassCognition:
                 (
                     "This pinned engineering objective is now actionable.",
                     "The current material plan is ready to move into engineering.",
+                    "The pinned blueprint now has the materials required for its next step.",
+                    "Engineering inventory reconciled; the selected upgrade can proceed.",
                 ), ("engineering", "goal", "progress"), outcome="engineering",
             ))
         if event in ("FSDJump", "Location"):
@@ -753,17 +799,32 @@ class CompassCognition:
         if not templates:
             return ""
         topic = candidate["topic"]
-        previous = ((state.get("topic_stats") or {}).get(topic) or {}).get("last_template")
-        available = [index for index in range(len(templates)) if index != previous] or list(range(len(templates)))
+        topic_state = (state.get("topic_stats") or {}).get(topic) or {}
+        history = list(topic_state.get("recent_templates") or ())
+        history_limit = min(4, len(templates) - 1)
+        recent = set(history[-history_limit:]) if history_limit else set()
+        available = [index for index in range(len(templates)) if index not in recent] or list(range(len(templates)))
         index = random.choice(available)
+        history.append(index)
+        state["topic_stats"][topic]["recent_templates"] = history[-4:]
         state["topic_stats"][topic]["last_template"] = index
         line = str(templates[index]).strip()
         mood_name = str((mood or {}).get("name") or "calm").casefold()
         tags = set(candidate.get("tags") or ())
         if mood_name == "curious" and tags & {"survey", "biology", "anomaly"}:
-            line = f"{line.rstrip('.')} — worth a closer look."
+            clauses = MOOD_CLAUSES["curious"]
+            previous_clause = topic_state.get("last_mood_clause")
+            available_clauses = [item for item in clauses if item != previous_clause] or list(clauses)
+            clause = random.choice(available_clauses)
+            state["topic_stats"][topic]["last_mood_clause"] = clause
+            line = f"{line.rstrip('.')} — {clause}."
         elif mood_name == "proud" and tags & {"progress", "milestone"}:
-            line = f"{line.rstrip('.')} — solid progress."
+            clauses = MOOD_CLAUSES["proud"]
+            previous_clause = topic_state.get("last_mood_clause")
+            available_clauses = [item for item in clauses if item != previous_clause] or list(clauses)
+            clause = random.choice(available_clauses)
+            state["topic_stats"][topic]["last_mood_clause"] = clause
+            line = f"{line.rstrip('.')} — {clause}."
         return line
 
     def select(self, event, raw, snapshot, memory=None, key=None, existing=False):

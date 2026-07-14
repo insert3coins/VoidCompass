@@ -167,11 +167,11 @@ def set_selected_voice(config, voice):
 
 
 _line_lock = threading.Lock()
-_last_line = {}
+_line_history = {}
 
 
 def choose_line(lines, key=None):
-    """Choose a phrase without repeating the previous phrase for that event."""
+    """Choose a phrase while cycling through the pool before reusing lines."""
     if isinstance(lines, str):
         return lines
     choices = tuple(str(line).strip() for line in (lines or ()) if str(line).strip())
@@ -181,10 +181,13 @@ def choose_line(lines, key=None):
         return choices[0]
     identity = str(key or choices)
     with _line_lock:
-        previous = _last_line.get(identity)
-        available = tuple(line for line in choices if line != previous) or choices
+        history = list(_line_history.get(identity) or ())
+        history_limit = min(5, len(choices) - 1)
+        recent = set(history[-history_limit:]) if history_limit else set()
+        available = tuple(line for line in choices if line not in recent) or choices
         selected = random.choice(available)
-        _last_line[identity] = selected
+        history.append(selected)
+        _line_history[identity] = history[-5:]
     return selected
 
 
