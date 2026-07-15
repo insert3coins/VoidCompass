@@ -11,7 +11,9 @@ import math
 
 
 GRADE_CAP = {1: 300, 2: 250, 3: 200, 4: 150, 5: 100}
-ROLLS_PER_GRADE = {1: 2, 2: 2, 3: 3, 4: 4, 5: 5}
+# Frontier's deterministic post-rebalance maximum-access costs.  A plan from
+# stock to G5 therefore budgets 1, 2, 3, 4 and 5 applications respectively.
+ROLLS_PER_GRADE = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5}
 
 
 # symbol, display name, category, family, grade
@@ -169,14 +171,29 @@ BLUEPRINT_INFO = {
         "what": "Raises speed and agility at the cost of additional heat.",
         "engineer": "Professor Palin and other thruster engineers.",
     },
+    "Power Plant Armoured": {"what": "Improves plant integrity and heat efficiency.", "engineer": "Hera Tani, Marco Qwent and other power-plant engineers."},
+    "Power Plant Overcharged": {"what": "Raises power output at the cost of heat and integrity.", "engineer": "Hera Tani, Marco Qwent and other power-plant engineers."},
+    "Power Plant Low Emissions": {"what": "Reduces heat generation at the cost of mass and output.", "engineer": "Hera Tani, Marco Qwent and other power-plant engineers."},
+    "Power Distributor Charge Enhanced": {"what": "Raises recharge rates across all three capacitors.", "engineer": "The Dweller and other distributor engineers."},
+    "Power Distributor Engine Focused": {"what": "Prioritises the engine capacitor and its recharge rate.", "engineer": "The Dweller and other distributor engineers."},
+    "Power Distributor High Capacity": {"what": "Raises capacitor capacity at the cost of recharge rate.", "engineer": "The Dweller and other distributor engineers."},
+    "Shield Generator Enhanced Low Power": {"what": "Reduces shield mass and power draw.", "engineer": "Elvira Martuuk, Lei Cheung and other shield engineers."},
+    "Shield Generator Reinforced": {"what": "Raises absolute shield strength.", "engineer": "Elvira Martuuk, Lei Cheung and other shield engineers."},
+    "Shield Generator Thermal Resistant": {"what": "Improves thermal resistance while balancing defences.", "engineer": "Elvira Martuuk, Lei Cheung and other shield engineers."},
+    "Shield Booster Heavy Duty": {"what": "Raises total shield boost at the cost of mass and power.", "engineer": "Didi Vatermann and other utility engineers."},
+    "Shield Booster Resistance Augmented": {"what": "Improves all shield resistances.", "engineer": "Didi Vatermann and other utility engineers."},
+    "Armour Heavy Duty": {"what": "Raises hull integrity and resistance.", "engineer": "Selene Jean and other armour engineers."},
+    "Life Support Lightweight": {"what": "Reduces life-support mass.", "engineer": "Lori Jameson and other support engineers."},
+    "Surface Scanner Expanded Probe Radius": {"what": "Makes efficient surface mapping easier.", "engineer": "Hera Tani and other scanner engineers."},
 }
 
-# Verified starter recipes: material display names are resolved to symbols below.
+# Verified high-use ship recipes.  Costs are expressed per application; the
+# planner applies ROLLS_PER_GRADE and can start from an existing grade.
 BLUEPRINTS = {
     "FSD Increased Range": {
         1: {"disruptedwakeechoes": 1},
         2: {"disruptedwakeechoes": 1, "chemicalprocessors": 1},
-        3: {"phasealloys": 1, "chemicalprocessors": 1, "wakesolutions": 1},
+        3: {"phosphorus": 1, "chemicalprocessors": 1, "wakesolutions": 1},
         4: {"manganese": 1, "chemicaldistillery": 1, "hyperspacetrajectories": 1},
         5: {"arsenic": 1, "chemicalmanipulators": 1, "dataminedwake": 1},
     },
@@ -184,8 +201,92 @@ BLUEPRINTS = {
         1: {"legacyfirmware": 1},
         2: {"legacyfirmware": 1, "mechanicalequipment": 1},
         3: {"legacyfirmware": 1, "chromium": 1, "mechanicalcomponents": 1},
-        4: {"consumerfirmware": 1, "selenium": 1, "mechanicalcomponents": 1},
+        4: {"consumerfirmware": 1, "selenium": 1, "configurablecomponents": 1},
         5: {"industrialfirmware": 1, "cadmium": 1, "pharmaceuticalisolators": 1},
+    },
+    "Power Plant Armoured": {
+        1: {"wornshieldemitters": 1}, 2: {"carbon": 1, "shieldemitters": 1},
+        3: {"carbon": 1, "highdensitycomposites": 1, "shieldemitters": 1},
+        4: {"fedproprietarycomposites": 1, "shieldingsensors": 1, "vanadium": 1},
+        5: {"compoundshielding": 1, "fedcorecomposites": 1, "tungsten": 1},
+    },
+    "Power Plant Overcharged": {
+        1: {"sulphur": 1}, 2: {"conductivecomponents": 1, "heatconductionwiring": 1},
+        3: {"conductivecomponents": 1, "heatconductionwiring": 1, "selenium": 1},
+        4: {"cadmium": 1, "conductiveceramics": 1, "heatdispersionplate": 1},
+        5: {"chemicalmanipulators": 1, "conductiveceramics": 1, "tellurium": 1},
+    },
+    "Power Plant Low Emissions": {
+        1: {"iron": 1}, 2: {"iron": 1, "archivedemissiondata": 1},
+        3: {"heatexchangers": 1, "iron": 1, "archivedemissiondata": 1},
+        4: {"germanium": 1, "emissiondata": 1, "heatvanes": 1},
+        5: {"niobium": 1, "decodedemissiondata": 1, "protoheatradiators": 1},
+    },
+    "Power Distributor Charge Enhanced": {
+        1: {"legacyfirmware": 1}, 2: {"chemicalprocessors": 1, "legacyfirmware": 1},
+        3: {"chemicaldistillery": 1, "gridresistors": 1, "consumerfirmware": 1},
+        4: {"chemicalmanipulators": 1, "industrialfirmware": 1, "hybridcapacitors": 1},
+        5: {"chemicalmanipulators": 1, "industrialfirmware": 1, "exquisitefocuscrystals": 1},
+    },
+    "Power Distributor Engine Focused": {
+        1: {"sulphur": 1}, 2: {"conductivecomponents": 1, "sulphur": 1},
+        3: {"bulkscandata": 1, "chromium": 1, "electrochemicalarrays": 1},
+        4: {"scanarchives": 1, "selenium": 1, "polymercapacitors": 1},
+        5: {"scandatabanks": 1, "cadmium": 1, "militarysupercapacitors": 1},
+    },
+    "Power Distributor High Capacity": {
+        1: {"sulphur": 1}, 2: {"chromium": 1, "legacyfirmware": 1},
+        3: {"chromium": 1, "highdensitycomposites": 1, "legacyfirmware": 1},
+        4: {"consumerfirmware": 1, "fedproprietarycomposites": 1, "selenium": 1},
+        5: {"industrialfirmware": 1, "militarysupercapacitors": 1, "fedproprietarycomposites": 1},
+    },
+    "Shield Generator Enhanced Low Power": {
+        1: {"shieldcyclerecordings": 1}, 2: {"shieldcyclerecordings": 1, "germanium": 1},
+        3: {"shieldcyclerecordings": 1, "germanium": 1, "precipitatedalloys": 1},
+        4: {"shieldsoakanalysis": 1, "niobium": 1, "thermicalloys": 1},
+        5: {"militarygradealloys": 1, "tin": 1, "shielddensityreports": 1},
+    },
+    "Shield Generator Reinforced": {
+        1: {"phosphorus": 1}, 2: {"conductivecomponents": 1, "phosphorus": 1},
+        3: {"conductivecomponents": 1, "mechanicalcomponents": 1, "phosphorus": 1},
+        4: {"conductiveceramics": 1, "configurablecomponents": 1, "manganese": 1},
+        5: {"arsenic": 1, "conductivepolymers": 1, "improvisedcomponents": 1},
+    },
+    "Shield Generator Thermal Resistant": {
+        1: {"shieldcyclerecordings": 1}, 2: {"shieldcyclerecordings": 1, "germanium": 1},
+        3: {"shieldcyclerecordings": 1, "germanium": 1, "selenium": 1},
+        4: {"focuscrystals": 1, "shieldsoakanalysis": 1, "mercury": 1},
+        5: {"refinedfocuscrystals": 1, "ruthenium": 1, "shielddensityreports": 1},
+    },
+    "Shield Booster Heavy Duty": {
+        1: {"gridresistors": 1}, 2: {"shieldcyclerecordings": 1, "hybridcapacitors": 1},
+        3: {"shieldcyclerecordings": 1, "hybridcapacitors": 1, "niobium": 1},
+        4: {"electrochemicalarrays": 1, "shieldsoakanalysis": 1, "tin": 1},
+        5: {"antimony": 1, "polymercapacitors": 1, "shielddensityreports": 1},
+    },
+    "Shield Booster Resistance Augmented": {
+        1: {"phosphorus": 1}, 2: {"conductivecomponents": 1, "phosphorus": 1},
+        3: {"conductivecomponents": 1, "focuscrystals": 1, "phosphorus": 1},
+        4: {"conductiveceramics": 1, "manganese": 1, "refinedfocuscrystals": 1},
+        5: {"conductiveceramics": 1, "imperialshielding": 1, "refinedfocuscrystals": 1},
+    },
+    "Armour Heavy Duty": {
+        1: {"carbon": 1}, 2: {"carbon": 1, "shieldemitters": 1},
+        3: {"carbon": 1, "highdensitycomposites": 1, "shieldemitters": 1},
+        4: {"fedproprietarycomposites": 1, "shieldingsensors": 1, "vanadium": 1},
+        5: {"compoundshielding": 1, "fedcorecomposites": 1, "tungsten": 1},
+    },
+    "Life Support Lightweight": {
+        1: {"phosphorus": 1}, 2: {"manganese": 1, "salvagedalloys": 1},
+        3: {"conductiveceramics": 1, "manganese": 1, "salvagedalloys": 1},
+        4: {"conductivecomponents": 1, "phasealloys": 1, "protolightalloys": 1},
+        5: {"conductiveceramics": 1, "protoradiolicalloys": 1, "protolightalloys": 1},
+    },
+    "Surface Scanner Expanded Probe Radius": {
+        1: {"mechanicalscrap": 1}, 2: {"mechanicalscrap": 1, "germanium": 1},
+        3: {"mechanicalscrap": 1, "germanium": 1, "phasealloys": 1},
+        4: {"mechanicalequipment": 1, "niobium": 1, "protolightalloys": 1},
+        5: {"mechanicalcomponents": 1, "tin": 1, "protoradiolicalloys": 1},
     },
 }
 
@@ -240,15 +341,19 @@ def inventory_counts(state: dict) -> dict[str, int]:
     return out
 
 
-def requirements(blueprint: str, target_grade: int, rolls=None) -> dict[str, int]:
+def requirements(blueprint: str, target_grade: int, rolls=None,
+                 current_grade: int = 0, quantity: int = 1) -> dict[str, int]:
     recipe = BLUEPRINTS.get(blueprint)
     if not recipe:
         raise KeyError(blueprint)
     rolls = rolls or ROLLS_PER_GRADE
     need = {}
-    for grade in range(1, min(5, max(1, int(target_grade))) + 1):
+    current_grade = max(0, min(4, int(current_grade or 0)))
+    target_grade = min(5, max(1, int(target_grade)))
+    quantity = max(1, min(99, int(quantity or 1)))
+    for grade in range(current_grade + 1, target_grade + 1):
         for symbol, qty in recipe.get(grade, {}).items():
-            need[symbol] = need.get(symbol, 0) + qty * rolls.get(grade, 3)
+            need[symbol] = need.get(symbol, 0) + qty * rolls.get(grade, grade) * quantity
     return need
 
 
@@ -286,8 +391,9 @@ def _best_trade(target: dict, deficit: int, inventory: dict, reserved: dict):
     return best
 
 
-def plan(blueprint: str, target_grade: int, inventory: dict) -> dict:
-    need = requirements(blueprint, target_grade)
+def plan(blueprint: str, target_grade: int, inventory: dict,
+         current_grade: int = 0, quantity: int = 1) -> dict:
+    need = requirements(blueprint, target_grade, current_grade=current_grade, quantity=quantity)
     reserved = dict(need)
     rows = []
     for symbol, qty in sorted(need.items(), key=lambda item: -material_info(item[0])["grade"]):
@@ -298,7 +404,8 @@ def plan(blueprint: str, target_grade: int, inventory: dict) -> dict:
         if deficit:
             row["trade"] = _best_trade(info, deficit, inventory, reserved)
         rows.append(row)
-    return {"blueprint": blueprint, "grade": int(target_grade), "materials": rows,
+    return {"blueprint": blueprint, "grade": int(target_grade),
+            "current_grade": int(current_grade or 0), "quantity": int(quantity or 1), "materials": rows,
             "craftable": all(row["deficit"] == 0 for row in rows)}
 
 
@@ -307,7 +414,10 @@ def pinned_plans(state: dict) -> list[dict]:
     plans = []
     for pin in state.get("pinned_blueprints") or []:
         try:
-            plans.append(plan(pin["name"], pin.get("grade", 5), inventory))
+            plans.append(plan(
+                pin["name"], pin.get("target_grade", pin.get("grade", 5)), inventory,
+                current_grade=pin.get("current_grade", 0), quantity=pin.get("quantity", 1),
+            ))
         except (KeyError, TypeError, ValueError):
             continue
     return plans
@@ -315,3 +425,35 @@ def pinned_plans(state: dict) -> list[dict]:
 
 def ready_blueprints(state: dict) -> set[str]:
     return {row["blueprint"] for row in pinned_plans(state) if row["craftable"]}
+
+
+def wishlist_plan(state: dict) -> dict:
+    """Return one combined, non-double-counted shopping list for every pin."""
+    inventory = inventory_counts(state)
+    needed = {}
+    valid_pins = 0
+    for pin in state.get("pinned_blueprints") or []:
+        try:
+            req = requirements(
+                pin["name"], pin.get("target_grade", pin.get("grade", 5)),
+                current_grade=pin.get("current_grade", 0), quantity=pin.get("quantity", 1),
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+        valid_pins += 1
+        for symbol, count in req.items():
+            needed[symbol] = needed.get(symbol, 0) + count
+    rows = []
+    for symbol, count in needed.items():
+        info = material_info(symbol)
+        have = int(inventory.get(symbol, 0))
+        deficit = max(0, count - have)
+        rows.append({**info, "need": count, "have": have, "deficit": deficit})
+    rows.sort(key=lambda row: (row["deficit"] == 0, -(row.get("grade") or 0), row["name"]))
+    return {
+        "pins": valid_pins,
+        "materials": rows,
+        "required_units": sum(row["need"] for row in rows),
+        "missing_units": sum(row["deficit"] for row in rows),
+        "complete": bool(valid_pins) and all(row["deficit"] == 0 for row in rows),
+    }

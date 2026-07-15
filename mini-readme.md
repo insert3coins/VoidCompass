@@ -1,5 +1,15 @@
 # VoidCompass // UPDATE LOG
 
+## v4.8.3 // Command Workspaces
+**Release Date:** 2026-Jul-16
+
+### Command Workspace Refresh
+*   Rebuilt **Profile** as a Commander Record for career progress, ranks, achievements, fleet/loadout exports, missions, Captain's Log highlights, integrations and per-commander backups, backed by persisted `Statistics` journal data.
+*   Rebuilt **Route** around separate live `NavRoute.json` and expedition-waypoint lanes, a real sortable waypoint table and one-click **Copy Next**. The manual 4x/6x Spansh Neutron Plotter remains explicitly no-autoplot.
+*   Reworked **Engineer** into an Engineering Workshop with searchable inventory, all known engineers, jumponium readiness, 16 verified high-use blueprints, grade/quantity goals, shared shopping requirements, material-trader suggestions and Route handoff.
+*   Added journal-backed **Squadron Carrier** identity, membership/rank awareness and protection against unrelated carrier events. Existing jump, expedition, fuel, finance, storage, services and HUD paths now support personal or squadron carriers without inventing unavailable data.
+*   Extended Carrier Discord notifications to identify personal versus squadron carriers and include squadron context. Profile, Route and Engineer now defer hidden-page work, while waypoint and engineering persistence use validated atomic writes with visible recovery behaviour.
+
 ## v4.8.2 // Operational Command Dashboard
 **Release Date:** 2026-Jul-16
 

@@ -35,6 +35,8 @@ DEFAULT_STATE = {
     "faction_watch_snapshots": {},
     "community_goals": {},
     "squadron": None,
+    "statistics": None,
+    "statistics_updated": None,
     "unsold_exploration_cr": 0,
     "unsold_bio_cr": 0,
     "unsold_scan_keys": [],

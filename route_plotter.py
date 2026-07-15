@@ -30,7 +30,10 @@ class SpanshRouteError(Exception):
 
 
 class RoutePlotter(ThemedWindowMixin):
-    def __init__(self, root, edsm_handler, current_coords=None, current_sys="Unknown", config=None, manager=None, on_change_callback=None, event_callback=None, embedded=False):
+    def __init__(self, root, edsm_handler, current_coords=None, current_sys="Unknown", config=None,
+                 manager=None, on_change_callback=None, event_callback=None, embedded=False,
+                 navigation_state_callback=None, copy_waypoint_callback=None,
+                 is_active_callback=None):
         self.root = root
         self.edsm = edsm_handler
         self.manager = manager if manager else WaypointManager()
@@ -39,12 +42,16 @@ class RoutePlotter(ThemedWindowMixin):
         self.config = config if config is not None else {}
         self.on_change_callback = on_change_callback
         self.event_callback = event_callback
+        self.navigation_state_callback = navigation_state_callback
+        self.copy_waypoint_callback = copy_waypoint_callback
+        self.is_active_callback = is_active_callback
         self.route_refresh_running = False
         self.neutron_route_running = False
         self.neutron_waypoints = []
         self._route_refresh_state = None
         self.duplicate_mode = self.config.get("route_duplicate_mode", "skip")
         self.pending_import_jobs = {}
+        self._refresh_pending = False
 
         self.embedded = embedded
         self.win = window_surface(root, embedded=embedded)
@@ -78,130 +85,325 @@ class RoutePlotter(ThemedWindowMixin):
         style.configure("Route.TNotebook", background=COLOR_BG, borderwidth=0)
         style.configure("Route.TNotebook.Tab", background=COLOR_PANEL, foreground=COLOR_TEXT, padding=(14, 6), font=("Courier", 9, "bold"))
         style.map("Route.TNotebook.Tab", background=[("selected", "#111111")], foreground=[("selected", COLOR_ACCENT)])
+        style.configure("Route.Treeview", background="#050505", foreground=COLOR_TEXT, fieldbackground="#050505", rowheight=25, borderwidth=0, font=("Courier", 9))
+        style.configure("Route.Treeview.Heading", background=COLOR_PANEL, foreground=COLOR_ORANGE, relief="flat", font=("Courier", 8, "bold"))
+        style.map("Route.Treeview", background=[("selected", COLOR_ACCENT)], foreground=[("selected", "black")])
 
         self.tabs = ttk.Notebook(wrapper, style="Route.TNotebook")
         self.tabs.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+        overview_tab = tk.Frame(self.tabs, bg=COLOR_BG)
         route_tab = tk.Frame(self.tabs, bg=COLOR_BG)
         plotter_tab = tk.Frame(self.tabs, bg=COLOR_BG)
+        self.tabs.add(overview_tab, text="Route Overview")
         self.tabs.add(route_tab, text="Waypoints")
-        self.tabs.add(plotter_tab, text="System Plotter")
+        self.tabs.add(plotter_tab, text="Neutron Plotter")
 
+        self._build_route_overview_tab(overview_tab)
         self._build_waypoint_tab(route_tab)
         self._build_system_plotter_tab(plotter_tab)
+        self.tabs.bind("<<NotebookTabChanged>>", lambda _e: self._refresh_route_overview())
+
+    def _build_route_overview_tab(self, wrapper):
+        summary = tk.Frame(wrapper, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
+        summary.pack(fill=tk.X, pady=(0, 8))
+        self.overview_metrics = {}
+        for idx, label in enumerate(("GAME ROUTE", "EXPEDITION", "NEXT STOP", "REMAINING")):
+            card = tk.Frame(summary, bg=COLOR_PANEL)
+            card.grid(row=0, column=idx, sticky="nsew", padx=10, pady=8)
+            summary.grid_columnconfigure(idx, weight=1, uniform="route_overview_metrics")
+            tk.Label(card, text=label, font=("Courier", 8, "bold"), fg="#777", bg=COLOR_PANEL, anchor="w").pack(fill=tk.X)
+            value = tk.Label(card, text="-", font=("Courier", 10, "bold"), fg=COLOR_ACCENT if idx < 2 else COLOR_TEXT, bg=COLOR_PANEL, anchor="w")
+            value.pack(fill=tk.X, pady=(2, 0))
+            self.overview_metrics[label] = value
+
+        lanes = tk.Frame(wrapper, bg=COLOR_BG)
+        lanes.pack(fill=tk.BOTH, expand=True)
+        lanes.grid_columnconfigure(0, weight=1, uniform="route_lanes")
+        lanes.grid_columnconfigure(1, weight=1, uniform="route_lanes")
+        lanes.grid_rowconfigure(0, weight=1)
+
+        game = tk.Frame(lanes, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
+        game.grid(row=0, column=0, sticky="nsew", padx=(0, 4))
+        tk.Label(game, text="LIVE ELITE ROUTE", font=("Courier", 10, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL, anchor="w").pack(fill=tk.X, padx=10, pady=(9, 2))
+        self.game_route_detail = tk.Label(game, text="NavRoute.json has no active route", font=("Courier", 8), fg="#999", bg=COLOR_PANEL, anchor="w")
+        self.game_route_detail.pack(fill=tk.X, padx=10, pady=(0, 6))
+        game_list_frame = tk.Frame(game, bg=COLOR_PANEL)
+        game_list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+        self.game_route_list = tk.Listbox(game_list_frame, bg="#050505", fg=COLOR_TEXT, font=("Courier", 9), relief=tk.FLAT, highlightthickness=1, highlightbackground="#333", selectbackground=COLOR_ACCENT, selectforeground="black", activestyle="none")
+        self.game_route_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        game_sb = scrollbar(game_list_frame, orient=tk.VERTICAL, command=self.game_route_list.yview)
+        game_sb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.game_route_list.config(yscrollcommand=game_sb.set)
+
+        expedition = tk.Frame(lanes, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
+        expedition.grid(row=0, column=1, sticky="nsew", padx=(4, 0))
+        tk.Label(expedition, text="EXPEDITION WAYPOINTS", font=("Courier", 10, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL, anchor="w").pack(fill=tk.X, padx=10, pady=(9, 2))
+        self.expedition_detail = tk.Label(expedition, text="No saved waypoints", font=("Courier", 8), fg="#999", bg=COLOR_PANEL, anchor="w")
+        self.expedition_detail.pack(fill=tk.X, padx=10, pady=(0, 6))
+        expedition_list_frame = tk.Frame(expedition, bg=COLOR_PANEL)
+        expedition_list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+        self.expedition_route_list = tk.Listbox(expedition_list_frame, bg="#050505", fg=COLOR_TEXT, font=("Courier", 9), relief=tk.FLAT, highlightthickness=1, highlightbackground="#333", selectbackground=COLOR_ACCENT, selectforeground="black", activestyle="none")
+        self.expedition_route_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        expedition_sb = scrollbar(expedition_list_frame, orient=tk.VERTICAL, command=self.expedition_route_list.yview)
+        expedition_sb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.expedition_route_list.config(yscrollcommand=expedition_sb.set)
+
+        actions = tk.Frame(wrapper, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
+        actions.pack(fill=tk.X, pady=(8, 0))
+        button(actions, "COPY NEXT", self.copy_next_destination, accent=True).pack(side=tk.LEFT, padx=8, pady=8)
+        button(actions, "MANAGE WAYPOINTS", lambda: self.tabs.select(1)).pack(side=tk.LEFT, padx=(0, 8), pady=8)
+        button(actions, "PLOT NEUTRON ROUTE", lambda: self.tabs.select(2)).pack(side=tk.LEFT, padx=(0, 8), pady=8)
+        self.overview_source_lbl = tk.Label(actions, text="Game navigation and saved waypoints remain separate", font=("Courier", 8), fg="#888", bg=COLOR_PANEL)
+        self.overview_source_lbl.pack(side=tk.RIGHT, padx=10)
+
+    def _navigation_state(self):
+        if callable(self.navigation_state_callback):
+            try:
+                state = self.navigation_state_callback()
+                if isinstance(state, dict):
+                    return state
+            except Exception:
+                pass
+        return {"current_system": self.current_sys, "route": [], "entries": [], "destination": None}
+
+    def _route_overview_values(self):
+        state = self._navigation_state()
+        current = state.get("current_system") or self.current_sys
+        route = list(state.get("route") or [])
+        entries = list(state.get("entries") or [])
+        current_index = next(
+            (index for index, name in enumerate(route)
+             if str(name).casefold() == str(current).casefold()),
+            -1,
+        )
+        if current_index >= 0:
+            game_pending = route[current_index + 1:]
+        else:
+            game_pending = route
+        pending_waypoints = [row for row in self.manager.waypoints if not row.get("visited", False)]
+        remaining_distance = 0.0
+        previous = self.current_coords
+        for row in pending_waypoints:
+            coords = row.get("coords")
+            if coords and previous:
+                try:
+                    remaining_distance += self.manager.get_distance(previous, coords)
+                except Exception:
+                    pass
+            if coords:
+                previous = coords
+        next_game = game_pending[0] if game_pending else None
+        next_waypoint = pending_waypoints[0].get("name") if pending_waypoints else None
+        return {
+            "state": state, "current": current, "route": route, "entries": entries,
+            "game_pending": game_pending, "pending_waypoints": pending_waypoints,
+            "remaining_distance": remaining_distance,
+            "next_game": next_game, "next_waypoint": next_waypoint,
+            "next": next_game or next_waypoint,
+            "source": "GAME ROUTE" if next_game else ("WAYPOINT" if next_waypoint else "NONE"),
+        }
+
+    def _refresh_route_overview(self):
+        if not hasattr(self, "game_route_list"):
+            return
+        values = self._route_overview_values()
+        route = values["route"]
+        game_pending = values["game_pending"]
+        waypoints = self.manager.waypoints
+        pending = values["pending_waypoints"]
+        visited = len(waypoints) - len(pending)
+        self.overview_metrics["GAME ROUTE"].config(text=f"{len(game_pending)} JUMPS" if route else "NO ROUTE")
+        self.overview_metrics["EXPEDITION"].config(text=f"{visited}/{len(waypoints)} COMPLETE" if waypoints else "NO WAYPOINTS")
+        self.overview_metrics["NEXT STOP"].config(text=values["next"] or "-")
+        remaining_bits = []
+        if game_pending:
+            remaining_bits.append(f"{len(game_pending)} jumps")
+        if pending:
+            remaining_bits.append(f"{values['remaining_distance']:,.0f} ly")
+        self.overview_metrics["REMAINING"].config(text=" / ".join(remaining_bits) or "-")
+        self.overview_source_lbl.config(text=f"COPY NEXT SOURCE: {values['source']}")
+
+        self.game_route_list.delete(0, tk.END)
+        if route:
+            current = values["current"]
+            entry_by_name = {
+                str(row.get("StarSystem") or "").casefold(): row
+                for row in values["entries"] if isinstance(row, dict)
+            }
+            for index, name in enumerate(route):
+                if str(name).casefold() == str(current).casefold():
+                    marker = "CURRENT"
+                elif name == values["next_game"]:
+                    marker = "NEXT"
+                else:
+                    marker = f"{index + 1:02d}"
+                star_class = entry_by_name.get(str(name).casefold(), {}).get("StarClass")
+                suffix = f"  [{star_class}]" if star_class else ""
+                self.game_route_list.insert(tk.END, f"{marker:<8} {name}{suffix}")
+                row_index = self.game_route_list.size() - 1
+                if marker == "CURRENT":
+                    self.game_route_list.itemconfig(row_index, {"fg": COLOR_ORANGE})
+                elif marker == "NEXT":
+                    self.game_route_list.itemconfig(row_index, {"fg": COLOR_ACCENT})
+            destination = values["state"].get("destination") or route[-1]
+            self.game_route_detail.config(text=f"{len(game_pending)} jumps remaining · destination {destination}")
+        else:
+            self.game_route_list.insert(tk.END, "NO ACTIVE GAME ROUTE")
+            self.game_route_list.itemconfig(0, {"fg": "#777"})
+            self.game_route_detail.config(text="NavRoute.json has no active route")
+
+        self.expedition_route_list.delete(0, tk.END)
+        if waypoints:
+            next_name = values["next_waypoint"]
+            for index, row in enumerate(waypoints):
+                name = row.get("name") or "Unknown"
+                if row.get("visited", False):
+                    marker = "DONE"
+                elif name == next_name:
+                    marker = "NEXT"
+                else:
+                    marker = f"{index + 1:02d}"
+                note_value = str(row.get("note") or "")
+                note = f" · {note_value[:60]}" if note_value else ""
+                self.expedition_route_list.insert(tk.END, f"{marker:<6} {name}{note}")
+                row_index = self.expedition_route_list.size() - 1
+                if marker == "DONE":
+                    self.expedition_route_list.itemconfig(row_index, {"fg": "#666"})
+                elif marker == "NEXT":
+                    self.expedition_route_list.itemconfig(row_index, {"fg": COLOR_ACCENT})
+            self.expedition_detail.config(text=f"{len(pending)} pending · {visited} complete · {values['remaining_distance']:,.1f} ly remaining")
+        else:
+            self.expedition_route_list.insert(tk.END, "NO SAVED WAYPOINTS")
+            self.expedition_route_list.itemconfig(0, {"fg": "#777"})
+            self.expedition_detail.config(text="No saved waypoint expedition")
+
+    def copy_next_destination(self):
+        values = self._route_overview_values()
+        destination = values.get("next")
+        if not destination:
+            messagebox.showinfo("Route Overview", "No pending game-route hop or waypoint to copy.", parent=self.win)
+            return
+        label = "NEXT GAME HOP" if values.get("next_game") else "NEXT WAYPOINT"
+        if callable(self.copy_waypoint_callback):
+            self.copy_waypoint_callback(destination, label)
+        else:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(destination)
+            self._emit_event("ROUTE", f"Copied {label}: {destination}", "INFO", copy_text=destination)
+
+    def on_shown(self):
+        if self._refresh_pending:
+            self._refresh_pending = False
+            self.refresh_list()
+        else:
+            self._refresh_route_overview()
+
+    def update_navigation_state(self):
+        if callable(self.is_active_callback) and not self.is_active_callback():
+            self._refresh_pending = True
+            return
+        self._refresh_route_overview()
 
     def _build_waypoint_tab(self, wrapper):
         input_panel = tk.Frame(wrapper, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
         input_panel.pack(fill=tk.X)
-        tk.Label(input_panel, text="SYSTEM:", font=("Courier", 9), fg="#888", bg=COLOR_PANEL).grid(row=0, column=0, sticky="w", padx=(10, 6), pady=8)
+        tk.Label(input_panel, text="SYSTEM", font=("Courier", 8, "bold"), fg="#888", bg=COLOR_PANEL).grid(row=0, column=0, sticky="w", padx=(10, 6), pady=(7, 2))
         self.entry = tk.Entry(input_panel, bg="#111", fg=COLOR_TEXT, font=("Courier", 10), insertbackground=COLOR_ACCENT, relief=tk.FLAT)
-        self.entry.grid(row=0, column=1, sticky="ew", padx=(0, 8), pady=8, ipady=3)
-        self.entry.bind("<Return>", lambda e: self.add_system())
-
-        tk.Label(input_panel, text="NOTE:", font=("Courier", 9), fg="#888", bg=COLOR_PANEL).grid(row=0, column=2, sticky="w", padx=(6, 6), pady=8)
+        self.entry.grid(row=0, column=1, sticky="ew", padx=(0, 8), pady=(7, 2), ipady=3)
+        self.entry.bind("<Return>", lambda _e: self.add_system())
+        tk.Label(input_panel, text="NOTE", font=("Courier", 8, "bold"), fg="#888", bg=COLOR_PANEL).grid(row=0, column=2, sticky="w", padx=(6, 6), pady=(7, 2))
         self.note_entry = tk.Entry(input_panel, bg="#111", fg=COLOR_TEXT, font=("Courier", 10), insertbackground=COLOR_ACCENT, relief=tk.FLAT)
-        self.note_entry.grid(row=0, column=3, sticky="ew", padx=(0, 8), pady=8, ipady=3)
-
-        button(input_panel, "ADD", self.add_system, accent=True).grid(row=0, column=4, padx=(0, 6))
-        button(input_panel, "IMPORT", self.open_import_dialog).grid(row=0, column=5, padx=(0, 10))
-        button(input_panel, "IMPORT SPANSH CSV", self.import_spansh_csv).grid(row=0, column=6, padx=(0, 10))
-        self.dup_btn = button(input_panel, "", self.cycle_duplicate_mode, muted=True)
-        self.dup_btn.grid(row=0, column=7, padx=(0, 10))
+        self.note_entry.grid(row=0, column=3, sticky="ew", padx=(0, 8), pady=(7, 2), ipady=3)
+        button(input_panel, "ADD WAYPOINT", self.add_system, accent=True).grid(row=0, column=4, padx=(0, 10), pady=(7, 2))
         input_panel.grid_columnconfigure(1, weight=2)
         input_panel.grid_columnconfigure(3, weight=1)
+
+        import_row = tk.Frame(input_panel, bg=COLOR_PANEL)
+        import_row.grid(row=1, column=0, columnspan=5, sticky="ew", padx=8, pady=(3, 7))
+        button(import_row, "PASTE LIST", self.open_import_dialog).pack(side=tk.LEFT)
+        button(import_row, "IMPORT SPANSH CSV", self.import_spansh_csv).pack(side=tk.LEFT, padx=(6, 0))
+        self.dup_btn = button(import_row, "", self.cycle_duplicate_mode, muted=True)
+        self.dup_btn.pack(side=tk.LEFT, padx=(6, 0))
         self._update_duplicate_mode_btn()
+        tk.Label(import_row, text="Imports resolve coordinates through EDSM; plotting remains manual.", font=("Courier", 8), fg="#777", bg=COLOR_PANEL).pack(side=tk.RIGHT, padx=4)
 
-        content = tk.Frame(wrapper, bg=COLOR_BG)
-        content.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
-        content.grid_columnconfigure(0, weight=3)
-        content.grid_columnconfigure(1, weight=1)
-        content.grid_rowconfigure(0, weight=1)
+        list_wrap = tk.Frame(wrapper, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
+        list_wrap.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+        tree_frame = tk.Frame(list_wrap, bg=COLOR_PANEL)
+        tree_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+        columns = ("index", "state", "system", "segment", "cumulative", "note")
+        self.waypoint_tree = ttk.Treeview(tree_frame, columns=columns, show="headings", selectmode="extended", style="Route.Treeview", height=5)
+        headings = {
+            "index": ("#", 42, False), "state": ("STATUS", 72, False),
+            "system": ("SYSTEM", 220, True), "segment": ("SEGMENT", 90, False),
+            "cumulative": ("CUMULATIVE", 105, False), "note": ("NOTE", 300, True),
+        }
+        for key, (title, width, stretch) in headings.items():
+            self.waypoint_tree.heading(key, text=title, anchor="w")
+            self.waypoint_tree.column(key, width=width, minwidth=40, stretch=stretch, anchor="w")
+        self.waypoint_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tree_sb = scrollbar(tree_frame, orient=tk.VERTICAL, command=self.waypoint_tree.yview)
+        tree_sb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.waypoint_tree.configure(yscrollcommand=tree_sb.set)
+        self.waypoint_tree.tag_configure("current", foreground=COLOR_ORANGE)
+        self.waypoint_tree.tag_configure("visited", foreground="#666")
+        self.waypoint_tree.bind("<<TreeviewSelect>>", lambda _e: self._update_selection_panel())
+        self.waypoint_tree.bind("<Double-Button-1>", lambda _e: self.edit_selected())
+        self.waypoint_tree.bind("<Delete>", lambda _e: self.remove_selected_batch())
+        self.waypoint_tree.bind("<Control-c>", lambda _e: self.copy_selected_batch())
 
-        list_wrap = tk.Frame(content, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
-        list_wrap.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        tk.Label(list_wrap, text=f"{'ID':<3}{'S':<2}{'SYSTEM':<30}{'DIST':<12}NOTE", font=("Courier", 9, "bold"), fg="#777", bg=COLOR_PANEL, anchor="w").pack(fill=tk.X, padx=8, pady=(8, 4))
+        selection = tk.Frame(wrapper, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
+        selection.pack(fill=tk.X, pady=(8, 0))
+        for column in range(3):
+            selection.grid_columnconfigure(column, weight=1, uniform="route_selection")
+        self.sel_name_lbl = tk.Label(selection, text="Name: -", font=("Courier", 9, "bold"), fg=COLOR_TEXT, bg=COLOR_PANEL, anchor="w")
+        self.sel_name_lbl.grid(row=0, column=0, sticky="ew", padx=10, pady=(7, 2))
+        self.sel_dist_lbl = tk.Label(selection, text="Distance: -", font=("Courier", 8), fg="#aaa", bg=COLOR_PANEL, anchor="w")
+        self.sel_dist_lbl.grid(row=0, column=1, sticky="ew", padx=10, pady=(7, 2))
+        self.sel_state_lbl = tk.Label(selection, text="State: -", font=("Courier", 8), fg="#aaa", bg=COLOR_PANEL, anchor="w")
+        self.sel_state_lbl.grid(row=0, column=2, sticky="ew", padx=10, pady=(7, 2))
+        self.sel_note_lbl = tk.Label(selection, text="Note: -", font=("Courier", 8), fg="#aaa", bg=COLOR_PANEL, anchor="w")
+        self.sel_note_lbl.grid(row=1, column=0, sticky="ew", padx=10, pady=(2, 7))
+        self.sel_seg_lbl = tk.Label(selection, text="Segment: -", font=("Courier", 8), fg="#aaa", bg=COLOR_PANEL, anchor="w")
+        self.sel_seg_lbl.grid(row=1, column=1, sticky="ew", padx=10, pady=(2, 7))
+        self.sel_cum_lbl = tk.Label(selection, text="Cumulative: -", font=("Courier", 8), fg="#aaa", bg=COLOR_PANEL, anchor="w")
+        self.sel_cum_lbl.grid(row=1, column=2, sticky="ew", padx=10, pady=(2, 7))
 
-        list_frame = tk.Frame(list_wrap, bg=COLOR_PANEL)
-        list_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
-        self.listbox = tk.Listbox(
-            list_frame, bg="#050505", fg=COLOR_TEXT, font=("Courier", 10), relief=tk.FLAT,
-            highlightthickness=1, highlightbackground="#333", selectbackground=COLOR_ACCENT, selectforeground="black",
-            activestyle="none", selectmode=tk.EXTENDED
-        )
-        self.listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        sb = scrollbar(list_frame, orient=tk.VERTICAL, command=self.listbox.yview)
-        sb.pack(side=tk.RIGHT, fill=tk.Y)
-        self.listbox.config(yscrollcommand=sb.set)
-        self.listbox.bind("<<ListboxSelect>>", lambda e: self._update_selection_panel())
-        self.listbox.bind("<Double-Button-1>", lambda e: self.edit_selected())
-        self.listbox.bind("<Delete>", lambda e: self.remove())
-        self.listbox.bind("<Control-c>", lambda e: self.copy_selected())
+        actions = tk.Frame(wrapper, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
+        actions.pack(fill=tk.X, pady=(8, 0))
+        selection_actions = tk.Frame(actions, bg=COLOR_PANEL)
+        selection_actions.pack(fill=tk.X, padx=8, pady=(7, 3))
+        for text, command, accent, danger in (
+            ("COPY", self.copy_selected, True, False), ("EDIT", self.edit_selected, False, False),
+            ("TOGGLE DONE", self.toggle_visited, False, False), ("MARK DONE", self.mark_selected_done, False, False),
+            ("MARK TODO", self.mark_selected_todo, False, False), ("DELETE", self.remove_selected_batch, False, True),
+        ):
+            button(selection_actions, text, command, accent=accent, danger=danger, width=13).pack(side=tk.LEFT, padx=(0, 6))
 
-        side = tk.Frame(content, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
-        side.grid(row=0, column=1, sticky="nsew")
-        tk.Label(side, text="SELECTION", font=("Courier", 10, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(8, 4))
-        self.sel_name_lbl = tk.Label(side, text="Name: -", font=("Courier", 9, "bold"), fg=COLOR_TEXT, bg=COLOR_PANEL, anchor="w")
-        self.sel_name_lbl.pack(fill=tk.X, padx=10, pady=2)
-        self.sel_note_lbl = tk.Label(side, text="Note: -", font=("Courier", 8), fg="#aaa", bg=COLOR_PANEL, anchor="w", justify=tk.LEFT, wraplength=210)
-        self.sel_note_lbl.pack(fill=tk.X, padx=10, pady=2)
-        self.sel_dist_lbl = tk.Label(side, text="Distance: -", font=("Courier", 8), fg="#aaa", bg=COLOR_PANEL, anchor="w")
-        self.sel_dist_lbl.pack(fill=tk.X, padx=10, pady=2)
-        self.sel_seg_lbl = tk.Label(side, text="Segment: -", font=("Courier", 8), fg="#aaa", bg=COLOR_PANEL, anchor="w")
-        self.sel_seg_lbl.pack(fill=tk.X, padx=10, pady=2)
-        self.sel_cum_lbl = tk.Label(side, text="Cumulative: -", font=("Courier", 8), fg="#aaa", bg=COLOR_PANEL, anchor="w")
-        self.sel_cum_lbl.pack(fill=tk.X, padx=10, pady=2)
-        self.sel_state_lbl = tk.Label(side, text="State: -", font=("Courier", 8), fg="#888", bg=COLOR_PANEL, anchor="w")
-        self.sel_state_lbl.pack(fill=tk.X, padx=10, pady=(2, 6))
-
-        tk.Label(side, text="ROUTE HEALTH", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(8, 2))
-        self.health_lbl = tk.Label(side, text="Pending: 0 | Visited: 0 | Missing Coords: 0 | Duplicates: 0", font=("Courier", 8), fg="#aaa", bg=COLOR_PANEL, justify=tk.LEFT, wraplength=230, anchor="w")
-        self.health_lbl.pack(fill=tk.X, padx=10, pady=(0, 8))
-
-        def mk_btn(parent, text, cmd, bg=COLOR_PANEL, fg=COLOR_TEXT):
-            return button(parent, text, cmd, accent=bg == COLOR_ACCENT, danger=fg == "red", width=22)
-
-        def section(title):
-            tk.Label(side, text=title, font=("Courier", 8, "bold"), fg="#777", bg=COLOR_PANEL).pack(anchor="w", padx=10, pady=(8, 2))
-
-        section("SELECTION ACTIONS")
-        mk_btn(side, "COPY SELECTED", self.copy_selected, COLOR_ACCENT, "black").pack(padx=10, pady=2)
-        mk_btn(side, "EDIT SELECTED", self.edit_selected).pack(padx=10, pady=2)
-        mk_btn(side, "TOGGLE DONE", self.toggle_visited).pack(padx=10, pady=2)
-        mk_btn(side, "DELETE SELECTED", self.remove, "#331111", "red").pack(padx=10, pady=2)
-
-        section("BATCH ACTIONS")
-        mk_btn(side, "COPY SELECTED (BATCH)", self.copy_selected_batch).pack(padx=10, pady=2)
-        mk_btn(side, "MARK SELECTED DONE", self.mark_selected_done).pack(padx=10, pady=2)
-        mk_btn(side, "MARK SELECTED TODO", self.mark_selected_todo).pack(padx=10, pady=2)
-        mk_btn(side, "DELETE SELECTED (BATCH)", self.remove_selected_batch, "#331111", "red").pack(padx=10, pady=2)
-
-        section("ROUTE STRUCTURE")
-        mk_btn(side, "MOVE UP", self.move_up).pack(padx=10, pady=2)
-        mk_btn(side, "MOVE DOWN", self.move_down).pack(padx=10, pady=2)
-        self.refresh_route_btn = mk_btn(side, "REFRESH FROM EDSM", self.refresh_route_from_edsm, COLOR_PANEL, COLOR_ACCENT)
-        self.refresh_route_btn.pack(padx=10, pady=2)
-        mk_btn(side, "CLEAR ALL", self.clear_all, "#331111", "red").pack(padx=10, pady=2)
-
-        section("DATA I/O")
-        mk_btn(side, "EXPORT ROUTE CSV", self.export_route_csv, COLOR_PANEL, COLOR_ACCENT).pack(padx=10, pady=(2, 6))
+        route_actions = tk.Frame(actions, bg=COLOR_PANEL)
+        route_actions.pack(fill=tk.X, padx=8, pady=(3, 7))
+        button(route_actions, "MOVE UP", self.move_up, width=13).pack(side=tk.LEFT, padx=(0, 6))
+        button(route_actions, "MOVE DOWN", self.move_down, width=13).pack(side=tk.LEFT, padx=(0, 6))
+        self.refresh_route_btn = button(route_actions, "REFRESH EDSM", self.refresh_route_from_edsm, width=15)
+        self.refresh_route_btn.pack(side=tk.LEFT, padx=(0, 6))
+        button(route_actions, "EXPORT CSV", self.export_route_csv, width=13).pack(side=tk.LEFT, padx=(0, 6))
+        button(route_actions, "CLEAR ROUTE", self.clear_all, danger=True, width=13).pack(side=tk.LEFT, padx=(0, 6))
+        self.health_lbl = tk.Label(route_actions, text="", font=("Courier", 8), fg="#999", bg=COLOR_PANEL, anchor="e")
+        self.health_lbl.pack(side=tk.RIGHT, padx=4)
 
         footer = tk.Frame(wrapper, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
         footer.pack(fill=tk.X, pady=(8, 0))
-        self.stats_lbl = tk.Label(footer, text="TOTAL PLOTTED DISTANCE: 0.0 LY", font=("Courier", 10, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL)
-        self.stats_lbl.pack(side=tk.LEFT, padx=10, pady=8)
+        self.stats_lbl = tk.Label(footer, text="TOTAL PLOTTED DISTANCE: 0.0 LY", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL)
+        self.stats_lbl.pack(side=tk.LEFT, padx=10, pady=7)
         self.ac_var = tk.BooleanVar(value=self.config.get("auto_copy_waypoint", False))
-        cb = tk.Checkbutton(
-            footer, text="AUTO-COPY NEXT WAYPOINT", variable=self.ac_var, command=self.toggle_auto_copy,
-            bg=COLOR_PANEL, fg=COLOR_TEXT, selectcolor=COLOR_PANEL, activebackground=COLOR_PANEL, activeforeground=COLOR_TEXT,
-            font=("Courier", 8)
-        )
-        cb.pack(side=tk.RIGHT, padx=10)
+        tk.Checkbutton(footer, text="AUTO-COPY NEXT WAYPOINT", variable=self.ac_var, command=self.toggle_auto_copy,
+            bg=COLOR_PANEL, fg=COLOR_TEXT, selectcolor=COLOR_PANEL, activebackground=COLOR_PANEL,
+            activeforeground=COLOR_TEXT, font=("Courier", 8)).pack(side=tk.RIGHT, padx=10)
         self.auto_note_var = tk.BooleanVar(value=self.config.get("route_auto_note_from_edsm", True))
-        auto_note_cb = tk.Checkbutton(
-            footer, text="AUTO NOTE FROM EDSM", variable=self.auto_note_var, command=self.toggle_auto_note,
-            bg=COLOR_PANEL, fg=COLOR_TEXT, selectcolor=COLOR_PANEL, activebackground=COLOR_PANEL, activeforeground=COLOR_TEXT,
-            font=("Courier", 8)
-        )
-        auto_note_cb.pack(side=tk.RIGHT, padx=(4, 10))
+        tk.Checkbutton(footer, text="AUTO NOTE FROM EDSM", variable=self.auto_note_var, command=self.toggle_auto_note,
+            bg=COLOR_PANEL, fg=COLOR_TEXT, selectcolor=COLOR_PANEL, activebackground=COLOR_PANEL,
+            activeforeground=COLOR_TEXT, font=("Courier", 8)).pack(side=tk.RIGHT, padx=(4, 10))
+
 
     def _entry_box(self, parent, label, width):
         box = tk.Frame(parent, bg=parent.cget("bg"))
@@ -216,29 +418,34 @@ class RoutePlotter(ThemedWindowMixin):
         controls.pack(fill=tk.X)
 
         saved = self.config.get("system_plotter_form") or {}
-        self.neutron_from_entry = self._entry_box(controls, "FROM", 22)
+        form_row = tk.Frame(controls, bg=COLOR_PANEL)
+        form_row.pack(fill=tk.X, padx=8, pady=(7, 1))
+        self.neutron_from_entry = self._entry_box(form_row, "FROM", 22)
         self.neutron_from_entry.insert(0, saved.get("from") or (self.current_sys if self.current_sys != "Unknown" else ""))
         self.neutron_from_entry.bind("<Return>", lambda _e: self.find_neutron_route())
-        self.neutron_to_entry = self._entry_box(controls, "DESTINATION", 24)
+        self.neutron_to_entry = self._entry_box(form_row, "DESTINATION", 24)
         self.neutron_to_entry.insert(0, saved.get("to") or "")
         self.neutron_to_entry.bind("<Return>", lambda _e: self.find_neutron_route())
-        self.neutron_range_entry = self._entry_box(controls, "JUMP LY", 8)
+        self.neutron_range_entry = self._entry_box(form_row, "JUMP LY", 8)
         self.neutron_range_entry.insert(0, str(saved.get("range") or 30))
-        self.neutron_eff_entry = self._entry_box(controls, "EFF %", 7)
+        self.neutron_eff_entry = self._entry_box(form_row, "EFF %", 7)
         self.neutron_eff_entry.insert(0, str(saved.get("efficiency") or 60))
-        mode_box = tk.Frame(controls, bg=controls.cget("bg"))
+        mode_box = tk.Frame(form_row, bg=form_row.cget("bg"))
         mode_box.pack(side=tk.LEFT, padx=(0, 8), pady=(0, 6))
-        tk.Label(mode_box, text="SUPERCHARGE", font=("Courier", 8, "bold"), fg="#888", bg=controls.cget("bg")).pack(anchor="w")
+        tk.Label(mode_box, text="SUPERCHARGE", font=("Courier", 8, "bold"), fg="#888", bg=form_row.cget("bg")).pack(anchor="w")
         self.neutron_supercharge_var = tk.StringVar(value=self._supercharge_mode_from_saved(saved.get("supercharge_multiplier")))
         supercharge_menu = tk.OptionMenu(mode_box, self.neutron_supercharge_var, "Normal 4x", "Overcharge 6x")
         supercharge_menu.config(bg="#111", fg=COLOR_TEXT, activebackground=COLOR_PANEL, activeforeground=COLOR_ACCENT, relief=tk.FLAT, highlightthickness=0, font=("Courier", 9), width=14)
         supercharge_menu["menu"].config(bg="#111", fg=COLOR_TEXT, activebackground=COLOR_ACCENT, activeforeground="black", font=("Courier", 9))
         supercharge_menu.pack(anchor="w")
 
-        self.neutron_plot_btn = button(controls, "PLOT", self.find_neutron_route, accent=True)
-        self.neutron_plot_btn.pack(side=tk.LEFT, padx=(0, 6), pady=(12, 6))
-        button(controls, "IMPORT TO ROUTE", self.import_neutron_route).pack(side=tk.LEFT, padx=(0, 6), pady=(12, 6))
-        button(controls, "COPY LIST", self.copy_neutron_route).pack(side=tk.LEFT, padx=(0, 10), pady=(12, 6))
+        action_row = tk.Frame(controls, bg=COLOR_PANEL)
+        action_row.pack(fill=tk.X, padx=8, pady=(1, 7))
+        self.neutron_plot_btn = button(action_row, "PLOT", self.find_neutron_route, accent=True)
+        self.neutron_plot_btn.pack(side=tk.LEFT, padx=(0, 6))
+        button(action_row, "IMPORT TO ROUTE", self.import_neutron_route).pack(side=tk.LEFT, padx=(0, 6))
+        button(action_row, "COPY LIST", self.copy_neutron_route).pack(side=tk.LEFT, padx=(0, 10))
+        tk.Label(action_row, text="Manual Spansh neutron route · no automatic plotting", font=("Courier", 8), fg="#777", bg=COLOR_PANEL).pack(side=tk.RIGHT, padx=4)
 
         body = tk.Frame(wrapper, bg=COLOR_BG)
         body.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
@@ -295,17 +502,17 @@ class RoutePlotter(ThemedWindowMixin):
         from_system = self.neutron_from_entry.get().strip() or self.current_sys
         to_system = self.neutron_to_entry.get().strip()
         if not from_system or from_system == "Unknown":
-            messagebox.showwarning("System Plotter", "No starting system known yet.")
+            messagebox.showwarning("Neutron Plotter", "No starting system known yet.")
             return
         if not to_system:
-            messagebox.showwarning("System Plotter", "Enter a destination system.")
+            messagebox.showwarning("Neutron Plotter", "Enter a destination system.")
             return
         try:
             jump_range = float(self.neutron_range_entry.get().strip())
             efficiency = int(float(self.neutron_eff_entry.get().strip()))
             supercharge_multiplier = self._selected_supercharge_multiplier()
         except Exception:
-            messagebox.showwarning("System Plotter", "Jump range and efficiency must be numbers.")
+            messagebox.showwarning("Neutron Plotter", "Jump range and efficiency must be numbers.")
             return
 
         self._save_system_plotter_form()
@@ -356,7 +563,7 @@ class RoutePlotter(ThemedWindowMixin):
         self.neutron_status_lbl.config(text=f"Plot failed: {exc}")
         self.neutron_total_lbl.config(text="Route: failed")
         self._emit_event("ROUTE", f"Neutron plot failed: {exc}", "FAIL")
-        messagebox.showerror("System Plotter", f"Neutron route failed:\n{exc}")
+        messagebox.showerror("Neutron Plotter", f"Neutron route failed:\n{exc}")
 
     def import_neutron_route(self):
         if not self.neutron_waypoints:
@@ -371,7 +578,7 @@ class RoutePlotter(ThemedWindowMixin):
         if not records:
             messagebox.showwarning("Import Route", "The plotted route did not contain system names.")
             return
-        self.tabs.select(0)
+        self.tabs.select(1)
         self._start_import_job(records, enrich_notes=False)
         self._emit_event("ROUTE", f"Neutron route import queued: {len(records)} systems", "INFO")
 
@@ -480,14 +687,17 @@ class RoutePlotter(ThemedWindowMixin):
         return f"Spansh error ({resp.status_code}): {detail or resp.text[:200]}"
 
     def get_selected_index(self):
-        sel = self.listbox.curselection()
-        return sel[0] if sel else None
+        selected = self.get_selected_indices()
+        return selected[0] if selected else None
 
     def _run_on_ui(self, fn):
         self.root.after(0, fn)
 
     def get_selected_indices(self):
-        return list(self.listbox.curselection())
+        try:
+            return sorted(int(item) for item in self.waypoint_tree.selection())
+        except Exception:
+            return []
 
     def _update_duplicate_mode_btn(self):
         label = {"skip": "DUP: SKIP", "append": "DUP: APPEND NOTE", "keep": "DUP: KEEP BOTH"}.get(self.duplicate_mode, "DUP: SKIP")
@@ -498,6 +708,10 @@ class RoutePlotter(ThemedWindowMixin):
         idx = modes.index(self.duplicate_mode) if self.duplicate_mode in modes else 0
         self.duplicate_mode = modes[(idx + 1) % len(modes)]
         self.config["route_duplicate_mode"] = self.duplicate_mode
+        try:
+            save_config(self.config)
+        except Exception:
+            pass
         self._update_duplicate_mode_btn()
         self._emit_event("ROUTE", f"Duplicate mode: {self.duplicate_mode.upper()}", "INFO")
 
@@ -572,75 +786,80 @@ class RoutePlotter(ThemedWindowMixin):
             self._emit_event("ROUTE", f"Waypoint skipped (duplicate): {name}", "INFO", copy_text=name)
 
     def refresh_list(self, select_index=None, select_last=False):
-        previous = self.get_selected_index()
-        self.listbox.delete(0, tk.END)
+        if callable(self.is_active_callback) and not self.is_active_callback():
+            self._refresh_pending = True
+            return
+        previous = self.get_selected_indices()
+        self.waypoint_tree.delete(*self.waypoint_tree.get_children())
         total_dist = 0.0
         prev_coords = self.current_coords
         missing_coords = 0
-
         current_idx = self.manager.get_waypoint_index(self.current_sys)
-        for i, wp in enumerate(self.manager.waypoints):
-            name = wp["name"]
-            coords = wp.get("coords")
-            note = wp.get("note")
-            is_visited = wp.get("visited", False)
 
-            dist_str = "---"
+        for i, wp in enumerate(self.manager.waypoints):
+            name = wp.get("name") or "Unknown"
+            coords = wp.get("coords")
+            note = wp.get("note") or ""
+            is_visited = bool(wp.get("visited", False))
+            segment = None
             if coords and prev_coords:
-                d = self.manager.get_distance(prev_coords, coords)
-                total_dist += d
-                dist_str = f"{d:,.1f} LY"
+                try:
+                    segment = self.manager.get_distance(prev_coords, coords)
+                    total_dist += segment
+                except Exception:
+                    segment = None
                 prev_coords = coords
             elif coords:
                 prev_coords = coords
             else:
                 missing_coords += 1
 
-            marker = "|"
             if i == current_idx:
-                marker = ">"
+                state = "CURRENT"
+                tags = ("current",)
             elif is_visited:
-                marker = "x"
-
-            note_text = f" [{note}]" if note else ""
-            line = f"{i+1:02d} {marker:<2}{name:<30}{dist_str:<12}{note_text}"
-            self.listbox.insert(tk.END, line)
-
-            if i == current_idx:
-                self.listbox.itemconfig(i, {"fg": COLOR_ORANGE})
-            elif is_visited:
-                self.listbox.itemconfig(i, {"fg": "#555"})
-
-        self.stats_lbl.config(text=f"TOTAL PLOTTED DISTANCE: {total_dist:,.1f} LY")
-        self.header_current_lbl.config(text=f"CURRENT: {self.current_sys}")
+                state = "DONE"
+                tags = ("visited",)
+            else:
+                state = "PENDING"
+                tags = ()
+            self.waypoint_tree.insert(
+                "", tk.END, iid=str(i), tags=tags,
+                values=(
+                    i + 1, state, name,
+                    f"{segment:,.1f} LY" if segment is not None else "---",
+                    f"{total_dist:,.1f} LY" if coords else "---",
+                    note,
+                ),
+            )
 
         visited_count = sum(1 for wp in self.manager.waypoints if wp.get("visited", False))
         pending_count = len(self.manager.waypoints) - visited_count
-        seen = set()
-        dup_count = 0
-        for wp in self.manager.waypoints:
-            n = wp.get("name", "").lower()
-            if n in seen:
-                dup_count += 1
-            else:
-                seen.add(n)
-        self.health_lbl.config(
-            text=f"Pending: {pending_count} | Visited: {visited_count}\nMissing Coords: {missing_coords} | Duplicates: {dup_count}"
-        )
+        names = [str(wp.get("name") or "").casefold() for wp in self.manager.waypoints]
+        duplicate_count = len(names) - len(set(names))
+        self.stats_lbl.config(text=f"ROUTE DISTANCE: {total_dist:,.1f} LY  //  {len(self.manager.waypoints)} WAYPOINTS")
+        self.header_current_lbl.config(text=f"CURRENT: {self.current_sys}")
+        storage_error = getattr(self.manager, "last_error", None)
+        if storage_error:
+            self.health_lbl.config(text=f"WAYPOINT SAVE ERROR · {storage_error}", fg="#ff7777")
+        else:
+            self.health_lbl.config(text=f"{pending_count} pending · {visited_count} done · {missing_coords} missing · {duplicate_count} duplicates", fg="#999")
 
-        target = previous
+        targets = previous
         if select_last and self.manager.waypoints:
-            target = len(self.manager.waypoints) - 1
-        if select_index is not None:
-            target = select_index
-        if target is not None and 0 <= target < len(self.manager.waypoints):
-            self.listbox.selection_set(target)
-            self.listbox.see(target)
+            targets = [len(self.manager.waypoints) - 1]
+        elif select_index is not None:
+            targets = [select_index]
+        valid_targets = [str(index) for index in targets if 0 <= index < len(self.manager.waypoints)]
+        if valid_targets:
+            self.waypoint_tree.selection_set(valid_targets)
+            self.waypoint_tree.see(valid_targets[0])
 
         self._update_selection_panel()
-
+        self._refresh_route_overview()
         if self.on_change_callback:
             self.root.after(0, self.on_change_callback)
+
 
     def _update_selection_panel(self):
         selected = self.get_selected_indices()
@@ -712,6 +931,9 @@ class RoutePlotter(ThemedWindowMixin):
             if not from_value or from_value == "Unknown" or from_value == old_sys:
                 self.neutron_from_entry.delete(0, tk.END)
                 self.neutron_from_entry.insert(0, sys_name if sys_name != "Unknown" else "")
+        if callable(self.is_active_callback) and not self.is_active_callback():
+            self._refresh_pending = True
+            return
         self.refresh_list()
 
     def move_up(self):
@@ -807,7 +1029,7 @@ class RoutePlotter(ThemedWindowMixin):
             return
         self.root.clipboard_clear()
         self.root.clipboard_append(name)
-        self.root.update()
+        self._emit_event("ROUTE", f"Copied waypoint: {name}", "INFO", copy_text=name)
 
     def copy_selected_batch(self):
         idxs = self.get_selected_indices()
@@ -823,7 +1045,7 @@ class RoutePlotter(ThemedWindowMixin):
             return
         self.root.clipboard_clear()
         self.root.clipboard_append("\n".join(names))
-        self.root.update()
+        self._emit_event("ROUTE", f"Copied {len(names)} selected waypoints", "INFO", copy_text="\n".join(names))
 
     def remove(self):
         idx = self.get_selected_index()
@@ -839,9 +1061,7 @@ class RoutePlotter(ThemedWindowMixin):
             return
         if not messagebox.askyesno("Confirm", f"Delete {len(idxs)} selected waypoint(s)?"):
             return
-        for idx in sorted(idxs, reverse=True):
-            if 0 <= idx < len(self.manager.waypoints):
-                self.manager.remove_waypoint(idx)
+        self.manager.remove_waypoints(idxs)
         next_idx = min(idxs) if self.manager.waypoints else None
         self.refresh_list(select_index=next_idx)
 
@@ -1079,9 +1299,19 @@ class RoutePlotter(ThemedWindowMixin):
 
     def toggle_auto_copy(self):
         self.config["auto_copy_waypoint"] = self.ac_var.get()
+        try:
+            save_config(self.config)
+        except Exception:
+            pass
+        self._emit_event("ROUTE", f"Auto-copy next waypoint: {'ON' if self.ac_var.get() else 'OFF'}", "INFO")
 
     def toggle_auto_note(self):
         self.config["route_auto_note_from_edsm"] = self.auto_note_var.get()
+        try:
+            save_config(self.config)
+        except Exception:
+            pass
+        self._emit_event("ROUTE", f"Automatic EDSM notes: {'ON' if self.auto_note_var.get() else 'OFF'}", "INFO")
 
     def _fetch_edsm_note(self, system_name, callback):
         if not self.auto_note_var.get():

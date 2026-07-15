@@ -8,23 +8,37 @@ class WaypointManager:
     def __init__(self, path=None):
         self.path = path or WAYPOINTS_FILE
         self.waypoints = []
+        self.last_error = None
         self.load()
 
     def load(self):
         if os.path.exists(self.path):
             try:
-                with open(self.path, 'r') as f:
+                with open(self.path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    self.waypoints = data
-            except:
+                    self.waypoints = [row for row in data if isinstance(row, dict)] if isinstance(data, list) else []
+                self.last_error = None
+            except Exception as exc:
+                self.last_error = str(exc)
                 self.waypoints = []
 
     def save(self):
+        temp_path = self.path + '.tmp'
         try:
-            with open(self.path, 'w') as f:
+            os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
+            with open(temp_path, 'w', encoding='utf-8') as f:
                 json.dump(self.waypoints, f, indent=4)
-        except:
-            pass
+            os.replace(temp_path, self.path)
+            self.last_error = None
+            return True
+        except Exception as exc:
+            self.last_error = str(exc)
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except OSError:
+                pass
+            return False
 
     def add_waypoint(self, name, coords=None, note=None):
         self.waypoints.append({"name": name, "coords": coords, "note": note})
@@ -34,6 +48,22 @@ class WaypointManager:
         if 0 <= index < len(self.waypoints):
             del self.waypoints[index]
             self.save()
+
+    def remove_waypoints(self, indices):
+        valid = set()
+        for index in indices:
+            try:
+                index = int(index)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= index < len(self.waypoints):
+                valid.add(index)
+        valid = sorted(valid, reverse=True)
+        for index in valid:
+            del self.waypoints[index]
+        if valid:
+            self.save()
+        return len(valid)
     
     def clear(self):
         self.waypoints = []
@@ -62,7 +92,9 @@ class WaypointManager:
 
     def edit_waypoint(self, index, name, coords=None, note=None):
         if 0 <= index < len(self.waypoints):
-            self.waypoints[index] = {"name": name, "coords": coords, "note": note}
+            updated = dict(self.waypoints[index])
+            updated.update({"name": name, "coords": coords, "note": note})
+            self.waypoints[index] = updated
             self.save()
             return True
         return False
@@ -80,14 +112,21 @@ class WaypointManager:
         return 0.0
 
     def get_next_waypoint(self, current_name):
+        current_name = str(current_name or "")
         for i, wp in enumerate(self.waypoints):
-            if wp['name'].lower() == current_name.lower():
-                if i + 1 < len(self.waypoints):
-                    return self.waypoints[i+1]['name']
+            if str(wp.get('name') or '').lower() == current_name.lower():
+                for candidate in self.waypoints[i + 1:]:
+                    if not candidate.get('visited', False) and candidate.get('name'):
+                        return candidate['name']
+                return None
+        for wp in self.waypoints:
+            if not wp.get('visited', False) and wp.get('name'):
+                return wp['name']
         return None
 
     def get_waypoint_index(self, name):
+        name = str(name or "")
         for i, wp in enumerate(self.waypoints):
-            if wp['name'].lower() == name.lower():
+            if str(wp.get('name') or '').lower() == name.lower():
                 return i
         return -1

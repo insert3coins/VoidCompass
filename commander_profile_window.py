@@ -5,11 +5,17 @@ import time
 import tkinter as tk
 import webbrowser
 from datetime import datetime, timezone
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 
-from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, get_active_profile, get_profile_dir, save_config
+from config import (
+    COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, get_active_profile, get_profile_dir,
+    get_profile_file, save_config,
+)
 from trade import marketdb as trade_marketdb
-from ui_theme import THEME, ThemedWindowMixin, apply_window, button, scrollbar, window_surface
+from ui_theme import (
+    THEME, ThemedWindowMixin, apply_window, button, configure_ttk, scrollbar,
+    window_surface,
+)
 import companion_features
 
 COLOR_ACCENT = THEME.accent
@@ -47,6 +53,17 @@ class CommanderProfileWindow(ThemedWindowMixin):
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
         self._wheel_bound = False
         self._last_queue_count = 0
+        self._journal_snapshot_cache = {}
+        self._journal_snapshot_profile = None
+        self._folder_size_cache = {}
+        self._credit_delta_cache = (0.0, None)
+        self._achievement_cache_key = None
+        self._achievement_cache = None
+        self._tab_fingerprints = {}
+        self._tab_canvases = {}
+        self._tab_contents = {}
+        self._refreshing = False
+        self._refresh_pending = False
         self._build()
         self.refresh()
 
@@ -61,50 +78,100 @@ class CommanderProfileWindow(ThemedWindowMixin):
         self.win.focus_force()
 
     def _build(self):
-        header = tk.Frame(self.win, bg="#0c1014", height=48)
+        header = tk.Frame(self.win, bg="#0c1014", height=66)
         header.pack(fill=tk.X)
         header.pack_propagate(False)
         title_box = tk.Frame(header, bg="#0c1014")
         title_box.pack(side=tk.LEFT, padx=14)
-        tk.Label(title_box, text="COMMANDER PROFILE", font=("Segoe UI", 14, "bold"), fg=COLOR_ACCENT, bg="#0c1014").pack(anchor="w", pady=(6, 0))
-        tk.Label(title_box, text="live commander, ship, route, cargo, and profile state", font=("Consolas", 8), fg=self.UI_MUTED, bg="#0c1014").pack(anchor="w")
+        tk.Label(title_box, text="COMMANDER RECORD", font=("Segoe UI", 16, "bold"), fg=COLOR_ACCENT, bg="#0c1014").pack(anchor="w", pady=(10, 0))
+        tk.Label(title_box, text="career progression // fleet // responsibilities // profile custody", font=("Consolas", 8), fg=self.UI_MUTED, bg="#0c1014").pack(anchor="w", pady=(1, 0))
         self.summary = tk.Label(header, text="", font=("Consolas", 8), fg=self.UI_MUTED, bg="#0c1014")
         self.summary.pack(side=tk.RIGHT, padx=14)
 
-        body = tk.Frame(self.win, bg=self.UI_BG)
-        body.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.hero = self._band(self.win, border=COLOR_ACCENT)
+        self.hero.pack(fill=tk.X, padx=10, pady=(10, 8))
+        hero_body = tk.Frame(self.hero, bg=self.UI_PANEL)
+        hero_body.pack(fill=tk.X, padx=14, pady=10)
+        identity = tk.Frame(hero_body, bg=self.UI_PANEL)
+        identity.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.hero_name = tk.Label(identity, text="-", fg=COLOR_ACCENT, bg=self.UI_PANEL, font=("Segoe UI", 19, "bold"), anchor="w")
+        self.hero_name.pack(fill=tk.X)
+        self.hero_fid = tk.Label(identity, text="-", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 8), anchor="w")
+        self.hero_fid.pack(fill=tk.X)
+        self.hero_ship = tk.Label(identity, text="-", fg=COLOR_TEXT, bg=self.UI_PANEL, font=("Consolas", 9, "bold"), anchor="w")
+        self.hero_ship.pack(fill=tk.X, pady=(6, 0))
 
-        self.canvas = tk.Canvas(body, bg=self.UI_BG, highlightthickness=0, bd=0)
-        self.scrollbar = scrollbar(body, orient=tk.VERTICAL, command=self.canvas.yview)
-        self.content = tk.Frame(self.canvas, bg=self.UI_BG)
-        self.content_window = self.canvas.create_window((0, 0), window=self.content, anchor="nw")
-        self.canvas.configure(yscrollcommand=self.scrollbar.set)
-        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.content.bind("<Configure>", lambda _e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
-        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(self.content_window, width=e.width))
-        self.canvas.bind("<Enter>", self._bind_mousewheel)
-        self.canvas.bind("<Leave>", self._unbind_mousewheel)
-        self.content.bind("<Enter>", self._bind_mousewheel)
-        self.content.bind("<Leave>", self._unbind_mousewheel)
+        hero_metrics = tk.Frame(hero_body, bg=self.UI_PANEL)
+        hero_metrics.pack(side=tk.RIGHT, fill=tk.Y)
+        self.hero_values = {}
+        for idx, label in enumerate(("CREDITS", "CAREER", "SESSION")):
+            card = tk.Frame(hero_metrics, bg=self.UI_PANEL_2, highlightbackground=self.UI_BORDER, highlightthickness=1)
+            card.grid(row=0, column=idx, sticky="nsew", padx=(7 if idx else 0, 0))
+            tk.Label(card, text=label, fg=self.UI_MUTED, bg=self.UI_PANEL_2, font=("Segoe UI", 7, "bold")).pack(anchor="w", padx=9, pady=(5, 0))
+            value = tk.Label(card, text="-", fg=COLOR_ACCENT if idx == 0 else COLOR_TEXT, bg=self.UI_PANEL_2, font=("Consolas", 9, "bold"), anchor="w", justify=tk.LEFT)
+            value.pack(fill=tk.X, padx=9, pady=(2, 6))
+            self.hero_values[label] = value
+
+        style = configure_ttk(self.win, "CommanderProfile")
+        style.theme_use("default")
+        style.configure("CommanderProfile.TNotebook", background=self.UI_BG, borderwidth=0)
+        style.configure(
+            "CommanderProfile.TNotebook.Tab", background=self.UI_PANEL,
+            foreground=COLOR_TEXT, padding=(15, 7), borderwidth=0,
+            font=("Segoe UI", 8, "bold"),
+        )
+        style.map(
+            "CommanderProfile.TNotebook.Tab",
+            background=[("selected", self.UI_PANEL_2)],
+            foreground=[("selected", COLOR_ACCENT)],
+        )
+        self.tabs = ttk.Notebook(self.win, style="CommanderProfile.TNotebook")
+        self.tabs.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 8))
+        for name in ("Career Overview", "Fleet & Loadouts", "Missions", "Data & Backups"):
+            self._make_scroll_tab(name)
+        self.tabs.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
         footer = tk.Frame(self.win, bg=self.UI_BG)
-        footer.pack(fill=tk.X, padx=10, pady=(0, 10))
-        self._button(footer, "Refresh", self.refresh).pack(side=tk.LEFT)
-        self._button(footer, "Open Profile Folder", self._open_profile_folder, accent=True).pack(side=tk.LEFT, padx=(8, 0))
-        self._button(footer, "Backup Profile", self._backup_profile).pack(side=tk.LEFT, padx=(8, 0))
+        footer.pack(fill=tk.X, padx=10, pady=(0, 8))
+        self._button(footer, "Refresh", lambda: self.refresh(force=True)).pack(side=tk.LEFT)
+        self.footer_hint = tk.Label(footer, text="Live events update only the visible profile section", font=("Consolas", 8), fg=self.UI_MUTED, bg=self.UI_BG)
+        self.footer_hint.pack(side=tk.RIGHT)
+
+    def _make_scroll_tab(self, name):
+        tab = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.tabs.add(tab, text=name)
+        canvas = tk.Canvas(tab, bg=self.UI_BG, highlightthickness=0, bd=0)
+        bar = scrollbar(tab, orient=tk.VERTICAL, command=canvas.yview)
+        content = tk.Frame(canvas, bg=self.UI_BG)
+        window_id = canvas.create_window((0, 0), window=content, anchor="nw")
+        canvas.configure(yscrollcommand=bar.set)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        bar.pack(side=tk.RIGHT, fill=tk.Y)
+        content.bind("<Configure>", lambda _e, c=canvas: c.configure(scrollregion=c.bbox("all")))
+        canvas.bind("<Configure>", lambda e, c=canvas, wid=window_id: c.itemconfigure(wid, width=e.width))
+        canvas.bind("<Enter>", lambda _e, c=canvas: self._bind_mousewheel(canvas=c))
+        canvas.bind("<Leave>", self._unbind_mousewheel)
+        content.bind("<Enter>", lambda _e, c=canvas: self._bind_mousewheel(canvas=c))
+        content.bind("<Leave>", self._unbind_mousewheel)
+        self._tab_canvases[name] = canvas
+        self._tab_contents[name] = content
+
+    def _on_tab_changed(self, _event=None):
+        if not self._refreshing:
+            self.refresh(force=False)
 
     def _button(self, parent, text, cmd, accent=False):
         return button(parent, text, cmd, accent=accent, padx=12, pady=6)
 
-    def _bind_mousewheel(self, _event=None):
+    def _bind_mousewheel(self, _event=None, canvas=None):
+        self.canvas = canvas or getattr(self, "canvas", None)
         if not self._wheel_bound:
-            self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+            self.win.bind_all("<MouseWheel>", self._on_mousewheel)
             self._wheel_bound = True
 
     def _unbind_mousewheel(self, _event=None):
         if self._wheel_bound:
-            self.canvas.unbind_all("<MouseWheel>")
+            self.win.unbind_all("<MouseWheel>")
             self._wheel_bound = False
 
     def _on_mousewheel(self, event):
@@ -115,9 +182,18 @@ class CommanderProfileWindow(ThemedWindowMixin):
         except Exception:
             pass
 
-    def _clear_content(self):
-        for child in self.content.winfo_children():
+    def _clear_content(self, content=None):
+        content = content or self._tab_contents.get(self._active_tab_name())
+        if content is None:
+            return
+        for child in content.winfo_children():
             child.destroy()
+
+    def _active_tab_name(self):
+        try:
+            return str(self.tabs.tab(self.tabs.select(), "text"))
+        except Exception:
+            return "Career Overview"
 
     def _panel(self, parent, border=None):
         return tk.Frame(
@@ -160,12 +236,6 @@ class CommanderProfileWindow(ThemedWindowMixin):
         self._value_label(card, value, fg=COLOR_ACCENT if accent else COLOR_TEXT, font=("Consolas", 11, "bold")).pack(fill=tk.X, padx=10, pady=(1, 0))
         tk.Label(card, text=detail or "", font=("Consolas", 8), fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w").pack(fill=tk.X, padx=10, pady=(1, 7))
         return card
-
-    def _chip(self, parent, label, value, accent=False):
-        chip = tk.Frame(parent, bg=self.UI_PANEL_2, highlightbackground=COLOR_ACCENT if accent else self.UI_BORDER, highlightthickness=1)
-        tk.Label(chip, text=label.upper(), fg=self.UI_MUTED, bg=self.UI_PANEL_2, font=("Segoe UI", 7, "bold")).pack(anchor="w", padx=9, pady=(5, 0))
-        tk.Label(chip, text=str(value), fg=COLOR_ACCENT if accent else COLOR_TEXT, bg=self.UI_PANEL_2, font=("Consolas", 10, "bold"), anchor="w").pack(fill=tk.X, padx=9, pady=(1, 6))
-        return chip
 
     def _kv_row(self, parent, label, value, fg=COLOR_TEXT):
         row = tk.Frame(parent, bg=parent.cget("bg"))
@@ -251,12 +321,6 @@ class CommanderProfileWindow(ThemedWindowMixin):
             return f"{int(value):,} cr"
         return "-"
 
-    def _fmt_delta_credits(self, value):
-        if not isinstance(value, (int, float)):
-            return "-"
-        sign = "+" if value >= 0 else "-"
-        return f"{sign}{abs(int(value)):,} cr"
-
     @staticmethod
     def _mission_expiry_text(value):
         if not value:
@@ -281,66 +345,6 @@ class CommanderProfileWindow(ThemedWindowMixin):
         m, s = divmod(rem, 60)
         return f"{h:02d}:{m:02d}:{s:02d}"
 
-    def _cargo_summary(self):
-        inv = list(getattr(self.app, "current_cargo_inventory", []) or [])
-        cap = int(getattr(self.app, "cargo_capacity", 0) or 0)
-        tons = int(getattr(self.app, "current_cargo_tons", 0) or 0)
-        if not tons and inv:
-            tons = sum(int(item.get("Count", item.get("count", 0)) or 0) for item in inv if isinstance(item, dict))
-        if cap:
-            text = f"{tons}/{cap} t"
-            detail = f"{(tons / cap) * 100:.0f}% hold used" if cap else ""
-        else:
-            text = f"{tons} t"
-            detail = f"{len(inv)} commodity type(s)" if inv else "Cargo unavailable"
-        if inv:
-            top = []
-            for item in inv[:3]:
-                if not isinstance(item, dict):
-                    continue
-                name = item.get("Name_Localised") or item.get("Name") or item.get("name") or "Cargo"
-                count = item.get("Count", item.get("count", 0))
-                top.append(f"{name} x{count}")
-            if top:
-                detail = ", ".join(top)
-        return text, detail
-
-    def _route_summary(self):
-        route = list(getattr(self.app, "route_list", []) or [])
-        dest = getattr(self.app, "dest_name", None) or "-"
-        if route:
-            current = getattr(self.app, "current_sys", None)
-            try:
-                idx = route.index(current) + 1
-            except Exception:
-                idx = 0
-            progress = f"{idx}/{len(route)}" if idx else f"{len(route)} jumps"
-            return dest, progress
-        waypoints = getattr(getattr(self.app, "waypoint_manager", None), "waypoints", []) or []
-        if waypoints:
-            visited = sum(1 for wp in waypoints if wp.get("visited"))
-            next_wp = next((wp.get("name") for wp in waypoints if not wp.get("visited")), None)
-            return next_wp or "Route complete", f"{visited}/{len(waypoints)} waypoints"
-        return "-", "No active route"
-
-    def _profile_alerts(self):
-        alerts = []
-        if getattr(self.app, "system_undiscovered", False):
-            alerts.append("Undiscovered system")
-        bio = int(getattr(self.app, "system_bio_signals", 0) or 0)
-        if bio:
-            alerts.append(f"{bio} bio signal(s)")
-        valuable = getattr(self.app, "valuable_bodies", []) or []
-        if valuable:
-            alerts.append(f"{len(valuable)} valuable body/bodies")
-        if getattr(self.app, "target_latlon_active", False):
-            alerts.append("Ground target active")
-        if getattr(self.app, "current_docked", False):
-            alerts.append("Docked")
-        if not alerts:
-            alerts.append("No active alerts")
-        return alerts
-
     def _fmt_percent(self, value):
         if isinstance(value, (int, float)):
             return f"{float(value):.0f}%"
@@ -360,7 +364,11 @@ class CommanderProfileWindow(ThemedWindowMixin):
             return f"{ranks[-1]} ({value})"
         return ranks[value]
 
-    def _latest_journal_snapshot(self):
+    def _latest_journal_snapshot(self, force=False):
+        profile_key = get_active_profile(self.config)
+        if (not force and self._journal_snapshot_profile == profile_key
+                and self._journal_snapshot_cache):
+            return self._journal_snapshot_cache
         journal_path = self.config.get("journal_path") or ""
         if not journal_path or not os.path.isdir(journal_path):
             return {}
@@ -375,8 +383,13 @@ class CommanderProfileWindow(ThemedWindowMixin):
             return {}
 
         active_name = (self.config.get("active_commander_name") or "").strip().lower()
+        if active_name in ("unknown commander", "cmdr"):
+            active_name = ""
         active_fid = (self.config.get("active_commander_fid") or "").strip()
-        snapshot = {"ranks": {}, "progress": {}, "reputation": {}, "ship": {}, "balance": None, "loan": None}
+        snapshot = {
+            "ranks": {}, "progress": {}, "reputation": {}, "statistics": {},
+            "ship": {}, "balance": None, "loan": None,
+        }
         matched_file = False
         for path in files[:12]:
             try:
@@ -399,18 +412,26 @@ class CommanderProfileWindow(ThemedWindowMixin):
             if active_name and file_commander and file_commander.lower() != active_name:
                 continue
             matched_file = True
+            file_snapshot = {
+                "ranks": {}, "progress": {}, "reputation": {}, "statistics": {},
+                "ship": {}, "balance": None, "loan": None,
+            }
             for event in events:
                 ev = event.get("event")
                 if ev == "Rank":
-                    snapshot["ranks"].update({k: v for k, v in event.items() if k not in ("timestamp", "event")})
+                    file_snapshot["ranks"].update({k: v for k, v in event.items() if k not in ("timestamp", "event")})
                 elif ev == "Progress":
-                    snapshot["progress"].update({k: v for k, v in event.items() if k not in ("timestamp", "event")})
+                    file_snapshot["progress"].update({k: v for k, v in event.items() if k not in ("timestamp", "event")})
                 elif ev == "Reputation":
-                    snapshot["reputation"].update({k: v for k, v in event.items() if k not in ("timestamp", "event")})
+                    file_snapshot["reputation"].update({k: v for k, v in event.items() if k not in ("timestamp", "event")})
+                elif ev == "Statistics":
+                    file_snapshot["statistics"] = {
+                        k: v for k, v in event.items() if k not in ("timestamp", "event")
+                    }
                 elif ev == "LoadGame":
-                    snapshot["balance"] = event.get("Credits")
-                    snapshot["loan"] = event.get("Loan")
-                    snapshot["ship"].update({
+                    file_snapshot["balance"] = event.get("Credits")
+                    file_snapshot["loan"] = event.get("Loan")
+                    file_snapshot["ship"].update({
                         "ship": event.get("Ship"),
                         "ship_localised": event.get("Ship_Localised"),
                         "ship_id": event.get("ShipID"),
@@ -422,250 +443,509 @@ class CommanderProfileWindow(ThemedWindowMixin):
                         "group": event.get("Group"),
                     })
                 elif ev == "Loadout":
-                    snapshot["ship"].update({
-                        "ship": event.get("Ship") or snapshot["ship"].get("ship"),
-                        "ship_id": event.get("ShipID") or snapshot["ship"].get("ship_id"),
-                        "ship_name": event.get("ShipName") or snapshot["ship"].get("ship_name"),
-                        "ship_ident": event.get("ShipIdent") or snapshot["ship"].get("ship_ident"),
+                    file_snapshot["ship"].update({
+                        "ship": event.get("Ship") or file_snapshot["ship"].get("ship"),
+                        "ship_id": event.get("ShipID") or file_snapshot["ship"].get("ship_id"),
+                        "ship_name": event.get("ShipName") or file_snapshot["ship"].get("ship_name"),
+                        "ship_ident": event.get("ShipIdent") or file_snapshot["ship"].get("ship_ident"),
                         "modules_value": event.get("ModulesValue"),
                         "hull_health": event.get("HullHealth"),
                         "max_jump_range": event.get("MaxJumpRange"),
                         "rebuy": event.get("Rebuy"),
                         "cargo_capacity": event.get("CargoCapacity"),
                     })
-            if snapshot["ranks"] or snapshot["ship"] or snapshot["balance"] is not None:
+            # Files are newest first. Fill each category once so an older
+            # journal can provide missing Statistics without overwriting the
+            # newest ship, balance or rank snapshot.
+            for key in ("ranks", "progress", "reputation", "statistics", "ship"):
+                if not snapshot[key] and file_snapshot[key]:
+                    snapshot[key] = file_snapshot[key]
+            if snapshot["balance"] is None and file_snapshot["balance"] is not None:
+                snapshot["balance"] = file_snapshot["balance"]
+                snapshot["loan"] = file_snapshot["loan"]
+            if (snapshot["statistics"] and
+                    (snapshot["ranks"] or snapshot["ship"] or snapshot["balance"] is not None)):
                 break
-        return snapshot if matched_file else {}
+        result = snapshot if matched_file else {}
+        self._journal_snapshot_profile = profile_key
+        self._journal_snapshot_cache = result
+        return result
 
-    def refresh(self):
+    def _cached_session_credit_delta(self, force=False):
+        cached_at, cached_value = self._credit_delta_cache
+        if not force and time.monotonic() - cached_at < 20.0:
+            return cached_value
+        value = self._session_credit_delta()
+        self._credit_delta_cache = (time.monotonic(), value)
+        return value
+
+    def _cached_folder_size(self, path, force=False):
+        cached_at, cached_value = self._folder_size_cache.get(path, (0.0, 0))
+        if force or time.monotonic() - cached_at >= 60.0:
+            cached_value = self._folder_size(path)
+            self._folder_size_cache[path] = (time.monotonic(), cached_value)
+        return cached_value
+
+    @staticmethod
+    def _stat_value(statistics, *names):
+        wanted = {str(name).lower() for name in names}
+        pending = [statistics]
+        while pending:
+            current = pending.pop()
+            if not isinstance(current, dict):
+                continue
+            for key, value in current.items():
+                if str(key).lower() in wanted and not isinstance(value, (dict, list)):
+                    return value
+                if isinstance(value, dict):
+                    pending.append(value)
+        return None
+
+    @staticmethod
+    def _fmt_number(value, decimals=0):
+        if not isinstance(value, (int, float)):
+            return "-"
+        if decimals:
+            return f"{float(value):,.{decimals}f}"
+        return f"{int(value):,}"
+
+    @staticmethod
+    def _fingerprint(value):
+        try:
+            return json.dumps(value, sort_keys=True, default=str, separators=(",", ":"))
+        except Exception:
+            return repr(value)
+
+    def _achievement_summary(self):
+        engine = getattr(self.app, "achievement_engine", None)
+        if engine is None:
+            return {"unlocked": 0, "total": 0, "totalPoints": 0, "recent": []}
+        state = getattr(engine, "state", {}) or {}
+        unlocked_ids = tuple(sorted(
+            (key, str(record.get("unlockedAt") or "") if isinstance(record, dict) else "")
+            for key, record in (state.get("unlocked") or {}).items()
+        ))
+        cache_key = (
+            id(engine), unlocked_ids,
+            tuple(sorted(getattr(engine, "disabled_categories", ()) or ())),
+        )
+        if cache_key == self._achievement_cache_key and self._achievement_cache is not None:
+            return self._achievement_cache
+        try:
+            snapshot = engine.snapshot()
+        except Exception:
+            return {"unlocked": 0, "total": 0, "totalPoints": 0, "recent": []}
+        recent = sorted(
+            (row for row in snapshot.get("achievements", []) if row.get("unlocked")),
+            key=lambda row: str(row.get("unlockedAt") or ""), reverse=True,
+        )[:6]
+        result = {
+            "unlocked": int(snapshot.get("unlocked") or 0),
+            "total": int(snapshot.get("total") or 0),
+            "totalPoints": int(snapshot.get("totalPoints") or 0),
+            "recent": recent,
+        }
+        self._achievement_cache_key = cache_key
+        self._achievement_cache = result
+        return result
+
+    def _captain_summary(self):
+        log = getattr(self.app, "captains_log", None)
+        try:
+            sessions = log.sessions() if log is not None else []
+        except Exception:
+            sessions = []
+        totals = {
+            "sessions": len(sessions), "jumps": 0, "distance_ly": 0.0,
+            "codex": 0, "bio_analyses": 0, "trade_profit": 0,
+            "exploration_sales": 0, "biology_sales": 0, "highlights": [],
+        }
+        for session in sessions:
+            for key in ("jumps", "codex", "bio_analyses", "trade_profit", "exploration_sales", "biology_sales"):
+                totals[key] += int(session.get(key) or 0)
+            totals["distance_ly"] += float(session.get("distance_ly") or 0)
+        for session in sessions[:8]:
+            totals["highlights"].extend(reversed(session.get("highlights") or []))
+            if len(totals["highlights"]) >= 8:
+                break
+        totals["highlights"] = totals["highlights"][:8]
+        return totals
+
+    def _profile_model(self, active_tab, force=False):
         profile_key = get_active_profile(self.config)
-        profile_dir = get_profile_dir(profile_key)
-        name = self.config.get("active_commander_name") or "Unknown Commander"
-        fid = self.config.get("active_commander_fid") or ""
-        journal_snapshot = self._latest_journal_snapshot()
+        journal = self._latest_journal_snapshot(force=force)
         companion_state = getattr(self.app, "companion_state", {}) or {}
-        balance = self.app.cmdr_balance
-        loan = self.app.cmdr_loan
-        if balance is None:
-            balance = journal_snapshot.get("balance")
-        if loan is None:
-            loan = journal_snapshot.get("loan")
-        balance_text = self._fmt_credits(balance)
-        loan_text = self._fmt_credits(loan)
-        credit_delta = self._session_credit_delta()
-        ship = dict(journal_snapshot.get("ship") or {})
+        ship = dict(journal.get("ship") or {})
         ship.update({
             key: value for key, value in (getattr(self.app, "cmdr_ship", {}) or {}).items()
             if value is not None and value != ""
         })
-        ranks = dict(journal_snapshot.get("ranks") or {})
+        ranks = dict(journal.get("ranks") or {})
         ranks.update(getattr(self.app, "cmdr_ranks", {}) or {})
-        progress = dict(journal_snapshot.get("progress") or {})
+        progress = dict(journal.get("progress") or {})
         progress.update(getattr(self.app, "cmdr_rank_progress", {}) or {})
-        reputation = dict(journal_snapshot.get("reputation") or {})
+        reputation = dict(journal.get("reputation") or {})
         reputation.update(getattr(self.app, "cmdr_reputation", {}) or {})
-        paths = [
-            ("Exploration DB", getattr(self.app, "db_path", "")),
-            ("Mining DB", self.config.get("mining_db_file", "")),
-            ("Waypoints", self.config.get("waypoints_file", "")),
-            ("Carrier State", self.config.get("carrier_state_file", "")),
-            ("Colonisation", self.config.get("colonisation_data_file", "")),
-            ("Engineer Materials", self.config.get("engineer_materials_file", "")),
-            ("Companion State", self.config.get("companion_state_file", "")),
-        ]
+        balance = getattr(self.app, "cmdr_balance", None)
+        loan = getattr(self.app, "cmdr_loan", None)
+        if balance is None:
+            balance = journal.get("balance")
+        if loan is None:
+            loan = journal.get("loan")
+        statistics = companion_state.get("statistics") or journal.get("statistics") or {}
+        model = {
+            "profile_key": profile_key,
+            "profile_dir": get_profile_dir(profile_key),
+            "name": self.config.get("active_commander_name") or "Unknown Commander",
+            "fid": self.config.get("active_commander_fid") or "",
+            "balance": balance, "loan": loan, "ship": ship,
+            "ranks": ranks, "progress": progress, "reputation": reputation,
+            "statistics": statistics, "companion_state": companion_state,
+        }
+        if active_tab == "Career Overview":
+            model["credit_delta"] = self._cached_session_credit_delta(force=force)
+            model["achievements"] = self._achievement_summary()
+            model["captain"] = self._captain_summary()
+        elif active_tab == "Fleet & Loadouts":
+            model["carrier"] = dict(getattr(getattr(self.app, "carrier_tracker", None), "carrier_data", {}) or {})
+        elif active_tab == "Missions":
+            model["cargo"] = list(getattr(self.app, "current_cargo_inventory", []) or [])
+        elif active_tab == "Data & Backups":
+            model["paths"] = [
+                ("Exploration DB", getattr(self.app, "db_path", "")),
+                ("Mining DB", self.config.get("mining_db_file", "")),
+                ("Waypoints", self.config.get("waypoints_file", "")),
+                ("Carrier State", self.config.get("carrier_state_file", "")),
+                ("Colonisation", self.config.get("colonisation_data_file", "")),
+                ("Engineer Materials", self.config.get("engineer_materials_file", "")),
+                ("Companion State", self.config.get("companion_state_file", "")),
+                ("Achievements", get_profile_file(profile_key, "achievements_state.json")),
+                ("Captain's Log", get_profile_file(profile_key, "captains_log.json")),
+                ("Compass Memory", get_profile_file(profile_key, "cockpit_ai_memory.json")),
+                ("Compass Brain", get_profile_file(profile_key, "cockpit_ai_brain.json")),
+            ]
+            model["folder_size"] = self._cached_folder_size(model["profile_dir"], force=force)
+            model["queue_count"] = self._queue_count()
+        return model
 
-        self.summary.config(text=profile_key)
-        self._clear_content()
-
+    def _update_hero(self, model):
+        ship = model["ship"]
         ship_type = ship.get("ship_localised") or ship.get("ship") or "-"
-        ship_name = ship.get("ship_name") or "-"
+        ship_name = ship.get("ship_name") or ship_type
         ship_ident = ship.get("ship_ident") or "-"
+        self.summary.config(text=model["profile_key"])
+        self.hero_name.config(text=model["name"].upper())
+        self.hero_fid.config(text=model["fid"] or model["profile_key"])
+        self.hero_ship.config(text=f"{ship_name}  |  {ship_type}  |  {ship_ident}")
+        self.hero_values["CREDITS"].config(text=self._fmt_credits(model["balance"]))
+        achievement_state = getattr(getattr(self.app, "achievement_engine", None), "state", {}) or {}
+        unlocked = len(achievement_state.get("unlocked") or {})
+        sessions = len((getattr(getattr(self.app, "captains_log", None), "data", {}) or {}).get("sessions") or [])
+        self.hero_values["CAREER"].config(text=f"{unlocked} awards\n{sessions} logged flights")
+        self.hero_values["SESSION"].config(
+            text=f"{self._session_elapsed_text()}\n{getattr(self.app, 'session_jump_count', 0)} jumps"
+        )
 
-        hero = self._band(self.content, border=COLOR_ACCENT)
-        hero.pack(fill=tk.X, padx=2, pady=(0, 10))
-        hero_body = tk.Frame(hero, bg=self.UI_PANEL)
-        hero_body.pack(fill=tk.X, padx=14, pady=12)
-        identity = tk.Frame(hero_body, bg=self.UI_PANEL)
-        identity.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        tk.Label(identity, text=name.upper(), fg=COLOR_ACCENT, bg=self.UI_PANEL, font=("Segoe UI", 22, "bold"), anchor="w").pack(fill=tk.X)
-        tk.Label(identity, text=fid or profile_key, fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 9), anchor="w").pack(fill=tk.X, pady=(1, 0))
-        ship_line = ship_name if ship_name != "-" else ship_type
-        tk.Label(identity, text=f"{ship_line}  |  {ship_type}  |  {ship_ident}", fg=COLOR_TEXT, bg=self.UI_PANEL, font=("Consolas", 10, "bold"), anchor="w").pack(fill=tk.X, pady=(8, 0))
+    def refresh(self, force=False):
+        if self._refreshing or not self.is_open():
+            return
+        self._refreshing = True
+        try:
+            active_tab = self._active_tab_name()
+            model = self._profile_model(active_tab, force=force)
+            self._update_hero(model)
+            content = self._tab_contents[active_tab]
+            fingerprint_model = {key: value for key, value in model.items() if key != "companion_state"}
+            companion_keys = {
+                "Career Overview": ("statistics",),
+                "Fleet & Loadouts": ("stored_ships", "loadout"),
+                "Missions": ("missions", "faction_kills"),
+                "Data & Backups": (),
+            }[active_tab]
+            fingerprint_model["companion_state"] = {
+                key: model["companion_state"].get(key)
+                for key in companion_keys
+            }
+            fingerprint = self._fingerprint(fingerprint_model)
+            if not force and self._tab_fingerprints.get(active_tab) == fingerprint:
+                return
+            self._tab_fingerprints[active_tab] = fingerprint
+            self._clear_content(content)
+            {
+                "Career Overview": self._render_career,
+                "Fleet & Loadouts": self._render_fleet,
+                "Missions": self._render_missions,
+                "Data & Backups": self._render_data,
+            }[active_tab](content, model)
+            content.update_idletasks()
+            canvas = self._tab_canvases[active_tab]
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            self.footer_hint.config(text=f"{active_tab} updated {time.strftime('%H:%M:%S')} // selective live refresh")
+        finally:
+            self._refreshing = False
 
-        chips = tk.Frame(hero_body, bg=self.UI_PANEL)
-        chips.pack(side=tk.RIGHT, fill=tk.Y)
-        credit_detail = f"{balance_text}\n{self._fmt_delta_credits(credit_delta)} session" if credit_delta is not None else f"{balance_text}\nLoan {loan_text}"
-        for idx, (label, value, accent) in enumerate((
-            ("Credits", credit_detail, True),
-            ("System", getattr(self.app, "current_sys", "---"), False),
-            ("Session", f"{self._session_elapsed_text()}\n{getattr(self.app, 'session_jump_count', 0)} jumps", False),
-        )):
-            chip = self._chip(chips, label, value, accent=accent)
-            chip.grid(row=0, column=idx, sticky="nsew", padx=(8 if idx else 0, 0))
-            chips.grid_columnconfigure(idx, weight=1, uniform="hero_chips")
+    def _two_columns(self, parent, left_weight=1, right_weight=1):
+        grid = tk.Frame(parent, bg=self.UI_BG)
+        grid.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+        grid.grid_columnconfigure(0, weight=left_weight, uniform="profile_columns")
+        grid.grid_columnconfigure(1, weight=right_weight, uniform="profile_columns")
+        left = tk.Frame(grid, bg=self.UI_BG)
+        right = tk.Frame(grid, bg=self.UI_BG)
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
+        right.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
+        return left, right
 
-        main = tk.Frame(self.content, bg=self.UI_BG)
-        main.pack(fill=tk.BOTH, expand=True)
-        main.grid_columnconfigure(0, weight=3, uniform="profile_cols")
-        main.grid_columnconfigure(1, weight=2, uniform="profile_cols")
+    def _render_career(self, parent, model):
+        left, right = self._two_columns(parent, 1, 1)
+        ranks_card = self._band(left, border=COLOR_ACCENT)
+        ranks_card.pack(fill=tk.X, pady=(0, 8))
+        self._section_label(ranks_card, "CAREER RANKS")
+        rank_count = 0
+        for category in ("Combat", "Trade", "Explore", "Soldier", "Exobiologist", "Empire", "Federation", "CQC"):
+            if category not in model["ranks"] and category not in model["progress"]:
+                continue
+            rank = self._rank_label(category, model["ranks"].get(category))
+            progress = model["progress"].get(category)
+            self._bar_row(ranks_card, category, f"{rank}  {self._fmt_percent(progress)}", progress, COLOR_ACCENT)
+            rank_count += 1
+        if not rank_count:
+            self._kv_row(ranks_card, "Ranks", "Awaiting Rank and Progress journal data", fg=self.UI_MUTED)
 
-        left = tk.Frame(main, bg=self.UI_BG)
-        left.grid(row=0, column=0, sticky="nsew", padx=(2, 5))
-        right = tk.Frame(main, bg=self.UI_BG)
-        right.grid(row=0, column=1, sticky="nsew", padx=(5, 2))
+        rep_card = self._panel(left)
+        rep_card.pack(fill=tk.X, pady=(0, 8))
+        self._section_label(rep_card, "SUPERPOWER REPUTATION")
+        shown = False
+        for key in ("Federation", "Empire", "Alliance", "Independent"):
+            if key in model["reputation"]:
+                shown = True
+                value = model["reputation"].get(key)
+                self._bar_row(rep_card, key, self._fmt_percent(value), value, COLOR_ORANGE)
+        if not shown:
+            self._kv_row(rep_card, "Reputation", "Awaiting Reputation journal data", fg=self.UI_MUTED)
 
-        ops_card = self._band(left, border=COLOR_ACCENT)
-        ops_card.pack(fill=tk.X, pady=(0, 8))
-        self._section_label(ops_card, "CURRENT OPERATIONS")
-        cargo_text, cargo_detail = self._cargo_summary()
-        route_target, route_detail = self._route_summary()
-        station = getattr(self.app, "current_station_name", None) or "-"
-        docked = "Docked" if getattr(self.app, "current_docked", False) else "In flight"
-        trade_session = getattr(self.app, "trade_session", {}) or {}
-        ops_grid = tk.Frame(ops_card, bg=self.UI_PANEL)
-        ops_grid.pack(fill=tk.X, padx=8, pady=(0, 10))
+        stats = model["statistics"]
+        records = self._panel(left)
+        records.pack(fill=tk.X, pady=(0, 8))
+        self._section_label(records, "CAREER RECORDS")
+        stats_grid = tk.Frame(records, bg=self.UI_PANEL)
+        stats_grid.pack(fill=tk.X, padx=7, pady=(0, 8))
         for col in range(2):
-            ops_grid.grid_columnconfigure(col, weight=1, uniform="ops")
-        self._metric_card(ops_grid, "STATION", f"{station}" if station != "-" else docked, docked, 0, 0)
-        self._metric_card(ops_grid, "CARGO", cargo_text, cargo_detail, 0, 1)
-        self._metric_card(ops_grid, "ROUTE TARGET", route_target, route_detail, 1, 0)
-        self._metric_card(ops_grid, "TRADE SESSION", self._fmt_delta_credits(trade_session.get("profit", 0)), f"{trade_session.get('bought_units', 0):,}t bought / {trade_session.get('sold_units', 0):,}t sold", 1, 1)
+            stats_grid.grid_columnconfigure(col, weight=1, uniform="career_stats")
+        career_metrics = (
+            ("SYSTEMS VISITED", self._fmt_number(self._stat_value(stats, "Systems_Visited")), "Journal Statistics"),
+            ("HYPERSPACE", f"{self._fmt_number(self._stat_value(stats, 'Total_Hyperspace_Distance'), 1)} ly", f"{self._fmt_number(self._stat_value(stats, 'Total_Hyperspace_Jumps'))} jumps"),
+            ("EXPLORATION PROFIT", self._fmt_credits(self._stat_value(stats, "Exploration_Profits")), f"best {self._fmt_credits(self._stat_value(stats, 'Highest_Payout'))}"),
+            ("FIRST FOOTFALLS", self._fmt_number(self._stat_value(stats, "First_Footfalls")), f"{self._fmt_number(self._stat_value(stats, 'Planet_Footfalls'))} total footfalls"),
+            ("MARKET PROFIT", self._fmt_credits(self._stat_value(stats, "Market_Profits")), f"{self._fmt_number(self._stat_value(stats, 'Markets_Traded_With'))} markets"),
+            ("MINING PROFIT", self._fmt_credits(self._stat_value(stats, "Mining_Profits")), f"{self._fmt_number(self._stat_value(stats, 'Quantity_Mined'))} refined"),
+            ("BOUNTIES", self._fmt_number(self._stat_value(stats, "Bounties_Claimed")), self._fmt_credits(self._stat_value(stats, "Bounty_Hunting_Profit"))),
+            ("ORGANIC DATA", self._fmt_credits(self._stat_value(stats, "Organic_Data_Profits")), f"{self._fmt_number(self._stat_value(stats, 'Organic_Species_Encountered'))} species"),
+        )
+        for idx, (title, value, detail) in enumerate(career_metrics):
+            self._metric_card(stats_grid, title, value, detail, idx // 2, idx % 2, accent=idx == 0)
+        if not stats:
+            self._kv_row(records, "Statistics", "Elite will supply lifetime records through its Statistics event", fg=self.UI_MUTED)
 
-        ship_card = self._panel(left)
-        ship_card.pack(fill=tk.X, pady=(0, 8))
-        self._section_label(ship_card, "ACTIVE SHIP")
+        achievements = model["achievements"]
+        award_card = self._band(right, border=COLOR_ORANGE)
+        award_card.pack(fill=tk.X, pady=(0, 8))
+        self._section_label(award_card, "ACHIEVEMENTS")
+        award_grid = tk.Frame(award_card, bg=self.UI_PANEL)
+        award_grid.pack(fill=tk.X, padx=7, pady=(0, 6))
+        for col in range(3):
+            award_grid.grid_columnconfigure(col, weight=1, uniform="award_stats")
+        completion = (achievements["unlocked"] / achievements["total"] * 100) if achievements["total"] else 0
+        self._metric_card(award_grid, "UNLOCKED", f"{achievements['unlocked']}/{achievements['total']}", f"{completion:.1f}% complete", 0, 0, accent=True)
+        self._metric_card(award_grid, "POINTS", self._fmt_number(achievements["totalPoints"]), "earned", 0, 1)
+        self._metric_card(award_grid, "RECENT", self._fmt_number(len(achievements["recent"])), "latest milestones", 0, 2)
+        for row in achievements["recent"]:
+            when = str(row.get("unlockedAt") or "")[:10] or "Unlocked"
+            self._kv_row(award_card, row.get("category") or "Award", f"{row.get('title') or row.get('id')} · {when}", fg=COLOR_ACCENT)
+        if not achievements["recent"]:
+            self._kv_row(award_card, "Milestones", "No achievements unlocked yet", fg=self.UI_MUTED)
+
+        captain = model["captain"]
+        log_card = self._panel(right)
+        log_card.pack(fill=tk.X, pady=(0, 8))
+        self._section_label(log_card, "CAPTAIN'S LOG TOTALS")
+        log_grid = tk.Frame(log_card, bg=self.UI_PANEL)
+        log_grid.pack(fill=tk.X, padx=7, pady=(0, 6))
+        for col in range(2):
+            log_grid.grid_columnconfigure(col, weight=1, uniform="log_stats")
+        for idx, (title, value, detail) in enumerate((
+            ("FLIGHTS", self._fmt_number(captain["sessions"]), "logged sessions"),
+            ("TRAVEL", f"{captain['distance_ly']:,.1f} ly", f"{captain['jumps']:,} jumps"),
+            ("DISCOVERIES", self._fmt_number(captain["codex"]), f"{captain['bio_analyses']:,} bio analyses"),
+            ("DATA SALES", self._fmt_credits(captain["exploration_sales"] + captain["biology_sales"]), "exploration + biology"),
+        )):
+            self._metric_card(log_grid, title, value, detail, idx // 2, idx % 2, accent=idx == 0)
+        self._section_label(log_card, "RECENT CAREER HIGHLIGHTS")
+        for row in captain["highlights"][:6]:
+            detail = f" · {row.get('detail')}" if row.get("detail") else ""
+            self._kv_row(log_card, row.get("kind") or "Log", f"{row.get('title') or 'Event'}{detail}")
+        if not captain["highlights"]:
+            self._kv_row(log_card, "Chronicle", "Captain's Log will collect notable sessions and discoveries", fg=self.UI_MUTED)
+
+    def _render_fleet(self, parent, model):
+        left, right = self._two_columns(parent, 3, 2)
+        ship = model["ship"]
+        companion_state = model["companion_state"]
+        active = self._band(left, border=COLOR_ACCENT)
+        active.pack(fill=tk.X, pady=(0, 8))
+        self._section_label(active, "ACTIVE SHIP & LOADOUT")
+        ship_type = ship.get("ship_localised") or ship.get("ship") or "-"
+        ship_name = ship.get("ship_name") or ship_type
         for key, value in (
-            ("Type", ship_type),
-            ("Ident", ship_ident),
+            ("Name", ship_name), ("Type", ship_type), ("Ident", ship.get("ship_ident") or "-"),
             ("Ship ID", ship.get("ship_id") or "-"),
             ("Cargo Capacity", f"{ship.get('cargo_capacity')} t" if ship.get("cargo_capacity") is not None else "-"),
             ("Jump Range", f"{float(ship.get('max_jump_range')):.2f} ly" if isinstance(ship.get("max_jump_range"), (int, float)) else "-"),
             ("Rebuy", self._fmt_credits(ship.get("rebuy"))),
             ("Modules", self._fmt_credits(ship.get("modules_value"))),
             ("Hull", f"{float(ship.get('hull_health')) * 100:.1f}%" if isinstance(ship.get("hull_health"), (int, float)) else "-"),
-            ("Fuel", f"{float(ship.get('fuel_level')):.1f}/{float(ship.get('fuel_capacity')):.1f} t" if isinstance(ship.get("fuel_level"), (int, float)) and isinstance(ship.get("fuel_capacity"), (int, float)) else "-"),
-            ("Mode", ship.get("game_mode") or "-"),
-            ("Group", ship.get("group") or "-"),
+            ("Mode", ship.get("game_mode") or "-"), ("Group", ship.get("group") or "-"),
         ):
-            self._kv_row(ship_card, key, value)
-        ship_actions = tk.Frame(ship_card, bg=self.UI_PANEL)
-        ship_actions.pack(fill=tk.X, padx=12, pady=(8, 10))
-        has_loadout = bool(companion_state.get("loadout"))
-        edsy_btn = self._button(ship_actions, "Open in EDSY", self._open_loadout_edsy, accent=True)
-        edsy_btn.pack(side=tk.LEFT)
-        slef_btn = self._button(ship_actions, "Copy SLEF", self._copy_loadout_slef)
-        slef_btn.pack(side=tk.LEFT, padx=(8, 0))
-        if not has_loadout:
-            edsy_btn.config(state=tk.DISABLED)
-            slef_btn.config(state=tk.DISABLED)
+            self._kv_row(active, key, value)
+        actions = tk.Frame(active, bg=self.UI_PANEL)
+        actions.pack(fill=tk.X, padx=12, pady=(8, 10))
+        edsy = self._button(actions, "Open in EDSY", self._open_loadout_edsy, accent=True)
+        edsy.pack(side=tk.LEFT)
+        slef = self._button(actions, "Copy SLEF", self._copy_loadout_slef)
+        slef.pack(side=tk.LEFT, padx=(8, 0))
+        if not companion_state.get("loadout"):
+            edsy.config(state=tk.DISABLED)
+            slef.config(state=tk.DISABLED)
 
         fleet = companion_state.get("stored_ships") or {}
+        rows = list(fleet.get("here") or []) + list(fleet.get("remote") or [])
         fleet_card = self._panel(left)
         fleet_card.pack(fill=tk.X, pady=(0, 8))
-        self._section_label(fleet_card, "STORED SHIPS")
-        fleet_rows = list(fleet.get("here") or []) + list(fleet.get("remote") or [])
-        if fleet_rows:
-            for stored in fleet_rows:
-                location = stored.get("system") or fleet.get("system") or fleet.get("station") or "Local shipyard"
-                detail = location
-                if stored.get("in_transit"):
-                    detail += " · IN TRANSIT"
-                elif stored.get("transfer_cr"):
-                    detail += f" · transfer {self._fmt_credits(stored.get('transfer_cr'))}"
-                self._kv_row(fleet_card, stored.get("name") or stored.get("type"), detail,
-                             fg="#ff7777" if stored.get("hot") else COLOR_TEXT)
-        else:
+        self._section_label(fleet_card, f"STORED FLEET · {len(rows)} SHIPS")
+        for stored in rows:
+            location = stored.get("system") or fleet.get("system") or fleet.get("station") or "Local shipyard"
+            detail = location
+            if stored.get("in_transit"):
+                detail += " · IN TRANSIT"
+            elif stored.get("transfer_cr"):
+                detail += f" · transfer {self._fmt_credits(stored.get('transfer_cr'))}"
+            self._kv_row(fleet_card, stored.get("name") or stored.get("type") or "Ship", detail, fg="#ff7777" if stored.get("hot") else COLOR_TEXT)
+        if not rows:
             self._kv_row(fleet_card, "Fleet", "Open a shipyard in Elite to sync stored ships", fg=self.UI_MUTED)
 
+        carrier = model.get("carrier") or {}
+        carrier_card = self._band(right, border=COLOR_ORANGE)
+        carrier_card.pack(fill=tk.X, pady=(0, 8))
+        self._section_label(carrier_card, "FLEET CARRIER")
+        if carrier.get("carrier_id") or carrier.get("callsign"):
+            for key, value in (
+                ("Carrier", carrier.get("name") or carrier.get("callsign") or "-"),
+                ("Callsign", carrier.get("callsign") or "-"),
+                ("Location", carrier.get("system") or "-"),
+                ("Status", str(carrier.get("status") or "idle").upper()),
+                ("Tritium", f"{carrier.get('fuel_level'):,} t" if isinstance(carrier.get("fuel_level"), (int, float)) else "-"),
+                ("Balance", self._fmt_credits(carrier.get("balance"))),
+                ("Expedition", carrier.get("expedition_name") or "No active expedition"),
+            ):
+                self._kv_row(carrier_card, key, value)
+            open_carrier = getattr(self.app, "open_carrier_window", None)
+            if callable(open_carrier):
+                self._button(carrier_card, "Open Carrier Navigator", open_carrier, accent=True).pack(anchor="w", padx=12, pady=(8, 10))
+        else:
+            self._kv_row(carrier_card, "Carrier", "No owned fleet carrier data has been received", fg=self.UI_MUTED)
+
+        identity = self._panel(right)
+        identity.pack(fill=tk.X, pady=(0, 8))
+        self._section_label(identity, "FLEET IDENTITY")
+        self._kv_row(identity, "Active vessel", ship_name)
+        self._kv_row(identity, "Stored vessels", self._fmt_number(len(rows)))
+        hot = sum(1 for row in rows if row.get("hot"))
+        self._kv_row(identity, "Hot ships", self._fmt_number(hot), fg="#ff7777" if hot else self.UI_MUTED)
+        self._kv_row(identity, "Loadout export", "Ready" if companion_state.get("loadout") else "Awaiting Loadout event", fg=COLOR_ACCENT if companion_state.get("loadout") else self.UI_MUTED)
+
+    def _render_missions(self, parent, model):
+        companion_state = model["companion_state"]
         missions = list((companion_state.get("missions") or {}).values())
         cargo_by_symbol = {}
-        for item in getattr(self.app, "current_cargo_inventory", []) or []:
-            symbol = str(item.get("Name") or item.get("name") or "").strip("$;").lower()
-            symbol = symbol.removesuffix("_name")
+        for item in model.get("cargo") or []:
+            symbol = str(item.get("Name") or item.get("name") or "").strip("$;").lower().removesuffix("_name")
             cargo_by_symbol[symbol] = cargo_by_symbol.get(symbol, 0) + int(item.get("Count", item.get("count", 0)) or 0)
-        mission_card = self._panel(left)
-        mission_card.pack(fill=tk.X, pady=(0, 8))
-        self._section_label(mission_card, "ACTIVE MISSIONS")
-        if missions:
-            for mission in sorted(missions, key=lambda row: row.get("expiry") or "")[:12]:
-                destination = " · ".join(value for value in (
-                    mission.get("destination_system"), mission.get("destination_station")) if value)
-                progress = ""
-                if mission.get("to_deliver"):
-                    progress = f" · {mission.get('delivered') or 0}/{mission['to_deliver']} delivered"
-                elif mission.get("commodity_symbol") and mission.get("count"):
-                    held = cargo_by_symbol.get(mission["commodity_symbol"], 0)
-                    progress = f" · cargo {held}/{mission['count']}"
-                expiry = self._mission_expiry_text(mission.get("expiry"))
-                if expiry:
-                    progress += f" · {expiry}"
-                self._kv_row(mission_card, mission.get("kind") or "Mission",
-                             f"{mission.get('name') or 'Mission'} · {destination or 'No destination'}{progress}",
-                             fg=COLOR_ORANGE if "EXPIRED" in expiry else COLOR_TEXT)
-        else:
-            self._kv_row(mission_card, "Missions", "No active tracked missions", fg=self.UI_MUTED)
-        for stack in companion_features.massacre_stacks(companion_state):
-            self._bar_row(
-                mission_card, f"Massacre · {stack['faction']}",
-                f"{stack['kills_done']}/{stack['kills_needed']} kills · {self._fmt_credits(stack['reward'])}",
-                (stack["kills_done"] / stack["kills_needed"] * 100) if stack["kills_needed"] else 0,
-                "#21d189" if stack["complete"] else COLOR_ORANGE,
-            )
-
-        rank_card = self._band(right, border=COLOR_ORANGE)
-        rank_card.pack(fill=tk.X, pady=(0, 8))
-        self._section_label(rank_card, "RANKS")
-        rank_count = 0
-        for category in ("Combat", "Trade", "Explore", "Soldier", "Exobiologist", "Empire", "Federation", "CQC"):
-            if category not in ranks and category not in progress:
-                continue
-            rank_text = self._rank_label(category, ranks.get(category))
-            progress_value = progress.get(category)
-            prog_text = self._fmt_percent(progress_value)
-            self._bar_row(rank_card, category, f"{rank_text}  {prog_text}", progress_value, COLOR_ACCENT)
-            rank_count += 1
-        if rank_count == 0:
-            tk.Label(rank_card, text="No rank data seen yet.", font=("Consolas", 9), fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w").pack(fill=tk.X, padx=12, pady=(0, 12))
-
-        alert_card = self._panel(right)
-        alert_card.pack(fill=tk.X, pady=(0, 8))
-        self._section_label(alert_card, "ACTIVE TASKS")
-        for alert in self._profile_alerts():
-            self._kv_row(alert_card, "Task", alert, fg=COLOR_ACCENT if alert != "No active alerts" else self.UI_MUTED)
-
-        rep_card = self._panel(right)
-        rep_card.pack(fill=tk.X, pady=(0, 8))
-        self._section_label(rep_card, "REPUTATION")
-        if reputation:
-            for key in ("Federation", "Empire", "Alliance", "Independent"):
-                if key in reputation:
-                    self._bar_row(rep_card, key, self._fmt_percent(reputation.get(key)), reputation.get(key), COLOR_ORANGE)
-        else:
-            tk.Label(rep_card, text="No reputation data seen yet.", font=("Consolas", 9), fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w").pack(fill=tk.X, padx=12, pady=(0, 12))
-
-        storage_card = self._panel(left)
-        storage_card.pack(fill=tk.X, pady=(0, 8))
-        self._section_label(storage_card, "PROFILE STORAGE")
-        self._kv_row(storage_card, "Folder", profile_dir)
-        self._kv_row(storage_card, "Size", self._fmt_bytes(self._folder_size(profile_dir)))
-        for label, path in paths:
-            exists = "OK" if path and os.path.exists(path) else "missing"
-            fg = COLOR_TEXT if exists == "OK" else "#ff9a3c"
-            self._kv_row(storage_card, label, f"{exists}  {path}", fg=fg)
-
-        integration_card = self._panel(self.content)
-        integration_card.pack(fill=tk.X, padx=2, pady=(2, 2))
-        self._section_label(integration_card, "INTEGRATIONS")
-        integration_grid = tk.Frame(integration_card, bg=self.UI_PANEL)
-        integration_grid.pack(fill=tk.X, padx=7, pady=(0, 8))
+        stacks = companion_features.massacre_stacks(companion_state)
+        expiring = sum(1 for row in missions if "h left" in self._mission_expiry_text(row.get("expiry")) and int(self._mission_expiry_text(row.get("expiry")).split("h", 1)[0]) < 3)
+        summary = self._band(parent, border=COLOR_ACCENT)
+        summary.pack(fill=tk.X, padx=2, pady=(2, 8))
+        self._section_label(summary, "MISSION RESPONSIBILITIES")
+        grid = tk.Frame(summary, bg=self.UI_PANEL)
+        grid.pack(fill=tk.X, padx=7, pady=(0, 8))
         for col in range(3):
-            integration_grid.grid_columnconfigure(col, weight=1, uniform="profile_integrations")
-        self._metric_card(integration_grid, "EDSM UPLOAD", "ON" if self.config.get("edsm_upload_enabled") else "OFF", "Scan upload setting", 0, 0, accent=bool(self.config.get("edsm_upload_enabled")))
-        self._metric_card(integration_grid, "EDSM QUEUE", f"{self._queue_count()} events", "Pending upload backlog", 0, 1)
-        self._metric_card(integration_grid, "CARRIER DISCORD", "CONFIGURED" if self.config.get("carrier_discord_webhook_url") else "OFF", "Webhook notification setting", 0, 2)
+            grid.grid_columnconfigure(col, weight=1, uniform="mission_summary")
+        self._metric_card(grid, "ACTIVE", self._fmt_number(len(missions)), "tracked missions", 0, 0, accent=True)
+        self._metric_card(grid, "EXPIRING", self._fmt_number(expiring), "under three hours", 0, 1)
+        self._metric_card(grid, "MASSACRE STACKS", self._fmt_number(len(stacks)), f"{sum(int(row.get('reward') or 0) for row in stacks):,} cr rewards", 0, 2)
 
-        self.content.update_idletasks()
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        mission_card = self._panel(parent)
+        mission_card.pack(fill=tk.X, padx=2, pady=(0, 8))
+        self._section_label(mission_card, "ACTIVE MISSIONS")
+        for mission in sorted(missions, key=lambda row: row.get("expiry") or ""):
+            destination = " · ".join(value for value in (mission.get("destination_system"), mission.get("destination_station")) if value)
+            details = []
+            if destination:
+                details.append(destination)
+            if mission.get("to_deliver"):
+                details.append(f"{mission.get('delivered') or 0}/{mission['to_deliver']} delivered")
+            elif mission.get("commodity_symbol") and mission.get("count"):
+                held = cargo_by_symbol.get(mission["commodity_symbol"], 0)
+                details.append(f"cargo {held}/{mission['count']}")
+            expiry = self._mission_expiry_text(mission.get("expiry"))
+            if expiry:
+                details.append(expiry)
+            self._kv_row(mission_card, mission.get("kind") or "Mission", f"{mission.get('name') or 'Mission'} · {' · '.join(details) or 'No destination'}", fg=COLOR_ORANGE if expiry == "EXPIRED" else COLOR_TEXT)
+        if not missions:
+            self._kv_row(mission_card, "Missions", "No active tracked missions", fg=self.UI_MUTED)
+
+        stack_card = self._panel(parent)
+        stack_card.pack(fill=tk.X, padx=2, pady=(0, 8))
+        self._section_label(stack_card, "MASSACRE STACKS")
+        for stack in stacks:
+            self._bar_row(stack_card, stack["faction"], f"{stack['kills_done']}/{stack['kills_needed']} kills · {self._fmt_credits(stack['reward'])}", (stack["kills_done"] / stack["kills_needed"] * 100) if stack["kills_needed"] else 0, "#21d189" if stack["complete"] else COLOR_ORANGE)
+        if not stacks:
+            self._kv_row(stack_card, "Stacks", "No active massacre mission stacks", fg=self.UI_MUTED)
+
+    def _render_data(self, parent, model):
+        left, right = self._two_columns(parent, 3, 2)
+        storage = self._band(left, border=COLOR_ACCENT)
+        storage.pack(fill=tk.X, pady=(0, 8))
+        self._section_label(storage, "PROFILE STORAGE")
+        self._kv_row(storage, "Profile", model["profile_key"])
+        self._kv_row(storage, "Folder", model["profile_dir"])
+        self._kv_row(storage, "Size", self._fmt_bytes(model.get("folder_size")))
+        for label, path in model.get("paths") or []:
+            exists = bool(path and os.path.exists(path))
+            self._kv_row(storage, label, f"{'OK' if exists else 'missing'}  {path or '-'}", fg=COLOR_TEXT if exists else "#ff9a3c")
+
+        actions = self._panel(left)
+        actions.pack(fill=tk.X, pady=(0, 8))
+        self._section_label(actions, "PROFILE CUSTODY")
+        tk.Label(actions, text="Backups include the active commander's databases, route state, achievements, Compass memory, Captain's Log and companion data.", wraplength=590, justify=tk.LEFT, font=("Consolas", 8), fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w").pack(fill=tk.X, padx=12, pady=(0, 8))
+        action_row = tk.Frame(actions, bg=self.UI_PANEL)
+        action_row.pack(fill=tk.X, padx=12, pady=(0, 10))
+        self._button(action_row, "Open Profile Folder", self._open_profile_folder, accent=True).pack(side=tk.LEFT)
+        self._button(action_row, "Backup Profile", self._backup_profile).pack(side=tk.LEFT, padx=(8, 0))
+
+        integrations = self._band(right, border=COLOR_ORANGE)
+        integrations.pack(fill=tk.X, pady=(0, 8))
+        self._section_label(integrations, "INTEGRATIONS")
+        self._kv_row(integrations, "EDSM upload", "ON" if self.config.get("edsm_upload_enabled") else "OFF", fg=COLOR_ACCENT if self.config.get("edsm_upload_enabled") else self.UI_MUTED)
+        self._kv_row(integrations, "EDSM queue", f"{model.get('queue_count', 0)} pending events")
+        self._kv_row(integrations, "Carrier Discord", "CONFIGURED" if self.config.get("carrier_discord_webhook_url") else "OFF", fg=COLOR_ACCENT if self.config.get("carrier_discord_webhook_url") else self.UI_MUTED)
+
+        identity = self._panel(right)
+        identity.pack(fill=tk.X, pady=(0, 8))
+        self._section_label(identity, "PROFILE IDENTITY")
+        self._kv_row(identity, "Commander", model["name"])
+        self._kv_row(identity, "FID", model["fid"] or "-")
+        self._kv_row(identity, "Credits", self._fmt_credits(model["balance"]))
+        self._kv_row(identity, "Loan", self._fmt_credits(model["loan"]))
+        self._kv_row(identity, "Journal folder", self.config.get("journal_path") or "Not configured", fg=COLOR_TEXT if self.config.get("journal_path") else "#ff9a3c")
 
     def _open_loadout_edsy(self):
         loadout = (getattr(self.app, "companion_state", {}) or {}).get("loadout")

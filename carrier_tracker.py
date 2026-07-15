@@ -1,5 +1,5 @@
 """
-carrier_tracker.py — Fleet carrier state from Elite Dangerous journal events.
+carrier_tracker.py — Personal and squadron carrier state from Elite Dangerous journal events.
 Implements the EDCM status state machine.
 Discord webhooks use requests only — no discord.py dependency.
 State is persisted to carrier_state.json so it survives app restarts.
@@ -14,7 +14,8 @@ CARRIER_STATE_FILE = "carrier_state.json"
 
 # Fields that are safe to persist (skip runtime callbacks etc.)
 _PERSIST_KEYS = {
-    "carrier_id", "callsign", "name",
+    "carrier_id", "carrier_type", "callsign", "name",
+    "squadron_name", "squadron_rank",
     "carrier_purchased_at", "carrier_spawn_system",
     "system", "body",
     "fuel_level", "fuel_capacity",
@@ -70,8 +71,11 @@ class CarrierTracker:
     def __init__(self):
         self.carrier_data = {
             "carrier_id": None,
+            "carrier_type": None,
             "callsign": None,
             "name": None,
+            "squadron_name": None,
+            "squadron_rank": None,
             "carrier_purchased_at": None,
             "carrier_spawn_system": None,
             "system": None,
@@ -167,6 +171,8 @@ class CarrierTracker:
                         if not ev:
                             continue
                         cid = raw.get("CarrierID")
+                        if ev == "CarrierJump" and cid is None:
+                            cid = raw.get("MarketID")
                         if carrier_id and cid and cid != carrier_id:
                             continue
                         if ev == "CarrierStats":
@@ -174,6 +180,8 @@ class CarrierTracker:
                             if not carrier_id:
                                 carrier_id = raw.get("CarrierID")
                         elif ev in ("CarrierLocation", "CarrierJump"):
+                            if not carrier_id:
+                                continue
                             file_events["CarrierLocation"] = raw
                         elif ev == "CarrierJumpRequest":
                             file_events["CarrierJumpRequest"] = raw
@@ -290,6 +298,22 @@ class CarrierTracker:
         if not ev:
             return
 
+        # CarrierJump is written for any carrier the commander is aboard, and
+        # CarrierDepositFuel can describe a donation to somebody else's
+        # carrier.  Never let those events replace the owned/managed carrier
+        # established by CarrierStats or CarrierBuy.
+        identity_events = {"CarrierStats", "CarrierBuy"}
+        carrier_events = ev.startswith("Carrier")
+        if carrier_events and ev not in identity_events:
+            known_id = self.carrier_data.get("carrier_id")
+            event_id = raw.get("CarrierID")
+            if event_id is None and ev == "CarrierJump":
+                event_id = raw.get("MarketID")
+            if not known_id:
+                return
+            if event_id is not None and str(event_id) != str(known_id):
+                return
+
         changed = False
 
         if ev == "CarrierStats":
@@ -320,6 +344,24 @@ class CarrierTracker:
             changed = self._handle_finance(raw)
         elif ev == "CarrierBuy":
             changed = self._handle_carrier_buy(raw)
+        elif ev in ("SquadronStartup", "SquadronCreated", "JoinedSquadron"):
+            name = raw.get("SquadronName")
+            if name:
+                self.carrier_data["squadron_name"] = name
+                if raw.get("CurrentRank") is not None:
+                    self.carrier_data["squadron_rank"] = raw.get("CurrentRank")
+                changed = True
+        elif ev in ("SquadronPromotion", "SquadronDemotion"):
+            name = raw.get("SquadronName")
+            if name:
+                self.carrier_data["squadron_name"] = name
+            if raw.get("NewRank") is not None:
+                self.carrier_data["squadron_rank"] = raw.get("NewRank")
+            changed = bool(name or raw.get("NewRank") is not None)
+        elif ev in ("LeftSquadron", "KickedFromSquadron", "DisbandedSquadron"):
+            self.carrier_data["squadron_name"] = None
+            self.carrier_data["squadron_rank"] = None
+            changed = True
 
         if changed:
             self.carrier_data["last_updated"] = (
@@ -346,6 +388,7 @@ class CarrierTracker:
     def _handle_stats(self, raw):
         cd = self.carrier_data
         cd["carrier_id"] = raw.get("CarrierID")
+        cd["carrier_type"] = raw.get("CarrierType") or cd.get("carrier_type") or "FleetCarrier"
         cd["callsign"] = raw.get("Callsign")
         cd["name"] = raw.get("Name")
         cd["docking_access"] = (raw.get("DockingAccess") or "all").lower()
@@ -363,16 +406,16 @@ class CarrierTracker:
         cd["available_balance"] = finance.get("AvailableBalance")
         cd["reserve_balance"] = finance.get("ReserveBalance")
         cd["reserve_percent"] = finance.get("ReservePercent")
-        cd["tax_rearm"] = finance.get("TaxRate_Rearm")
-        cd["tax_refuel"] = finance.get("TaxRate_Refuel")
-        cd["tax_repair"] = finance.get("TaxRate_Repair")
+        cd["tax_rearm"] = finance.get("TaxRate_rearm", finance.get("TaxRate_Rearm"))
+        cd["tax_refuel"] = finance.get("TaxRate_refuel", finance.get("TaxRate_Refuel"))
+        cd["tax_repair"] = finance.get("TaxRate_repair", finance.get("TaxRate_Repair"))
 
         space = raw.get("SpaceUsage") or {}
         cd["space_total"] = space.get("TotalCapacity")
         cd["space_cargo"] = space.get("Cargo") or 0
         cd["space_crew"] = space.get("Crew") or 0
         cd["space_free"] = space.get("FreeSpace")
-        cd["space_reserved"] = space.get("ReservedSpace") or 0
+        cd["space_reserved"] = space.get("CargoSpaceReserved", space.get("ReservedSpace")) or 0
         cd["space_ship_packs"] = space.get("ShipPacks") or 0
         cd["space_module_packs"] = space.get("ModulePacks") or 0
 
@@ -397,10 +440,9 @@ class CarrierTracker:
 
     def _handle_carrier_buy(self, raw):
         cd = self.carrier_data
-        if not cd.get("carrier_id"):
-            cd["carrier_id"] = raw.get("CarrierID")
-        if not cd.get("callsign"):
-            cd["callsign"] = raw.get("Callsign")
+        cd["carrier_id"] = raw.get("CarrierID") or cd.get("carrier_id")
+        cd["carrier_type"] = "FleetCarrier"
+        cd["callsign"] = raw.get("Callsign") or cd.get("callsign")
         cd["carrier_purchased_at"] = raw.get("timestamp")
         cd["carrier_spawn_system"] = raw.get("Location")
         return True
@@ -648,8 +690,13 @@ class CarrierTracker:
     def _send_discord(self, url, event_type, cd):
         try:
             import requests
-            name         = cd.get("name")     or "Fleet Carrier"
+            carrier_type = cd.get("carrier_type")
+            is_squadron  = carrier_type == "SquadronCarrier"
+            carrier_label = "Squadron Carrier" if is_squadron else "Fleet Carrier"
+            name         = cd.get("name")     or carrier_label
             callsign     = cd.get("callsign") or "???-???"
+            squadron     = (cd.get("squadron_name") or "").strip()
+            squadron_rank = cd.get("squadron_rank")
             curr_sys     = cd.get("system")            or "Unknown"
             curr_body    = cd.get("body")              or ""
             prev_sys     = cd.get("previous_system")   or "Unknown"
@@ -710,6 +757,11 @@ class CarrierTracker:
             else:
                 lines = [event_type]
 
+            if is_squadron:
+                squadron_text = f"**{squadron}**" if squadron else "Awaiting SquadronStartup"
+                if squadron and squadron_rank is not None:
+                    squadron_text += f" · rank {squadron_rank}"
+                lines.append(f"🛡️  **Squadron:** {squadron_text}")
             lines.append(f"📌  **Destination:** {dest_display}")
             if note:
                 lines.append(f"ℹ️  *{note}*")
@@ -719,11 +771,11 @@ class CarrierTracker:
                 json={
                     "username": "Void Compass",
                     "embeds": [{
-                        "title": f"{name}  ·  {callsign}",
+                        "title": f"{carrier_label} · {name}  ·  {callsign}",
                         "description": "\n".join(lines),
                         "color": _DISCORD_COLORS.get(event_type, 0x888888),
                         "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        "footer": {"text": "VoidCompass · Fleet Carrier Tracker"},
+                        "footer": {"text": f"VoidCompass · {carrier_label} Command"},
                     }],
                 },
                 timeout=8,
@@ -772,14 +824,22 @@ class CarrierTracker:
     def send_test_discord(self, url):
         try:
             import requests
+            cd = self.carrier_data
+            is_squadron = cd.get("carrier_type") == "SquadronCarrier"
+            carrier_label = "Squadron Carrier" if is_squadron else "Fleet Carrier"
+            squadron = cd.get("squadron_name")
+            detail = "Webhook connection confirmed from Void Compass."
+            if is_squadron:
+                detail += f"\nSquadron: **{squadron or 'Awaiting SquadronStartup'}**"
             resp = requests.post(
                 url.strip(),
                 json={
                     "username": "Void Compass",
                     "embeds": [{
-                        "title": "Fleet Carrier — Test Notification",
-                        "description": "Webhook connection confirmed from Void Compass.",
+                        "title": f"{carrier_label} — Test Notification",
+                        "description": detail,
                         "color": _DISCORD_COLORS["cooldown_finished"],
+                        "footer": {"text": f"VoidCompass · {carrier_label} Command"},
                     }],
                 },
                 timeout=8,
