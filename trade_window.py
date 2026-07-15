@@ -86,7 +86,7 @@ class TradeWindow(ThemedWindowMixin):
         header.pack_propagate(False)
         title_box = tk.Frame(header, bg="#0c1014")
         title_box.pack(side=tk.LEFT, fill=tk.Y, padx=14)
-        tk.Label(title_box, text="ELITE TRADER", font=("Segoe UI", 16, "bold"), fg=COLOR_ACCENT, bg="#0c1014").pack(anchor="w", pady=(10, 0))
+        tk.Label(title_box, text="TRADE COMMAND", font=("Segoe UI", 16, "bold"), fg=COLOR_ACCENT, bg="#0c1014").pack(anchor="w", pady=(10, 0))
         self.subtitle = tk.Label(title_box, text="", font=("Consolas", 8), fg=self.UI_MUTED, bg="#0c1014")
         self.subtitle.pack(anchor="w", pady=(2, 0))
         self.db_badge = tk.Label(header, text="DB CHECKING", font=("Segoe UI", 8, "bold"), fg="black", bg=self.UI_DIM, padx=10, pady=4)
@@ -125,12 +125,77 @@ class TradeWindow(ThemedWindowMixin):
 
         self.tabs = ttk.Notebook(self.win, style="Trade.TNotebook")
         self.tabs.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self._build_quick_trade_tab()
         self._build_routes_group()
         self._build_markets_group()
         self._build_local_tab()
         self._build_tracking_group()
         self._build_database_tab()
         self._build_footer()
+
+    def _build_quick_trade_tab(self):
+        frame = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.tabs.add(frame, text="One Click")
+        self.quick_trade_frame = frame
+        tk.Label(frame, text="ONE-CLICK TRADE", fg=COLOR_ORANGE, bg=self.UI_BG,
+                 font=("Segoe UI", 11, "bold"), anchor="w").pack(fill=tk.X, padx=12, pady=(14, 2))
+        tk.Label(
+            frame,
+            text="Uses your live system, ship, cargo and market database. Detailed controls remain available in the other tabs.",
+            fg=self.UI_MUTED, bg=self.UI_BG, font=("Segoe UI", 9), anchor="w",
+        ).pack(fill=tk.X, padx=12, pady=(0, 12))
+        grid = tk.Frame(frame, bg=self.UI_BG)
+        grid.pack(fill=tk.BOTH, expand=True, padx=12)
+        actions = (
+            ("BEST ROUTES NOW", "Find profitable loops from the current system.", self._quick_routes, COLOR_ACCENT),
+            ("SELL MY CARGO", "Find the best nearby buyers for the live cargo hold.", self._quick_cargo, self.UI_OK),
+            ("NEARBY OPPORTUNITIES", "Scan local station-to-station profit flows.", self._quick_radar, COLOR_ORANGE),
+            ("CURRENT MARKET", "Open the live station market and price analysis.", self._quick_market, COLOR_TEXT),
+            ("TRACKING & ANALYTICS", "Open price watchlists and trade performance history.", self._quick_tracking, "#a5b4fc"),
+            ("MARKET DATABASE", "Check or update the local market data.", self._quick_database, self.UI_MUTED),
+        )
+        for index, (title, subtitle, command, colour) in enumerate(actions):
+            card = tk.Frame(grid, bg=self.UI_PANEL, highlightbackground=self.UI_BORDER, highlightthickness=1)
+            card.grid(row=index // 2, column=index % 2, sticky="nsew", padx=(0, 8), pady=(0, 8))
+            tk.Frame(card, bg=colour, height=3).pack(fill=tk.X)
+            tk.Label(card, text=title, fg=colour, bg=self.UI_PANEL,
+                     font=("Segoe UI", 10, "bold"), anchor="w").pack(fill=tk.X, padx=12, pady=(12, 3))
+            tk.Label(card, text=subtitle, fg=self.UI_MUTED, bg=self.UI_PANEL,
+                     font=("Segoe UI", 9), anchor="w").pack(fill=tk.X, padx=12)
+            self._button(card, "GO", command, accent=(index == 0)).pack(anchor="w", padx=12, pady=12)
+        grid.grid_columnconfigure(0, weight=1)
+        grid.grid_columnconfigure(1, weight=1)
+        for row in range(3):
+            grid.grid_rowconfigure(row, weight=1)
+
+    def _quick_routes(self):
+        self.tabs.select(self.routes_group_frame)
+        self.route_tabs.select(0)
+        self.use_current_system()
+        self.find_routes()
+
+    def _quick_cargo(self):
+        self.tabs.select(self.markets_group_frame)
+        self.market_tabs.select(0)
+        self.refresh_cargo_sellers()
+
+    def _quick_radar(self):
+        self.tabs.select(self.markets_group_frame)
+        self.market_tabs.select(0)
+        self.refresh_radar()
+
+    def _quick_market(self):
+        self.tabs.select(self.local_group_frame)
+        self.refresh_local()
+
+    def _quick_tracking(self):
+        self.tabs.select(self.tracking_group_frame)
+        self.tracking_tabs.select(0)
+        self.refresh_watchlist()
+
+    def _quick_database(self):
+        self.tabs.select(self.database_group_frame)
+        self.refresh_status()
 
     def _sub_notebook(self, parent):
         notebook = ttk.Notebook(parent, style="Trade.Sub.TNotebook")
@@ -139,6 +204,7 @@ class TradeWindow(ThemedWindowMixin):
 
     def _build_routes_group(self):
         frame = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.routes_group_frame = frame
         self.tabs.add(frame, text="Routes")
         self.route_tabs = self._sub_notebook(frame)
         self._build_routes_tab(self.route_tabs, "TRADE ROUTES")
@@ -146,6 +212,7 @@ class TradeWindow(ThemedWindowMixin):
 
     def _build_markets_group(self):
         frame = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.markets_group_frame = frame
         self.tabs.add(frame, text="Markets")
         self.market_tabs = self._sub_notebook(frame)
         self._build_radar_tab(self.market_tabs, "RADAR + CARGO")
@@ -154,6 +221,7 @@ class TradeWindow(ThemedWindowMixin):
 
     def _build_tracking_group(self):
         frame = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.tracking_group_frame = frame
         self.tabs.add(frame, text="Tracking")
         self.tracking_tabs = self._sub_notebook(frame)
         self._build_watchlist_tab(self.tracking_tabs, "WATCHLIST")
@@ -623,6 +691,8 @@ class TradeWindow(ThemedWindowMixin):
     def _build_local_tab(self, notebook=None, text="Local"):
         notebook = notebook or self.tabs
         frame = tk.Frame(notebook, bg=self.UI_BG)
+        if notebook is self.tabs:
+            self.local_group_frame = frame
         notebook.add(frame, text=text)
         wrap = tk.Frame(frame, bg=self.UI_BG)
         wrap.pack(fill=tk.BOTH, expand=True)
@@ -667,6 +737,8 @@ class TradeWindow(ThemedWindowMixin):
     def _build_database_tab(self, notebook=None, text="Database"):
         notebook = notebook or self.tabs
         frame = tk.Frame(notebook, bg=self.UI_BG)
+        if notebook is self.tabs:
+            self.database_group_frame = frame
         notebook.add(frame, text=text)
         panel = self._card(
             frame, "MARKET DATABASE",

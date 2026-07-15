@@ -66,6 +66,7 @@ from cockpit_ai_memory import CockpitMemory, ordinal
 from cockpit_ai_brain import CockpitBrain
 from compass_cognition import CompassCognition
 import compass_personas
+from captains_log import CaptainsLog
 from diagnostic_logs import application_base_dir, resolve_log_path
 
 
@@ -224,6 +225,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._exploration_refresh_job = self.root.after(150, _run)
         except Exception:
             self._exploration_refresh_job = None
+
+    def _import_captains_log_history(self, journal_path):
+        try:
+            imported = self.captains_log.import_journals(journal_path)
+            if imported:
+                self.log(f"Captain's Log imported {imported:,} journal highlights and session updates")
+                self._refresh_exploration_window()
+        except Exception as exc:
+            logging.warning("Captain's Log history import skipped: %s", exc)
 
     def _refresh_bgs_window(self):
         self._refresh_tool_window("bgs_window", "refresh_current")
@@ -405,6 +415,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.cockpit_brain.switch(
                     get_profile_file(new_key, "cockpit_ai_brain.json")
                 )
+            if getattr(self, "captains_log", None):
+                self.captains_log.switch(
+                    get_profile_file(new_key, "captains_log.json")
+                )
             self.cockpit_memory.begin_app_session()
             self._publish_cockpit_ai_online()
         if getattr(self, "achievement_engine", None):
@@ -482,6 +496,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         self.cockpit_brain = CockpitBrain(
             get_profile_file(get_active_profile(self.config), "cockpit_ai_brain.json")
+        )
+        self.captains_log = CaptainsLog(
+            get_profile_file(get_active_profile(self.config), "captains_log.json")
         )
         self.compass_cognition = CompassCognition(self.cockpit_brain, self.config)
         self.cockpit_memory.begin_app_session()
@@ -867,6 +884,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             args=(journal_path,),
             daemon=True,
         ).start()
+        threading.Thread(
+            target=self._import_captains_log_history,
+            args=(journal_path,),
+            daemon=True,
+        ).start()
 
         threading.Thread(target=self.check_updates, daemon=True).start()
 
@@ -1249,6 +1271,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.colonisation_projects,
             self._save_colonisation_data,
             overlay_callback=self.toggle_colony_overlay,
+            cargo_capacity_provider=lambda: self.cargo_capacity,
             embedded=True,
         )
         self._show_embedded_page("COLONY", self.colonization_window.win)
@@ -3295,6 +3318,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         except Exception as exc:
             logging.warning(f"Achievement engine event error [{ev}]: {exc}")
         self._record_journal_event()
+        if getattr(self, "captains_log", None):
+            try:
+                if self.captains_log.process_event(raw):
+                    self._refresh_exploration_window()
+            except Exception as exc:
+                logging.debug("Captain's Log event skipped [%s]: %s", ev, exc)
         self._handle_live_journal_toast(ev, raw, d, startup_replay=startup_replay)
         if ev == "LoadGame":
             self._handle_cockpit_load_game(raw, d, startup_replay=startup_replay)
@@ -4141,6 +4170,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 # Preserve existing notes when refreshing from depot event
                 _existing = self.colonisation_projects.get(mid, {})
                 was_complete = bool(_existing.get("complete"))
+                was_failed = bool(_existing.get("failed"))
                 self.colonisation_projects[mid] = {
                     "market_id":    mid,
                     "system_name":  d.get("system_name", ""),
@@ -4151,7 +4181,24 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     "resources":    d.get("resources", []),
                     "last_updated": time.time(),
                     "notes":        _existing.get("notes", ""),
+                    "activity":     list(_existing.get("activity") or []),
                 }
+                old_progress = float(_existing.get("progress") or 0)
+                new_progress = float(self.colonisation_projects[mid].get("progress") or 0)
+                project_now = self.colonisation_projects[mid]
+                if (new_progress != old_progress or project_now["complete"] != was_complete
+                        or project_now["failed"] != was_failed):
+                    activity = self.colonisation_projects[mid]["activity"]
+                    activity_type = (
+                        "COMPLETE" if project_now["complete"] else
+                        "FAILED" if project_now["failed"] else "PROGRESS"
+                    )
+                    activity.append({
+                        "timestamp": raw.get("timestamp") or time.time(),
+                        "type": activity_type,
+                        "detail": f"Depot progress {new_progress * 100:.1f}%",
+                    })
+                    self.colonisation_projects[mid]["activity"] = activity[-120:]
                 self.db_save_colonisation_project(self.colonisation_projects[mid])
                 if not self.batch_mode:
                     self._save_colonisation_data(self.colonisation_projects)
@@ -4175,6 +4222,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     delta = contribs.get(r["name"].lower(), 0)
                     if delta:
                         r["provided"] = min(r["required"], r.get("provided", 0) + delta)
+                delivered = sum(int(value or 0) for value in contribs.values())
+                if delivered:
+                    detail = ", ".join(
+                        f"{name}: {int(count):,}" for name, count in contribs.items() if count
+                    )
+                    activity = proj.setdefault("activity", [])
+                    activity.append({
+                        "timestamp": raw.get("timestamp") or time.time(),
+                        "type": "DELIVERY", "detail": detail,
+                    })
+                    proj["activity"] = activity[-120:]
                 self.db_save_colonisation_project(proj)
                 if not self.batch_mode:
                     self._save_colonisation_data(self.colonisation_projects)

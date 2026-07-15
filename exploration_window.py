@@ -135,6 +135,7 @@ class ExplorationWindow(ThemedWindowMixin):
         self._build_bio_tab()
         self._build_route_tab()
         self._build_history_tab()
+        self._build_captains_log_tab()
         self._build_system_history_tab()
         self._build_ledger_tab()
 
@@ -299,6 +300,39 @@ class ExplorationWindow(ThemedWindowMixin):
         self.history_text.pack(fill=tk.BOTH, expand=True)
         self.history_text.configure(state=tk.DISABLED)
 
+    def _build_captains_log_tab(self):
+        frame = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.tabs.add(frame, text="Captain's Log")
+        toolbar = tk.Frame(frame, bg=self.UI_BG)
+        toolbar.pack(fill=tk.X, padx=10, pady=(10, 6))
+        tk.Label(toolbar, text="EXPEDITION CHRONICLE", fg=COLOR_ORANGE, bg=self.UI_BG,
+                 font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT)
+        self._button(toolbar, "Copy Markdown", self._copy_captains_log, accent=True).pack(side=tk.RIGHT)
+        self.captains_log_summary = tk.Label(toolbar, text="", fg=self.UI_MUTED, bg=self.UI_BG,
+                                             font=("Consolas", 8))
+        self.captains_log_summary.pack(side=tk.RIGHT, padx=12)
+
+        split = tk.PanedWindow(frame, orient=tk.HORIZONTAL, bg=self.UI_BG, sashwidth=6,
+                               sashrelief=tk.FLAT, bd=0)
+        split.pack(fill=tk.BOTH, expand=True)
+        left = tk.Frame(split, bg=self.UI_BG)
+        right = tk.Frame(split, bg=self.UI_PANEL)
+        split.add(left, minsize=390)
+        split.add(right, minsize=350)
+        self.captains_log_tree = self._tree(left, ("date", "route", "jumps", "discoveries", "sales"), {
+            "date": ("Session", 145, tk.W), "route": ("Route", 260, tk.W),
+            "jumps": ("Jumps", 60, tk.E), "discoveries": ("Discoveries", 95, tk.E),
+            "sales": ("Data Sold", 100, tk.E),
+        })
+        self.captains_log_tree.bind("<<TreeviewSelect>>", self._on_captains_log_selected)
+        self.captains_log_rows = {}
+        self.captains_log_text = tk.Text(
+            right, bg="#0b0f13", fg=COLOR_TEXT, insertbackground=COLOR_ACCENT,
+            relief=tk.FLAT, bd=0, padx=12, pady=10, font=("Consolas", 9), wrap=tk.WORD,
+        )
+        self.captains_log_text.pack(fill=tk.BOTH, expand=True)
+        self.captains_log_text.configure(state=tk.DISABLED)
+
     def _build_system_history_tab(self):
         frame = tk.Frame(self.tabs, bg=self.UI_BG)
         self.tabs.add(frame, text="System History")
@@ -442,6 +476,7 @@ class ExplorationWindow(ThemedWindowMixin):
             self._request_route_enrichment()
             self._render_route()
             self._render_history(current_value, valuable_count, session_stats)
+            self._render_captains_log()
             self._refresh_ledger()
         except Exception as exc:
             self._log_error(f"Exploration refresh failed: {exc}")
@@ -1490,6 +1525,62 @@ class ExplorationWindow(ThemedWindowMixin):
         self.history_text.delete("1.0", tk.END)
         self.history_text.insert(tk.END, "\n".join(lines))
         self.history_text.configure(state=tk.DISABLED)
+
+    def _render_captains_log(self):
+        if not hasattr(self, "captains_log_tree"):
+            return
+        selected_started = None
+        selected = self.captains_log_tree.selection()
+        if selected:
+            row = self.captains_log_rows.get(selected[0])
+            selected_started = row.get("started") if row else None
+        for iid in self.captains_log_tree.get_children():
+            self.captains_log_tree.delete(iid)
+        self.captains_log_rows = {}
+        journal = getattr(self.app, "captains_log", None)
+        sessions = journal.sessions() if journal else []
+        chosen = None
+        for session in sessions:
+            started = str(session.get("started") or "")
+            route = f"{session.get('start_system') or '?'} → {session.get('end_system') or '?'}"
+            discoveries = int(session.get("codex") or 0) + int(session.get("bio_analyses") or 0)
+            sales = int(session.get("exploration_sales") or 0) + int(session.get("biology_sales") or 0)
+            iid = self.captains_log_tree.insert("", tk.END, values=(
+                started[:16].replace("T", " "), route, int(session.get("jumps") or 0),
+                discoveries, self._format_credits(sales),
+            ))
+            self.captains_log_rows[iid] = session
+            if selected_started and started == selected_started:
+                chosen = iid
+        self.captains_log_summary.config(text=f"{len(sessions)} retained sessions | bounded local journal")
+        children = self.captains_log_tree.get_children()
+        if chosen or children:
+            iid = chosen or children[0]
+            self.captains_log_tree.selection_set(iid)
+            self._show_captains_log(self.captains_log_rows.get(iid))
+        else:
+            self._show_captains_log(None)
+
+    def _on_captains_log_selected(self, _event=None):
+        selected = self.captains_log_tree.selection()
+        self._show_captains_log(self.captains_log_rows.get(selected[0]) if selected else None)
+
+    def _show_captains_log(self, session):
+        journal = getattr(self.app, "captains_log", None)
+        text = journal.markdown(session) if journal and session else "No journal session has been recorded yet."
+        self.captains_log_text.configure(state=tk.NORMAL)
+        self.captains_log_text.delete("1.0", tk.END)
+        self.captains_log_text.insert(tk.END, text)
+        self.captains_log_text.configure(state=tk.DISABLED)
+
+    def _copy_captains_log(self):
+        selected = self.captains_log_tree.selection()
+        session = self.captains_log_rows.get(selected[0]) if selected else None
+        journal = getattr(self.app, "captains_log", None)
+        text = journal.markdown(session) if journal and session else ""
+        if text:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(text)
 
     def _format_history_time(self, ts):
         try:
