@@ -35,12 +35,20 @@ DEFAULT_STATE = {
     "faction_watch_snapshots": {},
     "community_goals": {},
     "squadron": None,
+    "squadron_application": None,
+    "squadron_invitation": None,
+    "squadron_activity": [],
+    "squadron_trophies": [],
+    "squadron_bookmarks": [],
     "statistics": None,
     "statistics_updated": None,
     "unsold_exploration_cr": 0,
     "unsold_bio_cr": 0,
     "unsold_scan_keys": [],
 }
+
+SQUADRON_ACTIVITY_LIMIT = 60
+SQUADRON_ITEM_LIMIT = 30
 
 MISSION_KINDS = (
     ("delivery", "delivery"), ("collect", "collect"), ("salvage", "salvage"),
@@ -87,6 +95,43 @@ def save_state(path, state):
         os.replace(temp, path)
     except Exception:
         pass
+
+
+def record_squadron_activity(state, event, squadron_name=None, timestamp=None,
+                              detail=None, limit=SQUADRON_ACTIVITY_LIMIT):
+    """Record one bounded, de-duplicated squadron journal action."""
+    entry = {
+        "event": str(event or "SquadronEvent"),
+        "squadron": str(squadron_name or "").strip() or None,
+        "timestamp": timestamp,
+        "detail": str(detail or "").strip() or None,
+    }
+    key = (entry["event"], entry["squadron"], entry["timestamp"], entry["detail"])
+    activity = [row for row in state.get("squadron_activity") or [] if isinstance(row, dict)]
+    if any((row.get("event"), row.get("squadron"), row.get("timestamp"), row.get("detail")) == key
+           for row in activity):
+        return False
+    activity.insert(0, entry)
+    state["squadron_activity"] = activity[:max(1, int(limit or SQUADRON_ACTIVITY_LIMIT))]
+    return True
+
+
+def record_squadron_item(state, key, event, squadron_name=None, timestamp=None,
+                         detail=None, limit=SQUADRON_ITEM_LIMIT):
+    """Record a bounded trophy/bookmark fact without inventing unavailable details."""
+    entry = {
+        "event": str(event or "SquadronEvent"),
+        "squadron": str(squadron_name or "").strip() or None,
+        "timestamp": timestamp,
+        "detail": str(detail or "").strip() or None,
+    }
+    rows = [row for row in state.get(key) or [] if isinstance(row, dict)]
+    identity = (entry["event"], entry["squadron"], entry["timestamp"])
+    if not any((row.get("event"), row.get("squadron"), row.get("timestamp")) == identity
+               for row in rows):
+        rows.insert(0, entry)
+    state[key] = rows[:max(1, int(limit or SQUADRON_ITEM_LIMIT))]
+    return entry
 
 
 def toggle_faction_watch(state, faction_name):

@@ -815,7 +815,10 @@ class CockpitMemory:
             "ModuleSell", "ModuleStore", "ModuleRetrieve", "ModuleSwap",
         }
         social_events = {
-            "SquadronStartup", "LeftSquadron", "DisbandedSquadron", "WingJoin", "WingLeave",
+            "SquadronStartup", "SquadronCreated", "AppliedToSquadron", "InvitedToSquadron",
+            "JoinedSquadron", "SquadronPromotion", "SquadronDemotion", "LeftSquadron",
+            "KickedFromSquadron", "DisbandedSquadron", "SharedBookmarkToSquadron",
+            "WonATrophyForSquadron", "WingJoin", "WingLeave",
             "CrewMemberJoins", "CrewMemberQuits", "Friends",
         }
 

@@ -15,7 +15,7 @@ CARRIER_STATE_FILE = "carrier_state.json"
 # Fields that are safe to persist (skip runtime callbacks etc.)
 _PERSIST_KEYS = {
     "carrier_id", "carrier_type", "callsign", "name",
-    "squadron_name", "squadron_rank",
+    "squadron_id", "squadron_name", "squadron_rank", "squadron_rank_name",
     "carrier_purchased_at", "carrier_spawn_system",
     "system", "body",
     "fuel_level", "fuel_capacity",
@@ -74,8 +74,10 @@ class CarrierTracker:
             "carrier_type": None,
             "callsign": None,
             "name": None,
+            "squadron_id": None,
             "squadron_name": None,
             "squadron_rank": None,
+            "squadron_rank_name": None,
             "carrier_purchased_at": None,
             "carrier_spawn_system": None,
             "system": None,
@@ -347,9 +349,13 @@ class CarrierTracker:
         elif ev in ("SquadronStartup", "SquadronCreated", "JoinedSquadron"):
             name = raw.get("SquadronName")
             if name:
+                if raw.get("SquadronID") is not None:
+                    self.carrier_data["squadron_id"] = raw.get("SquadronID")
                 self.carrier_data["squadron_name"] = name
                 if raw.get("CurrentRank") is not None:
                     self.carrier_data["squadron_rank"] = raw.get("CurrentRank")
+                if raw.get("CurrentRankName"):
+                    self.carrier_data["squadron_rank_name"] = raw.get("CurrentRankName")
                 changed = True
         elif ev in ("SquadronPromotion", "SquadronDemotion"):
             name = raw.get("SquadronName")
@@ -357,10 +363,14 @@ class CarrierTracker:
                 self.carrier_data["squadron_name"] = name
             if raw.get("NewRank") is not None:
                 self.carrier_data["squadron_rank"] = raw.get("NewRank")
-            changed = bool(name or raw.get("NewRank") is not None)
+            if raw.get("NewRankName"):
+                self.carrier_data["squadron_rank_name"] = raw.get("NewRankName")
+            changed = bool(name or raw.get("NewRank") is not None or raw.get("NewRankName"))
         elif ev in ("LeftSquadron", "KickedFromSquadron", "DisbandedSquadron"):
+            self.carrier_data["squadron_id"] = None
             self.carrier_data["squadron_name"] = None
             self.carrier_data["squadron_rank"] = None
+            self.carrier_data["squadron_rank_name"] = None
             changed = True
 
         if changed:
@@ -696,7 +706,7 @@ class CarrierTracker:
             name         = cd.get("name")     or carrier_label
             callsign     = cd.get("callsign") or "???-???"
             squadron     = (cd.get("squadron_name") or "").strip()
-            squadron_rank = cd.get("squadron_rank")
+            squadron_rank = cd.get("squadron_rank_name") or cd.get("squadron_rank")
             curr_sys     = cd.get("system")            or "Unknown"
             curr_body    = cd.get("body")              or ""
             prev_sys     = cd.get("previous_system")   or "Unknown"

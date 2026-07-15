@@ -1,6 +1,6 @@
 """
 carrier_window.py — Personal/Squadron Carrier detail window for VoidCompass.
-Tabs: Overview, Expedition, Finance, Services.
+Tabs: Overview, Squadron, Expedition, Finance, Services.
 All data comes from CarrierTracker.carrier_data.
 """
 import tkinter as tk
@@ -8,7 +8,7 @@ import webbrowser
 from datetime import datetime, timezone
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
-from ui_theme import THEME, ThemedWindowMixin, apply_window, button, window_surface
+from ui_theme import THEME, ThemedWindowMixin, apply_window, button, scrollbar, window_surface
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -136,7 +136,7 @@ class CarrierWindow(ThemedWindowMixin):
         tab_bar.pack(fill=tk.X)
         self._tabs = {}
         self._tab_frames = {}
-        for name in ("Overview", "Expedition", "Finance", "Services"):
+        for name in ("Overview", "Squadron", "Expedition", "Finance", "Services"):
             btn = button(tab_bar, name, lambda n=name: self._show_tab(n), muted=True, padx=14, pady=6)
             btn.pack(side=tk.LEFT)
             self._tabs[name] = btn
@@ -146,6 +146,7 @@ class CarrierWindow(ThemedWindowMixin):
         self._tab_area.pack(fill=tk.BOTH, expand=True, padx=10, pady=8)
 
         self._build_overview_tab()
+        self._build_squadron_tab()
         self._build_expedition_tab()
         self._build_finance_tab()
         self._build_services_tab()
@@ -285,6 +286,88 @@ class CarrierWindow(ThemedWindowMixin):
             fg=self.UI_MUTED, bg=self.UI_PANEL,
         )
         self.post_discord_status_lbl.pack(side=tk.LEFT, padx=(10, 0))
+
+    # ---------- Squadron tab ----------
+    def _build_squadron_tab(self):
+        f = tk.Frame(self._tab_area, bg=self.UI_PANEL,
+                     highlightbackground=self.UI_BORDER, highlightthickness=1)
+        self._tab_frames["Squadron"] = f
+
+        self._sq_canvas = tk.Canvas(
+            f, bg=self.UI_PANEL, highlightthickness=0, bd=0,
+        )
+        sq_scroll = scrollbar(f, orient=tk.VERTICAL, command=self._sq_canvas.yview)
+        self._sq_canvas.configure(yscrollcommand=sq_scroll.set)
+        self._sq_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        sq_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        body = tk.Frame(self._sq_canvas, bg=self.UI_PANEL)
+        body_id = self._sq_canvas.create_window((0, 0), window=body, anchor="nw")
+        body.bind(
+            "<Configure>",
+            lambda _event: self._sq_canvas.configure(scrollregion=self._sq_canvas.bbox("all")),
+        )
+        self._sq_canvas.bind(
+            "<Configure>",
+            lambda event: self._sq_canvas.itemconfigure(body_id, width=event.width),
+        )
+
+        self._section(body, "SQUADRON CARRIER READINESS")
+        self.sq_status = tk.Label(
+            body, text="AWAITING JOURNAL DATA", font=("Segoe UI", 11, "bold"),
+            fg=self.UI_DIM, bg=self.UI_PANEL, anchor="w",
+        )
+        self.sq_status.pack(fill=tk.X, padx=10, pady=(2, 3))
+        self.sq_guidance = tk.Label(
+            body, text="", font=("Segoe UI", 8), fg=self.UI_MUTED,
+            bg=self.UI_PANEL, anchor="w", justify=tk.LEFT, wraplength=420,
+        )
+        self.sq_guidance.pack(fill=tk.X, padx=10, pady=(0, 8))
+
+        self._section(body, "IDENTITY & ACCESS")
+        self.sq_type = self._row(body, "Carrier Type")
+        self.sq_name = self._row(body, "Squadron")
+        self.sq_rank = self._row(body, "Commander Rank")
+        self.sq_carrier = self._row(body, "Carrier")
+        self.sq_callsign = self._row(body, "Callsign")
+        self.sq_carrier_id = self._row(body, "Carrier ID")
+        self.sq_synced = self._row(body, "Last Synced")
+
+        self._section(body, "LIVE OPERATIONS")
+        self.sq_system = self._row(body, "Current System")
+        self.sq_jump = self._row(body, "Next Jump")
+        self.sq_fuel = self._row(body, "Tritium")
+        self.sq_range = self._row(body, "Jump Range")
+        self.sq_docking = self._row(body, "Docking Access")
+
+        self._section(body, "DISCORD & EXPEDITION")
+        self.sq_discord = self._row(body, "Carrier Webhook")
+        tk.Label(
+            body,
+            text="The shared Carrier Discord webhook automatically labels Squadron Carrier notifications and includes squadron name/rank when known.",
+            font=("Segoe UI", 8), fg=self.UI_MUTED, bg=self.UI_PANEL,
+            anchor="w", justify=tk.LEFT, wraplength=420,
+        ).pack(fill=tk.X, padx=10, pady=(2, 6))
+        actions = tk.Frame(body, bg=self.UI_PANEL)
+        actions.pack(fill=tk.X, padx=10, pady=(0, 12))
+        self.sq_expedition_btn = button(
+            actions, "OPEN EXPEDITION", lambda: self._show_tab("Expedition"), muted=True,
+        )
+        self.sq_expedition_btn.pack(side=tk.LEFT)
+        self.sq_discord_btn = button(
+            actions, "POST SQUADRON STATUS", self._post_status_to_discord, accent=True,
+        )
+        self.sq_discord_btn.pack(side=tk.LEFT, padx=(6, 0))
+        self._bind_squadron_wheel(body)
+
+    def _bind_squadron_wheel(self, widget):
+        widget.bind("<MouseWheel>", self._scroll_squadron, add="+")
+        for child in widget.winfo_children():
+            self._bind_squadron_wheel(child)
+
+    def _scroll_squadron(self, event):
+        direction = -1 if event.delta > 0 else 1
+        self._sq_canvas.yview_scroll(direction, "units")
+        return "break"
 
     def _copy_countdown(self):
         dep = self.tracker.carrier_data.get("jump_departure_time")
@@ -565,6 +648,79 @@ class CarrierWindow(ThemedWindowMixin):
     # Refresh
     # ------------------------------------------------------------------
 
+    def _refresh_squadron(self, cd):
+        carrier_type = cd.get("carrier_type")
+        is_squadron = carrier_type == "SquadronCarrier"
+        squadron = cd.get("squadron_name")
+        rank = cd.get("squadron_rank_name") or cd.get("squadron_rank")
+
+        if is_squadron:
+            self.sq_status.config(text="TRACKING SQUADRON CARRIER", fg=self.UI_OK)
+            self.sq_guidance.config(
+                text="CarrierStats has identified this as the squadron-owned carrier. Identity, operations, expedition progress and Discord announcements update through the existing carrier journal path."
+            )
+        elif squadron:
+            self.sq_status.config(text="SQUADRON KNOWN · CARRIER NOT SYNCED", fg=self.UI_WARN)
+            self.sq_guidance.config(
+                text="Squadron membership is known. Open the Squadron Carrier management screen in Elite so CarrierStats can identify and populate the carrier; unsupported details remain blank until then."
+            )
+        elif carrier_type == "FleetCarrier":
+            self.sq_status.config(text="PERSONAL CARRIER ACTIVE", fg=self.UI_DIM)
+            self.sq_guidance.config(
+                text="The tracked carrier is personal. Join or load into a squadron, then open its carrier management screen to activate this command view."
+            )
+        else:
+            self.sq_status.config(text="AWAITING SQUADRON JOURNAL DATA", fg=self.UI_DIM)
+            self.sq_guidance.config(
+                text="This tab is ready before ownership. SquadronStartup supplies membership and rank; CarrierStats supplies the carrier type, identity, fuel, finance, storage and services."
+            )
+
+        type_text = (
+            "Squadron Carrier" if is_squadron
+            else "Fleet Carrier" if carrier_type == "FleetCarrier"
+            else "Awaiting CarrierStats"
+        )
+        self.sq_type.config(text=type_text)
+        self.sq_name.config(text=squadron or "Awaiting SquadronStartup")
+        self.sq_rank.config(text=str(rank) if rank is not None else "—")
+        carrier_name = cd.get("name")
+        self.sq_carrier.config(text=carrier_name or "—")
+        self.sq_callsign.config(text=cd.get("callsign") or "—")
+        carrier_id = str(cd.get("carrier_id")) if cd.get("carrier_id") is not None else "—"
+        squadron_id = cd.get("squadron_id")
+        if squadron_id is not None:
+            carrier_id += f" · squadron {squadron_id}"
+        self.sq_carrier_id.config(text=carrier_id)
+        self.sq_synced.config(text=_fmt_dt(cd.get("last_updated")))
+        self.sq_system.config(text=cd.get("system") or "—")
+
+        destination = cd.get("jump_destination")
+        departure = cd.get("jump_departure_time")
+        jump_text = destination or "No jump scheduled"
+        if destination and departure:
+            jump_text += f" · {_fmt_dt(departure)}"
+        self.sq_jump.config(text=jump_text)
+        fuel = cd.get("fuel_level")
+        self.sq_fuel.config(text=f"{int(fuel):,} T" if fuel is not None else "—")
+        current_range = cd.get("jump_range_curr")
+        maximum_range = cd.get("jump_range_max")
+        if current_range is not None and maximum_range is not None:
+            range_text = f"{float(current_range):.1f} / {float(maximum_range):.1f} LY"
+        elif current_range is not None:
+            range_text = f"{float(current_range):.1f} LY"
+        else:
+            range_text = "—"
+        self.sq_range.config(text=range_text)
+        self.sq_docking.config(text=(cd.get("docking_access") or "—").title())
+
+        webhook_ready = bool((self.config.get("carrier_discord_webhook_url") or "").strip())
+        self.sq_discord.config(
+            text="CONFIGURED" if webhook_ready else "OFF · Settings > Integrations",
+            fg=self.UI_OK if webhook_ready else self.UI_DIM,
+        )
+        self.sq_expedition_btn.config(state=tk.NORMAL if is_squadron else tk.DISABLED)
+        self.sq_discord_btn.config(state=tk.NORMAL if is_squadron and webhook_ready else tk.DISABLED)
+
     def _refresh(self):
         if not self.is_open():
             return
@@ -595,7 +751,7 @@ class CarrierWindow(ThemedWindowMixin):
         self.id_callsign.config(text=cd.get("callsign") or "—")
         self.id_type.config(text=type_label)
         squadron = cd.get("squadron_name")
-        squadron_rank = cd.get("squadron_rank")
+        squadron_rank = cd.get("squadron_rank_name") or cd.get("squadron_rank")
         if squadron:
             rank_text = f" · rank {squadron_rank}" if squadron_rank is not None else ""
             self.id_squadron.config(text=f"{squadron}{rank_text}")
@@ -609,6 +765,7 @@ class CarrierWindow(ThemedWindowMixin):
         self.id_purchased_at.config(text=_fmt_dt(cd.get("carrier_purchased_at")))
         self.id_spawn_system.config(text=cd.get("carrier_spawn_system") or "—")
         self.id_last_synced.config(text=_fmt_dt(cd.get("last_updated")))
+        self._refresh_squadron(cd)
 
         # Pending decom
         if cd.get("pending_decom"):

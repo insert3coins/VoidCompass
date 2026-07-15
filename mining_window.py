@@ -46,19 +46,34 @@ def save_mining_sessions_json(sessions, path=None):
 
 MINING_MATERIALS = {
     "Alexandrite",
+    "Bauxite",
     "Benitoite",
+    "Bertrandite",
     "Bromellite",
+    "Cobalt",
+    "Coltan",
+    "Gallite",
+    "Gold",
     "Grandidierite",
+    "Indite",
+    "Lepidolite",
+    "Lithium Hydroxide",
     "Low Temperature Diamonds",
+    "Methanol Monohydrate Crystals",
     "Monazite",
     "Musgravite",
     "Osmium",
     "Painite",
     "Palladium",
     "Platinum",
+    "Praseodymium",
     "Rhodplumsite",
+    "Rutile",
+    "Samarium",
     "Serendibite",
+    "Silver",
     "Tritium",
+    "Uraninite",
     "Void Opals",
 }
 
@@ -82,9 +97,26 @@ MATERIAL_ALIASES = {
     "monazite": "Monazite",
     "musgravite": "Musgravite",
     "osmium": "Osmium",
+    "bauxite": "Bauxite",
+    "bertrandite": "Bertrandite",
+    "cobalt": "Cobalt",
+    "coltan": "Coltan",
+    "gallite": "Gallite",
+    "gold": "Gold",
+    "indite": "Indite",
+    "lepidolite": "Lepidolite",
+    "lithiumhydroxide": "Lithium Hydroxide",
+    "lithium hydroxide": "Lithium Hydroxide",
+    "methanolmonohydratecrystals": "Methanol Monohydrate Crystals",
+    "methanol monohydrate crystals": "Methanol Monohydrate Crystals",
     "palladium": "Palladium",
+    "praseodymium": "Praseodymium",
     "rhodplumsite": "Rhodplumsite",
+    "rutile": "Rutile",
+    "samarium": "Samarium",
     "serendibite": "Serendibite",
+    "silver": "Silver",
+    "uraninite": "Uraninite",
 }
 
 
@@ -127,12 +159,16 @@ def _ring_body_name(full_body_name, system_name):
 
 class MiningWindow(ThemedWindowMixin):
     def __init__(self, root, config, get_current_system=None, get_cargo_capacity=None, get_current_coords=None,
+                 get_statistics=None, get_missions=None, route_system_callback=None,
                  embedded=False, is_active_callback=None):
         self.root = root
         self.config = config
         self.get_current_system = get_current_system or (lambda: "---")
         self.get_cargo_capacity = get_cargo_capacity or (lambda: 0)
         self.get_current_coords = get_current_coords or (lambda: None)
+        self.get_statistics = get_statistics or (lambda: {})
+        self.get_missions = get_missions or (lambda: {})
+        self.route_system_callback = route_system_callback
         self.is_active_callback = is_active_callback
         self._view_dirty = False
 
@@ -147,6 +183,7 @@ class MiningWindow(ThemedWindowMixin):
         self.session_started_at = None
         self.prospected_count = 0
         self.core_count = 0
+        self.cracked_count = 0
         self.mined_tons = {}
         self.material_stats = {}
         self.latest_prospector = "Waiting for prospector data."
@@ -212,7 +249,7 @@ class MiningWindow(ThemedWindowMixin):
         header.pack(fill=tk.X, padx=12, pady=(12, 8))
         tk.Label(
             header,
-            text="MINING CONTROL",
+            text="MINING COMMAND",
             bg="#0c1014",
             fg=COLOR_ACCENT,
             font=("Segoe UI", 14, "bold"),
@@ -225,11 +262,11 @@ class MiningWindow(ThemedWindowMixin):
             font=("Consolas", 10, "bold"),
         )
         self.session_label.pack(side=tk.LEFT, padx=20)
-        self.start_btn = self._button(header, "Start Session", self.start_session, accent=True)
+        self.start_btn = self._button(header, "START SESSION", self.start_session, accent=True)
         self.start_btn.pack(side=tk.RIGHT, padx=(6, 12), pady=9)
-        self.stop_btn = self._button(header, "Stop", self.stop_session)
+        self.stop_btn = self._button(header, "STOP", self.stop_session)
         self.stop_btn.pack(side=tk.RIGHT, padx=6, pady=9)
-        self.reset_btn = self._button(header, "Reset", self.reset_session)
+        self.reset_btn = self._button(header, "RESET", self.reset_session)
         self.reset_btn.pack(side=tk.RIGHT, padx=6, pady=9)
 
         self.notebook = ttk.Notebook(self.win, style="Mining.TNotebook")
@@ -239,7 +276,6 @@ class MiningWindow(ThemedWindowMixin):
         self._build_prospector_tab()
         self._build_cargo_tab()
         self._build_hotspots_tab()
-        self._build_missions_tab()
         self._build_reports_tab()
 
     def _button(self, parent, text, command, accent=False):
@@ -268,20 +304,38 @@ class MiningWindow(ThemedWindowMixin):
 
     def _build_session_tab(self):
         tab = tk.Frame(self.notebook, bg=COLOR_BG)
-        self.notebook.add(tab, text="Session")
+        self.notebook.add(tab, text="Overview")
+
+        briefing = self._panel(tab)
+        briefing.pack(fill=tk.X, padx=2, pady=(2, 8))
+        self.session_state_label = tk.Label(
+            briefing, text="READY FOR MINING", bg="#11161c", fg=COLOR_GREEN,
+            font=("Segoe UI", 10, "bold"), anchor="w",
+        )
+        self.session_state_label.pack(fill=tk.X, padx=10, pady=(8, 1))
+        self.session_brief_label = tk.Label(
+            briefing, text="Start manually, or fire a prospector limpet to begin automatically.",
+            bg="#11161c", fg="#9aa8b3", font=("Consolas", 8), anchor="w",
+            justify=tk.LEFT, wraplength=900,
+        )
+        self.session_brief_label.pack(fill=tk.X, padx=10, pady=(0, 8))
 
         metrics = tk.Frame(tab, bg=COLOR_BG)
-        metrics.pack(fill=tk.X, padx=2, pady=(2, 10))
-        for col in range(4):
+        metrics.pack(fill=tk.X, padx=2, pady=(0, 8))
+        for col in range(3):
             metrics.grid_columnconfigure(col, weight=1)
         _, self.system_metric = self._metric(metrics, "SYSTEM", self.current_system)
+        _, self.body_metric = self._metric(metrics, "RING / BODY", self.current_body)
         _, self.cargo_metric = self._metric(metrics, "CARGO", "0/0 t")
+        _, self.limpet_metric = self._metric(metrics, "LIMPETS", "0")
         _, self.prospected_metric = self._metric(metrics, "PROSPECTED", "0")
-        _, self.mined_metric = self._metric(metrics, "MINED", "0 t")
+        _, self.mined_metric = self._metric(metrics, "REFINED", "0 t")
         self.system_metric.master.grid(row=0, column=0, sticky="ew", padx=(0, 6))
-        self.cargo_metric.master.grid(row=0, column=1, sticky="ew", padx=6)
-        self.prospected_metric.master.grid(row=0, column=2, sticky="ew", padx=6)
-        self.mined_metric.master.grid(row=0, column=3, sticky="ew", padx=(6, 0))
+        self.body_metric.master.grid(row=0, column=1, sticky="ew", padx=6)
+        self.cargo_metric.master.grid(row=0, column=2, sticky="ew", padx=(6, 0))
+        self.limpet_metric.master.grid(row=1, column=0, sticky="ew", padx=(0, 6), pady=(6, 0))
+        self.prospected_metric.master.grid(row=1, column=1, sticky="ew", padx=6, pady=(6, 0))
+        self.mined_metric.master.grid(row=1, column=2, sticky="ew", padx=(6, 0), pady=(6, 0))
 
         body = tk.Frame(tab, bg=COLOR_BG)
         body.pack(fill=tk.BOTH, expand=True)
@@ -290,7 +344,7 @@ class MiningWindow(ThemedWindowMixin):
         right = self._panel(body)
         right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(6, 0))
 
-        tk.Label(left, text="MATERIAL STATS", bg="#11161c", fg=COLOR_ACCENT, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=10, pady=8)
+        tk.Label(left, text="ASTEROID QUALITY", bg="#11161c", fg=COLOR_ACCENT, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=10, pady=8)
         tree_frame = tk.Frame(left, bg="#11161c")
         tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
         self.material_tree = self._tree(tree_frame, [
@@ -301,7 +355,7 @@ class MiningWindow(ThemedWindowMixin):
             ("latest", "Latest", 70),
         ])
 
-        tk.Label(right, text="MINED CARGO", bg="#11161c", fg=COLOR_ACCENT, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=10, pady=8)
+        tk.Label(right, text="SESSION YIELD", bg="#11161c", fg=COLOR_ACCENT, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=10, pady=8)
         mined_frame = tk.Frame(right, bg="#11161c")
         mined_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
         self.mined_tree = self._tree(mined_frame, [
@@ -311,7 +365,7 @@ class MiningWindow(ThemedWindowMixin):
 
     def _build_prospector_tab(self):
         tab = tk.Frame(self.notebook, bg=COLOR_BG)
-        self.notebook.add(tab, text="Prospector")
+        self.notebook.add(tab, text="Prospecting")
         latest = self._panel(tab)
         latest.pack(fill=tk.X, padx=2, pady=(2, 10))
         tk.Label(latest, text="LATEST PROSPECTOR", bg="#11161c", fg=COLOR_ACCENT, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=10, pady=(8, 0))
@@ -333,16 +387,29 @@ class MiningWindow(ThemedWindowMixin):
 
     def _build_cargo_tab(self):
         tab = tk.Frame(self.notebook, bg=COLOR_BG)
-        self.notebook.add(tab, text="Cargo")
-        frame = self._panel(tab)
-        frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
-        tk.Label(frame, text="LIVE CARGO", bg="#11161c", fg=COLOR_ACCENT, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=10, pady=8)
-        tree_frame = tk.Frame(frame, bg="#11161c")
+        self.notebook.add(tab, text="Cargo & Missions")
+        cargo = self._panel(tab)
+        cargo.pack(fill=tk.BOTH, expand=True, padx=2, pady=(2, 5))
+        tk.Label(cargo, text="LIVE HOLD", bg="#11161c", fg=COLOR_ACCENT, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=10, pady=8)
+        tree_frame = tk.Frame(cargo, bg="#11161c")
         tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
         self.cargo_tree = self._tree(tree_frame, [
             ("name", "Name", 300),
             ("count", "Count", 90),
-            ("mining", "Mining", 90),
+            ("mining", "Mined Commodity", 120),
+        ])
+
+        missions = self._panel(tab)
+        missions.pack(fill=tk.BOTH, expand=True, padx=2, pady=(5, 2))
+        tk.Label(missions, text="MINING CONTRACTS", bg="#11161c", fg=COLOR_ACCENT, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=10, pady=8)
+        mission_frame = tk.Frame(missions, bg="#11161c")
+        mission_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+        self.mission_tree = self._tree(mission_frame, [
+            ("id", "Mission ID", 100),
+            ("commodity", "Commodity", 180),
+            ("progress", "Delivered / Required · Aboard", 210),
+            ("destination", "Destination", 220),
+            ("expires", "Expires", 170),
         ])
 
     def _build_hotspots_tab(self):
@@ -368,9 +435,10 @@ class MiningWindow(ThemedWindowMixin):
         ttk.Combobox(controls, textvariable=self.hotspot_ring_var, values=["All", "Metallic", "Metal Rich", "Rocky", "Icy"], width=14, state="readonly").grid(row=1, column=1, sticky="ew", padx=(8, 0))
         ttk.Combobox(controls, textvariable=self.hotspot_source_var, values=["Both", "Local", "Spansh"], width=10, state="readonly").grid(row=1, column=2, sticky="ew", padx=(8, 0))
         tk.Entry(controls, textvariable=self.hotspot_range_var, width=8, bg="#090c10", fg=COLOR_TEXT, insertbackground=COLOR_ACCENT, relief=tk.FLAT).grid(row=1, column=3, sticky="ew", padx=(8, 0), ipady=4)
-        self._button(controls, "Search", self.search_hotspots, accent=True).grid(row=1, column=4, padx=(10, 0))
-        self._button(controls, "Bookmark", self.bookmark_selected_hotspot).grid(row=1, column=5, padx=(6, 0))
-        self._button(controls, "Import DB", self.import_elitemining_db).grid(row=1, column=6, padx=(6, 0))
+        self._button(controls, "SEARCH", self.search_hotspots, accent=True).grid(row=1, column=4, padx=(10, 0))
+        self._button(controls, "ROUTE", self.route_selected_hotspot).grid(row=1, column=5, padx=(6, 0))
+        self._button(controls, "BOOKMARK", self.bookmark_selected_hotspot).grid(row=1, column=6, padx=(6, 0))
+        self._button(controls, "IMPORT DB", self.import_elitemining_db).grid(row=1, column=7, padx=(6, 0))
         controls.grid_columnconfigure(0, weight=1)
 
         self.hotspot_status_label = tk.Label(frame, text="Local discoveries from journal scans appear here. Use Import DB for an EliteMining user_data.db, or Source=Spansh for live search.", bg="#11161c", fg="#7d8891", font=("Consolas", 8), anchor="w")
@@ -390,25 +458,20 @@ class MiningWindow(ThemedWindowMixin):
             ("res", "RES", 80),
         ])
 
-    def _build_missions_tab(self):
-        tab = tk.Frame(self.notebook, bg=COLOR_BG)
-        self.notebook.add(tab, text="Missions")
-        frame = self._panel(tab)
-        frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
-        tk.Label(frame, text="ACTIVE MINING MISSIONS", bg="#11161c", fg=COLOR_ACCENT, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=10, pady=8)
-        tree_frame = tk.Frame(frame, bg="#11161c")
-        tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
-        self.mission_tree = self._tree(tree_frame, [
-            ("id", "Mission ID", 100),
-            ("commodity", "Commodity", 180),
-            ("progress", "Progress", 120),
-            ("destination", "Destination", 220),
-            ("expires", "Expires", 170),
-        ])
-
     def _build_reports_tab(self):
         tab = tk.Frame(self.notebook, bg=COLOR_BG)
         self.notebook.add(tab, text="History")
+
+        record = tk.Frame(tab, bg=COLOR_BG)
+        record.pack(fill=tk.X, padx=2, pady=(2, 8))
+        for column in range(3):
+            record.grid_columnconfigure(column, weight=1)
+        _, self.lifetime_profit_metric = self._metric(record, "LIFETIME MINING PROFIT", "—")
+        _, self.lifetime_quantity_metric = self._metric(record, "LIFETIME QUANTITY MINED", "—")
+        _, self.lifetime_materials_metric = self._metric(record, "MATERIALS COLLECTED", "—")
+        self.lifetime_profit_metric.master.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        self.lifetime_quantity_metric.master.grid(row=0, column=1, sticky="ew", padx=6)
+        self.lifetime_materials_metric.master.grid(row=0, column=2, sticky="ew", padx=(6, 0))
 
         top = tk.Frame(tab, bg=COLOR_BG)
         top.pack(fill=tk.BOTH, expand=True)
@@ -487,6 +550,8 @@ class MiningWindow(ThemedWindowMixin):
         self.win.destroy()
 
     def start_session(self):
+        if self.session_active:
+            return
         self.session_active = True
         self.session_started_at = time.time()
         started_at = datetime.utcnow().isoformat(timespec="seconds") + "Z"
@@ -497,6 +562,7 @@ class MiningWindow(ThemedWindowMixin):
         )
         self.prospected_count = 0
         self.core_count = 0
+        self.cracked_count = 0
         self.mined_tons = {}
         self.material_stats = {}
         # Create the JSON record for this session
@@ -508,6 +574,7 @@ class MiningWindow(ThemedWindowMixin):
             "body_name": self.current_body,
             "prospected_count": 0,
             "core_count": 0,
+            "cracked_count": 0,
             "mined_tons": {},
             "material_stats": {},
             "in_progress": True,
@@ -530,6 +597,7 @@ class MiningWindow(ThemedWindowMixin):
         self._json_session_key = None
         self.prospected_count = 0
         self.core_count = 0
+        self.cracked_count = 0
         self.mined_tons = {}
         self.material_stats = {}
         self.latest_prospector = "Waiting for prospector data."
@@ -562,6 +630,10 @@ class MiningWindow(ThemedWindowMixin):
             self._process_saa_signals(raw)
         elif ev == "ProspectedAsteroid":
             self._process_prospector(raw)
+        elif ev == "AsteroidCracked":
+            if self.session_active:
+                self.cracked_count += 1
+                self._save_current_session_progress()
         elif ev == "MiningRefined":
             self._process_refined(raw)
         elif ev == "Cargo":
@@ -605,6 +677,10 @@ class MiningWindow(ThemedWindowMixin):
                 cargo = int(status.get("Cargo") or 0)
                 changed = changed or cargo != self.last_status_cargo
                 self.last_status_cargo = cargo
+            if status.get("BodyName"):
+                body = str(status.get("BodyName"))
+                changed = changed or body != self.current_body
+                self.current_body = body
         except Exception:
             pass
         if changed:
@@ -631,6 +707,7 @@ class MiningWindow(ThemedWindowMixin):
             return
         system = raw.get("StarSystem") or self.current_system
         body = _ring_body_name(body_name, system)
+        self.current_body = body
         meta = self.ring_metadata.get((system, body), {})
         for signal in raw.get("Signals", []) or []:
             material = _clean_name(signal.get("Type") or signal.get("Type_Localised"))
@@ -770,13 +847,56 @@ class MiningWindow(ThemedWindowMixin):
             elapsed = f"{seconds // 3600:02d}:{(seconds % 3600) // 60:02d}:{seconds % 60:02d}"
         self.session_label.config(text=f"SESSION: {elapsed}")
         self.system_metric.config(text=str(self.current_system or "---").upper())
+        self.body_metric.config(text=str(self.current_body or "-").upper())
 
         cargo_total = self._cargo_total()
         capacity = self.cargo_capacity or int(self.get_cargo_capacity() or 0)
         self.cargo_metric.config(text=f"{cargo_total}/{capacity} t" if capacity else f"{cargo_total} t")
-        self.prospected_metric.config(text=f"{self.prospected_count} ({self.core_count} core)")
-        self.mined_metric.config(text=f"{sum(self.mined_tons.values())} t")
+        limpets = self._limpet_count()
+        self.limpet_metric.config(text=str(limpets))
+        self.prospected_metric.config(text=f"{self.prospected_count} · {self.core_count} core")
+        mined_total = sum(self.mined_tons.values())
+        rate = 0.0
+        if self.session_active and self.session_started_at:
+            hours = max((time.time() - self.session_started_at) / 3600.0, 1 / 3600.0)
+            rate = mined_total / hours
+        mined_text = f"{mined_total} t"
+        if self.session_active and mined_total:
+            mined_text += f" · {rate:.1f}/h"
+        self.mined_metric.config(text=mined_text)
         self.latest_label.config(text=self.latest_prospector)
+
+        if self.session_active:
+            if self.prospected_count == 0:
+                status = "SESSION ACTIVE · SEEKING ASTEROIDS"
+                brief = "Deploy a prospector limpet. The first result populates asteroid quality and the live prospecting history."
+            elif mined_total == 0:
+                status = "PROSPECTING · TARGET IDENTIFIED"
+                brief = f"{self.prospected_count} asteroid(s) checked, {self.core_count} core candidate(s), {self.cracked_count} core(s) cracked. No refined cargo recorded yet."
+            else:
+                status = "EXTRACTING · REFINERY ACTIVE"
+                brief = f"{mined_total} t refined this session at {rate:.1f} t/h. {limpets} limpet(s) remain and {len(self._current_mining_missions())} mining contract(s) are tracked."
+            self.session_state_label.config(text=status, fg=COLOR_GREEN)
+            self.start_btn.config(state=tk.DISABLED)
+            self.stop_btn.config(state=tk.NORMAL)
+        else:
+            status = "READY FOR MINING"
+            if self._mined_cargo_total():
+                brief = f"{self._mined_cargo_total()} t of recognised mined commodities are aboard. Start manually, or fire a prospector limpet to begin automatically."
+            else:
+                brief = "Start manually, or fire a prospector limpet to begin automatically. Sessions stop automatically when you jump to another system."
+            self.session_state_label.config(text=status, fg=COLOR_ACCENT)
+            self.start_btn.config(state=tk.NORMAL)
+            self.stop_btn.config(state=tk.DISABLED)
+        self.session_brief_label.config(text=brief)
+
+        statistics = self.get_statistics() or {}
+        mining = statistics.get("Mining") if isinstance(statistics, dict) else {}
+        mining = mining if isinstance(mining, dict) else {}
+        if hasattr(self, "lifetime_profit_metric"):
+            self.lifetime_profit_metric.config(text=self._fmt_credits(mining.get("Mining_Profits")))
+            self.lifetime_quantity_metric.config(text=self._fmt_count(mining.get("Quantity_Mined"), " t"))
+            self.lifetime_materials_metric.config(text=self._fmt_count(mining.get("Materials_Collected")))
 
     def _refresh_materials(self):
         self._clear_tree(self.material_tree)
@@ -845,10 +965,15 @@ class MiningWindow(ThemedWindowMixin):
 
     def _refresh_missions(self):
         self._clear_tree(self.mission_tree)
-        for mission in sorted(self.missions.values(), key=lambda m: str(m.get("expires", ""))):
+        cargo_by_name = {
+            _clean_name(item.get("Name_Localised") or item.get("Name")): int(item.get("Count") or 0)
+            for item in self.cargo_inventory
+        }
+        for mission in sorted(self._current_mining_missions(), key=lambda m: str(m.get("expires", ""))):
             required = int(mission.get("required") or 0)
             delivered = int(mission.get("delivered") or 0)
-            progress = f"{delivered}/{required}" if required else str(delivered)
+            aboard = cargo_by_name.get(mission.get("commodity"), 0)
+            progress = f"{delivered}/{required} · {aboard} t" if required else f"{delivered} · {aboard} t"
             self.mission_tree.insert(
                 "",
                 tk.END,
@@ -959,6 +1084,24 @@ class MiningWindow(ThemedWindowMixin):
         self._refresh_bookmarks()
         self.hotspot_status_label.config(text=f"Bookmarked {system} / {body} / {material}.")
 
+    def route_selected_hotspot(self):
+        selection = self.hotspot_tree.selection()
+        if not selection:
+            self.hotspot_status_label.config(text="Select a hotspot row before routing.")
+            return
+        values = self.hotspot_tree.item(selection[0], "values")
+        system = values[0] if values else None
+        if not system or system == "-":
+            self.hotspot_status_label.config(text="The selected hotspot has no system name.")
+            return
+        if callable(self.route_system_callback):
+            self.route_system_callback(system)
+            self.hotspot_status_label.config(text=f"Loaded {system} into Route Command.")
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(system)
+        self.hotspot_status_label.config(text=f"Copied {system} to clipboard.")
+
     def import_elitemining_db(self):
         path = filedialog.askopenfilename(
             parent=self.win,
@@ -993,6 +1136,7 @@ class MiningWindow(ThemedWindowMixin):
             "body_name": self.current_body,
             "prospected_count": self.prospected_count,
             "core_count": self.core_count,
+            "cracked_count": self.cracked_count,
             "mined_tons": sum(self.mined_tons.values()),
             "cargo_json": json.dumps(self.mined_tons, sort_keys=True),
             "material_json": json.dumps(self.material_stats, sort_keys=True),
@@ -1009,6 +1153,7 @@ class MiningWindow(ThemedWindowMixin):
                 rec["body_name"] = self.current_body
                 rec["prospected_count"] = self.prospected_count
                 rec["core_count"] = self.core_count
+                rec["cracked_count"] = self.cracked_count
                 rec["mined_tons"] = dict(self.mined_tons)
                 # Summarise material stats: store avg/best/count per material
                 mat_summary = {}
@@ -1058,6 +1203,7 @@ class MiningWindow(ThemedWindowMixin):
             "body_name": session.get("body_name", ""),
             "prospected_count": session.get("prospected_count", 0),
             "core_count": session.get("core_count", 0),
+            "cracked_count": session.get("cracked_count", 0),
             "mined_tons": sum(mined_tons.values()),
             "cargo_json": json.dumps(mined_tons),
             "material_json": json.dumps(material_json_expanded),
@@ -1117,6 +1263,7 @@ class MiningWindow(ThemedWindowMixin):
   <div class="metric">System: {session.get('system_name') or ''}</div>
   <div class="metric">Prospected: {session.get('prospected_count') or 0}</div>
   <div class="metric">Core: {session.get('core_count') or 0}</div>
+  <div class="metric">Core Cracked: {session.get('cracked_count') or 0}</div>
   <div class="metric">Mined Tons: {session.get('mined_tons') or 0}</div>
   <h2>Cargo</h2>
   <table><tr><th>Commodity</th><th>Tons</th><th>Chart</th></tr>{cargo_rows}</table>
@@ -1133,6 +1280,59 @@ class MiningWindow(ThemedWindowMixin):
         if self.cargo_inventory:
             return sum(int(item.get("Count") or 0) for item in self.cargo_inventory)
         return int(self.last_status_cargo or 0)
+
+    def _limpet_count(self):
+        total = 0
+        for item in self.cargo_inventory:
+            name = _clean_name(item.get("Name_Localised") or item.get("Name")).lower()
+            if name in ("limpet", "limpets", "drone", "drones"):
+                total += int(item.get("Count") or 0)
+        return total
+
+    def _mined_cargo_total(self):
+        return sum(
+            int(item.get("Count") or 0)
+            for item in self.cargo_inventory
+            if _clean_name(item.get("Name_Localised") or item.get("Name")) in MINING_MATERIALS
+        )
+
+    def _current_mining_missions(self):
+        combined = {str(key): dict(value) for key, value in self.missions.items() if isinstance(value, dict)}
+        try:
+            companion_missions = self.get_missions() or {}
+        except Exception:
+            companion_missions = {}
+        for key, mission in companion_missions.items():
+            if not isinstance(mission, dict) or mission.get("kind") != "mining":
+                continue
+            mission_id = mission.get("id", key)
+            combined[str(mission_id)] = {
+                "id": mission_id,
+                "commodity": _clean_name(mission.get("commodity") or mission.get("commodity_symbol")),
+                "required": int(mission.get("count") or mission.get("to_deliver") or 0),
+                "delivered": int(mission.get("delivered") or 0),
+                "destination": mission.get("destination_station") or mission.get("destination_system") or "-",
+                "expires": mission.get("expiry") or "-",
+            }
+        return list(combined.values())
+
+    @staticmethod
+    def _fmt_credits(value):
+        if value is None:
+            return "—"
+        try:
+            return f"{int(value):,} CR"
+        except Exception:
+            return str(value)
+
+    @staticmethod
+    def _fmt_count(value, suffix=""):
+        if value is None:
+            return "—"
+        try:
+            return f"{int(value):,}{suffix}"
+        except Exception:
+            return str(value)
 
     @staticmethod
     def _clear_tree(tree):
