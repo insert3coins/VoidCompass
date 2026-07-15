@@ -52,7 +52,7 @@ def resource_path(relative_path):
 
     return os.path.join(base_path, relative_path)
 
-if __name__ == "__main__":
+def main():
     startup_config = load_config()
     crash_reporting_enabled = bool(startup_config.get("crash_reporting_enabled", True))
     if crash_reporting_enabled:
@@ -66,6 +66,11 @@ if __name__ == "__main__":
 
     try:
         root = tk.Tk()
+        # Do not let Windows map Tk's small default root while the dashboard is
+        # still being constructed.  Apart from looking like a stray startup
+        # window, mapping it early can make child HUDs report transient window
+        # manager coordinates before their saved positions are reapplied.
+        root.withdraw()
         if crash_reporting_enabled:
             crash_reporter.install_tk(root)
             root.bind_all("<Control-Alt-d>", lambda _event: crash_reporter.dump_stacks("manual Ctrl+Alt+D"))
@@ -77,8 +82,15 @@ if __name__ == "__main__":
             pass # Icon file likely missing or invalid
 
         app = MainDashboard(root)
+        root.update_idletasks()
+        root.deiconify()
+        root.lift()
         root.mainloop()
     except BaseException:
         if crash_reporting_enabled:
             crash_reporter.log_exception(*sys.exc_info(), source="main")
         raise
+
+
+if __name__ == "__main__":
+    main()
