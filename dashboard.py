@@ -70,6 +70,20 @@ from diagnostic_logs import application_base_dir, resolve_log_path
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
+    _OVERLAY_POSITION_SPECS = (
+        ("hud", "hud_x", "hud_y"),
+        ("cargo_hud", "cargo_hud_x", "cargo_hud_y"),
+        ("carrier_hud", "carrier_hud_x", "carrier_hud_y"),
+        ("prospector_hud", "prospector_hud_x", "prospector_hud_y"),
+        ("system_info_hud", "system_info_hud_x", "system_info_hud_y"),
+        ("gravity_warning_hud", "gravity_warning_hud_x", "gravity_warning_hud_y"),
+        ("station_info_hud", "station_info_hud_x", "station_info_hud_y"),
+        ("survey_status_hud", "survey_status_hud_x", "survey_status_hud_y"),
+        ("toast_hud", "toast_hud_x", "toast_hud_y"),
+        ("heartbeat_hud", "heartbeat_hud_x", "heartbeat_hud_y"),
+        ("colony_overlay", "colony_overlay_x", "colony_overlay_y"),
+    )
+
     _COCKPIT_BRAIN_MILESTONES = {
         "systems": (10, 25, 50, 100, 250, 500, 1000, 2500, 5000),
         "species": (10, 25, 50, 100, 250, 500, 1000, 2000),
@@ -662,7 +676,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._ui_watchdog_interval_ms = 50
         self._ui_watchdog_spike_ms = float(self.config.get("ui_watchdog_spike_ms", 120.0))
         self._ui_watchdog_last_ts = time.perf_counter()
-        self._overlay_pos_last_saved = {"hud": None, "cargo": None, "carrier": None, "scan": None, "system_info": None, "colony": None}
+        self._overlay_pos_last_saved = {
+            attr: None for attr, _x_key, _y_key in self._OVERLAY_POSITION_SPECS
+        }
         self._overlay_sync_grace_until = time.time() + 4.0
         trace_path = resolve_log_path(
             "runtime_trace.log",
@@ -872,43 +888,70 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._tick_cockpit_ambient()
 
     def _reapply_overlay_positions(self):
-        try:
-            if self.hud and self.hud.win and self.hud.win.winfo_exists():
-                hx = int(float(self.config.get("hud_x", self.hud.win.winfo_x())))
-                hy = int(float(self.config.get("hud_y", self.hud.win.winfo_y())))
-                self.hud.win.geometry(f"{self.hud.width}x{self.hud.base_height}+{hx}+{hy}")
-        except Exception:
-            pass
-        try:
-            if self.cargo_hud and self.cargo_hud.win and self.cargo_hud.win.winfo_exists():
-                cx = int(float(self.config.get("cargo_hud_x", self.cargo_hud.win.winfo_x())))
-                cy = int(float(self.config.get("cargo_hud_y", self.cargo_hud.win.winfo_y())))
-                self.cargo_hud.win.geometry(f"300x400+{cx}+{cy}")
-        except Exception:
-            pass
-        try:
-            if self.carrier_hud and self.carrier_hud.win and self.carrier_hud.win.winfo_exists():
-                fx = int(float(self.config.get("carrier_hud_x", self.carrier_hud.win.winfo_x())))
-                fy = int(float(self.config.get("carrier_hud_y", self.carrier_hud.win.winfo_y())))
-                self.carrier_hud.win.geometry(f"+{fx}+{fy}")
-        except Exception:
-            pass
+        for attr, x_key, y_key in self._OVERLAY_POSITION_SPECS:
+            overlay = getattr(self, attr, None)
+            win = getattr(overlay, "win", None)
+            if not win:
+                continue
+            try:
+                if not win.winfo_exists() or x_key not in self.config or y_key not in self.config:
+                    continue
+                x = int(float(self.config[x_key]))
+                y = int(float(self.config[y_key]))
+                # Position-only geometry preserves each HUD's current/dynamic size.
+                win.geometry(f"+{x}+{y}")
+                self._overlay_pos_last_saved[attr] = (x, y)
+            except (TypeError, ValueError, tk.TclError):
+                continue
         self.root.after(250, self._log_applied_overlay_positions)
 
     def _log_applied_overlay_positions(self):
         try:
-            hxy = "-"
-            cxy = "-"
-            fxy = "-"
-            if self.hud and self.hud.win and self.hud.win.winfo_exists():
-                hxy = f"{self.hud.win.winfo_x()},{self.hud.win.winfo_y()}"
-            if self.cargo_hud and self.cargo_hud.win and self.cargo_hud.win.winfo_exists():
-                cxy = f"{self.cargo_hud.win.winfo_x()},{self.cargo_hud.win.winfo_y()}"
-            if self.carrier_hud and self.carrier_hud.win and self.carrier_hud.win.winfo_exists():
-                fxy = f"{self.carrier_hud.win.winfo_x()},{self.carrier_hud.win.winfo_y()}"
-            self.log(f"CONFIG FILE: APPLIED HUD({hxy}) | CARGO({cxy}) | CARRIER({fxy})")
+            positions = []
+            for attr, _x_key, _y_key in self._OVERLAY_POSITION_SPECS:
+                overlay = getattr(self, attr, None)
+                win = getattr(overlay, "win", None)
+                if win and win.winfo_exists():
+                    positions.append(
+                        f"{attr.upper()}({win.winfo_x()},{win.winfo_y()})"
+                    )
+            self.log("CONFIG FILE: APPLIED " + " | ".join(positions))
         except Exception:
             pass
+
+    def _capture_overlay_positions(self):
+        """Copy stable live HUD coordinates into config without writing it."""
+        changed = False
+        for attr, x_key, y_key in self._OVERLAY_POSITION_SPECS:
+            overlay = getattr(self, attr, None)
+            win = getattr(overlay, "win", None)
+            if not win:
+                continue
+            try:
+                if not win.winfo_exists():
+                    continue
+                pos = (int(win.winfo_x()), int(win.winfo_y()))
+                configured = None
+                if x_key in self.config and y_key in self.config:
+                    configured = (
+                        int(float(self.config[x_key])),
+                        int(float(self.config[y_key])),
+                    )
+                # Withdrawn or not-yet-mapped windows commonly report (0, 0).
+                # Preserve a real configured position, and do not manufacture a
+                # new (0, 0) value when an optional position has never been set.
+                if pos == (0, 0):
+                    if configured is None:
+                        continue
+                    if configured != (0, 0):
+                        pos = configured
+                self._overlay_pos_last_saved[attr] = pos
+                if configured != pos:
+                    self.config[x_key], self.config[y_key] = pos
+                    changed = True
+            except (TypeError, ValueError, tk.TclError):
+                continue
+        return changed
 
     @staticmethod
     def _perf_start():
@@ -957,86 +1000,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def _tick_overlay_position_sync(self):
         if not self.is_running:
             return
-        changed = False
         now = time.time()
-        try:
-            if self.hud and self.hud.win and self.hud.win.winfo_exists():
-                pos = (int(self.hud.win.winfo_x()), int(self.hud.win.winfo_y()))
-                cfg_pos = (
-                    int(float(self.config.get("hud_x", pos[0]))),
-                    int(float(self.config.get("hud_y", pos[1]))),
-                )
-                # Never trust a (0,0) reading — it means the window is minimised,
-                # hidden, or the WM hasn't placed it yet. Keep the last good position.
-                if pos == (0, 0) and cfg_pos != (0, 0):
-                    pos = cfg_pos
-                if self._overlay_pos_last_saved.get("hud") != pos:
-                    self._overlay_pos_last_saved["hud"] = pos
-                    self.config["hud_x"], self.config["hud_y"] = pos
-                    changed = True
-        except Exception:
-            pass
-        try:
-            if self.cargo_hud and self.cargo_hud.win and self.cargo_hud.win.winfo_exists():
-                pos = (int(self.cargo_hud.win.winfo_x()), int(self.cargo_hud.win.winfo_y()))
-                cfg_pos = (
-                    int(float(self.config.get("cargo_hud_x", pos[0]))),
-                    int(float(self.config.get("cargo_hud_y", pos[1]))),
-                )
-                if pos == (0, 0) and cfg_pos != (0, 0):
-                    pos = cfg_pos
-                if self._overlay_pos_last_saved.get("cargo") != pos:
-                    self._overlay_pos_last_saved["cargo"] = pos
-                    self.config["cargo_hud_x"], self.config["cargo_hud_y"] = pos
-                    changed = True
-        except Exception:
-            pass
-        try:
-            if self.carrier_hud and self.carrier_hud.win and self.carrier_hud.win.winfo_exists():
-                pos = (int(self.carrier_hud.win.winfo_x()), int(self.carrier_hud.win.winfo_y()))
-                cfg_pos = (
-                    int(float(self.config.get("carrier_hud_x", pos[0]))),
-                    int(float(self.config.get("carrier_hud_y", pos[1]))),
-                )
-                if pos == (0, 0) and cfg_pos != (0, 0):
-                    pos = cfg_pos
-                if self._overlay_pos_last_saved.get("carrier") != pos:
-                    self._overlay_pos_last_saved["carrier"] = pos
-                    self.config["carrier_hud_x"], self.config["carrier_hud_y"] = pos
-                    changed = True
-        except Exception:
-            pass
-        try:
-            if self.system_info_hud and self.system_info_hud.win and self.system_info_hud.win.winfo_exists():
-                pos = (int(self.system_info_hud.win.winfo_x()), int(self.system_info_hud.win.winfo_y()))
-                cfg_pos = (
-                    int(float(self.config.get("system_info_hud_x", pos[0]))),
-                    int(float(self.config.get("system_info_hud_y", pos[1]))),
-                )
-                if pos == (0, 0) and cfg_pos != (0, 0):
-                    pos = cfg_pos
-                if self._overlay_pos_last_saved.get("system_info") != pos:
-                    self._overlay_pos_last_saved["system_info"] = pos
-                    self.config["system_info_hud_x"], self.config["system_info_hud_y"] = pos
-                    changed = True
-        except Exception:
-            pass
-        try:
-            if self.colony_overlay and self.colony_overlay.win and self.colony_overlay.win.winfo_exists():
-                pos = (int(self.colony_overlay.win.winfo_x()), int(self.colony_overlay.win.winfo_y()))
-                cfg_pos = (
-                    int(float(self.config.get("colony_overlay_x", pos[0]))),
-                    int(float(self.config.get("colony_overlay_y", pos[1]))),
-                )
-                if pos == (0, 0) and cfg_pos != (0, 0):
-                    pos = cfg_pos
-                if self._overlay_pos_last_saved.get("colony") != pos:
-                    self._overlay_pos_last_saved["colony"] = pos
-                    self.config["colony_overlay_x"], self.config["colony_overlay_y"] = pos
-                    changed = True
-        except Exception:
-            pass
-        if changed:
+        if now < self._overlay_sync_grace_until:
+            remaining_ms = int((self._overlay_sync_grace_until - now) * 1000) + 25
+            self.root.after(max(100, min(700, remaining_ms)), self._tick_overlay_position_sync)
+            return
+        if self._capture_overlay_positions():
             self._save_config_file()
         self.root.after(700, self._tick_overlay_position_sync)
 
@@ -1115,37 +1084,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._stop_market_import_worker()
         self.watcher.stop()
         self.screenshots.stop()
-        try:
-            if self.hud and self.hud.win and self.hud.win.winfo_exists():
-                x, y = int(self.hud.win.winfo_x()), int(self.hud.win.winfo_y())
-                if x != 0 or y != 0:
-                    self.config["hud_x"], self.config["hud_y"] = x, y
-        except Exception:
-            pass
-        try:
-            if self.cargo_hud and self.cargo_hud.win and self.cargo_hud.win.winfo_exists():
-                x, y = int(self.cargo_hud.win.winfo_x()), int(self.cargo_hud.win.winfo_y())
-                if x != 0 or y != 0:
-                    self.config["cargo_hud_x"], self.config["cargo_hud_y"] = x, y
-        except Exception:
-            pass
-        try:
-            if self.carrier_hud and self.carrier_hud.win and self.carrier_hud.win.winfo_exists():
-                x, y = int(self.carrier_hud.win.winfo_x()), int(self.carrier_hud.win.winfo_y())
-                if x != 0 or y != 0:
-                    self.config["carrier_hud_x"], self.config["carrier_hud_y"] = x, y
-        except Exception:
-            pass
-        try:
-            if self.colony_overlay and self.colony_overlay.win and self.colony_overlay.win.winfo_exists():
-                x, y = int(self.colony_overlay.win.winfo_x()), int(self.colony_overlay.win.winfo_y())
-                w, h = int(self.colony_overlay.win.winfo_width()), int(self.colony_overlay.win.winfo_height())
-                if x != 0 or y != 0:
-                    self.config["colony_overlay_x"], self.config["colony_overlay_y"] = x, y
-                if w > 0 and h > 0:
-                    self.config["colony_overlay_w"], self.config["colony_overlay_h"] = w, h
-        except Exception:
-            pass
+        if time.time() >= self._overlay_sync_grace_until:
+            self._capture_overlay_positions()
+            try:
+                if self.colony_overlay and self.colony_overlay.win and self.colony_overlay.win.winfo_exists():
+                    w = int(self.colony_overlay.win.winfo_width())
+                    h = int(self.colony_overlay.win.winfo_height())
+                    if w > 0 and h > 0:
+                        self.config["colony_overlay_w"], self.config["colony_overlay_h"] = w, h
+            except Exception:
+                pass
         self.config["main_geometry"] = self.root.geometry()
         self._persist_config()
         if hasattr(self, 'conn'):

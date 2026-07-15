@@ -1,5 +1,14 @@
 # VoidCompass // UPDATE LOG
 
+## v4.7.5 // Stable Startup & Overlay Positions
+**Release Date:** 2026-Jul-15
+
+### Startup & HUD Persistence
+*   Removed the small temporary Tk window that appeared before the dashboard by keeping the main root hidden until the complete interface is ready.
+*   Added a four-second startup settling period during which transient Windows coordinates cannot overwrite saved overlay positions. Hidden or not-yet-mapped `(0,0)` readings are also rejected when a valid saved position exists.
+*   Unified saved-position reapplication, live persistence, and shutdown capture across the Navigation, Cargo, Carrier, Prospector, System Info, Gravity Warning, Station Info, Survey Status, Toast, Heartbeat, and Colony overlays while preserving each HUD's dynamic size.
+*   Confirmed overlay coordinates round-trip through the active commander profile; the Ground Target popup continues to retain its complete saved geometry independently.
+
 ## v4.7.4 // Compass Cognitive Engine
 **Release Date:** 2026-Jul-14
 
