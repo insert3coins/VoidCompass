@@ -1,5 +1,26 @@
 # VoidCompass // UPDATE LOG
 
+## v4.8.4 // Squadron & Mining Command
+**Release Date:** 2026-Jul-16
+
+### Squadron Command
+*   Added a dedicated **Squadron Command** workspace inside Galaxy, keeping squadron operations beside the existing faction, conflict, Powerplay, Community Goal and BGS history tools instead of creating another main navigation page.
+*   Expanded persistent journal awareness beyond name and numeric rank to include Squadron ID, reported rank name, membership freshness, applications, invitations, promotions/demotions, departures, removals, disbanding, shared-bookmark actions and trophy wins.
+*   Added a bounded, de-duplicated Squadron activity timeline plus retained trophy and bookmark counters. Repeated `SquadronStartup` events refresh membership without spamming the timeline.
+*   Turned existing watched factions into visible Squadron BGS objectives, with current-system influence, conflict and Community Goal context, direct Galaxy access, and an integrated Squadron Carrier snapshot with one-click Carrier Command access.
+*   Kept Frontier's journal boundary explicit: member rosters, online presence, squadron chat and complete leaderboard tables are not inferred when the game does not publish them.
+
+### Mining Command Recomposition
+*   Rebuilt Mining around a low-noise **Overview**, **Prospecting**, combined **Cargo & Missions**, **Hotspots**, and **History** workflow while preserving automatic first-prospector session starts, manual controls and automatic session completion on system jumps.
+*   Added a live operational briefing with system/ring context, hold use, limpet count, asteroid and core counts, refined tonnage, yield rate, remaining limpets and tracked mining contracts.
+*   Combined the live cargo hold and persistent companion mining missions, including delivered/required progress and matching commodity tonnage currently aboard.
+*   Expanded recognised mined commodities using current journal evidence, retained detailed prospector quality and refinery tracking, and added core-crack recording to session persistence and HTML reports.
+*   Improved Hotspots with direct hand-off to the existing manual Route Command plotter while retaining local journal discoveries, Spansh search, EliteMining database imports and bookmarks.
+*   Added lifetime Mining profit, quantity mined and materials-collected records from the persisted `Statistics.Mining` journal snapshot; no market value or profit is guessed from stale prices.
+
+### Documentation
+*   Rebuilt the main README around the current 4.8 command workspaces, local Compass architecture, integrations, source setup and executable build flow. Replaced the stale 4.3-era images with current Dashboard, Squadron Command, Mining Command, Navigation HUD and Achievement Centre captures.
+
 ## v4.8.3 // Command Workspaces
 **Release Date:** 2026-Jul-16
 
@@ -29,6 +50,7 @@
 
 ### Squadron Carrier Awareness
 *   Extended the existing Carrier Command panel for Frontier's journal-backed `CarrierStats.CarrierType`, distinguishing personal `FleetCarrier` and squadron-owned `SquadronCarrier` records without creating a second carrier tracker.
+*   Added an always-visible **Squadron** tab that acts as a pre-ownership readiness page, then becomes a live identity, access, operations, expedition and Discord command view when a Squadron Carrier is detected.
 *   Added carrier type plus squadron name/rank to Carrier Overview using `SquadronStartup`, creation/join, promotion/demotion, leave, kick, and disband journal events. Missing membership or management data remains explicitly unsynced rather than inferred.
 *   Preserved the existing jump, expedition, fuel, finance, storage, services, trade-order, HUD, and Discord paths for either carrier type. Personal-carrier upkeep rates are not applied to a squadron carrier; its journal finance remains authoritative.
 *   Extended the existing Carrier Discord webhook to Squadron Carrier jump-plotted, jump-complete, cancellation, cooldown-ready, manual status, and test notifications. Embeds now identify personal versus squadron carriers and include the squadron name/rank when journal data is available; the shared webhook remains configurable under **Settings → Integrations**.

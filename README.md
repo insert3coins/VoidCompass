@@ -1,32 +1,112 @@
 # Void Compass
 
-Real-time Elite Dangerous companion app — desktop dashboard, in-game overlays, route planning, EDSM integration, and a native achievement system.
+**Current version: 4.8.4**
 
-![Dashboard](DashBoard.PNG)
+Void Compass is a native Windows companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
 
-## Features
+![Void Compass operational dashboard](DashBoard.PNG)
 
-- **Live dashboard** — current system, nav route, scan progress, fleet carrier, traffic, and a live event timeline, all driven off the journal in real time.
-- **Overlays** — tactical navigation HUD, cargo, scan results, station info, gravity warnings, and more, each independently toggleable.
-- **Route planning** — waypoint management, EDSM sync, Spansh/CSV import, duplicate handling, and CSV export with cumulative LY.
-- **Career tools** — trade, mining, colonisation, BGS, carrier, and engineer material tracking.
-- **Achievements** — 1,023 journal-driven milestones with per-commander progress and live toast unlocks.
-- **Multi-commander** — separate profiles, data, and EDSM credentials per commander, detected automatically from the journal.
-- **Themes** — 10 built-in themes plus a full custom theme editor.
-- **Living Compass AI** — bounded per-commander memory, moods and learned habits, Piper voice callouts, 15 behavioural personas, and a GPU-free cognitive adviser that learns personal baselines and advice usefulness.
+## Command workspaces
+
+| Workspace | Purpose |
+| --- | --- |
+| **Dashboard** | Low-noise flight and Compass briefings, active objective, route/waypoint context, carrier expedition status and a filtered live activity stream. |
+| **Profile** | Career ranks, reputation, achievements, lifetime statistics, fleet and loadouts, missions, backups and integration state. |
+| **Explore** | System history, scan values, biological survey records, Captain's Log and expedition chronicle tools. |
+| **Achieve** | 1,023 native journal-driven achievements with per-commander progress, category controls and toast unlocks. |
+| **Trade** | One-click trade overview plus routes, markets, local opportunities, watch tracking and EDDN-maintained market data. |
+| **Mining** | Live session briefing, prospecting quality, refinery yield, cargo and mining contracts, hotspot search, bookmarks and reports. |
+| **Route** | Separate Elite `NavRoute.json` and expedition-waypoint lanes, waypoint management, CSV/Spansh imports and a manual neutron plotter. |
+| **Carrier** | Personal and Squadron Carrier identity, fuel, jump operations, expedition route, finance, services and Discord notifications. |
+| **Colony** | Architect Command Centre for colonisation projects, contributions, cargo requirements and persistent planning. |
+| **Galaxy** | Current-system factions, influence watches, conflicts, Powerplay, Community Goals, BGS history and Squadron Command. |
+| **Engineer** | Blueprint goals, combined shopping lists, material inventory, engineer access, traders and jumponium reserves. |
+
+### Squadron Command
+
+Galaxy includes a dedicated Squadron Command page for journal-backed membership, named rank, Squadron ID, applications, invitations, promotions, trophy wins, shared bookmarks and a bounded activity timeline. Existing faction watches become persistent squadron BGS objectives, while Squadron Carrier operations remain connected to Carrier Command.
+
+Frontier does not publish a complete member roster, online presence, squadron chat or full leaderboard tables through the journal, so Void Compass leaves those fields unavailable instead of inventing them.
+
+![Squadron Command workspace](SquadronCommand.PNG)
+
+*Representative populated Squadron Command state; the page only displays facts reported by the commander's own journal.*
+
+### Mining Command
+
+Mining follows the complete session flow: start manually or automatically with the first prospector limpet, inspect asteroid quality, track core finds and cracks, monitor refined tonnage and hourly yield, reconcile cargo against mining contracts, search local or Spansh hotspot data, and hand a selected system to Route Command.
+
+![Mining Command workspace](MiningCommand.PNG)
+
+## Native overlays
+
+Every overlay can be enabled independently, dragged to a saved position and styled with the active theme:
+
+- Navigation HUD with game-route/waypoint switching, scan progress, traffic, biology, value and optional CRT effects.
+- Survey Status with body names, scan state, notable worlds and biological sampling progress.
+- Cargo, Fleet Carrier, Prospector, System Information, Station Information and Colony overlays.
+- Gravity, touchdown/liftoff, on-foot and other low-noise safety notifications.
+- Toast notifications and the journal/Compass heartbeat pulse.
 
 ![Navigation HUD](NavHud.PNG)
-![Achievements](Achievements.PNG)
 
-## Setup
+## Achievements and commander profiles
 
-```
-pip install -r requirements.txt
+Achievement progress, companion memory, Captain's Log, carrier state, engineering plans, mining history, routes and integration settings are separated by commander profile. The active commander is detected from the journal and can be changed without mixing personal data.
+
+![Native Achievement Centre](Achievements.PNG)
+
+## Compass cockpit companion
+
+Compass runs locally without an LLM, Ollama service or GPU workload. Its bounded per-commander memory combines verified navigation, survey, biology, mission, trade, mining, engineering, carrier, social and data-sale context.
+
+The deterministic cognition engine learns personal baselines and whether advice was useful, varies verified wording, remembers notable episodes, chooses useful silence and supports 15 behavioural personas. Optional Piper voice packs provide cached neural speech; urgent safety callouts remain isolated from persona styling.
+
+## Integrations
+
+- **Elite journal and companion files** provide all live game state.
+- **EDSM** upload and traffic lookup are optional and use per-commander credentials.
+- **EDDN** incrementally maintains the local market database after its initial seed.
+- **Spansh** supports manual neutron routes, ring/hotspot searches and trader lookups.
+- **Discord webhooks** can announce personal or Squadron Carrier operations.
+- **Piper** voice packs are optional; regular system TTS remains available.
+
+Void Compass does not require an account or cloud database. Network integrations only run when their associated feature is enabled or requested.
+
+## Run from source
+
+Requirements:
+
+- Windows 10 or 11
+- Python 3.10 or newer
+- Elite Dangerous journal access
+
+From PowerShell:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 python VoidCompass.py
 ```
 
-`config.json` is created automatically on first launch. If journal auto-detect fails, set `journal_path` (default: `C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous`). Everything else is configurable in-app via **[ CONFIGURATION ]** and **SETTINGS**.
+`config.json` is created automatically in the working directory. If journal detection fails, set `journal_path` in Settings; the normal location is:
 
-Compass runs entirely locally without an LLM service. Its per-commander working brain combines verified route, survey, biology, mission, trade, mining, engineering, data-sale and learned-personality context. A bounded cognition engine ranks observations by utility, chooses useful silence, varies verified wording, recalls relevant episodes, tracks goals, learns personal baselines and whether advice was acted upon, and reports its reasoning in **Settings → Compass AI → Cognitive State**. Choose from 15 deterministic behavioural personas—from Tactical and Scientific to Deadpan, Companion, or Emergent. Urgent safety callouts remain isolated from persona styling and cognitive commentary.
+```text
+C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous
+```
 
-o7
+## Build the Windows executables
+
+```powershell
+python build.py
+```
+
+The PyInstaller build produces `dist\VoidCompass.exe` and `dist\VoidCompassMarketBuilder.exe`, then copies the current update log and required runtime data into `dist`.
+
+See [mini-readme.md](mini-readme.md) for the detailed release history.
+
+## Disclaimer
+
+Void Compass is an independent community project and is not affiliated with or endorsed by Frontier Developments. Elite Dangerous and its related marks belong to their respective owners.

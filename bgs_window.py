@@ -61,6 +61,8 @@ class BGSWindow(ThemedWindowMixin):
         purge_empty_cb: Callable[[], int | None] | None = None,
         get_galaxy_state_cb: Callable[[], dict] | None = None,
         toggle_faction_watch_cb: Callable[[str], bool] | None = None,
+        get_carrier_state_cb: Callable[[], dict] | None = None,
+        open_carrier_cb: Callable[[], None] | None = None,
         embedded=False,
     ):
         """
@@ -76,6 +78,8 @@ class BGSWindow(ThemedWindowMixin):
         self._purge_empty_bgs  = purge_empty_cb
         self._get_galaxy_state = get_galaxy_state_cb or (lambda: {})
         self._toggle_faction_watch = toggle_faction_watch_cb
+        self._get_carrier_state = get_carrier_state_cb or (lambda: {})
+        self._open_carrier = open_carrier_cb
         self._selected_system: str | None = None
         self._all_systems: list = []
         self._system_iids: dict[str, str] = {}
@@ -83,6 +87,7 @@ class BGSWindow(ThemedWindowMixin):
         self._galaxy_resize_job = None
         self._galaxy_compact = None
         self._galaxy_detail = None
+        self._squadron_compact = None
 
         self.embedded = embedded
         self.win = window_surface(root, embedded=embedded)
@@ -120,6 +125,7 @@ class BGSWindow(ThemedWindowMixin):
 
     def _do_refresh(self):
         self._render_galaxy_overview()
+        self._render_squadron_command()
         self._all_systems = self._load_systems()
         self._reload_list()
         if self._selected_system:
@@ -171,10 +177,13 @@ class BGSWindow(ThemedWindowMixin):
         self._tabs = ttk.Notebook(self.win, style="BGS.TNotebook")
         self._tabs.pack(fill=tk.BOTH, expand=True, padx=8, pady=(6, 8))
         self._galaxy_tab = tk.Frame(self._tabs, bg=self.UI_BG)
+        self._squadron_tab = tk.Frame(self._tabs, bg=self.UI_BG)
         self._history_tab = tk.Frame(self._tabs, bg=self.UI_BG)
         self._tabs.add(self._galaxy_tab, text="GALAXY OVERVIEW")
+        self._tabs.add(self._squadron_tab, text="SQUADRON COMMAND")
         self._tabs.add(self._history_tab, text="BGS HISTORY")
         self._build_galaxy_overview()
+        self._build_squadron_command()
 
         # Main split: left list + right detail
         main = tk.Frame(self._history_tab, bg=self.UI_BG)
@@ -378,6 +387,259 @@ class BGSWindow(ThemedWindowMixin):
         if detail_label:
             self._bind_galaxy_scroll(detail_label)
         return row
+
+    # ── Squadron command ─────────────────────────────────────────────────────
+
+    def _build_squadron_command(self):
+        body = tk.Frame(self._squadron_tab, bg=self.UI_BG)
+        body.pack(fill=tk.BOTH, expand=True)
+        self._squadron_canvas = tk.Canvas(body, bg=self.UI_BG, highlightthickness=0, bd=0)
+        scroll = scrollbar(body, orient=tk.VERTICAL, command=self._squadron_canvas.yview)
+        self._squadron_content = tk.Frame(self._squadron_canvas, bg=self.UI_BG)
+        window = self._squadron_canvas.create_window(
+            (0, 0), window=self._squadron_content, anchor="nw")
+        self._squadron_canvas.configure(yscrollcommand=scroll.set)
+        self._squadron_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self._squadron_content.bind(
+            "<Configure>",
+            lambda _event: self._squadron_canvas.configure(
+                scrollregion=self._squadron_canvas.bbox("all")),
+        )
+        self._squadron_canvas.bind(
+            "<Configure>",
+            lambda event: self._on_squadron_canvas_configure(window, event),
+        )
+        self._bind_squadron_scroll(self._squadron_canvas)
+        self._bind_squadron_scroll(self._squadron_content)
+        self._render_squadron_command()
+
+    def _bind_squadron_scroll(self, widget):
+        widget.bind("<MouseWheel>", self._on_squadron_mousewheel, add="+")
+
+    def _on_squadron_mousewheel(self, event):
+        if self._squadron_canvas.bbox("all"):
+            self._squadron_canvas.yview_scroll(int(-event.delta / 120), "units")
+        return "break"
+
+    def _on_squadron_canvas_configure(self, window, event):
+        self._squadron_canvas.itemconfigure(window, width=event.width)
+        compact = event.width < 760
+        if compact != self._squadron_compact:
+            self._squadron_compact = compact
+            self.win.after_idle(self._render_squadron_command)
+
+    def _squadron_card(self, parent, title, row, column, columnspan=1, accent=None):
+        card = tk.Frame(
+            parent, bg=self.UI_PANEL, highlightbackground=accent or self.UI_BORDER,
+            highlightthickness=1, bd=0,
+        )
+        card.grid(row=row, column=column, columnspan=columnspan, sticky="nsew", padx=5, pady=5)
+        tk.Frame(card, bg=accent or "#c4b5fd", height=2).pack(fill=tk.X)
+        tk.Label(
+            card, text=title, fg=accent or "#c4b5fd", bg=self.UI_PANEL,
+            font=("Segoe UI", 8, "bold"), anchor="w",
+        ).pack(fill=tk.X, padx=12, pady=(9, 5))
+        self._bind_squadron_scroll(card)
+        for child in card.winfo_children():
+            self._bind_squadron_scroll(child)
+        return card
+
+    def _squadron_line(self, parent, title, detail="", fg=COLOR_TEXT):
+        row = tk.Frame(parent, bg=self.UI_PANEL)
+        row.pack(fill=tk.X, padx=12, pady=3)
+        title_label = tk.Label(
+            row, text=str(title), fg=fg, bg=self.UI_PANEL,
+            font=("Consolas", 9, "bold"), anchor="w",
+        )
+        title_label.pack(side=tk.LEFT)
+        if detail not in ("", None):
+            detail_label = tk.Label(
+                row, text=str(detail), fg=self.UI_MUTED, bg=self.UI_PANEL,
+                font=("Consolas", 8), anchor="e", justify=tk.RIGHT,
+                wraplength=230 if self._squadron_compact else 390,
+            )
+            detail_label.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+            self._bind_squadron_scroll(detail_label)
+        self._bind_squadron_scroll(row)
+        self._bind_squadron_scroll(title_label)
+        return row
+
+    @staticmethod
+    def _squadron_event_label(event):
+        return {
+            "AppliedToSquadron": "APPLICATION",
+            "InvitedToSquadron": "INVITATION",
+            "JoinedSquadron": "JOINED",
+            "SquadronCreated": "CREATED",
+            "SquadronPromotion": "PROMOTION",
+            "SquadronDemotion": "DEMOTION",
+            "LeftSquadron": "LEFT",
+            "KickedFromSquadron": "REMOVED",
+            "DisbandedSquadron": "DISBANDED",
+            "SharedBookmarkToSquadron": "BOOKMARK",
+            "WonATrophyForSquadron": "TROPHY",
+        }.get(event, str(event or "EVENT").upper())
+
+    @staticmethod
+    def _short_timestamp(value):
+        if not value:
+            return "time not reported"
+        try:
+            stamp = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            return stamp.astimezone().strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            return str(value)
+
+    def _open_squadron_bgs(self):
+        self._tabs.select(self._galaxy_tab)
+        self._render_galaxy_overview()
+
+    def _render_squadron_command(self):
+        content = getattr(self, "_squadron_content", None)
+        if not content:
+            return
+        for child in content.winfo_children():
+            child.destroy()
+        compact = bool(self._squadron_compact)
+        columns = 1 if compact else 2
+        content.grid_columnconfigure(0, weight=1, uniform="squadron")
+        content.grid_columnconfigure(1, weight=0 if compact else 1,
+                                     uniform="" if compact else "squadron")
+
+        state = self._get_galaxy_state() or {}
+        carrier = self._get_carrier_state() or {}
+        squadron = state.get("squadron") or {}
+        application = state.get("squadron_application") or {}
+        invitation = state.get("squadron_invitation") or {}
+        activity = [row for row in state.get("squadron_activity") or [] if isinstance(row, dict)]
+        trophies = state.get("squadron_trophies") or []
+        bookmarks = state.get("squadron_bookmarks") or []
+        watched = list(state.get("watched_factions") or [])
+
+        hero = self._squadron_card(
+            content, "SQUADRON COMMAND STATUS", 0, 0, columns, "#c4b5fd")
+        if squadron:
+            rank = squadron.get("rank_name")
+            if not rank and squadron.get("rank") is not None:
+                rank = f"Rank {squadron.get('rank')}"
+            self._squadron_line(
+                hero, str(squadron.get("name") or "UNKNOWN SQUADRON").upper(),
+                rank or "Rank awaiting journal sync", "#c4b5fd")
+            identity = f"ID {squadron.get('id')}" if squadron.get("id") is not None else "ID not reported"
+            self._squadron_line(
+                hero, "Membership active", f"{identity} · {self._freshness_text(squadron.get('updated'))}",
+                "#21d189")
+        elif application:
+            self._squadron_line(
+                hero, "APPLICATION REPORTED", application.get("name") or "Unknown squadron", "#fde68a")
+            self._squadron_line(hero, "Submitted", self._short_timestamp(application.get("timestamp")))
+        elif invitation:
+            self._squadron_line(
+                hero, "INVITATION REPORTED", invitation.get("name") or "Unknown squadron", "#fde68a")
+            self._squadron_line(hero, "Received", self._short_timestamp(invitation.get("timestamp")))
+        else:
+            self._squadron_line(
+                hero, "NO ACTIVE SQUADRON", "Waiting for SquadronStartup, an application, or an invitation", self.UI_MUTED)
+
+        actions = tk.Frame(hero, bg=self.UI_PANEL)
+        actions.pack(fill=tk.X, padx=12, pady=(5, 10))
+        self._action_button(
+            actions, "GALAXY OBJECTIVES", self._open_squadron_bgs,
+            accent=True, padx=9, pady=3,
+        ).pack(side=tk.LEFT)
+        if self._open_carrier:
+            self._action_button(
+                actions, "CARRIER COMMAND", self._open_carrier,
+                muted=True, padx=9, pady=3,
+            ).pack(side=tk.LEFT, padx=(6, 0))
+
+        row = 1
+        membership_card = self._squadron_card(content, "IDENTITY & ENGAGEMENT", row, 0)
+        self._squadron_line(
+            membership_card, "Current rank",
+            squadron.get("rank_name") or (f"Rank {squadron.get('rank')}" if squadron.get("rank") is not None else "Not reported"))
+        self._squadron_line(membership_card, "Journal actions", f"{len(activity):,} retained")
+        self._squadron_line(membership_card, "Trophy wins", f"{len(trophies):,} retained")
+        self._squadron_line(membership_card, "Shared bookmarks", f"{len(bookmarks):,} retained")
+        pending = []
+        if application:
+            pending.append(f"Applied: {application.get('name') or 'unknown'}")
+        if invitation:
+            pending.append(f"Invited: {invitation.get('name') or 'unknown'}")
+        self._squadron_line(membership_card, "Journal signals", " · ".join(pending) or "None reported")
+
+        carrier_card = self._squadron_card(content, "SQUADRON CARRIER", row if not compact else row + 1,
+                                           1 if not compact else 0)
+        is_squadron_carrier = carrier.get("carrier_type") == "SquadronCarrier"
+        self._squadron_line(
+            carrier_card,
+            carrier.get("name") or ("Carrier not synced" if squadron else "No squadron carrier context"),
+            carrier.get("callsign") or "Open carrier management in Elite to sync",
+            "#21d189" if is_squadron_carrier else self.UI_MUTED,
+        )
+        self._squadron_line(
+            carrier_card, "Carrier type",
+            "Squadron Carrier" if is_squadron_carrier else
+            "Personal Fleet Carrier" if carrier.get("carrier_type") == "FleetCarrier" else "Awaiting CarrierStats")
+        self._squadron_line(carrier_card, "Location", carrier.get("system") or "Not reported")
+        destination = carrier.get("jump_destination")
+        if isinstance(destination, dict):
+            destination = destination.get("system") or destination.get("StarSystem")
+        self._squadron_line(carrier_card, "Next jump", destination or "None plotted")
+
+        ops_row = row + (2 if compact else 1)
+        objective_card = self._squadron_card(content, "SQUADRON OBJECTIVES", ops_row, 0)
+        self._squadron_line(
+            objective_card, "Watched factions", f"{len(watched):,}",
+            "#21d189" if watched else self.UI_MUTED)
+        if watched:
+            current_factions = {row.get("name"): row for row in state.get("factions") or []}
+            for name in watched[:6]:
+                faction = current_factions.get(name) or {}
+                influence = faction.get("influence")
+                detail = (f"{float(influence) * 100:.2f}% in current system"
+                          if isinstance(influence, (int, float)) else "Watch active")
+                self._squadron_line(objective_card, name, detail)
+            if len(watched) > 6:
+                self._squadron_line(objective_card, f"+{len(watched) - 6} more", "Open Galaxy Overview")
+        else:
+            self._squadron_line(
+                objective_card, "No objectives selected",
+                "Open a faction in Galaxy Overview and choose Watch Faction", self.UI_MUTED)
+        self._squadron_line(
+            objective_card, "Current-system conflicts", f"{len(state.get('conflicts') or []):,}")
+        self._squadron_line(
+            objective_card, "Community goals", f"{len(state.get('community_goals') or {}):,}")
+
+        activity_card = self._squadron_card(
+            content, "ACTIVITY TIMELINE", ops_row if not compact else ops_row + 1,
+            1 if not compact else 0)
+        if activity:
+            for item in activity[:10]:
+                detail_parts = [item.get("detail"), item.get("squadron"), self._short_timestamp(item.get("timestamp"))]
+                self._squadron_line(
+                    activity_card, self._squadron_event_label(item.get("event")),
+                    " · ".join(str(value) for value in detail_parts if value))
+        else:
+            self._squadron_line(
+                activity_card, "No retained squadron activity",
+                "New journal actions will appear here", self.UI_MUTED)
+
+        limit_row = ops_row + (2 if compact else 1)
+        limits = self._squadron_card(content, "JOURNAL COVERAGE", limit_row, 0, columns, self.UI_BORDER)
+        self._squadron_line(
+            limits, "Tracked",
+            "membership · rank changes · applications · invitations · trophy wins · shared bookmarks")
+        self._squadron_line(
+            limits, "Not exposed by the journal",
+            "member roster · online status · squadron chat · full leaderboard tables · application outcome", self.UI_MUTED)
+        self._squadron_line(
+            limits, "Objective model",
+            "Existing Galaxy faction watches act as persistent squadron BGS objectives")
+
+        content.update_idletasks()
+        self._squadron_canvas.configure(scrollregion=self._squadron_canvas.bbox("all"))
 
     @staticmethod
     def _reputation_band(value):
@@ -588,8 +850,15 @@ class BGSWindow(ThemedWindowMixin):
             squadron = state.get("squadron") or {}
             if squadron:
                 self._galaxy_line(card, squadron.get("name") or "Unknown Squadron", "Current commander squadron", "#c4b5fd")
-                self._galaxy_line(card, "Commander squadron rank", squadron.get("rank") or 0)
-                self._galaxy_line(card, "Source", "SquadronStartup journal event")
+                rank = squadron.get("rank_name") or (
+                    f"Rank {squadron.get('rank')}" if squadron.get("rank") is not None else "Not reported")
+                self._galaxy_line(card, "Commander squadron rank", rank)
+                self._galaxy_line(card, "Squadron ID", squadron.get("id") or "Not reported")
+                self._galaxy_line(card, "Source", squadron.get("source") or "Saved journal state")
+                self._action_button(
+                    actions, "OPEN SQUADRON COMMAND",
+                    lambda: self._tabs.select(self._squadron_tab), accent=True,
+                    padx=9, pady=3).pack(side=tk.LEFT, padx=(6, 0))
             else:
                 self._galaxy_line(card, "No squadron recorded", "The journal has not reported an active squadron", self.UI_MUTED)
 
@@ -703,9 +972,11 @@ class BGSWindow(ThemedWindowMixin):
                                         0 if compact else 1, accent="#c4b5fd")
         squadron = state.get("squadron") or {}
         if squadron:
+            rank = squadron.get("rank_name") or (
+                f"Rank {squadron.get('rank')}" if squadron.get("rank") is not None else "Rank not reported")
             self._galaxy_detail_line(
                 squad_card, "squadron", None, squadron.get("name") or "Unknown Squadron",
-                f"Rank {squadron.get('rank') or 0}")
+                rank)
         else:
             self._galaxy_detail_line(
                 squad_card, "squadron", None, "No squadron recorded",
@@ -823,6 +1094,7 @@ class BGSWindow(ThemedWindowMixin):
             return
         self._initial_retry_job = None
         self._render_galaxy_overview()
+        self._render_squadron_command()
         self._all_systems = self._load_systems()
         self._reload_list()
 

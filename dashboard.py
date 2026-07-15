@@ -1265,6 +1265,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             get_current_system=lambda: self.current_sys,
             get_cargo_capacity=lambda: self.cargo_capacity,
             get_current_coords=lambda: self.current_coords,
+            get_statistics=lambda: (self.companion_state or {}).get("statistics") or {},
+            get_missions=lambda: (self.companion_state or {}).get("missions") or {},
+            route_system_callback=lambda system: self._route_engineering_system(system, "Mining"),
             embedded=True,
             is_active_callback=lambda: getattr(self, "_active_page", None) == "MINING",
         )
@@ -1338,8 +1341,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._show_embedded_page("ENGINEER", self.engineer_window.win)
         self.engineer_window.on_shown()
 
-    def _route_engineering_system(self, system):
-        """Hand an engineer/trader destination to the existing route page."""
+    def _route_engineering_system(self, system, source="Engineering"):
+        """Hand an external workspace destination to the existing route page."""
         if not system:
             return
         self.open_route_planner()
@@ -1350,7 +1353,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             entry.insert(0, system)
             entry.focus_set()
             self.route_plotter.neutron_status_lbl.config(
-                text=f"Destination loaded from Engineering: {system}. Check jump range, then PLOT."
+                text=f"Destination loaded from {source}: {system}. Check jump range, then PLOT."
             )
         except Exception:
             pass
@@ -1369,6 +1372,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.db_purge_empty_bgs_systems,
             get_galaxy_state_cb=lambda: self.companion_state,
             toggle_faction_watch_cb=self._toggle_galaxy_faction_watch,
+            get_carrier_state_cb=lambda: self.carrier_tracker.carrier_data if self.carrier_tracker else {},
+            open_carrier_cb=self.open_carrier_window,
             embedded=True,
         )
         self._show_embedded_page("GALAXY", self.bgs_window.win)
@@ -4478,22 +4483,109 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         elif ev in ("SquadronStartup", "SquadronCreated", "JoinedSquadron"):
             previous = state.get("squadron") or {}
+            squadron_name = raw.get("SquadronName") or previous.get("name")
+            squadron_id = raw.get("SquadronID", previous.get("id"))
+            same_squadron = bool(previous and (
+                (squadron_id is not None and previous.get("id") == squadron_id)
+                or (squadron_name and previous.get("name") == squadron_name)
+            ))
             state["squadron"] = {
-                "name": raw.get("SquadronName") or previous.get("name"),
-                "rank": raw.get("CurrentRank", previous.get("rank")),
+                "id": squadron_id,
+                "name": squadron_name,
+                "rank": raw.get("CurrentRank", previous.get("rank") if same_squadron else None),
+                "rank_name": raw.get("CurrentRankName", previous.get("rank_name") if same_squadron else None),
+                "joined_at": previous.get("joined_at") if same_squadron else raw.get("timestamp"),
+                "updated": raw.get("timestamp"),
+                "source": ev,
             }
+            state["squadron_application"] = None
+            state["squadron_invitation"] = None
+            if ev != "SquadronStartup":
+                detail = "Squadron created" if ev == "SquadronCreated" else "Squadron joined"
+                companion_features.record_squadron_activity(
+                    state, ev, squadron_name, raw.get("timestamp"), detail,
+                )
             changed = True
             galaxy_changed = True
         elif ev in ("SquadronPromotion", "SquadronDemotion"):
             previous = state.get("squadron") or {}
             state["squadron"] = {
+                "id": raw.get("SquadronID", previous.get("id")),
                 "name": raw.get("SquadronName") or previous.get("name"),
                 "rank": raw.get("NewRank", previous.get("rank")),
+                "rank_name": raw.get("NewRankName", previous.get("rank_name")),
+                "joined_at": previous.get("joined_at"),
+                "updated": raw.get("timestamp"),
+                "source": ev,
             }
+            old_rank = raw.get("OldRankName", raw.get("OldRank"))
+            new_rank = raw.get("NewRankName", raw.get("NewRank"))
+            detail = f"{old_rank} → {new_rank}" if old_rank is not None and new_rank is not None else None
+            companion_features.record_squadron_activity(
+                state, ev, raw.get("SquadronName") or previous.get("name"), raw.get("timestamp"), detail,
+            )
             changed = True
             galaxy_changed = True
         elif ev in ("LeftSquadron", "KickedFromSquadron", "DisbandedSquadron"):
+            previous = state.get("squadron") or {}
+            squadron_name = raw.get("SquadronName") or previous.get("name")
+            detail = {
+                "LeftSquadron": "Squadron left",
+                "KickedFromSquadron": "Removed from squadron",
+                "DisbandedSquadron": "Squadron disbanded",
+            }[ev]
+            companion_features.record_squadron_activity(
+                state, ev, squadron_name, raw.get("timestamp"), detail,
+            )
             state["squadron"] = None
+            changed = True
+            galaxy_changed = True
+
+        elif ev == "AppliedToSquadron":
+            squadron_name = raw.get("SquadronName")
+            state["squadron_application"] = {
+                "id": raw.get("SquadronID"), "name": squadron_name,
+                "timestamp": raw.get("timestamp"),
+            }
+            companion_features.record_squadron_activity(
+                state, ev, squadron_name, raw.get("timestamp"), "Application submitted",
+            )
+            changed = True
+            galaxy_changed = True
+
+        elif ev == "InvitedToSquadron":
+            squadron_name = raw.get("SquadronName")
+            state["squadron_invitation"] = {
+                "id": raw.get("SquadronID"), "name": squadron_name,
+                "timestamp": raw.get("timestamp"),
+            }
+            companion_features.record_squadron_activity(
+                state, ev, squadron_name, raw.get("timestamp"), "Invitation received",
+            )
+            changed = True
+            galaxy_changed = True
+
+        elif ev == "SharedBookmarkToSquadron":
+            squadron_name = raw.get("SquadronName") or (state.get("squadron") or {}).get("name")
+            companion_features.record_squadron_item(
+                state, "squadron_bookmarks", ev, squadron_name, raw.get("timestamp"),
+                "Bookmark shared in Elite",
+            )
+            companion_features.record_squadron_activity(
+                state, ev, squadron_name, raw.get("timestamp"), "Bookmark shared",
+            )
+            changed = True
+            galaxy_changed = True
+
+        elif ev == "WonATrophyForSquadron":
+            squadron_name = raw.get("SquadronName") or (state.get("squadron") or {}).get("name")
+            companion_features.record_squadron_item(
+                state, "squadron_trophies", ev, squadron_name, raw.get("timestamp"),
+                "Trophy win reported by the journal",
+            )
+            companion_features.record_squadron_activity(
+                state, ev, squadron_name, raw.get("timestamp"), "Squadron trophy won",
+            )
             changed = True
             galaxy_changed = True
 
