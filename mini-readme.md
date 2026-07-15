@@ -1,5 +1,17 @@
 # VoidCompass // UPDATE LOG
 
+## v4.8.2 // Operational Command Dashboard
+**Release Date:** 2026-Jul-16
+
+### Dashboard Recomposition
+*   Rebuilt the central Dashboard as a low-noise operational command page while retaining the existing native navigation rail, command strip, embedded workspaces, theme system, overlays, and journal plumbing.
+*   Added a unified **Flight Briefing** for ship/flight state, navigation, route/waypoint progress, survey completion, fuel, cargo, legal state, and unsold-data risk without repeating the Navigation HUD's destination strip.
+*   Added a live **Compass Briefing** showing persona, relationship stage, mood, latest useful cognitive observation, remembered-system/memory totals, and decision count. Intentional silence is displayed as standing by instead of exposing internal scoring noise.
+*   Added a single promoted **Active Objective** chosen from unfinished biological sampling, high-risk unsold data, incomplete system surveys, active routes/waypoints, and mission work, with one-click Copy Next, Explore, and Ground Target actions.
+*   Added contextual **Active Operations** summaries for Architect sites, missions, trade/cargo, mining sessions, and carrier expedition stops. Inactive areas stay out of the summary while their detailed workspaces remain available from the navigation rail.
+*   Consolidated the two always-visible timelines into one **Activity Stream**. The curated colour-coded feed is the default, while the complete icon-based journal history remains available through **Raw Journal**; both retain hidden-page redraw coalescing.
+*   Kept diagnostics collapsed beneath the Dashboard and preserved the existing carrier fuel/jump widgets, route notes, event filters, clipboard behavior, and overlay z-order restoration.
+
 ## v4.8.1 // Command Centres & One-Click Trade
 **Release Date:** 2026-Jul-16
 
