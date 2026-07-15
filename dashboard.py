@@ -207,7 +207,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             pass
 
     def _refresh_commander_profile_window(self):
-        self._refresh_tool_window("commander_profile_window")
+        window = getattr(self, "commander_profile_window", None)
+        try:
+            if not window or not window.is_open():
+                return
+            if getattr(self, "_active_page", None) == "PROFILE":
+                self.root.after(0, window.refresh)
+            else:
+                window._refresh_pending = True
+        except Exception:
+            pass
 
     def _refresh_value_ledger_window(self):
         self._refresh_tool_window("value_ledger_window")
@@ -337,7 +346,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         save_colonisation_data(projects, self.config.get("colonisation_data_file"))
 
     def _save_engineer_materials(self, materials):
-        save_engineer_materials(materials, self.config.get("engineer_materials_file"))
+        return save_engineer_materials(materials, self.config.get("engineer_materials_file"))
 
     def _save_companion_state(self):
         companion_features.save_state(self.config.get("companion_state_file"), self.companion_state)
@@ -1218,6 +1227,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def open_route_planner(self):
         if self.route_plotter and self.route_plotter.win.winfo_exists():
             self._show_embedded_page("ROUTE", self.route_plotter.win)
+            self.route_plotter.on_shown()
             return
         self.route_plotter = RoutePlotter(
             self.dashboard_host,
@@ -1229,8 +1239,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             on_change_callback=self.update_waypoint_display,
             event_callback=self._on_route_event,
             embedded=True,
+            navigation_state_callback=self._route_panel_navigation_state,
+            copy_waypoint_callback=self._copy_waypoint_to_clipboard,
+            is_active_callback=lambda: getattr(self, "_active_page", None) == "ROUTE",
         )
         self._show_embedded_page("ROUTE", self.route_plotter.win)
+        self.route_plotter.on_shown()
+
+    def _route_panel_navigation_state(self):
+        return {
+            "current_system": self.current_sys,
+            "destination": self.dest_name,
+            "route": list(self.route_list or []),
+            "entries": [dict(row) for row in (self.nav_route_entries or []) if isinstance(row, dict)],
+        }
 
     def open_mining_window(self):
         if self.mining_window and self.mining_window.is_open():
@@ -1300,6 +1322,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def open_engineer_window(self):
         if self.engineer_window and self.engineer_window.is_open():
             self._show_embedded_page("ENGINEER", self.engineer_window.win)
+            self.engineer_window.on_shown()
             return
         self.engineer_window = EngineerWindow(
             self.dashboard_host,
@@ -1309,9 +1332,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             get_current_system=lambda: self.current_sys if self.current_sys != "---" else "",
             get_current_coords=lambda: self.current_coords,
             plot_system_callback=self._route_engineering_system,
+            is_active_callback=lambda: getattr(self, "_active_page", None) == "ENGINEER",
             embedded=True,
         )
         self._show_embedded_page("ENGINEER", self.engineer_window.win)
+        self.engineer_window.on_shown()
 
     def _route_engineering_system(self, system):
         """Hand an engineer/trader destination to the existing route page."""
@@ -1319,6 +1344,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return
         self.open_route_planner()
         try:
+            self.route_plotter.tabs.select(2)
             entry = self.route_plotter.neutron_to_entry
             entry.delete(0, tk.END)
             entry.insert(0, system)
@@ -1349,6 +1375,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def open_commander_profile_window(self):
         if self.commander_profile_window and self.commander_profile_window.is_open():
+            self.commander_profile_window.refresh()
+            self.commander_profile_window._refresh_pending = False
             self._show_embedded_page("PROFILE", self.commander_profile_window.win)
             return
         self.commander_profile_window = CommanderProfileWindow(self.dashboard_host, self, embedded=True)
@@ -1409,6 +1437,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             window = getattr(self, "achievement_window", None)
             if window and window.is_open() and getattr(self, "_active_page", None) == "ACHIEVE":
                 window.refresh()
+            self._refresh_commander_profile_window()
 
         try:
             self.root.after(0, apply_unlock)
@@ -2788,7 +2817,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         pinned = (getattr(self, "engineer_materials", {}) or {}).get("pinned_blueprints") or []
         if pinned:
             intentions["engineering"] = [
-                {"blueprint": row.get("name"), "grade": row.get("grade", 5)}
+                {"blueprint": row.get("name"),
+                 "grade": row.get("target_grade", row.get("grade", 5)),
+                 "quantity": row.get("quantity", 1)}
                 for row in pinned[:5] if row.get("name")
             ]
         self.cockpit_memory.update_intentions(intentions)
@@ -3322,6 +3353,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             try:
                 if self.captains_log.process_event(raw):
                     self._refresh_exploration_window()
+                    self._refresh_commander_profile_window()
             except Exception as exc:
                 logging.debug("Captain's Log event skipped [%s]: %s", ev, exc)
         self._handle_live_journal_toast(ev, raw, d, startup_replay=startup_replay)
@@ -3360,7 +3392,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         # Route carrier events defensively — a tracker failure must not cascade
         # into the main navigation if/elif chain (fix #2).
-        if ev and ev.startswith("Carrier"):
+        carrier_context_events = {
+            "SquadronStartup", "SquadronCreated", "JoinedSquadron",
+            "SquadronPromotion", "SquadronDemotion", "LeftSquadron",
+            "KickedFromSquadron", "DisbandedSquadron",
+        }
+        if ev and (ev.startswith("Carrier") or ev in carrier_context_events):
             try:
                 self.carrier_tracker.process_event(raw)
             except Exception as _ct_err:
@@ -4281,8 +4318,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         def run():
             self._companion_refresh_job = None
             try:
-                if self.commander_profile_window and self.commander_profile_window.is_open():
-                    self.commander_profile_window.refresh()
+                self._refresh_commander_profile_window()
             except Exception:
                 pass
             try:
@@ -4326,6 +4362,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         if ev == "Loadout":
             state["loadout"] = dict(raw)
+            changed = True
+
+        elif ev == "Statistics":
+            # Statistics is Elite's lifetime commander record. Retain the most
+            # recent complete snapshot per profile so Commander Record can use
+            # it without rescanning journal history on every UI refresh.
+            state["statistics"] = {
+                key: value for key, value in raw.items()
+                if key not in ("timestamp", "event")
+            }
+            state["statistics_updated"] = raw.get("timestamp")
             changed = True
 
         elif ev == "LoadGame":
@@ -4429,11 +4476,23 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             changed = True
             galaxy_changed = True
 
-        elif ev == "SquadronStartup":
-            state["squadron"] = {"name": raw.get("SquadronName"), "rank": raw.get("CurrentRank")}
+        elif ev in ("SquadronStartup", "SquadronCreated", "JoinedSquadron"):
+            previous = state.get("squadron") or {}
+            state["squadron"] = {
+                "name": raw.get("SquadronName") or previous.get("name"),
+                "rank": raw.get("CurrentRank", previous.get("rank")),
+            }
             changed = True
             galaxy_changed = True
-        elif ev in ("LeftSquadron", "DisbandedSquadron"):
+        elif ev in ("SquadronPromotion", "SquadronDemotion"):
+            previous = state.get("squadron") or {}
+            state["squadron"] = {
+                "name": raw.get("SquadronName") or previous.get("name"),
+                "rank": raw.get("NewRank", previous.get("rank")),
+            }
+            changed = True
+            galaxy_changed = True
+        elif ev in ("LeftSquadron", "KickedFromSquadron", "DisbandedSquadron"):
             state["squadron"] = None
             changed = True
             galaxy_changed = True
@@ -4851,19 +4910,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             for blueprint in sorted(ready_blueprints(self.engineer_materials) - ready_before):
                 pin = next((row for row in self.engineer_materials.get("pinned_blueprints", [])
                             if row.get("name") == blueprint), {})
-                grade = int(pin.get("grade", 5))
+                grade = int(pin.get("target_grade", pin.get("grade", 5)))
+                quantity = max(1, int(pin.get("quantity", 1)))
+                quantity_text = f" for {quantity} modules" if quantity > 1 else ""
+                quantity_badge = f" · {quantity} modules" if quantity > 1 else ""
                 if self.toast_hud:
-                    self.root.after(0, lambda name=blueprint, target_grade=grade: self.toast_hud.push(
+                    self.root.after(0, lambda name=blueprint, target_grade=grade, qty_badge=quantity_badge: self.toast_hud.push(
                         "READY TO ENGINEER",
-                        f"{name} G{target_grade} materials complete",
+                        f"{name} G{target_grade} materials complete{qty_badge}",
                         severity="info",
                         duration_s=12,
                     ))
                 self._speak(
-                    (f"Materials complete for {blueprint}, grade {grade}.",
-                     f"Engineering inventory reconciled. {blueprint}, grade {grade}, is ready.",
-                     f"I have confirmed every material for {blueprint}, grade {grade}.",
-                     f"Fabrication requirements satisfied. We can engineer {blueprint} to grade {grade}."),
+                    (f"Materials complete for {blueprint}, grade {grade}{quantity_text}.",
+                     f"Engineering inventory reconciled. {blueprint}, grade {grade}{quantity_text}, is ready.",
+                     f"I have confirmed every material for {blueprint}, grade {grade}{quantity_text}.",
+                     f"Fabrication requirements satisfied. We can engineer {blueprint} to grade {grade}{quantity_text}."),
                     category="objectives", cooldown_s=300,
                     key=f"engineering-ready:{blueprint}:{grade}",
                 )
@@ -5151,3 +5213,5 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.update_hud()
             self._refresh_commander_profile_window()
             self._refresh_exploration_window()
+        if self.route_plotter and self.route_plotter.win.winfo_exists():
+            self.root.after(0, self.route_plotter.update_navigation_state)

@@ -1072,8 +1072,14 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     edsm_actions = row(edsm_section)
     action_button(edsm_actions, "Test API Key", _test_edsm).pack(side=tk.LEFT)
 
-    carrier_section = section(integrations_page, "Fleet Carrier Discord")
+    carrier_section = section(integrations_page, "Carrier Discord (Personal / Squadron)")
     fc_wh_e = input_row(carrier_section, "Discord Webhook URL", "carrier_discord_webhook_url")
+    tk.Label(
+        carrier_section,
+        text="One webhook handles personal and Squadron Carrier jump, cooldown, cancellation and manual status posts. Messages identify the carrier type automatically.",
+        font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w", justify=tk.LEFT,
+        wraplength=620,
+    ).pack(fill=tk.X, padx=12, pady=(0, 6))
 
     def _test_discord():
         url = fc_wh_e.get().strip()

@@ -1,6 +1,6 @@
 """
-carrier_window.py — Fleet Carrier detail window for VoidCompass.
-Tabs: Overview, Finance, Services.
+carrier_window.py — Personal/Squadron Carrier detail window for VoidCompass.
+Tabs: Overview, Expedition, Finance, Services.
 All data comes from CarrierTracker.carrier_data.
 """
 import tkinter as tk
@@ -76,7 +76,7 @@ class CarrierWindow(ThemedWindowMixin):
 
         self.embedded = embedded
         self.win = window_surface(root, embedded=embedded)
-        self.win.title("Fleet Carrier")
+        self.win.title("Carrier Command")
         apply_window(self.win)
         self.win.geometry(config.get("carrier_window_geometry", "480x560"))
         self.win.resizable(True, True)
@@ -124,8 +124,9 @@ class CarrierWindow(ThemedWindowMixin):
         hdr = tk.Frame(self.win, bg="#0c1014", height=46)
         hdr.pack(fill=tk.X)
         hdr.pack_propagate(False)
-        tk.Label(hdr, text="FLEET CARRIER", font=("Segoe UI", 13, "bold"),
-                 fg=COLOR_ACCENT, bg="#0c1014").pack(side=tk.LEFT, padx=14, pady=8)
+        self.title_label = tk.Label(hdr, text="CARRIER COMMAND", font=("Segoe UI", 13, "bold"),
+                                    fg=COLOR_ACCENT, bg="#0c1014")
+        self.title_label.pack(side=tk.LEFT, padx=14, pady=8)
         self.status_badge = tk.Label(hdr, text="IDLE", fg="black", bg=self.UI_DIM,
                                      font=("Segoe UI", 8, "bold"), padx=8, pady=3)
         self.status_badge.pack(side=tk.RIGHT, padx=14, pady=10)
@@ -184,6 +185,8 @@ class CarrierWindow(ThemedWindowMixin):
         self._section(f, "IDENTITY")
         self.id_name      = self._row(f, "Name")
         self.id_callsign  = self._row(f, "Callsign")
+        self.id_type      = self._row(f, "Carrier Type")
+        self.id_squadron  = self._row(f, "Squadron")
         self.id_system    = self._row(f, "Location")
         self.id_body      = self._row(f, "Body")
         self.id_purchased_at   = self._row(f, "Purchased At")
@@ -275,7 +278,7 @@ class CarrierWindow(ThemedWindowMixin):
         # Post button + feedback
         post_row = tk.Frame(f, bg=self.UI_PANEL)
         post_row.pack(fill=tk.X, padx=10, pady=(2, 12))
-        self.post_discord_btn = button(post_row, "POST STATUS TO DISCORD", self._post_status_to_discord, accent=True, padx=12, pady=6)
+        self.post_discord_btn = button(post_row, "POST CARRIER STATUS TO DISCORD", self._post_status_to_discord, accent=True, padx=12, pady=6)
         self.post_discord_btn.pack(side=tk.LEFT)
         self.post_discord_status_lbl = tk.Label(
             post_row, text="", font=("Segoe UI", 8),
@@ -580,8 +583,26 @@ class CarrierWindow(ThemedWindowMixin):
         self.status_badge.config(text=badge_text, bg=badge_bg)
 
         # Overview
+        carrier_type = cd.get("carrier_type")
+        is_squadron_carrier = carrier_type == "SquadronCarrier"
+        type_label = (
+            "Squadron Carrier" if is_squadron_carrier
+            else "Fleet Carrier" if carrier_type == "FleetCarrier"
+            else "Awaiting CarrierStats"
+        )
+        self.title_label.config(text="SQUADRON CARRIER" if is_squadron_carrier else "FLEET CARRIER")
         self.id_name.config(text=cd.get("name") or "—")
         self.id_callsign.config(text=cd.get("callsign") or "—")
+        self.id_type.config(text=type_label)
+        squadron = cd.get("squadron_name")
+        squadron_rank = cd.get("squadron_rank")
+        if squadron:
+            rank_text = f" · rank {squadron_rank}" if squadron_rank is not None else ""
+            self.id_squadron.config(text=f"{squadron}{rank_text}")
+        elif is_squadron_carrier:
+            self.id_squadron.config(text="Awaiting SquadronStartup")
+        else:
+            self.id_squadron.config(text="—")
         self.id_system.config(text=cd.get("system") or "—")
         body = cd.get("body") or ""
         self.id_body.config(text=body if body else "—")
@@ -643,11 +664,17 @@ class CarrierWindow(ThemedWindowMixin):
         crew = cd.get("crew") or []
         weekly = _calc_weekly_upkeep(crew)
         svc_weekly = weekly - _BASE_UPKEEP
-        self.upkeep_base.config(text=_fmt_cr(_BASE_UPKEEP))
-        self.upkeep_services.config(text=_fmt_cr(svc_weekly))
-        self.upkeep_total.config(text=_fmt_cr(weekly))
+        if is_squadron_carrier:
+            self.upkeep_base.config(text="Not inferred")
+            self.upkeep_services.config(text="Not inferred")
+            self.upkeep_total.config(text="Use journal finance", fg=self.UI_MUTED)
+            self.upkeep_funded.config(text="—", fg=COLOR_TEXT)
+        else:
+            self.upkeep_base.config(text=_fmt_cr(_BASE_UPKEEP))
+            self.upkeep_services.config(text=_fmt_cr(svc_weekly))
+            self.upkeep_total.config(text=_fmt_cr(weekly), fg=COLOR_TEXT)
         avail = cd.get("available_balance")
-        if avail is not None and weekly > 0:
+        if not is_squadron_carrier and avail is not None and weekly > 0:
             weeks_funded = int(avail) / weekly
             if weeks_funded >= 52:
                 funded_txt = f"{weeks_funded / 52:.1f} years"
@@ -659,7 +686,7 @@ class CarrierWindow(ThemedWindowMixin):
                 funded_txt = f"{weeks_funded:.1f} weeks  [LOW]"
                 funded_fg = self.UI_WARN if weeks_funded >= 1 else self.UI_FAIL
             self.upkeep_funded.config(text=funded_txt, fg=funded_fg)
-        else:
+        elif not is_squadron_carrier:
             self.upkeep_funded.config(text="—", fg=COLOR_TEXT)
 
         # Services
