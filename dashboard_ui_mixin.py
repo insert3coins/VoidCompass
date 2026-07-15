@@ -244,7 +244,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.dashboard_host.pack(fill=tk.BOTH, expand=True)
         self._active_page = "DASHBOARD"
 
-        self._build_companion_dashboard_body()
+        self._build_command_dashboard_body()
         return
 
         # ── BODY ──────────────────────────────────────────────────────────
@@ -506,6 +506,235 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.ground_lat_entry.insert(0, f"{getattr(self, 'target_lat', 0.0):.6f}")
         self.ground_lon_entry.insert(0, f"{getattr(self, 'target_lon', 0.0):.6f}")
 
+    def _build_command_dashboard_body(self):
+        """Build the low-noise operational dashboard introduced in v4.8.2."""
+        body = tk.Frame(self.dashboard_host, bg=self.UI_BG)
+        self.dashboard_page = body
+        body.pack(fill=tk.BOTH, expand=True, padx=14, pady=10)
+
+        # Flight / Compass / route briefing row.
+        briefing = tk.Frame(body, bg=self.UI_BG)
+        briefing.pack(fill=tk.X, pady=(0, 8))
+        briefing.grid_columnconfigure(0, weight=3, uniform="briefing")
+        briefing.grid_columnconfigure(1, weight=3, uniform="briefing")
+        briefing.grid_columnconfigure(2, weight=4, uniform="briefing")
+
+        flight_card = self._panel(briefing, border=COLOR_ACCENT)
+        flight_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        self._section_label(flight_card, "FLIGHT BRIEFING").pack(anchor="w", padx=12, pady=(9, 0))
+        self.sys_stat = self.create_stat(flight_card, "SHIP / STATE", "AWAITING LOADOUT")
+        self.nav_stat = self.create_stat(flight_card, "NAVIGATION", "NO TARGET")
+        self.route_progress_stat = self.create_stat(flight_card, "ROUTE", "NO ACTIVE ROUTE")
+        self.scan_stat = self.create_stat(flight_card, "SURVEY", "0 / 0")
+        self.dashboard_flight_meta = tk.Label(
+            flight_card, text="", fg=self.UI_MUTED, bg=self.UI_PANEL,
+            font=("Consolas", 8), anchor="w",
+        )
+        self.dashboard_flight_meta.pack(fill=tk.X, padx=12, pady=(6, 9))
+        self.flight_strip_canvas = None
+
+        compass_card = self._panel(briefing)
+        compass_card.grid(row=0, column=1, sticky="nsew", padx=(0, 8))
+        compass_head = tk.Frame(compass_card, bg=self.UI_PANEL)
+        compass_head.pack(fill=tk.X, padx=12, pady=(9, 0))
+        self._section_label(compass_head, "COMPASS BRIEFING").pack(side=tk.LEFT)
+        self.dashboard_compass_badge = tk.Label(
+            compass_head, text="CALM", fg="black", bg=self.UI_OK,
+            font=("Segoe UI", 7, "bold"), padx=6, pady=2,
+        )
+        self.dashboard_compass_badge.pack(side=tk.RIGHT)
+        self.dashboard_compass_identity = tk.Label(
+            compass_card, text="Compass · Newly activated", fg=COLOR_ACCENT,
+            bg=self.UI_PANEL, font=("Segoe UI", 10, "bold"), anchor="w",
+        )
+        self.dashboard_compass_identity.pack(fill=tk.X, padx=12, pady=(8, 3))
+        self.dashboard_compass_advice = tk.Label(
+            compass_card, text="Standing by for verified flight context.", fg=COLOR_TEXT,
+            bg=self.UI_PANEL, font=("Segoe UI", 9), anchor="nw", justify=tk.LEFT,
+            wraplength=300,
+        )
+        self.dashboard_compass_advice.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 4))
+        self.dashboard_compass_meta = tk.Label(
+            compass_card, text="", fg=self.UI_MUTED, bg=self.UI_PANEL,
+            font=("Consolas", 8), anchor="w",
+        )
+        self.dashboard_compass_meta.pack(fill=tk.X, padx=12, pady=(2, 9))
+
+        self.wp_panel = self._panel(briefing, border=COLOR_ACCENT)
+        self.wp_panel.grid(row=0, column=2, sticky="nsew")
+        wp_head = tk.Frame(self.wp_panel, bg=self.UI_PANEL)
+        wp_head.pack(fill=tk.X, padx=12, pady=(9, 0))
+        self._section_label(wp_head, "ROUTE / WAYPOINT").pack(side=tk.LEFT)
+        self.wp_dist_lbl = tk.Label(wp_head, text="", font=self.UI_MONO_BOLD,
+                                    fg=COLOR_ACCENT, bg=self.UI_PANEL)
+        self.wp_dist_lbl.pack(side=tk.RIGHT)
+        self.wp_name_lbl = tk.Label(
+            self.wp_panel, text="NO ACTIVE ROUTE", font=("Segoe UI", 11, "bold"),
+            fg=COLOR_TEXT, bg=self.UI_PANEL, anchor="w",
+        )
+        self.wp_name_lbl.pack(fill=tk.X, padx=12, pady=(6, 0))
+        self.wp_info_wrap = tk.Frame(self.wp_panel, bg=self.UI_PANEL)
+        self.wp_info_wrap.pack(fill=tk.BOTH, expand=True, padx=12, pady=(2, 8))
+        self.wp_info_scroll = scrollbar(self.wp_info_wrap, orient=tk.VERTICAL)
+        self.wp_info_text = tk.Text(
+            self.wp_info_wrap, bg=self.UI_PANEL, fg=self.UI_MUTED, font=self.UI_MONO,
+            relief=tk.FLAT, borderwidth=0, highlightthickness=0, wrap=tk.WORD,
+            yscrollcommand=self.wp_info_scroll.set, height=4,
+        )
+        self.wp_info_scroll.config(command=self.wp_info_text.yview)
+        self.wp_info_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.wp_info_text.config(state=tk.DISABLED)
+        self.wp_info_scroll_visible = False
+        self.wp_info_text.bind("<Enter>", lambda _e: self._toggle_wp_scrollbar(True))
+        self.wp_info_text.bind("<Leave>", lambda _e: self._toggle_wp_scrollbar(False))
+        self.wp_info_text.bind("<MouseWheel>", self._on_wp_info_wheel)
+
+        # Current priority and active operation row.
+        active_row = tk.Frame(body, bg=self.UI_BG)
+        active_row.pack(fill=tk.X, pady=(0, 8))
+        active_row.grid_columnconfigure(0, weight=4, uniform="active")
+        active_row.grid_columnconfigure(1, weight=3, uniform="active")
+        active_row.grid_columnconfigure(2, weight=3, uniform="active")
+
+        objective_card = self._panel(active_row, border=COLOR_ORANGE)
+        objective_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        self._section_label(objective_card, "ACTIVE OBJECTIVE", fg=COLOR_ORANGE).pack(
+            anchor="w", padx=12, pady=(9, 0)
+        )
+        self.dashboard_objective_primary = tk.Label(
+            objective_card, text="No urgent objective", fg=COLOR_TEXT, bg=self.UI_PANEL,
+            font=("Segoe UI", 11, "bold"), anchor="w",
+        )
+        self.dashboard_objective_primary.pack(fill=tk.X, padx=12, pady=(7, 2))
+        self.dashboard_objective_detail = tk.Label(
+            objective_card, text="Compass will promote verified work here as the situation changes.",
+            fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 8), anchor="nw",
+            justify=tk.LEFT, wraplength=390,
+        )
+        self.dashboard_objective_detail.pack(fill=tk.X, padx=12, pady=(0, 8))
+        objective_actions = tk.Frame(objective_card, bg=self.UI_PANEL)
+        objective_actions.pack(fill=tk.X, padx=12, pady=(0, 9))
+        self._action_button(objective_actions, "COPY NEXT", self._dashboard_copy_next, accent=True).pack(side=tk.LEFT)
+        self._action_button(objective_actions, "EXPLORE", self.open_exploration_window).pack(side=tk.LEFT, padx=(6, 0))
+        self._action_button(objective_actions, "GROUND", self.open_ground_target_window, muted=True).pack(side=tk.LEFT, padx=(6, 0))
+
+        self.carrier_panel = self._panel(active_row)
+        self.carrier_panel.grid(row=0, column=1, sticky="nsew", padx=(0, 8))
+        carrier_hdr = tk.Frame(self.carrier_panel, bg=self.UI_PANEL)
+        carrier_hdr.pack(fill=tk.X, padx=12, pady=(9, 4))
+        self._section_label(carrier_hdr, "CARRIER EXPEDITION").pack(side=tk.LEFT)
+        self.carrier_panel_badge = tk.Label(
+            carrier_hdr, text="IDLE", fg="black", bg=self.UI_DIM,
+            font=("Segoe UI", 7, "bold"), padx=6, pady=2,
+        )
+        self.carrier_panel_badge.pack(side=tk.RIGHT)
+        self.carrier_panel_name = tk.Label(
+            self.carrier_panel, text="Dock at your carrier to sync.", fg=self.UI_DIM,
+            bg=self.UI_PANEL, font=self.UI_MONO_BOLD, anchor="w",
+        )
+        self.carrier_panel_name.pack(fill=tk.X, padx=12)
+        self.carrier_panel_loc = tk.Label(
+            self.carrier_panel, text="", fg=self.UI_MUTED, bg=self.UI_PANEL,
+            font=self.UI_MONO, anchor="w",
+        )
+        self.carrier_panel_loc.pack(fill=tk.X, padx=12, pady=(1, 0))
+        self.carrier_panel_jump = tk.Label(
+            self.carrier_panel, text="", fg=COLOR_ACCENT, bg=self.UI_PANEL,
+            font=("Segoe UI", 8, "bold"), anchor="w",
+        )
+        self.carrier_panel_jump.pack(fill=tk.X, padx=12, pady=(1, 0))
+        fuel_row = tk.Frame(self.carrier_panel, bg=self.UI_PANEL)
+        fuel_row.pack(fill=tk.X, padx=12, pady=(7, 9))
+        self.carrier_fuel_bar_bg = tk.Frame(fuel_row, bg="#1a2430", height=7)
+        self.carrier_fuel_bar_bg.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.carrier_fuel_fill = tk.Frame(self.carrier_fuel_bar_bg, bg=self.UI_OK, height=7)
+        self.carrier_fuel_fill.place(x=0, y=0, relheight=1.0, width=0)
+        self.carrier_fuel_txt = tk.Label(fuel_row, text="", fg=self.UI_DIM,
+                                         bg=self.UI_PANEL, font=("Segoe UI", 7))
+        self.carrier_fuel_txt.pack(side=tk.LEFT, padx=(8, 0))
+
+        operations_card = self._panel(active_row)
+        operations_card.grid(row=0, column=2, sticky="nsew")
+        self._section_label(operations_card, "ACTIVE OPERATIONS").pack(anchor="w", padx=12, pady=(9, 0))
+        self.dashboard_operations_text = tk.Label(
+            operations_card, text="No active operations", fg=COLOR_TEXT, bg=self.UI_PANEL,
+            font=("Consolas", 8), anchor="nw", justify=tk.LEFT, wraplength=300,
+        )
+        self.dashboard_operations_text.pack(fill=tk.BOTH, expand=True, padx=12, pady=(7, 5))
+        op_actions = tk.Frame(operations_card, bg=self.UI_PANEL)
+        op_actions.pack(fill=tk.X, padx=12, pady=(0, 9))
+        self._action_button(op_actions, "COLONY", self.open_colonization_window).pack(side=tk.LEFT)
+        self._action_button(op_actions, "TRADE", self.open_trade_window).pack(side=tk.LEFT, padx=(5, 0))
+        self._action_button(op_actions, "MINING", self.open_mining_window).pack(side=tk.LEFT, padx=(5, 0))
+
+        # One stream area: curated by default, raw journal on demand.
+        stream_shell = self._panel(body, border=COLOR_ACCENT)
+        stream_shell.pack(fill=tk.BOTH, expand=True)
+        stream_head = tk.Frame(stream_shell, bg=self.UI_PANEL)
+        stream_head.pack(fill=tk.X, padx=10, pady=(7, 0))
+        self._section_label(stream_head, "ACTIVITY STREAM").pack(side=tk.LEFT)
+        self.dashboard_stream_buttons = {}
+        for name, label in (("live", "CURATED"), ("raw", "RAW JOURNAL")):
+            btn = self._action_button(
+                stream_head, label, lambda selected=name: self._show_dashboard_stream(selected),
+                accent=(name == "live"), muted=(name != "live"),
+            )
+            btn.pack(side=tk.RIGHT, padx=(5, 0))
+            self.dashboard_stream_buttons[name] = btn
+        self.dashboard_stream_host = tk.Frame(stream_shell, bg=self.UI_PANEL)
+        self.dashboard_stream_host.pack(fill=tk.BOTH, expand=True)
+
+        self.details_drawer = tk.Frame(self.dashboard_stream_host, bg=self.UI_PANEL)
+        self._build_live_event_timeline(self.details_drawer)
+
+        self.dashboard_raw_stream = tk.Frame(self.dashboard_stream_host, bg=self.UI_PANEL)
+        raw_header = tk.Frame(self.dashboard_raw_stream, bg=self.UI_PANEL)
+        raw_header.pack(fill=tk.X, padx=10, pady=(8, 5))
+        tk.Label(raw_header, text="Unfiltered Elite journal events", fg=self.UI_MUTED,
+                 bg=self.UI_PANEL, font=("Segoe UI", 8)).pack(side=tk.LEFT)
+        self.journal_history_count_lbl = tk.Label(
+            raw_header, text="LIVE", fg=COLOR_ACCENT, bg=self.UI_PANEL,
+            font=("Consolas", 8, "bold"),
+        )
+        self.journal_history_count_lbl.pack(side=tk.RIGHT)
+        history_wrap = tk.Frame(self.dashboard_raw_stream, bg="#0b0f13")
+        history_wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+        self.journal_history_canvas = tk.Canvas(
+            history_wrap, bg="#0b0f13", highlightthickness=0, borderwidth=0,
+        )
+        self.journal_history_scroll = scrollbar(
+            history_wrap, orient=tk.VERTICAL, command=self.journal_history_canvas.yview,
+        )
+        self.journal_history_canvas.configure(yscrollcommand=self.journal_history_scroll.set)
+        self.journal_history_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.journal_history_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.journal_history_canvas.bind("<Configure>", lambda _event: self._render_journal_history_canvas())
+        self.journal_history_canvas.bind("<MouseWheel>", self._on_journal_history_wheel)
+        self.journal_history_entries = []
+        self._journal_icon_cache = {}
+        self._render_journal_history_empty()
+        self._show_dashboard_stream("live")
+
+        footer = tk.Frame(body, bg=self.UI_BG)
+        footer.pack(fill=tk.X, pady=(5, 0))
+        self._action_button(footer, "Rebuild Cache", self.scan_all_logs_threaded, muted=True).pack(side=tk.LEFT)
+        self._action_button(footer, "Screenshots", self.open_screenshots_folder, muted=True).pack(side=tk.LEFT, padx=(6, 0))
+        self._console_toggle_btn = tk.Button(
+            footer, text="▶  DIAGNOSTICS", command=self._toggle_console,
+            bg=self.UI_BG, fg=self.UI_DIM, font=("Segoe UI", 8, "bold"),
+            relief=tk.FLAT, bd=0, cursor="hand2", padx=0,
+        )
+        self._console_toggle_btn.pack(side=tk.LEFT, padx=(10, 0))
+        tk.Label(footer, text="2026 insert3coins", font=("Segoe UI", 8),
+                 fg=self.UI_DIM, bg=self.UI_BG).pack(side=tk.RIGHT, pady=5)
+        self._console_visible = False
+        self._console_frame = self._panel(body)
+        self.log_box = scrolledtext.ScrolledText(
+            self._console_frame, bg="#050607", fg="#62d66f", font=("Consolas", 8),
+            borderwidth=0, height=4, relief=tk.FLAT,
+        )
+        self.log_box.pack(fill=tk.X, padx=10, pady=10)
+
     def _build_companion_dashboard_body(self):
         body = tk.Frame(self.dashboard_host, bg=self.UI_BG)
         self.dashboard_page = body
@@ -665,6 +894,192 @@ class DashboardUIMixin(ThemedWindowMixin):
         )
         self.log_box.pack(fill=tk.X, padx=10, pady=10)
 
+    def _show_dashboard_stream(self, name):
+        if not hasattr(self, "dashboard_stream_host"):
+            return
+        for frame in (getattr(self, "details_drawer", None), getattr(self, "dashboard_raw_stream", None)):
+            if frame is not None:
+                frame.pack_forget()
+        target = self.dashboard_raw_stream if name == "raw" else self.details_drawer
+        target.pack(fill=tk.BOTH, expand=True)
+        self.dashboard_stream_mode = "raw" if name == "raw" else "live"
+        for key, btn in getattr(self, "dashboard_stream_buttons", {}).items():
+            selected = key == name
+            bg = self.UI_PANEL_2 if selected else self.UI_PANEL
+            fg = COLOR_ACCENT if selected else self.UI_MUTED
+            btn.configure(bg=bg, fg=fg)
+            btn._theme_resting_bg = bg
+            btn._theme_resting_fg = fg
+        if name == "raw":
+            self._refresh_journal_history_view()
+            self._journal_history_dirty = False
+        else:
+            self._refresh_event_feed()
+            self._event_feed_dirty = False
+
+    def _dashboard_next_destination(self):
+        route = list(getattr(self, "route_list", None) or [])
+        current = getattr(self, "current_sys", None)
+        if route:
+            try:
+                index = route.index(current)
+            except (ValueError, TypeError):
+                index = -1
+            if 0 <= index < len(route) - 1:
+                return route[index + 1]
+            if index < 0:
+                return route[0]
+        manager = getattr(self, "waypoint_manager", None)
+        waypoints = list(getattr(manager, "waypoints", None) or [])
+        if manager and current:
+            next_name = manager.get_next_waypoint(current)
+            if next_name:
+                return next_name
+        for waypoint in waypoints:
+            if not waypoint.get("visited") and waypoint.get("name"):
+                return waypoint["name"]
+        return None
+
+    def _dashboard_copy_next(self):
+        destination = self._dashboard_next_destination()
+        if destination:
+            self._copy_waypoint_to_clipboard(destination, "NEXT DESTINATION")
+            self.dashboard_objective_detail.config(text=f"Copied {destination} to the clipboard.")
+        else:
+            self.dashboard_objective_detail.config(text="No pending route or waypoint is available to copy.")
+
+    @staticmethod
+    def _dashboard_credits(value):
+        value = int(value or 0)
+        if value >= 1_000_000_000:
+            return f"{value / 1_000_000_000:.1f}B cr"
+        if value >= 1_000_000:
+            return f"{value / 1_000_000:.1f}M cr"
+        if value >= 1_000:
+            return f"{value / 1_000:.0f}K cr"
+        return f"{value:,} cr"
+
+    def _refresh_command_dashboard(self, route_progress=None):
+        """Refresh briefing cards from already-cached live state only."""
+        if not hasattr(self, "dashboard_objective_primary"):
+            return
+        route_progress = route_progress or self._current_route_progress()
+        state = getattr(self, "companion_state", {}) or {}
+        fuel = getattr(self, "current_fuel_main", None)
+        fuel_cap = getattr(self, "fuel_capacity_main", None)
+        fuel_pct = None
+        try:
+            if fuel is not None and fuel_cap and float(fuel_cap) > 0:
+                fuel_pct = round(float(fuel) * 100 / float(fuel_cap))
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
+        cargo = int(getattr(self, "current_cargo_tons", 0) or 0)
+        cargo_cap = int(getattr(self, "cargo_capacity", 0) or 0)
+        unsold = int(state.get("unsold_exploration_cr") or 0) + int(state.get("unsold_bio_cr") or 0)
+        flight_bits = []
+        if fuel_pct is not None:
+            flight_bits.append(f"fuel {fuel_pct}%")
+        if cargo_cap:
+            flight_bits.append(f"cargo {cargo}/{cargo_cap} T")
+        if unsold:
+            flight_bits.append(f"data {self._dashboard_credits(unsold)}")
+        legal = getattr(self, "current_legal_state", None)
+        if legal and str(legal).casefold() not in ("clean", "none"):
+            flight_bits.append(str(legal))
+        self.dashboard_flight_meta.config(text="  ·  ".join(flight_bits) or "Ship telemetry awaiting journal state")
+
+        # Compass identity and latest verified decision.
+        memory = getattr(self, "cockpit_memory", None)
+        cognition = getattr(self, "compass_cognition", None)
+        persona = str(self.config.get("cockpit_persona") or "Compass")
+        mood = {"name": "calm", "reason": "systems nominal"}
+        summary = {}
+        if memory:
+            try:
+                mood = memory.current_mood()
+                summary = memory.summary()
+            except Exception:
+                pass
+        mood_name = str(mood.get("name") or "calm")
+        mood_colour = self.UI_WARN if mood_name in ("alert", "shaken") else self.UI_OK
+        self.dashboard_compass_badge.config(text=mood_name.upper(), bg=mood_colour)
+        relationship = summary.get("relationship") or "Local flight companion"
+        self.dashboard_compass_identity.config(text=f"{persona} · {relationship}")
+        cognition_state = cognition.status() if cognition else {}
+        decision = cognition_state.get("last_decision") or {}
+        advice = decision.get("line")
+        if advice:
+            advice_text = advice
+        elif decision.get("action") == "silence":
+            advice_text = "Standing by. No observation currently clears the usefulness threshold."
+        elif cognition_state.get("goals"):
+            goal = cognition_state["goals"][0]
+            advice_text = str(goal.get("detail") or goal.get("label") or goal.get("topic") or "Monitoring active objectives.")
+        else:
+            advice_text = "Monitoring verified flight context and active objectives."
+        self.dashboard_compass_advice.config(text=advice_text)
+        self.dashboard_compass_meta.config(text=(
+            f"{summary.get('systems', 0):,} systems · {summary.get('memories', 0):,} memories · "
+            f"{int(cognition_state.get('decisions') or 0):,} decisions"
+        ))
+
+        # Choose one truthful priority instead of displaying every possible task.
+        primary = "No urgent objective"
+        detail = "Flight state is stable. Choose a workspace or continue the current route."
+        sample = getattr(self, "bio_sampling", None)
+        remaining_bodies = max(0, int(getattr(self, "total", 0) or 0) - int(getattr(self, "scanned", 0) or 0))
+        missions = state.get("missions") or {}
+        mission_rows = list(missions.values()) if isinstance(missions, dict) else list(missions)
+        next_destination = self._dashboard_next_destination()
+        if isinstance(sample, dict):
+            species = sample.get("species") or sample.get("genus") or "biological sample"
+            progress = int(sample.get("sample_idx") or sample.get("progress") or 1)
+            primary = f"Continue {species} sampling"
+            detail = f"Active biological analysis is at sample {progress}/3 on {sample.get('body') or 'the current body'}."
+        elif unsold >= 20_000_000:
+            primary = "Secure valuable survey data"
+            detail = f"Approximately {self._dashboard_credits(unsold)} remains unsold and is currently at risk."
+        elif remaining_bodies:
+            primary = "Complete the current system survey"
+            detail = f"{remaining_bodies} bod{'ies remain' if remaining_bodies != 1 else 'y remains'} unresolved in {getattr(self, 'current_sys', 'this system')}."
+        elif route_progress.get("remaining") and next_destination:
+            primary = f"Continue to {next_destination}"
+            detail = route_progress.get("text") or "A navigation route remains active."
+        elif mission_rows:
+            destination = next((row.get("destination_system") for row in mission_rows if isinstance(row, dict) and row.get("destination_system")), None)
+            primary = f"Review {len(mission_rows)} active mission{'s' if len(mission_rows) != 1 else ''}"
+            detail = f"Next recorded mission destination: {destination}." if destination else "Mission objectives remain active."
+        self.dashboard_objective_primary.config(text=primary)
+        self.dashboard_objective_detail.config(text=detail)
+
+        # Active operation roll-up; omit inactive/noise rows.
+        operations = []
+        active_colonies = [
+            project for project in (getattr(self, "colonisation_projects", {}) or {}).values()
+            if not project.get("complete") and not project.get("failed")
+        ]
+        colony_remaining = sum(
+            max(0, int(resource.get("required") or 0) - int(resource.get("provided") or 0))
+            for project in active_colonies for resource in (project.get("resources") or [])
+        )
+        if active_colonies:
+            operations.append(f"ARCHITECT  {len(active_colonies)} site{'s' if len(active_colonies) != 1 else ''} · {colony_remaining:,} T remaining")
+        if mission_rows:
+            operations.append(f"MISSIONS   {len(mission_rows)} active")
+        trade = getattr(self, "trade_session", {}) or {}
+        trade_profit = int(trade.get("profit") or 0)
+        if cargo or trade_profit:
+            operations.append(f"TRADE      {cargo:,} T aboard · {self._dashboard_credits(trade_profit)} session")
+        mining = getattr(self, "mining_window", None)
+        if mining and getattr(mining, "session_id", None):
+            operations.append("MINING     session active")
+        carrier_route = (getattr(self, "carrier_tracker", None).carrier_data.get("expedition_route")
+                         if getattr(self, "carrier_tracker", None) else []) or []
+        carrier_left = sum(1 for row in carrier_route if isinstance(row, dict) and not row.get("visited"))
+        if carrier_left:
+            operations.append(f"EXPEDITION {carrier_left} carrier stop{'s' if carrier_left != 1 else ''} remaining")
+        self.dashboard_operations_text.config(text="\n".join(operations[:5]) or "No active operations\nDetailed workspaces remain ready from the navigation rail.")
+
     def _run_nav_command(self, label, command):
         """Run a page action and add its full open/switch cost to runtime tracing."""
         started = time.perf_counter()
@@ -751,6 +1166,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         # Hidden pages already mark these views dirty as new events arrive.
         # Avoid rebuilding both timelines on every unchanged dashboard return.
         self._flush_dashboard_stream_views()
+        self._refresh_command_dashboard()
 
     def _build_live_event_timeline(self, parent):
         feed_wrap = tk.Frame(parent, bg=self.UI_PANEL)
@@ -850,10 +1266,10 @@ class DashboardUIMixin(ThemedWindowMixin):
         self._console_visible = not self._console_visible
         if self._console_visible:
             self._console_frame.pack(fill=tk.X, pady=(4, 0))
-            self._console_toggle_btn.config(text="▼  DEBUG CONSOLE")
+            self._console_toggle_btn.config(text="▼  DIAGNOSTICS")
         else:
             self._console_frame.pack_forget()
-            self._console_toggle_btn.config(text="▶  DEBUG CONSOLE")
+            self._console_toggle_btn.config(text="▶  DIAGNOSTICS")
 
     def add_event_feed_entry(self, tag, message, severity="INFO", copy_text=None, url=None):
         if threading.current_thread() is not threading.main_thread():
@@ -892,7 +1308,8 @@ class DashboardUIMixin(ThemedWindowMixin):
         if len(self.event_feed_entries) > self.event_feed_max_entries:
             self.event_feed_entries = self.event_feed_entries[:self.event_feed_max_entries]
         self._event_feed_dirty = True
-        if self._dashboard_streams_visible() and not getattr(self, "_defer_dashboard_stream_render", False):
+        if (self._dashboard_stream_visible("live")
+                and not getattr(self, "_defer_dashboard_stream_render", False)):
             self._refresh_event_feed()
             self._event_feed_dirty = False
 
@@ -944,6 +1361,12 @@ class DashboardUIMixin(ThemedWindowMixin):
     def _dashboard_streams_visible(self):
         return getattr(self, "_active_page", "DASHBOARD") == "DASHBOARD"
 
+    def _dashboard_stream_visible(self, name):
+        return (
+            self._dashboard_streams_visible()
+            and getattr(self, "dashboard_stream_mode", "live") == name
+        )
+
     def _refresh_journal_history_view(self):
         self._render_journal_history_canvas()
         if hasattr(self, "journal_history_count_lbl"):
@@ -952,10 +1375,12 @@ class DashboardUIMixin(ThemedWindowMixin):
     def _flush_dashboard_stream_views(self, force=False):
         if not force and not self._dashboard_streams_visible():
             return
-        if force or getattr(self, "_event_feed_dirty", False):
+        show_live = force or self._dashboard_stream_visible("live")
+        show_raw = force or self._dashboard_stream_visible("raw")
+        if show_live and (force or getattr(self, "_event_feed_dirty", False)):
             self._refresh_event_feed()
             self._event_feed_dirty = False
-        if force or getattr(self, "_journal_history_dirty", False):
+        if show_raw and (force or getattr(self, "_journal_history_dirty", False)):
             self._refresh_journal_history_view()
             self._journal_history_dirty = False
 
@@ -1083,7 +1508,8 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.journal_history_entries.insert(0, entry)
         self.journal_history_entries = self.journal_history_entries[:self.JOURNAL_HISTORY_LIMIT]
         self._journal_history_dirty = True
-        if self._dashboard_streams_visible() and not getattr(self, "_defer_dashboard_stream_render", False):
+        if (self._dashboard_stream_visible("raw")
+                and not getattr(self, "_defer_dashboard_stream_render", False)):
             self._refresh_journal_history_view()
             self._journal_history_dirty = False
 
@@ -2083,8 +2509,9 @@ class DashboardUIMixin(ThemedWindowMixin):
     def update_dashboard_panels(self):
         t0 = self._perf_start()
         """Refresh dashboard cards/summary without waypoint recompute."""
-        sys_text = self.current_sys.upper()
-        if self.star_class: sys_text += f" [{self.star_class}]"
+        ship = (getattr(self, "cmdr_ship", {}) or {}).get("ship_name") or (getattr(self, "cmdr_ship", {}) or {}).get("ship")
+        flight_state = str(getattr(self, "hud_flight_state", "FLIGHT") or "FLIGHT")
+        sys_text = f"{ship or 'SHIP'} · {flight_state}".upper()
         
         self.sys_stat.config(text=sys_text)
         self.scan_stat.config(text=f"{self.scanned} / {self.total}")
@@ -2128,6 +2555,7 @@ class DashboardUIMixin(ThemedWindowMixin):
 
         self._draw_flight_strip()
         self._refresh_event_feed()
+        self._refresh_command_dashboard(route_progress)
         self._perf_spike("update_dashboard_panels", t0, threshold_ms=28.0)
 
     def update_dashboard_ui(self):
