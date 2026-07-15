@@ -4,6 +4,7 @@ Tabs: Overview, Finance, Services.
 All data comes from CarrierTracker.carrier_data.
 """
 import tkinter as tk
+import webbrowser
 from datetime import datetime, timezone
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
@@ -134,7 +135,7 @@ class CarrierWindow(ThemedWindowMixin):
         tab_bar.pack(fill=tk.X)
         self._tabs = {}
         self._tab_frames = {}
-        for name in ("Overview", "Finance", "Services"):
+        for name in ("Overview", "Expedition", "Finance", "Services"):
             btn = button(tab_bar, name, lambda n=name: self._show_tab(n), muted=True, padx=14, pady=6)
             btn.pack(side=tk.LEFT)
             self._tabs[name] = btn
@@ -144,6 +145,7 @@ class CarrierWindow(ThemedWindowMixin):
         self._tab_area.pack(fill=tk.BOTH, expand=True, padx=10, pady=8)
 
         self._build_overview_tab()
+        self._build_expedition_tab()
         self._build_finance_tab()
         self._build_services_tab()
         self._show_tab("Overview")
@@ -320,6 +322,111 @@ class CarrierWindow(ThemedWindowMixin):
             highlightcolor=COLOR_ACCENT, highlightbackground=self.UI_BORDER
         ) if self.is_open() else None)
 
+    def _build_expedition_tab(self):
+        f = tk.Frame(self._tab_area, bg=self.UI_PANEL,
+                     highlightbackground=self.UI_BORDER, highlightthickness=1)
+        self._tab_frames["Expedition"] = f
+        self._section(f, "FLEET CARRIER EXPEDITION NAVIGATOR")
+        tk.Label(
+            f, text="Paste one system per line. CarrierJump/CarrierLocation marks arrivals automatically.",
+            font=("Segoe UI", 8), fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w",
+        ).pack(fill=tk.X, padx=10, pady=(0, 6))
+        fields = tk.Frame(f, bg=self.UI_PANEL)
+        fields.pack(fill=tk.X, padx=10)
+        tk.Label(fields, text="EXPEDITION", fg=self.UI_MUTED, bg=self.UI_PANEL,
+                 font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT)
+        self.expedition_name_var = tk.StringVar()
+        self.expedition_name_entry = tk.Entry(fields, textvariable=self.expedition_name_var, bg="#090c10", fg=COLOR_TEXT,
+                                              insertbackground=COLOR_ACCENT, relief=tk.FLAT, width=30)
+        self.expedition_name_entry.pack(side=tk.LEFT, padx=(6, 14), ipady=4)
+        tk.Label(fields, text="FUEL RESERVE", fg=self.UI_MUTED, bg=self.UI_PANEL,
+                 font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT)
+        self.expedition_reserve_var = tk.StringVar(value="200")
+        self.expedition_reserve_entry = tk.Entry(
+            fields, textvariable=self.expedition_reserve_var, bg="#090c10", fg=COLOR_TEXT,
+            insertbackground=COLOR_ACCENT, relief=tk.FLAT, width=7,
+        )
+        self.expedition_reserve_entry.pack(side=tk.LEFT, padx=6, ipady=4)
+        tk.Label(fields, text="T", fg=self.UI_MUTED, bg=self.UI_PANEL).pack(side=tk.LEFT)
+
+        route_wrap = tk.Frame(f, bg="#090c10")
+        route_wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=8)
+        self.expedition_route_text = tk.Text(
+            route_wrap, bg="#090c10", fg=COLOR_TEXT, insertbackground=COLOR_ACCENT,
+            relief=tk.FLAT, bd=0, font=self.UI_MONO, wrap=tk.NONE, padx=8, pady=8,
+        )
+        self.expedition_route_text.pack(fill=tk.BOTH, expand=True)
+        self.expedition_route_text.tag_config("visited", foreground=self.UI_DIM)
+        self.expedition_route_text.tag_config("next", foreground=COLOR_ORANGE)
+        self.expedition_route_text.tag_config("pending", foreground=COLOR_TEXT)
+
+        actions = tk.Frame(f, bg=self.UI_PANEL)
+        actions.pack(fill=tk.X, padx=10, pady=(0, 6))
+        button(actions, "SAVE / UPDATE ROUTE", self._save_expedition, accent=True).pack(side=tk.LEFT)
+        button(actions, "COPY NEXT", self._copy_next_expedition).pack(side=tk.LEFT, padx=(6, 0))
+        button(actions, "OPEN SPANSH ROUTER", self._open_spansh_carrier).pack(side=tk.LEFT, padx=(6, 0))
+        self.expedition_summary = tk.Label(actions, text="", fg=self.UI_MUTED, bg=self.UI_PANEL,
+                                           font=("Consolas", 8))
+        self.expedition_summary.pack(side=tk.RIGHT)
+
+    def _save_expedition(self):
+        systems = []
+        for line in self.expedition_route_text.get("1.0", tk.END).splitlines():
+            value = line.strip()
+            if value.startswith(("✓", "→", "·")):
+                value = value[1:].strip()
+            if value:
+                systems.append(value)
+        self.tracker.set_expedition(
+            self.expedition_name_var.get(), systems, self.expedition_reserve_var.get()
+        )
+
+    def _next_expedition_system(self):
+        for row in self.tracker.carrier_data.get("expedition_route") or []:
+            if isinstance(row, dict) and not row.get("visited"):
+                return row.get("system")
+        return None
+
+    def _copy_next_expedition(self):
+        system = self._next_expedition_system()
+        if system:
+            self.win.clipboard_clear()
+            self.win.clipboard_append(system)
+
+    @staticmethod
+    def _open_spansh_carrier():
+        webbrowser.open("https://spansh.co.uk/fleet-carrier")
+
+    def _refresh_expedition(self, cd):
+        try:
+            focused = self.win.focus_get() == self.expedition_route_text
+        except Exception:
+            focused = False
+        route = cd.get("expedition_route") or []
+        if not focused:
+            self.expedition_route_text.delete("1.0", tk.END)
+            next_written = False
+            for row in route:
+                if not isinstance(row, dict):
+                    continue
+                if row.get("visited"):
+                    marker, tag = "✓", "visited"
+                elif not next_written:
+                    marker, tag, next_written = "→", "next", True
+                else:
+                    marker, tag = "·", "pending"
+                self.expedition_route_text.insert(tk.END, f"{marker} {row.get('system') or ''}\n", tag)
+        if self.win.focus_get() != self.expedition_name_entry:
+            self.expedition_name_var.set(cd.get("expedition_name") or "")
+        if self.win.focus_get() != self.expedition_reserve_entry:
+            self.expedition_reserve_var.set(str(cd.get("expedition_reserve_fuel") or 0))
+        done = sum(1 for row in route if isinstance(row, dict) and row.get("visited"))
+        remaining = max(0, len(route) - done)
+        fuel = cd.get("fuel_level")
+        reserve = int(cd.get("expedition_reserve_fuel") or 0)
+        fuel_text = "fuel unknown" if fuel is None else f"{max(0, int(fuel) - reserve):,} T above reserve"
+        self.expedition_summary.config(text=f"{done}/{len(route)} stops | {remaining * 20} min nominal | {fuel_text}")
+
     @staticmethod
     def _parse_departure_time(text):
         """Parse a user-typed local time string into a UTC Unix timestamp.
@@ -459,6 +566,7 @@ class CarrierWindow(ThemedWindowMixin):
         if not self.is_open():
             return
         cd = self.tracker.carrier_data
+        self._refresh_expedition(cd)
 
         # Status badge
         status = cd.get("status", "idle")

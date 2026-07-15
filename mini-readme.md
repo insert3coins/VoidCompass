@@ -1,5 +1,24 @@
 # VoidCompass // UPDATE LOG
 
+## v4.8.1 // Command Centres & One-Click Trade
+**Release Date:** 2026-Jul-16
+
+### Architect Command Centre
+*   Evolved the Colonisation page into an **Architect Command Centre** while retaining the existing per-project detail and aggregated Shopping List. The new Command view summarises active sites, delivered and remaining tonnage, ship-load estimates, and a bounded construction activity timeline.
+*   Real `ColonisationConstructionDepot` and `ColonisationContribution` journal events now retain progress and commodity-delivery history per commander. Unsupported claim/beacon states are not inferred.
+
+### Fleet Carrier Expedition Navigator
+*   Added a persistent **Expedition** tab to the existing Carrier page. Paste a Spansh or hand-planned system list, name the expedition, keep a configurable tritium reserve, copy the next stop, and open the Spansh Fleet Carrier router in one click.
+*   Real `CarrierJump` and `CarrierLocation` arrivals automatically mark matching route stops complete. The navigator shows visited/remaining stops, nominal 20-minute-per-jump travel time, and fuel above reserve without inventing per-jump tritium figures that the journal does not provide.
+
+### Captain's Log / Expedition Chronicle
+*   Added a per-commander **Captain's Log** to Explore. It reconstructs bounded `LoadGame`/`Shutdown` sessions from the configured live journal folder and records routes, jumps, Codex discoveries, completed biological analyses, screenshots, trade totals, exploration/biology sales, and ship losses.
+*   Historical imports run away from the Tk thread, skip unchanged journal files on later launches, merge safely with live callbacks, retain 250 sessions with 180 highlights each, and export any session as Markdown.
+
+### One-Click Trade
+*   Reworked Trade around a new **One Click** landing page for best routes, cargo buyers, nearby opportunities, the current market, price tracking, and market-database maintenance. Each action uses the current system, ship and cargo context, then opens its result in the existing advanced panel rather than duplicating the trade engines.
+*   Preserved Routes, Markets, Local, Tracking, and Database as detailed workspaces, including the existing fast `marketdb.is_ready()` search path, live EDDN/journal updates, route tracking, watchlists, analytics, and market import tools.
+
 ## v4.7.5 // Stable Startup & Overlay Positions
 **Release Date:** 2026-Jul-15
 

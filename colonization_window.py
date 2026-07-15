@@ -64,7 +64,8 @@ class ColonizationWindow(ThemedWindowMixin):
     UI_MONO   = ("Consolas", 9)
     UI_MONO_B = ("Consolas", 10, "bold")
 
-    def __init__(self, root, config: dict, projects: dict, save_callback, overlay_callback=None, embedded=False):
+    def __init__(self, root, config: dict, projects: dict, save_callback, overlay_callback=None,
+                 cargo_capacity_provider=None, embedded=False):
         """
         projects     – live reference to dashboard's colonisation_projects dict
         save_callback – callable(projects) that persists changes to JSON
@@ -74,13 +75,14 @@ class ColonizationWindow(ThemedWindowMixin):
         self.projects      = projects       # shared reference — always current
         self.save_callback = save_callback
         self.overlay_callback = overlay_callback
+        self.cargo_capacity_provider = cargo_capacity_provider
         self._selected_mid = None
         self._notes_dirty  = False
         self._planner_sources = {}
 
         self.embedded = embedded
         self.win = window_surface(root, embedded=embedded)
-        self.win.title("Colonization Tracker — Void Compass")
+        self.win.title("Architect Command Centre — Void Compass")
         apply_window(self.win)
         self.win.geometry(config.get("colonisation_window_geometry", "740x560"))
         self.win.resizable(True, True)
@@ -90,6 +92,7 @@ class ColonizationWindow(ThemedWindowMixin):
         self._build_ui()
         self._refresh_list()
         self._refresh_planner()
+        self._refresh_command()
 
         # Auto-select most recently updated project
         if self.projects:
@@ -120,6 +123,7 @@ class ColonizationWindow(ThemedWindowMixin):
     def _do_refresh(self):
         self._refresh_list()
         self._refresh_planner()
+        self._refresh_command()
         if self._selected_mid is not None:
             if self._selected_mid in self.projects:
                 self._render(self._selected_mid)
@@ -146,7 +150,7 @@ class ColonizationWindow(ThemedWindowMixin):
         hdr = tk.Frame(self.win, bg="#0c1014", height=46)
         hdr.pack(fill=tk.X)
         hdr.pack_propagate(False)
-        tk.Label(hdr, text="COLONIZATION TRACKER",
+        tk.Label(hdr, text="ARCHITECT COMMAND CENTRE",
                  font=("Segoe UI", 13, "bold"), fg=COLOR_ACCENT, bg="#0c1014").pack(
             side=tk.LEFT, padx=14, pady=8)
         self._status_badge = tk.Label(hdr, text="", fg="black", bg=self.UI_DIM,
@@ -194,8 +198,11 @@ class ColonizationWindow(ThemedWindowMixin):
 
         detail_tab = tk.Frame(self._tabs, bg=self.UI_PANEL)
         planner_tab = tk.Frame(self._tabs, bg=self.UI_BG)
+        command_tab = tk.Frame(self._tabs, bg=self.UI_BG)
+        self._tabs.add(command_tab, text="Command")
         self._tabs.add(detail_tab, text="Project Details")
         self._tabs.add(planner_tab, text="Shopping List")
+        self._build_command_tab(command_tab)
         self._build_planner_tab(planner_tab)
         right = detail_tab
 
@@ -287,6 +294,74 @@ class ColonizationWindow(ThemedWindowMixin):
 
     def _action_button(self, parent, text, cmd, accent=False, muted=False):
         return button(parent, text, cmd, accent=accent, muted=muted, pady=4)
+
+    def _build_command_tab(self, parent):
+        cards = tk.Frame(parent, bg=self.UI_BG)
+        cards.pack(fill=tk.X, padx=10, pady=10)
+        self._command_labels = {}
+        for key, title, colour in (
+            ("sites", "ACTIVE SITES", COLOR_ACCENT), ("progress", "DELIVERED", self.UI_OK),
+            ("remaining", "REMAINING", COLOR_ORANGE), ("trips", "CARGO TRIPS", COLOR_TEXT),
+        ):
+            card = tk.Frame(cards, bg=self.UI_PANEL, highlightbackground=self.UI_BORDER, highlightthickness=1)
+            card.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
+            tk.Frame(card, bg=colour, height=2).pack(fill=tk.X)
+            tk.Label(card, text=title, fg=self.UI_MUTED, bg=self.UI_PANEL,
+                     font=("Segoe UI", 7, "bold")).pack(anchor="w", padx=10, pady=(8, 0))
+            value = tk.Label(card, text="—", fg=colour, bg=self.UI_PANEL,
+                             font=("Consolas", 12, "bold"))
+            value.pack(anchor="w", padx=10, pady=(2, 8))
+            self._command_labels[key] = value
+        tk.Label(parent, text="RECENT CONSTRUCTION ACTIVITY", fg=COLOR_ORANGE, bg=self.UI_BG,
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=10, pady=(2, 4))
+        self._command_activity = tk.Text(
+            parent, bg="#0b0f13", fg=COLOR_TEXT, relief=tk.FLAT, bd=0,
+            padx=10, pady=8, font=("Consolas", 9), wrap=tk.WORD,
+        )
+        self._command_activity.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+        self._command_activity.configure(state=tk.DISABLED)
+
+    def _refresh_command(self):
+        if not hasattr(self, "_command_activity"):
+            return
+        active = [p for p in self.projects.values() if not p.get("complete") and not p.get("failed")]
+        required = delivered = remaining = 0
+        for project in active:
+            for resource in project.get("resources") or []:
+                req = int(resource.get("required") or 0)
+                done = min(req, int(resource.get("provided") or 0))
+                required += req
+                delivered += done
+                remaining += max(0, req - done)
+        try:
+            cargo_capacity = max(0, int(self.cargo_capacity_provider() or 0)) if self.cargo_capacity_provider else 0
+        except Exception:
+            cargo_capacity = 0
+        trips = ((remaining + cargo_capacity - 1) // cargo_capacity) if cargo_capacity else None
+        self._command_labels["sites"].config(text=str(len(active)))
+        pct = (delivered / required * 100) if required else 0
+        self._command_labels["progress"].config(text=f"{delivered:,} T / {pct:.0f}%")
+        self._command_labels["remaining"].config(text=f"{remaining:,} T")
+        self._command_labels["trips"].config(text=str(trips) if trips is not None else "SET BY SHIP")
+        activity = []
+        for project in self.projects.values():
+            name = project.get("system_name") or project.get("body_name") or "Unknown site"
+            for row in project.get("activity") or []:
+                activity.append((row.get("timestamp"), name, row))
+        activity.sort(key=lambda item: str(item[0] or ""), reverse=True)
+        lines = []
+        for stamp, name, row in activity[:80]:
+            if isinstance(stamp, (int, float)):
+                when = datetime.fromtimestamp(stamp).strftime("%Y-%m-%d %H:%M")
+            else:
+                when = str(stamp or "").replace("T", " ")[:16]
+            lines.append(f"{when}  [{row.get('type') or 'UPDATE'}]  {name}\n    {row.get('detail') or ''}")
+        if not lines:
+            lines = ["No contribution activity recorded yet. Visit a construction depot or make a delivery."]
+        self._command_activity.configure(state=tk.NORMAL)
+        self._command_activity.delete("1.0", tk.END)
+        self._command_activity.insert(tk.END, "\n\n".join(lines))
+        self._command_activity.configure(state=tk.DISABLED)
 
     def _build_planner_tab(self, parent):
         header = tk.Frame(parent, bg=self.UI_BG)

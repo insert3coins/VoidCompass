@@ -27,6 +27,7 @@ _PERSIST_KEYS = {
     "space_total", "space_cargo", "space_crew", "space_free",
     "space_reserved", "space_ship_packs", "space_module_packs",
     "crew", "trade_orders", "jump_history",
+    "expedition_name", "expedition_route", "expedition_reserve_fuel",
     "notes", "destination_note", "last_updated",
 }
 
@@ -105,6 +106,9 @@ class CarrierTracker:
             "crew": [],
             "trade_orders": [],
             "jump_history": [],
+            "expedition_name": "",
+            "expedition_route": [],
+            "expedition_reserve_fuel": 200,
             "notes": "",
             "destination_note": "",
             "last_updated": None,
@@ -436,6 +440,7 @@ class CarrierTracker:
                 cd["jump_history"] = hist[:10]
             cd["system"] = system
             cd["body"] = body
+            self._advance_expedition(system, raw.get("timestamp"))
             cd["jump_destination"] = None
             cd["jump_body"] = None
             # Keep jump_departure_time so _update_status() can compute the
@@ -443,6 +448,47 @@ class CarrierTracker:
         elif body and body != cd.get("body"):
             cd["body"] = body
         return True
+
+    def _advance_expedition(self, system, timestamp=None):
+        target = (system or "").strip().lower()
+        if not target:
+            return
+        route = self.carrier_data.get("expedition_route") or []
+        for row in route:
+            if isinstance(row, dict) and str(row.get("system") or "").strip().lower() == target:
+                row["visited"] = True
+                row["visited_at"] = timestamp or datetime.utcnow().isoformat(timespec="seconds") + "Z"
+                break
+
+    def set_expedition(self, name, systems, reserve_fuel=200):
+        """Persist a manually pasted carrier route without relying on an undocumented API."""
+        existing = {
+            str(row.get("system") or "").strip().lower(): row
+            for row in (self.carrier_data.get("expedition_route") or []) if isinstance(row, dict)
+        }
+        route = []
+        seen = set()
+        for value in systems or []:
+            system = str(value or "").strip()
+            key = system.lower()
+            if not system or key in seen:
+                continue
+            seen.add(key)
+            old = existing.get(key, {})
+            route.append({"system": system, "visited": bool(old.get("visited")),
+                          "visited_at": old.get("visited_at")})
+        self.carrier_data["expedition_name"] = (name or "").strip()
+        self.carrier_data["expedition_route"] = route
+        try:
+            self.carrier_data["expedition_reserve_fuel"] = max(0, int(reserve_fuel))
+        except Exception:
+            self.carrier_data["expedition_reserve_fuel"] = 200
+        self._advance_expedition(self.carrier_data.get("system"))
+        self.save_state()
+        if callable(self.on_updated):
+            self.on_updated(self.carrier_data)
+        if callable(self.on_panel_updated):
+            self.on_panel_updated(self.carrier_data)
 
     def _handle_trade_order(self, raw):
         cd = self.carrier_data
