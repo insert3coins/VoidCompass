@@ -1,4 +1,5 @@
 import os
+import json
 import threading
 import math
 import sqlite3
@@ -75,6 +76,42 @@ from diagnostic_logs import application_base_dir, resolve_log_path
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
+    _COCKPIT_STATE_FILE = "last_cockpit_state.json"
+    _COCKPIT_STATE_SCHEMA = 1
+    _COCKPIT_STATE_FIELDS = (
+        "current_sys", "previous_sys", "previous_coords",
+        "current_system_address", "current_coords", "star_class",
+        "scanned", "total", "organic_count", "system_bio_signals",
+        "system_traffic", "last_traffic_system", "valuable_system",
+        "valuable_bodies", "body_signals", "system_undiscovered",
+        "fss_all_bodies", "current_body_id", "current_body_name",
+        "last_bio_scan", "bio_sampling", "bio_sample_points",
+        "cmdr_balance", "cmdr_loan", "cmdr_ranks", "cmdr_rank_progress",
+        "cmdr_reputation", "cmdr_ship", "game_version", "game_build",
+        "game_horizons", "game_odyssey", "current_station_name",
+        "current_station_type", "current_station_market_id",
+        "current_station_economy", "current_station_economies",
+        "current_station_government", "current_station_faction",
+        "current_station_allegiance", "current_station_services",
+        "current_station_dist_ls", "current_station_landing_pads",
+        "current_docked", "hud_flight_state", "current_landed",
+        "current_in_fighter", "current_in_srv", "current_on_foot",
+        "current_vehicle_id", "current_vehicle_name", "current_legal_state",
+        "current_fuel_main", "current_fuel_reservoir", "fuel_capacity_main",
+        "current_destination", "cargo_capacity", "current_cargo_tons",
+        "current_cargo_inventory", "dest_coords", "dest_name", "route_list",
+        "nav_route_entries", "current_latitude", "current_longitude",
+        "current_heading", "current_planet_radius", "on_planet",
+    )
+    _COCKPIT_STATE_LIMITS = {
+        "valuable_bodies": 64,
+        "current_station_economies": 16,
+        "current_station_services": 128,
+        "current_cargo_inventory": 256,
+        "route_list": 256,
+        "nav_route_entries": 256,
+        "bio_sample_points": 8,
+    }
     _OVERLAY_POSITION_SPECS = (
         ("hud", "hud_x", "hud_y"),
         ("cargo_hud", "cargo_hud_x", "cargo_hud_y"),
@@ -158,6 +195,157 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _profile_path(self, filename):
         return get_profile_file(get_active_profile(self.config), filename)
+
+    @classmethod
+    def _cockpit_state_json_value(cls, value):
+        """Return a bounded JSON-safe copy of simple runtime state."""
+        if value is None or isinstance(value, (str, bool, int)):
+            return value
+        if isinstance(value, float):
+            return value if math.isfinite(value) else None
+        if isinstance(value, dict):
+            return {
+                str(key): cls._cockpit_state_json_value(item)
+                for key, item in value.items()
+            }
+        if isinstance(value, (list, tuple, deque)):
+            return [cls._cockpit_state_json_value(item) for item in value]
+        if isinstance(value, set):
+            return [cls._cockpit_state_json_value(item) for item in sorted(value, key=str)]
+        return None
+
+    def _save_profile_cockpit_state(self):
+        """Persist the active commander's last visible state on clean shutdown."""
+        if getattr(self, "_startup_restore_active", False):
+            # Never replace a known-good snapshot with a partially replayed
+            # journal if the app is closed while recovery is still running.
+            return False
+        profile_key = get_active_profile(self.config)
+        state = {}
+        for field in self._COCKPIT_STATE_FIELDS:
+            value = getattr(self, field, None)
+            limit = self._COCKPIT_STATE_LIMITS.get(field)
+            if limit is not None and isinstance(value, (list, tuple, deque)):
+                value = list(value)[:limit]
+            state[field] = self._cockpit_state_json_value(value)
+        payload = {
+            "schema": self._COCKPIT_STATE_SCHEMA,
+            "saved_at": time.time(),
+            "profile_key": profile_key,
+            "commander": getattr(self, "cmdr_name", None),
+            "fid": getattr(self, "cmdr_fid", None),
+            "state": state,
+        }
+        path = self._profile_path(self._COCKPIT_STATE_FILE)
+        temp_path = f"{path}.tmp"
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(temp_path, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"))
+            os.replace(temp_path, path)
+            return True
+        except Exception as exc:
+            logging.warning("Could not save profile cockpit state: %s", exc)
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except Exception:
+                pass
+            return False
+
+    @staticmethod
+    def _restore_int_key_dict(value):
+        if not isinstance(value, dict):
+            return {}
+        restored = {}
+        for key, item in value.items():
+            try:
+                key = int(key)
+            except (TypeError, ValueError):
+                pass
+            restored[key] = item
+        return restored
+
+    def _load_profile_cockpit_state(self):
+        """Load only the active commander's graceful-shutdown snapshot."""
+        path = self._profile_path(self._COCKPIT_STATE_FILE)
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+        except (OSError, ValueError, TypeError):
+            return False
+        if not isinstance(payload, dict):
+            return False
+        if payload.get("schema") != self._COCKPIT_STATE_SCHEMA:
+            return False
+        if payload.get("profile_key") != get_active_profile(self.config):
+            return False
+        saved_fid = str(payload.get("fid") or "")
+        active_fid = str(self.config.get("active_commander_fid") or "")
+        if saved_fid and active_fid and saved_fid != active_fid:
+            return False
+        state = payload.get("state")
+        if not isinstance(state, dict):
+            return False
+        for field in self._COCKPIT_STATE_FIELDS:
+            if field in state:
+                setattr(self, field, state[field])
+        self.body_signals = self._restore_int_key_dict(self.body_signals)
+        if not isinstance(self.current_coords, list) or len(self.current_coords) != 3:
+            self.current_coords = [0, 0, 0]
+        if self.previous_coords is not None and (
+                not isinstance(self.previous_coords, list) or len(self.previous_coords) != 3):
+            self.previous_coords = None
+        if self.dest_coords is not None and (
+                not isinstance(self.dest_coords, list) or len(self.dest_coords) != 3):
+            self.dest_coords = None
+        try:
+            self._cached_cockpit_state_saved_at = float(payload.get("saved_at") or 0.0)
+        except (TypeError, ValueError):
+            self._cached_cockpit_state_saved_at = 0.0
+        return bool(self.current_sys and self.current_sys != "---")
+
+    def _hydrate_cached_system_scan_state(self):
+        """Use the profile DB for body detail while the journal catches up."""
+        if not getattr(self, "_cached_cockpit_state_loaded", False):
+            return
+        if not self.current_sys or self.current_sys in ("---", "Unknown"):
+            return
+        self.load_system_from_db(self.current_sys)
+        items = self.load_scan_items_from_db(self.current_sys)
+        if items:
+            self.scan_items = list(items)
+            self.scan_items_by_id = {}
+            for item in self.scan_items:
+                self._normalize_scan_item(item)
+                body_id = item.get("body_id")
+                if body_id is not None:
+                    self.scan_items_by_id[body_id] = item
+            self._rebuild_system_state_from_scan_items()
+
+    def _show_cached_cockpit_state(self):
+        """Paint the last state once, then freeze redraws during catch-up."""
+        if not getattr(self, "_cached_cockpit_state_loaded", False):
+            return
+        self.update_dashboard_ui()
+        self._perform_hud_update()
+        self._show_system_info_for_current_system()
+        if self.survey_status_hud:
+            self.survey_status_hud.update(
+                self.current_sys, self.scanned, self.total, self.scan_items,
+                self.body_signals, sampling=self._sampling_snapshot(),
+                focused_body_id=self.current_body_id,
+                focused_body_name=self.current_body_name,
+            )
+        if self.station_info_hud and self.current_docked and self.current_station_name:
+            self.station_info_hud.on_docked(self)
+        if self.cargo_hud:
+            self.cargo_hud.update(self.current_cargo_inventory, self.cargo_capacity)
+        self._refresh_gravity_warning(self.current_body_id, self.current_body_name)
+        self.update_ground_target_ui()
+        self.root.title(f"VOID COMPASS // v{APP_VERSION} // RESTORING JOURNAL")
+        self._startup_restore_active = True
+        self._startup_restore_ui_pending = False
 
     def _copy_legacy_to_profile(self, filename):
         src = os.path.abspath(filename)
@@ -1070,6 +1258,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             legacy_paths=(application_base_dir() / "runtime_trace.log",),
         )
         self.runtime_trace.start()
+        self._cached_cockpit_state_saved_at = 0.0
+        self._cached_cockpit_state_loaded = self._load_profile_cockpit_state()
         
         self.setup_layout()
         self.waypoint_manager = WaypointManager(self.config.get("waypoints_file"))
@@ -1217,6 +1407,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.engineer_materials = load_engineer_materials(self.config.get("engineer_materials_file"))
         self.companion_state = companion_features.load_state(self.config.get("companion_state_file"))
         self.import_scan_cache_json()
+        self._hydrate_cached_system_scan_state()
+        self._show_cached_cockpit_state()
         
         self.watcher = JournalWatcher(
             self.config.get("journal_path"),
@@ -1234,7 +1426,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         self.watcher.prime_market_file()
         self._start_market_import_worker()
-        self.watcher.start()
+        # Let Tk paint the cached cockpit and overlay windows before the
+        # journal worker begins its potentially large startup replay.
+        self.root.after(75, self.watcher.start)
         self._start_trade_live_services()
         self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
         if self.colony_overlay:
@@ -1434,6 +1628,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def on_close(self):
         """Save state and exit."""
         self.is_running = False
+        # This is intentionally the only write site for the last cockpit
+        # snapshot. It provides a fast visual restore after a normal quit
+        # without turning live journal traffic into continuous disk writes.
+        self._save_profile_cockpit_state()
         if getattr(self, "cockpit_memory", None):
             try:
                 if self.cockpit_memory.state.get("current_session"):
@@ -5979,8 +6177,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if startup_final or self.is_first_load:
             self._startup_restore_active = False
             self._startup_restore_ui_pending = False
+            self._cached_cockpit_state_loaded = False
             self.dashboard_refresh_full_pending = False
             self.is_first_load = False
+            try:
+                self.root.title(f"VOID COMPASS // v{APP_VERSION}")
+            except Exception:
+                pass
             # After startup batch: re-read DB so scan_stat always reflects the
             # committed authoritative values (fixes cases where in-memory state
             # diverged during batch processing).

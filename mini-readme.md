@@ -13,7 +13,7 @@
 ### Correct Commander Flight State
 *   Navigation HUD state now follows the incoming commander's `Location` and live `Status.json` evidence, including docked, landed, SRV, on-foot, supercruise and normal-flight states.
 *   Profile changes cancel delayed HUD callbacks from the outgoing commander and reload the new profile's station and vehicle context without retaining a stale state label.
-*   Restarting VoidCompass during an active game now restores the journal tail silently and paints one settled final UI state, instead of visibly stepping through each startup catch-up batch or replaying historical discoveries into the Live Feed.
+*   Restarting VoidCompass now paints the active commander's last graceful-shutdown cockpit state immediately while the journal tail catches up silently, then replaces it with one settled live state without replaying historical discoveries into the Live Feed.
 
 ## v4.8.5 // Commander Profile Isolation Audit
 **Release Date:** 2026-Jul-16

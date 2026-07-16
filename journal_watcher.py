@@ -288,6 +288,15 @@ class JournalWatcher:
                 if startup_catchup and eof_reached and self._startup_location_event:
                     events.append(self._startup_location_event)
                     self._startup_location_event = None
+                if startup_catchup and eof_reached and not events:
+                    # Complete the restore handshake even for a new/empty
+                    # journal so a cached UI cannot remain frozen forever.
+                    events.append({
+                        "type": "StartupCatchupComplete",
+                        "raw": {},
+                        "data": {},
+                        "startup_catchup": True,
+                    })
                 if startup_catchup and eof_reached and events:
                     events[-1]["startup_catchup_final"] = True
 
