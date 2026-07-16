@@ -97,6 +97,7 @@ class EDSMHandler:
         self._queue_lock = threading.Lock()
         self._flush_timer = None
         self._retry_count = 0
+        self._profile_generation = 0
         self._log_callback = None
         self._db_conn = None
         self._db_lock = None
@@ -119,6 +120,27 @@ class EDSMHandler:
             if self._log_callback:
                 self._log_callback("EDSM", f"Recovered {count} unsent event(s) from last session", "WARN")
             self._arm_flush(immediate=True)
+
+    def prepare_profile_switch(self):
+        """Invalidate queued background work before the outgoing DB is closed."""
+        with self._queue_lock:
+            self._profile_generation += 1
+            if self._flush_timer is not None:
+                try:
+                    self._flush_timer.cancel()
+                except Exception:
+                    pass
+                self._flush_timer = None
+            self._retry_count = 0
+
+    def switch_profile(self, config, conn, lock):
+        """Move uploads and cached credentials to a new commander database."""
+        self.prepare_profile_switch()
+        self.config = config
+        self._game_version = str(config.get("edsm_game_version") or "")
+        self._game_build = str(config.get("edsm_game_build") or "")
+        self._missing_game_version_warned = False
+        self.set_db(conn, lock)
 
     def set_game_version(self, game_version, game_build):
         """Record the live Elite game version/build required by EDSM uploads."""
@@ -188,8 +210,10 @@ class EDSMHandler:
         """Force an immediate flush — call this on system jumps."""
         self._arm_flush(immediate=True)
 
-    def _arm_flush(self, immediate=False, delay=None):
+    def _arm_flush(self, immediate=False, delay=None, expected_generation=None):
         with self._queue_lock:
+            if expected_generation is not None and expected_generation != self._profile_generation:
+                return
             if self._flush_timer is not None:
                 if not immediate and delay is None:
                     return  # existing timer is fine
@@ -216,9 +240,17 @@ class EDSMHandler:
             return
         if not self.config.get("edsm_api_key", "").strip():
             return
-        threading.Thread(target=self._do_backfill, args=(journal_path,), daemon=True).start()
+        with self._queue_lock:
+            generation = self._profile_generation
+            db_conn = self._db_conn
+            db_lock = self._db_lock
+        threading.Thread(
+            target=self._do_backfill,
+            args=(journal_path, generation, db_conn, db_lock),
+            daemon=True,
+        ).start()
 
-    def _do_backfill(self, journal_path):
+    def _do_backfill(self, journal_path, generation, db_conn, db_lock):
         try:
             if not journal_path or not os.path.exists(journal_path):
                 return
@@ -233,8 +265,10 @@ class EDSMHandler:
             # The most recently modified file is the active one — the live watcher handles it.
             current = max(all_files, key=lambda f: os.path.getmtime(os.path.join(journal_path, f)))
 
-            with self._db_lock:
-                done = {r[0] for r in self._db_conn.execute("SELECT journal_file FROM edsm_backfill").fetchall()}
+            if generation != self._profile_generation:
+                return
+            with db_lock:
+                done = {r[0] for r in db_conn.execute("SELECT journal_file FROM edsm_backfill").fetchall()}
 
             to_process = [f for f in all_files if f != current and f not in done]
             if not to_process:
@@ -243,16 +277,21 @@ class EDSMHandler:
             logging.info(f"EDSM backfill: {len(to_process)} journal file(s) to process")
             total = 0
             for filename in to_process:
-                total += self._backfill_file(os.path.join(journal_path, filename), filename)
+                if generation != self._profile_generation:
+                    return
+                total += self._backfill_file(
+                    os.path.join(journal_path, filename), filename,
+                    generation, db_conn, db_lock,
+                )
 
             if total > 0:
                 if self._log_callback:
                     self._log_callback("EDSM", f"Backfilled {total} historical event(s) — uploading", "INFO")
-                self._arm_flush(immediate=True)
+                self._arm_flush(immediate=True, expected_generation=generation)
         except Exception as e:
             logging.warning(f"EDSM backfill error: {e}")
 
-    def _backfill_file(self, filepath, filename):
+    def _backfill_file(self, filepath, filename, generation, db_conn, db_lock):
         """Read one journal file, insert relevant events into edsm_queue. Returns count queued."""
         count = 0
         system_name = None
@@ -296,26 +335,32 @@ class EDSMHandler:
                     count += 1
 
                     if len(batch) >= 200:
-                        with self._db_lock:
-                            self._db_conn.executemany(
+                        if generation != self._profile_generation:
+                            return count
+                        with db_lock:
+                            db_conn.executemany(
                                 "INSERT INTO edsm_queue (queued_ts, event_json) VALUES (?, ?)", batch
                             )
-                            self._db_conn.commit()
+                            db_conn.commit()
                         batch = []
 
             if batch:
-                with self._db_lock:
-                    self._db_conn.executemany(
+                if generation != self._profile_generation:
+                    return count
+                with db_lock:
+                    db_conn.executemany(
                         "INSERT INTO edsm_queue (queued_ts, event_json) VALUES (?, ?)", batch
                     )
-                    self._db_conn.commit()
+                    db_conn.commit()
 
-            with self._db_lock:
-                self._db_conn.execute(
+            if generation != self._profile_generation:
+                return count
+            with db_lock:
+                db_conn.execute(
                     "INSERT OR REPLACE INTO edsm_backfill (journal_file, backfilled_ts) VALUES (?, ?)",
                     (filename, time.time()),
                 )
-                self._db_conn.commit()
+                db_conn.commit()
 
         except Exception as e:
             logging.warning(f"EDSM: failed to backfill {filename}: {e}")
@@ -328,13 +373,16 @@ class EDSMHandler:
     def _do_flush(self):
         with self._queue_lock:
             self._flush_timer = None
+            generation = self._profile_generation
+            db_conn = self._db_conn
+            db_lock = self._db_lock
 
-        if not self._db_conn:
+        if not db_conn:
             return
 
         try:
-            with self._db_lock:
-                rows = self._db_conn.execute(
+            with db_lock:
+                rows = db_conn.execute(
                     "SELECT id, event_json FROM edsm_queue ORDER BY id ASC LIMIT ?",
                     (_BATCH_SIZE,),
                 ).fetchall()
@@ -387,37 +435,41 @@ class EDSMHandler:
                         resp = {}
                     msgnum = resp.get("msgnum", 100)
                     msg = resp.get("msg", "OK")
+                    if generation != self._profile_generation:
+                        return
                     if msgnum >= 200:
                         # Credential/cmdr error — drop the batch, don't retry.
                         logging.warning(f"EDSM rejected batch [{msgnum}]: {msg}")
-                        with self._db_lock:
-                            self._db_conn.execute(
+                        with db_lock:
+                            db_conn.execute(
                                 f"DELETE FROM edsm_queue WHERE id IN ({','.join('?'*len(ids))})", ids
                             )
-                            self._db_conn.commit()
+                            db_conn.commit()
                         if self._log_callback:
                             self._log_callback("EDSM", f"Upload rejected [{msgnum}]: {msg}", "ERROR")
                     else:
                         self._retry_count = 0
-                        with self._db_lock:
-                            self._db_conn.execute(
+                        with db_lock:
+                            db_conn.execute(
                                 f"DELETE FROM edsm_queue WHERE id IN ({','.join('?'*len(ids))})", ids
                             )
-                            remaining = self._db_conn.execute("SELECT COUNT(*) FROM edsm_queue").fetchone()[0]
-                            self._db_conn.commit()
+                            remaining = db_conn.execute("SELECT COUNT(*) FROM edsm_queue").fetchone()[0]
+                            db_conn.commit()
                         logging.debug(f"EDSM upload OK: {len(batch)} events")
                         if self._log_callback:
                             self._log_callback("EDSM", f"Uploaded {len(batch)} event(s) to EDSM", "INFO")
                         if remaining > 0:
-                            self._arm_flush(immediate=True)
+                            self._arm_flush(immediate=True, expected_generation=generation)
             except Exception as e:
                 # Network/HTTP error — rows stay in DB, retry with backoff.
+                if generation != self._profile_generation:
+                    return
                 logging.warning(f"EDSM batch upload failed ({len(batch)} events): {e}")
                 retry_delay = _RETRY_DELAYS[min(self._retry_count, len(_RETRY_DELAYS) - 1)]
                 self._retry_count += 1
                 if self._log_callback:
                     self._log_callback("EDSM", f"Upload failed, retrying in {retry_delay}s", "WARN")
-                self._arm_flush(delay=retry_delay)
+                self._arm_flush(delay=retry_delay, expected_generation=generation)
 
         threading.Thread(target=_send, daemon=True).start()
 

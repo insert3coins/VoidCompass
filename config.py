@@ -345,6 +345,7 @@ def apply_profile_config(config, profile_key=None):
     for setting in PROFILE_VALUE_SETTINGS:
         if setting not in profile and setting in config:
             profile_defaults = {
+                "ui_custom_themes": {},
                 "voice_volume": 0.8,
                 "voice_cache_retention_days": 7,
                 "cockpit_memory_system_limit": 300,
