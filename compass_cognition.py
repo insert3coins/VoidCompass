@@ -23,6 +23,7 @@ MAX_TOPICS = 48
 MAX_PENDING = 8
 MAX_METRIC_SAMPLES = 24
 MAX_GOALS = 8
+MAX_PREDICTIONS = 18
 
 MOOD_CLAUSES = {
     "curious": (
@@ -38,19 +39,19 @@ MOOD_CLAUSES = {
 
 
 PERSONA_TOPIC_WEIGHTS = {
-    "Tactical": {"mission": 1.30, "risk": 1.25, "cargo": 1.10, "route": 1.10, "ambient": 0.70},
-    "Guardian": {"risk": 1.35, "fuel": 1.30, "data": 1.20, "cargo": 1.10},
-    "Scientific": {"survey": 1.35, "anomaly": 1.30, "valuable": 1.25, "biology": 1.15},
+    "Tactical": {"mission": 1.30, "risk": 1.25, "combat": 1.35, "powerplay": 1.30, "cargo": 1.10, "route": 1.10, "ambient": 0.70},
+    "Guardian": {"risk": 1.35, "combat": 1.15, "fuel": 1.30, "data": 1.20, "cargo": 1.10},
+    "Scientific": {"survey": 1.35, "anomaly": 1.30, "valuable": 1.25, "biology": 1.15, "mining": 1.10},
     "Exobiologist": {"biology": 1.45, "survey": 1.20, "valuable": 1.10},
-    "Engineer": {"engineering": 1.40, "cargo": 1.20, "fuel": 1.15, "ship": 1.20},
+    "Engineer": {"engineering": 1.40, "cargo": 1.20, "fuel": 1.15, "ship": 1.20, "mining": 1.25},
     "Wayfarer": {"route": 1.25, "memory": 1.25, "session": 1.20, "ambient": 1.10},
     "Pathfinder": {"route": 1.40, "mission": 1.20, "survey": 1.05},
-    "Veteran": {"memory": 1.25, "pattern": 1.25, "risk": 1.10, "ambient": 0.85},
+    "Veteran": {"memory": 1.25, "pattern": 1.25, "risk": 1.10, "combat": 1.20, "trade": 1.10, "powerplay": 1.15, "ambient": 0.85},
     "Deadpan": {"anomaly": 1.20, "pattern": 1.15, "ambient": 0.70},
     "Stoic": {"risk": 1.15, "mission": 1.05, "ambient": 0.55, "memory": 0.75},
-    "Optimist": {"progress": 1.30, "milestone": 1.30, "recovery": 1.20},
-    "Archivist": {"memory": 1.45, "pattern": 1.30, "milestone": 1.20},
-    "Companion": {"memory": 1.30, "session": 1.25, "progress": 1.20},
+    "Optimist": {"progress": 1.30, "milestone": 1.30, "recovery": 1.20, "trade": 1.10},
+    "Archivist": {"memory": 1.45, "pattern": 1.30, "milestone": 1.20, "powerplay": 1.15},
+    "Companion": {"memory": 1.30, "session": 1.25, "progress": 1.20, "powerplay": 1.10},
     "Emergent": {"learning": 1.45, "pattern": 1.30, "memory": 1.20, "anomaly": 1.15},
 }
 
@@ -217,6 +218,10 @@ class CompassCognition:
             return []
         state = self._state()
         session = (snapshot or {}).get("session") or {}
+        mining = (snapshot or {}).get("mining") or {}
+        trade = (snapshot or {}).get("trade") or {}
+        combat = (snapshot or {}).get("combat") or {}
+        powerplay = (snapshot or {}).get("powerplay") or {}
         duration = self._session_duration_minutes(memory)
         previous_jumps = ((state.get("metrics") or {}).get("session_jumps") or {}).get("median")
         previous_duration = ((state.get("metrics") or {}).get("session_minutes") or {}).get("median")
@@ -231,6 +236,25 @@ class CompassCognition:
         profit = int(session.get("trade_profit_cr") or 0)
         if profit > 0:
             self._observe_metric(state, "session_trade_profit_cr", profit)
+        refined = int(mining.get("refined_tons") or 0)
+        if refined > 0:
+            self._observe_metric(state, "mining_session_refined_tons", refined)
+        transactions = int(trade.get("transactions") or 0)
+        if transactions > 0:
+            self._observe_metric(state, "trade_session_transactions", transactions)
+        combat_summary = combat.get("last_summary") or {}
+        if int(combat_summary.get("victories") or 0):
+            self._observe_metric(state, "combat_sortie_victories", combat_summary.get("victories"))
+        if int(combat_summary.get("reward_cr") or 0):
+            self._observe_metric(state, "combat_sortie_reward_cr", combat_summary.get("reward_cr"))
+        if combat_summary.get("minimum_hull_percent") is not None:
+            self._observe_metric(state, "combat_sortie_minimum_hull_pct", combat_summary.get("minimum_hull_percent"))
+        session_merits = int(powerplay.get("session_merits") or 0)
+        session_delivered = int(powerplay.get("session_delivered") or 0)
+        if session_merits:
+            self._observe_metric(state, "powerplay_session_merits", session_merits)
+        if session_delivered:
+            self._observe_metric(state, "powerplay_session_delivered", session_delivered)
         self._refresh_predictions(state, memory)
         self._commit(state, save=True)
 
@@ -246,6 +270,19 @@ class CompassCognition:
         if previous_duration and duration and duration >= float(previous_duration) * 1.5:
             insights.append(
                 f"The session ran for {round(duration)} minutes, longer than the usual {round(float(previous_duration))}."
+            )
+        if refined:
+            insights.append(f"Mining contributed {refined} refined tonnes to this session.")
+        if transactions and profit:
+            insights.append(f"Trade closed at {profit:,} credits across {transactions} market transactions.")
+        if int(combat_summary.get("victories") or 0):
+            insights.append(
+                f"PvE combat closed with {int(combat_summary.get('victories') or 0)} victories "
+                f"and {int(combat_summary.get('reward_cr') or 0):,} credits recorded."
+            )
+        if session_merits or session_delivered:
+            insights.append(
+                f"Powerplay closed with {session_merits:,} merits and {session_delivered:,} delivered units recorded."
             )
         goals = list(state.get("goals") or [])
         if goals:
@@ -297,6 +334,21 @@ class CompassCognition:
             "system_bodies": ("Typical surveyed system", "bodies", 0),
             "system_bio_signals": ("Typical biological yield", "signals", 1),
             "session_trade_profit_cr": ("Typical profitable trade session", "credits", 0),
+            "trade_sale_profit_cr": ("Typical trade sale profit", "credits", 0),
+            "trade_profit_per_ton_cr": ("Typical trade margin", "credits per tonne", 0),
+            "prospector_best_pct": ("Typical best prospector result", "percent", 1),
+            "mining_session_prospected": ("Typical mining search", "asteroids", 0),
+            "mining_session_refined_tons": ("Typical mining yield", "tonnes", 0),
+            "trade_session_transactions": ("Typical trade session", "transactions", 0),
+            "combat_kill_reward_cr": ("Typical PvE reward", "credits", 0),
+            "combat_sortie_victories": ("Typical PvE sortie", "victories", 0),
+            "combat_sortie_reward_cr": ("Typical PvE sortie reward", "credits", 0),
+            "combat_sortie_minimum_hull_pct": ("Typical post-combat hull floor", "percent", 0),
+            "powerplay_merit_gain": ("Typical Powerplay merit gain", "merits", 0),
+            "powerplay_delivery_batch": ("Typical Powerplay delivery", "units", 0),
+            "powerplay_collection_batch": ("Typical Powerplay collection", "units", 0),
+            "powerplay_session_merits": ("Typical Powerplay session", "merits", 0),
+            "powerplay_session_delivered": ("Typical Powerplay session delivery", "units", 0),
             "fuel_at_jump_pct": ("Typical jump fuel reserve", "percent", 0),
             "cargo_at_sale_pct": ("Typical cargo sale point", "percent", 0),
             "jumps_at_dock": ("Typical docking point", "session jumps", 0),
@@ -324,7 +376,7 @@ class CompassCognition:
                     ) * 0.03),
                     "samples": len((memory.state.get("habits_data") or {}).get("bio_sell_counts") or []),
                 })
-        state["predictions"] = predictions[:10]
+        state["predictions"] = predictions[:MAX_PREDICTIONS]
         new_keys = {row.get("key") for row in predictions} - previous
         return [row for row in predictions if row.get("key") in new_keys]
 
@@ -335,6 +387,11 @@ class CompassCognition:
         survey = snapshot.get("survey") or {}
         objectives = snapshot.get("objectives") or {}
         biology = snapshot.get("biology") or {}
+        mining = snapshot.get("mining") or {}
+        trade = snapshot.get("trade") or {}
+        combat = snapshot.get("combat") or {}
+        powerplay = snapshot.get("powerplay") or {}
+        flight = snapshot.get("flight") or {}
         goals = []
 
         def add(key, label, priority, topic):
@@ -358,6 +415,59 @@ class CompassCognition:
             add("biology", f"Investigate {bio_remaining} unresolved biological signal{'s' if bio_remaining != 1 else ''}", 68, "biology")
         if biology.get("species") and int(biology.get("progress") or 0):
             add("sample", f"Complete {biology.get('species')} sampling", 82, "biology")
+        mining_missions = list(mining.get("missions") or [])
+        mining_remaining = sum(
+            int(row.get("remaining") or 0) for row in mining_missions if isinstance(row, dict)
+        )
+        if mining_remaining:
+            add("mining-contracts", f"Collect {mining_remaining} t for active mining contracts", 76, "mining")
+        elif mining.get("active"):
+            add("mining-session", f"Continue mining session ({int(mining.get('refined_tons') or 0)} t refined)", 54, "mining")
+        bought_by_commodity = trade.get("commodities_bought") or {}
+        sold_by_commodity = trade.get("commodities_sold") or {}
+        trade_open_units = sum(
+            max(0, int(count or 0) - int(sold_by_commodity.get(name) or 0))
+            for name, count in bought_by_commodity.items()
+        )
+        if trade_open_units and int(flight.get("cargo_t") or 0):
+            add("trade-cargo", f"Sell or route {trade_open_units} t of session trade cargo", 64, "trade")
+        trade_plan = trade.get("plan") or {}
+        if trade_plan.get("to_station"):
+            add(
+                "trade-plan",
+                f"Run {trade_plan.get('kind') or 'trade'} plan to {trade_plan.get('to_station')}",
+                73, "trade",
+            )
+        hull = combat.get("hull_percent")
+        if combat.get("active") and hull is not None and float(hull) <= 35:
+            add("combat-survival", f"Break contact or finish the encounter at {float(hull):.0f}% hull", 96, "combat")
+        elif combat.get("active"):
+            target = (combat.get("current_target") or {}).get("pilot") or (combat.get("current_target") or {}).get("ship")
+            add("combat-encounter", f"Resolve active hostile encounter{f' with {target}' if target else ''}", 78, "combat")
+        incomplete_stacks = [
+            row for row in combat.get("massacre_stacks") or []
+            if isinstance(row, dict) and not row.get("complete")
+        ]
+        if incomplete_stacks:
+            stack = incomplete_stacks[0]
+            remaining_kills = max(0, int(stack.get("kills_needed") or 0) - int(stack.get("kills_done") or 0))
+            add("massacre-stack", f"Defeat {remaining_kills} more {stack.get('faction') or 'mission'} targets", 74, "combat")
+        if int(combat.get("unclaimed_reward_cr") or 0) >= 1_000_000:
+            add("combat-vouchers", f"Redeem {int(combat.get('unclaimed_reward_cr') or 0):,} credits in combat vouchers", 67, "combat")
+        powerplay_outstanding = int(powerplay.get("outstanding_units") or 0)
+        if powerplay.get("pledged") and powerplay_outstanding:
+            add(
+                "powerplay-delivery",
+                f"Deliver {powerplay_outstanding:,} outstanding Powerplay unit{'s' if powerplay_outstanding != 1 else ''}",
+                78, "powerplay",
+            )
+        pp_system = powerplay.get("system") or {}
+        if powerplay.get("pledged") and pp_system.get("contested"):
+            add(
+                "powerplay-system",
+                f"Review contested Powerplay conditions in {pp_system.get('name') or 'the current system'}",
+                72, "powerplay",
+            )
         unsold = int(objectives.get("unsold_data_total_cr") or 0)
         if unsold >= 1_000_000:
             add("unsold-data", f"Secure {unsold:,} credits of unsold survey data", 65 if unsold < 10_000_000 else 82, "data")
@@ -377,6 +487,10 @@ class CompassCognition:
         survey = (snapshot or {}).get("survey") or {}
         flight = (snapshot or {}).get("flight") or {}
         session = (snapshot or {}).get("session") or {}
+        mining = (snapshot or {}).get("mining") or {}
+        trade = (snapshot or {}).get("trade") or {}
+        combat = (snapshot or {}).get("combat") or {}
+        powerplay = (snapshot or {}).get("powerplay") or {}
         if event == "FSSAllBodiesFound":
             self._observe_metric(state, "system_bodies", survey.get("total_bodies"))
             self._observe_metric(state, "system_bio_signals", survey.get("biological_signals"))
@@ -395,6 +509,39 @@ class CompassCognition:
                 / int(survey.get("total_bodies") or 1)
             )
             self._observe_metric(state, "survey_completion_pct", completion)
+        if event == "ProspectedAsteroid" and mining.get("last_materials"):
+            best = max(
+                (_number(row.get("percent"), 0) for row in mining.get("last_materials") if isinstance(row, dict)),
+                default=0,
+            )
+            if best:
+                self._observe_metric(state, "prospector_best_pct", best)
+        if event == "MarketSell" and trade.get("last_transaction"):
+            sale = trade.get("last_transaction") or {}
+            self._observe_metric(state, "trade_sale_profit_cr", sale.get("profit"))
+            self._observe_metric(state, "trade_profit_per_ton_cr", sale.get("profit_per_ton"))
+        if event in ("FSDJump", "CarrierJump") and mining.get("last_summary"):
+            summary = mining.get("last_summary") or {}
+            if int(summary.get("prospected") or 0):
+                self._observe_metric(state, "mining_session_prospected", summary.get("prospected"))
+            if int(summary.get("refined_tons") or 0):
+                self._observe_metric(state, "mining_session_refined_tons", summary.get("refined_tons"))
+        if event in ("Bounty", "FactionKillBond", "CapShipBond") and combat.get("last_victory"):
+            self._observe_metric(state, "combat_kill_reward_cr", (combat.get("last_victory") or {}).get("reward_cr"))
+        if event in ("EscapeInterdiction", "StartJump", "FSDJump", "CarrierJump", "Docked", "Died") and combat.get("last_summary"):
+            summary = combat.get("last_summary") or {}
+            if int(summary.get("victories") or 0):
+                self._observe_metric(state, "combat_sortie_victories", summary.get("victories"))
+            if int(summary.get("reward_cr") or 0):
+                self._observe_metric(state, "combat_sortie_reward_cr", summary.get("reward_cr"))
+            if summary.get("minimum_hull_percent") is not None:
+                self._observe_metric(state, "combat_sortie_minimum_hull_pct", summary.get("minimum_hull_percent"))
+        if event == "PowerplayMerits":
+            self._observe_metric(state, "powerplay_merit_gain", (raw or {}).get("MeritsGained"))
+        elif event == "PowerplayCollect":
+            self._observe_metric(state, "powerplay_collection_batch", (raw or {}).get("Count"))
+        elif event == "PowerplayDeliver":
+            self._observe_metric(state, "powerplay_delivery_batch", (raw or {}).get("Count"))
         state["goals"] = self._goals(snapshot)
         new_predictions = self._refresh_predictions(state, memory)
         for prediction in new_predictions:
@@ -543,6 +690,10 @@ class CompassCognition:
         flight = snapshot.get("flight") or {}
         biology = snapshot.get("biology") or {}
         session = snapshot.get("session") or {}
+        mining = snapshot.get("mining") or {}
+        trade = snapshot.get("trade") or {}
+        combat = snapshot.get("combat") or {}
+        powerplay = snapshot.get("powerplay") or {}
         current_system = nav.get("current_system")
         candidates = []
         key_text = str(key or "")
@@ -612,6 +763,48 @@ class CompassCognition:
                 ))
 
         cargo_percent = flight.get("cargo_percent")
+        if event == "ProspectedAsteroid":
+            core = mining.get("last_core")
+            current_materials = [
+                row for row in mining.get("last_materials") or [] if isinstance(row, dict)
+            ]
+            current_best = max(current_materials, key=lambda row: float(row.get("percent") or 0), default={})
+            best_material = current_best.get("name")
+            best_percent = float(current_best.get("percent") or 0)
+            if core:
+                candidates.append(self._candidate(
+                    "mining-core-found", 88,
+                    "The prospector identified a motherlode material.",
+                    (
+                        f"Core deposit confirmed: {core}.",
+                        f"The prospector has identified a {core} core.",
+                        f"Motherlode signature resolved as {core}.",
+                        f"Core asteroid located. Primary material is {core}.",
+                    ), ("mining", "valuable", "progress"), category="objectives",
+                ))
+            elif best_material and best_percent >= 20:
+                candidates.append(self._candidate(
+                    "mining-rich-prospect", 72,
+                    "The strongest prospector result crossed a useful generic concentration threshold.",
+                    (
+                        f"Strong prospector result: {best_material} at {best_percent:.1f} percent.",
+                        f"This rock is carrying {best_percent:.1f} percent {best_material}.",
+                        f"Prospector quality is favourable: {best_material}, {best_percent:.1f} percent.",
+                        f"Useful concentration detected. {best_percent:.1f} percent {best_material}.",
+                    ), ("mining", "valuable", "pattern"), category="objectives",
+                ))
+        if event == "AsteroidCracked":
+            cracked = int(mining.get("cores_cracked") or 0)
+            candidates.append(self._candidate(
+                "mining-core-cracked", 78,
+                "A core asteroid has been opened and the session count is verified.",
+                (
+                    f"Core fracture confirmed. That is {cracked} opened this session.",
+                    f"Asteroid core successfully cracked; session count is now {cracked}.",
+                    f"Charge pattern complete. Core number {cracked} is open.",
+                    f"Core breach recorded. We have cracked {cracked} this session.",
+                ), ("mining", "progress"), category="objectives",
+            ))
         if event == "MiningRefined" and cargo_percent is not None and int(cargo_percent) >= 80:
             candidates.append(self._candidate(
                 f"mining-cargo-{95 if int(cargo_percent) >= 95 else 80}", 72,
@@ -623,6 +816,54 @@ class CompassCognition:
                     f"Mining capacity update: {flight.get('cargo_t')} of {flight.get('cargo_capacity_t')} tonnes loaded, or {int(cargo_percent)} percent.",
                 ), ("cargo", "progress", "mining"), outcome="cargo",
             ))
+        if (event in ("MiningRefined", "ProspectedAsteroid") and mining.get("active")
+                and mining.get("limpets") is not None and int(mining.get("limpets")) <= 5
+                and int(mining.get("prospected") or 0) >= 2):
+            limpets = int(mining.get("limpets") or 0)
+            candidates.append(self._candidate(
+                "mining-low-limpets", 80 if limpets <= 2 else 72,
+                "The active mining session has a low verified limpet reserve.",
+                (
+                    f"Limpet reserve is down to {limpets}.",
+                    f"Mining consumables are running low: {limpets} limpets remain.",
+                    f"We have {limpets} limpets left for prospecting and collection.",
+                    f"Limpet count is {limpets}; plan the remaining rocks accordingly.",
+                ), ("mining", "cargo", "risk"), category="objectives",
+            ))
+        if event in ("FSDJump", "CarrierJump") and mining.get("last_summary"):
+            summary = mining.get("last_summary") or {}
+            prospected = int(summary.get("prospected") or 0)
+            refined = int(summary.get("refined_tons") or 0)
+            cores = int(summary.get("cores_cracked") or 0)
+            if prospected or refined or cores:
+                candidates.append(self._candidate(
+                    "mining-session-summary", 66,
+                    "Leaving the system closed an active mining session with verified totals.",
+                    (
+                        f"Mining session closed: {prospected} asteroids checked, {refined} tonnes refined and {cores} cores cracked.",
+                        f"Final mining ledger: {refined} tonnes from {prospected} prospects, with {cores} opened cores.",
+                        f"Departure closes the mining run at {prospected} prospects, {refined} refined tonnes and {cores} cracked cores.",
+                        f"Mining record secured. {refined} tonnes refined after checking {prospected} asteroids; {cores} cores opened.",
+                    ), ("mining", "session", "progress"), category="objectives",
+                ))
+        if event == "CargoDepot":
+            completed_contracts = [
+                row for row in mining.get("missions") or []
+                if isinstance(row, dict) and int(row.get("required") or 0) > 0
+                and int(row.get("remaining") or 0) == 0
+            ]
+            if completed_contracts:
+                commodity = completed_contracts[0].get("commodity") or "mining cargo"
+                candidates.append(self._candidate(
+                    "mining-contract-ready", 82,
+                    "A tracked mining contract has reached its verified delivery requirement.",
+                    (
+                        f"Mining contract cargo is complete for {commodity}.",
+                        f"The {commodity} delivery requirement is now satisfied.",
+                        f"Contract ledger complete: required {commodity} has been delivered.",
+                        f"Mining objective fulfilled for {commodity}; the contract is ready to close.",
+                    ), ("mining", "mission", "progress"), outcome="mission", category="objectives",
+                ))
         profit = int(session.get("trade_profit_cr") or 0)
         milestones = (1_000_000, 5_000_000, 10_000_000, 50_000_000, 100_000_000)
         milestone = max((mark for mark in milestones if profit >= mark), default=0)
@@ -635,6 +876,294 @@ class CompassCognition:
                     f"Session trading profit now stands at {profit:,} credits.",
                     f"Trade milestone recorded: {profit:,} credits of session profit.",
                 ), ("trade", "progress", "milestone"), category="objectives",
+            ))
+        if event == "MarketBuy" and trade.get("last_transaction"):
+            purchase = trade.get("last_transaction") or {}
+            investment = abs(int(purchase.get("profit") or 0))
+            if investment >= 5_000_000:
+                commodity = purchase.get("commodity") or "commodity cargo"
+                candidates.append(self._candidate(
+                    "trade-large-investment", 67,
+                    "A large verified purchase materially increased cargo exposure.",
+                    (
+                        f"Trade position opened: {int(purchase.get('count') or 0)} tonnes of {commodity} for {investment:,} credits.",
+                        f"Cargo investment is {investment:,} credits in {commodity}.",
+                        f"Large purchase logged: {commodity}, {investment:,} credits committed.",
+                        f"The new {commodity} position puts {investment:,} credits into the hold.",
+                    ), ("trade", "cargo", "risk"), category="objectives",
+                ))
+        if event == "MarketSell" and trade.get("last_transaction"):
+            sale = trade.get("last_transaction") or {}
+            sale_profit = int(sale.get("profit") or 0)
+            per_ton = int(sale.get("profit_per_ton") or 0)
+            commodity = sale.get("commodity") or "commodity cargo"
+            count = int(sale.get("count") or 0)
+            if sale_profit < 0:
+                candidates.append(self._candidate(
+                    "trade-loss-sale", 86,
+                    "The completed sale realised a verified loss.",
+                    (
+                        f"Trade loss recorded: {abs(sale_profit):,} credits on {count} tonnes of {commodity}.",
+                        f"That {commodity} sale closed {abs(sale_profit):,} credits below cost.",
+                        f"Negative margin confirmed: {abs(per_ton):,} credits per tonne on {commodity}.",
+                        f"The ledger shows a {abs(sale_profit):,}-credit loss on this {commodity} sale.",
+                    ), ("trade", "risk", "pattern"), category="objectives",
+                ))
+            elif sale_profit >= 1_000_000 or per_ton >= 20_000:
+                candidates.append(self._candidate(
+                    "trade-strong-sale", 74,
+                    "The completed sale produced a strong verified total or per-tonne margin.",
+                    (
+                        f"Strong sale: {sale_profit:,} credits profit on {commodity}, or {per_ton:,} per tonne.",
+                        f"The {commodity} position closed {sale_profit:,} credits ahead.",
+                        f"Trade result confirmed: {sale_profit:,} credits profit from {count} tonnes of {commodity}.",
+                        f"That cargo leg returned {per_ton:,} credits per tonne on {commodity}.",
+                    ), ("trade", "progress", "valuable"), category="objectives",
+                ))
+
+        target = combat.get("current_target") or {}
+        if (event == "ShipTargeted" and int(target.get("scan_stage") or 0) >= 3
+                and not target.get("is_player")):
+            legal = str(target.get("legal_status") or "").casefold()
+            rank = str(target.get("rank") or "").casefold()
+            bounty = int(target.get("bounty_cr") or 0)
+            if legal in ("wanted", "enemy", "lawless") and (
+                    rank in ("master", "dangerous", "deadly", "elite") or bounty >= 500_000):
+                pilot = target.get("pilot") or target.get("ship") or "hostile contact"
+                ship = target.get("ship") or "ship"
+                details = f", bounty {bounty:,} credits" if bounty else ""
+                candidates.append(self._candidate(
+                    "combat-threat-scan", 72,
+                    "A fully scanned NPC target has a verified high rank or substantial bounty.",
+                    (
+                        f"Threat scan complete: {pilot}, {rank or 'rank unknown'} {ship}{details}.",
+                        f"Hostile profile resolved. {pilot} is flying a {ship}{details}.",
+                        f"Target assessment: {pilot}, combat rank {rank or 'unknown'}{details}.",
+                        f"PvE contact verified: {ship} piloted by {pilot}{details}.",
+                    ), ("combat", "risk", "valuable"), category="objectives",
+                ))
+
+        if event in ("Bounty", "FactionKillBond", "CapShipBond") and combat.get("last_victory"):
+            victory = combat.get("last_victory") or {}
+            reward = int(victory.get("reward_cr") or 0)
+            victim_faction = victory.get("victim_faction")
+            stacks = [row for row in combat.get("massacre_stacks") or [] if isinstance(row, dict)]
+            matching_stack = next(
+                (row for row in stacks if victim_faction and str(row.get("faction")).casefold() == str(victim_faction).casefold()),
+                None,
+            )
+            # The companion path already announces a newly completed stack.
+            if not (matching_stack and matching_stack.get("complete")):
+                progress = ""
+                if matching_stack:
+                    progress = (
+                        f" Massacre progress is {int(matching_stack.get('kills_done') or 0)} "
+                        f"of {int(matching_stack.get('kills_needed') or 0)}."
+                    )
+                target_name = victory.get("target") or "hostile contact"
+                candidates.append(self._candidate(
+                    "combat-victory", 71 if reward >= 250_000 else 64,
+                    "A PvE victory produced a verified bounty or combat bond.",
+                    (
+                        f"PvE victory confirmed: {target_name}, reward {reward:,} credits.{progress}",
+                        f"Combat ledger updated by {reward:,} credits after the {target_name} kill.{progress}",
+                        f"Hostile contact resolved. {reward:,} credits recorded.{progress}",
+                        f"Kill verified and voucher logged for {reward:,} credits.{progress}",
+                    ), ("combat", "progress", "mission"), category="objectives",
+                ))
+
+        if event in ("FighterDestroyed", "SRVDestroyed"):
+            vehicle = "ship-launched fighter" if event == "FighterDestroyed" else "surface vehicle"
+            candidates.append(self._candidate(
+                f"combat-{event.casefold()}", 82,
+                "A deployed combat vehicle was destroyed.",
+                (
+                    f"We have lost the {vehicle}.",
+                    f"{vehicle.title()} telemetry is gone; destruction confirmed.",
+                    f"Combat asset lost: {vehicle}.",
+                    f"The {vehicle} has been destroyed. I have updated the sortie record.",
+                ), ("combat", "risk", "loss"), category="objectives",
+            ))
+
+        if event == "RedeemVoucher" and combat.get("last_redemption"):
+            redemption = combat.get("last_redemption") or {}
+            amount = int(redemption.get("amount_cr") or 0)
+            if amount >= 250_000:
+                candidates.append(self._candidate(
+                    "combat-vouchers-redeemed", 64,
+                    "Combat vouchers were converted into verified credits.",
+                    (
+                        f"Combat vouchers secured: {amount:,} credits redeemed.",
+                        f"The combat ledger is banked for {amount:,} credits.",
+                        f"Voucher redemption complete. {amount:,} credits are now secure.",
+                        f"PvE earnings transferred: {amount:,} credits.",
+                    ), ("combat", "data", "progress"), category="objectives",
+                ))
+
+        if event == "EscapeInterdiction" and combat.get("last_summary"):
+            candidates.append(self._candidate(
+                "combat-interdiction-escaped", 68,
+                "The interdiction encounter ended in a verified escape.",
+                (
+                    "Interdiction escaped. The tether is broken and the route is ours again.",
+                    "Escape vector held. We are clear of the interdiction.",
+                    "Interdiction defeated; frame-shift control is stable.",
+                    "Tether broken cleanly. Navigation is back under our control.",
+                ), ("combat", "recovery", "progress"), category="navigation",
+            ))
+
+        if event in ("StartJump", "FSDJump", "CarrierJump", "Docked") and combat.get("last_summary"):
+            summary = combat.get("last_summary") or {}
+            victories = int(summary.get("victories") or 0)
+            rewards = int(summary.get("reward_cr") or 0)
+            minimum_hull = summary.get("minimum_hull_percent")
+            if victories or rewards:
+                hull_note = f" Minimum hull was {float(minimum_hull):.0f} percent." if minimum_hull is not None else ""
+                candidates.append(self._candidate(
+                    "combat-sortie-summary", 67,
+                    "The PvE encounter has ended with verified combat totals.",
+                    (
+                        f"Combat sortie closed: {victories} victories and {rewards:,} credits logged.{hull_note}",
+                        f"Post-combat record: {victories} hostiles resolved for {rewards:,} credits.{hull_note}",
+                        f"Encounter complete. The ledger holds {victories} victories and {rewards:,} credits.{hull_note}",
+                        f"PvE summary secured: {victories} victories, {rewards:,} credits.{hull_note}",
+                    ), ("combat", "session", "progress"), category="objectives",
+                ))
+
+        if event in ("PowerplayJoin", "PowerplayDefect", "PowerplayLeave"):
+            from_power = raw.get("FromPower")
+            to_power = raw.get("ToPower") or raw.get("Power")
+            if event == "PowerplayJoin":
+                detail = f"Pledge registered with {to_power or 'the selected power'}."
+                templates = (
+                    detail,
+                    f"Powerplay allegiance established with {to_power or 'the selected power'}.",
+                    f"Strategic record opened for {to_power or 'the new pledge'}.",
+                    f"Pledge confirmed. I will track our work for {to_power or 'this power'}.",
+                )
+            elif event == "PowerplayDefect":
+                detail = f"Defection recorded from {from_power or 'the former power'} to {to_power or 'the new power'}."
+                templates = (
+                    detail,
+                    f"Powerplay allegiance changed: {from_power or 'former power'} to {to_power or 'new power'}.",
+                    f"Strategic record transferred from {from_power or 'the previous power'} to {to_power or 'the new power'}.",
+                    f"Defection confirmed. I am now tracking activity for {to_power or 'the new pledge'}.",
+                )
+            else:
+                detail = f"Powerplay pledge to {raw.get('Power') or from_power or 'the current power'} has ended."
+                templates = (
+                    detail,
+                    "Powerplay allegiance cleared; the active pledge record is now closed.",
+                    "Pledge departure confirmed. I have closed the current Powerplay operation.",
+                    "Strategic affiliation removed from the active flight record.",
+                )
+            candidates.append(self._candidate(
+                "powerplay-pledge", 84, "The commander's Powerplay allegiance changed.",
+                templates, ("powerplay", "milestone", "progress"), category="objectives",
+            ))
+
+        if event == "PowerplayRank":
+            rank = raw.get("Rank") if raw.get("Rank") is not None else powerplay.get("rank")
+            power = raw.get("Power") or powerplay.get("power") or "the pledged power"
+            candidates.append(self._candidate(
+                "powerplay-rank", 82, "A verified Powerplay rank change was recorded.",
+                (
+                    f"Powerplay rank updated to {rank} with {power}.",
+                    f"Strategic progression confirmed: rank {rank} for {power}.",
+                    f"The pledge ledger now records Powerplay rank {rank} with {power}.",
+                    f"Rank change secured. Our standing with {power} is now {rank}.",
+                ), ("powerplay", "milestone", "progress"), category="objectives",
+            ))
+
+        if event == "PowerplayMerits":
+            gained = int(raw.get("MeritsGained") or 0)
+            total = int(raw.get("TotalMerits") or powerplay.get("merits") or 0)
+            if gained >= 100:
+                candidates.append(self._candidate(
+                    "powerplay-merits", 70 if gained < 1_000 else 80,
+                    "A meaningful verified merit gain changed Powerplay progression.",
+                    (
+                        f"Powerplay progress: {gained:,} merits gained, bringing the total to {total:,}.",
+                        f"Merit ledger updated by {gained:,}; current standing is {total:,} merits.",
+                        f"Strategic work credited: {gained:,} new merits and {total:,} held in total.",
+                        f"The pledge has recognised {gained:,} merits from this action; total merits are {total:,}.",
+                    ), ("powerplay", "progress", "milestone"), category="objectives",
+                ))
+
+        if event in ("PowerplayCollect", "PowerplayDeliver"):
+            action = powerplay.get("last_action") or {}
+            count = int(raw.get("Count") or action.get("count") or 0)
+            commodity = action.get("commodity") or "Powerplay units"
+            outstanding = int(powerplay.get("outstanding_units") or 0)
+            if event == "PowerplayCollect" and count >= 10:
+                candidates.append(self._candidate(
+                    "powerplay-collection", 64,
+                    "A useful Powerplay collection batch was recorded for the active operation.",
+                    (
+                        f"Collected {count:,} {commodity}; {outstanding:,} session units now remain for delivery.",
+                        f"Powerplay allocation received: {count:,} {commodity}. Outstanding session cargo is {outstanding:,} units.",
+                        f"Strategic cargo logged: {count:,} {commodity} collected, with {outstanding:,} units awaiting delivery.",
+                        f"Collection complete for {count:,} {commodity}. I am tracking {outstanding:,} outstanding units.",
+                    ), ("powerplay", "cargo", "progress"), category="objectives",
+                ))
+            elif event == "PowerplayDeliver" and count >= 10:
+                completed = outstanding == 0
+                candidates.append(self._candidate(
+                    "powerplay-delivery-complete" if completed else "powerplay-delivery", 78 if completed else 70,
+                    "A Powerplay delivery changed the verified outstanding session allocation.",
+                    (
+                        f"Delivered {count:,} {commodity}. {'The tracked allocation is complete' if completed else f'{outstanding:,} session units remain'}.",
+                        f"Powerplay delivery accepted: {count:,} {commodity}. {'No tracked units remain' if completed else f'{outstanding:,} remain outstanding'}.",
+                        f"Strategic cargo transferred: {count:,} {commodity}. {'Session allocation cleared' if completed else f'{outstanding:,} units are still tracked'}.",
+                        f"Delivery ledger updated by {count:,} {commodity}. {'The current allocation is closed' if completed else f'{outstanding:,} units remain'}.",
+                    ), ("powerplay", "cargo", "progress", "milestone"), category="objectives",
+                ))
+
+        if event == "PowerplayFastTrack":
+            cost = int(raw.get("Cost") or 0)
+            if cost >= 250_000:
+                candidates.append(self._candidate(
+                    "powerplay-fast-track", 66,
+                    "A substantial verified credit cost was spent on Powerplay fast tracking.",
+                    (
+                        f"Powerplay allocation fast-tracked for {cost:,} credits.",
+                        f"Strategic fast track confirmed; cost was {cost:,} credits.",
+                        f"The allocation timer was bypassed for {cost:,} credits.",
+                        f"Fast-track expenditure recorded at {cost:,} credits.",
+                    ), ("powerplay", "trade", "progress"), category="objectives",
+                ))
+
+        if event == "PowerplaySalary":
+            amount = int(raw.get("Amount") or 0)
+            if amount:
+                candidates.append(self._candidate(
+                    "powerplay-salary", 62,
+                    "The pledged power paid a verified salary.",
+                    (
+                        f"Powerplay salary received: {amount:,} credits.",
+                        f"The pledge ledger has paid {amount:,} credits in salary.",
+                        f"Strategic salary transfer confirmed at {amount:,} credits.",
+                        f"Powerplay service payment secured: {amount:,} credits.",
+                    ), ("powerplay", "progress"), category="objectives",
+                ))
+
+        pp_system = powerplay.get("system") or {}
+        if (event in ("FSDJump", "Location") and powerplay.get("pledged") and pp_system
+                and (pp_system.get("contested") or pp_system.get("state"))):
+            system_name = pp_system.get("name") or current_system or "this system"
+            controller = pp_system.get("controlling") or "no recorded controlling power"
+            state_name = pp_system.get("state") or "unclassified"
+            pledged = powerplay.get("power") or "our pledged power"
+            presence = "present" if pp_system.get("pledged_power_present") else "not listed among the active powers"
+            candidates.append(self._candidate(
+                "powerplay-system-context", 69 if pp_system.get("contested") else 61,
+                "The arrival has verified Powerplay control and presence context.",
+                (
+                    f"Powerplay briefing for {system_name}: {controller} controls the system, state {state_name}; {pledged} is {presence}.",
+                    f"Strategic context: {system_name} is controlled by {controller} with state {state_name}. Our pledge, {pledged}, is {presence}.",
+                    f"Local Powerplay record for {system_name} shows {controller} in control and state {state_name}; {pledged} is {presence}.",
+                    f"Arrival cross-check for {system_name}: controller {controller}, Powerplay state {state_name}, and {pledged} is {presence}.",
+                ), ("powerplay", "route", "progress"), category="navigation",
             ))
 
         matching = [

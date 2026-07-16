@@ -28,7 +28,7 @@ from route_plotter import RoutePlotter
 from waypoint_manager import WaypointManager
 import route_strip
 from journal_watcher import JournalWatcher
-from mining_window import MiningWindow
+from mining_window import MINING_MATERIALS, MiningWindow
 from carrier_tracker import CarrierTracker
 from carrier_window import CarrierWindow
 from prospector_hud import ProspectorHUD
@@ -65,6 +65,7 @@ from voice_callouts import VoiceCalloutManager, choose_line
 from cockpit_ai_memory import CockpitMemory, ordinal
 from cockpit_ai_brain import CockpitBrain
 from compass_cognition import CompassCognition
+from combat_awareness import CombatAwareness
 import compass_personas
 from captains_log import CaptainsLog
 from diagnostic_logs import application_base_dir, resolve_log_path
@@ -621,8 +622,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "spent": 0,
             "earned": 0,
             "profit": 0,
+            "transactions": 0,
+            "commodities_bought": {},
+            "commodities_sold": {},
+            "best_sale": None,
+            "worst_sale": None,
             "events": deque(maxlen=100),
         }
+        self.trade_plan_context = None
+        self.mining_ai_session = self._new_mining_ai_session()
+        self.combat_awareness = CombatAwareness()
         self._hud_balance_cache = {"ts": 0.0, "balance": None}
         self._market_import_queue = queue.Queue(maxsize=1)
         self._market_import_stop = threading.Event()
@@ -2564,6 +2573,78 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         unsold_exploration = int(state.get("unsold_exploration_cr") or 0)
         unsold_biology = int(state.get("unsold_bio_cr") or 0)
         trade = getattr(self, "trade_session", {}) or {}
+        mining = self._compass_mining_snapshot(mission_rows)
+        trade_context = self._compass_trade_snapshot()
+        statistics = state.get("statistics") or {}
+        combat_stats = statistics.get("Combat") or statistics.get("combat") or {}
+        combat_lifetime = {
+            "bounties_claimed": int(combat_stats.get("Bounties_Claimed") or 0),
+            "bounty_profit_cr": int(combat_stats.get("Bounty_Hunting_Profit") or 0),
+            "combat_bonds": int(combat_stats.get("Combat_Bonds") or 0),
+            "combat_bond_profit_cr": int(combat_stats.get("Combat_Bond_Profits") or 0),
+            "assassinations": int(combat_stats.get("Assassinations") or 0),
+            "assassination_profit_cr": int(combat_stats.get("Assassination_Profits") or 0),
+            "highest_reward_cr": int(combat_stats.get("Highest_Single_Reward") or 0),
+            "conflict_zones": int(combat_stats.get("ConflictZone_Total") or 0),
+            "conflict_zone_wins": int(combat_stats.get("ConflictZone_Total_Wins") or 0),
+            "on_foot_combat_bonds": int(combat_stats.get("OnFoot_Combat_Bonds") or 0),
+            "on_foot_combat_profit_cr": int(combat_stats.get("OnFoot_Combat_Bonds_Profits") or 0),
+        }
+        combat_tracker = getattr(self, "combat_awareness", None)
+        combat = combat_tracker.snapshot(
+            massacre_stacks=companion_features.massacre_stacks(state),
+            lifetime=combat_lifetime,
+        ) if combat_tracker else {}
+        powerplay_state = state.get("powerplay") or {}
+        powerplay_system = state.get("pp_system") or {}
+        collected = dict(powerplay_state.get("commodities_collected") or {})
+        delivered = dict(powerplay_state.get("commodities_delivered") or {})
+        outstanding = {
+            name: max(0, int(count or 0) - int(delivered.get(name) or 0))
+            for name, count in collected.items()
+            if max(0, int(count or 0) - int(delivered.get(name) or 0))
+        }
+        pledged_power = powerplay_state.get("power")
+        controlling_power = powerplay_system.get("controlling")
+        powers_present = list(powerplay_system.get("powers") or [])
+        powerplay = {
+            "pledged": bool(pledged_power),
+            "power": pledged_power,
+            "rank": powerplay_state.get("rank"),
+            "merits": int(powerplay_state.get("merits") or 0),
+            "time_pledged_s": int(powerplay_state.get("time_pledged_s") or 0),
+            "session_merits": int(powerplay_state.get("session_merits") or 0),
+            "session_collected": int(powerplay_state.get("session_collected") or 0),
+            "session_delivered": int(powerplay_state.get("session_delivered") or 0),
+            "session_fast_track_cr": int(powerplay_state.get("session_fast_track_cr") or 0),
+            "session_salary_cr": int(powerplay_state.get("session_salary_cr") or 0),
+            "commodities_collected": collected,
+            "commodities_delivered": delivered,
+            "outstanding": outstanding,
+            "outstanding_units": sum(outstanding.values()),
+            "last_action": dict(powerplay_state.get("last_action") or {}),
+            "system": {
+                "name": current_system,
+                "controlling": controlling_power,
+                "powers": powers_present,
+                "state": powerplay_system.get("state"),
+                "control_progress": powerplay_system.get("control_progress"),
+                "reinforcement": powerplay_system.get("reinforcement"),
+                "undermining": powerplay_system.get("undermining"),
+                "contested": len(powers_present) > 1,
+                "friendly_control": bool(
+                    pledged_power and controlling_power
+                    and str(pledged_power).casefold() == str(controlling_power).casefold()
+                ),
+                "pledged_power_present": bool(
+                    pledged_power and (
+                        str(pledged_power).casefold() == str(controlling_power).casefold()
+                        or any(str(power).casefold() == str(pledged_power).casefold()
+                               for power in powers_present)
+                    )
+                ),
+            } if powerplay_system else None,
+        }
         sample = self._sampling_snapshot() if getattr(self, "bio_sampling", None) else None
         snapshot = {
             "flight": {
@@ -2615,15 +2696,224 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "week": int((getattr(self, "system_traffic", {}) or {}).get("week") or 0),
                 "total": int((getattr(self, "system_traffic", {}) or {}).get("total") or 0),
             },
+            "mining": mining,
+            "trade": trade_context,
+            "combat": combat,
+            "powerplay": powerplay,
             "session": {
                 "jumps": int(getattr(self, "session_jump_count", 0) or 0),
                 "distance_ly": number(getattr(self, "session_ly", 0)) or 0.0,
                 "trade_profit_cr": int(trade.get("profit") or 0),
-                "mined_units": memory.count("mining_refined") if memory else 0,
+                "mined_units": int(mining.get("refined_tons") or 0),
             },
             "learned_gameplay": memory.gameplay_awareness() if memory else {},
         }
         return snapshot
+
+    @staticmethod
+    def _new_mining_ai_session(previous=None):
+        return {
+            "active": False,
+            "started_at": None,
+            "system": None,
+            "body": None,
+            "prospected": 0,
+            "cores_found": 0,
+            "cores_cracked": 0,
+            "refined_tons": 0,
+            "refined_by_material": {},
+            "best_material": None,
+            "best_percent": 0.0,
+            "last_materials": [],
+            "limpets": None,
+            "context_body": (previous or {}).get("context_body"),
+            "last_summary": (previous or {}).get("last_summary"),
+            "last_summary_pending": False,
+        }
+
+    @staticmethod
+    def _journal_display_name(value, fallback="Commodity"):
+        text = str(value or "").strip().strip("$;")
+        if text.casefold().endswith("_name"):
+            text = text[:-5]
+        return text.replace("_", " ").strip().title() or fallback
+
+    def _start_ai_mining_session(self):
+        previous = getattr(self, "mining_ai_session", {}) or {}
+        state = self._new_mining_ai_session(previous)
+        state.update({
+            "active": True,
+            "started_at": time.time(),
+            "system": getattr(self, "current_sys", None),
+            "body": previous.get("context_body") or getattr(self, "current_body_name", None),
+        })
+        self.mining_ai_session = state
+        return state
+
+    def _finish_ai_mining_session(self, reason):
+        state = getattr(self, "mining_ai_session", {}) or {}
+        if not state.get("active"):
+            return
+        duration = max(0.0, time.time() - float(state.get("started_at") or time.time()))
+        state["last_summary"] = {
+            "reason": str(reason or "complete"),
+            "system": state.get("system"),
+            "body": state.get("body"),
+            "duration_minutes": round(duration / 60.0, 1),
+            "prospected": int(state.get("prospected") or 0),
+            "cores_found": int(state.get("cores_found") or 0),
+            "cores_cracked": int(state.get("cores_cracked") or 0),
+            "refined_tons": int(state.get("refined_tons") or 0),
+            "refined_by_material": dict(state.get("refined_by_material") or {}),
+            "best_material": state.get("best_material"),
+            "best_percent": float(state.get("best_percent") or 0),
+        }
+        state["last_summary_pending"] = True
+        state["active"] = False
+        state["context_body"] = None
+
+    def _observe_ai_economy_event(self, event, raw, startup_replay=False):
+        """Maintain panel-independent live mining facts for Compass."""
+        if startup_replay or not isinstance(raw, dict):
+            return
+        state = getattr(self, "mining_ai_session", None)
+        if not isinstance(state, dict):
+            state = self._new_mining_ai_session()
+            self.mining_ai_session = state
+
+        if event == "LoadGame":
+            self.mining_ai_session = self._new_mining_ai_session()
+            return
+
+        if event == "SAASignalsFound" and "ring" in str(raw.get("BodyName") or "").casefold():
+            state["context_body"] = raw.get("BodyName")
+        if event in ("ProspectedAsteroid", "MiningRefined", "AsteroidCracked") and not state.get("active"):
+            state = self._start_ai_mining_session()
+
+        if event == "ProspectedAsteroid":
+            state["prospected"] = int(state.get("prospected") or 0) + 1
+            state["last_core"] = None
+            core = raw.get("MotherlodeMaterial_Localised") or raw.get("MotherlodeMaterial")
+            if core:
+                state["cores_found"] = int(state.get("cores_found") or 0) + 1
+            materials = []
+            for item in raw.get("Materials") or ():
+                if not isinstance(item, dict):
+                    continue
+                name = self._journal_display_name(item.get("Name_Localised") or item.get("Name"), "Mineral")
+                try:
+                    percent = float(item.get("Proportion") if item.get("Proportion") is not None else item.get("Percent") or 0)
+                except (TypeError, ValueError):
+                    percent = 0.0
+                if percent <= 1 and item.get("Proportion") is not None:
+                    percent *= 100.0
+                materials.append({"name": name, "percent": round(percent, 1)})
+                if percent > float(state.get("best_percent") or 0):
+                    state["best_percent"] = round(percent, 1)
+                    state["best_material"] = name
+            state["last_materials"] = sorted(materials, key=lambda row: row["percent"], reverse=True)[:5]
+            if core:
+                state["last_core"] = self._journal_display_name(core, "Core material")
+        elif event == "AsteroidCracked":
+            state["cores_cracked"] = int(state.get("cores_cracked") or 0) + 1
+        elif event == "MiningRefined":
+            material = self._journal_display_name(raw.get("Type_Localised") or raw.get("Type"), "Mineral")
+            state["refined_tons"] = int(state.get("refined_tons") or 0) + 1
+            refined = state.setdefault("refined_by_material", {})
+            refined[material] = int(refined.get(material) or 0) + 1
+        elif event == "Cargo":
+            inventory = raw.get("Inventory") or ()
+            if isinstance(inventory, list):
+                state["limpets"] = sum(
+                    int(item.get("Count") or 0) for item in inventory if isinstance(item, dict)
+                    and "limpet" in str(item.get("Name_Localised") or item.get("Name") or "").casefold()
+                )
+        elif event in ("FSDJump", "CarrierJump", "Shutdown"):
+            self._finish_ai_mining_session(event)
+
+    def _compass_mining_snapshot(self, mission_rows):
+        state = dict(getattr(self, "mining_ai_session", {}) or {})
+        limpets = state.get("limpets")
+        if limpets is None:
+            inventory = list(getattr(self, "current_cargo_inventory", None) or ())
+            if inventory or float(getattr(self, "last_cargo_event_ts", 0) or 0) > 0:
+                limpets = sum(
+                    int(item.get("Count", item.get("count", 0)) or 0)
+                    for item in inventory if isinstance(item, dict)
+                    and "limpet" in str(item.get("Name_Localised") or item.get("Name") or item.get("name") or "").casefold()
+                )
+        mining_names = {name.casefold() for name in MINING_MATERIALS}
+        mining_missions = []
+        for mission in mission_rows:
+            if not isinstance(mission, dict):
+                continue
+            internal = str(mission.get("internal_name") or mission.get("name") or "")
+            commodity = str(mission.get("commodity") or mission.get("commodity_symbol") or "")
+            if "mining" not in internal.casefold() and commodity.casefold() not in mining_names:
+                continue
+            required = int(mission.get("to_deliver") or mission.get("count") or 0)
+            delivered = int(mission.get("delivered") or 0)
+            mining_missions.append({
+                "commodity": commodity or "Mining commodity",
+                "required": required,
+                "delivered": delivered,
+                "remaining": max(0, required - delivered),
+                "destination": mission.get("destination_station") or mission.get("destination_system"),
+            })
+        started = state.get("started_at")
+        duration_hours = max((time.time() - float(started or time.time())) / 3600.0, 1 / 3600.0)
+        refined = int(state.get("refined_tons") or 0)
+        return {
+            "active": bool(state.get("active")),
+            "system": state.get("system"),
+            "body": state.get("body"),
+            "duration_minutes": round(duration_hours * 60, 1) if state.get("active") else 0.0,
+            "prospected": int(state.get("prospected") or 0),
+            "cores_found": int(state.get("cores_found") or 0),
+            "cores_cracked": int(state.get("cores_cracked") or 0),
+            "refined_tons": refined,
+            "yield_tph": round(refined / duration_hours, 1) if state.get("active") and refined else 0.0,
+            "refined_by_material": dict(state.get("refined_by_material") or {}),
+            "best_material": state.get("best_material"),
+            "best_percent": float(state.get("best_percent") or 0),
+            "last_materials": list(state.get("last_materials") or []),
+            "last_core": state.get("last_core"),
+            "limpets": int(limpets) if limpets is not None else None,
+            "missions": mining_missions[:6],
+            "last_summary": state.get("last_summary") if state.get("last_summary_pending") else None,
+        }
+
+    def _compass_trade_snapshot(self):
+        trade = getattr(self, "trade_session", {}) or {}
+        events = list(trade.get("events") or [])
+        return {
+            "transactions": int(trade.get("transactions") or len(events)),
+            "bought_units": int(trade.get("bought_units") or 0),
+            "sold_units": int(trade.get("sold_units") or 0),
+            "spent_cr": int(trade.get("spent") or 0),
+            "revenue_cr": int(trade.get("earned") or 0),
+            "profit_cr": int(trade.get("profit") or 0),
+            "commodities_bought": dict(trade.get("commodities_bought") or {}),
+            "commodities_sold": dict(trade.get("commodities_sold") or {}),
+            "best_sale": trade.get("best_sale"),
+            "worst_sale": trade.get("worst_sale"),
+            "last_transaction": dict(events[-1]) if events else None,
+            "plan": dict(getattr(self, "trade_plan_context", None) or {}) or None,
+        }
+
+    def _set_compass_trade_plan(self, plan):
+        """Share a verified Trade Command result with the working brain."""
+        self.trade_plan_context = dict(plan or {}) or None
+        self._refresh_cockpit_brain(
+            purpose="trade-route",
+            event=(
+                f"trade-route:{self.trade_plan_context.get('kind') or 'plan'}"
+                if self.trade_plan_context else "trade-route:cleared"
+            ),
+        )
+        self._publish_cockpit_ai_changes()
+        if self.trade_plan_context:
+            self._pulse_cockpit_ai()
 
     def _refresh_cockpit_brain(self, purpose=None, event=None, gameplay=None):
         """Persist and return Compass's compact verified working state."""
@@ -2786,10 +3076,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.add_event_feed_entry("AI", notice, severity="INFO")
             if notices:
                 self._pulse_cockpit_ai()
-            return self._maybe_speak_compass_advice(
+            spoken = self._maybe_speak_compass_advice(
                 event, raw, data, startup_replay=startup_replay,
                 snapshot=snapshot,
             )
+            if event in ("FSDJump", "CarrierJump", "Shutdown"):
+                mining_state = getattr(self, "mining_ai_session", {}) or {}
+                mining_state["last_summary_pending"] = False
+            if event in ("EscapeInterdiction", "StartJump", "FSDJump", "CarrierJump", "Docked", "Died", "Shutdown"):
+                combat_tracker = getattr(self, "combat_awareness", None)
+                if combat_tracker:
+                    combat_tracker.consume_summary()
+            return spoken
         except Exception as exc:
             logging.debug("Compass cognition event skipped [%s]: %s", event, exc)
             return False
@@ -3247,6 +3545,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                       f"Structural failure risk. My sensors show hull at {health * 100:.0f} percent.")) if threshold <= 25 else None,
                     voice_key=f"hull-{threshold}",
                 )
+        elif ev == "CockpitBreached":
+            self._push_live_toast(
+                "CANOPY BREACHED", "Emergency oxygen reserve active", "fail", 20,
+                (
+                    "Canopy breach confirmed. Life support reserve is now critical.",
+                    "Cockpit pressure lost. I am tracking emergency oxygen and the nearest safe dock.",
+                    "Canopy failure. Break contact and secure life support immediately.",
+                ), voice_key="cockpit-breached",
+            )
         elif ev in ("Interdicted", "EscapeInterdiction"):
             escaped = ev == "EscapeInterdiction" or bool(raw.get("Submitted") is False)
             actor = raw.get("Interdictor") or raw.get("Interdictor_Localised") or raw.get("InterdictorName") or "Unknown contact"
@@ -3362,6 +3669,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             except Exception as exc:
                 logging.debug("Captain's Log event skipped [%s]: %s", ev, exc)
         self._handle_live_journal_toast(ev, raw, d, startup_replay=startup_replay)
+        self._observe_ai_economy_event(
+            ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay,
+        )
+        combat_tracker = getattr(self, "combat_awareness", None)
+        if combat_tracker:
+            combat_tracker.observe(
+                ev, raw if isinstance(raw, dict) else d,
+                system=getattr(self, "current_sys", None),
+                startup_replay=startup_replay,
+            )
         if ev == "LoadGame":
             self._handle_cockpit_load_game(raw, d, startup_replay=startup_replay)
         if (self.config.get("cockpit_memory_enabled", True)
@@ -4382,7 +4699,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         elif ev == "LoadGame":
             if state.get("powerplay"):
-                state["powerplay"]["session_merits"] = 0
+                state["powerplay"].update({
+                    "session_merits": 0,
+                    "session_collected": 0,
+                    "session_delivered": 0,
+                    "session_fast_track_cr": 0,
+                    "session_salary_cr": 0,
+                    "commodities_collected": {},
+                    "commodities_delivered": {},
+                    "activity": [],
+                    "last_action": None,
+                })
                 changed = True
 
         elif ev == "StoredShips":
@@ -4455,7 +4782,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     )
 
         elif ev in ("Powerplay", "PowerplayJoin", "PowerplayDefect", "PowerplayLeave",
-                    "PowerplayRank", "PowerplayMerits"):
+                    "PowerplayRank", "PowerplayMerits", "PowerplayCollect",
+                    "PowerplayDeliver", "PowerplayFastTrack", "PowerplaySalary",
+                    "PowerplayVote", "PowerplayVoucher"):
             self._update_powerplay_state(ev, raw)
             changed = True
             galaxy_changed = True
@@ -4671,18 +5000,82 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if ev == "PowerplayLeave":
             self.companion_state["powerplay"] = None
             return
-        current = dict(self.companion_state.get("powerplay") or {"session_merits": 0})
+        current = dict(self.companion_state.get("powerplay") or {})
+        defaults = {
+            "session_merits": 0, "session_collected": 0, "session_delivered": 0,
+            "session_fast_track_cr": 0, "session_salary_cr": 0,
+            "commodities_collected": {}, "commodities_delivered": {}, "activity": [],
+        }
+        for name, value in defaults.items():
+            current.setdefault(name, value.copy() if isinstance(value, (dict, list)) else value)
+
+        def display_type():
+            return self._journal_display_name(
+                raw.get("Type_Localised") or raw.get("Type"), "Powerplay commodity"
+            )
+
+        def record(detail, **extra):
+            action = {
+                "event": ev,
+                "timestamp": raw.get("timestamp"),
+                "detail": detail,
+                "power": raw.get("ToPower") or raw.get("Power") or current.get("power"),
+                "system": getattr(self, "current_sys", None),
+                **extra,
+            }
+            current["last_action"] = action
+            current["activity"] = (list(current.get("activity") or []) + [action])[-30:]
+
         if ev == "Powerplay":
             current.update(power=raw.get("Power"), rank=raw.get("Rank"), merits=raw.get("Merits"),
                            time_pledged_s=raw.get("TimePledged"))
+            record(f"Pledge status refreshed for {raw.get('Power') or 'current power'}")
         elif ev in ("PowerplayJoin", "PowerplayDefect"):
-            current = {"power": raw.get("ToPower") or raw.get("Power"), "rank": 0,
-                       "merits": 0, "time_pledged_s": 0, "session_merits": 0}
+            current = {
+                **defaults,
+                "power": raw.get("ToPower") or raw.get("Power"), "rank": 0,
+                "merits": 0, "time_pledged_s": 0,
+            }
+            transition = "Defected" if ev == "PowerplayDefect" else "Pledged"
+            record(f"{transition} to {current.get('power') or 'a power'}",
+                   from_power=raw.get("FromPower"))
         elif ev == "PowerplayRank":
+            previous_rank = current.get("rank")
             current.update(power=raw.get("Power"), rank=raw.get("Rank"))
+            record(f"Rank changed from {previous_rank} to {raw.get('Rank')}",
+                   previous_rank=previous_rank, rank=raw.get("Rank"))
         elif ev == "PowerplayMerits":
+            gained = int(raw.get("MeritsGained") or 0)
             current.update(power=raw.get("Power"), merits=raw.get("TotalMerits"),
-                           session_merits=int(current.get("session_merits") or 0) + int(raw.get("MeritsGained") or 0))
+                           session_merits=int(current.get("session_merits") or 0) + gained)
+            record(f"Gained {gained:,} merits", count=gained,
+                   total_merits=int(raw.get("TotalMerits") or 0))
+        elif ev in ("PowerplayCollect", "PowerplayDeliver"):
+            commodity = display_type()
+            count = int(raw.get("Count") or 0)
+            verb = "collected" if ev == "PowerplayCollect" else "delivered"
+            field = "commodities_collected" if ev == "PowerplayCollect" else "commodities_delivered"
+            session_field = "session_collected" if ev == "PowerplayCollect" else "session_delivered"
+            values = dict(current.get(field) or {})
+            values[commodity] = int(values.get(commodity) or 0) + count
+            current[field] = values
+            current[session_field] = int(current.get(session_field) or 0) + count
+            record(f"{verb.title()} {count:,} {commodity}", commodity=commodity, count=count)
+        elif ev == "PowerplayFastTrack":
+            cost = int(raw.get("Cost") or 0)
+            current["session_fast_track_cr"] = int(current.get("session_fast_track_cr") or 0) + cost
+            record(f"Fast-tracked allocation for {cost:,} credits", amount_cr=cost)
+        elif ev == "PowerplaySalary":
+            amount = int(raw.get("Amount") or 0)
+            current["session_salary_cr"] = int(current.get("session_salary_cr") or 0) + amount
+            record(f"Received {amount:,} credits in Powerplay salary", amount_cr=amount)
+        elif ev == "PowerplayVote":
+            votes = int(raw.get("Votes") or 0)
+            record(f"Cast {votes:,} consolidation votes", count=votes,
+                   target_system=raw.get("System"))
+        elif ev == "PowerplayVoucher":
+            systems = list(raw.get("Systems") or [])
+            record(f"Received Powerplay vouchers for {len(systems)} system(s)", systems=systems[:20])
         self.companion_state["powerplay"] = current
 
     @staticmethod
@@ -5116,11 +5509,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         count = int(data.get("Count") or data.get("count") or 0)
         if count <= 0:
             return
+        self.trade_session["transactions"] = int(self.trade_session.get("transactions") or 0) + 1
         if ev == "MarketBuy":
             price = int(data.get("BuyPrice") or data.get("Price") or 0)
             total = int(data.get("TotalCost") or (price * count))
             self.trade_session["bought_units"] += count
             self.trade_session["spent"] += total
+            bought = self.trade_session.setdefault("commodities_bought", {})
+            bought[commodity] = int(bought.get(commodity) or 0) + count
             event = {
                 "time": time.time(),
                 "event": "BUY",
@@ -5137,6 +5533,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.trade_session["sold_units"] += count
             self.trade_session["earned"] += total
             self.trade_session["profit"] += profit
+            sold = self.trade_session.setdefault("commodities_sold", {})
+            sold[commodity] = int(sold.get(commodity) or 0) + count
             event = {
                 "time": time.time(),
                 "event": "SELL",
@@ -5144,7 +5542,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "count": count,
                 "price": price,
                 "profit": profit,
+                "profit_per_ton": round(profit / count) if count else 0,
             }
+            best = self.trade_session.get("best_sale")
+            if not isinstance(best, dict) or profit > int(best.get("profit") or 0):
+                self.trade_session["best_sale"] = dict(event)
+            worst = self.trade_session.get("worst_sale")
+            if not isinstance(worst, dict) or profit < int(worst.get("profit") or 0):
+                self.trade_session["worst_sale"] = dict(event)
             big_trade_threshold = int(self.config.get("big_trade_profit_threshold", 1_000_000) or 1_000_000)
             if profit >= big_trade_threshold and self.toast_hud:
                 self.toast_hud.push(
