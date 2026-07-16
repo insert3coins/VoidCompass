@@ -23,6 +23,10 @@ if __name__ == '__main__':
     if os.path.exists('build'):
         print("Removing previous build folder...")
         shutil.rmtree('build')
+    legacy_market_builder = os.path.join('dist', 'VoidCompassMarketBuilder.exe')
+    if os.path.exists(legacy_market_builder):
+        os.remove(legacy_market_builder)
+        print("Removed legacy dist/VoidCompassMarketBuilder.exe")
 
     # Convert "1.3.0" -> (1, 3, 0, 0) for Windows Version Info
     v_parts = [int(x) for x in APP_VERSION.split('.')]
@@ -90,22 +94,6 @@ VSVersionInfo(
 
     print("Starting build process...")
     PyInstaller.__main__.run(opts)
-
-    builder_opts = [
-        'market_builder.py',
-        '--name=VoidCompassMarketBuilder',
-        '--onefile',
-        '--windowed',
-        '--clean',
-        '--log-level=INFO',
-        '--icon=icon.ico',
-        '--add-data=icon.ico;.',
-        '--hidden-import=zmq',
-        '--version-file=version_info.txt'
-    ]
-
-    print("Starting market builder build process...")
-    PyInstaller.__main__.run(builder_opts)
     
     if os.path.exists('version_info.txt'):
         os.remove('version_info.txt')

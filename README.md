@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 4.8.6**
+**Current version: 4.8.7**
 
 Void Compass is a native Windows companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
 
@@ -103,7 +103,7 @@ C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous
 python build.py
 ```
 
-The PyInstaller build produces `dist\VoidCompass.exe` and `dist\VoidCompassMarketBuilder.exe`, then copies the current update log and required runtime data into `dist`.
+The PyInstaller build produces `dist\VoidCompass.exe`, including the headless worker used by the in-app market database tools, then copies the current update log and required runtime data into `dist`.
 
 See [mini-readme.md](mini-readme.md) for the detailed release history.
 

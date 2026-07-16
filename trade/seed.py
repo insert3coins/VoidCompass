@@ -150,10 +150,11 @@ class Seeder:
         script = os.environ.get("VC_TRADE_SEED_WORKER_SCRIPT") or str(Path(__file__).resolve().parent.parent / "market_builder.py")
         if getattr(sys, "frozen", False):
             configured = os.environ.get("VC_TRADE_SEED_WORKER_EXE")
-            builder = Path(configured) if configured else Path(sys.executable).resolve().parent / "VoidCompassMarketBuilder.exe"
-            # The main app delegates heavy imports to the companion worker exe;
-            # when already running inside that exe, this resolves to itself.
-            cmd = [str(builder if builder.exists() else sys.executable), "--trade-seed-worker"]
+            worker = Path(configured) if configured else Path(sys.executable)
+            # VoidCompass.exe contains the headless worker entry point, so the
+            # packaged app can isolate a heavy rebuild without shipping a
+            # second executable.
+            cmd = [str(worker), "--trade-seed-worker"]
         else:
             cmd = [sys.executable, script, "--trade-seed-worker"]
         cmd.extend([

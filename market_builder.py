@@ -1,8 +1,9 @@
-"""Isolated worker entry point for full market database builds.
+"""Source-tree worker entry point for full market database builds.
 
-The user-facing controls live in Trade > Database. Keeping the heavy import in
-this companion executable prevents the native dashboard from freezing while a
-multi-gigabyte Spansh snapshot is decompressed and indexed.
+The user-facing controls live in Trade > Database. Development runs launch this
+module in a separate Python process; packaged runs use the equivalent worker
+mode built into VoidCompass.exe. Either path keeps the multi-gigabyte import
+away from the native dashboard process.
 """
 
 import sys
