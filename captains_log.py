@@ -165,7 +165,21 @@ class CaptainsLog:
                 self.save()
             return changed
 
-    def import_journals(self, journal_path):
+    @staticmethod
+    def _commander_matches(raw, commander=None, fid=None):
+        expected_name = str(commander or "").strip().casefold()
+        expected_fid = str(fid or "").strip().casefold()
+        actual_name = str(
+            raw.get("Commander") or raw.get("Name") or raw.get("commander") or raw.get("name") or ""
+        ).strip().casefold()
+        actual_fid = str(raw.get("FID") or raw.get("fid") or "").strip().casefold()
+        if expected_name and actual_name != expected_name:
+            return False
+        if expected_fid and actual_fid and actual_fid != expected_fid:
+            return False
+        return bool(actual_name or actual_fid)
+
+    def import_journals(self, journal_path, commander=None, fid=None):
         if not journal_path or not os.path.isdir(journal_path):
             return 0
         count = 0
@@ -184,17 +198,20 @@ class CaptainsLog:
             if signature and imported.get(name) == signature:
                 continue
             try:
+                active_commander = not bool(commander or fid)
                 with open(path, "r", encoding="utf-8", errors="ignore") as handle:
                     for line in handle:
                         try:
-                            if rebuilt.process_event(json.loads(line), save=False):
+                            raw = json.loads(line)
+                            if raw.get("event") in ("Commander", "LoadGame"):
+                                active_commander = self._commander_matches(raw, commander, fid)
+                            if active_commander and rebuilt.process_event(raw, save=False):
                                 count += 1
                         except Exception:
                             continue
             except Exception:
                 continue
             if signature:
-                imported[name] = signature
                 imported[name] = signature
         with self.lock:
             # Parsing happens in an isolated model so live journal callbacks can

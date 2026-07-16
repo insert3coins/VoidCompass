@@ -67,9 +67,14 @@ def _discord_relative(ts_str):
     return f"<t:{int(dt.timestamp())}:R>"
 
 
+def _utc_stamp():
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
 class CarrierTracker:
-    def __init__(self):
-        self.carrier_data = {
+    @staticmethod
+    def _empty_carrier_data():
+        return {
             "carrier_id": None,
             "carrier_type": None,
             "callsign": None,
@@ -119,22 +124,37 @@ class CarrierTracker:
             "destination_note": "",
             "last_updated": None,
         }
+
+    def __init__(self):
+        self.carrier_data = self._empty_carrier_data()
         self._last_cancel_ts = None
         self._prev_status = "idle"
+        self._profile_generation = 0
+        self._profile_lock = threading.RLock()
         self._config = {}
         self.on_updated = None          # callback(carrier_data) — grabbed by CarrierWindow
         self.on_panel_updated = None    # callback(carrier_data) — persistent, used by dashboard panel
         self.on_status_changed = None   # callback(old, new, carrier_data)
 
     def set_config(self, config):
-        self._config = config
-        self.load_state()
+        with self._profile_lock:
+            self._profile_generation += 1
+            ticker = getattr(self, "_status_ticker", None)
+            if ticker and ticker.is_alive():
+                ticker.cancel()
+            self._status_ticker = None
+            self.carrier_data = self._empty_carrier_data()
+            self._last_cancel_ts = None
+            self._prev_status = "idle"
+            self._config = config
+            self.load_state()
 
-    def scan_journal_history(self, journal_path, max_files=10):
+    def scan_journal_history(self, journal_path, max_files=10, commander=None, fid=None):
         """
         One-time startup scan through recent journal files to catch carrier
         events that happened while the app was closed.
         """
+        generation = self._profile_generation
         if not journal_path or not os.path.exists(journal_path):
             return
         try:
@@ -155,10 +175,13 @@ class CarrierTracker:
             "CarrierJumpCancelled": None,
         }
         trade_events = []
+        expected_name = str(commander or "").strip().casefold()
+        expected_fid = str(fid or "").strip().casefold()
 
         for filepath in recent:
             file_events = {k: None for k in buckets}
             file_trades = []
+            active_commander = not bool(expected_name or expected_fid)
             try:
                 with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
                     for line in f:
@@ -171,6 +194,18 @@ class CarrierTracker:
                             continue
                         ev = raw.get("event")
                         if not ev:
+                            continue
+                        if ev in ("Commander", "LoadGame"):
+                            actual_name = str(
+                                raw.get("Commander") or raw.get("Name") or ""
+                            ).strip().casefold()
+                            actual_fid = str(raw.get("FID") or "").strip().casefold()
+                            active_commander = (
+                                (not expected_name or actual_name == expected_name)
+                                and (not expected_fid or not actual_fid or actual_fid == expected_fid)
+                                and bool(actual_name or actual_fid)
+                            )
+                        if not active_commander:
                             continue
                         cid = raw.get("CarrierID")
                         if ev == "CarrierJump" and cid is None:
@@ -203,6 +238,8 @@ class CarrierTracker:
             if buckets["CarrierStats"] is not None:
                 break
 
+        if generation != self._profile_generation:
+            return
         replay = []
         if buckets["CarrierStats"]:
             replay.append(buckets["CarrierStats"])
@@ -221,30 +258,31 @@ class CarrierTracker:
         if not replay:
             return
 
-        orig_on_updated = self.on_updated
-        self.on_updated = None
-        try:
-            for raw in replay:
-                ev = raw.get("event")
-                if ev == "CarrierStats":
-                    self._handle_stats(raw)
-                elif ev in ("CarrierLocation", "CarrierJump"):
-                    self._handle_location(raw)
-                elif ev == "CarrierJumpRequest":
-                    self._handle_jump_request(raw)
-                elif ev == "CarrierJumpCancelled":
-                    self._handle_jump_cancelled(raw)
-                elif ev == "CarrierTradeOrder":
-                    self._handle_trade_order(raw)
-        finally:
-            self.on_updated = orig_on_updated
+        with self._profile_lock:
+            if generation != self._profile_generation:
+                return
+            orig_on_updated = self.on_updated
+            self.on_updated = None
+            try:
+                for raw in replay:
+                    ev = raw.get("event")
+                    if ev == "CarrierStats":
+                        self._handle_stats(raw)
+                    elif ev in ("CarrierLocation", "CarrierJump"):
+                        self._handle_location(raw)
+                    elif ev == "CarrierJumpRequest":
+                        self._handle_jump_request(raw)
+                    elif ev == "CarrierJumpCancelled":
+                        self._handle_jump_cancelled(raw)
+                    elif ev == "CarrierTradeOrder":
+                        self._handle_trade_order(raw)
+            finally:
+                self.on_updated = orig_on_updated
 
-        self.carrier_data["last_updated"] = (
-            datetime.utcnow().isoformat(timespec="seconds") + "Z"
-        )
-        self._update_status()
-        self._prev_status = self.carrier_data["status"]
-        self.save_state()
+            self.carrier_data["last_updated"] = _utc_stamp()
+            self._update_status()
+            self._prev_status = self.carrier_data["status"]
+            self.save_state()
         logging.info(
             f"CarrierTracker: history scan complete — "
             f"{self.carrier_data.get('name') or 'unknown'} "
@@ -296,6 +334,10 @@ class CarrierTracker:
             logging.warning(f"CarrierTracker: could not load state: {exc}")
 
     def process_event(self, raw):
+        with self._profile_lock:
+            return self._process_event_unlocked(raw)
+
+    def _process_event_unlocked(self, raw):
         ev = raw.get("event") if isinstance(raw, dict) else None
         if not ev:
             return
@@ -374,9 +416,7 @@ class CarrierTracker:
             changed = True
 
         if changed:
-            self.carrier_data["last_updated"] = (
-                datetime.utcnow().isoformat(timespec="seconds") + "Z"
-            )
+            self.carrier_data["last_updated"] = _utc_stamp()
             old_status = self._prev_status
             self._update_status()
             new_status = self.carrier_data["status"]
@@ -509,7 +549,7 @@ class CarrierTracker:
         for row in route:
             if isinstance(row, dict) and str(row.get("system") or "").strip().lower() == target:
                 row["visited"] = True
-                row["visited_at"] = timestamp or datetime.utcnow().isoformat(timespec="seconds") + "Z"
+                row["visited_at"] = timestamp or _utc_stamp()
                 break
 
     def set_expedition(self, name, systems, reserve_fuel=200):
@@ -631,9 +671,7 @@ class CarrierTracker:
         new = self.carrier_data["status"]
         if new != old:
             self._prev_status = new
-            self.carrier_data["last_updated"] = (
-                datetime.utcnow().isoformat(timespec="seconds") + "Z"
-            )
+            self.carrier_data["last_updated"] = _utc_stamp()
             self._fire_status_changed(old, new)
             self.save_state()
             if callable(self.on_updated):

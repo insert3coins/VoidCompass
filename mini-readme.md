@@ -1,5 +1,19 @@
 # VoidCompass // UPDATE LOG
 
+## v4.8.5 // Commander Profile Isolation Audit
+**Release Date:** 2026-Jul-16
+
+### Per-Commander Theme Isolation
+*   Theme selection now follows the commander detected from the latest journal before the dashboard is painted, instead of briefly retaining the previously active profile's palette.
+*   Live commander changes immediately apply that profile's theme across the app and overlays, discard stale Settings controls, and keep custom-theme libraries isolated between profiles.
+
+### Hard Runtime Profile Boundary
+*   Commander changes now clear the outgoing system scans, routes and waypoints, cargo, trade, mining, combat, station, ship, flight, ground-target, advisor and activity-feed state before the new journal snapshot is applied.
+*   Profile-owned databases, companion data, engineering inventory, colony projects, achievements, Captain's Log, carrier state, Compass memory/brain, voice queues and overlay geometry are reloaded for the selected commander.
+*   Carrier and Captain's Log history recovery is filtered by commander and FID. A commander with no carrier file now starts with an empty carrier state instead of inheriting the previous profile's carrier.
+*   Stale carrier-history, chronicle-import, EDSM upload and EDSM backfill workers are prevented from writing into a newly selected profile.
+*   NavRoute, Status, Cargo, Market and ShipLocker snapshots are force-refreshed after the boundary, while profile-bound tool windows and overlays are rebuilt from the incoming commander's settings and saved positions.
+
 ## v4.8.4 // Squadron & Mining Command
 **Release Date:** 2026-Jul-16
 

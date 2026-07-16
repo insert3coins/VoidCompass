@@ -102,6 +102,17 @@ def normalize_theme(colors, base=None):
     return out
 
 
+def resolve_theme(theme_name=None, custom_themes=None):
+    """Return a valid theme name and palette from one profile's settings."""
+    name = str(theme_name or DEFAULT_THEME_NAME)
+    custom = custom_themes if isinstance(custom_themes, dict) else {}
+    if name in BUILTIN_THEMES:
+        return name, dict(BUILTIN_THEMES[name])
+    if name in custom and isinstance(custom.get(name), dict):
+        return name, normalize_theme(custom[name])
+    return DEFAULT_THEME_NAME, dict(BUILTIN_THEMES[DEFAULT_THEME_NAME])
+
+
 # ---------- startup resolution (profile-aware, no app imports) ----------
 
 
@@ -128,11 +139,7 @@ def resolve_startup_theme():
     name = profile_cfg.get("ui_theme_name") or root_cfg.get("ui_theme_name") or DEFAULT_THEME_NAME
     custom = profile_cfg.get("ui_custom_themes") or root_cfg.get("ui_custom_themes") or {}
 
-    if name in BUILTIN_THEMES:
-        return name, dict(BUILTIN_THEMES[name])
-    if isinstance(custom, dict) and name in custom:
-        return name, normalize_theme(custom.get(name))
-    return DEFAULT_THEME_NAME, dict(BUILTIN_THEMES[DEFAULT_THEME_NAME])
+    return resolve_theme(name, custom)
 
 
 ACTIVE_THEME_NAME, ACTIVE_PALETTE = resolve_startup_theme()

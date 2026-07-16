@@ -16,6 +16,8 @@ from config import (
     apply_profile_config, commander_profile_key, get_active_profile,
     get_profile_file, save_config, save_active_profile_config,
 )
+import themes
+from ui_theme import apply_theme_live
 from version import APP_VERSION
 import bio_values
 from hud import TacticalHUD
@@ -196,6 +198,281 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         apply_profile_config(self.config)
         self._refresh_profile_paths()
 
+    def _apply_active_profile_theme(self):
+        """Apply the selected commander's theme to the running UI and HUDs."""
+        custom_themes = self.config.get("ui_custom_themes")
+        if not isinstance(custom_themes, dict):
+            custom_themes = {}
+            self.config["ui_custom_themes"] = custom_themes
+        theme_name, palette = themes.resolve_theme(
+            self.config.get("ui_theme_name"),
+            custom_themes,
+        )
+        # Keep the runtime config canonical if a deleted or invalid custom
+        # theme has fallen back to the built-in default.
+        self.config["ui_theme_name"] = theme_name
+        try:
+            apply_theme_live(self.root, theme_name, palette)
+            return True
+        except Exception as exc:
+            logging.warning("Could not apply profile theme %s: %s", theme_name, exc)
+            return False
+
+    @staticmethod
+    def _new_trade_session():
+        return {
+            "bought_units": 0,
+            "sold_units": 0,
+            "spent": 0,
+            "earned": 0,
+            "profit": 0,
+            "transactions": 0,
+            "commodities_bought": {},
+            "commodities_sold": {},
+            "best_sale": None,
+            "worst_sale": None,
+            "events": deque(maxlen=100),
+        }
+
+    def _close_profile_surfaces(self):
+        """Close every UI surface holding references to the outgoing profile."""
+        try:
+            self._capture_overlay_positions()
+        except Exception:
+            pass
+
+        close_methods = {
+            "mining_window": "on_close",
+            "carrier_window": "_on_close",
+            "colonization_window": "_on_close",
+            "engineer_window": "_on_close",
+            "bgs_window": "_on_close",
+            "commander_profile_window": "_on_close",
+            "value_ledger_window": "_on_close",
+            "colonisation_planner_window": "_on_close",
+            "exploration_window": "_on_close",
+            "trade_window": "_on_close",
+            "achievement_window": "_on_close",
+        }
+        for attr, close_name in close_methods.items():
+            surface = getattr(self, attr, None)
+            try:
+                if surface and surface.is_open():
+                    getattr(surface, close_name)()
+            except Exception:
+                try:
+                    win = getattr(surface, "win", None)
+                    if win and win.winfo_exists():
+                        win.destroy()
+                except Exception:
+                    pass
+            setattr(self, attr, None)
+
+        plotter = getattr(self, "route_plotter", None)
+        try:
+            if plotter and plotter.win.winfo_exists():
+                plotter.on_close()
+        except Exception:
+            pass
+        self.route_plotter = None
+
+        settings_page = getattr(self, "settings_page", None)
+        try:
+            if settings_page is not None and settings_page.winfo_exists():
+                settings_page.destroy()
+        except Exception:
+            pass
+        self.settings_page = None
+
+        ground_window = getattr(self, "ground_target_window", None)
+        try:
+            if ground_window and ground_window.winfo_exists():
+                self.config["ground_target_window_geometry"] = ground_window.geometry()
+                ground_window.destroy()
+        except Exception:
+            pass
+        self.ground_target_window = None
+        try:
+            self._destroy_ground_popup()
+        except Exception:
+            pass
+
+        for attr in (
+            "hud", "cargo_hud", "carrier_hud", "prospector_hud",
+            "system_info_hud", "gravity_warning_hud", "station_info_hud",
+            "survey_status_hud", "toast_hud", "heartbeat_hud", "colony_overlay",
+        ):
+            overlay = getattr(self, attr, None)
+            try:
+                if overlay is not None and hasattr(overlay, "destroy"):
+                    overlay.destroy()
+                else:
+                    win = getattr(overlay, "win", None)
+                    if win and win.winfo_exists():
+                        win.destroy()
+            except Exception:
+                pass
+            setattr(self, attr, None)
+
+    def _reset_profile_runtime_state(self, commander_name, fid=None):
+        """Clear transient flight state so no commander can inherit another's session."""
+        self.current_sys = "---"
+        self.previous_sys = None
+        self.previous_coords = None
+        self.current_system_address = None
+        self.current_coords = [0, 0, 0]
+        self.star_class = ""
+        self.scanned = 0
+        self.total = 0
+        self.organic_count = 0
+        self.system_bio_signals = 0
+        self.system_traffic = {"day": 0, "week": 0, "total": 0}
+        self.last_traffic_system = None
+        self._system_traffic_resolved = False
+        self._pending_system_discovery = None
+        self.valuable_system = False
+        self.valuable_bodies = []
+        self.scanned_bodies = set()
+        self.scan_items = []
+        self.scan_items_by_id = {}
+        self.in_fss = False
+        self.fss_summary_active = False
+        self.body_signals = {}
+        self.body_dss_complete = set()
+        self.system_undiscovered = False
+        self.fss_all_bodies = False
+        self.system_stars = {}
+        self.body_scan_data = {}
+        self.current_body_id = None
+        self.current_body_name = ""
+        self.last_scan_event = None
+        self.last_bio_scan = {}
+        self.bio_sampling = None
+        self.bio_sample_points = []
+        self._sample_clear_announced = False
+        self._stale_bio_warned = set()
+
+        self.cmdr_name = commander_name or "CMDR"
+        self.cmdr_fid = fid or ""
+        self.cmdr_balance = None
+        self.cmdr_loan = None
+        self.cmdr_ranks = {}
+        self.cmdr_rank_progress = {}
+        self.cmdr_reputation = {}
+        self.cmdr_ship = {}
+        self.game_version = ""
+        self.game_build = ""
+        self.game_horizons = None
+        self.game_odyssey = None
+
+        self.current_station_name = None
+        self.current_station_type = None
+        self.current_station_market_id = None
+        self.current_station_economy = None
+        self.current_station_economies = []
+        self.current_station_government = None
+        self.current_station_faction = None
+        self.current_station_allegiance = None
+        self.current_station_services = []
+        self.current_station_dist_ls = None
+        self.current_station_landing_pads = None
+        self.current_trade_market = None
+        self.current_colonisation_market = None
+        self.current_docked = False
+
+        self.hud_flight_state = "FLIGHT"
+        self.current_landed = False
+        self.current_in_fighter = False
+        self.current_in_srv = False
+        self.current_on_foot = False
+        self.current_vehicle_id = None
+        self.current_vehicle_name = ""
+        self._vehicle_name_by_id = {}
+        self._last_surface_vehicle_name = ""
+        self.current_music_track = ""
+        self.current_music_mode = ""
+        self.current_music_label = ""
+        self._last_music_event_ts = 0.0
+        self.current_fuel_main = None
+        self.current_fuel_reservoir = None
+        self.fuel_capacity_main = None
+        self._fuel_used_samples = deque(maxlen=8)
+        self._fuel_advisory_signature = None
+        self._low_fuel_warned = False
+        self._toast_hull_thresholds_seen = set()
+        self._toast_status_alerts = set()
+        self._toast_legal_state = None
+        self._toast_shields_up = None
+        self.current_legal_state = None
+        self.current_destination = None
+
+        self.cargo_capacity = 0
+        self.current_cargo_tons = 0
+        self.current_cargo_inventory = []
+        self.trade_jump_history = deque(maxlen=20)
+        self.trade_session = self._new_trade_session()
+        self.trade_plan_context = None
+        self.mining_ai_session = self._new_mining_ai_session()
+        self.colonisation_projects = {}
+        self.engineer_materials = {}
+        self.companion_state = companion_features.fresh_state()
+        if getattr(self, "combat_awareness", None):
+            self.combat_awareness.reset()
+        else:
+            self.combat_awareness = CombatAwareness()
+
+        self.dest_coords = None
+        self.dest_name = None
+        self.route_list = []
+        self.nav_route_entries = []
+        self.target_waypoint = None
+        self.waypoint_cache = {}
+        self.session_start_ts = time.time()
+        self.session_jump_count = 0
+        self.session_ly = 0.0
+        self.session_systems = set()
+
+        self.target_lat = self._to_float(self.config.get("ground_target_lat"), 0.0)
+        self.target_lon = self._to_float(self.config.get("ground_target_lon"), 0.0)
+        self.target_latlon_active = bool(self.config.get("ground_target_active", False))
+        self.current_latitude = None
+        self.current_longitude = None
+        self.current_heading = None
+        self.current_planet_radius = None
+        self.on_planet = False
+        self._ground_last_on_planet = False
+        self.ground_popup_enabled = bool(self.config.get("ground_popup_enabled", True))
+        self._ground_ui_needs_update = True
+        self._ground_last_status_key = None
+        self._pending_status_data = None
+        self._status_dispatch_scheduled = False
+
+        self._rebuy_warning_level = 0
+        self._data_risk_level = 0
+        self._compass_advisor_last = {}
+        self._compass_advisor_last_any = 0.0
+        self._hud_balance_cache = {"ts": 0.0, "balance": None}
+        self.last_journal_event_ts = 0.0
+        self.last_logged_journal_file = None
+        self.last_status_event_ts = 0.0
+        self.last_nav_event_ts = 0.0
+        self.last_cargo_event_ts = 0.0
+        self.last_edsm_event_ts = 0.0
+        self.last_edsm_request_ts = 0.0
+        self._event_rate_ts = deque(maxlen=1200)
+
+        self.log_entries = []
+        self.event_feed_entries = []
+        self.event_feed_view = []
+        self.journal_history_entries = []
+        lock = getattr(self, "_event_feed_pending_lock", None)
+        if lock:
+            with lock:
+                self._event_feed_pending.clear()
+                self._journal_history_pending.clear()
+        self._event_feed_dirty = True
+        self._journal_history_dirty = True
+
     def _persist_config(self):
         save_config(self.config)
 
@@ -236,10 +513,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         except Exception:
             self._exploration_refresh_job = None
 
-    def _import_captains_log_history(self, journal_path):
+    def _import_captains_log_history(self, journal_path, logbook=None, commander=None, fid=None):
+        logbook = logbook or self.captains_log
         try:
-            imported = self.captains_log.import_journals(journal_path)
-            if imported:
+            imported = logbook.import_journals(journal_path, commander=commander, fid=fid)
+            if imported and logbook is self.captains_log:
                 self.log(f"Captain's Log imported {imported:,} journal highlights and session updates")
                 self._refresh_exploration_window()
         except Exception as exc:
@@ -370,12 +648,32 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._refresh_exploration_window()
             return
 
+        # Close and persist the outgoing commander's session while every live
+        # fact and UI position still belongs to that profile.
+        if getattr(self, "cockpit_memory", None):
+            insights = (
+                self.compass_cognition.observe_session_close(
+                    self._compass_gameplay_snapshot(), self.cockpit_memory,
+                )
+                if getattr(self, "compass_cognition", None) else []
+            )
+            self.cockpit_memory.session_debrief(
+                "Profile changed", close=True, insights=insights,
+            )
+        self._close_profile_surfaces()
+        try:
+            self.voice_callouts.shutdown()
+        except Exception:
+            pass
+        try:
+            self.edsm.prepare_profile_switch()
+        except Exception:
+            pass
         try:
             self.conn.commit()
             self.conn.close()
         except Exception:
             pass
-
         save_active_profile_config(self.config)
         profiles = self.config.setdefault("commander_profiles", {})
         profile = profiles.setdefault(new_key, {})
@@ -404,19 +702,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.config["active_commander_name"] = commander_name
         self.config["active_commander_fid"] = fid or profile.get("fid", "")
         apply_profile_config(self.config, new_key)
-        self._compass_advisor_last = {}
-        self._compass_advisor_last_any = 0.0
         self._refresh_profile_paths()
+        self._reset_profile_runtime_state(commander_name, self.config.get("active_commander_fid"))
+        self._apply_active_profile_theme()
+        # These long-lived workers retain the same config object today, but
+        # rebinding them makes the profile boundary explicit and future-proof.
+        self.screenshots.config = self.config
+        self.watcher.config = self.config
+        self.voice_callouts = VoiceCalloutManager(self.config)
         if getattr(self, "cockpit_memory", None):
-            insights = (
-                self.compass_cognition.observe_session_close(
-                    self._compass_gameplay_snapshot(), self.cockpit_memory,
-                )
-                if getattr(self, "compass_cognition", None) else []
-            )
-            self.cockpit_memory.session_debrief(
-                "Profile changed", close=True, insights=insights,
-            )
             self.cockpit_memory.switch(
                 get_profile_file(new_key, "cockpit_ai_memory.json"),
                 limits=self._cockpit_memory_limits(),
@@ -425,12 +719,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.cockpit_brain.switch(
                     get_profile_file(new_key, "cockpit_ai_brain.json")
                 )
-            if getattr(self, "captains_log", None):
-                self.captains_log.switch(
-                    get_profile_file(new_key, "captains_log.json")
-                )
+            self.compass_cognition = CompassCognition(self.cockpit_brain, self.config)
             self.cockpit_memory.begin_app_session()
             self._publish_cockpit_ai_online()
+        self.captains_log = CaptainsLog(
+            get_profile_file(new_key, "captains_log.json")
+        )
         if getattr(self, "achievement_engine", None):
             self.achievement_engine.switch_profile(
                 self._profile_path("achievements_state.json"),
@@ -438,8 +732,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 disabled_categories=self.config.get("achievements_disabled_categories", []),
             )
         self.init_db()
-        self.edsm.config = self.config
-        self.edsm.set_db(self.conn, self.db_lock)
+        self.edsm.switch_profile(self.config, self.conn, self.db_lock)
         self.carrier_tracker.set_config(self.config)
         self.colonisation_projects = self.db_load_colonisation_projects()
         for mid, jp in load_colonisation_data(self.config.get("colonisation_data_file")).items():
@@ -451,54 +744,42 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.colonisation_projects[mid] = jp
         self.engineer_materials = load_engineer_materials(self.config.get("engineer_materials_file"))
         self.companion_state = companion_features.load_state(self.config.get("companion_state_file"))
-        if getattr(self, "watcher", None):
-            self.watcher.force_check_ship_locker()
         self.waypoint_manager = WaypointManager(self.config.get("waypoints_file"))
-        for attr in (
-            "mining_window",
-            "colonization_window",
-            "engineer_window",
-            "bgs_window",
-            "commander_profile_window",
-            "value_ledger_window",
-            "colonisation_planner_window",
-            "exploration_window",
-            "achievement_window",
-        ):
-            win = getattr(self, attr, None)
-            try:
-                if win and win.is_open():
-                    if hasattr(win, "win"):
-                        win.win.destroy()
-                    else:
-                        win.destroy()
-            except Exception:
-                pass
-            setattr(self, attr, None)
-        try:
-            if self.route_plotter and self.route_plotter.win.winfo_exists():
-                self.route_plotter.on_close()
-        except Exception:
-            pass
-        self.route_plotter = None
-        try:
-            if self.carrier_window and self.carrier_window.is_open():
-                self.carrier_window.refresh()
-        except Exception:
-            pass
-        self._refresh_commander_profile_window()
+        journal_path = self.config.get("journal_path") or getattr(self.watcher, "journal_path", None)
+        threading.Thread(
+            target=self.carrier_tracker.scan_journal_history,
+            args=(journal_path, 10, self.cmdr_name, self.cmdr_fid),
+            daemon=True,
+        ).start()
+        threading.Thread(
+            target=self._import_captains_log_history,
+            args=(journal_path, self.captains_log, self.cmdr_name, self.cmdr_fid),
+            daemon=True,
+        ).start()
         self._persist_config()
-        self.load_system_from_db(self.current_sys)
+        self._apply_runtime_feature_toggles()
+        self.show_dashboard_page()
         self.update_dashboard_ui()
         self.update_hud()
         self.update_carrier_panel()
-        self._apply_runtime_feature_toggles()
+        self.update_ground_target_ui()
+        try:
+            self.root.after(120, self._reapply_overlay_positions)
+        except Exception:
+            pass
+        if getattr(self, "watcher", None):
+            self.watcher.force_check_nav()
+            self.watcher.force_check_status()
+            self.watcher.force_check_cargo()
+            self.watcher.force_check_market()
+            self.watcher.force_check_ship_locker()
         self.add_event_feed_entry("PROFILE", f"Switched to commander profile: {commander_name}", severity="INFO")
 
     def __init__(self, root):
         self.root = root
         self.config = load_config()
         self._prepare_commander_profile_from_journal()
+        self._apply_active_profile_theme()
         self.voice_callouts = VoiceCalloutManager(self.config)
         self.cockpit_memory = CockpitMemory(
             get_profile_file(get_active_profile(self.config), "cockpit_ai_memory.json"),
@@ -616,19 +897,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.cargo_capacity = 0
         self.current_cargo_tons = 0
         self.current_cargo_inventory = []
-        self.trade_session = {
-            "bought_units": 0,
-            "sold_units": 0,
-            "spent": 0,
-            "earned": 0,
-            "profit": 0,
-            "transactions": 0,
-            "commodities_bought": {},
-            "commodities_sold": {},
-            "best_sale": None,
-            "worst_sale": None,
-            "events": deque(maxlen=100),
-        }
+        self.trade_session = self._new_trade_session()
         self.trade_plan_context = None
         self.mining_ai_session = self._new_mining_ai_session()
         self.combat_awareness = CombatAwareness()
@@ -899,12 +1168,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         journal_path = self.config.get("journal_path") or getattr(self.watcher, "journal_path", None)
         threading.Thread(
             target=self.carrier_tracker.scan_journal_history,
-            args=(journal_path,),
+            args=(journal_path, 10, self.cmdr_name, self.cmdr_fid),
             daemon=True,
         ).start()
         threading.Thread(
             target=self._import_captains_log_history,
-            args=(journal_path,),
+            args=(journal_path, self.captains_log, self.cmdr_name, self.cmdr_fid),
             daemon=True,
         ).start()
 
