@@ -621,6 +621,9 @@ class VoiceCalloutManager:
         self.config = config
         self._queue = queue.Queue(maxsize=8)
         self._stop = threading.Event()
+        self._active_lock = threading.Lock()
+        self._active_item = None
+        self._active_cancel = None
         self._last_spoken = {}
         self.last_error = None
         self.last_cache_prune = None
@@ -671,7 +674,10 @@ class VoiceCalloutManager:
         if now - self._last_spoken.get(dedup_key, 0.0) < cooldown_s:
             return False
         self._last_spoken[dedup_key] = now
-        return self._enqueue(text, voice, self.config.get("voice_volume", 0.8))
+        return self._enqueue(
+            text, voice, self.config.get("voice_volume", 0.8),
+            category=category, key=dedup_key,
+        )
 
     def can_say(self, category="safety"):
         return bool(
@@ -688,12 +694,15 @@ class VoiceCalloutManager:
             self.config.get("voice_cache_enabled", True) if use_cache is None else use_cache,
         )
 
-    def _enqueue(self, text, voice, volume, use_cache=None):
+    def _enqueue(self, text, voice, volume, use_cache=None, category=None, key=None):
         if not ready(voice):
             raise VoiceError("Install the selected voice pack first.")
         if use_cache is None:
             use_cache = self.config.get("voice_cache_enabled", True)
-        item = (str(text), voice, max(0.0, min(1.0, float(volume))), bool(use_cache))
+        item = (
+            str(text), voice, max(0.0, min(1.0, float(volume))), bool(use_cache),
+            str(category or ""), str(key or ""),
+        )
         try:
             self._queue.put_nowait(item)
         except queue.Full:
@@ -705,16 +714,73 @@ class VoiceCalloutManager:
             self._queue.put_nowait(item)
         return True
 
+    @staticmethod
+    def _queue_item_matches(item, key_prefixes=(), category=None):
+        item_category = item[4] if len(item) > 4 else ""
+        item_key = item[5] if len(item) > 5 else ""
+        if category and str(item_category).casefold() == str(category).casefold():
+            return True
+        key = str(item_key).casefold()
+        return bool(key and any(key.startswith(str(prefix).casefold()) for prefix in key_prefixes))
+
+    def cancel(self, key_prefixes=(), category=None):
+        """Cancel queued/active callouts matching semantic voice keys."""
+        prefixes = tuple(str(prefix) for prefix in (key_prefixes or ()) if str(prefix))
+        if not prefixes and not category:
+            return 0
+        removed = 0
+        # Queue's own mutex prevents the worker taking an item while the
+        # filtered deque and unfinished-task count are updated together.
+        with self._queue.mutex:
+            queued = list(self._queue.queue)
+            kept = []
+            for item in queued:
+                if self._queue_item_matches(item, prefixes, category):
+                    removed += 1
+                else:
+                    kept.append(item)
+            if removed:
+                self._queue.queue.clear()
+                self._queue.queue.extend(kept)
+                self._queue.unfinished_tasks = max(
+                    0, self._queue.unfinished_tasks - removed,
+                )
+                if self._queue.unfinished_tasks == 0:
+                    self._queue.all_tasks_done.notify_all()
+                self._queue.not_full.notify_all()
+        cancel_active = False
+        with self._active_lock:
+            if (self._active_item is not None
+                    and self._queue_item_matches(self._active_item, prefixes, category)):
+                cancel_active = True
+                removed += 1
+                if self._active_cancel is not None:
+                    self._active_cancel.set()
+        if cancel_active and sys.platform == "win32":
+            try:
+                import winsound
+                winsound.PlaySound(None, 0)
+            except Exception:
+                pass
+        return removed
+
     def _run(self):
         while not self._stop.is_set():
             try:
-                text, voice, volume, use_cache = self._queue.get(timeout=0.25)
+                item = self._queue.get(timeout=0.25)
             except queue.Empty:
                 continue
+            text, voice, volume, use_cache = item[:4]
             source = None
             playback = None
+            cancel_event = threading.Event()
+            with self._active_lock:
+                self._active_item = item
+                self._active_cancel = cancel_event
             try:
-                source = synthesize(text, voice, self._stop, use_cache=use_cache)
+                source = synthesize(text, voice, cancel_event, use_cache=use_cache)
+                if cancel_event.is_set() or self._stop.is_set():
+                    raise VoiceError("Voice callout cancelled.")
                 playback = _scaled_wav(source, volume)
                 _play_wav(playback)
                 if use_cache:
@@ -723,7 +789,7 @@ class VoiceCalloutManager:
                     )
                 self.last_error = None
             except Exception as exc:
-                self.last_error = str(exc)
+                self.last_error = None if cancel_event.is_set() else str(exc)
             finally:
                 if not use_cache:
                     for path in {source, playback}:
@@ -732,10 +798,17 @@ class VoiceCalloutManager:
                                 path.unlink(missing_ok=True)
                             except OSError:
                                 pass
+                with self._active_lock:
+                    if self._active_item is item:
+                        self._active_item = None
+                        self._active_cancel = None
                 self._queue.task_done()
 
     def stop(self):
         self._stop.set()
+        with self._active_lock:
+            if self._active_cancel is not None:
+                self._active_cancel.set()
         if sys.platform == "win32":
             try:
                 import winsound

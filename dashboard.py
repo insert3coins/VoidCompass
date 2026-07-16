@@ -54,6 +54,7 @@ from engineer_window import (
 from engineering_data import ready_blueprints
 import companion_features
 import compass_operations
+from credit_events import authoritative_balance, credit_delta
 from bgs_window import BGSWindow
 from commander_profile_window import CommanderProfileWindow
 from system_value_ledger import SystemValueLedger
@@ -3043,6 +3044,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._refresh_commander_profile_window()
             if self.trade_window and self.trade_window.is_open():
                 self.root.after(0, self.trade_window._refresh_summary)
+            try:
+                self.schedule_dashboard_refresh()
+            except Exception:
+                pass
             self.update_hud()
         return changed
 
@@ -3050,35 +3055,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if not isinstance(raw, dict):
             return False
         timestamp = raw.get("timestamp")
-        for key in ("Credits", "Balance"):
-            if raw.get(key) is not None:
-                return self._set_commander_balance(raw.get(key), timestamp=timestamp, log=log)
+        explicit = authoritative_balance(raw)
+        if explicit is not None:
+            return self._set_commander_balance(explicit, timestamp=timestamp, log=log)
         if self.cmdr_balance is None:
             return False
-
-        delta = 0
-        if ev == "MarketBuy":
-            delta -= int(raw.get("TotalCost") or ((raw.get("BuyPrice") or raw.get("Price") or 0) * (raw.get("Count") or 0)) or 0)
-        elif ev == "MarketSell":
-            delta += int(raw.get("TotalSale") or ((raw.get("SellPrice") or raw.get("Price") or 0) * (raw.get("Count") or 0)) or 0)
-        elif ev == "MissionCompleted":
-            delta += int(raw.get("Reward") or 0)
-        elif ev in ("RedeemVoucher", "SellExplorationData", "MultiSellExplorationData"):
-            delta += int(raw.get("Amount") or raw.get("TotalEarnings") or raw.get("TotalSale") or 0)
-        elif ev == "SellOrganicData":
-            delta += int(raw.get("TotalSale") or raw.get("TotalValue") or 0)
-            if not delta:
-                for sample in raw.get("BioData") or ():
-                    if not isinstance(sample, dict):
-                        continue
-                    delta += int(sample.get("Value") or 0)
-                    delta += int(sample.get("Bonus") or 0)
-        elif ev in ("PayFines", "PayBounties", "BuyExplorationData", "BuyTradeData", "RefuelAll", "RefuelPartial", "Repair", "RepairAll", "BuyAmmo"):
-            delta -= int(raw.get("Amount") or raw.get("Cost") or 0)
-        elif ev in ("ModuleBuy", "ShipyardBuy"):
-            delta -= int(raw.get("BuyPrice") or raw.get("ShipPrice") or raw.get("Price") or 0)
-        elif ev in ("ModuleSell", "ShipyardSell"):
-            delta += int(raw.get("SellPrice") or raw.get("ShipPrice") or raw.get("Price") or 0)
+        delta = credit_delta(ev, raw)
         if not delta:
             return False
         return self._set_commander_balance(int(self.cmdr_balance or 0) + delta, timestamp=timestamp, log=log)
@@ -4334,6 +4316,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             logging.warning(f"Achievement engine event error [{ev}]: {exc}")
         if not startup_replay:
             self._record_journal_event()
+        # Apply personal-credit changes before optional AI, toast and tool
+        # handlers. A failure in a secondary feature must never leave the HUD
+        # balance behind a confirmed journal transaction.
+        if ev != "LoadGame":
+            try:
+                self._apply_credit_event(
+                    ev, raw if isinstance(raw, dict) else d,
+                    log=not startup_replay,
+                )
+            except Exception as exc:
+                logging.warning("Credit event failed [%s]: %s", ev, exc)
         if getattr(self, "captains_log", None):
             try:
                 if self.captains_log.process_event(raw):
@@ -4378,8 +4371,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 logging.debug("Cockpit memory event skipped [%s]: %s", ev, exc)
         if ev == "Shutdown" and not startup_replay:
             self._handle_cockpit_shutdown()
-        if ev != "LoadGame":
-            self._apply_credit_event(ev, raw if isinstance(raw, dict) else d, log=not startup_replay)
         self._process_companion_event(ev, raw if isinstance(raw, dict) else {}, d,
                                       startup_replay=startup_replay)
         if ev != "LoadGame" and self.edsm.is_credit_event(ev):
@@ -5379,6 +5370,29 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if voice_text:
             self._speak(voice_text, category=voice_category, key=voice_key)
 
+    def _clear_sold_data_warnings(self, biological=False):
+        """Cancel risk output that became obsolete during a data sale."""
+        toast = getattr(self, "toast_hud", None)
+        if toast and hasattr(toast, "dismiss"):
+            try:
+                self.root.after(0, lambda target=toast: target.dismiss(title="DATA AT RISK"))
+            except Exception:
+                pass
+        voice = getattr(self, "voice_callouts", None)
+        if voice and hasattr(voice, "cancel"):
+            prefixes = ["data-risk", "advisor:unsold-data"]
+            if biological:
+                prefixes.append("cockpit-context:bio-sell-anticipation")
+            try:
+                voice.cancel(key_prefixes=prefixes)
+            except Exception:
+                pass
+        if biological and getattr(self, "cockpit_memory", None):
+            try:
+                self.cockpit_memory.clear_pending_topics("bio-sell-anticipation")
+            except Exception:
+                pass
+
     def _toggle_galaxy_faction_watch(self, faction_name):
         enabled = companion_features.toggle_faction_watch(self.companion_state, faction_name)
         # Establish the current system as the baseline so enabling a watch never
@@ -5691,6 +5705,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 state["unsold_exploration_cr"] = 0
                 state["unsold_scan_keys"] = []
                 self._data_risk_level = 0
+                self._clear_sold_data_warnings()
                 changed = True
             elif ev == "SellOrganicData":
                 sold_count = int(state.get("unsold_bio_samples") or 0)
@@ -5699,6 +5714,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 state["unsold_bio_cr"] = 0
                 state["unsold_bio_samples"] = 0
                 self._data_risk_level = 0
+                self._clear_sold_data_warnings(biological=True)
                 changed = True
 
         if changed:
@@ -5706,7 +5722,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._refresh_companion_surfaces()
         self._check_rebuy_warning(raw if ev in ("Loadout", "LoadGame") else None,
                                   notify=not startup_replay)
-        self._check_data_risk(notify=not startup_replay)
+        sale_event = ev in (
+            "SellExplorationData", "MultiSellExplorationData", "SellOrganicData",
+        )
+        # A sale may leave the other data category unsold. Recompute its level
+        # silently; resetting to zero and notifying here made the sale itself
+        # look like a fresh risk escalation.
+        self._check_data_risk(notify=not startup_replay and not sale_event)
 
     def _prune_massacre_kills(self):
         active = {row["faction"] for row in companion_features.massacre_stacks(self.companion_state)}
