@@ -10,6 +10,26 @@ from config import COLOR_ACCENT, COLOR_TEXT
 
 
 class DashboardScanMixin:
+    def _sync_navigation_hud_flight_state(self, *, supercruise=False):
+        """Resolve the navigation HUD state from the latest verified vehicle flags."""
+        if getattr(self, "current_on_foot", False):
+            state = "ONFOOT"
+        elif getattr(self, "current_in_fighter", False):
+            state = getattr(self, "current_vehicle_name", None) or "FIGHTER"
+        elif getattr(self, "current_in_srv", False):
+            state = "NOMAD" if getattr(self, "current_vehicle_name", "") == "NOMAD" else "SRV"
+        elif getattr(self, "current_docked", False):
+            state = "DOCKED"
+        elif getattr(self, "current_landed", False):
+            state = "LANDED"
+        elif supercruise:
+            state = "SUPERCRUISE"
+        else:
+            state = "FLIGHT"
+        changed = state != getattr(self, "hud_flight_state", None)
+        self.hud_flight_state = state
+        return changed
+
     def _flush_pending_status_update(self):
         self._status_dispatch_scheduled = False
         data = getattr(self, "_pending_status_data", None)
@@ -27,6 +47,7 @@ class DashboardScanMixin:
             self.mining_window.update_status(data)
         was_on_planet = bool(self.on_planet)
         was_landed = bool(getattr(self, "current_landed", False))
+        was_docked = bool(getattr(self, "current_docked", False))
         was_in_fighter = bool(getattr(self, "current_in_fighter", False))
         was_in_srv = bool(getattr(self, "current_in_srv", False))
         was_on_foot = bool(getattr(self, "current_on_foot", False))
@@ -52,16 +73,36 @@ class DashboardScanMixin:
             and self.current_planet_radius > 0
         )
         flags = data.get("Flags")
+        in_supercruise = False
         if isinstance(flags, int):
             self.current_landed = bool(flags & 0x00000002)
             self.current_in_fighter = bool(flags & 0x02000000)
             self.current_in_srv = bool(flags & 0x04000000)
+            in_supercruise = bool(flags & 0x00000010)
             combat_tracker = getattr(self, "combat_awareness", None)
             if combat_tracker:
                 combat_tracker.update_status(flags)
         flags2 = data.get("Flags2")
         if isinstance(flags2, int):
             self.current_on_foot = bool(flags2 & 0x0001)
+        if isinstance(flags, int):
+            reported_docked = bool(flags & 0x00000001)
+            # The ship remains docked while its commander is walking inside a
+            # station, although Status.json clears the ship's Docked flag.
+            if self.current_on_foot and isinstance(flags2, int):
+                if flags2 & (0x0008 | 0x2000 | 0x4000):
+                    self.current_docked = True
+                elif flags2 & (0x0010 | 0x8000):
+                    self.current_docked = False
+                elif reported_docked:
+                    self.current_docked = True
+            else:
+                self.current_docked = reported_docked
+        hud_state_changed = False
+        if isinstance(flags, int) or isinstance(flags2, int):
+            hud_state_changed = self._sync_navigation_hud_flight_state(
+                supercruise=in_supercruise,
+            )
         try:
             compass_operations.observe_status(self.ai_operational_state, data)
         except Exception:
@@ -96,21 +137,12 @@ class DashboardScanMixin:
             self._ground_ui_needs_update = True
         vehicle_state_changed = (
             was_landed != bool(getattr(self, "current_landed", False))
+            or was_docked != bool(getattr(self, "current_docked", False))
             or was_in_fighter != bool(getattr(self, "current_in_fighter", False))
             or was_in_srv != bool(getattr(self, "current_in_srv", False))
             or was_on_foot != bool(getattr(self, "current_on_foot", False))
         )
-        if vehicle_state_changed and not self.batch_mode:
-            if getattr(self, "current_on_foot", False):
-                self.hud_flight_state = "ONFOOT"
-            elif self.current_in_fighter:
-                self.hud_flight_state = self.current_vehicle_name or "FIGHTER"
-            elif self.current_in_srv:
-                self.hud_flight_state = "NOMAD" if getattr(self, "current_vehicle_name", "") == "NOMAD" else "SRV"
-            elif self.current_landed:
-                self.hud_flight_state = "LANDED"
-            else:
-                self.hud_flight_state = "FLIGHT"
+        if (vehicle_state_changed or hud_state_changed) and not self.batch_mode:
             self.update_hud()
         if not self.batch_mode:
             self._check_low_fuel()

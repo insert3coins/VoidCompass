@@ -317,6 +317,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _reset_profile_runtime_state(self, commander_name, fid=None):
         """Clear transient flight state so no commander can inherit another's session."""
+        hud_job = getattr(self, "_hud_refresh_job", None)
+        if hud_job is not None:
+            try:
+                self.root.after_cancel(hud_job)
+            except Exception:
+                pass
+        self._hud_refresh_job = None
+        self._hud_refresh_requested = False
+        self._last_hud_refresh_ts = 0.0
         self.current_sys = "---"
         self.previous_sys = None
         self.previous_coords = None
@@ -561,6 +570,56 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         survey = getattr(self, "survey_status_hud", None)
         if survey:
             survey.hide()
+
+    def _apply_location_navigation_state(self, raw, data):
+        """Seed navigation/station state from a Location login event."""
+        location = raw if isinstance(raw, dict) else {}
+        data = data if isinstance(data, dict) else {}
+        station_name = data.get("station_name") or location.get("StationName")
+        docked_value = data.get("docked")
+        if docked_value is None:
+            docked_value = location.get("Docked")
+        on_foot_value = data.get("on_foot")
+        if on_foot_value is None:
+            on_foot_value = location.get("OnFoot")
+        self.current_on_foot = bool(on_foot_value)
+        self.current_in_fighter = False
+        self.current_in_srv = False
+        self.current_vehicle_id = None
+        self.current_vehicle_name = ""
+        self.current_docked = bool(docked_value or (self.current_on_foot and station_name))
+        if station_name:
+            self.current_station_name = station_name
+            self.current_station_type = data.get("station_type") or location.get("StationType") or None
+            self.current_station_market_id = data.get("market_id") or location.get("MarketID")
+            self.current_station_economy = (
+                location.get("StationEconomy_Localised") or location.get("StationEconomy")
+            )
+            self.current_station_economies = location.get("StationEconomies") or []
+            faction = location.get("StationFaction") or {}
+            self.current_station_government = (
+                location.get("StationGovernment_Localised") or location.get("StationGovernment")
+            )
+            self.current_station_faction = {
+                "name": faction.get("Name"), "state": faction.get("FactionState"),
+            } if faction.get("Name") else None
+            self.current_station_allegiance = location.get("StationAllegiance")
+            self.current_station_services = location.get("StationServices") or []
+            self.current_station_dist_ls = location.get("DistFromStarLS")
+            self.current_station_landing_pads = location.get("LandingPads")
+        else:
+            self.current_station_name = None
+            self.current_station_type = None
+            self.current_station_market_id = None
+            self.current_station_economy = None
+            self.current_station_economies = []
+            self.current_station_government = None
+            self.current_station_faction = None
+            self.current_station_allegiance = None
+            self.current_station_services = []
+            self.current_station_dist_ls = None
+            self.current_station_landing_pads = None
+        self._sync_navigation_hud_flight_state(supercruise=False)
 
     def _start_trade_live_services(self):
         """Start the EDDN listener at app startup (not first Trade-window open,
@@ -2349,11 +2408,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.route_list and self.current_sys in self.route_list:
             game_r_pos = (self.route_list.index(self.current_sys)+1, len(self.route_list))
 
-        self.root.after(0, lambda: self.hud.update(
+        target_hud = self.hud
+        payload = (
             self.current_sys, self.dest_name, dist,
             self.scanned, self.total, custom_r_pos, self.system_traffic, game_r_pos,
-            route_waypoint, route_counts, "OK", None, self._build_navigation_hud_context()
-        ))
+            route_waypoint, route_counts, "OK", None, self._build_navigation_hud_context(),
+        )
+
+        def _draw_navigation_hud():
+            if self.hud is target_hud:
+                target_hud.update(*payload)
+
+        self.root.after(0, _draw_navigation_hud)
         self.update_scan_hud()
         self._perf_spike("_perform_hud_update", t0, threshold_ms=30.0)
 
@@ -4220,11 +4286,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             # CarrierJump counts as a jump for the player when they are docked on board.
             is_jump = ev in ("FSDJump", "CarrierJump")
 
+            # A login while already docked normally emits Location, not a new
+            # Docked event. Apply its state immediately so a profile switch
+            # cannot retain the outgoing commander's HUD label or station.
+            if ev == "Location":
+                self._apply_location_navigation_state(raw, d)
+
             # Reset FSS state on jump completion
             if is_jump:
                 self.in_fss = False
                 self.fss_summary_active = False
-                self.hud_flight_state = "FLIGHT"
+                if ev == "CarrierJump" and d.get("docked"):
+                    self.current_docked = True
+                    self.hud_flight_state = "DOCKED"
+                else:
+                    self.current_docked = False
+                    self.hud_flight_state = "FLIGHT"
 
             prev_coords = self.current_coords if isinstance(self.current_coords, list) else None
 

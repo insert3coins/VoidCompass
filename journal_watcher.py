@@ -414,6 +414,13 @@ class JournalWatcher:
                     "star_pos": data.get("StarPos"),
                     "star_class": data.get("StarClass"),
                     "jump_type": data.get("JumpType"),
+                    "docked": data.get("Docked"),
+                    "on_foot": data.get("OnFoot"),
+                    "in_taxi": data.get("Taxi"),
+                    "in_multicrew": data.get("Multicrew"),
+                    "station_name": data.get("StationName"),
+                    "station_type": data.get("StationType"),
+                    "market_id": data.get("MarketID"),
                 }
             }
         # CarrierJump fires when the player is docked on a carrier that jumps.
