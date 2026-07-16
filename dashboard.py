@@ -52,6 +52,7 @@ from engineer_window import (
 )
 from engineering_data import ready_blueprints
 import companion_features
+import compass_operations
 from bgs_window import BGSWindow
 from commander_profile_window import CommanderProfileWindow
 from system_value_ledger import SystemValueLedger
@@ -413,6 +414,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.trade_session = self._new_trade_session()
         self.trade_plan_context = None
         self.mining_ai_session = self._new_mining_ai_session()
+        self.ai_operational_state = compass_operations.fresh_runtime_state()
         self.colonisation_projects = {}
         self.engineer_materials = {}
         self.companion_state = companion_features.fresh_state()
@@ -900,6 +902,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.trade_session = self._new_trade_session()
         self.trade_plan_context = None
         self.mining_ai_session = self._new_mining_ai_session()
+        self.ai_operational_state = compass_operations.fresh_runtime_state()
         self.combat_awareness = CombatAwareness()
         self._hud_balance_cache = {"ts": 0.0, "balance": None}
         self._market_import_queue = queue.Queue(maxsize=1)
@@ -2977,6 +2980,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             },
             "learned_gameplay": memory.gameplay_awareness() if memory else {},
         }
+        snapshot.update(compass_operations.build_snapshot(
+            getattr(self, "ai_operational_state", None),
+            companion_state=state,
+            cargo_inventory=getattr(self, "current_cargo_inventory", None),
+            engineer_materials=getattr(self, "engineer_materials", None),
+            carrier_data=getattr(getattr(self, "carrier_tracker", None), "carrier_data", None),
+            colonisation_projects=getattr(self, "colonisation_projects", None),
+            current_system=current_system,
+            legal_state=getattr(self, "current_legal_state", None),
+        ))
         return snapshot
 
     @staticmethod
@@ -3941,6 +3954,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._observe_ai_economy_event(
             ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay,
         )
+        try:
+            compass_operations.observe_event(
+                self.ai_operational_state,
+                ev,
+                raw if isinstance(raw, dict) else d,
+                current_system=getattr(self, "current_sys", None),
+                historical=startup_replay,
+            )
+        except Exception as exc:
+            logging.debug("Compass operational event skipped [%s]: %s", ev, exc)
         combat_tracker = getattr(self, "combat_awareness", None)
         if combat_tracker:
             combat_tracker.observe(
@@ -5027,6 +5050,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     mission["destination_system"] = raw["NewDestinationSystem"]
                 if raw.get("NewDestinationStation"):
                     mission["destination_station"] = raw["NewDestinationStation"]
+                if raw.get("NewDestinationSettlement"):
+                    mission["destination_settlement"] = raw["NewDestinationSettlement"]
                 changed = True
 
         elif ev in ("Bounty", "FactionKillBond"):

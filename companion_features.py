@@ -281,10 +281,21 @@ def mission_from_event(event):
         "count": event.get("Count"),
         "destination_system": event.get("DestinationSystem"),
         "destination_station": event.get("DestinationStation"),
+        "destination_settlement": event.get("DestinationSettlement"),
+        "target": event.get("Target") or event.get("Target_Localised"),
+        "target_type": event.get("TargetType") or event.get("TargetType_Localised"),
         "target_faction": event.get("TargetFaction"),
         "kill_count": event.get("KillCount"),
         "reward": event.get("Reward") or 0,
         "wing": bool(event.get("Wing")),
+        "illegal": bool(event.get("Illegal")) or any(
+            marker in internal_name.casefold()
+            for marker in ("illegal", "smuggl", "covert")
+        ),
+        "passenger_count": event.get("PassengerCount"),
+        "passenger_vips": bool(event.get("PassengerVIPs")),
+        "passenger_wanted": bool(event.get("PassengerWanted")),
+        "passenger_type": event.get("PassengerType"),
         "expiry": event.get("Expiry"),
         "accepted": event.get("timestamp"),
     }

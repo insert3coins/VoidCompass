@@ -39,18 +39,18 @@ MOOD_CLAUSES = {
 
 
 PERSONA_TOPIC_WEIGHTS = {
-    "Tactical": {"mission": 1.30, "risk": 1.25, "combat": 1.35, "powerplay": 1.30, "cargo": 1.10, "route": 1.10, "ambient": 0.70},
-    "Guardian": {"risk": 1.35, "combat": 1.15, "fuel": 1.30, "data": 1.20, "cargo": 1.10},
-    "Scientific": {"survey": 1.35, "anomaly": 1.30, "valuable": 1.25, "biology": 1.15, "mining": 1.10},
+    "Tactical": {"mission": 1.30, "risk": 1.25, "combat": 1.35, "powerplay": 1.30, "cargo": 1.10, "route": 1.10, "signals": 1.20, "legal": 1.15, "ambient": 0.70},
+    "Guardian": {"risk": 1.35, "combat": 1.15, "fuel": 1.30, "data": 1.20, "cargo": 1.10, "rescue": 1.35, "ground": 1.15},
+    "Scientific": {"survey": 1.35, "anomaly": 1.30, "valuable": 1.25, "biology": 1.15, "mining": 1.10, "signals": 1.25},
     "Exobiologist": {"biology": 1.45, "survey": 1.20, "valuable": 1.10},
-    "Engineer": {"engineering": 1.40, "cargo": 1.20, "fuel": 1.15, "ship": 1.20, "mining": 1.25},
+    "Engineer": {"engineering": 1.40, "cargo": 1.20, "fuel": 1.15, "ship": 1.20, "mining": 1.25, "logistics": 1.30},
     "Wayfarer": {"route": 1.25, "memory": 1.25, "session": 1.20, "ambient": 1.10},
     "Pathfinder": {"route": 1.40, "mission": 1.20, "survey": 1.05},
     "Veteran": {"memory": 1.25, "pattern": 1.25, "risk": 1.10, "combat": 1.20, "trade": 1.10, "powerplay": 1.15, "ambient": 0.85},
     "Deadpan": {"anomaly": 1.20, "pattern": 1.15, "ambient": 0.70},
     "Stoic": {"risk": 1.15, "mission": 1.05, "ambient": 0.55, "memory": 0.75},
     "Optimist": {"progress": 1.30, "milestone": 1.30, "recovery": 1.20, "trade": 1.10},
-    "Archivist": {"memory": 1.45, "pattern": 1.30, "milestone": 1.20, "powerplay": 1.15},
+    "Archivist": {"memory": 1.45, "pattern": 1.30, "milestone": 1.20, "powerplay": 1.15, "strategy": 1.20},
     "Companion": {"memory": 1.30, "session": 1.25, "progress": 1.20, "powerplay": 1.10},
     "Emergent": {"learning": 1.45, "pattern": 1.30, "memory": 1.20, "anomaly": 1.15},
 }
@@ -65,6 +65,10 @@ OUTCOME_EVENTS = {
     "cargo": {"MarketSell", "EjectCargo"},
     "route": {"FSDJump", "CarrierJump"},
     "engineering": {"EngineerCraft", "Synthesis", "TechnologyBroker"},
+    "signal": {"DataScanned", "Scanned", "SupercruiseDestinationDrop"},
+    "rescue": {"SearchAndRescue", "MarketSell"},
+    "mission-route": {"FSDJump", "CarrierJump", "Docked", "MissionCompleted"},
+    "colonisation": {"ColonisationContribution"},
 }
 
 OUTCOME_ABANDON_EVENTS = {
@@ -222,6 +226,10 @@ class CompassCognition:
         trade = (snapshot or {}).get("trade") or {}
         combat = (snapshot or {}).get("combat") or {}
         powerplay = (snapshot or {}).get("powerplay") or {}
+        ship_operations = (snapshot or {}).get("ship_operations") or {}
+        signals = (snapshot or {}).get("signals") or {}
+        ground = (snapshot or {}).get("ground_operations") or {}
+        missions = (snapshot or {}).get("missions") or {}
         duration = self._session_duration_minutes(memory)
         previous_jumps = ((state.get("metrics") or {}).get("session_jumps") or {}).get("median")
         previous_duration = ((state.get("metrics") or {}).get("session_minutes") or {}).get("median")
@@ -255,6 +263,19 @@ class CompassCognition:
             self._observe_metric(state, "powerplay_session_merits", session_merits)
         if session_delivered:
             self._observe_metric(state, "powerplay_session_delivered", session_delivered)
+        logistics = ship_operations.get("session_logistics") or {}
+        if float(logistics.get("fuel_scooped_t") or 0) > 0:
+            self._observe_metric(state, "session_fuel_scooped_t", logistics.get("fuel_scooped_t"))
+        mission_session = missions.get("session") or {}
+        if int(mission_session.get("completed") or 0):
+            self._observe_metric(state, "session_missions_completed", mission_session.get("completed"))
+        if int(mission_session.get("rewards_cr") or 0):
+            self._observe_metric(state, "session_mission_rewards_cr", mission_session.get("rewards_cr"))
+        if int(ground.get("items_collected") or 0):
+            self._observe_metric(state, "session_ground_items", ground.get("items_collected"))
+        signal_summary = signals.get("last_summary") or signals
+        if int(signal_summary.get("total") or 0):
+            self._observe_metric(state, "system_signals", signal_summary.get("total"))
         self._refresh_predictions(state, memory)
         self._commit(state, save=True)
 
@@ -353,6 +374,11 @@ class CompassCognition:
             "cargo_at_sale_pct": ("Typical cargo sale point", "percent", 0),
             "jumps_at_dock": ("Typical docking point", "session jumps", 0),
             "survey_completion_pct": ("Typical survey completion", "percent", 0),
+            "system_signals": ("Typical system signal count", "signals", 0),
+            "session_fuel_scooped_t": ("Typical session fuel scooped", "tonnes", 1),
+            "session_missions_completed": ("Typical mission session", "missions completed", 0),
+            "session_mission_rewards_cr": ("Typical mission session reward", "credits", 0),
+            "session_ground_items": ("Typical ground collection", "items", 0),
         }
         for key, (label, unit, digits) in labels.items():
             metric = (state.get("metrics") or {}).get(key) or {}
@@ -392,6 +418,11 @@ class CompassCognition:
         combat = snapshot.get("combat") or {}
         powerplay = snapshot.get("powerplay") or {}
         flight = snapshot.get("flight") or {}
+        mission_context = snapshot.get("missions") or {}
+        signals = snapshot.get("signals") or {}
+        ground = snapshot.get("ground_operations") or {}
+        strategy = snapshot.get("strategy") or {}
+        rescue_legal = snapshot.get("rescue_legal") or {}
         goals = []
 
         def add(key, label, priority, topic):
@@ -401,9 +432,20 @@ class CompassCognition:
         destination = nav.get("final_destination")
         if remaining and destination:
             add("route", f"Reach {destination} ({remaining} jumps remain)", 75, "route")
-        missions = int(objectives.get("active_missions") or 0)
-        if missions:
-            add("missions", f"Complete {missions} active mission{'s' if missions != 1 else ''}", 70, "mission")
+        urgent = [row for row in mission_context.get("urgent") or [] if not row.get("expired")]
+        if urgent:
+            mission = urgent[0]
+            minutes = int(mission.get("expiry_minutes") or 0)
+            destination = mission.get("system") or mission.get("settlement") or "its destination"
+            add("urgent-mission", f"Complete {mission.get('name') or 'mission'} at {destination} ({minutes} min remain)", 94, "mission")
+        active_missions = int(mission_context.get("active") or objectives.get("active_missions") or 0)
+        if active_missions and not urgent:
+            add("missions", f"Complete {active_missions} active mission{'s' if active_missions != 1 else ''}", 70, "mission")
+        grouped = list(mission_context.get("grouped_destinations") or [])
+        if grouped:
+            add("mission-route", f"Combine {grouped[0].get('missions')} missions in {grouped[0].get('system')}", 77, "mission-route")
+        if int(mission_context.get("ground") or 0) and ground.get("settlement"):
+            add("ground-missions", f"Review ground objectives near {(ground.get('settlement') or {}).get('name') or 'the settlement'}", 79, "ground")
         unresolved = max(0, int(survey.get("total_bodies") or 0) - int(survey.get("scanned_bodies") or 0))
         if unresolved:
             add("survey", f"Resolve {unresolved} remaining system bod{'ies' if unresolved != 1 else 'y'}", 62, "survey")
@@ -475,6 +517,48 @@ class CompassCognition:
         if engineering:
             name = engineering[0].get("name") if isinstance(engineering[0], dict) else str(engineering[0])
             add("engineering", f"Continue pinned engineering work: {name}", 55, "engineering")
+        if int(rescue_legal.get("rescue_units") or 0):
+            add("rescue-cargo", f"Deliver {int(rescue_legal.get('rescue_units') or 0)} rescued item{'s' if int(rescue_legal.get('rescue_units') or 0) != 1 else ''}", 76, "rescue")
+        if int(rescue_legal.get("stolen_units") or 0) or int(mission_context.get("illegal") or 0):
+            add("legal-cargo", "Manage illicit cargo and legal exposure", 86, "legal")
+        notable_signals = list(signals.get("notable") or [])
+        if notable_signals:
+            signal = max(notable_signals, key=lambda row: int(row.get("threat") or 0))
+            add("signal", f"Assess {signal.get('name') or signal.get('type')} (threat {int(signal.get('threat') or 0)})", 80 if int(signal.get("threat") or 0) >= 3 else 65, "signals")
+        carrier = strategy.get("carrier") or {}
+        if carrier.get("jump_destination"):
+            add("carrier-jump", f"Monitor carrier jump to {carrier.get('jump_destination')}", 69, "strategy")
+        try:
+            carrier_fuel = float(carrier.get("fuel_level"))
+            carrier_capacity = float(carrier.get("fuel_capacity") or 0)
+            if carrier_capacity and carrier_fuel / carrier_capacity <= 0.15:
+                add("carrier-fuel", f"Replenish carrier fuel ({carrier_fuel:.0f} of {carrier_capacity:.0f})", 84, "logistics")
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
+        matching = list(strategy.get("colonisation_matching_cargo") or [])
+        if matching:
+            add("colonisation-cargo", f"Deliver {sum(int(row.get('aboard') or 0) for row in matching)} t of matched construction cargo", 78, "colonisation")
+        conflicts = list(strategy.get("conflicts") or [])
+        if strategy.get("watched_factions_here") and conflicts:
+            add("watched-faction", "Review the watched faction's local conflict", 74, "strategy")
+        community_goals = [row for row in strategy.get("community_goals") or []
+                           if isinstance(row, dict) and not row.get("complete")]
+        if community_goals:
+            goal = community_goals[0]
+            priority = 62
+            expiry_note = ""
+            try:
+                expiry = datetime.fromisoformat(str(goal.get("expiry")).replace("Z", "+00:00"))
+                hours = max(0, round((expiry - datetime.now(timezone.utc)).total_seconds() / 3600))
+                expiry_note = f", {hours} h remain"
+                if hours <= 6:
+                    priority = 88
+            except (TypeError, ValueError):
+                pass
+            add("community-goal", f"Continue {goal.get('title') or 'Community Goal'} ({int(goal.get('contribution') or 0):,} contributed{expiry_note})", priority, "strategy")
+        if ground.get("on_foot") and (int(ground.get("medkits") or 0) == 0 or int(ground.get("energy_cells") or 0) == 0):
+            missing = "medkits" if int(ground.get("medkits") or 0) == 0 else "energy cells"
+            add("ground-supplies", f"Restock {missing} for ground operations", 73, "ground")
         return sorted(goals, key=lambda row: row["priority"], reverse=True)[:MAX_GOALS]
 
     def observe(self, event, snapshot, memory=None, raw=None, startup_replay=False):
@@ -491,12 +575,16 @@ class CompassCognition:
         trade = (snapshot or {}).get("trade") or {}
         combat = (snapshot or {}).get("combat") or {}
         powerplay = (snapshot or {}).get("powerplay") or {}
+        signals = (snapshot or {}).get("signals") or {}
         if event == "FSSAllBodiesFound":
             self._observe_metric(state, "system_bodies", survey.get("total_bodies"))
             self._observe_metric(state, "system_bio_signals", survey.get("biological_signals"))
             self._observe_metric(state, "system_valuable_bodies", len(survey.get("valuable_bodies") or []))
         elif event in ("FSDJump", "CarrierJump") and flight.get("fuel_percent") is not None:
             self._observe_metric(state, "fuel_at_jump_pct", flight.get("fuel_percent"))
+            previous_signals = signals.get("last_summary") or {}
+            if int(previous_signals.get("total") or 0):
+                self._observe_metric(state, "system_signals", previous_signals.get("total"))
         elif event == "MarketSell" and int(session.get("trade_profit_cr") or 0) > 0:
             self._observe_metric(state, "session_trade_profit_cr", session.get("trade_profit_cr"))
             if flight.get("cargo_percent") is not None:
@@ -694,6 +782,12 @@ class CompassCognition:
         trade = snapshot.get("trade") or {}
         combat = snapshot.get("combat") or {}
         powerplay = snapshot.get("powerplay") or {}
+        mission_context = snapshot.get("missions") or {}
+        signals = snapshot.get("signals") or {}
+        ship_operations = snapshot.get("ship_operations") or {}
+        ground = snapshot.get("ground_operations") or {}
+        strategy = snapshot.get("strategy") or {}
+        rescue_legal = snapshot.get("rescue_legal") or {}
         current_system = nav.get("current_system")
         candidates = []
         key_text = str(key or "")
@@ -702,16 +796,168 @@ class CompassCognition:
 
         destination = raw.get("DestinationSystem") or raw.get("destination_system")
         destination_station = raw.get("DestinationStation") or raw.get("destination_station")
+        destination_settlement = raw.get("DestinationSettlement") or raw.get("destination_settlement")
         if event == "MissionAccepted" and destination:
             templates = [f"Mission logged for {destination}."]
-            if destination_station:
+            mission_row = next(
+                (row for row in mission_context.get("rows") or []
+                 if str(row.get("id")) == str(raw.get("MissionID"))),
+                {},
+            )
+            minutes = mission_row.get("expiry_minutes")
+            deadline = f" The deadline is in {int(minutes)} minutes." if minutes is not None and int(minutes) > 0 else ""
+            if destination_settlement:
                 templates.extend((
-                    f"Mission logged for {destination}, with the objective at {destination_station}.",
-                    f"Objective recorded: {destination_station} in {destination}.",
+                    f"Ground objective logged for {destination_settlement} in {destination}.{deadline}",
+                    f"Settlement mission recorded: {destination_settlement}, {destination}.{deadline}",
+                ))
+            elif destination_station:
+                templates.extend((
+                    f"Mission logged for {destination}, with the objective at {destination_station}.{deadline}",
+                    f"Objective recorded: {destination_station} in {destination}.{deadline}",
                 ))
             candidates.append(self._candidate(
                 "mission-log", 76, "A new mission destination should be retained.",
                 templates, ("mission", "progress"), outcome="mission",
+            ))
+
+        if event == "Loadout" and ship_operations.get("role") not in (None, "General"):
+            role = ship_operations.get("role")
+            capabilities = [name.replace("_", " ") for name, enabled in
+                            (ship_operations.get("capabilities") or {}).items() if enabled]
+            detail = ", ".join(capabilities[:4]) or "verified modules"
+            candidates.append(self._candidate(
+                "ship-role", 58,
+                "The current modules support a verified broad operating role.",
+                (
+                    f"Loadout assessment: {role}, supported by {detail}.",
+                    f"The current ship configuration reads as {role}; key capability is {detail}.",
+                    f"Ship role indexed as {role}, with {detail} available.",
+                    f"Operational profile resolved: {role}. I have {detail} in the capability list.",
+                ), ("ship", "logistics", "pattern"), category="ambient",
+            ))
+
+        if event == "FSSSignalDiscovered":
+            raw_name = str(raw.get("SignalName_Localised") or raw.get("SignalName") or "").strip("$;")
+            raw_type = str(raw.get("SignalType") or "").strip("$;")
+            threat = int(raw.get("ThreatLevel") or 0)
+            notable = next(
+                (row for row in reversed(signals.get("notable") or [])
+                 if int(row.get("threat") or 0) == threat
+                 and (not raw_name or raw_name.casefold() in str(row.get("name") or "").casefold()
+                      or raw_type.casefold() == str(row.get("type") or "").casefold())),
+                None,
+            )
+            if notable and (threat >= 3 or any(marker in f"{raw_name} {raw_type}".casefold()
+                                               for marker in ("distress", "nonhuman", "non human", "salvage", "highgrade", "high grade"))):
+                name = notable.get("name") or notable.get("type") or "notable signal"
+                candidates.append(self._candidate(
+                    "notable-signal", 82 if threat >= 4 else 70,
+                    "A non-routine signal has verified risk or salvage value.",
+                    (
+                        f"Notable signal resolved: {name}, threat level {threat}.",
+                        f"Signal analysis flags {name}; verified threat is {threat}.",
+                        f"Sensors have a non-routine contact: {name}, threat {threat}.",
+                        f"Operational signal marked: {name}. Threat rating is {threat}.",
+                    ), ("signals", "risk", "valuable"), outcome="signal", category="objectives",
+                ))
+
+        if event == "ApproachSettlement":
+            settlement = (ground.get("settlement") or {}).get("name") or raw.get("Name") or "the settlement"
+            matching = [row for row in mission_context.get("rows") or []
+                        if row.get("settlement") and str(row.get("settlement")).casefold() == str(settlement).casefold()]
+            if matching:
+                candidates.append(self._candidate(
+                    "ground-objective-arrival", 81,
+                    "The approached settlement matches a verified active mission.",
+                    (
+                        f"Settlement confirmed: {settlement}. {len(matching)} active objective{'s' if len(matching) != 1 else ''} match this location.",
+                        f"We have reached {settlement}; the mission ledger has {len(matching)} matching objective{'s' if len(matching) != 1 else ''}.",
+                        f"Ground objective location verified at {settlement}.",
+                        f"Approach complete. {settlement} matches the active mission record.",
+                    ), ("ground", "mission", "progress"), outcome="mission", category="objectives",
+                ))
+
+        if event in ("FSDJump", "CarrierJump", "Location"):
+            grouped = [row for row in mission_context.get("grouped_destinations") or []
+                       if str(row.get("system") or "").casefold() == str(current_system or "").casefold()]
+            if grouped:
+                count = int(grouped[0].get("missions") or 0)
+                candidates.append(self._candidate(
+                    "mission-route-combination", 74,
+                    "Several active missions share the verified current system.",
+                    (
+                        f"Route efficiency note: {count} active missions share {current_system}.",
+                        f"This arrival combines {count} mission objectives in {current_system}.",
+                        f"Mission routing aligns here; {count} objectives use {current_system}.",
+                        f"We can service {count} active missions during this visit to {current_system}.",
+                    ), ("mission", "route", "strategy"), outcome="mission-route", category="objectives",
+                ))
+            if strategy.get("watched_factions_here") and strategy.get("conflicts"):
+                faction = (strategy.get("watched_factions_here") or [{}])[0].get("name") or "the watched faction"
+                candidates.append(self._candidate(
+                    "watched-faction-conflict", 72,
+                    "A watched faction is present alongside a verified local conflict.",
+                    (
+                        f"Strategic watch: {faction} is involved in local conflict conditions.",
+                        f"The watched-faction board is active here; {faction} has a conflict to review.",
+                        f"Local BGS conditions matter to {faction}; I have flagged the conflict.",
+                        f"Faction watch matched this system. {faction} has active strategic context here.",
+                    ), ("strategy", "mission", "pattern"), category="objectives",
+                ))
+
+        if event in ("ColonisationConstructionDepot", "ColonisationContribution"):
+            matched = list(strategy.get("colonisation_matching_cargo") or [])
+            if matched:
+                total = sum(int(row.get("aboard") or 0) for row in matched)
+                candidates.append(self._candidate(
+                    "colonisation-matched-cargo", 79,
+                    "Onboard cargo matches verified outstanding construction requirements.",
+                    (
+                        f"Construction match confirmed: {total} tonnes aboard can be contributed here.",
+                        f"The colony ledger matches {total} tonnes in our hold to outstanding resources.",
+                        f"We are carrying {total} tonnes required by this construction project.",
+                        f"Colonisation cargo check complete: {total} usable tonnes are aboard.",
+                    ), ("colonisation", "cargo", "strategy"), outcome="colonisation", category="objectives",
+                ))
+
+        if event == "CommunityGoal":
+            active_goals = [row for row in strategy.get("community_goals") or [] if isinstance(row, dict)]
+            important = next((row for row in active_goals if row.get("complete") or row.get("top_rank")), None)
+            if important:
+                title = important.get("title") or "Community Goal"
+                contribution = int(important.get("contribution") or 0)
+                status = "complete" if important.get("complete") else "in the top rank"
+                candidates.append(self._candidate(
+                    "community-goal-status", 78,
+                    "A joined Community Goal reached a meaningful verified status.",
+                    (
+                        f"Community Goal update: {title} is {status}, with {contribution:,} contributed.",
+                        f"Strategic goal status changed. {title} is {status}; our contribution is {contribution:,}.",
+                        f"{title} now reports {status}. The contribution ledger holds {contribution:,}.",
+                        f"Community operation update: {title}, {status}, {contribution:,} contributed.",
+                    ), ("strategy", "progress", "milestone"), category="objectives",
+                ))
+
+        if event in ("SquadronCreated", "JoinedSquadron", "SquadronPromotion",
+                     "SquadronDemotion", "LeftSquadron", "KickedFromSquadron",
+                     "DisbandedSquadron", "WonATrophyForSquadron"):
+            squadron = strategy.get("squadron") or {}
+            name = raw.get("SquadronName") or squadron.get("name") or "the squadron"
+            detail = {
+                "SquadronCreated": f"Squadron record created for {name}.",
+                "JoinedSquadron": f"Squadron membership confirmed with {name}.",
+                "SquadronPromotion": f"Squadron promotion recorded in {name}.",
+                "SquadronDemotion": f"Squadron rank change recorded in {name}.",
+                "LeftSquadron": f"Squadron membership with {name} has ended.",
+                "KickedFromSquadron": f"Removal from {name} has been recorded.",
+                "DisbandedSquadron": f"Squadron {name} has been disbanded.",
+                "WonATrophyForSquadron": f"A squadron trophy has been recorded for {name}.",
+            }[event]
+            candidates.append(self._candidate(
+                "squadron-status", 74 if event not in ("KickedFromSquadron", "DisbandedSquadron") else 84,
+                "A meaningful squadron membership or achievement event was verified.",
+                (detail,), ("strategy", "milestone", "social"), category="objectives",
             ))
 
         services = " ".join(str(item).casefold() for item in station.get("services") or [])
@@ -739,6 +985,19 @@ class CompassCognition:
                     f"Our {exploration:,}-credit survey archive can be sold through Universal Cartographics{at}.",
                     f"Universal Cartographics can receive the current exploration record worth approximately {exploration:,} credits{at}.",
                 ), ("survey", "data", "goal"), outcome="sell-exploration",
+            ))
+        if event == "Docked" and int(rescue_legal.get("rescue_units") or 0) and (
+                "searchandrescue" in services or "search and rescue" in services):
+            units = int(rescue_legal.get("rescue_units") or 0)
+            candidates.append(self._candidate(
+                "rescue-delivery", 80,
+                "Rescue cargo is aboard and this station exposes Search and Rescue.",
+                (
+                    f"Search and Rescue is available for the {units} recovered item{'s' if units != 1 else ''} aboard.",
+                    f"We can hand over {units} rescue item{'s' if units != 1 else ''} at this station.",
+                    f"Rescue cargo destination confirmed; {units} recovered item{'s are' if units != 1 else ' is'} ready for transfer.",
+                    f"This station can receive our {units} recovered item{'s' if units != 1 else ''}.",
+                ), ("rescue", "cargo", "progress"), outcome="rescue", category="objectives",
             ))
 
         if event == "FSSAllBodiesFound":
@@ -922,6 +1181,17 @@ class CompassCognition:
                 ))
 
         target = combat.get("current_target") or {}
+        if event == "Interdicted" and bool(raw.get("IsThargoid")):
+            candidates.append(self._candidate(
+                "residual-thargoid-interdiction", 96,
+                "The journal identifies the interdiction source as Thargoid; this is immediate encounter safety, not war-campaign tracking.",
+                (
+                    "Thargoid interdiction confirmed. Prioritise escape vector, heat control and distance.",
+                    "Non-human interdiction. Keep the ship cold, boost clear and prepare defensive systems.",
+                    "Thargoid contact verified. Break mass lock and avoid committing unless this encounter was intentional.",
+                    "Residual Thargoid encounter. Defensive flight profile recommended until the contact is clear.",
+                ), ("combat", "risk", "signals"), category="objectives",
+            ))
         if (event == "ShipTargeted" and int(target.get("scan_stage") or 0) >= 3
                 and not target.get("is_player")):
             legal = str(target.get("legal_status") or "").casefold()
