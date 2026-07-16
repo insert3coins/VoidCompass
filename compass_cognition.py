@@ -14,10 +14,11 @@ import re
 import statistics
 import time
 
+import compass_operations
 from compass_personas import normalize_persona
 
 
-COGNITION_SCHEMA = 1
+COGNITION_SCHEMA = 2
 MAX_DECISIONS = 40
 MAX_TOPICS = 48
 MAX_PENDING = 8
@@ -136,6 +137,7 @@ class CompassCognition:
             "last_decision": None,
             "last_anomalies": [],
             "learning_notices": [],
+            "preparation": {},
         }
 
     def _state(self):
@@ -166,6 +168,12 @@ class CompassCognition:
         state["recent_decisions"] = list(state.get("recent_decisions") or [])[-MAX_DECISIONS:]
         state["goals"] = list(state.get("goals") or [])[:MAX_GOALS]
         state["learning_notices"] = list(state.get("learning_notices") or [])[-8:]
+        preparation = state.get("preparation") or {}
+        state["preparation"] = dict(sorted(
+            preparation.items(),
+            key=lambda pair: _number((pair[1] or {}).get("last_observed_at"), 0),
+            reverse=True,
+        )[:12])
         self.brain.set_cognition_state(state, save=save)
 
     def reset(self, save=True):
@@ -214,6 +222,24 @@ class CompassCognition:
             return max(0.0, (datetime.now(timezone.utc) - start).total_seconds() / 60.0)
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _learn_preparation(state, key, label, memory=None):
+        """Learn a recurring preparation need at most once per game session."""
+        session = (memory.state.get("current_session") if memory else None) or {}
+        session_key = str(session.get("started_at") or datetime.now(timezone.utc).date())
+        rows = state.setdefault("preparation", {})
+        row = rows.setdefault(str(key), {
+            "label": str(label), "occurrences": 0, "last_session": None,
+            "last_observed_at": None,
+        })
+        if row.get("last_session") == session_key:
+            return False
+        row["label"] = str(label)
+        row["occurrences"] = int(row.get("occurrences") or 0) + 1
+        row["last_session"] = session_key
+        row["last_observed_at"] = time.time()
+        return True
 
     def observe_session_close(self, snapshot, memory):
         """Learn session baselines and return concise debrief insights."""
@@ -541,8 +567,17 @@ class CompassCognition:
         conflicts = list(strategy.get("conflicts") or [])
         if strategy.get("watched_factions_here") and conflicts:
             add("watched-faction", "Review the watched faction's local conflict", 74, "strategy")
-        community_goals = [row for row in strategy.get("community_goals") or []
-                           if isinstance(row, dict) and not row.get("complete")]
+        community_goals = []
+        for row in strategy.get("community_goals") or []:
+            if not isinstance(row, dict) or row.get("complete"):
+                continue
+            try:
+                expiry = datetime.fromisoformat(str(row.get("expiry")).replace("Z", "+00:00"))
+                if expiry <= datetime.now(timezone.utc):
+                    continue
+            except (TypeError, ValueError):
+                pass
+            community_goals.append(row)
         if community_goals:
             goal = community_goals[0]
             priority = 62
@@ -576,6 +611,28 @@ class CompassCognition:
         combat = (snapshot or {}).get("combat") or {}
         powerplay = (snapshot or {}).get("powerplay") or {}
         signals = (snapshot or {}).get("signals") or {}
+        ground = (snapshot or {}).get("ground_operations") or {}
+        if self.config.get("cockpit_cognition_learning_enabled", True):
+            if (mining.get("active") and int(mining.get("prospected") or 0) >= 2
+                    and mining.get("limpets") is not None
+                    and int(mining.get("limpets") or 0) <= 5):
+                self._learn_preparation(
+                    state, "mining-limpets", "Carry a healthier limpet reserve for mining", memory,
+                )
+            if (ground.get("on_foot") and (
+                    int(ground.get("medkits") or 0) == 0
+                    or int(ground.get("energy_cells") or 0) == 0)):
+                self._learn_preparation(
+                    state, "ground-supplies", "Check medkits and energy cells before ground work", memory,
+                )
+            if event in ("Repair", "RepairAll"):
+                self._learn_preparation(
+                    state, "repair-visits", "Review repair capability before extended operations", memory,
+                )
+            elif event == "Synthesis":
+                self._learn_preparation(
+                    state, "synthesis-use", "Review synthesis materials before departure", memory,
+                )
         if event == "FSSAllBodiesFound":
             self._observe_metric(state, "system_bodies", survey.get("total_bodies"))
             self._observe_metric(state, "system_bio_signals", survey.get("biological_signals"))
@@ -643,11 +700,13 @@ class CompassCognition:
         return notices[:2]
 
     @staticmethod
-    def _candidate(topic, priority, reason, templates, tags, outcome=None, category="objectives"):
+    def _candidate(topic, priority, reason, templates, tags, outcome=None,
+                   category="objectives", sources=()):
         return {
             "topic": topic, "priority": float(priority), "reason": reason,
             "templates": tuple(templates), "tags": tuple(tags),
             "outcome": outcome, "category": category,
+            "sources": tuple(sources),
         }
 
     def _memory_candidate(self, memory, system_name):
@@ -768,7 +827,7 @@ class CompassCognition:
                 ))
         return rows
 
-    def _candidates(self, event, raw, snapshot, memory, key=None):
+    def _candidates(self, event, raw, snapshot, memory, key=None, state=None):
         raw = raw if isinstance(raw, dict) else {}
         snapshot = snapshot or {}
         nav = snapshot.get("navigation") or {}
@@ -793,6 +852,65 @@ class CompassCognition:
         key_text = str(key or "")
         if key_text.startswith("advisor:"):
             return []
+
+        preparation = ((state or self._state()).get("preparation") or {})
+        limpet_lesson = preparation.get("mining-limpets") or {}
+        if (event in ("Undocked", "Loadout")
+                and int(limpet_lesson.get("occurrences") or 0) >= 2
+                and ship_operations.get("role") == "Mining"
+                and ship_operations.get("limpets") is not None
+                and int(ship_operations.get("limpets") or 0) < 10):
+            limpets = int(ship_operations.get("limpets") or 0)
+            candidates.append(self._candidate(
+                "prepare-mining-limpets", 78,
+                "Repeated mining sessions have reached a low limpet reserve.",
+                (
+                    f"Learned preparation check: this mining loadout has {limpets} limpets aboard.",
+                    f"Before the next mining run, note the limpet reserve is only {limpets}.",
+                    f"Our mining history says limpet reserves run short; the current count is {limpets}.",
+                    f"Mining preparation flag: {limpets} limpets aboard, below our learned working reserve.",
+                ), ("mining", "logistics", "learning"), category="objectives",
+                sources=("cargo", "journal"),
+            ))
+        ground_lesson = preparation.get("ground-supplies") or {}
+        if (event in ("Disembark", "SuitLoadout")
+                and int(ground_lesson.get("occurrences") or 0) >= 2
+                and (int(ground.get("medkits") or 0) == 0
+                     or int(ground.get("energy_cells") or 0) == 0)):
+            missing = []
+            if int(ground.get("medkits") or 0) == 0:
+                missing.append("medkits")
+            if int(ground.get("energy_cells") or 0) == 0:
+                missing.append("energy cells")
+            label = " and ".join(missing)
+            candidates.append(self._candidate(
+                "prepare-ground-supplies", 80,
+                "Repeated ground deployments have started without essential supplies.",
+                (
+                    f"Learned ground check: no {label} are recorded in the current kit.",
+                    f"Before moving farther from the ship, the kit still needs {label}.",
+                    f"Our ground history flags a recurring shortage: {label} are missing.",
+                    f"Ground preparation warning: current supplies show no {label}.",
+                ), ("ground", "logistics", "learning", "risk"), category="objectives",
+                sources=("status", "cargo"),
+            ))
+
+        if event == "ReceiveText":
+            message = compass_operations.classify_important_message(raw)
+            if message:
+                sender = message.get("sender") or "game operations"
+                content = message.get("message") or "an actionable communication arrived"
+                candidates.append(self._candidate(
+                    f"important-message:{message.get('kind')}", message.get("priority") or 82,
+                    "An actionable game or NPC communication passed the selective message filter.",
+                    (
+                        f"Priority communication from {sender}: {content}",
+                        f"Actionable message received from {sender}: {content}",
+                        f"Operational channel, {sender}: {content}",
+                        f"I have flagged this message from {sender}: {content}",
+                    ), ("mission", "risk", "communications"), category="objectives",
+                    sources=("journal",),
+                ))
 
         destination = raw.get("DestinationSystem") or raw.get("destination_system")
         destination_station = raw.get("DestinationStation") or raw.get("destination_station")
@@ -819,6 +937,7 @@ class CompassCognition:
             candidates.append(self._candidate(
                 "mission-log", 76, "A new mission destination should be retained.",
                 templates, ("mission", "progress"), outcome="mission",
+                sources=("journal",),
             ))
 
         if event == "Loadout" and ship_operations.get("role") not in (None, "General"):
@@ -860,6 +979,7 @@ class CompassCognition:
                         f"Sensors have a non-routine contact: {name}, threat {threat}.",
                         f"Operational signal marked: {name}. Threat rating is {threat}.",
                     ), ("signals", "risk", "valuable"), outcome="signal", category="objectives",
+                    sources=("journal",),
                 ))
 
         if event == "ApproachSettlement":
@@ -892,6 +1012,7 @@ class CompassCognition:
                         f"Mission routing aligns here; {count} objectives use {current_system}.",
                         f"We can service {count} active missions during this visit to {current_system}.",
                     ), ("mission", "route", "strategy"), outcome="mission-route", category="objectives",
+                    sources=("journal", "navigation"),
                 ))
             if strategy.get("watched_factions_here") and strategy.get("conflicts"):
                 faction = (strategy.get("watched_factions_here") or [{}])[0].get("name") or "the watched faction"
@@ -919,6 +1040,7 @@ class CompassCognition:
                         f"We are carrying {total} tonnes required by this construction project.",
                         f"Colonisation cargo check complete: {total} usable tonnes are aboard.",
                     ), ("colonisation", "cargo", "strategy"), outcome="colonisation", category="objectives",
+                    sources=("journal", "cargo"),
                 ))
 
         if event == "CommunityGoal":
@@ -998,6 +1120,7 @@ class CompassCognition:
                     f"Rescue cargo destination confirmed; {units} recovered item{'s are' if units != 1 else ' is'} ready for transfer.",
                     f"This station can receive our {units} recovered item{'s' if units != 1 else ''}.",
                 ), ("rescue", "cargo", "progress"), outcome="rescue", category="objectives",
+                sources=("journal", "cargo"),
             ))
 
         if event == "FSSAllBodiesFound":
@@ -1088,6 +1211,7 @@ class CompassCognition:
                     f"We have {limpets} limpets left for prospecting and collection.",
                     f"Limpet count is {limpets}; plan the remaining rocks accordingly.",
                 ), ("mining", "cargo", "risk"), category="objectives",
+                sources=("journal", "cargo"),
             ))
         if event in ("FSDJump", "CarrierJump") and mining.get("last_summary"):
             summary = mining.get("last_summary") or {}
@@ -1465,6 +1589,7 @@ class CompassCognition:
                     f"The plotted course to {final_destination} now has {remaining_jumps} jump{'s' if remaining_jumps != 1 else ''} remaining.",
                     f"Navigation count: {remaining_jumps} more jump{'s' if remaining_jumps != 1 else ''} to reach {final_destination}.",
                 ), ("route", "goal", "progress"), outcome="route", category="navigation",
+                sources=("navigation", "journal"),
             ))
         unresolved = max(0, int(survey.get("total_bodies") or 0) - int(survey.get("scanned_bodies") or 0))
         if unresolved and key_text.startswith(("system-arrival:", "first-discovery:", "cockpit-context:")):
@@ -1515,6 +1640,7 @@ class CompassCognition:
                     f"The exploration ledger still holds about {unsold:,} credits in unsold data.",
                     f"We are carrying a survey archive valued near {unsold:,} credits without a completed sale.",
                 ), ("data", "goal", "risk"), category="objectives",
+                sources=("journal",),
             ))
         if cargo_percent is not None and int(cargo_percent) >= 80 and key_text.startswith(("cockpit-context:", "engineering-ready:", "massacre-complete:")):
             candidates.append(self._candidate(
@@ -1526,6 +1652,7 @@ class CompassCognition:
                     f"Available hold space has fallen to {100 - int(cargo_percent)} percent.",
                     f"Current cargo load occupies {int(cargo_percent)} percent of the ship's capacity.",
                 ), ("cargo", "goal"), outcome="cargo",
+                sources=("cargo",),
             ))
         if key_text.startswith("engineering-ready:"):
             candidates.append(self._candidate(
@@ -1545,7 +1672,8 @@ class CompassCognition:
         candidates.extend(self._anomaly_candidates(snapshot, memory, event))
         return candidates
 
-    def _score(self, state, candidate, persona, mood, existing=False, voice_stage=None):
+    def _score(self, state, candidate, persona, mood, existing=False, voice_stage=None,
+               activity_mode=None, fact_quality=None):
         score = float(candidate.get("priority") or 0)
         tags = set(candidate.get("tags") or ())
         weights = PERSONA_TOPIC_WEIGHTS.get(normalize_persona(persona), {})
@@ -1567,6 +1695,39 @@ class CompassCognition:
                 score *= 1.12
             elif stage in ("new", "developing"):
                 score *= 0.88
+        mode = str(activity_mode or "general").casefold()
+        mode_tags = {
+            "exploration": {"survey", "biology", "signals", "valuable", "route", "data"},
+            "mining": {"mining", "cargo", "logistics", "ship"},
+            "trade": {"trade", "cargo", "route", "mission", "logistics"},
+            "combat": {"combat", "risk", "legal", "mission", "ship"},
+            "ground": {"ground", "risk", "mission", "legal"},
+            "engineering": {"engineering", "cargo", "logistics", "ship"},
+            "powerplay": {"powerplay", "strategy", "combat", "cargo", "route"},
+            "carrier": {"strategy", "logistics", "cargo", "route"},
+            "colonisation": {"colonisation", "cargo", "logistics", "route"},
+            "station": {"data", "trade", "engineering", "mission", "rescue", "legal", "cargo"},
+        }
+        operational_tags = set().union(*mode_tags.values())
+        if mode in mode_tags:
+            if tags & mode_tags[mode]:
+                score *= 1.15
+            elif tags & operational_tags and "risk" not in tags:
+                score *= 0.70
+        quality = fact_quality if isinstance(fact_quality, dict) else {}
+        source_rows = quality.get("sources") or {}
+        confidences = [
+            _number((source_rows.get(source) or {}).get("confidence"), 0)
+            for source in candidate.get("sources") or ()
+        ] if source_rows else []
+        if confidences:
+            fact_confidence = min(confidences)
+            score *= max(0.35, fact_confidence)
+            candidate["fact_confidence"] = round(fact_confidence, 2)
+        else:
+            candidate["fact_confidence"] = None
+        if quality.get("conflicts") and "risk" not in tags:
+            score *= 0.65
         row = self._topic_stat(state, candidate["topic"])
         confidence, resolved = self._confidence(row)
         if resolved >= 3:
@@ -1584,6 +1745,7 @@ class CompassCognition:
         if existing:
             score += 8
         candidate["confidence"] = confidence
+        candidate["activity_mode"] = mode
         candidate["score"] = round(score, 1)
         return candidate["score"]
 
@@ -1631,7 +1793,9 @@ class CompassCognition:
         if not self.enabled or not self.config.get("cockpit_advisor_enabled", True):
             return None
         state = self._state()
-        candidates = self._candidates(str(event or ""), raw, snapshot, memory, key=key)
+        candidates = self._candidates(
+            str(event or ""), raw, snapshot, memory, key=key, state=state,
+        )
         if not candidates:
             return None
         details = memory.status_details() if memory else {}
@@ -1641,10 +1805,13 @@ class CompassCognition:
             if memory else "new"
         )
         persona = self.config.get("cockpit_persona", "Compass")
+        activity_mode = ((snapshot or {}).get("activity") or {}).get("mode") or "general"
+        fact_quality = (snapshot or {}).get("fact_quality") or {}
         for candidate in candidates:
             self._score(
                 state, candidate, persona, mood,
                 existing=existing, voice_stage=voice_stage,
+                activity_mode=activity_mode, fact_quality=fact_quality,
             )
         selected = max(candidates, key=lambda row: row.get("score") or 0)
         threshold = self._threshold(self.config.get("cockpit_advisor_level"), existing=existing)
@@ -1658,7 +1825,7 @@ class CompassCognition:
         selected["line"] = self._render(state, selected, mood=mood)
         selected["decision_reason"] = (
             f"{selected['reason']} Persona {normalize_persona(persona)} and learned usefulness "
-            f"produced utility {selected['score']:.1f}, clearing {threshold}."
+            f"produced utility {selected['score']:.1f} in {activity_mode} mode, clearing {threshold}."
         )
         self._commit(state)
         return selected
@@ -1731,4 +1898,8 @@ class CompassCognition:
             },
             "anomalies": list(state.get("last_anomalies") or [])[-4:],
             "learning_notices": list(state.get("learning_notices") or [])[-4:],
+            "preparation": [
+                {"key": key, **dict(row)}
+                for key, row in (state.get("preparation") or {}).items()
+            ],
         }

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import re
+import time
 
 
 MAX_NOTABLE_SIGNALS = 16
@@ -21,6 +22,77 @@ SALVAGE_TERMS = (
     "salvage", "black box", "wreckage", "personal effects", "trade data",
     "encrypted data", "rebel transmissions", "military plans",
 )
+
+ACTIVITY_EVENTS = {
+    "exploration": {
+        "FSSDiscoveryScan", "FSSAllBodiesFound", "FSSBodySignals",
+        "FSSSignalDiscovered", "Scan", "SAAScanComplete", "ScanOrganic",
+        "CodexEntry", "NavBeaconScan",
+    },
+    "mining": {"ProspectedAsteroid", "MiningRefined", "AsteroidCracked"},
+    "trade": {"MarketBuy", "MarketSell", "BuyTradeData"},
+    "combat": {
+        "Bounty", "FactionKillBond", "CapShipBond", "UnderAttack",
+        "Interdicted", "Interdiction", "EscapeInterdiction", "Died",
+        "FighterDestroyed", "PVPKill", "ShipTargeted",
+    },
+    "ground": {
+        "Disembark", "SuitLoadout", "ApproachSettlement", "CollectItems",
+        "DropItems", "Backpack", "BackpackChange", "BookDropship",
+    },
+    "engineering": {"EngineerCraft", "MaterialTrade", "TechnologyBroker"},
+    "powerplay": {
+        "Powerplay", "PowerplayCollect", "PowerplayDeliver", "PowerplayDefect",
+        "PowerplayFastTrack", "PowerplayJoin", "PowerplayLeave", "PowerplayMerits",
+        "PowerplayRank", "PowerplaySalary", "PowerplayVote",
+    },
+    "carrier": {
+        "CarrierBuy", "CarrierJump", "CarrierJumpCancelled", "CarrierJumpRequest",
+        "CarrierStats", "CarrierTradeOrder", "CarrierBankTransfer",
+    },
+    "colonisation": {"ColonisationConstructionDepot", "ColonisationContribution"},
+    "station": {"Docked"},
+}
+
+
+def _activity_for_event(event):
+    for mode, events in ACTIVITY_EVENTS.items():
+        if event in events:
+            return mode
+    return None
+
+
+def classify_important_message(raw):
+    """Return a bounded actionable NPC/game message; discard routine/player chat."""
+    if not isinstance(raw, dict):
+        return None
+    channel = str(raw.get("Channel") or "").casefold()
+    sender_raw = str(raw.get("From") or "")
+    sender = _clean(raw.get("From_Localised") or sender_raw, "Game communication")
+    text = str(raw.get("Message_Localised") or raw.get("Message") or "").strip()
+    if not text:
+        return None
+    internal_sender = sender_raw.startswith("$") or channel in {
+        "npc", "missions", "station", "system", "squadronleadership",
+    }
+    if channel in {"player", "wing", "friend", "squadron", "starsystem", "local"}:
+        return None
+    combined = f"{sender} {text}".casefold()
+    groups = (
+        ("distress", 92, ("mayday", "distress", "under attack", "evacuat", "need assistance")),
+        ("access", 88, ("docking request denied", "access denied", "docking denied", "permission denied")),
+        ("mission", 84, ("mission updated", "mission redirected", "objective updated", "mission failed", "urgent objective")),
+        ("security", 82, ("security alert", "scan detected", "hostile scan", "wanted status", "trespass warning")),
+    )
+    match = next(((kind, severity) for kind, severity, terms in groups
+                  if any(term in combined for term in terms)), None)
+    if not match or not internal_sender:
+        return None
+    clean_text = re.sub(r"\s+", " ", text).strip()[:180]
+    return {
+        "kind": match[0], "priority": match[1], "sender": sender,
+        "message": clean_text, "timestamp": raw.get("timestamp"),
+    }
 
 
 def _number(value, default=0.0):
@@ -56,6 +128,11 @@ def _event_name(row, fallback="Item"):
 
 def fresh_runtime_state():
     return {
+        "activity": {
+            "mode": "general", "since": time.time(), "last_event": None,
+            "confidence": 0.4,
+        },
+        "communications": {"last_important": None, "recent": []},
         "ship": {
             "loadout_context": None,
             "fuel_scoop_events": 0,
@@ -185,7 +262,37 @@ def observe_event(state, event, raw=None, current_system=None, historical=False)
     ground = state.setdefault("ground", fresh_runtime_state()["ground"])
     legal = state.setdefault("legal", fresh_runtime_state()["legal"])
     missions = state.setdefault("missions", fresh_runtime_state()["missions"])
+    activity = state.setdefault("activity", fresh_runtime_state()["activity"])
+    communications = state.setdefault("communications", fresh_runtime_state()["communications"])
     changed = False
+
+    if not historical:
+        mode = _activity_for_event(event)
+        if event in ("LoadGame", "Undocked"):
+            mode = "general"
+        elif event == "Embark" and activity.get("mode") == "ground":
+            mode = "general"
+        if mode:
+            now = time.time()
+            if mode != activity.get("mode"):
+                activity["since"] = now
+            activity.update({
+                "mode": mode, "last_event": event, "last_event_at": now,
+                "confidence": 1.0,
+            })
+            changed = True
+        if event == "ReceiveText":
+            important = classify_important_message(raw)
+            if important:
+                important["observed_at"] = time.time()
+                communications["last_important"] = important
+                recent = list(communications.get("recent") or [])
+                marker = (important["kind"], important["sender"], important["message"])
+                if not any((row.get("kind"), row.get("sender"), row.get("message")) == marker
+                           for row in recent if isinstance(row, dict)):
+                    recent.append(important)
+                communications["recent"] = recent[-8:]
+                changed = True
 
     if event in ("Location", "FSDJump", "CarrierJump"):
         system = raw.get("StarSystem") or current_system
@@ -447,6 +554,7 @@ def mission_snapshot(missions, now=None):
     ground_count = 0
     passenger_count = 0
     illegal_count = 0
+    expired_count = 0
     for mission in rows:
         if not isinstance(mission, dict):
             continue
@@ -458,6 +566,9 @@ def mission_snapshot(missions, now=None):
         kind = mission.get("kind") or "other"
         illegal = bool(mission.get("illegal")) or any(term in internal for term in ("illegal", "smuggl", "covert"))
         passenger = kind == "passenger" or "passenger" in internal
+        if minutes is not None and minutes <= 0:
+            expired_count += 1
+            continue
         if settlement:
             ground_count += 1
         passenger_count += int(passenger)
@@ -471,7 +582,7 @@ def mission_snapshot(missions, now=None):
             "kind": kind, "system": system, "station": mission.get("destination_station"),
             "settlement": settlement, "expiry_minutes": minutes,
             "urgent": minutes is not None and minutes <= 60,
-            "expired": minutes is not None and minutes <= 0,
+            "expired": False,
             "illegal": illegal, "passenger": passenger, "wing": bool(mission.get("wing")),
             "commodity": mission.get("commodity"), "required": required,
             "delivered": delivered, "remaining": max(0, required - delivered),
@@ -489,6 +600,7 @@ def mission_snapshot(missions, now=None):
             if count >= 2
         ],
         "ground": ground_count, "passengers": passenger_count, "illegal": illegal_count,
+        "expired_count": expired_count,
     }
 
 
@@ -560,6 +672,13 @@ def build_snapshot(runtime, *, companion_state=None, cargo_inventory=None,
     legal.update(cargo)
     legal["legal_state"] = legal_state
 
+    activity = dict(runtime.get("activity") or {})
+    last_activity = _number(activity.get("last_event_at") or activity.get("since"), 0)
+    if last_activity and time.time() - last_activity > 1800:
+        activity.update({"mode": "general", "confidence": 0.35})
+    communications = dict(runtime.get("communications") or {})
+    communications["recent"] = list(communications.get("recent") or [])[-8:]
+
     watched = set(companion_state.get("watched_factions") or [])
     factions = [row for row in companion_state.get("factions") or [] if isinstance(row, dict)]
     watched_here = [row for row in factions if row.get("name") in watched]
@@ -614,4 +733,6 @@ def build_snapshot(runtime, *, companion_state=None, cargo_inventory=None,
         "missions": missions,
         "strategy": strategy,
         "rescue_legal": legal,
+        "activity": activity,
+        "communications": communications,
     }

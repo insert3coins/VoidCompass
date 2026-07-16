@@ -488,6 +488,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         save_config(self.config)
 
     def _refresh_tool_window(self, attr, method="refresh"):
+        if getattr(self, "_startup_restore_active", False):
+            self._startup_restore_ui_pending = True
+            return
         win = getattr(self, attr, None)
         try:
             if win and win.is_open():
@@ -496,6 +499,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             pass
 
     def _refresh_commander_profile_window(self):
+        if getattr(self, "_startup_restore_active", False):
+            self._startup_restore_ui_pending = True
+            return
         window = getattr(self, "commander_profile_window", None)
         try:
             if not window or not window.is_open():
@@ -514,6 +520,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._refresh_tool_window("colonisation_planner_window")
 
     def _refresh_exploration_window(self):
+        if getattr(self, "_startup_restore_active", False):
+            self._startup_restore_ui_pending = True
+            return
         if getattr(self, "_exploration_refresh_job", None) is not None:
             return
         def _run():
@@ -538,6 +547,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._refresh_tool_window("bgs_window", "refresh_current")
 
     def _refresh_system_info_progress(self):
+        if getattr(self, "_startup_restore_active", False):
+            self._startup_restore_ui_pending = True
+            return
         if not getattr(self, "system_info_hud", None) and not getattr(self, "survey_status_hud", None):
             return
         if getattr(self, "_system_info_refresh_job", None) is not None:
@@ -582,12 +594,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         on_foot_value = data.get("on_foot")
         if on_foot_value is None:
             on_foot_value = location.get("OnFoot")
-        self.current_on_foot = bool(on_foot_value)
+        if on_foot_value is not None:
+            self.current_on_foot = bool(on_foot_value)
         self.current_in_fighter = False
         self.current_in_srv = False
         self.current_vehicle_id = None
         self.current_vehicle_name = ""
-        self.current_docked = bool(docked_value or (self.current_on_foot and station_name))
+        if docked_value is not None or (self.current_on_foot and station_name):
+            self.current_docked = bool(docked_value or (self.current_on_foot and station_name))
         if station_name:
             self.current_station_name = station_name
             self.current_station_type = data.get("station_type") or location.get("StationType") or None
@@ -1184,6 +1198,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         self.db_lock = threading.RLock()
         self.batch_mode = False
+        self._startup_restore_active = False
+        self._startup_restore_ui_pending = False
         self._publish_cockpit_ai_online()
         self.init_db()
         self.edsm.set_db(self.conn, self.db_lock)
@@ -1807,6 +1823,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _on_carrier_status_changed(self, old_status, new_status, carrier_data):
         """Push carrier status transitions into the dashboard Live Event Timeline."""
+        if getattr(self, "_startup_restore_active", False):
+            self._startup_restore_ui_pending = True
+            return
         try:
             name     = carrier_data.get("name") or "Fleet Carrier"
             callsign = carrier_data.get("callsign") or ""
@@ -1850,6 +1869,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _on_carrier_panel_updated(self, carrier_data):
         """Fired by CarrierTracker whenever state changes (persistent hook)."""
+        if getattr(self, "_startup_restore_active", False):
+            self._startup_restore_ui_pending = True
+            return
         try:
             self.root.after(0, self.update_carrier_panel)
             if self.carrier_hud:
@@ -2282,11 +2304,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "Ammonia world": "☣️",
         }.get(planet_class, "🛠️")
         self.valuable_bodies.append(f"- {icon} {body_name}")
-        self.add_event_feed_entry(
-            "VALUABLE", f"{icon} Valuable world: {body_name}",
-            severity="WARN", copy_text=body_name,
-        )
         if not startup_replay:
+            self.add_event_feed_entry(
+                "VALUABLE", f"{icon} Valuable world: {body_name}",
+                severity="WARN", copy_text=body_name,
+            )
             self._speak(
                 self._valuable_world_voice_lines(body_name, planet_class, terraformable),
                 category="exploration", cooldown_s=86_400,
@@ -2332,6 +2354,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def _run_scheduled_hud_refresh(self):
         t0 = self._perf_start()
         self._hud_refresh_job = None
+        if getattr(self, "_startup_restore_active", False):
+            self._startup_restore_ui_pending = True
+            self._hud_refresh_requested = True
+            return
         if not self._hud_refresh_requested:
             return
         self._hud_refresh_requested = False
@@ -2343,6 +2369,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._perf_spike("_run_scheduled_hud_refresh", t0, threshold_ms=35.0)
 
     def update_hud(self):
+        if getattr(self, "_startup_restore_active", False):
+            self._startup_restore_ui_pending = True
+            self._hud_refresh_requested = True
+            return
         if threading.current_thread() is not threading.main_thread():
             self.root.after(0, self.update_hud)
             return
@@ -3056,7 +3086,61 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             current_system=current_system,
             legal_state=getattr(self, "current_legal_state", None),
         ))
+        snapshot["objectives"]["active_missions"] = int(
+            (snapshot.get("missions") or {}).get("active") or 0
+        )
+        active_destinations = []
+        for mission in (snapshot.get("missions") or {}).get("rows") or []:
+            system = mission.get("system") if isinstance(mission, dict) else None
+            if system and not any(row.get("system") == system for row in active_destinations):
+                active_destinations.append({
+                    "system": system, "station": mission.get("station"),
+                })
+        snapshot["objectives"]["mission_destinations"] = active_destinations[:6]
+        snapshot["fact_quality"] = self._compass_fact_quality(snapshot)
         return snapshot
+
+    def _compass_fact_quality(self, snapshot=None):
+        """Describe the age and confidence of facts used by Compass advice."""
+        now = time.time()
+        thresholds = {
+            "journal": (30.0, 180.0, "last_journal_event_ts"),
+            "status": (15.0, 60.0, "last_status_event_ts"),
+            "navigation": (120.0, 600.0, "last_nav_event_ts"),
+            "cargo": (180.0, 900.0, "last_cargo_event_ts"),
+            "edsm": (300.0, 1800.0, "last_edsm_event_ts"),
+        }
+        sources = {}
+        for name, (live_age, recent_age, attribute) in thresholds.items():
+            observed_at = float(getattr(self, attribute, 0.0) or 0.0)
+            age = max(0.0, now - observed_at) if observed_at else None
+            if age is None:
+                freshness, confidence = "unknown", 0.0
+            elif age <= live_age:
+                freshness, confidence = "live", 1.0
+            elif age <= recent_age:
+                freshness, confidence = "recent", 0.7
+            else:
+                freshness, confidence = "stale", 0.3
+            sources[name] = {
+                "freshness": freshness, "confidence": confidence,
+                "age_seconds": round(age, 1) if age is not None else None,
+                "observed_at": observed_at or None,
+            }
+        conflicts = []
+        flight_state = str(
+            ((snapshot or {}).get("flight") or {}).get("state")
+            or getattr(self, "hud_flight_state", "") or ""
+        ).upper()
+        if getattr(self, "current_docked", False) and flight_state not in {"DOCKED", "ONFOOT"}:
+            conflicts.append("docking-state")
+        known = [row["confidence"] for row in sources.values() if row["freshness"] != "unknown"]
+        return {
+            "sources": sources,
+            "overall": round(sum(known) / len(known), 2) if known else 0.0,
+            "conflicts": conflicts,
+            "updated_at": now,
+        }
 
     @staticmethod
     def _new_mining_ai_session(previous=None):
@@ -3234,6 +3318,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def _compass_trade_snapshot(self):
         trade = getattr(self, "trade_session", {}) or {}
         events = list(trade.get("events") or [])
+        plan = dict(getattr(self, "trade_plan_context", None) or {}) or None
+        if plan and time.time() - float(plan.get("_created_at") or time.time()) > 21600:
+            self.trade_plan_context = None
+            plan = None
         return {
             "transactions": int(trade.get("transactions") or len(events)),
             "bought_units": int(trade.get("bought_units") or 0),
@@ -3246,12 +3334,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "best_sale": trade.get("best_sale"),
             "worst_sale": trade.get("worst_sale"),
             "last_transaction": dict(events[-1]) if events else None,
-            "plan": dict(getattr(self, "trade_plan_context", None) or {}) or None,
+            "plan": plan,
         }
 
     def _set_compass_trade_plan(self, plan):
         """Share a verified Trade Command result with the working brain."""
         self.trade_plan_context = dict(plan or {}) or None
+        if self.trade_plan_context:
+            self.trade_plan_context["_created_at"] = time.time()
         self._refresh_cockpit_brain(
             purpose="trade-route",
             event=(
@@ -3408,13 +3498,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._mark_compass_advisor(candidate["topic"])
         return bool(spoken)
 
-    def _process_compass_cognition(self, event, raw, data, startup_replay=False):
+    def _process_compass_cognition(self, event, raw, data, startup_replay=False,
+                                   snapshot=None):
         """Learn from the settled event state, publish sparse insights, then advise."""
         cognition = getattr(self, "compass_cognition", None)
         if not cognition or startup_replay:
             return False
         try:
-            snapshot = self._compass_gameplay_snapshot()
+            snapshot = snapshot if isinstance(snapshot, dict) else self._compass_gameplay_snapshot()
             notices = cognition.observe(
                 event, snapshot, memory=getattr(self, "cockpit_memory", None),
                 raw=raw, startup_replay=startup_replay,
@@ -3440,11 +3531,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             logging.debug("Compass cognition event skipped [%s]: %s", event, exc)
             return False
 
-    def _sync_cockpit_intentions(self):
+    def _sync_cockpit_intentions(self, snapshot=None):
         if (not self.config.get("cockpit_memory_enabled", True)
                 or not getattr(self, "cockpit_memory", None)):
             return
         state = getattr(self, "companion_state", {}) or {}
+        snapshot = snapshot if isinstance(snapshot, dict) else self._compass_gameplay_snapshot()
         intentions = {}
         route = list(getattr(self, "route_list", None) or [])
         if route:
@@ -3458,13 +3550,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if unsold:
             intentions["unsold_data_cr"] = unsold
         sample = self._sampling_snapshot()
-        if sample:
+        if sample and str(getattr(self, "hud_flight_state", "")).upper() != "HYPERSPACE":
             intentions["biological_sampling"] = {
                 "species": sample.get("species"), "progress": sample.get("progress"),
             }
-        missions = state.get("missions") or []
-        if missions:
-            intentions["active_missions"] = len(missions)
+        missions = snapshot.get("missions") or {}
+        if int(missions.get("active") or 0):
+            intentions["active_missions"] = {
+                "count": int(missions.get("active") or 0),
+                "urgent": len(missions.get("urgent") or []),
+                "destinations": list(missions.get("grouped_destinations") or [])[:4],
+            }
         pinned = (getattr(self, "engineer_materials", {}) or {}).get("pinned_blueprints") or []
         if pinned:
             intentions["engineering"] = [
@@ -3473,6 +3569,33 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                  "quantity": row.get("quantity", 1)}
                 for row in pinned[:5] if row.get("name")
             ]
+        activity = snapshot.get("activity") or {}
+        if activity.get("mode") and activity.get("mode") != "general":
+            intentions["activity"] = {
+                "mode": activity.get("mode"),
+                "since": activity.get("since"),
+            }
+        rescue = snapshot.get("rescue_legal") or {}
+        if int(rescue.get("rescue_units") or 0):
+            intentions["rescue_cargo"] = int(rescue.get("rescue_units") or 0)
+        if int(rescue.get("stolen_units") or 0):
+            intentions["legal_cargo"] = int(rescue.get("stolen_units") or 0)
+        trade_plan = (snapshot.get("trade") or {}).get("plan")
+        if trade_plan:
+            intentions["trade_plan"] = {
+                key: trade_plan.get(key)
+                for key in ("kind", "from_station", "to_station", "commodity")
+                if trade_plan.get(key) is not None
+            }
+        strategy = snapshot.get("strategy") or {}
+        carrier = strategy.get("carrier") or {}
+        if carrier.get("jump_destination"):
+            intentions["carrier_jump"] = carrier.get("jump_destination")
+        matched = list(strategy.get("colonisation_matching_cargo") or [])
+        if matched:
+            intentions["colonisation_cargo_t"] = sum(
+                int(row.get("aboard") or 0) for row in matched if isinstance(row, dict)
+            )
         self.cockpit_memory.update_intentions(intentions)
 
     def _cockpit_ai_feed_snapshot(self):
@@ -3993,6 +4116,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         raw = data.get("raw", data)
         d = data.get("data", data)
         startup_replay = bool(data.get("startup_catchup"))
+        if startup_replay:
+            self._startup_restore_active = True
+            self._startup_restore_ui_pending = True
         if ev == "ScanOrganic":
             d = self._enrich_bio_event_context(d)
         if ev in ("Commander", "LoadGame"):
@@ -4008,7 +4134,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             )
         except Exception as exc:
             logging.warning(f"Achievement engine event error [{ev}]: {exc}")
-        self._record_journal_event()
+        if not startup_replay:
+            self._record_journal_event()
         if getattr(self, "captains_log", None):
             try:
                 if self.captains_log.process_event(raw):
@@ -4057,8 +4184,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._apply_credit_event(ev, raw if isinstance(raw, dict) else d, log=not startup_replay)
         self._process_companion_event(ev, raw if isinstance(raw, dict) else {}, d,
                                       startup_replay=startup_replay)
-        if not startup_replay:
-            self._sync_cockpit_intentions()
         if ev != "LoadGame" and self.edsm.is_credit_event(ev):
             self._queue_edsm_upload(raw, flush=True, startup_replay=startup_replay)
         current_journal = getattr(self.watcher, "last_journal", None)
@@ -4249,8 +4374,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
             if is_complete and not was_complete:
                 self.organic_count += 1
-                self.add_event_feed_entry("BIO", f"Organic complete: {species} ({body_label})", severity="INFO", copy_text=species)
-            elif is_new_sample:
+                if not startup_replay:
+                    self.add_event_feed_entry("BIO", f"Organic complete: {species} ({body_label})", severity="INFO", copy_text=species)
+            elif is_new_sample and not startup_replay:
                 self.add_event_feed_entry("BIO", f"Organic sample {sample_idx}: {species} ({body_label})", severity="INFO", copy_text=species)
 
             if body_id is not None:
@@ -4280,7 +4406,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 jump_type = str(jump_type or "").lower()
                 self.hud_flight_state = "SUPERCRUISE" if jump_type == "supercruise" else "HYPERSPACE"
                 self.update_hud()
-                self._process_compass_cognition(ev, raw, d, startup_replay=startup_replay)
+                compass_snapshot = None
+                if not startup_replay:
+                    compass_snapshot = self._compass_gameplay_snapshot()
+                    self._sync_cockpit_intentions(compass_snapshot)
+                self._process_compass_cognition(
+                    ev, raw, d, startup_replay=startup_replay,
+                    snapshot=compass_snapshot,
+                )
                 return
 
             # CarrierJump counts as a jump for the player when they are docked on board.
@@ -4406,7 +4539,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 evt_tag = "SYSTEM"
                 evt_msg = f"Location set: {self.current_sys}"
             self.log(log_msg)
-            self.add_event_feed_entry(evt_tag, evt_msg, severity="INFO", copy_text=self.current_sys, url=f"https://www.edsm.net/show-system?systemName={self.current_sys.replace(' ', '+')}")
+            if not startup_replay:
+                self.add_event_feed_entry(evt_tag, evt_msg, severity="INFO", copy_text=self.current_sys, url=f"https://www.edsm.net/show-system?systemName={self.current_sys.replace(' ', '+')}")
             if is_jump:
                 self._queue_edsm_upload(raw, startup_replay=startup_replay)
                 self.edsm.flush_upload_queue()
@@ -4441,18 +4575,19 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.update_scan_hud()
 
             # Update Route Plotter UI if open
-            if self.route_plotter and self.route_plotter.win.winfo_exists():
+            if (not startup_replay and self.route_plotter
+                    and self.route_plotter.win.winfo_exists()):
                 s_sys = self.current_sys
                 s_coords = self.current_coords
                 self.root.after(0, lambda: self.route_plotter.update_current_system(s_sys, s_coords))
 
             # Auto-copy next waypoint logic
-            if self.config.get("auto_copy_waypoint", False):
+            if not startup_replay and self.config.get("auto_copy_waypoint", False):
                 next_wp = self.waypoint_manager.get_next_waypoint(self.current_sys)
                 if next_wp:
                     self._copy_waypoint_to_clipboard(next_wp, "NEXT WAYPOINT")
 
-            if self.current_sys != self.last_traffic_system:
+            if not startup_replay and self.current_sys != self.last_traffic_system:
                 self.last_traffic_system = self.current_sys
                 self.fetch_system_traffic(self.current_sys)
 
@@ -4645,7 +4780,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if not self.batch_mode:
                     self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
             self.log(f"🔭 HONK: {self.total} bodies detected.")
-            self.add_event_feed_entry("SCAN", f"Honk complete: {self.total} bodies", severity="INFO", copy_text=self.current_sys)
+            if not startup_replay:
+                self.add_event_feed_entry("SCAN", f"Honk complete: {self.total} bodies", severity="INFO", copy_text=self.current_sys)
             if not self.batch_mode:
                 self.update_hud()
                 self.schedule_dashboard_refresh()
@@ -4670,7 +4806,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             count = d.get("num_bodies", 0)
             if isinstance(count, int) and count > 0:
                 self._mark_system_scan_complete(count)
-                self.add_event_feed_entry("SCAN", f"Nav beacon scan: {count} bodies", severity="INFO", copy_text=self.current_sys)
+                if not startup_replay:
+                    self.add_event_feed_entry("SCAN", f"Nav beacon scan: {count} bodies", severity="INFO", copy_text=self.current_sys)
                 if not self.batch_mode:
                     self._refresh_system_info_progress()
 
@@ -4690,7 +4827,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.fss_all_bodies = True
                 self._mark_system_scan_complete(count)
                 self.log("📡 SYSTEM SCAN COMPLETE: All bodies found.")
-                self.add_event_feed_entry("ALERT", "FSS complete: all bodies found", severity="WARN", copy_text=self.current_sys)
+                if not startup_replay:
+                    self.add_event_feed_entry("ALERT", "FSS complete: all bodies found", severity="WARN", copy_text=self.current_sys)
                 if not self.batch_mode:
                     self._refresh_system_info_progress()
 
@@ -4769,7 +4907,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         item["_ts"] = int(time.time())
                     self.save_scan_item_to_db(self.current_sys, item)
                     body_label = item.get("name") or f"Body {body_id}"
-                    self.add_event_feed_entry("DSS", f"DSS complete: {body_label}", severity="INFO", copy_text=body_label)
+                    if not startup_replay:
+                        self.add_event_feed_entry("DSS", f"DSS complete: {body_label}", severity="INFO", copy_text=body_label)
                     self._queue_edsm_upload(raw, startup_replay=startup_replay)
                     if not self.batch_mode:
                         self.update_hud()
@@ -4861,7 +5000,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
                     body_label = body_name or "Unknown Body"
                     landable_marker = " 🚀" if d.get("landable") else ""
-                    self.add_event_feed_entry("SCAN", f"{body_label}{landable_marker}", severity="INFO", copy_text=body_label)
+                    if not startup_replay:
+                        self.add_event_feed_entry("SCAN", f"{body_label}{landable_marker}", severity="INFO", copy_text=body_label)
 
                     # Check for biological signals and update the system total
                     if d.get("bio_signals_count", 0):
@@ -4995,7 +5135,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 mat = raw.get("Type_Localised") or raw.get("Type") or ""
                 self.root.after(0, lambda m=mat: self.prospector_hud.add_refined(m))
 
-        self._process_compass_cognition(ev, raw, d, startup_replay=startup_replay)
+        compass_snapshot = None
+        if not startup_replay:
+            compass_snapshot = self._compass_gameplay_snapshot()
+            self._sync_cockpit_intentions(compass_snapshot)
+        self._process_compass_cognition(
+            ev, raw, d, startup_replay=startup_replay,
+            snapshot=compass_snapshot,
+        )
 
     # ── Companion feature state ───────────────────────────────────────────────
 
@@ -5004,6 +5151,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         return str(mission_id) if mission_id is not None else None
 
     def _refresh_companion_surfaces(self):
+        if getattr(self, "_startup_restore_active", False):
+            self._startup_restore_ui_pending = True
+            return
         if getattr(self, "_companion_refresh_job", None) is not None:
             return
         def run():
@@ -5787,6 +5937,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 )
 
     def process_batch(self, events):
+        startup_batch = any(
+            bool(event.get("startup_catchup"))
+            for event in events if isinstance(event, dict)
+        )
+        startup_final = any(
+            bool(event.get("startup_catchup_final"))
+            for event in events if isinstance(event, dict)
+        )
+        if startup_batch:
+            self._startup_restore_active = True
+            self._startup_restore_ui_pending = True
         self.batch_mode = True
         try:
             with self.db_lock:
@@ -5810,7 +5971,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         finally:
             self.batch_mode = False
 
-        if self.is_first_load:
+        # Startup catch-up may span many watcher cycles. Keep every partial
+        # batch silent and draw only after the watcher marks the final batch.
+        if startup_batch and not startup_final:
+            return
+
+        if startup_final or self.is_first_load:
+            self._startup_restore_active = False
+            self._startup_restore_ui_pending = False
+            self.dashboard_refresh_full_pending = False
             self.is_first_load = False
             # After startup batch: re-read DB so scan_stat always reflects the
             # committed authoritative values (fixes cases where in-memory state
@@ -5871,6 +6040,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.root.after(0, lambda: self.cargo_hud.update(inv, cap))
         if self.colony_overlay:
             self.root.after(0, self.colony_overlay.update)
+        self._sync_cockpit_intentions()
         self._refresh_commander_profile_window()
 
     def _record_trade_session_event(self, ev, data):

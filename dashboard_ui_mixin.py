@@ -1763,12 +1763,18 @@ class DashboardUIMixin(ThemedWindowMixin):
     def schedule_dashboard_refresh(self, full=False):
         if full:
             self.dashboard_refresh_full_pending = True
+        if getattr(self, "_startup_restore_active", False):
+            self._startup_restore_ui_pending = True
+            return
         if self.dashboard_refresh_job is None:
             self.dashboard_refresh_job = self.root.after(120, self._run_scheduled_dashboard_refresh)
 
     def _run_scheduled_dashboard_refresh(self):
         t0 = self._perf_start()
         self.dashboard_refresh_job = None
+        if getattr(self, "_startup_restore_active", False):
+            self._startup_restore_ui_pending = True
+            return
         if self.dashboard_refresh_full_pending:
             self.dashboard_refresh_full_pending = False
             self.update_dashboard_ui()
@@ -2509,6 +2515,9 @@ class DashboardUIMixin(ThemedWindowMixin):
     def update_dashboard_panels(self):
         t0 = self._perf_start()
         """Refresh dashboard cards/summary without waypoint recompute."""
+        if getattr(self, "_startup_restore_active", False):
+            self._startup_restore_ui_pending = True
+            return
         ship = (getattr(self, "cmdr_ship", {}) or {}).get("ship_name") or (getattr(self, "cmdr_ship", {}) or {}).get("ship")
         flight_state = str(getattr(self, "hud_flight_state", "FLIGHT") or "FLIGHT")
         sys_text = f"{ship or 'SHIP'} · {flight_state}".upper()
@@ -2560,6 +2569,10 @@ class DashboardUIMixin(ThemedWindowMixin):
 
     def update_dashboard_ui(self):
         """Force update full dashboard, including waypoint panel."""
+        if getattr(self, "_startup_restore_active", False):
+            self._startup_restore_ui_pending = True
+            self.dashboard_refresh_full_pending = True
+            return
         self.update_dashboard_panels()
         try:
             self.update_carrier_panel()
@@ -2570,6 +2583,9 @@ class DashboardUIMixin(ThemedWindowMixin):
 
     def update_carrier_panel(self):
         """Refresh the sidebar Fleet Carrier status panel from carrier_tracker data."""
+        if getattr(self, "_startup_restore_active", False):
+            self._startup_restore_ui_pending = True
+            return
         if not hasattr(self, "carrier_panel") or not hasattr(self, "carrier_tracker"):
             return
         cd = self.carrier_tracker.carrier_data
@@ -2650,6 +2666,9 @@ class DashboardUIMixin(ThemedWindowMixin):
     def update_waypoint_display(self):
         # Route Plotter uses this same manager and callback. Refresh the
         # Dashboard progress immediately as routes are imported, edited, or cleared.
+        if getattr(self, "_startup_restore_active", False):
+            self._startup_restore_ui_pending = True
+            return
         self._refresh_route_progress_labels()
         if not self.waypoint_manager.waypoints:
             self.target_waypoint = None

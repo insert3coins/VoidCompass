@@ -30,6 +30,7 @@ class JournalWatcher:
         self._startup_catchup_done = False
         self._skip_partial_line_once = False
         self._startup_location_seeded = False
+        self._startup_location_event = None
         
         self.event_callback = None
         self.batch_event_callback = None
@@ -275,6 +276,21 @@ class JournalWatcher:
                         ev["startup_catchup"] = startup_catchup
                     events.append(ev)
 
+                # A read can land exactly on the line budget and also be at
+                # EOF. Detect that case now so the dashboard receives one
+                # definitive end-of-restore marker instead of treating the
+                # next empty poll as completion.
+                if startup_catchup and not eof_reached:
+                    try:
+                        eof_reached = f.tell() >= os.fstat(f.fileno()).st_size
+                    except OSError:
+                        pass
+                if startup_catchup and eof_reached and self._startup_location_event:
+                    events.append(self._startup_location_event)
+                    self._startup_location_event = None
+                if startup_catchup and eof_reached and events:
+                    events[-1]["startup_catchup_final"] = True
+
                 if events:
                     if self.batch_event_callback and (startup_catchup or len(events) > 1):
                         self.batch_event_callback(events)
@@ -301,11 +317,11 @@ class JournalWatcher:
                     pass
 
     def _seed_startup_location(self, tail_bytes=2 * 1024 * 1024):
-        """Dispatch the newest known location immediately while startup catch-up replays."""
+        """Retain the newest known location for the final startup restore batch."""
         if self._startup_location_seeded:
             return
         self._startup_location_seeded = True
-        if not self.last_journal or not self.event_callback:
+        if not self.last_journal:
             return
         try:
             size = os.path.getsize(self.last_journal)
@@ -323,11 +339,19 @@ class JournalWatcher:
                     continue
                 ev = raw.get("event")
                 if ev in ("FSDJump", "Location"):
-                    self.event_callback(self._normalize_event(raw))
+                    seeded = self._normalize_event(raw)
+                    seeded["type"] = "Location"
+                    seeded["startup_catchup"] = True
+                    seeded["startup_location_seed"] = True
+                    self._startup_location_event = seeded
                     return
                 # CarrierJump sets player location when they were on board
                 if ev == "CarrierJump" and raw.get("Docked"):
-                    self.event_callback(self._normalize_event(raw))
+                    seeded = self._normalize_event(raw)
+                    seeded["type"] = "Location"
+                    seeded["startup_catchup"] = True
+                    seeded["startup_location_seed"] = True
+                    self._startup_location_event = seeded
                     return
         except Exception:
             return
