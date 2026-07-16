@@ -10,6 +10,8 @@
 *   Added a selective `ReceiveText` path for actionable NPC/game communications such as denied docking, mission redirection, distress and security warnings. Routine NPC chatter and all player chat remain silent.
 *   Compass now learns recurring preparation gaps once per session and can surface lightweight pre-flight checks after repeated low-limpet mining runs or under-supplied ground deployments.
 *   Corrected route-fuel advice to distinguish unknown star data from confirmed non-scoopable arrival primaries, avoid overstating whole-system fuel availability, and stay quiet when current endurance already covers a short dry stretch.
+*   Exploration and biological sales now dismiss obsolete data-risk toasts and queued speech, clear pending biology-sale reminders, and silently rebase any genuinely unsold category instead of announcing a fresh warning during the transaction.
+*   Commander credits now update immediately across commodity, data, biology, outfitting, shipyard, service, Odyssey and carrier-bank transactions, with refuelling charged from its credit cost rather than its fuel-tonnage field.
 
 ### Correct Commander Flight State
 *   Navigation HUD state now follows the incoming commander's `Location` and live `Status.json` evidence, including docked, landed, SRV, on-foot, supercruise and normal-flight states.

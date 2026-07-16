@@ -107,6 +107,37 @@ class ToastHUD:
         except Exception:
             pass
 
+    def dismiss(self, title=None, title_prefix=None):
+        """Dismiss matching stale notifications without clearing the stack."""
+        exact = str(title or "").casefold()
+        prefix = str(title_prefix or "").casefold()
+        if not exact and not prefix:
+            return 0
+        before = len(self._toasts)
+        self._toasts = [
+            toast for toast in self._toasts
+            if not (
+                (exact and str(toast.get("title") or "").casefold() == exact)
+                or (prefix and str(toast.get("title") or "").casefold().startswith(prefix))
+            )
+        ]
+        removed = before - len(self._toasts)
+        if not removed:
+            return 0
+        self._redraw()
+        if not self._toasts:
+            if self._tick_job is not None:
+                try:
+                    self.win.after_cancel(self._tick_job)
+                except Exception:
+                    pass
+                self._tick_job = None
+            try:
+                self.win.withdraw()
+            except Exception:
+                pass
+        return removed
+
     def _ensure_tick(self):
         if self._tick_job is not None:
             return

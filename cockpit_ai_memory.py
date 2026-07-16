@@ -601,6 +601,18 @@ class CockpitMemory:
         self._last_remark_at = now
         return selected
 
+    def clear_pending_topics(self, *topics):
+        """Remove obsolete contextual remarks after their objective resolves."""
+        wanted = {str(topic) for topic in topics if str(topic)}
+        if not wanted:
+            return 0
+        before = len(self._pending_remarks)
+        self._pending_remarks = [
+            row for row in self._pending_remarks
+            if str(row.get("topic") or "") not in wanted
+        ]
+        return before - len(self._pending_remarks)
+
     def _increment(self, name, amount=1):
         counters = self.state["counters"]
         counters[name] = int(counters.get(name) or 0) + int(amount)
