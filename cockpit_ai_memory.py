@@ -7,6 +7,8 @@ import os
 import time
 import uuid
 
+import compass_operations
+
 
 SCHEMA_VERSION = 5
 DEFAULT_LIMITS = {"systems": 300, "species": 200, "ships": 30, "memories": 80}
@@ -795,8 +797,15 @@ class CockpitMemory:
         }
         odyssey_events = {
             "Disembark", "Embark", "ApproachSettlement", "BookDropship", "BookTaxi",
-            "DropshipDeploy", "BuySuit", "BuyWeapon", "UpgradeSuit", "UpgradeWeapon",
-            "SellOrganicData", "CollectItems", "DropItems",
+            "DropshipDeploy", "DropShipDeploy", "BuySuit", "BuyWeapon", "UpgradeSuit", "UpgradeWeapon",
+            "SellOrganicData", "CollectItems", "DropItems", "SuitLoadout",
+            "BackpackChange", "UseConsumable", "BuyMicroResources",
+            "SellMicroResources", "TradeMicroResources", "TransferMicroResources",
+        }
+        signal_events = {"FSSSignalDiscovered", "DataScanned", "Scanned", "SupercruiseDestinationDrop"}
+        logistics_events = {
+            "Repair", "RepairAll",
+            "RefuelAll", "RefuelPartial", "BuyDrones", "EjectCargo", "SearchAndRescue",
         }
         career_events = {"Rank", "Promotion", "Progress", "Reputation", "CodexEntry", "Statistics"}
         crime_events = {"CommitCrime", "CrimeVictim", "Fine", "PayFines", "PayBounties", "ClearImpound"}
@@ -839,6 +848,20 @@ class CockpitMemory:
             domain_name = "engineering"
         elif event in odyssey_events:
             domain_name = "odyssey"
+        elif event in signal_events:
+            if event == "FSSSignalDiscovered":
+                signal_text = " ".join(str(raw.get(key) or "") for key in (
+                    "SignalType", "SignalName", "SignalName_Localised",
+                )).casefold()
+                if not self._number(raw.get("ThreatLevel")) and not any(
+                        marker in signal_text for marker in (
+                            "distress", "weapons fire", "nonhuman", "non human",
+                            "salvage", "highgrade", "high grade", "combat aftermath",
+                        )):
+                    return False
+            domain_name = "signals"
+        elif event in logistics_events:
+            domain_name = "logistics"
         elif event in career_events:
             domain_name = "career"
         elif event in crime_events:
@@ -875,6 +898,16 @@ class CockpitMemory:
             reward = self._number(raw.get("Reward") or data.get("reward"))
             if event == "MissionCompleted" and reward:
                 domain["rewards_cr"] = int(domain.get("rewards_cr") or 0) + reward
+            if raw.get("DestinationSettlement"):
+                domain["settlement_missions"] = int(domain.get("settlement_missions") or 0) + 1
+            if raw.get("PassengerCount") or "passenger" in str(raw.get("Name") or "").casefold():
+                domain["passenger_missions"] = int(domain.get("passenger_missions") or 0) + 1
+            if raw.get("Illegal") or any(marker in str(raw.get("Name") or "").casefold()
+                                         for marker in ("illegal", "smuggl", "covert")):
+                domain["illegal_missions"] = int(domain.get("illegal_missions") or 0) + 1
+            destination = raw.get("DestinationSystem") or raw.get("NewDestinationSystem")
+            if destination:
+                self._knowledge_named(domain, "destinations", destination, timestamp=timestamp)
             self._domain_milestone("mission", "Missions completed", domain.get("completed", 0), timestamp)
 
         elif domain_name == "combat":
@@ -1047,10 +1080,15 @@ class CockpitMemory:
         elif domain_name == "odyssey":
             key = {
                 "Disembark": "disembarks", "Embark": "embarks", "ApproachSettlement": "settlements",
-                "DropshipDeploy": "combat_deployments", "BookDropship": "dropships_booked",
+                "DropshipDeploy": "combat_deployments", "DropShipDeploy": "combat_deployments",
+                "BookDropship": "dropships_booked",
                 "BookTaxi": "taxis_booked", "BuySuit": "suits_bought", "BuyWeapon": "weapons_bought",
                 "UpgradeSuit": "suits_upgraded", "UpgradeWeapon": "weapons_upgraded",
                 "SellOrganicData": "bio_sales", "CollectItems": "items_collected", "DropItems": "items_dropped",
+                "SuitLoadout": "loadout_reviews", "BackpackChange": "backpack_changes",
+                "UseConsumable": "consumables_used", "BuyMicroResources": "items_bought",
+                "SellMicroResources": "items_sold", "TradeMicroResources": "items_traded",
+                "TransferMicroResources": "items_transferred",
             }.get(event)
             if key:
                 domain[key] = int(domain.get(key) or 0) + 1
@@ -1063,6 +1101,40 @@ class CockpitMemory:
                     self._knowledge_named(
                         domain, "ground_items", item, max(1, self._number(raw.get("Count"), 1)), timestamp
                     )
+            elif event == "SuitLoadout":
+                suit = raw.get("SuitName_Localised") or raw.get("SuitName")
+                if suit:
+                    self._knowledge_named(domain, "suits_used", suit, timestamp=timestamp)
+                for weapon in raw.get("Modules") or ():
+                    if isinstance(weapon, dict):
+                        name = weapon.get("ModuleName_Localised") or weapon.get("ModuleName")
+                        if name:
+                            self._knowledge_named(domain, "ground_weapons", name, timestamp=timestamp)
+
+        elif domain_name == "signals":
+            if event == "FSSSignalDiscovered":
+                signal_type = self._event_label(raw, data, "SignalType", fallback="Unknown signal")
+                self._knowledge_named(domain, "types", signal_type, timestamp=timestamp)
+                threat = self._number(raw.get("ThreatLevel"))
+                domain["highest_threat"] = max(int(domain.get("highest_threat") or 0), threat)
+                if str(signal_type).casefold() not in ("fleetcarrier", "fleet carrier") and threat:
+                    domain["threat_signals"] = int(domain.get("threat_signals") or 0) + 1
+            elif event in ("DataScanned", "Scanned"):
+                scan = self._event_label(raw, data, "Type_Localised", "Type", fallback="Data scan")
+                self._knowledge_named(domain, "scans", scan, timestamp=timestamp)
+            elif event == "SupercruiseDestinationDrop":
+                domain["signal_drops"] = int(domain.get("signal_drops") or 0) + 1
+
+        elif domain_name == "logistics":
+            if event in ("Repair", "RepairAll"):
+                domain["repairs"] = int(domain.get("repairs") or 0) + 1
+            elif event in ("RefuelAll", "RefuelPartial"):
+                domain["refuels"] = int(domain.get("refuels") or 0) + 1
+            elif event == "SearchAndRescue":
+                domain["rescue_deliveries"] = int(domain.get("rescue_deliveries") or 0) + 1
+                domain["rescue_value_cr"] = int(domain.get("rescue_value_cr") or 0) + self._number(raw.get("Reward"))
+            elif event == "EjectCargo":
+                domain["cargo_ejected_t"] = int(domain.get("cargo_ejected_t") or 0) + self._number(raw.get("Count"))
 
         elif domain_name == "career":
             if event in ("Rank", "Promotion", "Progress"):
@@ -1706,6 +1778,11 @@ class CockpitMemory:
             entry = self.state["ships"].setdefault(ship, {"count": 0, "first_seen": timestamp})
             entry["count"] = int(entry.get("count") or 0) + 1
             entry["last_seen"] = timestamp
+            role = compass_operations.classify_loadout(raw)
+            entry["role"] = role.get("role")
+            entry["capabilities"] = role.get("capabilities")
+            entry["cargo_capacity_t"] = role.get("cargo_capacity_t")
+            entry["max_jump_range_ly"] = role.get("max_jump_range_ly")
             inc("loadouts")
             self._trim(self.state["ships"], self.limits["ships"])
 
@@ -2043,7 +2120,8 @@ class CockpitMemory:
             "mining": "Mining", "engineering": "Engineering", "odyssey": "Odyssey",
             "career": "Career", "crime": "Crime and legal", "strategy": "Powerplay and BGS",
             "carrier": "Fleet carrier", "colonisation": "Colonisation", "fleet": "Fleet",
-            "social": "Social and squadrons",
+            "social": "Social and squadrons", "signals": "Signals and salvage",
+            "logistics": "Ship logistics and rescue",
         }
         knowledge = self.state.get("knowledge", {})
         return [labels.get(name, name.title()) for name, domain in knowledge.items()
@@ -2060,6 +2138,8 @@ class CockpitMemory:
         carrier = knowledge.get("carrier") or {}
         colony = knowledge.get("colonisation") or {}
         strategy = knowledge.get("strategy") or {}
+        signals = knowledge.get("signals") or {}
+        logistics = knowledge.get("logistics") or {}
         return {
             "domains": self.knowledge_domains(),
             "missions_completed": int(missions.get("completed") or 0),
@@ -2092,6 +2172,9 @@ class CockpitMemory:
             "ground_operations": int(odyssey.get("events") or 0),
             "carrier_jumps": int(carrier.get("jumps") or 0),
             "colony_contributions": int(colony.get("contributions") or 0),
+            "signals_discovered": int(signals.get("events") or 0),
+            "highest_signal_threat": int(signals.get("highest_threat") or 0),
+            "rescue_deliveries": int(logistics.get("rescue_deliveries") or 0),
         }
 
     def biology_awareness(self):

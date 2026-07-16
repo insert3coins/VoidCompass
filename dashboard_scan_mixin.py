@@ -4,6 +4,7 @@ import threading
 
 import bio_values
 import companion_features
+import compass_operations
 import flight_callouts
 from config import COLOR_ACCENT, COLOR_TEXT
 
@@ -61,6 +62,10 @@ class DashboardScanMixin:
         flags2 = data.get("Flags2")
         if isinstance(flags2, int):
             self.current_on_foot = bool(flags2 & 0x0001)
+        try:
+            compass_operations.observe_status(self.ai_operational_state, data)
+        except Exception:
+            pass
 
         gui_focus = data.get("GuiFocus", -1)
         in_fss = gui_focus == 9 or gui_focus == "FSS"
