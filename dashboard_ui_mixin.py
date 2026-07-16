@@ -596,9 +596,9 @@ class DashboardUIMixin(ThemedWindowMixin):
         active_row.grid_columnconfigure(1, weight=3, uniform="active")
         active_row.grid_columnconfigure(2, weight=3, uniform="active")
 
-        objective_card = self._panel(active_row, border=COLOR_ORANGE)
+        objective_card = self._panel(active_row, border=COLOR_ACCENT)
         objective_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        self._section_label(objective_card, "ACTIVE OBJECTIVE", fg=COLOR_ORANGE).pack(
+        self._section_label(objective_card, "ACTIVE OBJECTIVE").pack(
             anchor="w", padx=12, pady=(9, 0)
         )
         self.dashboard_objective_primary = tk.Label(
