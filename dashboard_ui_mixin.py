@@ -12,6 +12,7 @@ from tkinter import scrolledtext
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
 from ui_theme import THEME, ThemedWindowMixin, apply_window, button, panel, scrollbar, section_label
 from version import APP_VERSION
+from overlay_input import set_mouse_passthrough
 import route_strip
 
 COLOR_ACCENT = THEME.accent
@@ -240,11 +241,37 @@ class DashboardUIMixin(ThemedWindowMixin):
 
         tk.Frame(self.workspace, bg=self.UI_BORDER, height=1).pack(fill=tk.X)
 
-        self.dashboard_host = tk.Frame(self.workspace, bg=self.UI_BG)
-        self.dashboard_host.pack(fill=tk.BOTH, expand=True)
+        # Every embedded workspace can outgrow the window after a resize.
+        # Keep one persistent outer viewport so pages that do not own a
+        # specialised scroller remain reachable without changing their UI.
+        workspace_view = tk.Frame(self.workspace, bg=self.UI_BG)
+        workspace_view.pack(fill=tk.BOTH, expand=True)
+        workspace_view.grid_rowconfigure(0, weight=1)
+        workspace_view.grid_columnconfigure(0, weight=1)
+        self.workspace_canvas = tk.Canvas(
+            workspace_view, bg=self.UI_BG, highlightthickness=0, bd=0,
+        )
+        self.workspace_vscroll = scrollbar(
+            workspace_view, orient=tk.VERTICAL, command=self.workspace_canvas.yview,
+        )
+        self.workspace_canvas.configure(
+            yscrollcommand=self.workspace_vscroll.set,
+        )
+        self.workspace_canvas.grid(row=0, column=0, sticky="nsew")
+        self.workspace_vscroll.grid(row=0, column=1, sticky="ns")
+
+        self.dashboard_host = tk.Frame(self.workspace_canvas, bg=self.UI_BG)
+        self._workspace_window_id = self.workspace_canvas.create_window(
+            (0, 0), window=self.dashboard_host, anchor="nw",
+        )
+        self._workspace_scroll_job = None
+        self.workspace_canvas.bind("<Configure>", self._schedule_workspace_scrollregion, add="+")
+        self.dashboard_host.bind("<Configure>", self._schedule_workspace_scrollregion, add="+")
+        self.root.bind("<MouseWheel>", self._on_workspace_mousewheel, add="+")
         self._active_page = "DASHBOARD"
 
         self._build_command_dashboard_body()
+        self._schedule_workspace_scrollregion()
         return
 
         # ── BODY ──────────────────────────────────────────────────────────
@@ -1115,7 +1142,95 @@ class DashboardUIMixin(ThemedWindowMixin):
                 bg=settings_bg,
                 fg=THEME.accent if settings_active else THEME.text,
             )
+        self.workspace_canvas.yview_moveto(0.0)
+        self._schedule_workspace_scrollregion()
         self._schedule_overlay_z_order_restore()
+
+    def _schedule_workspace_scrollregion(self, _event=None):
+        if getattr(self, "_workspace_scroll_job", None) is not None:
+            return
+        try:
+            self._workspace_scroll_job = self.root.after_idle(
+                self._refresh_workspace_scrollregion
+            )
+        except Exception:
+            self._workspace_scroll_job = None
+
+    def _refresh_workspace_scrollregion(self):
+        self._workspace_scroll_job = None
+        canvas = getattr(self, "workspace_canvas", None)
+        host = getattr(self, "dashboard_host", None)
+        item = getattr(self, "_workspace_window_id", None)
+        if canvas is None or host is None or item is None:
+            return
+        try:
+            active_children = [
+                child for child in host.winfo_children()
+                if child.winfo_manager()
+            ]
+            requested_h = max(
+                host.winfo_reqheight(),
+                max((child.winfo_reqheight() for child in active_children), default=1),
+            )
+            # Keep the page responsive horizontally, as it was before the
+            # outer viewport existed; only vertical overflow is scrollable.
+            width = max(1, canvas.winfo_width())
+            height = max(1, canvas.winfo_height(), requested_h)
+            canvas.itemconfigure(item, width=width, height=height)
+            canvas.configure(scrollregion=(0, 0, width, height))
+        except tk.TclError:
+            return
+
+    @staticmethod
+    def _scroll_view_can_move(widget, delta, horizontal=False):
+        try:
+            view = widget.xview() if horizontal else widget.yview()
+            first, last = float(view[0]), float(view[1])
+        except (AttributeError, TypeError, ValueError, tk.TclError):
+            return False
+        if last - first >= 0.999:
+            return False
+        return first > 0.0001 if delta > 0 else last < 0.9999
+
+    def _nested_scrollable_can_move(self, widget, delta, horizontal=False):
+        """Let the control under the pointer consume its own wheel first."""
+        current = widget
+        host = getattr(self, "dashboard_host", None)
+        outer = getattr(self, "workspace_canvas", None)
+        while current is not None and current is not host:
+            if current is not outer and self._scroll_view_can_move(
+                current, delta, horizontal=horizontal,
+            ):
+                return True
+            try:
+                parent_name = current.winfo_parent()
+                current = current.nametowidget(parent_name) if parent_name else None
+            except (AttributeError, KeyError, tk.TclError):
+                break
+        return False
+
+    def _scroll_workspace(self, event, horizontal=False):
+        canvas = getattr(self, "workspace_canvas", None)
+        delta = int(getattr(event, "delta", 0) or 0)
+        if canvas is None or not delta:
+            return None
+        widget = getattr(event, "widget", None)
+        if widget is not None and self._nested_scrollable_can_move(
+            widget, delta, horizontal=horizontal,
+        ):
+            return None
+        if not self._scroll_view_can_move(canvas, delta, horizontal=horizontal):
+            return None
+        steps = max(1, abs(delta) // 120)
+        direction = -steps if delta > 0 else steps
+        if horizontal:
+            canvas.xview_scroll(direction, "units")
+        else:
+            canvas.yview_scroll(direction, "units")
+        return "break"
+
+    def _on_workspace_mousewheel(self, event):
+        return self._scroll_workspace(event, horizontal=False)
 
     def _schedule_overlay_z_order_restore(self):
         """Keep visible native overlays above the dashboard after page changes."""
@@ -2301,6 +2416,10 @@ class DashboardUIMixin(ThemedWindowMixin):
             widget.bind("<ButtonPress-1>", self._on_ground_popup_press)
             widget.bind("<B1-Motion>", self._on_ground_popup_drag)
             widget.bind("<ButtonRelease-1>", self._on_ground_popup_release)
+        set_mouse_passthrough(
+            self.ground_popup,
+            bool(self.config.get("overlay_mouse_passthrough", True)),
+        )
 
     def _destroy_ground_popup(self):
         if self.ground_popup and self.ground_popup.winfo_exists():

@@ -42,6 +42,7 @@ from station_info_hud import StationInfoHUD
 from survey_status_hud import SurveyStatusHUD
 from toast_hud import ToastHUD
 from heartbeat_hud import HeartbeatHUD
+from overlay_input import set_mouse_passthrough
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
@@ -1387,6 +1388,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         else:
             self.colony_overlay = None
 
+        self._apply_overlay_mouse_passthrough()
+
         self.db_lock = threading.RLock()
         self.batch_mode = False
         self._startup_restore_active = False
@@ -1486,6 +1489,33 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             except (TypeError, ValueError, tk.TclError):
                 continue
         self.root.after(250, self._log_applied_overlay_positions)
+
+    def _apply_overlay_mouse_passthrough(self):
+        """Apply the profile's input mode to every live native overlay."""
+        enabled = bool(self.config.get("overlay_mouse_passthrough", True))
+        windows = []
+        for attr, _x_key, _y_key in self._OVERLAY_POSITION_SPECS:
+            overlay = getattr(self, attr, None)
+            window = getattr(overlay, "win", overlay)
+            if window is not None:
+                windows.append(window)
+        ground_popup = getattr(self, "ground_popup", None)
+        if ground_popup is not None:
+            windows.append(ground_popup)
+
+        applied = 0
+        seen = set()
+        for window in windows:
+            marker = id(window)
+            if marker in seen:
+                continue
+            seen.add(marker)
+            try:
+                if window.winfo_exists() and set_mouse_passthrough(window, enabled):
+                    applied += 1
+            except (AttributeError, tk.TclError):
+                continue
+        return applied
 
     def _log_applied_overlay_positions(self):
         try:
@@ -1874,6 +1904,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             lambda: self.cargo_capacity,
             lambda: self.current_colonisation_market,
         )
+        self._apply_overlay_mouse_passthrough()
         self.config["colony_overlay_enabled"] = True
         self._save_config_file()
 
@@ -2294,6 +2325,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if self.colony_overlay and self.colony_overlay.is_open():
                 self.colony_overlay.win.destroy()
             self.colony_overlay = None
+
+        self._apply_overlay_mouse_passthrough()
 
     def open_settings(self):
         def on_save():

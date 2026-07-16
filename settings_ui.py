@@ -10,7 +10,10 @@ import compass_personas
 from cockpit_ai_memory import DEFAULT_LIMITS as COCKPIT_MEMORY_DEFAULTS, LIMIT_BOUNDS as COCKPIT_MEMORY_BOUNDS
 from config import DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config as persist_config
 from diagnostic_logs import application_base_dir
-from ui_theme import THEME, FONT_MONO, FONT_TITLE, FONT_UI, FONT_UI_BOLD, apply_window, button, window_surface
+from ui_theme import (
+    THEME, FONT_MONO, FONT_TITLE, FONT_UI, FONT_UI_BOLD,
+    apply_window, button, scrollbar as themed_scrollbar, window_surface,
+)
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -79,13 +82,11 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
                 page, bg=UI_BG, bd=0, highlightthickness=0,
                 takefocus=True,
             )
-            scrollbar = tk.Scrollbar(
+            page_scrollbar = themed_scrollbar(
                 page, orient=tk.VERTICAL, command=canvas.yview,
-                bg=UI_PANEL_2, activebackground=COLOR_ACCENT,
-                troughcolor=UI_BG, relief=tk.FLAT, bd=0, width=12,
             )
-            canvas.configure(yscrollcommand=scrollbar.set)
-            scrollbar.pack(side=tk.RIGHT, fill=tk.Y, padx=(8, 0))
+            canvas.configure(yscrollcommand=page_scrollbar.set)
+            page_scrollbar.pack(side=tk.RIGHT, fill=tk.Y, padx=(8, 0))
             canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
             body = tk.Frame(canvas, bg=UI_BG)
             window_id = canvas.create_window((0, 0), window=body, anchor="nw")
@@ -235,6 +236,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
 
     # Variables
     ov_var = tk.BooleanVar(value=config.get("overlay_enabled", True))
+    overlay_mouse_passthrough_var = tk.BooleanVar(
+        value=config.get("overlay_mouse_passthrough", True)
+    )
     hud_compact_var = tk.BooleanVar(value=config.get("hud_compact_mode", False))
     cargo_var = tk.BooleanVar(value=config.get("cargo_overlay_enabled", False))
     carrier_overlay_var = tk.BooleanVar(value=config.get("carrier_overlay_enabled", False))
@@ -301,9 +305,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         config["screenshots_path"] = os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous")
 
     # Pages
-    core_page = make_page("core", "Core", "Journal and screenshot paths.")
-    overlay_page = make_page("overlays", "Overlays", "Runtime modules and display timing.")
-    crt_page = make_page("crt", "HUD Effects", "CRT styling for the native Navigation HUD.")
+    core_page = make_page("core", "Core", "Journal and screenshot paths.", scrollable=True)
+    overlay_page = make_page("overlays", "Overlays", "Runtime modules and display timing.", scrollable=True)
+    crt_page = make_page("crt", "HUD Effects", "CRT styling for the native Navigation HUD.", scrollable=True)
     voice_page = make_page(
         "voice", "Voice", "Optional local neural callouts. Voice audio never leaves this computer.",
         scrollable=True,
@@ -313,9 +317,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         "Review and curate the local history Compass has learned from this commander.",
         scrollable=True,
     )
-    theme_page = make_page("theme", "Theme", "Color theme for this commander profile. Applies when you save.")
-    integrations_page = make_page("integrations", "Integrations", "EDSM upload and fleet carrier Discord.")
-    diagnostics_page = make_page("diagnostics", "Diagnostics", "Runtime tracing and automatic crash or UI-freeze reports.")
+    theme_page = make_page("theme", "Theme", "Color theme for this commander profile. Applies when you save.", scrollable=True)
+    integrations_page = make_page("integrations", "Integrations", "EDSM upload and fleet carrier Discord.", scrollable=True)
+    diagnostics_page = make_page("diagnostics", "Diagnostics", "Runtime tracing and automatic crash or UI-freeze reports.", scrollable=True)
 
     nav_button("core", "Core")
     nav_button("overlays", "Overlays")
@@ -346,6 +350,13 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     toggle_row(overlay_modules, "Survey Status Strip", survey_status_var)
     toggle_row(overlay_modules, "Toast Notifications", toast_var)
     toggle_row(overlay_modules, "Journal Heartbeat Pulse", heartbeat_var)
+
+    overlay_interaction = section(overlay_page, "Interaction")
+    toggle_row(
+        overlay_interaction,
+        "Mouse passthrough (turn off to move or click overlays)",
+        overlay_mouse_passthrough_var,
+    )
 
     overlay_alerts = section(overlay_page, "Actionable Alerts")
     toggle_row(overlay_alerts, "Clear-to-sample notifications", sample_clear_var)
@@ -1144,6 +1155,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         config.update({
             "journal_path": j_e.get().strip(),
             "overlay_enabled": ov_var.get(),
+            "overlay_mouse_passthrough": overlay_mouse_passthrough_var.get(),
             "hud_compact_mode": hud_compact_var.get(),
             "cargo_overlay_enabled": cargo_var.get(),
             "carrier_overlay_enabled": carrier_overlay_var.get(),
@@ -1240,7 +1252,10 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     action_button(footer, "Save Settings", save_config, accent=True).pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
 
     win.protocol("WM_DELETE_WINDOW", close_window)
-    bind_scroll_tree(voice_page)
-    bind_scroll_tree(compass_page)
+    for scroll_page in (
+        core_page, overlay_page, crt_page, voice_page, compass_page,
+        theme_page, integrations_page, diagnostics_page,
+    ):
+        bind_scroll_tree(scroll_page)
     show_page("core")
     return win

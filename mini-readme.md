@@ -1,5 +1,13 @@
 # VoidCompass // UPDATE LOG
 
+## v4.8.7 // In-Game Overlay Input Safety
+**Release Date:** 2026-Jul-17
+
+*   Native HUDs and overlays now pass mouse input through to Elite Dangerous by default, preventing an overlay under the pointer from intercepting flight or camera controls.
+*   Added a profile-aware **Mouse passthrough** setting under Overlays. Turn it off temporarily to drag or click overlays, then turn it back on for gameplay; the change applies immediately without restarting VoidCompass.
+*   Resized windows now retain access to every workspace through persistent VoidCompass-themed scrolling. Mouse-wheel routing respects nested tables, text views and specialist panels, and every Settings section now has its own themed scrolling surface.
+*   Windows builds now produce only `VoidCompass.exe`. Full market database rebuilds remain isolated from the dashboard through the worker mode built into the main app, removing the redundant Market Builder executable and second PyInstaller pass.
+
 ## v4.8.6 // Compass Judgment & Profile-State Reliability
 **Release Date:** 2026-Jul-16
 
