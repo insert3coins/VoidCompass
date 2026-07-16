@@ -18,6 +18,26 @@
 *   Improved Hotspots with direct hand-off to the existing manual Route Command plotter while retaining local journal discoveries, Spansh search, EliteMining database imports and bookmarks.
 *   Added lifetime Mining profit, quantity mined and materials-collected records from the persisted `Statistics.Mining` journal snapshot; no market value or profit is guessed from stale prices.
 
+### Deeper Compass Mining & Trade Awareness
+*   Added a panel-independent live mining brain driven directly by journal events, so Compass tracks the active system/ring, asteroids prospected, current and best mineral concentrations, core finds/cracks, refined tonnage by material, yield rate, limpets and mining-contract progress even when Mining Command is closed.
+*   Added sparse mining advice for motherlodes, rich prospector results, low limpet reserves, cargo thresholds, completed mining contracts and end-of-system session summaries without narrating every refinery event.
+*   Expanded the Trade brain with commodity exposure, transaction counts, realised profit and per-tonne margins, best/worst sales, large cargo investments, strong-sale recognition and explicit loss warnings.
+*   Shared Trade Command's verified best loop or chain result with Compass working memory and active goals, while retaining the existing one-click route callout.
+*   Extended bounded long-term learning with personal prospector-quality, mining-yield, trade-margin, sale-profit and transaction baselines plus richer lifetime mining/trade experience summaries.
+
+### Deeper Compass PvE Awareness
+*   Added a lightweight PvE sortie brain that follows hostile target scans, hardpoints/danger status, shield collapse and recovery, hull floor, canopy breaches, NPC/player/Thargoid interdictions, fighter/SRV losses, destruction and combat completion without requiring a combat panel.
+*   Expanded verified reward awareness across bounties, combat-zone bonds, capital-ship bonds and voucher redemption, including victim/awarding factions, shared kills, unclaimed session earnings and compact post-sortie summaries.
+*   Connected existing massacre stacks and lifetime `Statistics.Combat` records to Compass goals and working memory, covering bounty hunting, conflict zones, assassinations and on-foot combat totals without inventing unavailable encounter details.
+*   Added sparse tactical observations for dangerous wanted NPC scans, useful kill/mission progress, lost combat assets, escaped interdictions, secured vouchers and completed sorties. Existing shield, hull, attack, interdiction and destruction safety warnings remain authoritative to avoid duplicate chatter.
+*   Added bounded learning for typical PvE kill rewards, victories and earnings per sortie, and the commander's usual post-combat hull floor so future advice can reflect actual play patterns.
+
+### Deeper Compass Powerplay Awareness
+*   Expanded the live Powerplay brain from pledge/rank totals into session merits, collected and delivered allocations by commodity, outstanding units, fast-track expenditure, salary, recent actions and verified system control/presence context.
+*   Added bounded long-term learning for pledges, defections, rank changes, lifetime merit gains, collections, deliveries, fast tracking, salary, vouchers and legacy votes while keeping journal-unavailable strategic intent explicit rather than inferred.
+*   Added active goals for outstanding Powerplay deliveries and contested-system review, plus sparse callouts for allegiance changes, ranks, meaningful merit gains, useful cargo batches, completed allocations, substantial fast tracking, salary and strategic arrival context.
+*   Added personal baselines for merit gains, collection/delivery batch sizes and session output, with Powerplay activity included in Compass session debriefs and mature pilot habits.
+
 ### Documentation
 *   Rebuilt the main README around the current 4.8 command workspaces, local Compass architecture, integrations, source setup and executable build flow. Replaced the stale 4.3-era images with current Dashboard, Squadron Command, Mining Command, Navigation HUD and Achievement Centre captures.
 

@@ -1906,6 +1906,20 @@ class TradeWindow(ThemedWindowMixin):
             fg=self.UI_MUTED,
         )
         self._set_route_detail(("\n\n" + "-" * 72 + "\n\n").join(cards) if cards else "")
+        if loops and callable(getattr(self.app, "_set_compass_trade_plan", None)):
+            best = loops[0]
+            self.app._set_compass_trade_plan({
+                "kind": "loop",
+                "from_system": best["a"].get("system"),
+                "from_station": best["a"].get("station"),
+                "to_system": best["b"].get("system"),
+                "to_station": best["b"].get("station"),
+                "profit_cr": int(best.get("profit") or 0),
+                "profit_per_hour_cr": int(best.get("profit_per_hour") or 0),
+                "distance_ly": float(best.get("distance") or 0),
+            })
+        elif callable(getattr(self.app, "_set_compass_trade_plan", None)):
+            self.app._set_compass_trade_plan(None)
         if loops and callable(getattr(self.app, "_speak", None)):
             best = loops[0]
             hourly_m = int(best.get("profit_per_hour") or 0) / 1_000_000
@@ -1936,6 +1950,21 @@ class TradeWindow(ThemedWindowMixin):
             fg=self.UI_MUTED,
         )
         self._set_route_detail(f"TOTAL {self._credits(total)} via {source}\n\n" + ("\n\n" + "-" * 72 + "\n\n").join(cards) if cards else "")
+        if hops and callable(getattr(self.app, "_set_compass_trade_plan", None)):
+            first, last = hops[0], hops[-1]
+            self.app._set_compass_trade_plan({
+                "kind": "chain",
+                "source": source,
+                "hops": len(hops),
+                "from_system": first.get("from_system"),
+                "from_station": first.get("from_station"),
+                "to_system": last.get("to_system"),
+                "to_station": last.get("to_station"),
+                "profit_cr": total,
+                "distance_ly": round(sum(float(hop.get("distance") or 0) for hop in hops), 1),
+            })
+        elif callable(getattr(self.app, "_set_compass_trade_plan", None)):
+            self.app._set_compass_trade_plan(None)
         if hops and callable(getattr(self.app, "_speak", None)):
             first, last = hops[0], hops[-1]
             total_m = total / 1_000_000

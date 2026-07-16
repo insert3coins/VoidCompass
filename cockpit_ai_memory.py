@@ -782,9 +782,10 @@ class CockpitMemory:
         """Learn bounded patterns from non-exploration gameplay journal events."""
         mission_events = {"MissionAccepted", "MissionCompleted", "MissionFailed", "MissionAbandoned", "MissionRedirected"}
         combat_events = {
-            "Bounty", "FactionKillBond", "PVPKill", "UnderAttack", "FighterDestroyed",
+            "Bounty", "FactionKillBond", "CapShipBond", "PVPKill", "UnderAttack", "FighterDestroyed",
             "SRVDestroyed", "EscapeInterdiction", "Interdiction", "Interdicted",
-            "ShieldState", "HullDamage", "JetConeDamage",
+            "ShieldState", "HullDamage", "JetConeDamage", "CockpitBreached", "Died",
+            "RedeemVoucher",
         }
         trade_events = {"MarketBuy", "MarketSell", "BuyTradeData"}
         mining_events = {"MiningRefined", "ProspectedAsteroid", "AsteroidCracked"}
@@ -801,8 +802,9 @@ class CockpitMemory:
         crime_events = {"CommitCrime", "CrimeVictim", "Fine", "PayFines", "PayBounties", "ClearImpound"}
         strategy_events = {
             "Powerplay", "PowerplayJoin", "PowerplayDefect", "PowerplayLeave",
-            "PowerplayRank", "PowerplayMerits", "CommunityGoal", "CommunityGoalJoin",
-            "CommunityGoalReward", "FactionState",
+            "PowerplayRank", "PowerplayMerits", "PowerplayCollect", "PowerplayDeliver",
+            "PowerplayFastTrack", "PowerplaySalary", "PowerplayVote", "PowerplayVoucher",
+            "CommunityGoal", "CommunityGoalJoin", "CommunityGoalReward", "FactionState",
         }
         carrier_events = {
             "CarrierBuy", "CarrierStats", "CarrierJump", "CarrierDepositFuel", "CarrierFinance",
@@ -824,7 +826,10 @@ class CockpitMemory:
 
         if event in mission_events:
             domain_name = "missions"
-        elif event in combat_events:
+        elif event in combat_events and (
+                event != "RedeemVoucher"
+                or str(raw.get("Type") or data.get("type") or "").replace("_", " ").casefold()
+                in ("bounty", "combatbond", "combat bond")):
             domain_name = "combat"
         elif event in trade_events:
             domain_name = "trade"
@@ -873,7 +878,7 @@ class CockpitMemory:
             self._domain_milestone("mission", "Missions completed", domain.get("completed", 0), timestamp)
 
         elif domain_name == "combat":
-            if event in ("Bounty", "FactionKillBond", "PVPKill"):
+            if event in ("Bounty", "FactionKillBond", "CapShipBond", "PVPKill"):
                 domain["victories"] = int(domain.get("victories") or 0) + 1
                 self._increment("combat_victories")
                 target = self._event_label(
@@ -882,16 +887,45 @@ class CockpitMemory:
                 self._knowledge_named(domain, "targets", target, timestamp=timestamp)
                 reward = self._number(raw.get("TotalReward") or raw.get("Reward") or data.get("reward"))
                 domain["rewards_cr"] = int(domain.get("rewards_cr") or 0) + reward
+                if event == "Bounty":
+                    domain["bounties"] = int(domain.get("bounties") or 0) + 1
+                elif event in ("FactionKillBond", "CapShipBond"):
+                    domain["combat_bonds"] = int(domain.get("combat_bonds") or 0) + 1
+                    if event == "CapShipBond":
+                        domain["capital_ship_bonds"] = int(domain.get("capital_ship_bonds") or 0) + 1
+                else:
+                    domain["pvp_victories"] = int(domain.get("pvp_victories") or 0) + 1
+                previous_reward = int(domain.get("highest_reward_cr") or 0)
+                domain["highest_reward_cr"] = max(previous_reward, reward)
+                victim_faction = raw.get("VictimFaction") or data.get("victim_faction")
+                if victim_faction:
+                    self._knowledge_named(domain, "victim_factions", victim_faction, timestamp=timestamp)
+                awarding_faction = raw.get("AwardingFaction") or raw.get("Faction")
+                if awarding_faction:
+                    self._knowledge_named(domain, "awarding_factions", awarding_faction, timestamp=timestamp)
                 self._domain_milestone("combat", "Combat victories", domain["victories"], timestamp)
             else:
                 key = {
                     "UnderAttack": "attacks", "FighterDestroyed": "fighters_lost",
                     "SRVDestroyed": "srvs_lost", "EscapeInterdiction": "interdictions_escaped",
                     "Interdiction": "interdictions_attempted", "Interdicted": "interdictions_suffered",
-                    "JetConeDamage": "jet_cone_damage",
+                    "JetConeDamage": "jet_cone_damage", "CockpitBreached": "canopy_breaches",
+                    "Died": "ship_losses",
                 }.get(event)
                 if key:
                     domain[key] = int(domain.get(key) or 0) + 1
+                    if event == "Interdicted":
+                        domain["submitted_interdictions" if bool(raw.get("Submitted")) else "resisted_interdictions"] = int(
+                            domain.get("submitted_interdictions" if bool(raw.get("Submitted")) else "resisted_interdictions") or 0
+                        ) + 1
+                        source = "player" if raw.get("IsPlayer") else "thargoid" if raw.get("IsThargoid") else "npc"
+                        domain[f"interdictions_by_{source}"] = int(domain.get(f"interdictions_by_{source}") or 0) + 1
+                    elif event == "Interdiction":
+                        result_key = "interdictions_succeeded" if bool(raw.get("Success")) else "interdictions_failed"
+                        domain[result_key] = int(domain.get(result_key) or 0) + 1
+                    elif event == "EscapeInterdiction":
+                        source = "player" if raw.get("IsPlayer") else "thargoid" if raw.get("IsThargoid") else "npc"
+                        domain[f"escapes_from_{source}"] = int(domain.get(f"escapes_from_{source}") or 0) + 1
                 elif event == "ShieldState" and not bool(raw.get("ShieldsUp", data.get("shields_up", True))):
                     domain["shield_failures"] = int(domain.get("shield_failures") or 0) + 1
                 elif event == "HullDamage":
@@ -903,9 +937,14 @@ class CockpitMemory:
                         domain["lowest_hull_pct"] = health_pct if previous is None else min(float(previous), health_pct)
                     except (TypeError, ValueError):
                         pass
+                elif event == "RedeemVoucher":
+                    amount = self._number(raw.get("Amount") or data.get("amount"))
+                    domain["redeemed_cr"] = int(domain.get("redeemed_cr") or 0) + amount
+                    domain["redemptions"] = int(domain.get("redemptions") or 0) + 1
 
         elif domain_name == "trade":
             if event in ("MarketBuy", "MarketSell"):
+                domain["transactions"] = int(domain.get("transactions") or 0) + 1
                 commodity = self._event_label(
                     raw, data, "Type_Localised", "Type", "type", fallback="Commodity"
                 )
@@ -920,7 +959,18 @@ class CockpitMemory:
                 if event == "MarketSell":
                     average = self._number(raw.get("AvgPricePaid"))
                     if average:
-                        domain["realised_profit_cr"] = int(domain.get("realised_profit_cr") or 0) + total - average * count
+                        sale_profit = total - average * count
+                        domain["realised_profit_cr"] = int(domain.get("realised_profit_cr") or 0) + sale_profit
+                        domain["profitable_sales" if sale_profit >= 0 else "loss_sales"] = int(
+                            domain.get("profitable_sales" if sale_profit >= 0 else "loss_sales") or 0
+                        ) + 1
+                        best = domain.get("best_sale_profit_cr")
+                        worst = domain.get("worst_sale_profit_cr")
+                        domain["best_sale_profit_cr"] = sale_profit if best is None else max(int(best), sale_profit)
+                        domain["worst_sale_profit_cr"] = sale_profit if worst is None else min(int(worst), sale_profit)
+                        per_ton = round(sale_profit / count) if count else 0
+                        best_per_ton = domain.get("best_profit_per_ton_cr")
+                        domain["best_profit_per_ton_cr"] = per_ton if best_per_ton is None else max(int(best_per_ton), per_ton)
                 system = self.state.get("current_system")
                 if system:
                     self._knowledge_named(domain, "market_systems", system, timestamp=timestamp)
@@ -940,6 +990,24 @@ class CockpitMemory:
                         name = material.get("Name_Localised") or material.get("Name")
                         if name:
                             self._knowledge_named(domain, "prospected_materials", name, timestamp=timestamp)
+                            try:
+                                percent = float(
+                                    material.get("Proportion")
+                                    if material.get("Proportion") is not None
+                                    else material.get("Percent") or 0
+                                )
+                                if percent <= 1 and material.get("Proportion") is not None:
+                                    percent *= 100.0
+                                previous = float(domain.get("best_prospector_percent") or 0)
+                                if percent > previous:
+                                    domain["best_prospector_percent"] = round(percent, 1)
+                                    domain["best_prospector_material"] = _safe_name(name, "Mineral")
+                            except (TypeError, ValueError):
+                                pass
+                core = raw.get("MotherlodeMaterial_Localised") or raw.get("MotherlodeMaterial")
+                if core:
+                    domain["cores_found"] = int(domain.get("cores_found") or 0) + 1
+                    self._knowledge_named(domain, "core_materials", core, timestamp=timestamp)
             elif event == "AsteroidCracked":
                 domain["cores_cracked"] = int(domain.get("cores_cracked") or 0) + 1
 
@@ -1030,12 +1098,69 @@ class CockpitMemory:
         elif domain_name == "strategy":
             if event.startswith("Powerplay"):
                 domain["powerplay_events"] = int(domain.get("powerplay_events") or 0) + 1
-                power = raw.get("Power") or raw.get("FromPower") or raw.get("ToPower")
+                power = raw.get("ToPower") or raw.get("Power") or raw.get("FromPower")
                 if power:
                     domain["power"] = _safe_name(power)
-                merits = self._number(raw.get("Merits") or raw.get("TotalMerits"))
-                if merits:
-                    domain["merits"] = max(int(domain.get("merits") or 0), merits)
+                if event in ("PowerplayJoin", "PowerplayDefect"):
+                    domain["pledged"] = True
+                    domain["pledges"] = int(domain.get("pledges") or 0) + 1
+                    if event == "PowerplayDefect":
+                        domain["defections"] = int(domain.get("defections") or 0) + 1
+                        domain["previous_power"] = _safe_name(raw.get("FromPower"), "")
+                elif event == "PowerplayLeave":
+                    domain["pledged"] = False
+                    domain["departures"] = int(domain.get("departures") or 0) + 1
+                elif event == "Powerplay":
+                    domain["pledged"] = bool(raw.get("Power"))
+                    domain["rank"] = int(raw.get("Rank") or 0)
+                    domain["merits"] = int(raw.get("Merits") or 0)
+                    domain["time_pledged_s"] = int(raw.get("TimePledged") or 0)
+                elif event == "PowerplayRank":
+                    domain["rank_changes"] = int(domain.get("rank_changes") or 0) + 1
+                    domain["rank"] = int(raw.get("Rank") or 0)
+                    self._remember(
+                        "powerplay", f"Reached Powerplay rank {domain['rank']} with {domain.get('power') or 'the pledged power'}",
+                        4, timestamp,
+                    )
+                elif event == "PowerplayMerits":
+                    gained = self._number(raw.get("MeritsGained"))
+                    total = self._number(raw.get("TotalMerits"))
+                    domain["merit_events"] = int(domain.get("merit_events") or 0) + 1
+                    domain["merits_gained"] = int(domain.get("merits_gained") or 0) + gained
+                    domain["merits"] = total
+                    self._domain_milestone(
+                        "powerplay", "Lifetime Powerplay merits earned",
+                        domain["merits_gained"], timestamp,
+                        (1000, 5000, 10000, 25000, 50000, 100000),
+                    )
+                elif event in ("PowerplayCollect", "PowerplayDeliver"):
+                    count = self._number(raw.get("Count"))
+                    commodity = self._event_label(
+                        raw, data, "Type_Localised", "type_localised", "Type", "type",
+                        fallback="Powerplay commodity",
+                    )
+                    total_key = "collected_units" if event == "PowerplayCollect" else "delivered_units"
+                    bucket = "commodities_collected" if event == "PowerplayCollect" else "commodities_delivered"
+                    domain[total_key] = int(domain.get(total_key) or 0) + count
+                    self._knowledge_named(domain, bucket, commodity, amount=count, timestamp=timestamp)
+                    self._domain_milestone(
+                        "powerplay", f"Powerplay units {'collected' if event == 'PowerplayCollect' else 'delivered'}",
+                        domain[total_key], timestamp, (100, 500, 1000, 2500, 5000, 10000),
+                    )
+                elif event == "PowerplayFastTrack":
+                    cost = self._number(raw.get("Cost"))
+                    domain["fast_track_events"] = int(domain.get("fast_track_events") or 0) + 1
+                    domain["fast_track_cost_cr"] = int(domain.get("fast_track_cost_cr") or 0) + cost
+                elif event == "PowerplaySalary":
+                    amount = self._number(raw.get("Amount"))
+                    domain["salary_events"] = int(domain.get("salary_events") or 0) + 1
+                    domain["salary_cr"] = int(domain.get("salary_cr") or 0) + amount
+                elif event == "PowerplayVote":
+                    domain["votes_cast"] = int(domain.get("votes_cast") or 0) + self._number(raw.get("Votes"))
+                elif event == "PowerplayVoucher":
+                    domain["voucher_events"] = int(domain.get("voucher_events") or 0) + 1
+                    for system in raw.get("Systems") or ():
+                        self._knowledge_named(domain, "voucher_systems", system, timestamp=timestamp)
             elif event.startswith("CommunityGoal") or event == "CommunityGoal":
                 domain["community_goal_events"] = int(domain.get("community_goal_events") or 0) + 1
             elif event == "FactionState":
@@ -1902,6 +2027,10 @@ class CockpitMemory:
             habits.append("Methodical ship engineer")
         if int((knowledge.get("odyssey") or {}).get("combat_deployments") or 0) >= 10:
             habits.append("Experienced ground operative")
+        strategy = knowledge.get("strategy") or {}
+        if (int(strategy.get("merits_gained") or 0) >= 5_000
+                or int(strategy.get("delivered_units") or 0) >= 500):
+            habits.append("Powerplay field operative")
         if int((knowledge.get("colonisation") or {}).get("contributions") or 0) >= 5:
             habits.append("Colony builder")
         if int((knowledge.get("carrier") or {}).get("jumps") or 0) >= 10:
@@ -1925,15 +2054,40 @@ class CockpitMemory:
         missions = knowledge.get("missions") or {}
         combat = knowledge.get("combat") or {}
         trade = knowledge.get("trade") or {}
+        mining = knowledge.get("mining") or {}
         engineering = knowledge.get("engineering") or {}
         odyssey = knowledge.get("odyssey") or {}
         carrier = knowledge.get("carrier") or {}
         colony = knowledge.get("colonisation") or {}
+        strategy = knowledge.get("strategy") or {}
         return {
             "domains": self.knowledge_domains(),
             "missions_completed": int(missions.get("completed") or 0),
             "combat_victories": int(combat.get("victories") or 0),
+            "combat_bounties": int(combat.get("bounties") or 0),
+            "combat_bonds": int(combat.get("combat_bonds") or 0),
+            "combat_rewards_cr": int(combat.get("rewards_cr") or 0),
+            "combat_redeemed_cr": int(combat.get("redeemed_cr") or 0),
+            "combat_shield_failures": int(combat.get("shield_failures") or 0),
+            "combat_lowest_hull_pct": combat.get("lowest_hull_pct"),
+            "combat_interdictions_escaped": int(combat.get("interdictions_escaped") or 0),
             "trade_profit_cr": int(trade.get("realised_profit_cr") or 0),
+            "trade_transactions": int(trade.get("transactions") or 0),
+            "trade_units_bought": int(trade.get("bought_units") or 0),
+            "trade_units_sold": int(trade.get("sold_units") or 0),
+            "mining_prospected": int(mining.get("prospected") or 0),
+            "mining_refined_tons": int(mining.get("refined") or 0),
+            "mining_cores_found": int(mining.get("cores_found") or 0),
+            "mining_cores_cracked": int(mining.get("cores_cracked") or 0),
+            "powerplay_power": strategy.get("power"),
+            "powerplay_rank": strategy.get("rank"),
+            "powerplay_events": int(strategy.get("powerplay_events") or 0),
+            "powerplay_merits": int(strategy.get("merits") or 0),
+            "powerplay_merits_gained": int(strategy.get("merits_gained") or 0),
+            "powerplay_collected_units": int(strategy.get("collected_units") or 0),
+            "powerplay_delivered_units": int(strategy.get("delivered_units") or 0),
+            "powerplay_fast_track_cr": int(strategy.get("fast_track_cost_cr") or 0),
+            "powerplay_salary_cr": int(strategy.get("salary_cr") or 0),
             "engineering_crafts": int(engineering.get("crafts") or 0),
             "ground_operations": int(odyssey.get("events") or 0),
             "carrier_jumps": int(carrier.get("jumps") or 0),

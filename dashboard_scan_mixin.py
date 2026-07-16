@@ -55,6 +55,9 @@ class DashboardScanMixin:
             self.current_landed = bool(flags & 0x00000002)
             self.current_in_fighter = bool(flags & 0x02000000)
             self.current_in_srv = bool(flags & 0x04000000)
+            combat_tracker = getattr(self, "combat_awareness", None)
+            if combat_tracker:
+                combat_tracker.update_status(flags)
         flags2 = data.get("Flags2")
         if isinstance(flags2, int):
             self.current_on_foot = bool(flags2 & 0x0001)
