@@ -82,7 +82,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     _COCKPIT_STATE_FIELDS = (
         "current_sys", "previous_sys", "previous_coords",
         "current_system_address", "current_coords", "star_class",
-        "scanned", "total", "organic_count", "system_bio_signals",
+        "scanned", "total", "navigation_scan_progress",
+        "navigation_scan_progress_source", "organic_count", "system_bio_signals",
         "system_traffic", "last_traffic_system", "valuable_system",
         "valuable_bodies", "body_signals", "system_undiscovered",
         "fss_all_bodies", "current_body_id", "current_body_name",
@@ -523,6 +524,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.star_class = ""
         self.scanned = 0
         self.total = 0
+        self.navigation_scan_progress = None
+        self.navigation_scan_progress_source = "bodies"
         self.organic_count = 0
         self.system_bio_signals = 0
         self.system_traffic = {"day": 0, "week": 0, "total": 0}
@@ -1072,6 +1075,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.star_class = ""
         self.scanned = 0
         self.total = 0
+        self.navigation_scan_progress = None
+        self.navigation_scan_progress_source = "bodies"
         self.organic_count = 0
         self.system_bio_signals = 0
         self.system_traffic = {'day': 0, 'week': 0, 'total': 0}
@@ -2178,12 +2183,41 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.total = max(self.total, total)
         if self.total > 0:
             self.scanned = self.total
+            self.navigation_scan_progress = 1.0
+            self.navigation_scan_progress_source = "bodies"
             self.db_update_system(self.current_sys, self.total, self.scanned)
             if not self.batch_mode:
                 self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
                 self.update_hud()
                 self.schedule_dashboard_refresh()
                 self._refresh_exploration_window()
+
+    def _seed_navigation_scan_progress(self):
+        """Seed the HUD from persisted body knowledge on entering a system."""
+        if self.total > 0:
+            self.navigation_scan_progress = max(0.0, min(1.0, self.scanned / self.total))
+        else:
+            self.navigation_scan_progress = None
+        self.navigation_scan_progress_source = "bodies"
+
+    def _record_navigation_fss_progress(self, progress):
+        """Keep Frontier's live FSS percentage without corrupting body counts.
+
+        FSS ``Progress`` is not a body count: it can also reflect non-body
+        signals.  Return visits may not replay every already-known ``Scan``
+        event, however, so it is the best live source for the HUD progress bar.
+        """
+        try:
+            progress = float(progress)
+        except (TypeError, ValueError):
+            return
+        progress = max(0.0, min(1.0, progress))
+        body_progress = (self.scanned / self.total) if self.total > 0 else 0.0
+        current = self.navigation_scan_progress
+        if current is None:
+            current = 0.0
+        self.navigation_scan_progress = max(progress, body_progress, current)
+        self.navigation_scan_progress_source = "fss"
 
     def _apply_runtime_feature_toggles(self):
         if self.config.get("screenshots_enabled", False):
@@ -2815,6 +2849,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "flight_state": getattr(self, "hud_flight_state", "FLIGHT"),
             "music_mode": getattr(self, "current_music_mode", ""),
             "music_track": getattr(self, "current_music_track", ""),
+            "scan_progress": getattr(self, "navigation_scan_progress", None),
+            "scan_progress_source": getattr(self, "navigation_scan_progress_source", "bodies"),
             "badges": badges[:6],
         }
 
@@ -4743,6 +4779,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.fss_summary_active = False
             self._rebuild_scan_index()
             self._rebuild_system_state_from_scan_items()
+            self._seed_navigation_scan_progress()
             if is_jump:
                 # Speak only after the incoming system's persisted scan state is
                 # loaded; otherwise cognitive context can accidentally describe
@@ -5001,6 +5038,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 progress = float(progress) if progress is not None else None
             except (TypeError, ValueError):
                 progress = None
+            self._record_navigation_fss_progress(progress)
             if progress is not None and progress >= 1.0 and self.total > 0:
                 self._mark_system_scan_complete(self.total)
             else:

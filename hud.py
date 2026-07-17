@@ -409,6 +409,19 @@ class TacticalHUD:
         dest_color = COLOR_ORANGE if hops else "#7d8891"
         return dest_color
 
+    @staticmethod
+    def _scan_progress_state(scanned, total, nav_context):
+        body_pct = (scanned / total) if total > 0 else 0.0
+        body_pct = max(0.0, min(1.0, body_pct))
+        if nav_context.get("scan_progress_source") != "fss":
+            return body_pct, f"{scanned}/{total}  ·  {int(body_pct * 100)}%"
+        try:
+            live_pct = float(nav_context.get("scan_progress"))
+        except (TypeError, ValueError):
+            return body_pct, f"{scanned}/{total}  ·  {int(body_pct * 100)}%"
+        live_pct = max(body_pct, min(1.0, max(0.0, live_pct)))
+        return live_pct, f"{scanned}/{total}  ·  FSS {int(live_pct * 100)}%"
+
     def _draw_compact(
         self,
         current_sys,
@@ -428,8 +441,7 @@ class TacticalHUD:
         state_color = self._state_color(state_text)
         remaining = nav_context.get("route_remaining")
 
-        pct = (scanned / total) if total > 0 else 0
-        pct = max(0.0, min(1.0, pct))
+        pct, scan_progress_text = self._scan_progress_state(scanned, total, nav_context)
         traffic_text = f"{system_traffic.get('day', 0)}/{system_traffic.get('week', 0)}/{system_traffic.get('total', 0)}"
 
         self._draw_chrome(bracket_len=10)
@@ -457,7 +469,7 @@ class TacticalHUD:
         self.canvas.create_line(16, 102, w - 16, 102, fill="#1a2530", width=1)
 
         self.draw_text(16, 112, text="SCAN PROGRESS", fill="#7d8891", font=("Courier", 7, "bold"), anchor="w")
-        self.draw_text(w - 16, 112, text=f"{scanned}/{total}  ·  {int(pct*100)}%", fill=COLOR_TEXT, font=("Courier", 8, "bold"), anchor="e")
+        self.draw_text(w - 16, 112, text=scan_progress_text, fill=COLOR_TEXT, font=("Courier", 8, "bold"), anchor="e")
         self.canvas.create_rectangle(16, 120, w - 16, 126, outline="#26313a", width=1)
         if pct > 0:
             self.canvas.create_rectangle(16, 120, 16 + ((w - 32) * pct), 126, fill=COLOR_ACCENT, outline=COLOR_ACCENT)
@@ -564,10 +576,9 @@ class TacticalHUD:
         self.canvas.create_line(20, 162, w - 20, 162, fill="#1a2530", width=1)
 
         # ── Scan progress ────────────────────────────────────────────────
-        pct = (scanned / total) if total > 0 else 0
-        pct = max(0.0, min(1.0, pct))
+        pct, scan_progress_text = self._scan_progress_state(scanned, total, nav_context)
         self.draw_text(20, 174, text="SCAN PROGRESS", fill="#7d8891", font=("Courier", 7, "bold"), anchor="w")
-        self.draw_text(w - 20, 174, text=f"{scanned}/{total}  ·  {int(pct*100)}%", fill=COLOR_TEXT, font=("Courier", 8, "bold"), anchor="e")
+        self.draw_text(w - 20, 174, text=scan_progress_text, fill=COLOR_TEXT, font=("Courier", 8, "bold"), anchor="e")
         self.canvas.create_rectangle(20, 182, w - 20, 190, outline="#26313a", width=1)
         if pct > 0:
             self.canvas.create_rectangle(20, 182, 20 + ((w - 40) * pct), 190, fill=COLOR_ACCENT, outline=COLOR_ACCENT)
