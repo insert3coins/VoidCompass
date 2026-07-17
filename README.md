@@ -20,7 +20,7 @@ Void Compass is a native Windows companion for Elite Dangerous. It turns Frontie
 | **Carrier** | Personal and Squadron Carrier identity, fuel, jump operations, expedition route, finance, services and Discord notifications. |
 | **Colony** | Architect Command Centre for colonisation projects, contributions, cargo requirements and persistent planning. |
 | **Galaxy** | Current-system factions, influence watches, conflicts, Powerplay, Community Goals, BGS history and Squadron Command. |
-| **Engineer** | Goal-driven Engineering Command with shared Horizons and Odyssey wishlists, collect/keep/trade inventory relevance, sourcing guidance, engineer access, nearby traders and jumponium reserves. |
+| **Engineer** | Goal-driven Engineering Command with shared Horizons and Odyssey wishlists, grade-aware engineer access and blueprint availability, collect/keep/trade inventory relevance, nearby traders and jumponium reserves. |
 
 ### Squadron Command
 
