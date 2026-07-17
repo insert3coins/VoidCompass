@@ -1,5 +1,14 @@
 # VoidCompass // UPDATE LOG
 
+## v4.9.1 // Engineering Materials Command
+**Release Date:** 2026-Jul-18
+
+*   Transformed Engineer into a goal-driven **Engineering Command** with Command, Wishlist, Inventory, Engineers and Odyssey workspaces based on the strongest workflows from dedicated Elite Dangerous material helpers.
+*   Combined raw, manufactured and encoded stock into one searchable inventory that marks wishlist shortages, protected ingredients, spare trader stock and near-capacity materials, with practical collection or scan guidance for each family.
+*   Upgraded the shared ship-engineering wishlist with collection priorities, non-doubled requirements, per-goal readiness, trader alternatives and direct routing to nearby material traders and engineer systems.
+*   Added persistent per-commander Odyssey suit and weapon modification goals, combined ShipLocker shopping requirements, notable-item guidance and Horizons/Odyssey engineer filtering without introducing an external service or ship-build planner.
+*   Completed an app-wide native theme audit: formerly pale ttk controls, notebooks, scrollbars, progress bars, combobox dropdowns and legacy panel surfaces now follow the active commander profile palette, including live theme changes, while gameplay overlays keep their dedicated HUD treatment.
+
 ## v4.8.7 // In-Game Overlay Input Safety
 **Release Date:** 2026-Jul-17
 

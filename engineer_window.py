@@ -18,10 +18,16 @@ from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 from engineering_data import (
     BLUEPRINTS,
     BLUEPRINT_INFO,
+    collection_priorities,
     ENGINEERS,
     GRADE_CAP,
     MATERIALS,
     material_info,
+    material_relevance,
+    ODYSSEY_BLUEPRINTS,
+    odyssey_item_use,
+    odyssey_inventory_counts,
+    odyssey_wishlist_plan,
     pinned_plans,
     wishlist_plan,
 )
@@ -52,7 +58,7 @@ def load_engineer_materials(path=None) -> dict:
     path = path or os.path.join(os.getcwd(), ENGINEER_MATERIALS_FILE)
     if not os.path.exists(path):
         return {"raw": {}, "manufactured": {}, "encoded": {}, "engineers": {},
-                "pinned_blueprints": [], "ship_locker": {}, "last_updated": None}
+                "pinned_blueprints": [], "odyssey_goals": [], "ship_locker": {}, "last_updated": None}
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -60,6 +66,7 @@ def load_engineer_materials(path=None) -> dict:
             data.setdefault(cat, {})
         data.setdefault("engineers", {})
         data.setdefault("pinned_blueprints", [])
+        data.setdefault("odyssey_goals", [])
         data.setdefault("ship_locker", {})
         return data
     except Exception as exc:
@@ -71,7 +78,7 @@ def load_engineer_materials(path=None) -> dict:
         except Exception:
             backup = None
         return {"raw": {}, "manufactured": {}, "encoded": {}, "engineers": {},
-                "pinned_blueprints": [], "ship_locker": {}, "last_updated": None,
+                "pinned_blueprints": [], "odyssey_goals": [], "ship_locker": {}, "last_updated": None,
                 "_load_warning": f"Could not read engineering data: {exc}",
                 "_corrupt_backup": backup}
 
@@ -103,12 +110,10 @@ def save_engineer_materials(materials: dict, path=None):
 class EngineerWindow(ThemedWindowMixin):
 
     _TABS = [
-        ("overview",     "OVERVIEW",     "#67e8f9"),
-        ("raw",          "RAW",          "#b0d8a0"),
-        ("manufactured", "MFG",          "#93c5fd"),
-        ("encoded",      "DATA",         "#fde68a"),
+        ("command",      "COMMAND",      "#67e8f9"),
+        ("wishlist",     "WISHLIST",     "#b0d8a0"),
+        ("inventory",    "INVENTORY",    "#93c5fd"),
         ("engineers",    "ENGINEERS",    "#c4b5fd"),
-        ("planner",      "PLANNER",      "#67e8f9"),
         ("odyssey",      "ODYSSEY",      "#f9a8d4"),
     ]
 
@@ -124,7 +129,7 @@ class EngineerWindow(ThemedWindowMixin):
         self.get_current_coords = get_current_coords or (lambda: None)
         self.plot_system_callback = plot_system_callback
         self.is_active_callback = is_active_callback
-        self._active_tab   = "overview"
+        self._active_tab   = "command"
         self._row_meta = {}
         self._refresh_job = None
         self._refresh_pending = False
@@ -133,7 +138,7 @@ class EngineerWindow(ThemedWindowMixin):
 
         self.embedded = embedded
         self.win = window_surface(root, embedded=embedded)
-        self.win.title("Engineer Materials — Void Compass")
+        self.win.title("Engineering Command — Void Compass")
         apply_window(self.win)
         self.win.geometry(config.get("engineer_window_geometry", "740x560"))
         self.win.resizable(True, True)
@@ -213,10 +218,10 @@ class EngineerWindow(ThemedWindowMixin):
         hdr.pack_propagate(False)
         title_box = tk.Frame(hdr, bg="#0c1014")
         title_box.pack(side=tk.LEFT, padx=14)
-        tk.Label(title_box, text="ENGINEERING WORKSHOP",
+        tk.Label(title_box, text="ENGINEERING COMMAND",
                  font=("Segoe UI", 14, "bold"), fg=COLOR_ACCENT, bg="#0c1014"
                  ).pack(anchor="w", pady=(7, 0))
-        tk.Label(title_box, text="inventory // engineers // upgrade goals",
+        tk.Label(title_box, text="live inventory // shared wishlist // collection priorities",
                  font=("Consolas", 8), fg=self.UI_MUTED, bg="#0c1014"
                  ).pack(anchor="w")
         self._sync_lbl = tk.Label(hdr, text="Not yet synced",
@@ -231,7 +236,7 @@ class EngineerWindow(ThemedWindowMixin):
         metrics = tk.Frame(self.win, bg=self.UI_BG)
         metrics.pack(fill=tk.X, padx=8, pady=(7, 5))
         self._metric_values = {}
-        for index, label in enumerate(("HELD TYPES", "READY GOALS", "ENGINEERS", "MISSING UNITS")):
+        for index, label in enumerate(("WISHLIST", "READY", "TO COLLECT", "ENGINEERS")):
             card = tk.Frame(metrics, bg=self.UI_PANEL, highlightbackground=self.UI_BORDER, highlightthickness=1)
             card.grid(row=0, column=index, sticky="nsew", padx=(0 if index == 0 else 5, 0))
             metrics.grid_columnconfigure(index, weight=1)
@@ -254,7 +259,7 @@ class EngineerWindow(ThemedWindowMixin):
         self._style_tabs()
 
         self._planner_controls = tk.Frame(self.win, bg=self.UI_PANEL)
-        tk.Label(self._planner_controls, text="BLUEPRINT", bg=self.UI_PANEL,
+        tk.Label(self._planner_controls, text="ADD BLUEPRINT", bg=self.UI_PANEL,
                  fg=self.UI_DIM, font=("Consolas", 8, "bold")).grid(row=0, column=0, padx=(12, 5), pady=(6, 2))
         self._blueprint_var = tk.StringVar(value=next(iter(BLUEPRINTS)))
         self._blueprint_combo = ttk.Combobox(
@@ -280,13 +285,44 @@ class EngineerWindow(ThemedWindowMixin):
                    width=3, bg=self.UI_BG, fg=COLOR_TEXT, insertbackground=COLOR_ACCENT,
                    buttonbackground=self.UI_PANEL_2, relief=tk.FLAT).grid(row=0, column=7, padx=(0, 10), pady=(6, 2))
         self._planner_controls.grid_columnconfigure(1, weight=1)
-        button(self._planner_controls, "PIN", self._pin_blueprint,
+        button(self._planner_controls, "ADD GOAL", self._pin_blueprint,
                padx=10, pady=4).grid(row=1, column=0, padx=(12, 4), pady=(2, 6), sticky="w")
-        button(self._planner_controls, "UNPIN", self._unpin_selected,
+        button(self._planner_controls, "REMOVE SELECTED", self._unpin_selected,
                muted=True, padx=10, pady=4).grid(row=1, column=1, padx=2, pady=(2, 6), sticky="w")
         self._trader_btn = button(self._planner_controls, "FIND TRADERS", self._find_traders,
                                   muted=True, padx=10, pady=4)
         self._trader_btn.grid(row=1, column=6, columnspan=2, padx=(4, 10), pady=(2, 6), sticky="e")
+
+        self._odyssey_goal_controls = tk.Frame(self.win, bg=self.UI_PANEL)
+        tk.Label(
+            self._odyssey_goal_controls, text="ODYSSEY MODIFICATION GOAL",
+            bg=self.UI_PANEL, fg=self.UI_DIM, font=("Consolas", 8, "bold"),
+        ).pack(side=tk.LEFT, padx=(12, 5), pady=7)
+        self._odyssey_goal_var = tk.StringVar(value=next(iter(ODYSSEY_BLUEPRINTS)))
+        self._odyssey_goal_combo = ttk.Combobox(
+            self._odyssey_goal_controls, textvariable=self._odyssey_goal_var,
+            values=sorted(ODYSSEY_BLUEPRINTS), state="readonly", width=31,
+        )
+        self._odyssey_goal_combo.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8), pady=6)
+        tk.Label(
+            self._odyssey_goal_controls, text="QTY", bg=self.UI_PANEL,
+            fg=self.UI_DIM, font=("Consolas", 8, "bold"),
+        ).pack(side=tk.LEFT, padx=(0, 3))
+        self._odyssey_quantity_var = tk.StringVar(value="1")
+        tk.Spinbox(
+            self._odyssey_goal_controls, from_=1, to=99,
+            textvariable=self._odyssey_quantity_var, width=3,
+            bg=self.UI_BG, fg=COLOR_TEXT, insertbackground=COLOR_ACCENT,
+            buttonbackground=self.UI_PANEL_2, relief=tk.FLAT,
+        ).pack(side=tk.LEFT, padx=(0, 8), pady=6)
+        button(
+            self._odyssey_goal_controls, "ADD GOAL", self._add_odyssey_goal,
+            padx=9, pady=4,
+        ).pack(side=tk.LEFT, padx=(0, 4), pady=5)
+        button(
+            self._odyssey_goal_controls, "REMOVE SELECTED", self._remove_odyssey_goal,
+            muted=True, padx=9, pady=4,
+        ).pack(side=tk.LEFT, padx=(0, 10), pady=5)
 
         self._filter_controls = tk.Frame(self.win, bg=self.UI_PANEL)
         tk.Label(self._filter_controls, text="SEARCH", bg=self.UI_PANEL, fg=self.UI_DIM,
@@ -297,12 +333,25 @@ class EngineerWindow(ThemedWindowMixin):
                                 relief=tk.FLAT, font=("Segoe UI", 9))
         search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10), pady=6, ipady=3)
         self._search_var.trace_add("write", lambda *_args: self._redraw())
+        self._category_label = tk.Label(
+            self._filter_controls, text="TYPE", bg=self.UI_PANEL, fg=self.UI_DIM,
+            font=("Consolas", 8, "bold"),
+        )
+        self._category_label.pack(side=tk.LEFT, padx=(0, 5))
+        self._category_var = tk.StringVar(value="All types")
+        self._category_combo = ttk.Combobox(
+            self._filter_controls, textvariable=self._category_var,
+            values=("All types", "Raw", "Manufactured", "Encoded"),
+            state="readonly", width=13,
+        )
+        self._category_combo.pack(side=tk.LEFT, padx=(0, 10), pady=6)
+        self._category_combo.bind("<<ComboboxSelected>>", lambda _event: self._redraw())
         tk.Label(self._filter_controls, text="VIEW", bg=self.UI_PANEL, fg=self.UI_DIM,
                  font=("Consolas", 8, "bold")).pack(side=tk.LEFT, padx=(0, 5))
-        self._view_var = tk.StringVar(value="Held only")
+        self._view_var = tk.StringVar(value="All materials")
         self._view_combo = ttk.Combobox(self._filter_controls, textvariable=self._view_var,
-                                        values=("Held only", "All materials", "Near capacity"),
-                                        state="readonly", width=14)
+                                        values=("All materials", "Wishlist only", "Missing only", "Held only", "Near capacity"),
+                                        state="readonly", width=15)
         self._view_combo.pack(side=tk.LEFT, padx=(0, 12), pady=6)
         self._view_combo.bind("<<ComboboxSelected>>", lambda _event: self._redraw())
 
@@ -342,10 +391,15 @@ class EngineerWindow(ThemedWindowMixin):
         self._material_tree.tag_configure("empty", foreground=self.UI_MUTED)
 
         page_scroll = scrollbar(body, orient=tk.VERTICAL, command=self._material_tree.yview)
-        self._material_tree.configure(yscrollcommand=page_scroll.set)
+        page_xscroll = scrollbar(body, orient=tk.HORIZONTAL, command=self._material_tree.xview)
+        self._material_tree.configure(
+            yscrollcommand=page_scroll.set,
+            xscrollcommand=page_xscroll.set,
+        )
         self._material_tree.bind("<<TreeviewSelect>>", self._selection_changed)
-        self._material_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         page_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        page_xscroll.pack(side=tk.BOTTOM, fill=tk.X)
+        self._material_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # Footer
         foot = tk.Frame(self.win, bg="#0c1014", height=32)
@@ -363,19 +417,46 @@ class EngineerWindow(ThemedWindowMixin):
     def _select_tab(self, category: str):
         self._active_tab = category
         self._style_tabs()
-        if category == "planner":
+        if category == "wishlist":
             self._filter_controls.pack_forget()
+            self._odyssey_goal_controls.pack_forget()
             if not self._planner_controls.winfo_manager():
                 self._planner_controls.pack(fill=tk.X, before=self._body)
-        elif category in ("raw", "manufactured", "encoded", "engineers", "odyssey"):
+        elif category in ("inventory", "engineers", "odyssey"):
             self._planner_controls.pack_forget()
+            self._configure_filters(category)
+            if category == "odyssey":
+                if not self._odyssey_goal_controls.winfo_manager():
+                    self._odyssey_goal_controls.pack(fill=tk.X, before=self._body)
+            else:
+                self._odyssey_goal_controls.pack_forget()
             if not self._filter_controls.winfo_manager():
                 self._filter_controls.pack(fill=tk.X, before=self._body)
-            self._view_combo.config(state="readonly" if category in ("raw", "manufactured", "encoded") else tk.DISABLED)
         else:
             self._planner_controls.pack_forget()
             self._filter_controls.pack_forget()
+            self._odyssey_goal_controls.pack_forget()
         self._redraw()
+
+    def _configure_filters(self, category: str):
+        if category == "inventory":
+            categories = ("All types", "Raw", "Manufactured", "Encoded")
+            views = ("All materials", "Wishlist only", "Missing only", "Held only", "Near capacity")
+            default_view = "All materials"
+        elif category == "engineers":
+            categories = ("All engineers", "Horizons", "Odyssey")
+            views = ("Any access", "Unlocked", "Invited / Known", "Locked / Unsynced")
+            default_view = "Any access"
+        else:
+            categories = ("All locker", "Items", "Components", "Data", "Consumables")
+            views = ("All locker items", "Notable only", "Held only")
+            default_view = "All locker items"
+        if self._category_var.get() not in categories:
+            self._category_var.set(categories[0])
+        if self._view_var.get() not in views:
+            self._view_var.set(default_view)
+        self._category_combo.config(values=categories, state="readonly")
+        self._view_combo.config(values=views, state="readonly")
 
     def _style_tabs(self):
         tab_colors = {key: col for key, _, col in self._TABS}
@@ -397,13 +478,13 @@ class EngineerWindow(ThemedWindowMixin):
             self._material_tree.delete(*rows)
         self._row_meta = {}
 
-        if self._active_tab == "overview":
+        if self._active_tab == "command":
             self._redraw_overview()
-        elif self._active_tab in ("raw", "manufactured", "encoded"):
-            self._redraw_materials(self._active_tab)
+        elif self._active_tab == "inventory":
+            self._redraw_inventory()
         elif self._active_tab == "engineers":
             self._redraw_engineers()
-        elif self._active_tab == "planner":
+        elif self._active_tab == "wishlist":
             self._redraw_planner()
         else:
             self._redraw_odyssey()
@@ -421,57 +502,54 @@ class EngineerWindow(ThemedWindowMixin):
         return self._search_var.get().strip().casefold()
 
     def _update_metrics(self):
-        held_types = sum(
-            1 for cat in ("raw", "manufactured", "encoded")
-            for item in (self.materials.get(cat) or {}).values()
-            if int(item.get("count", 0) if isinstance(item, dict) else item) > 0
-        )
         plans = pinned_plans(self.materials)
         ready = sum(1 for row in plans if row["craftable"])
         records = self.materials.get("engineers") or {}
         unlocked = sum(1 for row in records.values() if row.get("progress") == "Unlocked")
         shopping = wishlist_plan(self.materials)
-        self._metric_values["HELD TYPES"].config(text=f"{held_types} / {len(MATERIALS)} known")
-        self._metric_values["READY GOALS"].config(text=f"{ready} / {len(plans)}")
+        odyssey = odyssey_wishlist_plan(self.materials)
+        missing_types = sum(1 for row in shopping["materials"] if row["deficit"])
+        odyssey_ready = int(bool(odyssey["goals"]) and odyssey["complete"])
+        total_goals = len(plans) + len(odyssey["goals"])
+        total_missing = shopping["missing_units"] + odyssey["missing_units"]
+        self._metric_values["WISHLIST"].config(text=f"{total_goals} goal{'s' if total_goals != 1 else ''}")
+        self._metric_values["READY"].config(text=f"{ready + odyssey_ready} ready")
+        self._metric_values["TO COLLECT"].config(text=f"{total_missing:,} · {missing_types + sum(1 for row in odyssey['materials'] if row['deficit'])} types")
         self._metric_values["ENGINEERS"].config(text=f"{unlocked} / {len(ENGINEERS)} unlocked")
-        self._metric_values["MISSING UNITS"].config(text=f"{shopping['missing_units']:,}")
 
     def _redraw_overview(self):
         self._configure_columns({
-            "grade": ("AREA", 100, tk.CENTER, False),
-            "material": ("WORKSHOP STATUS", 240, tk.W, True),
-            "stock": ("STATE", 135, tk.E, False),
-            "capacity": ("NEXT ACTION", 320, tk.W, True),
+            "grade": ("PRIORITY", 100, tk.CENTER, False),
+            "material": ("ENGINEERING OBJECTIVE", 245, tk.W, True),
+            "stock": ("STATUS", 140, tk.E, False),
+            "capacity": ("NEXT ACTION", 340, tk.W, True),
         })
         plans = pinned_plans(self.materials)
         shopping = wishlist_plan(self.materials)
+        odyssey = odyssey_wishlist_plan(self.materials)
         ready = sum(1 for row in plans if row["craftable"])
         records = self.materials.get("engineers") or {}
         unlocked = sum(1 for row in records.values() if row.get("progress") == "Unlocked")
-        held_types = sum(
-            1 for cat in ("raw", "manufactured", "encoded")
-            for item in (self.materials.get(cat) or {}).values()
-            if int(item.get("count", 0) if isinstance(item, dict) else item) > 0
-        )
-        near_cap = 0
-        for cat in ("raw", "manufactured", "encoded"):
-            for symbol, item in (self.materials.get(cat) or {}).items():
-                grade = material_info(symbol).get("grade")
-                cap = GRADE_CAP.get(grade)
-                count = int(item.get("count", 0) if isinstance(item, dict) else item)
-                near_cap += int(bool(cap and count / cap >= 0.85))
+        relevance = material_relevance(self.materials)
+        held_types = sum(1 for row in relevance.values() if row["have"])
+        near_cap = sum(1 for row in relevance.values() if row["status"] == "NEAR CAP")
         raw_counts = {
             symbol: int(item.get("count", 0) if isinstance(item, dict) else item)
             for symbol, item in (self.materials.get("raw") or {}).items()
         }
         synth = fsd_injections(raw_counts)
         status_rows = [
-            ("GOALS", "Pinned engineering goals", f"{ready} ready / {len(plans)} pinned",
-             "Open Planner to build or adjust the shared shopping list"),
-            ("MATERIALS", "Ship engineering inventory", f"{held_types} held types",
-             f"{near_cap} near capacity · filter inventory before gathering more"),
-            ("ENGINEERS", "Engineer access network", f"{unlocked} / {len(ENGINEERS)} unlocked",
-             "Select an engineer row to hand its system to Route Command"),
+            ("GOALS", "Shared engineering wishlist", f"{ready} ready / {len(plans)} goals",
+             "Open Wishlist to add, change or remove upgrade goals"),
+            ("COLLECT", "Outstanding shopping list", f"{shopping['missing_units']:,} units",
+             "Highest-grade shortages are prioritised below" if shopping["missing_units"] else "All wishlist ingredients are held"),
+            ("INVENTORY", "Journal-backed material stores", f"{held_types} held types",
+             f"{near_cap} near capacity · Inventory marks useful, spare and missing stock"),
+            ("ACCESS", "Engineer network", f"{unlocked} / {len(ENGINEERS)} unlocked",
+             "Filter Horizons or Odyssey engineers and route directly to their system"),
+            ("ODYSSEY", "Suit and weapon modification goals",
+             f"{len(odyssey['goals'])} goals · {odyssey['missing_units']:,} missing",
+             "Open Odyssey to add modifications and inspect locker relevance"),
             ("SYNTHESIS", "FSD injection reserves",
              f"B {synth['basic']} · S {synth['standard']} · P {synth['premium']}",
              "Basic +25% · Standard +50% · Premium +100%"),
@@ -482,117 +560,103 @@ class EngineerWindow(ThemedWindowMixin):
         for area, title, state, action in status_rows:
             self._material_tree.insert("", tk.END, values=(area, title, state, action),
                                        tags=("near_cap" if "ATTENTION" in state else "mid_cap",))
-        missing = [row for row in shopping["materials"] if row["deficit"]]
+        missing = collection_priorities(self.materials, limit=8)
         if missing:
             self._material_tree.insert("", tk.END,
-                values=("SHOPPING", "Highest shared shortages", f"{shopping['missing_units']:,} units", "Across every pinned goal"),
+                values=("GATHER", "COLLECTION PRIORITIES", f"{len(missing)} shown", "Highest grade first · shared across every goal"),
                 tags=("grade_header",))
-            for row in missing[:8]:
+            for row in missing:
                 self._material_tree.insert("", tk.END,
                     values=(f"G{row['grade']}" if row.get("grade") else "—", f"  {row['name']}",
-                            f"{row['have']} / {row['need']}", f"Need {row['deficit']} more"),
+                            f"{row['have']} / {row['need']}", f"Need {row['deficit']} · {row['source']}"),
                     tags=("near_cap",))
         elif plans:
             self._material_tree.insert("", tk.END, values=("READY", "Combined shopping list complete", "ALL HELD", "Visit the appropriate engineer"), tags=("mid_cap",))
         else:
-            self._material_tree.insert("", tk.END, values=("PLANNER", "No engineering goal pinned", "STANDING BY", "Choose a verified blueprint in Planner"), tags=("empty",))
-        self._total_lbl.config(text=f"Workshop: {len(plans)} goal{'s' if len(plans) != 1 else ''}")
-        self._type_lbl.config(text="Live journal inventory · local planning")
+            self._material_tree.insert("", tk.END, values=("WISHLIST", "No engineering goal added", "STANDING BY", "Open Wishlist and add a blueprint target"), tags=("empty",))
+        self._total_lbl.config(text=f"Command: {len(plans) + len(odyssey['goals'])} goals · {shopping['missing_units'] + odyssey['missing_units']:,} units outstanding")
+        self._type_lbl.config(text="Live journal inventory · profile-aware local planning")
 
-    def _redraw_materials(self, cat):
+    def _redraw_inventory(self):
         self._configure_columns({
-            "grade": ("GOAL", 105, tk.CENTER, False),
-            "material": ("MATERIAL", 235, tk.W, True),
-            "stock": ("COUNT / CAP", 105, tk.E, False),
-            "capacity": ("CAPACITY", 155, tk.W, False),
+            "grade": ("STATE", 95, tk.CENTER, False),
+            "material": ("MATERIAL", 230, tk.W, True),
+            "stock": ("HAVE / NEED", 115, tk.E, False),
+            "capacity": ("COLLECTION / TRADE GUIDANCE", 355, tk.W, True),
         })
-        cat_data = self.materials.get(cat, {})
         search = self._search_text()
+        category_filter = self._category_var.get().casefold()
         view = self._view_var.get()
+        rows = []
+        for row in material_relevance(self.materials).values():
+            category = row.get("category", "")
+            if category_filter != "all types" and category != category_filter:
+                continue
+            if search and search not in f"{row['name']} {row['symbol']} {category} {row['family']} g{row.get('grade')}".casefold():
+                continue
+            if view == "Wishlist only" and not row["need"]:
+                continue
+            if view == "Missing only" and not row["deficit"]:
+                continue
+            if view == "Held only" and not row["have"]:
+                continue
+            if view == "Near capacity" and row["status"] != "NEAR CAP":
+                continue
+            rows.append(row)
 
-        items_with_count = []
-        known = {key: {"name": value["name"], "count": 0}
-                 for key, value in MATERIALS.items() if value.get("category") == cat}
-        known.update(cat_data)
-        for key, item in known.items():
-            count = int(item.get("count", 0) if isinstance(item, dict) else item)
-            ref = material_info(key)
-            name = (item.get("name") if isinstance(item, dict) else None) or ref["name"]
-            grade = ref.get("grade")
-            cap = GRADE_CAP.get(grade)
-            if search and search not in f"{name} {key} g{grade}".casefold():
-                continue
-            if view == "Held only" and count <= 0:
-                continue
-            if view == "Near capacity" and not (cap and count / cap >= 0.85):
-                continue
-            items_with_count.append((key, item, count))
-
-        if not items_with_count:
+        rows.sort(key=lambda row: (
+            {"MISSING": 0, "READY": 1, "NEAR CAP": 2, "SPARE": 3, "UNHELD": 4}.get(row["status"], 5),
+            row.get("category", ""), -(row.get("grade") or 0), row["name"],
+        ))
+        if not rows:
             self._material_tree.insert(
-                "",
-                tk.END,
-                values=("", f"No {cat.upper()} materials on record", "", "Log into Elite Dangerous to sync"),
+                "", tk.END,
+                values=("", "No materials match this view", "", "Change the type, view or search filter"),
                 tags=("empty",),
             )
-            self._update_footer(cat, cat_data, 0)
-            return
-
-        by_grade: dict[int | None, list] = {}
-        for key, item, count in items_with_count:
-            g = material_info(key).get("grade")
-            by_grade.setdefault(g, []).append((key, item, count, g))
-
-        for grade in sorted(by_grade.keys(), key=lambda value: value if value is not None else 99):
-            cap = GRADE_CAP.get(grade)
-            rows = sorted(by_grade[grade], key=lambda x: (-(x[2]), (
-                x[1].get("name") if isinstance(x[1], dict) else x[0]).lower()))
-
+        for row in rows:
+            grade = f"G{row['grade']}" if row.get("grade") else "—"
+            status = f"{row['status']} · {grade}"
+            if row["need"]:
+                stock = f"{row['have']:,} / {row['need']:,}"
+            elif row["cap"]:
+                stock = f"{row['have']:,} / {row['cap']:,}"
+            else:
+                stock = f"{row['have']:,}"
+            if row["deficit"]:
+                detail = f"Collect {row['deficit']:,} · {row['source']}"
+                tag = "near_cap"
+            elif row["need"]:
+                detail = "Wishlist requirement held · protect this stock from trades"
+                tag = "mid_cap"
+            elif row["status"] == "NEAR CAP":
+                detail = f"{row['fill'] * 100:.0f}% full · safe trader stock unless a future goal needs it"
+                tag = "near_cap"
+            else:
+                detail = row["source"]
+                tag = "low_cap" if row["have"] else "empty"
             self._material_tree.insert(
-                "",
-                tk.END,
-                values=((f"G{grade}" if grade else "—"),
-                        (f"GRADE {grade}  —  individual cap {cap:,}" if grade else "SPECIAL MATERIALS"), "", ""),
-                tags=("grade_header",),
+                "", tk.END,
+                values=(status, row["name"], stock, detail),
+                tags=(tag,),
             )
 
-            for key, item, count, g in rows:
-                ref = material_info(key)
-                name = (item.get("name") if isinstance(item, dict) else None) or ref["name"]
-                fill = min(1.0, count / cap) if cap else 0
-
-                if cap and fill >= 0.85:
-                    row_tag = "near_cap"
-                elif cap and fill >= 0.50:
-                    row_tag = "mid_cap"
-                else:
-                    row_tag = "low_cap"
-
-                if cap:
-                    segments = 10
-                    filled = max(0, min(segments, round(fill * segments)))
-                    capacity = "█" * filled + "░" * (segments - filled) + f"  {fill * 100:>3.0f}%"
-                    stock = f"{count:,} / {cap:,}"
-                else:
-                    capacity, stock = "Not material-trader stock", f"{count:,}"
-                self._material_tree.insert(
-                    "",
-                    tk.END,
-                    values=((f"G{g}" if g else "—"), name, stock, capacity),
-                    tags=(row_tag,),
-                )
-
-        self._update_footer(cat, cat_data, len(items_with_count))
+        held = sum(1 for row in material_relevance(self.materials).values() if row["have"])
+        missing = sum(1 for row in material_relevance(self.materials).values() if row["deficit"])
+        self._total_lbl.config(text=f"Inventory: {held} held types · {missing} wishlist shortages")
+        self._type_lbl.config(text=f"{len(rows)} shown · journal-backed ship material storage")
 
     def _redraw_engineers(self):
         self._configure_columns({
-            "grade": ("STATUS", 90, tk.CENTER, False),
+            "grade": ("WORKSHOP", 90, tk.CENTER, False),
             "material": ("ENGINEER", 190, tk.W, True),
             "stock": ("ACCESS", 90, tk.CENTER, False),
             "capacity": ("SYSTEM · SPECIALTY", 300, tk.W, True),
         })
         records = self.materials.get("engineers") or {}
         search = self._search_text()
+        division = self._category_var.get()
+        access_filter = self._view_var.get()
         order = {"Unlocked": 0, "Invited": 1, "Known": 2, "Locked": 3, "Not synced": 4}
         merged = {
             name: records.get(name) or {"progress": "Not synced", "rank": None}
@@ -605,13 +669,24 @@ class EngineerWindow(ThemedWindowMixin):
         displayed = 0
         for name, rec in rows:
             system, offers, on_foot = ENGINEERS.get(name, ("", "", False))
+            if division == "Horizons" and on_foot:
+                continue
+            if division == "Odyssey" and not on_foot:
+                continue
             if search and search not in f"{name} {system} {offers} {rec.get('progress', '')}".casefold():
                 continue
             progress = rec.get("progress") or "Not synced"
+            if access_filter == "Unlocked" and progress != "Unlocked":
+                continue
+            if access_filter == "Invited / Known" and progress not in ("Invited", "Known"):
+                continue
+            if access_filter == "Locked / Unsynced" and progress not in ("Locked", "Not synced"):
+                continue
             rank = int(rec.get("rank") or 0)
             access = f"G{rank} / 5" if progress == "Unlocked" and rank else progress.upper()
-            label = f"{name}  [ON-FOOT]" if on_foot else name
-            iid = self._material_tree.insert("", tk.END, values=(progress.upper(), label, access,
+            label = name
+            lane = "ODYSSEY" if on_foot else "HORIZONS"
+            iid = self._material_tree.insert("", tk.END, values=(lane, label, access,
                                              " · ".join(value for value in (system, offers) if value)),
                                              tags=("mid_cap" if progress == "Unlocked" else "low_cap",))
             if system:
@@ -621,14 +696,14 @@ class EngineerWindow(ThemedWindowMixin):
         if not displayed:
             self._material_tree.insert("", tk.END, values=("", "No engineers match the search", "", "Clear the search filter"), tags=("empty",))
         self._total_lbl.config(text=f"Unlocked: {unlocked} / {len(ENGINEERS)} known engineers")
-        self._type_lbl.config(text=f"{len(records)} synced from EngineerProgress · {displayed} shown")
+        self._type_lbl.config(text=f"{len(records)} synced from EngineerProgress · {displayed} shown · select to route")
 
     def _redraw_planner(self):
         self._configure_columns({
-            "grade": ("GRADE", 55, tk.CENTER, False),
+            "grade": ("TARGET", 90, tk.CENTER, False),
             "material": ("BLUEPRINT / MATERIAL", 235, tk.W, True),
             "stock": ("HAVE / NEED", 110, tk.E, False),
-            "capacity": ("SHORTFALL / TRADER OPTION", 330, tk.W, True),
+            "capacity": ("READINESS / COLLECTION OPTION", 350, tk.W, True),
         })
         raw_counts = {
             symbol: int(item.get("count", 0) if isinstance(item, dict) else item)
@@ -644,8 +719,9 @@ class EngineerWindow(ThemedWindowMixin):
         )
         plans = pinned_plans(self.materials)
         shopping = wishlist_plan(self.materials)
+        relevance = material_relevance(self.materials)
         if not plans:
-            self._material_tree.insert("", tk.END, values=("", "Nothing pinned yet", "", "Choose a blueprint and grade above, then PIN"), tags=("empty",))
+            self._material_tree.insert("", tk.END, values=("", "No wishlist goals yet", "", "Choose a blueprint and target grade above, then ADD GOAL"), tags=("empty",))
         for plan_row in plans:
             total = sum(row["need"] for row in plan_row["materials"])
             have = sum(min(row["have"], row["need"]) for row in plan_row["materials"])
@@ -658,7 +734,7 @@ class EngineerWindow(ThemedWindowMixin):
                 goal += f" · {quantity} modules"
             iid = self._material_tree.insert("", tk.END,
                 values=(goal, plan_row["blueprint"], f"{have} / {total}", status),
-                tags=("near_cap" if plan_row["craftable"] else "grade_header",))
+                tags=("mid_cap" if plan_row["craftable"] else "grade_header",))
             self._row_meta[iid] = {"blueprint": plan_row["blueprint"]}
             for row in plan_row["materials"]:
                 if row["deficit"]:
@@ -666,6 +742,8 @@ class EngineerWindow(ThemedWindowMixin):
                     if row.get("trade"):
                         trade = row["trade"]
                         detail += f" · trade {trade['spend']}× {trade['from']} for {trade['covers']}"
+                    else:
+                        detail += f" · {relevance.get(row['symbol'], {}).get('source', '')}"
                     tag = "near_cap"
                 else:
                     detail, tag = "Complete", "mid_cap"
@@ -674,7 +752,7 @@ class EngineerWindow(ThemedWindowMixin):
                     tags=(tag,))
         if plans:
             self._material_tree.insert("", tk.END,
-                values=("SHOPPING", "COMBINED NON-DOUBLED SHOPPING LIST",
+                values=("SHOPPING", "SHARED NON-DOUBLED SHOPPING LIST",
                         f"{shopping['required_units'] - shopping['missing_units']} / {shopping['required_units']}",
                         f"{shopping['missing_units']} units missing" if shopping['missing_units'] else "All required units held"),
                 tags=("grade_header",))
@@ -683,7 +761,8 @@ class EngineerWindow(ThemedWindowMixin):
                     continue
                 self._material_tree.insert("", tk.END,
                     values=(f"G{row['grade']}" if row.get("grade") else "—", f"  {row['name']}",
-                            f"{row['have']} / {row['need']}", f"Need {row['deficit']} more across all goals"),
+                            f"{row['have']} / {row['need']}",
+                            f"Need {row['deficit']} · {relevance.get(row['symbol'], {}).get('source', '')}"),
                     tags=("near_cap",))
         if self._trader_results or self._trader_searching:
             state = "Search in progress" if self._trader_searching else "Select a result, then ROUTE SELECTED"
@@ -698,7 +777,7 @@ class EngineerWindow(ThemedWindowMixin):
                     self._row_meta[iid] = {"system": trader.get("system")}
                 else:
                     self._material_tree.insert("", tk.END, values=(kind.upper(), "No trader found", "", ""), tags=("empty",))
-        self._total_lbl.config(text=f"Pinned goals: {len(plans)} · Missing: {shopping['missing_units']:,} units")
+        self._total_lbl.config(text=f"Wishlist: {len(plans)} goals · Missing: {shopping['missing_units']:,} units")
         selected = self._blueprint_var.get()
         info = BLUEPRINT_INFO.get(selected, {})
         self._type_lbl.config(text=info.get("what", "Verified high-use ship recipe set"))
@@ -708,27 +787,87 @@ class EngineerWindow(ThemedWindowMixin):
             "grade": ("TYPE", 100, tk.CENTER, False),
             "material": ("LOCKER ITEM", 280, tk.W, True),
             "stock": ("COUNT", 90, tk.E, False),
-            "capacity": ("USE", 260, tk.W, True),
+            "capacity": ("RELEVANCE / USE", 330, tk.W, True),
         })
         locker = self.materials.get("ship_locker") or {}
         search = self._search_text()
+        group_filter = self._category_var.get().casefold()
+        view = self._view_var.get()
+        plan = odyssey_wishlist_plan(self.materials)
+        locker_counts = odyssey_inventory_counts(self.materials)
         total = 0
+        displayed = 0
+        notable_count = 0
+        if plan["goals"]:
+            self._material_tree.insert(
+                "", tk.END,
+                values=("GOALS", "SUIT & WEAPON MODIFICATION WISHLIST",
+                        f"{plan['required_units'] - plan['missing_units']} / {plan['required_units']}",
+                        "READY" if plan["complete"] else f"{plan['missing_units']} units still required"),
+                tags=("mid_cap" if plan["complete"] else "grade_header",),
+            )
+            for goal in plan["goals"]:
+                recipe = ODYSSEY_BLUEPRINTS[goal["name"]]
+                required = {
+                    "".join(ch for ch in name.casefold() if ch.isalnum()): amount * goal["quantity"]
+                    for name, amount in recipe.items()
+                }
+                need = sum(required.values())
+                have = sum(min(int((locker_counts.get(key) or {}).get("count") or 0), amount)
+                           for key, amount in required.items())
+                iid = self._material_tree.insert(
+                    "", tk.END,
+                    values=("MOD", goal["name"], f"{have} / {need}",
+                            "READY TO APPLY" if have >= need else f"{need - have} ingredient units missing"),
+                    tags=("mid_cap" if have >= need else "low_cap",),
+                )
+                self._row_meta[iid] = {"odyssey_goal": goal["name"]}
+            for row in plan["materials"]:
+                if not row["deficit"]:
+                    continue
+                self._material_tree.insert(
+                    "", tk.END,
+                    values=("NEED", f"  {row['name']}", f"{row['have']} / {row['need']}",
+                            f"Collect or obtain {row['deficit']} more from Odyssey settlements/missions"),
+                    tags=("near_cap",),
+                )
+        else:
+            self._material_tree.insert(
+                "", tk.END,
+                values=("GOALS", "No Odyssey modification goals", "", "Choose a modification above, then ADD GOAL"),
+                tags=("empty",),
+            )
         for group in ("items", "components", "data", "consumables"):
             rows = locker.get(group) or []
             if not rows:
                 continue
-            self._material_tree.insert("", tk.END, values=(group.upper(), f"{group.upper()} · {len(rows)} types", "", ""), tags=("grade_header",))
+            if group_filter != "all locker" and group != group_filter:
+                continue
+            visible = []
             for item in rows:
                 if search and search not in f"{item.get('name', '')} {group}".casefold():
                     continue
                 count = int(item.get("count") or 0)
+                use, notable = odyssey_item_use(item.get("name", ""), group)
+                if view == "Notable only" and not notable:
+                    continue
+                if view == "Held only" and count <= 0:
+                    continue
+                visible.append((item, count, use, notable))
+            if not visible:
+                continue
+            self._material_tree.insert("", tk.END, values=(group.upper(), f"{group.upper()} · {len(visible)} shown", "", ""), tags=("grade_header",))
+            for item, count, use, notable in visible:
                 total += count
+                displayed += 1
+                notable_count += int(notable)
                 self._material_tree.insert("", tk.END, values=(group.upper(), item.get("name"), count,
-                                          "Locker inventory · recipe purpose not inferred"), tags=("low_cap",))
-        if not total:
-            self._material_tree.insert("", tk.END, values=("", "No Odyssey locker data", "", "ShipLocker.json syncs automatically"), tags=("empty",))
-        self._total_lbl.config(text=f"Locker total: {total:,}")
-        self._type_lbl.config(text="Goods · assets · data · consumables · live inventory only")
+                                          use), tags=("mid_cap" if notable else "low_cap",))
+        if not displayed and not plan["goals"]:
+            message = "No Odyssey locker data" if not locker else "No locker items match this view"
+            self._material_tree.insert("", tk.END, values=("", message, "", "ShipLocker.json syncs automatically"), tags=("empty",))
+        self._total_lbl.config(text=f"Odyssey: {len(plan['goals'])} goals · {plan['missing_units']} missing · {total:,} locker units shown")
+        self._type_lbl.config(text=f"{displayed} locker types · {notable_count} notable")
 
     def _pin_blueprint(self):
         name = self._blueprint_var.get()
@@ -760,6 +899,40 @@ class EngineerWindow(ThemedWindowMixin):
         result = self.save_callback(self.materials)
         if result is False:
             self._total_lbl.config(text=f"Could not save engineering goal: {self.materials.get('_save_error', 'unknown error')}")
+            return
+        self._redraw()
+
+    def _add_odyssey_goal(self):
+        name = self._odyssey_goal_var.get()
+        if name not in ODYSSEY_BLUEPRINTS:
+            return
+        quantity = max(1, min(99, int(self._odyssey_quantity_var.get() or 1)))
+        goals = [
+            goal for goal in (self.materials.get("odyssey_goals") or [])
+            if goal.get("name") != name
+        ]
+        goals.append({"name": name, "quantity": quantity})
+        self.materials["odyssey_goals"] = goals
+        result = self.save_callback(self.materials)
+        if result is False:
+            self._total_lbl.config(text=f"Could not save Odyssey goal: {self.materials.get('_save_error', 'unknown error')}")
+            return
+        self._redraw()
+
+    def _remove_odyssey_goal(self):
+        selected = self._material_tree.selection()
+        if not selected:
+            return
+        name = (self._row_meta.get(selected[0]) or {}).get("odyssey_goal")
+        if not name:
+            return
+        self.materials["odyssey_goals"] = [
+            goal for goal in (self.materials.get("odyssey_goals") or [])
+            if goal.get("name") != name
+        ]
+        result = self.save_callback(self.materials)
+        if result is False:
+            self._total_lbl.config(text=f"Could not save Odyssey goal: {self.materials.get('_save_error', 'unknown error')}")
             return
         self._redraw()
 

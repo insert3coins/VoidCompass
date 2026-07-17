@@ -333,6 +333,278 @@ ENGINEERS = {
 }
 
 
+# Compact gathering guidance inspired by the workflow used by dedicated
+# material-helper applications.  These are deliberately broad, stable hints:
+# the journal tells us what the commander owns, while the workshop explains
+# the most useful activity or trader lane without pretending to know a live
+# spawn location.
+_SOURCE_BY_CATEGORY = {
+    "raw": "Surface prospecting, crystalline sites or brain trees; exchange at a Raw trader.",
+    "manufactured": "Ship salvage, signal sources and mission rewards; exchange at a Manufactured trader.",
+    "encoded": "Scan ships, wakes and data points; exchange at an Encoded trader.",
+}
+
+_SOURCE_BY_FAMILY = {
+    "capacitors": "Combat-ship salvage, signal sources and mission rewards.",
+    "crystals": "Ship salvage and mission rewards; high grades are often fastest through missions.",
+    "thermic": "Signal sources and heat-related ship salvage.",
+    "conductive": "Transport and authority ship salvage, signal sources or missions.",
+    "mechanical": "Ship salvage, encoded emissions and mission rewards.",
+    "heat": "Transport-ship salvage and signal sources.",
+    "shielding": "Shielded ship salvage and signal sources.",
+    "composite": "Combat-ship salvage and high-grade emissions.",
+    "alloys": "Ship salvage and high-grade emissions.",
+    "chemical": "Transport-ship salvage, emissions and mission rewards.",
+    "firmware": "Scan data points and mission terminals.",
+    "encryption": "Scan data points, installations and mission targets.",
+    "archives": "Scan ships and data points.",
+    "wake scans": "Scan low and high wakes with a wake scanner.",
+    "emissions": "Scan ships and emissions signal sources.",
+    "shield data": "Scan shielded ships during normal traffic or combat.",
+    "guardian": "Guardian surface sites; these materials cannot use normal material traders.",
+    "thargoid": "Thargoid salvage or surface sites; these materials cannot use normal material traders.",
+    "special": "Special activity reward; normal material traders cannot supply it.",
+}
+
+
+def material_source_hint(symbol: str) -> str:
+    """Return concise, non-live gathering guidance for a material."""
+    info = material_info(symbol)
+    return _SOURCE_BY_FAMILY.get(
+        info.get("family"),
+        _SOURCE_BY_CATEGORY.get(info.get("category"), "Check the material description and current activity rewards."),
+    )
+
+
+def material_relevance(state: dict) -> dict[str, dict]:
+    """Describe how every known material relates to the shared wishlist.
+
+    The result gives the UI one authoritative place to decide whether an item
+    is missing, required, spare, near capacity, or simply untracked.
+    """
+    inventory = inventory_counts(state)
+    shopping = wishlist_plan(state)
+    needed = {row["symbol"]: row for row in shopping["materials"]}
+    result = {}
+    symbols = set(MATERIALS) | set(inventory) | set(needed)
+    for symbol in symbols:
+        info = material_info(symbol)
+        have = int(inventory.get(symbol, 0))
+        need = int((needed.get(symbol) or {}).get("need", 0))
+        deficit = max(0, need - have)
+        grade = info.get("grade")
+        cap = GRADE_CAP.get(grade)
+        fill = (have / cap) if cap else 0.0
+        if deficit:
+            status = "MISSING"
+        elif need:
+            status = "READY"
+        elif cap and fill >= 0.85:
+            status = "NEAR CAP"
+        elif have:
+            status = "SPARE"
+        else:
+            status = "UNHELD"
+        result[symbol] = {
+            **info,
+            "have": have,
+            "need": need,
+            "deficit": deficit,
+            "cap": cap,
+            "fill": fill,
+            "status": status,
+            "source": material_source_hint(symbol),
+        }
+    return result
+
+
+def collection_priorities(state: dict, limit: int | None = None) -> list[dict]:
+    """Return wishlist shortages in a useful collection order."""
+    rows = [row for row in material_relevance(state).values() if row["deficit"]]
+    rows.sort(key=lambda row: (-(row.get("grade") or 0), -row["deficit"], row["name"]))
+    return rows if limit is None else rows[:max(0, int(limit))]
+
+
+_ODYSSEY_KEY_USES = {
+    "power regulator": "Suit upgrades and settlement restoration; high-value engineering stock.",
+    "suit schematic": "Required for suit grade upgrades.",
+    "weapon schematic": "Required for weapon grade upgrades.",
+    "manufacturing instructions": "Common weapon and suit modification ingredient.",
+    "opinion polls": "Engineer invitation requirement; keep until access is complete.",
+    "settlement defence plans": "Engineer unlock requirement; rare data worth keeping.",
+    "smear campaign plans": "Engineer unlock requirement; rare data worth keeping.",
+    "financial projections": "Engineer unlock and modification ingredient.",
+    "push": "Engineer invitation item and bartender-trade good.",
+    "surveillance equipment": "Engineer invitation item.",
+    "genetic repair meds": "Engineer invitation item.",
+    "insight entertainment suite": "Engineer invitation item.",
+}
+
+
+# Common suit and weapon modifications.  Names match the localized English
+# values stored by ShipLocker.json so goals remain useful without a separate
+# database or network lookup.
+ODYSSEY_BLUEPRINTS = {
+    "Added Melee Damage": {
+        "Combat Training Material": 5, "Combatant Performance": 5,
+        "Epinephrine": 5, "Micro Thrusters": 8,
+    },
+    "Combat Movement Speed": {
+        "Evacuation Protocols": 5, "Genetic Research": 3,
+        "Epinephrine": 5, "pH Neutraliser": 8,
+    },
+    "Damage Resistance": {
+        "Weapon Inventory": 5, "Ballistics Data": 5, "Titanium Plating": 3,
+        "Epoxy Adhesive": 8, "Carbon Fibre Plating": 3,
+    },
+    "Enhanced Tracking": {
+        "Topographical Surveys": 5, "Stellar Activity Logs": 5,
+        "Spectral Analysis Data": 5, "Transmitter": 3, "Circuit Board": 3,
+    },
+    "Extra Ammo Capacity": {
+        "Recycling Logs": 8, "Weapon Test Data": 5,
+        "Production Reports": 5, "Weapon Component": 3,
+    },
+    "Extra Backpack Capacity": {
+        "Weapon Inventory": 5, "Chemical Inventory": 5, "Digital Designs": 5,
+        "Epoxy Adhesive": 5, "Memory Chip": 3,
+    },
+    "Faster Shield Regeneration": {
+        "Reactor Output Review": 5, "Ion Battery": 3,
+        "Micro Transformer": 8, "Electrical Wiring": 8,
+    },
+    "Improved Battery Capacity": {
+        "Reactor Output Review": 5, "Maintenance Logs": 8, "Ion Battery": 3,
+        "Micro Supercapacitor": 5, "Electrical Wiring": 5,
+    },
+    "Improved Jump Assist": {
+        "G-Meds": 5, "Topographical Surveys": 5, "Micro Thrusters": 3, "Motor": 5,
+    },
+    "Increased Air Reserves": {
+        "Pharmaceutical Patents": 3, "Air Quality Reports": 8,
+        "Oxygenic Bacteria": 5, "pH Neutraliser": 8,
+    },
+    "Increased Sprint Duration": {
+        "Troop Deployment Records": 3, "Gene Sequencing Data": 3,
+        "Medical Trial Records": 3, "Oxygenic Bacteria": 5, "Chemical Catalyst": 8,
+    },
+    "Night Vision": {
+        "Surveillance Equipment": 5, "Surveillance Logs": 3,
+        "NOC Data": 3, "Radioactivity Data": 3, "Circuit Switch": 5,
+    },
+    "Quieter Footsteps": {
+        "Settlement Assault Plans": 3, "Tactical Plans": 5, "Patrol Routes": 5,
+        "Micro Hydraulics": 3, "Viscoelastic Polymer": 8,
+    },
+    "Reduced Tool Battery Consumption": {
+        "Reactor Output Review": 5, "Electrical Wiring": 8,
+        "Electrical Fuse": 3, "Micro Transformer": 5,
+    },
+    "Audio Masking": {
+        "Audio Logs": 3, "Patrol Routes": 5, "Scrambler": 5,
+        "Transmitter": 8, "Circuit Board": 3,
+    },
+    "Faster Handling": {
+        "Operational Manual": 5, "Combatant Performance": 5,
+        "Combat Training Material": 5, "Viscoelastic Polymer": 3,
+    },
+    "Magazine Size": {
+        "Weapon Test Data": 5, "Security Expenses": 3, "Weapon Component": 3,
+        "Tungsten Carbide": 3, "Metal Coil": 5,
+    },
+    "Noise Suppressor": {
+        "Atmospheric Data": 5, "Mining Analytics": 5,
+        "Viscoelastic Polymer": 8, "Weapon Component": 3,
+    },
+    "Reload Speed": {
+        "Operational Manual": 5, "Production Reports": 5,
+        "Combat Training Material": 5, "Micro Hydraulics": 5, "Electromagnet": 5,
+    },
+    "Scope": {
+        "Spectral Analysis Data": 5, "Biometric Data": 3,
+        "Optical Lens": 5, "Optical Fibre": 3,
+    },
+    "Stability": {
+        "Mining Analytics": 5, "Risk Assessments": 8,
+        "Viscoelastic Polymer": 5, "Micro Hydraulics": 5,
+    },
+    "Stowed Reloading": {
+        "Digital Designs": 5, "Operational Manual": 5, "Production Schedule": 5,
+        "Circuit Board": 3, "Encrypted Memory Chip": 8,
+    },
+}
+
+
+def _locker_key(value: str) -> str:
+    return "".join(character for character in (value or "").casefold() if character.isalnum())
+
+
+def odyssey_inventory_counts(state: dict) -> dict[str, dict]:
+    """Return normalized Odyssey locker counts while preserving display names."""
+    result = {}
+    for group in ("items", "components", "data", "consumables"):
+        for item in ((state.get("ship_locker") or {}).get(group) or []):
+            name = item.get("name") or ""
+            key = _locker_key(name)
+            if not key:
+                continue
+            row = result.setdefault(key, {"name": name, "count": 0, "group": group})
+            row["count"] += int(item.get("count") or 0)
+    return result
+
+
+def odyssey_wishlist_plan(state: dict) -> dict:
+    """Combine every Odyssey modification goal into one locker shopping list."""
+    inventory = odyssey_inventory_counts(state)
+    needed = {}
+    goals = []
+    for goal in state.get("odyssey_goals") or []:
+        name = goal.get("name")
+        recipe = ODYSSEY_BLUEPRINTS.get(name)
+        if not recipe:
+            continue
+        quantity = max(1, min(99, int(goal.get("quantity") or 1)))
+        goals.append({"name": name, "quantity": quantity})
+        for material, amount in recipe.items():
+            key = _locker_key(material)
+            row = needed.setdefault(key, {"symbol": key, "name": material, "need": 0})
+            row["need"] += int(amount) * quantity
+    materials = []
+    for key, row in needed.items():
+        held = inventory.get(key) or {}
+        have = int(held.get("count") or 0)
+        materials.append({
+            **row,
+            "have": have,
+            "deficit": max(0, row["need"] - have),
+            "group": held.get("group", "unknown"),
+        })
+    materials.sort(key=lambda row: (row["deficit"] == 0, -row["deficit"], row["name"]))
+    return {
+        "goals": goals,
+        "materials": materials,
+        "required_units": sum(row["need"] for row in materials),
+        "missing_units": sum(row["deficit"] for row in materials),
+        "complete": bool(goals) and all(row["deficit"] == 0 for row in materials),
+    }
+
+
+def odyssey_item_use(name: str, group: str = "") -> tuple[str, bool]:
+    """Return a useful locker description and whether the item is notable."""
+    text = (name or "").replace("_", " ").casefold()
+    for token, description in _ODYSSEY_KEY_USES.items():
+        if token in text:
+            return description, True
+    group_key = (group or "").casefold()
+    if group_key == "consumables":
+        return "Mission and on-foot consumable; not an engineering ingredient.", False
+    if group_key == "data":
+        return "Odyssey data; keep when a suit, weapon or engineer goal requires it.", False
+    if group_key == "components":
+        return "Odyssey asset used by suit and weapon modifications or bartender trades.", False
+    return "Odyssey good used by engineers, upgrades, missions or bartender trades.", False
+
+
 def inventory_counts(state: dict) -> dict[str, int]:
     out = {}
     for category in ("raw", "manufactured", "encoded"):

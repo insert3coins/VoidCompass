@@ -38,6 +38,42 @@ class Palette:
 # (themes.py). Theme changes apply on the next launch.
 THEME = Palette(**_themes.normalize_theme(_themes.ACTIVE_PALETTE))
 
+# Older native panels predate the shared palette and still contain a small set
+# of repeated dark shell colors.  Treat them as semantic tokens when a window
+# is first painted or the profile theme changes.  Overlays never call
+# ``apply_window`` and therefore retain their purpose-built chroma palettes.
+_LEGACY_COLOR_SLOTS = {
+    "#050505": "inset",
+    "#050607": "inset",
+    "#070a0e": "bg",
+    "#090c10": "input",
+    "#090d12": "input",
+    "#0b0e12": "inset",
+    "#0b0f13": "inset",
+    "#0c1014": "header",
+    "#0d1317": "panel",
+    "#0d1318": "panel",
+    "#0e1318": "panel",
+    "#10151a": "panel",
+    "#10161c": "panel",
+    "#111111": "input",
+    "#11161c": "panel",
+    "#121920": "panel_alt",
+    "#17232c": "panel_raised",
+    "#1a2228": "panel_raised",
+    "#1a2430": "panel_raised",
+    "#26313a": "border",
+    "#12313c": "selection",
+    "#ff9a3c": "orange",
+    "#ff9a4d": "orange",
+    "#ff7777": "red",
+    "#ff5c5c": "red",
+    "#ff4d4d": "red",
+    "#21d189": "green",
+    "#62d66f": "green",
+    "#00ff99": "green",
+}
+
 FONT_UI = ("Segoe UI", 9)
 FONT_UI_BOLD = ("Segoe UI", 9, "bold")
 FONT_TITLE = ("Bahnschrift SemiCondensed", 14, "bold")
@@ -50,22 +86,181 @@ def apply_window(window, *, background=None):
     """Apply application defaults to a root or Toplevel without touching overlays."""
     window.configure(bg=background or THEME.bg)
     window.option_add("*Font", FONT_UI)
-    window.option_add("*insertBackground", THEME.accent)
-    window.option_add("*selectBackground", THEME.selection)
-    window.option_add("*selectForeground", THEME.text)
+    _configure_native_options(window)
+    _configure_shared_ttk(window)
+    try:
+        window.after_idle(lambda target=window: _apply_legacy_theme(target))
+    except Exception:
+        pass
+
+
+def _legacy_theme_mapping(palette=None):
+    palette = palette or {key: getattr(THEME, key) for key in _themes.THEME_KEYS}
+    mapping = {
+        color: palette[key]
+        for color, key in _LEGACY_COLOR_SLOTS.items()
+    }
+    defaults = _themes.BUILTIN_THEMES[_themes.DEFAULT_THEME_NAME]
+    for key in _themes.THEME_KEYS:
+        mapping[str(defaults[key]).lower()] = palette[key]
+    return mapping
+
+
+def _apply_legacy_theme(window):
+    try:
+        if window.winfo_exists():
+            _walk_widgets(window, _legacy_theme_mapping())
+    except Exception:
+        pass
 
 
 _CONFIGURED_TTK_PREFIXES = set()
 
 
-def configure_ttk(window, prefix="Void"):
-    """Create consistently named notebook, tree, input, and scrollbar styles."""
-    _CONFIGURED_TTK_PREFIXES.add(prefix)
+def _configure_native_options(window):
+    """Theme native controls that otherwise inherit Windows' light defaults."""
+    options = {
+        "*insertBackground": THEME.accent,
+        "*selectBackground": THEME.selection,
+        "*selectForeground": THEME.text,
+        "*Listbox.background": THEME.inset,
+        "*Listbox.foreground": THEME.text,
+        "*Listbox.highlightBackground": THEME.border,
+        "*Listbox.highlightColor": THEME.accent,
+        "*Text.background": THEME.inset,
+        "*Text.foreground": THEME.text,
+        "*Text.highlightBackground": THEME.border,
+        "*Entry.background": THEME.input,
+        "*Entry.foreground": THEME.text,
+        "*Spinbox.background": THEME.input,
+        "*Spinbox.foreground": THEME.text,
+        "*Spinbox.buttonBackground": THEME.panel_raised,
+        "*Checkbutton.background": THEME.bg,
+        "*Checkbutton.foreground": THEME.text,
+        "*Checkbutton.activeBackground": THEME.panel_alt,
+        "*Checkbutton.activeForeground": THEME.accent,
+        "*Checkbutton.selectColor": THEME.input,
+        "*Radiobutton.background": THEME.bg,
+        "*Radiobutton.foreground": THEME.text,
+        "*Radiobutton.activeBackground": THEME.panel_alt,
+        "*Radiobutton.activeForeground": THEME.accent,
+        "*Radiobutton.selectColor": THEME.input,
+        "*Scale.background": THEME.bg,
+        "*Scale.foreground": THEME.text,
+        "*Scale.troughColor": THEME.inset,
+        "*Menu.background": THEME.panel,
+        "*Menu.foreground": THEME.text,
+        "*Menu.activeBackground": THEME.selection,
+        "*Menu.activeForeground": THEME.text,
+        "*TCombobox*Listbox.background": THEME.input,
+        "*TCombobox*Listbox.foreground": THEME.text,
+        "*TCombobox*Listbox.selectBackground": THEME.selection,
+        "*TCombobox*Listbox.selectForeground": THEME.text,
+    }
+    for pattern, value in options.items():
+        try:
+            window.option_add(pattern, value)
+        except tk.TclError:
+            pass
+
+
+def _configure_shared_ttk(window):
+    """Install dark/profile-aware defaults for every unprefixed ttk widget."""
     style = ttk.Style(window)
     try:
         style.theme_use("clam")
     except tk.TclError:
         pass
+
+    style.configure(".", background=THEME.bg, foreground=THEME.text, font=FONT_UI)
+    style.configure("TFrame", background=THEME.bg)
+    style.configure("TLabel", background=THEME.bg, foreground=THEME.text)
+    style.configure("TLabelframe", background=THEME.bg, foreground=THEME.text,
+                    bordercolor=THEME.border, lightcolor=THEME.border,
+                    darkcolor=THEME.border, relief="flat")
+    style.configure("TLabelframe.Label", background=THEME.bg,
+                    foreground=THEME.orange, font=FONT_DISPLAY)
+    style.configure("TButton", background=THEME.panel_raised,
+                    foreground=THEME.text, bordercolor=THEME.border,
+                    lightcolor=THEME.border, darkcolor=THEME.border,
+                    padding=(9, 5), relief="flat", font=FONT_DISPLAY)
+    style.map(
+        "TButton",
+        background=[("pressed", THEME.selection), ("active", THEME.panel_alt),
+                    ("disabled", THEME.panel)],
+        foreground=[("pressed", THEME.accent), ("active", THEME.accent),
+                    ("disabled", THEME.dim)],
+    )
+    for control in ("TCheckbutton", "TRadiobutton"):
+        style.configure(control, background=THEME.bg, foreground=THEME.text,
+                        indicatorbackground=THEME.input,
+                        indicatorforeground=THEME.accent)
+        style.map(
+            control,
+            background=[("active", THEME.panel_alt)],
+            foreground=[("active", THEME.accent), ("disabled", THEME.dim)],
+            indicatorbackground=[("selected", THEME.accent),
+                                 ("active", THEME.selection)],
+        )
+    for control in ("TEntry", "TSpinbox"):
+        style.configure(control, fieldbackground=THEME.input,
+                        background=THEME.panel_raised, foreground=THEME.text,
+                        bordercolor=THEME.border, lightcolor=THEME.border,
+                        darkcolor=THEME.border, insertcolor=THEME.accent,
+                        arrowcolor=THEME.accent)
+        style.map(
+            control,
+            fieldbackground=[("disabled", THEME.panel), ("readonly", THEME.input)],
+            foreground=[("disabled", THEME.dim), ("readonly", THEME.text)],
+            bordercolor=[("focus", THEME.accent)],
+        )
+    style.configure("TCombobox", fieldbackground=THEME.input,
+                    background=THEME.panel_raised, foreground=THEME.text,
+                    arrowcolor=THEME.accent, bordercolor=THEME.border,
+                    lightcolor=THEME.border, darkcolor=THEME.border)
+    style.map(
+        "TCombobox",
+        fieldbackground=[("readonly", THEME.input), ("disabled", THEME.panel)],
+        background=[("readonly", THEME.panel_raised), ("active", THEME.panel_alt)],
+        foreground=[("readonly", THEME.text), ("disabled", THEME.dim)],
+        arrowcolor=[("disabled", THEME.dim), ("active", THEME.accent)],
+        bordercolor=[("focus", THEME.accent)],
+    )
+    style.configure("TNotebook", background=THEME.bg, borderwidth=0)
+    style.configure("TNotebook.Tab", background=THEME.panel,
+                    foreground=THEME.muted, padding=(13, 7),
+                    borderwidth=0, font=FONT_DISPLAY)
+    style.map(
+        "TNotebook.Tab",
+        background=[("selected", THEME.panel_raised), ("active", THEME.panel_alt)],
+        foreground=[("selected", THEME.accent), ("active", THEME.text)],
+    )
+    style.configure("Treeview", background=THEME.inset, foreground=THEME.text,
+                    fieldbackground=THEME.inset, borderwidth=0,
+                    rowheight=25, font=FONT_MONO)
+    style.configure("Treeview.Heading", background=THEME.panel_raised,
+                    foreground=THEME.orange, relief="flat", borderwidth=0,
+                    font=FONT_DISPLAY)
+    style.map("Treeview", background=[("selected", THEME.selection)],
+              foreground=[("selected", THEME.text)])
+    style.map("Treeview.Heading", background=[("active", THEME.panel_alt)],
+              foreground=[("active", THEME.accent)])
+    style.configure("TPanedwindow", background=THEME.bg)
+    style.configure("TSeparator", background=THEME.border)
+    style.configure("TScale", background=THEME.bg, troughcolor=THEME.inset)
+    for axis in ("Horizontal", "Vertical"):
+        style.configure(f"{axis}.TProgressbar", background=THEME.accent,
+                        troughcolor=THEME.inset, bordercolor=THEME.inset,
+                        lightcolor=THEME.accent, darkcolor=THEME.accent,
+                        thickness=9)
+    _configure_scrollbar_styles(style, "")
+    return style
+
+
+def configure_ttk(window, prefix="Void"):
+    """Create consistently named notebook, tree, input, and scrollbar styles."""
+    _CONFIGURED_TTK_PREFIXES.add(prefix)
+    style = _configure_shared_ttk(window)
 
     style.configure(f"{prefix}.TNotebook", background=THEME.bg, borderwidth=0)
     style.configure(
@@ -118,13 +313,21 @@ def configure_ttk(window, prefix="Void"):
         lightcolor=THEME.border,
         darkcolor=THEME.border,
     )
+    style.map(
+        f"{prefix}.TCombobox",
+        fieldbackground=[("readonly", THEME.input), ("disabled", THEME.panel)],
+        background=[("readonly", THEME.panel_raised), ("active", THEME.panel_alt)],
+        foreground=[("readonly", THEME.text), ("disabled", THEME.dim)],
+        arrowcolor=[("disabled", THEME.dim), ("active", THEME.accent)],
+        bordercolor=[("focus", THEME.accent)],
+    )
     _configure_scrollbar_styles(style, prefix)
     return style
 
 
 def _configure_scrollbar_styles(style, prefix="Void"):
-    vertical = f"{prefix}.Vertical.TScrollbar"
-    horizontal = f"{prefix}.Horizontal.TScrollbar"
+    vertical = f"{prefix}.Vertical.TScrollbar" if prefix else "Vertical.TScrollbar"
+    horizontal = f"{prefix}.Horizontal.TScrollbar" if prefix else "Horizontal.TScrollbar"
     style.layout(vertical, [
         ("Vertical.Scrollbar.trough", {
             "sticky": "ns",
@@ -461,6 +664,12 @@ def apply_theme_live(root, theme_name, palette):
         new = palette[key]
         if old != new.lower() and old not in mapping:
             mapping[old] = new
+    # Panels created from older hard-coded shell colors still follow live
+    # themes.  This also covers a page opened after the commander selected a
+    # non-default palette but before its first idle paint.
+    for old, new in _legacy_theme_mapping(palette).items():
+        if old != str(new).lower() and old not in mapping:
+            mapping[old] = new
     # Overlay constants may predate THEME (config.COLOR_* seeds) — map those too.
     try:
         import config as _cfg
@@ -526,8 +735,7 @@ def apply_theme_live(root, theme_name, palette):
         except Exception:
             pass
     try:
-        root.option_add("*insertBackground", THEME.accent)
-        root.option_add("*selectBackground", THEME.selection)
-        root.option_add("*selectForeground", THEME.text)
+        _configure_native_options(root)
+        _configure_shared_ttk(root)
     except Exception:
         pass

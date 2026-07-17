@@ -146,6 +146,7 @@ class ColonizationWindow(ThemedWindowMixin):
     # ── UI construction ───────────────────────────────────────────────────────
 
     def _build_ui(self):
+        configure_ttk(self.win, "Colony")
         # ── Header bar ────────────────────────────────────────────────────────
         hdr = tk.Frame(self.win, bg="#0c1014", height=46)
         hdr.pack(fill=tk.X)
@@ -193,7 +194,7 @@ class ColonizationWindow(ThemedWindowMixin):
         # ── Right: project detail + planner tabs ─────────────────────────────
         right = tk.Frame(main, bg=self.UI_PANEL)
         right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self._tabs = ttk.Notebook(right)
+        self._tabs = ttk.Notebook(right, style="Colony.TNotebook")
         self._tabs.pack(fill=tk.BOTH, expand=True)
 
         detail_tab = tk.Frame(self._tabs, bg=self.UI_PANEL)
@@ -381,7 +382,6 @@ class ColonizationWindow(ThemedWindowMixin):
         ).pack(side=tk.LEFT, padx=(6, 0))
 
         style = configure_ttk(self.win, "Colony")
-        style.theme_use("default")
         style.configure(
             "ColonyPlanner.Treeview",
             background="#0b0f13",

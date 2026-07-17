@@ -113,7 +113,6 @@ class CommanderProfileWindow(ThemedWindowMixin):
             self.hero_values[label] = value
 
         style = configure_ttk(self.win, "CommanderProfile")
-        style.theme_use("default")
         style.configure("CommanderProfile.TNotebook", background=self.UI_BG, borderwidth=0)
         style.configure(
             "CommanderProfile.TNotebook.Tab", background=self.UI_PANEL,

@@ -108,6 +108,10 @@ class TradeWindow(ThemedWindowMixin):
         style.configure("Trade.Treeview", background="#0b0f13", foreground=COLOR_TEXT, fieldbackground="#0b0f13", rowheight=24, borderwidth=0)
         style.configure("Trade.Treeview.Heading", background=self.UI_PANEL, foreground=COLOR_ORANGE, relief="flat", font=("Segoe UI", 8, "bold"))
         style.map("Trade.Treeview", background=[("selected", "#12313c")], foreground=[("selected", COLOR_TEXT)])
+        style.configure("Trade.Horizontal.TProgressbar", background=COLOR_ACCENT,
+                        troughcolor=self.UI_BG, bordercolor=self.UI_BG,
+                        lightcolor=COLOR_ACCENT, darkcolor=COLOR_ACCENT,
+                        thickness=9)
 
         self.summary = tk.Frame(self.win, bg=self.UI_PANEL, highlightbackground=self.UI_BORDER, highlightthickness=1, bd=0)
         self.summary.pack(fill=tk.X, padx=10, pady=(10, 0))
@@ -745,7 +749,10 @@ class TradeWindow(ThemedWindowMixin):
             "full Spansh baseline once; incremental EDDN and journal-market updates thereafter")
         self.db_status = tk.Label(panel, text="", fg=COLOR_TEXT, bg=self.UI_PANEL, font=("Consolas", 9), justify=tk.LEFT, anchor="w")
         self.db_status.pack(fill=tk.X, padx=12, pady=8)
-        self.seed_progress = ttk.Progressbar(panel, mode="determinate", maximum=100)
+        self.seed_progress = ttk.Progressbar(
+            panel, mode="determinate", maximum=100,
+            style="Trade.Horizontal.TProgressbar",
+        )
         self.seed_progress.pack(fill=tk.X, padx=12, pady=(0, 10))
         self.seed_progress.pack_forget()
         self.eddn_upload_var = tk.BooleanVar(value=bool(self.config.get("trade_eddn_upload_enabled", True)))
