@@ -65,6 +65,24 @@ FSD_INJECTION_RECIPES = {
 }
 FSD_INJECTION_BOOST = {"basic": 25, "standard": 50, "premium": 100}
 
+SHIP_CHANGE_EVENTS = {"ShipyardBuy", "ShipyardNew", "ShipyardSwap"}
+SHIP_COMPANION_EVENTS = SHIP_CHANGE_EVENTS | {"SetUserShipName", "ShipyardSell"}
+SHIP_DETAIL_FIELDS = {
+    "ModulesValue": "modules_value",
+    "HullHealth": "hull_health",
+    "MaxJumpRange": "max_jump_range",
+    "Rebuy": "rebuy",
+    "CargoCapacity": "cargo_capacity",
+    "FuelLevel": "fuel_level",
+    "FuelCapacity": "fuel_capacity",
+    "GameMode": "game_mode",
+    "Group": "group",
+}
+SHIP_RESET_FIELDS = {
+    "ship", "ship_localised", "ship_id", "ship_name", "ship_ident",
+    *SHIP_DETAIL_FIELDS.values(),
+}
+
 
 def fresh_state():
     return json.loads(json.dumps(DEFAULT_STATE))
@@ -330,8 +348,143 @@ def massacre_stacks(state):
 def normalise_stored_ship(record):
     return {
         "type": record.get("ShipType_Localised") or record.get("ShipType") or "Unknown ship",
+        "type_symbol": record.get("ShipType"), "ship_id": record.get("ShipID"),
         "name": record.get("Name"), "value": record.get("Value"),
         "hot": bool(record.get("Hot")), "system": record.get("StarSystem"),
         "transfer_cr": record.get("TransferPrice"), "transfer_s": record.get("TransferTime"),
         "in_transit": bool(record.get("InTransit")),
     }
+
+
+def _same_ship_id(left, right):
+    if left is None or right is None:
+        return False
+    return str(left) == str(right)
+
+
+def update_active_ship(current, event, raw):
+    """Reduce one journal ship event into the active mothership identity."""
+    ship = dict(current or {})
+    raw = raw if isinstance(raw, dict) else {}
+    before = dict(ship)
+
+    if event == "SetUserShipName":
+        # Elite also emits this event for SRVs. Only the active ship ID may
+        # update the mothership shown throughout the Commander Profile.
+        if not _same_ship_id(ship.get("ship_id"), raw.get("ShipID")):
+            return ship, False
+        if "UserShipName" in raw:
+            ship["ship_name"] = raw.get("UserShipName")
+        if "UserShipId" in raw:
+            ship["ship_ident"] = raw.get("UserShipId")
+        return ship, ship != before
+
+    if event not in ("Loadout", "LoadGame") and event not in SHIP_CHANGE_EVENTS:
+        return ship, False
+
+    if event in ("ShipyardBuy", "ShipyardSwap"):
+        incoming_type = raw.get("ShipType")
+        incoming_localised = raw.get("ShipType_Localised")
+        incoming_id = raw.get("ShipID") if event == "ShipyardSwap" else None
+        identity_changed = True
+    elif event == "ShipyardNew":
+        incoming_type = raw.get("ShipType")
+        incoming_localised = raw.get("ShipType_Localised")
+        incoming_id = raw.get("NewShipID")
+        identity_changed = True
+    else:
+        incoming_type = raw.get("Ship")
+        incoming_localised = raw.get("Ship_Localised")
+        incoming_id = raw.get("ShipID")
+        current_id = ship.get("ship_id")
+        current_type = ship.get("ship")
+        identity_changed = bool(
+            (incoming_id is not None and current_id is not None
+             and not _same_ship_id(incoming_id, current_id))
+            or (incoming_type and current_type and incoming_type != current_type)
+        )
+
+    if identity_changed:
+        for key in SHIP_RESET_FIELDS:
+            ship.pop(key, None)
+
+    if incoming_type is not None:
+        ship["ship"] = incoming_type
+    if incoming_localised is not None:
+        ship["ship_localised"] = incoming_localised
+    if incoming_id is not None:
+        ship["ship_id"] = incoming_id
+
+    if event in ("Loadout", "LoadGame"):
+        # Empty names and identifiers are real values for newly purchased
+        # ships; never retain the outgoing vessel's identity in their place.
+        if "ShipName" in raw:
+            ship["ship_name"] = raw.get("ShipName")
+        if "ShipIdent" in raw:
+            ship["ship_ident"] = raw.get("ShipIdent")
+        for source, target in SHIP_DETAIL_FIELDS.items():
+            if source in raw:
+                ship[target] = raw.get(source)
+
+    return ship, ship != before
+
+
+def _remove_stored_ship(rows, ship_id):
+    if ship_id is None:
+        return list(rows or []), False
+    filtered = [row for row in rows or []
+                if not _same_ship_id((row or {}).get("ship_id"), ship_id)]
+    return filtered, len(filtered) != len(rows or [])
+
+
+def update_ship_companion_state(state, event, raw):
+    """Keep the cached loadout and stored fleet aligned with shipyard events."""
+    raw = raw if isinstance(raw, dict) else {}
+    changed = False
+
+    if event in SHIP_CHANGE_EVENTS and state.get("loadout") is not None:
+        state["loadout"] = None
+        changed = True
+    elif event == "SetUserShipName" and isinstance(state.get("loadout"), dict):
+        loadout = state["loadout"]
+        if _same_ship_id(loadout.get("ShipID"), raw.get("ShipID")):
+            if "UserShipName" in raw and loadout.get("ShipName") != raw.get("UserShipName"):
+                loadout["ShipName"] = raw.get("UserShipName")
+                changed = True
+            if "UserShipId" in raw and loadout.get("ShipIdent") != raw.get("UserShipId"):
+                loadout["ShipIdent"] = raw.get("UserShipId")
+                changed = True
+
+    fleet = state.get("stored_ships")
+    if not isinstance(fleet, dict):
+        return changed
+
+    fleet_changed = False
+    here = list(fleet.get("here") or [])
+    remote = list(fleet.get("remote") or [])
+    target_id = {
+        "ShipyardNew": raw.get("NewShipID"),
+        "ShipyardSwap": raw.get("ShipID"),
+        "ShipyardSell": raw.get("SellShipID") or raw.get("ShipID"),
+    }.get(event)
+    if target_id is not None:
+        here, here_changed = _remove_stored_ship(here, target_id)
+        remote, remote_changed = _remove_stored_ship(remote, target_id)
+        fleet_changed = fleet_changed or here_changed or remote_changed
+
+    if event in ("ShipyardBuy", "ShipyardSwap") and raw.get("StoreShipID") is not None:
+        stored_id = raw.get("StoreShipID")
+        here, _ = _remove_stored_ship(here, stored_id)
+        remote, _ = _remove_stored_ship(remote, stored_id)
+        here.append(normalise_stored_ship({
+            "ShipID": stored_id,
+            "ShipType": raw.get("StoreOldShip"),
+            "StarSystem": raw.get("StarSystem"),
+        }))
+        fleet_changed = True
+
+    if fleet_changed:
+        fleet["here"] = here
+        fleet["remote"] = remote
+        fleet["updated"] = raw.get("timestamp") or fleet.get("updated")
+    return changed or fleet_changed

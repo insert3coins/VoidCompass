@@ -386,6 +386,7 @@ class JournalWatcher:
                 "data": {
                     "cargo_capacity": data.get("CargoCapacity", 0),
                     "ship": data.get("Ship"),
+                    "ship_localised": data.get("Ship_Localised"),
                     "ship_id": data.get("ShipID"),
                     "ship_name": data.get("ShipName"),
                     "ship_ident": data.get("ShipIdent"),

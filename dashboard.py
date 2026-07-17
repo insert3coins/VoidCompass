@@ -4444,22 +4444,25 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             fuel_cap = (raw.get("FuelCapacity") or {}) if isinstance(raw, dict) else {}
             self.fuel_capacity_main = fuel_cap.get("Main")
             self._low_fuel_warned = False
-            self.cmdr_ship.update({
-                "ship": d.get("ship") or self.cmdr_ship.get("ship"),
-                "ship_id": d.get("ship_id") or self.cmdr_ship.get("ship_id"),
-                "ship_name": d.get("ship_name") or self.cmdr_ship.get("ship_name"),
-                "ship_ident": d.get("ship_ident") or self.cmdr_ship.get("ship_ident"),
-                "modules_value": d.get("modules_value"),
-                "hull_health": d.get("hull_health"),
-                "max_jump_range": d.get("max_jump_range"),
-                "rebuy": d.get("rebuy"),
-                "cargo_capacity": self.cargo_capacity,
-            })
+            self.cmdr_ship, _ = companion_features.update_active_ship(
+                self.cmdr_ship, ev, raw
+            )
             self.watcher.force_check_cargo()
             if self.colony_overlay:
                 self.colony_overlay.update()
             self._queue_edsm_upload(raw, allow_startup=True)
             self._refresh_commander_profile_window()
+
+        elif ev in ("ShipyardBuy", "ShipyardNew", "ShipyardSwap", "SetUserShipName"):
+            self.cmdr_ship, ship_changed = companion_features.update_active_ship(
+                self.cmdr_ship, ev, raw
+            )
+            if ev in companion_features.SHIP_CHANGE_EVENTS:
+                self.cargo_capacity = 0
+                self.fuel_capacity_main = None
+                self._low_fuel_warned = False
+            if ship_changed:
+                self._refresh_commander_profile_window()
 
         elif ev == "Cargo":
             # Journal can emit Cargo before/without immediate file polling update.
@@ -4537,17 +4540,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if credits is not None:
                 self._set_commander_balance(credits, loan=loan, timestamp=raw.get("timestamp"))
                 self._queue_edsm_upload(raw, allow_startup=True, flush=True)
-            self.cmdr_ship.update({
-                "ship": d.get("ship") or self.cmdr_ship.get("ship"),
-                "ship_localised": d.get("ship_localised") or self.cmdr_ship.get("ship_localised"),
-                "ship_id": d.get("ship_id") or self.cmdr_ship.get("ship_id"),
-                "ship_name": d.get("ship_name") or self.cmdr_ship.get("ship_name"),
-                "ship_ident": d.get("ship_ident") or self.cmdr_ship.get("ship_ident"),
-                "fuel_level": d.get("fuel_level"),
-                "fuel_capacity": d.get("fuel_capacity"),
-                "game_mode": d.get("game_mode"),
-                "group": d.get("group"),
-            })
+            self.cmdr_ship, _ = companion_features.update_active_ship(
+                self.cmdr_ship, ev, raw
+            )
             self._refresh_commander_profile_window()
 
         elif ev == "ScanOrganic":
@@ -5449,6 +5444,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if ev == "Loadout":
             state["loadout"] = dict(raw)
             changed = True
+
+        elif ev in companion_features.SHIP_COMPANION_EVENTS:
+            changed = companion_features.update_ship_companion_state(
+                state, ev, raw
+            ) or changed
 
         elif ev == "Statistics":
             # Statistics is Elite's lifetime commander record. Retain the most

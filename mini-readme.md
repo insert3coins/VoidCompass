@@ -6,6 +6,7 @@
 *   Native HUDs and overlays now pass mouse input through to Elite Dangerous by default, preventing an overlay under the pointer from intercepting flight or camera controls.
 *   Added a profile-aware **Mouse passthrough** setting under Overlays. Turn it off temporarily to drag or click overlays, then turn it back on for gameplay; the change applies immediately without restarting VoidCompass.
 *   Resized windows now retain access to every workspace through persistent VoidCompass-themed scrolling. Mouse-wheel routing respects nested tables, text views and specialist panels, and every Settings section now has its own themed scrolling surface.
+*   Commander Profile ship identity now follows purchases, new-ship assignment, shipyard swaps, full loadouts and ship renames immediately. Empty names no longer retain the previous vessel's name, and SRV naming events cannot replace the active mothership.
 
 ## v4.8.6 // Compass Judgment & Profile-State Reliability
 **Release Date:** 2026-Jul-16
