@@ -648,7 +648,14 @@ class JournalWatcher:
                     "landable": data.get("Landable", False),
                     "was_discovered": data.get("WasDiscovered", True),
                     "was_mapped": data.get("WasMapped", True),
-                    "first_footfall": data.get("FirstFootfall", False),
+                    "was_footfalled": data.get("WasFootfalled"),
+                    # Elite reports whether somebody had already made first
+                    # footfall when the body was scanned.  Keep the existing
+                    # UI key as an availability flag for landable planets.
+                    "first_footfall": bool(
+                        data.get("Landable", False)
+                        and data.get("WasFootfalled") is False
+                    ),
                     "mass_em": data.get("MassEM"),
                     "stellar_mass": data.get("StellarMass"),
                     "is_body_scan": bool(star_type or planet_class),
@@ -705,6 +712,7 @@ class JournalWatcher:
                     "display":  display,
                     "required": int(r.get("RequiredAmount") or 0),
                     "provided": int(r.get("ProvidedAmount") or 0),
+                    "payment":  int(r.get("Payment") or 0),
                 })
             return {
                 "type": ev,
@@ -714,7 +722,9 @@ class JournalWatcher:
                     "system_name":    data.get("SystemName", ""),
                     "system_address": data.get("SystemAddress"),
                     "body_name":      data.get("BodyName", ""),
-                    "progress":       float(data.get("Progress") or 0),
+                    "progress":       float(
+                        data.get("ConstructionProgress", data.get("Progress", 0)) or 0
+                    ),
                     "complete":       bool(data.get("ConstructionComplete", False)),
                     "failed":         bool(data.get("ConstructionFailed", False)),
                     "resources":      resources,
@@ -731,19 +741,18 @@ class JournalWatcher:
                 contributions.append({
                     "name":    raw_name,
                     "display": display,
-                    "count":   int(c.get("Count") or 0),
+                    "count":   int(c.get("Amount", c.get("Count", 0)) or 0),
                 })
             return {
                 "type": ev,
                 "raw": data,
                 "data": {
                     "market_id":     data.get("MarketID"),
-                    "progress":      float(data.get("Progress") or 0),
                     "contributions": contributions,
                 }
             }
 
-        if ev == "ColonisationSystemClaimed":
+        if ev in ("ColonisationSystemClaim", "ColonisationSystemClaimRelease"):
             return {
                 "type": ev,
                 "raw": data,

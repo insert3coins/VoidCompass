@@ -1085,16 +1085,21 @@ class CompassCognition:
         services = " ".join(str(item).casefold() for item in station.get("services") or [])
         exploration = int(objectives.get("unsold_exploration_cr") or 0)
         bio_value = int(objectives.get("unsold_biology_cr") or 0)
+        bio_potential = int(objectives.get("unsold_biology_bonus_potential_cr") or 0)
+        bio_value_text = (
+            f"{bio_value:,} to {bio_value + bio_potential:,} estimated credits"
+            if bio_potential else f"{bio_value:,} credits"
+        )
         station_name = station.get("name")
         if event == "Docked" and bio_value and "vista" in services:
             at = f" at {station_name}" if station_name else ""
             candidates.append(self._candidate(
                 "sell-biology", 88, "Unsold biological data can be acted on at this station.",
                 (
-                    f"Vista Genomics is available{at} for our {bio_value:,} credits of biological data.",
-                    f"We can secure {bio_value:,} credits of biological data through Vista Genomics{at}.",
-                    f"Our biological archive is worth {bio_value:,} credits, and Vista Genomics is available{at}.",
-                    f"Vista Genomics can receive the current {bio_value:,}-credit biology record{at}.",
+                    f"Vista Genomics is available{at} for our biological archive, estimated at {bio_value_text}.",
+                    f"We can secure at least {bio_value:,} credits of biological data through Vista Genomics{at}.",
+                    f"Our biological archive is estimated at {bio_value_text}, and Vista Genomics is available{at}.",
+                    f"Vista Genomics can receive the current biology record{at}; base value is {bio_value:,} credits.",
                 ), ("biology", "data", "goal"), outcome="sell-biology",
             ))
         if event == "Docked" and exploration and "cartograph" in services:

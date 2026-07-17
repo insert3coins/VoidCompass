@@ -1002,13 +1002,17 @@ class DashboardUIMixin(ThemedWindowMixin):
         cargo = int(getattr(self, "current_cargo_tons", 0) or 0)
         cargo_cap = int(getattr(self, "cargo_capacity", 0) or 0)
         unsold = int(state.get("unsold_exploration_cr") or 0) + int(state.get("unsold_bio_cr") or 0)
+        potential_bonus = int(state.get("unsold_bio_bonus_potential_cr") or 0)
         flight_bits = []
         if fuel_pct is not None:
             flight_bits.append(f"fuel {fuel_pct}%")
         if cargo_cap:
             flight_bits.append(f"cargo {cargo}/{cargo_cap} T")
         if unsold:
-            flight_bits.append(f"data {self._dashboard_credits(unsold)}")
+            value = self._dashboard_credits(unsold)
+            if potential_bonus:
+                value = f"{value}–{self._dashboard_credits(unsold + potential_bonus)} est."
+            flight_bits.append(f"data {value}")
         legal = getattr(self, "current_legal_state", None)
         if legal and str(legal).casefold() not in ("clean", "none"):
             flight_bits.append(str(legal))

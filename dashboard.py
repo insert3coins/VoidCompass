@@ -3135,6 +3135,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         unsold_exploration = int(state.get("unsold_exploration_cr") or 0)
         unsold_biology = int(state.get("unsold_bio_cr") or 0)
+        unsold_biology_potential = int(state.get("unsold_bio_bonus_potential_cr") or 0)
         trade = getattr(self, "trade_session", {}) or {}
         mining = self._compass_mining_snapshot(mission_rows)
         trade_context = self._compass_trade_snapshot()
@@ -3245,7 +3246,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "mission_destinations": mission_destinations[:6],
                 "unsold_exploration_cr": unsold_exploration,
                 "unsold_biology_cr": unsold_biology,
+                "unsold_biology_bonus_potential_cr": unsold_biology_potential,
                 "unsold_data_total_cr": unsold_exploration + unsold_biology,
+                "unsold_data_max_cr": (
+                    unsold_exploration + unsold_biology + unsold_biology_potential
+                ),
                 "pinned_engineering": list(
                     (getattr(self, "engineer_materials", {}) or {}).get("pinned_blueprints") or []
                 )[:5],
@@ -4305,6 +4310,27 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev in ("CommitCrime", "Bounty"):
             detail = raw.get("CrimeType_Localised") or raw.get("CrimeType") or raw.get("Victim") or raw.get("Target_Localised") or raw.get("Target") or "Legal status changed"
             self._push_live_toast("CRIME REPORTED" if ev == "CommitCrime" else "BOUNTY AWARDED", str(detail), "warn", 15)
+        elif ev == "SystemsShutdown":
+            self._push_live_toast(
+                "SYSTEMS SHUTDOWN", "Ship systems have been forced offline", "fail", 18,
+                (
+                    "Warning. Ship systems have been forced offline.",
+                    "Critical systems shutdown detected. Stand by for recovery.",
+                    "All ship systems are offline. Monitoring recovery sequence.",
+                    "Power loss across the ship. I am tracking the restart cycle.",
+                ),
+                voice_category="safety", voice_key="systems-shutdown",
+            )
+        elif ev == "USSDrop":
+            threat = int(raw.get("USSThreat") or 0)
+            if threat >= 3:
+                signal = raw.get("USSType_Localised") or raw.get("USSType") or "Signal source"
+                self._push_live_toast(
+                    "SIGNAL THREAT", f"{signal} · threat {threat}",
+                    "fail" if threat >= 5 else "warn", 14,
+                )
+        elif ev == "SelfDestruct":
+            self._push_live_toast("SELF-DESTRUCT", "Self-destruct sequence initiated", "fail", 15)
 
     def process_event(self, data):
         ev = data.get("type") or data.get("event")
@@ -4344,7 +4370,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 logging.warning("Credit event failed [%s]: %s", ev, exc)
         if getattr(self, "captains_log", None):
             try:
-                if self.captains_log.process_event(raw):
+                if self.captains_log.process_event(raw, context=d):
                     self._refresh_exploration_window()
                     self._refresh_commander_profile_window()
             except Exception as exc:
@@ -4877,6 +4903,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.hud_flight_state = "FLIGHT"
             self.update_hud()
 
+        elif ev == "VehicleSwitch":
+            self._apply_vehicle_switch(raw.get("To") or d.get("To"))
+
         elif ev == "Music":
             self._handle_music_event(raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
 
@@ -5240,8 +5269,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 was_failed = bool(_existing.get("failed"))
                 self.colonisation_projects[mid] = {
                     "market_id":    mid,
-                    "system_name":  d.get("system_name", ""),
-                    "body_name":    d.get("body_name", ""),
+                    "system_name":  d.get("system_name") or _existing.get("system_name") or self.current_sys or "",
+                    "body_name":    d.get("body_name") or _existing.get("body_name") or "",
                     "progress":     d.get("progress", 0.0),
                     "complete":     d.get("complete", False),
                     "failed":       d.get("failed", False),
@@ -5282,7 +5311,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             mid = d.get("market_id")
             if mid in self.colonisation_projects:
                 proj = self.colonisation_projects[mid]
-                proj["progress"] = d.get("progress", proj.get("progress", 0))
                 proj["last_updated"] = time.time()
                 contribs = {c["name"].lower(): c["count"] for c in (d.get("contributions") or [])}
                 for r in proj.get("resources", []):
@@ -5584,6 +5612,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 )
             changed = True
             galaxy_changed = True
+
+        elif ev == "CommunityGoalDiscard":
+            goal_id = raw.get("CGID")
+            goals = state.setdefault("community_goals", {})
+            removed = goals.pop(str(goal_id), None) if goal_id is not None else None
+            if removed is not None:
+                changed = True
+                galaxy_changed = True
         elif ev in ("SquadronPromotion", "SquadronDemotion"):
             previous = state.get("squadron") or {}
             state["squadron"] = {
@@ -5626,6 +5662,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             }
             companion_features.record_squadron_activity(
                 state, ev, squadron_name, raw.get("timestamp"), "Application submitted",
+            )
+            changed = True
+            galaxy_changed = True
+
+        elif ev in ("CancelledSquadronApplication", "SquadronApplicationApproved",
+                    "SquadronApplicationRejected"):
+            pending = state.get("squadron_application") or {}
+            squadron_name = raw.get("SquadronName") or pending.get("name")
+            detail = {
+                "CancelledSquadronApplication": "Application cancelled",
+                "SquadronApplicationApproved": "Application approved",
+                "SquadronApplicationRejected": "Application rejected",
+            }[ev]
+            state["squadron_application"] = None
+            companion_features.record_squadron_activity(
+                state, ev, squadron_name, raw.get("timestamp"), detail,
             )
             changed = True
             galaxy_changed = True
@@ -5675,6 +5727,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "Died" and not startup_replay:
             state["unsold_exploration_cr"] = 0
             state["unsold_bio_cr"] = 0
+            state["unsold_bio_bonus_potential_cr"] = 0
             state["unsold_scan_keys"] = []
             self._data_risk_level = 0
             changed = True
@@ -5727,6 +5780,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if sold_count > 0 and getattr(self, "cockpit_memory", None):
                     self.cockpit_memory.record_bio_sale(sold_count)
                 state["unsold_bio_cr"] = 0
+                state["unsold_bio_bonus_potential_cr"] = 0
                 state["unsold_bio_samples"] = 0
                 self._data_risk_level = 0
                 self._clear_sold_data_warnings(biological=True)
@@ -5899,8 +5953,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return False
         if scan_type == "analyse" or data.get("is_complete"):
             body_item = self.scan_items_by_id.get(self._normalize_body_id(body), {})
-            multiplier = 5 if body_item.get("first_footfall") else 1
-            self.companion_state["unsold_bio_cr"] = int(self.companion_state.get("unsold_bio_cr") or 0) + int(bio_values.species_value(species) or 0) * multiplier
+            base_value = int(bio_values.species_value(species) or 0)
+            self.companion_state["unsold_bio_cr"] = int(
+                self.companion_state.get("unsold_bio_cr") or 0
+            ) + base_value
+            if body_item.get("first_footfall"):
+                self.companion_state["unsold_bio_bonus_potential_cr"] = int(
+                    self.companion_state.get("unsold_bio_bonus_potential_cr") or 0
+                ) + base_value * 4
             self.companion_state["unsold_bio_samples"] = int(self.companion_state.get("unsold_bio_samples") or 0) + 1
             self.bio_sampling = None
             self.bio_sample_points = []

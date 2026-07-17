@@ -34,7 +34,8 @@ ACTIVITY_EVENTS = {
     "combat": {
         "Bounty", "FactionKillBond", "CapShipBond", "UnderAttack",
         "Interdicted", "Interdiction", "EscapeInterdiction", "Died",
-        "FighterDestroyed", "PVPKill", "ShipTargeted",
+        "FighterDestroyed", "PVPKill", "ShipTargeted", "SystemsShutdown",
+        "SelfDestruct",
     },
     "ground": {
         "Disembark", "SuitLoadout", "ApproachSettlement", "CollectItems",
@@ -50,7 +51,11 @@ ACTIVITY_EVENTS = {
         "CarrierBuy", "CarrierJump", "CarrierJumpCancelled", "CarrierJumpRequest",
         "CarrierStats", "CarrierTradeOrder", "CarrierBankTransfer",
     },
-    "colonisation": {"ColonisationConstructionDepot", "ColonisationContribution"},
+    "colonisation": {
+        "ColonisationConstructionDepot", "ColonisationContribution",
+        "ColonisationSystemClaim", "ColonisationSystemClaimRelease",
+        "ColonisationBeaconDeployed", "CompleteConstruction",
+    },
     "station": {"Docked"},
 }
 
@@ -143,6 +148,9 @@ def fresh_runtime_state():
             "refuels": 0,
             "synthesis": {},
             "cargo_ejected_t": 0,
+            "systems_shutdowns": 0,
+            "last_systems_shutdown": None,
+            "self_destructs": 0,
         },
         "signals": {
             "system": None,
@@ -164,6 +172,8 @@ def fresh_runtime_state():
             "on_foot": False,
             "in_taxi": False,
             "in_multicrew": False,
+            "crew_captain": None,
+            "vehicle_control": "Mothership",
             "oxygen_percent": None,
             "health_percent": None,
             "temperature_k": None,
@@ -321,11 +331,19 @@ def observe_event(state, event, raw=None, current_system=None, historical=False)
         scans = signals.setdefault("data_scans", {})
         scans[scan_type] = int(scans.get(scan_type) or 0) + 1
         changed = True
-    elif event == "SupercruiseDestinationDrop":
+    elif event in ("SupercruiseDestinationDrop", "USSDrop"):
+        threat = _integer(
+            raw.get("USSThreat") if event == "USSDrop" else raw.get("Threat"), 0
+        )
         signals["last_drop"] = {
-            "type": raw.get("Type"), "threat": _integer(raw.get("Threat"), 0),
+            "type": (
+                raw.get("USSType_Localised") or raw.get("USSType")
+                if event == "USSDrop" else raw.get("Type")
+            ),
+            "threat": threat,
             "timestamp": raw.get("timestamp"),
         }
+        signals["highest_threat"] = max(int(signals.get("highest_threat") or 0), threat)
         changed = True
 
     if not historical:
@@ -354,6 +372,13 @@ def observe_event(state, event, raw=None, current_system=None, historical=False)
             changed = True
         elif event == "EjectCargo":
             ship["cargo_ejected_t"] = int(ship.get("cargo_ejected_t") or 0) + _integer(raw.get("Count"), 0)
+            changed = True
+        elif event == "SystemsShutdown":
+            ship["systems_shutdowns"] = int(ship.get("systems_shutdowns") or 0) + 1
+            ship["last_systems_shutdown"] = raw.get("timestamp") or time.time()
+            changed = True
+        elif event == "SelfDestruct":
+            ship["self_destructs"] = int(ship.get("self_destructs") or 0) + 1
             changed = True
 
         if event == "MissionAccepted":
@@ -423,6 +448,19 @@ def observe_event(state, event, raw=None, current_system=None, historical=False)
         changed = True
     elif event in ("BookTaxi", "BookDropship"):
         ground["in_taxi"] = True
+        changed = True
+    elif event == "VehicleSwitch":
+        destination = _clean(raw.get("To"), "Mothership")
+        ground["vehicle_control"] = destination
+        ground["on_foot"] = False
+        changed = True
+    elif event == "JoinACrew":
+        ground["in_multicrew"] = True
+        ground["crew_captain"] = raw.get("Captain")
+        changed = True
+    elif event == "QuitACrew":
+        ground["in_multicrew"] = False
+        ground["crew_captain"] = None
         changed = True
     elif event in ("CollectItems", "DropItems") and not historical:
         count = max(1, _integer(raw.get("Count"), 1))

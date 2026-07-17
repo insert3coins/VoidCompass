@@ -173,6 +173,7 @@ class CarrierTracker:
             "CarrierLocation": None,
             "CarrierJumpRequest": None,
             "CarrierJumpCancelled": None,
+            "CarrierNameChange": None,
         }
         trade_events = []
         expected_name = str(commander or "").strip().casefold()
@@ -224,6 +225,8 @@ class CarrierTracker:
                             file_events["CarrierJumpRequest"] = raw
                         elif ev == "CarrierJumpCancelled":
                             file_events["CarrierJumpCancelled"] = raw
+                        elif ev == "CarrierNameChange":
+                            file_events["CarrierNameChange"] = raw
                         elif ev == "CarrierTradeOrder":
                             file_trades.append(raw)
             except Exception:
@@ -252,6 +255,8 @@ class CarrierTracker:
             can_ts = _parse_dt(buckets["CarrierJumpCancelled"].get("timestamp"))
             if req_ts and can_ts and can_ts > req_ts:
                 replay.append(buckets["CarrierJumpCancelled"])
+        if buckets["CarrierNameChange"]:
+            replay.append(buckets["CarrierNameChange"])
         for t in trade_events:
             replay.append(t)
 
@@ -276,6 +281,8 @@ class CarrierTracker:
                         self._handle_jump_cancelled(raw)
                     elif ev == "CarrierTradeOrder":
                         self._handle_trade_order(raw)
+                    elif ev == "CarrierNameChange":
+                        self._handle_name_change(raw)
             finally:
                 self.on_updated = orig_on_updated
 
@@ -379,11 +386,8 @@ class CarrierTracker:
             self.carrier_data["docking_access"] = raw.get("DockingAccess", "all")
             self.carrier_data["allow_notorious"] = bool(raw.get("AllowNotorious", False))
             changed = True
-        elif ev == "CarrierNameChanged":
-            name = raw.get("Name") or raw.get("CarrierName")
-            if name:
-                self.carrier_data["name"] = name
-                changed = True
+        elif ev == "CarrierNameChange":
+            changed = self._handle_name_change(raw)
         elif ev == "CarrierFinance":
             changed = self._handle_finance(raw)
         elif ev == "CarrierBuy":
@@ -539,6 +543,18 @@ class CarrierTracker:
             # post-jump cooldown window; it expires naturally after _COOLDOWN_SECS.
         elif body and body != cd.get("body"):
             cd["body"] = body
+        return True
+
+    def _handle_name_change(self, raw):
+        # Name is the documented field.  At least one live journal build
+        # emitted the carrier name under an empty key, so retain that
+        # compatibility fallback instead of silently losing a rename.
+        name = raw.get("Name") or raw.get("CarrierName") or raw.get("")
+        if not name:
+            return False
+        self.carrier_data["name"] = name
+        if raw.get("Callsign"):
+            self.carrier_data["callsign"] = raw.get("Callsign")
         return True
 
     def _advance_expedition(self, system, timestamp=None):

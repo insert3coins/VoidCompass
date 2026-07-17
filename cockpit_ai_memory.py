@@ -799,7 +799,7 @@ class CockpitMemory:
             "Bounty", "FactionKillBond", "CapShipBond", "PVPKill", "UnderAttack", "FighterDestroyed",
             "SRVDestroyed", "EscapeInterdiction", "Interdiction", "Interdicted",
             "ShieldState", "HullDamage", "JetConeDamage", "CockpitBreached", "Died",
-            "RedeemVoucher",
+            "RedeemVoucher", "SystemsShutdown", "SelfDestruct",
         }
         trade_events = {"MarketBuy", "MarketSell", "BuyTradeData"}
         mining_events = {"MiningRefined", "ProspectedAsteroid", "AsteroidCracked"}
@@ -813,36 +813,54 @@ class CockpitMemory:
             "SellOrganicData", "CollectItems", "DropItems", "SuitLoadout",
             "BackpackChange", "UseConsumable", "BuyMicroResources",
             "SellMicroResources", "TradeMicroResources", "TransferMicroResources",
+            "DeleteSuitLoadout", "RenameSuitLoadout", "HoloscreenHacked",
         }
-        signal_events = {"FSSSignalDiscovered", "DataScanned", "Scanned", "SupercruiseDestinationDrop"}
+        signal_events = {
+            "FSSSignalDiscovered", "DataScanned", "Scanned",
+            "SupercruiseDestinationDrop", "USSDrop",
+        }
         logistics_events = {
             "Repair", "RepairAll",
             "RefuelAll", "RefuelPartial", "BuyDrones", "EjectCargo", "SearchAndRescue",
+            "VehicleSwitch", "Resupply",
         }
-        career_events = {"Rank", "Promotion", "Progress", "Reputation", "CodexEntry", "Statistics"}
+        career_events = {
+            "Rank", "Promotion", "Progress", "Reputation", "CodexEntry",
+            "Statistics", "ScientificResearch",
+        }
         crime_events = {"CommitCrime", "CrimeVictim", "Fine", "PayFines", "PayBounties", "ClearImpound"}
         strategy_events = {
             "Powerplay", "PowerplayJoin", "PowerplayDefect", "PowerplayLeave",
             "PowerplayRank", "PowerplayMerits", "PowerplayCollect", "PowerplayDeliver",
             "PowerplayFastTrack", "PowerplaySalary", "PowerplayVote", "PowerplayVoucher",
-            "CommunityGoal", "CommunityGoalJoin", "CommunityGoalReward", "FactionState",
+            "CommunityGoal", "CommunityGoalJoin", "CommunityGoalReward",
+            "CommunityGoalDiscard", "FactionState", "DeliverPowerMicroResources",
+            "RequestPowerMicroResources",
         }
         carrier_events = {
             "CarrierBuy", "CarrierStats", "CarrierJump", "CarrierDepositFuel", "CarrierFinance",
             "CarrierBankTransfer", "CarrierTradeOrder", "CarrierCrewServices", "CarrierNameChange",
             "CarrierDecommission", "CarrierCancelDecommission", "CarrierDockingPermission",
+            "CarrierShipPack", "FCMaterials",
         }
-        colony_events = {"ColonisationConstructionDepot", "ColonisationContribution", "ColonisationSystemClaimed"}
+        colony_events = {
+            "ColonisationConstructionDepot", "ColonisationContribution",
+            "ColonisationSystemClaim", "ColonisationSystemClaimRelease",
+            "ColonisationBeaconDeployed", "CompleteConstruction",
+        }
         fleet_events = {
             "ShipyardBuy", "ShipyardSell", "ShipyardTransfer", "StoredShips", "ModuleBuy",
             "ModuleSell", "ModuleStore", "ModuleRetrieve", "ModuleSwap",
+            "ShipyardRedeem", "ShipRedeemed", "ShipyardBankDeposit", "LoadoutRemoveModule",
         }
         social_events = {
             "SquadronStartup", "SquadronCreated", "AppliedToSquadron", "InvitedToSquadron",
             "JoinedSquadron", "SquadronPromotion", "SquadronDemotion", "LeftSquadron",
             "KickedFromSquadron", "DisbandedSquadron", "SharedBookmarkToSquadron",
-            "WonATrophyForSquadron", "WingJoin", "WingLeave",
-            "CrewMemberJoins", "CrewMemberQuits", "Friends",
+            "WonATrophyForSquadron", "WingJoin", "WingLeave", "WingAdd", "WingInvite",
+            "CrewMemberJoins", "CrewMemberQuits", "Friends", "JoinACrew", "QuitACrew",
+            "CancelledSquadronApplication", "SquadronApplicationApproved",
+            "SquadronApplicationRejected",
         }
 
         if event in mission_events:
@@ -955,7 +973,8 @@ class CockpitMemory:
                     "SRVDestroyed": "srvs_lost", "EscapeInterdiction": "interdictions_escaped",
                     "Interdiction": "interdictions_attempted", "Interdicted": "interdictions_suffered",
                     "JetConeDamage": "jet_cone_damage", "CockpitBreached": "canopy_breaches",
-                    "Died": "ship_losses",
+                    "Died": "ship_losses", "SystemsShutdown": "systems_shutdowns",
+                    "SelfDestruct": "self_destructs",
                 }.get(event)
                 if key:
                     domain[key] = int(domain.get(key) or 0) + 1
@@ -971,6 +990,13 @@ class CockpitMemory:
                     elif event == "EscapeInterdiction":
                         source = "player" if raw.get("IsPlayer") else "thargoid" if raw.get("IsThargoid") else "npc"
                         domain[f"escapes_from_{source}"] = int(domain.get(f"escapes_from_{source}") or 0) + 1
+                    elif event == "SystemsShutdown":
+                        self._remember(
+                            "combat", "Survived a forced ship systems shutdown",
+                            5, timestamp,
+                        )
+                    elif event == "SelfDestruct":
+                        self._remember("combat", "A ship self-destruct was initiated", 5, timestamp)
                 elif event == "ShieldState" and not bool(raw.get("ShieldsUp", data.get("shields_up", True))):
                     domain["shield_failures"] = int(domain.get("shield_failures") or 0) + 1
                 elif event == "HullDamage":
@@ -1136,6 +1162,16 @@ class CockpitMemory:
                 self._knowledge_named(domain, "scans", scan, timestamp=timestamp)
             elif event == "SupercruiseDestinationDrop":
                 domain["signal_drops"] = int(domain.get("signal_drops") or 0) + 1
+            elif event == "USSDrop":
+                domain["uss_drops"] = int(domain.get("uss_drops") or 0) + 1
+                threat = self._number(raw.get("USSThreat"))
+                domain["highest_uss_threat"] = max(
+                    int(domain.get("highest_uss_threat") or 0), threat,
+                )
+                signal = self._event_label(
+                    raw, data, "USSType_Localised", "USSType", fallback="Signal source"
+                )
+                self._knowledge_named(domain, "visited_signals", signal, timestamp=timestamp)
 
         elif domain_name == "logistics":
             if event in ("Repair", "RepairAll"):
@@ -1147,6 +1183,10 @@ class CockpitMemory:
                 domain["rescue_value_cr"] = int(domain.get("rescue_value_cr") or 0) + self._number(raw.get("Reward"))
             elif event == "EjectCargo":
                 domain["cargo_ejected_t"] = int(domain.get("cargo_ejected_t") or 0) + self._number(raw.get("Count"))
+            elif event == "VehicleSwitch":
+                destination = self._event_label(raw, data, "To", fallback="Vehicle")
+                domain["vehicle_switches"] = int(domain.get("vehicle_switches") or 0) + 1
+                domain["last_vehicle"] = destination
 
         elif domain_name == "career":
             if event in ("Rank", "Promotion", "Progress"):
@@ -1256,6 +1296,8 @@ class CockpitMemory:
                 "CarrierBankTransfer": "bank_transfers", "CarrierTradeOrder": "trade_orders",
                 "CarrierNameChange": "renames", "CarrierDecommission": "decommissions",
                 "CarrierCancelDecommission": "decommissions_cancelled",
+                "CarrierShipPack": "ship_pack_changes",
+                "FCMaterials": "material_market_reviews",
             }.get(event)
             if key:
                 domain[key] = int(domain.get(key) or 0) + 1
@@ -1268,7 +1310,10 @@ class CockpitMemory:
             key = {
                 "ColonisationConstructionDepot": "depot_updates",
                 "ColonisationContribution": "contributions",
-                "ColonisationSystemClaimed": "systems_claimed",
+                "ColonisationSystemClaim": "systems_claimed",
+                "ColonisationSystemClaimRelease": "claims_released",
+                "ColonisationBeaconDeployed": "beacons_deployed",
+                "CompleteConstruction": "constructions_completed",
             }[event]
             domain[key] = int(domain.get(key) or 0) + 1
             if event == "ColonisationContribution":
@@ -1278,7 +1323,10 @@ class CockpitMemory:
                         continue
                     commodity = (contribution.get("display") or contribution.get("Name_Localised")
                                  or contribution.get("name") or contribution.get("Name"))
-                    amount = self._number(contribution.get("count") or contribution.get("Count"))
+                    amount = self._number(
+                        contribution.get("count") or contribution.get("Amount")
+                        or contribution.get("Count")
+                    )
                     if commodity:
                         self._knowledge_named(domain, "commodities", commodity, max(1, amount), timestamp)
             elif event == "ColonisationConstructionDepot":
@@ -1288,12 +1336,18 @@ class CockpitMemory:
                             domain, "required_resources", resource["display"],
                             max(1, self._number(resource.get("required"))), timestamp,
                         )
-            if event == "ColonisationSystemClaimed":
+            if event == "ColonisationSystemClaim":
                 system = raw.get("StarSystem") or data.get("star_system") or self.state.get("current_system")
                 self._remember("colonisation", f"Helped claim {system or 'a new system'}", 5, timestamp)
+            elif event == "ColonisationSystemClaimRelease":
+                system = raw.get("StarSystem") or data.get("star_system") or self.state.get("current_system")
+                self._remember("colonisation", f"Released the claim on {system or 'a system'}", 4, timestamp)
+            elif event == "CompleteConstruction":
+                self._remember("colonisation", "Completed a colonisation construction", 5, timestamp)
 
         elif domain_name == "fleet":
-            if event in ("ShipyardBuy", "ShipyardSell", "ShipyardTransfer"):
+            if event in ("ShipyardBuy", "ShipyardSell", "ShipyardTransfer",
+                         "ShipyardRedeem", "ShipRedeemed", "ShipyardBankDeposit"):
                 domain[event] = int(domain.get(event) or 0) + 1
                 ship = self._event_label(raw, data, "ShipType_Localised", "ShipType", fallback="Ship")
                 self._knowledge_named(domain, "ships", ship, timestamp=timestamp)

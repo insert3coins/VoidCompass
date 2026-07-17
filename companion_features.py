@@ -44,6 +44,7 @@ DEFAULT_STATE = {
     "statistics_updated": None,
     "unsold_exploration_cr": 0,
     "unsold_bio_cr": 0,
+    "unsold_bio_bonus_potential_cr": 0,
     "unsold_scan_keys": [],
 }
 
@@ -97,6 +98,15 @@ def load_state(path):
             loaded = json.load(handle)
         if isinstance(loaded, dict):
             state.update(loaded)
+            # Older builds stored a single biology estimate that sometimes
+            # included a presumed 5x first-footfall bonus. Its exact split
+            # cannot be reconstructed, so migrate it to a conservative range.
+            if ("unsold_bio_bonus_potential_cr" not in loaded
+                    and int(loaded.get("unsold_bio_cr") or 0) > 0):
+                legacy = int(loaded.get("unsold_bio_cr") or 0)
+                base = (legacy + 4) // 5
+                state["unsold_bio_cr"] = base
+                state["unsold_bio_bonus_potential_cr"] = legacy - base
     except Exception:
         pass
     return state
