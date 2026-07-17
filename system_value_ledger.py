@@ -55,7 +55,6 @@ class SystemValueLedger(ThemedWindowMixin):
         self._button(controls, "Copy Summary", self._copy_summary, accent=True).pack(side=tk.LEFT, padx=(8, 0))
 
         style = configure_ttk(self.win, "Ledger")
-        style.theme_use("default")
         style.configure("Ledger.Treeview", background="#0b0f13", foreground=COLOR_TEXT, fieldbackground="#0b0f13", rowheight=24, borderwidth=0)
         style.configure("Ledger.Treeview.Heading", background=self.UI_PANEL, foreground=COLOR_ORANGE, relief="flat", font=("Segoe UI", 8, "bold"))
         style.map("Ledger.Treeview", background=[("selected", "#12313c")], foreground=[("selected", COLOR_TEXT)])

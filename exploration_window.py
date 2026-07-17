@@ -124,7 +124,6 @@ class ExplorationWindow(ThemedWindowMixin):
         self.trip_card = self._summary_card(summary, "SESSION", accent="#a5b4fc")
 
         style = configure_ttk(self.win, "Explore")
-        style.theme_use("default")
         style.configure("Explore.TNotebook", background=self.UI_BG, borderwidth=0)
         style.configure("Explore.TNotebook.Tab", background=self.UI_PANEL, foreground=COLOR_TEXT, padding=(12, 7), borderwidth=0)
         style.map("Explore.TNotebook.Tab", background=[("selected", self.UI_PANEL_2)], foreground=[("selected", COLOR_ACCENT)])

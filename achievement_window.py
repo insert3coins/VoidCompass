@@ -5,7 +5,7 @@ from datetime import datetime
 from tkinter import filedialog, messagebox, ttk
 
 from config import save_config
-from ui_theme import FONT_MONO, THEME, ThemedWindowMixin, apply_window, configure_ttk, window_surface
+from ui_theme import FONT_MONO, THEME, ThemedWindowMixin, apply_window, configure_ttk, scrollbar, window_surface
 
 
 class AchievementWindow(ThemedWindowMixin):
@@ -80,7 +80,6 @@ class AchievementWindow(ThemedWindowMixin):
         self.summary_recent = self._summary_card(summary, "LATEST", "#a5b4fc")
 
         style = configure_ttk(self.win, "Achievements")
-        style.theme_use("default")
         style.configure("Achievements.TNotebook", background=self.UI_BG, borderwidth=0)
         style.configure(
             "Achievements.TNotebook.Tab",
@@ -202,7 +201,8 @@ class AchievementWindow(ThemedWindowMixin):
         for column, (title, width, anchor) in headings.items():
             self.tree.heading(column, text=title)
             self.tree.column(column, width=width, minwidth=45, anchor=anchor, stretch=column == "title")
-        scroll = ttk.Scrollbar(left, orient=tk.VERTICAL, command=self.tree.yview)
+        scroll = scrollbar(left, orient=tk.VERTICAL, command=self.tree.yview,
+                           prefix="Achievements")
         self.tree.configure(yscrollcommand=scroll.set)
         scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)

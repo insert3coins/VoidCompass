@@ -50,7 +50,6 @@ class ColonisationPlanner(ThemedWindowMixin):
         self._button(controls, "Copy Shopping List", self._copy, accent=True).pack(side=tk.LEFT, padx=(8, 0))
 
         style = configure_ttk(self.win, "Planner")
-        style.theme_use("default")
         style.configure("Planner.Treeview", background="#0b0f13", foreground=COLOR_TEXT, fieldbackground="#0b0f13", rowheight=24, borderwidth=0)
         style.configure("Planner.Treeview.Heading", background=self.UI_PANEL, foreground=COLOR_ORANGE, relief="flat", font=("Segoe UI", 8, "bold"))
         style.map("Planner.Treeview", background=[("selected", "#12313c")], foreground=[("selected", COLOR_TEXT)])
