@@ -27,7 +27,6 @@ from carrier_hud import CarrierHUD
 from edsm_handler import EDSMHandler
 from screenshot_handler import ScreenshotHandler
 from settings_ui import open_settings
-from route_plotter import RoutePlotter
 from waypoint_manager import WaypointManager
 import route_strip
 from journal_watcher import JournalWatcher
@@ -1810,26 +1809,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.log("⚠️ Screenshot folder not found.")
 
     def open_route_planner(self):
-        if self.route_plotter and self.route_plotter.win.winfo_exists():
-            self._show_embedded_page("ROUTE", self.route_plotter.win)
-            self.route_plotter.on_shown()
-            return
-        self.route_plotter = RoutePlotter(
-            self.dashboard_host,
-            self.edsm,
-            self.current_coords,
-            self.current_sys,
-            self.config,
-            self.waypoint_manager,
-            on_change_callback=self.update_waypoint_display,
-            event_callback=self._on_route_event,
-            embedded=True,
-            navigation_state_callback=self._route_panel_navigation_state,
-            copy_waypoint_callback=self._copy_waypoint_to_clipboard,
-            is_active_callback=lambda: getattr(self, "_active_page", None) == "ROUTE",
-        )
-        self._show_embedded_page("ROUTE", self.route_plotter.win)
-        self.route_plotter.on_shown()
+        self.open_exploration_window(section="route")
 
     def _route_panel_navigation_state(self):
         return {
@@ -1973,12 +1953,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.commander_profile_window = CommanderProfileWindow(self.dashboard_host, self, embedded=True)
         self._show_embedded_page("PROFILE", self.commander_profile_window.win)
 
-    def open_exploration_window(self):
+    def open_exploration_window(self, section=None):
         if self.exploration_window and self.exploration_window.is_open():
             self._show_embedded_page("EXPLORE", self.exploration_window.win)
+            self.exploration_window.on_shown(section=section)
             return
         self.exploration_window = ExplorationWindow(self.dashboard_host, self, embedded=True)
         self._show_embedded_page("EXPLORE", self.exploration_window.win)
+        self.exploration_window.on_shown(section=section)
 
     def open_trade_window(self):
         if self.trade_window and self.trade_window.is_open():

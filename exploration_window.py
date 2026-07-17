@@ -11,6 +11,7 @@ import requests
 
 import bio_values
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
+from route_plotter import RoutePlotter
 from ui_theme import THEME, ThemedWindowMixin, apply_window, button, configure_ttk, scrollbar, window_surface
 
 COLOR_ACCENT = THEME.accent
@@ -40,6 +41,7 @@ class ExplorationWindow(ThemedWindowMixin):
         self.system_history_rows = []
         self._last_history_refresh_ts = 0.0
         self._closing = False
+        self.route_plotter = None
         self.embedded = embedded
         self.win = window_surface(root, embedded=embedded)
         self.win.title("Exploration")
@@ -78,7 +80,7 @@ class ExplorationWindow(ThemedWindowMixin):
         title_box.pack(side=tk.LEFT, fill=tk.Y, padx=14)
         tk.Label(
             title_box,
-            text="EXPLORATION",
+            text="EXPLORATION & ROUTES",
             font=("Segoe UI", 16, "bold"),
             fg=COLOR_ACCENT,
             bg="#0c1014",
@@ -86,7 +88,7 @@ class ExplorationWindow(ThemedWindowMixin):
         ).pack(anchor="w", pady=(12, 0))
         self.header_subtitle = tk.Label(
             title_box,
-            text="System telemetry",
+            text="Survey, flight planning and expedition history",
             font=("Consolas", 8),
             fg=self.UI_MUTED,
             bg="#0c1014",
@@ -109,6 +111,7 @@ class ExplorationWindow(ThemedWindowMixin):
         self._button(toolbar, "Refresh", self.refresh).pack(side=tk.LEFT)
         self._button(toolbar, "Copy Summary", self._copy_summary, accent=True).pack(side=tk.LEFT, padx=(8, 0))
         self._button(toolbar, "Copy Next Route", self._copy_next_route).pack(side=tk.LEFT, padx=(8, 0))
+        self._button(toolbar, "Route Planner", self.show_route_planning).pack(side=tk.LEFT, padx=(8, 0))
         self._button(toolbar, "Open EDSM", self._open_current_edsm).pack(side=tk.LEFT, padx=(8, 0))
         self._button(toolbar, "Reset Session", self._reset_session).pack(side=tk.RIGHT)
 
@@ -125,19 +128,92 @@ class ExplorationWindow(ThemedWindowMixin):
         style.configure("Explore.TNotebook", background=self.UI_BG, borderwidth=0)
         style.configure("Explore.TNotebook.Tab", background=self.UI_PANEL, foreground=COLOR_TEXT, padding=(12, 7), borderwidth=0)
         style.map("Explore.TNotebook.Tab", background=[("selected", self.UI_PANEL_2)], foreground=[("selected", COLOR_ACCENT)])
+        style.configure("Explore.Section.TNotebook", background=self.UI_BG, borderwidth=0)
+        style.configure("Explore.Section.TNotebook.Tab", background=self.UI_PANEL_2, foreground=self.UI_MUTED, padding=(11, 6), borderwidth=0)
+        style.map("Explore.Section.TNotebook.Tab", background=[("selected", "#0b0f13")], foreground=[("selected", COLOR_ORANGE)])
         style.configure("Explore.Treeview", background="#0b0f13", foreground=COLOR_TEXT, fieldbackground="#0b0f13", rowheight=24, borderwidth=0)
         style.configure("Explore.Treeview.Heading", background=self.UI_PANEL, foreground=COLOR_ORANGE, relief="flat", font=("Segoe UI", 8, "bold"))
         style.map("Explore.Treeview", background=[("selected", "#12313c")], foreground=[("selected", COLOR_TEXT)])
 
         self.tabs = ttk.Notebook(self.win, style="Explore.TNotebook")
         self.tabs.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+        self.survey_workspace = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.route_workspace = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.chronicle_workspace = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.tabs.add(self.survey_workspace, text="Survey")
+        self.tabs.add(self.route_workspace, text="Route Planning")
+        self.tabs.add(self.chronicle_workspace, text="Chronicle")
+
+        self.survey_tabs = ttk.Notebook(self.survey_workspace, style="Explore.Section.TNotebook")
+        self.survey_tabs.pack(fill=tk.BOTH, expand=True)
+        self.chronicle_tabs = ttk.Notebook(self.chronicle_workspace, style="Explore.Section.TNotebook")
+        self.chronicle_tabs.pack(fill=tk.BOTH, expand=True)
+
         self._build_bodies_tab()
         self._build_bio_tab()
-        self._build_route_tab()
+        self._build_route_workspace()
         self._build_history_tab()
         self._build_captains_log_tab()
         self._build_system_history_tab()
         self._build_ledger_tab()
+        self.tabs.bind("<<NotebookTabChanged>>", self._on_workspace_changed)
+
+    def _build_route_workspace(self):
+        """Host the existing route engine inside the unified Explore page."""
+        self.route_plotter = RoutePlotter(
+            self.route_workspace,
+            self.app.edsm,
+            self.app.current_coords,
+            self.app.current_sys,
+            self.config,
+            self.app.waypoint_manager,
+            on_change_callback=self.app.update_waypoint_display,
+            event_callback=self.app._on_route_event,
+            embedded=True,
+            navigation_state_callback=self.app._route_panel_navigation_state,
+            copy_waypoint_callback=self.app._copy_waypoint_to_clipboard,
+            is_active_callback=self.is_route_active,
+            compact=True,
+        )
+        self.route_plotter.win.pack(fill=tk.BOTH, expand=True)
+        self.app.route_plotter = self.route_plotter
+        self._build_route_tab(self.route_plotter.tabs)
+
+    def _on_workspace_changed(self, _event=None):
+        if self.is_route_active() and self.route_plotter:
+            self.route_plotter.on_shown()
+
+    def is_route_active(self):
+        try:
+            return bool(
+                getattr(self.app, "_active_page", None) == "EXPLORE"
+                and self.tabs.select() == str(self.route_workspace)
+            )
+        except Exception:
+            return False
+
+    def show_section(self, section=None):
+        section = str(section or "survey").strip().casefold()
+        target = {
+            "survey": self.survey_workspace,
+            "route": self.route_workspace,
+            "route planning": self.route_workspace,
+            "chronicle": self.chronicle_workspace,
+            "history": self.chronicle_workspace,
+        }.get(section, self.survey_workspace)
+        self.tabs.select(target)
+        if target is self.route_workspace and self.route_plotter:
+            self.route_plotter.on_shown()
+
+    def show_route_planning(self):
+        self.show_section("route")
+
+    def on_shown(self, section=None):
+        if section:
+            self.show_section(section)
+        self.refresh()
+        if self.is_route_active() and self.route_plotter:
+            self.route_plotter.on_shown()
 
     def _summary_card(self, parent, title, accent=None):
         accent = accent or COLOR_ACCENT
@@ -150,8 +226,8 @@ class ExplorationWindow(ThemedWindowMixin):
         return value
 
     def _build_bodies_tab(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="Current System")
+        frame = tk.Frame(self.survey_tabs, bg=self.UI_BG)
+        self.survey_tabs.add(frame, text="Current System")
         left = tk.Frame(frame, bg=self.UI_BG)
         left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         right = tk.Frame(frame, bg=self.UI_PANEL, highlightbackground=self.UI_BORDER, highlightthickness=1, bd=0, width=300)
@@ -221,8 +297,8 @@ class ExplorationWindow(ThemedWindowMixin):
         self.body_detail.configure(state=tk.DISABLED)
 
     def _build_bio_tab(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="Bio")
+        frame = tk.Frame(self.survey_tabs, bg=self.UI_BG)
+        self.survey_tabs.add(frame, text="Biology")
 
         top = tk.Frame(frame, bg=self.UI_BG)
         top.pack(fill=tk.X, pady=(0, 8))
@@ -264,9 +340,9 @@ class ExplorationWindow(ThemedWindowMixin):
         self.bio_tree.tag_configure("pending", foreground=COLOR_ORANGE)
         self.bio_tree.tag_configure("empty", foreground=self.UI_MUTED)
 
-    def _build_route_tab(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="Route")
+    def _build_route_tab(self, notebook):
+        frame = tk.Frame(notebook, bg=self.UI_BG)
+        notebook.add(frame, text="Survey Intelligence")
         cols = ("idx", "system", "star", "scoop", "distance", "edsm", "valuable", "status")
         self.route_tree = self._tree(frame, cols, {
             "idx": ("#", 48, tk.E),
@@ -283,8 +359,8 @@ class ExplorationWindow(ThemedWindowMixin):
         self.route_tree.tag_configure("pending", foreground=self.UI_MUTED)
 
     def _build_history_tab(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="Trip & History")
+        frame = tk.Frame(self.chronicle_tabs, bg=self.UI_BG)
+        self.chronicle_tabs.add(frame, text="Trip & History")
         self.history_text = tk.Text(
             frame,
             bg="#0b0f13",
@@ -301,8 +377,8 @@ class ExplorationWindow(ThemedWindowMixin):
         self.history_text.configure(state=tk.DISABLED)
 
     def _build_captains_log_tab(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="Captain's Log")
+        frame = tk.Frame(self.chronicle_tabs, bg=self.UI_BG)
+        self.chronicle_tabs.add(frame, text="Captain's Log")
         toolbar = tk.Frame(frame, bg=self.UI_BG)
         toolbar.pack(fill=tk.X, padx=10, pady=(10, 6))
         tk.Label(toolbar, text="EXPEDITION CHRONICLE", fg=COLOR_ORANGE, bg=self.UI_BG,
@@ -334,8 +410,8 @@ class ExplorationWindow(ThemedWindowMixin):
         self.captains_log_text.configure(state=tk.DISABLED)
 
     def _build_system_history_tab(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="System History")
+        frame = tk.Frame(self.chronicle_tabs, bg=self.UI_BG)
+        self.chronicle_tabs.add(frame, text="System History")
 
         controls = tk.Frame(frame, bg=self.UI_BG)
         controls.pack(fill=tk.X, padx=10, pady=(10, 6))
@@ -395,8 +471,8 @@ class ExplorationWindow(ThemedWindowMixin):
         self.system_history_detail.configure(state=tk.DISABLED)
 
     def _build_ledger_tab(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="Value Ledger")
+        frame = tk.Frame(self.chronicle_tabs, bg=self.UI_BG)
+        self.chronicle_tabs.add(frame, text="Value Ledger")
 
         controls = tk.Frame(frame, bg=self.UI_BG)
         controls.pack(fill=tk.X, padx=10, pady=(10, 6))
@@ -1802,6 +1878,15 @@ class ExplorationWindow(ThemedWindowMixin):
 
     def _on_close(self):
         self._closing = True
+        plotter = self.route_plotter
+        try:
+            if plotter and self._widget_alive(plotter.win):
+                plotter.on_close()
+        except Exception:
+            pass
+        self.route_plotter = None
+        if getattr(self.app, "route_plotter", None) is plotter:
+            self.app.route_plotter = None
         try:
             if self.win and self.win.winfo_exists():
                 self.config["exploration_window_geometry"] = self.win.geometry()

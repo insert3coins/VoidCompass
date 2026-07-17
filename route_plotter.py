@@ -33,7 +33,7 @@ class RoutePlotter(ThemedWindowMixin):
     def __init__(self, root, edsm_handler, current_coords=None, current_sys="Unknown", config=None,
                  manager=None, on_change_callback=None, event_callback=None, embedded=False,
                  navigation_state_callback=None, copy_waypoint_callback=None,
-                 is_active_callback=None):
+                 is_active_callback=None, compact=False):
         self.root = root
         self.edsm = edsm_handler
         self.manager = manager if manager else WaypointManager()
@@ -45,6 +45,7 @@ class RoutePlotter(ThemedWindowMixin):
         self.navigation_state_callback = navigation_state_callback
         self.copy_waypoint_callback = copy_waypoint_callback
         self.is_active_callback = is_active_callback
+        self.compact = bool(compact)
         self.route_refresh_running = False
         self.neutron_route_running = False
         self.neutron_waypoints = []
@@ -73,13 +74,20 @@ class RoutePlotter(ThemedWindowMixin):
 
     def setup_ui(self):
         wrapper = tk.Frame(self.win, bg=COLOR_BG)
-        wrapper.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        wrapper.pack(
+            fill=tk.BOTH, expand=True,
+            padx=0 if self.compact else 10,
+            pady=0 if self.compact else 10,
+        )
 
-        header = tk.Frame(wrapper, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
-        header.pack(fill=tk.X)
-        tk.Label(header, text=" // FLIGHT PLANNER", font=("Courier", 14, "bold"), fg=COLOR_ACCENT, bg=COLOR_PANEL).pack(side=tk.LEFT, padx=10, pady=8)
-        self.header_current_lbl = tk.Label(header, text=f"CURRENT: {self.current_sys}", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL)
-        self.header_current_lbl.pack(side=tk.RIGHT, padx=10)
+        if not self.compact:
+            header = tk.Frame(wrapper, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
+            header.pack(fill=tk.X)
+            tk.Label(header, text=" // FLIGHT PLANNER", font=("Courier", 14, "bold"), fg=COLOR_ACCENT, bg=COLOR_PANEL).pack(side=tk.LEFT, padx=10, pady=8)
+            self.header_current_lbl = tk.Label(header, text=f"CURRENT: {self.current_sys}", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL)
+            self.header_current_lbl.pack(side=tk.RIGHT, padx=10)
+        else:
+            self.header_current_lbl = None
 
         style = configure_ttk(self.win, "Route")
         style.configure("Route.TNotebook", background=COLOR_BG, borderwidth=0)
@@ -90,7 +98,7 @@ class RoutePlotter(ThemedWindowMixin):
         style.map("Route.Treeview", background=[("selected", COLOR_ACCENT)], foreground=[("selected", "black")])
 
         self.tabs = ttk.Notebook(wrapper, style="Route.TNotebook")
-        self.tabs.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+        self.tabs.pack(fill=tk.BOTH, expand=True, pady=(0 if self.compact else 8, 0))
         overview_tab = tk.Frame(self.tabs, bg=COLOR_BG)
         route_tab = tk.Frame(self.tabs, bg=COLOR_BG)
         plotter_tab = tk.Frame(self.tabs, bg=COLOR_BG)
@@ -838,7 +846,8 @@ class RoutePlotter(ThemedWindowMixin):
         names = [str(wp.get("name") or "").casefold() for wp in self.manager.waypoints]
         duplicate_count = len(names) - len(set(names))
         self.stats_lbl.config(text=f"ROUTE DISTANCE: {total_dist:,.1f} LY  //  {len(self.manager.waypoints)} WAYPOINTS")
-        self.header_current_lbl.config(text=f"CURRENT: {self.current_sys}")
+        if self.header_current_lbl is not None:
+            self.header_current_lbl.config(text=f"CURRENT: {self.current_sys}")
         storage_error = getattr(self.manager, "last_error", None)
         if storage_error:
             self.health_lbl.config(text=f"WAYPOINT SAVE ERROR · {storage_error}", fg="#ff7777")
