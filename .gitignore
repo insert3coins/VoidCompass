@@ -26,6 +26,7 @@ tests/
 # PyInstaller
 build/
 dist/
+release/
 *.spec
 
 #misc
