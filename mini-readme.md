@@ -7,6 +7,7 @@
 *   Added a profile-aware **Mouse passthrough** setting under Overlays. Turn it off temporarily to drag or click overlays, then turn it back on for gameplay; the change applies immediately without restarting VoidCompass.
 *   Resized windows now retain access to every workspace through persistent VoidCompass-themed scrolling. Mouse-wheel routing respects nested tables, text views and specialist panels, and every Settings section now has its own themed scrolling surface.
 *   Commander Profile ship identity now follows purchases, new-ship assignment, shipyard swaps, full loadouts and ship renames immediately. Empty names no longer retain the previous vessel's name, and SRV naming events cannot replace the active mothership.
+*   Explore and Route now share one **Exploration & Routes** workspace. Survey telemetry, the full route overview, waypoint manager, neutron plotter, route-value intelligence and expedition chronicle remain grouped by workflow, while the duplicate Route navigation entry has been removed.
 
 ## v4.8.6 // Compass Judgment & Profile-State Reliability
 **Release Date:** 2026-Jul-16

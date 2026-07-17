@@ -129,7 +129,6 @@ class DashboardUIMixin(ThemedWindowMixin):
             ("★", "ACHIEVE", self.open_achievement_window),
             ("⇌", "TRADE", self.open_trade_window),
             ("◆", "MINING", self.open_mining_window),
-            ("➤", "ROUTE", self.open_route_planner),
             ("⬢", "CARRIER", self.open_carrier_window),
             ("⌂", "COLONY", self.open_colonization_window),
             ("⚑", "GALAXY", self.open_bgs_window),
