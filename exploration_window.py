@@ -589,7 +589,7 @@ class ExplorationWindow(ThemedWindowMixin):
         if item.get("was_discovered") is False:
             flags.append("Undiscovered")
         if item.get("first_footfall"):
-            flags.append("First footfall")
+            flags.append("First footfall available")
         if item.get("was_mapped") is False:
             flags.append("Unmapped")
         return ", ".join(flags)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import threading
 from datetime import datetime
@@ -28,6 +29,8 @@ class CaptainsLog:
         self.data = {"sessions": [], "seen": [], "imported_files": {}}
         self.load()
         self._seen_set = set(self.data.get("seen") or [])
+        self._last_star_pos = None
+        self._body_names = {}
 
     def switch(self, path):
         with self.lock:
@@ -35,6 +38,8 @@ class CaptainsLog:
             self.data = {"sessions": [], "seen": [], "imported_files": {}}
             self.load()
             self._seen_set = set(self.data.get("seen") or [])
+            self._last_star_pos = None
+            self._body_names = {}
 
     def load(self):
         if not self.path or not os.path.exists(self.path):
@@ -90,10 +95,43 @@ class CaptainsLog:
         rows.append({"timestamp": _stamp(raw), "kind": kind, "title": title, "detail": detail})
         session["highlights"] = rows[-MAX_HIGHLIGHTS:]
 
-    def process_event(self, raw, save=True):
+    @staticmethod
+    def _star_pos(raw):
+        value = (raw or {}).get("StarPos")
+        if not isinstance(value, (list, tuple)) or len(value) < 3:
+            return None
+        try:
+            return tuple(float(value[index]) for index in range(3))
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _distance(left, right):
+        if not left or not right:
+            return None
+        return math.sqrt(sum((a - b) ** 2 for a, b in zip(left, right)))
+
+    def _remember_scan_body(self, raw):
+        address = raw.get("SystemAddress")
+        body_id = raw.get("BodyID")
+        body_name = raw.get("BodyName")
+        if address is None or body_id is None or not body_name:
+            return
+        self._body_names[(str(address), str(body_id))] = str(body_name)
+        while len(self._body_names) > 4096:
+            self._body_names.pop(next(iter(self._body_names)))
+
+    def process_event(self, raw, save=True, context=None):
         if not isinstance(raw, dict):
             return False
         ev = raw.get("event")
+        context = context if isinstance(context, dict) else {}
+        if ev == "Scan":
+            self._remember_scan_body(raw)
+            return False
+        if ev == "Location":
+            self._last_star_pos = self._star_pos(raw) or self._last_star_pos
+            return False
         if ev not in TRACKED_EVENTS:
             return False
         key = self._event_key(raw)
@@ -108,6 +146,7 @@ class CaptainsLog:
                 self._seen_set = set(self.data["seen"])
 
             if ev == "LoadGame":
+                self._last_star_pos = None
                 current = self._session(raw, create=False)
                 if current:
                     current["ended"] = _stamp(raw)
@@ -119,18 +158,35 @@ class CaptainsLog:
             changed = True
             if ev in ("FSDJump", "CarrierJump"):
                 system = raw.get("StarSystem") or "Unknown system"
+                destination_pos = self._star_pos(raw)
+                distance = None
+                if ev == "FSDJump" and raw.get("JumpDist") is not None:
+                    try:
+                        distance = float(raw.get("JumpDist"))
+                    except (TypeError, ValueError):
+                        distance = None
+                if distance is None:
+                    distance = self._distance(self._last_star_pos, destination_pos)
                 session["jumps"] += 1
-                session["distance_ly"] = round(float(session.get("distance_ly") or 0) + float(raw.get("JumpDist") or 0), 2)
+                if distance is not None:
+                    session["distance_ly"] = round(
+                        float(session.get("distance_ly") or 0) + distance, 2
+                    )
                 session["end_system"] = system
-                self._highlight(session, raw, "JUMP", f"Arrived in {system}", f"{float(raw.get('JumpDist') or 0):.1f} ly")
+                detail = f"{distance:.1f} ly" if distance is not None else "Distance unavailable"
+                self._highlight(session, raw, "JUMP", f"Arrived in {system}", detail)
+                self._last_star_pos = destination_pos or self._last_star_pos
             elif ev == "CodexEntry":
                 name = raw.get("Name_Localised") or raw.get("Name") or "Codex discovery"
                 session["codex"] += 1
                 self._highlight(session, raw, "CODEX", name, raw.get("Category_Localised") or "")
             elif ev == "ScanOrganic" and str(raw.get("ScanType") or "").lower() == "analyse":
                 name = raw.get("Species_Localised") or raw.get("Species") or raw.get("Genus_Localised") or "Biological analysis"
+                body_name = context.get("body_name") or raw.get("BodyName") or self._body_names.get((
+                    str(raw.get("SystemAddress")), str(raw.get("Body")),
+                ), "")
                 session["bio_analyses"] += 1
-                self._highlight(session, raw, "BIO", name, raw.get("BodyName") or "")
+                self._highlight(session, raw, "BIO", name, body_name)
             elif ev == "Screenshot":
                 session["screenshots"] += 1
                 detail = raw.get("Body") or raw.get("System") or raw.get("Filename") or ""

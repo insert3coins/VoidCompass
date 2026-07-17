@@ -30,6 +30,35 @@ class DashboardScanMixin:
         self.hud_flight_state = state
         return changed
 
+    def _apply_vehicle_switch(self, destination):
+        """Apply the journal VehicleSwitch event before Status.json catches up."""
+        destination = str(destination or "").strip().casefold()
+        self.current_on_foot = False
+        if destination == "fighter":
+            self.current_in_fighter = True
+            self.current_in_srv = False
+            self.current_vehicle_name = "FIGHTER"
+        elif destination == "srv":
+            self.current_in_fighter = False
+            self.current_in_srv = True
+            vehicle = str(self.current_vehicle_name or "").upper()
+            previous = str(self._last_surface_vehicle_name or "").upper()
+            self.current_vehicle_name = (
+                vehicle if vehicle in ("NOMAD", "SRV")
+                else previous if previous in ("NOMAD", "SRV")
+                else "SRV"
+            )
+        elif destination == "mothership":
+            self.current_in_fighter = False
+            self.current_in_srv = False
+            self.current_vehicle_id = None
+            self.current_vehicle_name = ""
+        self._sync_navigation_hud_flight_state(
+            supercruise=self.hud_flight_state == "SUPERCRUISE"
+        )
+        self.update_hud()
+        return self.hud_flight_state
+
     def _flush_pending_status_update(self):
         self._status_dispatch_scheduled = False
         data = getattr(self, "_pending_status_data", None)
@@ -679,7 +708,8 @@ class DashboardScanMixin:
         landable = data.get("Landable", False)
         was_discovered = data.get("WasDiscovered", True)
         was_mapped = data.get("WasMapped", True)
-        first_footfall = data.get("FirstFootfall", False)
+        was_footfalled = data.get("WasFootfalled")
+        first_footfall = bool(landable and was_footfalled is False)
 
         if not was_discovered:
             icons.append("⚑")
@@ -756,6 +786,7 @@ class DashboardScanMixin:
             "geo_count": 0,
             "is_star": is_star,
             "was_discovered": was_discovered,
+            "was_footfalled": was_footfalled,
             "first_footfall": first_footfall,
             "_ts": ts
         }

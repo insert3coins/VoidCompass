@@ -68,9 +68,10 @@ def credit_delta(event, raw):
         return _money(raw.get("SellPrice"))
     if event in {"ShipyardSell", "SellShipOnRebuy"}:
         return _money(raw.get("ShipPrice") or raw.get("SellPrice"))
+    if event in {"PayFines", "PayBounties", "PayLegacyFines"}:
+        return -_money(raw.get("Amount") or raw.get("Cost"))
 
     negative_cost = {
-        "PayFines", "PayBounties", "PayLegacyFines",
         "BuyExplorationData", "BuyTradeData",
         "RefuelAll", "RefuelPartial", "Repair", "RepairAll", "BuyAmmo",
         "RestockVehicle", "Resurrect", "CrewHire",

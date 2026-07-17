@@ -88,7 +88,7 @@ class SystemValueLedger(ThemedWindowMixin):
         if item.get("was_discovered") is False:
             flags.append("First discovered")
         if item.get("first_footfall"):
-            flags.append("First footfall")
+            flags.append("First footfall available")
         if item.get("landable"):
             flags.append("Landable")
         return ", ".join(flags)
