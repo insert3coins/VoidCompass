@@ -73,47 +73,11 @@ The deterministic cognition engine learns personal baselines and whether advice 
 
 Void Compass does not require an account or cloud database. Network integrations only run when their associated feature is enabled or requested.
 
-## Run from source
-
-Requirements:
-
-- Windows 10 or 11
-- Python 3.10 or newer
-- Elite Dangerous journal access
-
-From PowerShell:
-
-```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python VoidCompass.py
-```
-
 `config.json` is created automatically in the working directory. If journal detection fails, set `journal_path` in Settings; the normal location is:
 
 ```text
 C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous
 ```
-
-## Build the Windows executables
-
-```powershell
-python build.py
-```
-
-The PyInstaller build produces `dist\VoidCompass.exe`, including the headless worker used by the in-app market database tools. `dist` is the local test installation and may accumulate profiles, logs, voice packs, caches and databases; **do not publish that folder**.
-
-Each build also creates a privacy-guarded public package under `release\VoidCompass-v<version>-Windows-x64`, a matching ZIP and a `.sha256` checksum. The release contains the self-contained executable, README and its referenced screenshots, update log, Codex reference and a sanitized mining seed database. End users do not need Python, pip or a virtual environment.
-
-To refresh the public package from an existing `dist\VoidCompass.exe` without rebuilding the executable:
-
-```powershell
-python release_packager.py
-```
-
-See [mini-readme.md](mini-readme.md) for the detailed release history.
 
 ## Disclaimer
 
