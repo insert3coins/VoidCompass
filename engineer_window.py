@@ -19,6 +19,8 @@ from engineering_data import (
     BLUEPRINTS,
     BLUEPRINT_INFO,
     collection_priorities,
+    engineer_blueprints,
+    engineer_info,
     ENGINEERS,
     GRADE_CAP,
     MATERIALS,
@@ -131,6 +133,9 @@ class EngineerWindow(ThemedWindowMixin):
         self.is_active_callback = is_active_callback
         self._active_tab   = "command"
         self._row_meta = {}
+        self._selected_engineer = None
+        self._engineer_cards = {}
+        self._search_job = None
         self._refresh_job = None
         self._refresh_pending = False
         self._trader_results = []
@@ -197,6 +202,12 @@ class EngineerWindow(ThemedWindowMixin):
             except Exception:
                 pass
             self._refresh_job = None
+        if self._search_job is not None:
+            try:
+                self.win.after_cancel(self._search_job)
+            except Exception:
+                pass
+            self._search_job = None
         try:
             self.config["engineer_window_geometry"] = self.win.geometry()
             save_config(self.config)
@@ -332,7 +343,7 @@ class EngineerWindow(ThemedWindowMixin):
                                 bg=self.UI_BG, fg=COLOR_TEXT, insertbackground=COLOR_ACCENT,
                                 relief=tk.FLAT, font=("Segoe UI", 9))
         search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10), pady=6, ipady=3)
-        self._search_var.trace_add("write", lambda *_args: self._redraw())
+        self._search_var.trace_add("write", lambda *_args: self._on_search_changed())
         self._category_label = tk.Label(
             self._filter_controls, text="TYPE", bg=self.UI_PANEL, fg=self.UI_DIM,
             font=("Consolas", 8, "bold"),
@@ -390,16 +401,39 @@ class EngineerWindow(ThemedWindowMixin):
         self._material_tree.tag_configure("low_cap", foreground=COLOR_TEXT)
         self._material_tree.tag_configure("empty", foreground=self.UI_MUTED)
 
-        page_scroll = scrollbar(body, orient=tk.VERTICAL, command=self._material_tree.yview)
-        page_xscroll = scrollbar(body, orient=tk.HORIZONTAL, command=self._material_tree.xview)
+        self._page_scroll = scrollbar(body, orient=tk.VERTICAL, command=self._material_tree.yview)
+        self._page_xscroll = scrollbar(body, orient=tk.HORIZONTAL, command=self._material_tree.xview)
         self._material_tree.configure(
-            yscrollcommand=page_scroll.set,
-            xscrollcommand=page_xscroll.set,
+            yscrollcommand=self._page_scroll.set,
+            xscrollcommand=self._page_xscroll.set,
         )
         self._material_tree.bind("<<TreeviewSelect>>", self._selection_changed)
-        page_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        page_xscroll.pack(side=tk.BOTTOM, fill=tk.X)
+        self._page_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self._page_xscroll.pack(side=tk.BOTTOM, fill=tk.X)
         self._material_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Card-based engineer roster (ENGINEERS tab). Kept as a separate scrollable
+        # surface rather than shoehorned into the treeview, since progress bars and
+        # grouped blueprint lists can't render as native tree rows. Uses the same
+        # canvas+inner-frame+destroy-and-rebuild pattern as colonization_window.py's
+        # site list, which already proves this scales fine at this row count.
+        self._engineer_canvas = tk.Canvas(body, bg=self.UI_BG, highlightthickness=0)
+        self._engineer_scroll = scrollbar(body, orient=tk.VERTICAL, command=self._engineer_canvas.yview)
+        self._engineer_canvas.configure(yscrollcommand=self._engineer_scroll.set)
+        self._engineer_list = tk.Frame(self._engineer_canvas, bg=self.UI_BG)
+        self._engineer_window_id = self._engineer_canvas.create_window((0, 0), window=self._engineer_list, anchor="nw")
+        self._engineer_list.bind(
+            "<Configure>",
+            lambda _e: self._engineer_canvas.configure(scrollregion=self._engineer_canvas.bbox("all")),
+        )
+        self._engineer_canvas.bind(
+            "<Configure>",
+            lambda e: self._engineer_canvas.itemconfig(self._engineer_window_id, width=e.width),
+        )
+        self._engineer_canvas.bind(
+            "<MouseWheel>",
+            lambda e: self._engineer_canvas.yview_scroll(-1 * (e.delta // 120), "units"),
+        )
 
         # Footer
         foot = tk.Frame(self.win, bg="#0c1014", height=32)
@@ -417,6 +451,18 @@ class EngineerWindow(ThemedWindowMixin):
     def _select_tab(self, category: str):
         self._active_tab = category
         self._style_tabs()
+        if category == "engineers":
+            self._material_tree.pack_forget()
+            self._page_scroll.pack_forget()
+            self._page_xscroll.pack_forget()
+            self._engineer_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            self._engineer_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        else:
+            self._engineer_canvas.pack_forget()
+            self._engineer_scroll.pack_forget()
+            self._material_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            self._page_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+            self._page_xscroll.pack(side=tk.BOTTOM, fill=tk.X)
         if category == "wishlist":
             self._filter_controls.pack_forget()
             self._odyssey_goal_controls.pack_forget()
@@ -483,7 +529,7 @@ class EngineerWindow(ThemedWindowMixin):
         elif self._active_tab == "inventory":
             self._redraw_inventory()
         elif self._active_tab == "engineers":
-            self._redraw_engineers()
+            self._redraw_engineer_cards()
         elif self._active_tab == "wishlist":
             self._redraw_planner()
         else:
@@ -500,6 +546,20 @@ class EngineerWindow(ThemedWindowMixin):
 
     def _search_text(self):
         return self._search_var.get().strip().casefold()
+
+    def _on_search_changed(self):
+        # The ENGINEERS tab rebuilds a widget tree per card, which is too heavy
+        # to redo on every keystroke — debounce so typing doesn't stall the UI.
+        if self._search_job is not None:
+            try:
+                self.win.after_cancel(self._search_job)
+            except Exception:
+                pass
+        self._search_job = self.win.after(150, self._run_search_redraw)
+
+    def _run_search_redraw(self):
+        self._search_job = None
+        self._redraw()
 
     def _update_metrics(self):
         plans = pinned_plans(self.materials)
@@ -646,13 +706,10 @@ class EngineerWindow(ThemedWindowMixin):
         self._total_lbl.config(text=f"Inventory: {held} held types · {missing} wishlist shortages")
         self._type_lbl.config(text=f"{len(rows)} shown · journal-backed ship material storage")
 
-    def _redraw_engineers(self):
-        self._configure_columns({
-            "grade": ("WORKSHOP", 90, tk.CENTER, False),
-            "material": ("ENGINEER", 190, tk.W, True),
-            "stock": ("ACCESS", 90, tk.CENTER, False),
-            "capacity": ("SYSTEM · SPECIALTY", 300, tk.W, True),
-        })
+    def _redraw_engineer_cards(self):
+        for widget in self._engineer_list.winfo_children():
+            widget.destroy()
+        self._engineer_cards = {}
         records = self.materials.get("engineers") or {}
         search = self._search_text()
         division = self._category_var.get()
@@ -668,35 +725,119 @@ class EngineerWindow(ThemedWindowMixin):
         ))
         displayed = 0
         for name, rec in rows:
-            system, offers, on_foot = ENGINEERS.get(name, ("", "", False))
-            if division == "Horizons" and on_foot:
+            info = engineer_info(name)
+            if division == "Horizons" and info["odyssey"]:
                 continue
-            if division == "Odyssey" and not on_foot:
-                continue
-            if search and search not in f"{name} {system} {offers} {rec.get('progress', '')}".casefold():
+            if division == "Odyssey" and not info["odyssey"]:
                 continue
             progress = rec.get("progress") or "Not synced"
+            if search and search not in f"{name} {info['system']} {info['offers']} {progress}".casefold():
+                continue
             if access_filter == "Unlocked" and progress != "Unlocked":
                 continue
             if access_filter == "Invited / Known" and progress not in ("Invited", "Known"):
                 continue
             if access_filter == "Locked / Unsynced" and progress not in ("Locked", "Not synced"):
                 continue
-            rank = int(rec.get("rank") or 0)
-            access = f"G{rank} / 5" if progress == "Unlocked" and rank else progress.upper()
-            label = name
-            lane = "ODYSSEY" if on_foot else "HORIZONS"
-            iid = self._material_tree.insert("", tk.END, values=(lane, label, access,
-                                             " · ".join(value for value in (system, offers) if value)),
-                                             tags=("mid_cap" if progress == "Unlocked" else "low_cap",))
-            if system:
-                self._row_meta[iid] = {"system": system}
+            self._build_engineer_card(self._engineer_list, name, info, rec, progress)
             displayed += 1
-        unlocked = sum(1 for rec in records.values() if rec.get("progress") == "Unlocked")
         if not displayed:
-            self._material_tree.insert("", tk.END, values=("", "No engineers match the search", "", "Clear the search filter"), tags=("empty",))
+            tk.Label(self._engineer_list, text="No engineers match the search",
+                     fg=self.UI_MUTED, bg=self.UI_BG, font=("Consolas", 9)).pack(pady=20)
+        unlocked = sum(1 for rec in records.values() if rec.get("progress") == "Unlocked")
         self._total_lbl.config(text=f"Unlocked: {unlocked} / {len(ENGINEERS)} known engineers")
-        self._type_lbl.config(text=f"{len(records)} synced from EngineerProgress · {displayed} shown · select to route")
+        self._type_lbl.config(text=f"{len(records)} synced from EngineerProgress · {displayed} shown · click a card to route")
+
+    def _build_engineer_card(self, parent, name, info, rec, progress):
+        rank = int(rec.get("rank") or 0)
+        rank_progress = rec.get("rank_progress")
+        state_color = (
+            self.UI_OK if progress == "Unlocked"
+            else COLOR_ORANGE if progress in ("Invited", "Known")
+            else self.UI_DIM
+        )
+        # Plain bordered frame rather than the decorative panel() shell (extra
+        # corner-bracket frames) — this tab rebuilds many cards per redraw, and
+        # the decoration cost adds up across dozens of list rows.
+        border = COLOR_ACCENT if self._selected_engineer == name else self.UI_BORDER
+        card = tk.Frame(parent, bg=self.UI_PANEL, highlightbackground=border, highlightthickness=1)
+        card.pack(fill=tk.X, padx=6, pady=4)
+        self._engineer_cards[name] = card
+
+        body = tk.Frame(card, bg=self.UI_PANEL)
+        body.pack(fill=tk.X, padx=10, pady=(8, 8))
+
+        header = tk.Frame(body, bg=self.UI_PANEL)
+        header.pack(fill=tk.X)
+        tk.Label(header, text=name, font=("Segoe UI", 10, "bold"), fg=state_color,
+                 bg=self.UI_PANEL, anchor="w").pack(side=tk.LEFT)
+        tk.Label(header, text="ODYSSEY" if info["odyssey"] else "HORIZONS",
+                 font=("Consolas", 7, "bold"), fg=self.UI_MUTED, bg=self.UI_PANEL
+                 ).pack(side=tk.LEFT, padx=(8, 0))
+        badge_text = f"G{rank} / 5" if progress == "Unlocked" and rank else progress.upper()
+        tk.Label(header, text=badge_text, font=("Consolas", 8, "bold"), fg=state_color,
+                 bg=self.UI_PANEL).pack(side=tk.RIGHT)
+
+        sub_text = " · ".join(value for value in (info["system"], info["offers"]) if value)
+        tk.Label(body, text=sub_text, font=("Consolas", 8), fg=self.UI_MUTED, bg=self.UI_PANEL,
+                 anchor="w").pack(fill=tk.X, pady=(1, 6))
+
+        bar = tk.Frame(body, bg=self.UI_PANEL)
+        bar.pack(fill=tk.X, pady=(0, 6))
+        for grade in range(1, 6):
+            trough = tk.Frame(bar, bg=self.UI_PANEL_2, height=6)
+            trough.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0 if grade == 1 else 2, 0))
+            trough.pack_propagate(False)
+            if progress == "Unlocked" and rank >= grade:
+                tk.Frame(trough, bg=COLOR_ACCENT).place(x=0, y=0, relwidth=1.0, relheight=1.0)
+            elif progress == "Unlocked" and rank == grade - 1 and rank_progress:
+                fill = max(0.0, min(1.0, float(rank_progress) / 100))
+                tk.Frame(trough, bg=COLOR_ACCENT).place(x=0, y=0, relwidth=fill, relheight=1.0)
+
+        if progress in ("Locked", "Not synced") and info.get("unlock"):
+            tk.Label(body, text=info["unlock"], font=("Consolas", 8), fg=self.UI_MUTED,
+                     bg=self.UI_PANEL, anchor="w", justify=tk.LEFT, wraplength=560
+                     ).pack(fill=tk.X, pady=(0, 4))
+
+        groups = engineer_blueprints(name)
+        if groups:
+            tk.Label(body, text=self._summarize_blueprint_groups(groups), font=("Consolas", 8),
+                     fg=COLOR_TEXT, bg=self.UI_PANEL, anchor="w", justify=tk.LEFT, wraplength=560
+                     ).pack(fill=tk.X)
+
+        self._bind_recursive(card, lambda _event, n=name, i=info: self._select_engineer_card(n, i))
+        return card
+
+    @staticmethod
+    def _summarize_blueprint_groups(groups: dict, max_chars: int = 220) -> str:
+        parts = []
+        for slot, names in groups.items():
+            label = slot.rsplit(" - ", 1)[-1]
+            parts.append(f"{label}: " + ", ".join(names))
+        text = "  ·  ".join(parts)
+        if len(text) <= max_chars:
+            return text
+        return text[:max_chars].rsplit(" ", 1)[0] + " …"
+
+    def _bind_recursive(self, widget, handler):
+        widget.bind("<Button-1>", handler)
+        try:
+            widget.config(cursor="hand2")
+        except tk.TclError:
+            pass
+        for child in widget.winfo_children():
+            self._bind_recursive(child, handler)
+
+    def _select_engineer_card(self, name, info):
+        previous = self._selected_engineer
+        self._selected_engineer = name
+        # Selection only changes a border color — recolor the (at most two)
+        # affected cards in place instead of rebuilding the whole list.
+        for target, border in ((previous, self.UI_BORDER), (name, COLOR_ACCENT)):
+            card = self._engineer_cards.get(target)
+            if card is not None and card.winfo_exists():
+                card.config(highlightbackground=border)
+        self._selection_changed()
 
     def _redraw_planner(self):
         self._configure_columns({
@@ -962,9 +1103,14 @@ class EngineerWindow(ThemedWindowMixin):
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _plot_selected(self):
+    def _current_route_system(self):
+        if self._active_tab == "engineers":
+            return engineer_info(self._selected_engineer)["system"] if self._selected_engineer else None
         selected = self._material_tree.selection()
-        system = (self._row_meta.get(selected[0]) or {}).get("system") if selected else None
+        return (self._row_meta.get(selected[0]) or {}).get("system") if selected else None
+
+    def _plot_selected(self):
+        system = self._current_route_system()
         if not system or not self.plot_system_callback:
             self._total_lbl.config(text="Select an engineer or trader row with a system first")
             return
@@ -986,9 +1132,7 @@ class EngineerWindow(ThemedWindowMixin):
         self._total_lbl.config(text=f"Trader search failed: {message}")
 
     def _selection_changed(self, _event=None):
-        selected = self._material_tree.selection()
-        system = (self._row_meta.get(selected[0]) or {}).get("system") if selected else None
-        enabled = bool(system and self.plot_system_callback)
+        enabled = bool(self._current_route_system() and self.plot_system_callback)
         self._route_btn.config(state=tk.NORMAL if enabled else tk.DISABLED)
 
     def _update_footer(self, cat: str, cat_data: dict, displayed=None):

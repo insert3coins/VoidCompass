@@ -162,30 +162,292 @@ def material_info(symbol: str) -> dict:
                                "category": "manufactured", "family": "unknown", "grade": None})
 
 
+# Module-slot categories used to group each engineer's offered blueprints in the
+# ENGINEERS-tab cards. Order here is the display order.
+SLOT_CATEGORIES = [
+    "Hardpoint - Kinetic", "Hardpoint - Energy", "Hardpoint - Missiles & Mines",
+    "Core Internal - Power Plant", "Core Internal - Thrusters", "Core Internal - FSD",
+    "Core Internal - Power Distributor", "Core Internal - Life Support",
+    "Core Internal - Sensors", "Core Internal - Armour",
+    "Optional Internal - Shield Generator", "Optional Internal - Shield Booster",
+    "Optional Internal - Hull / Module Reinforcement",
+    "Optional Internal - Fuel Scoop",
+    "Utility Mount",
+]
+
 BLUEPRINT_INFO = {
     "FSD Increased Range": {
         "what": "Raises jump range; the best first upgrade for most ships.",
-        "engineer": "Felicity Farseer, Elvira Martuuk and others.",
+        "slot": "Core Internal - FSD",
+        "engineers": ["Felicity Farseer", "Elvira Martuuk", "Etienne Dorn", "Colonel Bris Dekker"],
     },
     "Thrusters Dirty Tuning": {
         "what": "Raises speed and agility at the cost of additional heat.",
-        "engineer": "Professor Palin and other thruster engineers.",
+        "slot": "Core Internal - Thrusters",
+        "engineers": ["Professor Palin", "Chloe Sedesi", "Zacariah Nemo"],
     },
-    "Power Plant Armoured": {"what": "Improves plant integrity and heat efficiency.", "engineer": "Hera Tani, Marco Qwent and other power-plant engineers."},
-    "Power Plant Overcharged": {"what": "Raises power output at the cost of heat and integrity.", "engineer": "Hera Tani, Marco Qwent and other power-plant engineers."},
-    "Power Plant Low Emissions": {"what": "Reduces heat generation at the cost of mass and output.", "engineer": "Hera Tani, Marco Qwent and other power-plant engineers."},
-    "Power Distributor Charge Enhanced": {"what": "Raises recharge rates across all three capacitors.", "engineer": "The Dweller and other distributor engineers."},
-    "Power Distributor Engine Focused": {"what": "Prioritises the engine capacitor and its recharge rate.", "engineer": "The Dweller and other distributor engineers."},
-    "Power Distributor High Capacity": {"what": "Raises capacitor capacity at the cost of recharge rate.", "engineer": "The Dweller and other distributor engineers."},
-    "Shield Generator Enhanced Low Power": {"what": "Reduces shield mass and power draw.", "engineer": "Elvira Martuuk, Lei Cheung and other shield engineers."},
-    "Shield Generator Reinforced": {"what": "Raises absolute shield strength.", "engineer": "Elvira Martuuk, Lei Cheung and other shield engineers."},
-    "Shield Generator Thermal Resistant": {"what": "Improves thermal resistance while balancing defences.", "engineer": "Elvira Martuuk, Lei Cheung and other shield engineers."},
-    "Shield Booster Heavy Duty": {"what": "Raises total shield boost at the cost of mass and power.", "engineer": "Didi Vatermann and other utility engineers."},
-    "Shield Booster Resistance Augmented": {"what": "Improves all shield resistances.", "engineer": "Didi Vatermann and other utility engineers."},
-    "Armour Heavy Duty": {"what": "Raises hull integrity and resistance.", "engineer": "Selene Jean and other armour engineers."},
-    "Life Support Lightweight": {"what": "Reduces life-support mass.", "engineer": "Lori Jameson and other support engineers."},
-    "Surface Scanner Expanded Probe Radius": {"what": "Makes efficient surface mapping easier.", "engineer": "Hera Tani and other scanner engineers."},
+    "Power Plant Armoured": {
+        "what": "Improves plant integrity and heat efficiency.",
+        "slot": "Core Internal - Power Plant",
+        "engineers": ["Hera Tani", "Marco Qwent"],
+    },
+    "Power Plant Overcharged": {
+        "what": "Raises power output at the cost of heat and integrity.",
+        "slot": "Core Internal - Power Plant",
+        "engineers": ["Hera Tani", "Marco Qwent"],
+    },
+    "Power Plant Low Emissions": {
+        "what": "Reduces heat generation at the cost of mass and output.",
+        "slot": "Core Internal - Power Plant",
+        "engineers": ["Hera Tani", "Marco Qwent"],
+    },
+    "Power Distributor Charge Enhanced": {
+        "what": "Raises recharge rates across all three capacitors.",
+        "slot": "Core Internal - Power Distributor",
+        "engineers": ["The Dweller", "Marco Qwent"],
+    },
+    "Power Distributor Engine Focused": {
+        "what": "Prioritises the engine capacitor and its recharge rate.",
+        "slot": "Core Internal - Power Distributor",
+        "engineers": ["The Dweller", "Marco Qwent"],
+    },
+    "Power Distributor High Capacity": {
+        "what": "Raises capacitor capacity at the cost of recharge rate.",
+        "slot": "Core Internal - Power Distributor",
+        "engineers": ["The Dweller", "Marco Qwent"],
+    },
+    "Shield Generator Enhanced Low Power": {
+        "what": "Reduces shield mass and power draw.",
+        "slot": "Optional Internal - Shield Generator",
+        "engineers": ["Elvira Martuuk", "Lei Cheung"],
+    },
+    "Shield Generator Reinforced": {
+        "what": "Raises absolute shield strength.",
+        "slot": "Optional Internal - Shield Generator",
+        "engineers": ["Elvira Martuuk", "Lei Cheung"],
+    },
+    "Shield Generator Thermal Resistant": {
+        "what": "Improves thermal resistance while balancing defences.",
+        "slot": "Optional Internal - Shield Generator",
+        "engineers": ["Elvira Martuuk", "Lei Cheung"],
+    },
+    "Shield Booster Heavy Duty": {
+        "what": "Raises total shield boost at the cost of mass and power.",
+        "slot": "Optional Internal - Shield Booster",
+        "engineers": ["Didi Vatermann"],
+    },
+    "Shield Booster Resistance Augmented": {
+        "what": "Improves all shield resistances.",
+        "slot": "Optional Internal - Shield Booster",
+        "engineers": ["Didi Vatermann"],
+    },
+    "Armour Heavy Duty": {
+        "what": "Raises hull integrity and resistance.",
+        "slot": "Core Internal - Armour",
+        "engineers": ["Selene Jean", "Petra Olmanova"],
+    },
+    "Life Support Lightweight": {
+        "what": "Reduces life-support mass.",
+        "slot": "Core Internal - Life Support",
+        "engineers": ["Lori Jameson"],
+    },
+    "Surface Scanner Expanded Probe Radius": {
+        "what": "Makes efficient surface mapping easier.",
+        "slot": "Core Internal - Sensors",
+        "engineers": ["Hera Tani", "Juri Ishmaak"],
+    },
+
+    # ---- Weapon hardpoint mods, one row per (category, effect) rather than per
+    # weapon model — every model offering a given effect shares an identical
+    # per-grade recipe. "what" text lists exactly which models it applies to. ----
+    "Kinetic Weapon Overcharged": {
+        "what": "Raises damage output at the cost of higher thermal load and distributor draw. Applies to Multi-cannons, Cannons and Fragment Cannons (not Rail Guns).",
+        "slot": "Hardpoint - Kinetic",
+        "engineers": ["Marsha Hicks", "The Sarge", "Tod 'The Blaster' McQuinn", "Zacariah Nemo"],
+    },
+    "Kinetic Weapon Efficient": {
+        "what": "Cuts thermal load, power and distributor draw for sustained fire, with a smaller damage bonus. Applies to Multi-cannons, Cannons and Fragment Cannons (not Rail Guns).",
+        "slot": "Hardpoint - Kinetic",
+        "engineers": ["Marsha Hicks", "The Sarge", "Tod 'The Blaster' McQuinn", "Zacariah Nemo"],
+    },
+    "Kinetic Weapon Long Range": {
+        "what": "Extends maximum range and removes damage falloff at the cost of mass and power draw. Applies to Multi-cannons, Cannons and Rail Guns (not Fragment Cannons).",
+        "slot": "Hardpoint - Kinetic",
+        "engineers": ["Etienne Dorn", "Marsha Hicks", "The Sarge", "Tod 'The Blaster' McQuinn", "Zacariah Nemo"],
+    },
+    "Kinetic Weapon Rapid Fire": {
+        "what": "Raises rate of fire and cuts reload time at the cost of accuracy jitter and a small damage penalty. Applies to Multi-cannons, Cannons and Fragment Cannons (not Rail Guns).",
+        "slot": "Hardpoint - Kinetic",
+        "engineers": ["Marsha Hicks", "The Sarge", "Tod 'The Blaster' McQuinn", "Zacariah Nemo"],
+    },
+    "Kinetic Weapon Lightweight": {
+        "what": "Sharply reduces mass and power/distributor draw at the cost of weapon integrity. Applies to Multi-cannons, Cannons, Fragment Cannons and Rail Guns.",
+        "slot": "Hardpoint - Kinetic",
+        "engineers": ["Etienne Dorn", "Marsha Hicks", "The Sarge", "Tod 'The Blaster' McQuinn", "Zacariah Nemo"],
+    },
+    "Kinetic Weapon Sturdy": {
+        "what": "Raises weapon integrity and armour piercing at the cost of mass. Applies to Multi-cannons, Cannons, Fragment Cannons and Rail Guns.",
+        "slot": "Hardpoint - Kinetic",
+        "engineers": ["Etienne Dorn", "Marsha Hicks", "The Sarge", "Tod 'The Blaster' McQuinn", "Zacariah Nemo"],
+    },
+    "Kinetic Weapon Short Range Blaster": {
+        "what": "Raises damage sharply at the cost of range and higher thermal load. Applies to Multi-cannons, Cannons and Rail Guns (not Fragment Cannons).",
+        "slot": "Hardpoint - Kinetic",
+        "engineers": ["Etienne Dorn", "Marsha Hicks", "The Sarge", "Tod 'The Blaster' McQuinn", "Zacariah Nemo"],
+    },
+    "Kinetic Weapon High Capacity Magazine": {
+        "what": "Raises clip and ammo capacity at the cost of mass and power draw. Applies to Multi-cannons, Cannons, Fragment Cannons and Rail Guns.",
+        "slot": "Hardpoint - Kinetic",
+        "engineers": ["Etienne Dorn", "Marsha Hicks", "The Sarge", "Tod 'The Blaster' McQuinn", "Zacariah Nemo"],
+    },
+    "Fragment Cannon Double Shot": {
+        "what": "Fires two shots per trigger pull for more burst damage. Fragment Cannon only.",
+        "slot": "Hardpoint - Kinetic",
+        "engineers": ["Marsha Hicks", "Tod 'The Blaster' McQuinn", "Zacariah Nemo"],
+    },
+    "Energy Weapon Overcharged": {
+        "what": "Raises damage output at the cost of higher thermal load and distributor draw. Applies to Beam, Burst and Pulse Lasers and Plasma Accelerators.",
+        "slot": "Hardpoint - Energy",
+        "engineers": ["Bill Turner", "Broo Tarquin", "Etienne Dorn", "Mel Brandon", "The Dweller", "Zacariah Nemo"],
+    },
+    "Energy Weapon Efficient": {
+        "what": "Cuts thermal load, power and distributor draw for sustained fire, with a smaller damage bonus. Applies to Beam, Burst and Pulse Lasers and Plasma Accelerators.",
+        "slot": "Hardpoint - Energy",
+        "engineers": ["Bill Turner", "Broo Tarquin", "Etienne Dorn", "Mel Brandon", "The Dweller", "Zacariah Nemo"],
+    },
+    "Energy Weapon Long Range": {
+        "what": "Extends maximum range, removes damage falloff and raises shot speed at the cost of mass and power draw. Applies to Beam, Burst and Pulse Lasers and Plasma Accelerators.",
+        "slot": "Hardpoint - Energy",
+        "engineers": ["Bill Turner", "Broo Tarquin", "Etienne Dorn", "Mel Brandon", "The Dweller", "Zacariah Nemo"],
+    },
+    "Energy Weapon Focused": {
+        "what": "Extends range and raises armour piercing at the cost of rate of fire and thermal load. Applies to Burst and Pulse Lasers and Plasma Accelerators (not Beam Lasers).",
+        "slot": "Hardpoint - Energy",
+        "engineers": ["Bill Turner", "Broo Tarquin", "Etienne Dorn", "Mel Brandon", "The Dweller", "Zacariah Nemo"],
+    },
+    "Energy Weapon Rapid Fire": {
+        "what": "Raises rate of fire and cuts reload time at the cost of accuracy jitter and a small damage penalty. Applies to Burst and Pulse Lasers and Plasma Accelerators (not Beam Lasers).",
+        "slot": "Hardpoint - Energy",
+        "engineers": ["Bill Turner", "Broo Tarquin", "Etienne Dorn", "Mel Brandon", "The Dweller", "Zacariah Nemo"],
+    },
+    "Energy Weapon Lightweight": {
+        "what": "Sharply reduces mass and power/distributor draw at the cost of weapon integrity. Applies to Beam, Burst and Pulse Lasers and Plasma Accelerators.",
+        "slot": "Hardpoint - Energy",
+        "engineers": ["Bill Turner", "Broo Tarquin", "Etienne Dorn", "Mel Brandon", "The Dweller", "Zacariah Nemo"],
+    },
+    "Energy Weapon Sturdy": {
+        "what": "Raises weapon integrity and armour piercing at the cost of mass. Applies to Beam, Burst and Pulse Lasers and Plasma Accelerators.",
+        "slot": "Hardpoint - Energy",
+        "engineers": ["Bill Turner", "Broo Tarquin", "Etienne Dorn", "Mel Brandon", "The Dweller", "Zacariah Nemo"],
+    },
+    "Energy Weapon Short Range Blaster": {
+        "what": "Raises damage sharply at the cost of range and higher thermal load. Applies to Beam and Burst Lasers and Plasma Accelerators (not Pulse Lasers).",
+        "slot": "Hardpoint - Energy",
+        "engineers": ["Bill Turner", "Broo Tarquin", "Etienne Dorn", "Mel Brandon", "The Dweller", "Zacariah Nemo"],
+    },
+    "Missile & Mine Lightweight": {
+        "what": "Sharply reduces mass and power/distributor draw at the cost of weapon integrity. Applies to Missile Racks, Mine Launchers and Torpedo Pylons.",
+        "slot": "Hardpoint - Missiles & Mines",
+        "engineers": ["Juri Ishmaak", "Liz Ryder", "Petra Olmanova"],
+    },
+    "Missile & Mine Sturdy": {
+        "what": "Raises weapon integrity and armour piercing at the cost of mass. Applies to Missile Racks, Mine Launchers and Torpedo Pylons.",
+        "slot": "Hardpoint - Missiles & Mines",
+        "engineers": ["Juri Ishmaak", "Liz Ryder", "Petra Olmanova"],
+    },
+    "Missile & Mine Rapid Fire": {
+        "what": "Raises rate of fire and cuts reload time at the cost of accuracy jitter and a small damage penalty. Applies to Missile Racks and Mine Launchers (not Torpedo Pylons).",
+        "slot": "Hardpoint - Missiles & Mines",
+        "engineers": ["Juri Ishmaak", "Liz Ryder", "Petra Olmanova"],
+    },
+    "Missile & Mine High Capacity Magazine": {
+        "what": "Raises clip and ammo capacity at the cost of mass and power draw. Applies to Missile Racks and Mine Launchers (not Torpedo Pylons, which have no magazine).",
+        "slot": "Hardpoint - Missiles & Mines",
+        "engineers": ["Juri Ishmaak", "Liz Ryder", "Petra Olmanova"],
+    },
+    "Sensors Lightweight": {
+        "what": "Reduces sensor mass and narrows scan angle at the cost of module integrity.",
+        "slot": "Core Internal - Sensors",
+        "engineers": ["Bill Turner", "Etienne Dorn", "Felicity Farseer", "Hera Tani", "Juri Ishmaak", "Lei Cheung", "Lori Jameson", "Tiana Fortune"],
+    },
+    "Sensors Long Range": {
+        "what": "Extends detection range at the cost of a narrower scan angle and more mass.",
+        "slot": "Core Internal - Sensors",
+        "engineers": ["Bill Turner", "Etienne Dorn", "Felicity Farseer", "Hera Tani", "Juri Ishmaak", "Lei Cheung", "Lori Jameson", "Tiana Fortune"],
+    },
+    "Sensors Wide Angle": {
+        "what": "Widens the scan angle at the cost of detection range and power draw.",
+        "slot": "Core Internal - Sensors",
+        "engineers": ["Bill Turner", "Etienne Dorn", "Felicity Farseer", "Hera Tani", "Juri Ishmaak", "Lei Cheung", "Lori Jameson", "Tiana Fortune"],
+    },
+    "Armour Lightweight": {
+        "what": "Cuts hull mass sharply and raises overall resistances slightly, at the cost of some hull boost.",
+        "slot": "Core Internal - Armour",
+        "engineers": ["Liz Ryder", "Petra Olmanova", "Selene Jean"],
+    },
+    "Armour Blast Resistant": {
+        "what": "Raises explosive resistance at the cost of thermal and kinetic resistance.",
+        "slot": "Core Internal - Armour",
+        "engineers": ["Liz Ryder", "Petra Olmanova", "Selene Jean"],
+    },
+    "Armour Kinetic Resistant": {
+        "what": "Raises kinetic resistance at the cost of thermal and explosive resistance.",
+        "slot": "Core Internal - Armour",
+        "engineers": ["Liz Ryder", "Petra Olmanova", "Selene Jean"],
+    },
+    "Armour Thermal Resistant": {
+        "what": "Raises thermal resistance at the cost of kinetic and explosive resistance.",
+        "slot": "Core Internal - Armour",
+        "engineers": ["Liz Ryder", "Petra Olmanova", "Selene Jean"],
+    },
+    "Hull Reinforcement Heavy Duty": {
+        "what": "Raises hull reinforcement and all resistances at the cost of mass.",
+        "slot": "Optional Internal - Hull / Module Reinforcement",
+        "engineers": ["Liz Ryder", "Petra Olmanova", "Selene Jean"],
+    },
+    "Hull Reinforcement Lightweight": {
+        "what": "Cuts mass and raises hull boost at the cost of hull reinforcement.",
+        "slot": "Optional Internal - Hull / Module Reinforcement",
+        "engineers": ["Liz Ryder", "Petra Olmanova", "Selene Jean"],
+    },
+    "Hull Reinforcement Blast Resistant": {
+        "what": "Raises explosive resistance and hull reinforcement at the cost of thermal and kinetic resistance.",
+        "slot": "Optional Internal - Hull / Module Reinforcement",
+        "engineers": ["Liz Ryder", "Petra Olmanova", "Selene Jean"],
+    },
+    "Hull Reinforcement Kinetic Resistant": {
+        "what": "Raises kinetic resistance and hull reinforcement at the cost of thermal and explosive resistance.",
+        "slot": "Optional Internal - Hull / Module Reinforcement",
+        "engineers": ["Liz Ryder", "Petra Olmanova", "Selene Jean"],
+    },
+    "Hull Reinforcement Thermal Resistant": {
+        "what": "Raises thermal resistance and hull reinforcement at the cost of kinetic and explosive resistance.",
+        "slot": "Optional Internal - Hull / Module Reinforcement",
+        "engineers": ["Liz Ryder", "Petra Olmanova", "Selene Jean"],
+    },
+    "Fuel Scoop Shielded": {
+        "what": "Raises module integrity so the scoop better survives sustained close-star scooping, at the cost of power draw.",
+        "slot": "Optional Internal - Fuel Scoop",
+        "engineers": ["Bill Turner", "Lori Jameson", "Marsha Hicks"],
+    },
 }
+
+
+def blueprint_info(name: str) -> dict:
+    return BLUEPRINT_INFO.get(name, {"what": "", "slot": "Unclassified", "engineers": []})
+
+
+def engineer_blueprints(name: str) -> dict[str, list[str]]:
+    """Blueprint names offered by an engineer, grouped by slot (SLOT_CATEGORIES order)."""
+    groups: dict[str, list[str]] = {}
+    for bp_name, info in BLUEPRINT_INFO.items():
+        if name in info.get("engineers", ()):
+            groups.setdefault(info.get("slot", "Unclassified"), []).append(bp_name)
+    for names in groups.values():
+        names.sort()
+    ordered = {slot: groups[slot] for slot in SLOT_CATEGORIES if slot in groups}
+    ordered.update({slot: names for slot, names in groups.items() if slot not in ordered})
+    return ordered
 
 # Verified high-use ship recipes.  Costs are expressed per application; the
 # planner applies ROLLS_PER_GRADE and can start from an existing grade.
@@ -288,49 +550,349 @@ BLUEPRINTS = {
         4: {"mechanicalequipment": 1, "niobium": 1, "protolightalloys": 1},
         5: {"mechanicalcomponents": 1, "tin": 1, "protoradiolicalloys": 1},
     },
+
+    # ---- Kinetic weapon hardpoints (Multi-cannon, Cannon, Fragment Cannon, Rail Gun) ----
+    "Kinetic Weapon Overcharged": {
+        1: {"nickel": 1},
+        2: {"nickel": 1, "conductivecomponents": 1},
+        3: {"nickel": 1, "conductivecomponents": 1, "electrochemicalarrays": 1},
+        4: {"zinc": 1, "conductiveceramics": 1, "polymercapacitors": 1},
+        5: {"zirconium": 1, "conductivepolymers": 1, "embeddedfirmware": 1},
+    },
+    "Kinetic Weapon Efficient": {
+        1: {"sulphur": 1},
+        2: {"sulphur": 1, "heatdispersionplate": 1},
+        3: {"chromium": 1, "heatexchangers": 1, "scrambledemissiondata": 1},
+        4: {"selenium": 1, "heatvanes": 1, "archivedemissiondata": 1},
+        5: {"cadmium": 1, "protoheatradiators": 1, "emissiondata": 1},
+    },
+    "Kinetic Weapon Long Range": {
+        1: {"sulphur": 1},
+        2: {"sulphur": 1, "consumerfirmware": 1},
+        3: {"sulphur": 1, "consumerfirmware": 1, "focuscrystals": 1},
+        4: {"consumerfirmware": 1, "focuscrystals": 1, "conductivepolymers": 1},
+        5: {"industrialfirmware": 1, "thermicalloys": 1, "biotechconductors": 1},
+    },
+    "Kinetic Weapon Rapid Fire": {
+        1: {"mechanicalscrap": 1},
+        2: {"mechanicalscrap": 1, "heatdispersionplate": 1},
+        3: {"legacyfirmware": 1, "mechanicalequipment": 1, "precipitatedalloys": 1},
+        4: {"consumerfirmware": 1, "mechanicalcomponents": 1, "thermicalloys": 1},
+        5: {"configurablecomponents": 1, "precipitatedalloys": 1, "technetium": 1},
+    },
+    "Kinetic Weapon Lightweight": {
+        1: {"phosphorus": 1},
+        2: {"manganese": 1, "salvagedalloys": 1},
+        3: {"manganese": 1, "salvagedalloys": 1, "conductiveceramics": 1},
+        4: {"conductivecomponents": 1, "phasealloys": 1, "protolightalloys": 1},
+        5: {"conductiveceramics": 1, "protolightalloys": 1, "protoradiolicalloys": 1},
+    },
+    "Kinetic Weapon Sturdy": {
+        1: {"nickel": 1},
+        2: {"nickel": 1, "shieldemitters": 1},
+        3: {"nickel": 1, "shieldemitters": 1, "tungsten": 1},
+        4: {"molybdenum": 1, "tungsten": 1, "zinc": 1},
+        5: {"highdensitycomposites": 1, "molybdenum": 1, "technetium": 1},
+    },
+    "Kinetic Weapon Short Range Blaster": {
+        1: {"nickel": 1},
+        2: {"nickel": 1, "consumerfirmware": 1},
+        3: {"nickel": 1, "consumerfirmware": 1, "electrochemicalarrays": 1},
+        4: {"consumerfirmware": 1, "electrochemicalarrays": 1, "conductivepolymers": 1},
+        5: {"industrialfirmware": 1, "biotechconductors": 1, "configurablecomponents": 1},
+    },
+    "Kinetic Weapon High Capacity Magazine": {
+        1: {"mechanicalscrap": 1},
+        2: {"mechanicalscrap": 1, "vanadium": 1},
+        3: {"mechanicalscrap": 1, "vanadium": 1, "niobium": 1},
+        4: {"tin": 1, "mechanicalequipment": 1, "highdensitycomposites": 1},
+        5: {"mechanicalcomponents": 1, "militarysupercapacitors": 1, "fedproprietarycomposites": 1},
+    },
+    "Fragment Cannon Double Shot": {
+        1: {"carbon": 1},
+        2: {"carbon": 1, "mechanicalequipment": 1},
+        3: {"carbon": 1, "mechanicalequipment": 1, "industrialfirmware": 1},
+        4: {"vanadium": 1, "mechanicalcomponents": 1, "securityfirmware": 1},
+        5: {"highdensitycomposites": 1, "configurablecomponents": 1, "embeddedfirmware": 1},
+    },
+
+    # ---- Energy weapon hardpoints (Beam/Burst/Pulse Laser, Plasma Accelerator) ----
+    "Energy Weapon Overcharged": {
+        1: {"nickel": 1},
+        2: {"nickel": 1, "conductivecomponents": 1},
+        3: {"nickel": 1, "conductivecomponents": 1, "electrochemicalarrays": 1},
+        4: {"zinc": 1, "conductiveceramics": 1, "polymercapacitors": 1},
+        5: {"zirconium": 1, "conductivepolymers": 1, "embeddedfirmware": 1},
+    },
+    "Energy Weapon Efficient": {
+        1: {"sulphur": 1},
+        2: {"sulphur": 1, "heatdispersionplate": 1},
+        3: {"chromium": 1, "heatexchangers": 1, "scrambledemissiondata": 1},
+        4: {"selenium": 1, "heatvanes": 1, "archivedemissiondata": 1},
+        5: {"cadmium": 1, "protoheatradiators": 1, "emissiondata": 1},
+    },
+    "Energy Weapon Long Range": {
+        1: {"sulphur": 1},
+        2: {"sulphur": 1, "consumerfirmware": 1},
+        3: {"sulphur": 1, "consumerfirmware": 1, "focuscrystals": 1},
+        4: {"consumerfirmware": 1, "focuscrystals": 1, "conductivepolymers": 1},
+        5: {"industrialfirmware": 1, "thermicalloys": 1, "biotechconductors": 1},
+    },
+    "Energy Weapon Focused": {
+        1: {"iron": 1},
+        2: {"iron": 1, "conductivecomponents": 1},
+        3: {"iron": 1, "chromium": 1, "conductiveceramics": 1},
+        4: {"germanium": 1, "focuscrystals": 1, "polymercapacitors": 1},
+        5: {"niobium": 1, "refinedfocuscrystals": 1, "militarysupercapacitors": 1},
+    },
+    "Energy Weapon Rapid Fire": {
+        1: {"mechanicalscrap": 1},
+        2: {"mechanicalscrap": 1, "heatdispersionplate": 1},
+        3: {"legacyfirmware": 1, "mechanicalequipment": 1, "precipitatedalloys": 1},
+        4: {"consumerfirmware": 1, "mechanicalcomponents": 1, "thermicalloys": 1},
+        5: {"configurablecomponents": 1, "precipitatedalloys": 1, "technetium": 1},
+    },
+    "Energy Weapon Lightweight": {
+        1: {"phosphorus": 1},
+        2: {"manganese": 1, "salvagedalloys": 1},
+        3: {"manganese": 1, "salvagedalloys": 1, "conductiveceramics": 1},
+        4: {"conductivecomponents": 1, "phasealloys": 1, "protolightalloys": 1},
+        5: {"conductiveceramics": 1, "protolightalloys": 1, "protoradiolicalloys": 1},
+    },
+    "Energy Weapon Sturdy": {
+        1: {"nickel": 1},
+        2: {"nickel": 1, "shieldemitters": 1},
+        3: {"nickel": 1, "shieldemitters": 1, "tungsten": 1},
+        4: {"molybdenum": 1, "tungsten": 1, "zinc": 1},
+        5: {"highdensitycomposites": 1, "molybdenum": 1, "technetium": 1},
+    },
+    "Energy Weapon Short Range Blaster": {
+        1: {"nickel": 1},
+        2: {"nickel": 1, "consumerfirmware": 1},
+        3: {"nickel": 1, "consumerfirmware": 1, "electrochemicalarrays": 1},
+        4: {"consumerfirmware": 1, "electrochemicalarrays": 1, "conductivepolymers": 1},
+        5: {"industrialfirmware": 1, "biotechconductors": 1, "configurablecomponents": 1},
+    },
+
+    # ---- Missile / mine ordnance hardpoints (Missile Rack, Mine Launcher, Torpedo Pylon) ----
+    "Missile & Mine Lightweight": {
+        1: {"phosphorus": 1},
+        2: {"manganese": 1, "salvagedalloys": 1},
+        3: {"manganese": 1, "salvagedalloys": 1, "conductiveceramics": 1},
+        4: {"conductivecomponents": 1, "phasealloys": 1, "protolightalloys": 1},
+        5: {"conductiveceramics": 1, "protolightalloys": 1, "protoradiolicalloys": 1},
+    },
+    "Missile & Mine Sturdy": {
+        1: {"nickel": 1},
+        2: {"nickel": 1, "shieldemitters": 1},
+        3: {"nickel": 1, "shieldemitters": 1, "tungsten": 1},
+        4: {"molybdenum": 1, "tungsten": 1, "zinc": 1},
+        5: {"highdensitycomposites": 1, "molybdenum": 1, "technetium": 1},
+    },
+    "Missile & Mine Rapid Fire": {
+        1: {"mechanicalscrap": 1},
+        2: {"mechanicalscrap": 1, "heatdispersionplate": 1},
+        3: {"legacyfirmware": 1, "mechanicalequipment": 1, "precipitatedalloys": 1},
+        4: {"consumerfirmware": 1, "mechanicalcomponents": 1, "thermicalloys": 1},
+        5: {"configurablecomponents": 1, "precipitatedalloys": 1, "technetium": 1},
+    },
+    "Missile & Mine High Capacity Magazine": {
+        1: {"mechanicalscrap": 1},
+        2: {"mechanicalscrap": 1, "vanadium": 1},
+        3: {"mechanicalscrap": 1, "vanadium": 1, "niobium": 1},
+        4: {"tin": 1, "mechanicalequipment": 1, "highdensitycomposites": 1},
+        5: {"mechanicalcomponents": 1, "militarysupercapacitors": 1, "fedproprietarycomposites": 1},
+    },
+
+    # ---- Sensors (core internal) ----
+    "Sensors Lightweight": {
+        1: {"phosphorus": 1},
+        2: {"salvagedalloys": 1, "manganese": 1},
+        3: {"salvagedalloys": 1, "manganese": 1, "conductiveceramics": 1},
+        4: {"conductivecomponents": 1, "phasealloys": 1, "protolightalloys": 1},
+        5: {"conductiveceramics": 1, "protolightalloys": 1, "protoradiolicalloys": 1},
+    },
+    "Sensors Long Range": {
+        1: {"iron": 1},
+        2: {"iron": 1, "hybridcapacitors": 1},
+        3: {"iron": 1, "hybridcapacitors": 1, "emissiondata": 1},
+        4: {"germanium": 1, "electrochemicalarrays": 1, "decodedemissiondata": 1},
+        5: {"niobium": 1, "polymercapacitors": 1, "compactemissionsdata": 1},
+    },
+    "Sensors Wide Angle": {
+        1: {"mechanicalscrap": 1},
+        2: {"mechanicalscrap": 1, "germanium": 1},
+        3: {"mechanicalscrap": 1, "germanium": 1, "scandatabanks": 1},
+        4: {"mechanicalequipment": 1, "niobium": 1, "encodedscandata": 1},
+        5: {"mechanicalcomponents": 1, "tin": 1, "classifiedscandata": 1},
+    },
+
+    # ---- Armour (core internal); "Armour Heavy Duty" already exists above ----
+    "Armour Lightweight": {
+        1: {"iron": 1},
+        2: {"iron": 1, "conductivecomponents": 1},
+        3: {"iron": 1, "conductivecomponents": 1, "highdensitycomposites": 1},
+        4: {"germanium": 1, "conductiveceramics": 1, "fedproprietarycomposites": 1},
+        5: {"conductiveceramics": 1, "tin": 1, "militarygradealloys": 1},
+    },
+    "Armour Blast Resistant": {
+        1: {"nickel": 1},
+        2: {"carbon": 1, "zinc": 1},
+        3: {"salvagedalloys": 1, "vanadium": 1, "zirconium": 1},
+        4: {"galvanisingalloys": 1, "tungsten": 1, "mercury": 1},
+        5: {"phasealloys": 1, "molybdenum": 1, "ruthenium": 1},
+    },
+    "Armour Kinetic Resistant": {
+        1: {"nickel": 1},
+        2: {"nickel": 1, "vanadium": 1},
+        3: {"highdensitycomposites": 1, "salvagedalloys": 1, "vanadium": 1},
+        4: {"galvanisingalloys": 1, "tungsten": 1, "fedproprietarycomposites": 1},
+        5: {"phasealloys": 1, "molybdenum": 1, "fedcorecomposites": 1},
+    },
+    "Armour Thermal Resistant": {
+        1: {"heatconductionwiring": 1},
+        2: {"heatdispersionplate": 1, "nickel": 1},
+        3: {"heatexchangers": 1, "salvagedalloys": 1, "vanadium": 1},
+        4: {"galvanisingalloys": 1, "tungsten": 1, "heatvanes": 1},
+        5: {"phasealloys": 1, "molybdenum": 1, "protoheatradiators": 1},
+    },
+
+    # ---- Hull Reinforcement Package (optional internal) ----
+    "Hull Reinforcement Heavy Duty": {
+        1: {"carbon": 1},
+        2: {"carbon": 1, "shieldemitters": 1},
+        3: {"carbon": 1, "highdensitycomposites": 1, "shieldemitters": 1},
+        4: {"fedproprietarycomposites": 1, "shieldingsensors": 1, "vanadium": 1},
+        5: {"compoundshielding": 1, "fedcorecomposites": 1, "tungsten": 1},
+    },
+    "Hull Reinforcement Lightweight": {
+        1: {"iron": 1},
+        2: {"iron": 1, "conductivecomponents": 1},
+        3: {"iron": 1, "conductivecomponents": 1, "highdensitycomposites": 1},
+        4: {"conductiveceramics": 1, "germanium": 1, "fedproprietarycomposites": 1},
+        5: {"conductiveceramics": 1, "militarygradealloys": 1, "tin": 1},
+    },
+    "Hull Reinforcement Blast Resistant": {
+        1: {"nickel": 1},
+        2: {"carbon": 1, "zinc": 1},
+        3: {"salvagedalloys": 1, "vanadium": 1, "zirconium": 1},
+        4: {"galvanisingalloys": 1, "tungsten": 1, "mercury": 1},
+        5: {"phasealloys": 1, "molybdenum": 1, "ruthenium": 1},
+    },
+    "Hull Reinforcement Kinetic Resistant": {
+        1: {"nickel": 1},
+        2: {"nickel": 1, "vanadium": 1},
+        3: {"highdensitycomposites": 1, "salvagedalloys": 1, "vanadium": 1},
+        4: {"galvanisingalloys": 1, "tungsten": 1, "fedproprietarycomposites": 1},
+        5: {"phasealloys": 1, "molybdenum": 1, "fedcorecomposites": 1},
+    },
+    "Hull Reinforcement Thermal Resistant": {
+        1: {"heatconductionwiring": 1},
+        2: {"heatdispersionplate": 1, "nickel": 1},
+        3: {"heatexchangers": 1, "salvagedalloys": 1, "vanadium": 1},
+        4: {"galvanisingalloys": 1, "tungsten": 1, "heatvanes": 1},
+        5: {"phasealloys": 1, "molybdenum": 1, "protoheatradiators": 1},
+    },
+
+    # ---- Fuel Scoop (optional internal) ----
+    "Fuel Scoop Shielded": {
+        1: {"wornshieldemitters": 1},
+        2: {"carbon": 1, "shieldemitters": 1},
+        3: {"carbon": 1, "highdensitycomposites": 1, "shieldemitters": 1},
+        4: {"fedproprietarycomposites": 1, "shieldingsensors": 1, "vanadium": 1},
+        5: {"compoundshielding": 1, "fedcorecomposites": 1, "tungsten": 1},
+    },
 }
 
 
+# Unlock text is deliberately broad, stable guidance on the *type* of activity or
+# standing each engineer requires (combat rank, exploration, trade reputation,
+# on-foot missions, etc.) rather than exact numeric thresholds — Frontier has
+# adjusted specific requirements over time, but the general unlock pathway for
+# each engineer has stayed stable. Verify exact current requirements in-game via
+# the engineer's holo-terminal or a wiki before relying on this for a hard block.
 ENGINEERS = {
-    "Felicity Farseer": ("Deciat", "FSD range, thrusters, sensors", False),
-    "Elvira Martuuk": ("Khun", "FSD range, shields", False),
-    "The Dweller": ("Wyrd", "power distributor, lasers", False),
-    "Liz Ryder": ("Eurybia", "missiles, torpedoes", False),
-    "Tod 'The Blaster' McQuinn": ("Wolf 397", "multi-cannons, fragment cannons", False),
-    "Zacariah Nemo": ("Yoru", "fragment cannons, plasma", False),
-    "Lei Cheung": ("Laksak", "shield generators, sensors", False),
-    "Hera Tani": ("Kuwemaki", "power plant, surface scanner", False),
-    "Juri Ishmaak": ("Giryak", "mines, sensors, scanners", False),
-    "Selene Jean": ("Kuk", "hull reinforcement, armour", False),
-    "Marco Qwent": ("Sirius", "power plant, distributor", False),
-    "Ram Tah": ("Meene", "utilities, limpets", False),
-    "Broo Tarquin": ("Muang", "pulse and burst lasers", False),
-    "The Sarge": ("Beta-3 Tucani", "cannons, limpets", False),
-    "Colonel Bris Dekker": ("Sol", "FSD interdictors", False),
-    "Didi Vatermann": ("Leesti", "shield boosters", False),
-    "Bill Turner": ("Alioth", "plasma accelerators, utilities", False),
-    "Lori Jameson": ("Shinrarta Dezhra", "sensors, scanners, life support", False),
-    "Professor Palin": ("Arque", "thrusters, FSD", False),
-    "Tiana Fortune": ("Achenar", "interdictors, limpets, sensors", False),
-    "Chloe Sedesi": ("Shenve", "thrusters, FSD", False),
-    "Mel Brandon": ("Luchtaine", "lasers, shields, FSD, thrusters", False),
-    "Petra Olmanova": ("Asura", "armour, countermeasures, explosives", False),
-    "Marsha Hicks": ("Tir", "multi-cannons, fragments, limpets", False),
-    "Etienne Dorn": ("Los", "rail guns, power, sensors", False),
-    "Domino Green": ("Orishis", "suit and weapon mods", True),
-    "Hero Ferrari": ("Siris", "suit and weapon mods", True),
-    "Kit Fowler": ("Capoya", "suit and weapon mods", True),
-    "Jude Navarro": ("Aurai", "suit and weapon mods", True),
-    "Terra Velasquez": ("Shou Xing", "suit and weapon mods", True),
-    "Oden Geiger": ("Candiaei", "suit and weapon mods", True),
-    "Uma Laszlo": ("Xuane", "suit and weapon mods", True),
-    "Wellington Beck": ("Jolapa", "suit and weapon mods", True),
-    "Yarden Bond": ("Bayan", "suit and weapon mods", True),
-    "Baltanos": ("Deriso", "suit and weapon mods", True),
-    "Eleanor Bresa": ("Desy", "suit and weapon mods", True),
-    "Rosa Dayette": ("Kojeara", "suit and weapon mods", True),
-    "Yi Shen": ("Einheriar", "suit and weapon mods", True),
+    "Felicity Farseer": {"system": "Deciat", "offers": "FSD range, thrusters, sensors", "odyssey": False,
+        "unlock": "Available from the start of the game — simply travel to Deciat and speak to her."},
+    "Elvira Martuuk": {"system": "Khun", "offers": "FSD range, shields", "odyssey": False,
+        "unlock": "Build reputation with a minor faction (Cordial or higher), then travel to Khun."},
+    "The Dweller": {"system": "Wyrd", "offers": "power distributor, lasers", "odyssey": False,
+        "unlock": "Redeem a bounty voucher for a wanted commander at an Interstellar Factors contact, then travel to Wyrd."},
+    "Liz Ryder": {"system": "Eurybia", "offers": "missiles, torpedoes", "odyssey": False,
+        "unlock": "Reach a combat rank of Novice or higher, then travel to Eurybia."},
+    "Tod 'The Blaster' McQuinn": {"system": "Wolf 397", "offers": "multi-cannons, fragment cannons", "odyssey": False,
+        "unlock": "Reach a combat rank of Competent or higher, then travel to Wolf 397."},
+    "Zacariah Nemo": {"system": "Yoru", "offers": "fragment cannons, plasma", "odyssey": False,
+        "unlock": "Complete missions for minor factions, then travel to Yoru."},
+    "Lei Cheung": {"system": "Laksak", "offers": "shield generators, sensors", "odyssey": False,
+        "unlock": "Build trade reputation with a minor faction, then travel to Laksak."},
+    "Hera Tani": {"system": "Kuwemaki", "offers": "power plant, surface scanner", "odyssey": False,
+        "unlock": "Sell exploration data at a high-tech system, then travel to Kuwemaki."},
+    "Juri Ishmaak": {"system": "Giryak", "offers": "mines, sensors, scanners", "odyssey": False,
+        "unlock": "Scan wake signatures or hand in bounty vouchers, then travel to Giryak."},
+    "Selene Jean": {"system": "Kuk", "offers": "hull reinforcement, armour", "odyssey": False,
+        "unlock": "Undertake mining activity, then travel to Kuk."},
+    "Marco Qwent": {"system": "Sirius", "offers": "power plant, distributor", "odyssey": False,
+        "unlock": "Build reputation with Sirius Corporation-aligned factions, then travel to Sirius."},
+    "Ram Tah": {"system": "Meene", "offers": "utilities, limpets", "odyssey": False,
+        "unlock": "Hand in unlocked Guardian data logs from ancient ruins, then travel to Meene."},
+    "Broo Tarquin": {"system": "Muang", "offers": "pulse and burst lasers", "odyssey": False,
+        "unlock": "Hand in combat bounty vouchers, then travel to Muang."},
+    "The Sarge": {"system": "Beta-3 Tucani", "offers": "cannons, limpets", "odyssey": False,
+        "unlock": "Complete combat bounty activity against Thargoids or pirates, then travel to Beta-3 Tucani."},
+    "Colonel Bris Dekker": {"system": "Sol", "offers": "FSD interdictors", "odyssey": False,
+        "unlock": "Reach a Federation Navy rank, then travel to Sol (Federation-aligned CMDRs only)."},
+    "Didi Vatermann": {"system": "Leesti", "offers": "shield boosters", "odyssey": False,
+        "unlock": "Reach an exploration rank of Scout or higher, then travel to Leesti."},
+    "Bill Turner": {"system": "Alioth", "offers": "plasma accelerators, utilities", "odyssey": False,
+        "unlock": "Reach a Federation Navy rank, then travel to Alioth."},
+    "Lori Jameson": {"system": "Shinrarta Dezhra", "offers": "sensors, scanners, life support", "odyssey": False,
+        "unlock": "Sell exploration data and hold Pilots Federation membership, then travel to Shinrarta Dezhra."},
+    "Professor Palin": {"system": "Arque", "offers": "thrusters, FSD", "odyssey": False,
+        "unlock": "Reach an exploration rank of Surveyor or higher, then travel to Arque."},
+    "Tiana Fortune": {"system": "Achenar", "offers": "interdictors, limpets, sensors", "odyssey": False,
+        "unlock": "Reach an Empire Navy rank, then travel to Achenar (Empire-aligned CMDRs only)."},
+    "Chloe Sedesi": {"system": "Shenve", "offers": "thrusters, FSD", "odyssey": False,
+        "unlock": "Undertake deep-space exploration, then travel to Shenve."},
+    "Mel Brandon": {"system": "Luchtaine", "offers": "lasers, shields, FSD, thrusters", "odyssey": False,
+        "unlock": "Build reputation with the Silver Bridge Talon minor faction, then travel to Luchtaine."},
+    "Petra Olmanova": {"system": "Asura", "offers": "armour, countermeasures, explosives", "odyssey": False,
+        "unlock": "Complete combat mission activity, then travel to Asura."},
+    "Marsha Hicks": {"system": "Tir", "offers": "multi-cannons, fragments, limpets", "odyssey": False,
+        "unlock": "Complete combat bounty activity, then travel to Tir."},
+    "Etienne Dorn": {"system": "Los", "offers": "rail guns, power, sensors", "odyssey": False,
+        "unlock": "Reach an exploration rank of Pathfinder or higher, then travel to Los."},
+    "Domino Green": {"system": "Orishis", "offers": "suit and weapon mods", "odyssey": True,
+        "unlock": "Complete on-foot combat or settlement missions, then visit her in person at Orishis."},
+    "Hero Ferrari": {"system": "Siris", "offers": "suit and weapon mods", "odyssey": True,
+        "unlock": "Complete on-foot covert-theft missions, then visit her in person at Siris."},
+    "Kit Fowler": {"system": "Capoya", "offers": "suit and weapon mods", "odyssey": True,
+        "unlock": "Complete on-foot mission activity, then visit her in person at Capoya."},
+    "Jude Navarro": {"system": "Aurai", "offers": "suit and weapon mods", "odyssey": True,
+        "unlock": "Complete on-foot mission activity, then visit him in person at Aurai."},
+    "Terra Velasquez": {"system": "Shou Xing", "offers": "suit and weapon mods", "odyssey": True,
+        "unlock": "Complete on-foot mission activity, then visit her in person at Shou Xing."},
+    "Oden Geiger": {"system": "Candiaei", "offers": "suit and weapon mods", "odyssey": True,
+        "unlock": "Complete on-foot mission activity, then visit him in person at Candiaei."},
+    "Uma Laszlo": {"system": "Xuane", "offers": "suit and weapon mods", "odyssey": True,
+        "unlock": "Complete on-foot mission activity, then visit her in person at Xuane."},
+    "Wellington Beck": {"system": "Jolapa", "offers": "suit and weapon mods", "odyssey": True,
+        "unlock": "Complete on-foot mission activity, then visit him in person at Jolapa."},
+    "Yarden Bond": {"system": "Bayan", "offers": "suit and weapon mods", "odyssey": True,
+        "unlock": "Complete on-foot mission activity, then visit him in person at Bayan."},
+    "Baltanos": {"system": "Deriso", "offers": "suit and weapon mods", "odyssey": True,
+        "unlock": "Complete on-foot mission activity, then visit him in person at Deriso."},
+    "Eleanor Bresa": {"system": "Desy", "offers": "suit and weapon mods", "odyssey": True,
+        "unlock": "Complete on-foot mission activity, then visit her in person at Desy."},
+    "Rosa Dayette": {"system": "Kojeara", "offers": "suit and weapon mods", "odyssey": True,
+        "unlock": "Complete on-foot mission activity, then visit her in person at Kojeara."},
+    "Yi Shen": {"system": "Einheriar", "offers": "suit and weapon mods", "odyssey": True,
+        "unlock": "Complete on-foot mission activity, then visit him in person at Einheriar."},
 }
+
+
+def engineer_info(name: str) -> dict:
+    return ENGINEERS.get(name, {"system": "", "offers": "", "odyssey": False, "unlock": ""})
 
 
 # Compact gathering guidance inspired by the workflow used by dedicated
