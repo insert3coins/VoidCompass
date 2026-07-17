@@ -362,6 +362,12 @@ def _same_ship_id(left, right):
     return str(left) == str(right)
 
 
+def _same_ship_symbol(left, right):
+    if not left or not right:
+        return False
+    return str(left).casefold() == str(right).casefold()
+
+
 def update_active_ship(current, event, raw):
     """Reduce one journal ship event into the active mothership identity."""
     ship = dict(current or {})
@@ -401,7 +407,8 @@ def update_active_ship(current, event, raw):
         identity_changed = bool(
             (incoming_id is not None and current_id is not None
              and not _same_ship_id(incoming_id, current_id))
-            or (incoming_type and current_type and incoming_type != current_type)
+            or (incoming_type and current_type
+                and not _same_ship_symbol(incoming_type, current_type))
         )
 
     if identity_changed:
