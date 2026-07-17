@@ -172,7 +172,8 @@ SLOT_CATEGORIES = [
     "Optional Internal - Shield Generator", "Optional Internal - Shield Booster",
     "Optional Internal - Hull / Module Reinforcement",
     "Optional Internal - Fuel Scoop",
-    "Utility Mount",
+    "Optional Internal - Detailed Surface Scanner",
+    "Utility Mount - Shield Booster", "Utility Mount",
 ]
 
 BLUEPRINT_INFO = {
@@ -233,12 +234,12 @@ BLUEPRINT_INFO = {
     },
     "Shield Booster Heavy Duty": {
         "what": "Raises total shield boost at the cost of mass and power.",
-        "slot": "Optional Internal - Shield Booster",
+        "slot": "Utility Mount - Shield Booster",
         "engineers": ["Didi Vatermann"],
     },
     "Shield Booster Resistance Augmented": {
         "what": "Improves all shield resistances.",
-        "slot": "Optional Internal - Shield Booster",
+        "slot": "Utility Mount - Shield Booster",
         "engineers": ["Didi Vatermann"],
     },
     "Armour Heavy Duty": {
@@ -253,7 +254,7 @@ BLUEPRINT_INFO = {
     },
     "Surface Scanner Expanded Probe Radius": {
         "what": "Makes efficient surface mapping easier.",
-        "slot": "Core Internal - Sensors",
+        "slot": "Optional Internal - Detailed Surface Scanner",
         "engineers": ["Hera Tani", "Juri Ishmaak"],
     },
 
@@ -341,7 +342,7 @@ BLUEPRINT_INFO = {
         "engineers": ["Bill Turner", "Broo Tarquin", "Etienne Dorn", "Mel Brandon", "The Dweller", "Zacariah Nemo"],
     },
     "Energy Weapon Short Range Blaster": {
-        "what": "Raises damage sharply at the cost of range and higher thermal load. Applies to Beam and Burst Lasers and Plasma Accelerators (not Pulse Lasers).",
+        "what": "Raises damage sharply at the cost of range and higher thermal load. Applies to Beam, Burst and Pulse Lasers and Plasma Accelerators.",
         "slot": "Hardpoint - Energy",
         "engineers": ["Bill Turner", "Broo Tarquin", "Etienne Dorn", "Mel Brandon", "The Dweller", "Zacariah Nemo"],
     },
@@ -432,6 +433,70 @@ BLUEPRINT_INFO = {
     },
 }
 
+# Highest grade each engineer can apply for the compact blueprint families
+# above.  This is a static, runtime-independent snapshot of the per-grade
+# engineer lists in ed-odyssey-materials-helper.  A flat list is not enough:
+# many engineers offer a blueprint only through G1-G4 while another reaches
+# G5.  Keeping the cap lets the UI answer the useful question: "who can finish
+# this upgrade?"
+BLUEPRINT_ENGINEER_GRADES = {
+    'FSD Increased Range': {'Chloe Sedesi': 3, 'Colonel Bris Dekker': 3, 'Elvira Martuuk': 5, 'Felicity Farseer': 5, 'Mel Brandon': 5, 'Professor Palin': 3},
+    'Thrusters Dirty Tuning': {'Chloe Sedesi': 5, 'Elvira Martuuk': 2, 'Felicity Farseer': 3, 'Mel Brandon': 5, 'Professor Palin': 5},
+    'Power Plant Armoured': {'Etienne Dorn': 5, 'Felicity Farseer': 1, 'Hera Tani': 5, 'Marco Qwent': 4},
+    'Power Plant Overcharged': {'Etienne Dorn': 5, 'Felicity Farseer': 1, 'Hera Tani': 5, 'Marco Qwent': 4},
+    'Power Plant Low Emissions': {'Etienne Dorn': 5, 'Felicity Farseer': 1, 'Hera Tani': 5, 'Marco Qwent': 4},
+    'Power Distributor Charge Enhanced': {'Etienne Dorn': 5, 'Hera Tani': 3, 'Marco Qwent': 3, 'The Dweller': 5},
+    'Power Distributor Engine Focused': {'Etienne Dorn': 5, 'Hera Tani': 3, 'Marco Qwent': 3, 'The Dweller': 5},
+    'Power Distributor High Capacity': {'Etienne Dorn': 5, 'Hera Tani': 3, 'Marco Qwent': 3, 'The Dweller': 5},
+    'Shield Generator Enhanced Low Power': {'Didi Vatermann': 3, 'Elvira Martuuk': 3, 'Lei Cheung': 5, 'Mel Brandon': 5},
+    'Shield Generator Reinforced': {'Didi Vatermann': 3, 'Elvira Martuuk': 3, 'Lei Cheung': 5, 'Mel Brandon': 5},
+    'Shield Generator Thermal Resistant': {'Didi Vatermann': 3, 'Elvira Martuuk': 3, 'Lei Cheung': 5, 'Mel Brandon': 5},
+    'Shield Booster Heavy Duty': {'Didi Vatermann': 5, 'Felicity Farseer': 1, 'Lei Cheung': 3, 'Mel Brandon': 5},
+    'Shield Booster Resistance Augmented': {'Didi Vatermann': 5, 'Felicity Farseer': 1, 'Lei Cheung': 3, 'Mel Brandon': 5},
+    'Armour Heavy Duty': {'Liz Ryder': 1, 'Petra Olmanova': 5, 'Selene Jean': 5},
+    'Life Support Lightweight': {'Bill Turner': 3, 'Etienne Dorn': 5, 'Lori Jameson': 4},
+    'Surface Scanner Expanded Probe Radius': {'Bill Turner': 5, 'Etienne Dorn': 5, 'Felicity Farseer': 3, 'Hera Tani': 5, 'Juri Ishmaak': 5, 'Lei Cheung': 5, 'Lori Jameson': 5, 'Tiana Fortune': 3},
+    'Kinetic Weapon Overcharged': {'Marsha Hicks': 5, 'The Sarge': 5, "Tod 'The Blaster' McQuinn": 5, 'Zacariah Nemo': 5},
+    'Kinetic Weapon Efficient': {'Marsha Hicks': 5, 'The Sarge': 5, "Tod 'The Blaster' McQuinn": 5, 'Zacariah Nemo': 5},
+    'Kinetic Weapon Long Range': {'Etienne Dorn': 5, 'Marsha Hicks': 5, 'The Sarge': 5, "Tod 'The Blaster' McQuinn": 5, 'Zacariah Nemo': 3},
+    'Kinetic Weapon Rapid Fire': {'Marsha Hicks': 5, 'The Sarge': 5, "Tod 'The Blaster' McQuinn": 5, 'Zacariah Nemo': 5},
+    'Kinetic Weapon Lightweight': {'Etienne Dorn': 5, 'Marsha Hicks': 5, 'The Sarge': 5, "Tod 'The Blaster' McQuinn": 5, 'Zacariah Nemo': 5},
+    'Kinetic Weapon Sturdy': {'Etienne Dorn': 5, 'Marsha Hicks': 5, 'The Sarge': 5, "Tod 'The Blaster' McQuinn": 5, 'Zacariah Nemo': 5},
+    'Kinetic Weapon Short Range Blaster': {'Etienne Dorn': 5, 'Marsha Hicks': 5, 'The Sarge': 5, "Tod 'The Blaster' McQuinn": 5, 'Zacariah Nemo': 3},
+    'Kinetic Weapon High Capacity Magazine': {'Etienne Dorn': 5, 'Marsha Hicks': 5, 'The Sarge': 5, "Tod 'The Blaster' McQuinn": 5, 'Zacariah Nemo': 5},
+    'Fragment Cannon Double Shot': {'Marsha Hicks': 5, "Tod 'The Blaster' McQuinn": 3, 'Zacariah Nemo': 5},
+    'Energy Weapon Overcharged': {'Bill Turner': 5, 'Broo Tarquin': 5, 'Etienne Dorn': 5, 'Mel Brandon': 5, 'The Dweller': 4, 'Zacariah Nemo': 2},
+    'Energy Weapon Efficient': {'Bill Turner': 5, 'Broo Tarquin': 5, 'Etienne Dorn': 5, 'Mel Brandon': 5, 'The Dweller': 4, 'Zacariah Nemo': 2},
+    'Energy Weapon Long Range': {'Bill Turner': 5, 'Broo Tarquin': 5, 'Etienne Dorn': 5, 'Mel Brandon': 5, 'The Dweller': 4, 'Zacariah Nemo': 2},
+    'Energy Weapon Focused': {'Bill Turner': 5, 'Broo Tarquin': 5, 'Etienne Dorn': 5, 'Mel Brandon': 5, 'The Dweller': 4, 'Zacariah Nemo': 2},
+    'Energy Weapon Rapid Fire': {'Bill Turner': 5, 'Broo Tarquin': 5, 'Etienne Dorn': 5, 'Mel Brandon': 5, 'The Dweller': 4, 'Zacariah Nemo': 2},
+    'Energy Weapon Lightweight': {'Bill Turner': 5, 'Broo Tarquin': 5, 'Etienne Dorn': 5, 'Mel Brandon': 5, 'The Dweller': 4, 'Zacariah Nemo': 2},
+    'Energy Weapon Sturdy': {'Bill Turner': 5, 'Broo Tarquin': 5, 'Etienne Dorn': 5, 'Mel Brandon': 5, 'The Dweller': 4, 'Zacariah Nemo': 2},
+    'Energy Weapon Short Range Blaster': {'Bill Turner': 5, 'Broo Tarquin': 5, 'Etienne Dorn': 5, 'Mel Brandon': 5, 'The Dweller': 3, 'Zacariah Nemo': 2},
+    'Missile & Mine Lightweight': {'Juri Ishmaak': 5, 'Liz Ryder': 5, 'Petra Olmanova': 5},
+    'Missile & Mine Sturdy': {'Juri Ishmaak': 5, 'Liz Ryder': 5, 'Petra Olmanova': 5},
+    'Missile & Mine Rapid Fire': {'Juri Ishmaak': 5, 'Liz Ryder': 5, 'Petra Olmanova': 5},
+    'Missile & Mine High Capacity Magazine': {'Juri Ishmaak': 5, 'Liz Ryder': 5, 'Petra Olmanova': 5},
+    'Sensors Lightweight': {'Bill Turner': 5, 'Etienne Dorn': 5, 'Felicity Farseer': 3, 'Hera Tani': 3, 'Juri Ishmaak': 5, 'Lei Cheung': 5, 'Lori Jameson': 5, 'Tiana Fortune': 5},
+    'Sensors Long Range': {'Bill Turner': 5, 'Etienne Dorn': 5, 'Felicity Farseer': 3, 'Hera Tani': 3, 'Juri Ishmaak': 5, 'Lei Cheung': 5, 'Lori Jameson': 5, 'Tiana Fortune': 5},
+    'Sensors Wide Angle': {'Bill Turner': 5, 'Etienne Dorn': 5, 'Felicity Farseer': 3, 'Hera Tani': 3, 'Juri Ishmaak': 5, 'Lei Cheung': 5, 'Lori Jameson': 5, 'Tiana Fortune': 5},
+    'Armour Lightweight': {'Liz Ryder': 1, 'Petra Olmanova': 5, 'Selene Jean': 5},
+    'Armour Blast Resistant': {'Liz Ryder': 1, 'Petra Olmanova': 5, 'Selene Jean': 5},
+    'Armour Kinetic Resistant': {'Liz Ryder': 1, 'Petra Olmanova': 5, 'Selene Jean': 5},
+    'Armour Thermal Resistant': {'Liz Ryder': 1, 'Petra Olmanova': 5, 'Selene Jean': 5},
+    'Hull Reinforcement Heavy Duty': {'Liz Ryder': 1, 'Petra Olmanova': 5, 'Selene Jean': 5},
+    'Hull Reinforcement Lightweight': {'Liz Ryder': 1, 'Petra Olmanova': 5, 'Selene Jean': 5},
+    'Hull Reinforcement Blast Resistant': {'Liz Ryder': 1, 'Petra Olmanova': 5, 'Selene Jean': 5},
+    'Hull Reinforcement Kinetic Resistant': {'Liz Ryder': 1, 'Petra Olmanova': 5, 'Selene Jean': 5},
+    'Hull Reinforcement Thermal Resistant': {'Liz Ryder': 1, 'Petra Olmanova': 5, 'Selene Jean': 5},
+    'Fuel Scoop Shielded': {'Bill Turner': 3, 'Lori Jameson': 4, 'Marsha Hicks': 5},
+}
+
+# Keep the original public metadata shape compatible while replacing the old
+# hand-written, non-grade-aware engineer lists with the verified snapshot.
+for _blueprint_name, _engineer_grades in BLUEPRINT_ENGINEER_GRADES.items():
+    BLUEPRINT_INFO[_blueprint_name]["engineers"] = list(_engineer_grades)
+
 
 def blueprint_info(name: str) -> dict:
     return BLUEPRINT_INFO.get(name, {"what": "", "slot": "Unclassified", "engineers": []})
@@ -448,6 +513,11 @@ def engineer_blueprints(name: str) -> dict[str, list[str]]:
     ordered = {slot: groups[slot] for slot in SLOT_CATEGORIES if slot in groups}
     ordered.update({slot: names for slot, names in groups.items() if slot not in ordered})
     return ordered
+
+
+def engineer_blueprint_grade(engineer: str, blueprint: str) -> int:
+    """Highest grade *engineer* can apply for *blueprint*, or zero."""
+    return int((BLUEPRINT_ENGINEER_GRADES.get(blueprint) or {}).get(engineer) or 0)
 
 # Verified high-use ship recipes.  Costs are expressed per application; the
 # planner applies ROLLS_PER_GRADE and can start from an existing grade.
@@ -890,9 +960,178 @@ ENGINEERS = {
         "unlock": "Complete on-foot mission activity, then visit him in person at Einheriar."},
 }
 
+# Exact access chains from the helper reference.  The journal supplies the
+# current Known/Invited/Unlocked state; these steps explain what advances it.
+ENGINEER_ACCESS_STEPS = {
+    "Elvira Martuuk": (
+        "Revealed by default.",
+        "Travel at least 300 ly from your starting system.",
+        "Provide 3 t of Soontill Relics from Cheranovsky City in Ngurii.",
+    ),
+    "Mel Brandon": (
+        "Reach grade 3 plus 33% reputation with Elvira Martuuk.",
+        "Become Friendly with the Colonia Council and complete its invitation mission.",
+        "Provide 100,000 credits of bounty vouchers.",
+    ),
+    "Zacariah Nemo": (
+        "Reach grade 3 plus 33% reputation with Elvira Martuuk.",
+        "Become Friendly with the Party of Yoru and complete its invitation mission.",
+        "Provide 25 t of Xihe Biomorphic Companions from Zhen Dock in Xihe.",
+    ),
+    "Marco Qwent": (
+        "Reach grade 3 plus 33% reputation with Elvira Martuuk.",
+        "Become Friendly with Sirius Corporation and complete its invitation mission.",
+        "Provide 25 t of Modular Terminals from mission rewards.",
+    ),
+    "Professor Palin": (
+        "Reach grade 3 plus 33% reputation with Marco Qwent.",
+        "Visit a system at least 5,000 ly from your starting system.",
+        "Provide 25 Sensor Fragments from Thargoid Sensor salvage.",
+    ),
+    "Lori Jameson": (
+        "Reach grade 3 plus 33% reputation with Marco Qwent.",
+        "Reach Dangerous combat rank.",
+        "Provide 25 t of Kongga Ale.",
+    ),
+    "Chloe Sedesi": (
+        "Reach grade 3 plus 33% reputation with Marco Qwent.",
+        "Visit a system at least 5,000 ly from your starting system.",
+        "Provide 25 Sensor Fragments from Thargoid Sensor salvage.",
+    ),
+    "The Dweller": (
+        "Revealed by default.",
+        "Trade at five different black markets.",
+        "Donate 500,000 credits.",
+    ),
+    "Marsha Hicks": (
+        "Reach grade 3 plus 33% reputation with The Dweller.",
+        "Reach Surveyor exploration rank.",
+        "Mine and provide 10 t of Osmium.",
+    ),
+    "Lei Cheung": (
+        "Reach grade 3 plus 33% reputation with The Dweller.",
+        "Buy or sell goods at 50 different stations.",
+        "Provide 200 t of Gold.",
+    ),
+    "Ram Tah": (
+        "Reach grade 3 plus 33% reputation with Lei Cheung.",
+        "Reach Surveyor exploration rank.",
+        "Provide 50 Classified Scan Databanks.",
+    ),
+    "Felicity Farseer": (
+        "Revealed by default.",
+        "Reach Scout exploration rank.",
+        "Provide 1 t of Meta-Alloys.",
+    ),
+    "Juri Ishmaak": (
+        "Reach grade 3 plus 33% reputation with Felicity Farseer.",
+        "Earn more than 50 combat bonds.",
+        "Provide 1,000,000 credits of combat bonds.",
+    ),
+    "Colonel Bris Dekker": (
+        "Reach grade 3 plus 33% reputation with Juri Ishmaak.",
+        "Become Friendly with the Federation.",
+        "Provide 1,000,000 credits of combat bonds.",
+    ),
+    "The Sarge": (
+        "Reach grade 3 plus 33% reputation with Juri Ishmaak.",
+        "Reach Midshipman or higher in the Federal Navy.",
+        "Provide 50 Aberrant Shield Pattern Analysis.",
+    ),
+    "Tod 'The Blaster' McQuinn": (
+        "Revealed by default.",
+        "Hand in at least 15 bounty vouchers.",
+        "Provide 100,000 credits of bounty vouchers.",
+    ),
+    "Petra Olmanova": (
+        "Reach grade 3 plus 33% reputation with Tod McQuinn.",
+        "Reach Expert combat rank.",
+        "Provide 200 t of Progenitor Cells.",
+    ),
+    "Selene Jean": (
+        "Reach grade 3 plus 33% reputation with Tod McQuinn.",
+        "Mine at least 500 t of ore.",
+        "Provide 10 t of Painite.",
+    ),
+    "Didi Vatermann": (
+        "Reach grade 3 plus 33% reputation with Selene Jean.",
+        "Reach Merchant trade rank.",
+        "Provide 50 t of Lavian Brandy from Lave Station in Lave.",
+    ),
+    "Bill Turner": (
+        "Reach grade 3 plus 33% reputation with Selene Jean.",
+        "Become Friendly with the Alliance and Allied with Alioth Independents for the Alioth permit.",
+        "Provide 50 t of Bromellite.",
+    ),
+    "Liz Ryder": (
+        "Revealed by default.",
+        "Become Cordial with the Eurybia Blue Mafia.",
+        "Provide 200 t of Landmines from planetary markets.",
+    ),
+    "Etienne Dorn": (
+        "Reach grade 3 plus 33% reputation with Liz Ryder.",
+        "Reach Dealer trade rank.",
+        "Provide 25 Occupied Escape Pods.",
+    ),
+    "Hera Tani": (
+        "Reach grade 3 plus 33% reputation with Liz Ryder.",
+        "Reach Outsider or higher in the Imperial Navy.",
+        "Provide 50 t of Kamitra Cigars from Hammel Terminal in Kamitra.",
+    ),
+    "Broo Tarquin": (
+        "Reach grade 3 plus 33% reputation with Hera Tani.",
+        "Reach Competent combat rank.",
+        "Provide 50 t of Fujin Tea from Futen Spaceport in Fujin.",
+    ),
+    "Tiana Fortune": (
+        "Reach grade 3 plus 33% reputation with Hera Tani.",
+        "Become Friendly with the Empire.",
+        "Provide 50 Decoded Emission Data.",
+    ),
+    "Domino Green": ("Travel 100 ly in Apex Interstellar Transport shuttles.",),
+    "Kit Fowler": (
+        "Provide Domino Green with 5 Push to learn about Kit Fowler.",
+        "Sell 5 Opinion Polls to bartenders.",
+    ),
+    "Yarden Bond": (
+        "Provide Kit Fowler with 5 Surveillance Equipment to learn about Yarden Bond.",
+        "Sell 5 Smear Campaign Plans to bartenders.",
+    ),
+    "Hero Ferrari": ("Complete 10 low-threat Conflict Zones.",),
+    "Wellington Beck": (
+        "Provide Hero Ferrari with 5 Settlement Defence Plans.",
+        "Sell 15 Classic Entertainment, Multimedia Entertainment or Cat Media to bartenders.",
+    ),
+    "Uma Laszlo": (
+        "Provide Wellington Beck with 5 InSight Entertainment Suites.",
+        "Reach Unfriendly reputation or lower with Sirius Corporation.",
+    ),
+    "Jude Navarro": ("Complete 10 Restore or Reactivation on-foot missions.",),
+    "Terra Velasquez": (
+        "Provide Jude Navarro with 5 Genetic Repair Meds.",
+        "Complete 6 Covert Heist or Covert Theft on-foot missions.",
+    ),
+    "Oden Geiger": (
+        "Provide Terra Velasquez with 15 Financial Projections.",
+        "Sell 20 Biological Samples, Employee Genetic Data or Genetic Research to bartenders.",
+    ),
+    "Baltanos": ("Become Friendly with the Colonia Council.",),
+    "Rosa Dayette": ("Sell 10 Culinary Recipes or Cocktail Recipes to stations in Colonia.",),
+    "Eleanor Bresa": ("Dock and disembark at 5 settlements in the Colonia system.",),
+    "Yi Shen": (
+        "Provide one referral: 10 Faction Associates to Baltanos, 10 Manufacturing Instructions to Rosa Dayette, or 10 Digital Designs to Eleanor Bresa.",
+        "Complete all three referral deliveries to unlock Yi Shen.",
+    ),
+}
+
+for _engineer_name, _access_steps in ENGINEER_ACCESS_STEPS.items():
+    ENGINEERS[_engineer_name]["unlock_steps"] = _access_steps
+    ENGINEERS[_engineer_name]["unlock"] = _access_steps[-1]
+
 
 def engineer_info(name: str) -> dict:
-    return ENGINEERS.get(name, {"system": "", "offers": "", "odyssey": False, "unlock": ""})
+    return ENGINEERS.get(name, {"system": "", "offers": "", "odyssey": False,
+                                "unlock": "", "unlock_steps": ()})
 
 
 # Compact gathering guidance inspired by the workflow used by dedicated
