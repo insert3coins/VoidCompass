@@ -431,29 +431,14 @@ class CommanderProfileWindow(ThemedWindowMixin):
                 elif ev == "LoadGame":
                     file_snapshot["balance"] = event.get("Credits")
                     file_snapshot["loan"] = event.get("Loan")
-                    file_snapshot["ship"].update({
-                        "ship": event.get("Ship"),
-                        "ship_localised": event.get("Ship_Localised"),
-                        "ship_id": event.get("ShipID"),
-                        "ship_name": event.get("ShipName"),
-                        "ship_ident": event.get("ShipIdent"),
-                        "fuel_level": event.get("FuelLevel"),
-                        "fuel_capacity": event.get("FuelCapacity"),
-                        "game_mode": event.get("GameMode"),
-                        "group": event.get("Group"),
-                    })
-                elif ev == "Loadout":
-                    file_snapshot["ship"].update({
-                        "ship": event.get("Ship") or file_snapshot["ship"].get("ship"),
-                        "ship_id": event.get("ShipID") or file_snapshot["ship"].get("ship_id"),
-                        "ship_name": event.get("ShipName") or file_snapshot["ship"].get("ship_name"),
-                        "ship_ident": event.get("ShipIdent") or file_snapshot["ship"].get("ship_ident"),
-                        "modules_value": event.get("ModulesValue"),
-                        "hull_health": event.get("HullHealth"),
-                        "max_jump_range": event.get("MaxJumpRange"),
-                        "rebuy": event.get("Rebuy"),
-                        "cargo_capacity": event.get("CargoCapacity"),
-                    })
+                    file_snapshot["ship"], _ = companion_features.update_active_ship(
+                        file_snapshot["ship"], ev, event
+                    )
+                elif ev in ("Loadout", "ShipyardBuy", "ShipyardNew",
+                            "ShipyardSwap", "SetUserShipName"):
+                    file_snapshot["ship"], _ = companion_features.update_active_ship(
+                        file_snapshot["ship"], ev, event
+                    )
             # Files are newest first. Fill each category once so an older
             # journal can provide missing Statistics without overwriting the
             # newest ship, balance or rank snapshot.
@@ -576,10 +561,23 @@ class CommanderProfileWindow(ThemedWindowMixin):
         journal = self._latest_journal_snapshot(force=force)
         companion_state = getattr(self.app, "companion_state", {}) or {}
         ship = dict(journal.get("ship") or {})
-        ship.update({
-            key: value for key, value in (getattr(self.app, "cmdr_ship", {}) or {}).items()
-            if value is not None and value != ""
-        })
+        live_ship = dict(getattr(self.app, "cmdr_ship", {}) or {})
+        journal_id = ship.get("ship_id")
+        live_id = live_ship.get("ship_id")
+        journal_type = ship.get("ship")
+        live_type = live_ship.get("ship")
+        identity_changed = bool(
+            (journal_id is not None and live_id is not None
+             and str(journal_id) != str(live_id))
+            or (journal_type and live_type
+                and str(journal_type).casefold() != str(live_type).casefold())
+        )
+        if identity_changed:
+            ship = live_ship
+        else:
+            # Empty name/ident values are authoritative for a newly bought
+            # vessel and must replace the outgoing ship's journal values.
+            ship.update(live_ship)
         ranks = dict(journal.get("ranks") or {})
         ranks.update(getattr(self.app, "cmdr_ranks", {}) or {})
         progress = dict(journal.get("progress") or {})
