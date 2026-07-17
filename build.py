@@ -4,6 +4,7 @@ import os
 import shutil
 from version import APP_VERSION
 from mining_data import MiningDataStore
+from release_packager import create_release
 
 # This script automates the build process for SurveyAnalysis
 
@@ -129,4 +130,11 @@ VSVersionInfo(
         shutil.copy(engineer_mats_src, os.path.join(dist_dir, 'engineer_materials.json'))
         print("Copied engineer_materials.json to dist/")
 
-    print("Build complete. Check the 'dist' folder.")
+    release = create_release(os.getcwd(), APP_VERSION)
+    print(f"Created public release folder: {release['package_dir']}")
+    print(f"Created public release ZIP: {release['zip_path']}")
+    print(f"Release SHA-256: {release['sha256']}")
+    if not release["license_included"]:
+        print("Warning: no LICENSE or COPYING file was found to include.")
+
+    print("Build complete. Use 'dist' for testing and 'release' for publishing.")
