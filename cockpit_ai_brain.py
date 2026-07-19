@@ -12,6 +12,7 @@ import os
 import threading
 
 from compass_personas import DEFAULT_PERSONA, persona_profile
+from persistence_queue import persistence_queue
 
 
 BRAIN_SCHEMA_VERSION = 3
@@ -40,6 +41,7 @@ class CockpitBrain:
     def __init__(self, path):
         self.path = str(path)
         self._lock = threading.RLock()
+        self._sync_next_save = not os.path.exists(self.path)
         self.state = self._load()
 
     def _empty(self):
@@ -68,6 +70,8 @@ class CockpitBrain:
             with open(self.path, "r", encoding="utf-8") as handle:
                 saved = json.load(handle)
             if isinstance(saved, dict):
+                if "recent_decisions" in saved:
+                    self._sync_next_save = True
                 for key in ("identity", "pilot_model", "experience", "working_memory", "cognition"):
                     if isinstance(saved.get(key), dict):
                         state[key] = saved[key]
@@ -79,21 +83,17 @@ class CockpitBrain:
     def switch(self, path):
         with self._lock:
             self.path = str(path)
+            self._sync_next_save = not os.path.exists(self.path)
             self.state = self._load()
 
     def _save(self):
-        folder = os.path.dirname(os.path.abspath(self.path))
-        os.makedirs(folder, exist_ok=True)
-        temporary = self.path + ".tmp"
-        try:
-            with open(temporary, "w", encoding="utf-8") as handle:
-                json.dump(self.state, handle, indent=2, ensure_ascii=False)
-            os.replace(temporary, self.path)
-        except OSError:
-            try:
-                os.remove(temporary)
-            except OSError:
-                pass
+        immediate = bool(self._sync_next_save)
+        persistence_queue().submit_json(
+            self.path, self.state, indent=2, delay_s=1.0, immediate=immediate,
+        )
+        if immediate:
+            persistence_queue().flush(self.path, timeout=2.0)
+            self._sync_next_save = False
 
     @staticmethod
     def _session_view(memory):

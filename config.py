@@ -84,6 +84,7 @@ PROFILE_TEXT_SETTINGS = (
     "cockpit_persona",
     "cockpit_advisor_level",
     "hud_crt_intensity",
+    "adaptive_mode_lock",
 )
 
 PROFILE_BOOL_SETTINGS = (
@@ -128,6 +129,10 @@ PROFILE_BOOL_SETTINGS = (
     "cockpit_cognition_learning_enabled",
     "hud_crt_enabled",
     "hud_crt_motion_enabled",
+    "adaptive_command_enabled",
+    "adaptive_overlay_scenes_enabled",
+    "adaptive_briefings_enabled",
+    "adaptive_debriefings_enabled",
 )
 
 PROFILE_VALUE_SETTINGS = (
@@ -191,6 +196,7 @@ PROFILE_VALUE_SETTINGS = (
     "cockpit_memory_species_limit",
     "cockpit_memory_ship_limit",
     "cockpit_memory_episode_limit",
+    "adaptive_overlay_scenes",
 )
 
 PROFILE_SETTINGS = PROFILE_TEXT_SETTINGS + PROFILE_BOOL_SETTINGS + PROFILE_VALUE_SETTINGS
@@ -215,6 +221,8 @@ GLOBAL_ONLY_KEYS = (
     "active_commander_name",
     "active_commander_fid",
     "commander_profiles",
+    "onboarding_complete",
+    "recovery_safe_mode_enabled",
 )
 
 
@@ -292,6 +300,7 @@ def apply_profile_config(config, profile_key=None):
             profile.get("cockpit_llm_advisor_level") or "Balanced"
         ),
         "hud_crt_intensity": "Subtle",
+        "adaptive_mode_lock": "auto",
     }
     bool_defaults = {
         "edsm_upload_enabled": False,
@@ -337,6 +346,10 @@ def apply_profile_config(config, profile_key=None):
         "cockpit_cognition_learning_enabled": True,
         "hud_crt_enabled": True,
         "hud_crt_motion_enabled": True,
+        "adaptive_command_enabled": True,
+        "adaptive_overlay_scenes_enabled": True,
+        "adaptive_briefings_enabled": True,
+        "adaptive_debriefings_enabled": True,
     }
     for setting in PROFILE_TEXT_SETTINGS:
         if setting not in profile:
@@ -354,6 +367,7 @@ def apply_profile_config(config, profile_key=None):
                 "cockpit_memory_species_limit": 200,
                 "cockpit_memory_ship_limit": 30,
                 "cockpit_memory_episode_limit": 80,
+                "adaptive_overlay_scenes": {},
             }
             profile[setting] = (
                 profile_defaults[setting] if not is_initial_profile and setting in profile_defaults
@@ -418,6 +432,7 @@ def save_config(config):
 
 def load_config():
     """Loads configuration from file or returns defaults."""
+    config_existed = os.path.exists(CONFIG_FILE)
     defaults = {
         'journal_path': '',
         'overlay_enabled': True,
@@ -539,8 +554,18 @@ def load_config():
         'cockpit_memory_species_limit': 200,
         'cockpit_memory_ship_limit': 30,
         'cockpit_memory_episode_limit': 80,
+        'adaptive_command_enabled': True,
+        'adaptive_overlay_scenes_enabled': True,
+        'adaptive_briefings_enabled': True,
+        'adaptive_debriefings_enabled': True,
+        'adaptive_mode_lock': 'auto',
+        'adaptive_overlay_scenes': {},
         'ui_theme_name': _themes.DEFAULT_THEME_NAME,
         'ui_custom_themes': {},
+        # Existing installations migrate silently; only a genuinely new
+        # config receives the guided public-release setup.
+        'onboarding_complete': bool(config_existed),
+        'recovery_safe_mode_enabled': True,
     }
     if os.path.exists(CONFIG_FILE):
         try:

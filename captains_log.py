@@ -7,6 +7,7 @@ import math
 import os
 import threading
 from datetime import datetime
+from persistence_queue import persistence_queue
 
 
 MAX_SESSIONS = 250
@@ -54,11 +55,9 @@ class CaptainsLog:
 
     def save(self):
         try:
-            os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
-            tmp = self.path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as handle:
-                json.dump(self.data, handle, indent=2)
-            os.replace(tmp, self.path)
+            persistence_queue().submit_json(
+                self.path, self.data, indent=2, delay_s=1.0,
+            )
         except Exception:
             pass
 

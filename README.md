@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 4.9.2**
+**Current version: 5.0.0**
 
 Void Compass is a native Windows companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
 
@@ -10,7 +10,7 @@ Void Compass is a native Windows companion for Elite Dangerous. It turns Frontie
 
 | Workspace | Purpose |
 | --- | --- |
-| **Dashboard** | Low-noise flight and Compass briefings, active objective, route/waypoint context, carrier expedition status and a filtered live activity stream. |
+| **Dashboard** | Adaptive activity mode, Command Health, a unified Operational Queue, route/waypoint context, carrier expedition status and a filtered live activity stream. |
 | **Profile** | Career ranks, reputation, achievements, lifetime statistics, fleet and loadouts, missions, backups and integration state. |
 | **Analytics** | Live session pace, interactive credit-balance and daily-profit graphs, selectable trading periods and top commodity performance from local journal history. |
 | **Explore** | System history, scan values, biological survey records, Captain's Log and expedition chronicle tools. |
@@ -40,6 +40,12 @@ Mining now lives inside Specialist Console as the single authoritative workflow.
 ### Specialist Console
 
 Specialists remains local and journal-driven. Mining runs track confirmed refinery yield, prospector quality, limpet economics and attributable sales; Combat/AX records observed loadout readiness, ammunition snapshots, claims, damage, synthesis and recent sorties; Carrier planning combines authoritative owner snapshots with explicit upkeep, inventory and per-leg tritium inputs. Exobiology keeps body-local samples, manual pins and GeoJSON exports, while selected coordinates are handed to the existing Ground tool for navigation.
+
+## Adaptive Command Deck
+
+Void Compass detects the commander's active workflow from live journal evidence and shifts the Dashboard's priorities between Exploration, Mining, Trade, Combat, Ground, Engineering, Powerplay, Carrier, Architect, Station and general flight modes. The unified Operational Queue can combine the next route or waypoint, unfinished survey work, sampling, missions, trade delivery, mining, engineering, Powerplay, carrier and colony objectives without creating separate competing task lists.
+
+Each mode can apply a focused overlay scene while gravity, toast and heartbeat safety feedback remains available. Automatic detection can be locked to a chosen mode per commander, and overlay scenes or deterministic Compass briefings/debriefs can be disabled independently in **Settings → Command Deck**.
 
 ## Native overlays
 
@@ -75,6 +81,14 @@ The deterministic cognition engine learns personal baselines and whether advice 
 - **Piper** voice packs are optional; regular system TTS remains available.
 
 Void Compass does not require an account or cloud database. Network integrations only run when their associated feature is enabled or requested.
+
+## First run, recovery and diagnostics
+
+New installations open a short themed setup for the Elite journal folder, overlays, mouse passthrough, Adaptive Command and optional voice. Settings can rerun this setup at any time.
+
+State-heavy journal bursts are buffered through a coalescing background writer, while one bounded dispatcher protects Tk from cross-thread UI work. Closing Void Compass immediately cancels active or queued voice work and uses one short, bounded final-state flush. A profile-local session marker detects an unclean shutdown and restores the last graceful cockpit snapshot while journal catch-up settles. Dashboard and Settings expose Command Health queue status.
+
+**Settings → Diagnostics → Create Support Bundle** produces a ZIP in the `logs` folder with version and health information, sanitized runtime/crash diagnostics, and only journal event names and timestamps. It excludes raw journal payloads, commander identity, profile identifiers, credentials and webhook URLs.
 
 `config.json` is created automatically in the working directory. If journal detection fails, set `journal_path` in Settings; the normal location is:
 

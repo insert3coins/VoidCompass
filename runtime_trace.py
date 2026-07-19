@@ -3,6 +3,7 @@ import threading
 import time
 
 from diagnostic_logs import LOG_ARCHIVE_LIMIT, prepare_log
+from persistence_queue import persistence_queue
 
 
 class RuntimeTrace:
@@ -99,7 +100,12 @@ class RuntimeTrace:
         if extra:
             payload["extra"] = extra
         try:
-            with open(self.path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(payload) + "\n")
+            persistence_queue().append_text(
+                self.path, json.dumps(payload) + "\n", delay_s=0.05,
+            )
         except Exception:
             self.enabled = False
+
+    def close(self, timeout=3.0, wait=True):
+        if self.enabled and wait:
+            persistence_queue().flush(self.path, timeout=timeout)

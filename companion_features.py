@@ -14,6 +14,7 @@ import math
 import os
 
 from version import APP_VERSION
+from persistence_queue import persistence_queue
 
 
 DEFAULT_STATE = {
@@ -116,11 +117,7 @@ def save_state(path, state):
     if not path:
         return
     try:
-        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-        temp = path + ".tmp"
-        with open(temp, "w", encoding="utf-8") as handle:
-            json.dump(state, handle, indent=2, ensure_ascii=False)
-        os.replace(temp, path)
+        persistence_queue().submit_json(path, state, indent=2, delay_s=0.75)
     except Exception:
         pass
 
