@@ -259,6 +259,7 @@ class JournalWatcher:
                 events = []
                 eof_reached = False
                 while lines_read < line_budget:
+                    line_offset = f.tell()
                     line = f.readline()
                     if not line:
                         eof_reached = True
@@ -274,6 +275,7 @@ class JournalWatcher:
                     ev = self._normalize_event(raw)
                     if isinstance(ev, dict):
                         ev["startup_catchup"] = startup_catchup
+                        ev["_journal_uid"] = f"{os.path.basename(self.last_journal)}:{line_offset}"
                     events.append(ev)
 
                 # A read can land exactly on the line budget and also be at

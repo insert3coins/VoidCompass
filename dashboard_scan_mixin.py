@@ -72,8 +72,6 @@ class DashboardScanMixin:
         self.last_status_event_ts = time.time()
         if getattr(self, "heartbeat_hud", None):
             self.heartbeat_hud.pulse()
-        if getattr(self, "mining_window", None) and self.mining_window.is_open():
-            self.mining_window.update_status(data)
         was_on_planet = bool(self.on_planet)
         was_landed = bool(getattr(self, "current_landed", False))
         was_docked = bool(getattr(self, "current_docked", False))
@@ -101,6 +99,16 @@ class DashboardScanMixin:
             and self.current_planet_radius is not None
             and self.current_planet_radius > 0
         )
+        specialist_engine = getattr(self, "specialist_engine", None)
+        if specialist_engine:
+            specialist_engine.update_position({
+                "lat": self.current_latitude,
+                "lon": self.current_longitude,
+                "heading": self.current_heading,
+                "radius_m": self.current_planet_radius,
+                "alt_m": data.get("Altitude"),
+                "body": getattr(self, "current_body_name", None) or getattr(self, "current_body_id", None),
+            })
         flags = data.get("Flags")
         in_supercruise = False
         if isinstance(flags, int):

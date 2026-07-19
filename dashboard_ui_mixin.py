@@ -128,7 +128,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             ("✦", "EXPLORE", self.open_exploration_window),
             ("★", "ACHIEVE", self.open_achievement_window),
             ("⇌", "TRADE", self.open_trade_window),
-            ("◆", "MINING", self.open_mining_window),
+            ("▦", "SPECIALISTS", self.open_specialists_window),
             ("⬢", "CARRIER", self.open_carrier_window),
             ("⌂", "COLONY", self.open_colonization_window),
             ("⚑", "GALAXY", self.open_bgs_window),
@@ -1100,8 +1100,8 @@ class DashboardUIMixin(ThemedWindowMixin):
         trade_profit = int(trade.get("profit") or 0)
         if cargo or trade_profit:
             operations.append(f"TRADE      {cargo:,} T aboard · {self._dashboard_credits(trade_profit)} session")
-        mining = getattr(self, "mining_window", None)
-        if mining and getattr(mining, "session_id", None):
+        specialist_engine = getattr(self, "specialist_engine", None)
+        if specialist_engine and specialist_engine.mining_active():
             operations.append("MINING     session active")
         carrier_route = (getattr(self, "carrier_tracker", None).carrier_data.get("expedition_route")
                          if getattr(self, "carrier_tracker", None) else []) or []

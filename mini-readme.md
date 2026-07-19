@@ -1,5 +1,16 @@
 # VoidCompass // UPDATE LOG
 
+## v4.9.2 // Specialist Operations Console
+**Release Date:** 2026-Jul-20
+
+*   Added a profile-local **Specialists** with dedicated Mining, Combat/AX, Carrier and Exobiology sections driven directly by Frontier journal and Status data.
+*   Consolidated Mining into Specialists as the single authoritative workflow. Existing Mining shortcuts now open it directly, while the duplicate navigation page has been retired.
+*   Added replay-safe mining runs with manual or automatic starts, prospector quality, refinery and cargo yield, core cracks, limpet inventory and observed costs, attributable sales, performance rates and durable history.
+*   Added Combat/AX loadout readiness, observed ammunition, session kills, claims, damage, synthesis and AX encounter history without claiming telemetry that Elite does not journal.
+*   Added Carrier upkeep runway, explicit inventory, market-order exposure and per-leg tritium planning alongside the existing full Carrier Command workspace.
+*   Added Exobiology sampling records, body-local pins, history and GeoJSON export, with selected coordinates handed to the existing Ground tool instead of duplicating surface navigation.
+*   Specialist state is isolated per commander, journal-offset deduplicated and protected against assigning historical startup samples to the current live surface position.
+
 ## v4.9.1 // Engineering Materials Command
 **Release Date:** 2026-Jul-18
 

@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 4.9.1**
+**Current version: 4.9.2**
 
 Void Compass is a native Windows companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
 
@@ -15,7 +15,7 @@ Void Compass is a native Windows companion for Elite Dangerous. It turns Frontie
 | **Explore** | System history, scan values, biological survey records, Captain's Log and expedition chronicle tools. |
 | **Achieve** | 1,023 native journal-driven achievements with per-commander progress, category controls and toast unlocks. |
 | **Trade** | One-click trade overview plus routes, markets, local opportunities, watch tracking and EDDN-maintained market data. |
-| **Mining** | Live session briefing, prospecting quality, refinery yield, cargo and mining contracts, hotspot search, bookmarks and reports. |
+| **Specialists** | Four profile-local role consoles: elite-trader-style mining runs and economics, Combat/AX readiness and sorties, carrier upkeep/inventory/tritium planning, and exobiology records linked to the Ground tool. |
 | **Route** | Separate Elite `NavRoute.json` and expedition-waypoint lanes, waypoint management, CSV/Spansh imports and a manual neutron plotter. |
 | **Carrier** | Personal and Squadron Carrier identity, fuel, jump operations, expedition route, finance, services and Discord notifications. |
 | **Colony** | Architect Command Centre for colonisation projects, contributions, cargo requirements and persistent planning. |
@@ -32,11 +32,13 @@ Frontier does not publish a complete member roster, online presence, squadron ch
 
 *Representative populated Squadron Command state; the page only displays facts reported by the commander's own journal.*
 
-### Mining Command
+### Mining Specialist
 
-Mining follows the complete session flow: start manually or automatically with the first prospector limpet, inspect asteroid quality, track core finds and cracks, monitor refined tonnage and hourly yield, reconcile cargo against mining contracts, search local or Spansh hotspot data, and hand a selected system to Route Command.
+Mining now lives inside Specialist Console as the single authoritative workflow. Runs start manually or from journal mining activity and record prospector quality, refinery and cargo yield, core cracks, limpets and their observed cost, attributable commodity sales, hourly performance and per-commander history. The Dashboard Mining shortcut opens this section directly.
 
-![Mining Command workspace](MiningCommand.PNG)
+### Specialist Console
+
+Specialists remains local and journal-driven. Mining runs track confirmed refinery yield, prospector quality, limpet economics and attributable sales; Combat/AX records observed loadout readiness, ammunition snapshots, claims, damage, synthesis and recent sorties; Carrier planning combines authoritative owner snapshots with explicit upkeep, inventory and per-leg tritium inputs. Exobiology keeps body-local samples, manual pins and GeoJSON exports, while selected coordinates are handed to the existing Ground tool for navigation.
 
 ## Native overlays
 

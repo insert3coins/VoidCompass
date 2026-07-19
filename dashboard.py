@@ -30,7 +30,7 @@ from settings_ui import open_settings
 from waypoint_manager import WaypointManager
 import route_strip
 from journal_watcher import JournalWatcher
-from mining_window import MINING_MATERIALS, MiningWindow
+from mining_window import MINING_MATERIALS
 from carrier_tracker import CarrierTracker
 from carrier_window import CarrierWindow
 from prospector_hud import ProspectorHUD
@@ -71,6 +71,8 @@ from cockpit_ai_memory import CockpitMemory, ordinal
 from cockpit_ai_brain import CockpitBrain
 from compass_cognition import CompassCognition
 from combat_awareness import CombatAwareness
+from specialist_engine import SpecialistEngine
+from specialists_window import SpecialistsWindow
 import compass_personas
 from captains_log import CaptainsLog
 from diagnostic_logs import application_base_dir, resolve_log_path
@@ -370,6 +372,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.config["mining_db_file"] = self._copy_legacy_to_profile("mining_data.db")
         self.config["mining_sessions_file"] = self._copy_legacy_to_profile("mining_sessions.json")
         self.config["waypoints_file"] = self._copy_legacy_to_profile("waypoints.json")
+        self.config["specialists_file"] = self._profile_path("specialists.json")
 
     def _prepare_commander_profile_from_journal(self):
         detected = JournalWatcher.detect_latest_commander(self.config.get("journal_path"))
@@ -433,7 +436,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             pass
 
         close_methods = {
-            "mining_window": "on_close",
             "carrier_window": "_on_close",
             "colonization_window": "_on_close",
             "engineer_window": "_on_close",
@@ -444,6 +446,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "exploration_window": "_on_close",
             "trade_window": "_on_close",
             "achievement_window": "_on_close",
+            "specialists_window": "_on_close",
         }
         for attr, close_name in close_methods.items():
             surface = getattr(self, attr, None)
@@ -738,6 +741,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def _refresh_bgs_window(self):
         self._refresh_tool_window("bgs_window", "refresh_current")
 
+    def _schedule_specialist_flush(self):
+        """Coalesce live specialist writes so rapid journal bursts stay cheap."""
+        if self.batch_mode or getattr(self, "_specialist_flush_job", None) is not None:
+            return
+
+        def flush_later():
+            self._specialist_flush_job = None
+            engine = getattr(self, "specialist_engine", None)
+            if engine:
+                threading.Thread(target=engine.flush, daemon=True).start()
+
+        try:
+            self._specialist_flush_job = self.root.after(750, flush_later)
+        except Exception:
+            self._specialist_flush_job = None
+
     def _refresh_system_info_progress(self):
         if getattr(self, "_startup_restore_active", False):
             self._startup_restore_ui_pending = True
@@ -956,6 +975,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "engineer_materials.json",
                 "mining_data.db",
                 "mining_sessions.json",
+                "specialists.json",
                 "waypoints.json",
             ):
                 src = get_profile_file(old_key, filename)
@@ -992,6 +1012,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.captains_log = CaptainsLog(
             get_profile_file(new_key, "captains_log.json")
         )
+        if getattr(self, "specialist_engine", None):
+            self.specialist_engine.switch(self.config.get("specialists_file"))
         if getattr(self, "achievement_engine", None):
             self.achievement_engine.switch_profile(
                 self._profile_path("achievements_state.json"),
@@ -1058,6 +1080,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.captains_log = CaptainsLog(
             get_profile_file(get_active_profile(self.config), "captains_log.json")
         )
+        self.specialist_engine = SpecialistEngine(self.config.get("specialists_file"))
         self.compass_cognition = CompassCognition(self.cockpit_brain, self.config)
         self.cockpit_memory.begin_app_session()
         self.root.title(f"VOID COMPASS // v{APP_VERSION}")
@@ -1287,7 +1310,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.log,
             trace_callback=self._trace_record_ms,
         )
-        self.mining_window = None
         self.carrier_window = None
         self.colonization_window = None
         self.engineer_window = None
@@ -1298,7 +1320,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.exploration_window = None
         self.trade_window = None
         self.achievement_window = None
+        self.specialists_window = None
         self._carrier_panel_tick_job = None
+        self._specialist_flush_job = None
         self.carrier_tracker = CarrierTracker()
         self._refresh_profile_paths()
         self.carrier_tracker.set_config(self.config)
@@ -1686,8 +1710,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         
         if self.route_plotter and self.route_plotter.win.winfo_exists():
             self.route_plotter.on_close()
-        if self.mining_window and self.mining_window.is_open():
-            self.mining_window.on_close()
         if self.colonization_window and self.colonization_window.is_open():
             self.colonization_window._on_close()
         if self.engineer_window and self.engineer_window.is_open():
@@ -1698,6 +1720,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.exploration_window._on_close()
         if self.trade_window and self.trade_window.is_open():
             self.trade_window._on_close()
+        if self.specialists_window and self.specialists_window.is_open():
+            self.specialists_window._on_close()
+        try:
+            self.specialist_engine.flush()
+        except Exception:
+            pass
         if self.achievement_engine:
             self.achievement_engine.flush()
             
@@ -1825,29 +1853,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         }
 
     def open_mining_window(self):
-        if self.mining_window and self.mining_window.is_open():
-            self._show_embedded_page("MINING", self.mining_window.win)
-            self.mining_window.on_shown()
-            return
-        self.mining_window = MiningWindow(
-            self.dashboard_host,
-            self.config,
-            get_current_system=lambda: self.current_sys,
-            get_cargo_capacity=lambda: self.cargo_capacity,
-            get_current_coords=lambda: self.current_coords,
-            get_statistics=lambda: (self.companion_state or {}).get("statistics") or {},
-            get_missions=lambda: (self.companion_state or {}).get("missions") or {},
-            route_system_callback=lambda system: self._route_engineering_system(system, "Mining"),
-            embedded=True,
-            is_active_callback=lambda: getattr(self, "_active_page", None) == "MINING",
-        )
-        self._show_embedded_page("MINING", self.mining_window.win)
-        self.mining_window.on_shown()
-        try:
-            self.watcher.force_check_cargo()
-            self.watcher.force_check_status()
-        except Exception:
-            pass
+        """Open the authoritative elite-trader-style mining workflow."""
+        self.open_specialists_window(section="mining")
 
     def open_carrier_window(self):
         if self.carrier_window and self.carrier_window.is_open():
@@ -1855,6 +1862,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return
         self.carrier_window = CarrierWindow(self.dashboard_host, self.config, self.carrier_tracker, embedded=True)
         self._show_embedded_page("CARRIER", self.carrier_window.win)
+
+    def open_specialists_window(self, section=None):
+        if self.specialists_window and self.specialists_window.is_open():
+            self._show_embedded_page("SPECIALISTS", self.specialists_window.win)
+            if section:
+                self.specialists_window.select_section(section)
+            self.specialists_window.on_shown()
+            return
+        self.specialists_window = SpecialistsWindow(
+            self.dashboard_host, self, self.specialist_engine, embedded=True,
+        )
+        self._show_embedded_page("SPECIALISTS", self.specialists_window.win)
+        if section:
+            self.specialists_window.select_section(section)
+        self.specialists_window.on_shown()
 
     def open_colonization_window(self):
         if self.colonization_window and self.colonization_window.is_open():
@@ -4383,6 +4405,32 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             fid = d.get("fid")
             if commander:
                 self._switch_commander_profile(commander, fid)
+        specialist_changed = False
+        try:
+            specialist_engine = getattr(self, "specialist_engine", None)
+            specialist_changed = bool(specialist_engine) and specialist_engine.observe_event(
+                raw if isinstance(raw, dict) else d,
+                event_uid=data.get("_journal_uid"),
+                context={
+                    "system": getattr(self, "current_sys", None),
+                    "body": getattr(self, "current_body_name", None),
+                    "historical": startup_replay,
+                    "at_own_carrier": bool(
+                        getattr(self, "current_docked", False)
+                        and getattr(self, "current_station_market_id", None)
+                        and getattr(self.carrier_tracker, "carrier_data", {}).get("carrier_id")
+                        == getattr(self, "current_station_market_id", None)
+                    ),
+                },
+                defer_save=True,
+            )
+        except Exception as exc:
+            logging.warning("Specialist workflow event failed [%s]: %s", ev, exc)
+        if specialist_changed and not self.batch_mode:
+            self._schedule_specialist_flush()
+            window = getattr(self, "specialists_window", None)
+            if window and window.is_open() and getattr(self, "_active_page", None) == "SPECIALISTS":
+                self.root.after(0, window.refresh)
         try:
             self.achievement_engine.process_event(
                 data,
@@ -4458,9 +4506,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.log(f"Journal file: {os.path.basename(current_journal)}")
         if ev and not startup_replay and not self._is_redundant_music_event(ev, raw if isinstance(raw, dict) else d):
             self.add_journal_history_entry(ev, raw if isinstance(raw, dict) else d)
-        if self.mining_window and self.mining_window.is_open():
-            self.mining_window.process_event(data)
-
         # Route carrier events defensively — a tracker failure must not cascade
         # into the main navigation if/elif chain (fix #2).
         carrier_context_events = {
@@ -6303,6 +6348,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         pass
         finally:
             self.batch_mode = False
+        try:
+            specialist_engine = getattr(self, "specialist_engine", None)
+            if specialist_engine:
+                specialist_engine.flush()
+        except Exception as exc:
+            logging.warning("Specialist workflow batch flush failed: %s", exc)
 
         # Startup catch-up may span many watcher cycles. Keep every partial
         # batch silent and draw only after the watcher marks the final batch.
@@ -6361,17 +6412,24 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._refresh_colonisation_planner_window()
         self._refresh_exploration_window()
         self._refresh_bgs_window()
+        window = getattr(self, "specialists_window", None)
+        if window and window.is_open() and getattr(self, "_active_page", None) == "SPECIALISTS":
+            self.root.after(0, window.refresh)
 
     def update_cargo(self, inventory):
         self.last_cargo_event_ts = time.time()
         self.current_cargo_inventory = list(inventory or [])
+        try:
+            specialist_engine = getattr(self, "specialist_engine", None)
+            if specialist_engine:
+                specialist_engine.update_cargo(self.current_cargo_inventory)
+        except Exception as exc:
+            logging.debug("Specialist cargo snapshot skipped: %s", exc)
         self.current_cargo_tons = sum(
             int(item.get("Count", item.get("count", 0)) or 0)
             for item in self.current_cargo_inventory
             if isinstance(item, dict)
         )
-        if self.mining_window and self.mining_window.is_open():
-            self.mining_window.update_cargo(self.current_cargo_inventory, self.cargo_capacity)
         if self.cargo_hud:
             inv = list(self.current_cargo_inventory)
             cap = self.cargo_capacity
