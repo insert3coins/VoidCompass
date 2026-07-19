@@ -618,6 +618,7 @@ class CarrierTracker:
                     "type": "Buy" if purchase is not None else "Sell",
                     "amount": purchase if purchase is not None else sale,
                     "price": raw.get("Price"),
+                    "black_market": bool(raw.get("BlackMarket", False)),
                     "timestamp": raw.get("timestamp"),
                 })
         cd["trade_orders"] = orders[:50]
