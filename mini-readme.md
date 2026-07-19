@@ -12,7 +12,7 @@
 *   Routed journal, Status, cargo, market, carrier and network callbacks through one bounded Tk dispatcher to protect frame time during event bursts.
 *   Made application and profile shutdown cancel active Piper synthesis/playback and discard queued speech immediately; final AI state now uses one bounded durability window instead of waiting for voice work or several sequential flushes.
 *   Added profile-aware unclean-shutdown detection and safe cached-state recovery while journal catch-up completes.
-*   Added a themed first-run setup for journal location, overlays, mouse passthrough, Adaptive Command and voice, with a rerun action in Settings.
+*   Added a themed first-run setup for journal location, overlays, mouse passthrough, Adaptive Command and voice. It is the only visible window and completes before profile state, voice, overlays or journal catch-up start; Settings retains an in-app rerun action.
 *   Added one-click privacy-redacted support bundles containing health data, sanitized diagnostics and journal event names/timestamps—but no raw journal payloads, commander identity or credentials.
 
 ## v4.9.2 // Specialist Operations Console

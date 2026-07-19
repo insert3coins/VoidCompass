@@ -84,7 +84,7 @@ Void Compass does not require an account or cloud database. Network integrations
 
 ## First run, recovery and diagnostics
 
-New installations open a short themed setup for the Elite journal folder, overlays, mouse passthrough, Adaptive Command and optional voice. Settings can rerun this setup at any time.
+New installations open a short themed setup for the Elite journal folder, overlays, mouse passthrough, Adaptive Command and optional voice. This is the only visible window and finishes before profile state, voice, overlays or journal catch-up start. Settings can rerun it at any time.
 
 State-heavy journal bursts are buffered through a coalescing background writer, while one bounded dispatcher protects Tk from cross-thread UI work. Closing Void Compass immediately cancels active or queued voice work and uses one short, bounded final-state flush. A profile-local session marker detects an unclean shutdown and restores the last graceful cockpit snapshot while journal catch-up settles. Dashboard and Settings expose Command Health queue status.
 
