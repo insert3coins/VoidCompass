@@ -1,5 +1,11 @@
 # VoidCompass // UPDATE LOG
 
+## v5.0.2 // Adaptive Mode Navigation
+**Release Date:** 2026-Jul-20
+
+*   Fixed Adaptive Command Deck mode navigation so Explore, Mining, Combat, Trade, Ground, Engineering, Carrier, Colony and Powerplay open their intended workspace or exact Specialist section.
+*   Replaced the ambiguous **Open Mode** control with a live destination label. General and Station modes now open the next actionable task, or clearly show **Dashboard Active** when there is nowhere else to navigate.
+
 ## v5.0.1 // About & Release Awareness
 **Release Date:** 2026-Jul-20
 

@@ -583,9 +583,10 @@ class DashboardUIMixin(ThemedWindowMixin):
             mode_bar, "LOCK MODE", self._adaptive_toggle_lock, muted=True,
         )
         self.dashboard_mode_lock_btn.pack(side=tk.RIGHT, padx=(5, 0), pady=5)
-        self._action_button(
+        self.dashboard_mode_open_btn = self._action_button(
             mode_bar, "OPEN MODE", self._adaptive_open_mode_workspace,
-        ).pack(side=tk.RIGHT, padx=(5, 0), pady=5)
+        )
+        self.dashboard_mode_open_btn.pack(side=tk.RIGHT, padx=(5, 0), pady=5)
 
         # Flight / Compass / route briefing row.
         briefing = tk.Frame(body, bg=self.UI_BG)
@@ -1037,6 +1038,33 @@ class DashboardUIMixin(ThemedWindowMixin):
             return f"{value / 1_000:.0f}K cr"
         return f"{value:,} cr"
 
+    def _refresh_adaptive_mode_open_button(self, deck_status, queue_rows=None):
+        button_widget = getattr(self, "dashboard_mode_open_btn", None)
+        if not self._widget_alive(button_widget):
+            return
+        mode = str((deck_status or {}).get("mode") or "general")
+        mode_actions = {
+            "exploration": "OPEN EXPLORE",
+            "mining": "OPEN MINING",
+            "trade": "OPEN TRADE",
+            "combat": "OPEN COMBAT",
+            "ground": "OPEN GROUND",
+            "engineering": "OPEN ENGINEER",
+            "carrier": "OPEN CARRIER",
+            "colony": "OPEN COLONY",
+            "powerplay": "OPEN POWERPLAY",
+        }
+        open_text = mode_actions.get(mode)
+        open_state = tk.NORMAL
+        if not open_text:
+            rows = queue_rows if queue_rows is not None else (
+                getattr(self, "_operational_queue", None) or []
+            )
+            actionable = any(row.get("workspace") != "DASHBOARD" for row in rows)
+            open_text = "OPEN NEXT TASK" if actionable else "DASHBOARD ACTIVE"
+            open_state = tk.NORMAL if actionable else tk.DISABLED
+        button_widget.config(text=open_text, state=open_state)
+
     def _refresh_command_dashboard(self, route_progress=None):
         """Refresh briefing cards from already-cached live state only."""
         if not hasattr(self, "dashboard_objective_primary"):
@@ -1062,6 +1090,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             self.dashboard_mode_lock_btn.config(
                 text="LOCK MODE" if deck_status.get("automatic") else "USE AUTO",
             )
+            self._refresh_adaptive_mode_open_button(deck_status)
         state = getattr(self, "companion_state", {}) or {}
         fuel = getattr(self, "current_fuel_main", None)
         fuel_cap = getattr(self, "fuel_capacity_main", None)
@@ -1214,6 +1243,7 @@ class DashboardUIMixin(ThemedWindowMixin):
                 self.dashboard_mode_detail.config(
                     text=f"{control} · {session_events:,} mode event{'s' if session_events != 1 else ''} · {len(rows)} queued objectives"
                 )
+                self._refresh_adaptive_mode_open_button(deck_status, rows)
 
     def _run_nav_command(self, label, command):
         """Run a page action and add its full open/switch cost to runtime tracing."""
