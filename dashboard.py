@@ -4125,14 +4125,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def _adaptive_open_primary(self):
         rows = getattr(self, "_operational_queue", None) or []
         if not rows:
-            return
-        workspace = rows[0].get("workspace")
+            return False
+        row = rows[0]
+        section = None
+        if row.get("id") == "mining":
+            section = "mining"
+        return self._adaptive_open_workspace(row.get("workspace"), section=section)
+
+    def _adaptive_open_workspace(self, workspace, section=None):
+        """Open one Command Deck destination with tracing and visible failures."""
+        workspace = str(workspace or "").strip().upper()
         actions = {
             "DASHBOARD": self.show_dashboard_page,
             "PROFILE": self.open_commander_profile_window,
-            "EXPLORE": self.open_exploration_window,
+            "EXPLORE": lambda: self.open_exploration_window(section=section),
             "TRADE": self.open_trade_window,
-            "SPECIALISTS": self.open_specialists_window,
+            "SPECIALISTS": lambda: self.open_specialists_window(section=section),
             "CARRIER": self.open_carrier_window,
             "COLONY": self.open_colonization_window,
             "ENGINEER": self.open_engineer_window,
@@ -4140,28 +4148,53 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "GALAXY": self.open_bgs_window,
         }
         callback = actions.get(workspace)
-        if callback:
-            callback()
+        if callback is None:
+            self.log(f"Command Deck has no workspace route for: {workspace or 'UNKNOWN'}")
+            return False
+        try:
+            self._run_nav_command(f"mode-{workspace.lower()}", callback)
+            return True
+        except Exception as exc:
+            self.log(f"Command Deck could not open {workspace}: {exc}")
+            self.add_event_feed_entry(
+                "SYSTEM", f"Command Deck could not open {workspace}: {exc}", severity="WARN",
+            )
+            return False
 
     def _adaptive_open_mode_workspace(self):
         deck = getattr(self, "adaptive_command", None)
         if not deck:
-            return
-        workspace = deck.status().get("workspace")
-        actions = {
-            "DASHBOARD": self.show_dashboard_page,
-            "EXPLORE": self.open_exploration_window,
-            "TRADE": self.open_trade_window,
-            "SPECIALISTS": self.open_specialists_window,
-            "CARRIER": self.open_carrier_window,
-            "COLONY": self.open_colonization_window,
-            "ENGINEER": self.open_engineer_window,
-            "GROUND": self.open_ground_target_window,
-            "GALAXY": self.open_bgs_window,
-        }
-        callback = actions.get(workspace)
-        if callback:
-            callback()
+            return False
+        status = deck.status()
+        mode = str(status.get("mode") or "general")
+        workspace = status.get("workspace")
+        section = {
+            "exploration": "survey",
+            "mining": "mining",
+            "combat": "combat",
+        }.get(mode)
+
+        # General and station activity deliberately live on Dashboard. When a
+        # real objective exists, take the commander there instead of visibly
+        # reopening the page that owns this button.
+        if workspace == "DASHBOARD":
+            rows = getattr(self, "_operational_queue", None) or []
+            row = next(
+                (item for item in rows if item.get("workspace") != "DASHBOARD"),
+                None,
+            )
+            if row:
+                row_section = "mining" if row.get("id") == "mining" else None
+                return self._adaptive_open_workspace(
+                    row.get("workspace"), section=row_section,
+                )
+            if hasattr(self, "dashboard_mode_detail"):
+                self.dashboard_mode_detail.config(
+                    text=f"{status.get('label') or 'GENERAL FLIGHT'} uses this Dashboard · no queued task to open"
+                )
+            return False
+
+        return self._adaptive_open_workspace(workspace, section=section)
 
     def _sync_cockpit_intentions(self, snapshot=None):
         if (not self.config.get("cockpit_memory_enabled", True)
