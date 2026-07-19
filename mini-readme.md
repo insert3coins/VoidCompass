@@ -10,6 +10,9 @@
 *   Added Carrier upkeep runway, explicit inventory, market-order exposure and per-leg tritium planning alongside the existing full Carrier Command workspace.
 *   Added Exobiology sampling records, body-local pins, history and GeoJSON export, with selected coordinates handed to the existing Ground tool instead of duplicating surface navigation.
 *   Specialist state is isolated per commander, journal-offset deduplicated and protected against assigning historical startup samples to the current live surface position.
+*   Promoted Analytics to a root command workspace with live session-rate tiles, selectable performance periods, interactive balance and daily-profit graphs, hover detail and top commodity rankings; Trade now keeps its focused market watchlist instead of hiding Analytics inside a subtab.
+*   Removed redundant commander-name badges from root workspace headers; the global commander strip remains the single active-profile identity, while Commander Record keeps identity where it is part of the actual profile content.
+*   Licensed Void Compass under GNU GPL v3.0 only and added the complete licence to both the source repository and packaged public releases.
 
 ## v4.9.1 // Engineering Materials Command
 **Release Date:** 2026-Jul-18

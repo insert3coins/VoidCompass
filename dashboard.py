@@ -61,6 +61,7 @@ from system_value_ledger import SystemValueLedger
 from colonisation_planner import ColonisationPlanner
 from exploration_window import ExplorationWindow
 from trade_window import TradeWindow
+from analytics_window import AnalyticsWindow
 from trade import marketdb as trade_marketdb
 from trade import alerts as trade_alerts
 from trade.eddn_upload import UPLOADER as trade_eddn_uploader
@@ -445,6 +446,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "colonisation_planner_window": "_on_close",
             "exploration_window": "_on_close",
             "trade_window": "_on_close",
+            "analytics_window": "_on_close",
             "achievement_window": "_on_close",
             "specialists_window": "_on_close",
         }
@@ -1319,6 +1321,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.colonisation_planner_window = None
         self.exploration_window = None
         self.trade_window = None
+        self.analytics_window = None
         self.achievement_window = None
         self.specialists_window = None
         self._carrier_panel_tick_job = None
@@ -1720,6 +1723,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.exploration_window._on_close()
         if self.trade_window and self.trade_window.is_open():
             self.trade_window._on_close()
+        if self.analytics_window and self.analytics_window.is_open():
+            self.analytics_window._on_close()
         if self.specialists_window and self.specialists_window.is_open():
             self.specialists_window._on_close()
         try:
@@ -1855,6 +1860,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def open_mining_window(self):
         """Open the authoritative elite-trader-style mining workflow."""
         self.open_specialists_window(section="mining")
+
+    def open_analytics_window(self):
+        if self.analytics_window and self.analytics_window.is_open():
+            self._show_embedded_page("ANALYTICS", self.analytics_window.win)
+            self.analytics_window.on_shown()
+            return
+        self.analytics_window = AnalyticsWindow(self.dashboard_host, self, embedded=True)
+        self._show_embedded_page("ANALYTICS", self.analytics_window.win)
+        self.analytics_window.on_shown()
 
     def open_carrier_window(self):
         if self.carrier_window and self.carrier_window.is_open():
@@ -3096,6 +3110,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         def worker():
             try:
                 trade_marketdb.log_balance(ts, balance)
+                window = getattr(self, "analytics_window", None)
+                if window and window.is_open() and getattr(self, "_active_page", None) == "ANALYTICS":
+                    self.root.after(0, window.request_refresh)
             except Exception:
                 pass
 
@@ -6504,6 +6521,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         def worker():
             try:
                 trade_marketdb.log_trade(ts, log_event, symbol, commodity, count, price, total, profit)
+                window = getattr(self, "analytics_window", None)
+                if window and window.is_open() and getattr(self, "_active_page", None) == "ANALYTICS":
+                    self.root.after(0, window.request_refresh)
             except Exception:
                 pass
 

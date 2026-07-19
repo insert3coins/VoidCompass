@@ -12,6 +12,7 @@ Void Compass is a native Windows companion for Elite Dangerous. It turns Frontie
 | --- | --- |
 | **Dashboard** | Low-noise flight and Compass briefings, active objective, route/waypoint context, carrier expedition status and a filtered live activity stream. |
 | **Profile** | Career ranks, reputation, achievements, lifetime statistics, fleet and loadouts, missions, backups and integration state. |
+| **Analytics** | Live session pace, interactive credit-balance and daily-profit graphs, selectable trading periods and top commodity performance from local journal history. |
 | **Explore** | System history, scan values, biological survey records, Captain's Log and expedition chronicle tools. |
 | **Achieve** | 1,023 native journal-driven achievements with per-commander progress, category controls and toast unlocks. |
 | **Trade** | One-click trade overview plus routes, markets, local opportunities, watch tracking and EDDN-maintained market data. |
@@ -80,6 +81,10 @@ Void Compass does not require an account or cloud database. Network integrations
 ```text
 C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous
 ```
+
+## License
+
+Copyright © 2026 insert3coins. Void Compass is free software released under the [GNU General Public License v3.0 only](LICENSE). You may use, study, modify and redistribute it under those terms; redistributed source or binaries must preserve the GPL and provide the corresponding source as required by the licence. The corresponding source is published at [github.com/insert3coins/SurveyAnalysis](https://github.com/insert3coins/SurveyAnalysis).
 
 ## Disclaimer
 

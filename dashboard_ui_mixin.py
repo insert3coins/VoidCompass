@@ -125,6 +125,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         nav_items = (
             ("⌖", "DASHBOARD", self.show_dashboard_page),
             ("◉", "PROFILE", self.open_commander_profile_window),
+            ("∿", "ANALYTICS", self.open_analytics_window),
             ("✦", "EXPLORE", self.open_exploration_window),
             ("★", "ACHIEVE", self.open_achievement_window),
             ("⇌", "TRADE", self.open_trade_window),

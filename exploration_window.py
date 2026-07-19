@@ -533,8 +533,7 @@ class ExplorationWindow(ThemedWindowMixin):
 
             star = getattr(self.app, "star_class", "") or "-"
             traffic = getattr(self.app, "system_traffic", {}) or {}
-            cmdr = getattr(self.app, "cmdr_name", None) or self.config.get("active_commander_name") or "Unknown"
-            self.header_summary.config(text=f"CMDR {cmdr} | {current}")
+            self.header_summary.config(text=current)
             self.system_card.config(text=f"{current}\nStar {star} | Traffic {traffic.get('day', 0)}/{traffic.get('week', 0)}/{traffic.get('total', 0)}")
             self.scan_card.config(text=f"{complete} bodies | {current_value:,} cr\n{valuable_count} valuable bodies")
             self.route_card.config(text=self._route_card_text())
