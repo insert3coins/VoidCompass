@@ -539,6 +539,35 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.dashboard_page = body
         body.pack(fill=tk.BOTH, expand=True, padx=14, pady=10)
 
+        mode_bar = self._panel(body, border=COLOR_ACCENT)
+        mode_bar.pack(fill=tk.X, pady=(0, 8))
+        tk.Label(
+            mode_bar, text="ADAPTIVE COMMAND DECK", fg=self.UI_DIM,
+            bg=self.UI_PANEL, font=("Segoe UI", 7, "bold"),
+        ).pack(side=tk.LEFT, padx=(12, 8), pady=8)
+        self.dashboard_mode_badge = tk.Label(
+            mode_bar, text="GENERAL FLIGHT", fg="black", bg=COLOR_ACCENT,
+            font=("Segoe UI", 8, "bold"), padx=8, pady=3,
+        )
+        self.dashboard_mode_badge.pack(side=tk.LEFT, pady=7)
+        self.dashboard_mode_detail = tk.Label(
+            mode_bar, text="AUTOMATIC · awaiting journal activity", fg=COLOR_TEXT,
+            bg=self.UI_PANEL, font=self.UI_MONO, anchor="w",
+        )
+        self.dashboard_mode_detail.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=10)
+        self.dashboard_health_badge = tk.Label(
+            mode_bar, text="NOMINAL", fg="black", bg=self.UI_OK,
+            font=("Segoe UI", 7, "bold"), padx=7, pady=2,
+        )
+        self.dashboard_health_badge.pack(side=tk.RIGHT, padx=(5, 12))
+        self.dashboard_mode_lock_btn = self._action_button(
+            mode_bar, "LOCK MODE", self._adaptive_toggle_lock, muted=True,
+        )
+        self.dashboard_mode_lock_btn.pack(side=tk.RIGHT, padx=(5, 0), pady=5)
+        self._action_button(
+            mode_bar, "OPEN MODE", self._adaptive_open_mode_workspace,
+        ).pack(side=tk.RIGHT, padx=(5, 0), pady=5)
+
         # Flight / Compass / route briefing row.
         briefing = tk.Frame(body, bg=self.UI_BG)
         briefing.pack(fill=tk.X, pady=(0, 8))
@@ -642,6 +671,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         objective_actions = tk.Frame(objective_card, bg=self.UI_PANEL)
         objective_actions.pack(fill=tk.X, padx=12, pady=(0, 9))
         self._action_button(objective_actions, "COPY NEXT", self._dashboard_copy_next, accent=True).pack(side=tk.LEFT)
+        self._action_button(objective_actions, "OPEN TASK", self._adaptive_open_primary).pack(side=tk.LEFT, padx=(6, 0))
         self._action_button(objective_actions, "EXPLORE", self.open_exploration_window).pack(side=tk.LEFT, padx=(6, 0))
         self._action_button(objective_actions, "GROUND", self.open_ground_target_window, muted=True).pack(side=tk.LEFT, padx=(6, 0))
 
@@ -682,7 +712,7 @@ class DashboardUIMixin(ThemedWindowMixin):
 
         operations_card = self._panel(active_row)
         operations_card.grid(row=0, column=2, sticky="nsew")
-        self._section_label(operations_card, "ACTIVE OPERATIONS").pack(anchor="w", padx=12, pady=(9, 0))
+        self._section_label(operations_card, "OPERATIONAL QUEUE").pack(anchor="w", padx=12, pady=(9, 0))
         self.dashboard_operations_text = tk.Label(
             operations_card, text="No active operations", fg=COLOR_TEXT, bg=self.UI_PANEL,
             font=("Consolas", 8), anchor="nw", justify=tk.LEFT, wraplength=300,
@@ -968,7 +998,9 @@ class DashboardUIMixin(ThemedWindowMixin):
         return None
 
     def _dashboard_copy_next(self):
-        destination = self._dashboard_next_destination()
+        rows = getattr(self, "_operational_queue", None) or []
+        destination = rows[0].get("copy_text") if rows else None
+        destination = destination or self._dashboard_next_destination()
         if destination:
             self._copy_waypoint_to_clipboard(destination, "NEXT DESTINATION")
             self.dashboard_objective_detail.config(text=f"Copied {destination} to the clipboard.")
@@ -991,6 +1023,26 @@ class DashboardUIMixin(ThemedWindowMixin):
         if not hasattr(self, "dashboard_objective_primary"):
             return
         route_progress = route_progress or self._current_route_progress()
+        deck = getattr(self, "adaptive_command", None)
+        if deck and hasattr(self, "dashboard_mode_badge"):
+            deck_status = deck.status()
+            health = self._adaptive_health_snapshot()
+            self.dashboard_mode_badge.config(text=deck_status.get("label") or "GENERAL FLIGHT")
+            session = deck_status.get("session") or {}
+            event_count = int(session.get("events") or 0)
+            control = "AUTO" if deck_status.get("automatic") else "LOCKED"
+            self.dashboard_mode_detail.config(
+                text=f"{control} · {event_count:,} mode event{'s' if event_count != 1 else ''} · {len(getattr(self, '_operational_queue', []) or [])} queued objectives"
+            )
+            level = health.get("level") or "NOMINAL"
+            colour = self.UI_OK if level == "NOMINAL" else self.UI_WARN if level == "BUSY" else self.UI_FAIL
+            self.dashboard_health_badge.config(
+                text=f"{level} · UI {health.get('ui_pending', 0)} · IO {health.get('writes_pending', 0)}",
+                bg=colour,
+            )
+            self.dashboard_mode_lock_btn.config(
+                text="LOCK MODE" if deck_status.get("automatic") else "USE AUTO",
+            )
         state = getattr(self, "companion_state", {}) or {}
         fuel = getattr(self, "current_fuel_main", None)
         fuel_cap = getattr(self, "fuel_capacity_main", None)
@@ -1110,6 +1162,39 @@ class DashboardUIMixin(ThemedWindowMixin):
         if carrier_left:
             operations.append(f"EXPEDITION {carrier_left} carrier stop{'s' if carrier_left != 1 else ''} remaining")
         self.dashboard_operations_text.config(text="\n".join(operations[:5]) or "No active operations\nDetailed workspaces remain ready from the navigation rail.")
+
+        # The 5.0 Operational Queue unifies the truthful objectives already
+        # maintained by each workspace. It owns the final dashboard priority
+        # without changing or duplicating the source data.
+        if deck:
+            try:
+                command_snapshot = self._compass_gameplay_snapshot()
+                self._operational_queue = deck.build_queue(
+                    command_snapshot, self._adaptive_context(route_progress),
+                )
+            except Exception:
+                self._operational_queue = []
+            rows = self._operational_queue
+            if rows:
+                self.dashboard_objective_primary.config(text=rows[0]["label"])
+                self.dashboard_objective_detail.config(text=rows[0]["detail"])
+                queue_lines = [
+                    f"{index}. {row['label']}  //  {row['workspace']}"
+                    for index, row in enumerate(rows[:5], start=1)
+                ]
+                self.dashboard_operations_text.config(text="\n".join(queue_lines))
+            else:
+                self.dashboard_operations_text.config(
+                    text="Queue clear\nDetailed workspaces remain ready from the navigation rail."
+                )
+            # Refresh the mode strip once more now that the current queue is known.
+            if hasattr(self, "dashboard_mode_detail"):
+                deck_status = deck.status()
+                control = "AUTO" if deck_status.get("automatic") else "LOCKED"
+                session_events = int((deck_status.get("session") or {}).get("events") or 0)
+                self.dashboard_mode_detail.config(
+                    text=f"{control} · {session_events:,} mode event{'s' if session_events != 1 else ''} · {len(rows)} queued objectives"
+                )
 
     def _run_nav_command(self, label, command):
         """Run a page action and add its full open/switch cost to runtime tracing."""
@@ -1877,7 +1962,11 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.log_entries.append(line)
         if len(self.log_entries) > 2000:
             self.log_entries = self.log_entries[-2000:]
-        self.root.after(0, self._refresh_log_view)
+        dispatcher = getattr(self, "_ui_post", None)
+        if callable(dispatcher):
+            dispatcher(self._refresh_log_view, key="debug-log-view")
+        else:
+            self.root.after(0, self._refresh_log_view)
 
     def schedule_dashboard_refresh(self, full=False):
         if full:

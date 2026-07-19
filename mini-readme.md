@@ -1,5 +1,20 @@
 # VoidCompass // UPDATE LOG
 
+## v5.0.0 // Adaptive Command Deck
+**Release Date:** 2026-Jul-20
+
+*   Added an **Adaptive Command Deck** that detects Exploration, Mining, Trade, Combat, Ground, Engineering, Powerplay, Carrier, Architect and Station activity from verified journal state, with an optional profile-local manual mode lock.
+*   Reworked Dashboard objectives into one priority-ranked **Operational Queue** spanning survey work, routes and waypoints, missions, mining, trade plans, engineering goals, Powerplay logistics, carriers and colony supply.
+*   Added activity-focused overlay scenes that keep safety feedback available while reducing unrelated HUD clutter; scenes can be disabled without leaving overlays hidden.
+*   Added deterministic Compass mode briefings, activity debriefs and a shutdown summary path without an LLM, external service or new GPU workload.
+*   Added live Command Health telemetry for UI backlog, persistence backlog and recent stalls, surfaced on Dashboard and in Settings.
+*   Moved high-churn Compass memory, working brain, companion state, achievements, specialist state, Captain's Log and runtime trace writes onto one coalescing background persistence queue.
+*   Routed journal, Status, cargo, market, carrier and network callbacks through one bounded Tk dispatcher to protect frame time during event bursts.
+*   Made application and profile shutdown cancel active Piper synthesis/playback and discard queued speech immediately; final AI state now uses one bounded durability window instead of waiting for voice work or several sequential flushes.
+*   Added profile-aware unclean-shutdown detection and safe cached-state recovery while journal catch-up completes.
+*   Added a themed first-run setup for journal location, overlays, mouse passthrough, Adaptive Command and voice, with a rerun action in Settings.
+*   Added one-click privacy-redacted support bundles containing health data, sanitized diagnostics and journal event names/timestamps—but no raw journal payloads, commander identity or credentials.
+
 ## v4.9.2 // Specialist Operations Console
 **Release Date:** 2026-Jul-20
 

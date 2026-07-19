@@ -6,6 +6,7 @@ import sqlite3
 import logging
 import time
 import tkinter as tk
+from tkinter import messagebox
 import webbrowser
 import shutil
 import queue
@@ -77,6 +78,12 @@ from specialists_window import SpecialistsWindow
 import compass_personas
 from captains_log import CaptainsLog
 from diagnostic_logs import application_base_dir, resolve_log_path
+from adaptive_command import AdaptiveCommandDeck, MODE_LABELS
+from diagnostic_bundle import create_support_bundle
+from onboarding import should_show as should_show_onboarding, show_first_run
+from persistence_queue import flush_persistence, persistence_queue
+from session_recovery import ProfileSessionGuard
+from ui_dispatcher import TkDispatcher
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
@@ -374,6 +381,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.config["mining_sessions_file"] = self._copy_legacy_to_profile("mining_sessions.json")
         self.config["waypoints_file"] = self._copy_legacy_to_profile("waypoints.json")
         self.config["specialists_file"] = self._profile_path("specialists.json")
+        self.config["adaptive_command_file"] = self._profile_path("adaptive_command.json")
 
     def _prepare_commander_profile_from_journal(self):
         detected = JournalWatcher.detect_latest_commander(self.config.get("journal_path"))
@@ -855,8 +863,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         def _on_trade_alert(alert):
             toast = getattr(self, "toast_hud", None)
             if toast:
-                # Called from the EDDN thread — hop to the Tk main loop.
-                self.root.after(0, lambda a=alert: toast.push(
+                # Called from the EDDN thread — hop through the shared Tk dispatcher.
+                self._ui_post(lambda a=alert: toast.push(
                     "TRADE WATCH", a.get("text") or "", severity="warn", duration_s=15))
         try:
             trade_alerts.set_notify_callback(_on_trade_alert)
@@ -978,6 +986,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "mining_data.db",
                 "mining_sessions.json",
                 "specialists.json",
+                "adaptive_command.json",
                 "waypoints.json",
             ):
                 src = get_profile_file(old_key, filename)
@@ -1016,6 +1025,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         if getattr(self, "specialist_engine", None):
             self.specialist_engine.switch(self.config.get("specialists_file"))
+        if getattr(self, "adaptive_command", None):
+            self.adaptive_command.switch(
+                self.config.get("adaptive_command_file"), self.config,
+            )
+            self._adaptive_startup_briefed = False
+        if getattr(self, "session_guard", None):
+            self.session_guard.switch(self._profile_path("session.active"))
+            self._startup_recovery_mode = bool(
+                self.session_guard.unclean
+                and self.config.get("recovery_safe_mode_enabled", True)
+            )
         if getattr(self, "achievement_engine", None):
             self.achievement_engine.switch_profile(
                 self._profile_path("achievements_state.json"),
@@ -1068,6 +1088,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def __init__(self, root):
         self.root = root
+        # This is the only cross-thread gateway into Tk. Background journal,
+        # network and file workers enqueue bounded work here; Tk drains it in
+        # short slices so flight controls and overlays remain responsive.
+        self.ui_dispatcher = TkDispatcher(root)
         self.config = load_config()
         self._prepare_commander_profile_from_journal()
         self._apply_active_profile_theme()
@@ -1083,6 +1107,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             get_profile_file(get_active_profile(self.config), "captains_log.json")
         )
         self.specialist_engine = SpecialistEngine(self.config.get("specialists_file"))
+        self.adaptive_command = AdaptiveCommandDeck(
+            self.config.get("adaptive_command_file"), self.config,
+        )
+        self._adaptive_startup_briefed = False
+        self.session_guard = ProfileSessionGuard(
+            self._profile_path("session.active"), APP_VERSION,
+        )
+        self._startup_recovery_mode = bool(
+            self.session_guard.unclean
+            and self.config.get("recovery_safe_mode_enabled", True)
+        )
         self.compass_cognition = CompassCognition(self.cockpit_brain, self.config)
         self.cockpit_memory.begin_app_session()
         self.root.title(f"VOID COMPASS // v{APP_VERSION}")
@@ -1301,10 +1336,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         # Initialize Handlers
         self.edsm = EDSMHandler(self.config)
         self.edsm.set_log_callback(
-            lambda tag, msg, sev: self.root.after(0, lambda: self.add_event_feed_entry(tag, msg, severity=sev))
+            lambda tag, msg, sev: self._ui_post(
+                self.add_event_feed_entry, tag, msg, severity=sev,
+            )
         )
         trade_eddn_uploader.set_log_callback(
-            lambda tag, msg, sev: self.root.after(0, lambda: self.add_event_feed_entry(tag, msg, severity=sev))
+            lambda tag, msg, sev: self._ui_post(
+                self.add_event_feed_entry, tag, msg, severity=sev,
+            )
         )
         self.screenshots = ScreenshotHandler(
             self.config,
@@ -1420,6 +1459,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.colony_overlay = None
 
         self._apply_overlay_mouse_passthrough()
+        if not self._startup_recovery_mode:
+            self._apply_adaptive_overlay_scene()
 
         self.db_lock = threading.RLock()
         self.batch_mode = False
@@ -1451,13 +1492,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             config=self.config,
         )
         self.watcher.register_callback(
-            event_cb=self.process_event,
-            batch_cb=self.process_batch,
-            cargo_cb=self.update_cargo,
-            nav_cb=self.update_nav_route,
-            status_cb=self.update_status,
-            market_cb=self.update_market,
-            ship_locker_cb=self.update_ship_locker,
+            event_cb=lambda event: self._ui_post(self.process_event, event),
+            batch_cb=lambda events: self._ui_post(self.process_batch, list(events)),
+            cargo_cb=lambda data: self._ui_post(self.update_cargo, data, key="watcher:cargo"),
+            nav_cb=lambda data: self._ui_post(self.update_nav_route, data, key="watcher:nav"),
+            status_cb=lambda data: self._ui_post(self.update_status, data, key="watcher:status"),
+            market_cb=lambda data: self._ui_post(self.update_market, data, key="watcher:market"),
+            ship_locker_cb=lambda data: self._ui_post(
+                self.update_ship_locker, data, key="watcher:ship-locker",
+            ),
         )
         self.watcher.prime_market_file()
         self._start_market_import_worker()
@@ -1491,6 +1534,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             f"CONFIG FILE: {CONFIG_FILE} | HUD({self.config.get('hud_x')},{self.config.get('hud_y')}) "
             f"| CARGO({self.config.get('cargo_hud_x')},{self.config.get('cargo_hud_y')})"
         )
+        if self._startup_recovery_mode:
+            self.add_event_feed_entry(
+                "SYSTEM",
+                self.session_guard.description()
+                + " Cached cockpit state is visible while the journal catches up.",
+                severity="WARN",
+            )
         self.root.after(120, self._reapply_overlay_positions)
         self.update_hud()
         self.update_ground_target_ui()
@@ -1502,6 +1552,56 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._tick_runtime_trace()
         self._tick_overlay_position_sync()
         self._tick_cockpit_ambient()
+        if should_show_onboarding(self.config):
+            self.root.after(450, self._show_first_run_onboarding)
+
+    def _show_first_run_onboarding(self):
+        if not self.is_running:
+            return
+
+        def complete():
+            self._persist_config()
+            if getattr(self, "watcher", None):
+                self.watcher.journal_path = self.config.get("journal_path")
+                self.watcher.last_journal = None
+                self.watcher.file_pos = 0
+            self._apply_runtime_feature_toggles()
+            self._apply_adaptive_overlay_scene()
+            self.schedule_dashboard_refresh(full=True)
+            self.add_event_feed_entry(
+                "SYSTEM", "First-run setup complete", severity="INFO",
+            )
+
+        show_first_run(self.root, self.config, complete)
+
+    def _rerun_first_run_onboarding(self):
+        self.config["onboarding_complete"] = False
+        self._show_first_run_onboarding()
+
+    def _create_support_bundle(self):
+        def worker():
+            try:
+                path = create_support_bundle(
+                    application_base_dir(), self.config, APP_VERSION,
+                    health=self._adaptive_health_snapshot(),
+                    profile_key=get_active_profile(self.config),
+                )
+                self._ui_post(
+                    lambda: messagebox.showinfo(
+                        "Support Bundle",
+                        f"Privacy-redacted support bundle created:\n{path}",
+                        parent=self.root,
+                    )
+                )
+            except Exception as exc:
+                self._ui_post(
+                    lambda error=str(exc): messagebox.showerror(
+                        "Support Bundle", f"Could not create support bundle:\n{error}",
+                        parent=self.root,
+                    )
+                )
+
+        threading.Thread(target=worker, name="support-bundle", daemon=True).start()
 
     def _reapply_overlay_positions(self):
         for attr, x_key, y_key in self._OVERLAY_POSITION_SPECS:
@@ -1608,6 +1708,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.runtime_trace:
             self.runtime_trace.bump(label, amount)
 
+    def _ui_post(self, callback, *args, key=None, **kwargs):
+        dispatcher = getattr(self, "ui_dispatcher", None)
+        if dispatcher:
+            return dispatcher.post(callback, *args, key=key, **kwargs)
+        return False
+
     def _tick_runtime_trace(self):
         if not self.is_running:
             return
@@ -1616,6 +1722,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "scan_items": len(getattr(self, "scan_items", []) or []),
             "log_entries": len(getattr(self, "log_entries", []) or []),
             "event_feed_entries": len(getattr(self, "event_feed_entries", []) or []),
+            "ui_dispatch": getattr(self, "ui_dispatcher", None).stats()
+            if getattr(self, "ui_dispatcher", None) else {},
+            "persistence": persistence_queue().stats(),
         }
         if self.runtime_trace:
             self.runtime_trace.flush(extra=extra)
@@ -1676,6 +1785,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._ui_watchdog_last_ts = now
         overrun_ms = delta_ms - float(self._ui_watchdog_interval_ms)
         if overrun_ms >= self._ui_watchdog_spike_ms:
+            self._last_ui_stall_ts = time.time()
             now_ts = time.time()
             last = self._perf_last_emit_ts.get("UI_STALL", 0.0)
             if (now_ts - last) >= self._perf_emit_min_interval_s:
@@ -1688,28 +1798,41 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.root.after(self._ui_watchdog_interval_ms, self._tick_ui_stall_watchdog)
 
     def on_close(self):
-        """Save state and exit."""
+        """Cancel live work, queue the final state and exit without waiting on speech."""
+        if getattr(self, "_closing", False):
+            return
+        self._closing = True
         self.is_running = False
+        try:
+            self.root.withdraw()
+        except Exception:
+            pass
+        for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
+            "gravity_warning_hud", "toast_hud", "heartbeat_hud",
+        ):
+            window = self._overlay_window(getattr(self, attr, None))
+            try:
+                if window is not None:
+                    window.withdraw()
+            except Exception:
+                pass
+        if getattr(self, "watcher", None):
+            self.watcher.stop()
+        if getattr(self, "ui_dispatcher", None):
+            self.ui_dispatcher.stop()
+        # Cancellation comes before any state work. Piper synthesis, playback
+        # and queued callouts must never keep the application open.
+        try:
+            self.voice_callouts.stop()
+        except Exception:
+            pass
         # This is intentionally the only write site for the last cockpit
         # snapshot. It provides a fast visual restore after a normal quit
         # without turning live journal traffic into continuous disk writes.
         self._save_profile_cockpit_state()
-        if getattr(self, "cockpit_memory", None):
-            try:
-                if self.cockpit_memory.state.get("current_session"):
-                    insights = (
-                        self.compass_cognition.observe_session_close(
-                            self._compass_gameplay_snapshot(), self.cockpit_memory,
-                        )
-                        if getattr(self, "compass_cognition", None) else []
-                    )
-                    self.cockpit_memory.session_debrief(
-                        "Session complete", close=True, insights=insights,
-                    )
-                self._refresh_cockpit_brain(event="app_close")
-            except Exception:
-                pass
-        self.voice_callouts.stop()
+        # Elite's Shutdown journal event owns the Compass debrief. Closing
+        # only the companion leaves an in-progress game session intact and
+        # avoids running another cognition pass during application teardown.
         
         if self.route_plotter and self.route_plotter.win.winfo_exists():
             self.route_plotter.on_close()
@@ -1728,14 +1851,23 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.specialists_window and self.specialists_window.is_open():
             self.specialists_window._on_close()
         try:
-            self.specialist_engine.flush()
+            self.specialist_engine.flush(wait=False)
         except Exception:
             pass
         if self.achievement_engine:
-            self.achievement_engine.flush()
+            self.achievement_engine.flush(wait=False)
+        if getattr(self, "cockpit_memory", None):
+            try:
+                self.cockpit_memory.flush(wait=False)
+            except Exception:
+                pass
+        if getattr(self, "adaptive_command", None):
+            try:
+                self.adaptive_command.flush(wait=False)
+            except Exception:
+                pass
             
         self._stop_market_import_worker()
-        self.watcher.stop()
         self.screenshots.stop()
         if time.time() >= self._overlay_sync_grace_until:
             self._capture_overlay_positions()
@@ -1758,8 +1890,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.runtime_trace:
             try:
                 self.runtime_trace.flush(extra={"shutdown": True})
+                self.runtime_trace.close(wait=False)
             except Exception:
                 pass
+        # One short durability window replaces several sequential five-second
+        # waits. All state was already coalesced onto the same writer.
+        flush_persistence(timeout=1.0)
         if self.ground_target_window and self.ground_target_window.winfo_exists():
             try:
                 self.config["ground_target_window_geometry"] = self.ground_target_window.geometry()
@@ -1767,6 +1903,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             except Exception:
                 pass
         self._destroy_ground_popup()
+        if getattr(self, "session_guard", None):
+            self.session_guard.close()
         self.root.destroy()
 
     def _save_config_file(self):
@@ -2054,7 +2192,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._refresh_commander_profile_window()
 
         try:
-            self.root.after(0, apply_unlock)
+            self._ui_post(apply_unlock)
         except Exception:
             pass
 
@@ -2098,25 +2236,25 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     except Exception:
                         pass
                 msg = f"FC {label}: jump plotted → {dest}{dep_txt}"
-                self.root.after(0, lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="INFO"))
+                self._ui_post(lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="INFO"))
 
             elif new_status == "cooldown":
                 system = carrier_data.get("system") or "?"
                 msg = f"FC {label}: arrived at {system}"
-                self.root.after(0, lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="INFO"))
+                self._ui_post(lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="INFO"))
                 if self.toast_hud:
-                    self.root.after(0, lambda m=msg: self.toast_hud.push("CARRIER JUMPED", m, severity="success"))
+                    self._ui_post(lambda m=msg: self.toast_hud.push("CARRIER JUMPED", m, severity="success"))
 
             elif new_status == "cooldown_cancel":
                 msg = f"FC {label}: jump cancelled"
-                self.root.after(0, lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="WARN"))
+                self._ui_post(lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="WARN"))
 
             elif old_status in ("cooldown", "cooldown_cancel") and new_status == "idle":
                 system = carrier_data.get("system") or "?"
                 msg = f"FC {label}: cooldown complete @ {system}"
-                self.root.after(0, lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="INFO"))
+                self._ui_post(lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="INFO"))
                 if self.toast_hud:
-                    self.root.after(0, lambda m=msg: self.toast_hud.push("CARRIER READY", m, severity="success"))
+                    self._ui_post(lambda m=msg: self.toast_hud.push("CARRIER READY", m, severity="success"))
         except Exception:
             pass
 
@@ -2126,11 +2264,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._startup_restore_ui_pending = True
             return
         try:
-            self.root.after(0, self.update_carrier_panel)
+            self._ui_post(self.update_carrier_panel, key="carrier-panel")
             if self.carrier_hud:
-                self.root.after(0, lambda d=dict(carrier_data): self.carrier_hud.update(d))
+                self._ui_post(lambda d=dict(carrier_data): self.carrier_hud.update(d), key="carrier-hud")
             if carrier_data.get("status") == "jumping":
-                self.root.after(0, self._ensure_carrier_panel_ticker)
+                self._ui_post(self._ensure_carrier_panel_ticker, key="carrier-ticker")
         except Exception:
             pass
 
@@ -2379,6 +2517,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.colony_overlay = None
 
         self._apply_overlay_mouse_passthrough()
+        self._apply_adaptive_overlay_scene()
 
     def open_settings(self):
         def on_save():
@@ -2401,6 +2540,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 cockpit_memory=self.cockpit_memory,
                 cockpit_brain=self.cockpit_brain,
                 cockpit_cognition=self.compass_cognition,
+                support_bundle_callback=self._create_support_bundle,
+                rerun_setup_callback=self._rerun_first_run_onboarding,
+                health_provider=self._adaptive_health_snapshot,
+                ui_post_callback=self._ui_post,
             )
         self._show_embedded_page("SETTINGS", self.settings_page)
 
@@ -2420,7 +2563,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.update_hud()
                 if self.system_info_hud and isinstance(traffic_data, dict):
                     self.system_info_hud.update_traffic(self.system_traffic)
-            self.root.after(0, _apply)
+            self._ui_post(_apply, key="edsm-traffic")
         self.edsm.fetch_traffic(system_name, callback)
 
         if self.config.get("system_info_enabled", True):
@@ -2430,7 +2573,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         return
                     if self.system_info_hud:
                         self.system_info_hud.update_edsm_details(details)
-                self.root.after(0, _apply)
+                self._ui_post(_apply, key="edsm-details")
             self.edsm.fetch_system_details(system_name, details_callback)
 
             sys_addr = self.current_system_address
@@ -2441,7 +2584,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                             return
                         if self.system_info_hud:
                             self.system_info_hud.update_spansh(data)
-                    self.root.after(0, _apply)
+                    self._ui_post(_apply, key="spansh-details")
                 self.edsm.fetch_spansh_system(sys_addr, spansh_callback)
 
     @staticmethod
@@ -2658,7 +2801,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._hud_refresh_requested = True
             return
         if threading.current_thread() is not threading.main_thread():
-            self.root.after(0, self.update_hud)
+            self._ui_post(self.update_hud, key="navigation-hud")
             return
         self._hud_refresh_requested = True
         if self._hud_refresh_job is not None:
@@ -3698,6 +3841,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         return candidate
 
     def _speak(self, text, category="safety", cooldown_s=20, key=None):
+        if getattr(self, "_closing", False):
+            return False
         try:
             if (self.config.get("cockpit_memory_enabled", True)
                     and getattr(self, "cockpit_memory", None)):
@@ -3805,6 +3950,202 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         except Exception as exc:
             logging.debug("Compass cognition event skipped [%s]: %s", event, exc)
             return False
+
+    def _adaptive_health_snapshot(self):
+        dispatch = self.ui_dispatcher.stats() if getattr(self, "ui_dispatcher", None) else {}
+        persistence = persistence_queue().stats()
+        journal_age = max(0.0, time.time() - float(self.last_journal_event_ts or 0.0)) \
+            if self.last_journal_event_ts else None
+        recent_stall = (
+            time.time() - float(getattr(self, "_last_ui_stall_ts", 0.0) or 0.0)
+        ) < 60.0
+        stall_age = (
+            max(0.0, time.time() - float(getattr(self, "_last_ui_stall_ts", 0.0)))
+            if getattr(self, "_last_ui_stall_ts", 0.0) else None
+        )
+        if persistence.get("failures") or dispatch.get("failures"):
+            level = "FAULT"
+        elif recent_stall or dispatch.get("pending", 0) > 24 or persistence.get("pending", 0) > 5:
+            level = "BUSY"
+        else:
+            level = "NOMINAL"
+        return {
+            "level": level,
+            "ui_pending": int(dispatch.get("pending") or 0),
+            "ui_max_lag_ms": float(dispatch.get("max_lag_ms") or 0.0),
+            "writes_pending": int(persistence.get("pending") or 0),
+            "last_write_ms": float(persistence.get("last_write_ms") or 0.0),
+            "journal_age_s": round(journal_age, 1) if journal_age is not None else None,
+            "last_ui_stall_age_s": round(stall_age, 1) if stall_age is not None else None,
+            "ui": dispatch,
+            "persistence": persistence,
+        }
+
+    @staticmethod
+    def _overlay_window(instance):
+        if instance is None:
+            return None
+        return getattr(instance, "win", instance)
+
+    def _apply_adaptive_overlay_scene(self, mode=None):
+        deck = getattr(self, "adaptive_command", None)
+        if not deck:
+            return
+        hidden = getattr(self, "_adaptive_hidden_overlays", set())
+        if (
+            not self.config.get("adaptive_overlay_scenes_enabled", True)
+            or not self.config.get("adaptive_command_enabled", True)
+        ):
+            for attr in tuple(hidden):
+                window = self._overlay_window(getattr(self, attr, None))
+                try:
+                    if window is not None:
+                        window.deiconify()
+                except (AttributeError, tk.TclError):
+                    pass
+            self._adaptive_hidden_overlays = set()
+            return
+        scene = deck.scene(mode)
+        persistent = {"hud", "cargo_hud", "carrier_hud", "colony_overlay"}
+        for attr, visible in scene.items():
+            instance = getattr(self, attr, None)
+            window = self._overlay_window(instance)
+            if window is None:
+                continue
+            try:
+                if not visible:
+                    window.withdraw()
+                    hidden.add(attr)
+                elif attr in hidden:
+                    hidden.discard(attr)
+                    if attr in persistent:
+                        window.deiconify()
+            except (AttributeError, tk.TclError):
+                pass
+        self._adaptive_hidden_overlays = hidden
+        # Safety feedback is never suppressed by an activity scene.
+        for attr in ("toast_hud", "gravity_warning_hud", "heartbeat_hud"):
+            hidden.discard(attr)
+
+    def _update_adaptive_command(self, event, raw, startup_replay=False):
+        deck = getattr(self, "adaptive_command", None)
+        if not deck or startup_replay:
+            return
+        if event == "Shutdown":
+            summary = deck.close_session("Session complete")
+            if summary and self.config.get("adaptive_debriefings_enabled", True):
+                self.add_event_feed_entry("AI", summary, severity="INFO")
+                # The established Compass shutdown summary owns TTS for this
+                # boundary, avoiding two spoken debriefs for the same event.
+            return
+        detected = ((getattr(self, "ai_operational_state", {}) or {}).get("activity") or {}).get("mode")
+        transition = deck.observe(event, detected, raw, historical=False)
+        if not transition.get("changed"):
+            return
+        mode = transition.get("mode") or "general"
+        self._apply_adaptive_overlay_scene(mode)
+        if transition.get("debrief") and self.config.get("adaptive_debriefings_enabled", True):
+            self.add_event_feed_entry("AI", transition["debrief"], severity="INFO")
+        briefing = transition.get("briefing")
+        if briefing and self.config.get("adaptive_briefings_enabled", True):
+            self.add_event_feed_entry(
+                "AI", f"Command Deck: {briefing}", severity="INFO",
+            )
+            self._speak(
+                briefing, category="objectives", cooldown_s=0,
+                key=f"adaptive-mode:{mode}",
+            )
+        self.schedule_dashboard_refresh(full=True)
+
+    def _adaptive_startup_briefing(self):
+        if getattr(self, "_adaptive_startup_briefed", False):
+            return
+        self._adaptive_startup_briefed = True
+        deck = getattr(self, "adaptive_command", None)
+        if not deck or not self.config.get("adaptive_command_enabled", True):
+            return
+        detected = ((getattr(self, "ai_operational_state", {}) or {}).get("activity") or {}).get("mode")
+        if detected:
+            deck.observe("StartupReady", detected, {}, historical=False)
+        mode = deck.current_mode
+        self._apply_adaptive_overlay_scene(mode)
+        briefing = deck.briefing(mode)
+        if self.config.get("adaptive_briefings_enabled", True):
+            self.add_event_feed_entry(
+                "AI", f"Command Deck ready: {briefing}", severity="INFO",
+            )
+            self._speak(
+                briefing, category="objectives", cooldown_s=0,
+                key=f"adaptive-startup:{mode}",
+            )
+
+    def _adaptive_context(self, route_progress=None):
+        route_progress = route_progress or self._current_route_progress()
+        pinned = (getattr(self, "engineer_materials", {}) or {}).get("pinned_blueprints") or []
+        return {
+            "current_system": getattr(self, "current_sys", None),
+            "survey_remaining": max(
+                0, int(getattr(self, "total", 0) or 0) - int(getattr(self, "scanned", 0) or 0),
+            ),
+            "next_destination": self._dashboard_next_destination(),
+            "route_text": route_progress.get("text"),
+            "engineering_goals": list(pinned),
+        }
+
+    def _adaptive_toggle_lock(self):
+        deck = getattr(self, "adaptive_command", None)
+        if not deck:
+            return
+        mode = deck.set_lock(deck.current_mode if deck.automatic else "auto")
+        self._persist_config()
+        self._apply_adaptive_overlay_scene(mode)
+        self.add_event_feed_entry(
+            "SYSTEM",
+            f"Command Deck mode {'locked to ' + MODE_LABELS.get(mode, mode).title() if not deck.automatic else 'returned to automatic detection'}",
+            severity="INFO",
+        )
+        self.schedule_dashboard_refresh(full=True)
+
+    def _adaptive_open_primary(self):
+        rows = getattr(self, "_operational_queue", None) or []
+        if not rows:
+            return
+        workspace = rows[0].get("workspace")
+        actions = {
+            "DASHBOARD": self.show_dashboard_page,
+            "PROFILE": self.open_commander_profile_window,
+            "EXPLORE": self.open_exploration_window,
+            "TRADE": self.open_trade_window,
+            "SPECIALISTS": self.open_specialists_window,
+            "CARRIER": self.open_carrier_window,
+            "COLONY": self.open_colonization_window,
+            "ENGINEER": self.open_engineer_window,
+            "GROUND": self.open_ground_target_window,
+            "GALAXY": self.open_bgs_window,
+        }
+        callback = actions.get(workspace)
+        if callback:
+            callback()
+
+    def _adaptive_open_mode_workspace(self):
+        deck = getattr(self, "adaptive_command", None)
+        if not deck:
+            return
+        workspace = deck.status().get("workspace")
+        actions = {
+            "DASHBOARD": self.show_dashboard_page,
+            "EXPLORE": self.open_exploration_window,
+            "TRADE": self.open_trade_window,
+            "SPECIALISTS": self.open_specialists_window,
+            "CARRIER": self.open_carrier_window,
+            "COLONY": self.open_colonization_window,
+            "ENGINEER": self.open_engineer_window,
+            "GROUND": self.open_ground_target_window,
+            "GALAXY": self.open_bgs_window,
+        }
+        callback = actions.get(workspace)
+        if callback:
+            callback()
 
     def _sync_cockpit_intentions(self, snapshot=None):
         if (not self.config.get("cockpit_memory_enabled", True)
@@ -4490,6 +4831,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             )
         except Exception as exc:
             logging.debug("Compass operational event skipped [%s]: %s", ev, exc)
+        self._update_adaptive_command(
+            ev, raw if isinstance(raw, dict) else d,
+            startup_replay=startup_replay,
+        )
         combat_tracker = getattr(self, "combat_awareness", None)
         if combat_tracker:
             combat_tracker.observe(
@@ -6368,7 +6713,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         try:
             specialist_engine = getattr(self, "specialist_engine", None)
             if specialist_engine:
-                specialist_engine.flush()
+                specialist_engine.flush(wait=False)
         except Exception as exc:
             logging.warning("Specialist workflow batch flush failed: %s", exc)
 
@@ -6383,6 +6728,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._cached_cockpit_state_loaded = False
             self.dashboard_refresh_full_pending = False
             self.is_first_load = False
+            self._startup_recovery_mode = False
+            self._apply_adaptive_overlay_scene()
+            self._adaptive_startup_briefing()
             try:
                 self.root.title(f"VOID COMPASS // v{APP_VERSION}")
             except Exception:
@@ -6595,7 +6943,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 finally:
                     conn.close()
             except Exception as exc:
-                self.root.after(0, lambda e=exc: self.log(f"Trade market import failed: {e}"))
+                self._ui_post(lambda e=exc: self.log(f"Trade market import failed: {e}"))
                 continue
 
             if context.get("docked"):
@@ -6604,7 +6952,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
             if not result.get("updated"):
                 continue
-            self.root.after(0, lambda d=data, c=context, r=result: self._apply_market_import_result(d, c, r))
+            self._ui_post(
+                lambda d=data, c=context, r=result: self._apply_market_import_result(d, c, r),
+                key="market-import-result",
+            )
 
     def _apply_market_import_result(self, data, context, result):
         self.current_trade_market = {

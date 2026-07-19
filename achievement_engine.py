@@ -10,6 +10,8 @@ import time
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
+
+from persistence_queue import persistence_queue
 from typing import Any, Callable
 
 
@@ -215,15 +217,20 @@ class AchievementEngine:
             now = time.monotonic()
             if not force and (now - self._last_save) < 1.5:
                 return
-            self.state_path.parent.mkdir(parents=True, exist_ok=True)
-            temp_path = self.state_path.with_suffix(self.state_path.suffix + ".tmp")
-            temp_path.write_text(json.dumps(self._serializable_state(), indent=2), encoding="utf-8")
-            os.replace(temp_path, self.state_path)
+            persistence_queue().submit_json(
+                self.state_path,
+                self._serializable_state(),
+                indent=2,
+                delay_s=0.0 if force else 1.5,
+                immediate=force,
+            )
             self._dirty = False
             self._last_save = now
 
-    def flush(self) -> None:
+    def flush(self, wait: bool = True) -> None:
         self.save(force=True)
+        if wait:
+            persistence_queue().flush(self.state_path, timeout=5.0)
 
     def switch_profile(
         self,

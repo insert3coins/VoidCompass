@@ -7,6 +7,7 @@ from tkinter import colorchooser
 import themes
 import voice_callouts
 import compass_personas
+from adaptive_command import MODES as ADAPTIVE_MODES, MODE_LABELS as ADAPTIVE_MODE_LABELS, normalize_mode
 from cockpit_ai_memory import DEFAULT_LIMITS as COCKPIT_MEMORY_DEFAULTS, LIMIT_BOUNDS as COCKPIT_MEMORY_BOUNDS
 from config import DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config as persist_config
 from diagnostic_logs import application_base_dir
@@ -35,7 +36,9 @@ UI_MONO = FONT_MONO
 
 def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded=False,
                   on_close_callback=None, voice_manager=None, cockpit_memory=None,
-                  cockpit_brain=None, cockpit_cognition=None):
+                  cockpit_brain=None, cockpit_cognition=None,
+                  support_bundle_callback=None, rerun_setup_callback=None,
+                  health_provider=None, ui_post_callback=None):
     win = window_surface(root, embedded=embedded)
     win.title("SYSTEM CONFIGURATION")
     win.geometry(config.get("settings_geometry", "980x800"))
@@ -72,6 +75,12 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
 
     def action_button(parent, text, command, accent=False, muted=False):
         return button(parent, text, command, accent=accent, muted=muted, padx=12, pady=7)
+
+    def ui_post(callback):
+        if callable(ui_post_callback):
+            ui_post_callback(callback)
+        else:
+            win.after(0, callback)
 
     def make_page(key, title, subtitle, scrollable=False):
         page = tk.Frame(content, bg=UI_BG)
@@ -260,6 +269,20 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     edsm_upload_var = tk.BooleanVar(value=config.get("edsm_upload_enabled", False))
     runtime_trace_var = tk.BooleanVar(value=config.get("runtime_trace_enabled", True))
     crash_reporting_var = tk.BooleanVar(value=config.get("crash_reporting_enabled", True))
+    recovery_safe_mode_var = tk.BooleanVar(value=config.get("recovery_safe_mode_enabled", True))
+    adaptive_enabled_var = tk.BooleanVar(value=config.get("adaptive_command_enabled", True))
+    adaptive_scenes_var = tk.BooleanVar(value=config.get("adaptive_overlay_scenes_enabled", True))
+    adaptive_briefings_var = tk.BooleanVar(value=config.get("adaptive_briefings_enabled", True))
+    adaptive_debriefings_var = tk.BooleanVar(value=config.get("adaptive_debriefings_enabled", True))
+    adaptive_mode_labels = {"Automatic": "auto"}
+    adaptive_mode_labels.update({ADAPTIVE_MODE_LABELS[key].title(): key for key in ADAPTIVE_MODES})
+    adaptive_mode_key = normalize_mode(config.get("adaptive_mode_lock", "auto"), "auto")
+    adaptive_mode_var = tk.StringVar(
+        value=next(
+            (label for label, key in adaptive_mode_labels.items() if key == adaptive_mode_key),
+            "Automatic",
+        )
+    )
     voice_enabled_var = tk.BooleanVar(value=config.get("voice_callouts_enabled", False))
     voice_safety_var = tk.BooleanVar(value=config.get("voice_safety_enabled", True))
     voice_exploration_var = tk.BooleanVar(value=config.get("voice_exploration_enabled", True))
@@ -317,6 +340,11 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         "Review and curate the local history Compass has learned from this commander.",
         scrollable=True,
     )
+    command_page = make_page(
+        "command", "Adaptive Command Deck",
+        "Activity-aware workspace, operational queue and overlay scenes.",
+        scrollable=True,
+    )
     theme_page = make_page("theme", "Theme", "Color theme for this commander profile. Applies when you save.", scrollable=True)
     integrations_page = make_page("integrations", "Integrations", "EDSM upload and fleet carrier Discord.", scrollable=True)
     diagnostics_page = make_page("diagnostics", "Diagnostics", "Runtime tracing and automatic crash or UI-freeze reports.", scrollable=True)
@@ -326,6 +354,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     nav_button("crt", "HUD Effects")
     nav_button("voice", "Voice")
     nav_button("compass", "Compass AI")
+    nav_button("command", "Command Deck")
     nav_button("theme", "Theme")
     nav_button("integrations", "Integrations")
     nav_button("diagnostics", "Diagnostics")
@@ -882,6 +911,69 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     action_button(browser_actions, "Save Edit", _save_selected_memory).pack(side=tk.LEFT, padx=(8, 0))
     action_button(browser_actions, "Delete", _delete_selected_memory, muted=True).pack(side=tk.RIGHT)
 
+    # ---- Adaptive Command Deck ----
+    command_control = section(command_page, "Activity Control")
+    tk.Label(
+        command_control,
+        text=(
+            "VoidCompass detects the current activity from verified journal state and prioritises "
+            "the dashboard, objectives and overlays. A manual lock stays with this commander profile."
+        ),
+        font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w", justify=tk.LEFT,
+        wraplength=650,
+    ).pack(fill=tk.X, padx=12, pady=(2, 8))
+    toggle_row(command_control, "Enable adaptive activity detection", adaptive_enabled_var)
+    mode_menu = option_row(
+        command_control, "Activity mode", adaptive_mode_var,
+        list(adaptive_mode_labels.keys()),
+    )
+    mode_menu.configure(width=20)
+
+    command_behavior = section(command_page, "Adaptive Behaviour")
+    toggle_row(command_behavior, "Apply activity-specific overlay scenes", adaptive_scenes_var)
+    toggle_row(command_behavior, "Compass pre-flight and mode briefings", adaptive_briefings_var)
+    toggle_row(command_behavior, "Compass activity and shutdown debriefs", adaptive_debriefings_var)
+    tk.Label(
+        command_behavior,
+        text=(
+            "Safety overlays remain available in every scene. Hidden activity overlays are restored "
+            "when the mode changes or Automatic is selected."
+        ),
+        font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w", justify=tk.LEFT,
+        wraplength=650,
+    ).pack(fill=tk.X, padx=12, pady=(2, 10))
+
+    command_health = section(command_page, "Command Health")
+    command_health_var = tk.StringVar(value="Health telemetry is unavailable in this session.")
+
+    def _refresh_command_health():
+        if not callable(health_provider):
+            return
+        try:
+            health = health_provider() or {}
+            ui = health.get("ui") or {}
+            persistence = health.get("persistence") or {}
+            stall = float(health.get("last_ui_stall_age_s") or 0)
+            stall_text = f" · last UI stall {stall:.0f}s ago" if stall > 0 else ""
+            command_health_var.set(
+                f"{health.get('level') or 'NOMINAL'} · UI queue "
+                f"{int(ui.get('pending') or health.get('ui_pending') or 0)} · max lag "
+                f"{float(ui.get('max_lag_ms') or health.get('ui_max_lag_ms') or 0):.0f} ms · disk queue "
+                f"{int(persistence.get('pending') or health.get('writes_pending') or 0)} · writes "
+                f"{int(persistence.get('writes') or 0)} · retries "
+                f"{int(persistence.get('retries') or 0)}{stall_text}"
+            )
+        except Exception as exc:
+            command_health_var.set(f"Health telemetry unavailable: {exc}")
+
+    tk.Label(
+        command_health, textvariable=command_health_var, font=UI_MONO,
+        fg=COLOR_TEXT, bg=UI_PANEL, anchor="w", justify=tk.LEFT,
+    ).pack(fill=tk.X, padx=12, pady=(4, 8))
+    command_health_actions = row(command_health)
+    action_button(command_health_actions, "Refresh Health", _refresh_command_health, muted=True).pack(side=tk.LEFT)
+    _refresh_command_health()
+
     # ---- Theme page ----
     custom_themes = {
         str(name): themes.normalize_theme(palette)
@@ -1063,20 +1155,20 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
                         msg = "EDSM/Cloudflare blocked the credential test request. Try again later, or verify the key on EDSM.net."
                     else:
                         msg = f"EDSM returned an unexpected non-JSON response (HTTP {r.status_code})."
-                    win.after(0, lambda: tk.messagebox.showwarning("EDSM Test", msg, parent=win))
+                    ui_post(lambda message=msg: tk.messagebox.showwarning("EDSM Test", message, parent=win))
                     return
 
                 body = r.json()
                 msgnum = body.get("msgnum")
                 msg = body.get("msg", "Unknown EDSM response")
                 if msgnum == 100:
-                    win.after(0, lambda: tk.messagebox.showinfo("EDSM Test", "API key verified successfully.", parent=win))
+                    ui_post(lambda: tk.messagebox.showinfo("EDSM Test", "API key verified successfully.", parent=win))
                 elif msgnum == 207:
-                    win.after(0, lambda: tk.messagebox.showinfo("EDSM Test", "Commander/API key accepted, but EDSM has no rank data stored yet.", parent=win))
+                    ui_post(lambda: tk.messagebox.showinfo("EDSM Test", "Commander/API key accepted, but EDSM has no rank data stored yet.", parent=win))
                 else:
-                    win.after(0, lambda: tk.messagebox.showwarning("EDSM Test", f"EDSM response [{msgnum}]: {msg}", parent=win))
+                    ui_post(lambda number=msgnum, message=msg: tk.messagebox.showwarning("EDSM Test", f"EDSM response [{number}]: {message}", parent=win))
             except Exception as e:
-                win.after(0, lambda: tk.messagebox.showerror("EDSM Test", f"Request failed: {e}", parent=win))
+                ui_post(lambda error=str(e): tk.messagebox.showerror("EDSM Test", f"Request failed: {error}", parent=win))
 
         threading.Thread(target=_do_test, daemon=True).start()
 
@@ -1110,6 +1202,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     diagnostics_section = section(diagnostics_page, "Runtime Diagnostics")
     toggle_row(diagnostics_section, "Runtime performance trace log", runtime_trace_var)
     toggle_row(diagnostics_section, "Crash and UI-freeze reporter", crash_reporting_var)
+    toggle_row(diagnostics_section, "Recover safely after an unclean shutdown", recovery_safe_mode_var)
 
     def _open_logs_folder():
         path = application_base_dir() / "logs"
@@ -1123,6 +1216,14 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
 
     diagnostics_actions = row(diagnostics_section)
     action_button(diagnostics_actions, "Open Logs Folder", _open_logs_folder).pack(side=tk.LEFT)
+    if callable(support_bundle_callback):
+        action_button(
+            diagnostics_actions, "Create Support Bundle", support_bundle_callback, accent=True,
+        ).pack(side=tk.LEFT, padx=(8, 0))
+    if callable(rerun_setup_callback):
+        action_button(
+            diagnostics_actions, "Run Setup", rerun_setup_callback, muted=True,
+        ).pack(side=tk.RIGHT)
     tk.Label(
         diagnostics_section,
         text=(
@@ -1190,6 +1291,12 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "edsm_upload_enabled": edsm_upload_var.get(),
             "runtime_trace_enabled": runtime_trace_var.get(),
             "crash_reporting_enabled": crash_reporting_var.get(),
+            "recovery_safe_mode_enabled": recovery_safe_mode_var.get(),
+            "adaptive_command_enabled": adaptive_enabled_var.get(),
+            "adaptive_overlay_scenes_enabled": adaptive_scenes_var.get(),
+            "adaptive_briefings_enabled": adaptive_briefings_var.get(),
+            "adaptive_debriefings_enabled": adaptive_debriefings_var.get(),
+            "adaptive_mode_lock": adaptive_mode_labels.get(adaptive_mode_var.get(), "auto"),
             "voice_callouts_enabled": voice_enabled_var.get(),
             "voice_safety_enabled": voice_safety_var.get(),
             "voice_exploration_enabled": voice_exploration_var.get(),
@@ -1254,7 +1361,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     win.protocol("WM_DELETE_WINDOW", close_window)
     for scroll_page in (
         core_page, overlay_page, crt_page, voice_page, compass_page,
-        theme_page, integrations_page, diagnostics_page,
+        command_page, theme_page, integrations_page, diagnostics_page,
     ):
         bind_scroll_tree(scroll_page)
     show_page("core")

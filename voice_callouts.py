@@ -416,12 +416,39 @@ def _ensure_process(voice):
     return _process
 
 
-def stop_engine():
+def _abort_piper_process(process):
+    """Best-effort immediate stop used by UI shutdown and cancellation."""
+    if process is None:
+        return
+    stream = getattr(process, "stdin", None)
+    if stream is not None:
+        try:
+            stream.close()
+        except (OSError, ValueError):
+            pass
+    try:
+        if process.poll() is None:
+            process.terminate()
+    except OSError:
+        try:
+            process.kill()
+        except OSError:
+            pass
+
+
+def stop_engine(wait=True, expected_process=None):
     global _process, _process_voice
+    process = None
     with _process_lock:
-        _stop_piper_process(_process)
+        if expected_process is not None and _process is not expected_process:
+            return
+        process = _process
         _process = None
         _process_voice = None
+    if wait:
+        _stop_piper_process(process)
+    else:
+        _abort_piper_process(process)
 
 
 def prune_cache(max_age_days=None, max_files=CACHE_KEEP, now=None):
@@ -537,6 +564,8 @@ def _synthesis_payload(text, output, voice):
 
 
 def synthesize(text, voice, cancel_event=None, use_cache=True):
+    if cancel_event is not None and cancel_event.is_set():
+        raise VoiceError("Voice playback stopped.")
     voice = canonical_voice(voice)
     if voice is None:
         raise VoiceError("Unknown voice pack.")
@@ -551,6 +580,8 @@ def synthesize(text, voice, cancel_event=None, use_cache=True):
     if use_cache and _touch_cache_hit(output):
         return output
     with _process_lock:
+        if cancel_event is not None and cancel_event.is_set():
+            raise VoiceError("Voice playback stopped.")
         if use_cache and _touch_cache_hit(output):
             return output
         process = _ensure_process(voice)
@@ -561,24 +592,24 @@ def synthesize(text, voice, cancel_event=None, use_cache=True):
         except OSError as exc:
             stop_engine()
             raise VoiceError("The voice engine stopped. Trying again usually fixes it.") from exc
-        deadline = time.monotonic() + 30
-        previous_size = -1
-        while time.monotonic() < deadline:
-            if cancel_event is not None and cancel_event.is_set():
-                stop_engine()
-                output.unlink(missing_ok=True)
-                raise VoiceError("Voice playback stopped.")
-            if output.is_file():
-                size = output.stat().st_size
-                if size > 44 and size == previous_size:
-                    if use_cache:
-                        _evict_cache()
-                    return output
-                previous_size = size
-            time.sleep(0.05)
-        stop_engine()
-        output.unlink(missing_ok=True)
-        raise VoiceError("The voice engine timed out. Trying again usually fixes it.")
+    deadline = time.monotonic() + 30
+    previous_size = -1
+    while time.monotonic() < deadline:
+        if cancel_event is not None and cancel_event.is_set():
+            stop_engine(wait=False, expected_process=process)
+            output.unlink(missing_ok=True)
+            raise VoiceError("Voice playback stopped.")
+        if output.is_file():
+            size = output.stat().st_size
+            if size > 44 and size == previous_size:
+                if use_cache:
+                    _evict_cache()
+                return output
+            previous_size = size
+        time.sleep(0.05)
+    stop_engine(wait=False, expected_process=process)
+    output.unlink(missing_ok=True)
+    raise VoiceError("The voice engine timed out. Trying again usually fixes it.")
 
 
 def _scaled_wav(source, volume):
@@ -607,11 +638,24 @@ def _scaled_wav(source, volume):
     return target
 
 
-def _play_wav(path):
+def _play_wav(path, cancel_event=None, stop_event=None):
     if sys.platform != "win32":
         raise VoiceError("Voice playback is currently available on Windows only.")
     import winsound
-    winsound.PlaySound(str(path), winsound.SND_FILENAME)
+    try:
+        with wave.open(str(path), "rb") as reader:
+            duration_s = reader.getnframes() / max(1, reader.getframerate())
+    except (OSError, wave.Error):
+        duration_s = 30.0
+    winsound.PlaySound(str(path), winsound.SND_FILENAME | winsound.SND_ASYNC)
+    deadline = time.monotonic() + min(60.0, max(0.1, duration_s + 0.15))
+    while time.monotonic() < deadline:
+        if ((cancel_event is not None and cancel_event.is_set())
+                or (stop_event is not None and stop_event.is_set())):
+            winsound.PlaySound(None, 0)
+            return False
+        time.sleep(0.025)
+    return True
 
 
 class VoiceCalloutManager:
@@ -695,6 +739,8 @@ class VoiceCalloutManager:
         )
 
     def _enqueue(self, text, voice, volume, use_cache=None, category=None, key=None):
+        if self._stop.is_set():
+            return False
         if not ready(voice):
             raise VoiceError("Install the selected voice pack first.")
         if use_cache is None:
@@ -770,6 +816,9 @@ class VoiceCalloutManager:
                 item = self._queue.get(timeout=0.25)
             except queue.Empty:
                 continue
+            if self._stop.is_set():
+                self._queue.task_done()
+                break
             text, voice, volume, use_cache = item[:4]
             source = None
             playback = None
@@ -777,12 +826,14 @@ class VoiceCalloutManager:
             with self._active_lock:
                 self._active_item = item
                 self._active_cancel = cancel_event
+                if self._stop.is_set():
+                    cancel_event.set()
             try:
                 source = synthesize(text, voice, cancel_event, use_cache=use_cache)
                 if cancel_event.is_set() or self._stop.is_set():
                     raise VoiceError("Voice callout cancelled.")
                 playback = _scaled_wav(source, volume)
-                _play_wav(playback)
+                _play_wav(playback, cancel_event, self._stop)
                 if use_cache:
                     prune_cache(
                         max_age_days=self._cache_retention_days(), max_files=CACHE_KEEP,
@@ -806,6 +857,15 @@ class VoiceCalloutManager:
 
     def stop(self):
         self._stop.set()
+        with self._queue.mutex:
+            removed = len(self._queue.queue)
+            self._queue.queue.clear()
+            self._queue.unfinished_tasks = max(
+                0, self._queue.unfinished_tasks - removed,
+            )
+            if self._queue.unfinished_tasks == 0:
+                self._queue.all_tasks_done.notify_all()
+            self._queue.not_full.notify_all()
         with self._active_lock:
             if self._active_cancel is not None:
                 self._active_cancel.set()
@@ -815,9 +875,11 @@ class VoiceCalloutManager:
                 winsound.PlaySound(None, 0)
             except Exception:
                 pass
-        stop_engine()
-        if self._prune_thread is not None:
-            self._prune_thread.join(timeout=0.5)
+        stop_engine(wait=False)
+
+    def shutdown(self):
+        """Compatibility alias used by commander-profile switching."""
+        self.stop()
 
 
-atexit.register(stop_engine)
+atexit.register(lambda: stop_engine(wait=False))

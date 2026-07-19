@@ -7,6 +7,8 @@ import os
 import time
 import uuid
 
+from persistence_queue import persistence_queue
+
 import compass_operations
 
 
@@ -318,18 +320,20 @@ class CockpitMemory:
     def _save(self):
         self.state["schema"] = SCHEMA_VERSION
         self.state["updated_at"] = _now()
-        folder = os.path.dirname(os.path.abspath(self.path))
-        os.makedirs(folder, exist_ok=True)
-        temporary = self.path + ".tmp"
         try:
-            with open(temporary, "w", encoding="utf-8") as handle:
-                json.dump(self.state, handle, indent=2, ensure_ascii=False)
-            os.replace(temporary, self.path)
-        except OSError:
-            try:
-                os.remove(temporary)
-            except OSError:
-                pass
+            persistence_queue().submit_json(
+                self.path, self.state, indent=2, delay_s=1.5,
+            )
+        except Exception:
+            pass
+
+    def flush(self, timeout=5.0, wait=True):
+        self.state["schema"] = SCHEMA_VERSION
+        self.state["updated_at"] = _now()
+        persistence_queue().submit_json(
+            self.path, self.state, indent=2, immediate=True,
+        )
+        return persistence_queue().flush(self.path, timeout=timeout) if wait else True
 
     def reset(self):
         self.state = _initial_state()

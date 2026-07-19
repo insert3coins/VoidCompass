@@ -15,6 +15,8 @@ import os
 import threading
 import time
 import uuid
+
+from persistence_queue import persistence_queue
 from datetime import datetime
 
 import bio_values
@@ -177,18 +179,18 @@ class SpecialistEngine:
         except (OSError, ValueError, TypeError):
             self.state = _defaults()
 
-    def _save(self):
-        os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
-        temp = f"{self.path}.tmp"
-        with open(temp, "w", encoding="utf-8") as handle:
-            json.dump(self.state, handle, indent=2, ensure_ascii=False)
-        os.replace(temp, self.path)
+    def _save(self, immediate=False):
+        persistence_queue().submit_json(
+            self.path, self.state, indent=2, delay_s=0.75, immediate=immediate,
+        )
         self._dirty = False
 
-    def flush(self):
+    def flush(self, wait=True):
         with self._lock:
             if self._dirty:
-                self._save()
+                self._save(immediate=wait)
+        if wait:
+            persistence_queue().flush(self.path, timeout=5.0)
 
     @staticmethod
     def _fallback_uid(event):
