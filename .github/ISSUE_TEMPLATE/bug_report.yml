@@ -1,0 +1,110 @@
+name: Bug report
+description: Report a reproducible problem in Void Compass
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Void Compass. Please redact commander names, Frontier IDs, API keys, webhook URLs, local usernames, and unrelated journal data.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues for this problem.
+          required: true
+        - label: I tested the latest published version when it was safe to do so.
+          required: true
+        - label: This report does not contain credentials or unredacted personal data.
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Void Compass version
+      placeholder: "For example: 4.9.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installation
+      options:
+        - Packaged Windows release
+        - Running from Python source
+        - Other or unknown
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "For example: Windows 11 24H2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Startup, shutdown, or packaging
+        - Dashboard or Live Feed
+        - Profile, settings, or themes
+        - Analytics
+        - Exploration, routes, or waypoints
+        - Trade or markets
+        - Specialists, mining, combat, or exobiology
+        - Carrier, squadron, colony, or Galaxy
+        - Engineer or materials
+        - Overlay or HUD
+        - Compass voice or cognition
+        - Integration or networking
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Explain the observed behaviour and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start Void Compass...
+        2. In Elite Dangerous...
+        3. Open or change...
+        4. Observe...
+    validations:
+      required: true
+
+  - type: textarea
+    id: journal
+    attributes:
+      label: Relevant journal or status evidence
+      description: Paste only the smallest redacted event sequence needed, or state that no journal event is involved.
+      render: json
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics, screenshots, or additional context
+      description: Drag files here after checking that they contain no sensitive information.
+
+  - type: checkboxes
+    id: regression
+    attributes:
+      label: Regression
+      options:
+        - label: This worked in an earlier Void Compass version.

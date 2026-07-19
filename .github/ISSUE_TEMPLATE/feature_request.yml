@@ -1,0 +1,75 @@
+name: Feature request
+description: Suggest a focused improvement for Void Compass
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the commander workflow first. Please distinguish facts available from Frontier journals or documented APIs from information the game does not expose.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and wiki for a similar request.
+          required: true
+        - label: This request describes a specific gameplay or application problem.
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Dashboard or Live Feed
+        - Profile, settings, or themes
+        - Analytics
+        - Exploration, routes, or waypoints
+        - Trade or markets
+        - Specialists, mining, combat, or exobiology
+        - Carrier, squadron, colony, or Galaxy
+        - Engineer or materials
+        - Overlay or HUD
+        - Compass voice or cognition
+        - Integration or networking
+        - New workspace or workflow
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Commander problem
+      description: What is difficult, missing, repetitive, or unclear today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: Describe the smallest useful outcome, including where it should appear in the application.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Available game data
+      description: List relevant journal events, companion files, official schemas, or APIs if known. It is fine to say that you are unsure.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Note any current workaround or a simpler approach that might solve the same problem.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Mock-ups or additional context
+      description: Drag screenshots or sketches here after removing personal information.
