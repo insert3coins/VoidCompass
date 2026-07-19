@@ -91,8 +91,6 @@ class TradeWindow(ThemedWindowMixin):
         self.subtitle.pack(anchor="w", pady=(2, 0))
         self.db_badge = tk.Label(header, text="DB CHECKING", font=("Segoe UI", 8, "bold"), fg="black", bg=self.UI_DIM, padx=10, pady=4)
         self.db_badge.pack(side=tk.RIGHT, padx=14)
-        self.commander_badge = tk.Label(header, text=getattr(self.app, "cmdr_name", "") or "CMDR", font=("Segoe UI", 9, "bold"), fg=COLOR_TEXT, bg="#0c1014")
-        self.commander_badge.pack(side=tk.RIGHT, padx=(0, 8))
 
         self.banner = tk.Label(self.win, text="", bg="#4a2c00", fg=self.UI_WARN, font=("Segoe UI", 9), anchor="w", padx=14, pady=6)
 
@@ -155,7 +153,7 @@ class TradeWindow(ThemedWindowMixin):
             ("SELL MY CARGO", "Find the best nearby buyers for the live cargo hold.", self._quick_cargo, self.UI_OK),
             ("NEARBY OPPORTUNITIES", "Scan local station-to-station profit flows.", self._quick_radar, COLOR_ORANGE),
             ("CURRENT MARKET", "Open the live station market and price analysis.", self._quick_market, COLOR_TEXT),
-            ("TRACKING & ANALYTICS", "Open price watchlists and trade performance history.", self._quick_tracking, "#a5b4fc"),
+            ("PRICE WATCHLIST", "Open tracked commodities, station loops and market alerts.", self._quick_tracking, "#a5b4fc"),
             ("MARKET DATABASE", "Check or update the local market data.", self._quick_database, self.UI_MUTED),
         )
         for index, (title, subtitle, command, colour) in enumerate(actions):
@@ -229,7 +227,6 @@ class TradeWindow(ThemedWindowMixin):
         self.tabs.add(frame, text="Tracking")
         self.tracking_tabs = self._sub_notebook(frame)
         self._build_watchlist_tab(self.tracking_tabs, "WATCHLIST")
-        self._build_analytics_tab(self.tracking_tabs, "ANALYTICS")
 
     def _summary_stat(self, parent, label, value, fg):
         box = tk.Frame(parent, bg=self.UI_PANEL)
@@ -1191,7 +1188,6 @@ class TradeWindow(ThemedWindowMixin):
         jump = ((getattr(self.app, "cmdr_ship", {}) or {}).get("max_jump_range") or None)
         self.jump_value.config(text=f"{float(jump):.1f} ly" if jump else "---")
         self.destination_value.config(text=getattr(self.app, "current_destination", None) or "---")
-        self.commander_badge.config(text=getattr(self.app, "cmdr_name", "") or "CMDR")
 
     def load_commodity_list(self):
         def worker():
