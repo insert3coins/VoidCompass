@@ -1,5 +1,12 @@
 # VoidCompass // UPDATE LOG
 
+## v5.0.1 // About & Release Awareness
+**Release Date:** 2026-Jul-20
+
+*   Added a themed **About** workspace beneath Engineer with project, release, wiki, Frontier community and dedicated GitHub Issues support links.
+*   Added concise in-app GPL-3.0-only, privacy and independent Frontier disclaimer summaries, plus direct access to redacted support bundles and diagnostic logs.
+*   Repaired update checks to use the public VoicCompass GitHub Releases feed, with a manual status check and direct release access from About.
+
 ## v5.0.0 // Adaptive Command Deck
 **Release Date:** 2026-Jul-20
 

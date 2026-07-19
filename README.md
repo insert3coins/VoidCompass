@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.0.0**
+**Current version: 5.0.1**
 
 Void Compass is a native Windows companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
 
@@ -22,6 +22,7 @@ Void Compass is a native Windows companion for Elite Dangerous. It turns Frontie
 | **Colony** | Architect Command Centre for colonisation projects, contributions, cargo requirements and persistent planning. |
 | **Galaxy** | Current-system factions, influence watches, conflicts, Powerplay, Community Goals, BGS history and Squadron Command. |
 | **Engineer** | Goal-driven Engineering Command with shared Horizons and Odyssey wishlists, grade-aware engineer access and blueprint availability, collect/keep/trade inventory relevance, nearby traders and jumponium reserves. |
+| **About** | Version and release status, project/community links, support tools, privacy summary, GPL-3.0 terms and Frontier disclaimer. |
 
 ### Squadron Command
 
@@ -80,7 +81,7 @@ The deterministic cognition engine learns personal baselines and whether advice 
 - **Discord webhooks** can announce personal or Squadron Carrier operations.
 - **Piper** voice packs are optional; regular system TTS remains available.
 
-Void Compass does not require an account or cloud database. Network integrations only run when their associated feature is enabled or requested.
+Void Compass does not require an account or cloud database. It checks GitHub Releases for a newer version at startup; other network integrations only run when their associated feature is enabled or requested.
 
 ## First run, recovery and diagnostics
 

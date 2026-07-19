@@ -6,6 +6,7 @@ import threading
 import tkinter as tk
 import requests
 import webbrowser
+import re
 from datetime import datetime, timezone
 from tkinter import scrolledtext
 
@@ -62,6 +63,22 @@ def _carrier_countdown(dep_str):
 # closed for playtime-accrual purposes. Generous: the watcher only fires on
 # file changes, so an idle docked commander can be quiet for a while.
 GAME_ACTIVE_GRACE_S = 300.0
+
+PROJECT_URL = "https://github.com/insert3coins/VoicCompass"
+RELEASES_URL = f"{PROJECT_URL}/releases"
+RELEASES_API_URL = "https://api.github.com/repos/insert3coins/VoicCompass/releases/latest"
+ISSUES_URL = f"{PROJECT_URL}/issues/new/choose"
+WIKI_URL = f"{PROJECT_URL}/wiki"
+LICENSE_URL = f"{PROJECT_URL}/blob/master/LICENSE"
+FRONTIER_COMMUNITY_URL = "https://www.elitedangerous.com/community"
+
+
+def _version_key(value):
+    """Return a comparable release tuple from tags such as v5.0.1."""
+    match = re.search(r"\d+(?:\.\d+)*", str(value or ""))
+    if not match:
+        return ()
+    return tuple(int(part) for part in match.group(0).split("."))
 
 
 class DashboardUIMixin(ThemedWindowMixin):
@@ -134,6 +151,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             ("⌂", "COLONY", self.open_colonization_window),
             ("⚑", "GALAXY", self.open_bgs_window),
             ("⚙", "ENGINEER", self.open_engineer_window),
+            ("ⓘ", "ABOUT", self.show_about_page),
         )
         self.nav_buttons = {}
         self.nav_indicators = {}
@@ -271,6 +289,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         self._active_page = "DASHBOARD"
 
         self._build_command_dashboard_body()
+        self._build_about_page()
         self._schedule_workspace_scrollregion()
         return
 
@@ -1363,6 +1382,146 @@ class DashboardUIMixin(ThemedWindowMixin):
             except Exception:
                 continue
 
+    def _build_about_page(self):
+        """Build the project, support, privacy and update workspace."""
+        body = tk.Frame(self.dashboard_host, bg=self.UI_BG)
+        self.about_page = body
+
+        hero = self._panel(body, border=COLOR_ACCENT)
+        hero.pack(fill=tk.X, padx=14, pady=(12, 8))
+        hero_text = tk.Frame(hero, bg=self.UI_PANEL)
+        hero_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=16, pady=14)
+        tk.Label(
+            hero_text, text="VOID COMPASS", fg=COLOR_ACCENT, bg=self.UI_PANEL,
+            font=("Bahnschrift SemiCondensed", 22, "bold"), anchor="w",
+        ).pack(fill=tk.X)
+        tk.Label(
+            hero_text,
+            text="A native Windows command companion for Elite Dangerous",
+            fg=COLOR_TEXT, bg=self.UI_PANEL, font=("Segoe UI", 10), anchor="w",
+        ).pack(fill=tk.X, pady=(2, 0))
+        tk.Label(
+            hero, text=f"v{APP_VERSION}\nGPL-3.0", fg="black", bg=COLOR_ACCENT,
+            font=("Cascadia Mono", 9, "bold"), justify=tk.CENTER, padx=15, pady=10,
+        ).pack(side=tk.RIGHT, padx=14, pady=14)
+
+        update_panel = self._panel(body)
+        update_panel.pack(fill=tk.X, padx=14, pady=(0, 8))
+        update_copy = tk.Frame(update_panel, bg=self.UI_PANEL)
+        update_copy.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=14, pady=11)
+        self._section_label(update_copy, "RELEASE STATUS").pack(anchor="w")
+        self.about_update_status = tk.Label(
+            update_copy, text=f"Installed version: v{APP_VERSION}",
+            fg=self.UI_MUTED, bg=self.UI_PANEL, font=self.UI_MONO,
+            anchor="w", justify=tk.LEFT,
+        )
+        self.about_update_status.pack(fill=tk.X, pady=(4, 0))
+        update_actions = tk.Frame(update_panel, bg=self.UI_PANEL)
+        update_actions.pack(side=tk.RIGHT, padx=14, pady=11)
+        self.about_update_btn = self._action_button(
+            update_actions, "CHECK FOR UPDATES", self._start_manual_update_check,
+            accent=True,
+        )
+        self.about_update_btn.pack(side=tk.LEFT)
+        self._action_button(
+            update_actions, "OPEN RELEASES",
+            lambda: webbrowser.open_new_tab(RELEASES_URL), muted=True,
+        ).pack(side=tk.LEFT, padx=(6, 0))
+
+        cards = tk.Frame(body, bg=self.UI_BG)
+        cards.pack(fill=tk.BOTH, expand=True, padx=14)
+        cards.grid_columnconfigure(0, weight=1, uniform="about")
+        cards.grid_columnconfigure(1, weight=1, uniform="about")
+
+        privacy = self._panel(cards)
+        privacy.grid(row=0, column=0, sticky="nsew", padx=(0, 4), pady=(0, 8))
+        self._section_label(privacy, "PRIVACY SUMMARY").pack(anchor="w", padx=14, pady=(12, 5))
+        tk.Label(
+            privacy,
+            text=(
+                "Void Compass reads Elite's journal and companion files and stores commander "
+                "profiles locally. It needs no Void Compass account or cloud database. At startup "
+                "it asks GitHub Releases for the latest version. EDSM, EDDN, Spansh and Discord "
+                "features only connect when enabled or requested. Support bundles are privacy-redacted."
+            ),
+            fg=COLOR_TEXT, bg=self.UI_PANEL, font=("Segoe UI", 9),
+            justify=tk.LEFT, anchor="nw", wraplength=480,
+        ).pack(fill=tk.BOTH, expand=True, padx=14, pady=(0, 13))
+
+        licence = self._panel(cards)
+        licence.grid(row=0, column=1, sticky="nsew", padx=(4, 0), pady=(0, 8))
+        self._section_label(licence, "GPL-3.0 ONLY").pack(anchor="w", padx=14, pady=(12, 5))
+        tk.Label(
+            licence,
+            text=(
+                "Void Compass is free software. You may use, study, modify and redistribute it "
+                "under GNU GPL v3.0. Distributions must keep the licence and provide corresponding "
+                "source as required by its terms."
+            ),
+            fg=COLOR_TEXT, bg=self.UI_PANEL, font=("Segoe UI", 9),
+            justify=tk.LEFT, anchor="nw", wraplength=480,
+        ).pack(fill=tk.X, padx=14)
+        self._action_button(
+            licence, "READ FULL LICENCE", lambda: webbrowser.open_new_tab(LICENSE_URL), muted=True,
+        ).pack(anchor="w", padx=14, pady=(10, 13))
+
+        disclaimer = self._panel(cards)
+        disclaimer.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 8))
+        self._section_label(disclaimer, "FRONTIER DISCLAIMER").pack(anchor="w", padx=14, pady=(12, 5))
+        tk.Label(
+            disclaimer,
+            text=(
+                "Void Compass is an independent community project and is not affiliated with or "
+                "endorsed by Frontier Developments. Elite Dangerous and its related marks belong "
+                "to their respective owners."
+            ),
+            fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Segoe UI", 9),
+            justify=tk.LEFT, anchor="w", wraplength=980,
+        ).pack(fill=tk.X, padx=14, pady=(0, 13))
+
+        links = self._panel(cards)
+        links.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 8))
+        self._section_label(links, "PROJECT & COMMUNITY").pack(anchor="w", padx=14, pady=(12, 7))
+        link_row = tk.Frame(links, bg=self.UI_PANEL)
+        link_row.pack(fill=tk.X, padx=14, pady=(0, 8))
+        for label, url in (
+            ("GITHUB", PROJECT_URL),
+            ("RELEASES", RELEASES_URL),
+            ("REPORT AN ISSUE", ISSUES_URL),
+            ("WIKI", WIKI_URL),
+            ("FRONTIER COMMUNITY", FRONTIER_COMMUNITY_URL),
+        ):
+            self._action_button(
+                link_row, label, lambda target=url: webbrowser.open_new_tab(target), muted=True,
+            ).pack(side=tk.LEFT, padx=(0, 6), pady=(0, 4))
+
+        support = tk.Frame(links, bg=self.UI_PANEL)
+        support.pack(fill=tk.X, padx=14, pady=(0, 12))
+        tk.Label(
+            support,
+            text="Support: GitHub Issues only.\nAttach a redacted bundle when reporting a fault.",
+            fg=self.UI_DIM, bg=self.UI_PANEL, font=self.UI_MONO,
+            anchor="w", justify=tk.LEFT,
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self._action_button(
+            support, "OPEN LOGS", self._open_about_logs, muted=True,
+        ).pack(side=tk.RIGHT)
+        self._action_button(
+            support, "CREATE SUPPORT BUNDLE", self._create_support_bundle, accent=True,
+        ).pack(side=tk.RIGHT, padx=(0, 6))
+
+    def _open_about_logs(self):
+        base = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.getcwd()
+        path = os.path.join(base, "logs")
+        os.makedirs(path, exist_ok=True)
+        try:
+            os.startfile(path)
+        except (AttributeError, OSError):
+            webbrowser.open(path)
+
+    def show_about_page(self):
+        self._show_embedded_page("ABOUT", self.about_page)
+
     def show_dashboard_page(self):
         self._show_embedded_page("DASHBOARD", self.dashboard_page)
         if hasattr(self, "summary_session"):
@@ -2137,28 +2296,89 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.ground_detail_lbl.pack(fill=tk.X, padx=12, pady=(3, 12))
         self.update_ground_target_ui()
 
-    def check_updates(self):
+    def _post_update_result(self, callback):
         try:
-            url = "https://api.github.com/repos/insert3coins/VoidCompass-Release/releases/latest"
-            r = requests.get(url, timeout=5)
-            if r.status_code == 200:
-                data = r.json()
-                tag = data.get("tag_name", "").lstrip("v")
-                html_url = data.get("html_url", "")
-                
-                current_v = [int(x) for x in APP_VERSION.split('.')]
-                remote_v = [int(x) for x in tag.split('.')]
-                
-                if remote_v > current_v:
-                    self.root.after(0, lambda: self.show_update_btn(html_url, tag))
+            dispatcher = getattr(self, "_ui_post", None)
+            if callable(dispatcher):
+                dispatcher(callback)
+            else:
+                self.root.after(0, callback)
         except Exception:
             pass
 
+    def _set_about_update_status(self, text, fg=None):
+        label = getattr(self, "about_update_status", None)
+        if self._widget_alive(label):
+            label.config(text=text, fg=fg or self.UI_MUTED)
+        button_widget = getattr(self, "about_update_btn", None)
+        if self._widget_alive(button_widget):
+            button_widget.config(state=tk.NORMAL)
+
+    def _start_manual_update_check(self):
+        if getattr(self, "_update_check_running", False):
+            return
+        self._update_check_running = True
+        self._set_about_update_status("Checking GitHub Releases…", COLOR_ACCENT)
+        if self._widget_alive(getattr(self, "about_update_btn", None)):
+            self.about_update_btn.config(state=tk.DISABLED)
+        threading.Thread(
+            target=self.check_updates, args=(True,), name="release-check", daemon=True,
+        ).start()
+
+    def check_updates(self, manual=False):
+        """Check the public VoicCompass GitHub releases without blocking Tk."""
+        try:
+            response = requests.get(
+                RELEASES_API_URL,
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": f"VoidCompass/{APP_VERSION}",
+                },
+                timeout=5,
+            )
+            response.raise_for_status()
+            data = response.json()
+            tag = str(data.get("tag_name") or "").lstrip("vV")
+            html_url = str(data.get("html_url") or RELEASES_URL)
+            current_v = _version_key(APP_VERSION)
+            remote_v = _version_key(tag)
+            if not remote_v:
+                raise ValueError("latest release has no valid version tag")
+
+            if remote_v > current_v:
+                self._post_update_result(lambda: self.show_update_btn(html_url, tag))
+            elif manual:
+                if remote_v == current_v:
+                    message = f"Up to date — v{APP_VERSION} is the latest public release."
+                else:
+                    message = f"This build is newer than the latest public release (v{tag})."
+                self._post_update_result(
+                    lambda text=message: self._set_about_update_status(text, self.UI_OK)
+                )
+        except Exception as exc:
+            if manual:
+                message = f"Could not check GitHub Releases: {exc}"
+                self._post_update_result(
+                    lambda text=message: self._set_about_update_status(text, self.UI_FAIL)
+                )
+        finally:
+            self._update_check_running = False
+
     def show_update_btn(self, url, tag):
         self.log(f"✨ UPDATE AVAILABLE: v{tag}")
+        self._set_about_update_status(
+            f"Update available — v{tag}", self.UI_WARN,
+        )
+        existing = getattr(self, "_release_update_nav_btn", None)
+        if self._widget_alive(existing):
+            existing.config(text=f"Update v{tag}", command=lambda: webbrowser.open_new_tab(url))
+            return
         target = getattr(self, "nav_utilities", self.nav)
-        btn = self._action_button(target, f"Update v{tag}", lambda: webbrowser.open(url), accent=True)
+        btn = self._action_button(
+            target, f"Update v{tag}", lambda: webbrowser.open_new_tab(url), accent=True,
+        )
         btn.pack(fill=tk.X, pady=(6, 0))
+        self._release_update_nav_btn = btn
 
     def update_nav_label(self):
         txt = "NO ROUTE"
