@@ -13,12 +13,18 @@ def should_show(config):
     return not bool((config or {}).get("onboarding_complete", False))
 
 
-def show_first_run(root, config, on_complete):
+def show_first_run(root, config, on_complete, *, standalone=False):
     win = tk.Toplevel(root)
     win.title("VOID COMPASS // FIRST RUN")
     win.geometry("620x480")
     win.minsize(560, 430)
-    win.transient(root)
+    if not standalone:
+        win.transient(root)
+    else:
+        # The real dashboard root is deliberately withdrawn during bootstrap.
+        # Keeping this Toplevel non-transient allows it to be the only mapped
+        # application window on a genuine first run.
+        win.attributes("-topmost", True)
     win.grab_set()
     apply_window(win)
 
@@ -42,9 +48,9 @@ def show_first_run(root, config, on_complete):
     entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=5)
     button(path_row, "BROWSE", lambda: journal_var.set(filedialog.askdirectory(parent=win) or journal_var.get())).pack(side=tk.LEFT, padx=(7, 0))
 
-    adaptive_var = tk.BooleanVar(value=True)
-    overlays_var = tk.BooleanVar(value=True)
-    passthrough_var = tk.BooleanVar(value=True)
+    adaptive_var = tk.BooleanVar(value=bool(config.get("adaptive_command_enabled", True)))
+    overlays_var = tk.BooleanVar(value=bool(config.get("overlay_enabled", True)))
+    passthrough_var = tk.BooleanVar(value=bool(config.get("overlay_mouse_passthrough", True)))
     voice_var = tk.BooleanVar(value=bool(config.get("voice_callouts_enabled", False)))
     for text, variable in (
         ("Adaptive Command Deck and activity modes", adaptive_var),
@@ -79,4 +85,11 @@ def show_first_run(root, config, on_complete):
     footer.pack(side=tk.BOTTOM, fill=tk.X, pady=(14, 0))
     button(footer, "START VOID COMPASS", finish, accent=True).pack(side=tk.RIGHT)
     win.protocol("WM_DELETE_WINDOW", finish)
+    if standalone:
+        win.update_idletasks()
+        x = max(0, (win.winfo_screenwidth() - win.winfo_width()) // 2)
+        y = max(0, (win.winfo_screenheight() - win.winfo_height()) // 2)
+        win.geometry(f"+{x}+{y}")
+        win.lift()
+        win.focus_force()
     return win

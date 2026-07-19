@@ -1088,13 +1088,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def __init__(self, root):
         self.root = root
+        self.config = load_config()
+        self._prepare_commander_profile_from_journal()
+        self._apply_active_profile_theme()
+        if should_show_onboarding(self.config):
+            self._show_bootstrap_onboarding()
+            # The selected journal folder may identify a different commander
+            # than the pre-wizard defaults. Establish that profile before any
+            # profile-local state, voice worker, overlay or journal watcher.
+            self._prepare_commander_profile_from_journal()
+            self._apply_active_profile_theme()
+            save_config(self.config)
         # This is the only cross-thread gateway into Tk. Background journal,
         # network and file workers enqueue bounded work here; Tk drains it in
         # short slices so flight controls and overlays remain responsive.
         self.ui_dispatcher = TkDispatcher(root)
-        self.config = load_config()
-        self._prepare_commander_profile_from_journal()
-        self._apply_active_profile_theme()
         self.voice_callouts = VoiceCalloutManager(self.config)
         self.cockpit_memory = CockpitMemory(
             get_profile_file(get_active_profile(self.config), "cockpit_ai_memory.json"),
@@ -1552,8 +1560,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._tick_runtime_trace()
         self._tick_overlay_position_sync()
         self._tick_cockpit_ambient()
-        if should_show_onboarding(self.config):
-            self.root.after(450, self._show_first_run_onboarding)
+
+    def _show_bootstrap_onboarding(self):
+        """Block construction so first-run setup is the only visible window."""
+        def complete():
+            save_config(self.config)
+
+        window = show_first_run(
+            self.root, self.config, complete, standalone=True,
+        )
+        self.root.wait_window(window)
 
     def _show_first_run_onboarding(self):
         if not self.is_running:
