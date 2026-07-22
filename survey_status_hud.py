@@ -218,6 +218,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
             "bio_count": bio_count,
             "geo_count": geo_count,
             "complete": complete,
+            "bio_complete": bool(bio_count and complete >= bio_count),
             "needs_dss": needs_dss,
             "min_value": lo,
             "max_value": hi,
@@ -231,6 +232,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
             ],
         })
     rows.sort(key=lambda row: (
+        bool(row["bio_complete"]),
         not bool(row["bio_count"] or row["geo_count"]),
         not bool(row["bio_count"]), row["name"],
     ))
@@ -377,6 +379,8 @@ class SurveyStatusHUD:
         palette = self._palette
         is_body = model["mode"] == "body"
         rows = model["rows"]
+        active_rows = rows if is_body else [row for row in rows if not row.get("bio_complete")]
+        completed_rows = [] if is_body else [row for row in rows if row.get("bio_complete")]
         notable_rows = model.get("notable_rows") or []
         sample_h = 19 if model.get("sampling") else 0
         if is_body:
@@ -387,17 +391,22 @@ class SurveyStatusHUD:
                     (21 if row.get("bio_count") or row.get("geo_count") else 19)
                     + len(row.get("bio_details") or []) * BIO_DETAIL_H
                     + (15 if row.get("notable") else 0)
-                    for row in rows
+                    for row in active_rows
                 )
-            ) if rows else 0
+            ) if active_rows else 0
+        completed_h = (
+            24 + sum(
+                19 + (15 if row.get("bio_details") else 0)
+                for row in completed_rows
+            )
+        ) if completed_rows else 0
         notable_h = (20 + len(notable_rows) * 34) if notable_rows else 0
-        h = 48 + sample_h + content_h + notable_h + 27
+        h = 48 + sample_h + content_h + notable_h + completed_h + 27
         self.canvas.config(width=WIDTH, height=h)
         self.win.geometry(f"{WIDTH}x{h}")
         self.canvas.delete("all")
         overlay_chrome.draw_chrome(
             self.canvas, WIDTH, h, accent=palette["accent"], bracket_len=10,
-            scanline_color=palette["border_soft"],
         )
         title = "BIO SURVEY" if is_body else "SURVEY STATUS"
         self._text(18, 18, title, palette["accent"], ("Courier", 9, "bold"))
@@ -432,11 +441,11 @@ class SurveyStatusHUD:
                 self._text(WIDTH - 18, y, value_text, color, ("Courier", 8, "bold"), "e")
                 y += 19
         else:
-            if rows:
+            if active_rows:
                 self._text(18, y, "SURVEY TARGETS", palette["dim"], ("Courier", 7, "bold"))
                 self._text(WIDTH - 18, y, "STATUS / EST. VALUE", palette["dim"], ("Courier", 7, "bold"), "e")
                 y += 20
-            for row in rows:
+            for row in active_rows:
                 bio = row["bio_count"]
                 geo = row["geo_count"]
                 state, color = _surface_signal_state(
@@ -481,6 +490,44 @@ class SurveyStatusHUD:
             y += 24
             for row in notable_rows:
                 y = self._notable_row(row, y)
+
+        if completed_rows:
+            self.canvas.create_line(18, y - 2, WIDTH - 18, y - 2, fill=palette["border"], width=1)
+            self._text(
+                18, y + 8, f"COMPLETED BIO ({len(completed_rows)})",
+                palette["green"], ("Courier", 7, "bold"),
+            )
+            y += 24
+            for row in completed_rows:
+                state, _color = _surface_signal_state(
+                    row["bio_count"], row["complete"], row["geo_count"],
+                    needs_dss=row["needs_dss"], palette=palette,
+                )
+                lo, hi = row["min_value"], row["max_value"]
+                estimate = "" if not hi else (
+                    f" · {_credits(lo)}" if lo == hi
+                    else f" · {_credits(lo)}–{_credits(hi)}"
+                )
+                notable = row.get("notable")
+                label = row.get("display_name") or row["name"]
+                name = f"{notable['icons']} {label}" if notable and notable.get("icons") else label
+                self._text(20, y, f"✓ {_truncate(name, 34)}", palette["green"], ("Courier", 8, "bold"))
+                self._text(
+                    WIDTH - 18, y, state + estimate,
+                    palette["green"], BIO_DETAIL_FONT, "e",
+                )
+                y += 19
+                details = row.get("bio_details") or []
+                if details:
+                    species = " · ".join(
+                        detail.get("display_name") or detail.get("name") or "Organic"
+                        for detail in details
+                    )
+                    self._text(
+                        30, y, _truncate(species, 62),
+                        palette["text"], ("Courier", 7, "bold"),
+                    )
+                    y += 15
 
         if is_body:
             lo, hi = model["min_value"], model["max_value"]
