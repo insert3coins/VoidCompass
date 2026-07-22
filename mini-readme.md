@@ -3,8 +3,8 @@
 ## v5.0.5 // Readable Survey Status
 **Release Date:** 2026-Jul-23
 
-*   Enlarged Survey Status headings, target rows, biological details, geological counts, values and footer text for easier in-game reading.
-*   Widened the overlay and increased its calculated row spacing so the larger text remains clear without clipping or overlap.
+*   Enlarged the newly added biological identification and **BIO/GEO** status text for easier in-game reading.
+*   Preserved the Survey Status overlay's original headings, values, footer typography and compact width while adding space only where the larger signal details need it.
 
 ## v5.0.4 // Geological Survey Signals
 **Release Date:** 2026-Jul-23

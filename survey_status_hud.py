@@ -10,14 +10,11 @@ from notable_bodies import build_notable_body_rows
 _CHROMA = "#ff00ff"
 _DIM = "#7a8a98"
 _GREEN = "#21d189"
-WIDTH = 560
-FONT_TITLE = ("Courier", 11, "bold")
-FONT_MAIN = ("Courier", 10, "bold")
-FONT_DETAIL = ("Courier", 9, "bold")
-FONT_SYMBOL = ("Courier", 11, "bold")
-ROW_H = 22
-DETAIL_ROW_H = 18
-NOTABLE_ROW_H = 40
+WIDTH = 480
+SIGNAL_FONT = ("Courier", 10, "bold")
+BIO_DETAIL_FONT = ("Courier", 9, "bold")
+BIO_SYMBOL_FONT = ("Courier", 10, "bold")
+BIO_DETAIL_H = 18
 
 
 def _safe_int(value, default=0):
@@ -348,44 +345,45 @@ class SurveyStatusHUD:
         minimum = sampling.get("min_distance_m")
         clear = sampling.get("clear")
         status = "CLEAR" if clear else (f"{_safe_int(minimum):,}/{_safe_int(colony):,} M" if minimum is not None and colony else "MOVE TO NEXT SAMPLE")
-        self._text(18, y, f"SAMPLE {progress}/3 · {_truncate(sampling.get('species'), 31)}", COLOR_ORANGE, FONT_MAIN)
-        self._text(WIDTH - 18, y, status, _GREEN if clear else COLOR_TEXT, FONT_MAIN, "e")
-        return y + ROW_H
+        self._text(18, y, f"SAMPLE {progress}/3 · {_truncate(sampling.get('species'), 27)}", COLOR_ORANGE, ("Courier", 8, "bold"))
+        self._text(WIDTH - 18, y, status, _GREEN if clear else COLOR_TEXT, ("Courier", 8, "bold"), "e")
+        return y + 19
 
     def _notable_row(self, row, y):
         label = row.get("display_name") or row["name"]
         name = f"{row['icons']} {label}" if row.get("icons") else label
-        self._text(20, y, _truncate(name, 42), row["name_color"], FONT_MAIN)
-        self._text(28, y + DETAIL_ROW_H, "SURVEY VALUE", _DIM, FONT_DETAIL)
-        self._text(WIDTH - 18, y + DETAIL_ROW_H, row["value_line"], row["value_color"], FONT_DETAIL, "e")
-        return y + NOTABLE_ROW_H
+        self._text(20, y, _truncate(name, 36), row["name_color"], ("Courier", 8, "bold"))
+        self._text(28, y + 15, "SURVEY VALUE", _DIM, ("Courier", 7, "bold"))
+        self._text(WIDTH - 18, y + 15, row["value_line"], row["value_color"], ("Courier", 7, "bold"), "e")
+        return y + 34
 
     def _redraw(self, model):
         is_body = model["mode"] == "body"
         rows = model["rows"]
         notable_rows = model.get("notable_rows") or []
-        sample_h = ROW_H if model.get("sampling") else 0
+        sample_h = 19 if model.get("sampling") else 0
         if is_body:
-            content_h = 24 + max(1, len(rows)) * ROW_H
+            content_h = 20 + max(1, len(rows)) * 19
         else:
             content_h = (
-                24 + sum(
-                    ROW_H + len(row.get("bio_details") or []) * DETAIL_ROW_H
-                    + (DETAIL_ROW_H if row.get("notable") else 0)
+                20 + sum(
+                    (21 if row.get("bio_count") or row.get("geo_count") else 19)
+                    + len(row.get("bio_details") or []) * BIO_DETAIL_H
+                    + (15 if row.get("notable") else 0)
                     for row in rows
                 )
             ) if rows else 0
-        notable_h = (28 + len(notable_rows) * NOTABLE_ROW_H) if notable_rows else 0
-        h = 52 + sample_h + content_h + notable_h + 32
+        notable_h = (20 + len(notable_rows) * 34) if notable_rows else 0
+        h = 48 + sample_h + content_h + notable_h + 27
         self.canvas.config(width=WIDTH, height=h)
         self.win.geometry(f"{WIDTH}x{h}")
         self.canvas.delete("all")
         overlay_chrome.draw_chrome(self.canvas, WIDTH, h, bracket_len=10)
         title = "BIO SURVEY" if is_body else "SURVEY STATUS"
-        self._text(18, 20, title, COLOR_ACCENT, FONT_TITLE)
-        self._text(WIDTH - 18, 20, _truncate(model["system"].upper(), 34), COLOR_TEXT, FONT_TITLE, "e")
-        self.canvas.create_line(18, 33, WIDTH - 18, 33, fill="#1a2530", width=1)
-        y = self._sample_row(model.get("sampling"), 49)
+        self._text(18, 18, title, COLOR_ACCENT, ("Courier", 9, "bold"))
+        self._text(WIDTH - 18, 18, _truncate(model["system"].upper(), 30), COLOR_TEXT, ("Courier", 9, "bold"), "e")
+        self.canvas.create_line(18, 28, WIDTH - 18, 28, fill="#1a2530", width=1)
+        y = self._sample_row(model.get("sampling"), 42)
 
         if is_body:
             body = model["body"]
@@ -395,9 +393,9 @@ class SurveyStatusHUD:
             signal_state, signal_color = _surface_signal_state(
                 count, done, geo, needs_dss=not bool(body.get("dss_complete")),
             )
-            self._text(18, y, _truncate(model.get("body_display") or body.get("name"), 43), COLOR_ORANGE, FONT_MAIN)
-            self._text(WIDTH - 18, y, signal_state, signal_color, FONT_MAIN, "e")
-            y += 24
+            self._text(18, y, _truncate(model.get("body_display") or body.get("name"), 38), COLOR_ORANGE, ("Courier", 8, "bold"))
+            self._text(WIDTH - 18, y, signal_state, signal_color, SIGNAL_FONT, "e")
+            y += 20
             for row in rows:
                 symbol = {"complete": "✓", "sample": "●", "detected": "○", "predicted": "?"}.get(row["kind"], "·")
                 color = _GREEN if row["kind"] == "complete" else (COLOR_ORANGE if row["kind"] == "sample" else COLOR_TEXT if row["kind"] == "detected" else _DIM)
@@ -408,15 +406,15 @@ class SurveyStatusHUD:
                 else:
                     lo, hi = row.get("min_value"), row.get("max_value")
                     value_text = _credits(lo) if lo == hi else f"{_credits(lo)}–{_credits(hi)}"
-                self._text(20, y, symbol, color, FONT_SYMBOL)
-                self._text(40, y, _truncate(label, 39), color, FONT_MAIN)
-                self._text(WIDTH - 18, y, value_text, color, FONT_MAIN, "e")
-                y += ROW_H
+                self._text(20, y, symbol, color, ("Courier", 9, "bold"))
+                self._text(38, y, _truncate(label, 34), color, ("Courier", 8, "bold"))
+                self._text(WIDTH - 18, y, value_text, color, ("Courier", 8, "bold"), "e")
+                y += 19
         else:
             if rows:
-                self._text(18, y, "SURVEY TARGETS", _DIM, FONT_DETAIL)
-                self._text(WIDTH - 18, y, "STATUS / EST. VALUE", _DIM, FONT_DETAIL, "e")
-                y += 24
+                self._text(18, y, "SURVEY TARGETS", _DIM, ("Courier", 7, "bold"))
+                self._text(WIDTH - 18, y, "STATUS / EST. VALUE", _DIM, ("Courier", 7, "bold"), "e")
+                y += 20
             for row in rows:
                 bio = row["bio_count"]
                 geo = row["geo_count"]
@@ -428,9 +426,10 @@ class SurveyStatusHUD:
                 notable = row.get("notable")
                 label = row.get("display_name") or row["name"]
                 name = f"{notable['icons']} {label}" if notable and notable.get("icons") else label
-                self._text(20, y, _truncate(name, 39), color, FONT_MAIN)
-                self._text(WIDTH - 18, y, state + estimate, color, FONT_MAIN, "e")
-                y += ROW_H
+                self._text(20, y, _truncate(name, 34), color, ("Courier", 8, "bold"))
+                status_font = SIGNAL_FONT if bio or geo else ("Courier", 8, "bold")
+                self._text(WIDTH - 18, y, state + estimate, color, status_font, "e")
+                y += 21 if bio or geo else 19
                 for detail in row.get("bio_details") or []:
                     kind = detail.get("kind")
                     symbol = {"complete": "✓", "sample": "●", "detected": "○"}.get(kind, "·")
@@ -439,34 +438,34 @@ class SurveyStatusHUD:
                         else COLOR_ORANGE if kind == "sample"
                         else COLOR_TEXT
                     )
-                    self._text(30, y, symbol, detail_color, FONT_MAIN)
+                    self._text(30, y, symbol, detail_color, BIO_SYMBOL_FONT)
                     self._text(
-                        48, y, _truncate(detail.get("display_name") or detail.get("name"), 42),
-                        detail_color, FONT_DETAIL,
+                        46, y, _truncate(detail.get("display_name") or detail.get("name"), 38),
+                        detail_color, BIO_DETAIL_FONT,
                     )
                     self._text(
                         WIDTH - 18, y, detail.get("status") or "DETECTED",
-                        detail_color, FONT_DETAIL, "e",
+                        detail_color, BIO_DETAIL_FONT, "e",
                     )
-                    y += DETAIL_ROW_H
+                    y += BIO_DETAIL_H
                 if notable:
-                    self._text(28, y, "NOTABLE BODY", _DIM, FONT_DETAIL)
-                    self._text(WIDTH - 18, y, notable["value_line"], notable["value_color"], FONT_DETAIL, "e")
-                    y += DETAIL_ROW_H
+                    self._text(28, y, "NOTABLE BODY", _DIM, ("Courier", 7, "bold"))
+                    self._text(WIDTH - 18, y, notable["value_line"], notable["value_color"], ("Courier", 7, "bold"), "e")
+                    y += 15
 
         if notable_rows:
             self.canvas.create_line(18, y - 2, WIDTH - 18, y - 2, fill="#26313a", width=1)
-            self._text(18, y + 10, f"NOTABLE BODIES ({len(notable_rows)})", _DIM, FONT_DETAIL)
-            y += 28
+            self._text(18, y + 8, f"NOTABLE BODIES ({len(notable_rows)})", _DIM, ("Courier", 7, "bold"))
+            y += 24
             for row in notable_rows:
                 y = self._notable_row(row, y)
 
         if is_body:
             lo, hi = model["min_value"], model["max_value"]
             total = _credits(lo) if lo == hi else f"{_credits(lo)}–{_credits(hi)}"
-            self._text(18, h - 18, "ESTIMATED BASE", _DIM, FONT_DETAIL)
-            self._text(WIDTH - 18, h - 18, total, COLOR_ORANGE, FONT_MAIN, "e")
+            self._text(18, h - 15, "ESTIMATED BASE", _DIM, ("Courier", 7, "bold"))
+            self._text(WIDTH - 18, h - 15, total, COLOR_ORANGE, ("Courier", 8, "bold"), "e")
         else:
             progress = f"SCAN {model.get('scanned', 0)}/{model.get('total', 0)}"
-            self._text(18, h - 18, progress, _DIM, FONT_DETAIL)
-            self._text(WIDTH - 18, h - 18, f"NOTABLE {model.get('notable_count', 0)}", COLOR_ORANGE, FONT_DETAIL, "e")
+            self._text(18, h - 15, progress, _DIM, ("Courier", 7, "bold"))
+            self._text(WIDTH - 18, h - 15, f"NOTABLE {model.get('notable_count', 0)}", COLOR_ORANGE, ("Courier", 7, "bold"), "e")
