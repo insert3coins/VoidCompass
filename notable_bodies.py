@@ -1,10 +1,6 @@
 """Shared notable-body classification used by the persistent Survey Status HUD."""
 
-from config import COLOR_ACCENT, COLOR_ORANGE
-
-
-_COL_DIM = "#7a8a98"
-_COL_GOLD = "#e8c97a"
+import themes
 _NOTABLE_PLANET_CLASSES = {"earthlike body", "water world", "ammonia world"}
 DEFAULT_MIN_VALUE = 50_000
 
@@ -33,8 +29,9 @@ def _fmt_credits(value):
     return f"{value:,}"
 
 
-def build_notable_body_rows(scan_items, min_value=DEFAULT_MIN_VALUE):
+def build_notable_body_rows(scan_items, min_value=DEFAULT_MIN_VALUE, palette=None):
     """Return formatted notable bodies for the persistent Survey Status HUD."""
+    palette = palette or themes.ACTIVE_PALETTE
     bodies = []
     for item in (scan_items or []):
         if not _is_interesting_body(item, min_value):
@@ -55,8 +52,8 @@ def build_notable_body_rows(scan_items, min_value=DEFAULT_MIN_VALUE):
             "icons": icons,
             "planet_class": item.get("planet_class") or "",
             "terraformable": bool(item.get("terraformable")),
-            "name_color": COLOR_ACCENT if bio_count else COLOR_ORANGE,
+            "name_color": palette["accent"] if bio_count else palette["orange"],
             "value_line": value_line,
-            "value_color": _COL_GOLD if max(reward, dss_reward) >= min_value else _COL_DIM,
+            "value_color": palette["yellow"] if max(reward, dss_reward) >= min_value else palette["dim"],
         })
     return bodies

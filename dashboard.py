@@ -416,6 +416,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.config["ui_theme_name"] = theme_name
         try:
             apply_theme_live(self.root, theme_name, palette)
+            survey = getattr(self, "survey_status_hud", None)
+            apply_survey_theme = getattr(survey, "apply_theme", None)
+            if callable(apply_survey_theme):
+                apply_survey_theme(palette)
             return True
         except Exception as exc:
             logging.warning("Could not apply profile theme %s: %s", theme_name, exc)
@@ -2540,6 +2544,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def open_settings(self):
         def on_save():
             self.log("Configuration saved successfully.")
+            self._apply_active_profile_theme()
             self._apply_runtime_feature_toggles()
             self._refresh_cockpit_brain(event="settings_saved")
             self._publish_cockpit_ai_changes()
