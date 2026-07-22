@@ -1,5 +1,11 @@
 # VoidCompass // UPDATE LOG
 
+## v5.0.6 // Theme-Aware Survey Status
+**Release Date:** 2026-Jul-23
+
+*   Survey Status now adopts the active commander theme across its chrome, headings, BIO/GEO states, biology details, notable-body values, separators and supporting text.
+*   Live theme changes and profile switches immediately rebuild the visible survey from its cached state, without waiting for another journal event.
+
 ## v5.0.5 // Readable Survey Status
 **Release Date:** 2026-Jul-23
 
