@@ -1,5 +1,11 @@
 # VoidCompass // UPDATE LOG
 
+## v5.0.4 // Geological Survey Signals
+**Release Date:** 2026-Jul-23
+
+*   Survey Status now retains and displays mapped geological signal counts as **GEO N**, including geo-only bodies that previously disappeared after DSS mapping.
+*   Mixed biological and geological planets show a combined status while preserving identified biology, completion state, estimated value and notable-body context.
+
 ## v5.0.3 // Identified Biology Survey
 **Release Date:** 2026-Jul-23
 

@@ -83,6 +83,26 @@ def _bio_display_name(name, variant=None):
     return f"{name} · {variant}"
 
 
+def _surface_signal_state(bio_count=0, complete=0, geo_count=0, needs_dss=False):
+    """Return the compact, truthful surface-signal label and colour."""
+    bio_count = _safe_int(bio_count)
+    complete = _safe_int(complete)
+    geo_count = _safe_int(geo_count)
+    parts = []
+    bio_finished = bool(bio_count and complete >= bio_count)
+    if bio_count:
+        parts.append("BIO COMPLETE" if bio_finished else f"BIO {complete}/{bio_count}")
+    if geo_count:
+        parts.append(f"GEO {geo_count}")
+    if parts:
+        if bio_count:
+            color = _GREEN if bio_finished else COLOR_ORANGE
+        else:
+            color = COLOR_ACCENT
+        return " · ".join(parts), color
+    return ("DSS REQUIRED", _DIM) if needs_dss else ("NO SURFACE SIGNALS", _DIM)
+
+
 def _body_value_range(item):
     scans = list((item.get("organic_scans") or {}).values())
     known = sum(_safe_int(bio_values.species_value(scan.get("species"))
@@ -172,13 +192,14 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
     rows = []
     for body in bodies:
         bio_count = _safe_int(body.get("bio_count"))
+        geo_count = _safe_int(body.get("geo_count"))
         complete = _safe_int(body.get("organic_complete_count"))
         needs_dss = not bool(body.get("dss_complete"))
         # Keep mapped biological bodies visible through completion. Survey
         # Status is the persistent system record until StartJump, so removing
         # the row after the final analysis would also remove the identification
         # the commander just earned.
-        if not needs_dss and not bio_count:
+        if not needs_dss and not bio_count and not geo_count:
             continue
         lo, hi = _body_value_range(body)
         rows.append({
@@ -189,6 +210,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
             "planet_class": body.get("planet_class") or "",
             "terraformable": bool(body.get("terraformable")),
             "bio_count": bio_count,
+            "geo_count": geo_count,
             "complete": complete,
             "needs_dss": needs_dss,
             "min_value": lo,
@@ -202,7 +224,10 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
                 if detail.get("kind") != "predicted"
             ],
         })
-    rows.sort(key=lambda row: (not bool(row["bio_count"]), row["name"]))
+    rows.sort(key=lambda row: (
+        not bool(row["bio_count"] or row["geo_count"]),
+        not bool(row["bio_count"]), row["name"],
+    ))
     notable_by_id = {
         str(row.get("body_id")): row for row in notable_rows if row.get("body_id") is not None
     }
@@ -358,9 +383,13 @@ class SurveyStatusHUD:
         if is_body:
             body = model["body"]
             count = _safe_int(body.get("bio_count"))
+            geo = _safe_int(body.get("geo_count"))
             done = _safe_int(body.get("organic_complete_count"))
+            signal_state, signal_color = _surface_signal_state(
+                count, done, geo, needs_dss=not bool(body.get("dss_complete")),
+            )
             self._text(18, y, _truncate(model.get("body_display") or body.get("name"), 38), COLOR_ORANGE, ("Courier", 8, "bold"))
-            self._text(WIDTH - 18, y, f"BIO {done}/{count}", COLOR_TEXT, ("Courier", 8, "bold"), "e")
+            self._text(WIDTH - 18, y, signal_state, signal_color, ("Courier", 8, "bold"), "e")
             y += 20
             for row in rows:
                 symbol = {"complete": "✓", "sample": "●", "detected": "○", "predicted": "?"}.get(row["kind"], "·")
@@ -383,12 +412,10 @@ class SurveyStatusHUD:
                 y += 20
             for row in rows:
                 bio = row["bio_count"]
-                if bio:
-                    finished = row["complete"] >= bio
-                    state = "BIO COMPLETE" if finished else f"BIO {row['complete']}/{bio}"
-                    color = _GREEN if finished else COLOR_ORANGE
-                else:
-                    state, color = "DSS REQUIRED", _DIM
+                geo = row["geo_count"]
+                state, color = _surface_signal_state(
+                    bio, row["complete"], geo, needs_dss=row["needs_dss"],
+                )
                 lo, hi = row["min_value"], row["max_value"]
                 estimate = "" if not hi else (f" · {_credits(lo)}" if lo == hi else f" · {_credits(lo)}–{_credits(hi)}")
                 notable = row.get("notable")
