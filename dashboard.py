@@ -2351,13 +2351,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         current_address = self._normalize_system_address(self.current_system_address)
         return event_address is None or current_address is None or event_address == current_address
 
-    def _set_body_signals(self, body_id, bio_count=0, geo_count=0):
+    def _set_body_signals(self, body_id, bio_count=0, geo_count=0, genuses=None):
         body_id = self._normalize_body_id(body_id)
         if body_id is None:
             return
+        previous = self.body_signals.get(body_id, {})
         self.body_signals[body_id] = {
             "bio": int(bio_count or 0),
             "geo": int(geo_count or 0),
+            "genuses": list(genuses) if genuses else list(previous.get("genuses") or []),
         }
         self.system_bio_signals = sum(
             int(signals.get("bio", 0) or 0)
@@ -5077,6 +5079,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "body_name":      body_label,
                 "species":        species,
                 "genus":          d.get("genus"),
+                "variant":        d.get("variant"),
                 "species_value":  bio_values.species_value(species),
                 "genus_value":    bio_values.genus_info(d.get("genus") or species),
                 "colony_m":       bio_values.GENUS_COLONY_M.get(d.get("genus") or species),
@@ -5600,7 +5603,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         parts.append(f"{geo_count} geological")
                     self._push_live_toast("DSS SIGNALS", f"{body}: {', '.join(parts)}", "success", 12)
                 if bio_count or geo_count:
-                    self._set_body_signals(body_id, bio_count, geo_count)
+                    self._set_body_signals(
+                        body_id, bio_count, geo_count, genuses=d.get("genuses") or [],
+                    )
                 item = self.scan_items_by_id.get(body_id)
                 if item:
                     item["bio_count"] = bio_count

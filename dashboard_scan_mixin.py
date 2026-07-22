@@ -754,12 +754,13 @@ class DashboardScanMixin:
         dss_complete = was_mapped or (body_id in self.body_dss_complete)
 
         bio_count = 0
+        signal_state = self.body_signals.get(body_id, {}) if body_id is not None else {}
         if "BioSignals" in data:
             for signal in data.get("BioSignals", []):
                 if signal.get("Type_Localised") == "Biological":
                     bio_count += signal.get("Count", 0)
-        elif body_id in self.body_signals:
-            bio_count = self.body_signals[body_id].get("bio", 0)
+        elif signal_state:
+            bio_count = signal_state.get("bio", 0)
 
         highlight = (bio_count > 0) or (not is_star and dss_reward > reward)
         color = COLOR_ACCENT if highlight else COLOR_TEXT
@@ -791,7 +792,8 @@ class DashboardScanMixin:
             "dss_reward": dss_reward,
             "dss_complete": dss_complete,
             "bio_count": bio_count,
-            "geo_count": 0,
+            "geo_count": signal_state.get("geo", 0),
+            "genuses": list(signal_state.get("genuses") or []),
             "is_star": is_star,
             "was_discovered": was_discovered,
             "was_footfalled": was_footfalled,
@@ -810,6 +812,16 @@ class DashboardScanMixin:
         if body_id is not None:
             existing = self.scan_items_by_id.get(body_id)
         if existing:
+            # Elite emits a fresh Detailed Scan immediately after
+            # SAASignalsFound. Preserve the DSS genus identification and any
+            # later organic progress instead of replacing it with the newer
+            # planet record.
+            for key in (
+                "genuses", "organic_scans", "organic_complete_count",
+                "geo_count",
+            ):
+                if existing.get(key) not in (None, [], {}):
+                    item[key] = existing[key]
             self.scan_items.remove(existing)
         self.scan_items.insert(0, item)
         self.scan_items = self.scan_items[:60]
