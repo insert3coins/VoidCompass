@@ -785,7 +785,10 @@ class JournalWatcher:
                                 content = f.read().strip()
                                 if content:
                                     data = json.loads(content)
-                                    self.cargo_callback(data.get("Inventory", []))
+                                    self.cargo_callback(
+                                        data.get("Inventory", []),
+                                        data.get("Vessel", "Ship"),
+                                    )
                                     self.last_cargo_mtime = mtime
                 except:
                     pass

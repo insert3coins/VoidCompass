@@ -1506,7 +1506,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.watcher.register_callback(
             event_cb=lambda event: self._ui_post(self.process_event, event),
             batch_cb=lambda events: self._ui_post(self.process_batch, list(events)),
-            cargo_cb=lambda data: self._ui_post(self.update_cargo, data, key="watcher:cargo"),
+            cargo_cb=lambda data, vessel="Ship": self._ui_post(
+                self.update_cargo, data, vessel, key="watcher:cargo"
+            ),
             nav_cb=lambda data: self._ui_post(self.update_nav_route, data, key="watcher:nav"),
             status_cb=lambda data: self._ui_post(self.update_status, data, key="watcher:status"),
             market_cb=lambda data: self._ui_post(self.update_market, data, key="watcher:market"),
@@ -4974,7 +4976,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "Cargo":
             # Journal can emit Cargo before/without immediate file polling update.
             self.watcher.force_check_cargo()
-            self._queue_edsm_upload(raw, allow_startup=True)
+            # EDSM cargo is sent from the complete Cargo.json snapshot by
+            # update_cargo(); the journal notification often has no Inventory.
 
         elif ev == "CargoDepot":
             self._queue_edsm_upload(raw, startup_replay=startup_replay)
@@ -6840,9 +6843,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if window and window.is_open() and getattr(self, "_active_page", None) == "SPECIALISTS":
             self.root.after(0, window.refresh)
 
-    def update_cargo(self, inventory):
+    def update_cargo(self, inventory, vessel="Ship"):
         self.last_cargo_event_ts = time.time()
         self.current_cargo_inventory = list(inventory or [])
+        self.edsm.queue_cargo_snapshot(self.current_cargo_inventory, vessel=vessel)
         try:
             specialist_engine = getattr(self, "specialist_engine", None)
             if specialist_engine:

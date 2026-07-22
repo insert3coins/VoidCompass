@@ -6,6 +6,7 @@ import logging
 import re
 import html
 import time
+from datetime import datetime, timezone
 from version import APP_VERSION
 
 _EDSM_CREDIT_EVENTS = frozenset({
@@ -23,8 +24,9 @@ _EDSM_CREDIT_EVENTS = frozenset({
     "ShipyardBuy", "ShipyardSell", "ShipyardTransfer",
 })
 
-# Events EDSM discards — matches the list served by api-journal-v1/discard.
-# Keeping these client-side avoids sending noise and saves round-trips.
+# Events EDSM discards, plus high-frequency events VoidCompass handles through
+# quieter authoritative snapshots. In particular, raw Cargo notifications stay
+# filtered because queue_cargo_snapshot() sends the complete Cargo.json state.
 _EDSM_DISCARD_EVENTS = frozenset({
     "AfmuRepairs", "AppliedToSquadron", "ApproachBody",
     "AsteroidCracked", "BookDropship", "CancelDropship",
@@ -85,6 +87,8 @@ _EDSM_DISCARD_EVENTS = frozenset({
 _BATCH_SIZE = 50          # send when queue reaches this many events
 _FLUSH_INTERVAL_S = 5     # flush this many seconds after the last queued event
 _RETRY_DELAYS = [30, 60, 120, 300]  # backoff (seconds) after consecutive send failures
+_CARGO_SYNC_DEBOUNCE_S = 15
+_CARGO_SYNC_MAX_WAIT_S = 120
 
 
 class EDSMHandler:
@@ -104,6 +108,12 @@ class EDSMHandler:
         self._game_version = self.config.get("edsm_game_version", "")
         self._game_build = self.config.get("edsm_game_build", "")
         self._missing_game_version_warned = False
+        self._cargo_timer = None
+        self._pending_cargo_inventory = None
+        self._pending_cargo_vessel = "Ship"
+        self._pending_cargo_signature = None
+        self._pending_cargo_since = 0.0
+        self._last_cargo_signature = None
 
     def set_log_callback(self, callback):
         """Wire up a function(tag, msg, severity) to post feed entries on upload."""
@@ -131,6 +141,16 @@ class EDSMHandler:
                 except Exception:
                     pass
                 self._flush_timer = None
+            if self._cargo_timer is not None:
+                try:
+                    self._cargo_timer.cancel()
+                except Exception:
+                    pass
+                self._cargo_timer = None
+            self._pending_cargo_inventory = None
+            self._pending_cargo_signature = None
+            self._pending_cargo_since = 0.0
+            self._last_cargo_signature = None
             self._retry_count = 0
 
     def switch_profile(self, config, conn, lock):
@@ -152,6 +172,21 @@ class EDSMHandler:
             self.config["edsm_game_build"] = self._game_build
         if self._game_version and self._game_build:
             self._missing_game_version_warned = False
+
+    @staticmethod
+    def _cargo_signature(inventory, vessel):
+        """Return an order-independent identity for one complete cargo state."""
+        items = [dict(item) for item in (inventory or []) if isinstance(item, dict)]
+        encoded = sorted(
+            json.dumps(item, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+            for item in items
+        )
+        return json.dumps(
+            {"vessel": str(vessel or "Ship"), "inventory": encoded},
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
 
     def is_credit_event(self, event_name):
         return event_name in _EDSM_CREDIT_EVENTS
@@ -205,6 +240,99 @@ class EDSMHandler:
             return
 
         self._arm_flush()
+
+    def queue_cargo_snapshot(self, inventory, vessel="Ship"):
+        """Debounce and upload the authoritative Cargo.json state to EDSM.
+
+        Elite emits frequent Cargo journal notifications without the inventory.
+        Those remain on the normal discard list; this path sends one complete,
+        settled snapshot instead, including an empty inventory when the hold is
+        cleared.
+        """
+        normalized = [dict(item) for item in (inventory or []) if isinstance(item, dict)]
+        vessel = str(vessel or "Ship")
+        signature = self._cargo_signature(normalized, vessel)
+        now = time.monotonic()
+
+        with self._queue_lock:
+            if signature == self._last_cargo_signature:
+                return False
+            if signature == self._pending_cargo_signature:
+                return False
+
+            self._pending_cargo_inventory = normalized
+            self._pending_cargo_vessel = vessel
+            self._pending_cargo_signature = signature
+            if not self._pending_cargo_since:
+                self._pending_cargo_since = now
+
+            if self._cargo_timer is not None:
+                self._cargo_timer.cancel()
+                self._cargo_timer = None
+
+            elapsed = max(0.0, now - self._pending_cargo_since)
+            delay = 0.0 if elapsed >= _CARGO_SYNC_MAX_WAIT_S else _CARGO_SYNC_DEBOUNCE_S
+            generation = self._profile_generation
+            timer = threading.Timer(delay, self._flush_pending_cargo, args=(generation,))
+            timer.daemon = True
+            self._cargo_timer = timer
+        timer.start()
+        return True
+
+    def _flush_pending_cargo(self, generation):
+        with self._queue_lock:
+            if generation != self._profile_generation:
+                return
+            inventory = self._pending_cargo_inventory
+            vessel = self._pending_cargo_vessel
+            signature = self._pending_cargo_signature
+            self._cargo_timer = None
+            self._pending_cargo_inventory = None
+            self._pending_cargo_signature = None
+            self._pending_cargo_since = 0.0
+
+        if inventory is None or signature is None:
+            return
+
+        event = {
+            "timestamp": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+            "event": "Cargo",
+            "Vessel": vessel,
+            "Count": sum(max(0, int(item.get("Count", 0) or 0)) for item in inventory),
+            "Inventory": inventory,
+        }
+        if self._queue_prepared_event(event):
+            with self._queue_lock:
+                if generation == self._profile_generation:
+                    self._last_cargo_signature = signature
+
+    def _queue_prepared_event(self, event):
+        """Persist an already validated EDSM event, bypassing journal filtering."""
+        if not self._db_conn:
+            return False
+        if not self.config.get("edsm_upload_enabled"):
+            return False
+        if not self.config.get("edsm_cmdr_name", "").strip():
+            return False
+        if not self.config.get("edsm_api_key", "").strip():
+            return False
+        if not self._game_version or not self._game_build:
+            if self._log_callback and not self._missing_game_version_warned:
+                self._missing_game_version_warned = True
+                self._log_callback("EDSM", "Cargo sync waiting for game version/build", "WARN")
+            return False
+        try:
+            with self._db_lock:
+                self._db_conn.execute(
+                    "INSERT INTO edsm_queue (queued_ts, event_json) VALUES (?, ?)",
+                    (time.time(), json.dumps(event)),
+                )
+                self._db_conn.commit()
+        except Exception as e:
+            logging.warning(f"EDSM: failed to queue cargo snapshot: {e}")
+            return False
+        self._arm_flush()
+        return True
 
     def flush_upload_queue(self):
         """Force an immediate flush — call this on system jumps."""
