@@ -1,5 +1,11 @@
 # VoidCompass // UPDATE LOG
 
+## v5.0.5 // Readable Survey Status
+**Release Date:** 2026-Jul-23
+
+*   Enlarged Survey Status headings, target rows, biological details, geological counts, values and footer text for easier in-game reading.
+*   Widened the overlay and increased its calculated row spacing so the larger text remains clear without clipping or overlap.
+
 ## v5.0.4 // Geological Survey Signals
 **Release Date:** 2026-Jul-23
 
