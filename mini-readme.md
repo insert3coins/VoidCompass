@@ -1,5 +1,11 @@
 # VoidCompass // UPDATE LOG
 
+## v5.0.3 // Identified Biology Survey
+**Release Date:** 2026-Jul-23
+
+*   Survey Status now expands mapped planet rows with every journal-identified biological genus, then upgrades each entry to its sampled species, localized variant and completion state as organic scans arrive.
+*   Preserved DSS genus and geological results across Elite's post-mapping Detailed Scan event, so identified biology remains visible in the overlay and profile-local scan cache instead of being immediately replaced.
+
 ## v5.0.2 // Adaptive Mode Navigation
 **Release Date:** 2026-Jul-20
 

@@ -588,6 +588,7 @@ class JournalWatcher:
                 "data": {
                     "species": data.get("Species_Localised") or data.get("Species"),
                     "genus": data.get("Genus_Localised") or data.get("Genus"),
+                    "variant": data.get("Variant_Localised") or data.get("Variant"),
                     "sample_idx": data.get("Sample"),
                     "scan_type": data.get("ScanType_Localised") or data.get("ScanType"),
                     "is_new_entry": bool(data.get("IsNewEntry")),

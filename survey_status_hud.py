@@ -72,6 +72,17 @@ def _credits(value):
     return f"{value:,}" if value else "-"
 
 
+def _bio_display_name(name, variant=None):
+    """Prefer the localized variant without repeating its species prefix."""
+    name = str(name or "Organic").strip()
+    variant = str(variant or "").strip()
+    if not variant:
+        return name
+    if variant.casefold().startswith(name.casefold()):
+        return variant
+    return f"{name} · {variant}"
+
+
 def _body_value_range(item):
     scans = list((item.get("organic_scans") or {}).values())
     known = sum(_safe_int(bio_values.species_value(scan.get("species"))
@@ -104,6 +115,7 @@ def _body_detail_rows(item):
             "status": "COMPLETE" if complete else (f"SAMPLE {sample}/3" if sample else "LOGGED"),
             "name": species,
             "variant": scan.get("variant") or "",
+            "display_name": _bio_display_name(species, scan.get("variant")),
             "value": bio_values.species_value(species) or _safe_int(scan.get("species_value")),
             "kind": "complete" if complete else "sample",
         })
@@ -121,6 +133,7 @@ def _body_detail_rows(item):
                 "status": "DETECTED" if kind == "detected" else "PREDICTED",
                 "name": name,
                 "variant": "",
+                "display_name": name,
                 "min_value": info.get("min_value"),
                 "max_value": info.get("max_value"),
                 "kind": kind,
@@ -161,7 +174,11 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
         bio_count = _safe_int(body.get("bio_count"))
         complete = _safe_int(body.get("organic_complete_count"))
         needs_dss = not bool(body.get("dss_complete"))
-        if not needs_dss and (not bio_count or complete >= bio_count):
+        # Keep mapped biological bodies visible through completion. Survey
+        # Status is the persistent system record until StartJump, so removing
+        # the row after the final analysis would also remove the identification
+        # the commander just earned.
+        if not needs_dss and not bio_count:
             continue
         lo, hi = _body_value_range(body)
         rows.append({
@@ -177,6 +194,13 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
             "min_value": lo,
             "max_value": hi,
             "first_footfall": bool(body.get("first_footfall")),
+            # System mode used to stop at BIO 0/N. Include only journal-
+            # identified genera/species here; predictions remain exclusive to
+            # the focused-body view so they cannot be mistaken for DSS facts.
+            "bio_details": [
+                detail for detail in _body_detail_rows(body)
+                if detail.get("kind") != "predicted"
+            ],
         })
     rows.sort(key=lambda row: (not bool(row["bio_count"]), row["name"]))
     notable_by_id = {
@@ -312,7 +336,13 @@ class SurveyStatusHUD:
         if is_body:
             content_h = 20 + max(1, len(rows)) * 19
         else:
-            content_h = (20 + sum(19 + (15 if row.get("notable") else 0) for row in rows)) if rows else 0
+            content_h = (
+                20 + sum(
+                    19 + len(row.get("bio_details") or []) * 15
+                    + (15 if row.get("notable") else 0)
+                    for row in rows
+                )
+            ) if rows else 0
         notable_h = (20 + len(notable_rows) * 34) if notable_rows else 0
         h = 48 + sample_h + content_h + notable_h + 27
         self.canvas.config(width=WIDTH, height=h)
@@ -335,7 +365,7 @@ class SurveyStatusHUD:
             for row in rows:
                 symbol = {"complete": "✓", "sample": "●", "detected": "○", "predicted": "?"}.get(row["kind"], "·")
                 color = _GREEN if row["kind"] == "complete" else (COLOR_ORANGE if row["kind"] == "sample" else COLOR_TEXT if row["kind"] == "detected" else _DIM)
-                label = row["name"] + (f" · {row['variant']}" if row.get("variant") else "")
+                label = row.get("display_name") or row["name"]
                 value = row.get("value")
                 if value:
                     value_text = _credits(value)
@@ -354,8 +384,9 @@ class SurveyStatusHUD:
             for row in rows:
                 bio = row["bio_count"]
                 if bio:
-                    state = f"BIO {row['complete']}/{bio}"
-                    color = COLOR_ORANGE
+                    finished = row["complete"] >= bio
+                    state = "BIO COMPLETE" if finished else f"BIO {row['complete']}/{bio}"
+                    color = _GREEN if finished else COLOR_ORANGE
                 else:
                     state, color = "DSS REQUIRED", _DIM
                 lo, hi = row["min_value"], row["max_value"]
@@ -366,6 +397,24 @@ class SurveyStatusHUD:
                 self._text(20, y, _truncate(name, 34), color, ("Courier", 8, "bold"))
                 self._text(WIDTH - 18, y, state + estimate, color, ("Courier", 8, "bold"), "e")
                 y += 19
+                for detail in row.get("bio_details") or []:
+                    kind = detail.get("kind")
+                    symbol = {"complete": "✓", "sample": "●", "detected": "○"}.get(kind, "·")
+                    detail_color = (
+                        _GREEN if kind == "complete"
+                        else COLOR_ORANGE if kind == "sample"
+                        else COLOR_TEXT
+                    )
+                    self._text(30, y, symbol, detail_color, ("Courier", 8, "bold"))
+                    self._text(
+                        46, y, _truncate(detail.get("display_name") or detail.get("name"), 38),
+                        detail_color, ("Courier", 7, "bold"),
+                    )
+                    self._text(
+                        WIDTH - 18, y, detail.get("status") or "DETECTED",
+                        detail_color, ("Courier", 7, "bold"), "e",
+                    )
+                    y += 15
                 if notable:
                     self._text(28, y, "NOTABLE BODY", _DIM, ("Courier", 7, "bold"))
                     self._text(WIDTH - 18, y, notable["value_line"], notable["value_color"], ("Courier", 7, "bold"), "e")
