@@ -32,7 +32,7 @@ This Code of Conduct applies in all project spaces, including issues, pull reque
 
 Project maintainers are responsible for clarifying and enforcing these standards. They may edit, remove, or reject comments, commits, code, issues, and other contributions that do not follow them, and will communicate moderation reasons when appropriate.
 
-For a confidential report, use GitHub's private [security advisory form](https://github.com/insert3coins/VoicCompass/security/advisories/new) and begin the report title with `Conduct:`. Do not post sensitive conduct reports in a public issue. Reports will be reviewed promptly, fairly, and with respect for the reporter's privacy and safety.
+For a confidential report, use GitHub's private [security advisory form](https://github.com/insert3coins/VoidCompass/security/advisories/new) and begin the report title with `Conduct:`. Do not post sensitive conduct reports in a public issue. Reports will be reviewed promptly, fairly, and with respect for the reporter's privacy and safety.
 
 ## Enforcement guidelines
 

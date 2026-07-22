@@ -13,7 +13,7 @@ Please confirm a suspected problem still occurs on the latest release before rep
 
 ## Reporting a vulnerability
 
-Do not open a public issue for a suspected vulnerability. Submit it privately through [GitHub Security Advisories](https://github.com/insert3coins/VoicCompass/security/advisories/new).
+Do not open a public issue for a suspected vulnerability. Submit it privately through [GitHub Security Advisories](https://github.com/insert3coins/VoidCompass/security/advisories/new).
 
 Include, where possible:
 

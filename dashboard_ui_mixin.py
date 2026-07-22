@@ -64,9 +64,9 @@ def _carrier_countdown(dep_str):
 # file changes, so an idle docked commander can be quiet for a while.
 GAME_ACTIVE_GRACE_S = 300.0
 
-PROJECT_URL = "https://github.com/insert3coins/VoicCompass"
+PROJECT_URL = "https://github.com/insert3coins/VoidCompass"
 RELEASES_URL = f"{PROJECT_URL}/releases"
-RELEASES_API_URL = "https://api.github.com/repos/insert3coins/VoicCompass/releases/latest"
+RELEASES_API_URL = "https://api.github.com/repos/insert3coins/VoidCompass/releases/latest"
 ISSUES_URL = f"{PROJECT_URL}/issues/new/choose"
 WIKI_URL = f"{PROJECT_URL}/wiki"
 LICENSE_URL = f"{PROJECT_URL}/blob/master/LICENSE"
@@ -2356,7 +2356,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         ).start()
 
     def check_updates(self, manual=False):
-        """Check the public VoicCompass GitHub releases without blocking Tk."""
+        """Check the public VoidCompass GitHub releases without blocking Tk."""
         try:
             response = requests.get(
                 RELEASES_API_URL,
