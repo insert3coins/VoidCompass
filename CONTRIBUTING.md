@@ -4,7 +4,7 @@ Thank you for helping improve Void Compass. Bug reports, journal evidence, docum
 
 ## Before opening an issue
 
-- Check the [wiki](https://github.com/insert3coins/VoicCompass/wiki) and existing issues first.
+- Check the [wiki](https://github.com/insert3coins/VoidCompass/wiki) and existing issues first.
 - Reproduce the problem with the newest release when possible.
 - Remove commander names, Frontier IDs, API keys, Discord webhooks, and other personal information from screenshots, journals, configuration, and logs.
 - Report security problems privately as described in [SECURITY.md](SECURITY.md).
@@ -16,8 +16,8 @@ The structured issue forms will ask for the details needed to investigate a bug 
 Void Compass targets Windows and Python 3. Clone the repository, create a virtual environment, and install the declared dependencies:
 
 ```powershell
-git clone https://github.com/insert3coins/VoicCompass.git
-cd VoicCompass
+git clone https://github.com/insert3coins/VoidCompass.git
+cd VoidCompass
 py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
