@@ -78,7 +78,7 @@ from specialists_window import SpecialistsWindow
 import compass_personas
 from captains_log import CaptainsLog
 from diagnostic_logs import application_base_dir, resolve_log_path
-from adaptive_command import AdaptiveCommandDeck, MODE_LABELS
+from adaptive_command import AdaptiveCommandDeck, AUTOMATIC_MODE_IDLE_S, MODE_LABELS
 from diagnostic_bundle import create_support_bundle
 from onboarding import should_show as should_show_onboarding, show_first_run
 from persistence_queue import flush_persistence, persistence_queue
@@ -4064,7 +4064,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 # The established Compass shutdown summary owns TTS for this
                 # boundary, avoiding two spoken debriefs for the same event.
             return
-        detected = ((getattr(self, "ai_operational_state", {}) or {}).get("activity") or {}).get("mode")
+        detected = self._detected_adaptive_mode()
         transition = deck.observe(event, detected, raw, historical=False)
         if not transition.get("changed"):
             return
@@ -4090,7 +4090,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         deck = getattr(self, "adaptive_command", None)
         if not deck or not self.config.get("adaptive_command_enabled", True):
             return
-        detected = ((getattr(self, "ai_operational_state", {}) or {}).get("activity") or {}).get("mode")
+        detected = self._detected_adaptive_mode()
         if detected:
             deck.observe("StartupReady", detected, {}, historical=False)
         mode = deck.current_mode
@@ -4104,6 +4104,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 briefing, category="objectives", cooldown_s=0,
                 key=f"adaptive-startup:{mode}",
             )
+
+    def _detected_adaptive_mode(self):
+        """Return live activity, aging stale automatic evidence to general flight."""
+        activity = (
+            (getattr(self, "ai_operational_state", {}) or {}).get("activity") or {}
+        )
+        mode = activity.get("mode") or "general"
+        observed_at = float(activity.get("last_event_at") or activity.get("since") or 0)
+        if (
+            mode != "general" and observed_at
+            and time.time() - observed_at > AUTOMATIC_MODE_IDLE_S
+        ):
+            return "general"
+        return mode
 
     def _adaptive_context(self, route_progress=None):
         route_progress = route_progress or self._current_route_progress()
@@ -4122,14 +4136,26 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         deck = getattr(self, "adaptive_command", None)
         if not deck:
             return
-        mode = deck.set_lock(deck.current_mode if deck.automatic else "auto")
+        self._adaptive_select_mode(deck.current_mode if deck.automatic else "auto")
+
+    def _adaptive_select_mode(self, selected_mode):
+        """Apply a manual Dashboard mode, or resynchronise Automatic immediately."""
+        deck = getattr(self, "adaptive_command", None)
+        if not deck:
+            return
+        selected_mode = str(selected_mode or "auto")
+        mode = deck.set_lock(selected_mode)
+        if selected_mode == "auto":
+            detected = self._detected_adaptive_mode()
+            deck.observe("ManualModeAuto", detected, {}, historical=False)
+            mode = deck.current_mode
         self._persist_config()
         self._apply_adaptive_overlay_scene(mode)
-        self.add_event_feed_entry(
-            "SYSTEM",
-            f"Command Deck mode {'locked to ' + MODE_LABELS.get(mode, mode).title() if not deck.automatic else 'returned to automatic detection'}",
-            severity="INFO",
-        )
+        if deck.automatic:
+            message = f"Command Deck returned to Automatic · {MODE_LABELS.get(mode, mode).title()} detected"
+        else:
+            message = f"Command Deck manually locked to {MODE_LABELS.get(mode, mode).title()}"
+        self.add_event_feed_entry("SYSTEM", message, severity="INFO")
         self.schedule_dashboard_refresh(full=True)
 
     def _adaptive_open_primary(self):

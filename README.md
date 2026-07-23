@@ -1,12 +1,14 @@
 # Void Compass
 
-**Current version: 5.1.1**
+**Current version: 5.1.2**
 
 Void Compass is a native Windows companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
 
 Exploration is the primary experience. Trade, Mining, Combat/AX, Engineering, Powerplay and strategy tools remain fully available as optional add-on workspaces without crowding the live exploration view.
 
-The Dashboard's Exploration Log keeps a curated Flight Log for discoveries, surveys, navigation, Compass, alerts and support services. Frontier's unfiltered journal stream remains one click away in a separate diagnostics view.
+The Dashboard defaults to exploration, then transforms from verified journal activity for Trade, Mining, Combat, Ground, Engineering, Powerplay, Carrier, Colony and station operations. Its hero, telemetry, priority, support and primary action change together; automatic mode returns to exploration context when wider activity is no longer active. A themed mode selector can manually lock and inspect any Dashboard or immediately return to Automatic detection.
+
+The Dashboard's activity log follows the current mode and keeps a curated Flight Log for discoveries, surveys, navigation, operations, Compass, alerts and support services. Frontier's unfiltered journal stream remains one click away in a separate diagnostics view.
 
 ![Void Compass exploration dashboard](DashBoard.PNG)
 

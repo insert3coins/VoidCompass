@@ -14,6 +14,7 @@ from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
 from ui_theme import THEME, ThemedWindowMixin, apply_window, button, panel, scrollbar, section_label
 from version import APP_VERSION
 from overlay_input import set_mouse_passthrough
+from adaptive_command import AUTOMATIC_MODE_IDLE_S
 import route_strip
 
 COLOR_ACCENT = THEME.accent
@@ -627,10 +628,11 @@ class DashboardUIMixin(ThemedWindowMixin):
 
         mode_bar = self._panel(body, border=COLOR_ACCENT)
         mode_bar.pack(fill=tk.X, pady=(0, 8))
-        tk.Label(
+        self.dashboard_deck_heading = tk.Label(
             mode_bar, text="EXPLORATION COMMAND DECK", fg=self.UI_DIM,
             bg=self.UI_PANEL, font=("Segoe UI", 7, "bold"),
-        ).pack(side=tk.LEFT, padx=(12, 8), pady=8)
+        )
+        self.dashboard_deck_heading.pack(side=tk.LEFT, padx=(12, 8), pady=8)
         self.dashboard_mode_badge = tk.Label(
             mode_bar, text="GENERAL FLIGHT", fg="black", bg=COLOR_ACCENT,
             font=("Segoe UI", 8, "bold"), padx=8, pady=3,
@@ -647,7 +649,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         )
         self.dashboard_health_badge.pack(side=tk.RIGHT, padx=(5, 12))
         self.dashboard_mode_lock_btn = self._action_button(
-            mode_bar, "LOCK MODE", self._adaptive_toggle_lock, muted=True,
+            mode_bar, "MODE · AUTO", self._show_adaptive_mode_menu, muted=True,
         )
         self.dashboard_mode_lock_btn.pack(side=tk.RIGHT, padx=(5, 0), pady=5)
         self.dashboard_mode_open_btn = self._action_button(
@@ -667,7 +669,8 @@ class DashboardUIMixin(ThemedWindowMixin):
         system_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         system_head = tk.Frame(system_card, bg=self.UI_PANEL)
         system_head.pack(fill=tk.X, padx=14, pady=(11, 0))
-        self._section_label(system_head, "CURRENT SYSTEM").pack(side=tk.LEFT)
+        self.dashboard_context_heading = self._section_label(system_head, "CURRENT SYSTEM")
+        self.dashboard_context_heading.pack(side=tk.LEFT)
         self.dashboard_survey_badge = tk.Label(
             system_head, text="AWAITING", fg="black", bg=self.UI_DIM,
             font=("Segoe UI", 7, "bold"), padx=7, pady=2,
@@ -708,10 +711,27 @@ class DashboardUIMixin(ThemedWindowMixin):
             zone = tk.Frame(flight_stats, bg=self.UI_PANEL)
             zone.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
             stat_zones.append(zone)
-        self.sys_stat = self.create_stat(stat_zones[0], "SHIP / STATE", "AWAITING LOADOUT")
-        self.nav_stat = self.create_stat(stat_zones[1], "NAVIGATION", "NO TARGET")
-        self.route_progress_stat = self.create_stat(stat_zones[2], "ROUTE", "NO ACTIVE ROUTE")
-        self.scan_stat = self.create_stat(stat_zones[3], "SURVEY", "0 / 0")
+
+        self.dashboard_stat_labels = []
+        self.dashboard_stat_values = []
+        for zone, label, value in zip(
+            stat_zones,
+            ("SHIP / STATE", "NAVIGATION", "ROUTE", "SURVEY"),
+            ("AWAITING LOADOUT", "NO TARGET", "NO ACTIVE ROUTE", "0 / 0"),
+        ):
+            label_widget = tk.Label(
+                zone, text=label, font=("Segoe UI", 8, "bold"),
+                fg=self.UI_DIM, bg=self.UI_PANEL, anchor="w",
+            )
+            label_widget.pack(fill=tk.X, padx=12, pady=(8, 0))
+            value_widget = tk.Label(
+                zone, text=value, font=self.UI_MONO_BOLD, fg=COLOR_TEXT,
+                bg=self.UI_PANEL, anchor="w",
+            )
+            value_widget.pack(fill=tk.X, padx=12)
+            self.dashboard_stat_labels.append(label_widget)
+            self.dashboard_stat_values.append(value_widget)
+        self.sys_stat, self.nav_stat, self.route_progress_stat, self.scan_stat = self.dashboard_stat_values
         self.dashboard_flight_meta = tk.Label(
             system_card, text="", fg=self.UI_MUTED, bg=self.UI_PANEL,
             font=("Consolas", 8), anchor="w",
@@ -723,7 +743,8 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.wp_panel.grid(row=0, column=1, sticky="nsew")
         wp_head = tk.Frame(self.wp_panel, bg=self.UI_PANEL)
         wp_head.pack(fill=tk.X, padx=14, pady=(11, 0))
-        self._section_label(wp_head, "NEXT DESTINATION").pack(side=tk.LEFT)
+        self.dashboard_destination_heading = self._section_label(wp_head, "NEXT DESTINATION")
+        self.dashboard_destination_heading.pack(side=tk.LEFT)
         self.wp_dist_lbl = tk.Label(wp_head, text="", font=self.UI_MONO_BOLD,
                                     fg=COLOR_ACCENT, bg=self.UI_PANEL)
         self.wp_dist_lbl.pack(side=tk.RIGHT)
@@ -763,9 +784,10 @@ class DashboardUIMixin(ThemedWindowMixin):
 
         objective_card = self._panel(active_row, border=COLOR_ACCENT)
         objective_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        self._section_label(objective_card, "EXPLORATION PRIORITY").pack(
-            anchor="w", padx=12, pady=(9, 0)
+        self.dashboard_objective_heading = self._section_label(
+            objective_card, "EXPLORATION PRIORITY",
         )
+        self.dashboard_objective_heading.pack(anchor="w", padx=12, pady=(9, 0))
         self.dashboard_objective_primary = tk.Label(
             objective_card, text="No urgent objective", fg=COLOR_TEXT, bg=self.UI_PANEL,
             font=("Segoe UI", 11, "bold"), anchor="w",
@@ -779,9 +801,18 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.dashboard_objective_detail.pack(fill=tk.X, padx=12, pady=(0, 8))
         objective_actions = tk.Frame(objective_card, bg=self.UI_PANEL)
         objective_actions.pack(fill=tk.X, padx=12, pady=(0, 9))
-        self._action_button(objective_actions, "EXPLORE", self.open_exploration_window, accent=True).pack(side=tk.LEFT)
-        self._action_button(objective_actions, "GALAXY", self.open_bgs_window).pack(side=tk.LEFT, padx=(6, 0))
-        self._action_button(objective_actions, "GROUND", self.open_ground_target_window, muted=True).pack(side=tk.LEFT, padx=(6, 0))
+        self.dashboard_primary_action_btn = self._action_button(
+            objective_actions, "OPEN EXPLORE", self.open_exploration_window, accent=True,
+        )
+        self.dashboard_primary_action_btn.pack(side=tk.LEFT)
+        self.dashboard_copy_action_btn = self._action_button(
+            objective_actions, "COPY NEXT", self._dashboard_copy_next,
+        )
+        self.dashboard_copy_action_btn.pack(side=tk.LEFT, padx=(6, 0))
+        self.dashboard_explore_action_btn = self._action_button(
+            objective_actions, "GALAXY", self.open_bgs_window, muted=True,
+        )
+        self.dashboard_explore_action_btn.pack(side=tk.LEFT, padx=(6, 0))
 
         compass_card = self._panel(active_row)
         compass_card.grid(row=0, column=1, sticky="nsew", padx=(0, 8))
@@ -814,7 +845,8 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.carrier_panel.grid(row=0, column=2, sticky="nsew")
         carrier_hdr = tk.Frame(self.carrier_panel, bg=self.UI_PANEL)
         carrier_hdr.pack(fill=tk.X, padx=12, pady=(9, 4))
-        self._section_label(carrier_hdr, "EXPEDITION SUPPORT").pack(side=tk.LEFT)
+        self.dashboard_support_heading = self._section_label(carrier_hdr, "EXPEDITION SUPPORT")
+        self.dashboard_support_heading.pack(side=tk.LEFT)
         self.carrier_panel_badge = tk.Label(
             carrier_hdr, text="IDLE", fg="black", bg=self.UI_DIM,
             font=("Segoe UI", 7, "bold"), padx=6, pady=2,
@@ -870,12 +902,14 @@ class DashboardUIMixin(ThemedWindowMixin):
         stream_head.pack(fill=tk.X, padx=12, pady=(9, 7))
         stream_title = tk.Frame(stream_head, bg=self.UI_PANEL)
         stream_title.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        self._section_label(stream_title, "EXPLORATION LOG").pack(anchor="w")
-        tk.Label(
+        self.dashboard_stream_heading = self._section_label(stream_title, "EXPLORATION LOG")
+        self.dashboard_stream_heading.pack(anchor="w")
+        self.dashboard_stream_subtitle = tk.Label(
             stream_title,
             text="Curated discoveries, navigation and Compass activity",
             fg=self.UI_DIM, bg=self.UI_PANEL, font=("Segoe UI", 8), anchor="w",
-        ).pack(anchor="w", pady=(2, 0))
+        )
+        self.dashboard_stream_subtitle.pack(anchor="w", pady=(2, 0))
         self.dashboard_stream_buttons = {}
         for name, label in (("live", "FLIGHT LOG"), ("raw", "JOURNAL")):
             btn = self._action_button(
@@ -1173,6 +1207,372 @@ class DashboardUIMixin(ThemedWindowMixin):
             return f"{value / 1_000:.0f}K cr"
         return f"{value:,} cr"
 
+    @staticmethod
+    def _dashboard_number(value, default=0):
+        try:
+            return int(float(value or 0))
+        except (TypeError, ValueError):
+            return default
+
+    def _dashboard_activity_context(self, mode, snapshot, queue_rows=None):
+        """Build one verified, display-only context for an adaptive add-on mode."""
+        snapshot = snapshot if isinstance(snapshot, dict) else {}
+        queue_rows = list(queue_rows or [])
+        flight = snapshot.get("flight") or {}
+        navigation = snapshot.get("navigation") or {}
+        current_system = navigation.get("current_system") or getattr(self, "current_sys", None) or "UNKNOWN SYSTEM"
+        cargo = self._dashboard_number(flight.get("cargo_t"))
+        cargo_cap = self._dashboard_number(flight.get("cargo_capacity_t"))
+        cargo_ratio = min(1.0, cargo / cargo_cap) if cargo_cap else 0.0
+        next_system = navigation.get("next_system") or navigation.get("final_destination") or "NO DESTINATION"
+        mode_labels = {
+            "trade": "TRADE", "mining": "MINING", "combat": "COMBAT",
+            "ground": "GROUND OPS", "engineering": "ENGINEERING",
+            "carrier": "CARRIER OPS", "colony": "ARCHITECT",
+            "station": "STATION OPS", "powerplay": "POWERPLAY",
+        }
+        label = mode_labels.get(mode, str(mode or "ACTIVITY").upper())
+        context = {
+            "deck": f"{label} COMMAND DECK",
+            "heading": f"{label} ACTIVITY",
+            "badge": "ACTIVE",
+            "badge_colour": COLOR_ACCENT,
+            "title": current_system,
+            "detail": f"Verified {label.casefold()} context is active in {current_system}.",
+            "value": "LIVE JOURNAL CONTEXT",
+            "progress": cargo_ratio,
+            "progress_colour": COLOR_ACCENT,
+            "stats": [
+                ("SHIP / STATE", f"{flight.get('ship') or 'SHIP'} · {flight.get('state') or 'FLIGHT'}"),
+                ("NAVIGATION", next_system),
+                ("CARGO", f"{cargo}/{cargo_cap} T" if cargo_cap else f"{cargo} T"),
+                ("LEGAL", flight.get("legal_state") or "CLEAN"),
+            ],
+            "priority": f"Continue {label.casefold()} activity",
+            "priority_detail": "Open the active workspace for its complete controls and verified detail.",
+            "support_heading": f"{label} SUPPORT",
+            "support_badge": "READY",
+            "support_colour": self.UI_OK,
+            "support_name": next_system,
+            "support_detail": current_system,
+            "support_meta": "Context follows live journal activity",
+            "support_progress": cargo_ratio,
+            "support_progress_text": f"{cargo}/{cargo_cap} T" if cargo_cap else "",
+            "action": f"OPEN {label}",
+        }
+
+        if mode == "trade":
+            trade = snapshot.get("trade") or {}
+            plan = trade.get("plan") or {}
+            last = trade.get("last_transaction") or {}
+            commodity = (
+                last.get("commodity") or plan.get("commodity")
+                or next(iter((trade.get("commodities_bought") or {}).keys()), None)
+                or next(iter((trade.get("commodities_sold") or {}).keys()), None)
+                or "TRADE RUN"
+            )
+            destination = plan.get("to_station") or plan.get("to_system") or next_system
+            origin = plan.get("from_station") or plan.get("from_system") or current_system
+            profit = self._dashboard_number(trade.get("profit_cr"))
+            expected = self._dashboard_number(plan.get("profit_cr"))
+            context.update({
+                "heading": "TRADE RUN", "badge": "PLANNED" if plan else "ACTIVE",
+                "title": str(commodity),
+                "detail": f"{origin}  →  {destination}" if plan else f"Market activity in {current_system}",
+                "value": f"SESSION PROFIT {self._dashboard_credits(profit)}" + (
+                    f"  ·  PLAN {self._dashboard_credits(expected)}" if expected else ""
+                ),
+                "stats": [
+                    ("CARGO", f"{cargo}/{cargo_cap} T" if cargo_cap else f"{cargo} T"),
+                    ("BOUGHT", f"{self._dashboard_number(trade.get('bought_units')):,} T"),
+                    ("SOLD", f"{self._dashboard_number(trade.get('sold_units')):,} T"),
+                    ("PROFIT", self._dashboard_credits(profit)),
+                ],
+                "priority": f"Deliver trade plan to {destination}" if plan else "Review the next profitable market",
+                "priority_detail": (
+                    f"The active plan runs from {origin} to {destination}."
+                    if plan else "No planned market destination is currently recorded."
+                ),
+                "support_heading": "MARKET SUPPORT", "support_badge": "PLAN" if plan else "LIVE",
+                "support_name": destination, "support_detail": f"FROM {origin}",
+                "support_meta": f"EXPECTED {self._dashboard_credits(expected)}" if expected else "EDDN market services remain automatic",
+                "action": "OPEN TRADE",
+            })
+        elif mode == "mining":
+            mining = snapshot.get("mining") or {}
+            body = mining.get("body") or mining.get("system") or current_system
+            refined = self._dashboard_number(mining.get("refined_tons"))
+            best = mining.get("best_material") or "No confirmed mineral yet"
+            best_pct = float(mining.get("best_percent") or 0)
+            context.update({
+                "heading": "MINING RUN", "title": body,
+                "detail": f"Best prospect: {best}" + (f" at {best_pct:.1f}%" if best_pct else ""),
+                "value": f"{refined:,} T REFINED  ·  {float(mining.get('yield_tph') or 0):.1f} T/H",
+                "stats": [
+                    ("PROSPECTED", f"{self._dashboard_number(mining.get('prospected')):,}"),
+                    ("CORES", f"{self._dashboard_number(mining.get('cores_found')):,} FOUND"),
+                    ("REFINED", f"{refined:,} T"),
+                    ("LIMPETS", str(mining.get("limpets") if mining.get("limpets") is not None else "UNKNOWN")),
+                ],
+                "priority": "Continue the active mining run" if mining.get("active") else "Prepare the next mining run",
+                "priority_detail": f"Refinery has confirmed {refined:,} tonnes during this session.",
+                "support_heading": "PROSPECTOR SUPPORT", "support_name": str(best),
+                "support_detail": f"BEST CONTENT {best_pct:.1f}%" if best_pct else "Awaiting prospector result",
+                "support_meta": f"{self._dashboard_number(mining.get('cores_cracked')):,} cores cracked",
+                "action": "OPEN MINING",
+            })
+        elif mode == "combat":
+            combat = snapshot.get("combat") or {}
+            target = combat.get("current_target") or {}
+            target_name = target.get("name") or target.get("ship") or "COMBAT SORTIE"
+            hull = combat.get("hull_percent")
+            hull_ratio = min(1.0, max(0.0, float(hull) / 100.0)) if hull is not None else 0.0
+            reward = self._dashboard_number(combat.get("unclaimed_reward_cr"))
+            context.update({
+                "heading": "COMBAT SORTIE", "badge": "DANGER" if combat.get("in_danger") else "ACTIVE",
+                "badge_colour": self.UI_FAIL if combat.get("in_danger") else COLOR_ACCENT,
+                "title": target_name, "detail": f"Combat activity in {current_system}",
+                "value": f"UNCLAIMED {self._dashboard_credits(reward)}",
+                "progress": hull_ratio, "progress_colour": self.UI_OK if hull_ratio >= 0.5 else self.UI_WARN,
+                "stats": [
+                    ("HULL", f"{float(hull):.0f}%" if hull is not None else "UNKNOWN"),
+                    ("SHIELDS", "UP" if combat.get("shields_up") else "DOWN"),
+                    ("VICTORIES", f"{self._dashboard_number(combat.get('victories')):,}"),
+                    ("CLAIMS", f"{self._dashboard_number(combat.get('bounties')) + self._dashboard_number(combat.get('combat_bonds')):,}"),
+                ],
+                "priority": "Stabilise the ship" if combat.get("in_danger") else "Continue the combat sortie",
+                "priority_detail": f"{self._dashboard_number(combat.get('attacks')):,} hostile engagements observed this sortie.",
+                "support_heading": "COMBAT READINESS", "support_badge": "DANGER" if combat.get("in_danger") else "READY",
+                "support_colour": self.UI_FAIL if combat.get("in_danger") else self.UI_OK,
+                "support_name": f"HULL {float(hull):.0f}%" if hull is not None else "Hull state unknown",
+                "support_detail": "SHIELDS UP" if combat.get("shields_up") else "SHIELDS DOWN",
+                "support_meta": f"{self._dashboard_credits(reward)} awaiting redemption",
+                "support_progress": hull_ratio, "support_progress_text": f"{float(hull):.0f}%" if hull is not None else "",
+                "action": "OPEN COMBAT",
+            })
+        elif mode == "ground":
+            ground = snapshot.get("ground_operations") or {}
+            biology = snapshot.get("biology") or {}
+            sample_progress = self._dashboard_number(biology.get("progress") or biology.get("sample_idx"))
+            sample_ratio = min(1.0, sample_progress / 3.0) if sample_progress else 0.0
+            place = ground.get("settlement") or biology.get("body") or (snapshot.get("survey") or {}).get("focused_body") or current_system
+            suit = ground.get("suit") or ground.get("loadout") or "GROUND LOADOUT"
+            context.update({
+                "heading": "GROUND OPERATIONS", "title": place,
+                "detail": f"{suit}  ·  {ground.get('vehicle_control') or 'On foot'}",
+                "value": f"BIO SAMPLE {sample_progress}/3" if sample_progress else f"BACKPACK {self._dashboard_number(ground.get('backpack_units'))} ITEMS",
+                "progress": sample_ratio,
+                "stats": [
+                    ("HEALTH", f"{float(ground.get('health_percent')):.0f}%" if ground.get("health_percent") is not None else "UNKNOWN"),
+                    ("OXYGEN", f"{float(ground.get('oxygen_percent')):.0f}%" if ground.get("oxygen_percent") is not None else "UNKNOWN"),
+                    ("MEDKITS", str(self._dashboard_number(ground.get("medkits")))),
+                    ("ENERGY", str(self._dashboard_number(ground.get("energy_cells")))),
+                ],
+                "priority": f"Continue {biology.get('species') or biology.get('genus')} sampling" if biology else "Continue surface operations",
+                "priority_detail": f"Current surface context: {place}.",
+                "support_heading": "SURFACE SUPPORT", "support_name": suit,
+                "support_detail": f"GRAVITY {float(ground.get('gravity_g')):.2f} G" if ground.get("gravity_g") is not None else "Local gravity awaiting telemetry",
+                "support_meta": f"{self._dashboard_number(ground.get('backpack_units'))} backpack items",
+                "support_progress": sample_ratio, "support_progress_text": f"{sample_progress}/3" if sample_progress else "",
+                "action": "OPEN GROUND",
+            })
+        elif mode == "engineering":
+            pins = list((snapshot.get("objectives") or {}).get("pinned_engineering") or [])
+            first = pins[0] if pins else {}
+            name = first.get("name") if isinstance(first, dict) else str(first or "")
+            grade = self._dashboard_number(first.get("target_grade", first.get("grade", 0))) if isinstance(first, dict) else 0
+            context.update({
+                "heading": "ENGINEERING GOALS", "badge": "PINNED" if pins else "READY",
+                "title": name or "NO PINNED BLUEPRINT",
+                "detail": f"{len(pins)} pinned blueprint{'s' if len(pins) != 1 else ''} tracked from local inventory.",
+                "value": f"TARGET GRADE {grade}" if grade else "MATERIAL INVENTORY READY",
+                "progress": min(1.0, len(pins) / 5.0) if pins else 0.0,
+                "stats": [
+                    ("PINNED", str(len(pins))),
+                    ("TARGET", f"G{grade}" if grade else "NONE"),
+                    ("CARGO", f"{cargo}/{cargo_cap} T" if cargo_cap else f"{cargo} T"),
+                    ("SYSTEM", current_system),
+                ],
+                "priority": f"Advance {name}" if name else "Pin an engineering goal",
+                "priority_detail": "Engineering Command holds grade-aware material shortages and trader alternatives.",
+                "support_heading": "MATERIAL SUPPORT", "support_name": f"{len(pins)} PINNED GOALS",
+                "support_detail": name or "No blueprint selected", "support_meta": f"TARGET G{grade}" if grade else "Open Engineering Command to plan",
+                "support_progress": min(1.0, len(pins) / 5.0) if pins else 0.0,
+                "support_progress_text": f"{len(pins)} GOALS", "action": "OPEN ENGINEER",
+            })
+        elif mode == "powerplay":
+            pp = snapshot.get("powerplay") or {}
+            system = pp.get("system") or {}
+            outstanding = self._dashboard_number(pp.get("outstanding_units"))
+            context.update({
+                "heading": "POWERPLAY OPERATIONS", "title": pp.get("power") or "NO PLEDGE RECORDED",
+                "detail": f"{current_system}  ·  {system.get('state') or 'regional state unknown'}",
+                "value": f"{self._dashboard_number(pp.get('merits')):,} MERITS  ·  {outstanding:,} UNITS OUTSTANDING",
+                "progress": min(1.0, self._dashboard_number(pp.get("session_delivered")) / max(1, self._dashboard_number(pp.get("session_collected")))) if pp.get("session_collected") else 0.0,
+                "stats": [
+                    ("RANK", str(pp.get("rank") or "—")),
+                    ("MERITS", f"{self._dashboard_number(pp.get('merits')):,}"),
+                    ("COLLECTED", f"{self._dashboard_number(pp.get('session_collected')):,}"),
+                    ("DELIVERED", f"{self._dashboard_number(pp.get('session_delivered')):,}"),
+                ],
+                "priority": "Deliver Powerplay commodities" if outstanding else "Review regional Powerplay strategy",
+                "priority_detail": f"{outstanding:,} collected units remain outstanding." if outstanding else f"Current controlling power: {system.get('controlling') or 'unknown'}.",
+                "support_heading": "REGIONAL STATUS", "support_name": system.get("controlling") or current_system,
+                "support_detail": "CONTESTED" if system.get("contested") else "STABLE",
+                "support_meta": f"{len(system.get('powers') or [])} powers present", "action": "OPEN POWERPLAY",
+            })
+        elif mode in ("carrier", "colony"):
+            strategy = snapshot.get("strategy") or {}
+            carrier = strategy.get("carrier") or {}
+            projects = list(strategy.get("colonisation_projects") or [])
+            if mode == "carrier":
+                fuel = self._dashboard_number(carrier.get("fuel_level"))
+                capacity = self._dashboard_number(carrier.get("fuel_capacity"))
+                fuel_ratio = min(1.0, fuel / capacity) if capacity else 0.0
+                context.update({
+                    "heading": "FLEET CARRIER OPERATIONS", "title": carrier.get("name") or "NO CARRIER SYNC",
+                    "detail": f"{carrier.get('system') or current_system}  →  {carrier.get('jump_destination') or 'NO JUMP PLOTTED'}",
+                    "value": f"TRITIUM {fuel:,}/{capacity:,} T" if capacity else "Carrier fuel awaiting sync",
+                    "progress": fuel_ratio,
+                    "stats": [
+                        ("STATUS", str(carrier.get("status") or "IDLE").upper()),
+                        ("FUEL", f"{fuel}/{capacity} T" if capacity else "UNKNOWN"),
+                        ("ORDERS", str(self._dashboard_number(carrier.get("trade_orders")))),
+                        ("DESTINATION", carrier.get("jump_destination") or "NONE"),
+                    ],
+                    "priority": f"Prepare jump to {carrier.get('jump_destination')}" if carrier.get("jump_destination") else "Review carrier expedition logistics",
+                    "priority_detail": "Carrier Command holds route, fuel, service and inventory planning.",
+                    "action": "OPEN CARRIER",
+                })
+            else:
+                project = projects[0] if projects else {}
+                remaining = sum(self._dashboard_number(row.get("remaining_units")) for row in projects if isinstance(row, dict))
+                progress = float(project.get("progress") or 0) if isinstance(project, dict) else 0.0
+                progress = progress / 100.0 if progress > 1 else progress
+                context.update({
+                    "heading": "ARCHITECT COMMAND", "badge": "BUILDING" if projects else "READY",
+                    "title": project.get("system") or "NO ACTIVE CONSTRUCTION SITE",
+                    "detail": f"{project.get('body') or current_system}  ·  {len(projects)} active site{'s' if len(projects) != 1 else ''}",
+                    "value": f"{remaining:,} UNITS REMAINING", "progress": min(1.0, max(0.0, progress)),
+                    "stats": [
+                        ("SITES", str(len(projects))),
+                        ("REMAINING", f"{remaining:,} T"),
+                        ("MATCHED", str(len(strategy.get("colonisation_matching_cargo") or []))),
+                        ("CARGO", f"{cargo}/{cargo_cap} T" if cargo_cap else f"{cargo} T"),
+                    ],
+                    "priority": f"Supply {project.get('system')}" if project else "Select a construction project",
+                    "priority_detail": f"{remaining:,} journal-confirmed units remain across active sites.",
+                    "support_heading": "CONSTRUCTION SUPPORT", "support_name": project.get("body") or "No active site",
+                    "support_detail": f"{remaining:,} UNITS REQUIRED", "support_meta": f"{len(strategy.get('colonisation_matching_cargo') or [])} cargo matches aboard",
+                    "support_progress": min(1.0, max(0.0, progress)), "support_progress_text": f"{progress * 100:.0f}%",
+                    "action": "OPEN COLONY",
+                })
+        elif mode == "station":
+            station = snapshot.get("station") or {}
+            missions = snapshot.get("missions") or {}
+            services = list(station.get("services") or [])
+            context.update({
+                "heading": "STATION OPERATIONS", "title": station.get("name") or "DOCKED",
+                "detail": f"{current_system}  ·  {len(services)} services available",
+                "value": f"{self._dashboard_number(missions.get('active'))} ACTIVE MISSIONS",
+                "stats": [
+                    ("SERVICES", str(len(services))),
+                    ("MISSIONS", str(self._dashboard_number(missions.get("active")))),
+                    ("CARGO", f"{cargo}/{cargo_cap} T" if cargo_cap else f"{cargo} T"),
+                    ("BALANCE", self._dashboard_credits(getattr(self, "cmdr_balance", 0))),
+                ],
+                "priority": "Review station services and outstanding work",
+                "priority_detail": ", ".join(str(item) for item in services[:5]) or "Station service list is awaiting journal state.",
+                "support_heading": "STATION SUPPORT", "support_name": station.get("name") or current_system,
+                "support_detail": f"{len(services)} SERVICES", "support_meta": f"{cargo} tonnes aboard",
+                "action": "OPEN NEXT TASK",
+            })
+
+        if queue_rows:
+            context["priority"] = queue_rows[0].get("label") or context["priority"]
+            context["priority_detail"] = queue_rows[0].get("detail") or context["priority_detail"]
+        return context
+
+    def _apply_dashboard_activity_context(self, mode, context=None):
+        """Apply an adaptive mode without rebuilding or replacing dashboard widgets."""
+        exploration = mode in ("general", "exploration", None)
+        if exploration:
+            previous_mode = getattr(self, "_dashboard_render_mode", None)
+            self.dashboard_deck_heading.config(text="EXPLORATION COMMAND DECK")
+            self.dashboard_context_heading.config(text="CURRENT SYSTEM")
+            self.dashboard_destination_heading.config(text="NEXT DESTINATION")
+            self.dashboard_objective_heading.config(text="EXPLORATION PRIORITY")
+            for widget, text_value in zip(
+                self.dashboard_stat_labels, ("SHIP / STATE", "NAVIGATION", "ROUTE", "SURVEY"),
+            ):
+                widget.config(text=text_value)
+            self.dashboard_support_heading.config(text="EXPEDITION SUPPORT")
+            self.dashboard_stream_heading.config(text="EXPLORATION LOG")
+            self.dashboard_stream_subtitle.config(
+                text="Curated discoveries, navigation and Compass activity"
+            )
+            self.dashboard_primary_action_btn.config(
+                text="OPEN EXPLORE", command=self.open_exploration_window,
+            )
+            self.dashboard_copy_action_btn.config(text="COPY NEXT", command=self._dashboard_copy_next)
+            self.dashboard_explore_action_btn.config(text="GALAXY", command=self.open_bgs_window)
+            self._dashboard_render_mode = "exploration"
+            if previous_mode not in (None, "exploration"):
+                try:
+                    self.update_carrier_panel(force=True)
+                except Exception:
+                    pass
+            return
+        if not context:
+            return
+        self.dashboard_deck_heading.config(text=context["deck"])
+        self.dashboard_context_heading.config(text=context["heading"])
+        self.dashboard_destination_heading.config(text="NAVIGATION / DESTINATION")
+        self.dashboard_objective_heading.config(text=f"{str(mode).upper()} PRIORITY")
+        activity_label = context["deck"].replace(" COMMAND DECK", "")
+        self.dashboard_stream_heading.config(text=f"{activity_label} ACTIVITY LOG")
+        self.dashboard_stream_subtitle.config(
+            text="Curated mode events, navigation, Compass decisions and support services"
+        )
+        self.dashboard_survey_badge.config(
+            text=context["badge"], bg=context.get("badge_colour") or COLOR_ACCENT,
+        )
+        self.dashboard_survey_name.config(text=str(context["title"]).upper())
+        self.dashboard_survey_detail.config(text=context["detail"])
+        self.dashboard_survey_value.config(text=context["value"])
+        ratio = min(1.0, max(0.0, float(context.get("progress") or 0)))
+        self.dashboard_survey_progress_fill.config(
+            bg=context.get("progress_colour") or COLOR_ACCENT,
+        )
+        self.dashboard_survey_progress_fill.place_configure(relwidth=ratio)
+        for index, (label, value) in enumerate(context["stats"][:4]):
+            self.dashboard_stat_labels[index].config(text=label)
+            self.dashboard_stat_values[index].config(text=str(value).upper())
+        self.dashboard_flight_meta.config(
+            text=f"Adaptive mode · verified from live journal state · {context['detail']}"
+        )
+        self.dashboard_objective_primary.config(text=context["priority"])
+        self.dashboard_objective_detail.config(text=context["priority_detail"])
+        self.dashboard_support_heading.config(text=context["support_heading"])
+        self.carrier_panel_badge.config(
+            text=context["support_badge"], bg=context.get("support_colour") or self.UI_OK,
+        )
+        self._config_label_if_changed(self.carrier_panel_name, text=context["support_name"], fg=COLOR_TEXT)
+        self._config_label_if_changed(self.carrier_panel_loc, text=context["support_detail"], fg=self.UI_MUTED)
+        self._config_label_if_changed(self.carrier_panel_jump, text=context["support_meta"], fg=COLOR_ACCENT)
+        support_ratio = min(1.0, max(0.0, float(context.get("support_progress") or 0)))
+        self.carrier_fuel_fill.place(x=0, y=0, relheight=1.0, relwidth=support_ratio)
+        self.carrier_fuel_fill.config(bg=context.get("progress_colour") or COLOR_ACCENT)
+        self._config_label_if_changed(
+            self.carrier_fuel_txt, text=context.get("support_progress_text") or "", fg=self.UI_MUTED,
+        )
+        self.dashboard_primary_action_btn.config(
+            text=context["action"], command=self._adaptive_open_mode_workspace,
+        )
+        self.dashboard_copy_action_btn.config(text="COPY NEXT", command=self._dashboard_copy_next)
+        self.dashboard_explore_action_btn.config(text="EXPLORATION", command=self.open_exploration_window)
+        self._dashboard_render_mode = mode
+
     def _refresh_adaptive_mode_open_button(self, deck_status, queue_rows=None):
         button_widget = getattr(self, "dashboard_mode_open_btn", None)
         if not self._widget_alive(button_widget):
@@ -1200,6 +1600,51 @@ class DashboardUIMixin(ThemedWindowMixin):
             open_state = tk.NORMAL if actionable else tk.DISABLED
         button_widget.config(text=open_text, state=open_state)
 
+    def _show_adaptive_mode_menu(self):
+        """Show the themed manual/automatic Dashboard mode selector."""
+        deck = getattr(self, "adaptive_command", None)
+        button_widget = getattr(self, "dashboard_mode_lock_btn", None)
+        if not deck or not self._widget_alive(button_widget):
+            return
+        selected = deck.locked_mode if not deck.automatic else "auto"
+        self._adaptive_mode_menu_var = tk.StringVar(value=selected)
+        menu = tk.Menu(
+            self.root, tearoff=False, bg=self.UI_PANEL, fg=COLOR_TEXT,
+            activebackground=COLOR_ACCENT, activeforeground="black",
+            selectcolor=COLOR_ACCENT, relief=tk.FLAT, bd=1,
+            font=("Segoe UI", 9),
+        )
+        options = (
+            ("auto", "Automatic · follow journal activity"),
+            ("exploration", "Exploration"),
+            ("trade", "Trade"),
+            ("mining", "Mining"),
+            ("combat", "Combat / AX"),
+            ("ground", "Ground Operations"),
+            ("engineering", "Engineering"),
+            ("powerplay", "Powerplay"),
+            ("carrier", "Fleet Carrier"),
+            ("colony", "Colony / Architect"),
+            ("station", "Station Operations"),
+        )
+        for index, (mode, label) in enumerate(options):
+            if index == 1:
+                menu.add_separator()
+            menu.add_radiobutton(
+                label=label, value=mode, variable=self._adaptive_mode_menu_var,
+                command=lambda value=mode: self._adaptive_select_mode(value),
+            )
+        try:
+            menu.tk_popup(
+                button_widget.winfo_rootx(),
+                button_widget.winfo_rooty() + button_widget.winfo_height(),
+            )
+        finally:
+            try:
+                menu.grab_release()
+            except tk.TclError:
+                pass
+
     def _refresh_command_dashboard(self, route_progress=None):
         """Refresh briefing cards from already-cached live state only."""
         if not hasattr(self, "dashboard_objective_primary"):
@@ -1222,8 +1667,9 @@ class DashboardUIMixin(ThemedWindowMixin):
                 text=f"{level} · UI {health.get('ui_pending', 0)} · IO {health.get('writes_pending', 0)}",
                 bg=colour,
             )
+            selected_label = str(deck_status.get("label") or "MODE")
             self.dashboard_mode_lock_btn.config(
-                text="LOCK MODE" if deck_status.get("automatic") else "USE AUTO",
+                text="MODE · AUTO" if deck_status.get("automatic") else f"MODE · {selected_label}",
             )
             self._refresh_adaptive_mode_open_button(deck_status)
         state = getattr(self, "companion_state", {}) or {}
@@ -1396,6 +1842,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         # The operational queue still drives adaptive mode actions, but only
         # non-exploration rows are summarised in the add-on strip. It no longer
         # replaces the exploration priority above.
+        command_snapshot = {}
         if deck:
             try:
                 command_snapshot = self._compass_gameplay_snapshot()
@@ -1419,6 +1866,39 @@ class DashboardUIMixin(ThemedWindowMixin):
                     text=f"{control} · {session_events:,} context event{'s' if session_events != 1 else ''} · {len(addon_rows)} active add-on{'s' if len(addon_rows) != 1 else ''}"
                 )
                 self._refresh_adaptive_mode_open_button(deck_status, rows)
+
+            render_mode = str(deck_status.get("mode") or "general")
+            sensed_mode = str((command_snapshot.get("activity") or {}).get("mode") or "general")
+            adaptive_enabled = self.config.get("adaptive_command_enabled", True)
+            if not adaptive_enabled or (deck.automatic and sensed_mode == "general"):
+                render_mode = "general"
+                if str(deck_status.get("mode") or "general") not in ("general", "exploration"):
+                    self.dashboard_mode_badge.config(text="EXPLORATION", bg=COLOR_ACCENT)
+                    self.dashboard_mode_detail.config(
+                        text=(
+                            "ADAPTIVE OFF · exploration context active"
+                            if not adaptive_enabled
+                            else "AUTO · add-on activity idle · exploration context restored"
+                        )
+                    )
+            queue_ids_by_mode = {
+                "trade": {"trade-plan"}, "mining": {"mining"},
+                "ground": {"biology"}, "engineering": {"engineering"},
+                "carrier": {"carrier"}, "colony": {"colony"},
+                "powerplay": {"powerplay", "powerplay-delivery"},
+            }
+            expected_ids = queue_ids_by_mode.get(render_mode, set())
+            mode_rows = (
+                [row for row in rows if row.get("id") in expected_ids]
+                if expected_ids else []
+            )
+            activity_context = (
+                self._dashboard_activity_context(render_mode, command_snapshot, mode_rows)
+                if render_mode not in ("general", "exploration") else None
+            )
+            self._apply_dashboard_activity_context(render_mode, activity_context)
+        else:
+            self._apply_dashboard_activity_context("exploration")
 
     def _run_nav_command(self, label, command):
         """Run a page action and add its full open/switch cost to runtime tracing."""
@@ -1910,7 +2390,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             ("NAVIGATION", "NAVIGATION"),
             ("COMPASS", "COMPASS"),
             ("ALERTS", "ALERTS"),
-            ("SUPPORT", "SUPPORT"),
+            ("OPERATIONS", "OPERATIONS"),
         )
         for idx, (tag, label) in enumerate(event_filters):
             btn = tk.Button(
@@ -2019,7 +2499,7 @@ class DashboardUIMixin(ThemedWindowMixin):
                 "NAVIGATION": "ROUTE & FLIGHT",
                 "COMPASS": "COMPASS ACTIVITY",
                 "ALERTS": "WARNINGS & FAILURES",
-                "SUPPORT": "SERVICES & SUPPORT",
+                "OPERATIONS": "OPERATIONS & SERVICES",
             }
             self.event_feed_filter_lbl.config(text=labels.get(mode, str(mode)))
         if hasattr(self, "event_feed_selection_lbl"):
@@ -2361,7 +2841,10 @@ class DashboardUIMixin(ThemedWindowMixin):
             "DISCOVERY": {"VALUABLE", "SCAN", "DSS", "BIO"},
             "NAVIGATION": {"JUMP", "ROUTE", "SYSTEM", "DOCK"},
             "COMPASS": {"AI", "MUSIC"},
-            "SUPPORT": {"EDSM", "EDDN", "CARRIER", "INFO"},
+            "OPERATIONS": {
+                "TRADE", "CARRIER", "EDSM", "EDDN", "ACHIEVEMENT",
+                "PROFILE", "INFO",
+            },
         }
         if mode == "ALERTS":
             return tag == "ALERT" or entry.get("severity") in ("WARN", "FAIL")
@@ -2654,6 +3137,17 @@ class DashboardUIMixin(ThemedWindowMixin):
             )
             if time.time() <= newest_until + 1.1:
                 self._recolor_event_feed_rows()
+            deck = getattr(self, "adaptive_command", None)
+            if (
+                deck and deck.automatic
+                and getattr(self, "_dashboard_render_mode", "exploration") != "exploration"
+            ):
+                activity = (
+                    (getattr(self, "ai_operational_state", {}) or {}).get("activity") or {}
+                )
+                observed_at = float(activity.get("last_event_at") or activity.get("since") or 0)
+                if observed_at and time.time() - observed_at > AUTOMATIC_MODE_IDLE_S:
+                    self.schedule_dashboard_refresh()
         self.root.after(1000, self._tick_session_clock)
 
     def _toggle_wp_scrollbar(self, show):
@@ -3477,12 +3971,18 @@ class DashboardUIMixin(ThemedWindowMixin):
             logging.warning(f"update_carrier_panel error: {_cp_err}")
         self.update_waypoint_display()
 
-    def update_carrier_panel(self):
+    def update_carrier_panel(self, force=False):
         """Refresh the sidebar Fleet Carrier status panel from carrier_tracker data."""
         if getattr(self, "_startup_restore_active", False):
             self._startup_restore_ui_pending = True
             return
         if not hasattr(self, "carrier_panel") or not hasattr(self, "carrier_tracker"):
+            return
+        deck = getattr(self, "adaptive_command", None)
+        render_mode = str(deck.current_mode if deck else "exploration")
+        if not force and render_mode not in ("general", "exploration", "carrier"):
+            # In add-on modes this physical card is intentionally reused for
+            # mode-specific support; a carrier refresh must not overwrite it.
             return
         cd = self.carrier_tracker.carrier_data
         name     = cd.get("name")
