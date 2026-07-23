@@ -112,6 +112,9 @@ class ExplorationWindow(ThemedWindowMixin):
         self._button(toolbar, "Copy Summary", self._copy_summary, accent=True).pack(side=tk.LEFT, padx=(8, 0))
         self._button(toolbar, "Copy Next Route", self._copy_next_route).pack(side=tk.LEFT, padx=(8, 0))
         self._button(toolbar, "Route Planner", self.show_route_planning).pack(side=tk.LEFT, padx=(8, 0))
+        open_galaxy = getattr(self.app, "open_bgs_window", None)
+        if callable(open_galaxy):
+            self._button(toolbar, "Galaxy", open_galaxy).pack(side=tk.LEFT, padx=(8, 0))
         self._button(toolbar, "Open EDSM", self._open_current_edsm).pack(side=tk.LEFT, padx=(8, 0))
         self._button(toolbar, "Reset Session", self._reset_session).pack(side=tk.RIGHT)
 

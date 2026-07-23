@@ -1,28 +1,28 @@
 # Void Compass
 
-**Current version: 5.0.7**
+**Current version: 5.1.1**
 
 Void Compass is a native Windows companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
 
-![Void Compass operational dashboard](DashBoard.PNG)
+Exploration is the primary experience. Trade, Mining, Combat/AX, Engineering, Powerplay and strategy tools remain fully available as optional add-on workspaces without crowding the live exploration view.
+
+The Dashboard's Exploration Log keeps a curated Flight Log for discoveries, surveys, navigation, Compass, alerts and support services. Frontier's unfiltered journal stream remains one click away in a separate diagnostics view.
+
+![Void Compass exploration dashboard](DashBoard.PNG)
 
 ## Command workspaces
 
-| Workspace | Purpose |
+| Group | Direct workspaces |
 | --- | --- |
-| **Dashboard** | Adaptive activity mode, Command Health, a unified Operational Queue, route/waypoint context, carrier expedition status and a filtered live activity stream. |
-| **Profile** | Career ranks, reputation, achievements, lifetime statistics, fleet and loadouts, missions, backups and integration state. |
-| **Analytics** | Live session pace, interactive credit-balance and daily-profit graphs, selectable trading periods and top commodity performance from local journal history. |
-| **Explore** | System history, scan values, biological survey records, Captain's Log and expedition chronicle tools. |
-| **Achieve** | 1,023 native journal-driven achievements with per-commander progress, category controls and toast unlocks. |
-| **Trade** | One-click trade overview plus routes, markets, local opportunities, watch tracking and EDDN-maintained market data. |
-| **Specialists** | Four profile-local role consoles: elite-trader-style mining runs and economics, Combat/AX readiness and sorties, carrier upkeep/inventory/tritium planning, and exobiology records linked to the Ground tool. |
-| **Route** | Separate Elite `NavRoute.json` and expedition-waypoint lanes, waypoint management, CSV/Spansh imports and a manual neutron plotter. |
-| **Carrier** | Personal and Squadron Carrier identity, fuel, jump operations, expedition route, finance, services and Discord notifications. |
-| **Colony** | Architect Command Centre for colonisation projects, contributions, cargo requirements and persistent planning. |
-| **Galaxy** | Current-system factions, influence watches, conflicts, Powerplay, Community Goals, BGS history and Squadron Command. |
-| **Engineer** | Goal-driven Engineering Command with shared Horizons and Odyssey wishlists, grade-aware engineer access and blueprint availability, collect/keep/trade inventory relevance, nearby traders and jumponium reserves. |
-| **About** | Version and release status, project/community links, support tools, privacy summary, GPL-3.0 terms and Frontier disclaimer. |
+| **Core** | Dashboard and Profile. |
+| **Explore** | Explore and Galaxy. Survey, biological records, routes, waypoints, system history and Captain's Log stay together. |
+| **Expedition** | Expedition overview plus direct Analytics, Achievements, Carrier and Colony access. |
+| **Operations** | Operations overview plus direct Trade and Specialists access, including Mining and Combat/AX. |
+| **System** | Engineer and About. |
+
+Every group starts expanded, can be collapsed deliberately, remembers that choice per commander and remains reachable through a themed scrolling rail on smaller windows. Full secondary workspaces are still created only when first opened.
+
+Trade opens in a compact **Simple Trade** view with cargo selling, routes, the current market and a clear EDDN receive/upload status. Routes, commodities, tracking, station search and database maintenance remain available through **Advanced Tools** and can be returned to the simple view at any time.
 
 ### Squadron Command
 
@@ -36,7 +36,7 @@ Frontier does not publish a complete member roster, online presence, squadron ch
 
 ### Mining Specialist
 
-Mining now lives inside Specialist Console as the single authoritative workflow. Runs start manually or from journal mining activity and record prospector quality, refinery and cargo yield, core cracks, limpets and their observed cost, attributable commodity sales, hourly performance and per-commander history. The Dashboard Mining shortcut opens this section directly.
+Mining now lives inside Specialist Console as the single authoritative workflow. Runs start manually or from journal mining activity and record prospector quality, refinery and cargo yield, core cracks, limpets and their observed cost, attributable commodity sales, hourly performance and per-commander history. It remains directly available from the Operations navigation group.
 
 ### Specialist Console
 
@@ -44,7 +44,7 @@ Specialists remains local and journal-driven. Mining runs track confirmed refine
 
 ## Adaptive Command Deck
 
-Void Compass detects the commander's active workflow from live journal evidence and shifts the Dashboard's priorities between Exploration, Mining, Trade, Combat, Ground, Engineering, Powerplay, Carrier, Architect, Station and general flight modes. The unified Operational Queue can combine the next route or waypoint, unfinished survey work, sampling, missions, trade delivery, mining, engineering, Powerplay, carrier and colony objectives without creating separate competing task lists.
+Void Compass keeps the Dashboard centred on exploration: current flight, route or waypoint progress, system survey, valuable discoveries, expedition support and the next verified exploration priority remain prominent. It still detects Mining, Trade, Combat, Ground, Engineering, Powerplay, Carrier, Architect and station activity from live journal evidence, but presents those optional workflows in a compact add-on strip and their dedicated workspaces instead of displacing exploration.
 
 Each mode can apply a focused overlay scene while gravity, toast and heartbeat safety feedback remains available. Automatic detection can be locked to a chosen mode per commander, and overlay scenes or deterministic Compass briefings/debriefs can be disabled independently in **Settings → Command Deck**.
 

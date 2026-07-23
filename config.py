@@ -88,6 +88,7 @@ PROFILE_TEXT_SETTINGS = (
 )
 
 PROFILE_BOOL_SETTINGS = (
+    "trade_advanced_tools_visible",
     "edsm_upload_enabled",
     "overlay_enabled",
     "overlay_mouse_passthrough",
@@ -136,6 +137,7 @@ PROFILE_BOOL_SETTINGS = (
 )
 
 PROFILE_VALUE_SETTINGS = (
+    "nav_collapsed_groups",
     "prospector_hud_timeout_s",
     "prospector_hud_x",
     "prospector_hud_y",
@@ -303,6 +305,7 @@ def apply_profile_config(config, profile_key=None):
         "adaptive_mode_lock": "auto",
     }
     bool_defaults = {
+        "trade_advanced_tools_visible": False,
         "edsm_upload_enabled": False,
         "overlay_enabled": True,
         "overlay_mouse_passthrough": True,
@@ -361,6 +364,7 @@ def apply_profile_config(config, profile_key=None):
         if setting not in profile and setting in config:
             profile_defaults = {
                 "ui_custom_themes": {},
+                "nav_collapsed_groups": [],
                 "voice_volume": 0.8,
                 "voice_cache_retention_days": 7,
                 "cockpit_memory_system_limit": 300,
@@ -435,6 +439,8 @@ def load_config():
     config_existed = os.path.exists(CONFIG_FILE)
     defaults = {
         'journal_path': '',
+        'trade_advanced_tools_visible': False,
+        'nav_collapsed_groups': [],
         'overlay_enabled': True,
         'overlay_mouse_passthrough': True,
         'hud_compact_mode': False,

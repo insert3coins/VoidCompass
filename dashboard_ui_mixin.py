@@ -134,48 +134,114 @@ class DashboardUIMixin(ThemedWindowMixin):
             fg=THEME.accent, bg=THEME.header, anchor="w",
         ).pack(fill=tk.X, padx=8)
         tk.Label(
-            self.brand_row, text="COMMANDER CONSOLE", font=("Cascadia Mono", 8, "bold"),
+            self.brand_row, text="EXPLORATION CONSOLE", font=("Cascadia Mono", 8, "bold"),
             fg=THEME.orange, bg=THEME.header, anchor="w",
         ).pack(fill=tk.X, padx=8, pady=(3, 14))
         tk.Frame(self.brand_row, bg=THEME.accent, height=1).pack(fill=tk.X, padx=8)
 
-        nav_items = (
-            ("⌖", "DASHBOARD", self.show_dashboard_page),
-            ("◉", "PROFILE", self.open_commander_profile_window),
-            ("∿", "ANALYTICS", self.open_analytics_window),
-            ("✦", "EXPLORE", self.open_exploration_window),
-            ("★", "ACHIEVE", self.open_achievement_window),
-            ("⇌", "TRADE", self.open_trade_window),
-            ("▦", "SPECIALISTS", self.open_specialists_window),
-            ("⬢", "CARRIER", self.open_carrier_window),
-            ("⌂", "COLONY", self.open_colonization_window),
-            ("⚑", "GALAXY", self.open_bgs_window),
-            ("⚙", "ENGINEER", self.open_engineer_window),
-            ("ⓘ", "ABOUT", self.show_about_page),
+        nav_groups = (
+            ("CORE", (
+                ("⌖", "DASHBOARD", "DASHBOARD", self.show_dashboard_page),
+                ("◉", "PROFILE", "PROFILE", self.open_commander_profile_window),
+            )),
+            ("EXPLORE", (
+                ("✦", "EXPLORE", "EXPLORE", self.open_exploration_window),
+                ("⚑", "GALAXY", "GALAXY", self.open_bgs_window),
+            )),
+            ("EXPEDITION", (
+                ("⬢", "EXPEDITION", "OVERVIEW", self.show_expedition_page),
+                ("∿", "ANALYTICS", "ANALYTICS", self.open_analytics_window),
+                ("★", "ACHIEVE", "ACHIEVEMENTS", self.open_achievement_window),
+                ("⬢", "CARRIER", "CARRIER", self.open_carrier_window),
+                ("⌂", "COLONY", "COLONY", self.open_colonization_window),
+            )),
+            ("OPERATIONS", (
+                ("▦", "OPERATIONS", "OVERVIEW", self.show_operations_page),
+                ("⇌", "TRADE", "TRADE", self.open_trade_window),
+                ("▦", "SPECIALISTS", "SPECIALISTS", self.open_specialists_window),
+            )),
+            ("SYSTEM", (
+                ("⚙", "ENGINEER", "ENGINEER", self.open_engineer_window),
+                ("ⓘ", "ABOUT", "ABOUT", self.show_about_page),
+            )),
         )
         self.nav_buttons = {}
         self.nav_indicators = {}
-        nav_list = tk.Frame(self.nav, bg=THEME.header)
-        nav_list.pack(fill=tk.X, padx=12, pady=(18, 0))
-        for icon, label, command in nav_items:
-            active = label == "DASHBOARD"
-            row = tk.Frame(nav_list, bg=THEME.panel_alt if active else THEME.header, height=34)
-            row.pack(fill=tk.X, pady=1)
-            row.pack_propagate(False)
-            indicator = tk.Frame(row, bg=THEME.accent if active else row.cget("bg"), width=3)
-            indicator.pack(side=tk.LEFT, fill=tk.Y)
-            btn = tk.Button(
-                row,
-                text=f"{icon}   {label}",
-                command=lambda name=label, callback=command: self._run_nav_command(name, callback),
-                bg=row.cget("bg"), fg=THEME.accent if active else THEME.muted,
-                activebackground=THEME.panel_alt, activeforeground=THEME.accent,
-                font=("Bahnschrift SemiCondensed", 9, "bold"), anchor="w",
-                relief=tk.FLAT, bd=0, padx=12, pady=7, cursor="arrow" if active else "hand2",
+        self.nav_group_bodies = {}
+        self.nav_group_buttons = {}
+
+        nav_view = tk.Frame(self.nav, bg=THEME.header)
+        nav_view.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=(8, 0))
+        self.nav_canvas = tk.Canvas(
+            nav_view, bg=THEME.header, highlightthickness=0, bd=0,
+        )
+        self.nav_scrollbar = scrollbar(
+            nav_view, orient=tk.VERTICAL, command=self.nav_canvas.yview,
+        )
+        self.nav_canvas.configure(yscrollcommand=self.nav_scrollbar.set)
+        self.nav_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.nav_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        nav_list = tk.Frame(self.nav_canvas, bg=THEME.header)
+        nav_window = self.nav_canvas.create_window((0, 0), window=nav_list, anchor="nw")
+
+        def fit_nav(_event=None):
+            try:
+                self.nav_canvas.itemconfigure(nav_window, width=max(1, self.nav_canvas.winfo_width()))
+                self.nav_canvas.configure(scrollregion=self.nav_canvas.bbox("all"))
+            except tk.TclError:
+                pass
+
+        def scroll_nav(event):
+            if not event.delta:
+                return None
+            self.nav_canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
+            return "break"
+
+        nav_list.bind("<Configure>", fit_nav, add="+")
+        self.nav_canvas.bind("<Configure>", fit_nav, add="+")
+        self.nav_canvas.bind("<MouseWheel>", scroll_nav, add="+")
+        nav_list.bind("<MouseWheel>", scroll_nav, add="+")
+
+        for group_name, items in nav_groups:
+            group = tk.Frame(nav_list, bg=THEME.header)
+            group.pack(fill=tk.X, padx=10, pady=(3, 1))
+            group_header = tk.Button(
+                group, text=f"▾  {group_name}",
+                command=lambda name=group_name: self._toggle_navigation_group(name),
+                bg=THEME.header, fg=THEME.dim,
+                activebackground=THEME.header, activeforeground=THEME.accent,
+                font=("Cascadia Mono", 7, "bold"), anchor="w",
+                relief=tk.FLAT, bd=0, padx=6, pady=3, cursor="hand2",
             )
-            btn.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-            self.nav_buttons[label] = btn
-            self.nav_indicators[label] = indicator
+            group_header.pack(fill=tk.X)
+            group_header.bind("<MouseWheel>", scroll_nav, add="+")
+            body = tk.Frame(group, bg=THEME.header)
+            body.pack(fill=tk.X)
+            self.nav_group_bodies[group_name] = body
+            self.nav_group_buttons[group_name] = group_header
+            for icon, label, display, command in items:
+                active = label == "DASHBOARD"
+                row = tk.Frame(body, bg=THEME.panel_alt if active else THEME.header, height=31)
+                row.pack(fill=tk.X, pady=1)
+                row.pack_propagate(False)
+                indicator = tk.Frame(row, bg=THEME.accent if active else row.cget("bg"), width=3)
+                indicator.pack(side=tk.LEFT, fill=tk.Y)
+                btn = tk.Button(
+                    row,
+                    text=f"{icon}   {display}",
+                    command=lambda name=label, callback=command: self._run_nav_command(name, callback),
+                    bg=row.cget("bg"), fg=THEME.accent if active else THEME.muted,
+                    activebackground=THEME.panel_alt, activeforeground=THEME.accent,
+                    font=("Bahnschrift SemiCondensed", 9, "bold"), anchor="w",
+                    relief=tk.FLAT, bd=0, padx=10, pady=5, cursor="arrow" if active else "hand2",
+                )
+                btn.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+                btn.bind("<MouseWheel>", scroll_nav, add="+")
+                row.bind("<MouseWheel>", scroll_nav, add="+")
+                self.nav_buttons[label] = btn
+                self.nav_indicators[label] = indicator
+
+        self._apply_navigation_group_state()
 
         utilities = tk.Frame(self.nav, bg=THEME.header)
         self.nav_utilities = utilities
@@ -289,6 +355,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         self._active_page = "DASHBOARD"
 
         self._build_command_dashboard_body()
+        self._build_workspace_hubs()
         self._build_about_page()
         self._schedule_workspace_scrollregion()
         return
@@ -553,7 +620,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.ground_lon_entry.insert(0, f"{getattr(self, 'target_lon', 0.0):.6f}")
 
     def _build_command_dashboard_body(self):
-        """Build the low-noise operational dashboard introduced in v4.8.2."""
+        """Build the exploration-first command dashboard."""
         body = tk.Frame(self.dashboard_host, bg=self.UI_BG)
         self.dashboard_page = body
         body.pack(fill=tk.BOTH, expand=True, padx=14, pady=10)
@@ -561,7 +628,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         mode_bar = self._panel(body, border=COLOR_ACCENT)
         mode_bar.pack(fill=tk.X, pady=(0, 8))
         tk.Label(
-            mode_bar, text="ADAPTIVE COMMAND DECK", fg=self.UI_DIM,
+            mode_bar, text="EXPLORATION COMMAND DECK", fg=self.UI_DIM,
             bg=self.UI_PANEL, font=("Segoe UI", 7, "bold"),
         ).pack(side=tk.LEFT, padx=(12, 8), pady=8)
         self.dashboard_mode_badge = tk.Label(
@@ -588,32 +655,139 @@ class DashboardUIMixin(ThemedWindowMixin):
         )
         self.dashboard_mode_open_btn.pack(side=tk.RIGHT, padx=(5, 0), pady=5)
 
-        # Flight / Compass / route briefing row.
-        briefing = tk.Frame(body, bg=self.UI_BG)
-        briefing.pack(fill=tk.X, pady=(0, 8))
-        briefing.grid_columnconfigure(0, weight=3, uniform="briefing")
-        briefing.grid_columnconfigure(1, weight=3, uniform="briefing")
-        briefing.grid_columnconfigure(2, weight=4, uniform="briefing")
+        # Hero row: the current system and route own the dashboard's strongest
+        # visual weight. Everything below supports these two exploration jobs.
+        hero = tk.Frame(body, bg=self.UI_BG)
+        hero.pack(fill=tk.X, pady=(0, 8))
+        hero.grid_columnconfigure(0, weight=6, uniform="hero")
+        hero.grid_columnconfigure(1, weight=4, uniform="hero")
+        hero.grid_rowconfigure(0, weight=1)
 
-        flight_card = self._panel(briefing, border=COLOR_ACCENT)
-        flight_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        self._section_label(flight_card, "FLIGHT BRIEFING").pack(anchor="w", padx=12, pady=(9, 0))
-        self.sys_stat = self.create_stat(flight_card, "SHIP / STATE", "AWAITING LOADOUT")
-        self.nav_stat = self.create_stat(flight_card, "NAVIGATION", "NO TARGET")
-        self.route_progress_stat = self.create_stat(flight_card, "ROUTE", "NO ACTIVE ROUTE")
-        self.scan_stat = self.create_stat(flight_card, "SURVEY", "0 / 0")
+        system_card = self._panel(hero, border=COLOR_ACCENT)
+        system_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        system_head = tk.Frame(system_card, bg=self.UI_PANEL)
+        system_head.pack(fill=tk.X, padx=14, pady=(11, 0))
+        self._section_label(system_head, "CURRENT SYSTEM").pack(side=tk.LEFT)
+        self.dashboard_survey_badge = tk.Label(
+            system_head, text="AWAITING", fg="black", bg=self.UI_DIM,
+            font=("Segoe UI", 7, "bold"), padx=7, pady=2,
+        )
+        self.dashboard_survey_badge.pack(side=tk.RIGHT)
+        self.dashboard_survey_name = tk.Label(
+            system_card, text="NO SYSTEM DATA", fg=COLOR_ACCENT, bg=self.UI_PANEL,
+            font=("Bahnschrift SemiCondensed", 17, "bold"), anchor="w",
+        )
+        self.dashboard_survey_name.pack(fill=tk.X, padx=14, pady=(5, 1))
+        self.dashboard_survey_detail = tk.Label(
+            system_card, text="Scan telemetry will appear here.", fg=COLOR_TEXT,
+            bg=self.UI_PANEL, font=("Consolas", 9), anchor="nw", justify=tk.LEFT,
+            wraplength=610,
+        )
+        self.dashboard_survey_detail.pack(fill=tk.X, padx=14, pady=(0, 2))
+        self.dashboard_survey_value = tk.Label(
+            system_card, text="", fg=COLOR_ORANGE, bg=self.UI_PANEL,
+            font=("Segoe UI", 8, "bold"), anchor="w",
+        )
+        self.dashboard_survey_value.pack(fill=tk.X, padx=14, pady=(1, 5))
+        self.dashboard_survey_progress_bg = tk.Frame(
+            system_card, bg=self.UI_PANEL_2, height=5,
+        )
+        self.dashboard_survey_progress_bg.pack(fill=tk.X, padx=14, pady=(0, 8))
+        self.dashboard_survey_progress_fill = tk.Frame(
+            self.dashboard_survey_progress_bg, bg=COLOR_ACCENT, height=5,
+        )
+        self.dashboard_survey_progress_fill.place(
+            x=0, y=0, relheight=1.0, relwidth=0.0,
+        )
+        tk.Frame(system_card, bg=self.UI_BORDER, height=1).pack(fill=tk.X, padx=14)
+
+        flight_stats = tk.Frame(system_card, bg=self.UI_PANEL)
+        flight_stats.pack(fill=tk.X, padx=2, pady=(0, 2))
+        stat_zones = []
+        for _index in range(4):
+            zone = tk.Frame(flight_stats, bg=self.UI_PANEL)
+            zone.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            stat_zones.append(zone)
+        self.sys_stat = self.create_stat(stat_zones[0], "SHIP / STATE", "AWAITING LOADOUT")
+        self.nav_stat = self.create_stat(stat_zones[1], "NAVIGATION", "NO TARGET")
+        self.route_progress_stat = self.create_stat(stat_zones[2], "ROUTE", "NO ACTIVE ROUTE")
+        self.scan_stat = self.create_stat(stat_zones[3], "SURVEY", "0 / 0")
         self.dashboard_flight_meta = tk.Label(
-            flight_card, text="", fg=self.UI_MUTED, bg=self.UI_PANEL,
+            system_card, text="", fg=self.UI_MUTED, bg=self.UI_PANEL,
             font=("Consolas", 8), anchor="w",
         )
-        self.dashboard_flight_meta.pack(fill=tk.X, padx=12, pady=(6, 9))
+        self.dashboard_flight_meta.pack(fill=tk.X, padx=14, pady=(4, 10))
         self.flight_strip_canvas = None
 
-        compass_card = self._panel(briefing)
+        self.wp_panel = self._panel(hero, border=COLOR_ACCENT)
+        self.wp_panel.grid(row=0, column=1, sticky="nsew")
+        wp_head = tk.Frame(self.wp_panel, bg=self.UI_PANEL)
+        wp_head.pack(fill=tk.X, padx=14, pady=(11, 0))
+        self._section_label(wp_head, "NEXT DESTINATION").pack(side=tk.LEFT)
+        self.wp_dist_lbl = tk.Label(wp_head, text="", font=self.UI_MONO_BOLD,
+                                    fg=COLOR_ACCENT, bg=self.UI_PANEL)
+        self.wp_dist_lbl.pack(side=tk.RIGHT)
+        self.wp_name_lbl = tk.Label(
+            self.wp_panel, text="NO ACTIVE ROUTE", font=("Bahnschrift SemiCondensed", 15, "bold"),
+            fg=COLOR_TEXT, bg=self.UI_PANEL, anchor="w",
+        )
+        self.wp_name_lbl.pack(fill=tk.X, padx=14, pady=(6, 0))
+        self.wp_info_wrap = tk.Frame(self.wp_panel, bg=self.UI_PANEL)
+        self.wp_info_wrap.pack(fill=tk.BOTH, expand=True, padx=14, pady=(3, 4))
+        self.wp_info_scroll = scrollbar(self.wp_info_wrap, orient=tk.VERTICAL)
+        self.wp_info_text = tk.Text(
+            self.wp_info_wrap, bg=self.UI_PANEL, fg=self.UI_MUTED, font=self.UI_MONO,
+            relief=tk.FLAT, borderwidth=0, highlightthickness=0, wrap=tk.WORD,
+            yscrollcommand=self.wp_info_scroll.set, height=6,
+        )
+        self.wp_info_scroll.config(command=self.wp_info_text.yview)
+        self.wp_info_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.wp_info_text.config(state=tk.DISABLED)
+        self.wp_info_scroll_visible = False
+        self.wp_info_text.bind("<Enter>", lambda _e: self._toggle_wp_scrollbar(True))
+        self.wp_info_text.bind("<Leave>", lambda _e: self._toggle_wp_scrollbar(False))
+        self.wp_info_text.bind("<MouseWheel>", self._on_wp_info_wheel)
+        route_actions = tk.Frame(self.wp_panel, bg=self.UI_PANEL)
+        route_actions.pack(fill=tk.X, padx=14, pady=(0, 10))
+        self._action_button(route_actions, "COPY NEXT", self._dashboard_copy_next, accent=True).pack(side=tk.LEFT)
+        self._action_button(route_actions, "OPEN EXPLORE", self.open_exploration_window).pack(side=tk.LEFT, padx=(6, 0))
+
+        # Supporting row: one next action, the local companion, and expedition
+        # logistics. These remain secondary to the system and route above.
+        active_row = tk.Frame(body, bg=self.UI_BG)
+        active_row.pack(fill=tk.X, pady=(0, 8))
+        active_row.grid_columnconfigure(0, weight=4, uniform="active")
+        active_row.grid_columnconfigure(1, weight=3, uniform="active")
+        active_row.grid_columnconfigure(2, weight=3, uniform="active")
+        active_row.grid_rowconfigure(0, weight=1)
+
+        objective_card = self._panel(active_row, border=COLOR_ACCENT)
+        objective_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        self._section_label(objective_card, "EXPLORATION PRIORITY").pack(
+            anchor="w", padx=12, pady=(9, 0)
+        )
+        self.dashboard_objective_primary = tk.Label(
+            objective_card, text="No urgent objective", fg=COLOR_TEXT, bg=self.UI_PANEL,
+            font=("Segoe UI", 11, "bold"), anchor="w",
+        )
+        self.dashboard_objective_primary.pack(fill=tk.X, padx=12, pady=(7, 2))
+        self.dashboard_objective_detail = tk.Label(
+            objective_card, text="Compass will promote verified exploration work as the situation changes.",
+            fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 8), anchor="nw",
+            justify=tk.LEFT, wraplength=390,
+        )
+        self.dashboard_objective_detail.pack(fill=tk.X, padx=12, pady=(0, 8))
+        objective_actions = tk.Frame(objective_card, bg=self.UI_PANEL)
+        objective_actions.pack(fill=tk.X, padx=12, pady=(0, 9))
+        self._action_button(objective_actions, "EXPLORE", self.open_exploration_window, accent=True).pack(side=tk.LEFT)
+        self._action_button(objective_actions, "GALAXY", self.open_bgs_window).pack(side=tk.LEFT, padx=(6, 0))
+        self._action_button(objective_actions, "GROUND", self.open_ground_target_window, muted=True).pack(side=tk.LEFT, padx=(6, 0))
+
+        compass_card = self._panel(active_row)
         compass_card.grid(row=0, column=1, sticky="nsew", padx=(0, 8))
         compass_head = tk.Frame(compass_card, bg=self.UI_PANEL)
         compass_head.pack(fill=tk.X, padx=12, pady=(9, 0))
-        self._section_label(compass_head, "COMPASS BRIEFING").pack(side=tk.LEFT)
+        self._section_label(compass_head, "COMPASS").pack(side=tk.LEFT)
         self.dashboard_compass_badge = tk.Label(
             compass_head, text="CALM", fg="black", bg=self.UI_OK,
             font=("Segoe UI", 7, "bold"), padx=6, pady=2,
@@ -636,70 +810,11 @@ class DashboardUIMixin(ThemedWindowMixin):
         )
         self.dashboard_compass_meta.pack(fill=tk.X, padx=12, pady=(2, 9))
 
-        self.wp_panel = self._panel(briefing, border=COLOR_ACCENT)
-        self.wp_panel.grid(row=0, column=2, sticky="nsew")
-        wp_head = tk.Frame(self.wp_panel, bg=self.UI_PANEL)
-        wp_head.pack(fill=tk.X, padx=12, pady=(9, 0))
-        self._section_label(wp_head, "ROUTE / WAYPOINT").pack(side=tk.LEFT)
-        self.wp_dist_lbl = tk.Label(wp_head, text="", font=self.UI_MONO_BOLD,
-                                    fg=COLOR_ACCENT, bg=self.UI_PANEL)
-        self.wp_dist_lbl.pack(side=tk.RIGHT)
-        self.wp_name_lbl = tk.Label(
-            self.wp_panel, text="NO ACTIVE ROUTE", font=("Segoe UI", 11, "bold"),
-            fg=COLOR_TEXT, bg=self.UI_PANEL, anchor="w",
-        )
-        self.wp_name_lbl.pack(fill=tk.X, padx=12, pady=(6, 0))
-        self.wp_info_wrap = tk.Frame(self.wp_panel, bg=self.UI_PANEL)
-        self.wp_info_wrap.pack(fill=tk.BOTH, expand=True, padx=12, pady=(2, 8))
-        self.wp_info_scroll = scrollbar(self.wp_info_wrap, orient=tk.VERTICAL)
-        self.wp_info_text = tk.Text(
-            self.wp_info_wrap, bg=self.UI_PANEL, fg=self.UI_MUTED, font=self.UI_MONO,
-            relief=tk.FLAT, borderwidth=0, highlightthickness=0, wrap=tk.WORD,
-            yscrollcommand=self.wp_info_scroll.set, height=4,
-        )
-        self.wp_info_scroll.config(command=self.wp_info_text.yview)
-        self.wp_info_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self.wp_info_text.config(state=tk.DISABLED)
-        self.wp_info_scroll_visible = False
-        self.wp_info_text.bind("<Enter>", lambda _e: self._toggle_wp_scrollbar(True))
-        self.wp_info_text.bind("<Leave>", lambda _e: self._toggle_wp_scrollbar(False))
-        self.wp_info_text.bind("<MouseWheel>", self._on_wp_info_wheel)
-
-        # Current priority and active operation row.
-        active_row = tk.Frame(body, bg=self.UI_BG)
-        active_row.pack(fill=tk.X, pady=(0, 8))
-        active_row.grid_columnconfigure(0, weight=4, uniform="active")
-        active_row.grid_columnconfigure(1, weight=3, uniform="active")
-        active_row.grid_columnconfigure(2, weight=3, uniform="active")
-
-        objective_card = self._panel(active_row, border=COLOR_ACCENT)
-        objective_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        self._section_label(objective_card, "ACTIVE OBJECTIVE").pack(
-            anchor="w", padx=12, pady=(9, 0)
-        )
-        self.dashboard_objective_primary = tk.Label(
-            objective_card, text="No urgent objective", fg=COLOR_TEXT, bg=self.UI_PANEL,
-            font=("Segoe UI", 11, "bold"), anchor="w",
-        )
-        self.dashboard_objective_primary.pack(fill=tk.X, padx=12, pady=(7, 2))
-        self.dashboard_objective_detail = tk.Label(
-            objective_card, text="Compass will promote verified work here as the situation changes.",
-            fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 8), anchor="nw",
-            justify=tk.LEFT, wraplength=390,
-        )
-        self.dashboard_objective_detail.pack(fill=tk.X, padx=12, pady=(0, 8))
-        objective_actions = tk.Frame(objective_card, bg=self.UI_PANEL)
-        objective_actions.pack(fill=tk.X, padx=12, pady=(0, 9))
-        self._action_button(objective_actions, "COPY NEXT", self._dashboard_copy_next, accent=True).pack(side=tk.LEFT)
-        self._action_button(objective_actions, "OPEN TASK", self._adaptive_open_primary).pack(side=tk.LEFT, padx=(6, 0))
-        self._action_button(objective_actions, "EXPLORE", self.open_exploration_window).pack(side=tk.LEFT, padx=(6, 0))
-        self._action_button(objective_actions, "GROUND", self.open_ground_target_window, muted=True).pack(side=tk.LEFT, padx=(6, 0))
-
         self.carrier_panel = self._panel(active_row)
-        self.carrier_panel.grid(row=0, column=1, sticky="nsew", padx=(0, 8))
+        self.carrier_panel.grid(row=0, column=2, sticky="nsew")
         carrier_hdr = tk.Frame(self.carrier_panel, bg=self.UI_PANEL)
         carrier_hdr.pack(fill=tk.X, padx=12, pady=(9, 4))
-        self._section_label(carrier_hdr, "CARRIER EXPEDITION").pack(side=tk.LEFT)
+        self._section_label(carrier_hdr, "EXPEDITION SUPPORT").pack(side=tk.LEFT)
         self.carrier_panel_badge = tk.Label(
             carrier_hdr, text="IDLE", fg="black", bg=self.UI_DIM,
             font=("Segoe UI", 7, "bold"), padx=6, pady=2,
@@ -730,28 +845,39 @@ class DashboardUIMixin(ThemedWindowMixin):
                                          bg=self.UI_PANEL, font=("Segoe UI", 7))
         self.carrier_fuel_txt.pack(side=tk.LEFT, padx=(8, 0))
 
-        operations_card = self._panel(active_row)
-        operations_card.grid(row=0, column=2, sticky="nsew")
-        self._section_label(operations_card, "OPERATIONAL QUEUE").pack(anchor="w", padx=12, pady=(9, 0))
+        # Optional workspaces remain available, but no longer compete with the
+        # primary exploration briefing.
+        addon_strip = self._panel(body)
+        addon_strip.pack(fill=tk.X, pady=(0, 8))
+        tk.Label(
+            addon_strip, text="ADD-ON ACTIVITY", fg=self.UI_DIM, bg=self.UI_PANEL,
+            font=("Segoe UI", 7, "bold"),
+        ).pack(side=tk.LEFT, padx=(12, 8), pady=8)
         self.dashboard_operations_text = tk.Label(
-            operations_card, text="No active operations", fg=COLOR_TEXT, bg=self.UI_PANEL,
-            font=("Consolas", 8), anchor="nw", justify=tk.LEFT, wraplength=300,
+            addon_strip, text="No active add-on work", fg=self.UI_MUTED,
+            bg=self.UI_PANEL, font=("Consolas", 8), anchor="w",
         )
-        self.dashboard_operations_text.pack(fill=tk.BOTH, expand=True, padx=12, pady=(7, 5))
-        op_actions = tk.Frame(operations_card, bg=self.UI_PANEL)
-        op_actions.pack(fill=tk.X, padx=12, pady=(0, 9))
-        self._action_button(op_actions, "COLONY", self.open_colonization_window).pack(side=tk.LEFT)
-        self._action_button(op_actions, "TRADE", self.open_trade_window).pack(side=tk.LEFT, padx=(5, 0))
-        self._action_button(op_actions, "MINING", self.open_mining_window).pack(side=tk.LEFT, padx=(5, 0))
+        self.dashboard_operations_text.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=6)
+        self._action_button(
+            addon_strip, "OPEN ADD-ONS", self.show_operations_page, muted=True,
+        ).pack(side=tk.RIGHT, padx=10, pady=5)
 
-        # One stream area: curated by default, raw journal on demand.
+        # Exploration log: a curated flight record by default, with the raw
+        # Frontier journal kept deliberately secondary for diagnostics.
         stream_shell = self._panel(body, border=COLOR_ACCENT)
         stream_shell.pack(fill=tk.BOTH, expand=True)
         stream_head = tk.Frame(stream_shell, bg=self.UI_PANEL)
-        stream_head.pack(fill=tk.X, padx=10, pady=(7, 0))
-        self._section_label(stream_head, "ACTIVITY STREAM").pack(side=tk.LEFT)
+        stream_head.pack(fill=tk.X, padx=12, pady=(9, 7))
+        stream_title = tk.Frame(stream_head, bg=self.UI_PANEL)
+        stream_title.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self._section_label(stream_title, "EXPLORATION LOG").pack(anchor="w")
+        tk.Label(
+            stream_title,
+            text="Curated discoveries, navigation and Compass activity",
+            fg=self.UI_DIM, bg=self.UI_PANEL, font=("Segoe UI", 8), anchor="w",
+        ).pack(anchor="w", pady=(2, 0))
         self.dashboard_stream_buttons = {}
-        for name, label in (("live", "CURATED"), ("raw", "RAW JOURNAL")):
+        for name, label in (("live", "FLIGHT LOG"), ("raw", "JOURNAL")):
             btn = self._action_button(
                 stream_head, label, lambda selected=name: self._show_dashboard_stream(selected),
                 accent=(name == "live"), muted=(name != "live"),
@@ -766,16 +892,25 @@ class DashboardUIMixin(ThemedWindowMixin):
 
         self.dashboard_raw_stream = tk.Frame(self.dashboard_stream_host, bg=self.UI_PANEL)
         raw_header = tk.Frame(self.dashboard_raw_stream, bg=self.UI_PANEL)
-        raw_header.pack(fill=tk.X, padx=10, pady=(8, 5))
-        tk.Label(raw_header, text="Unfiltered Elite journal events", fg=self.UI_MUTED,
-                 bg=self.UI_PANEL, font=("Segoe UI", 8)).pack(side=tk.LEFT)
+        raw_header.pack(fill=tk.X, padx=12, pady=(9, 7))
+        raw_copy = tk.Frame(raw_header, bg=self.UI_PANEL)
+        raw_copy.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Label(
+            raw_copy, text="RAW JOURNAL DIAGNOSTICS", fg=COLOR_ORANGE,
+            bg=self.UI_PANEL, font=("Segoe UI", 8, "bold"), anchor="w",
+        ).pack(anchor="w")
+        tk.Label(
+            raw_copy,
+            text="Unfiltered Frontier events for troubleshooting and verification",
+            fg=self.UI_DIM, bg=self.UI_PANEL, font=("Segoe UI", 8), anchor="w",
+        ).pack(anchor="w", pady=(2, 0))
         self.journal_history_count_lbl = tk.Label(
-            raw_header, text="LIVE", fg=COLOR_ACCENT, bg=self.UI_PANEL,
-            font=("Consolas", 8, "bold"),
+            raw_header, text="0 EVENTS", fg="black", bg=COLOR_ORANGE,
+            font=("Consolas", 8, "bold"), padx=7, pady=3,
         )
         self.journal_history_count_lbl.pack(side=tk.RIGHT)
         history_wrap = tk.Frame(self.dashboard_raw_stream, bg="#0b0f13")
-        history_wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+        history_wrap.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 12))
         self.journal_history_canvas = tk.Canvas(
             history_wrap, bg="#0b0f13", highlightthickness=0, borderwidth=0,
         )
@@ -1154,9 +1289,10 @@ class DashboardUIMixin(ThemedWindowMixin):
             f"{int(cognition_state.get('decisions') or 0):,} decisions"
         ))
 
-        # Choose one truthful priority instead of displaying every possible task.
+        # Choose one truthful exploration priority instead of allowing optional
+        # workspaces to displace the app's primary purpose.
         primary = "No urgent objective"
-        detail = "Flight state is stable. Choose a workspace or continue the current route."
+        detail = "Flight state is stable. Continue surveying or follow the current route."
         sample = getattr(self, "bio_sampling", None)
         remaining_bodies = max(0, int(getattr(self, "total", 0) or 0) - int(getattr(self, "scanned", 0) or 0))
         missions = state.get("missions") or {}
@@ -1176,12 +1312,61 @@ class DashboardUIMixin(ThemedWindowMixin):
         elif route_progress.get("remaining") and next_destination:
             primary = f"Continue to {next_destination}"
             detail = route_progress.get("text") or "A navigation route remains active."
-        elif mission_rows:
-            destination = next((row.get("destination_system") for row in mission_rows if isinstance(row, dict) and row.get("destination_system")), None)
-            primary = f"Review {len(mission_rows)} active mission{'s' if len(mission_rows) != 1 else ''}"
-            detail = f"Next recorded mission destination: {destination}." if destination else "Mission objectives remain active."
         self.dashboard_objective_primary.config(text=primary)
         self.dashboard_objective_detail.config(text=detail)
+
+        # Current-system survey intelligence stays visible even when the
+        # transient survey overlay is hidden or the activity stream moves on.
+        if hasattr(self, "dashboard_survey_name"):
+            system_name = str(getattr(self, "current_sys", None) or "NO SYSTEM DATA")
+            scanned = max(0, int(getattr(self, "scanned", 0) or 0))
+            total = max(0, int(getattr(self, "total", 0) or 0))
+            bio_signals = max(0, int(getattr(self, "system_bio_signals", 0) or 0))
+            geo_signals = 0
+            for signals in (getattr(self, "body_signals", {}) or {}).values():
+                if isinstance(signals, dict):
+                    geo_signals += max(0, int(signals.get("geo") or 0))
+            notable = len(getattr(self, "valuable_bodies", None) or ())
+            if total and scanned >= total:
+                survey_state, survey_colour = "COMPLETE", self.UI_OK
+            elif scanned or total:
+                survey_state, survey_colour = "SCANNING", COLOR_ACCENT
+            else:
+                survey_state, survey_colour = "AWAITING", self.UI_DIM
+            if getattr(self, "system_undiscovered", False):
+                survey_state, survey_colour = "FIRST DISCOVERY", self.UI_WARN
+            self.dashboard_survey_badge.config(text=survey_state, bg=survey_colour)
+            survey_ratio = min(1.0, scanned / total) if total else 0.0
+            self.dashboard_survey_progress_fill.config(
+                bg=self.UI_OK if total and scanned >= total else COLOR_ACCENT,
+            )
+            self.dashboard_survey_progress_fill.place_configure(relwidth=survey_ratio)
+            self.dashboard_survey_name.config(text=system_name.upper())
+            signal_bits = [f"FSS {scanned}/{total}" if total else f"FSS {scanned}"]
+            if bio_signals:
+                signal_bits.append(f"BIO {bio_signals}")
+            if geo_signals:
+                signal_bits.append(f"GEO {geo_signals}")
+            if notable:
+                signal_bits.append(f"NOTABLE {notable}")
+            survey_summary = None
+            try:
+                survey_summary = self._get_fss_summary()
+            except Exception:
+                pass
+            high_value = list((survey_summary or {}).get("high_value") or [])
+            detail_lines = ["  ·  ".join(signal_bits)]
+            if high_value:
+                detail_lines.append("Notable: " + " · ".join(high_value[:2]))
+            self.dashboard_survey_detail.config(text="\n".join(detail_lines))
+            value_bits = []
+            if survey_summary and survey_summary.get("total"):
+                value_bits.append(f"SCANNED VALUE {survey_summary['total']}")
+            traffic = getattr(self, "system_traffic", {}) or {}
+            value_bits.append(
+                f"TRAFFIC {int(traffic.get('day') or 0)}/{int(traffic.get('week') or 0)}/{int(traffic.get('total') or 0)}"
+            )
+            self.dashboard_survey_value.config(text="  ·  ".join(value_bits))
 
         # Active operation roll-up; omit inactive/noise rows.
         operations = []
@@ -1204,16 +1389,13 @@ class DashboardUIMixin(ThemedWindowMixin):
         specialist_engine = getattr(self, "specialist_engine", None)
         if specialist_engine and specialist_engine.mining_active():
             operations.append("MINING     session active")
-        carrier_route = (getattr(self, "carrier_tracker", None).carrier_data.get("expedition_route")
-                         if getattr(self, "carrier_tracker", None) else []) or []
-        carrier_left = sum(1 for row in carrier_route if isinstance(row, dict) and not row.get("visited"))
-        if carrier_left:
-            operations.append(f"EXPEDITION {carrier_left} carrier stop{'s' if carrier_left != 1 else ''} remaining")
-        self.dashboard_operations_text.config(text="\n".join(operations[:5]) or "No active operations\nDetailed workspaces remain ready from the navigation rail.")
+        self.dashboard_operations_text.config(
+            text="  ·  ".join(operations[:3]) or "No active add-on work · optional workspaces remain ready"
+        )
 
-        # The 5.0 Operational Queue unifies the truthful objectives already
-        # maintained by each workspace. It owns the final dashboard priority
-        # without changing or duplicating the source data.
+        # The operational queue still drives adaptive mode actions, but only
+        # non-exploration rows are summarised in the add-on strip. It no longer
+        # replaces the exploration priority above.
         if deck:
             try:
                 command_snapshot = self._compass_gameplay_snapshot()
@@ -1223,25 +1405,18 @@ class DashboardUIMixin(ThemedWindowMixin):
             except Exception:
                 self._operational_queue = []
             rows = self._operational_queue
-            if rows:
-                self.dashboard_objective_primary.config(text=rows[0]["label"])
-                self.dashboard_objective_detail.config(text=rows[0]["detail"])
-                queue_lines = [
-                    f"{index}. {row['label']}  //  {row['workspace']}"
-                    for index, row in enumerate(rows[:5], start=1)
-                ]
-                self.dashboard_operations_text.config(text="\n".join(queue_lines))
-            else:
-                self.dashboard_operations_text.config(
-                    text="Queue clear\nDetailed workspaces remain ready from the navigation rail."
-                )
+            exploration_ids = {"biology", "survey-data", "survey", "route", "carrier"}
+            addon_rows = [row for row in rows if row.get("id") not in exploration_ids]
+            if addon_rows:
+                queue_text = "  ·  ".join(row["label"] for row in addon_rows[:3])
+                self.dashboard_operations_text.config(text=queue_text)
             # Refresh the mode strip once more now that the current queue is known.
             if hasattr(self, "dashboard_mode_detail"):
                 deck_status = deck.status()
                 control = "AUTO" if deck_status.get("automatic") else "LOCKED"
                 session_events = int((deck_status.get("session") or {}).get("events") or 0)
                 self.dashboard_mode_detail.config(
-                    text=f"{control} · {session_events:,} mode event{'s' if session_events != 1 else ''} · {len(rows)} queued objectives"
+                    text=f"{control} · {session_events:,} context event{'s' if session_events != 1 else ''} · {len(addon_rows)} active add-on{'s' if len(addon_rows) != 1 else ''}"
                 )
                 self._refresh_adaptive_mode_open_button(deck_status, rows)
 
@@ -1283,6 +1458,147 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.workspace_canvas.yview_moveto(0.0)
         self._schedule_workspace_scrollregion()
         self._schedule_overlay_z_order_restore()
+
+    def _toggle_navigation_group(self, group_name):
+        collapsed = {
+            str(name).upper()
+            for name in (self.config.get("nav_collapsed_groups") or [])
+        }
+        name = str(group_name or "").upper()
+        if name in collapsed:
+            collapsed.remove(name)
+        else:
+            collapsed.add(name)
+        self.config["nav_collapsed_groups"] = sorted(collapsed)
+        self._apply_navigation_group_state()
+        persist = getattr(self, "_persist_config", None)
+        if callable(persist):
+            persist()
+
+    def _apply_navigation_group_state(self):
+        """Restore expanded/collapsed sidebar groups for the active profile."""
+        bodies = getattr(self, "nav_group_bodies", {})
+        buttons = getattr(self, "nav_group_buttons", {})
+        if not bodies:
+            return
+        collapsed = {
+            str(name).upper()
+            for name in (self.config.get("nav_collapsed_groups") or [])
+        }
+        for name, body in bodies.items():
+            is_collapsed = str(name).upper() in collapsed
+            try:
+                if is_collapsed:
+                    body.pack_forget()
+                elif not body.winfo_manager():
+                    body.pack(fill=tk.X)
+                buttons[name].configure(
+                    text=f"{'▸' if is_collapsed else '▾'}  {name}"
+                )
+            except tk.TclError:
+                continue
+
+    def _workspace_hub_card(self, parent, row, column, title, description, action, button_text):
+        card = self._panel(parent)
+        card.grid(row=row, column=column, sticky="nsew", padx=5, pady=5)
+        tk.Label(
+            card, text=title, fg=COLOR_ORANGE, bg=self.UI_PANEL,
+            font=("Bahnschrift SemiCondensed", 13, "bold"), anchor="w",
+        ).pack(fill=tk.X, padx=14, pady=(13, 4))
+        tk.Label(
+            card, text=description, fg=COLOR_TEXT, bg=self.UI_PANEL,
+            font=("Segoe UI", 9), justify=tk.LEFT, anchor="nw", wraplength=420,
+        ).pack(fill=tk.BOTH, expand=True, padx=14, pady=(0, 10))
+        self._action_button(card, button_text, action, accent=True).pack(
+            anchor="w", padx=14, pady=(0, 13)
+        )
+
+    def _build_workspace_hubs(self):
+        """Build small launch pages while leaving full tools first-open lazy."""
+        self.expedition_page = tk.Frame(self.dashboard_host, bg=self.UI_BG)
+        self.operations_page = tk.Frame(self.dashboard_host, bg=self.UI_BG)
+
+        def hero(page, title, subtitle):
+            panel = self._panel(page, border=COLOR_ACCENT)
+            panel.pack(fill=tk.X, padx=14, pady=(12, 6))
+            tk.Label(
+                panel, text=title, fg=COLOR_ACCENT, bg=self.UI_PANEL,
+                font=("Bahnschrift SemiCondensed", 20, "bold"), anchor="w",
+            ).pack(fill=tk.X, padx=16, pady=(13, 2))
+            tk.Label(
+                panel, text=subtitle, fg=self.UI_MUTED, bg=self.UI_PANEL,
+                font=self.UI_MONO, anchor="w",
+            ).pack(fill=tk.X, padx=16, pady=(0, 13))
+
+        hero(
+            self.expedition_page,
+            "EXPEDITION COMMAND",
+            "Long-range planning and commander progress · every tool remains directly available",
+        )
+        expedition_grid = tk.Frame(self.expedition_page, bg=self.UI_BG)
+        expedition_grid.pack(fill=tk.BOTH, expand=True, padx=9, pady=(0, 10))
+        for column in range(2):
+            expedition_grid.grid_columnconfigure(column, weight=1, uniform="expedition")
+        for row in range(2):
+            expedition_grid.grid_rowconfigure(row, weight=1)
+        self._workspace_hub_card(
+            expedition_grid, 0, 0, "FLEET CARRIER",
+            "Personal and Squadron Carrier jumps, fuel, finance, services and expedition route.",
+            self.open_carrier_window, "OPEN CARRIER",
+        )
+        self._workspace_hub_card(
+            expedition_grid, 0, 1, "COLONY LOGISTICS",
+            "Architect projects, construction requirements, contributions and cargo planning.",
+            self.open_colonization_window, "OPEN COLONY",
+        )
+        self._workspace_hub_card(
+            expedition_grid, 1, 0, "ANALYTICS",
+            "Session pace, exploration history, balances and local performance trends.",
+            self.open_analytics_window, "OPEN ANALYTICS",
+        )
+        self._workspace_hub_card(
+            expedition_grid, 1, 1, "ACHIEVEMENTS",
+            "Journal-driven progress across exploration, travel and the wider commander career.",
+            self.open_achievement_window, "OPEN ACHIEVEMENTS",
+        )
+
+        hero(
+            self.operations_page,
+            "OPERATIONS",
+            "Optional roles kept together without hiding their direct navigation shortcuts",
+        )
+        operations_grid = tk.Frame(self.operations_page, bg=self.UI_BG)
+        operations_grid.pack(fill=tk.BOTH, expand=True, padx=9, pady=(0, 10))
+        for column in range(2):
+            operations_grid.grid_columnconfigure(column, weight=1, uniform="operations")
+        for row in range(2):
+            operations_grid.grid_rowconfigure(row, weight=1)
+        self._workspace_hub_card(
+            operations_grid, 0, 0, "SIMPLE TRADE",
+            "Cargo selling, routes and EDDN status first; detailed market tools remain one click away.",
+            self.open_trade_window, "OPEN TRADE",
+        )
+        self._workspace_hub_card(
+            operations_grid, 0, 1, "MINING",
+            "Mining runs, prospecting quality, refinery yield, cargo economics and history.",
+            self.open_mining_window, "OPEN MINING",
+        )
+        self._workspace_hub_card(
+            operations_grid, 1, 0, "COMBAT / AX",
+            "Observed readiness, ammunition, claims, damage, synthesis and sortie history.",
+            lambda: self.open_specialists_window(section="combat"), "OPEN COMBAT / AX",
+        )
+        self._workspace_hub_card(
+            operations_grid, 1, 1, "SPECIALIST CONSOLE",
+            "Mining, Combat/AX, Carrier logistics and Exobiology role workflows in one place.",
+            self.open_specialists_window, "OPEN SPECIALISTS",
+        )
+
+    def show_expedition_page(self):
+        self._show_embedded_page("EXPEDITION", self.expedition_page)
+
+    def show_operations_page(self):
+        self._show_embedded_page("OPERATIONS", self.operations_page)
 
     def _schedule_workspace_scrollregion(self, _event=None):
         if getattr(self, "_workspace_scroll_job", None) is not None:
@@ -1563,17 +1879,38 @@ class DashboardUIMixin(ThemedWindowMixin):
 
     def _build_live_event_timeline(self, parent):
         feed_wrap = tk.Frame(parent, bg=self.UI_PANEL)
-        feed_wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        self._section_label(feed_wrap, "LIVE EVENT TIMELINE").pack(anchor="w")
+        feed_wrap.pack(fill=tk.BOTH, expand=True, padx=12, pady=(7, 12))
+
+        feed_status = tk.Frame(feed_wrap, bg=self.UI_PANEL)
+        feed_status.pack(fill=tk.X, pady=(0, 5))
+        self.event_feed_live_badge = tk.Label(
+            feed_status, text="● LIVE", fg="black", bg=self.UI_OK,
+            font=("Segoe UI", 7, "bold"), padx=7, pady=2,
+        )
+        self.event_feed_live_badge.pack(side=tk.LEFT)
+        self.event_feed_count_lbl = tk.Label(
+            feed_status, text="0 CURATED EVENTS", fg=COLOR_TEXT,
+            bg=self.UI_PANEL, font=("Consolas", 8, "bold"),
+        )
+        self.event_feed_count_lbl.pack(side=tk.LEFT, padx=(8, 0))
+        self.event_feed_filter_lbl = tk.Label(
+            feed_status, text="ALL ACTIVITY", fg=self.UI_DIM,
+            bg=self.UI_PANEL, font=("Segoe UI", 7, "bold"),
+        )
+        self.event_feed_filter_lbl.pack(side=tk.RIGHT)
+
         self.event_filter_row = tk.Frame(feed_wrap, bg=self.UI_PANEL)
         self.event_filter_row.pack(fill=tk.X, pady=(6, 4))
-        for col in range(5):
+        for col in range(6):
             self.event_filter_row.grid_columnconfigure(col, weight=1, uniform="event_filter")
         self.event_filter_buttons = {}
         event_filters = (
-            ("ALL", "ALL"), ("VALUABLE", "VALUE"), ("SCAN", "SCAN"), ("ALERT", "ALERT"), ("JUMP", "JUMP"),
-            ("ROUTE", "ROUTE"), ("SYSTEM", "SYSTEM"), ("MUSIC", "MUSIC"), ("AI", "AI"), ("DSS", "DSS"), ("DOCK", "DOCK"),
-            ("INFO", "INFO"),
+            ("ALL", "ALL"),
+            ("DISCOVERY", "DISCOVERIES"),
+            ("NAVIGATION", "NAVIGATION"),
+            ("COMPASS", "COMPASS"),
+            ("ALERTS", "ALERTS"),
+            ("SUPPORT", "SUPPORT"),
         )
         for idx, (tag, label) in enumerate(event_filters):
             btn = tk.Button(
@@ -1590,7 +1927,7 @@ class DashboardUIMixin(ThemedWindowMixin):
                 activebackground=self.UI_PANEL_2,
                 activeforeground=COLOR_ACCENT,
             )
-            btn.grid(row=idx // 5, column=idx % 5, sticky="ew", padx=2, pady=2)
+            btn.grid(row=0, column=idx, sticky="ew", padx=2, pady=2)
             self.event_filter_buttons[tag] = btn
         event_text_wrap = tk.Frame(feed_wrap, bg="#0b0f13")
         event_text_wrap.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
@@ -1605,8 +1942,10 @@ class DashboardUIMixin(ThemedWindowMixin):
             highlightthickness=0,
             borderwidth=0,
             wrap=tk.WORD,
-            padx=8,
-            pady=6,
+            padx=10,
+            pady=8,
+            spacing1=2,
+            spacing3=2,
             yscrollcommand=self.event_feed_scroll.set,
         )
         self.event_feed_scroll.config(command=self.event_feed_list.yview)
@@ -1615,6 +1954,25 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.event_feed_list.config(state=tk.DISABLED)
         self.event_feed_list.bind("<Button-1>", self._select_event_feed_line)
         self.event_feed_list.bind("<Double-Button-1>", lambda e: self._open_selected_event_feed_link())
+
+        selection_bar = tk.Frame(feed_wrap, bg=self.UI_PANEL)
+        selection_bar.pack(fill=tk.X, pady=(6, 0))
+        self.event_feed_selection_lbl = tk.Label(
+            selection_bar,
+            text="Select an event to copy its system, body or useful detail",
+            fg=self.UI_DIM, bg=self.UI_PANEL, font=("Segoe UI", 8), anchor="w",
+        )
+        self.event_feed_selection_lbl.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.event_feed_copy_btn = self._action_button(
+            selection_bar, "COPY SELECTED", self._copy_selected_event_feed, muted=True,
+        )
+        self.event_feed_copy_btn.config(state=tk.DISABLED)
+        self.event_feed_copy_btn.pack(side=tk.RIGHT, padx=(6, 0))
+        self.event_feed_source_btn = self._action_button(
+            selection_bar, "OPEN SOURCE", self._open_selected_event_feed_link, muted=True,
+        )
+        self.event_feed_source_btn.config(state=tk.DISABLED)
+        self.event_feed_source_btn.pack(side=tk.RIGHT)
 
     def create_stat(self, parent, label, val):
         tk.Label(parent, text=label, font=("Segoe UI", 8, "bold"), fg=self.UI_DIM, bg=parent.cget("bg")).pack(anchor="w", padx=12, pady=(8, 0))
@@ -1646,6 +2004,7 @@ class DashboardUIMixin(ThemedWindowMixin):
 
     def set_event_feed_filter(self, mode):
         self.event_feed_filter = mode
+        self.event_feed_selected_idx = None
         if hasattr(self, "event_filter_buttons"):
             for tag, btn in self.event_filter_buttons.items():
                 selected = tag == mode
@@ -1653,6 +2012,24 @@ class DashboardUIMixin(ThemedWindowMixin):
                     fg=COLOR_TEXT if selected else "#888",
                     bg=self.UI_PANEL_2 if selected else self.UI_PANEL,
                 )
+        if hasattr(self, "event_feed_filter_lbl"):
+            labels = {
+                "ALL": "ALL ACTIVITY",
+                "DISCOVERY": "DISCOVERIES & SURVEYS",
+                "NAVIGATION": "ROUTE & FLIGHT",
+                "COMPASS": "COMPASS ACTIVITY",
+                "ALERTS": "WARNINGS & FAILURES",
+                "SUPPORT": "SERVICES & SUPPORT",
+            }
+            self.event_feed_filter_lbl.config(text=labels.get(mode, str(mode)))
+        if hasattr(self, "event_feed_selection_lbl"):
+            self.event_feed_selection_lbl.config(
+                text="Select an event to copy its system, body or useful detail"
+            )
+        for widget_name in ("event_feed_copy_btn", "event_feed_source_btn"):
+            widget = getattr(self, widget_name, None)
+            if widget is not None:
+                widget.config(state=tk.DISABLED)
         self._refresh_event_feed()
 
     def _toggle_console(self):
@@ -1697,6 +2074,17 @@ class DashboardUIMixin(ThemedWindowMixin):
                 and abs(prev.get("ts", 0) - entry["ts"]) < 1.5
             ):
                 return
+        # Do not let a live insertion move the selection highlight onto a
+        # different event while the commander is reaching for Copy/Open.
+        self.event_feed_selected_idx = None
+        if hasattr(self, "event_feed_selection_lbl"):
+            self.event_feed_selection_lbl.config(
+                text="Select an event to copy its system, body or useful detail"
+            )
+        for widget_name in ("event_feed_copy_btn", "event_feed_source_btn"):
+            widget = getattr(self, widget_name, None)
+            if widget is not None:
+                widget.config(state=tk.DISABLED)
         self.event_feed_entries.insert(0, entry)
         if len(self.event_feed_entries) > self.event_feed_max_entries:
             self.event_feed_entries = self.event_feed_entries[:self.event_feed_max_entries]
@@ -1968,7 +2356,18 @@ class DashboardUIMixin(ThemedWindowMixin):
         mode = getattr(self, "event_feed_filter", "ALL")
         if mode == "ALL":
             return True
-        return entry.get("tag") == mode
+        tag = entry.get("tag")
+        groups = {
+            "DISCOVERY": {"VALUABLE", "SCAN", "DSS", "BIO"},
+            "NAVIGATION": {"JUMP", "ROUTE", "SYSTEM", "DOCK"},
+            "COMPASS": {"AI", "MUSIC"},
+            "SUPPORT": {"EDSM", "EDDN", "CARRIER", "INFO"},
+        }
+        if mode == "ALERTS":
+            return tag == "ALERT" or entry.get("severity") in ("WARN", "FAIL")
+        if mode in groups:
+            return tag in groups[mode]
+        return tag == mode
 
     def _event_feed_row_color(self, entry):
         sev = entry.get("severity", "INFO")
@@ -1990,7 +2389,7 @@ class DashboardUIMixin(ThemedWindowMixin):
     @staticmethod
     def _event_feed_row_text(row):
         ts_txt = datetime.fromtimestamp(row.get("ts", time.time())).strftime("%H:%M:%S")
-        return f"[{ts_txt}] [{row.get('tag', 'INFO')}] {row.get('message', '')}"
+        return f"{ts_txt}   {row.get('tag', 'INFO'):<9}  {row.get('message', '')}"
 
     def _recolor_event_feed_rows(self):
         if not hasattr(self, "event_feed_list"):
@@ -2001,7 +2400,12 @@ class DashboardUIMixin(ThemedWindowMixin):
         for idx, row in enumerate(getattr(self, "event_feed_view", [])):
             tag = f"event_row_{idx}"
             self.event_feed_list.tag_add(tag, f"{idx + 1}.0", f"{idx + 2}.0")
-            self.event_feed_list.tag_config(tag, foreground=self._event_feed_row_color(row))
+            selected = idx == getattr(self, "event_feed_selected_idx", None)
+            self.event_feed_list.tag_config(
+                tag,
+                foreground=self._event_feed_row_color(row),
+                background=self.UI_PANEL_2 if selected else "#0b0f13",
+            )
         self.event_feed_list.config(state=tk.DISABLED)
 
     def _event_feed_delete_rows(self, start_idx, end_idx):
@@ -2020,7 +2424,19 @@ class DashboardUIMixin(ThemedWindowMixin):
         visible = [e for e in self.event_feed_entries if self._event_feed_matches_filter(e)]
         rows = visible
         rows = rows[:self.event_feed_display_limit]
+        if hasattr(self, "event_feed_count_lbl"):
+            total = len(self.event_feed_entries)
+            shown = len(visible)
+            count_text = f"{total} CURATED EVENT{'S' if total != 1 else ''}"
+            if shown != total:
+                count_text += f" · {shown} MATCH"
+            self.event_feed_count_lbl.config(text=count_text)
         lines = [self._event_feed_row_text(row) for row in rows]
+        if not lines:
+            if self.event_feed_entries:
+                lines = ["No events match this exploration-log filter."]
+            else:
+                lines = ["Waiting for live exploration activity from Elite Dangerous..."]
         old_lines = getattr(self, "_event_feed_render_lines", [])
 
         if old_lines == lines:
@@ -2066,6 +2482,22 @@ class DashboardUIMixin(ThemedWindowMixin):
         except Exception:
             idx = 0
         self.event_feed_selected_idx = idx if 0 <= idx < len(self.event_feed_view) else None
+        if self.event_feed_selected_idx is not None:
+            row = self.event_feed_view[self.event_feed_selected_idx]
+            if hasattr(self, "event_feed_selection_lbl"):
+                action = "double-click or open source" if row.get("url") else "ready to copy"
+                self.event_feed_selection_lbl.config(
+                    text=f"{row.get('tag', 'INFO')} selected · {action}"
+                )
+            if hasattr(self, "event_feed_copy_btn"):
+                self.event_feed_copy_btn.config(
+                    state=tk.NORMAL if row.get("copy_text") else tk.DISABLED,
+                )
+            if hasattr(self, "event_feed_source_btn"):
+                self.event_feed_source_btn.config(
+                    state=tk.NORMAL if row.get("url") else tk.DISABLED,
+                )
+        self._recolor_event_feed_rows()
         return None
 
     def _copy_selected_event_feed(self):
@@ -2081,6 +2513,8 @@ class DashboardUIMixin(ThemedWindowMixin):
             return
         self.root.clipboard_clear()
         self.root.clipboard_append(str(payload))
+        if hasattr(self, "event_feed_selection_lbl"):
+            self.event_feed_selection_lbl.config(text="Selected event detail copied to clipboard")
 
     def _open_selected_event_feed_link(self):
         if not hasattr(self, "event_feed_list"):
