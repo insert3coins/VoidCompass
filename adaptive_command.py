@@ -15,6 +15,8 @@ MODES = (
     "powerplay",
 )
 
+AUTOMATIC_MODE_IDLE_S = 1800.0
+
 MODE_LABELS = {
     "general": "GENERAL FLIGHT",
     "exploration": "EXPLORATION",
@@ -150,7 +152,18 @@ class AdaptiveCommandDeck:
     @property
     def current_mode(self):
         locked = self.locked_mode
-        return locked if locked != "auto" else normalize_mode(self.state.get("mode"))
+        if locked != "auto":
+            return locked
+        mode = normalize_mode(self.state.get("mode"))
+        if mode == "general":
+            return mode
+        session = self.state.get("session") or {}
+        last_event_at = float(
+            session.get("last_event_at") or self.state.get("mode_since") or 0
+        )
+        if last_event_at and time.time() - last_event_at > AUTOMATIC_MODE_IDLE_S:
+            return "general"
+        return mode
 
     @property
     def automatic(self):

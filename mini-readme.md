@@ -1,5 +1,13 @@
 # VoidCompass // UPDATE LOG
 
+## v5.1.2 // Adaptive Activity Dashboards
+**Release Date:** 2026-Jul-23
+
+*   Made the Dashboard genuinely adaptive: Exploration remains the default, while verified Trade, Mining, Combat, Ground, Engineering, Powerplay, Carrier, Colony and Station activity transforms the hero, telemetry, progress, priority, support card and primary workspace action.
+*   Made the curated activity-log heading follow the active mode and added an Operations filter for Trade, Carrier, EDDN/EDSM, profile and achievement events without changing the secondary raw Journal Diagnostics view.
+*   Added a themed manual mode selector for Automatic, Exploration, Trade, Mining, Combat/AX, Ground, Engineering, Powerplay, Carrier, Colony and Station dashboards, making every transformation directly testable from the Command Deck.
+*   Preserved navigation and the Exploration escape action in every mode, retained persistent manual mode locking, and made automatic add-on activity age safely back to Exploration after 30 idle minutes.
+
 ## v5.1.1 // Exploration-First Command Deck
 **Release Date:** 2026-Jul-23
 
@@ -9,7 +17,7 @@
 *   Simplified Trade's default view to four everyday actions and a live EDDN receive/upload status. All existing routes, markets, commodities, tracking and database controls remain available through Advanced Tools.
 *   Added direct Galaxy access inside Explore and retained Compass/Adaptive Command awareness across exploration and wider Elite gameplay.
 *   Reworked the Dashboard around a wide current-system survey hero and next-destination panel, including live FSS completion, BIO/GEO, notable discoveries, scanned value and traffic; exploration priority, Compass and expedition support remain immediately below while wider gameplay is reduced to a compact add-on strip.
-*   Rebuilt Dashboard activity as an **Exploration Log** with a primary Flight Log, grouped discovery/navigation/Compass/alert/support filters, live counts, selected-event copy/source actions and a clearly secondary raw Journal Diagnostics view.
+*   Rebuilt Dashboard activity as an **Exploration Log** with a primary Flight Log, grouped discovery/navigation/operations/Compass/alert filters, live counts, selected-event copy/source actions and a clearly secondary raw Journal Diagnostics view.
 *   Corrected EDSM cargo synchronization with complete debounced `Cargo.json` snapshots, including empty ship or SRV inventories, while continuing to suppress raw cargo-event spam.
 
 ## v5.0.7 // Condensed Completed Biology
