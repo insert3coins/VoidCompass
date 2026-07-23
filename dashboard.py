@@ -1073,6 +1073,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         ).start()
         self._persist_config()
         self._apply_runtime_feature_toggles()
+        self._apply_navigation_group_state()
         self.show_dashboard_page()
         self.update_dashboard_ui()
         self.update_hud()

@@ -133,28 +133,46 @@ class TradeWindow(ThemedWindowMixin):
         self._build_local_tab()
         self._build_tracking_group()
         self._build_database_tab()
+        self._advanced_trade_tabs = (
+            (self.routes_group_frame, "Routes"),
+            (self.markets_group_frame, "Markets"),
+            (self.local_group_frame, "Local"),
+            (self.tracking_group_frame, "Tracking"),
+            (self.database_group_frame, "Database / EDDN"),
+        )
+        self._advanced_tools_visible = True
         self._build_footer()
+        self._set_advanced_tools_visible(
+            bool(self.config.get("trade_advanced_tools_visible", False)),
+            persist=False,
+        )
 
     def _build_quick_trade_tab(self):
         frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="One Click")
+        self.tabs.add(frame, text="Simple Trade")
         self.quick_trade_frame = frame
-        tk.Label(frame, text="ONE-CLICK TRADE", fg=COLOR_ORANGE, bg=self.UI_BG,
+        tk.Label(frame, text="SIMPLE TRADE", fg=COLOR_ORANGE, bg=self.UI_BG,
                  font=("Segoe UI", 11, "bold"), anchor="w").pack(fill=tk.X, padx=12, pady=(14, 2))
         tk.Label(
             frame,
-            text="Uses your live system, ship, cargo and market database. Detailed controls remain available in the other tabs.",
+            text="The useful everyday actions first. EDDN and journal markets stay automatic; detailed controls are optional.",
             fg=self.UI_MUTED, bg=self.UI_BG, font=("Segoe UI", 9), anchor="w",
-        ).pack(fill=tk.X, padx=12, pady=(0, 12))
+        ).pack(fill=tk.X, padx=12, pady=(0, 7))
+        status_row = tk.Frame(frame, bg=self.UI_PANEL, highlightbackground=self.UI_BORDER, highlightthickness=1)
+        status_row.pack(fill=tk.X, padx=12, pady=(0, 10))
+        self.quick_eddn_status = tk.Label(
+            status_row, text="EDDN STATUS · CHECKING", fg=COLOR_TEXT, bg=self.UI_PANEL,
+            font=("Consolas", 9, "bold"), anchor="w",
+        )
+        self.quick_eddn_status.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=12, pady=8)
+        self._button(status_row, "EDDN SETTINGS", self._quick_database).pack(side=tk.RIGHT, padx=8, pady=6)
         grid = tk.Frame(frame, bg=self.UI_BG)
         grid.pack(fill=tk.BOTH, expand=True, padx=12)
         actions = (
-            ("BEST ROUTES NOW", "Find profitable loops from the current system.", self._quick_routes, COLOR_ACCENT),
             ("SELL MY CARGO", "Find the best nearby buyers for the live cargo hold.", self._quick_cargo, self.UI_OK),
-            ("NEARBY OPPORTUNITIES", "Scan local station-to-station profit flows.", self._quick_radar, COLOR_ORANGE),
+            ("BEST ROUTES NOW", "Find profitable loops from the current system.", self._quick_routes, COLOR_ACCENT),
             ("CURRENT MARKET", "Open the live station market and price analysis.", self._quick_market, COLOR_TEXT),
-            ("PRICE WATCHLIST", "Open tracked commodities, station loops and market alerts.", self._quick_tracking, "#a5b4fc"),
-            ("MARKET DATABASE", "Check or update the local market data.", self._quick_database, self.UI_MUTED),
+            ("ADVANCED TOOLS", "Routes, markets, tracking, commodities and database maintenance.", self._show_advanced_tools, "#a5b4fc"),
         )
         for index, (title, subtitle, command, colour) in enumerate(actions):
             card = tk.Frame(grid, bg=self.UI_PANEL, highlightbackground=self.UI_BORDER, highlightthickness=1)
@@ -167,37 +185,81 @@ class TradeWindow(ThemedWindowMixin):
             self._button(card, "GO", command, accent=(index == 0)).pack(anchor="w", padx=12, pady=12)
         grid.grid_columnconfigure(0, weight=1)
         grid.grid_columnconfigure(1, weight=1)
-        for row in range(3):
+        for row in range(2):
             grid.grid_rowconfigure(row, weight=1)
 
+    def _open_advanced_tab(self, frame):
+        self._set_advanced_tools_visible(True)
+        self.tabs.select(frame)
+
     def _quick_routes(self):
-        self.tabs.select(self.routes_group_frame)
+        self._open_advanced_tab(self.routes_group_frame)
         self.route_tabs.select(0)
         self.use_current_system()
         self.find_routes()
 
     def _quick_cargo(self):
-        self.tabs.select(self.markets_group_frame)
+        self._open_advanced_tab(self.markets_group_frame)
         self.market_tabs.select(0)
         self.refresh_cargo_sellers()
 
     def _quick_radar(self):
-        self.tabs.select(self.markets_group_frame)
+        self._open_advanced_tab(self.markets_group_frame)
         self.market_tabs.select(0)
         self.refresh_radar()
 
     def _quick_market(self):
-        self.tabs.select(self.local_group_frame)
+        self._open_advanced_tab(self.local_group_frame)
         self.refresh_local()
 
     def _quick_tracking(self):
-        self.tabs.select(self.tracking_group_frame)
+        self._open_advanced_tab(self.tracking_group_frame)
         self.tracking_tabs.select(0)
         self.refresh_watchlist()
 
     def _quick_database(self):
-        self.tabs.select(self.database_group_frame)
+        self._open_advanced_tab(self.database_group_frame)
         self.refresh_status()
+
+    def _show_advanced_tools(self):
+        self._set_advanced_tools_visible(True)
+        self.tabs.select(self.routes_group_frame)
+
+    def _set_advanced_tools_visible(self, visible, persist=True):
+        visible = bool(visible)
+        tabs = getattr(self, "_advanced_trade_tabs", ())
+        if not tabs:
+            return
+        if visible:
+            for frame, label in tabs:
+                try:
+                    self.tabs.add(frame, text=label)
+                except tk.TclError:
+                    pass
+        else:
+            try:
+                self.tabs.select(self.quick_trade_frame)
+            except tk.TclError:
+                pass
+            for frame, _label in tabs:
+                try:
+                    self.tabs.hide(frame)
+                except tk.TclError:
+                    pass
+        self._advanced_tools_visible = visible
+        button_widget = getattr(self, "advanced_view_btn", None)
+        if button_widget is not None:
+            button_widget.configure(
+                text="SIMPLE VIEW" if visible else "SHOW ADVANCED"
+            )
+        if persist:
+            self.config["trade_advanced_tools_visible"] = visible
+            save_config(self.config)
+
+    def _toggle_advanced_view(self):
+        self._set_advanced_tools_visible(not self._advanced_tools_visible)
+        if not self._advanced_tools_visible:
+            self.tabs.select(self.quick_trade_frame)
 
     def _sub_notebook(self, parent):
         notebook = ttk.Notebook(parent, style="Trade.Sub.TNotebook")
@@ -251,6 +313,10 @@ class TradeWindow(ThemedWindowMixin):
     def _build_footer(self):
         footer = tk.Frame(self.win, bg=self.UI_BG)
         footer.pack(fill=tk.X, padx=10, pady=(0, 8))
+        self.advanced_view_btn = self._button(
+            footer, "SIMPLE VIEW", self._toggle_advanced_view, accent=True,
+        )
+        self.advanced_view_btn.pack(side=tk.LEFT, padx=(0, 10))
         tk.Label(footer, text="External lookups:", fg=self.UI_MUTED, bg=self.UI_BG, font=("Segoe UI", 8)).pack(side=tk.LEFT)
         for label, site in (
             ("Inara Routes", "inara_routes"),
@@ -1039,6 +1105,16 @@ class TradeWindow(ThemedWindowMixin):
             upload_txt = f"{upload_stats.get('uploads', 0):,} uploaded"
             if upload_stats.get("last_error"):
                 upload_txt += f" | last error: {upload_stats.get('last_error')}"
+        if hasattr(self, "quick_eddn_status"):
+            receive_state = "CONNECTED" if eddn_stats.get("connected") else "RECONNECTING"
+            upload_state = "ON" if upload_stats.get("enabled") else "OFF"
+            self.quick_eddn_status.config(
+                text=(
+                    f"EDDN RECEIVE · {receive_state}   |   UPLOAD · {upload_state}   |   "
+                    f"{int(upload_stats.get('uploads') or 0):,} SENT"
+                ),
+                fg=self.UI_OK if upload_stats.get("enabled") else self.UI_MUTED,
+            )
         rate_txt = "--"
         if phase == "starting":
             self.seed_progress.configure(mode="indeterminate")
