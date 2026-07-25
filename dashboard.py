@@ -782,7 +782,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         def _run():
             self._system_info_refresh_job = None
             if self.system_info_hud:
-                self.system_info_hud.update_scan_progress(self.scan_items, self.body_signals, self.total)
+                self.system_info_hud.update_scan_progress(
+                    self.scan_items, self.body_signals, self.total,
+                    star_class=self.star_class,
+                )
             if self.survey_status_hud:
                 self.survey_status_hud.update(
                     self.current_sys, self.scanned, self.total, self.scan_items,

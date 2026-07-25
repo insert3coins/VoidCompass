@@ -1,3 +1,4 @@
+import re
 import tkinter as tk
 from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, save_config
 import overlay_chrome
@@ -13,6 +14,27 @@ _STARPORT_TYPES = {
     "Coriolis Starport", "Orbis Starport", "Ocellus Starport",
     "Asteroid base", "Planetary Port", "Planetary Outpost",
 }
+
+_STAR_TYPE_LABELS = {
+    "M_RedGiant": "M Red Giant",
+    "M_RedSuperGiant": "M Red Supergiant",
+    "K_OrangeGiant": "K Orange Giant",
+    "A_BlueWhiteSuperGiant": "A Blue-White Supergiant",
+    "F_WhiteSuperGiant": "F White Supergiant",
+    "SupermassiveBlackHole": "Supermassive Black Hole",
+}
+
+
+def _format_star_type(star_type):
+    """Turn Frontier's internal StarType identifiers into overlay labels."""
+    raw = str(star_type or "").strip()
+    if not raw:
+        return ""
+    if raw in _STAR_TYPE_LABELS:
+        return _STAR_TYPE_LABELS[raw]
+    words = raw.replace("_", " ")
+    words = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", words)
+    return re.sub(r"\s+", " ", words).strip()
 
 def _fmt_pop(n):
     try:
@@ -135,13 +157,14 @@ class SystemInfoHUD:
     def on_system_arrival(self, system_name, star_class,
                           scan_items, body_signals, total_bodies):
         self._system        = system_name or "Unknown"
-        self._star_class    = star_class or ""
+        self._star_class    = _format_star_type(star_class)
         self._edsm_info     = None
         self._spansh        = None
         self._apply_scan_progress(scan_items, body_signals, total_bodies)
         self.show()
 
-    def update_scan_progress(self, scan_items, body_signals, total_bodies):
+    def update_scan_progress(self, scan_items, body_signals, total_bodies,
+                             star_class=None):
         """Incremental refresh as the current system is surveyed further.
 
         Unlike on_system_arrival(), this never shows/repositions the window
@@ -149,6 +172,8 @@ class SystemInfoHUD:
         place if the panel happens to already be visible.
         """
         self._apply_scan_progress(scan_items, body_signals, total_bodies)
+        if star_class:
+            self._star_class = _format_star_type(star_class)
         try:
             if self.win.state() != "withdrawn":
                 self._redraw()
