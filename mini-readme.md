@@ -1,5 +1,11 @@
 # VoidCompass // UPDATE LOG
 
+## v5.2.3 // Galactic Map Navigation
+**Release Date:** 2026-Jul-26
+
+*   Corrected the map's initial galactic orientation and made mouse navigation predictable with grab-style orbiting, gentler sensitivity, cursor-centred wheel zoom, alternate pan controls, double-click reset and a live `+X/+Y/+Z` orientation indicator.
+*   Added a full-window **POP OUT** map with the complete toolbar, layer controls, summary and record details. **DOCK**, Escape or the window close button returns the current camera, zoom and layer state to Explore, while the detached geometry remains profile-local and live expedition updates continue normally.
+
 ## v5.2.2 // Expedition Mission Control
 **Release Date:** 2026-Jul-26
 

@@ -57,6 +57,11 @@ class ExplorationWindow(ThemedWindowMixin):
         self.discoveries_view = None
         self.expedition_map_view = None
         self.expedition_mission_view = None
+        self._map_popout = None
+        self._map_popout_view = None
+        self._map_split = None
+        self._map_host = None
+        self._map_intelligence_host = None
         self.embedded = embedded
         self.win = window_surface(root, embedded=embedded)
         self.win.title("Exploration")
@@ -216,10 +221,14 @@ class ExplorationWindow(ThemedWindowMixin):
         split.pack(fill=tk.BOTH, expand=True)
         map_host = tk.Frame(split, bg=self.UI_BG)
         intelligence_host = tk.Frame(split, bg=self.UI_BG)
+        self._map_split = split
+        self._map_host = map_host
+        self._map_intelligence_host = intelligence_host
         split.add(map_host, minsize=380)
         split.add(intelligence_host, minsize=165)
         self.expedition_map_view = ExpeditionMapView(
             map_host, self.app, open_record_callback=self._open_map_record,
+            popout_callback=self._toggle_map_popout,
         )
         self._build_route_tab(intelligence_host, embedded=True)
 
@@ -234,7 +243,7 @@ class ExplorationWindow(ThemedWindowMixin):
             elif selected == str(self.expedition_workspace) and self.expedition_map_view:
                 section = self.route_plotter.current_section() if self.route_plotter else ""
                 if section == "Map & Intelligence":
-                    self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
+                    self._refresh_visible_map()
                 if section == "Mission Control" and self.expedition_mission_view:
                     self.expedition_mission_view.refresh()
         except Exception:
@@ -274,7 +283,86 @@ class ExplorationWindow(ThemedWindowMixin):
 
     def _on_expedition_section_changed(self, value):
         self._save_view_setting("explore_expedition_section", value)
-        if value == "Map & Intelligence" and self.expedition_map_view:
+        if (
+            value == "Map & Intelligence" and self.expedition_map_view
+            and not self._map_popout_is_open()
+        ):
+            self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
+
+    def _map_popout_is_open(self):
+        return self._widget_alive(self._map_popout)
+
+    def _toggle_map_popout(self):
+        if self._map_popout_is_open():
+            self._dock_map_popout()
+        else:
+            self._open_map_popout()
+
+    def _open_map_popout(self):
+        if self._map_popout_is_open():
+            self._map_popout.lift()
+            self._map_popout.focus_force()
+            return
+        state = self.expedition_map_view.view_state() if self.expedition_map_view else None
+        popout = tk.Toplevel(self.root)
+        popout.withdraw()
+        popout.title("VOID COMPASS // GALAXY MAP")
+        popout.geometry(self.config.get("expedition_map_popout_geometry", "1180x800"))
+        popout.minsize(760, 520)
+        apply_window(popout)
+        popout.protocol("WM_DELETE_WINDOW", self._dock_map_popout)
+        popout.bind("<Escape>", lambda _event: self._dock_map_popout())
+        self._map_popout = popout
+        self._map_popout_view = ExpeditionMapView(
+            popout, self.app,
+            open_record_callback=self._open_map_record,
+            popout_callback=self._toggle_map_popout,
+            detached=True,
+        )
+        self._map_popout_view.refresh(self.system_history_rows, self.ledger_rows)
+        self._map_popout_view.apply_view_state(state)
+        popout.update_idletasks()
+        popout.deiconify()
+        popout.lift()
+        popout.focus_force()
+
+    def _dock_map_popout(self, sync=True):
+        popout = self._map_popout
+        popout_view = self._map_popout_view
+        if popout is None and popout_view is None:
+            return
+        state = popout_view.view_state() if popout_view else None
+        if self._widget_alive(popout):
+            try:
+                self.config["expedition_map_popout_geometry"] = popout.geometry()
+            except Exception:
+                pass
+        self._map_popout = None
+        self._map_popout_view = None
+        try:
+            if popout and popout.winfo_exists():
+                popout.destroy()
+        except Exception:
+            pass
+        if sync and self.expedition_map_view:
+            self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
+            self.expedition_map_view.apply_view_state(state)
+        try:
+            persist = getattr(self.app, "_persist_config", None)
+            if callable(persist):
+                persist()
+        except Exception:
+            pass
+
+    def _refresh_visible_map(self):
+        if self._map_popout_is_open() and self._map_popout_view:
+            self._map_popout_view.refresh(self.system_history_rows, self.ledger_rows)
+            return
+        if (
+            self.expedition_map_view and self.is_route_active()
+            and self.route_plotter
+            and self.route_plotter.current_section() == "Map & Intelligence"
+        ):
             self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
 
     def _restore_view_state(self):
@@ -443,12 +531,7 @@ class ExplorationWindow(ThemedWindowMixin):
         self._refresh_expedition_strip()
         if self.expedition_mission_view:
             self.expedition_mission_view.refresh()
-        if (
-            self.expedition_map_view and self.is_route_active()
-            and self.route_plotter
-            and self.route_plotter.current_section() == "Map & Intelligence"
-        ):
-            self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
+        self._refresh_visible_map()
         try:
             self.app.schedule_dashboard_refresh()
         except Exception:
@@ -882,13 +965,12 @@ class ExplorationWindow(ThemedWindowMixin):
             selected_workspace = self.tabs.select()
             if selected_workspace == str(self.discoveries_workspace) and self.discoveries_view:
                 self.discoveries_view.refresh(self.system_history_rows, self.ledger_rows)
-            if (
+            if self._map_popout_is_open() or (
                 selected_workspace == str(self.expedition_workspace)
-                and self.expedition_map_view
-                and self.route_plotter
+                and self.expedition_map_view and self.route_plotter
                 and self.route_plotter.current_section() == "Map & Intelligence"
             ):
-                self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
+                self._refresh_visible_map()
             elif (
                 selected_workspace == str(self.expedition_workspace)
                 and self.expedition_mission_view
@@ -2536,6 +2618,7 @@ class ExplorationWindow(ThemedWindowMixin):
     def _on_close(self):
         self._closing = True
         self._remember_active_page()
+        self._dock_map_popout(sync=False)
         plotter = self.route_plotter
         try:
             if plotter and self._widget_alive(plotter.win):
