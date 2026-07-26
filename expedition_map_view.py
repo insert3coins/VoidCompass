@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from functools import lru_cache
 import math
 import tkinter as tk
 from tkinter import ttk
+
+from PIL import Image, ImageDraw, ImageFont, ImageTk
 
 from galactic_regions import find_region, region_geometry
 from stellar_types import star_type_label
@@ -33,6 +36,16 @@ VIEW_PRESETS = (
 GALACTIC_CENTRE = (0.0, 0.0, 25899.0)
 GALAXY_RADIUS_LY = 51500.0
 MAX_ROUTE_POINTS = 1500
+
+
+@lru_cache(maxsize=24)
+def _map_font(size, bold=False):
+    filename = "consolab.ttf" if bold else "consola.ttf"
+    pixel_size = max(9, round(float(size) * 1.5))
+    try:
+        return ImageFont.truetype(f"C:/Windows/Fonts/{filename}", pixel_size)
+    except OSError:
+        return ImageFont.load_default()
 
 
 def _position(value):
@@ -101,7 +114,11 @@ class ExpeditionMapView:
         self._yaw = -0.55
         self._pitch = 0.62
         self._projection_context = None
+        self._background_draw = None
+        self._background_photo = None
+        self._background_item = None
         self._render_job = None
+        self._render_pending = False
         self._camera_ready = False
         self._drag_mode = None
         self._drag_origin = None
@@ -161,6 +178,7 @@ class ExpeditionMapView:
         )
         self.canvas.pack(fill=tk.BOTH, expand=True)
         self.canvas.bind("<Configure>", lambda _event: self._schedule_render())
+        self.canvas.bind("<Map>", self._on_canvas_mapped)
         self.canvas.bind("<ButtonPress-1>", lambda event: self._begin_drag(event, "rotate"))
         self.canvas.bind("<B1-Motion>", self._drag)
         self.canvas.bind("<ButtonRelease-1>", self._end_drag)
@@ -277,9 +295,17 @@ class ExpeditionMapView:
         if self._render_job is not None:
             return
         try:
+            if not self.canvas.winfo_ismapped():
+                self._render_pending = True
+                return
+            self._render_pending = False
             self._render_job = self.canvas.after(24, self._render)
         except tk.TclError:
             self._render_job = None
+
+    def _on_canvas_mapped(self, _event=None):
+        if self._render_pending or self._projection_context is None:
+            self._schedule_render()
 
     def _begin_drag(self, event, mode):
         self._drag_mode = mode
@@ -423,23 +449,97 @@ class ExpeditionMapView:
         self._render_job = None
         canvas = self.canvas
         try:
-            if not canvas.winfo_exists():
+            if not canvas.winfo_exists() or not canvas.winfo_ismapped():
+                self._render_pending = True
                 return
         except tk.TclError:
             return
-        canvas.delete("all")
         self._map_points = []
         self._projection_context = self._projection()
+        width = int(self._projection_context["width"])
+        height = int(self._projection_context["height"])
+        background = Image.new("RGB", (width, height), THEME.inset)
+        self._background_draw = ImageDraw.Draw(background)
         self._draw_starfield()
         self._draw_galaxy_structure()
         self._draw_grid()
+        region_labels = ()
         if self.layer_vars.get("Regions") and self.layer_vars["Regions"].get():
-            self._draw_regions()
+            region_labels = self._draw_region_contours()
+        if region_labels:
+            self._draw_region_labels(region_labels)
         self._draw_route_and_markers()
         self._draw_hud_frame()
+        self._background_draw = None
+        self._background_photo = ImageTk.PhotoImage(background, master=canvas)
+        if self._background_item is None:
+            self._background_item = canvas.create_image(
+                0, 0, image=self._background_photo, anchor="nw",
+            )
+        else:
+            canvas.itemconfigure(self._background_item, image=self._background_photo)
+
+    @staticmethod
+    def _dashed_segment(draw, left, right, colour, width, dash):
+        dx = right[0] - left[0]
+        dy = right[1] - left[1]
+        length = math.hypot(dx, dy)
+        if length <= 0.01:
+            return
+        cursor = 0.0
+        draw_on = True
+        pattern_index = 0
+        while cursor < length:
+            span = max(1.0, float(dash[pattern_index % len(dash)]))
+            end = min(length, cursor + span)
+            if draw_on:
+                start_ratio = cursor / length
+                end_ratio = end / length
+                draw.line(
+                    (
+                        left[0] + dx * start_ratio, left[1] + dy * start_ratio,
+                        left[0] + dx * end_ratio, left[1] + dy * end_ratio,
+                    ),
+                    fill=colour, width=width,
+                )
+            cursor = end
+            draw_on = not draw_on
+            pattern_index += 1
+
+    def _background_line(self, coordinates, colour, width=1, dash=None):
+        points = list(zip(coordinates[0::2], coordinates[1::2]))
+        if len(points) < 2:
+            return
+        draw = self._background_draw
+        pixel_width = max(1, int(round(width)))
+        if dash and not self._drag_mode:
+            for left, right in zip(points, points[1:]):
+                self._dashed_segment(draw, left, right, colour, pixel_width, dash)
+        else:
+            draw.line(points, fill=colour, width=pixel_width, joint="curve")
+
+    def _background_text(self, x, y, text, colour, size=7, bold=False, anchor="center"):
+        draw = self._background_draw
+        font = _map_font(size, bold)
+        text = str(text or "")
+        bounds = draw.textbbox((0, 0), text, font=font)
+        text_width = bounds[2] - bounds[0]
+        text_height = bounds[3] - bounds[1]
+        if anchor == "w":
+            left, top = x, y - text_height / 2.0
+        elif anchor == "sw":
+            left, top = x, y - text_height
+        elif anchor == "se":
+            left, top = x - text_width, y - text_height
+        else:
+            left, top = x - text_width / 2.0, y - text_height / 2.0
+        draw.text(
+            (left - bounds[0], top - bounds[1]), text,
+            font=font, fill=colour,
+        )
 
     def _draw_starfield(self):
-        canvas = self.canvas
+        draw = self._background_draw
         width = self._projection_context["width"]
         height = self._projection_context["height"]
         state = 0x5EED123
@@ -452,9 +552,9 @@ class ExpeditionMapView:
             colour = _mix(THEME.inset, THEME.text if bright else THEME.muted, 0.42 if bright else 0.22)
             radius = 1 if bright else 0
             if radius:
-                canvas.create_oval(x - 1, y - 1, x + 1, y + 1, fill=colour, outline="")
+                draw.ellipse((x - 1, y - 1, x + 1, y + 1), fill=colour)
             else:
-                canvas.create_line(x, y, x + 1, y, fill=colour)
+                draw.point((x, y), fill=colour)
 
     def _project_polyline(self, positions, colour, width=1, dash=None):
         projected = [self._project(position) for position in positions]
@@ -465,10 +565,10 @@ class ExpeditionMapView:
                     points.extend((left[0], left[1]))
                 points.extend((right[0], right[1]))
             elif len(points) >= 4:
-                self.canvas.create_line(*points, fill=colour, width=width, dash=dash, smooth=True)
+                self._background_line(points, colour, width=width, dash=dash)
                 points = []
         if len(points) >= 4:
-            self.canvas.create_line(*points, fill=colour, width=width, dash=dash, smooth=True)
+            self._background_line(points, colour, width=width, dash=dash)
 
     def _draw_galaxy_structure(self):
         mode = self.view_mode.get()
@@ -551,7 +651,7 @@ class ExpeditionMapView:
                 colour,
             )
 
-    def _draw_regions(self):
+    def _draw_region_contours(self):
         visible_radius = self._fit_radius / max(self._zoom, 0.01)
         contour_step = 32 if visible_radius > 16000 else (16 if visible_radius > 4500 else 8)
         if self._drag_mode:
@@ -565,10 +665,13 @@ class ExpeditionMapView:
             left = self._project((x1, 0.0, z1))
             right = self._project((x2, 0.0, z2))
             if self._visible_line(left, right, pad=30):
-                self.canvas.create_line(
-                    left[0], left[1], right[0], right[1],
-                    fill=boundary_colour, width=1, dash=(3, 4),
+                self._background_line(
+                    (left[0], left[1], right[0], right[1]),
+                    boundary_colour, width=1, dash=(3, 4),
                 )
+        return labels
+
+    def _draw_region_labels(self, labels):
         width = self._projection_context["width"]
         height = self._projection_context["height"]
         label_colour = _mix(THEME.inset, THEME.text, 0.48)
@@ -608,6 +711,8 @@ class ExpeditionMapView:
                 row["name"] == selected_region
                 or bool(current_region and row["id"] == current_region[0])
             )
+            if self._drag_mode and not forced:
+                continue
             overlaps = any(
                 bounds[0] < other[2] and bounds[2] > other[0]
                 and bounds[1] < other[3] and bounds[3] > other[1]
@@ -615,10 +720,8 @@ class ExpeditionMapView:
             )
             if overlaps and not forced:
                 continue
-            self.canvas.create_text(
-                px, py, text=text,
-                fill=label_colour, font=("Cascadia Mono", size, "bold"),
-                anchor="center",
+            self._background_text(
+                px, py, text, label_colour, size=size, bold=True,
             )
             occupied.append(bounds)
             self._map_points.append({
@@ -631,31 +734,63 @@ class ExpeditionMapView:
             })
 
     def _draw_route_and_markers(self):
-        canvas = self.canvas
+        draw = self._background_draw
         rows = self._route_rows
         mapped_points = [point for point in self._map_points if point["record"].get("kind") == "Region"]
-        route_points = []
         position_by_system = {}
         for row in rows:
             pos = _position(row.get("pos"))
             if pos is None:
                 continue
-            projected = self._project(pos)
-            route_points.append((projected, row, pos))
             system = str(row.get("system") or "")
             if system:
                 position_by_system[system.casefold()] = pos
-        for index in range(1, len(route_points)):
-            left = route_points[index - 1][0]
-            right = route_points[index][0]
-            if not self._visible_line(left, right):
-                continue
-            brightness = max(0.25, min(0.85, (left[3] + right[3]) / 2.5))
-            colour = _mix(THEME.inset, THEME.orange, brightness)
-            canvas.create_line(left[0], left[1], right[0], right[1], fill=colour, width=2)
+        draw_rows = rows
+        if self._drag_mode and len(rows) > 500:
+            last = len(rows) - 1
+            indexes = {
+                round(sample * last / 499)
+                for sample in range(500)
+            }
+            current_key = str(getattr(self.app, "current_sys", "") or "").casefold()
+            indexes.update(
+                index for index, row in enumerate(rows)
+                if current_key and str(row.get("system") or "").casefold() == current_key
+            )
+            draw_rows = [rows[index] for index in sorted(indexes)]
+        route_points = []
+        for row in draw_rows:
+            pos = _position(row.get("pos"))
+            if pos is not None:
+                route_points.append((self._project(pos), row, pos))
+        self._draw_route_path(route_points)
 
-        ordered = sorted(enumerate(route_points), key=lambda item: item[1][0][2], reverse=True)
+        visible_indexes = [
+            index for index, (projected, _row, _pos) in enumerate(route_points)
+            if -30 <= projected[0] <= self._projection_context["width"] + 30
+            and -30 <= projected[1] <= self._projection_context["height"] + 30
+        ]
         current_system = str(getattr(self.app, "current_sys", "") or "")
+        mandatory_indexes = {
+            index for index in visible_indexes
+            if index in {0, len(route_points) - 1}
+            or (
+                current_system
+                and str(route_points[index][1].get("system") or "").casefold()
+                == current_system.casefold()
+            )
+        }
+        point_limit = 70 if self._drag_mode else 220
+        if len(visible_indexes) > point_limit:
+            last = len(visible_indexes) - 1
+            visible_indexes = sorted(mandatory_indexes | {
+                visible_indexes[round(sample * last / (point_limit - 1))]
+                for sample in range(point_limit)
+            })
+        ordered = sorted(
+            ((index, route_points[index]) for index in visible_indexes),
+            key=lambda item: item[1][0][2], reverse=True,
+        )
         for index, (projected, row, pos) in ordered:
             px, py, depth, perspective = projected
             if not (-30 <= px <= self._projection_context["width"] + 30
@@ -667,15 +802,20 @@ class ExpeditionMapView:
             colour = THEME.orange if is_current else _star_colour(row.get("star_class"))
             radius = max(1.5, min(5.5, (4.2 if is_endpoint else 2.4) * perspective))
             glow = _mix(THEME.inset, colour, 0.28)
-            canvas.create_oval(px - radius * 2.2, py - radius * 2.2, px + radius * 2.2, py + radius * 2.2, outline=glow)
-            canvas.create_oval(px - radius, py - radius, px + radius, py + radius, fill=colour, outline="")
+            draw.ellipse(
+                (px - radius * 2.2, py - radius * 2.2, px + radius * 2.2, py + radius * 2.2),
+                outline=glow,
+            )
+            draw.ellipse(
+                (px - radius, py - radius, px + radius, py + radius), fill=colour,
+            )
             if is_current:
                 self._draw_target_brackets(px, py, 10, THEME.orange)
             if is_current or is_endpoint:
-                canvas.create_text(
-                    px + 10, py - 8, text=system or "UNKNOWN",
-                    fill=THEME.text if is_current else THEME.muted,
-                    font=("Cascadia Mono", 7, "bold"), anchor="w",
+                self._background_text(
+                    px + 10, py - 8, system or "UNKNOWN",
+                    THEME.text if is_current else THEME.muted,
+                    size=7, bold=True, anchor="w",
                 )
             mapped_points.append({
                 "x": px, "y": py, "depth": depth,
@@ -717,44 +857,84 @@ class ExpeditionMapView:
         self._map_points = mapped_points
         self._plotted_markers = plotted_markers
 
+    def _draw_route_path(self, route_points):
+        sequence = []
+
+        def flush():
+            if len(sequence) < 2:
+                return
+            # A handful of depth bands retains the 3D cue without creating one
+            # drawing object for every jump in a long expedition.
+            band_count = min(12, max(1, math.ceil((len(sequence) - 1) / 80)))
+            band_size = max(1, math.ceil((len(sequence) - 1) / band_count))
+            for start in range(0, len(sequence) - 1, band_size):
+                band = sequence[start:min(len(sequence), start + band_size + 1)]
+                brightness = max(
+                    0.25, min(0.85, sum(point[3] for point in band) / len(band) / 1.25),
+                )
+                coordinates = []
+                for point in band:
+                    coordinates.extend((point[0], point[1]))
+                self._background_line(
+                    coordinates, _mix(THEME.inset, THEME.orange, brightness), width=2,
+                )
+
+        for index in range(1, len(route_points)):
+            left = route_points[index - 1][0]
+            right = route_points[index][0]
+            if self._visible_line(left, right):
+                if not sequence:
+                    sequence.append(left)
+                sequence.append(right)
+            else:
+                flush()
+                sequence.clear()
+        flush()
+
     def _draw_target_brackets(self, x, y, radius, colour):
         gap = radius * 0.45
         outer = radius
         for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
-            self.canvas.create_line(
-                x + sx * gap, y + sy * outer, x + sx * outer, y + sy * outer,
-                fill=colour, width=1,
+            self._background_line(
+                (x + sx * gap, y + sy * outer, x + sx * outer, y + sy * outer),
+                colour,
             )
-            self.canvas.create_line(
-                x + sx * outer, y + sy * gap, x + sx * outer, y + sy * outer,
-                fill=colour, width=1,
+            self._background_line(
+                (x + sx * outer, y + sy * gap, x + sx * outer, y + sy * outer),
+                colour,
             )
 
     def _draw_marker(self, x, y, layer, colour):
+        draw = self._background_draw
         glow = _mix(THEME.inset, colour, 0.28)
-        self.canvas.create_oval(x - 7, y - 7, x + 7, y + 7, outline=glow)
+        draw.ellipse((x - 7, y - 7, x + 7, y + 7), outline=glow)
         if layer == "Valuable":
-            self.canvas.create_polygon(x, y - 5, x + 5, y, x, y + 5, x - 5, y, outline=colour, fill=THEME.inset)
+            draw.polygon(
+                ((x, y - 5), (x + 5, y), (x, y + 5), (x - 5, y)),
+                outline=colour, fill=THEME.inset,
+            )
         elif layer == "Biology":
-            self.canvas.create_polygon(x, y - 5, x + 5, y + 4, x - 5, y + 4, outline=colour, fill=THEME.inset)
+            draw.polygon(
+                ((x, y - 5), (x + 5, y + 4), (x - 5, y + 4)),
+                outline=colour, fill=THEME.inset,
+            )
         elif layer == "Codex":
             points = []
             for index in range(6):
                 angle = math.tau * index / 6.0
-                points.extend((x + math.cos(angle) * 5, y + math.sin(angle) * 5))
-            self.canvas.create_polygon(*points, outline=colour, fill=THEME.inset)
+                points.append((x + math.cos(angle) * 5, y + math.sin(angle) * 5))
+            draw.polygon(points, outline=colour, fill=THEME.inset)
         elif layer == "Photos":
-            self.canvas.create_rectangle(x - 4, y - 4, x + 4, y + 4, outline=colour)
-            self.canvas.create_oval(x - 1, y - 1, x + 1, y + 1, fill=colour, outline="")
+            draw.rectangle((x - 4, y - 4, x + 4, y + 4), outline=colour)
+            draw.ellipse((x - 1, y - 1, x + 1, y + 1), fill=colour)
         elif layer == "Recon":
-            self.canvas.create_line(x - 5, y, x + 5, y, fill=colour, width=2)
-            self.canvas.create_line(x, y - 5, x, y + 5, fill=colour, width=2)
+            self._background_line((x - 5, y, x + 5, y), colour, width=2)
+            self._background_line((x, y - 5, x, y + 5), colour, width=2)
         else:
-            self.canvas.create_oval(x - 5, y - 5, x + 5, y + 5, outline=colour, width=2)
-            self.canvas.create_oval(x - 1, y - 1, x + 1, y + 1, fill=colour, outline="")
+            draw.ellipse((x - 5, y - 5, x + 5, y + 5), outline=colour, width=2)
+            draw.ellipse((x - 1, y - 1, x + 1, y + 1), fill=colour)
 
     def _draw_hud_frame(self):
-        canvas = self.canvas
         width = self._projection_context["width"]
         height = self._projection_context["height"]
         colour = _mix(THEME.inset, THEME.accent, 0.65)
@@ -764,20 +944,20 @@ class ExpeditionMapView:
             (margin, margin, 1, 1), (width - margin, margin, -1, 1),
             (margin, height - margin, 1, -1), (width - margin, height - margin, -1, -1),
         ):
-            canvas.create_line(x, y, x + sx * length, y, fill=colour)
-            canvas.create_line(x, y, x, y + sy * length, fill=colour)
-        canvas.create_text(
+            self._background_line((x, y, x + sx * length, y), colour)
+            self._background_line((x, y, x, y + sy * length), colour)
+        self._background_text(
             16, height - 16,
-            text=f"{self.view_mode.get().upper()}  ·  ZOOM {self._zoom:05.2f}x",
-            fill=THEME.dim, font=("Cascadia Mono", 7, "bold"), anchor="sw",
+            f"{self.view_mode.get().upper()}  ·  ZOOM {self._zoom:05.2f}x",
+            THEME.dim, size=7, bold=True, anchor="sw",
         )
         current = _position(getattr(self.app, "current_coords", None))
         region = find_region(*current) if current else None
         if region:
-            canvas.create_text(
+            self._background_text(
                 width - 16, height - 16,
-                text=f"REGION {region[0]:02d} // {region[1].upper()}",
-                fill=THEME.orange, font=("Cascadia Mono", 7, "bold"), anchor="se",
+                f"REGION {region[0]:02d} // {region[1].upper()}",
+                THEME.orange, size=7, bold=True, anchor="se",
             )
 
     def _update_summary(self, all_rows):
