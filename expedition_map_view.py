@@ -5,10 +5,13 @@ from __future__ import annotations
 from collections import defaultdict
 from functools import lru_cache
 import math
+import random
+import threading
 import tkinter as tk
 from tkinter import ttk
+import weakref
 
-from PIL import Image, ImageDraw, ImageFont, ImageTk
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageTk
 
 from galactic_regions import find_region, region_geometry
 from stellar_types import star_type_label
@@ -36,6 +39,13 @@ VIEW_PRESETS = (
 GALACTIC_CENTRE = (0.0, 0.0, 25899.0)
 GALAXY_RADIUS_LY = 51500.0
 MAX_ROUTE_POINTS = 1500
+GALAXY_TEXTURE_SIZE = 768
+GALAXY_PREVIEW_SIZE = 384
+GALAXY_MOTION_SIZE = 192
+MAX_GALAXY_TEXTURE_THEMES = 4
+_GALAXY_TEXTURES = {}
+_GALAXY_TEXTURE_WAITERS = {}
+_GALAXY_TEXTURE_LOCK = threading.Lock()
 
 
 @lru_cache(maxsize=24)
@@ -75,6 +85,205 @@ def _mix(left, right, amount):
     return "#{:02x}{:02x}{:02x}".format(*values)
 
 
+def _rgba(colour, alpha):
+    return (*_hex_rgb(colour), max(0, min(255, int(alpha))))
+
+
+def _build_galaxy_texture(key):
+    """Build one original, theme-tinted top-down Milky Way texture."""
+    size, accent, orange, text = key
+    rng = random.Random(0x5A17C0DE)
+    centre = size / 2.0
+    radius = size * 0.465
+    flatten = 0.92
+    arm_colour = _mix(accent, text, 0.48)
+    warm_colour = _mix(orange, text, 0.62)
+    cool_colour = _mix(accent, "#bcdcff", 0.46)
+
+    base = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    haze = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    haze_draw = ImageDraw.Draw(haze, "RGBA")
+
+    # A diffuse stellar disc prevents the arms from looking like four clean
+    # painted lines. Particles are generated once off the UI thread, then
+    # softened into overlapping star clouds.
+    for _index in range(5200):
+        radial = rng.random() ** 0.63
+        angle = rng.random() * math.tau
+        x = centre + math.cos(angle) * radius * radial
+        y = centre - math.sin(angle) * radius * radial * flatten
+        particle = 1.0 + rng.random() * (4.0 - radial * 2.2)
+        alpha = 5 + int((1.0 - radial) * 18)
+        colour = warm_colour if radial < 0.28 else arm_colour
+        haze_draw.ellipse(
+            (x - particle, y - particle, x + particle, y + particle),
+            fill=_rgba(colour, alpha),
+        )
+
+    arm_glow = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    arm_draw = ImageDraw.Draw(arm_glow, "RGBA")
+    for arm in range(4):
+        path = []
+        for index in range(180):
+            radial = 0.055 + index / 179.0 * 0.91
+            angle = arm * math.pi / 2.0 + 0.64 + radial * 5.15
+            path.append((
+                centre + math.cos(angle) * radius * radial,
+                centre - math.sin(angle) * radius * radial * flatten,
+            ))
+        arm_draw.line(
+            path, fill=_rgba(arm_colour, 35),
+            width=max(5, round(size * 0.035)), joint="curve",
+        )
+    arm_glow = arm_glow.filter(ImageFilter.GaussianBlur(max(3, size / 60.0)))
+    haze = haze.filter(ImageFilter.GaussianBlur(max(2, size / 95.0)))
+    base = Image.alpha_composite(base, haze)
+    base = Image.alpha_composite(base, arm_glow)
+
+    core = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    core_draw = ImageDraw.Draw(core, "RGBA")
+    for fraction, alpha in ((0.22, 22), (0.15, 42), (0.09, 78), (0.045, 125)):
+        rx = radius * fraction
+        ry = rx * 0.72
+        core_draw.ellipse(
+            (centre - rx, centre - ry, centre + rx, centre + ry),
+            fill=_rgba(warm_colour, alpha),
+        )
+    bar_angle = math.radians(24)
+    bar_dx = math.cos(bar_angle) * radius * 0.20
+    bar_dy = math.sin(bar_angle) * radius * 0.20
+    core_draw.line(
+        (centre - bar_dx, centre + bar_dy, centre + bar_dx, centre - bar_dy),
+        fill=_rgba(warm_colour, 92), width=max(9, round(size * 0.035)),
+    )
+    core = core.filter(ImageFilter.GaussianBlur(max(4, size / 48.0)))
+    base = Image.alpha_composite(base, core)
+
+    stars = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    star_draw = ImageDraw.Draw(stars, "RGBA")
+    for arm in range(4):
+        for _index in range(1900):
+            radial = 0.07 + rng.random() ** 0.72 * 0.90
+            width = 0.07 + radial * 0.12
+            angle = (
+                arm * math.pi / 2.0 + 0.64 + radial * 5.15
+                + rng.gauss(0.0, width)
+            )
+            radial = max(0.02, min(1.0, radial + rng.gauss(0.0, 0.018 + radial * 0.018)))
+            x = centre + math.cos(angle) * radius * radial
+            y = centre - math.sin(angle) * radius * radial * flatten
+            roll = rng.random()
+            colour = warm_colour if radial < 0.24 else (cool_colour if roll < 0.45 else arm_colour)
+            alpha = 48 + int(rng.random() * 115 * (1.08 - radial * 0.35))
+            point_size = 1 if rng.random() < 0.93 else 2
+            star_draw.ellipse(
+                (x - point_size, y - point_size, x + point_size, y + point_size),
+                fill=_rgba(colour, alpha),
+            )
+    for _index in range(2700):
+        radial = rng.random() ** 0.58
+        angle = rng.random() * math.tau
+        x = centre + math.cos(angle) * radius * radial
+        y = centre - math.sin(angle) * radius * radial * flatten
+        colour = warm_colour if radial < 0.22 else arm_colour
+        alpha = 25 + int(rng.random() * 70 * (1.0 - radial * 0.28))
+        star_draw.point((x, y), fill=_rgba(colour, alpha))
+    for _index in range(1500):
+        x = centre + rng.gauss(0.0, radius * 0.095)
+        y = centre + rng.gauss(0.0, radius * 0.060)
+        point_size = 1 if rng.random() < 0.88 else 2
+        star_draw.ellipse(
+            (x - point_size, y - point_size, x + point_size, y + point_size),
+            fill=_rgba(warm_colour, 105 + int(rng.random() * 130)),
+        )
+    base = Image.alpha_composite(base, stars)
+
+    # Offset logarithmic lanes obscure parts of the arms and create the dark,
+    # irregular rifts visible in a galactic disc without copying game artwork.
+    dust = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    dust_draw = ImageDraw.Draw(dust, "RGBA")
+    for arm in range(4):
+        path = []
+        for index in range(150):
+            radial = 0.14 + index / 149.0 * 0.78
+            angle = arm * math.pi / 2.0 + 0.79 + radial * 5.15
+            jitter = math.sin(index * 0.31 + arm) * radius * 0.004
+            path.append((
+                centre + math.cos(angle) * (radius * radial + jitter),
+                centre - math.sin(angle) * (radius * radial + jitter) * flatten,
+            ))
+        dust_draw.line(
+            path, fill=(0, 2, 5, 70),
+            width=max(5, round(size * 0.018)), joint="curve",
+        )
+    dust = dust.filter(ImageFilter.GaussianBlur(max(2, size / 180.0)))
+    base = Image.alpha_composite(base, dust)
+
+    edge_mask = Image.new("L", (size, size), 0)
+    mask_draw = ImageDraw.Draw(edge_mask)
+    margin = round(size * 0.025)
+    mask_draw.ellipse((margin, margin, size - margin, size - margin), fill=255)
+    edge_mask = edge_mask.filter(ImageFilter.GaussianBlur(max(8, size / 28.0)))
+    base.putalpha(ImageChops.multiply(base.getchannel("A"), edge_mask))
+    preview = base.resize(
+        (GALAXY_PREVIEW_SIZE, GALAXY_PREVIEW_SIZE), Image.Resampling.LANCZOS,
+    )
+    motion = preview.resize(
+        (GALAXY_MOTION_SIZE, GALAXY_MOTION_SIZE), Image.Resampling.LANCZOS,
+    )
+    return base, preview, motion
+
+
+def _finish_galaxy_texture(key):
+    try:
+        bundle = _build_galaxy_texture(key)
+    except Exception:
+        bundle = None
+    with _GALAXY_TEXTURE_LOCK:
+        if bundle is not None:
+            while (
+                len(_GALAXY_TEXTURES) >= MAX_GALAXY_TEXTURE_THEMES
+                and key not in _GALAXY_TEXTURES
+            ):
+                _GALAXY_TEXTURES.pop(next(iter(_GALAXY_TEXTURES)))
+            _GALAXY_TEXTURES[key] = bundle
+        waiters = _GALAXY_TEXTURE_WAITERS.pop(key, set())
+    for view_ref in waiters:
+        view = view_ref()
+        if view is None:
+            continue
+        post = getattr(view.app, "_ui_post", None)
+        if callable(post):
+            post(lambda ref=view_ref, ready_key=key: _deliver_galaxy_texture(ref, ready_key))
+
+
+def _deliver_galaxy_texture(view_ref, key):
+    view = view_ref()
+    if view is not None:
+        view._on_galaxy_texture_ready(key)
+
+
+def _request_galaxy_texture(view, key):
+    view_ref = weakref.ref(view)
+    start_worker = False
+    with _GALAXY_TEXTURE_LOCK:
+        bundle = _GALAXY_TEXTURES.get(key)
+        if bundle is not None:
+            return bundle
+        waiters = _GALAXY_TEXTURE_WAITERS.get(key)
+        if waiters is None:
+            waiters = set()
+            _GALAXY_TEXTURE_WAITERS[key] = waiters
+            start_worker = True
+        waiters.add(view_ref)
+    if start_worker:
+        threading.Thread(
+            target=_finish_galaxy_texture, args=(key,),
+            name="VoidCompassGalaxyTexture", daemon=True,
+        ).start()
+    return None
+
+
 def _star_colour(star_class):
     code = str(star_class or "").upper()
     if code.startswith(("O", "B")):
@@ -112,6 +321,9 @@ class ExpeditionMapView:
         self._route_rows = []
         self._snapshot = {}
         self._bookmarks = []
+        self._position_by_system = {}
+        self._marker_cache = []
+        self._marker_glow_cache = {}
         self._camera_center = [0.0, 0.0, 0.0]
         self._fit_radius = 1000.0
         self._zoom = 1.0
@@ -119,9 +331,12 @@ class ExpeditionMapView:
         self._yaw = -0.55
         self._pitch = -0.62
         self._projection_context = None
+        self._background_image = None
         self._background_draw = None
         self._background_photo = None
         self._background_item = None
+        self._galaxy_warp_key = None
+        self._galaxy_warp_image = None
         self._render_job = None
         self._render_pending = False
         self._camera_ready = False
@@ -131,6 +346,7 @@ class ExpeditionMapView:
         self._drag_distance = 0.0
         self._hover_point = None
         self._selected_point = None
+        self._disposed = False
         configure_ttk(parent, "ExpeditionMap")
         self._build()
 
@@ -218,13 +434,32 @@ class ExpeditionMapView:
             self.popout_callback()
 
     def dispose(self):
+        self._disposed = True
         if self._render_job is not None:
             try:
                 self.canvas.after_cancel(self._render_job)
             except tk.TclError:
                 pass
         self._render_job = None
+        self._background_image = None
         self._background_photo = None
+        self._galaxy_warp_image = None
+
+    def _galaxy_texture_key(self):
+        return (
+            GALAXY_TEXTURE_SIZE,
+            str(THEME.accent),
+            str(THEME.orange),
+            str(THEME.text),
+        )
+
+    def _on_galaxy_texture_ready(self, key):
+        """Refresh after the background worker has prepared this theme."""
+        if self._disposed or key != self._galaxy_texture_key():
+            return
+        self._galaxy_warp_key = None
+        self._galaxy_warp_image = None
+        self._schedule_render()
 
     def view_state(self):
         return {
@@ -286,6 +521,13 @@ class ExpeditionMapView:
             self._route_rows = all_rows
         manager = getattr(self.app, "expedition_manager", None)
         self._bookmarks = manager.bookmarks() if manager else []
+        self._position_by_system = {
+            str(row.get("system") or "").casefold(): position
+            for row in self._route_rows
+            if (position := _position(row.get("pos"))) is not None
+            and str(row.get("system") or "").strip()
+        }
+        self._marker_cache = self._layer_markers(self._snapshot, self._bookmarks)
         if not self._camera_ready:
             self._reset_view(render=False)
             self._camera_ready = True
@@ -372,7 +614,11 @@ class ExpeditionMapView:
                 self._render_pending = True
                 return
             self._render_pending = False
-            self._render_job = self.canvas.after(24, self._render)
+            # Motion frames are already deliberately lighter, so do not add a
+            # long timer delay on top of their render time. Settled redraws can
+            # remain gently coalesced because they contain the full data layer.
+            delay = 8 if self._drag_mode else 24
+            self._render_job = self.canvas.after(delay, self._render)
         except tk.TclError:
             self._render_job = None
 
@@ -546,7 +792,8 @@ class ExpeditionMapView:
         self._projection_context = self._projection()
         width = int(self._projection_context["width"])
         height = int(self._projection_context["height"])
-        background = Image.new("RGB", (width, height), THEME.inset)
+        background = Image.new("RGBA", (width, height), _rgba(THEME.inset, 255))
+        self._background_image = background
         self._background_draw = ImageDraw.Draw(background)
         self._draw_starfield()
         self._draw_galaxy_structure()
@@ -559,6 +806,7 @@ class ExpeditionMapView:
         self._draw_route_and_markers()
         self._draw_hud_frame()
         self._background_draw = None
+        self._background_image = None
         self._background_photo = ImageTk.PhotoImage(background, master=canvas)
         if self._background_item is None:
             self._background_item = canvas.create_image(
@@ -631,7 +879,7 @@ class ExpeditionMapView:
         width = self._projection_context["width"]
         height = self._projection_context["height"]
         state = 0x5EED123
-        for index in range(40 if self._drag_mode else 150):
+        for index in range(24 if self._drag_mode else 150):
             state = (1103515245 * state + 12345) & 0x7FFFFFFF
             x = (state % 10000) / 10000.0 * width
             state = (1103515245 * state + 12345) & 0x7FFFFFFF
@@ -662,37 +910,100 @@ class ExpeditionMapView:
         mode = self.view_mode.get()
         if mode != "Galaxy Overview" and self._fit_radius / max(self._zoom, 0.01) < 15000:
             return
+        textured = self._draw_galaxy_texture()
+        rim_divisions = 48 if self._drag_mode else 96
         rim = []
-        for index in range(97):
-            angle = math.tau * index / 96.0
+        for index in range(rim_divisions + 1):
+            angle = math.tau * index / rim_divisions
             rim.append((
                 GALACTIC_CENTRE[0] + math.cos(angle) * GALAXY_RADIUS_LY,
                 0.0,
                 GALACTIC_CENTRE[2] + math.sin(angle) * GALAXY_RADIUS_LY * 0.92,
             ))
-        self._project_polyline(rim, _mix(THEME.inset, THEME.border, 0.8), width=2)
-        for arm in range(4):
-            points = []
-            for index in range(90):
-                radius = 1500.0 + index / 89.0 * 47000.0
-                angle = arm * math.pi / 2.0 + 0.7 + radius / 8700.0
-                points.append((
-                    GALACTIC_CENTRE[0] + math.cos(angle) * radius,
-                    0.0,
-                    GALACTIC_CENTRE[2] + math.sin(angle) * radius * 0.92,
-                ))
-            self._project_polyline(
-                points, _mix(THEME.inset, THEME.accent, 0.16), width=2,
-            )
+        self._project_polyline(rim, _mix(THEME.inset, THEME.border, 0.74), width=2)
+        # Keep the cheap geometric arms as an immediate fallback while the
+        # one-time texture worker is running. Once ready, the actual star and
+        # dust layer supplies the structure and the cyan scaffolding vanishes.
+        if not textured:
+            for arm in range(4):
+                points = []
+                for index in range(90):
+                    radius = 1500.0 + index / 89.0 * 47000.0
+                    angle = arm * math.pi / 2.0 + 0.7 + radius / 8700.0
+                    points.append((
+                        GALACTIC_CENTRE[0] + math.cos(angle) * radius,
+                        0.0,
+                        GALACTIC_CENTRE[2] + math.sin(angle) * radius * 0.92,
+                    ))
+                self._project_polyline(
+                    points, _mix(THEME.inset, THEME.accent, 0.16), width=2,
+                )
+        core_divisions = 32 if self._drag_mode else 64
         core = []
-        for index in range(65):
-            angle = math.tau * index / 64.0
+        for index in range(core_divisions + 1):
+            angle = math.tau * index / core_divisions
             core.append((
                 GALACTIC_CENTRE[0] + math.cos(angle) * 3500.0,
                 0.0,
                 GALACTIC_CENTRE[2] + math.sin(angle) * 3500.0,
             ))
         self._project_polyline(core, _mix(THEME.inset, THEME.orange, 0.35), width=2)
+
+    def _draw_galaxy_texture(self):
+        """Composite a cached, inclination-aware galaxy disc behind the map."""
+        texture_key = self._galaxy_texture_key()
+        bundle = _request_galaxy_texture(self, texture_key)
+        if bundle is None or self._background_image is None:
+            return False
+
+        centre = self._project(GALACTIC_CENTRE)
+        diameter = (
+            2.0 * GALAXY_RADIUS_LY
+            * self._projection_context["scale"] * centre[3]
+        )
+        # At close route scales the galaxy would become a multi-thousand-pixel
+        # bitmap with no useful detail. The existing 15 kly visibility gate
+        # normally prevents this; this guard covers highly perspective views.
+        if diameter < 36.0 or diameter > 2200.0:
+            return False
+        target_width = max(36, round(diameter))
+        target_height = max(12, round(diameter * max(0.055, abs(math.sin(self._pitch))) * 0.92))
+        # A dedicated 192px motion source keeps live orbiting cheap. The 384px
+        # derivative covers ordinary settled panels; full detail is reserved
+        # for genuinely large focus-mode displays.
+        if self._drag_mode:
+            source_detail, source = "motion", bundle[2]
+        elif target_width <= 700:
+            source_detail, source = "preview", bundle[1]
+        else:
+            source_detail, source = "full", bundle[0]
+        # Quantising the live orbit angle lets adjacent drag frames reuse the
+        # same low-resolution warp. Panning only changes the paste position.
+        angle_step = 0.045 if self._drag_mode else 0.012
+        quantised_yaw = round(self._yaw / angle_step) * angle_step
+        warp_key = (
+            texture_key, source_detail, bool(self._drag_mode),
+            round(quantised_yaw, 4), target_width, target_height,
+        )
+        if self._galaxy_warp_key != warp_key or self._galaxy_warp_image is None:
+            resample = (
+                Image.Resampling.BILINEAR
+                if self._drag_mode else Image.Resampling.BICUBIC
+            )
+            rotated = source.rotate(
+                -math.degrees(quantised_yaw),
+                resample=resample, expand=False,
+            )
+            self._galaxy_warp_image = rotated.resize(
+                (target_width, target_height), resample=resample,
+            )
+            self._galaxy_warp_key = warp_key
+        left = round(centre[0] - target_width / 2.0)
+        top = round(centre[1] - target_height / 2.0)
+        self._background_image.alpha_composite(
+            self._galaxy_warp_image, dest=(left, top),
+        )
+        return True
 
     def _nice_grid_step(self):
         visible_radius = self._fit_radius / max(self._zoom, 0.01)
@@ -702,10 +1013,11 @@ class ExpeditionMapView:
 
     def _draw_grid(self):
         if self.view_mode.get() == "Galaxy Overview":
+            divisions = 36 if self._drag_mode else 72
             for radius in (10000, 20000, 30000, 40000, 50000):
                 ring = []
-                for index in range(73):
-                    angle = math.tau * index / 72.0
+                for index in range(divisions + 1):
+                    angle = math.tau * index / divisions
                     ring.append((
                         GALACTIC_CENTRE[0] + math.cos(angle) * radius,
                         0.0,
@@ -743,7 +1055,7 @@ class ExpeditionMapView:
         visible_radius = self._fit_radius / max(self._zoom, 0.01)
         contour_step = 32 if visible_radius > 16000 else (16 if visible_radius > 4500 else 8)
         if self._drag_mode:
-            contour_step = min(128, contour_step * 4)
+            contour_step = min(256, contour_step * 8)
         # Contours become more detailed as the camera approaches them. Label
         # anchors stay fixed so names do not visibly drift between zoom levels.
         segments, _ignored_labels = region_geometry(contour_step)
@@ -825,20 +1137,13 @@ class ExpeditionMapView:
         draw = self._background_draw
         rows = self._route_rows
         mapped_points = [point for point in self._map_points if point["record"].get("kind") == "Region"]
-        position_by_system = {}
-        for row in rows:
-            pos = _position(row.get("pos"))
-            if pos is None:
-                continue
-            system = str(row.get("system") or "")
-            if system:
-                position_by_system[system.casefold()] = pos
+        position_by_system = self._position_by_system
         draw_rows = rows
-        if self._drag_mode and len(rows) > 500:
+        if self._drag_mode and len(rows) > 160:
             last = len(rows) - 1
             indexes = {
-                round(sample * last / 499)
-                for sample in range(500)
+                round(sample * last / 159)
+                for sample in range(160)
             }
             current_key = str(getattr(self.app, "current_sys", "") or "").casefold()
             indexes.update(
@@ -868,7 +1173,7 @@ class ExpeditionMapView:
                 == current_system.casefold()
             )
         }
-        point_limit = 70 if self._drag_mode else 220
+        point_limit = 30 if self._drag_mode else 220
         if len(visible_indexes) > point_limit:
             last = len(visible_indexes) - 1
             visible_indexes = sorted(mandatory_indexes | {
@@ -899,10 +1204,10 @@ class ExpeditionMapView:
             )
             if is_current:
                 self._draw_target_brackets(px, py, 10, THEME.orange)
-            if is_current or is_endpoint:
+            if is_endpoint and not is_current:
                 self._background_text(
                     px + 10, py - 8, system or "UNKNOWN",
-                    THEME.text if is_current else THEME.muted,
+                    THEME.muted,
                     size=7, bold=True, anchor="w",
                 )
             mapped_points.append({
@@ -914,7 +1219,27 @@ class ExpeditionMapView:
                 },
             })
 
-        markers = self._layer_markers(self._snapshot, self._bookmarks)
+        markers = self._marker_cache
+        if self._drag_mode and len(markers) > 120:
+            last = len(markers) - 1
+            indexes = {
+                round(sample * last / 119)
+                for sample in range(120)
+            }
+            # Keep a bounded selection of human-authored bookmarks visible
+            # while moving, then restore every intelligence marker on release.
+            bookmark_indexes = [
+                index for index, marker in enumerate(markers)
+                if marker.get("layer") == "Bookmarks"
+            ]
+            if len(bookmark_indexes) > 40:
+                bookmark_last = len(bookmark_indexes) - 1
+                bookmark_indexes = [
+                    bookmark_indexes[round(sample * bookmark_last / 39)]
+                    for sample in range(40)
+                ]
+            indexes.update(bookmark_indexes)
+            markers = [markers[index] for index in sorted(indexes)]
         marker_counts = defaultdict(int)
         plotted_markers = 0
         projected_markers = []
@@ -942,6 +1267,26 @@ class ExpeditionMapView:
             marker["position"] = pos
             mapped_points.append({"x": px, "y": py, "depth": depth, "record": marker})
             plotted_markers += 1
+
+        current_position = _position(getattr(self.app, "current_coords", None))
+        if current_position is None and current_system:
+            current_position = position_by_system.get(current_system.casefold())
+        if current_position is not None:
+            px, py, depth, _perspective = self._project(current_position)
+            if (
+                -35 <= px <= self._projection_context["width"] + 35
+                and -35 <= py <= self._projection_context["height"] + 35
+            ):
+                self._draw_current_locator(px, py, current_system)
+                mapped_points.append({
+                    "x": px, "y": py, "depth": depth,
+                    "record": {
+                        "kind": "System", "system": current_system,
+                        "subject": "You are here",
+                        "detail": "Current commander location",
+                        "position": current_position,
+                    },
+                })
         self._map_points = mapped_points
         self._plotted_markers = plotted_markers
 
@@ -992,9 +1337,63 @@ class ExpeditionMapView:
                 colour,
             )
 
+    def _draw_current_locator(self, x, y, system):
+        """Draw an unmistakable, topmost marker for the commander location."""
+        draw = self._background_draw
+        accent = THEME.orange
+        glow = _mix(THEME.inset, accent, 0.48)
+        for radius in (18, 13):
+            draw.ellipse(
+                (x - radius, y - radius, x + radius, y + radius),
+                outline=glow if radius == 18 else accent,
+                width=2 if radius == 13 else 1,
+            )
+        for dx, dy in ((-24, 0), (24, 0), (0, -24), (0, 24)):
+            inner = 16
+            if dx:
+                start = x + math.copysign(inner, dx)
+                self._background_line((start, y, x + dx, y), accent, width=2)
+            else:
+                start = y + math.copysign(inner, dy)
+                self._background_line((x, start, x, y + dy), accent, width=2)
+        draw.polygon(
+            ((x, y - 6), (x + 6, y), (x, y + 6), (x - 6, y)),
+            fill=accent, outline=THEME.text,
+        )
+
+        label = "YOU ARE HERE"
+        if system:
+            label += f" // {str(system).upper()}"
+        font = _map_font(8, True)
+        bounds = draw.textbbox((0, 0), label, font=font)
+        text_width = bounds[2] - bounds[0]
+        text_height = bounds[3] - bounds[1]
+        width = self._projection_context["width"]
+        height = self._projection_context["height"]
+        label_left = x + 29
+        if label_left + text_width + 12 > width - 8:
+            label_left = x - 29 - text_width - 12
+        label_left = max(8, min(label_left, width - text_width - 20))
+        label_top = max(8, min(y - text_height / 2.0 - 5, height - text_height - 14))
+        box = (
+            label_left, label_top,
+            label_left + text_width + 12, label_top + text_height + 10,
+        )
+        draw.rounded_rectangle(
+            box, radius=3, fill=_mix(THEME.inset, "#000000", 0.30),
+            outline=accent, width=1,
+        )
+        text_x = label_left + 6 - bounds[0]
+        text_y = label_top + 5 - bounds[1]
+        draw.text((text_x, text_y), label, font=font, fill=THEME.text)
+
     def _draw_marker(self, x, y, layer, colour):
         draw = self._background_draw
-        glow = _mix(THEME.inset, colour, 0.28)
+        glow_key = (THEME.inset, colour)
+        glow = self._marker_glow_cache.get(glow_key)
+        if glow is None:
+            glow = _mix(THEME.inset, colour, 0.28)
+            self._marker_glow_cache[glow_key] = glow
         draw.ellipse((x - 7, y - 7, x + 7, y + 7), outline=glow)
         if layer == "Valuable":
             draw.polygon(

@@ -246,7 +246,7 @@ class ExplorationWindow(ThemedWindowMixin):
                 if section == "Map & Intelligence":
                     self._refresh_visible_map()
                 if section == "Mission Control" and self.expedition_mission_view:
-                    self.expedition_mission_view.refresh()
+                    self.expedition_mission_view.on_shown()
         except Exception:
             pass
 
@@ -289,6 +289,10 @@ class ExplorationWindow(ThemedWindowMixin):
             and not self._map_popout_is_open()
         ):
             self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
+        elif value == "Mission Control" and self.expedition_mission_view:
+            # This callback also runs while restoring the saved Explore state,
+            # before the outer notebook necessarily emits its own change event.
+            self.expedition_mission_view.on_shown()
 
     def _map_popout_is_open(self):
         return self._widget_alive(self._map_focus_host)
@@ -1003,7 +1007,7 @@ class ExplorationWindow(ThemedWindowMixin):
                 and self.route_plotter
                 and self.route_plotter.current_section() == "Mission Control"
             ):
-                self.expedition_mission_view.refresh()
+                self.expedition_mission_view.on_shown()
         except Exception as exc:
             self._log_error(f"Exploration refresh failed: {exc}")
 
