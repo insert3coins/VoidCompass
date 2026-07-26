@@ -85,6 +85,10 @@ PROFILE_TEXT_SETTINGS = (
     "cockpit_advisor_level",
     "hud_crt_intensity",
     "adaptive_mode_lock",
+    "explore_active_page",
+    "explore_survey_filter",
+    "explore_discovery_filter",
+    "explore_expedition_section",
 )
 
 PROFILE_BOOL_SETTINGS = (
@@ -303,6 +307,10 @@ def apply_profile_config(config, profile_key=None):
         ),
         "hud_crt_intensity": "Subtle",
         "adaptive_mode_lock": "auto",
+        "explore_active_page": "System Survey",
+        "explore_survey_filter": "All bodies",
+        "explore_discovery_filter": "All",
+        "explore_expedition_section": "Overview",
     }
     bool_defaults = {
         "trade_advanced_tools_visible": False,
@@ -565,6 +573,10 @@ def load_config():
         'adaptive_briefings_enabled': True,
         'adaptive_debriefings_enabled': True,
         'adaptive_mode_lock': 'auto',
+        'explore_active_page': 'System Survey',
+        'explore_survey_filter': 'All bodies',
+        'explore_discovery_filter': 'All',
+        'explore_expedition_section': 'Overview',
         'adaptive_overlay_scenes': {},
         'ui_theme_name': _themes.DEFAULT_THEME_NAME,
         'ui_custom_themes': {},

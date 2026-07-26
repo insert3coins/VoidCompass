@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.1.2**
+**Current version: 5.2.1**
 
 Void Compass is a native Windows companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
 
@@ -17,12 +17,25 @@ The Dashboard's activity log follows the current mode and keeps a curated Flight
 | Group | Direct workspaces |
 | --- | --- |
 | **Core** | Dashboard and Profile. |
-| **Explore** | Explore and Galaxy. Survey, biological records, routes, waypoints, system history and Captain's Log stay together. |
+| **Explore** | Explore and Galaxy. Explore uses four clear pages—System Survey, Expedition, Discoveries and Logbook—without nested Survey or Chronicle tabs. |
 | **Expedition** | Expedition overview plus direct Analytics, Achievements, Carrier and Colony access. |
 | **Operations** | Operations overview plus direct Trade and Specialists access, including Mining and Combat/AX. |
 | **System** | Engineer and About. |
 
 Every group starts expanded, can be collapsed deliberately, remembers that choice per commander and remains reachable through a themed scrolling rail on smaller windows. Full secondary workspaces are still created only when first opened.
+
+### Deep Survey Intelligence
+
+Explore integrates profile-local Deep Survey intelligence directly into its four workflow pages, built from Frontier journal facts:
+
+- **System Survey** combines the current body list, architecture, actionable DSS/biology/geology planner, stellar wonders and Colonisation Recon in one filterable view.
+- **Expedition** uses a compact section switcher for route overview, waypoints and neutron planning, then combines the projected `StarPos` map with route intelligence.
+- **Discoveries** is one searchable archive for system history, valuable bodies, Codex discoveries, FSS signals, DSS probe efficiency and screenshot metadata; image previews load only when selected, while system records can be copied or opened directly in EDSM.
+- **Logbook** places the live trip summary and retained Captain's Log sessions together instead of separating them across Chronicle tabs, and can copy or save a shareable Markdown Expedition Report.
+
+Explore remembers its active page, survey/discovery filters and Expedition section independently for each commander. Colonisation Recon produces a conservative survey-readiness dossier, saved candidate list and direct Architect Command handoff; it does not claim that survey readiness guarantees game eligibility. System architecture follows journal `Parents` relationships, while wonders detection flags unusual measured characteristics without inventing missing orbits.
+
+Existing journals are indexed on a background worker the first time this profile opens 5.2.1. Stored collections and visible rows are bounded so a long expedition does not turn map, ledger or startup recovery into a cockpit stall.
 
 Trade opens in a compact **Simple Trade** view with cargo selling, routes, the current market and a clear EDDN receive/upload status. Routes, commodities, tracking, station search and database maintenance remain available through **Advanced Tools** and can be returned to the simple view at any time.
 
@@ -64,7 +77,7 @@ Every overlay can be enabled independently, dragged to a saved position and styl
 
 ## Achievements and commander profiles
 
-Achievement progress, companion memory, Captain's Log, carrier state, engineering plans, mining history, routes and integration settings are separated by commander profile. The active commander is detected from the journal and can be changed without mixing personal data.
+Achievement progress, companion memory, Captain's Log, Deep Survey history, carrier state, engineering plans, mining history, routes and integration settings are separated by commander profile. The active commander is detected from the journal and can be changed without mixing personal data.
 
 ![Native Achievement Centre](Achievements.PNG)
 

@@ -10,6 +10,7 @@ from tkinter import ttk
 from config import COLOR_BG, COLOR_PANEL, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 from ui_theme import THEME, ThemedWindowMixin, apply_window, button, configure_ttk, scrollbar, window_surface
 from waypoint_manager import WaypointManager
+from stellar_types import star_type_label
 
 COLOR_BG = THEME.bg
 COLOR_PANEL = THEME.panel
@@ -33,7 +34,8 @@ class RoutePlotter(ThemedWindowMixin):
     def __init__(self, root, edsm_handler, current_coords=None, current_sys="Unknown", config=None,
                  manager=None, on_change_callback=None, event_callback=None, embedded=False,
                  navigation_state_callback=None, copy_waypoint_callback=None,
-                 is_active_callback=None, compact=False):
+                 is_active_callback=None, compact=False, flat_navigation=False,
+                 section_change_callback=None, persist_config_callback=None):
         self.root = root
         self.edsm = edsm_handler
         self.manager = manager if manager else WaypointManager()
@@ -46,6 +48,11 @@ class RoutePlotter(ThemedWindowMixin):
         self.copy_waypoint_callback = copy_waypoint_callback
         self.is_active_callback = is_active_callback
         self.compact = bool(compact)
+        self.flat_navigation = bool(flat_navigation)
+        self.section_change_callback = section_change_callback
+        self.persist_config_callback = persist_config_callback
+        self._flat_sections = []
+        self._flat_nav_buttons = {}
         self.route_refresh_running = False
         self.neutron_route_running = False
         self.neutron_waypoints = []
@@ -63,6 +70,12 @@ class RoutePlotter(ThemedWindowMixin):
 
         self.setup_ui()
         self.refresh_list()
+
+    def _persist_config(self):
+        if callable(self.persist_config_callback):
+            self.persist_config_callback()
+        elif not self.embedded:
+            save_config(self.config)
 
     def _emit_event(self, tag, message, severity="INFO", copy_text=None):
         if not callable(self.event_callback):
@@ -97,7 +110,17 @@ class RoutePlotter(ThemedWindowMixin):
         style.configure("Route.Treeview.Heading", background=COLOR_PANEL, foreground=COLOR_ORANGE, relief="flat", font=("Courier", 8, "bold"))
         style.map("Route.Treeview", background=[("selected", COLOR_ACCENT)], foreground=[("selected", "black")])
 
-        self.tabs = ttk.Notebook(wrapper, style="Route.TNotebook")
+        if self.flat_navigation:
+            self.flat_nav = tk.Frame(wrapper, bg=COLOR_PANEL)
+            self.flat_nav.pack(fill=tk.X, pady=(0, 7))
+            style.configure("Route.Flat.TNotebook", background=COLOR_BG, borderwidth=0)
+            style.layout("Route.Flat.TNotebook.Tab", [])
+            notebook_style = "Route.Flat.TNotebook"
+        else:
+            self.flat_nav = None
+            notebook_style = "Route.TNotebook"
+
+        self.tabs = ttk.Notebook(wrapper, style=notebook_style)
         self.tabs.pack(fill=tk.BOTH, expand=True, pady=(0 if self.compact else 8, 0))
         overview_tab = tk.Frame(self.tabs, bg=COLOR_BG)
         route_tab = tk.Frame(self.tabs, bg=COLOR_BG)
@@ -105,11 +128,84 @@ class RoutePlotter(ThemedWindowMixin):
         self.tabs.add(overview_tab, text="Route Overview")
         self.tabs.add(route_tab, text="Waypoints")
         self.tabs.add(plotter_tab, text="Neutron Plotter")
+        self._register_flat_section(overview_tab, "Overview")
+        self._register_flat_section(route_tab, "Waypoints")
+        self._register_flat_section(plotter_tab, "Neutron")
 
         self._build_route_overview_tab(overview_tab)
         self._build_waypoint_tab(route_tab)
         self._build_system_plotter_tab(plotter_tab)
-        self.tabs.bind("<<NotebookTabChanged>>", lambda _e: self._refresh_route_overview())
+        self.tabs.bind("<<NotebookTabChanged>>", self._on_section_changed)
+        self._update_flat_navigation()
+
+    def _register_flat_section(self, frame, label):
+        if not self.flat_navigation or not self.flat_nav:
+            return
+        self._flat_sections.append((str(label), frame))
+        nav_button = button(
+            self.flat_nav,
+            str(label).upper(),
+            lambda target=frame: self.tabs.select(target),
+            padx=13,
+            pady=6,
+        )
+        nav_button.pack(side=tk.LEFT, padx=(7 if not self._flat_nav_buttons else 0, 7), pady=6)
+        self._flat_nav_buttons[str(frame)] = nav_button
+
+    def add_section(self, label):
+        """Add an embedded Expedition section and include it in the flat switcher."""
+        frame = tk.Frame(self.tabs, bg=COLOR_BG)
+        self.tabs.add(frame, text=str(label))
+        self._register_flat_section(frame, label)
+        self._update_flat_navigation()
+        return frame
+
+    def show_flat_section(self, label):
+        wanted = str(label or "").strip().casefold()
+        for section_label, frame in self._flat_sections:
+            section_key = section_label.casefold()
+            if section_key == wanted or section_key.startswith(wanted) or wanted.startswith(section_key):
+                self.tabs.select(frame)
+                self._on_section_changed()
+                return True
+        return False
+
+    def _on_section_changed(self, _event=None):
+        self._refresh_route_overview()
+        self._update_flat_navigation()
+        if callable(self.section_change_callback):
+            try:
+                self.section_change_callback(self.current_section())
+            except Exception:
+                pass
+
+    def current_section(self):
+        try:
+            selected = self.tabs.select()
+        except Exception:
+            return "Overview"
+        for section_label, frame in self._flat_sections:
+            if str(frame) == selected:
+                return section_label
+        try:
+            return str(self.tabs.tab(selected, "text") or "Overview")
+        except Exception:
+            return "Overview"
+
+    def _update_flat_navigation(self):
+        if not self.flat_navigation:
+            return
+        try:
+            selected = self.tabs.select()
+        except Exception:
+            selected = ""
+        for frame_key, nav_button in self._flat_nav_buttons.items():
+            active = frame_key == selected
+            bg = COLOR_ACCENT if active else THEME.panel_raised
+            fg = COLOR_BG if active else COLOR_TEXT
+            nav_button._theme_resting_bg = bg
+            nav_button._theme_resting_fg = fg
+            nav_button.configure(bg=bg, fg=fg)
 
     def _build_route_overview_tab(self, wrapper):
         summary = tk.Frame(wrapper, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
@@ -246,7 +342,7 @@ class RoutePlotter(ThemedWindowMixin):
                 else:
                     marker = f"{index + 1:02d}"
                 star_class = entry_by_name.get(str(name).casefold(), {}).get("StarClass")
-                suffix = f"  [{star_class}]" if star_class else ""
+                suffix = f"  [{star_type_label(star_class)}]" if star_class else ""
                 self.game_route_list.insert(tk.END, f"{marker:<8} {name}{suffix}")
                 row_index = self.game_route_list.size() - 1
                 if marker == "CURRENT":
@@ -500,7 +596,7 @@ class RoutePlotter(ThemedWindowMixin):
             "supercharge_multiplier": self._selected_supercharge_multiplier(),
         }
         try:
-            save_config(self.config)
+            self._persist_config()
         except Exception:
             pass
 
@@ -717,7 +813,7 @@ class RoutePlotter(ThemedWindowMixin):
         self.duplicate_mode = modes[(idx + 1) % len(modes)]
         self.config["route_duplicate_mode"] = self.duplicate_mode
         try:
-            save_config(self.config)
+            self._persist_config()
         except Exception:
             pass
         self._update_duplicate_mode_btn()
@@ -997,7 +1093,7 @@ class RoutePlotter(ThemedWindowMixin):
         def save_geometry():
             self.config["edit_dialog_geometry"] = dlg.geometry()
             try:
-                save_config(self.config)
+                self._persist_config()
             except Exception:
                 pass
 
@@ -1123,7 +1219,7 @@ class RoutePlotter(ThemedWindowMixin):
         def save_geometry():
             self.config["import_dialog_geometry"] = dlg.geometry()
             try:
-                save_config(self.config)
+                self._persist_config()
             except Exception:
                 pass
 
@@ -1309,7 +1405,7 @@ class RoutePlotter(ThemedWindowMixin):
     def toggle_auto_copy(self):
         self.config["auto_copy_waypoint"] = self.ac_var.get()
         try:
-            save_config(self.config)
+            self._persist_config()
         except Exception:
             pass
         self._emit_event("ROUTE", f"Auto-copy next waypoint: {'ON' if self.ac_var.get() else 'OFF'}", "INFO")
@@ -1317,7 +1413,7 @@ class RoutePlotter(ThemedWindowMixin):
     def toggle_auto_note(self):
         self.config["route_auto_note_from_edsm"] = self.auto_note_var.get()
         try:
-            save_config(self.config)
+            self._persist_config()
         except Exception:
             pass
         self._emit_event("ROUTE", f"Automatic EDSM notes: {'ON' if self.auto_note_var.get() else 'OFF'}", "INFO")
@@ -1560,7 +1656,7 @@ class RoutePlotter(ThemedWindowMixin):
                     "supercharge_multiplier": self._selected_supercharge_multiplier(),
                 }
             try:
-                save_config(self.config)
+                self._persist_config()
             except Exception:
                 pass
         self.win.destroy()
