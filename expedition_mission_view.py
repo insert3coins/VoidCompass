@@ -27,6 +27,14 @@ class ExpeditionMissionView:
         self.selected_expedition_id = None
         configure_ttk(parent, "Mission")
         self._build()
+        # Mission Control may be restored while its parent notebook is still
+        # hidden. Populate it now instead of waiting for a later tab-change
+        # event to provide its first usable view.
+        self.refresh()
+
+    def on_shown(self):
+        """Refresh saved expedition state whenever Mission Control is shown."""
+        self.refresh(self.selected_expedition_id)
 
     def _build(self):
         toolbar = tk.Frame(self.parent, bg=THEME.panel)

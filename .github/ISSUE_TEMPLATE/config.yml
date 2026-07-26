@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Void Compass wiki
-    url: https://github.com/insert3coins/VoicCompass/wiki
+    url: https://github.com/insert3coins/VoidCompass/wiki
     about: Check setup guidance, feature documentation, and troubleshooting before opening an issue.
   - name: Private security report
-    url: https://github.com/insert3coins/VoicCompass/security/advisories/new
+    url: https://github.com/insert3coins/VoidCompass/security/advisories/new
     about: Report suspected vulnerabilities privately instead of creating a public issue.
