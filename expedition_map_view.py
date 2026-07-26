@@ -1194,16 +1194,16 @@ class ExpeditionMapView:
             is_endpoint = index in {0, len(route_points) - 1}
             colour = THEME.orange if is_current else _star_colour(row.get("star_class"))
             radius = max(1.5, min(5.5, (4.2 if is_endpoint else 2.4) * perspective))
-            glow = _mix(THEME.inset, colour, 0.28)
-            draw.ellipse(
-                (px - radius * 2.2, py - radius * 2.2, px + radius * 2.2, py + radius * 2.2),
-                outline=glow,
-            )
-            draw.ellipse(
-                (px - radius, py - radius, px + radius, py + radius), fill=colour,
-            )
-            if is_current:
-                self._draw_target_brackets(px, py, 10, THEME.orange)
+            if not is_current:
+                glow = _mix(THEME.inset, colour, 0.28)
+                draw.ellipse(
+                    (px - radius * 2.2, py - radius * 2.2,
+                     px + radius * 2.2, py + radius * 2.2),
+                    outline=glow,
+                )
+                draw.ellipse(
+                    (px - radius, py - radius, px + radius, py + radius), fill=colour,
+                )
             if is_endpoint and not is_current:
                 self._background_text(
                     px + 10, py - 8, system or "UNKNOWN",
@@ -1324,68 +1324,74 @@ class ExpeditionMapView:
                 sequence.clear()
         flush()
 
-    def _draw_target_brackets(self, x, y, radius, colour):
-        gap = radius * 0.45
-        outer = radius
-        for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
-            self._background_line(
-                (x + sx * gap, y + sy * outer, x + sx * outer, y + sy * outer),
-                colour,
-            )
-            self._background_line(
-                (x + sx * outer, y + sy * gap, x + sx * outer, y + sy * outer),
-                colour,
-            )
-
-    def _draw_current_locator(self, x, y, system):
-        """Draw an unmistakable, topmost marker for the commander location."""
+    def _draw_current_locator(self, x, y, _system):
+        """Draw a compact, topmost ship glyph at the commander location."""
         draw = self._background_draw
         accent = THEME.orange
-        glow = _mix(THEME.inset, accent, 0.48)
-        for radius in (18, 13):
-            draw.ellipse(
-                (x - radius, y - radius, x + radius, y + radius),
-                outline=glow if radius == 18 else accent,
-                width=2 if radius == 13 else 1,
-            )
-        for dx, dy in ((-24, 0), (24, 0), (0, -24), (0, 24)):
-            inner = 16
-            if dx:
-                start = x + math.copysign(inner, dx)
-                self._background_line((start, y, x + dx, y), accent, width=2)
-            else:
-                start = y + math.copysign(inner, dy)
-                self._background_line((x, start, x, y + dy), accent, width=2)
-        draw.polygon(
-            ((x, y - 6), (x + 6, y), (x, y + 6), (x - 6, y)),
-            fill=accent, outline=THEME.text,
+        glow = _mix(THEME.inset, accent, 0.32)
+        draw.ellipse((x - 13, y - 13, x + 13, y + 13), outline=glow)
+        self._draw_ship_glyph(x, y, 1.0, accent)
+
+    def _current_ship_identity(self):
+        ship = getattr(self.app, "cmdr_ship", None)
+        if not isinstance(ship, dict):
+            return "VoidCompass"
+        return str(
+            ship.get("ship_localised") or ship.get("ship")
+            or ship.get("ship_name") or "VoidCompass"
         )
 
-        label = "YOU ARE HERE"
-        if system:
-            label += f" // {str(system).upper()}"
-        font = _map_font(8, True)
-        bounds = draw.textbbox((0, 0), label, font=font)
-        text_width = bounds[2] - bounds[0]
-        text_height = bounds[3] - bounds[1]
-        width = self._projection_context["width"]
-        height = self._projection_context["height"]
-        label_left = x + 29
-        if label_left + text_width + 12 > width - 8:
-            label_left = x - 29 - text_width - 12
-        label_left = max(8, min(label_left, width - text_width - 20))
-        label_top = max(8, min(y - text_height / 2.0 - 5, height - text_height - 14))
-        box = (
-            label_left, label_top,
-            label_left + text_width + 12, label_top + text_height + 10,
+    def _ship_glyph_points(self, x, y, scale=1.0):
+        """Generate a stable ship silhouette from the active vessel identity."""
+        identity = self._current_ship_identity()
+        seed = sum(
+            (index + 1) * ord(character)
+            for index, character in enumerate(identity.casefold())
         )
-        draw.rounded_rectangle(
-            box, radius=3, fill=_mix(THEME.inset, "#000000", 0.30),
-            outline=accent, width=1,
+        nose = 9.0 + seed % 3
+        wing_span = 7.0 + (seed // 3) % 4
+        wing_sweep = 1.0 + (seed // 11) % 4
+        tail = 7.0 + (seed // 17) % 3
+        shoulder = 2.4 + ((seed // 23) % 3) * 0.45
+        raw = (
+            (0.0, -nose),
+            (shoulder, -3.0),
+            (wing_span, wing_sweep),
+            (wing_span - 1.5, wing_sweep + 3.5),
+            (3.6, 3.4),
+            (3.0, tail),
+            (0.0, tail - 2.0),
+            (-3.0, tail),
+            (-3.6, 3.4),
+            (-wing_span + 1.5, wing_sweep + 3.5),
+            (-wing_span, wing_sweep),
+            (-shoulder, -3.0),
         )
-        text_x = label_left + 6 - bounds[0]
-        text_y = label_top + 5 - bounds[1]
-        draw.text((text_x, text_y), label, font=font, fill=THEME.text)
+        return tuple((x + dx * scale, y + dy * scale) for dx, dy in raw)
+
+    def _draw_ship_glyph(self, x, y, scale, colour):
+        draw = self._background_draw
+        points = self._ship_glyph_points(x, y, scale)
+        draw.polygon(points, fill=THEME.inset, outline=colour, width=2)
+        draw.line(
+            ((x, y - 5.5 * scale), (x, y + 4.5 * scale)),
+            fill=_mix(THEME.inset, THEME.text, 0.70),
+            width=max(1, round(scale)),
+        )
+        cockpit = max(1.2, 1.8 * scale)
+        draw.ellipse(
+            (x - cockpit, y - 2.4 * scale - cockpit,
+             x + cockpit, y - 2.4 * scale + cockpit),
+            fill=colour,
+        )
+        engine_y = y + (5.0 + (sum(ord(ch) for ch in self._current_ship_identity()) % 2)) * scale
+        engine_radius = max(0.8, 1.2 * scale)
+        for engine_x in (x - 2.0 * scale, x + 2.0 * scale):
+            draw.ellipse(
+                (engine_x - engine_radius, engine_y - engine_radius,
+                 engine_x + engine_radius, engine_y + engine_radius),
+                fill=THEME.accent,
+            )
 
     def _draw_marker(self, x, y, layer, colour):
         draw = self._background_draw
@@ -1433,6 +1439,13 @@ class ExpeditionMapView:
         ):
             self._background_line((x, y, x + sx * length, y), colour)
             self._background_line((x, y, x, y + sy * length), colour)
+        # Fixed legend explains the compact live-position symbol without
+        # attaching a large label to the route itself.
+        self._draw_ship_glyph(24, 28, 0.72, THEME.orange)
+        self._background_text(
+            38, 28, "CURRENT SHIP", THEME.muted,
+            size=7, bold=True, anchor="w",
+        )
         self._draw_axis_gizmo(width - 55, 47)
         self._background_text(
             16, height - 16,
