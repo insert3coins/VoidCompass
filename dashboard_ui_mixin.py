@@ -34,6 +34,7 @@ _FEED_TAG_COLORS = {
     "EDDN":    "#38bdf8",  # blue   — EDDN market upload status
     "MUSIC":   "#22d3ee",  # cyan   — music mood / soft state
     "AI":      "#c084fc",  # violet — Compass mood / memory evolution
+    "EXPEDITION":"#d8b4fe", # purple — named expedition progress
     "VALUABLE":"#FF7100",  # orange — high-value worlds
     "ALERT":   "#FF7100",  # orange — system alerts
     "DOCK":    "#fb923c",  # amber  — docking / undocking

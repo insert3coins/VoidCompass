@@ -17,6 +17,7 @@ from deep_survey import (
 )
 from discoveries_view import DiscoveriesView
 from expedition_map_view import ExpeditionMapView
+from expedition_mission_view import ExpeditionMissionView
 from route_plotter import RoutePlotter
 from stellar_types import star_type_label
 from ui_theme import THEME, ThemedWindowMixin, apply_window, button, configure_ttk, scrollbar, window_surface
@@ -55,6 +56,7 @@ class ExplorationWindow(ThemedWindowMixin):
         self.route_plotter = None
         self.discoveries_view = None
         self.expedition_map_view = None
+        self.expedition_mission_view = None
         self.embedded = embedded
         self.win = window_surface(root, embedded=embedded)
         self.win.title("Exploration")
@@ -138,6 +140,7 @@ class ExplorationWindow(ThemedWindowMixin):
         self.route_card = self._summary_card(summary, "ROUTE", accent=COLOR_ORANGE)
         self.bio_card = self._summary_card(summary, "BIO SIGNALS", accent="#86efac")
         self.trip_card = self._summary_card(summary, "SESSION", accent="#a5b4fc")
+        self._build_expedition_strip()
 
         style = configure_ttk(self.win, "Explore")
         style.configure("Explore.TNotebook", background=self.UI_BG, borderwidth=0)
@@ -171,6 +174,7 @@ class ExplorationWindow(ThemedWindowMixin):
             self.app,
             initial_filter=self.config.get("explore_discovery_filter", "All"),
             on_filter_change=self._on_discovery_filter_changed,
+            bookmark_callback=self._bookmark_discovery,
         )
         self._build_logbook_workspace()
         self.tabs.bind("<<NotebookTabChanged>>", self._on_workspace_changed)
@@ -198,6 +202,12 @@ class ExplorationWindow(ThemedWindowMixin):
         )
         self.route_plotter.win.pack(fill=tk.BOTH, expand=True)
         self.app.route_plotter = self.route_plotter
+        mission_section = self.route_plotter.add_section("Mission Control")
+        self.expedition_mission_view = ExpeditionMissionView(
+            mission_section, self.app,
+            on_change=self._on_expedition_changed,
+            copy_report_callback=self._copy_named_expedition_report,
+        )
         map_section = self.route_plotter.add_section("Map & Intelligence")
         split = tk.PanedWindow(
             map_section, orient=tk.VERTICAL, bg=self.UI_BG,
@@ -206,9 +216,11 @@ class ExplorationWindow(ThemedWindowMixin):
         split.pack(fill=tk.BOTH, expand=True)
         map_host = tk.Frame(split, bg=self.UI_BG)
         intelligence_host = tk.Frame(split, bg=self.UI_BG)
-        split.add(map_host, minsize=270)
-        split.add(intelligence_host, minsize=190)
-        self.expedition_map_view = ExpeditionMapView(map_host, self.app)
+        split.add(map_host, minsize=380)
+        split.add(intelligence_host, minsize=165)
+        self.expedition_map_view = ExpeditionMapView(
+            map_host, self.app, open_record_callback=self._open_map_record,
+        )
         self._build_route_tab(intelligence_host, embedded=True)
 
     def _on_workspace_changed(self, _event=None):
@@ -220,7 +232,9 @@ class ExplorationWindow(ThemedWindowMixin):
             if selected == str(self.discoveries_workspace) and self.discoveries_view:
                 self.discoveries_view.refresh(self.system_history_rows, self.ledger_rows)
             elif selected == str(self.expedition_workspace) and self.expedition_map_view:
-                self.expedition_map_view.refresh()
+                self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
+                if self.expedition_mission_view:
+                    self.expedition_mission_view.refresh()
         except Exception:
             pass
 
@@ -309,6 +323,10 @@ class ExplorationWindow(ThemedWindowMixin):
             "route": self.expedition_workspace,
             "route planning": self.expedition_workspace,
             "expedition": self.expedition_workspace,
+            "mission": self.expedition_workspace,
+            "mission control": self.expedition_workspace,
+            "objectives": self.expedition_workspace,
+            "bookmarks": self.expedition_workspace,
             "waypoints": self.expedition_workspace,
             "neutron": self.expedition_workspace,
             "map": self.expedition_workspace,
@@ -327,6 +345,8 @@ class ExplorationWindow(ThemedWindowMixin):
             section_name = {
                 "route": "Overview", "route planning": "Overview",
                 "waypoints": "Waypoints", "neutron": "Neutron",
+                "mission": "Mission Control", "mission control": "Mission Control",
+                "objectives": "Mission Control", "bookmarks": "Mission Control",
                 "map": "Map & Intelligence",
             }.get(section)
             if section_name and hasattr(self.route_plotter, "show_flat_section"):
@@ -356,6 +376,75 @@ class ExplorationWindow(ThemedWindowMixin):
         value = tk.Label(card, text="-", fg=COLOR_TEXT, bg=self.UI_PANEL, font=("Consolas", 10, "bold"), anchor="w", justify=tk.LEFT, height=2)
         value.pack(fill=tk.X, padx=10, pady=(3, 8))
         return value
+
+    def _build_expedition_strip(self):
+        self.expedition_strip = tk.Frame(
+            self.win, bg=self.UI_PANEL, highlightbackground=self.UI_BORDER,
+            highlightthickness=1, bd=0,
+        )
+        self.expedition_strip.pack(fill=tk.X, padx=10, pady=(0, 8))
+        tk.Frame(self.expedition_strip, bg=COLOR_ORANGE, width=3).pack(side=tk.LEFT, fill=tk.Y)
+        tk.Label(
+            self.expedition_strip, text="MISSION CONTROL", fg=COLOR_ORANGE,
+            bg=self.UI_PANEL, font=("Segoe UI", 8, "bold"),
+        ).pack(side=tk.LEFT, padx=(10, 8), pady=8)
+        self.expedition_strip_text = tk.Label(
+            self.expedition_strip, text="No active expedition", fg=COLOR_TEXT,
+            bg=self.UI_PANEL, font=("Consolas", 9, "bold"), anchor="w",
+        )
+        self.expedition_strip_text.pack(side=tk.LEFT, fill=tk.X, expand=True, pady=8)
+        self.expedition_strip_status_btn = self._button(
+            self.expedition_strip, "PAUSE", self._toggle_active_expedition,
+        )
+        self.expedition_strip_status_btn.pack(side=tk.RIGHT, padx=(0, 8), pady=5)
+        self._button(
+            self.expedition_strip, "OPEN", lambda: self.show_section("mission"), accent=True,
+        ).pack(side=tk.RIGHT, padx=(0, 7), pady=5)
+
+    def _refresh_expedition_strip(self):
+        manager = getattr(self.app, "expedition_manager", None)
+        expedition = manager.active() if manager else None
+        if not expedition:
+            self.expedition_strip_text.config(
+                text="No active expedition · open Mission Control to create or resume one",
+                fg=self.UI_MUTED,
+            )
+            self.expedition_strip_status_btn.config(text="PAUSE", state=tk.DISABLED)
+            return
+        complete, total = manager.progress(expedition)
+        pending = next((
+            row for row in expedition.get("objectives") or []
+            if row.get("status") != "complete"
+        ), None)
+        stats = expedition.get("stats") or {}
+        next_text = pending.get("title") if pending else "All objectives complete"
+        self.expedition_strip_text.config(
+            text=(
+                f"{expedition.get('name')} · {complete}/{total} goals · "
+                f"{len(stats.get('systems') or []):,} systems / "
+                f"{float(stats.get('distance_ly') or 0):,.1f} ly · NEXT: {next_text}"
+            ),
+            fg=COLOR_TEXT,
+        )
+        self.expedition_strip_status_btn.config(text="PAUSE", state=tk.NORMAL)
+
+    def _toggle_active_expedition(self):
+        manager = getattr(self.app, "expedition_manager", None)
+        expedition = manager.active() if manager else None
+        if expedition:
+            manager.set_status(expedition["id"], "paused")
+            self._on_expedition_changed()
+
+    def _on_expedition_changed(self):
+        self._refresh_expedition_strip()
+        if self.expedition_mission_view:
+            self.expedition_mission_view.refresh()
+        if self.expedition_map_view:
+            self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
+        try:
+            self.app.schedule_dashboard_refresh()
+        except Exception:
+            pass
 
     def _build_bodies_tab(self):
         frame = self.survey_workspace
@@ -461,6 +550,7 @@ class ExplorationWindow(ThemedWindowMixin):
         recon_actions.pack(fill=tk.X, padx=10, pady=(0, 9))
         self._button(recon_actions, "Save Recon", self._save_recon_candidate, accent=True).pack(side=tk.LEFT)
         self._button(recon_actions, "Copy", self._copy_recon_dossier).pack(side=tk.LEFT, padx=(6, 0))
+        self._button(recon_actions, "Bookmark", self._bookmark_selected_body).pack(side=tk.LEFT, padx=(6, 0))
         self._button(
             recon_actions, "Architect",
             lambda: getattr(self.app, "open_colonization_window", lambda: None)(),
@@ -767,6 +857,7 @@ class ExplorationWindow(ThemedWindowMixin):
             self.route_card.config(text=self._route_card_text())
             session_stats = self._session_stats()
             self.trip_card.config(text=self._trip_card_text(session_stats))
+            self._refresh_expedition_strip()
             bio_summary = self._bio_summary(bodies)
             self.bio_card.config(text=f"{bio_summary['bio_bodies']} bodies | {bio_summary['bio_signals']} signals\n{bio_summary['complete']} complete")
             self._render_body_metrics(current, bodies, scanned, total, current_value)
@@ -786,7 +877,9 @@ class ExplorationWindow(ThemedWindowMixin):
             if selected_workspace == str(self.expedition_workspace) and self.expedition_map_view:
                 # The map is inexpensive to redraw and only consumes the tracker's
                 # bounded snapshot. Its canvas remains current when the section is opened.
-                self.expedition_map_view.refresh()
+                self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
+                if self.expedition_mission_view and self.route_plotter.current_section() == "Mission Control":
+                    self.expedition_mission_view.refresh()
         except Exception as exc:
             self._log_error(f"Exploration refresh failed: {exc}")
 
@@ -1370,6 +1463,14 @@ class ExplorationWindow(ThemedWindowMixin):
                 "SURVEY", f"Recon candidate saved: {report['system']} ({report['score']}/100)",
                 severity="INFO",
             )
+        manager = getattr(self.app, "expedition_manager", None)
+        if manager:
+            completed = manager.observe_recon(report["system"], report["score"])
+            if completed and hasattr(self.app, "add_event_feed_entry"):
+                self.app.add_event_feed_entry(
+                    "EXPEDITION", f"Objective complete: {completed[0]}", severity="INFO",
+                )
+            self._on_expedition_changed()
         self._update_recon_status()
 
     def _copy_recon_dossier(self):
@@ -1378,6 +1479,64 @@ class ExplorationWindow(ThemedWindowMixin):
             return
         self.root.clipboard_clear()
         self.root.clipboard_append(tracker.recon_markdown(self._current_recon_report()))
+
+    def _bookmark_selected_body(self):
+        selected = self.bodies_tree.selection()
+        item = self.body_items_by_iid.get(selected[0]) if selected else None
+        if not item:
+            return
+        system = getattr(self.app, "current_sys", "")
+        body = item.get("full_name") or item.get("name") or "Body"
+        kind = "Biology" if self._safe_int(item.get("bio_count")) else (
+            "Valuable" if self._is_valuable(item) else "Body"
+        )
+        self._add_expedition_bookmark(
+            kind, system=system, body=body, title=body,
+            tags=[kind.casefold(), "survey"], source="system-survey",
+            position=getattr(self.app, "current_coords", None),
+        )
+
+    def _bookmark_discovery(self, row):
+        raw = row.get("raw") or {}
+        system = row.get("system") or ""
+        subject = row.get("subject") or row.get("kind") or "Discovery"
+        position = raw.get("pos")
+        if not position and str(system).casefold() == str(getattr(self.app, "current_sys", "")).casefold():
+            position = getattr(self.app, "current_coords", None)
+        self._add_expedition_bookmark(
+            row.get("kind") or "Discovery", system=system,
+            body=raw.get("body") or "", title=subject,
+            tags=[str(row.get("kind") or "discovery").casefold()],
+            source="discoveries", position=position,
+        )
+
+    def _add_expedition_bookmark(self, kind, **kwargs):
+        manager = getattr(self.app, "expedition_manager", None)
+        if not manager:
+            return None
+        bookmark = manager.add_bookmark(kind, **kwargs)
+        if hasattr(self.app, "add_event_feed_entry"):
+            self.app.add_event_feed_entry(
+                "EXPEDITION", f"Bookmark saved: {bookmark.get('title')}", severity="INFO",
+            )
+        self._on_expedition_changed()
+        return bookmark
+
+    def _open_map_record(self, record):
+        kind = str((record or {}).get("kind") or "")
+        if kind in {"Bookmark", "Recon"}:
+            self.show_section("mission")
+            bookmark_id = (record or {}).get("bookmark_id")
+            if bookmark_id and self.expedition_mission_view:
+                self.expedition_mission_view.open_bookmark(bookmark_id)
+            return
+        self.tabs.select(self.discoveries_workspace)
+        if self.discoveries_view:
+            self.discoveries_view.refresh(self.system_history_rows, self.ledger_rows)
+            self.discoveries_view.select_record(
+                kind=kind, system=(record or {}).get("system"),
+                subject=(record or {}).get("subject"),
+            )
 
     def _trip_card_text(self, session_stats=None):
         jumps = int(getattr(self.app, "session_jump_count", 0) or 0)
@@ -2033,8 +2192,16 @@ class ExplorationWindow(ThemedWindowMixin):
         sessions = journal.sessions() if journal else []
         return sessions[0] if sessions else {}
 
-    def _expedition_report(self):
-        session = self._selected_expedition_session()
+    def _expedition_report(self, expedition_id=None):
+        manager = getattr(self.app, "expedition_manager", None)
+        named_expedition = (
+            manager.get(expedition_id) if manager and expedition_id
+            else manager.active() if manager else None
+        )
+        session = (
+            manager.report_session(named_expedition)
+            if manager and named_expedition else self._selected_expedition_session()
+        )
         active_session = bool(session and not session.get("ended"))
         tracker = getattr(self.app, "deep_survey", None)
         snapshot = tracker.snapshot() if tracker else {}
@@ -2043,11 +2210,25 @@ class ExplorationWindow(ThemedWindowMixin):
             if active_session or not session else session.get("end_system") or ""
         )
         bodies = self._last_survey_bodies if active_session or not session else []
-        session_systems = (
-            sorted(set(getattr(self.app, "session_systems", set()) or set()))
-            if active_session else None
-        )
-        return expedition_report_markdown(
+        if named_expedition:
+            session_systems = list((named_expedition.get("stats") or {}).get("systems") or [])
+            expedition_keys = {str(name).casefold() for name in session_systems}
+            value_rows = [
+                row for row in self.ledger_rows
+                if str(row.get("system") or "").casefold() in expedition_keys
+            ]
+            snapshot = dict(snapshot)
+            snapshot["candidates"] = [
+                row for row in snapshot.get("candidates") or []
+                if str(row.get("system") or "").casefold() in expedition_keys
+            ]
+        else:
+            session_systems = (
+                sorted(set(getattr(self.app, "session_systems", set()) or set()))
+                if active_session else None
+            )
+            value_rows = self.ledger_rows
+        report = expedition_report_markdown(
             snapshot=snapshot,
             session=session,
             current_system=current,
@@ -2057,10 +2238,18 @@ class ExplorationWindow(ThemedWindowMixin):
                 "value": sum(self._item_value(item) for item in bodies),
             },
             system_rows=self.system_history_rows,
-            value_rows=self.ledger_rows,
+            value_rows=value_rows,
             wonders=wonder_rows(bodies),
             session_systems=session_systems,
         )
+        if named_expedition and manager:
+            _first_line, separator, remainder = report.partition("\n")
+            report = (
+                f"# VoidCompass Expedition Report — {named_expedition.get('name') or 'Unnamed'}"
+                + (separator + remainder if separator else "")
+            )
+            report += "\n" + manager.markdown_appendix(named_expedition)
+        return report
 
     def _copy_expedition_report(self):
         report = self._expedition_report()
@@ -2071,13 +2260,29 @@ class ExplorationWindow(ThemedWindowMixin):
                 "SURVEY", "Expedition report copied to clipboard", severity="INFO",
             )
 
+    def _copy_named_expedition_report(self, expedition_id):
+        report = self._expedition_report(expedition_id=expedition_id)
+        self.root.clipboard_clear()
+        self.root.clipboard_append(report)
+        if hasattr(self.app, "add_event_feed_entry"):
+            self.app.add_event_feed_entry(
+                "EXPEDITION", "Full named-expedition report copied", severity="INFO",
+            )
+
     def _save_expedition_report(self):
-        session = self._selected_expedition_session()
+        manager = getattr(self.app, "expedition_manager", None)
+        named_expedition = manager.active() if manager else None
+        session = manager.report_session(named_expedition) if named_expedition else self._selected_expedition_session()
         report_date = str(session.get("started") or time.strftime("%Y-%m-%d"))[:10]
+        report_name = named_expedition.get("name") if named_expedition else "Expedition"
+        safe_name = "".join(
+            character if character.isalnum() or character in "-_" else "_"
+            for character in str(report_name or "Expedition")
+        )[:60]
         path = filedialog.asksaveasfilename(
             parent=self.win,
             title="Save Expedition Report",
-            initialfile=f"VoidCompass-Expedition-{report_date}.md",
+            initialfile=f"VoidCompass-{safe_name}-{report_date}.md",
             defaultextension=".md",
             filetypes=(("Markdown", "*.md"), ("Text", "*.txt"), ("All files", "*.*")),
         )

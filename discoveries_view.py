@@ -23,11 +23,13 @@ FILTERS = ("All", "Systems", "Valuable", "Codex", "Signals", "DSS", "Photos")
 
 
 class DiscoveriesView:
-    def __init__(self, parent, app, initial_filter="All", on_filter_change=None):
+    def __init__(self, parent, app, initial_filter="All", on_filter_change=None,
+                 bookmark_callback=None):
         self.parent = parent
         self.app = app
         self.initial_filter = initial_filter if initial_filter in FILTERS else "All"
         self.on_filter_change = on_filter_change
+        self.bookmark_callback = bookmark_callback
         self.rows = {}
         self._all_rows = []
         self._photo_image = None
@@ -115,6 +117,8 @@ class DiscoveriesView:
         self.copy_system_btn.pack(side=tk.LEFT)
         self.open_edsm_btn = button(system_actions, "Open EDSM", self._open_edsm)
         self.open_edsm_btn.pack(side=tk.LEFT, padx=(7, 0))
+        self.bookmark_btn = button(system_actions, "Bookmark", self._bookmark_selected)
+        self.bookmark_btn.pack(side=tk.LEFT, padx=(7, 0))
         media_actions = tk.Frame(right, bg=THEME.panel)
         media_actions.pack(fill=tk.X, padx=8, pady=(0, 8))
         self.open_image_btn = button(media_actions, "Open Image", self._open_image)
@@ -272,6 +276,7 @@ class DiscoveriesView:
             self.open_folder_btn.config(state=tk.DISABLED)
             self.copy_system_btn.config(state=tk.DISABLED)
             self.open_edsm_btn.config(state=tk.DISABLED)
+            self.bookmark_btn.config(state=tk.DISABLED)
             return
         raw = row.get("raw") or {}
         lines = [
@@ -290,6 +295,9 @@ class DiscoveriesView:
         has_system = bool(row.get("system") and row.get("system") != "-")
         self.copy_system_btn.config(state=tk.NORMAL if has_system else tk.DISABLED)
         self.open_edsm_btn.config(state=tk.NORMAL if has_system else tk.DISABLED)
+        self.bookmark_btn.config(
+            state=tk.NORMAL if has_system and callable(self.bookmark_callback) else tk.DISABLED,
+        )
         is_photo = row["kind"] == "Photo"
         self.open_image_btn.config(state=tk.NORMAL if is_photo else tk.DISABLED)
         self.open_folder_btn.config(state=tk.NORMAL if is_photo else tk.DISABLED)
@@ -375,6 +383,30 @@ class DiscoveriesView:
         system = row.get("system") if row else None
         if system and system != "-":
             webbrowser.open(f"https://www.edsm.net/show-system?systemName={quote_plus(system)}")
+
+    def _bookmark_selected(self):
+        row = self._selected_row()
+        if row and callable(self.bookmark_callback):
+            self.bookmark_callback(dict(row))
+
+    def select_record(self, kind=None, system=None, subject=None):
+        filter_name = {
+            "Codex": "Codex", "Photo": "Photos", "Valuable": "Valuable",
+            "Signal": "Signals", "DSS": "DSS", "System": "Systems",
+        }.get(str(kind or "").title(), "All")
+        self.set_filter(filter_name)
+        self.search_var.set(str(system or subject or ""))
+        self._render()
+        for iid, row in self.rows.items():
+            if system and str(row.get("system") or "").casefold() != str(system).casefold():
+                continue
+            if subject and str(row.get("subject") or "").casefold() != str(subject).casefold():
+                continue
+            self.tree.selection_set(iid)
+            self.tree.see(iid)
+            self._show(row)
+            return True
+        return False
 
     def _open_image(self):
         path = self._selected_path()

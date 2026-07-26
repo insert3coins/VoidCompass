@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.2.1**
+**Current version: 5.2.2**
 
 Void Compass is a native Windows companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
 
@@ -17,7 +17,7 @@ The Dashboard's activity log follows the current mode and keeps a curated Flight
 | Group | Direct workspaces |
 | --- | --- |
 | **Core** | Dashboard and Profile. |
-| **Explore** | Explore and Galaxy. Explore uses four clear pages—System Survey, Expedition, Discoveries and Logbook—without nested Survey or Chronicle tabs. |
+| **Explore** | Explore and Galaxy. Explore uses four clear pages—System Survey, Expedition, Discoveries and Logbook—without nested Survey or Chronicle tabs; named Mission Control lives inside Expedition. |
 | **Expedition** | Expedition overview plus direct Analytics, Achievements, Carrier and Colony access. |
 | **Operations** | Operations overview plus direct Trade and Specialists access, including Mining and Combat/AX. |
 | **System** | Engineer and About. |
@@ -29,13 +29,15 @@ Every group starts expanded, can be collapsed deliberately, remembers that choic
 Explore integrates profile-local Deep Survey intelligence directly into its four workflow pages, built from Frontier journal facts:
 
 - **System Survey** combines the current body list, architecture, actionable DSS/biology/geology planner, stellar wonders and Colonisation Recon in one filterable view.
-- **Expedition** uses a compact section switcher for route overview, waypoints and neutron planning, then combines the projected `StarPos` map with route intelligence.
+- **Expedition** uses one compact section switcher for route overview, waypoints, neutron planning, named Mission Control, and an interactive Elite-style 3D galaxy map with route intelligence.
 - **Discoveries** is one searchable archive for system history, valuable bodies, Codex discoveries, FSS signals, DSS probe efficiency and screenshot metadata; image previews load only when selected, while system records can be copied or opened directly in EDSM.
 - **Logbook** places the live trip summary and retained Captain's Log sessions together instead of separating them across Chronicle tabs, and can copy or save a shareable Markdown Expedition Report.
 
+Named expeditions persist across sessions with journal-verified goals, multi-session statistics, prioritised bookmarks and revisit targets. Their active strip remains visible across Explore, while Compass can brief the next objective and announce verified completion without routine feed spam. The map plots the complete 42-region Universal Cartographics layout offline, supports rotate, pan, zoom and five camera presets, and overlays Valuable, Biology, Codex, Photo, Recon and Bookmark records; selecting an intelligence marker opens its existing record directly. Expedition plans can be exchanged as VoidCompass JSON or newline waypoint lists; full locally generated Markdown reports include the named route, objectives, evidence and bookmarks.
+
 Explore remembers its active page, survey/discovery filters and Expedition section independently for each commander. Colonisation Recon produces a conservative survey-readiness dossier, saved candidate list and direct Architect Command handoff; it does not claim that survey readiness guarantees game eligibility. System architecture follows journal `Parents` relationships, while wonders detection flags unusual measured characteristics without inventing missing orbits.
 
-Existing journals are indexed on a background worker the first time this profile opens 5.2.1. Stored collections and visible rows are bounded so a long expedition does not turn map, ledger or startup recovery into a cockpit stall.
+Existing journals are indexed on a background worker the first time Deep Survey opens for a profile. Stored collections, expedition facts and visible rows are bounded so a long expedition does not turn map, ledger or startup recovery into a cockpit stall.
 
 Trade opens in a compact **Simple Trade** view with cargo selling, routes, the current market and a clear EDDN receive/upload status. Routes, commodities, tracking, station search and database maintenance remain available through **Advanced Tools** and can be returned to the simple view at any time.
 
@@ -77,13 +79,13 @@ Every overlay can be enabled independently, dragged to a saved position and styl
 
 ## Achievements and commander profiles
 
-Achievement progress, companion memory, Captain's Log, Deep Survey history, carrier state, engineering plans, mining history, routes and integration settings are separated by commander profile. The active commander is detected from the journal and can be changed without mixing personal data.
+Achievement progress, companion memory, named expeditions, bookmarks, Captain's Log, Deep Survey history, carrier state, engineering plans, mining history, routes and integration settings are separated by commander profile. The active commander is detected from the journal and can be changed without mixing personal data.
 
 ![Native Achievement Centre](Achievements.PNG)
 
 ## Compass cockpit companion
 
-Compass runs locally without an LLM, Ollama service or GPU workload. Its bounded per-commander memory combines verified navigation, survey, biology, mission, trade, mining, engineering, carrier, social and data-sale context.
+Compass runs locally without an LLM, Ollama service or GPU workload. Its bounded per-commander memory combines verified navigation, named-expedition objectives, survey, biology, mission, trade, mining, engineering, carrier, social and data-sale context.
 
 The deterministic cognition engine learns personal baselines and whether advice was useful, varies verified wording, remembers notable episodes, chooses useful silence and supports 15 behavioural personas. Optional Piper voice packs provide cached neural speech; urgent safety callouts remain isolated from persona styling.
 
@@ -119,6 +121,8 @@ Bug reports and feature ideas use the repository's structured [issue forms](http
 ## License
 
 Copyright © 2026 insert3coins. Void Compass is free software released under the [GNU General Public License v3.0 only](LICENSE). You may use, study, modify and redistribute it under those terms; redistributed source or binaries must preserve the GPL and provide the corresponding source as required by the licence. The corresponding source is published at [github.com/insert3coins/VoidCompass](https://github.com/insert3coins/VoidCompass).
+
+The packaged offline galactic-region raster retains its upstream MIT notice in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Disclaimer
 
