@@ -57,8 +57,9 @@ class ExplorationWindow(ThemedWindowMixin):
         self.discoveries_view = None
         self.expedition_map_view = None
         self.expedition_mission_view = None
-        self._map_popout = None
-        self._map_popout_view = None
+        self._map_focus_host = None
+        self._map_focus_bind_target = None
+        self._map_focus_escape_binding = None
         self._map_split = None
         self._map_host = None
         self._map_intelligence_host = None
@@ -290,7 +291,7 @@ class ExplorationWindow(ThemedWindowMixin):
             self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
 
     def _map_popout_is_open(self):
-        return self._widget_alive(self._map_popout)
+        return self._widget_alive(self._map_focus_host)
 
     def _toggle_map_popout(self):
         if self._map_popout_is_open():
@@ -300,63 +301,88 @@ class ExplorationWindow(ThemedWindowMixin):
 
     def _open_map_popout(self):
         if self._map_popout_is_open():
-            self._map_popout.lift()
-            self._map_popout.focus_force()
+            self._map_focus_host.lift()
             return
         state = self.expedition_map_view.view_state() if self.expedition_map_view else None
-        popout = tk.Toplevel(self.root)
-        popout.withdraw()
-        popout.title("VOID COMPASS // GALAXY MAP")
-        popout.geometry(self.config.get("expedition_map_popout_geometry", "1180x800"))
-        popout.minsize(760, 520)
-        apply_window(popout)
-        popout.protocol("WM_DELETE_WINDOW", self._dock_map_popout)
-        popout.bind("<Escape>", lambda _event: self._dock_map_popout())
-        self._map_popout = popout
-        self._map_popout_view = ExpeditionMapView(
-            popout, self.app,
-            open_record_callback=self._open_map_record,
-            popout_callback=self._toggle_map_popout,
-            detached=True,
+        target = getattr(self.app, "root", None)
+        if not self._widget_alive(target):
+            target = self.win.winfo_toplevel()
+        focus_host = tk.Frame(target, bg=self.UI_BG, bd=0, highlightthickness=0)
+        focus_host.place(x=0, y=0, relwidth=1.0, relheight=1.0)
+        focus_host.lift()
+        self._map_focus_host = focus_host
+        self._map_focus_bind_target = target
+        self._map_focus_escape_binding = target.bind(
+            "<Escape>", lambda _event: self._dock_map_popout(), add="+",
         )
-        self._map_popout_view.refresh(self.system_history_rows, self.ledger_rows)
-        self._map_popout_view.apply_view_state(state)
-        popout.update_idletasks()
-        popout.deiconify()
-        popout.lift()
-        popout.focus_force()
+        try:
+            focus_view = ExpeditionMapView(
+                focus_host, self.app,
+                open_record_callback=self._open_map_record,
+                popout_callback=self._toggle_map_popout,
+                focus_mode=True,
+            )
+            focus_view.refresh(self.system_history_rows, self.ledger_rows)
+            focus_view.apply_view_state(state)
+        except Exception:
+            self._remove_map_focus_host()
+            raise
+        old_view = self.expedition_map_view
+        if old_view:
+            old_view.dispose()
+        if self._widget_alive(self._map_host):
+            for child in self._map_host.winfo_children():
+                child.destroy()
+        self.expedition_map_view = focus_view
+        focus_host.lift()
 
     def _dock_map_popout(self, sync=True):
-        popout = self._map_popout
-        popout_view = self._map_popout_view
-        if popout is None and popout_view is None:
+        if not self._map_popout_is_open():
             return
-        state = popout_view.view_state() if popout_view else None
-        if self._widget_alive(popout):
+        focus_view = self.expedition_map_view
+        state = focus_view.view_state() if focus_view else None
+        if sync and self._widget_alive(self._map_host):
             try:
-                self.config["expedition_map_popout_geometry"] = popout.geometry()
-            except Exception:
+                embedded_view = ExpeditionMapView(
+                    self._map_host, self.app,
+                    open_record_callback=self._open_map_record,
+                    popout_callback=self._toggle_map_popout,
+                )
+                embedded_view.refresh(self.system_history_rows, self.ledger_rows)
+                embedded_view.apply_view_state(state)
+            except Exception as exc:
+                for child in self._map_host.winfo_children():
+                    child.destroy()
+                self._log_error(f"Could not restore embedded galaxy map: {exc}")
+                return
+        else:
+            embedded_view = None
+        if focus_view:
+            focus_view.dispose()
+        self._remove_map_focus_host()
+        self.expedition_map_view = embedded_view
+
+    def _remove_map_focus_host(self):
+        target = self._map_focus_bind_target
+        binding = self._map_focus_escape_binding
+        if target is not None and binding:
+            try:
+                target.unbind("<Escape>", binding)
+            except tk.TclError:
                 pass
-        self._map_popout = None
-        self._map_popout_view = None
+        focus_host = self._map_focus_host
+        self._map_focus_host = None
+        self._map_focus_bind_target = None
+        self._map_focus_escape_binding = None
         try:
-            if popout and popout.winfo_exists():
-                popout.destroy()
-        except Exception:
-            pass
-        if sync and self.expedition_map_view:
-            self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
-            self.expedition_map_view.apply_view_state(state)
-        try:
-            persist = getattr(self.app, "_persist_config", None)
-            if callable(persist):
-                persist()
-        except Exception:
+            if focus_host and focus_host.winfo_exists():
+                focus_host.destroy()
+        except tk.TclError:
             pass
 
     def _refresh_visible_map(self):
-        if self._map_popout_is_open() and self._map_popout_view:
-            self._map_popout_view.refresh(self.system_history_rows, self.ledger_rows)
+        if self._map_popout_is_open() and self.expedition_map_view:
+            self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
             return
         if (
             self.expedition_map_view and self.is_route_active()
@@ -1621,6 +1647,8 @@ class ExplorationWindow(ThemedWindowMixin):
         return bookmark
 
     def _open_map_record(self, record):
+        if self._map_popout_is_open():
+            self._dock_map_popout()
         kind = str((record or {}).get("kind") or "")
         if kind in {"Bookmark", "Recon"}:
             self.show_section("mission")

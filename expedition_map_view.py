@@ -99,13 +99,13 @@ def _star_colour(star_class):
 class ExpeditionMapView:
     def __init__(
         self, parent, app, open_record_callback=None,
-        popout_callback=None, detached=False,
+        popout_callback=None, focus_mode=False,
     ):
         self.parent = parent
         self.app = app
         self.open_record_callback = open_record_callback
         self.popout_callback = popout_callback
-        self.detached = bool(detached)
+        self.focus_mode = bool(focus_mode)
         self._map_points = []
         self._system_rows = []
         self._value_rows = []
@@ -147,8 +147,8 @@ class ExpeditionMapView:
         ).pack(side=tk.LEFT)
         if callable(self.popout_callback):
             button(
-                toolbar, "DOCK" if self.detached else "POP OUT",
-                self._toggle_popout, accent=self.detached,
+                toolbar, "DOCK" if self.focus_mode else "POP OUT",
+                self._toggle_popout, accent=self.focus_mode,
             ).pack(side=tk.RIGHT, padx=(0, 8), pady=5)
         button(toolbar, "RESET", self._reset_view).pack(side=tk.RIGHT, padx=(0, 8), pady=5)
         button(toolbar, "CURRENT", self._focus_current).pack(side=tk.RIGHT, padx=(0, 6), pady=5)
@@ -216,6 +216,15 @@ class ExpeditionMapView:
     def _toggle_popout(self):
         if callable(self.popout_callback):
             self.popout_callback()
+
+    def dispose(self):
+        if self._render_job is not None:
+            try:
+                self.canvas.after_cancel(self._render_job)
+            except tk.TclError:
+                pass
+        self._render_job = None
+        self._background_photo = None
 
     def view_state(self):
         return {
