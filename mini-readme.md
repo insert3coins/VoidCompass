@@ -6,7 +6,7 @@
 *   Added an original procedurally generated Milky Way layer to the 3D expedition map, with theme-aware stellar arms, a bright galactic core, irregular dust lanes and a feathered disc behind the existing route and intelligence data.
 *   Preserved the exact offline 42-region Universal Cartographics boundaries, labels, grid, markers and map controls while giving Top, Perspective and Galaxy Overview cameras a more recognisable Elite-style galactic backdrop.
 *   Generates the texture once outside Tk's UI thread and caches full, preview and dedicated motion detail levels; live orbiting now samples long routes and dense intelligence layers, reuses prepared indexes and redraws sooner for substantially smoother control.
-*   Added a high-contrast, always-topmost **YOU ARE HERE** locator using the live commander coordinates, so the current system remains unmistakable among dense routes, region labels and discovery markers.
+*   Added a compact, procedurally generated current-ship glyph using the live commander coordinates and active vessel identity, with a restrained map legend and full system details retained on hover or click.
 *   Mission Control now populates saved expeditions during startup and refreshes immediately when its restored section is shown or an older expedition is resumed—no leave-and-return workaround required.
 *   Refreshed the public README graphics and GitHub wiki for the exploration-first command deck, Deep Survey, named expeditions and the new Galaxy Map, and corrected the remaining pre-rename repository links.
 
