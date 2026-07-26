@@ -59,6 +59,7 @@ from credit_events import authoritative_balance, credit_delta
 from bgs_window import BGSWindow
 from commander_profile_window import CommanderProfileWindow
 from system_value_ledger import SystemValueLedger
+from stellar_types import star_type_label
 from colonisation_planner import ColonisationPlanner
 from exploration_window import ExplorationWindow
 from trade_window import TradeWindow
@@ -77,6 +78,7 @@ from specialist_engine import SpecialistEngine
 from specialists_window import SpecialistsWindow
 import compass_personas
 from captains_log import CaptainsLog
+from deep_survey import DeepSurveyTracker
 from diagnostic_logs import application_base_dir, resolve_log_path
 from adaptive_command import AdaptiveCommandDeck, AUTOMATIC_MODE_IDLE_S, MODE_LABELS
 from diagnostic_bundle import create_support_bundle
@@ -382,6 +384,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.config["waypoints_file"] = self._copy_legacy_to_profile("waypoints.json")
         self.config["specialists_file"] = self._profile_path("specialists.json")
         self.config["adaptive_command_file"] = self._profile_path("adaptive_command.json")
+        self.config["deep_survey_file"] = self._profile_path("deep_survey.json")
 
     def _prepare_commander_profile_from_journal(self):
         detected = JournalWatcher.detect_latest_commander(self.config.get("journal_path"))
@@ -752,6 +755,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         except Exception as exc:
             logging.warning("Captain's Log history import skipped: %s", exc)
 
+    def _import_deep_survey_history(self, journal_path, tracker=None, commander=None, fid=None):
+        tracker = tracker or self.deep_survey
+        try:
+            imported = tracker.import_journals(journal_path, commander=commander, fid=fid)
+            if imported and tracker is self.deep_survey:
+                self.log(f"Deep Survey indexed {imported:,} exploration journal facts")
+                self._refresh_exploration_window()
+        except Exception as exc:
+            logging.warning("Deep Survey history import skipped: %s", exc)
+
+    def _import_exploration_history(self, journal_path, logbook, tracker, commander=None, fid=None):
+        """Read history sequentially so two indexers never contend for the journal folder."""
+        self._import_captains_log_history(journal_path, logbook, commander, fid)
+        self._import_deep_survey_history(journal_path, tracker, commander, fid)
+
     def _refresh_bgs_window(self):
         self._refresh_tool_window("bgs_window", "refresh_current")
 
@@ -877,17 +895,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             trade_alerts.set_notify_callback(_on_trade_alert)
         except Exception:
             pass
-        try:
-            conn = trade_marketdb.connect()
+        def _start_if_ready():
             try:
-                seeded = trade_marketdb.is_ready(conn)
-            finally:
-                conn.close()
-            if seeded:
-                from trade import eddn as trade_eddn
-                trade_eddn.LISTENER.start()
-        except Exception:
-            pass  # no zmq / no DB yet — Trade window can still start it later
+                conn = trade_marketdb.connect()
+                try:
+                    seeded = trade_marketdb.is_ready(conn)
+                finally:
+                    conn.close()
+                if seeded:
+                    from trade import eddn as trade_eddn
+                    trade_eddn.LISTENER.start()
+            except Exception:
+                pass  # no zmq / no DB yet — Trade window can still start it later
+
+        threading.Thread(
+            target=_start_if_ready, name="trade-live-startup", daemon=True,
+        ).start()
 
     def _refresh_gravity_warning(self, body_id, body_name=None):
         if not getattr(self, "gravity_warning_hud", None) or body_id is None:
@@ -972,11 +995,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.edsm.prepare_profile_switch()
         except Exception:
             pass
-        try:
-            self.conn.commit()
-            self.conn.close()
-        except Exception:
-            pass
+        self._stop_db_commit_worker(close=True, timeout=0.35)
         save_active_profile_config(self.config)
         profiles = self.config.setdefault("commander_profiles", {})
         profile = profiles.setdefault(new_key, {})
@@ -994,6 +1013,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "mining_sessions.json",
                 "specialists.json",
                 "adaptive_command.json",
+                "deep_survey.json",
                 "waypoints.json",
             ):
                 src = get_profile_file(old_key, filename)
@@ -1029,6 +1049,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._publish_cockpit_ai_online()
         self.captains_log = CaptainsLog(
             get_profile_file(new_key, "captains_log.json")
+        )
+        # Use a fresh tracker object: an outgoing profile may still be finishing
+        # its background history index, and must never write into the new one.
+        self.deep_survey = DeepSurveyTracker(
+            get_profile_file(new_key, "deep_survey.json")
         )
         if getattr(self, "specialist_engine", None):
             self.specialist_engine.switch(self.config.get("specialists_file"))
@@ -1070,9 +1095,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             daemon=True,
         ).start()
         threading.Thread(
-            target=self._import_captains_log_history,
-            args=(journal_path, self.captains_log, self.cmdr_name, self.cmdr_fid),
-            daemon=True,
+            target=self._import_exploration_history,
+            args=(journal_path, self.captains_log, self.deep_survey, self.cmdr_name, self.cmdr_fid),
+            name="exploration-history", daemon=True,
         ).start()
         self._persist_config()
         self._apply_runtime_feature_toggles()
@@ -1121,6 +1146,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         self.captains_log = CaptainsLog(
             get_profile_file(get_active_profile(self.config), "captains_log.json")
+        )
+        self.deep_survey = DeepSurveyTracker(
+            get_profile_file(get_active_profile(self.config), "deep_survey.json")
         )
         self.specialist_engine = SpecialistEngine(self.config.get("specialists_file"))
         self.adaptive_command = AdaptiveCommandDeck(
@@ -1540,9 +1568,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             daemon=True,
         ).start()
         threading.Thread(
-            target=self._import_captains_log_history,
-            args=(journal_path, self.captains_log, self.cmdr_name, self.cmdr_fid),
-            daemon=True,
+            target=self._import_exploration_history,
+            args=(journal_path, self.captains_log, self.deep_survey, self.cmdr_name, self.cmdr_fid),
+            name="exploration-history", daemon=True,
         ).start()
 
         threading.Thread(target=self.check_updates, daemon=True).start()
@@ -1892,6 +1920,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.adaptive_command.flush(wait=False)
             except Exception:
                 pass
+        if getattr(self, "deep_survey", None):
+            try:
+                self.deep_survey.flush(wait=False)
+            except Exception:
+                pass
             
         self._stop_market_import_worker()
         self.screenshots.stop()
@@ -1908,11 +1941,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.config["main_geometry"] = self.root.geometry()
         self._persist_config()
         if hasattr(self, 'conn'):
-            try:
-                self.conn.commit()
-                self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                self.conn.close()
-            except: pass
+            self._stop_db_commit_worker(close=True, timeout=0.35)
         if self.runtime_trace:
             try:
                 self.runtime_trace.flush(extra={"shutdown": True})
@@ -4905,6 +4934,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self._refresh_commander_profile_window()
             except Exception as exc:
                 logging.debug("Captain's Log event skipped [%s]: %s", ev, exc)
+        if getattr(self, "deep_survey", None):
+            try:
+                survey_raw = raw if isinstance(raw, dict) else d
+                if isinstance(survey_raw, dict) and not survey_raw.get("event"):
+                    survey_raw = dict(survey_raw, event=ev)
+                if self.deep_survey.observe_event(
+                    survey_raw, context=d, event_uid=data.get("_journal_uid"),
+                ):
+                    self._refresh_exploration_window()
+            except Exception as exc:
+                logging.debug("Deep Survey event skipped [%s]: %s", ev, exc)
         self._handle_live_journal_toast(ev, raw, d, startup_replay=startup_replay)
         self._observe_ai_economy_event(
             ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay,
@@ -5323,7 +5363,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             
             if not self.batch_mode:
                 sys_text = self.current_sys.upper()
-                if self.star_class: sys_text += f" [{self.star_class}]"
+                if self.star_class:
+                    sys_text += f" [{star_type_label(self.star_class)}]"
                 self.root.after(0, lambda: self.sys_stat.config(text=sys_text))
                 self.update_nav_label()
             # Bio logs hidden for now (counting disabled)
@@ -6792,14 +6833,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     except Exception as e:
                         ev_type = ev.get("type") if isinstance(ev, dict) else "UNKNOWN"
                         logging.warning(f"Batch event failed [{ev_type}]: {e}")
-                try:
-                    self.conn.commit()
-                except Exception as e:
-                    logging.warning(f"Batch commit failed: {e}")
-                    try:
-                        self.conn.rollback()
-                    except Exception:
-                        pass
+                self._request_db_commit(reason="journal_batch")
         finally:
             self.batch_mode = False
         try:

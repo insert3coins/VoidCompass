@@ -7,6 +7,7 @@ import companion_features
 import compass_operations
 import flight_callouts
 from config import COLOR_ACCENT, COLOR_TEXT
+from stellar_types import star_type_label
 
 
 class DashboardScanMixin:
@@ -706,7 +707,7 @@ class DashboardScanMixin:
         planet_class = data.get("PlanetClass")
         is_star = bool(star_type)
         if is_star:
-            body_class = f"{star_type} Star"
+            body_class = star_type_label(star_type, include_star=True)
             icons = ["★"]
         else:
             body_class = planet_class or "Unknown"
@@ -783,8 +784,21 @@ class DashboardScanMixin:
             "surface_temp": data.get("SurfaceTemperature"),
             "surface_gravity": data.get("SurfaceGravity"),
             "gravity_g": self._gravity_to_g(data.get("SurfaceGravity")),
+            "parents": list(data.get("Parents") or []),
+            "rings": list(data.get("Rings") or []),
+            "reserve_level": data.get("ReserveLevel"),
+            "rotation_period": data.get("RotationPeriod"),
+            "orbital_period": data.get("OrbitalPeriod"),
+            "semi_major_axis": data.get("SemiMajorAxis"),
+            "eccentricity": data.get("Eccentricity"),
+            "axial_tilt": data.get("AxialTilt"),
+            "tidal_lock": bool(data.get("TidalLock", False)),
+            "age_my": data.get("Age_MY"),
+            "luminosity": data.get("Luminosity"),
+            "absolute_magnitude": data.get("AbsoluteMagnitude"),
             "atmosphere": data.get("Atmosphere") or data.get("AtmosphereType"),
             "atmosphere_type": data.get("AtmosphereType") or data.get("Atmosphere"),
+            "atmosphere_composition": list(data.get("AtmosphereComposition") or []),
             "volcanism": data.get("Volcanism"),
             "icons": icons,
             "color": color,

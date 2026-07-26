@@ -5,13 +5,20 @@ import threading
 import time
 import webbrowser
 import tkinter as tk
-from tkinter import ttk
+from tkinter import filedialog, messagebox, ttk
 
 import requests
 
 import bio_values
-from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
+from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
+from deep_survey import (
+    architecture_rows, expedition_report_markdown, recon_report, survey_plan,
+    wonder_rows,
+)
+from discoveries_view import DiscoveriesView
+from expedition_map_view import ExpeditionMapView
 from route_plotter import RoutePlotter
+from stellar_types import star_type_label
 from ui_theme import THEME, ThemedWindowMixin, apply_window, button, configure_ttk, scrollbar, window_surface
 
 COLOR_ACCENT = THEME.accent
@@ -29,6 +36,8 @@ class ExplorationWindow(ThemedWindowMixin):
         self.app = app
         self.config = app.config
         self.body_items_by_iid = {}
+        self._last_survey_bodies = []
+        self._survey_plan_by_key = {}
         self._edsm_cache = self._load_edsm_cache()
         self._edsm_pending = set()
         self._edsm_lock = threading.Lock()
@@ -39,9 +48,13 @@ class ExplorationWindow(ThemedWindowMixin):
         self._last_route_status = {}
         self._last_ledger_refresh_ts = 0.0
         self.system_history_rows = []
+        self.ledger_rows = []
         self._last_history_refresh_ts = 0.0
         self._closing = False
+        self._restoring_view_state = False
         self.route_plotter = None
+        self.discoveries_view = None
+        self.expedition_map_view = None
         self.embedded = embedded
         self.win = window_surface(root, embedded=embedded)
         self.win.title("Exploration")
@@ -88,7 +101,7 @@ class ExplorationWindow(ThemedWindowMixin):
         ).pack(anchor="w", pady=(12, 0))
         self.header_subtitle = tk.Label(
             title_box,
-            text="Survey, flight planning and expedition history",
+            text="System survey, expedition, discoveries and logbook",
             font=("Consolas", 8),
             fg=self.UI_MUTED,
             bg="#0c1014",
@@ -140,25 +153,28 @@ class ExplorationWindow(ThemedWindowMixin):
         self.tabs = ttk.Notebook(self.win, style="Explore.TNotebook")
         self.tabs.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
         self.survey_workspace = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.route_workspace = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.chronicle_workspace = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(self.survey_workspace, text="Survey")
-        self.tabs.add(self.route_workspace, text="Route Planning")
-        self.tabs.add(self.chronicle_workspace, text="Chronicle")
-
-        self.survey_tabs = ttk.Notebook(self.survey_workspace, style="Explore.Section.TNotebook")
-        self.survey_tabs.pack(fill=tk.BOTH, expand=True)
-        self.chronicle_tabs = ttk.Notebook(self.chronicle_workspace, style="Explore.Section.TNotebook")
-        self.chronicle_tabs.pack(fill=tk.BOTH, expand=True)
+        self.expedition_workspace = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.discoveries_workspace = tk.Frame(self.tabs, bg=self.UI_BG)
+        self.logbook_workspace = tk.Frame(self.tabs, bg=self.UI_BG)
+        # Compatibility aliases for route callbacks and older direct links.
+        self.route_workspace = self.expedition_workspace
+        self.chronicle_workspace = self.logbook_workspace
+        self.tabs.add(self.survey_workspace, text="System Survey")
+        self.tabs.add(self.expedition_workspace, text="Expedition")
+        self.tabs.add(self.discoveries_workspace, text="Discoveries")
+        self.tabs.add(self.logbook_workspace, text="Logbook")
 
         self._build_bodies_tab()
-        self._build_bio_tab()
         self._build_route_workspace()
-        self._build_history_tab()
-        self._build_captains_log_tab()
-        self._build_system_history_tab()
-        self._build_ledger_tab()
+        self.discoveries_view = DiscoveriesView(
+            self.discoveries_workspace,
+            self.app,
+            initial_filter=self.config.get("explore_discovery_filter", "All"),
+            on_filter_change=self._on_discovery_filter_changed,
+        )
+        self._build_logbook_workspace()
         self.tabs.bind("<<NotebookTabChanged>>", self._on_workspace_changed)
+        self._restore_view_state()
 
     def _build_route_workspace(self):
         """Host the existing route engine inside the unified Explore page."""
@@ -176,14 +192,98 @@ class ExplorationWindow(ThemedWindowMixin):
             copy_waypoint_callback=self.app._copy_waypoint_to_clipboard,
             is_active_callback=self.is_route_active,
             compact=True,
+            flat_navigation=True,
+            section_change_callback=self._on_expedition_section_changed,
+            persist_config_callback=getattr(self.app, "_persist_config", None),
         )
         self.route_plotter.win.pack(fill=tk.BOTH, expand=True)
         self.app.route_plotter = self.route_plotter
-        self._build_route_tab(self.route_plotter.tabs)
+        map_section = self.route_plotter.add_section("Map & Intelligence")
+        split = tk.PanedWindow(
+            map_section, orient=tk.VERTICAL, bg=self.UI_BG,
+            sashwidth=6, sashrelief=tk.FLAT, bd=0,
+        )
+        split.pack(fill=tk.BOTH, expand=True)
+        map_host = tk.Frame(split, bg=self.UI_BG)
+        intelligence_host = tk.Frame(split, bg=self.UI_BG)
+        split.add(map_host, minsize=270)
+        split.add(intelligence_host, minsize=190)
+        self.expedition_map_view = ExpeditionMapView(map_host, self.app)
+        self._build_route_tab(intelligence_host, embedded=True)
 
     def _on_workspace_changed(self, _event=None):
+        self._remember_active_page()
         if self.is_route_active() and self.route_plotter:
             self.route_plotter.on_shown()
+        try:
+            selected = self.tabs.select()
+            if selected == str(self.discoveries_workspace) and self.discoveries_view:
+                self.discoveries_view.refresh(self.system_history_rows, self.ledger_rows)
+            elif selected == str(self.expedition_workspace) and self.expedition_map_view:
+                self.expedition_map_view.refresh()
+        except Exception:
+            pass
+
+    def _save_view_setting(self, key, value):
+        if self._restoring_view_state or self.config.get(key) == value:
+            return
+        self.config[key] = value
+        try:
+            persist = getattr(self.app, "_persist_config", None)
+            if callable(persist):
+                persist()
+        except Exception:
+            pass
+
+    def _remember_active_page(self):
+        try:
+            selected = self.tabs.select()
+        except Exception:
+            return
+        labels = {
+            str(self.survey_workspace): "System Survey",
+            str(self.expedition_workspace): "Expedition",
+            str(self.discoveries_workspace): "Discoveries",
+            str(self.logbook_workspace): "Logbook",
+        }
+        if selected in labels:
+            self._save_view_setting("explore_active_page", labels[selected])
+
+    def _on_survey_filter_changed(self, _event=None):
+        self._save_view_setting("explore_survey_filter", self.survey_filter_var.get())
+        self._render_bodies(self._last_survey_bodies)
+
+    def _on_discovery_filter_changed(self, value):
+        self._save_view_setting("explore_discovery_filter", value)
+
+    def _on_expedition_section_changed(self, value):
+        self._save_view_setting("explore_expedition_section", value)
+
+    def _restore_view_state(self):
+        self._restoring_view_state = True
+        try:
+            page = str(self.config.get("explore_active_page") or "System Survey")
+            page_frame = {
+                "System Survey": self.survey_workspace,
+                "Expedition": self.expedition_workspace,
+                "Discoveries": self.discoveries_workspace,
+                "Logbook": self.logbook_workspace,
+            }.get(page, self.survey_workspace)
+            self.tabs.select(page_frame)
+            survey_filter = str(self.config.get("explore_survey_filter") or "All bodies")
+            if survey_filter in ("All bodies", "Actionable", "Biology", "Geology", "Valuable"):
+                self.survey_filter_var.set(survey_filter)
+            if self.discoveries_view:
+                self.discoveries_view.set_filter(
+                    str(self.config.get("explore_discovery_filter") or "All"),
+                    notify=False,
+                )
+            if self.route_plotter:
+                self.route_plotter.show_flat_section(
+                    str(self.config.get("explore_expedition_section") or "Overview")
+                )
+        finally:
+            self._restoring_view_state = False
 
     def is_route_active(self):
         try:
@@ -198,14 +298,44 @@ class ExplorationWindow(ThemedWindowMixin):
         section = str(section or "survey").strip().casefold()
         target = {
             "survey": self.survey_workspace,
-            "route": self.route_workspace,
-            "route planning": self.route_workspace,
-            "chronicle": self.chronicle_workspace,
-            "history": self.chronicle_workspace,
+            "system survey": self.survey_workspace,
+            "current system": self.survey_workspace,
+            "biology": self.survey_workspace,
+            "planner": self.survey_workspace,
+            "architecture": self.survey_workspace,
+            "recon": self.survey_workspace,
+            "deep": self.survey_workspace,
+            "deep survey": self.survey_workspace,
+            "route": self.expedition_workspace,
+            "route planning": self.expedition_workspace,
+            "expedition": self.expedition_workspace,
+            "waypoints": self.expedition_workspace,
+            "neutron": self.expedition_workspace,
+            "map": self.expedition_workspace,
+            "discoveries": self.discoveries_workspace,
+            "research": self.discoveries_workspace,
+            "atlas": self.discoveries_workspace,
+            "history": self.discoveries_workspace,
+            "ledger": self.discoveries_workspace,
+            "chronicle": self.logbook_workspace,
+            "logbook": self.logbook_workspace,
         }.get(section, self.survey_workspace)
         self.tabs.select(target)
-        if target is self.route_workspace and self.route_plotter:
+        self._remember_active_page()
+        if target is self.expedition_workspace and self.route_plotter:
             self.route_plotter.on_shown()
+            section_name = {
+                "route": "Overview", "route planning": "Overview",
+                "waypoints": "Waypoints", "neutron": "Neutron",
+                "map": "Map & Intelligence",
+            }.get(section)
+            if section_name and hasattr(self.route_plotter, "show_flat_section"):
+                self.route_plotter.show_flat_section(section_name)
+        elif target is self.discoveries_workspace and self.discoveries_view:
+            filter_name = {"research": "All", "atlas": "Photos", "history": "Systems", "ledger": "Valuable"}.get(section)
+            if filter_name:
+                self.discoveries_view.set_filter(filter_name)
+            self.discoveries_view.refresh(self.system_history_rows, self.ledger_rows)
 
     def show_route_planning(self):
         self.show_section("route")
@@ -228,8 +358,7 @@ class ExplorationWindow(ThemedWindowMixin):
         return value
 
     def _build_bodies_tab(self):
-        frame = tk.Frame(self.survey_tabs, bg=self.UI_BG)
-        self.survey_tabs.add(frame, text="Current System")
+        frame = self.survey_workspace
         left = tk.Frame(frame, bg=self.UI_BG)
         left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         right = tk.Frame(frame, bg=self.UI_PANEL, highlightbackground=self.UI_BORDER, highlightthickness=1, bd=0, width=300)
@@ -255,6 +384,21 @@ class ExplorationWindow(ThemedWindowMixin):
 
         legend = tk.Frame(left, bg=self.UI_BG)
         legend.pack(fill=tk.X, pady=(0, 6))
+        tk.Label(
+            legend, text="VIEW", fg=self.UI_MUTED, bg=self.UI_BG,
+            font=("Segoe UI", 8, "bold"),
+        ).pack(side=tk.LEFT, padx=(0, 6))
+        initial_filter = str(self.config.get("explore_survey_filter") or "All bodies")
+        if initial_filter not in ("All bodies", "Actionable", "Biology", "Geology", "Valuable"):
+            initial_filter = "All bodies"
+        self.survey_filter_var = tk.StringVar(value=initial_filter)
+        survey_filter = ttk.Combobox(
+            legend, textvariable=self.survey_filter_var, state="readonly", width=15,
+            values=("All bodies", "Actionable", "Biology", "Geology", "Valuable"),
+            style="Explore.TCombobox",
+        )
+        survey_filter.pack(side=tk.LEFT, padx=(0, 18))
+        survey_filter.bind("<<ComboboxSelected>>", self._on_survey_filter_changed)
         for text, fg in (
             ("High value", COLOR_ACCENT),
             ("Bio/organic", self.UI_OK),
@@ -263,12 +407,20 @@ class ExplorationWindow(ThemedWindowMixin):
         ):
             tk.Label(legend, text=text, fg=fg, bg=self.UI_BG, font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=(0, 14))
 
-        cols = ("body", "type", "atmosphere", "status", "value", "signals", "discover", "distance")
+        self.sampling_banner = tk.Label(
+            left, text="", fg=COLOR_TEXT, bg="#0b0f13", font=("Consolas", 10, "bold"),
+            anchor="w", padx=12, pady=9, highlightbackground=self.UI_BORDER,
+            highlightthickness=1,
+        )
+        self.sampling_banner.pack(fill=tk.X, pady=(0, 8))
+        self.sampling_banner.pack_forget()
+
+        cols = ("body", "type", "action", "priority", "value", "signals", "discover", "distance")
         self.bodies_tree = self._tree(left, cols, {
-            "body": ("Name", 215, tk.W),
+            "body": ("System architecture", 250, tk.W),
             "type": ("Type", 180, tk.W),
-            "atmosphere": ("Atmosphere", 115, tk.W),
-            "status": ("Status", 110, tk.CENTER),
+            "action": ("Next action", 130, tk.W),
+            "priority": ("Priority", 65, tk.E),
             "value": ("Value", 90, tk.E),
             "signals": ("Signals", 95, tk.CENTER),
             "discover": ("Discovery", 90, tk.CENTER),
@@ -277,7 +429,9 @@ class ExplorationWindow(ThemedWindowMixin):
         self.bodies_tree.tag_configure("valuable", foreground=COLOR_ACCENT)
         self.bodies_tree.tag_configure("star", foreground=self.UI_MUTED)
         self.bodies_tree.tag_configure("bio", foreground=self.UI_OK)
+        self.bodies_tree.tag_configure("actionable", foreground=COLOR_ORANGE)
         self.bodies_tree.bind("<<TreeviewSelect>>", self._on_body_selected)
+        self.survey_tree_wrap = self.bodies_tree.master
 
         tk.Frame(right, bg=COLOR_ACCENT, height=2).pack(fill=tk.X)
         tk.Label(right, text="BODY DETAIL", fg=COLOR_ORANGE, bg=self.UI_PANEL, font=("Segoe UI", 8, "bold"), anchor="w").pack(fill=tk.X, padx=10, pady=(9, 0))
@@ -297,6 +451,76 @@ class ExplorationWindow(ThemedWindowMixin):
         )
         self.body_detail.pack(fill=tk.BOTH, expand=True)
         self.body_detail.configure(state=tk.DISABLED)
+
+        self.recon_status = tk.Label(
+            right, text="RECON · awaiting system data", fg=self.UI_MUTED,
+            bg=self.UI_PANEL, font=("Consolas", 8, "bold"), anchor="w",
+        )
+        self.recon_status.pack(fill=tk.X, padx=10, pady=(4, 5))
+        recon_actions = tk.Frame(right, bg=self.UI_PANEL)
+        recon_actions.pack(fill=tk.X, padx=10, pady=(0, 9))
+        self._button(recon_actions, "Save Recon", self._save_recon_candidate, accent=True).pack(side=tk.LEFT)
+        self._button(recon_actions, "Copy", self._copy_recon_dossier).pack(side=tk.LEFT, padx=(6, 0))
+        self._button(
+            recon_actions, "Architect",
+            lambda: getattr(self.app, "open_colonization_window", lambda: None)(),
+        ).pack(side=tk.LEFT, padx=(6, 0))
+
+    def _build_logbook_workspace(self):
+        frame = self.logbook_workspace
+        toolbar = tk.Frame(frame, bg=self.UI_BG)
+        toolbar.pack(fill=tk.X, padx=8, pady=(8, 6))
+        tk.Label(
+            toolbar, text="EXPEDITION LOGBOOK", fg=COLOR_ORANGE, bg=self.UI_BG,
+            font=("Segoe UI", 9, "bold"),
+        ).pack(side=tk.LEFT)
+        self._button(toolbar, "Save Report", self._save_expedition_report).pack(side=tk.RIGHT)
+        self._button(toolbar, "Copy Report", self._copy_expedition_report, accent=True).pack(side=tk.RIGHT, padx=(0, 7))
+        self._button(toolbar, "Copy Session", self._copy_captains_log).pack(side=tk.RIGHT, padx=(0, 7))
+        self._button(toolbar, "Reset Session", self._reset_session).pack(side=tk.RIGHT, padx=(0, 7))
+        self.captains_log_summary = tk.Label(
+            toolbar, text="", fg=self.UI_MUTED, bg=self.UI_BG, font=("Consolas", 8),
+        )
+        self.captains_log_summary.pack(side=tk.RIGHT, padx=12)
+
+        split = tk.PanedWindow(
+            frame, orient=tk.HORIZONTAL, bg=self.UI_BG,
+            sashwidth=6, sashrelief=tk.FLAT, bd=0,
+        )
+        split.pack(fill=tk.BOTH, expand=True)
+        left = tk.Frame(split, bg=self.UI_BG)
+        right = tk.Frame(split, bg=self.UI_PANEL)
+        split.add(left, minsize=520)
+        split.add(right, minsize=390)
+
+        self.history_text = tk.Text(
+            left, bg="#0b0f13", fg=COLOR_TEXT, insertbackground=COLOR_ACCENT,
+            relief=tk.FLAT, bd=0, padx=10, pady=8, height=10,
+            font=("Consolas", 9), wrap=tk.WORD,
+        )
+        self.history_text.pack(fill=tk.X, pady=(0, 8))
+        self.history_text.configure(state=tk.DISABLED)
+        self.captains_log_tree = self._tree(
+            left, ("date", "route", "jumps", "discoveries", "sales"), {
+                "date": ("Session", 140, tk.W), "route": ("Route", 250, tk.W),
+                "jumps": ("Jumps", 60, tk.E), "discoveries": ("Discoveries", 90, tk.E),
+                "sales": ("Data Sold", 100, tk.E),
+            },
+        )
+        self.captains_log_tree.bind("<<TreeviewSelect>>", self._on_captains_log_selected)
+        self.captains_log_rows = {}
+        tk.Frame(right, bg=COLOR_ACCENT, height=2).pack(fill=tk.X)
+        tk.Label(
+            right, text="SELECTED SESSION", fg=COLOR_ORANGE, bg=self.UI_PANEL,
+            font=("Segoe UI", 8, "bold"), anchor="w",
+        ).pack(fill=tk.X, padx=10, pady=(8, 2))
+        self.captains_log_text = tk.Text(
+            right, bg="#0b0f13", fg=COLOR_TEXT, insertbackground=COLOR_ACCENT,
+            relief=tk.FLAT, bd=0, padx=12, pady=10,
+            font=("Consolas", 9), wrap=tk.WORD,
+        )
+        self.captains_log_text.pack(fill=tk.BOTH, expand=True)
+        self.captains_log_text.configure(state=tk.DISABLED)
 
     def _build_bio_tab(self):
         frame = tk.Frame(self.survey_tabs, bg=self.UI_BG)
@@ -342,9 +566,10 @@ class ExplorationWindow(ThemedWindowMixin):
         self.bio_tree.tag_configure("pending", foreground=COLOR_ORANGE)
         self.bio_tree.tag_configure("empty", foreground=self.UI_MUTED)
 
-    def _build_route_tab(self, notebook):
-        frame = tk.Frame(notebook, bg=self.UI_BG)
-        notebook.add(frame, text="Survey Intelligence")
+    def _build_route_tab(self, parent, embedded=False):
+        frame = parent if embedded else tk.Frame(parent, bg=self.UI_BG)
+        if not embedded:
+            parent.add(frame, text="Survey Intelligence")
         cols = ("idx", "system", "star", "scoop", "distance", "edsm", "valuable", "status")
         self.route_tree = self._tree(frame, cols, {
             "idx": ("#", 48, tk.E),
@@ -534,7 +759,7 @@ class ExplorationWindow(ThemedWindowMixin):
             valuable_count = sum(1 for item in bodies if self._is_valuable(item))
             complete = f"{scanned}/{total}" if total else f"{scanned}/0"
 
-            star = getattr(self.app, "star_class", "") or "-"
+            star = star_type_label(getattr(self.app, "star_class", ""), "-")
             traffic = getattr(self.app, "system_traffic", {}) or {}
             self.header_summary.config(text=current)
             self.system_card.config(text=f"{current}\nStar {star} | Traffic {traffic.get('day', 0)}/{traffic.get('week', 0)}/{traffic.get('total', 0)}")
@@ -555,6 +780,13 @@ class ExplorationWindow(ThemedWindowMixin):
             self._render_history(current_value, valuable_count, session_stats)
             self._render_captains_log()
             self._refresh_ledger()
+            selected_workspace = self.tabs.select()
+            if selected_workspace == str(self.discoveries_workspace) and self.discoveries_view:
+                self.discoveries_view.refresh(self.system_history_rows, self.ledger_rows)
+            if selected_workspace == str(self.expedition_workspace) and self.expedition_map_view:
+                # The map is inexpensive to redraw and only consumes the tracker's
+                # bounded snapshot. Its canvas remains current when the section is opened.
+                self.expedition_map_view.refresh()
         except Exception as exc:
             self._log_error(f"Exploration refresh failed: {exc}")
 
@@ -655,7 +887,7 @@ class ExplorationWindow(ThemedWindowMixin):
         if not labels:
             return
         status = "complete" if total and scanned >= total else ("partial" if scanned else "unknown")
-        star = getattr(self.app, "star_class", "") or "-"
+        star = star_type_label(getattr(self.app, "star_class", ""), "-")
         bio_total = sum(self._safe_int(item.get("bio_count")) for item in bodies)
         geo_total = sum(self._safe_int(item.get("geo_count")) for item in bodies)
         edsm = self._edsm_summary(current)
@@ -673,15 +905,62 @@ class ExplorationWindow(ThemedWindowMixin):
         labels["activity"].config(text=activity)
 
     def _render_bodies(self, bodies):
-        for item_id in self.bodies_tree.get_children():
-            self.bodies_tree.delete(item_id)
+        self._last_survey_bodies = list(bodies or [])
+        selected_body_id = None
+        selected = self.bodies_tree.selection()
+        if selected:
+            selected_item = self.body_items_by_iid.get(selected[0])
+            selected_body_id = selected_item.get("body_id") if selected_item else None
+        children = self.bodies_tree.get_children()
+        if children:
+            self.bodies_tree.delete(*children)
         self.body_items_by_iid = {}
-        rows = sorted(bodies, key=lambda item: (item.get("body_id") is None, item.get("body_id") or 99999, item.get("name") or ""))
-        for item in rows:
+        plans = survey_plan(bodies)
+
+        def key_for(item):
+            body_id = item.get("body_id")
+            return ("id", str(body_id)) if body_id is not None else ("name", str(item.get("full_name") or item.get("name") or ""))
+
+        plan_by_name = {str(row.get("body") or ""): row for row in plans}
+        self._survey_plan_by_key = {}
+        for item in bodies:
+            plan = plan_by_name.get(str(item.get("name") or "")) or plan_by_name.get(str(item.get("full_name") or ""))
+            if plan:
+                self._survey_plan_by_key[key_for(item)] = plan
+
+        filter_var = getattr(self, "survey_filter_var", None)
+        selected_filter = filter_var.get() if filter_var else "All bodies"
+
+        def visible(item):
+            plan = self._survey_plan_by_key.get(key_for(item))
+            if selected_filter == "All bodies":
+                return True
+            if selected_filter == "Actionable":
+                return bool(plan and plan.get("action") not in ("Observe", "Review biology"))
+            if selected_filter == "Biology":
+                return bool(self._safe_int(item.get("bio_count")) or item.get("organic_scans") or item.get("genuses"))
+            if selected_filter == "Geology":
+                return self._safe_int(item.get("geo_count")) > 0
+            if selected_filter == "Valuable":
+                return self._is_valuable(item)
+            return True
+
+        architecture = architecture_rows(bodies)
+        rows = [row for row in architecture if visible(row["item"])]
+        chosen = None
+        for architecture_row in rows:
+            item = architecture_row["item"]
             body = item.get("full_name") or item.get("name") or "Body"
-            body_class = item.get("star_type") or item.get("planet_class") or item.get("class") or ""
+            depth = architecture_row.get("depth", 0) if selected_filter == "All bodies" else 0
+            display_body = f"{'   ' * depth}{'↳ ' if depth else ''}{body}"
+            body_class = (
+                star_type_label(item.get("star_type"), include_star=True)
+                if item.get("star_type") else item.get("planet_class") or item.get("class") or ""
+            )
             value = self._item_value(item)
-            atmosphere = item.get("atmosphere") or "-"
+            plan = self._survey_plan_by_key.get(key_for(item))
+            action = plan.get("action") if plan else ("Primary star" if item.get("is_star") else "Reference")
+            priority = plan.get("score") if plan else "-"
             tags = []
             if item.get("is_star"):
                 tags.append("star")
@@ -689,14 +968,16 @@ class ExplorationWindow(ThemedWindowMixin):
                 tags.append("bio")
             elif self._is_valuable(item):
                 tags.append("valuable")
+            if plan and int(plan.get("score") or 0) >= 50:
+                tags.append("actionable")
             iid = self.bodies_tree.insert(
                 "",
                 tk.END,
                 values=(
-                    body,
+                    display_body,
                     body_class,
-                    atmosphere,
-                    self._body_status(item),
+                    action,
+                    priority,
                     self._format_credits(value),
                     self._signal_text(item),
                     self._body_discovery_text(item),
@@ -705,12 +986,16 @@ class ExplorationWindow(ThemedWindowMixin):
                 tags=tuple(tags),
             )
             self.body_items_by_iid[iid] = item
+            if selected_body_id is not None and str(item.get("body_id")) == str(selected_body_id):
+                chosen = iid
         first = self.bodies_tree.get_children()
         if first:
-            self.bodies_tree.selection_set(first[0])
-            self._show_body_detail(self.body_items_by_iid.get(first[0]))
+            iid = chosen or first[0]
+            self.bodies_tree.selection_set(iid)
+            self._show_body_detail(self.body_items_by_iid.get(iid))
         else:
             self._show_body_detail(None)
+        self._update_recon_status()
 
     def _genus_labels(self, item):
         labels = []
@@ -888,7 +1173,7 @@ class ExplorationWindow(ThemedWindowMixin):
             banner.pack_forget()
             return
         if not banner.winfo_manager():
-            banner.pack(fill=tk.X, pady=(0, 8), before=self.bio_tree)
+            banner.pack(fill=tk.X, pady=(0, 8), before=self.survey_tree_wrap)
         minimum = sample.get("min_distance_m")
         colony = sample.get("colony_m")
         if sample.get("clear"):
@@ -957,7 +1242,7 @@ class ExplorationWindow(ThemedWindowMixin):
                 self.body_detail_title.config(text=item.get("full_name") or item.get("name") or "Body")
             lines.extend([
                 f"Status: {self._body_status(item)}",
-                f"Class: {item.get('star_type') or item.get('planet_class') or item.get('class') or '-'}",
+                f"Class: {star_type_label(item.get('star_type'), include_star=True) if item.get('star_type') else item.get('planet_class') or item.get('class') or '-'}",
                 f"Estimated value: {self._item_value(item):,} cr",
                 f"DSS value: {int(item.get('dss_reward') or 0):,} cr",
                 f"DSS complete: {'Yes' if item.get('dss_complete') else 'No'}",
@@ -1009,6 +1294,38 @@ class ExplorationWindow(ThemedWindowMixin):
                         value = self._format_credits(lo) if lo == hi else f"{self._format_credits(lo)}-{self._format_credits(hi)}"
                     spacing = f"{int(pred.get('colony_m')):,} m" if pred.get("colony_m") else "-"
                     lines.append(f"- {pred.get('name') or 'Organic'} | {spacing} spacing | {value}")
+            key = (
+                ("id", str(item.get("body_id"))) if item.get("body_id") is not None
+                else ("name", str(item.get("full_name") or item.get("name") or ""))
+            )
+            plan = self._survey_plan_by_key.get(key)
+            if plan:
+                lines.extend([
+                    "", "Survey plan:",
+                    f"- {plan.get('action')} · priority {plan.get('score')}",
+                    f"- {plan.get('reason')}",
+                ])
+            parents = item.get("parents") or []
+            if parents:
+                parent_text = " → ".join(
+                    f"{kind} {value}"
+                    for parent in parents if isinstance(parent, dict)
+                    for kind, value in parent.items()
+                )
+                lines.extend(["", f"Architecture: {parent_text or 'Root body'}"])
+            orbital = item.get("orbital_period")
+            rotation = item.get("rotation_period")
+            if orbital or rotation or item.get("eccentricity") is not None:
+                lines.append(
+                    "Orbit: "
+                    f"{float(orbital or 0) / 86400:.2f} d · rotation {float(rotation or 0) / 3600:.2f} h · "
+                    f"e {float(item.get('eccentricity') or 0):.3f}"
+                )
+            body_name = item.get("full_name") or item.get("name")
+            findings = [row for row in wonder_rows([item]) if row.get("body") == body_name]
+            if findings:
+                lines.extend(["", "Notable findings:"])
+                lines.extend(f"- {row['kind']}: {row['detail']}" for row in findings)
         else:
             if hasattr(self, "body_detail_title"):
                 self.body_detail_title.config(text="Select a body")
@@ -1017,6 +1334,50 @@ class ExplorationWindow(ThemedWindowMixin):
         self.body_detail.delete("1.0", tk.END)
         self.body_detail.insert(tk.END, "\n".join(lines))
         self.body_detail.configure(state=tk.DISABLED)
+
+    def _current_recon_report(self):
+        return recon_report(
+            getattr(self.app, "current_sys", "Unknown"), self._last_survey_bodies,
+            int(getattr(self.app, "scanned", 0) or 0),
+            int(getattr(self.app, "total", 0) or 0),
+            getattr(self.app, "system_traffic", {}) or {},
+        )
+
+    def _update_recon_status(self):
+        if not hasattr(self, "recon_status"):
+            return
+        report = self._current_recon_report()
+        gaps = len(report.get("gaps") or [])
+        self.recon_status.config(
+            text=f"RECON · {report['score']}/100 {report['grade'].upper()} · {gaps} gap(s)",
+            fg=self.UI_OK if report["score"] >= 85 else COLOR_ORANGE if report["score"] >= 40 else self.UI_MUTED,
+        )
+
+    def _save_recon_candidate(self):
+        tracker = getattr(self.app, "deep_survey", None)
+        if not tracker:
+            return
+        report = self._current_recon_report()
+        tracker.save_candidate(report)
+        logbook = getattr(self.app, "captains_log", None)
+        if logbook and hasattr(logbook, "add_manual_highlight"):
+            logbook.add_manual_highlight(
+                "RECON", f"Recon candidate saved: {report['system']}",
+                f"Survey readiness {report['score']}/100",
+            )
+        if hasattr(self.app, "add_event_feed_entry"):
+            self.app.add_event_feed_entry(
+                "SURVEY", f"Recon candidate saved: {report['system']} ({report['score']}/100)",
+                severity="INFO",
+            )
+        self._update_recon_status()
+
+    def _copy_recon_dossier(self):
+        tracker = getattr(self.app, "deep_survey", None)
+        if not tracker:
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(tracker.recon_markdown(self._current_recon_report()))
 
     def _trip_card_text(self, session_stats=None):
         jumps = int(getattr(self.app, "session_jump_count", 0) or 0)
@@ -1035,8 +1396,9 @@ class ExplorationWindow(ThemedWindowMixin):
         local_status = self._route_status_map([entry.get("StarSystem") for entry in entries])
         for idx, entry in enumerate(entries, 1):
             name = entry.get("StarSystem") or ""
-            star = entry.get("StarClass") or "-"
-            scoop = "Yes" if star[:1].upper() in SCOOPABLE_STAR_CLASSES else ("-" if star == "-" else "No")
+            raw_star = entry.get("StarClass") or "-"
+            star = star_type_label(raw_star, "-")
+            scoop = "Yes" if raw_star[:1].upper() in SCOOPABLE_STAR_CLASSES else ("-" if raw_star == "-" else "No")
             distance = self._distance_from_current(entry)
             edsm = self._edsm_summary(name)
             edsm_value = self._format_credits(edsm.get("estimatedValueMapped") or edsm.get("estimatedValue")) if edsm else "..."
@@ -1256,7 +1618,10 @@ class ExplorationWindow(ThemedWindowMixin):
             if not isinstance(item, dict):
                 continue
             name = item.get("full_name") or item.get("name") or "Body"
-            body_class = item.get("star_type") or item.get("planet_class") or item.get("class") or "-"
+            body_class = (
+                star_type_label(item.get("star_type"), include_star=True)
+                if item.get("star_type") else item.get("planet_class") or item.get("class") or "-"
+            )
             value = self._item_value(item)
             row = {
                 "name": name,
@@ -1289,7 +1654,7 @@ class ExplorationWindow(ThemedWindowMixin):
 
     def _history_row_from_items(self, system, address, last_seen, scanned, total, items):
         stars = sorted({
-            str(item.get("star_type"))
+            star_type_label(item.get("star_type"))
             for item in items
             if isinstance(item, dict) and item.get("is_star") and item.get("star_type")
         })
@@ -1389,17 +1754,19 @@ class ExplorationWindow(ThemedWindowMixin):
             return
         rows = [row for row in self.system_history_rows if row.get("system") != current]
         stars = sorted({
-            str(item.get("star_type"))
+            star_type_label(item.get("star_type"))
             for item in bodies
             if isinstance(item, dict) and item.get("is_star") and item.get("star_type")
         })
         if not stars and getattr(self.app, "star_class", None):
-            stars = [str(getattr(self.app, "star_class"))]
+            stars = [star_type_label(getattr(self.app, "star_class"))]
         rows.append({
             "system": current,
             "system_address": getattr(self.app, "current_system_address", None),
             "last_seen_ts": time.time(),
-            "star_class": getattr(self.app, "star_class", "") or (stars[0] if stars else "-"),
+            "star_class": star_type_label(
+                getattr(self.app, "star_class", ""), stars[0] if stars else "-",
+            ),
             "stars": stars,
             "scanned_bodies": int(scanned or 0),
             "total_bodies": int(total or 0),
@@ -1455,8 +1822,6 @@ class ExplorationWindow(ThemedWindowMixin):
         return stats
 
     def _refresh_ledger(self):
-        if not hasattr(self, "ledger_tree"):
-            return
         now = time.time()
         if now - getattr(self, "_last_ledger_refresh_ts", 0.0) < 1.5:
             self._render_ledger()
@@ -1658,6 +2023,76 @@ class ExplorationWindow(ThemedWindowMixin):
         if text:
             self.root.clipboard_clear()
             self.root.clipboard_append(text)
+
+    def _selected_expedition_session(self):
+        selected = self.captains_log_tree.selection() if hasattr(self, "captains_log_tree") else ()
+        session = self.captains_log_rows.get(selected[0]) if selected else None
+        if session:
+            return session
+        journal = getattr(self.app, "captains_log", None)
+        sessions = journal.sessions() if journal else []
+        return sessions[0] if sessions else {}
+
+    def _expedition_report(self):
+        session = self._selected_expedition_session()
+        active_session = bool(session and not session.get("ended"))
+        tracker = getattr(self.app, "deep_survey", None)
+        snapshot = tracker.snapshot() if tracker else {}
+        current = (
+            getattr(self.app, "current_sys", "")
+            if active_session or not session else session.get("end_system") or ""
+        )
+        bodies = self._last_survey_bodies if active_session or not session else []
+        session_systems = (
+            sorted(set(getattr(self.app, "session_systems", set()) or set()))
+            if active_session else None
+        )
+        return expedition_report_markdown(
+            snapshot=snapshot,
+            session=session,
+            current_system=current,
+            current_scan={
+                "scanned": int(getattr(self.app, "scanned", 0) or 0) if bodies else 0,
+                "total": int(getattr(self.app, "total", 0) or 0) if bodies else 0,
+                "value": sum(self._item_value(item) for item in bodies),
+            },
+            system_rows=self.system_history_rows,
+            value_rows=self.ledger_rows,
+            wonders=wonder_rows(bodies),
+            session_systems=session_systems,
+        )
+
+    def _copy_expedition_report(self):
+        report = self._expedition_report()
+        self.root.clipboard_clear()
+        self.root.clipboard_append(report)
+        if hasattr(self.app, "add_event_feed_entry"):
+            self.app.add_event_feed_entry(
+                "SURVEY", "Expedition report copied to clipboard", severity="INFO",
+            )
+
+    def _save_expedition_report(self):
+        session = self._selected_expedition_session()
+        report_date = str(session.get("started") or time.strftime("%Y-%m-%d"))[:10]
+        path = filedialog.asksaveasfilename(
+            parent=self.win,
+            title="Save Expedition Report",
+            initialfile=f"VoidCompass-Expedition-{report_date}.md",
+            defaultextension=".md",
+            filetypes=(("Markdown", "*.md"), ("Text", "*.txt"), ("All files", "*.*")),
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(self._expedition_report())
+        except OSError as exc:
+            messagebox.showerror("Save Expedition Report", f"Could not save the report:\n{exc}", parent=self.win)
+            return
+        if hasattr(self.app, "add_event_feed_entry"):
+            self.app.add_event_feed_entry(
+                "SURVEY", f"Expedition report saved: {os.path.basename(path)}", severity="INFO",
+            )
 
     def _format_history_time(self, ts):
         try:
@@ -1879,6 +2314,7 @@ class ExplorationWindow(ThemedWindowMixin):
 
     def _on_close(self):
         self._closing = True
+        self._remember_active_page()
         plotter = self.route_plotter
         try:
             if plotter and self._widget_alive(plotter.win):
@@ -1891,7 +2327,9 @@ class ExplorationWindow(ThemedWindowMixin):
         try:
             if self.win and self.win.winfo_exists():
                 self.config["exploration_window_geometry"] = self.win.geometry()
-                save_config(self.config)
+                persist = getattr(self.app, "_persist_config", None)
+                if callable(persist):
+                    persist()
                 self.win.destroy()
         except Exception:
             pass

@@ -15,6 +15,7 @@ from ui_theme import THEME, ThemedWindowMixin, apply_window, button, panel, scro
 from version import APP_VERSION
 from overlay_input import set_mouse_passthrough
 from adaptive_command import AUTOMATIC_MODE_IDLE_S
+from stellar_types import star_type_label
 import route_strip
 
 COLOR_ACCENT = THEME.accent
@@ -2707,7 +2708,9 @@ class DashboardUIMixin(ThemedWindowMixin):
             detail = "Jump charging"
         elif event_name == "Scan":
             title = payload.get("BodyName") or payload.get("body_name") or "Body scan"
-            detail = payload.get("PlanetClass") or payload.get("StarType") or payload.get("planet_class") or payload.get("star_type") or "Scan"
+            planet_class = payload.get("PlanetClass") or payload.get("planet_class")
+            star_type = payload.get("StarType") or payload.get("star_type")
+            detail = planet_class or star_type_label(star_type, "Scan")
         elif event_name in ("FSSDiscoveryScan", "DiscoveryScan"):
             count = payload.get("BodyCount") or payload.get("body_count") or payload.get("Bodies") or payload.get("bodies")
             title = "Discovery scan"

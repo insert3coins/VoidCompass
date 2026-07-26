@@ -220,6 +220,15 @@ class CaptainsLog:
                 self.save()
             return changed
 
+    def add_manual_highlight(self, kind, title, detail=""):
+        """Add a deliberate commander action without fabricating a journal event."""
+        raw = {"timestamp": _stamp({}), "event": "VoidCompassNote"}
+        with self.lock:
+            session = self._session(raw, create=True)
+            self._highlight(session, raw, str(kind or "NOTE"), str(title or "Log note"), str(detail or ""))
+            self.save()
+        return True
+
     @staticmethod
     def _commander_matches(raw, commander=None, fid=None):
         expected_name = str(commander or "").strip().casefold()

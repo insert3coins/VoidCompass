@@ -1,8 +1,10 @@
 import json
+import logging
 import os
-import sqlite3
-import time
 import shutil
+import sqlite3
+import threading
+import time
 
 from config import get_active_profile, get_profile_file
 
@@ -101,10 +103,83 @@ class DashboardDBMixin:
 
         if os.path.exists(self._profile_file(SCAN_HISTORY_FILE)) or os.path.exists(SCAN_HISTORY_FILE):
             self.migrate_json_history()
+        self._start_db_commit_worker()
 
-    def _db_commit(self, reason=""):
+    def _start_db_commit_worker(self):
+        """Commit routine journal writes away from Tk's event thread."""
+        conn = self.conn
+        db_lock = self.db_lock
+        event = threading.Event()
+        stopping = threading.Event()
+        reasons_lock = threading.Lock()
+        reasons = set()
+        state = {
+            "conn": conn,
+            "event": event,
+            "stopping": stopping,
+            "reasons_lock": reasons_lock,
+            "reasons": reasons,
+            "close": False,
+        }
+
+        def _worker():
+            while True:
+                event.wait()
+                if not stopping.is_set():
+                    stopping.wait(self._db_commit_interval_s)
+                event.clear()
+                with reasons_lock:
+                    reason = "+".join(sorted(reasons)) or "background"
+                    reasons.clear()
+                try:
+                    with db_lock:
+                        self._commit_connection(conn, reason=reason, background=True)
+                except Exception as exc:
+                    logging.warning("Background exploration DB commit failed: %s", exc)
+                if stopping.is_set():
+                    if state.get("close"):
+                        try:
+                            with db_lock:
+                                conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+                                conn.close()
+                        except Exception as exc:
+                            logging.warning("Exploration DB background close failed: %s", exc)
+                    return
+
+        thread = threading.Thread(
+            target=_worker, name="exploration-db-commit", daemon=True,
+        )
+        state["thread"] = thread
+        self._db_commit_worker_state = state
+        thread.start()
+
+    def _request_db_commit(self, reason=""):
+        state = getattr(self, "_db_commit_worker_state", None)
+        if not state or state.get("stopping").is_set():
+            # Lightweight test doubles and early startup use the synchronous
+            # path; the live app installs the worker during init_db().
+            self._db_commit(reason=reason)
+            return
+        with state["reasons_lock"]:
+            state["reasons"].add(reason or "general")
+        state["event"].set()
+
+    def _stop_db_commit_worker(self, *, close=False, timeout=0.35):
+        state = getattr(self, "_db_commit_worker_state", None)
+        if not state:
+            return True
+        state["close"] = bool(close)
+        state["stopping"].set()
+        state["event"].set()
+        state["thread"].join(timeout=max(0.0, float(timeout)))
+        finished = not state["thread"].is_alive()
+        if finished and getattr(self, "_db_commit_worker_state", None) is state:
+            self._db_commit_worker_state = None
+        return finished
+
+    def _commit_connection(self, conn, reason="", background=False):
         t0 = time.perf_counter()
-        self.conn.commit()
+        conn.commit()
         self._db_last_commit_ts = time.time()
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         if hasattr(self, "_trace_record_ms"):
@@ -113,14 +188,19 @@ class DashboardDBMixin:
             except Exception:
                 pass
         if elapsed_ms >= 25.0:
-            self.log(f"PERF SPIKE [db_commit:{reason or 'general'}] {elapsed_ms:.1f} ms")
+            message = f"PERF SPIKE [db_commit:{reason or 'general'}] {elapsed_ms:.1f} ms"
+            if background:
+                logging.warning(message)
+            else:
+                self.log(message)
+
+    def _db_commit(self, reason=""):
+        self._commit_connection(self.conn, reason=reason)
 
     def _db_maybe_commit(self, reason=""):
         if self.batch_mode:
             return
-        now = time.time()
-        if (now - self._db_last_commit_ts) >= self._db_commit_interval_s:
-            self._db_commit(reason=reason)
+        self._request_db_commit(reason=reason)
 
     def import_scan_cache_json(self):
         scan_cache_file = self._copy_legacy_profile_file(SCAN_CACHE_FILE)
@@ -544,7 +624,7 @@ class DashboardDBMixin:
                 (system_name, time.time()),
             )
             self.conn.execute("DELETE FROM bgs_snapshots WHERE system_name=?", (system_name,))
-            self._db_commit(reason="bgs_delete")
+            self._request_db_commit(reason="bgs_delete")
             self._bgs_systems_cache = [
                 row for row in getattr(self, "_bgs_systems_cache", [])
                 if row[0] != system_name
@@ -575,7 +655,7 @@ class DashboardDBMixin:
                 (now,),
             )
             self.conn.execute("DELETE FROM bgs_snapshots")
-            self._db_commit(reason="bgs_purge")
+            self._request_db_commit(reason="bgs_purge")
             self._bgs_systems_cache = []
             self._bgs_factions_cache = {}
             return True
@@ -604,7 +684,7 @@ class DashboardDBMixin:
                 (time.time(),),
             )
             removed = max(0, int(cursor.rowcount or 0))
-            self._db_commit(reason="bgs_purge_empty")
+            self._request_db_commit(reason="bgs_purge_empty")
             self._bgs_systems_cache = [
                 row for row in getattr(self, "_bgs_systems_cache", [])
                 if len(row) > 2 and row[2]

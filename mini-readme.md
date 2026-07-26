@@ -1,5 +1,21 @@
 # VoidCompass // UPDATE LOG
 
+## v5.2.1 // Deep Survey Intelligence
+**Release Date:** 2026-Jul-26
+
+*   Rebuilt Explore around four clear pages—**System Survey**, **Expedition**, **Discoveries** and **Logbook**—removing the nested Survey/Chronicle tab stacks while retaining their tools in unified, filterable views.
+*   Integrated seven profile-local **Deep Survey** capabilities directly into those pages: System Survey Planner, Expedition Route Map, Stellar Wonders, Research Ledger, Screenshot Discovery Atlas, System Architecture and Colonisation Recon.
+*   Built a measured body-by-body survey plan that ranks DSS, biology, geology, first-discovery and first-footfall opportunities, explains every recommendation and stays silent about facts the journal has not supplied.
+*   Added a projected expedition map beside route intelligence, with flat Overview, Waypoints, Neutron and Map section controls; it retains up to 5,000 journal `StarPos` arrivals while drawing a representative route on very large histories to protect UI performance.
+*   Unified system history, valuable bodies, Codex, transient signals, DSS efficiency and screenshots into one searchable **Discoveries** archive, including new-entry, region, surface-position, threat, expiry-at-discovery and probe-target facts where Frontier journals provide them.
+*   Added one-click copy/save **Expedition Reports** in Markdown, combining selected Captain's Log route and highlights with scoped Codex/DSS/signal/photo totals, survey value, stellar wonders, saved recon candidates and top retained worlds.
+*   Remembered the active Explore page, System Survey filter, Discoveries filter and Expedition section separately for every commander, and added Copy System/Open EDSM actions to discovery records.
+*   Added a lazy screenshot atlas that joins Screenshot metadata to converted images, previews them only on selection and preserves system, body, surface coordinates, altitude and heading when reported.
+*   Added a journal-parent system architecture tree and explainable wonders detector for exotic stars, notable worlds, unusual orbits, extreme environments, rings, biology and first-discovery opportunities.
+*   Added a conservative colonisation reconnaissance dossier with saved per-commander candidates, remaining-survey gaps, copyable Markdown, Captain's Log entries and direct handoff to Architect Command without claiming journal-unverifiable eligibility.
+*   Indexed existing commander journals on a background worker, bounded every retained collection and coalesced Deep Survey persistence so first-time history recovery never blocks the cockpit UI.
+*   Standardised internal stellar class labels throughout System Info, Dashboard, Explore and Route views, and moved routine scan-database commits plus Trade startup readiness off the Tk thread after live diagnostics exposed storage stalls.
+
 ## v5.1.2 // Adaptive Activity Dashboards
 **Release Date:** 2026-Jul-23
 

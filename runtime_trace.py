@@ -101,7 +101,7 @@ class RuntimeTrace:
             payload["extra"] = extra
         try:
             persistence_queue().append_text(
-                self.path, json.dumps(payload) + "\n", delay_s=0.05,
+                self.path, json.dumps(payload) + "\n", delay_s=2.0,
             )
         except Exception:
             self.enabled = False
