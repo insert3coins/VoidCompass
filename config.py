@@ -189,7 +189,6 @@ PROFILE_VALUE_SETTINGS = (
     "value_ledger_geometry",
     "colonisation_planner_geometry",
     "exploration_window_geometry",
-    "expedition_map_popout_geometry",
     "trade_window_geometry",
     "trade_route_form",
     "system_plotter_form",
@@ -381,7 +380,6 @@ def apply_profile_config(config, profile_key=None):
                 "cockpit_memory_ship_limit": 30,
                 "cockpit_memory_episode_limit": 80,
                 "adaptive_overlay_scenes": {},
-                "expedition_map_popout_geometry": "1180x800",
             }
             profile[setting] = (
                 profile_defaults[setting] if not is_initial_profile and setting in profile_defaults
@@ -532,7 +530,6 @@ def load_config():
         'value_ledger_geometry': '980x620',
         'colonisation_planner_geometry': '900x560',
         'exploration_window_geometry': '1040x680',
-        'expedition_map_popout_geometry': '1180x800',
         'trade_window_geometry': '1080x700',
         'trade_route_form': {},
         'system_plotter_form': {},
