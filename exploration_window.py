@@ -232,8 +232,10 @@ class ExplorationWindow(ThemedWindowMixin):
             if selected == str(self.discoveries_workspace) and self.discoveries_view:
                 self.discoveries_view.refresh(self.system_history_rows, self.ledger_rows)
             elif selected == str(self.expedition_workspace) and self.expedition_map_view:
-                self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
-                if self.expedition_mission_view:
+                section = self.route_plotter.current_section() if self.route_plotter else ""
+                if section == "Map & Intelligence":
+                    self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
+                if section == "Mission Control" and self.expedition_mission_view:
                     self.expedition_mission_view.refresh()
         except Exception:
             pass
@@ -272,6 +274,8 @@ class ExplorationWindow(ThemedWindowMixin):
 
     def _on_expedition_section_changed(self, value):
         self._save_view_setting("explore_expedition_section", value)
+        if value == "Map & Intelligence" and self.expedition_map_view:
+            self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
 
     def _restore_view_state(self):
         self._restoring_view_state = True
@@ -439,7 +443,11 @@ class ExplorationWindow(ThemedWindowMixin):
         self._refresh_expedition_strip()
         if self.expedition_mission_view:
             self.expedition_mission_view.refresh()
-        if self.expedition_map_view:
+        if (
+            self.expedition_map_view and self.is_route_active()
+            and self.route_plotter
+            and self.route_plotter.current_section() == "Map & Intelligence"
+        ):
             self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
         try:
             self.app.schedule_dashboard_refresh()
@@ -874,12 +882,20 @@ class ExplorationWindow(ThemedWindowMixin):
             selected_workspace = self.tabs.select()
             if selected_workspace == str(self.discoveries_workspace) and self.discoveries_view:
                 self.discoveries_view.refresh(self.system_history_rows, self.ledger_rows)
-            if selected_workspace == str(self.expedition_workspace) and self.expedition_map_view:
-                # The map is inexpensive to redraw and only consumes the tracker's
-                # bounded snapshot. Its canvas remains current when the section is opened.
+            if (
+                selected_workspace == str(self.expedition_workspace)
+                and self.expedition_map_view
+                and self.route_plotter
+                and self.route_plotter.current_section() == "Map & Intelligence"
+            ):
                 self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
-                if self.expedition_mission_view and self.route_plotter.current_section() == "Mission Control":
-                    self.expedition_mission_view.refresh()
+            elif (
+                selected_workspace == str(self.expedition_workspace)
+                and self.expedition_mission_view
+                and self.route_plotter
+                and self.route_plotter.current_section() == "Mission Control"
+            ):
+                self.expedition_mission_view.refresh()
         except Exception as exc:
             self._log_error(f"Exploration refresh failed: {exc}")
 
