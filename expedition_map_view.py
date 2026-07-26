@@ -97,10 +97,15 @@ def _star_colour(star_class):
 
 
 class ExpeditionMapView:
-    def __init__(self, parent, app, open_record_callback=None):
+    def __init__(
+        self, parent, app, open_record_callback=None,
+        popout_callback=None, detached=False,
+    ):
         self.parent = parent
         self.app = app
         self.open_record_callback = open_record_callback
+        self.popout_callback = popout_callback
+        self.detached = bool(detached)
         self._map_points = []
         self._system_rows = []
         self._value_rows = []
@@ -112,7 +117,7 @@ class ExpeditionMapView:
         self._zoom = 1.0
         self._pan = [0.0, 0.0]
         self._yaw = -0.55
-        self._pitch = 0.62
+        self._pitch = -0.62
         self._projection_context = None
         self._background_draw = None
         self._background_photo = None
@@ -137,9 +142,14 @@ class ExpeditionMapView:
             bg=THEME.panel, font=("Segoe UI", 9, "bold"),
         ).pack(side=tk.LEFT, padx=10, pady=8)
         tk.Label(
-            toolbar, text="drag rotate · right-drag pan · wheel zoom", fg=THEME.muted,
+            toolbar, text="LMB orbit · RMB move · wheel zoom · 2× reset", fg=THEME.muted,
             bg=THEME.panel, font=("Cascadia Mono", 7),
         ).pack(side=tk.LEFT)
+        if callable(self.popout_callback):
+            button(
+                toolbar, "DOCK" if self.detached else "POP OUT",
+                self._toggle_popout, accent=self.detached,
+            ).pack(side=tk.RIGHT, padx=(0, 8), pady=5)
         button(toolbar, "RESET", self._reset_view).pack(side=tk.RIGHT, padx=(0, 8), pady=5)
         button(toolbar, "CURRENT", self._focus_current).pack(side=tk.RIGHT, padx=(0, 6), pady=5)
         self.view_mode = tk.StringVar(value="Perspective")
@@ -182,10 +192,17 @@ class ExpeditionMapView:
         self.canvas.bind("<ButtonPress-1>", lambda event: self._begin_drag(event, "rotate"))
         self.canvas.bind("<B1-Motion>", self._drag)
         self.canvas.bind("<ButtonRelease-1>", self._end_drag)
+        self.canvas.bind("<Shift-ButtonPress-1>", lambda event: self._begin_drag(event, "pan"))
+        self.canvas.bind("<Shift-B1-Motion>", self._drag)
+        self.canvas.bind("<Shift-ButtonRelease-1>", self._end_drag)
+        self.canvas.bind("<ButtonPress-2>", lambda event: self._begin_drag(event, "pan"))
+        self.canvas.bind("<B2-Motion>", self._drag)
+        self.canvas.bind("<ButtonRelease-2>", self._end_drag)
         self.canvas.bind("<ButtonPress-3>", lambda event: self._begin_drag(event, "pan"))
         self.canvas.bind("<B3-Motion>", self._drag)
         self.canvas.bind("<ButtonRelease-3>", self._end_drag)
         self.canvas.bind("<MouseWheel>", self._wheel)
+        self.canvas.bind("<Double-Button-1>", self._canvas_reset)
         self.canvas.bind("<Motion>", self._motion)
         self.canvas.bind("<Leave>", self._leave)
         self.detail = tk.Label(
@@ -195,6 +212,49 @@ class ExpeditionMapView:
             anchor="w",
         )
         self.detail.pack(fill=tk.X, pady=(5, 0), ipady=5)
+
+    def _toggle_popout(self):
+        if callable(self.popout_callback):
+            self.popout_callback()
+
+    def view_state(self):
+        return {
+            "mode": self.view_mode.get(),
+            "camera_center": list(self._camera_center),
+            "fit_radius": float(self._fit_radius),
+            "zoom": float(self._zoom),
+            "pan": list(self._pan),
+            "yaw": float(self._yaw),
+            "pitch": float(self._pitch),
+            "layers": {name: bool(var.get()) for name, var in self.layer_vars.items()},
+        }
+
+    def apply_view_state(self, state):
+        if not isinstance(state, dict):
+            return
+        mode = str(state.get("mode") or "Perspective")
+        if mode in VIEW_PRESETS:
+            self.view_mode.set(mode)
+        centre = _position(state.get("camera_center"))
+        if centre is not None:
+            self._camera_center = list(centre)
+        try:
+            self._fit_radius = max(1.0, float(state.get("fit_radius", self._fit_radius)))
+            self._zoom = max(0.08, min(80.0, float(state.get("zoom", self._zoom))))
+            pan = state.get("pan") or self._pan
+            self._pan = [float(pan[0]), float(pan[1])]
+            self._yaw = float(state.get("yaw", self._yaw))
+            self._pitch = max(
+                -math.pi / 2.0,
+                min(math.pi / 2.0, float(state.get("pitch", self._pitch))),
+            )
+        except (IndexError, TypeError, ValueError):
+            pass
+        for name, enabled in (state.get("layers") or {}).items():
+            if name in self.layer_vars:
+                self.layer_vars[name].set(bool(enabled))
+        self._camera_ready = True
+        self._schedule_render()
 
     def refresh(self, system_rows=None, value_rows=None):
         if system_rows is not None:
@@ -254,13 +314,13 @@ class ExpeditionMapView:
             self._camera_center = list(GALACTIC_CENTRE)
             self._fit_radius = GALAXY_RADIUS_LY * 1.08
             self._yaw = 0.0
-            self._pitch = math.pi / 2.0
+            self._pitch = -math.pi / 2.0
             self._zoom = 0.92
         elif mode == "Top":
             self._camera_center = list(centre)
             self._fit_radius = radius
             self._yaw = 0.0
-            self._pitch = math.pi / 2.0
+            self._pitch = -math.pi / 2.0
         elif mode == "Side":
             self._camera_center = list(centre)
             self._fit_radius = radius
@@ -270,7 +330,7 @@ class ExpeditionMapView:
             self._camera_center = list(centre)
             self._fit_radius = radius
             self._yaw = -0.55 if mode == "Perspective" else -0.35
-            self._pitch = 0.62 if mode == "Perspective" else 0.72
+            self._pitch = -0.62 if mode == "Perspective" else -0.72
         if render:
             self._schedule_render()
 
@@ -288,8 +348,12 @@ class ExpeditionMapView:
         self._zoom = 1.15
         self._pan = [0.0, 0.0]
         self._yaw = -0.55
-        self._pitch = 0.62
+        self._pitch = -0.62
         self._schedule_render()
+
+    def _canvas_reset(self, _event=None):
+        self._reset_view()
+        return "break"
 
     def _schedule_render(self):
         if self._render_job is not None:
@@ -321,8 +385,10 @@ class ExpeditionMapView:
         self._drag_last = (event.x, event.y)
         self._drag_distance += abs(dx) + abs(dy)
         if self._drag_mode == "rotate":
-            self._yaw += dx * 0.008
-            self._pitch = max(-1.35, min(1.55, self._pitch + dy * 0.008))
+            # Orbit behaves like grabbing the galaxy: its visible motion follows
+            # the mouse instead of moving opposite to the drag.
+            self._yaw -= dx * 0.005
+            self._pitch = max(-1.50, min(1.35, self._pitch + dy * 0.005))
             if self.view_mode.get() in {"Top", "Side", "Galaxy Overview"}:
                 self.view_mode.set("Perspective")
         else:
@@ -344,10 +410,23 @@ class ExpeditionMapView:
             self._schedule_render()
 
     def _wheel(self, event):
-        steps = event.delta / 120.0 if event.delta else 0.0
+        steps = max(-4.0, min(4.0, event.delta / 120.0)) if event.delta else 0.0
         if not steps:
             return
-        self._zoom = max(0.08, min(80.0, self._zoom * (1.16 ** steps)))
+        old_zoom = self._zoom
+        new_zoom = max(0.08, min(80.0, old_zoom * (1.12 ** steps)))
+        if abs(new_zoom - old_zoom) < 0.0001:
+            return
+        ratio = new_zoom / old_zoom
+        width = max(240, self.canvas.winfo_width())
+        height = max(180, self.canvas.winfo_height())
+        old_cx = width / 2.0 + self._pan[0]
+        old_cy = height / 2.0 + self._pan[1]
+        new_cx = event.x - (event.x - old_cx) * ratio
+        new_cy = event.y - (event.y - old_cy) * ratio
+        self._pan[0] = new_cx - width / 2.0
+        self._pan[1] = new_cy - height / 2.0
+        self._zoom = new_zoom
         self._schedule_render()
 
     def _motion(self, event):
@@ -946,6 +1025,7 @@ class ExpeditionMapView:
         ):
             self._background_line((x, y, x + sx * length, y), colour)
             self._background_line((x, y, x, y + sy * length), colour)
+        self._draw_axis_gizmo(width - 55, 47)
         self._background_text(
             16, height - 16,
             f"{self.view_mode.get().upper()}  ·  ZOOM {self._zoom:05.2f}x",
@@ -958,6 +1038,42 @@ class ExpeditionMapView:
                 width - 16, height - 16,
                 f"REGION {region[0]:02d} // {region[1].upper()}",
                 THEME.orange, size=7, bold=True, anchor="se",
+            )
+
+    def _draw_axis_gizmo(self, centre_x, centre_y):
+        context = self._projection_context
+        axes = (
+            ("+X", (1.0, 0.0, 0.0), THEME.red),
+            ("+Y", (0.0, 1.0, 0.0), THEME.green),
+            ("+Z", (0.0, 0.0, 1.0), THEME.accent),
+        )
+        self._background_draw.ellipse(
+            (centre_x - 2, centre_y - 2, centre_x + 2, centre_y + 2),
+            fill=THEME.text,
+        )
+        for label, (dx, dy, dz), colour in axes:
+            rotated_x = dx * context["cos_yaw"] - dz * context["sin_yaw"]
+            rotated_z = dx * context["sin_yaw"] + dz * context["cos_yaw"]
+            screen_y_world = dy * context["cos_pitch"] - rotated_z * context["sin_pitch"]
+            screen_dx = rotated_x
+            screen_dy = -screen_y_world
+            length = math.hypot(screen_dx, screen_dy)
+            if length < 0.05:
+                self._background_draw.ellipse(
+                    (centre_x - 5, centre_y - 5, centre_x + 5, centre_y + 5),
+                    outline=colour, width=2,
+                )
+                self._background_text(
+                    centre_x, centre_y + 13, label, colour, size=6, bold=True,
+                )
+                continue
+            end_x = centre_x + screen_dx / length * 18.0
+            end_y = centre_y + screen_dy / length * 18.0
+            self._background_line((centre_x, centre_y, end_x, end_y), colour, width=2)
+            self._background_text(
+                end_x + screen_dx / length * 7.0,
+                end_y + screen_dy / length * 7.0,
+                label, colour, size=6, bold=True,
             )
 
     def _update_summary(self, all_rows):
