@@ -104,6 +104,12 @@ VSVersionInfo(
     if os.path.exists('mini-readme.md'):
         shutil.copy('mini-readme.md', os.path.join(dist_dir, 'UPDATE_LOG.md'))
         print("Copied mini-readme.md to dist/UPDATE_LOG.md")
+    if os.path.exists('THIRD_PARTY_NOTICES.md'):
+        shutil.copy(
+            'THIRD_PARTY_NOTICES.md',
+            os.path.join(dist_dir, 'THIRD_PARTY_NOTICES.md'),
+        )
+        print("Copied THIRD_PARTY_NOTICES.md to dist/")
     if os.path.exists(mining_db_path):
         shutil.copy(mining_db_path, os.path.join(dist_dir, 'mining_data.db'))
         print("Copied mining_data.db to dist/mining_data.db")

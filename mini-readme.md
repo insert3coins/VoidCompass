@@ -1,5 +1,21 @@
 # VoidCompass // UPDATE LOG
 
+## v5.2.2 // Expedition Mission Control
+**Release Date:** 2026-Jul-26
+
+*   Added profile-local **named expeditions** inside Explore's existing Expedition page, with create, activate, pause, resume, complete and delete controls plus durable progress across game and app sessions.
+*   Added journal-verified objectives for destinations, complete FSS surveys, individual or counted DSS mappings, biological species or analysis counts, Codex categories or counts, screenshots, galactic regions, valuable worlds, first discoveries and saved Colonisation Recon; manual objectives remain available for facts Elite does not journal.
+*   Audited the automation against Frontier's journal specification: a honk records the reported body count, while only `FSSAllBodiesFound` completes an FSS objective. Semantic fact deduplication also prevents repeat scans of one body, species, Codex entry or screenshot from inflating goals and statistics.
+*   Added tagged, prioritised **bookmarks and revisit targets** from Mission Control, System Survey and Discoveries, including optional body context, notes, recorded `StarPos`, automatic visited state on a matching arrival or body record and bounded per-commander storage.
+*   Rebuilt the expedition map as an interactive Elite-style 3D galaxy view with rotate, pan, zoom, current-system focus, adaptive region labels and Perspective, Galaxy Overview, Top, Side and Route Focus cameras.
+*   Added the complete 42-region Universal Cartographics layout for exact offline `StarPos` lookup and bounded map contours, with the pinned MIT data source documented and packaged alongside the application.
+*   Retained Valuable, Biology, Codex, Photo, Recon and Bookmark layers. Layer controls follow the active theme, explicit bookmark coordinates can be plotted without route history, and a clicked marker opens its Discoveries or Mission Control record.
+*   Added a persistent active-expedition strip across all four Explore pages, showing objective progress, systems, distance and the next goal without adding another top-level workspace or nested notebook.
+*   Connected named expeditions to Compass and the Live Feed with a low-noise resume briefing, completed-objective callouts, coloured expedition events and a verified working-brain snapshot containing route, progress and next-action facts.
+*   Extended Expedition Reports across the named expedition's full timestamp and system scope, including multi-session route/survey statistics, objective evidence, bookmarks and highlights; reports remain locally copyable or saveable as Markdown.
+*   Added portable VoidCompass JSON plan import/export and one-click newline waypoint sharing, with imported expeditions safely paused and assigned fresh local identifiers.
+*   Kept Mission Control lightweight through bounded histories, coalesced background persistence, replay-safe journal identities, graceful shutdown flushing and hard profile isolation.
+
 ## v5.2.1 // Deep Survey Intelligence
 **Release Date:** 2026-Jul-26
 

@@ -79,6 +79,7 @@ from specialists_window import SpecialistsWindow
 import compass_personas
 from captains_log import CaptainsLog
 from deep_survey import DeepSurveyTracker
+from expedition_manager import ExpeditionManager
 from diagnostic_logs import application_base_dir, resolve_log_path
 from adaptive_command import AdaptiveCommandDeck, AUTOMATIC_MODE_IDLE_S, MODE_LABELS
 from diagnostic_bundle import create_support_bundle
@@ -385,6 +386,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.config["specialists_file"] = self._profile_path("specialists.json")
         self.config["adaptive_command_file"] = self._profile_path("adaptive_command.json")
         self.config["deep_survey_file"] = self._profile_path("deep_survey.json")
+        self.config["expeditions_file"] = self._profile_path("expeditions.json")
 
     def _prepare_commander_profile_from_journal(self):
         detected = JournalWatcher.detect_latest_commander(self.config.get("journal_path"))
@@ -654,6 +656,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.session_jump_count = 0
         self.session_ly = 0.0
         self.session_systems = set()
+        self._expedition_resume_brief_key = None
 
         self.target_lat = self._to_float(self.config.get("ground_target_lat"), 0.0)
         self.target_lon = self._to_float(self.config.get("ground_target_lon"), 0.0)
@@ -1014,6 +1017,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "specialists.json",
                 "adaptive_command.json",
                 "deep_survey.json",
+                "expeditions.json",
                 "waypoints.json",
             ):
                 src = get_profile_file(old_key, filename)
@@ -1054,6 +1058,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         # its background history index, and must never write into the new one.
         self.deep_survey = DeepSurveyTracker(
             get_profile_file(new_key, "deep_survey.json")
+        )
+        if getattr(self, "expedition_manager", None):
+            self.expedition_manager.flush(wait=False)
+        self.expedition_manager = ExpeditionManager(
+            get_profile_file(new_key, "expeditions.json")
         )
         if getattr(self, "specialist_engine", None):
             self.specialist_engine.switch(self.config.get("specialists_file"))
@@ -1149,6 +1158,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         self.deep_survey = DeepSurveyTracker(
             get_profile_file(get_active_profile(self.config), "deep_survey.json")
+        )
+        self.expedition_manager = ExpeditionManager(
+            get_profile_file(get_active_profile(self.config), "expeditions.json")
         )
         self.specialist_engine = SpecialistEngine(self.config.get("specialists_file"))
         self.adaptive_command = AdaptiveCommandDeck(
@@ -1305,6 +1317,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.session_jump_count = 0
         self.session_ly = 0.0
         self.session_systems = set()
+        self._expedition_resume_brief_key = None
         self.target_lat = self._to_float(self.config.get("ground_target_lat"), 0.0)
         self.target_lon = self._to_float(self.config.get("ground_target_lon"), 0.0)
         self.target_latlon_active = bool(self.config.get("ground_target_active", False))
@@ -1923,6 +1936,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if getattr(self, "deep_survey", None):
             try:
                 self.deep_survey.flush(wait=False)
+            except Exception:
+                pass
+        if getattr(self, "expedition_manager", None):
+            try:
+                self.expedition_manager.flush(wait=False)
             except Exception:
                 pass
             
@@ -3573,6 +3591,24 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     "system": system, "station": mission.get("station"),
                 })
         snapshot["objectives"]["mission_destinations"] = active_destinations[:6]
+        expedition_manager = getattr(self, "expedition_manager", None)
+        if expedition_manager:
+            next_waypoint = None
+            try:
+                next_waypoint = self.waypoint_manager.get_next_waypoint(current_system)
+            except Exception:
+                pass
+            snapshot["expedition"] = expedition_manager.compass_snapshot(
+                next_waypoint=next_waypoint,
+            )
+            if snapshot["expedition"].get("active"):
+                snapshot["objectives"]["expedition"] = {
+                    "name": snapshot["expedition"].get("name"),
+                    "complete": snapshot["expedition"].get("objectives_complete"),
+                    "total": snapshot["expedition"].get("objectives_total"),
+                    "next": snapshot["expedition"].get("next_objective")
+                            or snapshot["expedition"].get("next_waypoint"),
+                }
         snapshot["fact_quality"] = self._compass_fact_quality(snapshot)
         return snapshot
 
@@ -4489,6 +4525,33 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         for message in self._cockpit_ai_state_events(before, after):
             self.add_event_feed_entry("AI", message, severity="INFO")
 
+    def _publish_expedition_resume_briefing(self):
+        manager = getattr(self, "expedition_manager", None)
+        if not manager:
+            return False
+        next_waypoint = None
+        try:
+            next_waypoint = self.waypoint_manager.get_next_waypoint(getattr(self, "current_sys", None))
+        except Exception:
+            pass
+        snapshot = manager.compass_snapshot(next_waypoint=next_waypoint)
+        if not snapshot.get("active"):
+            return False
+        brief_key = f"{snapshot.get('id')}:{snapshot.get('sessions')}"
+        if getattr(self, "_expedition_resume_brief_key", None) == brief_key:
+            return False
+        self._expedition_resume_brief_key = brief_key
+        line = manager.resume_briefing(next_waypoint=next_waypoint)
+        if not line:
+            return False
+        self.add_event_feed_entry("EXPEDITION", line, severity="INFO")
+        self._speak(
+            line,
+            category="exploration", cooldown_s=0,
+            key=f"expedition-resume:{snapshot.get('id')}:{snapshot.get('jumps')}",
+        )
+        return True
+
     def _handle_cockpit_load_game(self, raw, data, startup_replay=False):
         """Use LoadGame as the preferred session start, retaining automatic fallback."""
         memory = getattr(self, "cockpit_memory", None)
@@ -4945,6 +5008,40 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self._refresh_exploration_window()
             except Exception as exc:
                 logging.debug("Deep Survey event skipped [%s]: %s", ev, exc)
+        expedition_result = None
+        if getattr(self, "expedition_manager", None):
+            try:
+                expedition_raw = raw if isinstance(raw, dict) else d
+                if isinstance(expedition_raw, dict) and not expedition_raw.get("event"):
+                    expedition_raw = dict(expedition_raw, event=ev)
+                expedition_result = self.expedition_manager.observe_event(
+                    expedition_raw,
+                    context={
+                        "system": getattr(self, "current_sys", None),
+                        "body": d.get("body_name") if isinstance(d, dict) else getattr(self, "current_body_name", None),
+                    },
+                    event_uid=data.get("_journal_uid"),
+                    historical=startup_replay,
+                )
+                if expedition_result:
+                    self._refresh_exploration_window()
+            except Exception as exc:
+                logging.debug("Expedition objective event skipped [%s]: %s", ev, exc)
+        if expedition_result and expedition_result.get("completed") and not startup_replay:
+            completed_titles = list(expedition_result.get("completed") or [])
+            summary = completed_titles[0] if len(completed_titles) == 1 else f"{len(completed_titles)} objectives"
+            self.add_event_feed_entry(
+                "EXPEDITION", f"Objective complete: {summary}", severity="INFO",
+            )
+            self._speak(
+                (
+                    f"Expedition objective complete. {summary}.",
+                    f"Mission Control confirms completion of {summary}.",
+                    f"Objective log updated. {summary} is complete.",
+                ),
+                category="objectives", cooldown_s=2,
+                key=f"expedition-objective:{'|'.join(completed_titles)}",
+            )
         self._handle_live_journal_toast(ev, raw, d, startup_replay=startup_replay)
         self._observe_ai_economy_event(
             ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay,
@@ -4972,6 +5069,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             )
         if ev == "LoadGame":
             self._handle_cockpit_load_game(raw, d, startup_replay=startup_replay)
+            if not startup_replay:
+                self._publish_expedition_resume_briefing()
         if (self.config.get("cockpit_memory_enabled", True)
                 and getattr(self, "cockpit_memory", None)):
             try:
@@ -6857,6 +6956,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._startup_recovery_mode = False
             self._apply_adaptive_overlay_scene()
             self._adaptive_startup_briefing()
+            self._publish_expedition_resume_briefing()
             try:
                 self.root.title(f"VOID COMPASS // v{APP_VERSION}")
             except Exception:

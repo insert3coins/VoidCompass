@@ -28,6 +28,7 @@ PUBLIC_FILENAMES = {
     "README.md",
     "UPDATE_LOG.md",
     "START_HERE.txt",
+    "THIRD_PARTY_NOTICES.md",
     "RELEASE_MANIFEST.json",
     "mining_data.db",
     "codexRef.json",
@@ -155,6 +156,10 @@ def create_release(project_dir: str | Path = ".", version: str = APP_VERSION) ->
     _copy_required(dist_dir / "VoidCompass.exe", package_dir / "VoidCompass.exe")
     _copy_required(project / "README.md", package_dir / "README.md")
     _copy_required(project / "mini-readme.md", package_dir / "UPDATE_LOG.md")
+    _copy_required(
+        project / "THIRD_PARTY_NOTICES.md",
+        package_dir / "THIRD_PARTY_NOTICES.md",
+    )
     _copy_required(project / "codexRef.json", package_dir / "codexRef.json")
     _sanitize_mining_database(
         project / "mining_data.db", package_dir / "mining_data.db"
