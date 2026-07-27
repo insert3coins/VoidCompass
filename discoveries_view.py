@@ -10,6 +10,7 @@ from tkinter import ttk
 from urllib.parse import quote_plus
 import webbrowser
 
+from galactic_regions import region_names
 from ui_theme import THEME, button, configure_ttk, scrollbar
 
 try:
@@ -19,7 +20,7 @@ except ImportError:
     ImageTk = None
 
 
-FILTERS = ("All", "Systems", "Valuable", "Codex", "Signals", "DSS", "Photos")
+FILTERS = ("All", "Systems", "Valuable", "Regions", "Codex", "Signals", "DSS", "Photos")
 
 
 class DiscoveriesView:
@@ -97,6 +98,7 @@ class DiscoveriesView:
         self.tree.tag_configure("Codex", foreground=THEME.green)
         self.tree.tag_configure("Photo", foreground=THEME.accent)
         self.tree.tag_configure("Valuable", foreground=THEME.orange)
+        self.tree.tag_configure("Region", foreground=THEME.yellow)
         self.tree.bind("<<TreeviewSelect>>", self._selected)
 
         self.preview = tk.Label(
@@ -192,6 +194,22 @@ class DiscoveriesView:
                 coords = f"{float(row['latitude']):.4f}, {float(row['longitude']):.4f}"
             rows.append(self._row("Photo", row.get("timestamp"), row.get("system"),
                                   body, coords or "Orbital / coordinates unavailable", 0, row))
+        region_stats = snapshot.get("region_stats") or {}
+        for region_id, name in enumerate(region_names(), start=1):
+            row = dict(region_stats.get(str(region_id)) or region_stats.get(region_id) or {})
+            systems = list(row.get("systems") or [])
+            visited = bool(int(row.get("visits") or 0))
+            detail = (
+                f"{'VISITED' if visited else 'UNVISITED'} · {len(systems):,} systems · "
+                f"{float(row.get('distance_ly') or 0):,.1f} ly · "
+                f"FSS {int(row.get('fss') or 0)} / DSS {int(row.get('dss') or 0)} / "
+                f"BIO {int(row.get('biology') or 0)} / CODEX {int(row.get('codex') or 0)}"
+            )
+            row.update({"id": region_id, "name": name, "visited": visited})
+            rows.append(self._row(
+                "Region", row.get("last_visit") or 0, row.get("last_system") or "-",
+                name, detail, 0, row,
+            ))
         for row in system_rows or []:
             detail = (
                 f"{int(row.get('scanned_bodies') or 0)}/{int(row.get('total_bodies') or 0)} bodies · "
@@ -227,7 +245,7 @@ class DiscoveriesView:
         selected_filter = self.filter_var.get()
         filter_kind = {
             "Systems": "System", "Valuable": "Valuable", "Codex": "Codex",
-            "Signals": "Signal", "DSS": "DSS", "Photos": "Photo",
+            "Regions": "Region", "Signals": "Signal", "DSS": "DSS", "Photos": "Photo",
         }.get(selected_filter)
         query = self.search_var.get().strip().casefold()
         shown = []
@@ -249,7 +267,12 @@ class DiscoveriesView:
             if selected_key == key:
                 chosen = iid
         total_value = sum(row["value"] for row in shown)
-        self.summary.config(text=f"{len(shown):,} records · {total_value:,} cr represented · {selected_filter}")
+        if selected_filter == "Regions":
+            visited = sum(1 for row in shown if (row.get("raw") or {}).get("visited"))
+            summary = f"{visited}/{len(region_names())} Universal Cartographics regions visited"
+        else:
+            summary = f"{len(shown):,} records · {total_value:,} cr represented · {selected_filter}"
+        self.summary.config(text=summary)
         children = self.tree.get_children()
         if chosen or children:
             iid = chosen or children[0]
@@ -291,6 +314,15 @@ class DiscoveriesView:
                            ("Altitude", "altitude"), ("Heading", "heading")):
             if raw.get(key) not in (None, ""):
                 lines.append(f"{label}: {raw[key]}")
+        if row["kind"] == "Region":
+            lines.extend([
+                f"Passport: {'Visited' if raw.get('visited') else 'Not yet visited'}",
+                f"Region number: {raw.get('id')} of {len(region_names())}",
+                f"Systems recorded: {len(raw.get('systems') or []):,}",
+                f"Distance journalled: {float(raw.get('distance_ly') or 0):,.1f} ly",
+                f"Survey work: FSS {int(raw.get('fss') or 0)}, DSS {int(raw.get('dss') or 0)}, biology {int(raw.get('biology') or 0)}",
+                f"Field notes: Codex {int(raw.get('codex') or 0)}, photos {int(raw.get('screenshots') or 0)}, notable worlds {int(raw.get('notable') or 0)}",
+            ])
         self._set_detail("\n".join(lines))
         has_system = bool(row.get("system") and row.get("system") != "-")
         self.copy_system_btn.config(state=tk.NORMAL if has_system else tk.DISABLED)
@@ -393,6 +425,7 @@ class DiscoveriesView:
         filter_name = {
             "Codex": "Codex", "Photo": "Photos", "Valuable": "Valuable",
             "Signal": "Signals", "DSS": "DSS", "System": "Systems",
+            "Region": "Regions",
         }.get(str(kind or "").title(), "All")
         self.set_filter(filter_name)
         self.search_var.set(str(system or subject or ""))

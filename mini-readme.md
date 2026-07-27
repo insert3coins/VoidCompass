@@ -1,5 +1,19 @@
 # VoidCompass // UPDATE LOG
 
+## v5.2.5 // Exploration Continuity
+**Release Date:** 2026-Jul-27
+
+*   Added a journal-grounded **System Completion Matrix** for FSS, recommended DSS, biological analyses, detected geology, Codex records and first-discovery opportunities, including a clear explanation whenever a survey is not complete. Geological sites remain labelled as detected because Elite does not journal physical site inspection completion.
+*   Added a ranked **Exploration Action Queue** to System Survey with one-click body focus, route copying, expedition handoff and an Incomplete filter. Dashboard priorities and Compass goals now consume the same factual queue instead of maintaining competing recommendations.
+*   Upgraded Galaxy Map breadcrumbs with All History, Current Session and Active Expedition scopes; brighter recent travel, direction arrows, a dashed planned route, optional reverse return trail and live off-route distance to the nearest plotted point. Drawing remains sampled and reduced while moving to protect UI responsiveness.
+*   Added a 42-region **Universal Cartographics Passport** to Discoveries with per-region systems, distance, FSS, DSS, biology, Codex, photographs and notable-world field notes, plus profile-local achievements for 1, 5, 21 and all 42 regions.
+*   Added profile-local **reliable resume checkpoints** at departure, docking, game shutdown, profile changes, expedition changes and clean app close, preserving location, survey completion, active biology, unsold data, expedition objective, route and next waypoint without continuously rewriting state.
+*   Reworked the Dashboard's current-system hero into an **Arrival Intelligence** card with star, region, truthful completion state, remaining work, notables and traffic context while retaining the existing exploration-first adaptive layout.
+*   Added bounded automatic expedition milestones for systems, distance, regions, complete surveys, maps, biology, Codex, photography, distance from Sol and exceptional discoveries. Milestones appear in the coloured Live Feed and Captain's Log without routine-event spam.
+*   Expanded the Captain's Log into a **Session Debrief** with FSS, DSS, notable-world and first-discovery totals, durable shutdown summaries, recent milestones and the latest resume checkpoint.
+*   Deepened local Compass exploration awareness with the shared completion, action, arrival, route, region and checkpoint model; it can identify the next verified survey action, retain unfinished departure work and report a genuine plotted-route deviation without an LLM.
+*   Added profile-aware Windows global hotkeys in Settings for temporarily showing or hiding every overlay together or the Navigation, Survey, System, Station, Cargo, Carrier, Prospector and Colony overlays individually. Hotkeys work while Elite has focus, restore contextual visibility without changing enabled modules and report shortcut conflicts without crashing.
+
 ## v5.2.4 // Stellar Cartography
 **Release Date:** 2026-Jul-26
 

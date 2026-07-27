@@ -14166,5 +14166,65 @@
       ],
       "target": 10000000000
     }
+  },
+  {
+    "id": "region_passport_1",
+    "title": "Region Walker",
+    "desc": "Journal an arrival in a Universal Cartographics galactic region",
+    "icon": "🧭",
+    "category": "Exploration",
+    "points": 75,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassRegionPassport",
+      "field": "VisitedRegions",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "region_passport_5",
+    "title": "Regional Surveyor",
+    "desc": "Visit five Universal Cartographics galactic regions",
+    "icon": "🗺️",
+    "category": "Exploration",
+    "points": 200,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassRegionPassport",
+      "field": "VisitedRegions",
+      "value": 5,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "region_passport_21",
+    "title": "Half the Galaxy",
+    "desc": "Visit 21 Universal Cartographics galactic regions",
+    "icon": "🌌",
+    "category": "Exploration",
+    "points": 750,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassRegionPassport",
+      "field": "VisitedRegions",
+      "value": 21,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "region_passport_42",
+    "title": "Galactic Cartographer",
+    "desc": "Visit all 42 Universal Cartographics galactic regions",
+    "icon": "🏆",
+    "category": "Exploration",
+    "points": 2000,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassRegionPassport",
+      "field": "VisitedRegions",
+      "value": 42,
+      "compare": "gte"
+    }
   }
 ]
