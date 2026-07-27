@@ -70,6 +70,20 @@ class ExplorationWindow(ThemedWindowMixin):
         self.win.minsize(860, 520)
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
         self._build()
+        # The first refresh fills every table in the workspace. Running it here
+        # made opening a page wait for all of it, so the window is handed back
+        # immediately and populated on the next idle turn.
+        self._schedule_first_refresh()
+
+    def _schedule_first_refresh(self):
+        try:
+            self.win.after_idle(self._run_first_refresh)
+        except tk.TclError:
+            self.refresh()
+
+    def _run_first_refresh(self):
+        if self._closing:
+            return
         self.refresh()
 
     def is_open(self):
@@ -406,7 +420,9 @@ class ExplorationWindow(ThemedWindowMixin):
     def on_shown(self, section=None):
         if section:
             self.show_section(section)
-        self.refresh()
+        # Explore is on screen now, so its tables are painted whatever the
+        # rail last recorded as the active page.
+        self.refresh(force=True)
         if self.is_route_active() and self.route_plotter:
             self.route_plotter.on_shown()
 
@@ -918,7 +934,11 @@ class ExplorationWindow(ThemedWindowMixin):
     def _button(self, parent, text, cmd, accent=False):
         return button(parent, text, cmd, accent=accent)
 
-    def refresh(self):
+    def _explore_page_is_visible(self):
+        """Whether the rail is showing Explore rather than another workspace."""
+        return str(getattr(self.app, "_active_page", "") or "") == "EXPLORE"
+
+    def refresh(self, force=False):
         if not self.is_open() or not self._widget_alive(getattr(self, "header_summary", None)):
             return
         try:
@@ -930,36 +950,44 @@ class ExplorationWindow(ThemedWindowMixin):
             current_value = sum(self._item_value(item) for item in bodies)
             valuable_count = sum(1 for item in bodies if self._is_valuable(item))
             complete = f"{scanned}/{total}" if total else f"{scanned}/0"
-
-            star = star_type_label(getattr(self.app, "star_class", ""), "-")
-            traffic = getattr(self.app, "system_traffic", {}) or {}
-            self.header_summary.config(text=current)
-            self.system_card.config(text=f"{current}\nStar {star} | Traffic {traffic.get('day', 0)}/{traffic.get('week', 0)}/{traffic.get('total', 0)}")
-            self.scan_card.config(text=f"{complete} bodies | {current_value:,} cr\n{valuable_count} valuable bodies")
-            self.route_card.config(text=self._route_card_text())
             session_stats = self._session_stats()
-            self.trip_card.config(text=self._trip_card_text(session_stats))
-            self._refresh_expedition_strip()
             bio_summary = self._bio_summary(bodies)
-            self.bio_card.config(text=f"{bio_summary['bio_bodies']} bodies | {bio_summary['bio_signals']} signals\n{bio_summary['complete']} complete")
-            self._render_body_metrics(current, bodies, scanned, total, current_value)
-            self._render_exploration_intelligence()
-            self._render_bodies(bodies)
-            self._render_bio(bodies, bio_summary)
-            self._render_sampling()
+
+            # Rows other workspaces read stay current whichever page is shown.
             self._refresh_system_history_rows(current, bodies, current_value, valuable_count, bio_summary, scanned, total)
-            self._render_system_history()
             self._request_route_enrichment()
-            self._render_route()
-            self._render_history(current_value, valuable_count, session_stats)
-            self._render_captains_log()
-            self._refresh_ledger()
+
+            # Repainting Explore's tables while the rail is showing another
+            # workspace costs a great deal and changes nothing on screen. The
+            # ledger query still runs; only its table is left alone.
+            visible = force or self._explore_page_is_visible()
+            self._refresh_ledger(render=visible)
+            if visible:
+                star = star_type_label(getattr(self.app, "star_class", ""), "-")
+                traffic = getattr(self.app, "system_traffic", {}) or {}
+                self.header_summary.config(text=current)
+                self.system_card.config(text=f"{current}\nStar {star} | Traffic {traffic.get('day', 0)}/{traffic.get('week', 0)}/{traffic.get('total', 0)}")
+                self.scan_card.config(text=f"{complete} bodies | {current_value:,} cr\n{valuable_count} valuable bodies")
+                self.route_card.config(text=self._route_card_text())
+                self.trip_card.config(text=self._trip_card_text(session_stats))
+                self._refresh_expedition_strip()
+                self.bio_card.config(text=f"{bio_summary['bio_bodies']} bodies | {bio_summary['bio_signals']} signals\n{bio_summary['complete']} complete")
+                self._render_body_metrics(current, bodies, scanned, total, current_value)
+                self._render_exploration_intelligence()
+                self._render_bodies(bodies)
+                self._render_bio(bodies, bio_summary)
+                self._render_sampling()
+                self._render_system_history()
+                self._render_route()
+                self._render_history(current_value, valuable_count, session_stats)
+                self._render_captains_log()
             selected_workspace = self.tabs.select()
-            if selected_workspace == str(self.discoveries_workspace) and self.discoveries_view:
+            if visible and selected_workspace == str(self.discoveries_workspace) and self.discoveries_view:
                 self.discoveries_view.refresh(self.system_history_rows, self.ledger_rows)
             self._refresh_visible_map()
             if (
-                selected_workspace == str(self.expedition_workspace)
+                visible
+                and selected_workspace == str(self.expedition_workspace)
                 and self.expedition_mission_view
                 and self.route_plotter
                 and self.route_plotter.current_section() == "Mission Control"
@@ -2166,7 +2194,7 @@ class ExplorationWindow(ThemedWindowMixin):
                     pass
         return stats
 
-    def _refresh_ledger(self):
+    def _refresh_ledger(self, render=True):
         now = time.time()
         if now - getattr(self, "_last_ledger_refresh_ts", 0.0) < 1.5:
             self._render_ledger()
@@ -2206,7 +2234,8 @@ class ExplorationWindow(ThemedWindowMixin):
                 except Exception:
                     pass
         self.ledger_rows = sorted(rows, key=lambda row: row["value"], reverse=True)
-        self._render_ledger()
+        if render:
+            self._render_ledger()
 
     def _render_ledger(self):
         if not hasattr(self, "ledger_tree"):

@@ -12,6 +12,8 @@
 *   Added a **UI stall sampler** that records what the interface was actually doing while it was stalled. The existing watchdog could only report a stall's size after the fact; diagnostic traces showed more than nine tenths of stalled time was unaccounted for by any measured operation. The sampler captures the blocked call stack from outside the interface loop, once per stall, and writes it to the runtime trace.
 *   Excluded the loaded Codex, engineering, region and biology reference tables from later garbage collection once journal catch-up finishes, since they are large, permanent and never become garbage. A full collection pass measured about 11 ms before and effectively nothing after.
 *   Made opening the Map workspace draw its first frame on the lightweight path before settling to full detail, so arriving at the map no longer blocks the interface for a noticeable moment on a long journal history.
+*   Stopped Explore repainting its body, biology, route, history, log and ledger tables while the rail is showing a different workspace. Those tables were being rebuilt on every refresh regardless of whether anyone could see them; the underlying rows other workspaces read are still kept current, and the tables repaint the moment Explore is opened.
+*   Stopped the first Explore refresh blocking whichever page opened it. Building the workspace filled every table before returning, so opening Map or Explore waited for all of it; the window now appears immediately and populates on the next idle turn.
 
 ## v5.2.6 // Cartographic Regions
 **Release Date:** 2026-Jul-27
