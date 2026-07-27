@@ -55,8 +55,13 @@ def show_first_run(root, config, on_complete, *, standalone=False):
     for text, variable in (
         ("Adaptive Command Deck and activity modes", adaptive_var),
         ("Native navigation and safety overlays", overlays_var),
-        ("Mouse passthrough while playing", passthrough_var),
-        ("Voice callouts (uses the configured Windows/Piper voice)", voice_var),
+        (
+            "Mouse passthrough while playing"
+            if os.name == "nt" else
+            "Mouse passthrough (Windows only; Linux overlays remain interactive)",
+            passthrough_var,
+        ),
+        ("Voice callouts (uses the configured local Piper voice)", voice_var),
     ):
         tk.Checkbutton(panel, text=text, variable=variable, bg=THEME.panel, fg=THEME.text,
                        selectcolor=THEME.input, activebackground=THEME.panel,

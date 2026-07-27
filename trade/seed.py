@@ -151,9 +151,9 @@ class Seeder:
         if getattr(sys, "frozen", False):
             configured = os.environ.get("VC_TRADE_SEED_WORKER_EXE")
             worker = Path(configured) if configured else Path(sys.executable)
-            # VoidCompass.exe contains the headless worker entry point, so the
-            # packaged app can isolate a heavy rebuild without shipping a
-            # second executable.
+            # The frozen VoidCompass executable contains the headless worker
+            # entry point, so either platform can isolate a heavy rebuild
+            # without shipping a second executable.
             cmd = [str(worker), "--trade-seed-worker"]
         else:
             cmd = [sys.executable, script, "--trade-seed-worker"]
@@ -246,9 +246,18 @@ class Seeder:
                 fh.flush()
                 self._lock_handle = fh
                 return True
-            fd = os.open(LOCK_PATH, os.O_CREAT | os.O_EXCL | os.O_RDWR)
-            os.write(fd, str(os.getpid()).encode("ascii", errors="ignore"))
-            self._lock_handle = fd
+            import fcntl
+            fh = open(LOCK_PATH, "a+b")
+            try:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                fh.close()
+                return False
+            fh.seek(0)
+            fh.truncate()
+            fh.write(str(os.getpid()).encode("ascii", errors="ignore"))
+            fh.flush()
+            self._lock_handle = fh
             return True
         except Exception:
             return False
@@ -262,7 +271,9 @@ class Seeder:
                     msvcrt.locking(self._lock_handle.fileno(), msvcrt.LK_UNLCK, 1)
                     self._lock_handle.close()
             elif self._lock_handle is not None:
-                os.close(self._lock_handle)
+                import fcntl
+                fcntl.flock(self._lock_handle.fileno(), fcntl.LOCK_UN)
+                self._lock_handle.close()
             self._lock_handle = None
             LOCK_PATH.unlink(missing_ok=True)
         except Exception:

@@ -7,10 +7,42 @@ draw_chrome(canvas, width, height) as its first drawing call to pick up
 the same visual language.
 """
 
+import os
+
 from config import COLOR_ACCENT
 
 _BG = "#010101"
 _SCANLINE = "#0a0f14"
+
+
+def configure_overlay_window(window, chroma="#ff00ff"):
+    """Apply the strongest portable borderless/topmost overlay treatment.
+
+    Windows supports Tk's chroma-key and tool-window flags. Tk on Linux does
+    not, so X11/XWayland receives an opaque near-black background rather than
+    failing construction or displaying a magenta rectangle.
+    """
+    background = chroma if os.name == "nt" else _BG
+    try:
+        if os.name == "nt":
+            window.attributes(
+                "-topmost", True,
+                "-transparentcolor", chroma,
+                "-toolwindow", True,
+            )
+        else:
+            window.attributes("-topmost", True)
+    except Exception:
+        try:
+            window.attributes("-topmost", True)
+        except Exception:
+            pass
+    try:
+        window.overrideredirect(True)
+    except Exception:
+        pass
+    window.config(bg=background)
+    return background
 
 
 def dim_color(hexcolor, factor=0.35):

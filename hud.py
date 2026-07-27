@@ -11,16 +11,14 @@ class TacticalHUD:
         self.config = config
         self.on_widget_click = on_widget_click
 
-        self.win.attributes("-topmost", True, "-transparentcolor", "#ff00ff", "-toolwindow", True)
-        self.win.overrideredirect(True)
-        self.win.config(bg="#ff00ff")
+        overlay_bg = overlay_chrome.configure_overlay_window(self.win, "#ff00ff")
 
         self.full_width = 560
         self.full_height = 246
         self.compact_width = 450
         self.compact_height = 180
         self.width, self.base_height = self._target_dimensions()
-        self.canvas = tk.Canvas(self.win, width=self.width, height=self.base_height, bg="#ff00ff", highlightthickness=0)
+        self.canvas = tk.Canvas(self.win, width=self.width, height=self.base_height, bg=overlay_bg, highlightthickness=0)
         self.canvas.pack()
 
         self.canvas.bind("<Button-1>", self._on_mouse_down)

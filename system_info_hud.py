@@ -42,12 +42,10 @@ class SystemInfoHUD:
         self.config = config
 
         self.win = tk.Toplevel(root)
-        self.win.attributes("-topmost", True, "-transparentcolor", _CHROMA, "-toolwindow", True)
-        self.win.overrideredirect(True)
-        self.win.config(bg=_CHROMA)
+        overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
 
         self.canvas = tk.Canvas(
-            self.win, bg=_CHROMA, highlightthickness=0,
+            self.win, bg=overlay_bg, highlightthickness=0,
             width=WIDTH, height=100,
         )
         self.canvas.pack()

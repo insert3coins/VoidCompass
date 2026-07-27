@@ -89,6 +89,7 @@ from persistence_queue import flush_persistence, persistence_queue
 from session_recovery import ProfileSessionGuard
 from ui_dispatcher import TkDispatcher
 from global_hotkeys import GlobalHotkeyManager, OVERLAY_HOTKEY_SPECS
+from platform_support import default_screenshot_path, open_path
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
@@ -1808,7 +1809,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     "SYSTEM", f"Overlay hotkey unavailable: {detail}", severity="WARN",
                 )
         elif announce and hasattr(self, "event_feed_entries"):
-            if registered:
+            if not report.get("supported", True):
+                self.add_event_feed_entry(
+                    "SYSTEM",
+                    "System-wide overlay hotkeys are available on Windows only",
+                    severity="INFO",
+                )
+            elif registered:
                 self.add_event_feed_entry(
                     "SYSTEM",
                     f"Overlay hotkeys updated: {len(registered)} active",
@@ -2239,15 +2246,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def open_screenshots_folder(self):
         path = self.config.get("screenshots_path")
         if not path:
-            path = os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous")
+            path = default_screenshot_path(self.config.get("journal_path"))
             
         if os.path.exists(path):
-            try:
-                os.startfile(path)
-            except AttributeError:
-                webbrowser.open(path)
-            except Exception as e:
-                self.log(f"❌ Error opening folder: {e}")
+            if not open_path(path):
+                self.log("❌ Could not open the screenshot folder with the desktop handler.")
         else:
             self.log("⚠️ Screenshot folder not found.")
 
@@ -2407,6 +2410,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.exploration_window = ExplorationWindow(self.dashboard_host, self, embedded=True)
         self._show_embedded_page("EXPLORE", self.exploration_window.win)
         self.exploration_window.on_shown(section=section)
+
+    def open_galaxy_map_page(self):
+        """Show the galaxy map as its own rail workspace.
+
+        Explore owns the survey, ledger and route intelligence the map draws,
+        so it is built first if the commander opens the map before Explore.
+        """
+        if not (self.exploration_window and self.exploration_window.is_open()):
+            self.exploration_window = ExplorationWindow(self.dashboard_host, self, embedded=True)
+        workspace = getattr(self.exploration_window, "map_workspace", None)
+        if workspace is None:
+            self.log("Galaxy map workspace unavailable")
+            return
+        self._show_embedded_page("MAP", workspace)
+        self.exploration_window.on_map_shown()
 
     def open_trade_window(self):
         if self.trade_window and self.trade_window.is_open():

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 import os
 from pathlib import Path
-import sys
+from platform_support import application_dir
 
 
 LOG_ARCHIVE_LIMIT = 10
@@ -14,9 +14,7 @@ LOG_DIR_NAME = "logs"
 
 def application_base_dir():
     """Return the writable folder beside the EXE, or the current source run."""
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-    return Path.cwd().resolve()
+    return application_dir()
 
 
 def resolve_log_path(filename, configured=None, base_dir=None):

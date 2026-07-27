@@ -7,11 +7,9 @@ class CargoHUD:
         self.win = tk.Toplevel(root)
         self.config = config
         
-        self.win.attributes("-topmost", True, "-transparentcolor", "#ff00ff", "-toolwindow", True)
-        self.win.overrideredirect(True)
-        self.win.config(bg="#ff00ff")
+        overlay_bg = overlay_chrome.configure_overlay_window(self.win, "#ff00ff")
         
-        self.canvas = tk.Canvas(self.win, width=300, height=400, bg="#ff00ff", highlightthickness=0)
+        self.canvas = tk.Canvas(self.win, width=300, height=400, bg=overlay_bg, highlightthickness=0)
         self.canvas.pack()
 
         self.canvas.bind("<Button-1>", self.start_move)

@@ -17,6 +17,7 @@ from overlay_input import set_mouse_passthrough
 from adaptive_command import AUTOMATIC_MODE_IDLE_S
 from stellar_types import star_type_label
 import route_strip
+from platform_support import open_path
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -153,6 +154,7 @@ class DashboardUIMixin(ThemedWindowMixin):
                 ("⚑", "GALAXY", "GALAXY", self.open_bgs_window),
             )),
             ("EXPEDITION", (
+                ("◍", "MAP", "MAP", self.open_galaxy_map_page),
                 ("⬢", "EXPEDITION", "OVERVIEW", self.show_expedition_page),
                 ("∿", "ANALYTICS", "ANALYTICS", self.open_analytics_window),
                 ("★", "ACHIEVE", "ACHIEVEMENTS", self.open_achievement_window),
@@ -2359,10 +2361,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         base = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.getcwd()
         path = os.path.join(base, "logs")
         os.makedirs(path, exist_ok=True)
-        try:
-            os.startfile(path)
-        except (AttributeError, OSError):
-            webbrowser.open(path)
+        open_path(path)
 
     def show_about_page(self):
         self._show_embedded_page("ABOUT", self.about_page)

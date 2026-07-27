@@ -15,6 +15,7 @@ from global_hotkeys import (
     DEFAULT_OVERLAY_HOTKEYS, OVERLAY_HOTKEY_SPECS,
     validate_hotkey_bindings,
 )
+from platform_support import default_screenshot_path, open_path
 from ui_theme import (
     THEME, FONT_MONO, FONT_TITLE, FONT_UI, FONT_UI_BOLD,
     apply_window, button, scrollbar as themed_scrollbar, window_surface,
@@ -330,7 +331,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     }
     voice_volume_var = tk.DoubleVar(value=float(config.get("voice_volume", 0.8) or 0.8))
     if "screenshots_path" not in config:
-        config["screenshots_path"] = os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous")
+        config["screenshots_path"] = default_screenshot_path(config.get("journal_path"))
 
     # Pages
     core_page = make_page("core", "Core", "Journal and screenshot paths.", scrollable=True)
@@ -388,12 +389,22 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     overlay_interaction = section(overlay_page, "Interaction")
     toggle_row(
         overlay_interaction,
-        "Mouse passthrough (turn off to move or click overlays)",
+        (
+            "Mouse passthrough (turn off to move or click overlays)"
+            if os.name == "nt" else
+            "Mouse passthrough (Windows only; unavailable on Linux)"
+        ),
         overlay_mouse_passthrough_var,
     )
 
     overlay_hotkeys = section(overlay_page, "Global Hotkeys")
-    toggle_row(overlay_hotkeys, "Enable system-wide overlay hotkeys", overlay_hotkeys_var)
+    toggle_row(
+        overlay_hotkeys,
+        "Enable system-wide overlay hotkeys"
+        if os.name == "nt" else
+        "System-wide overlay hotkeys (Windows only)",
+        overlay_hotkeys_var,
+    )
     hotkey_entries = {}
     for action, key, label, _overlay_attr in OVERLAY_HOTKEY_SPECS:
         hotkey_entries[action] = input_row(overlay_hotkeys, label, key)
@@ -1245,10 +1256,14 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         path = application_base_dir() / "logs"
         try:
             path.mkdir(parents=True, exist_ok=True)
-            os.startfile(str(path))
         except Exception as exc:
             tk.messagebox.showerror(
                 "Logs Folder", f"Could not open {path}:\n{exc}", parent=win,
+            )
+            return
+        if not open_path(path):
+            tk.messagebox.showerror(
+                "Logs Folder", f"Could not open {path}.", parent=win,
             )
 
     diagnostics_actions = row(diagnostics_section)
