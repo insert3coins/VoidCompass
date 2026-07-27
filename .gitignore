@@ -39,6 +39,7 @@ version_info.txt
 
 # Virtual environment
 .venv/
+.venv-linux/
 venv/
 mining_data.db
 mining_data.db-*

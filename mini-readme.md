@@ -16,6 +16,7 @@
 *   Added a native **Linux x86-64 testing build** for Elite running through Steam/Proton, alongside the established native Windows build. It includes automatic journal and screenshot discovery across standard Steam, Flatpak, Snap and custom Steam-library prefixes, portable single-instance locking and desktop file/folder opening.
 *   Made every native overlay construct safely on X11/XWayland with borderless topmost themed backgrounds. Windows retains chroma transparency, mouse passthrough and global overlay hotkeys; unsupported Linux controls default off and no longer create startup errors.
 *   Enabled downloaded Piper voices on Linux through PipeWire, PulseAudio, ALSA or FFmpeg playback, and added a platform-aware PyInstaller build, `.tar.gz` release packager, executable permissions, SHA-256 output, local `build_linux.sh` entry point and manual GitHub Actions artifact build.
+*   Added a double-clickable Windows `build_linux.cmd` launcher that enters WSL, bootstraps missing Ubuntu/Debian Tk and venv packages, runs the native Linux builder and keeps the result visible on success or failure.
 
 ## v5.2.5 // Exploration Continuity
 **Release Date:** 2026-Jul-27

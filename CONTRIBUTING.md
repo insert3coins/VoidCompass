@@ -34,6 +34,8 @@ bash build_linux.sh
 
 The helper creates the native Linux executable and checksummed portable release; PyInstaller cannot cross-build the Linux executable from Windows.
 
+Windows maintainers can instead run `build_linux.cmd`. It enters the default WSL distribution, bootstraps missing Ubuntu/Debian packages and invokes the same Linux helper. The first run may ask for the Linux sudo password.
+
 Create a branch from `master` and keep each change focused. Do not commit generated builds, local databases, commander profiles, configuration, logs, journal files, voice caches, or credentials.
 
 ## Journal and UI changes
