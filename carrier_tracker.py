@@ -10,6 +10,8 @@ import os
 import threading
 from datetime import datetime, timezone
 
+from persistence_queue import persistence_queue
+
 CARRIER_STATE_FILE = "carrier_state.json"
 
 # Fields that are safe to persist (skip runtime callbacks etc.)
@@ -311,11 +313,15 @@ class CarrierTracker:
             self._config.get("carrier_state_file", CARRIER_STATE_FILE)
         )
 
-    def save_state(self):
+    def save_state(self, immediate=False):
+        # Journal events arrive on the Tk thread, so writing the file here
+        # blocked the interface; the shared queue coalesces repeat saves.
         try:
             data = {k: v for k, v in self.carrier_data.items() if k in _PERSIST_KEYS}
-            with open(self._state_path(), "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
+            persistence_queue().submit_json(
+                self._state_path(), data, indent=2,
+                delay_s=1.0, immediate=immediate,
+            )
         except Exception as exc:
             logging.warning(f"CarrierTracker: could not save state: {exc}")
 

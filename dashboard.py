@@ -1,10 +1,13 @@
 import os
+import gc
 import json
 import threading
 import math
 import sqlite3
 import logging
+import sys
 import time
+import traceback
 import tkinter as tk
 from tkinter import messagebox
 import webbrowser
@@ -90,6 +93,12 @@ from session_recovery import ProfileSessionGuard
 from ui_dispatcher import TkDispatcher
 from global_hotkeys import GlobalHotkeyManager, OVERLAY_HOTKEY_SPECS
 from platform_support import default_screenshot_path, open_path
+
+
+# One burst of journal events describes a single moment, so the shared
+# exploration fact packet is reused for that long instead of being rebuilt
+# for every event in the batch.
+EXPLORATION_INTELLIGENCE_TTL_S = 0.5
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
@@ -541,6 +550,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._hud_refresh_job = None
         self._hud_refresh_requested = False
         self._last_hud_refresh_ts = 0.0
+        # No commander may read a fact packet built for the previous one.
+        self._latest_exploration_intelligence = None
+        self._invalidate_exploration_intelligence()
         self.current_sys = "---"
         self.previous_sys = None
         self.previous_coords = None
@@ -1385,6 +1397,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._ui_watchdog_interval_ms = 50
         self._ui_watchdog_spike_ms = float(self.config.get("ui_watchdog_spike_ms", 120.0))
         self._ui_watchdog_last_ts = time.perf_counter()
+        self._latest_exploration_intelligence = None
+        self._exploration_intelligence_ts = 0.0
         self._overlay_pos_last_saved = {
             attr: None for attr, _x_key, _y_key in self._OVERLAY_POSITION_SPECS
         }
@@ -1627,6 +1641,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._tick_session_clock()
         self._tick_event_feed_queue()
         self._tick_ui_stall_watchdog()
+        self._start_ui_stall_sampler()
         self._tick_runtime_trace()
         self._tick_overlay_position_sync()
         self._tick_overlay_hotkey_guard()
@@ -2041,6 +2056,72 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         print(msg, flush=True)
         logging.warning(msg)
         self.log(msg)
+
+    def _freeze_startup_heap(self):
+        """Exclude the loaded reference data from every later GC pass.
+
+        Codex, engineering, region and bio tables are large, permanent and
+        never become garbage, yet a full collection still had to walk them.
+        Freezing them once catch-up finishes measured a full collection down
+        from about 11 ms to nothing.
+        """
+        if getattr(self, "_startup_heap_frozen", False):
+            return
+        self._startup_heap_frozen = True
+        try:
+            gc.collect()
+            gc.freeze()
+            self._trace_bump("gc_frozen_objects", gc.get_freeze_count())
+        except Exception as exc:
+            logging.warning("Could not freeze the startup heap: %s", exc)
+
+    def _start_ui_stall_sampler(self):
+        """Capture what the main thread is doing while it is stalled.
+
+        The existing watchdog measures how late a Tk callback fires, but by the
+        time it runs the blocking work has already finished, so the trace only
+        ever showed the stall's size and never its cause. This samples the main
+        thread's stack from outside the main loop, while it is still stuck.
+        """
+        if not bool(self.config.get("ui_stall_sampler_enabled", True)):
+            return
+        main_thread = threading.main_thread().ident
+        trigger_ms = max(80.0, float(self.config.get("ui_stall_sample_ms", 200.0)))
+
+        def sample():
+            while self.is_running:
+                time.sleep(0.05)
+                try:
+                    blocked_ms = (time.perf_counter() - self._ui_watchdog_last_ts) * 1000.0
+                    if blocked_ms < trigger_ms:
+                        continue
+                    frame = sys._current_frames().get(main_thread)
+                    if frame is None:
+                        continue
+                    # Innermost frames are the useful ones; application code is
+                    # kept in preference to the Tk and threading plumbing.
+                    stack = traceback.extract_stack(frame)[-14:]
+                    where = " < ".join(
+                        f"{os.path.basename(entry.filename)}:{entry.lineno}:{entry.name}"
+                        for entry in reversed(stack)
+                    )
+                    self._trace_record_ms("ui_stall_blocked", blocked_ms)
+                    trace = getattr(self, "runtime_trace", None)
+                    if trace is not None and getattr(trace, "enabled", False):
+                        trace.bump(f"ui_stall_at:{where[:400]}")
+                    # One sample per stall is enough to name the culprit.
+                    while self.is_running and (
+                        time.perf_counter() - self._ui_watchdog_last_ts
+                    ) * 1000.0 >= trigger_ms:
+                        time.sleep(0.05)
+                except Exception:
+                    continue
+
+        thread = threading.Thread(
+            target=sample, name="ui-stall-sampler", daemon=True,
+        )
+        self._ui_stall_sampler = thread
+        thread.start()
 
     def _tick_ui_stall_watchdog(self):
         if not self.is_running:
@@ -3587,12 +3668,28 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return False
         return self._set_commander_balance(int(self.cmdr_balance or 0) + delta, timestamp=timestamp, log=log)
 
+    def _invalidate_exploration_intelligence(self):
+        self._exploration_intelligence_ts = 0.0
+
     def _exploration_intelligence_snapshot(self, compact=False):
-        try:
-            intelligence = build_intelligence(self)
-        except Exception as exc:
-            logging.debug("Exploration intelligence snapshot skipped: %s", exc)
-            return {}
+        # Rebuilding deep-copies the Codex, checkpoint and milestone state under
+        # the tracker lock, and a burst of Scan events asked for it repeatedly
+        # from the same drain. Reuse holds only for the length of one burst, so
+        # the packet still reflects the batch being processed.
+        now = time.monotonic()
+        intelligence = getattr(self, "_latest_exploration_intelligence", None)
+        fresh = (
+            intelligence is not None
+            and (now - getattr(self, "_exploration_intelligence_ts", 0.0))
+            < EXPLORATION_INTELLIGENCE_TTL_S
+        )
+        if not fresh:
+            try:
+                intelligence = build_intelligence(self)
+            except Exception as exc:
+                logging.debug("Exploration intelligence snapshot skipped: %s", exc)
+                return {}
+            self._exploration_intelligence_ts = now
         self._latest_exploration_intelligence = intelligence
         if compact:
             intelligence = dict(intelligence)
@@ -3611,9 +3708,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         tracker = getattr(self, "deep_survey", None)
         if not tracker:
             return {}
+        # A checkpoint is the record a commander resumes from, so it always
+        # rebuilds rather than accepting a packet cached during a burst. The
+        # fresh packet is then reused by whatever reads it next.
+        self._invalidate_exploration_intelligence()
         try:
             return tracker.update_checkpoint(
-                checkpoint_payload(self, reason), immediate=immediate,
+                checkpoint_payload(
+                    self, reason,
+                    intelligence=self._exploration_intelligence_snapshot(),
+                ),
+                immediate=immediate,
             )
         except Exception as exc:
             logging.debug("Exploration checkpoint skipped [%s]: %s", reason, exc)
@@ -7277,6 +7382,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.dashboard_refresh_full_pending = False
             self.is_first_load = False
             self._startup_recovery_mode = False
+            self._freeze_startup_heap()
             self._apply_adaptive_overlay_scene()
             self._adaptive_startup_briefing()
             self._publish_expedition_resume_briefing()

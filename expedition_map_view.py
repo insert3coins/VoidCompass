@@ -821,6 +821,15 @@ class ExpeditionMapView:
         """Whether redraws should take the lightweight motion path."""
         return bool(self._drag_mode) or time.monotonic() < self._motion_until
 
+    def on_shown(self):
+        """Draw the first frame after becoming visible on the cheap path.
+
+        Opening the workspace otherwise pays a full-detail frame, which the UI
+        stall watchdog records as a page-open spike. The settle timer restores
+        full detail immediately afterwards.
+        """
+        self._begin_motion()
+
     def _begin_motion(self):
         """Open a short motion window and queue the full-detail redraw."""
         self._motion_until = time.monotonic() + MOTION_WINDOW_S

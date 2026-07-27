@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import math
 import os
@@ -59,10 +60,17 @@ class CaptainsLog:
         except Exception:
             pass
 
+    def _persist_snapshot(self):
+        """Produce the log payload on the persistence worker."""
+        with self.lock:
+            return copy.deepcopy(self.data)
+
     def save(self):
         try:
+            # save() runs for every journal event, and copying the whole log
+            # each time was wasted on all but the write that actually happens.
             persistence_queue().submit_json(
-                self.path, self.data, indent=2, delay_s=1.0,
+                self.path, indent=2, delay_s=1.0, source=self._persist_snapshot,
             )
         except Exception:
             pass

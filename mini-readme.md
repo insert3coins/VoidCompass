@@ -1,5 +1,18 @@
 # VoidCompass // UPDATE LOG
 
+## v5.2.7 // Responsive Journal Processing
+**Release Date:** 2026-Jul-27
+
+*   Fixed the interface stalling while journal events were processed. The new stall sampler identified several separate pieces of work running on the interface thread for every incoming event; they now run off it, or are shared within a batch. Captured stalls reached a quarter of a second each.
+*   Moved Fleet Carrier state saving onto the shared persistence queue. It previously wrote its file directly from the event handler, so every carrier update paused the interface for the length of a disk write. Repeat saves now coalesce and are still flushed on shutdown.
+*   Stopped Deep Survey from starting a timer thread for each save. Creating the thread made the interface wait for it to come up, and the persistence queue already performs the same delayed, coalescing write; the redundant timer has been removed.
+*   Stopped rebuilding the shared exploration fact packet for every event in a burst. Scanning a system asked for the same packet repeatedly, each time deep-copying Codex, checkpoint and milestone state under a lock. It is now built once per burst and reused.
+*   Kept resume checkpoints exact by always rebuilding that packet before one is written, and by discarding it on a commander change, so no checkpoint or profile can inherit another moment's facts.
+*   Stopped copying saved state on the interface thread. The persistence queue already merged repeated saves into a single write, but each request still copied the whole payload first, so a burst of journal events copied the Deep Survey record, Captain's Log and expedition state once per event and discarded all but the last. Those three now hand the queue a producer it runs on its own worker, so one write performs one copy. Callers that pass live state directly still get the original protective copy.
+*   Added a **UI stall sampler** that records what the interface was actually doing while it was stalled. The existing watchdog could only report a stall's size after the fact; diagnostic traces showed more than nine tenths of stalled time was unaccounted for by any measured operation. The sampler captures the blocked call stack from outside the interface loop, once per stall, and writes it to the runtime trace.
+*   Excluded the loaded Codex, engineering, region and biology reference tables from later garbage collection once journal catch-up finishes, since they are large, permanent and never become garbage. A full collection pass measured about 11 ms before and effectively nothing after.
+*   Made opening the Map workspace draw its first frame on the lightweight path before settling to full detail, so arriving at the map no longer blocks the interface for a noticeable moment on a long journal history.
+
 ## v5.2.6 // Cartographic Regions
 **Release Date:** 2026-Jul-27
 

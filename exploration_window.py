@@ -243,6 +243,7 @@ class ExplorationWindow(ThemedWindowMixin):
     def on_map_shown(self):
         """Refresh the map workspace as the rail brings it to the front."""
         if self.expedition_map_view:
+            self.expedition_map_view.on_shown()
             self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
 
     def _on_workspace_changed(self, _event=None):
