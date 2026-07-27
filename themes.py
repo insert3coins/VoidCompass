@@ -12,9 +12,9 @@ active.
 """
 
 import json
-import os
 import re
 from pathlib import Path
+from platform_support import application_dir
 
 # Every color slot a theme defines. The first group feeds ui_theme.Palette;
 # bg/panel/accent/orange/text/green also feed config.COLOR_* (overlays).
@@ -131,7 +131,7 @@ def resolve_startup_theme():
     holds active_commander_profile; the profile's own config.json holds
     ui_theme_name and ui_custom_themes.
     """
-    base = Path(os.getcwd())
+    base = application_dir()
     root_cfg = _read_json(base / "config.json")
     profile_key = str(root_cfg.get("active_commander_profile") or "").strip()
     profile_cfg = _read_json(base / "profiles" / profile_key / "config.json") if profile_key else {}

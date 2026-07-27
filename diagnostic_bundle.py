@@ -20,6 +20,8 @@ SENSITIVE_KEY_PARTS = (
 
 def _redact_path(text):
     text = re.sub(r"(?i)C:\\Users\\[^\\\s\"']+", r"C:\\Users\\<redacted>", str(text))
+    text = re.sub(r"(?i)(/home/)[^/\s\"']+", r"\1<redacted>", text)
+    text = re.sub(r"(?i)(/Users/)[^/\s\"']+", r"\1<redacted>", text)
     text = re.sub(r"(?i)([\\/]profiles[\\/])[^\\/\s\"']+", r"\1<redacted>", text)
     text = re.sub(r"(?i)(FID[\"'=:\s]+)[A-Za-z0-9_-]+", r"\1<redacted>", text)
     return text

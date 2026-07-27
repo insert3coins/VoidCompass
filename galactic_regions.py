@@ -97,17 +97,11 @@ def _merge_boundary_runs(entries, vertical, step):
     return segments
 
 
-@lru_cache(maxsize=4)
-def region_geometry(sample_step=8):
-    """Return bounded region contours and label anchors for map rendering.
-
-    Exact coordinate lookup continues to use the complete source raster. The
-    display contours sample it at roughly 395 ly with the default step, which
-    preserves all 42 regions while keeping interactive redraws lightweight.
-    """
-    step = max(4, min(128, int(sample_step)))
+@lru_cache(maxsize=6)
+def _sampled_grid(step):
+    """Sample the source raster into a square grid of region identifiers."""
     size = SOURCE_SIZE // step
-    names, rows = _dataset()
+    _names, rows = _dataset()
     grid = []
     cells_by_region = {}
     for cell_z in range(size):
@@ -123,6 +117,60 @@ def region_geometry(sample_step=8):
             if region_id:
                 cells_by_region.setdefault(region_id, []).append((px, pz))
         grid.append(sampled)
+    return size, grid, cells_by_region
+
+
+@lru_cache(maxsize=4)
+def region_fills(sample_step=32):
+    """Return merged world-space rectangles covering each region's interior.
+
+    :func:`region_geometry` describes where regions meet; a filled map instead
+    needs the area between those boundaries. Sampled cells are run-length
+    encoded per row, then extended downwards while the row beneath repeats the
+    same run, so the 42 regions become a few hundred rectangles rather than
+    tens of thousands of individual cells.
+    """
+    step = max(4, min(128, int(sample_step)))
+    size, grid, _cells = _sampled_grid(step)
+    rectangles = []
+    open_runs = {}
+    # One extra pass past the final row closes every run still being extended.
+    for cell_z in range(size + 1):
+        row = grid[cell_z] if cell_z < size else []
+        runs = set()
+        start = 0
+        while start < len(row):
+            region_id = row[start]
+            end = start + 1
+            while end < len(row) and row[end] == region_id:
+                end += 1
+            if region_id:
+                runs.add((start, end, region_id))
+            start = end
+        for key in tuple(open_runs):
+            if key in runs:
+                continue
+            first_z = open_runs.pop(key)
+            left, right, region_id = key
+            x1, z1 = _pixel_world(left * step, first_z * step)
+            x2, z2 = _pixel_world(right * step, cell_z * step)
+            rectangles.append((x1, z1, x2, z2, region_id))
+        for key in runs:
+            open_runs.setdefault(key, cell_z)
+    return tuple(rectangles)
+
+
+@lru_cache(maxsize=4)
+def region_geometry(sample_step=8):
+    """Return bounded region contours and label anchors for map rendering.
+
+    Exact coordinate lookup continues to use the complete source raster. The
+    display contours sample it at roughly 395 ly with the default step, which
+    preserves all 42 regions while keeping interactive redraws lightweight.
+    """
+    step = max(4, min(128, int(sample_step)))
+    names, _rows = _dataset()
+    size, grid, cells_by_region = _sampled_grid(step)
 
     vertical = []
     horizontal = []

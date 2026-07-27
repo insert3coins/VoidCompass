@@ -1,16 +1,18 @@
 import os
 import json
 import re
+from platform_support import application_dir, default_screenshot_path, detect_elite_journal_path
 
 
 def _get_config_file():
-    # Always resolve config relative to current working directory.
-    # This matches local Python runs and packaged EXE runs from dist/.
-    return os.path.abspath(os.path.join(os.getcwd(), "config.json"))
+    # Packaged Windows and Linux builds are portable and keep writable state
+    # beside the executable. Source runs retain the existing working-directory
+    # behaviour used by development and tests.
+    return str(application_dir() / "config.json")
 
 
 CONFIG_FILE = _get_config_file()
-PROFILE_DIR = os.path.abspath(os.path.join(os.getcwd(), "profiles"))
+PROFILE_DIR = str(application_dir() / "profiles")
 PROFILE_CONFIG_NAME = "config.json"
 DEPRECATED_CONFIG_KEYS = (
     'scan_overlay_enabled',
@@ -308,7 +310,7 @@ def apply_profile_config(config, profile_key=None):
         "edsm_game_version": "",
         "edsm_game_build": "",
         "carrier_discord_webhook_url": "",
-        "screenshots_path": os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous"),
+        "screenshots_path": default_screenshot_path(config.get("journal_path")),
         "ui_theme_name": _themes.DEFAULT_THEME_NAME,
         "voice_name": "en_GB-alba-medium",
         "cockpit_personality_level": "Balanced",
@@ -337,8 +339,8 @@ def apply_profile_config(config, profile_key=None):
         "trade_advanced_tools_visible": False,
         "edsm_upload_enabled": False,
         "overlay_enabled": True,
-        "overlay_mouse_passthrough": True,
-        "overlay_hotkeys_enabled": True,
+        "overlay_mouse_passthrough": os.name == "nt",
+        "overlay_hotkeys_enabled": os.name == "nt",
         "hud_compact_mode": False,
         "cargo_overlay_enabled": False,
         "carrier_overlay_enabled": False,
@@ -467,13 +469,14 @@ def save_config(config):
 def load_config():
     """Loads configuration from file or returns defaults."""
     config_existed = os.path.exists(CONFIG_FILE)
+    detected_journal = detect_elite_journal_path()
     defaults = {
         'journal_path': '',
         'trade_advanced_tools_visible': False,
         'nav_collapsed_groups': [],
         'overlay_enabled': True,
-        'overlay_mouse_passthrough': True,
-        'overlay_hotkeys_enabled': True,
+        'overlay_mouse_passthrough': os.name == 'nt',
+        'overlay_hotkeys_enabled': os.name == 'nt',
         'overlay_hotkey_toggle_all': 'Ctrl+Shift+O',
         'overlay_hotkey_navigation': '',
         'overlay_hotkey_survey': '',
@@ -540,7 +543,7 @@ def load_config():
         'watcher_startup_tail_bytes': 131072,
         'watcher_special_file_settle_ms': 200,
         'screenshots_enabled': False,
-        'screenshots_path': os.path.join(os.path.expanduser("~"), "Pictures", "Frontier Developments", "Elite Dangerous"),
+        'screenshots_path': default_screenshot_path(detected_journal),
         'edsm_cmdr_name': '',
         'edsm_api_key': '',
         'edsm_upload_enabled': False,
@@ -628,10 +631,6 @@ def load_config():
         except Exception:
             pass
     if not defaults['journal_path']:
-        user_profile = os.environ.get('USERPROFILE')
-        if user_profile:
-            default_path = os.path.join(user_profile, 'Saved Games', 'Frontier Developments', 'Elite Dangerous')
-            if os.path.exists(default_path):
-                defaults['journal_path'] = default_path
+        defaults['journal_path'] = detected_journal
     apply_profile_config(defaults)
     return defaults

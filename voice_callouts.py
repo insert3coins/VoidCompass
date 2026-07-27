@@ -10,6 +10,7 @@ import atexit
 import hashlib
 import json
 import os
+import platform
 import queue
 import random
 import re
@@ -256,7 +257,10 @@ def status(voice=None):
             "download_voice": _download["voice"],
             "progress": round(_download["progress"], 3),
             "error": _download["error"],
-            "supported": sys.platform in ("win32", "linux"),
+            "supported": (
+                sys.platform == "win32"
+                or (sys.platform == "linux" and platform.machine().casefold() in {"x86_64", "amd64"})
+            ),
         }
 
 
@@ -266,8 +270,8 @@ def start_download(voice):
         raise VoiceError("Unknown voice pack.")
     if ready(voice):
         return False
-    if sys.platform not in ("win32", "linux"):
-        raise VoiceError("Neural voice packs are only available on Windows and Linux.")
+    if not status(voice).get("supported"):
+        raise VoiceError("Neural voice packs are available on Windows and Linux x86-64.")
     with _download_lock:
         if _download["running"]:
             raise VoiceError("Another voice pack is already downloading.")
@@ -318,6 +322,8 @@ def _download_worker(voice):
         if archive.exists():
             shutil.unpack_archive(str(archive), str(TTS_DIR))
             archive.unlink()
+        if sys.platform == "linux" and binary_path().is_file():
+            binary_path().chmod(binary_path().stat().st_mode | 0o111)
         if not ready(voice):
             raise VoiceError("Voice installation is incomplete. Delete data/tts and try again.")
         with _download_lock:
@@ -639,8 +645,38 @@ def _scaled_wav(source, volume):
 
 
 def _play_wav(path, cancel_event=None, stop_event=None):
+    if sys.platform == "linux":
+        players = (
+            ("pw-play", ["pw-play", str(path)]),
+            ("paplay", ["paplay", str(path)]),
+            ("aplay", ["aplay", "-q", str(path)]),
+            ("ffplay", ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", str(path)]),
+        )
+        command = next((args for binary, args in players if shutil.which(binary)), None)
+        if command is None:
+            raise VoiceError(
+                "Voice playback needs pw-play, paplay, aplay, or ffplay on Linux."
+            )
+        process = subprocess.Popen(
+            command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        while process.poll() is None:
+            if ((cancel_event is not None and cancel_event.is_set())
+                    or (stop_event is not None and stop_event.is_set())):
+                process.terminate()
+                try:
+                    process.wait(timeout=0.5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                return False
+            time.sleep(0.025)
+        if process.returncode:
+            raise VoiceError(f"Linux audio player exited with status {process.returncode}.")
+        return True
     if sys.platform != "win32":
-        raise VoiceError("Voice playback is currently available on Windows only.")
+        raise VoiceError("Voice playback is available on Windows and Linux.")
+
     import winsound
     try:
         with wave.open(str(path), "rb") as reader:

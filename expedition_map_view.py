@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import colorsys
 from datetime import datetime
 from functools import lru_cache
 import math
 import random
 import threading
+import time
 import tkinter as tk
 from tkinter import ttk
 import weakref
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageTk
 
-from galactic_regions import find_region, region_geometry
+from galactic_regions import find_region, region_fills, region_geometry
 from exploration_intelligence import route_context
 from stellar_types import star_type_label
 from ui_theme import THEME, button, configure_ttk
@@ -43,6 +45,17 @@ VIEW_PRESETS = (
 GALACTIC_CENTRE = (0.0, 0.0, 25899.0)
 GALAXY_RADIUS_LY = 51500.0
 MAX_ROUTE_POINTS = 1500
+REGION_HUE_STEP = 0.381966  # (3 - sqrt 5) / 2 turns, the golden angle
+REGION_FILL_ALPHA = 42
+REGION_FILL_ALPHA_MOVING = 28
+REGION_FILL_STEP = 8
+REGION_FILL_STEP_MOVING = 32
+REGION_FILL_MIN_TILT = 0.15
+FIT_MARGIN = 0.88
+# Wheel zoom arrives as a burst of discrete events. Treating the burst as
+# motion keeps each step on the cheap redraw path; full detail returns once
+# the commander stops turning the wheel.
+MOTION_WINDOW_S = 0.18
 GALAXY_TEXTURE_SIZE = 768
 GALAXY_PREVIEW_SIZE = 384
 GALAXY_MOTION_SIZE = 192
@@ -91,6 +104,40 @@ def _mix(left, right, amount):
 
 def _rgba(colour, alpha):
     return (*_hex_rgb(colour), max(0, min(255, int(alpha))))
+
+
+@lru_cache(maxsize=256)
+def _region_fill_opaque(region_id, accent, alpha, backdrop):
+    """Pre-blend a region wash against the map backdrop.
+
+    Compositing a translucent layer costs about as much as the rest of a
+    motion frame, so while the camera moves the same colour is flattened
+    against the background once and drawn directly.
+    """
+    red, green, blue, _alpha = _region_fill_rgba(region_id, accent, alpha)
+    base = _hex_rgb(backdrop)
+    weight = max(0, min(255, int(alpha))) / 255.0
+    return tuple(
+        round(base[index] + (channel - base[index]) * weight)
+        for index, channel in enumerate((red, green, blue))
+    )
+
+
+@lru_cache(maxsize=256)
+def _region_fill_rgba(region_id, accent, alpha):
+    """Give each Codex region its own hue without leaving the active theme.
+
+    Rotating by the golden angle keeps neighbouring region identifiers far
+    apart on the colour wheel, so adjacent areas stay distinguishable, while
+    saturation and brightness follow the commander's accent.
+    """
+    red, green, blue = _hex_rgb(accent)
+    hue, saturation, value = colorsys.rgb_to_hsv(red / 255.0, green / 255.0, blue / 255.0)
+    hue = (hue + region_id * REGION_HUE_STEP) % 1.0
+    saturation = max(0.34, min(0.86, saturation if saturation > 0.05 else 0.62))
+    value = max(0.46, min(0.96, value * 0.86 + 0.22))
+    red, green, blue = colorsys.hsv_to_rgb(hue, saturation, value)
+    return (round(red * 255), round(green * 255), round(blue * 255), max(0, min(255, int(alpha))))
 
 
 def _build_galaxy_texture(key):
@@ -310,15 +357,10 @@ def _star_colour(star_class):
 
 
 class ExpeditionMapView:
-    def __init__(
-        self, parent, app, open_record_callback=None,
-        popout_callback=None, focus_mode=False,
-    ):
+    def __init__(self, parent, app, open_record_callback=None):
         self.parent = parent
         self.app = app
         self.open_record_callback = open_record_callback
-        self.popout_callback = popout_callback
-        self.focus_mode = bool(focus_mode)
         self._map_points = []
         self._system_rows = []
         self._value_rows = []
@@ -351,6 +393,10 @@ class ExpeditionMapView:
         self._drag_distance = 0.0
         self._hover_point = None
         self._selected_point = None
+        self._fit_pending = False
+        self._motion_until = 0.0
+        self._settle_job = None
+        self._motion_frame = False
         self._disposed = False
         configure_ttk(parent, "ExpeditionMap")
         self._build()
@@ -366,11 +412,6 @@ class ExpeditionMapView:
             toolbar, text="LMB orbit · RMB move · wheel zoom · 2× reset", fg=THEME.muted,
             bg=THEME.panel, font=("Cascadia Mono", 7),
         ).pack(side=tk.LEFT)
-        if callable(self.popout_callback):
-            button(
-                toolbar, "DOCK" if self.focus_mode else "POP OUT",
-                self._toggle_popout, accent=self.focus_mode,
-            ).pack(side=tk.RIGHT, padx=(0, 8), pady=5)
         button(toolbar, "RESET", self._reset_view).pack(side=tk.RIGHT, padx=(0, 8), pady=5)
         button(toolbar, "CURRENT", self._focus_current).pack(side=tk.RIGHT, padx=(0, 6), pady=5)
         self.view_mode = tk.StringVar(value="Perspective")
@@ -420,7 +461,7 @@ class ExpeditionMapView:
             highlightbackground=THEME.border, bd=0, cursor="crosshair",
         )
         self.canvas.pack(fill=tk.BOTH, expand=True)
-        self.canvas.bind("<Configure>", lambda _event: self._schedule_render())
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
         self.canvas.bind("<Map>", self._on_canvas_mapped)
         self.canvas.bind("<ButtonPress-1>", lambda event: self._begin_drag(event, "rotate"))
         self.canvas.bind("<B1-Motion>", self._drag)
@@ -446,18 +487,17 @@ class ExpeditionMapView:
         )
         self.detail.pack(fill=tk.X, pady=(5, 0), ipady=5)
 
-    def _toggle_popout(self):
-        if callable(self.popout_callback):
-            self.popout_callback()
-
     def dispose(self):
         self._disposed = True
-        if self._render_job is not None:
+        for job in (self._render_job, self._settle_job):
+            if job is None:
+                continue
             try:
-                self.canvas.after_cancel(self._render_job)
+                self.canvas.after_cancel(job)
             except tk.TclError:
                 pass
         self._render_job = None
+        self._settle_job = None
         self._background_image = None
         self._background_photo = None
         self._galaxy_warp_image = None
@@ -520,6 +560,9 @@ class ExpeditionMapView:
                 self.layer_vars[name].set(bool(enabled))
         if self._all_route_rows:
             self._route_rows = self._sample_route_rows(self._scoped_route_rows())
+        # A restored camera is the commander's own framing, so it must not be
+        # replaced by a deferred automatic fit.
+        self._fit_pending = False
         self._camera_ready = True
         self._schedule_render()
 
@@ -660,8 +703,66 @@ class ExpeditionMapView:
             self._fit_radius = radius
             self._yaw = -0.55 if mode == "Perspective" else -0.35
             self._pitch = -0.62 if mode == "Perspective" else -0.72
+        if mode != "Galaxy Overview":
+            # Galaxy Overview deliberately frames the whole disc, so only the
+            # data-driven cameras are re-fitted to the canvas.
+            self._fit_to_canvas(positions)
         if render:
             self._schedule_render()
+
+    def _fit_to_canvas(self, positions):
+        """Use the whole canvas, not just the square that fits its short side.
+
+        ``_bounds`` measures a sphere around the data, and the scale derived
+        from it divides by ``min(width, height)``. A route is usually far
+        longer than it is tall, so that framing leaves most of a wide canvas
+        empty. Projecting once with the spherical framing gives the real
+        screen extent, which is then grown to whichever axis truly constrains
+        it and recentred.
+        """
+        if not positions:
+            return
+        try:
+            sized = (
+                self.canvas.winfo_ismapped()
+                and self.canvas.winfo_width() > 1 and self.canvas.winfo_height() > 1
+            )
+        except tk.TclError:
+            sized = False
+        if not sized:
+            # This view is built while its workspace is still unpacked, so the
+            # canvas has no size to fit against yet. Retry once it does rather
+            # than baking a framing derived from the placeholder size.
+            self._fit_pending = True
+            return
+        self._fit_pending = False
+        context = self._projection()
+        self._projection_context = context
+        projected = [self._project(position) for position in positions]
+        xs = [point[0] for point in projected]
+        ys = [point[1] for point in projected]
+        span_x = max(xs) - min(xs)
+        span_y = max(ys) - min(ys)
+        usable_x = context["width"] * FIT_MARGIN
+        usable_y = context["height"] * FIT_MARGIN
+        corrections = []
+        if span_x > 1.0:
+            corrections.append(usable_x / span_x)
+        if span_y > 1.0:
+            corrections.append(usable_y / span_y)
+        if not corrections:
+            return
+        correction = min(corrections)
+        zoom = max(0.08, min(80.0, self._zoom * correction))
+        # Clamping the zoom would otherwise leave the framing off-centre.
+        correction = zoom / self._zoom if self._zoom else 1.0
+        self._zoom = zoom
+        centre_x = (max(xs) + min(xs)) / 2.0
+        centre_y = (max(ys) + min(ys)) / 2.0
+        self._pan = [
+            self._pan[0] - (centre_x - context["width"] / 2.0) * correction,
+            self._pan[1] - (centre_y - context["height"] / 2.0) * correction,
+        ]
 
     def _focus_current(self):
         position = _position(getattr(self.app, "current_coords", None))
@@ -695,13 +796,51 @@ class ExpeditionMapView:
             # Motion frames are already deliberately lighter, so do not add a
             # long timer delay on top of their render time. Settled redraws can
             # remain gently coalesced because they contain the full data layer.
-            delay = 8 if self._drag_mode else 24
+            delay = 8 if self._moving else 24
             self._render_job = self.canvas.after(delay, self._render)
         except tk.TclError:
             self._render_job = None
 
+    def _on_canvas_configure(self, _event=None):
+        if self._fit_pending:
+            # Only ever completes a framing that never got a real canvas; a
+            # later resize must not discard the commander's own zoom and pan.
+            self._reset_view()
+            return
+        self._schedule_render()
+
     def _on_canvas_mapped(self, _event=None):
+        if self._fit_pending:
+            self._reset_view()
+            return
         if self._render_pending or self._projection_context is None:
+            self._schedule_render()
+
+    @property
+    def _moving(self):
+        """Whether redraws should take the lightweight motion path."""
+        return bool(self._drag_mode) or time.monotonic() < self._motion_until
+
+    def _begin_motion(self):
+        """Open a short motion window and queue the full-detail redraw."""
+        self._motion_until = time.monotonic() + MOTION_WINDOW_S
+        if self._settle_job is not None:
+            try:
+                self.canvas.after_cancel(self._settle_job)
+            except tk.TclError:
+                pass
+            self._settle_job = None
+        try:
+            self._settle_job = self.canvas.after(
+                int(MOTION_WINDOW_S * 1000) + 40, self._settle_render,
+            )
+        except tk.TclError:
+            self._settle_job = None
+
+    def _settle_render(self):
+        self._settle_job = None
+        self._motion_until = 0.0
+        if not self._disposed:
             self._schedule_render()
 
     def _begin_drag(self, event, mode):
@@ -760,6 +899,7 @@ class ExpeditionMapView:
         self._pan[0] = new_cx - width / 2.0
         self._pan[1] = new_cy - height / 2.0
         self._zoom = new_zoom
+        self._begin_motion()
         self._schedule_render()
 
     def _motion(self, event):
@@ -866,6 +1006,10 @@ class ExpeditionMapView:
                 return
         except tk.TclError:
             return
+        # Resolved once: the drawing paths below read this thousands of times
+        # per frame, and re-deriving it from the clock in those loops measured
+        # more expensive than the detail reduction it selects.
+        self._motion_frame = self._moving
         self._map_points = []
         self._projection_context = self._projection()
         width = int(self._projection_context["width"])
@@ -926,7 +1070,7 @@ class ExpeditionMapView:
             return
         draw = self._background_draw
         pixel_width = max(1, int(round(width)))
-        if dash and not self._drag_mode:
+        if dash and not self._motion_frame:
             for left, right in zip(points, points[1:]):
                 self._dashed_segment(draw, left, right, colour, pixel_width, dash)
         else:
@@ -957,7 +1101,7 @@ class ExpeditionMapView:
         width = self._projection_context["width"]
         height = self._projection_context["height"]
         state = 0x5EED123
-        for index in range(24 if self._drag_mode else 150):
+        for index in range(24 if self._motion_frame else 150):
             state = (1103515245 * state + 12345) & 0x7FFFFFFF
             x = (state % 10000) / 10000.0 * width
             state = (1103515245 * state + 12345) & 0x7FFFFFFF
@@ -984,12 +1128,22 @@ class ExpeditionMapView:
         if len(points) >= 4:
             self._background_line(points, colour, width=width, dash=dash)
 
+    def _regions_will_cover_disc(self):
+        """Whether opaque motion-path region fills will hide the disc texture."""
+        layer = self.layer_vars.get("Regions")
+        return (
+            bool(self._motion_frame) and layer is not None and layer.get()
+            and abs(math.sin(self._pitch)) >= REGION_FILL_MIN_TILT
+        )
+
     def _draw_galaxy_structure(self):
         mode = self.view_mode.get()
         if mode != "Galaxy Overview" and self._fit_radius / max(self._zoom, 0.01) < 15000:
             return
-        textured = self._draw_galaxy_texture()
-        rim_divisions = 48 if self._drag_mode else 96
+        # Warping and compositing the disc costs about as much as the rest of a
+        # motion frame, and the flattened region wash paints straight over it.
+        textured = False if self._regions_will_cover_disc() else self._draw_galaxy_texture()
+        rim_divisions = 48 if self._motion_frame else 96
         rim = []
         for index in range(rim_divisions + 1):
             angle = math.tau * index / rim_divisions
@@ -1016,7 +1170,7 @@ class ExpeditionMapView:
                 self._project_polyline(
                     points, _mix(THEME.inset, THEME.accent, 0.16), width=2,
                 )
-        core_divisions = 32 if self._drag_mode else 64
+        core_divisions = 32 if self._motion_frame else 64
         core = []
         for index in range(core_divisions + 1):
             angle = math.tau * index / core_divisions
@@ -1049,7 +1203,7 @@ class ExpeditionMapView:
         # A dedicated 192px motion source keeps live orbiting cheap. The 384px
         # derivative covers ordinary settled panels; full detail is reserved
         # for genuinely large focus-mode displays.
-        if self._drag_mode:
+        if self._motion_frame:
             source_detail, source = "motion", bundle[2]
         elif target_width <= 700:
             source_detail, source = "preview", bundle[1]
@@ -1057,16 +1211,16 @@ class ExpeditionMapView:
             source_detail, source = "full", bundle[0]
         # Quantising the live orbit angle lets adjacent drag frames reuse the
         # same low-resolution warp. Panning only changes the paste position.
-        angle_step = 0.045 if self._drag_mode else 0.012
+        angle_step = 0.045 if self._motion_frame else 0.012
         quantised_yaw = round(self._yaw / angle_step) * angle_step
         warp_key = (
-            texture_key, source_detail, bool(self._drag_mode),
+            texture_key, source_detail, bool(self._motion_frame),
             round(quantised_yaw, 4), target_width, target_height,
         )
         if self._galaxy_warp_key != warp_key or self._galaxy_warp_image is None:
             resample = (
                 Image.Resampling.BILINEAR
-                if self._drag_mode else Image.Resampling.BICUBIC
+                if self._motion_frame else Image.Resampling.BICUBIC
             )
             rotated = source.rotate(
                 -math.degrees(quantised_yaw),
@@ -1091,7 +1245,7 @@ class ExpeditionMapView:
 
     def _draw_grid(self):
         if self.view_mode.get() == "Galaxy Overview":
-            divisions = 36 if self._drag_mode else 72
+            divisions = 36 if self._motion_frame else 72
             for radius in (10000, 20000, 30000, 40000, 50000):
                 ring = []
                 for index in range(divisions + 1):
@@ -1129,15 +1283,93 @@ class ExpeditionMapView:
                 colour,
             )
 
+    def _draw_region_fills(self, contour_step):
+        """Wash every Codex region in its own hue, as the in-game map does."""
+        background = self._background_image
+        if background is None:
+            return
+        # Codex regions divide the galactic plane, so an edge-on camera would
+        # collapse every fill into a meaningless sliver. Boundaries and labels
+        # still draw; only the wash is skipped.
+        if abs(math.sin(self._pitch)) < REGION_FILL_MIN_TILT:
+            return
+        width = int(self._projection_context["width"])
+        height = int(self._projection_context["height"])
+        accent = str(THEME.accent)
+        alpha = REGION_FILL_ALPHA_MOVING if self._motion_frame else REGION_FILL_ALPHA
+        # Interiors are the one part of the map read as shape rather than
+        # detail, so they always use the finest raster; coarse fills stair-step
+        # badly. A world-space pre-cull was measured and rejected: at shallow
+        # pitch the plane recedes to the horizon, so distant regions really do
+        # project into the top of the frame and no finite margin is safe.
+        fill_step = REGION_FILL_STEP_MOVING if self._motion_frame else REGION_FILL_STEP
+        # Compositing a translucent layer measured as costly as everything else
+        # in a motion frame put together, so while the camera moves the wash is
+        # pre-flattened against the backdrop and drawn straight on. Settled
+        # frames keep the true translucency over the galaxy texture.
+        moving = bool(self._motion_frame)
+        backdrop = str(THEME.inset)
+        project = self._project
+        visible = []
+        # Allocating and compositing a whole-canvas layer costs more than the
+        # geometry does, so the reachable bounds are accumulated here and the
+        # wash is confined to them.
+        left = top = float("inf")
+        right = bottom = float("-inf")
+        for x1, z1, x2, z2, region_id in region_fills(fill_step):
+            corners = (
+                project((x1, 0.0, z1)), project((x2, 0.0, z1)),
+                project((x2, 0.0, z2)), project((x1, 0.0, z2)),
+            )
+            xs = [corner[0] for corner in corners]
+            ys = [corner[1] for corner in corners]
+            low_x = min(xs)
+            high_x = max(xs)
+            low_y = min(ys)
+            high_y = max(ys)
+            if high_x < 0 or low_x > width or high_y < 0 or low_y > height:
+                continue
+            left = min(left, low_x)
+            right = max(right, high_x)
+            top = min(top, low_y)
+            bottom = max(bottom, high_y)
+            visible.append((
+                [(corner[0], corner[1]) for corner in corners],
+                _region_fill_opaque(region_id, accent, alpha, backdrop) if moving
+                else _region_fill_rgba(region_id, accent, alpha),
+            ))
+        if not visible:
+            return
+        if moving:
+            draw = self._background_draw
+            for points, colour in visible:
+                draw.polygon(points, fill=colour)
+            return
+        left = max(0, int(math.floor(left)))
+        top = max(0, int(math.floor(top)))
+        right = min(width, int(math.ceil(right)) + 1)
+        bottom = min(height, int(math.ceil(bottom)) + 1)
+        if right <= left or bottom <= top:
+            return
+        # ImageDraw replaces alpha on an RGBA surface instead of blending it,
+        # so the wash is collected on its own layer and composited once.
+        overlay = Image.new("RGBA", (right - left, bottom - top), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+        for points, colour in visible:
+            draw.polygon([(x - left, y - top) for x, y in points], fill=colour)
+        background.alpha_composite(overlay, dest=(left, top))
+
     def _draw_region_contours(self):
         visible_radius = self._fit_radius / max(self._zoom, 0.01)
         contour_step = 32 if visible_radius > 16000 else (16 if visible_radius > 4500 else 8)
-        if self._drag_mode:
+        if self._motion_frame:
             contour_step = min(256, contour_step * 8)
         # Contours become more detailed as the camera approaches them. Label
         # anchors stay fixed so names do not visibly drift between zoom levels.
         segments, _ignored_labels = region_geometry(contour_step)
         _ignored_segments, labels = region_geometry(16)
+        # Interiors sit beneath the boundaries so edges stay crisp on top.
+        self._draw_region_fills(contour_step)
         boundary_colour = _mix(THEME.inset, THEME.orange, 0.38)
         for x1, z1, x2, z2, _left_region, _right_region in segments:
             left = self._project((x1, 0.0, z1))
@@ -1152,7 +1384,8 @@ class ExpeditionMapView:
     def _draw_region_labels(self, labels):
         width = self._projection_context["width"]
         height = self._projection_context["height"]
-        label_colour = _mix(THEME.inset, THEME.text, 0.48)
+        # Names now sit over a coloured wash rather than bare background.
+        label_colour = _mix(THEME.inset, THEME.text, 0.74)
         current = _position(getattr(self.app, "current_coords", None))
         current_region = find_region(*current) if current else None
         selected_region = None
@@ -1189,7 +1422,7 @@ class ExpeditionMapView:
                 row["name"] == selected_region
                 or bool(current_region and row["id"] == current_region[0])
             )
-            if self._drag_mode and not forced:
+            if self._motion_frame and not forced:
                 continue
             overlaps = any(
                 bounds[0] < other[2] and bounds[2] > other[0]
@@ -1217,7 +1450,7 @@ class ExpeditionMapView:
         mapped_points = [point for point in self._map_points if point["record"].get("kind") == "Region"]
         position_by_system = self._position_by_system
         draw_rows = rows
-        if self._drag_mode and len(rows) > 160:
+        if self._motion_frame and len(rows) > 160:
             last = len(rows) - 1
             indexes = {
                 round(sample * last / 159)
@@ -1255,7 +1488,7 @@ class ExpeditionMapView:
                 == current_system.casefold()
             )
         }
-        point_limit = 30 if self._drag_mode else 220
+        point_limit = 30 if self._motion_frame else 220
         if len(visible_indexes) > point_limit:
             last = len(visible_indexes) - 1
             visible_indexes = sorted(mandatory_indexes | {
@@ -1302,7 +1535,7 @@ class ExpeditionMapView:
             })
 
         markers = self._marker_cache
-        if self._drag_mode and len(markers) > 120:
+        if self._motion_frame and len(markers) > 120:
             last = len(markers) - 1
             indexes = {
                 round(sample * last / 119)
@@ -1405,7 +1638,7 @@ class ExpeditionMapView:
                 flush()
                 sequence.clear()
         flush()
-        if not self._drag_mode and len(route_points) >= 2:
+        if not self._motion_frame and len(route_points) >= 2:
             recent = route_points[-min(24, len(route_points)):]
             coordinates = []
             for projected, _row, _pos in recent:
@@ -1439,7 +1672,7 @@ class ExpeditionMapView:
                     (left[0], left[1], right[0], right[1]),
                     LAYER_COLOURS["Planned"], width=2, dash=dash,
                 )
-                if not self._drag_mode and index % max(1, len(points) // 5) == 0:
+                if not self._motion_frame and index % max(1, len(points) // 5) == 0:
                     self._draw_direction_arrow(left, right, LAYER_COLOURS["Planned"])
 
     def _draw_return_trail(self, route_points):
@@ -1454,7 +1687,7 @@ class ExpeditionMapView:
                 (left[0], left[1], right[0], right[1]),
                 LAYER_COLOURS["Return"], width=1, dash=(2, 6),
             )
-            if not self._drag_mode and index % max(2, len(points) // 4) == 0:
+            if not self._motion_frame and index % max(2, len(points) // 4) == 0:
                 self._draw_direction_arrow(left, right, LAYER_COLOURS["Return"])
 
     def _draw_direction_arrow(self, left, right, colour):

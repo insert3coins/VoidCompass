@@ -9,6 +9,7 @@ corner anchor and auto-dismiss individually after their own timeout.
 import time
 import tkinter as tk
 from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, save_config
+import overlay_chrome
 
 _CHROMA = "#ff00ff"
 _RED = "#ff5a5a"
@@ -40,11 +41,9 @@ class ToastHUD:
         self._tick_job = None
 
         self.win = tk.Toplevel(root)
-        self.win.attributes("-topmost", True, "-transparentcolor", _CHROMA, "-toolwindow", True)
-        self.win.overrideredirect(True)
-        self.win.config(bg=_CHROMA)
+        overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
 
-        self.canvas = tk.Canvas(self.win, width=WIDTH, height=10, bg=_CHROMA, highlightthickness=0)
+        self.canvas = tk.Canvas(self.win, width=WIDTH, height=10, bg=overlay_bg, highlightthickness=0)
         self.canvas.pack()
 
         self.canvas.bind("<Button-1>", self._drag_start)

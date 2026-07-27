@@ -1,8 +1,8 @@
 # Void Compass
 
-**Current version: 5.2.5**
+**Current version: 5.2.6**
 
-Void Compass is a native Windows companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
+Void Compass is a native Windows companion for Elite Dangerous, with a native Linux x86-64 build currently offered for testing. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
 
 [Download releases](https://github.com/insert3coins/VoidCompass/releases) · [Read the wiki](https://github.com/insert3coins/VoidCompass/wiki) · [Report an issue](https://github.com/insert3coins/VoidCompass/issues/new/choose)
 
@@ -83,7 +83,7 @@ Every overlay can be enabled independently, dragged to a saved position and styl
 - Gravity, touchdown/liftoff, on-foot and other low-noise safety notifications.
 - Toast notifications and the journal/Compass heartbeat pulse.
 
-Profile-aware global shortcuts can temporarily hide or restore all overlays while Elite has focus, with optional individual shortcuts for the main exploration and operations overlays. The default master shortcut is **Ctrl+Shift+O**; assignments can be changed or cleared in **Settings → Overlays** without changing which modules are enabled.
+On Windows, profile-aware global shortcuts can temporarily hide or restore all overlays while Elite has focus, with optional individual shortcuts for the main exploration and operations overlays. The default master shortcut is **Ctrl+Shift+O**; assignments can be changed or cleared in **Settings → Overlays** without changing which modules are enabled. Linux X11/XWayland builds retain borderless topmost overlays with opaque themed backgrounds; chroma transparency, mouse passthrough and system-wide shortcuts remain Windows-only.
 
 ![Navigation HUD](NavHud.PNG)
 
@@ -118,11 +118,19 @@ State-heavy journal bursts are buffered through a coalescing background writer, 
 
 **Settings → Diagnostics → Create Support Bundle** produces a ZIP in the `logs` folder with version and health information, sanitized runtime/crash diagnostics, and only journal event names and timestamps. It excludes raw journal payloads, commander identity, profile identifiers, credentials and webhook URLs.
 
-`config.json` is created automatically in the working directory. If journal detection fails, set `journal_path` in Settings; the normal location is:
+Packaged releases create `config.json`, commander profiles and logs beside the executable. If journal detection fails, set `journal_path` in Settings. The normal Windows location is:
 
 ```text
 C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous
 ```
+
+The native Linux x86-64 build is currently a **testing release**. It detects Elite running through Steam/Proton in standard Steam, Flatpak Steam and custom Steam-library prefixes. A typical journal path is:
+
+```text
+~/.local/share/Steam/steamapps/compatdata/359320/pfx/drive_c/users/steamuser/Saved Games/Frontier Developments/Elite Dangerous
+```
+
+Windows and Linux are packaged as separate native builds; the Linux application does not run inside Proton. Extract its `.tar.gz` into a writable folder, make `VoidCompass` executable if necessary, and run it alongside Elite. Piper playback uses the first available `pw-play`, `paplay`, `aplay` or `ffplay` command. Maintainers can build on Linux with `bash build_linux.sh`; the manual GitHub Actions workflow produces a checksummed portable testing artifact because PyInstaller builds must be created separately on each operating system. Linux testers are encouraged to report distribution, desktop session and overlay details with any issue.
 
 ## Contributing and support
 

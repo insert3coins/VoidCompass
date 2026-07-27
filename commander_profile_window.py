@@ -17,6 +17,7 @@ from ui_theme import (
     window_surface,
 )
 import companion_features
+from platform_support import open_path
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -963,9 +964,7 @@ class CommanderProfileWindow(ThemedWindowMixin):
 
     def _open_profile_folder(self):
         path = get_profile_dir(get_active_profile(self.config))
-        try:
-            os.startfile(path)
-        except Exception:
+        if not open_path(path):
             messagebox.showinfo("Profile Folder", path, parent=self.win)
 
     def _backup_profile(self):

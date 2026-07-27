@@ -11,6 +11,7 @@ from urllib.parse import quote_plus
 import webbrowser
 
 from galactic_regions import region_names
+from platform_support import open_path
 from ui_theme import THEME, button, configure_ttk, scrollbar
 
 try:
@@ -444,13 +445,13 @@ class DiscoveriesView:
     def _open_image(self):
         path = self._selected_path()
         if path:
-            os.startfile(path)
+            open_path(path)
 
     def _open_folder(self):
         path = self._selected_path()
         folder = os.path.dirname(path) if path else self.app.config.get("screenshots_path")
         if folder and os.path.isdir(folder):
-            os.startfile(folder)
+            open_path(folder)
 
     def _copy_selected(self):
         selected = self.tree.selection()

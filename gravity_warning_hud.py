@@ -26,11 +26,9 @@ class GravityWarningHUD:
         self._last_gravity = None
 
         self.win = tk.Toplevel(root)
-        self.win.attributes("-topmost", True, "-transparentcolor", _CHROMA, "-toolwindow", True)
-        self.win.overrideredirect(True)
-        self.win.config(bg=_CHROMA)
+        overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
 
-        self.canvas = tk.Canvas(self.win, width=self.WIDTH, height=self.HEIGHT, bg=_CHROMA, highlightthickness=0)
+        self.canvas = tk.Canvas(self.win, width=self.WIDTH, height=self.HEIGHT, bg=overlay_bg, highlightthickness=0)
         self.canvas.pack()
 
         self.canvas.bind("<Button-1>", self._drag_start)

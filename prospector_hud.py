@@ -95,18 +95,12 @@ class ProspectorHUD:
 
         # ── Transparent topmost window ────────────────────────────────────
         self.win = tk.Toplevel(root)
-        self.win.attributes(
-            "-topmost", True,
-            "-transparentcolor", _CHROMA,
-            "-toolwindow", True,
-        )
-        self.win.overrideredirect(True)
-        self.win.config(bg=_CHROMA)
+        overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
 
         self.canvas = tk.Canvas(
             self.win,
             width=self.WIDTH, height=self._MIN_H,
-            bg=_CHROMA, highlightthickness=0,
+            bg=overlay_bg, highlightthickness=0,
         )
         self.canvas.pack()
 

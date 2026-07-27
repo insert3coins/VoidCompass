@@ -1,7 +1,9 @@
 import PyInstaller.__main__
 import PyInstaller
 import os
+import platform
 import shutil
+import sys
 from version import APP_VERSION
 from mining_data import MiningDataStore
 from release_packager import create_release
@@ -9,6 +11,13 @@ from release_packager import create_release
 # This script automates the build process for SurveyAnalysis
 
 if __name__ == '__main__':
+    if sys.platform not in {'win32', 'linux'}:
+        raise SystemExit("Void Compass builds currently support Windows and Linux only.")
+    is_windows = sys.platform == 'win32'
+    machine = platform.machine().casefold()
+    if not is_windows and machine not in {'x86_64', 'amd64'}:
+        raise SystemExit("The native Linux release currently supports x86-64 only.")
+    target_name = f"{'Windows' if is_windows else 'Linux'}-x64"
     pyinstaller_version = tuple(
         int(part) for part in PyInstaller.__version__.split('.')[:3]
     )
@@ -24,10 +33,11 @@ if __name__ == '__main__':
     if os.path.exists('build'):
         print("Removing previous build folder...")
         shutil.rmtree('build')
-    legacy_market_builder = os.path.join('dist', 'VoidCompassMarketBuilder.exe')
-    if os.path.exists(legacy_market_builder):
-        os.remove(legacy_market_builder)
-        print("Removed legacy dist/VoidCompassMarketBuilder.exe")
+    for legacy_name in ('VoidCompassMarketBuilder.exe', 'VoidCompassMarketBuilder'):
+        legacy_market_builder = os.path.join('dist', legacy_name)
+        if os.path.exists(legacy_market_builder):
+            os.remove(legacy_market_builder)
+            print(f"Removed legacy dist/{legacy_name}")
 
     # Convert "1.3.0" -> (1, 3, 0, 0) for Windows Version Info
     v_parts = [int(x) for x in APP_VERSION.split('.')]
@@ -36,8 +46,9 @@ if __name__ == '__main__':
     v_tuple = tuple(v_parts)
     v_str = f"{v_parts[0]}.{v_parts[1]}.{v_parts[2]}.{v_parts[3]}"
 
-    # Create version info file for Windows executable details
-    version_content = f"""
+    # Create PE metadata only for the Windows build.
+    if is_windows:
+        version_content = f"""
 # UTF-8
 VSVersionInfo(
   ffi=FixedFileInfo(
@@ -68,32 +79,37 @@ VSVersionInfo(
   ]
 )
 """
-    with open('version_info.txt', 'w', encoding='utf-8') as f:
-        f.write(version_content)
+        with open('version_info.txt', 'w', encoding='utf-8') as f:
+            f.write(version_content)
 
     mining_db_path = os.path.abspath("mining_data.db")
     if not os.path.exists(mining_db_path):
         MiningDataStore(mining_db_path)
         print("Created mining_data.db")
 
+    data_sep = os.pathsep
     opts = [
         'VoidCompass.py',          # Your main entry point
         '--name=VoidCompass',      # Name of the executable
-        '--onefile',               # Bundle everything into a single .exe file
+        '--onefile',               # Bundle everything into one native executable
         '--windowed',              # Hide the console (GUI only)
         '--clean',                 # Clean cache before building
         '--log-level=INFO',
-        '--icon=icon.ico',         # Sets the file icon for the .exe
-        '--add-data=icon.ico;.',   # Bundles the icon inside the .exe for the GUI
-        '--add-data=Images;Images',
-        '--add-data=mining_data.db;.',
-        '--add-data=codexRef.json;.',
-        '--add-data=data/achievements.json;data',
+        f'--add-data=icon.ico{data_sep}.',
+        f'--add-data=icon-source.png{data_sep}.',
+        f'--add-data=Images{data_sep}Images',
+        f'--add-data=mining_data.db{data_sep}.',
+        f'--add-data=codexRef.json{data_sep}.',
+        f'--add-data=data/achievements.json{data_sep}data',
         '--hidden-import=zmq',
-        '--version-file=version_info.txt'
     ]
+    if is_windows:
+        opts.extend([
+            '--icon=icon.ico',
+            '--version-file=version_info.txt',
+        ])
 
-    print("Starting build process...")
+    print(f"Starting {target_name} build process...")
     PyInstaller.__main__.run(opts)
     
     if os.path.exists('version_info.txt'):
@@ -138,7 +154,7 @@ VSVersionInfo(
 
     release = create_release(os.getcwd(), APP_VERSION)
     print(f"Created public release folder: {release['package_dir']}")
-    print(f"Created public release ZIP: {release['zip_path']}")
+    print(f"Created public release archive: {release['archive_path']}")
     print(f"Release SHA-256: {release['sha256']}")
     if not release["license_included"]:
         print("Warning: no LICENSE or COPYING file was found to include.")

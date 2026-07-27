@@ -46,9 +46,7 @@ class ColonyOverlay:
 
         self.win = tk.Toplevel(root)
         self.win.title("Colony Shopping List")
-        self.win.overrideredirect(True)
-        self.win.attributes("-topmost", True, "-transparentcolor", self.BG_KEY, "-toolwindow", True)
-        self.win.config(bg=self.BG_KEY)
+        overlay_bg = overlay_chrome.configure_overlay_window(self.win, self.BG_KEY)
 
         x = self._safe_int(config.get("colony_overlay_x"), 40)
         y = self._safe_int(config.get("colony_overlay_y"), 40)
@@ -56,7 +54,7 @@ class ColonyOverlay:
         h = self._safe_int(config.get("colony_overlay_h"), 260)
         self.win.geometry(f"{w}x{h}+{x}+{y}")
 
-        self.canvas = tk.Canvas(self.win, bg=self.BG_KEY, highlightthickness=0, bd=0)
+        self.canvas = tk.Canvas(self.win, bg=overlay_bg, highlightthickness=0, bd=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         self.panel = tk.Frame(self.canvas, bg=self.PANEL)
         self.panel_window = self.canvas.create_window(7, 7, window=self.panel, anchor="nw")

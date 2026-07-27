@@ -164,8 +164,6 @@ class GlobalHotkeyManager:
             parsed.append((action, canonical, modifiers, virtual_key))
         report = {"registered": {}, "errors": dict(errors), "supported": self.supported}
         if not self.supported:
-            if parsed:
-                report["errors"]["platform"] = "global hotkeys require Windows"
             return report
         if not parsed:
             return report
@@ -258,4 +256,3 @@ class GlobalHotkeyManager:
                 pass
         if thread is not threading.current_thread():
             thread.join(timeout=0.35)
-

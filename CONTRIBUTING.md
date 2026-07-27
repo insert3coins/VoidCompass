@@ -13,7 +13,7 @@ The structured issue forms will ask for the details needed to investigate a bug 
 
 ## Local development
 
-Void Compass targets Windows and Python 3. Clone the repository, create a virtual environment, and install the declared dependencies:
+Void Compass targets native Windows and native Linux x86-64 builds with Python 3. Linux support is currently in public testing. Clone the repository, create a virtual environment, and install the declared dependencies:
 
 ```powershell
 git clone https://github.com/insert3coins/VoidCompass.git
@@ -24,6 +24,15 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python VoidCompass.py
 ```
+
+On Debian/Ubuntu Linux, install the native Tk and virtual-environment packages, then run the build helper:
+
+```bash
+sudo apt install python3-tk python3-venv
+bash build_linux.sh
+```
+
+The helper creates the native Linux executable and checksummed portable release; PyInstaller cannot cross-build the Linux executable from Windows.
 
 Create a branch from `master` and keep each change focused. Do not commit generated builds, local databases, commander profiles, configuration, logs, journal files, voice caches, or credentials.
 

@@ -60,12 +60,8 @@ class ExplorationWindow(ThemedWindowMixin):
         self.discoveries_view = None
         self.expedition_map_view = None
         self.expedition_mission_view = None
-        self._map_focus_host = None
-        self._map_focus_bind_target = None
-        self._map_focus_escape_binding = None
-        self._map_split = None
+        self.map_workspace = None
         self._map_host = None
-        self._map_intelligence_host = None
         self.embedded = embedded
         self.win = window_surface(root, embedded=embedded)
         self.win.title("Exploration")
@@ -217,24 +213,37 @@ class ExplorationWindow(ThemedWindowMixin):
             on_change=self._on_expedition_changed,
             copy_report_callback=self._copy_named_expedition_report,
         )
-        map_section = self.route_plotter.add_section("Map & Intelligence")
-        split = tk.PanedWindow(
-            map_section, orient=tk.VERTICAL, bg=self.UI_BG,
-            sashwidth=6, sashrelief=tk.FLAT, bd=0,
+        # The per-system route table sits with the other route tools. It used
+        # to share the map's window, where it competed for the space the map
+        # now uses in full.
+        self._build_route_tab(
+            self.route_plotter.add_section("Route Intelligence"), embedded=True,
         )
-        split.pack(fill=tk.BOTH, expand=True)
-        map_host = tk.Frame(split, bg=self.UI_BG)
-        intelligence_host = tk.Frame(split, bg=self.UI_BG)
-        self._map_split = split
-        self._map_host = map_host
-        self._map_intelligence_host = intelligence_host
-        split.add(map_host, minsize=380)
-        split.add(intelligence_host, minsize=165)
+        self._build_map_workspace()
+
+    def _build_map_workspace(self):
+        """Build the galaxy map as its own top-level workspace.
+
+        The map is reached from the navigation rail rather than from a section
+        inside Explore, so it is parented to the shared workspace host and left
+        unpacked until the rail shows it. The map fills the workspace on its
+        own; its data still comes from this window, which owns the survey,
+        ledger and route intelligence.
+        """
+        host = getattr(self.app, "dashboard_host", None)
+        if not self._widget_alive(host):
+            host = self.win
+        workspace = tk.Frame(host, bg=self.UI_BG)
+        self.map_workspace = workspace
+        self._map_host = workspace
         self.expedition_map_view = ExpeditionMapView(
-            map_host, self.app, open_record_callback=self._open_map_record,
-            popout_callback=self._toggle_map_popout,
+            workspace, self.app, open_record_callback=self._open_map_record,
         )
-        self._build_route_tab(intelligence_host, embedded=True)
+
+    def on_map_shown(self):
+        """Refresh the map workspace as the rail brings it to the front."""
+        if self.expedition_map_view:
+            self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
 
     def _on_workspace_changed(self, _event=None):
         self._remember_active_page()
@@ -244,11 +253,9 @@ class ExplorationWindow(ThemedWindowMixin):
             selected = self.tabs.select()
             if selected == str(self.discoveries_workspace) and self.discoveries_view:
                 self.discoveries_view.refresh(self.system_history_rows, self.ledger_rows)
-            elif selected == str(self.expedition_workspace) and self.expedition_map_view:
+            elif selected == str(self.expedition_workspace) and self.expedition_mission_view:
                 section = self.route_plotter.current_section() if self.route_plotter else ""
-                if section == "Map & Intelligence":
-                    self._refresh_visible_map()
-                if section == "Mission Control" and self.expedition_mission_view:
+                if section == "Mission Control":
                     self.expedition_mission_view.on_shown()
         except Exception:
             pass
@@ -287,115 +294,20 @@ class ExplorationWindow(ThemedWindowMixin):
 
     def _on_expedition_section_changed(self, value):
         self._save_view_setting("explore_expedition_section", value)
-        if (
-            value == "Map & Intelligence" and self.expedition_map_view
-            and not self._map_popout_is_open()
-        ):
-            self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
-        elif value == "Mission Control" and self.expedition_mission_view:
+        if value == "Mission Control" and self.expedition_mission_view:
             # This callback also runs while restoring the saved Explore state,
             # before the outer notebook necessarily emits its own change event.
             self.expedition_mission_view.on_shown()
 
-    def _map_popout_is_open(self):
-        return self._widget_alive(self._map_focus_host)
-
-    def _toggle_map_popout(self):
-        if self._map_popout_is_open():
-            self._dock_map_popout()
-        else:
-            self._open_map_popout()
-
-    def _open_map_popout(self):
-        if self._map_popout_is_open():
-            self._map_focus_host.lift()
-            return
-        state = self.expedition_map_view.view_state() if self.expedition_map_view else None
-        target = getattr(self.app, "root", None)
-        if not self._widget_alive(target):
-            target = self.win.winfo_toplevel()
-        focus_host = tk.Frame(target, bg=self.UI_BG, bd=0, highlightthickness=0)
-        focus_host.place(x=0, y=0, relwidth=1.0, relheight=1.0)
-        focus_host.lift()
-        self._map_focus_host = focus_host
-        self._map_focus_bind_target = target
-        self._map_focus_escape_binding = target.bind(
-            "<Escape>", lambda _event: self._dock_map_popout(), add="+",
+    def _map_workspace_is_visible(self):
+        """Report whether the rail is currently showing the map workspace."""
+        return (
+            self._widget_alive(self.map_workspace)
+            and bool(self.map_workspace.winfo_manager())
         )
-        try:
-            focus_view = ExpeditionMapView(
-                focus_host, self.app,
-                open_record_callback=self._open_map_record,
-                popout_callback=self._toggle_map_popout,
-                focus_mode=True,
-            )
-            focus_view.refresh(self.system_history_rows, self.ledger_rows)
-            focus_view.apply_view_state(state)
-        except Exception:
-            self._remove_map_focus_host()
-            raise
-        old_view = self.expedition_map_view
-        if old_view:
-            old_view.dispose()
-        if self._widget_alive(self._map_host):
-            for child in self._map_host.winfo_children():
-                child.destroy()
-        self.expedition_map_view = focus_view
-        focus_host.lift()
-
-    def _dock_map_popout(self, sync=True):
-        if not self._map_popout_is_open():
-            return
-        focus_view = self.expedition_map_view
-        state = focus_view.view_state() if focus_view else None
-        if sync and self._widget_alive(self._map_host):
-            try:
-                embedded_view = ExpeditionMapView(
-                    self._map_host, self.app,
-                    open_record_callback=self._open_map_record,
-                    popout_callback=self._toggle_map_popout,
-                )
-                embedded_view.refresh(self.system_history_rows, self.ledger_rows)
-                embedded_view.apply_view_state(state)
-            except Exception as exc:
-                for child in self._map_host.winfo_children():
-                    child.destroy()
-                self._log_error(f"Could not restore embedded galaxy map: {exc}")
-                return
-        else:
-            embedded_view = None
-        if focus_view:
-            focus_view.dispose()
-        self._remove_map_focus_host()
-        self.expedition_map_view = embedded_view
-
-    def _remove_map_focus_host(self):
-        target = self._map_focus_bind_target
-        binding = self._map_focus_escape_binding
-        if target is not None and binding:
-            try:
-                target.unbind("<Escape>", binding)
-            except tk.TclError:
-                pass
-        focus_host = self._map_focus_host
-        self._map_focus_host = None
-        self._map_focus_bind_target = None
-        self._map_focus_escape_binding = None
-        try:
-            if focus_host and focus_host.winfo_exists():
-                focus_host.destroy()
-        except tk.TclError:
-            pass
 
     def _refresh_visible_map(self):
-        if self._map_popout_is_open() and self.expedition_map_view:
-            self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
-            return
-        if (
-            self.expedition_map_view and self.is_route_active()
-            and self.route_plotter
-            and self.route_plotter.current_section() == "Map & Intelligence"
-        ):
+        if self.expedition_map_view and self._map_workspace_is_visible():
             self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
 
     def _restore_view_state(self):
@@ -435,6 +347,13 @@ class ExplorationWindow(ThemedWindowMixin):
 
     def show_section(self, section=None):
         section = str(section or "survey").strip().casefold()
+        if section == "map":
+            # The galaxy map is a rail workspace of its own now, so existing
+            # "map" links hand off to it instead of selecting an Explore tab.
+            open_map = getattr(self.app, "open_galaxy_map_page", None)
+            if callable(open_map):
+                open_map()
+                return
         target = {
             "survey": self.survey_workspace,
             "system survey": self.survey_workspace,
@@ -454,7 +373,6 @@ class ExplorationWindow(ThemedWindowMixin):
             "bookmarks": self.expedition_workspace,
             "waypoints": self.expedition_workspace,
             "neutron": self.expedition_workspace,
-            "map": self.expedition_workspace,
             "discoveries": self.discoveries_workspace,
             "research": self.discoveries_workspace,
             "atlas": self.discoveries_workspace,
@@ -472,7 +390,6 @@ class ExplorationWindow(ThemedWindowMixin):
                 "waypoints": "Waypoints", "neutron": "Neutron",
                 "mission": "Mission Control", "mission control": "Mission Control",
                 "objectives": "Mission Control", "bookmarks": "Mission Control",
-                "map": "Map & Intelligence",
             }.get(section)
             if section_name and hasattr(self.route_plotter, "show_flat_section"):
                 self.route_plotter.show_flat_section(section_name)
@@ -1039,13 +956,8 @@ class ExplorationWindow(ThemedWindowMixin):
             selected_workspace = self.tabs.select()
             if selected_workspace == str(self.discoveries_workspace) and self.discoveries_view:
                 self.discoveries_view.refresh(self.system_history_rows, self.ledger_rows)
-            if self._map_popout_is_open() or (
-                selected_workspace == str(self.expedition_workspace)
-                and self.expedition_map_view and self.route_plotter
-                and self.route_plotter.current_section() == "Map & Intelligence"
-            ):
-                self._refresh_visible_map()
-            elif (
+            self._refresh_visible_map()
+            if (
                 selected_workspace == str(self.expedition_workspace)
                 and self.expedition_mission_view
                 and self.route_plotter
@@ -1787,16 +1699,23 @@ class ExplorationWindow(ThemedWindowMixin):
         return bookmark
 
     def _open_map_record(self, record):
-        if self._map_popout_is_open():
-            self._dock_map_popout()
+        # Records live in Explore, so a clicked marker leaves the map workspace
+        # and brings the owning Explore page forward.
+        open_explore = getattr(self.app, "open_exploration_window", None)
         kind = str((record or {}).get("kind") or "")
         if kind in {"Bookmark", "Recon"}:
-            self.show_section("mission")
+            if callable(open_explore):
+                open_explore(section="mission")
+            else:
+                self.show_section("mission")
             bookmark_id = (record or {}).get("bookmark_id")
             if bookmark_id and self.expedition_mission_view:
                 self.expedition_mission_view.open_bookmark(bookmark_id)
             return
-        self.tabs.select(self.discoveries_workspace)
+        if callable(open_explore):
+            open_explore(section="discoveries")
+        else:
+            self.tabs.select(self.discoveries_workspace)
         if self.discoveries_view:
             self.discoveries_view.refresh(self.system_history_rows, self.ledger_rows)
             self.discoveries_view.select_record(
@@ -2814,7 +2733,15 @@ class ExplorationWindow(ThemedWindowMixin):
     def _on_close(self):
         self._closing = True
         self._remember_active_page()
-        self._dock_map_popout(sync=False)
+        if self.expedition_map_view:
+            self.expedition_map_view.dispose()
+            self.expedition_map_view = None
+        if self._widget_alive(self.map_workspace):
+            try:
+                self.map_workspace.destroy()
+            except tk.TclError:
+                pass
+        self.map_workspace = None
         plotter = self.route_plotter
         try:
             if plotter and self._widget_alive(plotter.win):

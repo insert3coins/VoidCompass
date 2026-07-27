@@ -17,7 +17,6 @@ import tkinter as tk
 import logging
 import atexit
 import tempfile
-import msvcrt
 import crash_reporter
 from config import load_config
 from dashboard import MainDashboard
@@ -26,13 +25,25 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 _INSTANCE_LOCK_FILE = None
 
+
+def _lock_file(lock_file, unlock=False):
+    """Acquire or release the platform-native non-blocking process lock."""
+    if os.name == "nt":
+        import msvcrt
+        lock_file.seek(0)
+        mode = msvcrt.LK_UNLCK if unlock else msvcrt.LK_NBLCK
+        msvcrt.locking(lock_file.fileno(), mode, 1)
+        return
+    import fcntl
+    operation = fcntl.LOCK_UN if unlock else (fcntl.LOCK_EX | fcntl.LOCK_NB)
+    fcntl.flock(lock_file.fileno(), operation)
+
 def acquire_single_instance_lock():
     global _INSTANCE_LOCK_FILE
     lock_path = os.path.join(tempfile.gettempdir(), "void_compass.instance.lock")
     lock_file = open(lock_path, "a+")
     try:
-        lock_file.seek(0)
-        msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+        _lock_file(lock_file)
         _INSTANCE_LOCK_FILE = lock_file
         return True
     except OSError:
@@ -44,8 +55,7 @@ def release_single_instance_lock():
     if _INSTANCE_LOCK_FILE is None:
         return
     try:
-        _INSTANCE_LOCK_FILE.seek(0)
-        msvcrt.locking(_INSTANCE_LOCK_FILE.fileno(), msvcrt.LK_UNLCK, 1)
+        _lock_file(_INSTANCE_LOCK_FILE, unlock=True)
     except OSError:
         pass
     try:
@@ -87,9 +97,15 @@ def main():
             crash_reporter.install_tk(root)
             root.bind_all("<Control-Alt-d>", lambda _event: crash_reporter.dump_stacks("manual Ctrl+Alt+D"))
 
-        # Attempt to set the window icon
+        # Attempt to set the native window icon.
         try:
-            root.iconbitmap(resource_path("icon.ico"))
+            if sys.platform == "win32":
+                root.iconbitmap(resource_path("icon.ico"))
+            else:
+                root._voidcompass_icon = tk.PhotoImage(
+                    file=resource_path("icon-source.png")
+                )
+                root.iconphoto(True, root._voidcompass_icon)
         except Exception:
             pass # Icon file likely missing or invalid
 

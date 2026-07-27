@@ -1,5 +1,22 @@
 # VoidCompass // UPDATE LOG
 
+## v5.2.6 // Cartographic Regions
+**Release Date:** 2026-Jul-27
+
+*   Rebuilt the 42 Universal Cartographics regions as **filled translucent volumes** instead of dashed outlines, so the Galaxy Map reads like the in-game galactic-region view rather than a survey plot. Region interiors are derived from the same pinned offline raster as the existing boundaries, which continue to be drawn crisply on top.
+*   Gave every region its own hue by rotating the golden angle around the active commander accent, keeping neighbouring regions distinguishable while the whole map still follows the current theme. Region names were brightened to stay readable over the new colour.
+*   Region interiors use the finest raster when settled and a coarser one while orbiting, are confined to the pixels they can reach, and are skipped entirely when the camera is edge-on to the galactic plane, where the fills would collapse into a meaningless sliver.
+*   Promoted the Galaxy Map to its own **MAP** workspace on the navigation rail beside Expedition, where the map fills the whole window instead of being buried inside Explore's Expedition page.
+*   Moved the per-system route table into a **Route Intelligence** section alongside the other Expedition route tools. It previously shared the map's window, competing for the space the map now uses in full.
+*   Framed the Perspective, Top, Side and Route Focus cameras against the real shape of the plotted data instead of a sphere fitted to the window's shorter side. A long expedition route now spans the map rather than sitting in a narrow central column, and the Side camera no longer opens as an almost invisible sliver. Galaxy Overview keeps its deliberate whole-disc framing.
+*   Made wheel zoom treat its burst of events as camera motion, so each step redraws on the map's existing lightweight path and full detail returns once the wheel stops. Zooming a 1,500-jump history measured roughly three and a half times faster per step.
+*   Reduced orbiting cost further by flattening the region wash against the backdrop while the camera moves, which avoids compositing a translucent layer, and by skipping the galaxy disc texture in those frames because the wash already covers it.
+*   Removed the map's POP OUT and DOCK controls. A dedicated rail workspace already fills the window, so the temporary focus mode, its Escape binding and its view-state handoff are gone; existing "map" links open the new workspace directly.
+*   Clicking an intelligence marker now brings Explore forward on the matching Discoveries or Mission Control record instead of docking a focus overlay first.
+*   Added a native **Linux x86-64 testing build** for Elite running through Steam/Proton, alongside the established native Windows build. It includes automatic journal and screenshot discovery across standard Steam, Flatpak, Snap and custom Steam-library prefixes, portable single-instance locking and desktop file/folder opening.
+*   Made every native overlay construct safely on X11/XWayland with borderless topmost themed backgrounds. Windows retains chroma transparency, mouse passthrough and global overlay hotkeys; unsupported Linux controls default off and no longer create startup errors.
+*   Enabled downloaded Piper voices on Linux through PipeWire, PulseAudio, ALSA or FFmpeg playback, and added a platform-aware PyInstaller build, `.tar.gz` release packager, executable permissions, SHA-256 output, local `build_linux.sh` entry point and manual GitHub Actions artifact build.
+
 ## v5.2.5 // Exploration Continuity
 **Release Date:** 2026-Jul-27
 
