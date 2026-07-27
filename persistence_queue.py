@@ -39,12 +39,20 @@ class PersistenceQueue:
     def _key(path):
         return os.path.normcase(os.path.abspath(os.fspath(path)))
 
-    def submit_json(self, path, value, *, indent=2, delay_s=1.5, immediate=False):
-        """Queue the newest JSON snapshot, replacing an older pending one."""
+    def submit_json(self, path, value=None, *, indent=2, delay_s=1.5,
+                    immediate=False, source=None):
+        """Queue the newest JSON snapshot, replacing an older pending one.
+
+        ``source`` is a callable producing the payload, invoked on the worker
+        at write time instead of copying here. Repeat submissions coalesce, so
+        a burst that collapses into one write also performs one snapshot
+        rather than one per event; callers whose owner state can change must
+        take their own lock inside the callable.
+        """
         key = self._key(path)
         # Copy on the caller while its reducer has a consistent view. JSON
         # encoding and all filesystem work happen on the persistence worker.
-        snapshot = copy.deepcopy(value)
+        snapshot = None if source is not None else copy.deepcopy(value)
         now = time.monotonic()
         due = now if immediate else now + max(0.0, float(delay_s))
         with self._condition:
@@ -56,7 +64,7 @@ class PersistenceQueue:
                 due = min(float(previous["due"]), due)
             self._jobs[key] = {
                 "kind": "json", "path": key, "value": snapshot,
-                "indent": indent, "due": due,
+                "source": source, "indent": indent, "due": due,
             }
             self._condition.notify_all()
 
@@ -148,9 +156,11 @@ class PersistenceQueue:
             with path.open("a", encoding="utf-8") as handle:
                 handle.write(job["text"])
             return
+        source = job.get("source")
+        value = source() if source is not None else job["value"]
         temporary = path.with_name(path.name + ".tmp")
         with temporary.open("w", encoding="utf-8") as handle:
-            json.dump(job["value"], handle, indent=job.get("indent", 2), ensure_ascii=False)
+            json.dump(value, handle, indent=job.get("indent", 2), ensure_ascii=False)
         os.replace(temporary, path)
 
     def flush(self, path=None, timeout=5.0):

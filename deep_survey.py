@@ -452,7 +452,6 @@ class DeepSurveyTracker:
     def __init__(self, path):
         self.path = path
         self.lock = threading.RLock()
-        self._save_timer = None
         self.data = self._empty()
         self._seen = set()
         self.load()
@@ -526,36 +525,25 @@ class DeepSurveyTracker:
     def save(self, immediate=False):
         if not self.path:
             return
-        if not immediate:
-            with self.lock:
-                if self._save_timer is None:
-                    self._save_timer = threading.Timer(1.0, self._save_due)
-                    self._save_timer.name = "deep-survey-save"
-                    self._save_timer.daemon = True
-                    self._save_timer.start()
-            return
-        self._submit_snapshot(immediate=True)
-
-    def _save_due(self):
-        with self.lock:
-            self._save_timer = None
-        self._submit_snapshot(immediate=False)
+        # This runs on the Tk thread for every journal event. Starting a timer
+        # thread here blocked the interface waiting for the new thread to come
+        # up, so the persistence queue's own delay does the debouncing instead.
+        self._submit_snapshot(immediate=immediate)
 
     def _submit_snapshot(self, immediate=False):
         with self.lock:
-            snapshot = self.snapshot()
             path = self.path
         if path:
+            # snapshot() already deep-copies under this tracker's lock, so
+            # handing it over as the producer avoids copying the whole survey
+            # twice, and once per coalesced write rather than once per event.
             persistence_queue().submit_json(
-                path, snapshot, indent=2, delay_s=0.25, immediate=immediate,
+                path, indent=2, source=self.snapshot,
+                delay_s=0.25 if immediate else 1.0, immediate=immediate,
             )
 
     def flush(self, wait=False):
         with self.lock:
-            timer = self._save_timer
-            self._save_timer = None
-            if timer is not None:
-                timer.cancel()
             path = self.path
         self._submit_snapshot(immediate=True)
         if wait and path:

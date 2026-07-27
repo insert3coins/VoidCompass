@@ -454,8 +454,14 @@ def build_intelligence(app):
     }
 
 
-def checkpoint_payload(app, reason="app-close"):
-    intelligence = build_intelligence(app)
+def checkpoint_payload(app, reason="app-close", intelligence=None):
+    """Build a resume checkpoint.
+
+    ``intelligence`` lets a caller that has just built the shared fact packet
+    hand it in, rather than paying for a second identical build.
+    """
+    if not intelligence:
+        intelligence = build_intelligence(app)
     state = getattr(app, "companion_state", None) or {}
     manager = getattr(app, "expedition_manager", None)
     expedition = manager.compass_snapshot(
