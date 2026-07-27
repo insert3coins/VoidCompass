@@ -15,8 +15,11 @@ MAX_HIGHLIGHTS = 180
 TRACKED_EVENTS = {
     "LoadGame", "Shutdown", "FSDJump", "CarrierJump", "CodexEntry", "ScanOrganic",
     "Screenshot", "MarketBuy", "MarketSell", "SellExplorationData",
-    "MultiSellExplorationData", "SellOrganicData", "Died",
+    "MultiSellExplorationData", "SellOrganicData", "Died", "Scan",
+    "FSSAllBodiesFound", "SAAScanComplete",
 }
+
+NOTABLE_WORLDS = {"Earthlike body", "Water world", "Ammonia world"}
 
 
 def _stamp(raw):
@@ -27,7 +30,7 @@ class CaptainsLog:
     def __init__(self, path):
         self.path = path
         self.lock = threading.RLock()
-        self.data = {"sessions": [], "seen": [], "imported_files": {}}
+        self.data = {"schema": 2, "sessions": [], "seen": [], "imported_files": {}}
         self.load()
         self._seen_set = set(self.data.get("seen") or [])
         self._last_star_pos = None
@@ -36,7 +39,7 @@ class CaptainsLog:
     def switch(self, path):
         with self.lock:
             self.path = path
-            self.data = {"sessions": [], "seen": [], "imported_files": {}}
+            self.data = {"schema": 2, "sessions": [], "seen": [], "imported_files": {}}
             self.load()
             self._seen_set = set(self.data.get("seen") or [])
             self._last_star_pos = None
@@ -50,6 +53,9 @@ class CaptainsLog:
                 loaded = json.load(handle)
             if isinstance(loaded, dict):
                 self.data.update(loaded)
+                if int(loaded.get("schema") or 1) < 2:
+                    self.data["schema"] = 2
+                    self.data["imported_files"] = {}
         except Exception:
             pass
 
@@ -76,6 +82,8 @@ class CaptainsLog:
             "commander": raw.get("Commander") or "", "ship": raw.get("Ship_Localised") or raw.get("Ship") or "",
             "start_system": raw.get("StarSystem") or "", "end_system": raw.get("StarSystem") or "",
             "jumps": 0, "distance_ly": 0.0, "codex": 0, "bio_analyses": 0, "screenshots": 0,
+            "fss_surveys": 0, "dss_maps": 0, "valuable_worlds": 0,
+            "first_discoveries": 0,
             "trade_bought": 0, "trade_sold": 0, "trade_profit": 0,
             "exploration_sales": 0, "biology_sales": 0, "deaths": 0, "highlights": [],
         }
@@ -127,7 +135,6 @@ class CaptainsLog:
         context = context if isinstance(context, dict) else {}
         if ev == "Scan":
             self._remember_scan_body(raw)
-            return False
         if ev == "Location":
             self._last_star_pos = self._star_pos(raw) or self._last_star_pos
             return False
@@ -179,6 +186,27 @@ class CaptainsLog:
                 name = raw.get("Name_Localised") or raw.get("Name") or "Codex discovery"
                 session["codex"] += 1
                 self._highlight(session, raw, "CODEX", name, raw.get("Category_Localised") or "")
+            elif ev == "FSSAllBodiesFound":
+                session["fss_surveys"] = int(session.get("fss_surveys") or 0) + 1
+                count = int(raw.get("Count") or raw.get("BodyCount") or 0)
+                self._highlight(
+                    session, raw, "FSS", "Full spectrum survey complete",
+                    f"{count} bodies" if count else "All reported bodies resolved",
+                )
+            elif ev == "SAAScanComplete":
+                session["dss_maps"] = int(session.get("dss_maps") or 0) + 1
+            elif ev == "Scan":
+                planet_class = str(raw.get("PlanetClass") or "")
+                terraformable = str(raw.get("TerraformState") or "") == "Terraformable"
+                if raw.get("WasDiscovered") is False:
+                    session["first_discoveries"] = int(session.get("first_discoveries") or 0) + 1
+                if planet_class in NOTABLE_WORLDS or terraformable:
+                    session["valuable_worlds"] = int(session.get("valuable_worlds") or 0) + 1
+                if planet_class in {"Earthlike body", "Ammonia world"}:
+                    self._highlight(
+                        session, raw, "VALUABLE", f"{planet_class} recorded",
+                        raw.get("BodyName") or "",
+                    )
             elif ev == "ScanOrganic" and str(raw.get("ScanType") or "").lower() == "analyse":
                 name = raw.get("Species_Localised") or raw.get("Species") or raw.get("Genus_Localised") or "Biological analysis"
                 body_name = context.get("body_name") or raw.get("BodyName") or self._body_names.get((
@@ -212,7 +240,12 @@ class CaptainsLog:
                 self._highlight(session, raw, "LOSS", "Ship destroyed")
             elif ev == "Shutdown":
                 session["ended"] = _stamp(raw)
-                self._highlight(session, raw, "SESSION", "Flight session ended", session.get("end_system") or "")
+                detail = (
+                    f"{session.get('jumps', 0)} jumps · {float(session.get('distance_ly') or 0):.1f} ly · "
+                    f"FSS {session.get('fss_surveys', 0)} · DSS {session.get('dss_maps', 0)} · "
+                    f"BIO {session.get('bio_analyses', 0)}"
+                )
+                self._highlight(session, raw, "DEBRIEF", "Flight session ended", detail)
             elif ev not in ("LoadGame",):
                 changed = False
 
@@ -285,10 +318,23 @@ class CaptainsLog:
                 str(row.get("started") or ""): row
                 for row in rebuilt.data.get("sessions") or []
             }
-            merged.update({
-                str(row.get("started") or ""): row
-                for row in self.data.get("sessions") or []
-            })
+            for current in self.data.get("sessions") or []:
+                key = str(current.get("started") or "")
+                combined = dict(merged.get(key) or {})
+                rebuilt_highlights = list(combined.get("highlights") or [])
+                combined.update(current)
+                highlights = rebuilt_highlights + list(current.get("highlights") or [])
+                unique = {}
+                for row in highlights:
+                    if not isinstance(row, dict):
+                        continue
+                    identity = (
+                        row.get("timestamp"), row.get("kind"),
+                        row.get("title"), row.get("detail"),
+                    )
+                    unique[identity] = row
+                combined["highlights"] = list(unique.values())[-MAX_HIGHLIGHTS:]
+                merged[key] = combined
             self.data["sessions"] = sorted(
                 merged.values(), key=lambda row: str(row.get("started") or "")
             )[-MAX_SESSIONS:]
@@ -297,6 +343,7 @@ class CaptainsLog:
             ))[-6000:]
             self._seen_set = set(self.data["seen"])
             self.data["imported_files"] = dict(list(imported.items())[-400:])
+            self.data["schema"] = 2
             self.save()
         return count
 
@@ -309,6 +356,8 @@ class CaptainsLog:
             f"- Route: {session.get('start_system') or 'Unknown'} → {session.get('end_system') or 'Unknown'}",
             f"- Jumps: {session.get('jumps', 0)} ({float(session.get('distance_ly') or 0):.1f} ly)",
             f"- Discoveries: {session.get('codex', 0)} Codex, {session.get('bio_analyses', 0)} biological analyses",
+            f"- Survey: {session.get('fss_surveys', 0)} complete FSS, {session.get('dss_maps', 0)} DSS maps, {session.get('valuable_worlds', 0)} notable worlds",
+            f"- Firsts: {session.get('first_discoveries', 0)} bodies reported as undiscovered",
             f"- Sales: {int(session.get('exploration_sales') or 0):,} cr exploration, {int(session.get('biology_sales') or 0):,} cr biology",
             "", "## Chronicle", "",
         ]

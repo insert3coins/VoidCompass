@@ -11,6 +11,10 @@ from adaptive_command import MODES as ADAPTIVE_MODES, MODE_LABELS as ADAPTIVE_MO
 from cockpit_ai_memory import DEFAULT_LIMITS as COCKPIT_MEMORY_DEFAULTS, LIMIT_BOUNDS as COCKPIT_MEMORY_BOUNDS
 from config import DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config as persist_config
 from diagnostic_logs import application_base_dir
+from global_hotkeys import (
+    DEFAULT_OVERLAY_HOTKEYS, OVERLAY_HOTKEY_SPECS,
+    validate_hotkey_bindings,
+)
 from ui_theme import (
     THEME, FONT_MONO, FONT_TITLE, FONT_UI, FONT_UI_BOLD,
     apply_window, button, scrollbar as themed_scrollbar, window_surface,
@@ -248,6 +252,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     overlay_mouse_passthrough_var = tk.BooleanVar(
         value=config.get("overlay_mouse_passthrough", True)
     )
+    overlay_hotkeys_var = tk.BooleanVar(value=config.get("overlay_hotkeys_enabled", True))
     hud_compact_var = tk.BooleanVar(value=config.get("hud_compact_mode", False))
     cargo_var = tk.BooleanVar(value=config.get("cargo_overlay_enabled", False))
     carrier_overlay_var = tk.BooleanVar(value=config.get("carrier_overlay_enabled", False))
@@ -386,6 +391,38 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         "Mouse passthrough (turn off to move or click overlays)",
         overlay_mouse_passthrough_var,
     )
+
+    overlay_hotkeys = section(overlay_page, "Global Hotkeys")
+    toggle_row(overlay_hotkeys, "Enable system-wide overlay hotkeys", overlay_hotkeys_var)
+    hotkey_entries = {}
+    for action, key, label, _overlay_attr in OVERLAY_HOTKEY_SPECS:
+        hotkey_entries[action] = input_row(overlay_hotkeys, label, key)
+
+    hotkey_actions = row(overlay_hotkeys)
+
+    def _reset_overlay_hotkeys():
+        for _action, key, _label, _overlay_attr in OVERLAY_HOTKEY_SPECS:
+            entry = hotkey_entries[_action]
+            entry.delete(0, tk.END)
+            default = DEFAULT_OVERLAY_HOTKEYS.get(key, "")
+            if default:
+                entry.insert(0, default)
+
+    action_button(hotkey_actions, "Restore Defaults", _reset_overlay_hotkeys, muted=True).pack(side=tk.RIGHT)
+    tk.Label(
+        overlay_hotkeys,
+        text=(
+            "Shortcuts are system-wide and work while Elite Dangerous has focus. "
+            "Use Ctrl, Alt, Shift or Win plus a letter, number, F-key or navigation key. "
+            "Clear a field to leave that action unbound."
+        ),
+        font=UI_FONT,
+        fg=UI_MUTED,
+        bg=UI_PANEL,
+        anchor="w",
+        justify=tk.LEFT,
+        wraplength=620,
+    ).pack(fill=tk.X, padx=12, pady=(0, 12))
 
     overlay_alerts = section(overlay_page, "Actionable Alerts")
     toggle_row(overlay_alerts, "Clear-to-sample notifications", sample_clear_var)
@@ -1244,6 +1281,23 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             config.pop(key, None)
 
     def save_config():
+        raw_hotkeys = {
+            action: hotkey_entries[action].get().strip()
+            for action, _key, _label, _overlay_attr in OVERLAY_HOTKEY_SPECS
+        }
+        normalized_hotkeys, hotkey_errors = validate_hotkey_bindings(raw_hotkeys)
+        if hotkey_errors:
+            labels = {action: label for action, _key, label, _attr in OVERLAY_HOTKEY_SPECS}
+            details = "\n".join(
+                f"{labels.get(action, action)}: {error}"
+                for action, error in hotkey_errors.items()
+            )
+            tkinter.messagebox.showerror(
+                "Invalid Overlay Hotkey",
+                f"Correct the following shortcut settings:\n\n{details}",
+                parent=win,
+            )
+            return
         memory_limits = {}
         for key, variable in cockpit_limit_vars.items():
             low, high = COCKPIT_MEMORY_BOUNDS[key]
@@ -1257,6 +1311,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "journal_path": j_e.get().strip(),
             "overlay_enabled": ov_var.get(),
             "overlay_mouse_passthrough": overlay_mouse_passthrough_var.get(),
+            "overlay_hotkeys_enabled": overlay_hotkeys_var.get(),
             "hud_compact_mode": hud_compact_var.get(),
             "cargo_overlay_enabled": cargo_var.get(),
             "carrier_overlay_enabled": carrier_overlay_var.get(),
@@ -1323,6 +1378,8 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "voice_volume": float(voice_volume_var.get()),
             "settings_geometry": win.geometry(),
         })
+        for action, key, _label, _overlay_attr in OVERLAY_HOTKEY_SPECS:
+            config[key] = normalized_hotkeys.get(action, "")
         if cockpit_memory is not None:
             cockpit_memory.configure_limits(memory_limits, save=True)
             memory_summary_var.set(cockpit_memory.summary_text())

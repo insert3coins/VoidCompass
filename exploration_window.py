@@ -18,6 +18,7 @@ from deep_survey import (
 from discoveries_view import DiscoveriesView
 from expedition_map_view import ExpeditionMapView
 from expedition_mission_view import ExpeditionMissionView
+from exploration_intelligence import body_completion, build_intelligence
 from route_plotter import RoutePlotter
 from stellar_types import star_type_label
 from ui_theme import THEME, ThemedWindowMixin, apply_window, button, configure_ttk, scrollbar, window_surface
@@ -47,6 +48,8 @@ class ExplorationWindow(ThemedWindowMixin):
         self._last_session_stats = {"systems": 0, "bodies": 0, "value": 0, "valuable": 0}
         self._last_db_stats = {"systems": 0, "visits": 0, "bodies": 0, "value": 0, "valuable": 0}
         self._last_route_status = {}
+        self._exploration_intelligence = {}
+        self.action_queue_by_iid = {}
         self._last_ledger_refresh_ts = 0.0
         self.system_history_rows = []
         self.ledger_rows = []
@@ -407,7 +410,7 @@ class ExplorationWindow(ThemedWindowMixin):
             }.get(page, self.survey_workspace)
             self.tabs.select(page_frame)
             survey_filter = str(self.config.get("explore_survey_filter") or "All bodies")
-            if survey_filter in ("All bodies", "Actionable", "Biology", "Geology", "Valuable"):
+            if survey_filter in ("All bodies", "Incomplete", "Actionable", "Biology", "Geology", "Valuable"):
                 self.survey_filter_var.set(survey_filter)
             if self.discoveries_view:
                 self.discoveries_view.set_filter(
@@ -566,6 +569,9 @@ class ExplorationWindow(ThemedWindowMixin):
             self.app.schedule_dashboard_refresh()
         except Exception:
             pass
+        save_checkpoint = getattr(self.app, "_save_exploration_checkpoint", None)
+        if callable(save_checkpoint):
+            save_checkpoint("expedition-change")
 
     def _build_bodies_tab(self):
         frame = self.survey_workspace
@@ -599,12 +605,12 @@ class ExplorationWindow(ThemedWindowMixin):
             font=("Segoe UI", 8, "bold"),
         ).pack(side=tk.LEFT, padx=(0, 6))
         initial_filter = str(self.config.get("explore_survey_filter") or "All bodies")
-        if initial_filter not in ("All bodies", "Actionable", "Biology", "Geology", "Valuable"):
+        if initial_filter not in ("All bodies", "Incomplete", "Actionable", "Biology", "Geology", "Valuable"):
             initial_filter = "All bodies"
         self.survey_filter_var = tk.StringVar(value=initial_filter)
         survey_filter = ttk.Combobox(
             legend, textvariable=self.survey_filter_var, state="readonly", width=15,
-            values=("All bodies", "Actionable", "Biology", "Geology", "Valuable"),
+            values=("All bodies", "Incomplete", "Actionable", "Biology", "Geology", "Valuable"),
             style="Explore.TCombobox",
         )
         survey_filter.pack(side=tk.LEFT, padx=(0, 18))
@@ -624,6 +630,42 @@ class ExplorationWindow(ThemedWindowMixin):
         )
         self.sampling_banner.pack(fill=tk.X, pady=(0, 8))
         self.sampling_banner.pack_forget()
+
+        self.system_completion_banner = tk.Label(
+            left, text="SYSTEM COMPLETION · awaiting journal data",
+            fg=COLOR_ACCENT, bg=self.UI_PANEL_2, font=("Consolas", 9, "bold"),
+            anchor="w", justify=tk.LEFT, padx=12, pady=7,
+            highlightbackground=self.UI_BORDER, highlightthickness=1,
+        )
+        self.system_completion_banner.pack(fill=tk.X, pady=(0, 7))
+
+        queue_header = tk.Frame(left, bg=self.UI_BG)
+        queue_header.pack(fill=tk.X, pady=(0, 4))
+        tk.Label(
+            queue_header, text="EXPLORATION ACTION QUEUE", fg=COLOR_ORANGE,
+            bg=self.UI_BG, font=("Segoe UI", 8, "bold"),
+        ).pack(side=tk.LEFT)
+        self._button(queue_header, "COPY", self._copy_selected_action).pack(side=tk.RIGHT)
+        self._button(
+            queue_header, "FOCUS NEXT", self._execute_selected_action, accent=True,
+        ).pack(side=tk.RIGHT, padx=(0, 6))
+        action_wrap = tk.Frame(left, bg=self.UI_BG)
+        action_wrap.pack(fill=tk.X, pady=(0, 8))
+        self.action_queue_tree = ttk.Treeview(
+            action_wrap, columns=("action", "detail"), show="headings",
+            height=3, style="Explore.Treeview",
+        )
+        self.action_queue_tree.heading("action", text="Next action")
+        self.action_queue_tree.heading("detail", text="Verified reason")
+        self.action_queue_tree.column("action", width=290, anchor=tk.W)
+        self.action_queue_tree.column("detail", width=560, anchor=tk.W)
+        action_scroll = scrollbar(
+            action_wrap, orient=tk.VERTICAL, command=self.action_queue_tree.yview,
+        )
+        self.action_queue_tree.configure(yscrollcommand=action_scroll.set)
+        self.action_queue_tree.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        action_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.action_queue_tree.bind("<Double-Button-1>", self._execute_selected_action)
 
         cols = ("body", "type", "action", "priority", "value", "signals", "discover", "distance")
         self.bodies_tree = self._tree(left, cols, {
@@ -966,6 +1008,7 @@ class ExplorationWindow(ThemedWindowMixin):
             scanned = int(getattr(self.app, "scanned", 0) or 0)
             total = int(getattr(self.app, "total", 0) or 0)
             bodies = [item for item in list(getattr(self.app, "scan_items", []) or []) if isinstance(item, dict)]
+            self._exploration_intelligence = build_intelligence(self.app)
             current_value = sum(self._item_value(item) for item in bodies)
             valuable_count = sum(1 for item in bodies if self._is_valuable(item))
             complete = f"{scanned}/{total}" if total else f"{scanned}/0"
@@ -982,6 +1025,7 @@ class ExplorationWindow(ThemedWindowMixin):
             bio_summary = self._bio_summary(bodies)
             self.bio_card.config(text=f"{bio_summary['bio_bodies']} bodies | {bio_summary['bio_signals']} signals\n{bio_summary['complete']} complete")
             self._render_body_metrics(current, bodies, scanned, total, current_value)
+            self._render_exploration_intelligence()
             self._render_bodies(bodies)
             self._render_bio(bodies, bio_summary)
             self._render_sampling()
@@ -1107,7 +1151,10 @@ class ExplorationWindow(ThemedWindowMixin):
         labels = getattr(self, "body_metric_labels", {})
         if not labels:
             return
-        status = "complete" if total and scanned >= total else ("partial" if scanned else "unknown")
+        completion = (self._exploration_intelligence or {}).get("completion") or {}
+        status = str(completion.get("state") or (
+            "complete" if total and scanned >= total else "partial" if scanned else "unknown"
+        )).casefold()
         star = star_type_label(getattr(self.app, "star_class", ""), "-")
         bio_total = sum(self._safe_int(item.get("bio_count")) for item in bodies)
         geo_total = sum(self._safe_int(item.get("geo_count")) for item in bodies)
@@ -1124,6 +1171,87 @@ class ExplorationWindow(ThemedWindowMixin):
         labels["signals"].config(text=f"Bio {bio_total} | Geo {geo_total}")
         labels["value"].config(text=f"Local {self._format_credits(current_value)}\nEDSM {edsm_value}")
         labels["activity"].config(text=activity)
+
+    def _render_exploration_intelligence(self):
+        intelligence = self._exploration_intelligence or {}
+        completion = intelligence.get("completion") or {}
+        reasons = list(completion.get("reasons") or [])
+        text = (
+            f"SYSTEM COMPLETION · {completion.get('state') or 'AWAITING'} "
+            f"{int(completion.get('percent') or 0)}% · "
+            f"{completion.get('summary') or 'awaiting journal data'}"
+        )
+        if reasons:
+            text += "\nWHY NOT COMPLETE · " + " · ".join(reasons[:3])
+        self.system_completion_banner.config(
+            text=text, fg=self.UI_OK if completion.get("complete") else COLOR_ACCENT,
+        )
+
+        selected_id = None
+        selected = self.action_queue_tree.selection()
+        if selected:
+            old = self.action_queue_by_iid.get(selected[0])
+            selected_id = old.get("id") if old else None
+        children = self.action_queue_tree.get_children()
+        if children:
+            self.action_queue_tree.delete(*children)
+        self.action_queue_by_iid = {}
+        chosen = None
+        for row in (intelligence.get("actions") or [])[:8]:
+            iid = self.action_queue_tree.insert(
+                "", tk.END,
+                values=(row.get("title") or "Next action", row.get("detail") or ""),
+            )
+            self.action_queue_by_iid[iid] = row
+            if selected_id and row.get("id") == selected_id:
+                chosen = iid
+        rows = self.action_queue_tree.get_children()
+        if rows:
+            self.action_queue_tree.selection_set(chosen or rows[0])
+
+    def _selected_action(self):
+        selected = (
+            self.action_queue_tree.selection()
+            if hasattr(self, "action_queue_tree") else ()
+        )
+        return self.action_queue_by_iid.get(selected[0]) if selected else None
+
+    def _execute_selected_action(self, _event=None):
+        row = self._selected_action()
+        if not row:
+            return
+        if row.get("kind") == "body":
+            wanted_id = row.get("body_id")
+            wanted_name = str(row.get("body") or "").casefold()
+            for iid, item in self.body_items_by_iid.items():
+                if (
+                    wanted_id is not None
+                    and str(item.get("body_id")) == str(wanted_id)
+                ) or str(item.get("full_name") or item.get("name") or "").casefold() == wanted_name:
+                    self.bodies_tree.selection_set(iid)
+                    self.bodies_tree.see(iid)
+                    self._show_body_detail(item)
+                    return
+        elif row.get("kind") in {"route", "expedition"}:
+            if row.get("kind") == "expedition":
+                self.show_section("mission")
+            system = row.get("system")
+            if system:
+                self.root.clipboard_clear()
+                self.root.clipboard_append(system)
+        elif row.get("kind") == "data":
+            self.show_section("logbook")
+        else:
+            self.survey_filter_var.set("Incomplete")
+            self._on_survey_filter_changed()
+
+    def _copy_selected_action(self):
+        row = self._selected_action()
+        if not row:
+            return
+        text = f"{row.get('title') or 'Next action'} · {row.get('detail') or ''}".strip(" ·")
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
 
     def _render_bodies(self, bodies):
         self._last_survey_bodies = list(bodies or [])
@@ -1156,6 +1284,8 @@ class ExplorationWindow(ThemedWindowMixin):
             plan = self._survey_plan_by_key.get(key_for(item))
             if selected_filter == "All bodies":
                 return True
+            if selected_filter == "Incomplete":
+                return not body_completion(item).get("complete")
             if selected_filter == "Actionable":
                 return bool(plan and plan.get("action") not in ("Observe", "Review biology"))
             if selected_filter == "Biology":
@@ -1459,9 +1589,11 @@ class ExplorationWindow(ThemedWindowMixin):
     def _show_body_detail(self, item):
         lines = []
         if item:
+            matrix = body_completion(item)
             if hasattr(self, "body_detail_title"):
                 self.body_detail_title.config(text=item.get("full_name") or item.get("name") or "Body")
             lines.extend([
+                f"Completion: {matrix['matrix']}",
                 f"Status: {self._body_status(item)}",
                 f"Class: {star_type_label(item.get('star_type'), include_star=True) if item.get('star_type') else item.get('planet_class') or item.get('class') or '-'}",
                 f"Estimated value: {self._item_value(item):,} cr",
@@ -1483,6 +1615,10 @@ class ExplorationWindow(ThemedWindowMixin):
                 "",
                 f"Signals: {self._signal_text(item)}",
             ])
+            if matrix.get("geo_detected"):
+                lines.append(
+                    "Geology: detected by the journal; Elite does not report site inspection completion."
+                )
             genuses = item.get("genuses") or []
             if genuses:
                 lines.append("")
@@ -2224,7 +2360,31 @@ class ExplorationWindow(ThemedWindowMixin):
     def _render_history(self, current_value, valuable_count, session_stats=None):
         session_stats = session_stats or self._session_stats()
         stats = self._db_stats()
-        lines = [
+        tracker = getattr(self.app, "deep_survey", None)
+        if tracker and hasattr(tracker, "intelligence_state"):
+            deep = tracker.intelligence_state(getattr(self.app, "current_sys", ""))
+        else:
+            deep = tracker.snapshot() if tracker else {}
+        checkpoint = deep.get("checkpoint") or {}
+        lines = []
+        if checkpoint:
+            completion = checkpoint.get("completion") or {}
+            lines.extend([
+                "RELIABLE RESUME CHECKPOINT",
+                f"Saved: {str(checkpoint.get('saved_at') or '-')[:19]} · {checkpoint.get('reason') or 'checkpoint'}",
+                f"Location: {checkpoint.get('system') or '-'} · {completion.get('summary') or 'survey state unavailable'}",
+                f"Next: {checkpoint.get('next_waypoint') or '-'}",
+                "",
+            ])
+        milestones = list(deep.get("milestones") or [])[-5:]
+        if milestones:
+            lines.append("RECENT EXPEDITION MILESTONES")
+            lines.extend(
+                f"- {row.get('title')} · {row.get('detail')}"
+                for row in reversed(milestones)
+            )
+            lines.append("")
+        lines.extend([
             f"Current system: {getattr(self.app, 'current_sys', '---')}",
             f"Current system estimated scan value: {current_value:,} cr",
             f"Current valuable bodies: {valuable_count}",
@@ -2241,7 +2401,7 @@ class ExplorationWindow(ThemedWindowMixin):
             f"Profile scan bodies stored: {stats['bodies']:,}",
             f"Profile estimated scan value: {stats['value']:,} cr",
             f"Profile valuable bodies: {stats['valuable']:,}",
-        ]
+        ])
         archive = self._load_trip_archive()
         if archive:
             lines.extend(["", "Archived trips:"])
@@ -2599,9 +2759,13 @@ class ExplorationWindow(ThemedWindowMixin):
 
     def _copy_summary(self):
         current = getattr(self.app, "current_sys", "---") or "---"
+        intelligence = self._exploration_intelligence or build_intelligence(self.app)
+        completion = intelligence.get("completion") or {}
+        first_action = next(iter(intelligence.get("actions") or []), {})
         lines = [
             f"Exploration summary: {current}",
-            f"Scan: {getattr(self.app, 'scanned', 0)}/{getattr(self.app, 'total', 0)}",
+            f"Completion: {completion.get('state') or '-'} {completion.get('percent') or 0}% · {completion.get('summary') or '-'}",
+            f"Next action: {first_action.get('title') or '-'} · {first_action.get('detail') or '-'}",
             f"Route next: {self._next_route_system() or '-'}",
             f"Session: {int(getattr(self.app, 'session_jump_count', 0) or 0)} jumps, {float(getattr(self.app, 'session_ly', 0.0) or 0.0):.1f} ly",
         ]

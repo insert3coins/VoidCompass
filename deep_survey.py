@@ -7,6 +7,7 @@ long-running commander profile remains cheap to load and save.
 
 from __future__ import annotations
 
+import copy
 from datetime import datetime, timezone
 import json
 import math
@@ -14,6 +15,7 @@ import os
 import threading
 
 from persistence_queue import persistence_queue
+from galactic_regions import find_region
 from stellar_types import star_type_label
 
 
@@ -24,6 +26,8 @@ LIMITS = {
     "dss": 2000,
     "screenshots": 1000,
     "candidates": 250,
+    "milestones": 250,
+    "milestone_keys": 1200,
     "seen": 12000,
     "imported_files": 400,
 }
@@ -39,7 +43,7 @@ EXOTIC_STARS = {
 TRACKED_EVENTS = frozenset({
     "FSDJump", "CarrierJump", "Location", "CodexEntry",
     "FSSSignalDiscovered", "SAAScanComplete", "Screenshot", "Scan",
-    "SAASignalsFound",
+    "SAASignalsFound", "FSSDiscoveryScan", "FSSAllBodiesFound", "ScanOrganic",
 })
 IMPORT_EVENTS = TRACKED_EVENTS | {"Commander", "LoadGame"}
 IMPORT_MARKERS = tuple(
@@ -456,9 +460,11 @@ class DeepSurveyTracker:
     @staticmethod
     def _empty():
         return {
-            "schema": 1, "route_points": [], "codex": [], "signals": [],
+            "schema": 2, "route_points": [], "codex": [], "signals": [],
             "dss": [], "screenshots": [], "candidates": [], "seen": [],
-            "imported_files": {},
+            "imported_files": {}, "region_stats": {}, "checkpoint": {},
+            "last_departure": {}, "milestones": [], "milestone_keys": [],
+            "milestones_initialized": False,
         }
 
     def switch(self, path):
@@ -475,23 +481,46 @@ class DeepSurveyTracker:
             with open(self.path, "r", encoding="utf-8") as handle:
                 loaded = json.load(handle)
             if isinstance(loaded, dict):
+                upgrading = _integer(loaded.get("schema"), 1) < 2
                 for key in self.data:
                     if key in loaded:
                         self.data[key] = loaded[key]
+                self.data["schema"] = 2
+                if upgrading:
+                    # Re-index journals once in the existing background import.
+                    # The retained seen set deduplicates old facts, while newly
+                    # tracked FSS/biology events fill the 5.2.5 region passport.
+                    self.data["imported_files"] = {}
                 self._seen = set(self.data.get("seen") or [])
+                if not self.data.get("region_stats") and self.data.get("route_points"):
+                    self._rebuild_region_stats()
         except Exception:
             return
 
     def snapshot(self):
         with self.lock:
+            return copy.deepcopy(self.data)
+
+    def intelligence_state(self, current_system=""):
+        """Return only the small subset needed by the live decision model."""
+        wanted = str(current_system or "").casefold()
+        with self.lock:
             return {
-                key: (
-                    [dict(row) if isinstance(row, dict) else row for row in value]
-                    if isinstance(value, list)
-                    else dict(value) if isinstance(value, dict)
-                    else value
-                )
-                for key, value in self.data.items()
+                "codex": [
+                    copy.deepcopy(row) for row in self.data.get("codex") or []
+                    if not wanted or str(row.get("system") or "").casefold() == wanted
+                ],
+                "region_stats": {
+                    str(key): {
+                        "id": row.get("id"), "name": row.get("name"),
+                        "visits": _integer(row.get("visits")),
+                    }
+                    for key, row in (self.data.get("region_stats") or {}).items()
+                    if isinstance(row, dict)
+                },
+                "checkpoint": copy.deepcopy(self.data.get("checkpoint") or {}),
+                "last_departure": copy.deepcopy(self.data.get("last_departure") or {}),
+                "milestones": copy.deepcopy((self.data.get("milestones") or [])[-8:]),
             }
 
     def save(self, immediate=False):
@@ -543,11 +572,103 @@ class DeepSurveyTracker:
         for row in reversed(self.data.get("route_points") or []):
             if (address is not None and str(row.get("address")) == str(address)) or (system and row.get("system") == system):
                 for key, value in updates.items():
-                    if isinstance(value, int):
+                    if isinstance(value, bool):
+                        row[key] = value
+                    elif isinstance(value, int):
                         row[key] = _integer(row.get(key)) + value
                     elif value not in (None, ""):
                         row[key] = value
                 return
+
+    def _set_route(self, raw, **updates):
+        system = raw.get("StarSystem") or raw.get("System") or raw.get("SystemName")
+        address = raw.get("SystemAddress")
+        for row in reversed(self.data.get("route_points") or []):
+            if ((address is not None and str(row.get("address")) == str(address))
+                    or (system and row.get("system") == system)):
+                for key, value in updates.items():
+                    if value not in (None, ""):
+                        row[key] = value
+                return
+
+    def _system_position(self, system):
+        if not system:
+            return None
+        wanted = str(system).casefold()
+        for row in reversed(self.data.get("route_points") or []):
+            if str(row.get("system") or "").casefold() == wanted:
+                return _position(row.get("pos"))
+        return None
+
+    def _region_row(self, position, timestamp="", system="", visit=False, jump_dist=0.0):
+        position = _position(position)
+        region = find_region(*position) if position else None
+        if not region:
+            return None
+        key = str(region[0])
+        stats = self.data.setdefault("region_stats", {})
+        row = stats.setdefault(key, {
+            "id": region[0], "name": region[1], "visits": 0,
+            "systems": [], "distance_ly": 0.0, "fss": 0, "dss": 0,
+            "biology": 0, "codex": 0, "screenshots": 0, "notable": 0,
+            "first_visit": "", "last_visit": "", "last_system": "",
+            "last_photo": "",
+        })
+        if visit:
+            row["visits"] = _integer(row.get("visits")) + 1
+            row["distance_ly"] = round(
+                _number(row.get("distance_ly")) + max(0.0, _number(jump_dist)), 2,
+            )
+        system = str(system or "")
+        if system:
+            systems = list(row.get("systems") or [])
+            if not any(str(name).casefold() == system.casefold() for name in systems):
+                systems.append(system)
+                row["systems"] = systems[-LIMITS["route_points"]:]
+            row["last_system"] = system
+        timestamp = str(timestamp or "")
+        if timestamp:
+            row["first_visit"] = row.get("first_visit") or timestamp
+            if timestamp >= str(row.get("last_visit") or ""):
+                row["last_visit"] = timestamp
+        return row
+
+    def _touch_region(self, system, metric=None, amount=1, timestamp="", **updates):
+        row = self._region_row(
+            self._system_position(system), timestamp=timestamp, system=system,
+        )
+        if not row:
+            return
+        if metric:
+            row[metric] = _integer(row.get(metric)) + _integer(amount, 1)
+        for key, value in updates.items():
+            if value not in (None, ""):
+                row[key] = value
+
+    def _rebuild_region_stats(self):
+        self.data["region_stats"] = {}
+        positions = {}
+        for row in self.data.get("route_points") or []:
+            region_row = self._region_row(
+                row.get("pos"), row.get("timestamp"), row.get("system"),
+                visit=True, jump_dist=row.get("jump_dist"),
+            )
+            system = str(row.get("system") or "")
+            if system:
+                positions[system.casefold()] = row.get("pos")
+            if region_row is not None and row.get("fss_complete"):
+                region_row["fss"] = _integer(region_row.get("fss")) + 1
+        for key, metric in (("codex", "codex"), ("dss", "dss"), ("screenshots", "screenshots")):
+            for row in self.data.get(key) or []:
+                system = str(row.get("system") or "")
+                region_row = self._region_row(
+                    positions.get(system.casefold()), timestamp=row.get("timestamp"),
+                    system=system,
+                )
+                if region_row is not None:
+                    region_row[metric] = _integer(region_row.get(metric)) + 1
+                    if metric == "screenshots" and row.get("filename"):
+                        region_row["last_photo"] = row.get("filename")
 
     def _system_name(self, raw, context=None):
         context = context if isinstance(context, dict) else {}
@@ -598,6 +719,10 @@ class DeepSurveyTracker:
                     duplicate = points and points[-1].get("system") == row["system"] and points[-1].get("timestamp") == row["timestamp"]
                     if not duplicate:
                         self._append("route_points", row)
+                        self._region_row(
+                            pos, row["timestamp"], row["system"], visit=True,
+                            jump_dist=row.get("jump_dist"),
+                        )
             elif event == "CodexEntry":
                 self._append("codex", {
                     "timestamp": _stamp(raw), "system": self._system_name(raw, context),
@@ -609,6 +734,9 @@ class DeepSurveyTracker:
                     "longitude": raw.get("Longitude"), "traits": list(raw.get("Traits") or []),
                 })
                 self._touch_route(raw, codex=1, discoveries=1)
+                self._touch_region(
+                    self._system_name(raw, context), "codex", timestamp=_stamp(raw),
+                )
             elif event == "FSSSignalDiscovered":
                 self._append("signals", {
                     "timestamp": _stamp(raw), "system": self._system_name(raw, context),
@@ -628,6 +756,9 @@ class DeepSurveyTracker:
                     "body_id": raw.get("BodyID"), "probes": probes, "target": target,
                     "efficient": bool(target and probes and probes <= target),
                 })
+                self._touch_region(
+                    self._system_name(raw, context), "dss", timestamp=_stamp(raw),
+                )
             elif event == "Screenshot":
                 self._append("screenshots", {
                     "timestamp": _stamp(raw), "filename": raw.get("Filename") or "",
@@ -638,14 +769,37 @@ class DeepSurveyTracker:
                     "width": raw.get("Width"), "height": raw.get("Height"),
                 })
                 self._touch_route(raw, screenshots=1)
+                self._touch_region(
+                    self._system_name(raw, context), "screenshots",
+                    timestamp=_stamp(raw), last_photo=raw.get("Filename") or "",
+                )
             elif event == "Scan":
                 self._touch_route(
                     raw,
                     discoveries=1 if raw.get("WasDiscovered") is False else 0,
                     star_class=raw.get("StarType"),
                 )
+                planet_class = str(raw.get("PlanetClass") or "")
+                if planet_class in HIGH_VALUE_WORLDS or str(raw.get("TerraformState") or "") == "Terraformable":
+                    self._touch_region(
+                        self._system_name(raw, context), "notable", timestamp=_stamp(raw),
+                    )
             elif event == "SAASignalsFound":
                 self._touch_route(raw, discoveries=1 if (raw.get("Signals") or raw.get("Genuses")) else 0)
+            elif event == "FSSDiscoveryScan":
+                self._set_route(raw, body_count=_integer(raw.get("BodyCount")))
+            elif event == "FSSAllBodiesFound":
+                self._set_route(
+                    raw, fss_complete=True,
+                    body_count=_integer(raw.get("Count") or raw.get("BodyCount")),
+                )
+                self._touch_region(
+                    self._system_name(raw, context), "fss", timestamp=_stamp(raw),
+                )
+            elif event == "ScanOrganic" and str(raw.get("ScanType") or "").casefold() == "analyse":
+                self._touch_region(
+                    self._system_name(raw, context), "biology", timestamp=_stamp(raw),
+                )
         if changed and save:
             self.save()
         return changed
@@ -717,6 +871,117 @@ class DeepSurveyTracker:
             self.data["candidates"] = candidates[-LIMITS["candidates"]:]
         self.save()
         return row
+
+    def update_checkpoint(self, payload, immediate=False):
+        row = copy.deepcopy(payload) if isinstance(payload, dict) else {}
+        with self.lock:
+            self.data["checkpoint"] = row
+            if str(row.get("reason") or "").casefold() in {"departure", "startjump"}:
+                self.data["last_departure"] = copy.deepcopy(row)
+        self.save(immediate=immediate)
+        return copy.deepcopy(row)
+
+    def checkpoint(self):
+        with self.lock:
+            return copy.deepcopy(self.data.get("checkpoint") or {})
+
+    def evaluate_milestones(self, current_bodies=None, timestamp=None):
+        """Record bounded, meaningful exploration milestones and return new rows."""
+        timestamp = str(timestamp or datetime.now(timezone.utc).isoformat(timespec="seconds"))
+        with self.lock:
+            route = list(self.data.get("route_points") or [])
+            regions = self.data.get("region_stats") or {}
+            metrics = {
+                "systems": len({str(row.get("system") or "").casefold() for row in route if row.get("system")}),
+                "distance": sum(max(0.0, _number(row.get("jump_dist"))) for row in route),
+                "regions": len([row for row in regions.values() if _integer(row.get("visits"))]),
+                "fss": sum(1 for row in route if row.get("fss_complete")),
+                "dss": len(self.data.get("dss") or []),
+                "biology": sum(_integer(row.get("biology")) for row in regions.values()),
+                "codex": len(self.data.get("codex") or []),
+                "photos": len(self.data.get("screenshots") or []),
+                "furthest": max((math.sqrt(sum(value * value for value in _position(row.get("pos")) or (0, 0, 0))) for row in route), default=0.0),
+            }
+            definitions = (
+                ("systems", "Systems visited", (100, 250, 500, 1000, 2500, 5000)),
+                ("distance", "Light-years journalled", (1000, 5000, 10000, 25000, 50000, 100000)),
+                ("regions", "Galactic regions visited", (1, 5, 10, 21, 42)),
+                ("fss", "Complete system surveys", (10, 25, 50, 100, 250, 500)),
+                ("dss", "Bodies mapped", (10, 25, 50, 100, 250, 500, 1000)),
+                ("biology", "Biological analyses", (5, 10, 25, 50, 100, 250)),
+                ("codex", "Codex discoveries", (10, 25, 50, 100, 250, 500)),
+                ("photos", "Expedition photographs", (10, 25, 50, 100, 250)),
+                ("furthest", "Distance from Sol", (1000, 5000, 10000, 25000, 50000, 65000)),
+            )
+            key_order = list(dict.fromkeys(self.data.get("milestone_keys") or []))
+            known = set(key_order)
+            added = []
+            initializing = not bool(self.data.get("milestones_initialized"))
+            baseline_existing = bool(
+                len(route) > 1 or self.data.get("dss") or self.data.get("codex")
+                or self.data.get("screenshots")
+            )
+
+            def add(key, kind, title, detail, level=2, system=""):
+                if key in known:
+                    return
+                known.add(key)
+                key_order.append(key)
+                row = {
+                    "key": key, "timestamp": timestamp, "kind": kind,
+                    "title": title, "detail": detail, "level": level,
+                    "system": system,
+                }
+                added.append(row)
+                self._append("milestones", row)
+
+            for metric, label, thresholds in definitions:
+                value = metrics[metric]
+                for threshold in thresholds:
+                    if value >= threshold:
+                        key = f"{metric}:{threshold}"
+                        if initializing and baseline_existing:
+                            if key not in known:
+                                known.add(key)
+                                key_order.append(key)
+                            continue
+                        suffix = " ly" if metric in {"distance", "furthest"} else ""
+                        add(
+                            key, metric,
+                            f"{label}: {threshold:,}{suffix}",
+                            f"Verified total is now {value:,.1f}{suffix}" if suffix else f"Verified total is now {int(value):,}",
+                            4 if threshold == thresholds[-1] else 3 if threshold >= thresholds[len(thresholds) // 2] else 2,
+                        )
+            current_system = ""
+            if route:
+                current_system = str(route[-1].get("system") or "")
+            for item in current_bodies or []:
+                if not isinstance(item, dict):
+                    continue
+                body = item.get("full_name") or item.get("name") or "Unknown body"
+                planet_class = str(item.get("planet_class") or item.get("class") or "")
+                if planet_class in {"Earthlike body", "Ammonia world"}:
+                    add(
+                        f"world:{current_system.casefold()}:{str(body).casefold()}:{planet_class}",
+                        "notable-world", f"{planet_class} recorded", str(body),
+                        4, current_system,
+                    )
+                for scan in (item.get("organic_scans") or {}).values():
+                    if not isinstance(scan, dict) or not scan.get("is_complete"):
+                        continue
+                    value = _integer(scan.get("species_value"))
+                    if value >= 15_000_000:
+                        species = scan.get("species") or scan.get("genus") or "Rare biology"
+                        add(
+                            f"rare-bio:{current_system.casefold()}:{str(body).casefold()}:{str(species).casefold()}",
+                            "rare-biology", f"Rare biology analysed: {species}",
+                            f"{body} · base value {value:,} cr", 4, current_system,
+                        )
+            self.data["milestone_keys"] = key_order[-LIMITS["milestone_keys"]:]
+            self.data["milestones_initialized"] = True
+        if added or initializing:
+            self.save()
+        return copy.deepcopy(added)
 
     def remove_candidate(self, system):
         with self.lock:

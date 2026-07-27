@@ -35,6 +35,7 @@ _FEED_TAG_COLORS = {
     "MUSIC":   "#22d3ee",  # cyan   — music mood / soft state
     "AI":      "#c084fc",  # violet — Compass mood / memory evolution
     "EXPEDITION":"#d8b4fe", # purple — named expedition progress
+    "MILESTONE":"#facc15", # gold — durable exploration milestones
     "VALUABLE":"#FF7100",  # orange — high-value worlds
     "ALERT":   "#FF7100",  # orange — system alerts
     "DOCK":    "#fb923c",  # amber  — docking / undocking
@@ -1501,7 +1502,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         if exploration:
             previous_mode = getattr(self, "_dashboard_render_mode", None)
             self.dashboard_deck_heading.config(text="EXPLORATION COMMAND DECK")
-            self.dashboard_context_heading.config(text="CURRENT SYSTEM")
+            self.dashboard_context_heading.config(text="ARRIVAL INTELLIGENCE")
             self.dashboard_destination_heading.config(text="NEXT DESTINATION")
             self.dashboard_objective_heading.config(text="EXPLORATION PRIORITY")
             for widget, text_value in zip(
@@ -1741,6 +1742,11 @@ class DashboardUIMixin(ThemedWindowMixin):
         # workspaces to displace the app's primary purpose.
         primary = "No urgent objective"
         detail = "Flight state is stable. Continue surveying or follow the current route."
+        intelligence = self._exploration_intelligence_snapshot()
+        exploration_actions = list(intelligence.get("actions") or [])
+        if exploration_actions:
+            primary = str(exploration_actions[0].get("title") or primary)
+            detail = str(exploration_actions[0].get("detail") or detail)
         sample = getattr(self, "bio_sampling", None)
         remaining_bodies = max(0, int(getattr(self, "total", 0) or 0) - int(getattr(self, "scanned", 0) or 0))
         missions = state.get("missions") or {}
@@ -1754,7 +1760,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         elif unsold >= 20_000_000:
             primary = "Secure valuable survey data"
             detail = f"Approximately {self._dashboard_credits(unsold)} remains unsold and is currently at risk."
-        elif remaining_bodies:
+        elif remaining_bodies and not exploration_actions:
             primary = "Complete the current system survey"
             detail = f"{remaining_bodies} bod{'ies remain' if remaining_bodies != 1 else 'y remains'} unresolved in {getattr(self, 'current_sys', 'this system')}."
         elif route_progress.get("remaining") and next_destination:
@@ -1766,6 +1772,8 @@ class DashboardUIMixin(ThemedWindowMixin):
         # Current-system survey intelligence stays visible even when the
         # transient survey overlay is hidden or the activity stream moves on.
         if hasattr(self, "dashboard_survey_name"):
+            completion = intelligence.get("completion") or {}
+            arrival = intelligence.get("arrival") or {}
             system_name = str(getattr(self, "current_sys", None) or "NO SYSTEM DATA")
             scanned = max(0, int(getattr(self, "scanned", 0) or 0))
             total = max(0, int(getattr(self, "total", 0) or 0))
@@ -1775,8 +1783,10 @@ class DashboardUIMixin(ThemedWindowMixin):
                 if isinstance(signals, dict):
                     geo_signals += max(0, int(signals.get("geo") or 0))
             notable = len(getattr(self, "valuable_bodies", None) or ())
-            if total and scanned >= total:
+            if completion.get("complete"):
                 survey_state, survey_colour = "COMPLETE", self.UI_OK
+            elif completion.get("state") == "PARTIAL":
+                survey_state, survey_colour = "PARTIAL", COLOR_ACCENT
             elif scanned or total:
                 survey_state, survey_colour = "SCANNING", COLOR_ACCENT
             else:
@@ -1784,18 +1794,18 @@ class DashboardUIMixin(ThemedWindowMixin):
             if getattr(self, "system_undiscovered", False):
                 survey_state, survey_colour = "FIRST DISCOVERY", self.UI_WARN
             self.dashboard_survey_badge.config(text=survey_state, bg=survey_colour)
-            survey_ratio = min(1.0, scanned / total) if total else 0.0
+            survey_ratio = min(1.0, max(0.0, float(completion.get("percent") or 0) / 100.0))
             self.dashboard_survey_progress_fill.config(
-                bg=self.UI_OK if total and scanned >= total else COLOR_ACCENT,
+                bg=self.UI_OK if completion.get("complete") else COLOR_ACCENT,
             )
             self.dashboard_survey_progress_fill.place_configure(relwidth=survey_ratio)
             self.dashboard_survey_name.config(text=system_name.upper())
-            signal_bits = [f"FSS {scanned}/{total}" if total else f"FSS {scanned}"]
-            if bio_signals:
+            signal_bits = [completion.get("summary") or (f"FSS {scanned}/{total}" if total else f"FSS {scanned}")]
+            if bio_signals and not completion:
                 signal_bits.append(f"BIO {bio_signals}")
-            if geo_signals:
+            if geo_signals and not completion:
                 signal_bits.append(f"GEO {geo_signals}")
-            if notable:
+            if notable and not completion:
                 signal_bits.append(f"NOTABLE {notable}")
             survey_summary = None
             try:
@@ -1804,8 +1814,15 @@ class DashboardUIMixin(ThemedWindowMixin):
                 pass
             high_value = list((survey_summary or {}).get("high_value") or [])
             detail_lines = ["  ·  ".join(signal_bits)]
+            if arrival.get("region"):
+                detail_lines.append(
+                    f"ARRIVAL · {arrival.get('star') or 'Unknown star'} · {arrival['region'].get('name')}"
+                )
             if high_value:
                 detail_lines.append("Notable: " + " · ".join(high_value[:2]))
+            reasons = list(completion.get("reasons") or [])
+            if reasons:
+                detail_lines.append("Remaining: " + " · ".join(reasons[:2]))
             self.dashboard_survey_detail.config(text="\n".join(detail_lines))
             value_bits = []
             if survey_summary and survey_summary.get("total"):
@@ -2842,7 +2859,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             return True
         tag = entry.get("tag")
         groups = {
-            "DISCOVERY": {"VALUABLE", "SCAN", "DSS", "BIO"},
+            "DISCOVERY": {"VALUABLE", "SCAN", "DSS", "BIO", "MILESTONE", "EXPEDITION"},
             "NAVIGATION": {"JUMP", "ROUTE", "SYSTEM", "DOCK"},
             "COMPASS": {"AI", "MUSIC"},
             "OPERATIONS": {

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import datetime
 from functools import lru_cache
 import math
 import random
@@ -14,6 +15,7 @@ import weakref
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageTk
 
 from galactic_regions import find_region, region_geometry
+from exploration_intelligence import route_context
 from stellar_types import star_type_label
 from ui_theme import THEME, button, configure_ttk
 
@@ -26,6 +28,8 @@ LAYER_COLOURS = {
     "Photos": THEME.text,
     "Recon": THEME.red,
     "Bookmarks": THEME.yellow,
+    "Planned": THEME.accent,
+    "Return": THEME.green,
 }
 
 VIEW_PRESETS = (
@@ -319,6 +323,7 @@ class ExpeditionMapView:
         self._system_rows = []
         self._value_rows = []
         self._route_rows = []
+        self._all_route_rows = []
         self._snapshot = {}
         self._bookmarks = []
         self._position_by_system = {}
@@ -375,6 +380,18 @@ class ExpeditionMapView:
         )
         combo.pack(side=tk.RIGHT, padx=(0, 6), pady=5)
         combo.bind("<<ComboboxSelected>>", lambda _event: self._reset_view())
+        config = getattr(self.app, "config", None) or {}
+        initial_scope = str(config.get("explore_map_scope") or "All History")
+        if initial_scope not in ("All History", "Current Session", "Active Expedition"):
+            initial_scope = "All History"
+        self.scope_var = tk.StringVar(value=initial_scope)
+        scope = ttk.Combobox(
+            toolbar, textvariable=self.scope_var, state="readonly", width=15,
+            values=("All History", "Current Session", "Active Expedition"),
+            style="ExpeditionMap.TCombobox",
+        )
+        scope.pack(side=tk.RIGHT, padx=(0, 6), pady=5)
+        scope.bind("<<ComboboxSelected>>", self._scope_changed)
 
         layers = tk.Frame(self.parent, bg=THEME.inset)
         layers.pack(fill=tk.X, pady=(0, 5))
@@ -383,8 +400,8 @@ class ExpeditionMapView:
             font=("Segoe UI", 8, "bold"),
         ).pack(side=tk.LEFT, padx=(8, 5), pady=4)
         self.layer_vars = {}
-        for name in ("Regions", "Valuable", "Biology", "Codex", "Photos", "Recon", "Bookmarks"):
-            var = tk.BooleanVar(value=True)
+        for name in ("Regions", "Planned", "Return", "Valuable", "Biology", "Codex", "Photos", "Recon", "Bookmarks"):
+            var = tk.BooleanVar(value=name != "Return")
             self.layer_vars[name] = var
             tk.Checkbutton(
                 layers, text=name.upper(), variable=var, command=self._schedule_render,
@@ -464,6 +481,7 @@ class ExpeditionMapView:
     def view_state(self):
         return {
             "mode": self.view_mode.get(),
+            "scope": self.scope_var.get(),
             "camera_center": list(self._camera_center),
             "fit_radius": float(self._fit_radius),
             "zoom": float(self._zoom),
@@ -479,6 +497,9 @@ class ExpeditionMapView:
         mode = str(state.get("mode") or "Perspective")
         if mode in VIEW_PRESETS:
             self.view_mode.set(mode)
+        scope = str(state.get("scope") or "All History")
+        if scope in ("All History", "Current Session", "Active Expedition"):
+            self.scope_var.set(scope)
         centre = _position(state.get("camera_center"))
         if centre is not None:
             self._camera_center = list(centre)
@@ -497,6 +518,8 @@ class ExpeditionMapView:
         for name, enabled in (state.get("layers") or {}).items():
             if name in self.layer_vars:
                 self.layer_vars[name].set(bool(enabled))
+        if self._all_route_rows:
+            self._route_rows = self._sample_route_rows(self._scoped_route_rows())
         self._camera_ready = True
         self._schedule_render()
 
@@ -511,14 +534,9 @@ class ExpeditionMapView:
             row for row in self._snapshot.get("route_points") or []
             if _position(row.get("pos")) is not None
         ]
-        if len(all_rows) > MAX_ROUTE_POINTS:
-            last = len(all_rows) - 1
-            self._route_rows = [
-                all_rows[round(index * last / (MAX_ROUTE_POINTS - 1))]
-                for index in range(MAX_ROUTE_POINTS)
-            ]
-        else:
-            self._route_rows = all_rows
+        self._all_route_rows = all_rows
+        scoped_rows = self._scoped_route_rows(all_rows)
+        self._route_rows = self._sample_route_rows(scoped_rows)
         manager = getattr(self.app, "expedition_manager", None)
         self._bookmarks = manager.bookmarks() if manager else []
         self._position_by_system = {
@@ -531,8 +549,68 @@ class ExpeditionMapView:
         if not self._camera_ready:
             self._reset_view(render=False)
             self._camera_ready = True
-        self._update_summary(all_rows)
+        self._update_summary(scoped_rows)
         self._schedule_render()
+
+    @staticmethod
+    def _row_epoch(row):
+        value = (row or {}).get("timestamp")
+        try:
+            return datetime.fromisoformat(str(value or "").replace("Z", "+00:00")).timestamp()
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _scoped_route_rows(self, rows=None):
+        rows = list(self._all_route_rows if rows is None else rows)
+        scope = self.scope_var.get() if hasattr(self, "scope_var") else "All History"
+        if scope == "Current Session":
+            started = float(getattr(self.app, "session_start_ts", 0.0) or 0.0)
+            return [row for row in rows if self._row_epoch(row) >= started]
+        if scope == "Active Expedition":
+            manager = getattr(self.app, "expedition_manager", None)
+            active = manager.active() if manager else None
+            started = self._row_epoch({"timestamp": (active or {}).get("started")})
+            systems = {
+                str(name).casefold()
+                for name in ((active or {}).get("stats") or {}).get("systems") or []
+            }
+            selected = [
+                row for row in rows
+                if str(row.get("system") or "").casefold() in systems
+                and (not started or self._row_epoch(row) >= started)
+            ]
+            start_system = str((active or {}).get("start_system") or "").casefold()
+            origin = next((
+                row for row in reversed(rows)
+                if start_system
+                and str(row.get("system") or "").casefold() == start_system
+                and (not started or self._row_epoch(row) <= started)
+            ), None)
+            if origin is not None and (not selected or selected[0] is not origin):
+                selected.insert(0, origin)
+            return selected
+        return rows
+
+    def _scope_changed(self, _event=None):
+        config = getattr(self.app, "config", None)
+        if isinstance(config, dict):
+            config["explore_map_scope"] = self.scope_var.get()
+        persist = getattr(self.app, "_persist_config", None)
+        if callable(persist):
+            persist()
+        self.refresh(self._system_rows, self._value_rows)
+        self._reset_view()
+
+    @staticmethod
+    def _sample_route_rows(rows):
+        rows = list(rows or [])
+        if len(rows) <= MAX_ROUTE_POINTS:
+            return rows
+        last = len(rows) - 1
+        return [
+            rows[round(index * last / (MAX_ROUTE_POINTS - 1))]
+            for index in range(MAX_ROUTE_POINTS)
+        ]
 
     def _data_positions(self, recent=False):
         rows = self._route_rows[-50:] if recent else self._route_rows
@@ -1156,7 +1234,11 @@ class ExpeditionMapView:
             pos = _position(row.get("pos"))
             if pos is not None:
                 route_points.append((self._project(pos), row, pos))
+        if self.layer_vars.get("Planned") and self.layer_vars["Planned"].get():
+            self._draw_planned_route()
         self._draw_route_path(route_points)
+        if self.layer_vars.get("Return") and self.layer_vars["Return"].get():
+            self._draw_return_trail(route_points)
 
         visible_indexes = [
             index for index, (projected, _row, _pos) in enumerate(route_points)
@@ -1323,6 +1405,71 @@ class ExpeditionMapView:
                 flush()
                 sequence.clear()
         flush()
+        if not self._drag_mode and len(route_points) >= 2:
+            recent = route_points[-min(24, len(route_points)):]
+            coordinates = []
+            for projected, _row, _pos in recent:
+                coordinates.extend((projected[0], projected[1]))
+            self._background_line(
+                coordinates, _mix(THEME.inset, THEME.orange, 0.94), width=2,
+            )
+            stride = max(2, len(recent) // 5)
+            for index in range(stride, len(recent), stride):
+                self._draw_direction_arrow(
+                    recent[index - 1][0], recent[index][0], THEME.orange,
+                )
+
+    def _draw_planned_route(self):
+        planned = route_context(self.app).get("planned") or ()
+        for source, dash in (("game", (7, 5)), ("waypoint", (2, 5))):
+            points = []
+            for row in planned:
+                if row.get("source") != source:
+                    continue
+                pos = _position(row.get("pos"))
+                if pos is not None:
+                    points.append((self._project(pos), row, pos))
+            if len(points) < 2:
+                continue
+            for index in range(1, len(points)):
+                left, right = points[index - 1][0], points[index][0]
+                if not self._visible_line(left, right):
+                    continue
+                self._background_line(
+                    (left[0], left[1], right[0], right[1]),
+                    LAYER_COLOURS["Planned"], width=2, dash=dash,
+                )
+                if not self._drag_mode and index % max(1, len(points) // 5) == 0:
+                    self._draw_direction_arrow(left, right, LAYER_COLOURS["Planned"])
+
+    def _draw_return_trail(self, route_points):
+        points = list(reversed(route_points[-min(60, len(route_points)):]))
+        if len(points) < 2:
+            return
+        for index in range(1, len(points)):
+            left, right = points[index - 1][0], points[index][0]
+            if not self._visible_line(left, right):
+                continue
+            self._background_line(
+                (left[0], left[1], right[0], right[1]),
+                LAYER_COLOURS["Return"], width=1, dash=(2, 6),
+            )
+            if not self._drag_mode and index % max(2, len(points) // 4) == 0:
+                self._draw_direction_arrow(left, right, LAYER_COLOURS["Return"])
+
+    def _draw_direction_arrow(self, left, right, colour):
+        dx, dy = right[0] - left[0], right[1] - left[1]
+        length = math.hypot(dx, dy)
+        if length < 8:
+            return
+        ux, uy = dx / length, dy / length
+        cx, cy = (left[0] + right[0]) / 2.0, (left[1] + right[1]) / 2.0
+        size = 4.5
+        self._background_draw.polygon((
+            (cx + ux * size, cy + uy * size),
+            (cx - ux * size - uy * size * 0.7, cy - uy * size + ux * size * 0.7),
+            (cx - ux * size + uy * size * 0.7, cy - uy * size - ux * size * 0.7),
+        ), fill=colour)
 
     def _draw_current_locator(self, x, y, _system):
         """Draw a compact, topmost ship glyph at the commander location."""
@@ -1507,10 +1654,19 @@ class ExpeditionMapView:
             f" · {len(self._route_rows):,} representative points"
             if len(self._route_rows) != len(all_rows) else ""
         )
+        route = route_context(self.app)
+        route_text = ""
+        if route.get("off_route"):
+            distance = route.get("nearest_distance_ly")
+            route_text = (
+                f" · OFF ROUTE {distance:,.1f} ly from {route.get('nearest_system')}"
+                if distance is not None else " · OFF ROUTE"
+            )
+        scope = self.scope_var.get() if hasattr(self, "scope_var") else "All History"
         self.summary.config(
             text=(
-                f"{unique:,} systems · {total_ly:,.1f} ly journalled · "
-                f"42 Codex regions offline{region_text}{representative}"
+                f"{scope.upper()} · {unique:,} systems · {total_ly:,.1f} ly journalled · "
+                f"42 Codex regions offline{region_text}{representative}{route_text}"
             )
         )
 

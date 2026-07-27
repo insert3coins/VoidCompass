@@ -449,10 +449,25 @@ class CompassCognition:
         ground = snapshot.get("ground_operations") or {}
         strategy = snapshot.get("strategy") or {}
         rescue_legal = snapshot.get("rescue_legal") or {}
+        exploration = snapshot.get("exploration_intelligence") or {}
         goals = []
 
         def add(key, label, priority, topic):
+            if any(row.get("key") == key for row in goals):
+                return
             goals.append({"key": key, "label": label, "priority": int(priority), "topic": topic})
+
+        action_keys = {
+            "biology": "sample", "survey": "survey", "route": "route",
+            "expedition": "expedition",
+        }
+        for action in list(exploration.get("actions") or [])[:3]:
+            kind = str(action.get("kind") or "exploration")
+            key = action_keys.get(kind, str(action.get("id") or f"exploration-{kind}"))
+            add(
+                key, str(action.get("title") or "Continue exploration work"),
+                max(45, min(88, int(action.get("priority") or 55))), kind,
+            )
 
         remaining = int(nav.get("remaining_jumps") or 0)
         destination = nav.get("final_destination")
@@ -847,11 +862,58 @@ class CompassCognition:
         ground = snapshot.get("ground_operations") or {}
         strategy = snapshot.get("strategy") or {}
         rescue_legal = snapshot.get("rescue_legal") or {}
+        exploration = snapshot.get("exploration_intelligence") or {}
         current_system = nav.get("current_system")
         candidates = []
         key_text = str(key or "")
         if key_text.startswith("advisor:"):
             return []
+
+        route_intel = exploration.get("route") or {}
+        completion_intel = exploration.get("completion") or {}
+        if event in ("FSDJump", "CarrierJump", "Location") and route_intel.get("off_route"):
+            distance = route_intel.get("nearest_distance_ly")
+            nearest = route_intel.get("nearest_system") or "the plotted route"
+            distance_text = f"{float(distance):.1f} light-years" if distance is not None else "an unresolved distance"
+            candidates.append(self._candidate(
+                "exploration-off-route", 74,
+                "The verified live position is outside the active plotted route.",
+                (
+                    f"Arrival check: we are off the plotted route, {distance_text} from {nearest}.",
+                    f"Route comparison places us {distance_text} from the nearest plotted point, {nearest}.",
+                    f"This arrival sits outside the active route; {nearest} is the nearest plotted reference at {distance_text}.",
+                ), ("route", "survey", "navigation"), category="exploration",
+                sources=("journal", "navigation"),
+            ))
+        if event == "FSSAllBodiesFound" and completion_intel:
+            actions = list(exploration.get("actions") or [])
+            next_action = actions[0].get("title") if actions else None
+            if next_action:
+                candidates.append(self._candidate(
+                    "survey-next-action", 70,
+                    "The factual completion matrix has a highest-ranked remaining action.",
+                    (
+                        f"FSS is resolved. The next survey priority is {next_action}.",
+                        f"System matrix updated; highest remaining priority is {next_action}.",
+                        f"Survey pass complete. I have {next_action} at the top of the action queue.",
+                    ), ("survey", "goal", "progress"), category="exploration",
+                    sources=("journal",),
+                ))
+        if event == "StartJump":
+            departure = exploration.get("last_departure") or {}
+            departure_completion = departure.get("completion") or completion_intel
+            reasons = list(departure_completion.get("reasons") or [])
+            if reasons and int(departure_completion.get("percent") or 0) < 100:
+                candidates.append(self._candidate(
+                    "departure-survey-state", 52,
+                    "The saved departure checkpoint has verified unfinished survey work.",
+                    (
+                        f"Departure checkpoint saved at {int(departure_completion.get('percent') or 0)} percent; {reasons[0]}.",
+                        f"I have retained the unfinished survey state: {reasons[0]}.",
+                        f"System departure logged with work remaining: {reasons[0]}.",
+                    ), ("survey", "memory", "progress"), category="ambient",
+                    sources=("journal",),
+                ))
 
         preparation = ((state or self._state()).get("preparation") or {})
         limpet_lesson = preparation.get("mining-limpets") or {}

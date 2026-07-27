@@ -79,6 +79,7 @@ from specialists_window import SpecialistsWindow
 import compass_personas
 from captains_log import CaptainsLog
 from deep_survey import DeepSurveyTracker
+from exploration_intelligence import build_intelligence, checkpoint_payload
 from expedition_manager import ExpeditionManager
 from diagnostic_logs import application_base_dir, resolve_log_path
 from adaptive_command import AdaptiveCommandDeck, AUTOMATIC_MODE_IDLE_S, MODE_LABELS
@@ -87,6 +88,7 @@ from onboarding import should_show as should_show_onboarding, show_first_run
 from persistence_queue import flush_persistence, persistence_queue
 from session_recovery import ProfileSessionGuard
 from ui_dispatcher import TkDispatcher
+from global_hotkeys import GlobalHotkeyManager, OVERLAY_HOTKEY_SPECS
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
@@ -979,6 +981,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         # Close and persist the outgoing commander's session while every live
         # fact and UI position still belongs to that profile.
+        self._save_exploration_checkpoint("profile-change", immediate=True)
         if getattr(self, "cockpit_memory", None):
             insights = (
                 self.compass_cognition.observe_session_close(
@@ -998,6 +1001,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.edsm.prepare_profile_switch()
         except Exception:
             pass
+        if getattr(self, "overlay_hotkeys", None):
+            self.overlay_hotkeys.stop()
+        self._reset_overlay_hotkey_visibility(restore=True)
         self._stop_db_commit_worker(close=True, timeout=0.35)
         save_active_profile_config(self.config)
         profiles = self.config.setdefault("commander_profiles", {})
@@ -1110,6 +1116,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         ).start()
         self._persist_config()
         self._apply_runtime_feature_toggles()
+        self._configure_overlay_hotkeys(announce=False)
         self._apply_navigation_group_state()
         self.show_dashboard_page()
         self.update_dashboard_ui()
@@ -1145,6 +1152,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         # network and file workers enqueue bounded work here; Tk drains it in
         # short slices so flight controls and overlays remain responsive.
         self.ui_dispatcher = TkDispatcher(root)
+        self._overlay_hotkey_global_hidden = False
+        self._overlay_hotkey_hidden = set()
+        self._overlay_hotkey_restore = set()
+        self.overlay_hotkeys = GlobalHotkeyManager(
+            lambda action: self.ui_dispatcher.post(
+                self._handle_overlay_hotkey,
+                action,
+                key=f"overlay-hotkey:{action}",
+            )
+        )
         self.voice_callouts = VoiceCalloutManager(self.config)
         self.cockpit_memory = CockpitMemory(
             get_profile_file(get_active_profile(self.config), "cockpit_ai_memory.json"),
@@ -1589,6 +1606,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         threading.Thread(target=self.check_updates, daemon=True).start()
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        self._configure_overlay_hotkeys(announce=False)
         self.log(
             f"CONFIG FILE: {CONFIG_FILE} | HUD({self.config.get('hud_x')},{self.config.get('hud_y')}) "
             f"| CARGO({self.config.get('cargo_hud_x')},{self.config.get('cargo_hud_y')})"
@@ -1610,6 +1628,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._tick_ui_stall_watchdog()
         self._tick_runtime_trace()
         self._tick_overlay_position_sync()
+        self._tick_overlay_hotkey_guard()
         self._tick_cockpit_ambient()
 
     def _show_bootstrap_onboarding(self):
@@ -1714,6 +1733,178 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             except (AttributeError, tk.TclError):
                 continue
         return applied
+
+    def _overlay_hotkey_window_items(self):
+        """Return unique live overlay windows, including the ground popup."""
+        items = []
+        seen = set()
+        for attr, _x_key, _y_key in self._OVERLAY_POSITION_SPECS:
+            window = self._overlay_window(getattr(self, attr, None))
+            if window is None or id(window) in seen:
+                continue
+            seen.add(id(window))
+            items.append((attr, window))
+        popup = getattr(self, "ground_popup", None)
+        if popup is not None and id(popup) not in seen:
+            items.append(("ground_popup", popup))
+        return items
+
+    @staticmethod
+    def _overlay_window_is_shown(window):
+        try:
+            return bool(window.winfo_exists()) and str(window.state()) not in ("withdrawn", "iconic")
+        except (AttributeError, tk.TclError):
+            return False
+
+    def _restore_overlay_hotkey_windows(self, names):
+        adaptive_hidden = set(getattr(self, "_adaptive_hidden_overlays", set()))
+        individually_hidden = set(getattr(self, "_overlay_hotkey_hidden", set()))
+        lookup = dict(self._overlay_hotkey_window_items())
+        for attr in set(names or ()):
+            if attr in adaptive_hidden or attr in individually_hidden:
+                continue
+            window = lookup.get(attr)
+            if window is None:
+                continue
+            try:
+                if window.winfo_exists():
+                    window.deiconify()
+                    window.attributes("-topmost", True)
+                    window.lift()
+            except (AttributeError, tk.TclError):
+                continue
+
+    def _reset_overlay_hotkey_visibility(self, restore=False):
+        names = set(getattr(self, "_overlay_hotkey_restore", set()))
+        names.update(getattr(self, "_overlay_hotkey_hidden", set()))
+        self._overlay_hotkey_global_hidden = False
+        self._overlay_hotkey_hidden = set()
+        self._overlay_hotkey_restore = set()
+        if restore:
+            self._restore_overlay_hotkey_windows(names)
+
+    def _configure_overlay_hotkeys(self, announce=True):
+        manager = getattr(self, "overlay_hotkeys", None)
+        if manager is None:
+            return {"registered": {}, "errors": {"service": "not available"}}
+        bindings = {
+            action: self.config.get(key, "")
+            for action, key, _label, _attr in OVERLAY_HOTKEY_SPECS
+        }
+        if not self.config.get("overlay_hotkeys_enabled", True):
+            bindings = {}
+        report = manager.configure(bindings)
+        labels = {action: label for action, _key, label, _attr in OVERLAY_HOTKEY_SPECS}
+        errors = report.get("errors") or {}
+        registered = report.get("registered") or {}
+        if errors:
+            detail = "; ".join(
+                f"{labels.get(action, action)} ({error})"
+                for action, error in errors.items()
+            )
+            logging.warning("Overlay hotkey registration: %s", detail)
+            if hasattr(self, "event_feed_entries"):
+                self.add_event_feed_entry(
+                    "SYSTEM", f"Overlay hotkey unavailable: {detail}", severity="WARN",
+                )
+        elif announce and hasattr(self, "event_feed_entries"):
+            if registered:
+                self.add_event_feed_entry(
+                    "SYSTEM",
+                    f"Overlay hotkeys updated: {len(registered)} active",
+                    severity="INFO",
+                )
+            else:
+                self.add_event_feed_entry(
+                    "SYSTEM", "Overlay hotkeys disabled", severity="INFO",
+                )
+        return report
+
+    def _handle_overlay_hotkey(self, action):
+        if not self.is_running:
+            return
+        spec = next((item for item in OVERLAY_HOTKEY_SPECS if item[0] == action), None)
+        if spec is None:
+            return
+        _action, _key, label, attr = spec
+        if action == "toggle_all":
+            if self._overlay_hotkey_global_hidden:
+                self._overlay_hotkey_global_hidden = False
+                restore = set(self._overlay_hotkey_restore)
+                self._overlay_hotkey_restore.clear()
+                self._restore_overlay_hotkey_windows(restore)
+                self._apply_adaptive_overlay_scene()
+                message = "Overlays restored"
+            else:
+                self._overlay_hotkey_global_hidden = True
+                for name, window in self._overlay_hotkey_window_items():
+                    try:
+                        if self._overlay_window_is_shown(window):
+                            if name not in self._overlay_hotkey_hidden:
+                                self._overlay_hotkey_restore.add(name)
+                            window.withdraw()
+                    except (AttributeError, tk.TclError):
+                        continue
+                message = "Overlays hidden"
+        else:
+            if self._overlay_hotkey_global_hidden:
+                self.add_event_feed_entry(
+                    "SYSTEM",
+                    f"{label} remains behind the all-overlay curtain; use the all-overlays shortcut first",
+                    severity="INFO",
+                )
+                return
+            window = self._overlay_window(getattr(self, attr, None))
+            if window is None:
+                self.add_event_feed_entry(
+                    "SYSTEM", f"{label} is not enabled in Settings", severity="WARN",
+                )
+                return
+            if attr in self._overlay_hotkey_hidden:
+                self._overlay_hotkey_hidden.discard(attr)
+                self._overlay_hotkey_restore.discard(attr)
+                getattr(self, "_adaptive_hidden_overlays", set()).discard(attr)
+                self._restore_overlay_hotkey_windows({attr})
+                message = f"{label} shown"
+            elif self._overlay_window_is_shown(window):
+                self._overlay_hotkey_hidden.add(attr)
+                self._overlay_hotkey_restore.add(attr)
+                try:
+                    window.withdraw()
+                except (AttributeError, tk.TclError):
+                    pass
+                message = f"{label} hidden"
+            else:
+                getattr(self, "_adaptive_hidden_overlays", set()).discard(attr)
+                self._restore_overlay_hotkey_windows({attr})
+                message = f"{label} shown"
+        self.add_event_feed_entry("SYSTEM", message, severity="INFO")
+
+    def _enforce_overlay_hotkey_visibility(self):
+        global_hidden = bool(getattr(self, "_overlay_hotkey_global_hidden", False))
+        hidden = set(getattr(self, "_overlay_hotkey_hidden", set()))
+        if not global_hidden and not hidden:
+            return
+        for attr, window in self._overlay_hotkey_window_items():
+            if not global_hidden and attr not in hidden:
+                continue
+            try:
+                if not self._overlay_window_is_shown(window):
+                    continue
+                if global_hidden and attr not in hidden:
+                    self._overlay_hotkey_restore.add(attr)
+                window.withdraw()
+            except (AttributeError, tk.TclError):
+                continue
+
+    def _tick_overlay_hotkey_guard(self):
+        if not self.is_running:
+            return
+        self._enforce_overlay_hotkey_visibility()
+        active = bool(
+            self._overlay_hotkey_global_hidden or self._overlay_hotkey_hidden
+        )
+        self.root.after(90 if active else 350, self._tick_overlay_hotkey_guard)
 
     def _log_applied_overlay_positions(self):
         try:
@@ -1885,6 +2076,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 pass
         if getattr(self, "watcher", None):
             self.watcher.stop()
+        if getattr(self, "overlay_hotkeys", None):
+            self.overlay_hotkeys.stop()
         if getattr(self, "ui_dispatcher", None):
             self.ui_dispatcher.stop()
         # Cancellation comes before any state work. Piper synthesis, playback
@@ -1897,6 +2090,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         # snapshot. It provides a fast visual restore after a normal quit
         # without turning live journal traffic into continuous disk writes.
         self._save_profile_cockpit_state()
+        self._save_exploration_checkpoint("app-close", immediate=True)
         # Elite's Shutdown journal event owns the Compass debrief. Closing
         # only the companion leaves an in-progress game session intact and
         # avoids running another cognition pass during application teardown.
@@ -2599,6 +2793,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.log("Configuration saved successfully.")
             self._apply_active_profile_theme()
             self._apply_runtime_feature_toggles()
+            self._configure_overlay_hotkeys()
             self._refresh_cockpit_brain(event="settings_saved")
             self._publish_cockpit_ai_changes()
             self.show_dashboard_page()
@@ -3374,6 +3569,104 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return False
         return self._set_commander_balance(int(self.cmdr_balance or 0) + delta, timestamp=timestamp, log=log)
 
+    def _exploration_intelligence_snapshot(self, compact=False):
+        try:
+            intelligence = build_intelligence(self)
+        except Exception as exc:
+            logging.debug("Exploration intelligence snapshot skipped: %s", exc)
+            return {}
+        self._latest_exploration_intelligence = intelligence
+        if compact:
+            intelligence = dict(intelligence)
+            completion = dict(intelligence.get("completion") or {})
+            completion.pop("body_rows", None)
+            intelligence["completion"] = completion
+            intelligence["actions"] = [
+                dict(row) for row in list(intelligence.get("actions") or [])[:5]
+            ]
+            intelligence["milestones"] = [
+                dict(row) for row in list(intelligence.get("milestones") or [])[-4:]
+            ]
+        return intelligence
+
+    def _save_exploration_checkpoint(self, reason="app-close", immediate=False):
+        tracker = getattr(self, "deep_survey", None)
+        if not tracker:
+            return {}
+        try:
+            return tracker.update_checkpoint(
+                checkpoint_payload(self, reason), immediate=immediate,
+            )
+        except Exception as exc:
+            logging.debug("Exploration checkpoint skipped [%s]: %s", reason, exc)
+            return {}
+
+    def _update_exploration_intelligence(self, ev, raw, startup_replay=False):
+        tracker = getattr(self, "deep_survey", None)
+        if not tracker:
+            return
+        relevant = {
+            "LoadGame", "Location", "FSDJump", "CarrierJump", "Docked", "Shutdown",
+            "FSSDiscoveryScan", "FSSAllBodiesFound", "Scan", "SAAScanComplete",
+            "SAASignalsFound", "ScanOrganic", "CodexEntry", "Screenshot",
+        }
+        if ev not in relevant:
+            return
+        timestamp = raw.get("timestamp") if isinstance(raw, dict) else None
+        try:
+            milestones = tracker.evaluate_milestones(
+                current_bodies=getattr(self, "scan_items", None) or (),
+                timestamp=timestamp,
+            )
+        except Exception as exc:
+            logging.debug("Exploration milestone evaluation skipped [%s]: %s", ev, exc)
+            milestones = []
+        intelligence = self._exploration_intelligence_snapshot()
+        regions = intelligence.get("regions") or {}
+        current_region = regions.get("current") or {}
+        try:
+            self.achievement_engine.process_event({
+                "type": "VoidCompassRegionPassport",
+                "event": "VoidCompassRegionPassport",
+                "VisitedRegions": int(regions.get("visited") or 0),
+                "RegionID": current_region.get("id"),
+                "RegionName": current_region.get("name"),
+            }, notify=not startup_replay, historical=startup_replay)
+        except Exception:
+            pass
+        if ev in {"Docked", "Shutdown"}:
+            self._save_exploration_checkpoint(ev.casefold(), immediate=ev == "Shutdown")
+        if ev == "LoadGame" and not startup_replay:
+            checkpoint = intelligence.get("checkpoint") or {}
+            checkpoint_key = str(checkpoint.get("saved_at") or "")
+            if checkpoint_key and checkpoint_key != getattr(self, "_exploration_resume_feed_key", None):
+                self._exploration_resume_feed_key = checkpoint_key
+                completion = checkpoint.get("completion") or {}
+                next_waypoint = checkpoint.get("next_waypoint") or "no plotted waypoint"
+                self.add_event_feed_entry(
+                    "EXPEDITION",
+                    f"Resume checkpoint: {checkpoint.get('system') or 'unknown system'} · "
+                    f"{completion.get('summary') or 'survey state retained'} · next {next_waypoint}",
+                    severity="INFO",
+                )
+        if not milestones or startup_replay:
+            return
+        for milestone in milestones:
+            title = str(milestone.get("title") or "Exploration milestone")
+            detail = str(milestone.get("detail") or "")
+            self.add_event_feed_entry("MILESTONE", f"{title} · {detail}", severity="INFO")
+            if ev != "Shutdown" and getattr(self, "captains_log", None):
+                self.captains_log.add_manual_highlight("MILESTONE", title, detail)
+        self._pulse_cockpit_ai()
+        major = next((row for row in reversed(milestones) if int(row.get("level") or 0) >= 4), None)
+        if major:
+            title = major.get("title") or "Exploration milestone"
+            self._speak((
+                f"Milestone recorded. {title}.",
+                f"Expedition log updated. {title}.",
+                f"That is worth marking. {title}.",
+            ), category="exploration", cooldown_s=5, key=f"milestone:{major.get('key')}")
+
     def _compass_gameplay_snapshot(self):
         """Return compact verified live facts for the local Compass brain."""
         def number(value, digits=1):
@@ -3569,6 +3862,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "mined_units": int(mining.get("refined_tons") or 0),
             },
             "learned_gameplay": memory.gameplay_awareness() if memory else {},
+            "exploration_intelligence": self._exploration_intelligence_snapshot(compact=True),
         }
         snapshot.update(compass_operations.build_snapshot(
             getattr(self, "ai_operational_state", None),
@@ -4098,6 +4392,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 except (AttributeError, tk.TclError):
                     pass
             self._adaptive_hidden_overlays = set()
+            self._enforce_overlay_hotkey_visibility()
             return
         scene = deck.scene(mode)
         persistent = {"hud", "cargo_hud", "carrier_hud", "colony_overlay"}
@@ -4120,6 +4415,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         # Safety feedback is never suppressed by an activity scene.
         for attr in ("toast_hud", "gravity_warning_hud", "heartbeat_hud"):
             hidden.discard(attr)
+        self._enforce_overlay_hotkey_visibility()
 
     def _update_adaptive_command(self, event, raw, startup_replay=False):
         deck = getattr(self, "adaptive_command", None)
@@ -5033,6 +5329,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.add_event_feed_entry(
                 "EXPEDITION", f"Objective complete: {summary}", severity="INFO",
             )
+            if getattr(self, "captains_log", None):
+                self.captains_log.add_manual_highlight(
+                    "OBJECTIVE", f"Expedition objective complete: {summary}",
+                )
             self._speak(
                 (
                     f"Expedition objective complete. {summary}.",
@@ -5296,6 +5596,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "Location" or ev == "FSDJump" or ev == "StartJump" or (ev == "CarrierJump" and d.get("docked")):
             # Do not update HUDs during jump charge; wait for arrival.
             if ev == "StartJump":
+                self._save_exploration_checkpoint("departure")
                 self.in_fss = False
                 self.fss_summary_active = False
                 self._hide_survey_status_for_jump()
@@ -6039,6 +6340,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 mat = raw.get("Type_Localised") or raw.get("Type") or ""
                 self.root.after(0, lambda m=mat: self.prospector_hud.add_refined(m))
 
+        self._update_exploration_intelligence(
+            ev, raw if isinstance(raw, dict) else d,
+            startup_replay=startup_replay,
+        )
         compass_snapshot = None
         if not startup_replay:
             compass_snapshot = self._compass_gameplay_snapshot()
