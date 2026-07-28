@@ -34,7 +34,10 @@ _PERSIST_KEYS = {
     "expedition_name", "expedition_route", "expedition_reserve_fuel",
     "expedition_requested_destinations",
     "expedition_route_source", "expedition_spansh_job", "expedition_spansh_url",
-    "expedition_plotted_at",
+    "expedition_plotted_at", "expedition_total_distance_ly",
+    "expedition_used_capacity_t", "expedition_fuel_required_t",
+    "expedition_starting_tank_t", "expedition_starting_market_tritium_t",
+    "expedition_starting_load_t",
     "notes", "destination_note", "last_updated",
 }
 
@@ -136,6 +139,12 @@ class CarrierTracker:
             "expedition_spansh_job": None,
             "expedition_spansh_url": None,
             "expedition_plotted_at": None,
+            "expedition_total_distance_ly": None,
+            "expedition_used_capacity_t": None,
+            "expedition_fuel_required_t": None,
+            "expedition_starting_tank_t": None,
+            "expedition_starting_market_tritium_t": None,
+            "expedition_starting_load_t": None,
             "notes": "",
             "destination_note": "",
             "last_updated": None,
@@ -687,6 +696,12 @@ class CarrierTracker:
         self.carrier_data["expedition_spansh_job"] = None
         self.carrier_data["expedition_spansh_url"] = None
         self.carrier_data["expedition_plotted_at"] = None
+        for key in (
+            "expedition_total_distance_ly", "expedition_used_capacity_t",
+            "expedition_fuel_required_t", "expedition_starting_tank_t",
+            "expedition_starting_market_tritium_t", "expedition_starting_load_t",
+        ):
+            self.carrier_data[key] = None
         try:
             self.carrier_data["expedition_reserve_fuel"] = max(0, int(reserve_fuel))
         except Exception:
@@ -742,6 +757,25 @@ class CarrierTracker:
         cd["expedition_spansh_job"] = result.get("job")
         cd["expedition_spansh_url"] = result.get("url")
         cd["expedition_plotted_at"] = _utc_stamp()
+        cd["expedition_total_distance_ly"] = result.get("total_distance_ly")
+        cd["expedition_used_capacity_t"] = result.get("used_capacity_t")
+        cd["expedition_fuel_required_t"] = result.get("fuel_required_t")
+        cd["expedition_starting_tank_t"] = result.get("starting_tank_t")
+        cd["expedition_starting_market_tritium_t"] = result.get("starting_market_tritium_t")
+        cd["expedition_starting_load_t"] = result.get("starting_load_t")
+        self.save_state()
+        if callable(self.on_updated):
+            self.on_updated(self.carrier_data)
+        if callable(self.on_panel_updated):
+            self.on_panel_updated(self.carrier_data)
+
+    def update_expedition_details(self, name, reserve_fuel=200):
+        """Update route metadata without replacing calculated Spansh jumps."""
+        self.carrier_data["expedition_name"] = (name or "").strip()
+        try:
+            self.carrier_data["expedition_reserve_fuel"] = max(0, int(reserve_fuel))
+        except Exception:
+            self.carrier_data["expedition_reserve_fuel"] = 200
         self.save_state()
         if callable(self.on_updated):
             self.on_updated(self.carrier_data)
