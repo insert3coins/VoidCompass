@@ -713,6 +713,13 @@ class CarrierTracker:
         if callable(self.on_panel_updated):
             self.on_panel_updated(self.carrier_data)
 
+    def clear_expedition(self):
+        """Delete route-planning state without disturbing carrier evidence."""
+        reserve_fuel = self.carrier_data.get("expedition_reserve_fuel")
+        if reserve_fuel is None:
+            reserve_fuel = 200
+        self.set_expedition("", [], reserve_fuel)
+
     def set_spansh_expedition(self, name, route_result, reserve_fuel=200):
         """Persist a normalized Spansh route and its per-jump fuel evidence."""
         result = route_result if isinstance(route_result, dict) else {}

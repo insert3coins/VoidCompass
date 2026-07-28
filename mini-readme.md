@@ -8,6 +8,7 @@
 *   Kept Fleet Carrier jump selection and scroll position stable across live refreshes, with Copy Selected, Enter and double-click copying available.
 *   Added persistent weight-based Tritium readiness showing route fuel, reserve, plotted/current occupied capacity, tank fuel, known stored Tritium, unitemised cargo and confirmed or possible shortfall.
 *   Clarified that docking at a personal or Squadron Carrier exposes aggregate `CarrierStats` and subsequent `CargoTransfer` deltas, not an automatic full commodity manifest.
+*   Added a confirmed Delete Route action that clears manual/Spansh route and fuel-plan state while retaining carrier cargo, jump history and identity data.
 
 ## Earlier releases
 
