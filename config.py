@@ -106,6 +106,7 @@ PROFILE_TEXT_SETTINGS = (
 PROFILE_BOOL_SETTINGS = (
     "trade_advanced_tools_visible",
     "edsm_upload_enabled",
+    "edsm_backfill_on_cache_rebuild",
     "overlay_enabled",
     "overlay_mouse_passthrough",
     "overlay_hotkeys_enabled",
@@ -340,6 +341,7 @@ def apply_profile_config(config, profile_key=None):
     bool_defaults = {
         "trade_advanced_tools_visible": False,
         "edsm_upload_enabled": False,
+        "edsm_backfill_on_cache_rebuild": True,
         "overlay_enabled": True,
         "overlay_mouse_passthrough": os.name == "nt",
         "overlay_hotkeys_enabled": os.name == "nt",
@@ -551,6 +553,7 @@ def load_config():
         'edsm_cmdr_name': '',
         'edsm_api_key': '',
         'edsm_upload_enabled': False,
+        'edsm_backfill_on_cache_rebuild': True,
         'edsm_game_version': '',
         'edsm_game_build': '',
         'active_commander_profile': 'unknown_commander',

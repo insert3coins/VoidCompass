@@ -115,6 +115,57 @@ class DashboardUIMixin(ThemedWindowMixin):
     def _action_button(self, parent, text, command, accent=False, muted=False):
         return button(parent, text, command, accent=accent, muted=muted, pady=4)
 
+    def _sync_cache_rebuild_edsm_option(self):
+        """Keep the rebuild-only EDSM choice aligned with the active profile."""
+        variable = getattr(self, "cache_rebuild_edsm_var", None)
+        if variable is None:
+            return
+        try:
+            desired = bool(self.config.get("edsm_backfill_on_cache_rebuild", True))
+            if bool(variable.get()) != desired:
+                variable.set(desired)
+        except tk.TclError:
+            pass
+
+    def _save_cache_rebuild_edsm_option(self):
+        variable = getattr(self, "cache_rebuild_edsm_var", None)
+        if variable is None:
+            return
+        try:
+            self.config["edsm_backfill_on_cache_rebuild"] = bool(variable.get())
+            self._persist_config()
+        except tk.TclError:
+            pass
+
+    def _add_cache_rebuild_controls(self, parent):
+        self._action_button(
+            parent, "Rebuild Cache", self.scan_all_logs_threaded, muted=True,
+        ).pack(side=tk.LEFT)
+        variable = getattr(self, "cache_rebuild_edsm_var", None)
+        if variable is None:
+            variable = tk.BooleanVar(
+                master=self.root,
+                value=bool(self.config.get("edsm_backfill_on_cache_rebuild", True)),
+            )
+            self.cache_rebuild_edsm_var = variable
+        check = tk.Checkbutton(
+            parent,
+            text="Also upload history to EDSM",
+            variable=variable,
+            command=self._save_cache_rebuild_edsm_option,
+            bg=self.UI_BG,
+            fg=self.UI_DIM,
+            activebackground=self.UI_BG,
+            activeforeground=THEME.accent,
+            selectcolor=THEME.input,
+            highlightthickness=0,
+            bd=0,
+            font=("Segoe UI", 8),
+            cursor="hand2",
+        )
+        check.pack(side=tk.LEFT, padx=(9, 0))
+        return check
+
     def setup_layout(self):
         apply_window(self.root)
 
@@ -505,7 +556,7 @@ class DashboardUIMixin(ThemedWindowMixin):
 
         side_actions = tk.Frame(self.side, bg=self.UI_BG)
         side_actions.pack(side=tk.BOTTOM, fill=tk.X)
-        self._action_button(side_actions, "Rebuild Cache", self.scan_all_logs_threaded, muted=True).pack(side=tk.LEFT)
+        self._add_cache_rebuild_controls(side_actions)
         tk.Label(side_actions, text="2026 insert3coins", font=("Segoe UI", 8), fg=self.UI_DIM, bg=self.UI_BG).pack(side=tk.RIGHT, pady=6)
 
         center = tk.Frame(body, bg=self.UI_BG)
@@ -968,7 +1019,7 @@ class DashboardUIMixin(ThemedWindowMixin):
 
         footer = tk.Frame(body, bg=self.UI_BG)
         footer.pack(fill=tk.X, pady=(5, 0))
-        self._action_button(footer, "Rebuild Cache", self.scan_all_logs_threaded, muted=True).pack(side=tk.LEFT)
+        self._add_cache_rebuild_controls(footer)
         self._action_button(footer, "Screenshots", self.open_screenshots_folder, muted=True).pack(side=tk.LEFT, padx=(6, 0))
         self._console_toggle_btn = tk.Button(
             footer, text="▶  DIAGNOSTICS", command=self._toggle_console,
@@ -1120,7 +1171,7 @@ class DashboardUIMixin(ThemedWindowMixin):
 
         footer = tk.Frame(body, bg=self.UI_BG)
         footer.pack(fill=tk.X, pady=(6, 0))
-        self._action_button(footer, "Rebuild Cache", self.scan_all_logs_threaded, muted=True).pack(side=tk.LEFT)
+        self._add_cache_rebuild_controls(footer)
         self._action_button(footer, "Ground Target", self.open_ground_target_window, muted=True).pack(side=tk.LEFT, padx=(8, 0))
         tk.Label(footer, text="2026 insert3coins", font=("Segoe UI", 8), fg=self.UI_DIM, bg=self.UI_BG).pack(side=tk.RIGHT, pady=6)
         self._console_toggle_btn = tk.Button(

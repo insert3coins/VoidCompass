@@ -2928,6 +2928,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.colony_overlay.win.destroy()
             self.colony_overlay = None
 
+        self._sync_cache_rebuild_edsm_option()
         self._apply_overlay_mouse_passthrough()
         self._apply_adaptive_overlay_scene()
 
