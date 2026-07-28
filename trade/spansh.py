@@ -15,6 +15,10 @@ SUBMIT_TIMEOUT = 20
 POLL_TIMEOUT = 20
 MAX_WAIT_SECONDS = 90
 MODULE_RE = None
+FLEET_CARRIER_JOB_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
 
 
 class SpanshError(Exception):
@@ -196,26 +200,46 @@ def _normalize_fleet_carrier_result(
 
     carrier_key = str(carrier_type or result.get("carrier_type") or "fleet").casefold()
     squadron = carrier_key in {"squadron", "squadroncarrier"}
+    source_jump = jumps[0]
+    normalized_used_capacity = (
+        used_capacity if used_capacity is not None else result.get("capacity_used")
+    )
+    normalized_calculate_fuel = (
+        calculate_starting_fuel
+        if calculate_starting_fuel is not None
+        else result.get("calculate_starting_fuel")
+    )
     return {
         "job": str(job),
         "url": f"https://spansh.co.uk/fleet-carrier/results/{job}",
         "source": source_record,
         "destinations": requested,
         "carrier_type": "squadron" if squadron else "fleet",
-        "used_capacity_t": used_capacity,
-        "calculate_starting_fuel": calculate_starting_fuel,
+        "used_capacity_t": normalized_used_capacity,
+        "calculate_starting_fuel": normalized_calculate_fuel,
         "total_distance_ly": sum(float(row.get("distance_ly") or 0) for row in jumps[1:]),
         "fuel_required_t": sum(int(float(row.get("fuel_used_t") or 0)) for row in jumps[1:]),
+        "starting_tank_t": source_jump.get("fuel_remaining_t"),
+        "starting_market_tritium_t": source_jump.get("tritium_market_t"),
+        "starting_load_t": source_jump.get("restock_t"),
         "jumps": jumps,
     }
 
 
+def fleet_carrier_job_id(reference):
+    """Return a real Spansh result UUID, never a plausible system name."""
+    value = str(reference or "").strip()
+    candidate = value.split("#", 1)[0].split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1]
+    return candidate if FLEET_CARRIER_JOB_RE.fullmatch(candidate) else None
+
+
 def import_fleet_carrier_route(reference):
     """Import a completed Spansh Fleet Carrier result URL or job id."""
-    value = str(reference or "").strip()
-    job = value.split("#", 1)[0].split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1]
-    if not job or not re.fullmatch(r"[A-Za-z0-9._-]{3,120}", job):
-        raise SpanshError("Paste a Spansh Fleet Carrier result URL or job id.")
+    job = fleet_carrier_job_id(reference)
+    if not job:
+        raise SpanshError(
+            "Paste a Spansh Fleet Carrier result URL or UUID; system names are destinations."
+        )
 
     deadline = time.monotonic() + MAX_WAIT_SECONDS
     while time.monotonic() < deadline:

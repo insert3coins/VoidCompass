@@ -1,16 +1,17 @@
 # VoidCompass // UPDATE LOG
 
-## v5.2.8.1 // Survey Progress Reliability
+## v5.2.8.2 // Fleet Carrier Spansh Routing Fix
 **Release Date:** 2026-Jul-29
 
-*   Fixed completed system surveys being allowed to regress to 0%/0 bodies on known-system revisits or application reloads. Body totals and scanned counts are now cumulative across Location, FSS, Nav Beacon, cached body and journal evidence.
-*   Added a profile-aware incremental journal repair that restores existing damaged completion records in the background, then refreshes the Navigation HUD, Dashboard, Survey Status, System Info and Explore views together when the current system is repaired.
-*   Recognised Frontier's `FSSDiscoveryScan Progress=1.0` and `NavBeaconScan` as complete survey evidence in both normal database rebuilds and Deep Survey intelligence, while keeping different commanders' journal history isolated.
-*   Added a profile-aware cache rebuild option for skipping EDSM history backfill without disabling normal live EDSM uploads.
-*   Moved cache rebuild status into the Live Feed with a disabled in-progress button, percentage milestones and clear completion or failure reporting.
+*   Fixed destination names such as `Colonia` being mistaken for Spansh result job IDs and producing `/api/results/<system>` 404 errors in Fleet Carrier Expedition Navigator.
+*   Separated destination plotting from completed-result importing, made calculated routes explicitly auto-save, and prevented Save Details from replacing Spansh jumps with the destination list.
+*   Kept Fleet Carrier jump selection and scroll position stable across live refreshes, with Copy Selected, Enter and double-click copying available.
+*   Added persistent weight-based Tritium readiness showing route fuel, reserve, plotted/current occupied capacity, tank fuel, known stored Tritium, unitemised cargo and confirmed or possible shortfall.
+*   Clarified that docking at a personal or Squadron Carrier exposes aggregate `CarrierStats` and subsequent `CargoTransfer` deltas, not an automatic full commodity manifest.
 
 ## Earlier releases
 
+*   **v5.2.8.1** — Made known-system survey completion persistent and profile-safe, added journal repair, and added profile-aware EDSM cache-rebuild controls with visible Live Feed progress.
 *   **v5.2.8** — Added integrated Spansh Fleet/Squadron Carrier plotting, route progress, tritium logistics, carrier cargo evidence and the expanded carrier overlay; also kept that overlay visible in Exploration mode.
 *   **v5.2.7** — Removed journal-processing stalls through queued carrier persistence, coalesced state snapshots, cheaper Explore refreshes, a UI stall sampler and lightweight first-map rendering.
 *   **v5.2.6** — Added filled theme-aware galactic regions, a dedicated Map workspace, smoother route cameras and the first native Linux x86-64 testing build with WSL-assisted packaging.
