@@ -33,6 +33,7 @@ _FEED_TAG_COLORS = {
     "CARRIER": "#d8b4fe",  # purple — carrier events
     "EDSM":    "#67e8f9",  # teal   — EDSM upload status
     "EDDN":    "#38bdf8",  # blue   — EDDN market upload status
+    "CACHE":   "#7dd3fc",  # sky    — history/cache maintenance
     "MUSIC":   "#22d3ee",  # cyan   — music mood / soft state
     "AI":      "#c084fc",  # violet — Compass mood / memory evolution
     "EXPEDITION":"#d8b4fe", # purple — named expedition progress
@@ -138,9 +139,11 @@ class DashboardUIMixin(ThemedWindowMixin):
             pass
 
     def _add_cache_rebuild_controls(self, parent):
-        self._action_button(
+        rebuild_button = self._action_button(
             parent, "Rebuild Cache", self.scan_all_logs_threaded, muted=True,
-        ).pack(side=tk.LEFT)
+        )
+        rebuild_button.pack(side=tk.LEFT)
+        self.cache_rebuild_button = rebuild_button
         variable = getattr(self, "cache_rebuild_edsm_var", None)
         if variable is None:
             variable = tk.BooleanVar(
@@ -165,6 +168,21 @@ class DashboardUIMixin(ThemedWindowMixin):
         )
         check.pack(side=tk.LEFT, padx=(9, 0))
         return check
+
+    def _update_cache_rebuild_button(self, running, percent=None):
+        button_widget = getattr(self, "cache_rebuild_button", None)
+        if button_widget is None:
+            return
+        if running:
+            if percent is None:
+                text = "Rebuilding Cache…"
+            elif percent >= 100:
+                text = "Finalising Cache…"
+            else:
+                text = f"Rebuilding Cache… {max(0, int(percent))}%"
+            button_widget.config(text=text, state=tk.DISABLED)
+        else:
+            button_widget.config(text="Rebuild Cache", state=tk.NORMAL)
 
     def setup_layout(self):
         apply_window(self.root)
@@ -2914,7 +2932,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             "COMPASS": {"AI", "MUSIC"},
             "OPERATIONS": {
                 "TRADE", "CARRIER", "EDSM", "EDDN", "ACHIEVEMENT",
-                "PROFILE", "INFO",
+                "PROFILE", "INFO", "CACHE",
             },
         }
         if mode == "ALERTS":
