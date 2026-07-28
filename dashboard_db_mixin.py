@@ -531,77 +531,154 @@ class DashboardDBMixin:
     def scan_all_logs_threaded(self):
         import threading
 
+        if getattr(self, "_cache_rebuild_running", False):
+            self._cache_rebuild_feed("Cache rebuild is already in progress.")
+            return
+
         # Snapshot the profile preference on the UI thread so this rebuild is
         # not affected by a later profile switch or checkbox change.
         upload_history_to_edsm = bool(
             self.config.get("edsm_backfill_on_cache_rebuild", True)
         )
+        self._cache_rebuild_running = True
+        update_button = getattr(self, "_update_cache_rebuild_button", None)
+        if callable(update_button):
+            update_button(True, 0)
         threading.Thread(
             target=self.scan_all_logs,
             kwargs={"upload_history_to_edsm": upload_history_to_edsm},
             daemon=True,
         ).start()
 
+    def _cache_rebuild_feed(self, message, severity="INFO"):
+        publish = getattr(self, "add_event_feed_entry", None)
+        if callable(publish):
+            publish("CACHE", message, severity=severity)
+
+    def _post_cache_rebuild_progress(self, running, percent=None):
+        update_button = getattr(self, "_update_cache_rebuild_button", None)
+        post = getattr(self, "_ui_post", None)
+        if callable(update_button) and callable(post):
+            post(
+                update_button, running, percent,
+                key="cache-rebuild-button",
+            )
+
     def scan_all_logs(self, upload_history_to_edsm=None):
         if upload_history_to_edsm is None:
             upload_history_to_edsm = bool(
                 self.config.get("edsm_backfill_on_cache_rebuild", True)
             )
-        self.log("📚 STARTING HISTORY REBUILD...")
+        self._cache_rebuild_running = True
+        started_at = time.monotonic()
+        edsm_enabled = bool(self.config.get("edsm_upload_enabled"))
+        edsm_requested = edsm_enabled and bool(upload_history_to_edsm)
+        edsm_mode = "EDSM history enabled" if edsm_requested else "local cache only"
+        self._cache_rebuild_feed(f"Cache rebuild started · {edsm_mode}.")
 
-        new_history = self.watcher.scan_history(lambda p, t: self.log(f"⏳ Scanning... {int((p/t)*100)}%"))
+        last_progress_milestone = -10
 
-        if not new_history:
-            self.log("⚠️ No history found or scan failed.")
-            return
-
-        self.log("💾 Saving to database...")
-        with self.db_lock:
+        def report_progress(processed, total):
+            nonlocal last_progress_milestone
             try:
-                for sys_name, data in new_history.items():
-                    bodies = set(data.get("bodies", []))
-                    cursor = self.conn.cursor()
-                    cursor.execute("SELECT total, scanned_count FROM systems WHERE name=?", (sys_name,))
-                    row = cursor.fetchone()
-                    existing_total = row[0] if row else 0
-                    existing_scanned = row[1] if row else 0
-                    cursor.execute("SELECT COUNT(*) FROM bodies WHERE system_name=?", (sys_name,))
-                    existing_body_count = cursor.fetchone()[0] or 0
+                processed = max(0, int(processed))
+                total = max(1, int(total))
+                percent = max(0, min(99, int((processed / total) * 100)))
+            except (TypeError, ValueError, ZeroDivisionError):
+                return
+            self._post_cache_rebuild_progress(True, percent)
+            milestone = (percent // 10) * 10
+            if milestone >= 10 and milestone > last_progress_milestone:
+                last_progress_milestone = milestone
+                self._cache_rebuild_feed(
+                    f"Cache rebuild progress · {milestone}% "
+                    f"({min(processed, total)}/{total} journal files)."
+                )
 
-                    scanned_count = max(
-                        int(data.get("scanned_count", 0) or 0),
-                        len(bodies),
-                        int(existing_scanned or 0),
-                        int(existing_body_count or 0),
+        try:
+            try:
+                new_history = self.watcher.scan_history(report_progress)
+            except Exception as exc:
+                logging.exception("History cache rebuild failed while scanning journals")
+                self._cache_rebuild_feed(
+                    f"Cache rebuild failed while scanning journals: {exc}",
+                    severity="FAIL",
+                )
+                return
+
+            if not new_history:
+                self._cache_rebuild_feed(
+                    "Cache rebuild found no matching journal history.",
+                    severity="WARN",
+                )
+                return
+
+            self._post_cache_rebuild_progress(True, 100)
+            self._cache_rebuild_feed(
+                f"Journal scan complete · {len(new_history):,} systems found; updating cache."
+            )
+            with self.db_lock:
+                try:
+                    for sys_name, data in new_history.items():
+                        bodies = set(data.get("bodies", []))
+                        cursor = self.conn.cursor()
+                        cursor.execute("SELECT total, scanned_count FROM systems WHERE name=?", (sys_name,))
+                        row = cursor.fetchone()
+                        existing_total = row[0] if row else 0
+                        existing_scanned = row[1] if row else 0
+                        cursor.execute("SELECT COUNT(*) FROM bodies WHERE system_name=?", (sys_name,))
+                        existing_body_count = cursor.fetchone()[0] or 0
+
+                        scanned_count = max(
+                            int(data.get("scanned_count", 0) or 0),
+                            len(bodies),
+                            int(existing_scanned or 0),
+                            int(existing_body_count or 0),
+                        )
+                        total = max(
+                            int(data.get("total", 0) or 0),
+                            scanned_count,
+                            int(existing_total or 0),
+                        )
+                        if total <= 0 and scanned_count <= 0 and not bodies:
+                            continue
+
+                        for body_id in bodies:
+                            self.conn.execute("INSERT OR IGNORE INTO bodies (system_name, body_id) VALUES (?, ?)", (sys_name, body_id))
+                        self.conn.execute(
+                            "INSERT OR REPLACE INTO systems (name, total, scanned_count) VALUES (?, ?, ?)",
+                            (sys_name, total, scanned_count),
+                        )
+                    self.conn.commit()
+                except sqlite3.Error as exc:
+                    self.conn.rollback()
+                    self._cache_rebuild_feed(
+                        f"Cache rebuild database update failed: {exc}",
+                        severity="FAIL",
                     )
-                    total = max(
-                        int(data.get("total", 0) or 0),
-                        scanned_count,
-                        int(existing_total or 0),
-                    )
-                    if total <= 0 and scanned_count <= 0 and not bodies:
-                        continue
+                    return
 
-                    for body_id in bodies:
-                        self.conn.execute("INSERT OR IGNORE INTO bodies (system_name, body_id) VALUES (?, ?)", (sys_name, body_id))
-                    self.conn.execute(
-                        "INSERT OR REPLACE INTO systems (name, total, scanned_count) VALUES (?, ?, ?)",
-                        (sys_name, total, scanned_count),
-                    )
-                self.conn.commit()
-            except sqlite3.Error as e:
-                self.conn.rollback()
-                self.log(f"❌ DB ERROR (Rebuild): {e}")
+            self.load_system_from_db(self.current_sys)
+            self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+            self.update_hud()
 
-        self.log("✅ CACHE REBUILD COMPLETE.")
-        self.load_system_from_db(self.current_sys)
-        self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
-        self.update_hud()
+            if edsm_requested:
+                self.edsm.run_backfill(self.config.get("journal_path", ""))
 
-        if self.config.get("edsm_upload_enabled") and upload_history_to_edsm:
-            self.edsm.run_backfill(self.config.get("journal_path", ""))
-        elif self.config.get("edsm_upload_enabled"):
-            self.log("ℹ️ EDSM history upload skipped for this cache rebuild.")
+            elapsed = max(0.0, time.monotonic() - started_at)
+            if edsm_requested:
+                completion = "EDSM history backfill requested"
+            elif edsm_enabled:
+                completion = "EDSM history skipped"
+            else:
+                completion = "EDSM upload disabled"
+            self._cache_rebuild_feed(
+                f"Cache rebuild complete · {len(new_history):,} systems · "
+                f"{elapsed:.1f}s · {completion}."
+            )
+        finally:
+            self._cache_rebuild_running = False
+            self._post_cache_rebuild_progress(False)
 
     def load_system_from_db(self, sys_name):
         with self.db_lock:
