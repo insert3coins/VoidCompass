@@ -2800,8 +2800,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.config.get("carrier_overlay_enabled", False):
             if self.carrier_hud is None:
                 self.carrier_hud = CarrierHUD(self.root, self.config, self.carrier_tracker)
-            else:
-                self.carrier_hud.update()
+            self.carrier_hud.show()
         elif self.carrier_hud:
             self.carrier_hud.destroy()
             self.carrier_hud = None
@@ -4537,7 +4536,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 elif attr in hidden:
                     hidden.discard(attr)
                     if attr in persistent:
-                        window.deiconify()
+                        if attr == "carrier_hud" and hasattr(instance, "show"):
+                            instance.show()
+                        else:
+                            window.deiconify()
             except (AttributeError, tk.TclError):
                 pass
         self._adaptive_hidden_overlays = hidden

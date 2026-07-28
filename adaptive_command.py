@@ -46,7 +46,7 @@ DEFAULT_OVERLAY_SCENES = {
                 "prospector_hud": True, "system_info_hud": True,
                 "station_info_hud": True, "survey_status_hud": True,
                 "colony_overlay": True},
-    "exploration": {"hud": True, "cargo_hud": False, "carrier_hud": False,
+    "exploration": {"hud": True, "cargo_hud": False, "carrier_hud": True,
                     "prospector_hud": False, "system_info_hud": True,
                     "station_info_hud": False, "survey_status_hud": True,
                     "colony_overlay": False},
