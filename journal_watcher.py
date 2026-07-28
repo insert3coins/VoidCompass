@@ -877,66 +877,97 @@ class JournalWatcher:
 
         new_history = {}
         processed = 0
+        expected_name = str(self.config.get("active_commander_name") or "").strip().casefold()
+        expected_fid = str(self.config.get("active_commander_fid") or "").strip().casefold()
+
+        def commander_matches(data):
+            actual_name = str(data.get("Commander") or data.get("Name") or "").strip().casefold()
+            actual_fid = str(data.get("FID") or "").strip().casefold()
+            if expected_fid and actual_fid:
+                return expected_fid == actual_fid
+            if expected_name and actual_name:
+                return expected_name == actual_name
+            return not bool(expected_name or expected_fid)
+
+        def system_row(name):
+            return new_history.setdefault(
+                name, {"total": 0, "bodies": [], "scanned_count": 0},
+            )
 
         for filepath in files:
             try:
                 with open(filepath, 'r', encoding='utf-8') as f:
                     current_sys_context = None
+                    active_commander = not bool(expected_name or expected_fid)
                     for line in f:
                         try:
                             data = json.loads(line)
                             ev = data.get("event")
+
+                            if ev in ("Commander", "LoadGame"):
+                                active_commander = commander_matches(data)
+                                current_sys_context = None
+                                continue
+                            if not active_commander:
+                                continue
 
                             if ev in ["FSDJump", "Location"] or (
                                 ev == "CarrierJump" and data.get("Docked")
                             ):
                                 sys_name = data.get("StarSystem")
                                 current_sys_context = sys_name
-                                if sys_name and sys_name not in new_history:
-                                    new_history[sys_name] = {"total": 0, "bodies": [], "scanned_count": 0}
+                                if sys_name:
+                                    system_row(sys_name)
 
                             elif ev == "FSSDiscoveryScan":
                                 sys_name = data.get("SystemName", current_sys_context)
                                 if sys_name:
-                                    if sys_name not in new_history: new_history[sys_name] = {"total": 0, "bodies": [], "scanned_count": 0}
-                                    count = data.get("BodyCount", 0)
-                                    if count > new_history[sys_name]["total"]: new_history[sys_name]["total"] = count
+                                    row = system_row(sys_name)
+                                    count = int(data.get("BodyCount") or 0)
+                                    row["total"] = max(row["total"], count)
+                                    try:
+                                        complete = float(data.get("Progress")) >= 1.0
+                                    except (TypeError, ValueError):
+                                        complete = False
+                                    if complete:
+                                        row["scanned_count"] = max(row["scanned_count"], count)
 
                             elif ev == "DiscoveryScan":
                                 sys_name = current_sys_context
                                 if sys_name:
-                                    if sys_name not in new_history: new_history[sys_name] = {"total": 0, "bodies": [], "scanned_count": 0}
+                                    row = system_row(sys_name)
                                     discovered = data.get("Bodies", 0)
                                     if isinstance(discovered, int) and discovered > 0:
-                                        estimated_total = new_history[sys_name]["scanned_count"] + discovered
-                                        if estimated_total > new_history[sys_name]["total"]:
-                                            new_history[sys_name]["total"] = estimated_total
+                                        estimated_total = row["scanned_count"] + discovered
+                                        row["total"] = max(row["total"], estimated_total)
 
                             elif ev == "NavBeaconScan":
                                 sys_name = current_sys_context
                                 if sys_name:
-                                    if sys_name not in new_history: new_history[sys_name] = {"total": 0, "bodies": [], "scanned_count": 0}
-                                    count = data.get("NumBodies", 0)
-                                    if count > new_history[sys_name]["total"]: new_history[sys_name]["total"] = count
+                                    row = system_row(sys_name)
+                                    count = int(data.get("NumBodies") or 0)
+                                    row["total"] = max(row["total"], count)
+                                    row["scanned_count"] = max(row["scanned_count"], count)
 
                             elif ev == "FSSAllBodiesFound":
                                 sys_name = data.get("SystemName", current_sys_context)
                                 if sys_name:
-                                    if sys_name not in new_history: new_history[sys_name] = {"total": 0, "bodies": [], "scanned_count": 0}
-                                    count = data.get("Count", 0)
-                                    new_history[sys_name]["total"] = count
-                                    new_history[sys_name]["scanned_count"] = count
+                                    row = system_row(sys_name)
+                                    count = int(data.get("Count") or data.get("BodyCount") or 0)
+                                    row["total"] = max(row["total"], count)
+                                    row["scanned_count"] = max(row["scanned_count"], count)
 
                             elif ev == "Scan":
                                 sys_name = data.get("StarSystem", current_sys_context)
                                 if sys_name and ("StarType" in data or "PlanetClass" in data):
-                                    if sys_name not in new_history: new_history[sys_name] = {"total": 0, "bodies": [], "scanned_count": 0}
+                                    row = system_row(sys_name)
                                     body_id = data.get("BodyID")
-                                    if body_id is not None:
-                                        if "bodies" not in new_history[sys_name]: new_history[sys_name]["bodies"] = []
-                                        if body_id not in new_history[sys_name]["bodies"]: new_history[sys_name]["bodies"].append(body_id)
-                        except ValueError: continue
-            except Exception: pass
+                                    if body_id is not None and body_id not in row["bodies"]:
+                                        row["bodies"].append(body_id)
+                        except (ValueError, TypeError):
+                            continue
+            except OSError:
+                pass
             
             processed += 1
             if progress_callback and processed % 10 == 0:
