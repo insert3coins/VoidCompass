@@ -1,14 +1,13 @@
-"""
-carrier_window.py — Personal/Squadron Carrier detail window for VoidCompass.
-Tabs: Overview, Squadron, Expedition, Finance, Services.
-All data comes from CarrierTracker.carrier_data.
-"""
+"""Personal/Squadron Carrier command, routing and cargo intelligence."""
+import threading
 import tkinter as tk
 import webbrowser
 from datetime import datetime, timezone
+from tkinter import messagebox, ttk
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 from ui_theme import THEME, ThemedWindowMixin, apply_window, button, scrollbar, window_surface
+from trade.spansh import SpanshError, fleet_carrier_route, import_fleet_carrier_route
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -68,17 +67,25 @@ class CarrierWindow(ThemedWindowMixin):
     UI_MONO  = ("Consolas", 9)
     UI_MONO_B= ("Consolas", 10, "bold")
 
-    def __init__(self, root, config, tracker, embedded=False):
+    def __init__(self, root, config, tracker, embedded=False, specialist_engine=None):
         self.root = root
         self.config = config
         self.tracker = tracker
+        self.specialist_engine = specialist_engine
         self._after_job = None
+        self._route_generation = 0
+        self._cargo_editor_seeded = False
+        self._cargo_profile_path = None
+        try:
+            self._carrier_profile_path = self.tracker._state_path()
+        except Exception:
+            self._carrier_profile_path = None
 
         self.embedded = embedded
         self.win = window_surface(root, embedded=embedded)
         self.win.title("Carrier Command")
         apply_window(self.win)
-        self.win.geometry(config.get("carrier_window_geometry", "480x560"))
+        self.win.geometry(config.get("carrier_window_geometry", "900x680"))
         self.win.resizable(True, True)
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -95,6 +102,7 @@ class CarrierWindow(ThemedWindowMixin):
             return False
 
     def _on_close(self):
+        self._route_generation += 1
         try:
             self.config["carrier_window_geometry"] = self.win.geometry()
             save_config(self.config)
@@ -112,6 +120,37 @@ class CarrierWindow(ThemedWindowMixin):
             pass
 
     def _on_tracker_updated(self, _data):
+        if self.is_open():
+            try:
+                profile_path = self.tracker._state_path()
+            except Exception:
+                profile_path = None
+            if profile_path != self._carrier_profile_path:
+                self._carrier_profile_path = profile_path
+                self._route_generation += 1
+                self._cargo_editor_seeded = False
+                for name in ("spansh_plot_btn", "spansh_import_btn"):
+                    control = getattr(self, name, None)
+                    if control is not None:
+                        control.config(state=tk.NORMAL)
+            self.win.after(0, self._refresh)
+
+    def on_specialist_updated(self):
+        """Refresh the observed cargo manifest after a SpecialistEngine delta."""
+        if self.is_open():
+            self.win.after(0, lambda: self._refresh_cargo(self.tracker.carrier_data))
+
+    def on_profile_switched(self):
+        """Drop transient route/cargo UI state at the commander boundary."""
+        self._route_generation += 1
+        self._cargo_editor_seeded = False
+        self._cargo_profile_path = None
+        try:
+            self._carrier_profile_path = self.tracker._state_path()
+        except Exception:
+            self._carrier_profile_path = None
+        if hasattr(self, "spansh_import_var"):
+            self.spansh_import_var.set("")
         if self.is_open():
             self.win.after(0, self._refresh)
 
@@ -136,8 +175,8 @@ class CarrierWindow(ThemedWindowMixin):
         tab_bar.pack(fill=tk.X)
         self._tabs = {}
         self._tab_frames = {}
-        for name in ("Overview", "Squadron", "Expedition", "Finance", "Services"):
-            btn = button(tab_bar, name, lambda n=name: self._show_tab(n), muted=True, padx=14, pady=6)
+        for name in ("Overview", "Squadron", "Expedition", "Cargo", "Finance", "Services"):
+            btn = button(tab_bar, name, lambda n=name: self._show_tab(n), muted=True, padx=10, pady=6)
             btn.pack(side=tk.LEFT)
             self._tabs[name] = btn
 
@@ -148,6 +187,7 @@ class CarrierWindow(ThemedWindowMixin):
         self._build_overview_tab()
         self._build_squadron_tab()
         self._build_expedition_tab()
+        self._build_cargo_tab()
         self._build_finance_tab()
         self._build_services_tab()
         self._show_tab("Overview")
@@ -414,7 +454,8 @@ class CarrierWindow(ThemedWindowMixin):
         self._tab_frames["Expedition"] = f
         self._section(f, "FLEET CARRIER EXPEDITION NAVIGATOR")
         tk.Label(
-            f, text="Paste one system per line. CarrierJump/CarrierLocation marks arrivals automatically.",
+            f, text=("Paste one destination per line. Spansh calculates the jumps and tritium; "
+                     "select any calculated row to copy that waypoint. Journal arrivals advance the route."),
             font=("Segoe UI", 8), fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w",
         ).pack(fill=tk.X, padx=10, pady=(0, 6))
         fields = tk.Frame(f, bg=self.UI_PANEL)
@@ -436,12 +477,15 @@ class CarrierWindow(ThemedWindowMixin):
         tk.Label(fields, text="T", fg=self.UI_MUTED, bg=self.UI_PANEL).pack(side=tk.LEFT)
 
         route_wrap = tk.Frame(f, bg="#090c10")
-        route_wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=8)
+        route_wrap.pack(fill=tk.X, padx=10, pady=8)
         self.expedition_route_text = tk.Text(
             route_wrap, bg="#090c10", fg=COLOR_TEXT, insertbackground=COLOR_ACCENT,
-            relief=tk.FLAT, bd=0, font=self.UI_MONO, wrap=tk.NONE, padx=8, pady=8,
+            relief=tk.FLAT, bd=0, font=self.UI_MONO, wrap=tk.NONE, padx=8, pady=8, height=5,
         )
-        self.expedition_route_text.pack(fill=tk.BOTH, expand=True)
+        route_scroll = scrollbar(route_wrap, orient=tk.VERTICAL, command=self.expedition_route_text.yview)
+        self.expedition_route_text.configure(yscrollcommand=route_scroll.set)
+        self.expedition_route_text.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        route_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.expedition_route_text.tag_config("visited", foreground=self.UI_DIM)
         self.expedition_route_text.tag_config("next", foreground=COLOR_ORANGE)
         self.expedition_route_text.tag_config("pending", foreground=COLOR_TEXT)
@@ -449,13 +493,62 @@ class CarrierWindow(ThemedWindowMixin):
         actions = tk.Frame(f, bg=self.UI_PANEL)
         actions.pack(fill=tk.X, padx=10, pady=(0, 6))
         button(actions, "SAVE / UPDATE ROUTE", self._save_expedition, accent=True).pack(side=tk.LEFT)
+        self.spansh_plot_btn = button(actions, "PLOT WITH SPANSH", self._plot_spansh_expedition)
+        self.spansh_plot_btn.pack(side=tk.LEFT, padx=(6, 0))
         button(actions, "COPY NEXT", self._copy_next_expedition).pack(side=tk.LEFT, padx=(6, 0))
-        button(actions, "OPEN SPANSH ROUTER", self._open_spansh_carrier).pack(side=tk.LEFT, padx=(6, 0))
-        self.expedition_summary = tk.Label(actions, text="", fg=self.UI_MUTED, bg=self.UI_PANEL,
-                                           font=("Consolas", 8))
-        self.expedition_summary.pack(side=tk.RIGHT)
+        button(actions, "COPY SELECTED", self._copy_selected_expedition).pack(side=tk.LEFT, padx=(6, 0))
+        self.spansh_result_btn = button(actions, "OPEN RESULT", self._open_spansh_result, muted=True)
+        self.spansh_result_btn.pack(side=tk.LEFT, padx=(6, 0))
 
-    def _save_expedition(self):
+        import_row = tk.Frame(f, bg=self.UI_PANEL)
+        import_row.pack(fill=tk.X, padx=10, pady=(0, 6))
+        tk.Label(
+            import_row, text="SPANSH RESULT", fg=self.UI_MUTED, bg=self.UI_PANEL,
+            font=("Segoe UI", 7, "bold"),
+        ).pack(side=tk.LEFT)
+        self.spansh_import_var = tk.StringVar()
+        self.spansh_import_entry = tk.Entry(
+            import_row, textvariable=self.spansh_import_var,
+            bg="#090c10", fg=COLOR_TEXT, insertbackground=COLOR_ACCENT,
+            relief=tk.FLAT, highlightthickness=1,
+            highlightbackground=self.UI_BORDER, highlightcolor=COLOR_ACCENT,
+        )
+        self.spansh_import_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=6, ipady=4)
+        self.spansh_import_btn = button(
+            import_row, "IMPORT URL / JOB", self._import_spansh_expedition, muted=True,
+        )
+        self.spansh_import_btn.pack(side=tk.LEFT)
+        self.spansh_import_entry.bind("<Return>", lambda _event: self._import_spansh_expedition())
+
+        self.expedition_status = tk.Label(
+            f, text="", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 8), anchor="w",
+        )
+        self.expedition_status.pack(fill=tk.X, padx=10, pady=(0, 5))
+
+        tree_wrap = tk.Frame(f, bg=self.UI_PANEL)
+        tree_wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 6))
+        columns = ("stop", "system", "jump", "fuel", "tank", "restock")
+        self.expedition_tree = ttk.Treeview(tree_wrap, columns=columns, show="headings", height=8)
+        headings = {
+            "stop": ("#", 42, "center"), "system": ("System", 260, "w"),
+            "jump": ("Jump", 80, "e"), "fuel": ("Fuel", 75, "e"),
+            "tank": ("Tank after", 85, "e"), "restock": ("Restock", 95, "e"),
+        }
+        for key, (label, width, anchor) in headings.items():
+            self.expedition_tree.heading(key, text=label)
+            self.expedition_tree.column(key, width=width, minwidth=35, anchor=anchor,
+                                        stretch=key == "system")
+        tree_y = scrollbar(tree_wrap, orient=tk.VERTICAL, command=self.expedition_tree.yview)
+        self.expedition_tree.configure(yscrollcommand=tree_y.set)
+        self.expedition_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tree_y.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.expedition_summary = tk.Label(
+            f, text="", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 8), anchor="w",
+        )
+        self.expedition_summary.pack(fill=tk.X, padx=10, pady=(0, 8))
+
+    def _route_systems_from_editor(self):
         systems = []
         for line in self.expedition_route_text.get("1.0", tk.END).splitlines():
             value = line.strip()
@@ -463,9 +556,122 @@ class CarrierWindow(ThemedWindowMixin):
                 value = value[1:].strip()
             if value:
                 systems.append(value)
+        return systems
+
+    def _save_expedition(self):
         self.tracker.set_expedition(
-            self.expedition_name_var.get(), systems, self.expedition_reserve_var.get()
+            self.expedition_name_var.get(), self._route_systems_from_editor(),
+            self.expedition_reserve_var.get(),
         )
+        self.expedition_status.config(text="MANUAL · route saved", fg=self.UI_OK)
+
+    def _plot_spansh_expedition(self):
+        cd = self.tracker.carrier_data
+        source = str(cd.get("system") or "").strip()
+        destinations = self._route_systems_from_editor()
+        if not source:
+            self.expedition_status.config(
+                text="Open Carrier Management or wait for CarrierLocation so the source system is known.",
+                fg=self.UI_WARN,
+            )
+            return
+        destinations = [row for row in destinations if row.casefold() != source.casefold()]
+        if not destinations:
+            self.expedition_status.config(text="Add at least one destination system.", fg=self.UI_WARN)
+            return
+        total, free = cd.get("space_total"), cd.get("space_free")
+        used = max(0, int(total) - int(free)) if total is not None and free is not None else 0
+        source_id64 = cd.get("system_address")
+        carrier_type = cd.get("carrier_type") or "fleet"
+        try:
+            profile_path = self.tracker._state_path()
+        except Exception:
+            profile_path = None
+        self._route_generation += 1
+        generation = self._route_generation
+        self.spansh_plot_btn.config(state=tk.DISABLED)
+        self.expedition_status.config(text="SPANSH · resolving systems and calculating carrier jumps…", fg=COLOR_ACCENT)
+
+        def worker():
+            try:
+                result = fleet_carrier_route(
+                    source, destinations, source_id64=source_id64,
+                    used_capacity=used, carrier_type=carrier_type,
+                    calculate_starting_fuel=True,
+                )
+                error = None
+            except Exception as exc:
+                result, error = None, exc
+            try:
+                self.win.after(
+                    0, lambda: self._finish_spansh_plot(
+                        generation, profile_path, result, error, "plotted",
+                    ),
+                )
+            except Exception:
+                pass
+
+        threading.Thread(target=worker, name="SpanshCarrierRoute", daemon=True).start()
+
+    def _import_spansh_expedition(self):
+        reference = self.spansh_import_var.get().strip()
+        if not reference:
+            self.expedition_status.config(
+                text="Paste a Spansh Fleet Carrier results URL or job id.", fg=self.UI_WARN,
+            )
+            return
+        try:
+            profile_path = self.tracker._state_path()
+        except Exception:
+            profile_path = None
+        self._route_generation += 1
+        generation = self._route_generation
+        self.spansh_plot_btn.config(state=tk.DISABLED)
+        self.spansh_import_btn.config(state=tk.DISABLED)
+        self.expedition_status.config(text="SPANSH · importing completed carrier route…", fg=COLOR_ACCENT)
+
+        def worker():
+            try:
+                result, error = import_fleet_carrier_route(reference), None
+            except Exception as exc:
+                result, error = None, exc
+            try:
+                self.win.after(
+                    0, lambda: self._finish_spansh_plot(
+                        generation, profile_path, result, error, "imported",
+                    ),
+                )
+            except Exception:
+                pass
+
+        threading.Thread(target=worker, name="SpanshCarrierImport", daemon=True).start()
+
+    def _finish_spansh_plot(self, generation, profile_path, result, error, action="plotted"):
+        try:
+            current_profile_path = self.tracker._state_path()
+        except Exception:
+            current_profile_path = None
+        if (generation != self._route_generation or profile_path != current_profile_path
+                or not self.is_open()):
+            return
+        self.spansh_plot_btn.config(state=tk.NORMAL)
+        self.spansh_import_btn.config(state=tk.NORMAL)
+        if error:
+            detail = str(error) if isinstance(error, SpanshError) else f"Unexpected route error: {error}"
+            self.expedition_status.config(text=f"SPANSH · {detail}", fg=self.UI_FAIL)
+            return
+        self.tracker.set_spansh_expedition(
+            self.expedition_name_var.get() or "Carrier Route", result,
+            self.expedition_reserve_var.get(),
+        )
+        self.expedition_status.config(
+            text=(f"SPANSH · {len(result.get('jumps') or []) - 1:,} jumps · "
+                  f"{result.get('total_distance_ly') or 0:,.1f} LY · "
+                  f"{result.get('fuel_required_t') or 0:,} T · {action}"),
+            fg=self.UI_OK,
+        )
+        self.spansh_import_var.set(result.get("url") or "")
+        self._refresh()
 
     def _next_expedition_system(self):
         for row in self.tracker.carrier_data.get("expedition_route") or []:
@@ -478,10 +684,26 @@ class CarrierWindow(ThemedWindowMixin):
         if system:
             self.win.clipboard_clear()
             self.win.clipboard_append(system)
+            self.expedition_status.config(text=f"COPIED NEXT · {system}", fg=self.UI_OK)
 
-    @staticmethod
-    def _open_spansh_carrier():
-        webbrowser.open("https://spansh.co.uk/fleet-carrier")
+    def _copy_selected_expedition(self):
+        selected = self.expedition_tree.selection()
+        if not selected:
+            self.expedition_status.config(
+                text="Select a route row, then use COPY SELECTED.", fg=self.UI_WARN,
+            )
+            return
+        values = self.expedition_tree.item(selected[0], "values") or ()
+        system = str(values[1] if len(values) > 1 else "").strip()
+        if not system or system == "—":
+            return
+        self.win.clipboard_clear()
+        self.win.clipboard_append(system)
+        self.expedition_status.config(text=f"COPIED WAYPOINT · {system}", fg=self.UI_OK)
+
+    def _open_spansh_result(self):
+        url = self.tracker.carrier_data.get("expedition_spansh_url")
+        webbrowser.open(url or "https://spansh.co.uk/fleet-carrier")
 
     def _refresh_expedition(self, cd):
         try:
@@ -489,10 +711,16 @@ class CarrierWindow(ThemedWindowMixin):
         except Exception:
             focused = False
         route = cd.get("expedition_route") or []
+        editor_route = (
+            cd.get("expedition_requested_destinations") or route
+            if cd.get("expedition_route_source") == "spansh" else route
+        )
         if not focused:
             self.expedition_route_text.delete("1.0", tk.END)
             next_written = False
-            for row in route:
+            for row in editor_route:
+                if isinstance(row, str):
+                    row = {"system": row}
                 if not isinstance(row, dict):
                     continue
                 if row.get("visited"):
@@ -508,10 +736,221 @@ class CarrierWindow(ThemedWindowMixin):
             self.expedition_reserve_var.set(str(cd.get("expedition_reserve_fuel") or 0))
         done = sum(1 for row in route if isinstance(row, dict) and row.get("visited"))
         remaining = max(0, len(route) - done)
+        for item in self.expedition_tree.get_children():
+            self.expedition_tree.delete(item)
+        for index, row in enumerate(route, start=1):
+            if not isinstance(row, dict):
+                continue
+            visited = bool(row.get("visited"))
+            marker = "✓" if visited else "→" if index == done + 1 else str(index)
+            distance = row.get("distance_ly")
+            fuel_used = row.get("fuel_used_t")
+            fuel_left = row.get("fuel_remaining_t")
+            restock = row.get("restock_t")
+            self.expedition_tree.insert("", tk.END, values=(
+                marker, row.get("system") or "—",
+                f"{float(distance):,.1f} LY" if distance is not None else "—",
+                f"{int(fuel_used):,} T" if fuel_used is not None else "—",
+                f"{int(fuel_left):,} T" if fuel_left is not None else "—",
+                f"{int(restock):,} T" if restock else ("REQUIRED" if row.get("must_restock") else "—"),
+            ))
         fuel = cd.get("fuel_level")
         reserve = int(cd.get("expedition_reserve_fuel") or 0)
         fuel_text = "fuel unknown" if fuel is None else f"{max(0, int(fuel) - reserve):,} T above reserve"
-        self.expedition_summary.config(text=f"{done}/{len(route)} stops | {remaining * 20} min nominal | {fuel_text}")
+        source = str(cd.get("expedition_route_source") or "manual").upper()
+        self.expedition_summary.config(
+            text=f"{source} · {done}/{len(route)} stops · {remaining * 20} min nominal · {fuel_text}"
+        )
+        result_url = cd.get("expedition_spansh_url")
+        self.spansh_result_btn.config(
+            state=tk.NORMAL, text="OPEN RESULT" if result_url else "OPEN SPANSH",
+        )
+        try:
+            import_focused = self.win.focus_get() == self.spansh_import_entry
+        except Exception:
+            import_focused = False
+        if not import_focused:
+            desired_result = result_url or ""
+            if self.spansh_import_var.get() != desired_result:
+                self.spansh_import_var.set(desired_result)
+        if result_url and not self.expedition_status.cget("text"):
+            self.expedition_status.config(
+                text=f"SPANSH route saved · plotted {_fmt_dt(cd.get('expedition_plotted_at'))}", fg=self.UI_MUTED,
+            )
+
+    # ---------- Cargo tab ----------
+    def _build_cargo_tab(self):
+        f = tk.Frame(self._tab_area, bg=self.UI_PANEL,
+                     highlightbackground=self.UI_BORDER, highlightthickness=1)
+        self._tab_frames["Cargo"] = f
+        self._section(f, "CARRIER CARGO INTELLIGENCE")
+        self.cargo_totals = tk.Label(
+            f, text="", font=("Consolas", 10, "bold"), fg=COLOR_ACCENT,
+            bg=self.UI_PANEL, anchor="w",
+        )
+        self.cargo_totals.pack(fill=tk.X, padx=10, pady=(1, 2))
+        self.cargo_evidence = tk.Label(
+            f, text=("CarrierStats supplies the exact total cargo usage, but not a commodity manifest. "
+                     "The rows below are your saved baseline plus transfers observed while docked at your own carrier."),
+            font=("Segoe UI", 8), fg=self.UI_MUTED, bg=self.UI_PANEL,
+            anchor="w", justify=tk.LEFT, wraplength=820,
+        )
+        self.cargo_evidence.pack(fill=tk.X, padx=10, pady=(0, 7))
+
+        manifest_wrap = tk.Frame(f, bg=self.UI_PANEL)
+        manifest_wrap.pack(fill=tk.BOTH, expand=True, padx=10)
+        self.cargo_tree = ttk.Treeview(
+            manifest_wrap, columns=("commodity", "tonnes"), show="headings", height=7,
+        )
+        self.cargo_tree.heading("commodity", text="Observed commodity")
+        self.cargo_tree.heading("tonnes", text="Tonnes")
+        self.cargo_tree.column("commodity", width=360, anchor="w", stretch=True)
+        self.cargo_tree.column("tonnes", width=100, anchor="e", stretch=False)
+        cargo_y = scrollbar(manifest_wrap, orient=tk.VERTICAL, command=self.cargo_tree.yview)
+        self.cargo_tree.configure(yscrollcommand=cargo_y.set)
+        self.cargo_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        cargo_y.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self._section(f, "MANIFEST BASELINE")
+        tk.Label(
+            f, text="Use Commodity | tonnes. Save a fresh baseline after checking the carrier inventory in game.",
+            font=("Segoe UI", 8), fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w",
+        ).pack(fill=tk.X, padx=10, pady=(0, 3))
+        editor_wrap = tk.Frame(f, bg="#090c10")
+        editor_wrap.pack(fill=tk.X, padx=10)
+        self.cargo_manifest_text = tk.Text(
+            editor_wrap, height=4, bg="#090c10", fg=COLOR_TEXT,
+            insertbackground=COLOR_ACCENT, relief=tk.FLAT, bd=0,
+            font=self.UI_MONO, wrap=tk.NONE, padx=8, pady=6,
+        )
+        manifest_y = scrollbar(editor_wrap, orient=tk.VERTICAL, command=self.cargo_manifest_text.yview)
+        self.cargo_manifest_text.configure(yscrollcommand=manifest_y.set)
+        self.cargo_manifest_text.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        manifest_y.pack(side=tk.RIGHT, fill=tk.Y)
+        cargo_actions = tk.Frame(f, bg=self.UI_PANEL)
+        cargo_actions.pack(fill=tk.X, padx=10, pady=(6, 3))
+        self.cargo_save_btn = button(cargo_actions, "SAVE MANIFEST BASELINE", self._save_cargo_manifest, accent=True)
+        self.cargo_save_btn.pack(side=tk.LEFT)
+        self.cargo_status = tk.Label(
+            cargo_actions, text="", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 8), anchor="w",
+        )
+        self.cargo_status.pack(side=tk.LEFT, padx=(10, 0), fill=tk.X, expand=True)
+
+        self._section(f, "ACTIVE CARRIER MARKET ORDERS")
+        order_wrap = tk.Frame(f, bg=self.UI_PANEL)
+        order_wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 8))
+        self.cargo_order_tree = ttk.Treeview(
+            order_wrap, columns=("commodity", "side", "quantity", "price"), show="headings", height=4,
+        )
+        for key, label, width, anchor in (
+            ("commodity", "Commodity", 280, "w"), ("side", "Order", 80, "center"),
+            ("quantity", "Quantity", 100, "e"), ("price", "Price", 130, "e"),
+        ):
+            self.cargo_order_tree.heading(key, text=label)
+            self.cargo_order_tree.column(key, width=width, anchor=anchor, stretch=key == "commodity")
+        self.cargo_order_tree.pack(fill=tk.BOTH, expand=True)
+        if self.specialist_engine is None:
+            self.cargo_save_btn.config(state=tk.DISABLED)
+
+    @staticmethod
+    def _parse_cargo_manifest(text):
+        rows = []
+        for index, raw in enumerate(text.splitlines(), start=1):
+            if not raw.strip():
+                continue
+            normalized = raw.replace("\t", "|")
+            if "|" in normalized:
+                fields = [value.strip() for value in normalized.split("|")]
+            elif "," in normalized:
+                fields = [value.strip() for value in normalized.split(",", 1)]
+            else:
+                fields = [normalized.strip()]
+            if len(fields) < 2 or not fields[0]:
+                raise ValueError(f"Manifest line {index}: use Commodity | tonnes")
+            try:
+                count = int(float(fields[-1].replace(",", "")))
+            except ValueError as exc:
+                raise ValueError(f"Manifest line {index}: invalid tonnes") from exc
+            if count < 0:
+                raise ValueError(f"Manifest line {index}: tonnes cannot be negative")
+            name = " | ".join(fields[:-1])
+            rows.append({"name": name, "symbol": name.lower().replace(" ", "_"), "count": count})
+        return rows
+
+    def _save_cargo_manifest(self):
+        if self.specialist_engine is None:
+            return
+        try:
+            rows = self._parse_cargo_manifest(self.cargo_manifest_text.get("1.0", tk.END))
+            self.specialist_engine.set_carrier_inventory(rows, source="commander manifest baseline")
+            self._cargo_editor_seeded = True
+            self._refresh_cargo(self.tracker.carrier_data)
+            self.cargo_status.config(text="BASELINE SAVED · future own-carrier transfers update it", fg=self.UI_OK)
+        except Exception as exc:
+            messagebox.showerror("Carrier manifest", str(exc), parent=self.win)
+
+    def _refresh_cargo(self, cd):
+        workflow = {}
+        if self.specialist_engine is not None:
+            try:
+                profile_path = getattr(self.specialist_engine, "path", None)
+                if profile_path != self._cargo_profile_path:
+                    self._cargo_profile_path = profile_path
+                    self._cargo_editor_seeded = False
+                snapshot = getattr(self.specialist_engine, "carrier_snapshot", None)
+                workflow = (snapshot(cd) if callable(snapshot)
+                            else self.specialist_engine.snapshot(cd).get("carrier")) or {}
+            except Exception:
+                workflow = {}
+        inventory = workflow.get("inventory") or {}
+        rows = sorted(inventory.values(), key=lambda row: (-int(row.get("count") or 0), row.get("name") or ""))
+        for item in self.cargo_tree.get_children():
+            self.cargo_tree.delete(item)
+        for row in rows:
+            self.cargo_tree.insert("", tk.END, values=(row.get("name") or row.get("symbol") or "—",
+                                                        f"{int(row.get('count') or 0):,}"))
+        listed = sum(int(row.get("count") or 0) for row in rows)
+        exact = cd.get("space_cargo")
+        free = cd.get("space_free")
+        reserved = cd.get("space_reserved")
+        exact_text = "unknown" if exact is None else f"{int(exact):,} T"
+        remainder = None if exact is None else int(exact) - listed
+        comparison = (
+            "manifest awaits baseline" if not rows
+            else f"{remainder:,} T not itemised" if remainder is not None and remainder >= 0
+            else f"manifest exceeds snapshot by {abs(remainder):,} T" if remainder is not None
+            else "no aggregate snapshot"
+        )
+        self.cargo_totals.config(
+            text=(f"JOURNAL CARGO {exact_text}   ·   MANIFEST {listed:,} T   ·   {comparison.upper()}   ·   "
+                  f"FREE {int(free):,} T" if free is not None else
+                  f"JOURNAL CARGO {exact_text}   ·   MANIFEST {listed:,} T   ·   {comparison.upper()}")
+        )
+        source = workflow.get("inventory_source") or "no manifest baseline"
+        total_source = cd.get("cargo_total_source") or (
+            "CarrierStats snapshot" if exact is not None else "CarrierStats not received"
+        )
+        reserve_text = f" · reserved {int(reserved):,} T" if reserved is not None else ""
+        self.cargo_status.config(
+            text=(f"{source}{reserve_text} · total: {total_source} "
+                  f"{_fmt_dt(cd.get('cargo_updated_at') or cd.get('stats_updated_at'))}"),
+            fg=self.UI_MUTED,
+        )
+        if not self._cargo_editor_seeded:
+            self.cargo_manifest_text.delete("1.0", tk.END)
+            for row in sorted(rows, key=lambda value: value.get("name") or ""):
+                self.cargo_manifest_text.insert(
+                    tk.END, f"{row.get('name') or row.get('symbol')} | {int(row.get('count') or 0)}\n"
+                )
+            self._cargo_editor_seeded = True
+        for item in self.cargo_order_tree.get_children():
+            self.cargo_order_tree.delete(item)
+        orders = ((workflow.get("orders") or {}).get("items") or [])
+        for row in orders:
+            self.cargo_order_tree.insert("", tk.END, values=(
+                row.get("name") or "—", str(row.get("side") or "—").upper(),
+                f"{int(row.get('quantity') or 0):,}", f"{int(row.get('price_cr') or 0):,} cr",
+            ))
 
     @staticmethod
     def _parse_departure_time(text):
@@ -726,6 +1165,7 @@ class CarrierWindow(ThemedWindowMixin):
             return
         cd = self.tracker.carrier_data
         self._refresh_expedition(cd)
+        self._refresh_cargo(cd)
 
         # Status badge
         status = cd.get("status", "idle")
