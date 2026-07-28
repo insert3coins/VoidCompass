@@ -157,7 +157,11 @@ class CarrierHUD:
 
         overlay_chrome.draw_chrome(self.canvas, WIDTH, height)
         self.canvas.create_line(20, 35, WIDTH - 20, 35, fill="#1a2530", width=1)
-        self._draw_text(20, 20, "FLEET CARRIER", COLOR_ACCENT, ("Courier", 10, "bold"))
+        carrier_title = (
+            "SQUADRON CARRIER" if cd.get("carrier_type") == "SquadronCarrier"
+            else "FLEET CARRIER"
+        )
+        self._draw_text(20, 20, carrier_title, COLOR_ACCENT, ("Courier", 10, "bold"))
         self._draw_text(WIDTH - 20, 20, status_text, status_color, ("Courier", 10, "bold"), anchor="e")
 
         y = 47
@@ -185,6 +189,9 @@ class CarrierHUD:
 
         now = datetime.now(timezone.utc)
         dep = _parse_dt(cd.get("jump_departure_time"))
+        route = [row for row in (cd.get("expedition_route") or []) if isinstance(row, dict)]
+        done = sum(1 for row in route if row.get("visited"))
+        next_route = next((row for row in route if not row.get("visited")), None)
         if status == "jumping" and dep:
             dest = cd.get("jump_destination") or "TBD"
             dest_body = cd.get("jump_body") or ""
@@ -200,11 +207,34 @@ class CarrierHUD:
         elif status == "cooldown_cancel":
             rows.append(("JUMP CANCELLED - BRIEF COOLDOWN", _FAIL))
         else:
-            dest = cd.get("destination_note") or cd.get("jump_destination") or ""
+            dest = (
+                cd.get("destination_note") or cd.get("jump_destination")
+                or (next_route or {}).get("system") or ""
+            )
             if dest:
-                rows.append((f"PLAN: {_truncate(dest, 42)}", COLOR_ORANGE))
+                label = "NEXT" if next_route and dest == next_route.get("system") else "PLAN"
+                detail = ""
+                if label == "NEXT":
+                    distance = next_route.get("distance_ly")
+                    tritium = next_route.get("fuel_used_t")
+                    if distance is not None:
+                        detail += f" · {float(distance):.1f}LY"
+                    if tritium is not None:
+                        detail += f"/{int(float(tritium))}T"
+                rows.append((f"{label}: {_truncate(str(dest) + detail, 42)}", COLOR_ORANGE))
             else:
                 rows.append(("READY TO PLOT JUMP", _MUTED))
+
+        if route:
+            remaining_fuel_rows = [
+                row.get("fuel_used_t") for row in route if not row.get("visited")
+                and row.get("fuel_used_t") is not None
+            ]
+            source = str(cd.get("expedition_route_source") or "manual").upper()
+            route_text = f"ROUTE: {done}/{len(route)}  |  {source}"
+            if remaining_fuel_rows:
+                route_text += f"  |  {sum(int(float(value)) for value in remaining_fuel_rows)}T REM"
+            rows.append((_truncate(route_text, 45), COLOR_ACCENT if next_route else _OK))
 
         fuel = cd.get("fuel_level")
         cap = cd.get("fuel_capacity") or 1000
@@ -228,6 +258,19 @@ class CarrierHUD:
             except Exception:
                 fuel_color = _MUTED
             rows.append(("  |  ".join(parts), fuel_color))
+
+        cargo = cd.get("space_cargo")
+        free = cd.get("space_free")
+        orders = cd.get("trade_orders") or []
+        capacity_parts = []
+        if cargo is not None:
+            capacity_parts.append(f"CARGO {int(cargo):,}T")
+        if free is not None:
+            capacity_parts.append(f"FREE {int(free):,}T")
+        if orders:
+            capacity_parts.append(f"ORDERS {len(orders)}")
+        if capacity_parts:
+            rows.append(("  |  ".join(capacity_parts), _MUTED))
 
         return rows, badge[0], badge[1]
 

@@ -5,8 +5,12 @@ import re
 
 import requests
 
+from version import APP_VERSION
+
 BASE = "https://spansh.co.uk/api"
-HEADERS = {"User-Agent": "EliteTrader/1.0 (personal ED companion app)"}
+HEADERS = {
+    "User-Agent": f"VoidCompass/{APP_VERSION} (Elite Dangerous companion; insert3coins/VoidCompass)"
+}
 SUBMIT_TIMEOUT = 20
 POLL_TIMEOUT = 20
 MAX_WAIT_SECONDS = 90
@@ -83,7 +87,7 @@ def plan_route(
     raise SpanshError("Spansh took too long to compute a route; try again.")
 
 
-def submit_and_poll(path, payload):
+def submit_and_poll(path, payload, include_job=False):
     """Spansh's async job pattern: POST form payload, then poll results."""
     try:
         resp = requests.post(f"{BASE}/{path}", data=payload, headers=HEADERS, timeout=SUBMIT_TIMEOUT)
@@ -106,12 +110,200 @@ def submit_and_poll(path, payload):
         data = poll.json()
         status = data.get("status")
         if status == "ok":
-            return data.get("result")
+            result = data.get("result")
+            return (result, str(job)) if include_job else result
         if status in ("queued", "processing"):
             time.sleep(1.5)
             continue
         raise SpanshError(f"Spansh job failed: {data.get('error') or status}")
     raise SpanshError("Spansh took too long to compute a route; try again.")
+
+
+def resolve_system(system, id64=None):
+    """Resolve one exact Elite system through Spansh's public system search."""
+    if isinstance(system, dict):
+        id64 = system.get("id64") or system.get("system_address") or id64
+        name = str(system.get("name") or system.get("system") or "").strip()
+    else:
+        name = str(system or "").strip()
+    if id64 is not None:
+        try:
+            return {"id64": int(id64), "name": name or str(id64)}
+        except (TypeError, ValueError):
+            pass
+    if not name:
+        raise SpanshError("A carrier route system is blank.")
+    try:
+        response = requests.get(
+            f"{BASE}/search/systems", params={"q": name},
+            headers=HEADERS, timeout=SUBMIT_TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        raise SpanshError(f"Could not resolve {name} through Spansh: {exc}") from exc
+    if response.status_code >= 400:
+        raise SpanshError(_error_text(response))
+    try:
+        results = response.json().get("results") or []
+    except (ValueError, AttributeError) as exc:
+        raise SpanshError(f"Spansh returned invalid system-search data for {name}.") from exc
+    exact = next(
+        (row for row in results if str(row.get("name") or "").casefold() == name.casefold()),
+        None,
+    )
+    selected = exact or (results[0] if results else None)
+    if not selected or selected.get("id64") is None:
+        raise SpanshError(f"Spansh could not find the system {name}.")
+    return {"id64": int(selected["id64"]), "name": selected.get("name") or name}
+
+
+def _normalize_fleet_carrier_result(
+    result, job, *, source=None, destinations=None, carrier_type=None,
+    used_capacity=None, calculate_starting_fuel=None,
+):
+    if not isinstance(result, dict) or not isinstance(result.get("jumps"), list):
+        raise SpanshError("Spansh returned no Fleet Carrier route.")
+    jumps = []
+    for index, row in enumerate(result["jumps"]):
+        if not isinstance(row, dict) or not row.get("name"):
+            continue
+        jumps.append({
+            "index": index,
+            "system": row.get("name"),
+            "id64": row.get("id64"),
+            "distance_ly": row.get("distance"),
+            "distance_to_destination_ly": row.get("distance_to_destination"),
+            "fuel_remaining_t": row.get("fuel_in_tank"),
+            "fuel_used_t": row.get("fuel_used"),
+            "tritium_market_t": row.get("tritium_in_market"),
+            "restock_t": row.get("restock_amount"),
+            "must_restock": bool(row.get("must_restock")),
+            "icy_ring": bool(row.get("has_icy_ring")),
+            "pristine": bool(row.get("is_system_pristine")),
+            "desired_destination": bool(row.get("is_desired_destination")),
+        })
+    if len(jumps) < 2:
+        raise SpanshError("Spansh returned an empty Fleet Carrier route.")
+
+    source_record = source or {"name": jumps[0]["system"], "id64": jumps[0].get("id64")}
+    requested = list(destinations or [])
+    if not requested:
+        requested = [
+            {"name": row["system"], "id64": row.get("id64")}
+            for row in jumps[1:] if row.get("desired_destination")
+        ]
+    if not requested:
+        requested = [{"name": jumps[-1]["system"], "id64": jumps[-1].get("id64")}]
+
+    carrier_key = str(carrier_type or result.get("carrier_type") or "fleet").casefold()
+    squadron = carrier_key in {"squadron", "squadroncarrier"}
+    return {
+        "job": str(job),
+        "url": f"https://spansh.co.uk/fleet-carrier/results/{job}",
+        "source": source_record,
+        "destinations": requested,
+        "carrier_type": "squadron" if squadron else "fleet",
+        "used_capacity_t": used_capacity,
+        "calculate_starting_fuel": calculate_starting_fuel,
+        "total_distance_ly": sum(float(row.get("distance_ly") or 0) for row in jumps[1:]),
+        "fuel_required_t": sum(int(float(row.get("fuel_used_t") or 0)) for row in jumps[1:]),
+        "jumps": jumps,
+    }
+
+
+def import_fleet_carrier_route(reference):
+    """Import a completed Spansh Fleet Carrier result URL or job id."""
+    value = str(reference or "").strip()
+    job = value.split("#", 1)[0].split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1]
+    if not job or not re.fullmatch(r"[A-Za-z0-9._-]{3,120}", job):
+        raise SpanshError("Paste a Spansh Fleet Carrier result URL or job id.")
+
+    deadline = time.monotonic() + MAX_WAIT_SECONDS
+    while time.monotonic() < deadline:
+        try:
+            response = requests.get(
+                f"{BASE}/results/{job}", headers=HEADERS, timeout=POLL_TIMEOUT,
+            )
+        except requests.RequestException as exc:
+            raise SpanshError(f"Could not import the Spansh route: {exc}") from exc
+        if response.status_code >= 400:
+            raise SpanshError(_error_text(response))
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise SpanshError("Spansh returned invalid route data.") from exc
+        status = data.get("status")
+        if status == "ok":
+            return _normalize_fleet_carrier_result(data.get("result"), job)
+        if status in ("queued", "processing"):
+            time.sleep(1.5)
+            continue
+        raise SpanshError(f"Spansh route import failed: {data.get('error') or status}")
+    raise SpanshError("The Spansh route is still processing; try the import again.")
+
+
+def fleet_carrier_route(
+    source,
+    destinations,
+    *,
+    source_id64=None,
+    used_capacity=0,
+    carrier_type="fleet",
+    calculate_starting_fuel=True,
+    tritium_fuel=0,
+    tritium_stored=0,
+    refuel_destinations=None,
+):
+    """Plot a Fleet/Squadron Carrier route using Spansh's live route service.
+
+    The current Spansh web client submits system id64 values to
+    ``/api/fleetcarrier/route`` and polls the normal results endpoint. Keep the
+    response normalisation here so UI code never depends on its raw shape.
+    """
+    source_record = resolve_system(source, source_id64)
+    requested = []
+    seen = {source_record["id64"]}
+    for value in destinations or []:
+        record = resolve_system(value)
+        if record["id64"] in seen:
+            continue
+        seen.add(record["id64"])
+        requested.append(record)
+    if not requested:
+        raise SpanshError("Add at least one unvisited carrier destination.")
+
+    carrier_key = str(carrier_type or "fleet").casefold()
+    squadron = carrier_key in {"squadron", "squadroncarrier"}
+    capacity = 60_000 if squadron else 25_000
+    mass = 15_000 if squadron else 25_000
+    try:
+        used = max(0, min(capacity, int(used_capacity or 0)))
+    except (TypeError, ValueError):
+        used = 0
+
+    payload = {
+        "source": source_record["id64"],
+        "destinations": [row["id64"] for row in requested],
+        "capacity": capacity,
+        "mass": mass,
+        "capacity_used": used,
+        "calculate_starting_fuel": 1 if calculate_starting_fuel else 0,
+    }
+    if calculate_starting_fuel:
+        refuel_ids = []
+        for value in refuel_destinations or []:
+            refuel_ids.append(resolve_system(value)["id64"])
+        if refuel_ids:
+            payload["refuel_destinations"] = refuel_ids
+    else:
+        payload["fuel_loaded"] = max(0, min(1000, int(tritium_fuel or 0)))
+        payload["tritium_stored"] = max(0, int(tritium_stored or 0))
+
+    result, job = submit_and_poll("fleetcarrier/route", payload, include_job=True)
+    return _normalize_fleet_carrier_result(
+        result, job, source=source_record, destinations=requested,
+        carrier_type="squadron" if squadron else "fleet", used_capacity=used,
+        calculate_starting_fuel=bool(calculate_starting_fuel),
+    )
 
 
 def riches_route(

@@ -1105,6 +1105,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.init_db()
         self.edsm.switch_profile(self.config, self.conn, self.db_lock)
         self.carrier_tracker.set_config(self.config)
+        carrier_window = getattr(self, "carrier_window", None)
+        if carrier_window and carrier_window.is_open():
+            carrier_window.on_profile_switched()
         self.colonisation_projects = self.db_load_colonisation_projects()
         for mid, jp in load_colonisation_data(self.config.get("colonisation_data_file")).items():
             if mid in self.colonisation_projects:
@@ -2363,7 +2366,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.carrier_window and self.carrier_window.is_open():
             self._show_embedded_page("CARRIER", self.carrier_window.win)
             return
-        self.carrier_window = CarrierWindow(self.dashboard_host, self.config, self.carrier_tracker, embedded=True)
+        self.carrier_window = CarrierWindow(
+            self.dashboard_host, self.config, self.carrier_tracker,
+            embedded=True, specialist_engine=self.specialist_engine,
+        )
         self._show_embedded_page("CARRIER", self.carrier_window.win)
 
     def open_specialists_window(self, section=None):
@@ -5363,6 +5369,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if commander:
                 self._switch_commander_profile(commander, fid)
         specialist_changed = False
+        at_own_carrier = bool(
+            getattr(self, "current_docked", False)
+            and getattr(self, "current_station_market_id", None)
+            and getattr(self.carrier_tracker, "carrier_data", {}).get("carrier_id")
+            == getattr(self, "current_station_market_id", None)
+        )
         try:
             specialist_engine = getattr(self, "specialist_engine", None)
             specialist_changed = bool(specialist_engine) and specialist_engine.observe_event(
@@ -5372,22 +5384,25 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     "system": getattr(self, "current_sys", None),
                     "body": getattr(self, "current_body_name", None),
                     "historical": startup_replay,
-                    "at_own_carrier": bool(
-                        getattr(self, "current_docked", False)
-                        and getattr(self, "current_station_market_id", None)
-                        and getattr(self.carrier_tracker, "carrier_data", {}).get("carrier_id")
-                        == getattr(self, "current_station_market_id", None)
-                    ),
+                    "at_own_carrier": at_own_carrier,
                 },
                 defer_save=True,
             )
         except Exception as exc:
             logging.warning("Specialist workflow event failed [%s]: %s", ev, exc)
+        if ev == "CargoTransfer" and at_own_carrier and not startup_replay:
+            try:
+                self.carrier_tracker.apply_observed_cargo_transfer(raw)
+            except Exception as exc:
+                logging.warning("Carrier cargo total update failed: %s", exc)
         if specialist_changed and not self.batch_mode:
             self._schedule_specialist_flush()
             window = getattr(self, "specialists_window", None)
             if window and window.is_open() and getattr(self, "_active_page", None) == "SPECIALISTS":
                 self.root.after(0, window.refresh)
+            carrier_window = getattr(self, "carrier_window", None)
+            if carrier_window and carrier_window.is_open():
+                carrier_window.on_specialist_updated()
         try:
             self.achievement_engine.process_event(
                 data,

@@ -19,18 +19,22 @@ _PERSIST_KEYS = {
     "carrier_id", "carrier_type", "callsign", "name",
     "squadron_id", "squadron_name", "squadron_rank", "squadron_rank_name",
     "carrier_purchased_at", "carrier_spawn_system",
-    "system", "body",
+    "system", "system_address", "body",
     "fuel_level", "fuel_capacity",
     "jump_range_curr", "jump_range_max",
-    "jump_destination", "jump_body", "jump_departure_time",
+    "jump_destination", "jump_destination_address", "jump_body", "jump_departure_time",
     "previous_system", "previous_body",
     "docking_access", "allow_notorious", "pending_decom",
     "balance", "available_balance", "reserve_balance", "reserve_percent",
     "tax_rearm", "tax_refuel", "tax_repair",
     "space_total", "space_cargo", "space_crew", "space_free",
     "space_reserved", "space_ship_packs", "space_module_packs",
-    "crew", "trade_orders", "jump_history",
+    "crew", "trade_orders", "jump_history", "stats_updated_at",
+    "cargo_updated_at", "cargo_total_source",
     "expedition_name", "expedition_route", "expedition_reserve_fuel",
+    "expedition_requested_destinations",
+    "expedition_route_source", "expedition_spansh_job", "expedition_spansh_url",
+    "expedition_plotted_at",
     "notes", "destination_note", "last_updated",
 }
 
@@ -88,6 +92,7 @@ class CarrierTracker:
             "carrier_purchased_at": None,
             "carrier_spawn_system": None,
             "system": None,
+            "system_address": None,
             "body": None,
             "status": "idle",          # idle | jumping | cooldown | cooldown_cancel
             "fuel_level": None,
@@ -95,6 +100,7 @@ class CarrierTracker:
             "jump_range_curr": None,
             "jump_range_max": None,
             "jump_destination": None,
+            "jump_destination_address": None,
             "jump_body": None,
             "jump_departure_time": None,
             "previous_system": None,
@@ -110,18 +116,26 @@ class CarrierTracker:
             "tax_refuel": None,
             "tax_repair": None,
             "space_total": None,
-            "space_cargo": 0,
-            "space_crew": 0,
+            "space_cargo": None,
+            "space_crew": None,
             "space_free": None,
-            "space_reserved": 0,
-            "space_ship_packs": 0,
-            "space_module_packs": 0,
+            "space_reserved": None,
+            "space_ship_packs": None,
+            "space_module_packs": None,
             "crew": [],
             "trade_orders": [],
             "jump_history": [],
+            "stats_updated_at": None,
+            "cargo_updated_at": None,
+            "cargo_total_source": None,
             "expedition_name": "",
             "expedition_route": [],
             "expedition_reserve_fuel": 200,
+            "expedition_requested_destinations": [],
+            "expedition_route_source": "manual",
+            "expedition_spansh_job": None,
+            "expedition_spansh_url": None,
+            "expedition_plotted_at": None,
             "notes": "",
             "destination_note": "",
             "last_updated": None,
@@ -176,6 +190,7 @@ class CarrierTracker:
             "CarrierJumpRequest": None,
             "CarrierJumpCancelled": None,
             "CarrierNameChange": None,
+            "CarrierBankTransfer": None,
         }
         trade_events = []
         expected_name = str(commander or "").strip().casefold()
@@ -219,7 +234,13 @@ class CarrierTracker:
                             file_events["CarrierStats"] = raw
                             if not carrier_id:
                                 carrier_id = raw.get("CarrierID")
-                        elif ev in ("CarrierLocation", "CarrierJump"):
+                        elif ev == "CarrierLocation":
+                            # CarrierLocation is an owner startup event and is
+                            # normally written before CarrierStats in the same
+                            # journal. Keep it until the later identity snapshot
+                            # supplies CarrierID instead of losing the location.
+                            file_events["CarrierLocation"] = raw
+                        elif ev == "CarrierJump":
                             if not carrier_id:
                                 continue
                             file_events["CarrierLocation"] = raw
@@ -229,6 +250,8 @@ class CarrierTracker:
                             file_events["CarrierJumpCancelled"] = raw
                         elif ev == "CarrierNameChange":
                             file_events["CarrierNameChange"] = raw
+                        elif ev == "CarrierBankTransfer":
+                            file_events["CarrierBankTransfer"] = raw
                         elif ev == "CarrierTradeOrder":
                             file_trades.append(raw)
             except Exception:
@@ -259,6 +282,11 @@ class CarrierTracker:
                 replay.append(buckets["CarrierJumpCancelled"])
         if buckets["CarrierNameChange"]:
             replay.append(buckets["CarrierNameChange"])
+        if buckets["CarrierBankTransfer"]:
+            bank_ts = _parse_dt(buckets["CarrierBankTransfer"].get("timestamp"))
+            stats_ts = _parse_dt((buckets["CarrierStats"] or {}).get("timestamp"))
+            if not stats_ts or (bank_ts and bank_ts > stats_ts):
+                replay.append(buckets["CarrierBankTransfer"])
         for t in trade_events:
             replay.append(t)
 
@@ -285,6 +313,8 @@ class CarrierTracker:
                         self._handle_trade_order(raw)
                     elif ev == "CarrierNameChange":
                         self._handle_name_change(raw)
+                    elif ev == "CarrierBankTransfer":
+                        self._handle_bank_transfer(raw)
             finally:
                 self.on_updated = orig_on_updated
 
@@ -396,6 +426,8 @@ class CarrierTracker:
             changed = self._handle_name_change(raw)
         elif ev == "CarrierFinance":
             changed = self._handle_finance(raw)
+        elif ev == "CarrierBankTransfer":
+            changed = self._handle_bank_transfer(raw)
         elif ev == "CarrierBuy":
             changed = self._handle_carrier_buy(raw)
         elif ev in ("SquadronStartup", "SquadronCreated", "JoinedSquadron"):
@@ -460,6 +492,7 @@ class CarrierTracker:
             cd["fuel_level"] = int(fuel)
         cd["jump_range_curr"] = raw.get("JumpRangeCurr")
         cd["jump_range_max"] = raw.get("JumpRangeMax")
+        cd["stats_updated_at"] = raw.get("timestamp") or _utc_stamp()
 
         finance = raw.get("Finance") or {}
         cd["balance"] = finance.get("CarrierBalance")
@@ -472,12 +505,14 @@ class CarrierTracker:
 
         space = raw.get("SpaceUsage") or {}
         cd["space_total"] = space.get("TotalCapacity")
-        cd["space_cargo"] = space.get("Cargo") or 0
-        cd["space_crew"] = space.get("Crew") or 0
+        cd["space_cargo"] = space.get("Cargo")
+        cd["space_crew"] = space.get("Crew")
         cd["space_free"] = space.get("FreeSpace")
-        cd["space_reserved"] = space.get("CargoSpaceReserved", space.get("ReservedSpace")) or 0
-        cd["space_ship_packs"] = space.get("ShipPacks") or 0
-        cd["space_module_packs"] = space.get("ModulePacks") or 0
+        cd["space_reserved"] = space.get("CargoSpaceReserved", space.get("ReservedSpace"))
+        cd["space_ship_packs"] = space.get("ShipPacks")
+        cd["space_module_packs"] = space.get("ModulePacks")
+        cd["cargo_updated_at"] = cd["stats_updated_at"]
+        cd["cargo_total_source"] = "CarrierStats"
 
         crew_raw = raw.get("Crew") or []
         cd["crew"] = [
@@ -498,6 +533,47 @@ class CarrierTracker:
         cd["reserve_percent"] = raw.get("ReservePercent", cd["reserve_percent"])
         return True
 
+    def _handle_bank_transfer(self, raw):
+        cd = self.carrier_data
+        cd["balance"] = raw.get("CarrierBalance", cd.get("balance"))
+        return True
+
+    def apply_observed_cargo_transfer(self, raw):
+        """Advance an exact owner snapshot with a confirmed own-carrier transfer."""
+        if not isinstance(raw, dict):
+            return False
+        delta = 0
+        for row in raw.get("Transfers") or []:
+            if not isinstance(row, dict):
+                continue
+            try:
+                count = max(0, int(row.get("Count") or 0))
+            except (TypeError, ValueError):
+                continue
+            direction = str(row.get("Direction") or "").casefold()
+            if direction == "tocarrier":
+                delta += count
+            elif direction == "toship":
+                delta -= count
+        if not delta:
+            return False
+        with self._profile_lock:
+            cd = self.carrier_data
+            if cd.get("space_cargo") is None:
+                return False
+            cd["space_cargo"] = max(0, int(cd["space_cargo"]) + delta)
+            if cd.get("space_free") is not None:
+                cd["space_free"] = max(0, int(cd["space_free"]) - delta)
+            cd["cargo_updated_at"] = raw.get("timestamp") or _utc_stamp()
+            cd["cargo_total_source"] = "CarrierStats + own-carrier CargoTransfer"
+            cd["last_updated"] = _utc_stamp()
+            self.save_state()
+        if callable(self.on_updated):
+            self.on_updated(self.carrier_data)
+        if callable(self.on_panel_updated):
+            self.on_panel_updated(self.carrier_data)
+        return True
+
     def _handle_carrier_buy(self, raw):
         cd = self.carrier_data
         cd["carrier_id"] = raw.get("CarrierID") or cd.get("carrier_id")
@@ -510,6 +586,7 @@ class CarrierTracker:
     def _handle_jump_request(self, raw):
         cd = self.carrier_data
         cd["jump_destination"] = raw.get("SystemName")
+        cd["jump_destination_address"] = raw.get("SystemAddress")
         cd["jump_body"] = raw.get("Body")
         cd["jump_departure_time"] = raw.get("DepartureTime")
         self._last_cancel_ts = None
@@ -518,6 +595,7 @@ class CarrierTracker:
     def _handle_jump_cancelled(self, raw):
         cd = self.carrier_data
         cd["jump_destination"] = None
+        cd["jump_destination_address"] = None
         cd["jump_body"] = None
         cd["jump_departure_time"] = None
         ts = _parse_dt(raw.get("timestamp"))
@@ -527,6 +605,7 @@ class CarrierTracker:
     def _handle_location(self, raw):
         cd = self.carrier_data
         system = raw.get("StarSystem") or raw.get("SystemName")
+        system_address = raw.get("SystemAddress")
         body = raw.get("Body")
 
         if system and system != cd.get("system"):
@@ -541,14 +620,18 @@ class CarrierTracker:
                 })
                 cd["jump_history"] = hist[:10]
             cd["system"] = system
+            cd["system_address"] = system_address
             cd["body"] = body
             self._advance_expedition(system, raw.get("timestamp"))
             cd["jump_destination"] = None
+            cd["jump_destination_address"] = None
             cd["jump_body"] = None
             # Keep jump_departure_time so _update_status() can compute the
             # post-jump cooldown window; it expires naturally after _COOLDOWN_SECS.
         elif body and body != cd.get("body"):
             cd["body"] = body
+        if system_address is not None:
+            cd["system_address"] = system_address
         return True
 
     def _handle_name_change(self, raw):
@@ -575,7 +658,7 @@ class CarrierTracker:
                 break
 
     def set_expedition(self, name, systems, reserve_fuel=200):
-        """Persist a manually pasted carrier route without relying on an undocumented API."""
+        """Persist a manually pasted carrier route."""
         existing = {
             str(row.get("system") or "").strip().lower(): row
             for row in (self.carrier_data.get("expedition_route") or []) if isinstance(row, dict)
@@ -583,21 +666,82 @@ class CarrierTracker:
         route = []
         seen = set()
         for value in systems or []:
-            system = str(value or "").strip()
+            supplied = value if isinstance(value, dict) else {}
+            system = str(supplied.get("system") if supplied else value or "").strip()
             key = system.lower()
             if not system or key in seen:
                 continue
             seen.add(key)
             old = existing.get(key, {})
-            route.append({"system": system, "visited": bool(old.get("visited")),
-                          "visited_at": old.get("visited_at")})
+            row = dict(supplied)
+            row.update({
+                "system": system,
+                "visited": bool(old.get("visited")),
+                "visited_at": old.get("visited_at"),
+            })
+            route.append(row)
         self.carrier_data["expedition_name"] = (name or "").strip()
         self.carrier_data["expedition_route"] = route
+        self.carrier_data["expedition_requested_destinations"] = [row["system"] for row in route]
+        self.carrier_data["expedition_route_source"] = "manual"
+        self.carrier_data["expedition_spansh_job"] = None
+        self.carrier_data["expedition_spansh_url"] = None
+        self.carrier_data["expedition_plotted_at"] = None
         try:
             self.carrier_data["expedition_reserve_fuel"] = max(0, int(reserve_fuel))
         except Exception:
             self.carrier_data["expedition_reserve_fuel"] = 200
         self._advance_expedition(self.carrier_data.get("system"))
+        self.save_state()
+        if callable(self.on_updated):
+            self.on_updated(self.carrier_data)
+        if callable(self.on_panel_updated):
+            self.on_panel_updated(self.carrier_data)
+
+    def set_spansh_expedition(self, name, route_result, reserve_fuel=200):
+        """Persist a normalized Spansh route and its per-jump fuel evidence."""
+        result = route_result if isinstance(route_result, dict) else {}
+        jumps = result.get("jumps") or []
+        existing = {
+            str(row.get("system") or "").strip().lower(): row
+            for row in (self.carrier_data.get("expedition_route") or []) if isinstance(row, dict)
+        }
+        rows = []
+        # Spansh includes the source as row zero. The expedition list contains
+        # only jumps still to make from the carrier's current location.
+        for jump in jumps[1:]:
+            if not isinstance(jump, dict) or not jump.get("system"):
+                continue
+            system = str(jump.get("system") or "").strip()
+            old = existing.get(system.lower(), {})
+            rows.append({
+                key: jump.get(key)
+                for key in (
+                    "system", "id64", "distance_ly", "distance_to_destination_ly",
+                    "fuel_remaining_t", "fuel_used_t", "tritium_market_t", "restock_t",
+                    "must_restock", "icy_ring", "pristine", "desired_destination",
+                )
+            } | {
+                "system": system,
+                "visited": bool(old.get("visited")),
+                "visited_at": old.get("visited_at"),
+            })
+        cd = self.carrier_data
+        cd["expedition_name"] = (name or "").strip()
+        cd["expedition_route"] = rows
+        cd["expedition_requested_destinations"] = [
+            str(row.get("name") or row.get("system") or "").strip()
+            for row in (result.get("destinations") or [])
+            if isinstance(row, dict) and (row.get("name") or row.get("system"))
+        ]
+        try:
+            cd["expedition_reserve_fuel"] = max(0, int(reserve_fuel))
+        except Exception:
+            cd["expedition_reserve_fuel"] = 200
+        cd["expedition_route_source"] = "spansh"
+        cd["expedition_spansh_job"] = result.get("job")
+        cd["expedition_spansh_url"] = result.get("url")
+        cd["expedition_plotted_at"] = _utc_stamp()
         self.save_state()
         if callable(self.on_updated):
             self.on_updated(self.carrier_data)

@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.2.6**
+**Current version: 5.2.8**
 
 Void Compass is a native Windows companion for Elite Dangerous, with a native Linux x86-64 build currently offered for testing. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
 
@@ -65,7 +65,7 @@ Mining now lives inside Specialist Console as the single authoritative workflow.
 
 ### Specialist Console
 
-Specialists remains local and journal-driven. Mining runs track confirmed refinery yield, prospector quality, limpet economics and attributable sales; Combat/AX records observed loadout readiness, ammunition snapshots, claims, damage, synthesis and recent sorties; Carrier planning combines authoritative owner snapshots with explicit upkeep, inventory and per-leg tritium inputs. Exobiology keeps body-local samples, manual pins and GeoJSON exports, while selected coordinates are handed to the existing Ground tool for navigation.
+Specialists remains local and journal-driven. Mining runs track confirmed refinery yield, prospector quality, limpet economics and attributable sales; Combat/AX records observed loadout readiness, ammunition snapshots, claims, damage, synthesis and recent sorties. Carrier Command plots Fleet and Squadron Carrier routes through Spansh, can import an existing Fleet Carrier result URL or job, provides deliberate copy controls for the next or any selected jump, and carries route/fuel progress into the carrier overlay. Its Cargo view combines the exact journal cargo total with an explicitly labelled manual/observed commodity manifest and active market orders. Exobiology keeps body-local samples, manual pins and GeoJSON exports, while selected coordinates are handed to the existing Ground tool for navigation.
 
 ## Adaptive Command Deck
 
@@ -104,7 +104,7 @@ The deterministic cognition engine learns personal baselines and whether advice 
 - **Elite journal and companion files** provide all live game state.
 - **EDSM** upload and traffic lookup are optional and use per-commander credentials.
 - **EDDN** incrementally maintains the local market database after its initial seed.
-- **Spansh** supports manual neutron routes, ring/hotspot searches and trader lookups.
+- **Spansh** supports neutron routes, ring/hotspot searches, trader lookups and integrated Fleet/Squadron Carrier route calculation.
 - **Discord webhooks** can announce personal or Squadron Carrier operations.
 - **Piper** voice packs are optional; regular system TTS remains available.
 
