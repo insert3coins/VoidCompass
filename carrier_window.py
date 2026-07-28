@@ -518,6 +518,9 @@ class CarrierWindow(ThemedWindowMixin):
         copy_actions.pack(fill=tk.X, padx=10, pady=(0, 6))
         button(copy_actions, "COPY NEXT", self._copy_next_expedition).pack(side=tk.LEFT)
         button(copy_actions, "COPY SELECTED", self._copy_selected_expedition).pack(side=tk.LEFT, padx=(6, 0))
+        button(
+            copy_actions, "DELETE ROUTE", self._delete_expedition, danger=True,
+        ).pack(side=tk.RIGHT)
         tk.Label(
             copy_actions, text="Double-click a jump to copy it", fg=self.UI_DIM,
             bg=self.UI_PANEL, font=("Segoe UI", 7),
@@ -626,6 +629,43 @@ class CarrierWindow(ThemedWindowMixin):
             self.expedition_name_var.get(), systems, self.expedition_reserve_var.get(),
         )
         self.expedition_status.config(text="MANUAL · route saved", fg=self.UI_OK)
+
+    def _delete_expedition(self):
+        cd = self.tracker.carrier_data
+        has_route = any((
+            cd.get("expedition_name"),
+            cd.get("expedition_route"),
+            cd.get("expedition_requested_destinations"),
+            cd.get("expedition_spansh_job"),
+            cd.get("expedition_spansh_url"),
+        ))
+        if not has_route:
+            self.expedition_status.config(text="NO SAVED ROUTE TO DELETE", fg=self.UI_MUTED)
+            return
+        if not messagebox.askyesno(
+            "Delete carrier route",
+            "Delete the saved carrier expedition route and its Spansh fuel plan?\n\n"
+            "Carrier cargo, jump history and carrier details will be retained.",
+            parent=self.win,
+        ):
+            return
+
+        # Invalidate a route calculation/import that may still be finishing in
+        # the background so it cannot restore the route after deletion.
+        self._route_generation += 1
+        self.spansh_plot_btn.config(state=tk.NORMAL)
+        self.spansh_import_btn.config(state=tk.NORMAL)
+        self.tracker.clear_expedition()
+
+        # Clear focused editors explicitly; refresh deliberately preserves
+        # fields while the commander is typing in them.
+        self.expedition_name_var.set("")
+        self.expedition_route_text.delete("1.0", tk.END)
+        self.spansh_import_var.set("")
+        self._refresh()
+        self.expedition_status.config(
+            text="ROUTE DELETED · carrier cargo and history retained", fg=self.UI_OK,
+        )
 
     def _plot_spansh_expedition(self):
         cd = self.tracker.carrier_data
