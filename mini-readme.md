@@ -9,6 +9,7 @@
 *   Unified that observed manifest with the existing profile-local Specialist carrier inventory, showed active buy/sell orders separately, and included exact free/reserved capacity and the age/source of the latest owner snapshot. Confirmed own-carrier CargoTransfer events now advance the aggregate cargo/free totals and refresh Carrier Command and its overlay immediately, without restoring cargo event spam to the Live Feed; the next CarrierStats snapshot remains authoritative.
 *   Extended carrier journal tracking with current and scheduled system addresses, CarrierBankTransfer balance updates, CarrierStats evidence timestamps and persistent Spansh route provenance, while retaining theme and commander-profile isolation.
 *   Upgraded the Fleet/Squadron Carrier overlay with the active route's progress, next plotted leg, per-leg and remaining tritium evidence, exact cargo/free capacity and active market-order count while preserving its compact automatic height.
+*   Fixed the enabled Fleet Carrier overlay being suppressed by the Exploration adaptive scene, and kept its dynamic-height window above the bottom screen edge when it is restored.
 
 ## Earlier releases
 
