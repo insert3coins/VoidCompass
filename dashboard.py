@@ -783,10 +783,41 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         except Exception as exc:
             logging.warning("Deep Survey history import skipped: %s", exc)
 
-    def _import_exploration_history(self, journal_path, logbook, tracker, commander=None, fid=None):
-        """Read history sequentially so two indexers never contend for the journal folder."""
+    def _import_exploration_history(self, journal_path, logbook, tracker, commander=None, fid=None,
+                                    scan_db_path=None, profile_key=None):
+        """Read history sequentially so indexers never contend for the journal folder."""
         self._import_captains_log_history(journal_path, logbook, commander, fid)
         self._import_deep_survey_history(journal_path, tracker, commander, fid)
+        try:
+            repaired = self.import_scan_journal_history(
+                journal_path, commander, fid, db_path=scan_db_path,
+            )
+            if repaired.get("files"):
+                self.log(
+                    f"Survey cache checked {repaired['files']:,} changed journal files; "
+                    f"repaired {len(repaired['systems']):,} system records"
+                )
+            if repaired.get("systems"):
+                self._ui_post(
+                    self._apply_scan_history_repair, repaired, profile_key,
+                    key=f"scan-history-repair:{profile_key or 'active'}",
+                )
+        except Exception as exc:
+            logging.warning("Survey cache journal repair skipped: %s", exc)
+
+    def _apply_scan_history_repair(self, repaired, profile_key=None):
+        """Refresh every scan UI when a background journal repair affects this system."""
+        if profile_key and profile_key != get_active_profile(self.config):
+            return
+        systems = set((repaired or {}).get("systems") or ())
+        if self.current_sys not in systems:
+            return
+        self.load_system_from_db(self.current_sys)
+        self._seed_navigation_scan_progress()
+        self.update_dashboard_ui()
+        self.update_hud()
+        self._refresh_system_info_progress()
+        self._refresh_exploration_window()
 
     def _refresh_bgs_window(self):
         self._refresh_tool_window("bgs_window", "refresh_current")
@@ -820,7 +851,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if self.system_info_hud:
                 self.system_info_hud.update_scan_progress(
                     self.scan_items, self.body_signals, self.total,
-                    star_class=self.star_class,
+                    star_class=self.star_class, scanned_bodies=self.scanned,
                 )
             if self.survey_status_hud:
                 self.survey_status_hud.update(
@@ -1127,7 +1158,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         ).start()
         threading.Thread(
             target=self._import_exploration_history,
-            args=(journal_path, self.captains_log, self.deep_survey, self.cmdr_name, self.cmdr_fid),
+            args=(
+                journal_path, self.captains_log, self.deep_survey,
+                self.cmdr_name, self.cmdr_fid, self.db_path,
+                get_active_profile(self.config),
+            ),
             name="exploration-history", daemon=True,
         ).start()
         self._persist_config()
@@ -1617,7 +1652,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         ).start()
         threading.Thread(
             target=self._import_exploration_history,
-            args=(journal_path, self.captains_log, self.deep_survey, self.cmdr_name, self.cmdr_fid),
+            args=(
+                journal_path, self.captains_log, self.deep_survey,
+                self.cmdr_name, self.cmdr_fid, self.db_path,
+                get_active_profile(self.config),
+            ),
             name="exploration-history", daemon=True,
         ).start()
 
@@ -3129,6 +3168,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             list(self.scan_items),
             dict(self.body_signals),
             self.total,
+            scanned_bodies=self.scanned,
         )
 
     def _copy_waypoint_to_clipboard(self, waypoint_name, log_label="NEXT WAYPOINT"):
@@ -5942,8 +5982,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 _si   = list(self.scan_items)
                 _bs   = dict(self.body_signals)
                 _tot  = self.total
+                _done = self.scanned
                 self.root.after(0, lambda: self.system_info_hud.on_system_arrival(
-                    _sys, _sc, _si, _bs, _tot))
+                    _sys, _sc, _si, _bs, _tot, scanned_bodies=_done))
             if self.survey_status_hud and not startup_replay:
                 self.root.after(0, lambda: self.survey_status_hud.update(
                     self.current_sys, self.scanned, self.total, self.scan_items,

@@ -43,7 +43,8 @@ EXOTIC_STARS = {
 TRACKED_EVENTS = frozenset({
     "FSDJump", "CarrierJump", "Location", "CodexEntry",
     "FSSSignalDiscovered", "SAAScanComplete", "Screenshot", "Scan",
-    "SAASignalsFound", "FSSDiscoveryScan", "FSSAllBodiesFound", "ScanOrganic",
+    "SAASignalsFound", "FSSDiscoveryScan", "FSSAllBodiesFound", "NavBeaconScan",
+    "ScanOrganic",
 })
 IMPORT_EVENTS = TRACKED_EVENTS | {"Commander", "LoadGame"}
 IMPORT_MARKERS = tuple(
@@ -775,7 +776,18 @@ class DeepSurveyTracker:
             elif event == "SAASignalsFound":
                 self._touch_route(raw, discoveries=1 if (raw.get("Signals") or raw.get("Genuses")) else 0)
             elif event == "FSSDiscoveryScan":
-                self._set_route(raw, body_count=_integer(raw.get("BodyCount")))
+                updates = {"body_count": _integer(raw.get("BodyCount"))}
+                try:
+                    if float(raw.get("Progress")) >= 1.0:
+                        updates["fss_complete"] = True
+                except (TypeError, ValueError):
+                    pass
+                self._set_route(raw, **updates)
+            elif event == "NavBeaconScan":
+                self._set_route(
+                    raw, fss_complete=True,
+                    body_count=_integer(raw.get("NumBodies")),
+                )
             elif event == "FSSAllBodiesFound":
                 self._set_route(
                     raw, fss_complete=True,

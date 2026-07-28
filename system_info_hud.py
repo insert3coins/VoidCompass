@@ -122,33 +122,42 @@ class SystemInfoHUD:
 
     # ── Data interface ────────────────────────────────────────────────────
 
-    def _apply_scan_progress(self, scan_items, body_signals, total_bodies):
+    def _apply_scan_progress(self, scan_items, body_signals, total_bodies,
+                             scanned_bodies=None):
         self._body_count    = int(total_bodies or 0)
-        self._scanned_count = sum(
-            1 for it in (scan_items or []) if not it.get("is_star")
-        )
+        if scanned_bodies is None:
+            self._scanned_count = sum(
+                1 for it in (scan_items or []) if not it.get("is_star")
+            )
+        else:
+            self._scanned_count = max(0, int(scanned_bodies or 0))
         self._bio_total = sum(
             s.get("bio", 0) for s in (body_signals or {}).values()
         )
 
     def on_system_arrival(self, system_name, star_class,
-                          scan_items, body_signals, total_bodies):
+                          scan_items, body_signals, total_bodies,
+                          scanned_bodies=None):
         self._system        = system_name or "Unknown"
         self._star_class    = star_type_label(star_class)
         self._edsm_info     = None
         self._spansh        = None
-        self._apply_scan_progress(scan_items, body_signals, total_bodies)
+        self._apply_scan_progress(
+            scan_items, body_signals, total_bodies, scanned_bodies,
+        )
         self.show()
 
     def update_scan_progress(self, scan_items, body_signals, total_bodies,
-                             star_class=None):
+                             star_class=None, scanned_bodies=None):
         """Incremental refresh as the current system is surveyed further.
 
         Unlike on_system_arrival(), this never shows/repositions the window
         or resets its auto-hide timer — it only updates the content in
         place if the panel happens to already be visible.
         """
-        self._apply_scan_progress(scan_items, body_signals, total_bodies)
+        self._apply_scan_progress(
+            scan_items, body_signals, total_bodies, scanned_bodies,
+        )
         if star_class:
             self._star_class = star_type_label(star_class)
         try:

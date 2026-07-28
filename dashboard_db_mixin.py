@@ -12,6 +12,174 @@ SCAN_HISTORY_FILE = "scan_history.json"
 DB_FILE = "exploration_data.db"
 SCAN_CACHE_FILE = "scan_cache.json"
 
+_SCAN_HISTORY_EVENTS = (
+    "Commander", "LoadGame", "Location", "FSDJump", "CarrierJump",
+    "FSSDiscoveryScan", "FSSAllBodiesFound", "NavBeaconScan", "Scan",
+)
+
+
+def _journal_commander_matches(raw, commander=None, fid=None):
+    expected_name = str(commander or "").strip().casefold()
+    expected_fid = str(fid or "").strip().casefold()
+    actual_name = str(raw.get("Commander") or raw.get("Name") or "").strip().casefold()
+    actual_fid = str(raw.get("FID") or "").strip().casefold()
+    if expected_fid and actual_fid:
+        return expected_fid == actual_fid
+    if expected_name and actual_name:
+        return expected_name == actual_name
+    return not bool(expected_name or expected_fid)
+
+
+def import_scan_journal_history(db_path, journal_path, commander=None, fid=None):
+    """Incrementally restore authoritative scan totals from profile journals.
+
+    A dedicated SQLite connection keeps this background repair tied to the
+    profile that started it, even if the live UI changes commander mid-scan.
+    File signatures make the history pass a one-time cost; later starts only
+    revisit journals that have grown or changed.
+    """
+    result = {"files": 0, "systems": set(), "completed": 0}
+    if not db_path or not journal_path or not os.path.isdir(journal_path):
+        return result
+    try:
+        files = sorted(
+            os.path.join(journal_path, name)
+            for name in os.listdir(journal_path)
+            if name.startswith("Journal.") and name.endswith(".log")
+        )
+    except OSError:
+        return result
+
+    conn = sqlite3.connect(db_path, timeout=10.0)
+    try:
+        conn.execute("PRAGMA busy_timeout=10000")
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS scan_journal_imports ("
+            "journal_file TEXT PRIMARY KEY, signature TEXT NOT NULL, imported_at REAL NOT NULL)"
+        )
+        imported = dict(conn.execute(
+            "SELECT journal_file, signature FROM scan_journal_imports"
+        ).fetchall())
+        aggregate = {}
+        signatures = {}
+        wanted = tuple(f'"{event}"' for event in _SCAN_HISTORY_EVENTS)
+
+        for path in files:
+            try:
+                signature = f"{os.path.getsize(path)}:{int(os.path.getmtime(path))}"
+            except OSError:
+                continue
+            name = os.path.basename(path)
+            if imported.get(name) == signature:
+                continue
+            active = not bool(commander or fid)
+            context = None
+            parsed = False
+            try:
+                with open(path, "r", encoding="utf-8", errors="ignore") as handle:
+                    for line in handle:
+                        if not any(marker in line for marker in wanted):
+                            continue
+                        try:
+                            raw = json.loads(line)
+                        except (ValueError, TypeError):
+                            continue
+                        event = raw.get("event")
+                        if event in ("Commander", "LoadGame"):
+                            active = _journal_commander_matches(raw, commander, fid)
+                            context = None
+                            continue
+                        if not active:
+                            continue
+                        if event in ("Location", "FSDJump") or (
+                                event == "CarrierJump" and raw.get("Docked")):
+                            context = raw.get("StarSystem") or context
+                            continue
+
+                        system = raw.get("SystemName") or raw.get("StarSystem") or context
+                        if not system:
+                            continue
+                        row = aggregate.setdefault(system, {
+                            "total": 0, "scanned": 0, "bodies": set(), "complete": False,
+                        })
+                        if event == "FSSDiscoveryScan":
+                            count = int(raw.get("BodyCount") or 0)
+                            row["total"] = max(row["total"], count)
+                            try:
+                                complete = float(raw.get("Progress")) >= 1.0
+                            except (TypeError, ValueError):
+                                complete = False
+                            if complete:
+                                row["complete"] = True
+                                row["scanned"] = max(row["scanned"], count)
+                        elif event == "FSSAllBodiesFound":
+                            count = int(raw.get("Count") or raw.get("BodyCount") or 0)
+                            row["total"] = max(row["total"], count)
+                            row["scanned"] = max(row["scanned"], count)
+                            row["complete"] = True
+                        elif event == "NavBeaconScan":
+                            count = int(raw.get("NumBodies") or 0)
+                            row["total"] = max(row["total"], count)
+                            row["scanned"] = max(row["scanned"], count)
+                            row["complete"] = True
+                        elif event == "Scan" and (
+                                "StarType" in raw or "PlanetClass" in raw):
+                            body_id = raw.get("BodyID")
+                            if body_id is not None:
+                                try:
+                                    row["bodies"].add(int(body_id))
+                                except (TypeError, ValueError):
+                                    pass
+                        parsed = True
+            except OSError:
+                continue
+            if parsed or os.path.exists(path):
+                signatures[name] = signature
+
+        if not signatures:
+            return result
+
+        now = time.time()
+        conn.execute("BEGIN")
+        try:
+            for system, evidence in aggregate.items():
+                old = conn.execute(
+                    "SELECT total, scanned_count FROM systems WHERE name=?", (system,),
+                ).fetchone() or (0, 0)
+                body_count = len(evidence["bodies"])
+                total = max(int(old[0] or 0), int(evidence["total"] or 0), body_count)
+                scanned = max(int(old[1] or 0), int(evidence["scanned"] or 0), body_count)
+                if evidence["complete"] and total > 0:
+                    scanned = max(scanned, total)
+                total = max(total, scanned)
+                for body_id in evidence["bodies"]:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO bodies (system_name, body_id) VALUES (?, ?)",
+                        (system, body_id),
+                    )
+                if (total, scanned) != (int(old[0] or 0), int(old[1] or 0)):
+                    conn.execute(
+                        "INSERT OR REPLACE INTO systems (name, total, scanned_count) VALUES (?, ?, ?)",
+                        (system, total, scanned),
+                    )
+                    result["systems"].add(system)
+                    if evidence["complete"]:
+                        result["completed"] += 1
+            for name, signature in signatures.items():
+                conn.execute(
+                    "INSERT OR REPLACE INTO scan_journal_imports "
+                    "(journal_file, signature, imported_at) VALUES (?, ?, ?)",
+                    (name, signature, now),
+                )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        result["files"] = len(signatures)
+        return result
+    finally:
+        conn.close()
+
 
 class DashboardDBMixin:
     def _profile_file(self, filename):
@@ -30,6 +198,13 @@ class DashboardDBMixin:
             pass
         return dst
 
+    def import_scan_journal_history(self, journal_path, commander=None, fid=None,
+                                    db_path=None):
+        return import_scan_journal_history(
+            db_path or getattr(self, "db_path", None),
+            journal_path, commander, fid,
+        )
+
     def init_db(self):
         """Initialize SQLite database and migrate JSON if needed."""
         db_path = self._copy_legacy_profile_file(DB_FILE)
@@ -43,6 +218,10 @@ class DashboardDBMixin:
             self.conn.execute("PRAGMA synchronous = NORMAL")
             self.conn.execute("CREATE TABLE IF NOT EXISTS systems (name TEXT PRIMARY KEY, total INTEGER, scanned_count INTEGER)")
             self.conn.execute("CREATE TABLE IF NOT EXISTS bodies (system_name TEXT, body_id INTEGER, PRIMARY KEY (system_name, body_id))")
+            self.conn.execute(
+                "CREATE TABLE IF NOT EXISTS scan_journal_imports ("
+                "journal_file TEXT PRIMARY KEY, signature TEXT NOT NULL, imported_at REAL NOT NULL)"
+            )
             self.conn.execute(
                 "CREATE TABLE IF NOT EXISTS scan_hud_items (system_name TEXT, body_id INTEGER, data_json TEXT, ts INTEGER, PRIMARY KEY (system_name, body_id))"
             )
@@ -448,6 +627,11 @@ class DashboardDBMixin:
                 self.total = 0
                 self.scanned = 0
                 self.scanned_bodies = set()
+        # Every caller now receives matching Navigation HUD progress as well
+        # as the raw counts. This covers startup snapshots, profile switches,
+        # history repairs and manual database rebuilds from one source.
+        if hasattr(self, "_seed_navigation_scan_progress"):
+            self._seed_navigation_scan_progress()
 
     def db_update_system(self, sys_name, total, scanned):
         with self.db_lock:
@@ -457,7 +641,14 @@ class DashboardDBMixin:
                 row = cursor.fetchone()
                 if row:
                     total = max(int(total or 0), int(row[0] or 0))
+                    # Survey knowledge is cumulative. A return visit may emit
+                    # Location before any Scan events, but that must never erase
+                    # a previous FSSAllBodiesFound/NavBeacon completion.
+                    scanned = max(int(scanned or 0), int(row[1] or 0))
+                else:
+                    total = int(total or 0)
                     scanned = int(scanned or 0)
+                total = max(total, scanned)
                 self.conn.execute(
                     "INSERT OR REPLACE INTO systems (name, total, scanned_count) VALUES (?, ?, ?)",
                     (sys_name, total, scanned),

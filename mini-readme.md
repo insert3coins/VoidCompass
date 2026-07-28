@@ -1,18 +1,15 @@
 # VoidCompass // UPDATE LOG
 
-## v5.2.8 // Carrier Logistics Intelligence
-**Release Date:** 2026-Jul-28
+## v5.2.8.1 // Survey Progress Reliability
+**Release Date:** 2026-Jul-29
 
-*   Rebuilt the Fleet Carrier Expedition Navigator around an integrated Spansh calculation: it resolves the carrier's journal-backed current system, applies the correct personal or Squadron Carrier mass/capacity and latest used capacity, plots multiple requested destinations off the interface thread, then imports every calculated jump into the existing profile-local route.
-*   Added a themed per-jump route table with distance, tritium used, remaining tank and required restocks, plus persistent Spansh result links, nominal jump timing, explicit Copy Next and Copy Selected waypoint controls, and automatic progress from CarrierLocation/CarrierJump arrivals. Existing Spansh Fleet Carrier result URLs or job IDs can be imported into either a personal or Squadron Carrier route; the direct Spansh page remains the safe fallback if its live service changes.
-*   Added a dedicated Carrier Cargo page that treats `CarrierStats.SpaceUsage.Cargo` as the authoritative aggregate while clearly labelling the commodity rows as a commander-supplied baseline plus transfers observed at the commander's own carrier. Elite's journal does not expose a complete itemised carrier commodity hold, so the interface no longer implies that market orders or bartender stock are cargo inventory.
-*   Unified that observed manifest with the existing profile-local Specialist carrier inventory, showed active buy/sell orders separately, and included exact free/reserved capacity and the age/source of the latest owner snapshot. Confirmed own-carrier CargoTransfer events now advance the aggregate cargo/free totals and refresh Carrier Command and its overlay immediately, without restoring cargo event spam to the Live Feed; the next CarrierStats snapshot remains authoritative.
-*   Extended carrier journal tracking with current and scheduled system addresses, CarrierBankTransfer balance updates, CarrierStats evidence timestamps and persistent Spansh route provenance, while retaining theme and commander-profile isolation.
-*   Upgraded the Fleet/Squadron Carrier overlay with the active route's progress, next plotted leg, per-leg and remaining tritium evidence, exact cargo/free capacity and active market-order count while preserving its compact automatic height.
-*   Fixed the enabled Fleet Carrier overlay being suppressed by the Exploration adaptive scene, and kept its dynamic-height window above the bottom screen edge when it is restored.
+*   Fixed completed system surveys being allowed to regress to 0%/0 bodies on known-system revisits or application reloads. Body totals and scanned counts are now cumulative across Location, FSS, Nav Beacon, cached body and journal evidence.
+*   Added a profile-aware incremental journal repair that restores existing damaged completion records in the background, then refreshes the Navigation HUD, Dashboard, Survey Status, System Info and Explore views together when the current system is repaired.
+*   Recognised Frontier's `FSSDiscoveryScan Progress=1.0` and `NavBeaconScan` as complete survey evidence in both normal database rebuilds and Deep Survey intelligence, while keeping different commanders' journal history isolated.
 
 ## Earlier releases
 
+*   **v5.2.8** — Added integrated Spansh Fleet/Squadron Carrier plotting, route progress, tritium logistics, carrier cargo evidence and the expanded carrier overlay; also kept that overlay visible in Exploration mode.
 *   **v5.2.7** — Removed journal-processing stalls through queued carrier persistence, coalesced state snapshots, cheaper Explore refreshes, a UI stall sampler and lightweight first-map rendering.
 *   **v5.2.6** — Added filled theme-aware galactic regions, a dedicated Map workspace, smoother route cameras and the first native Linux x86-64 testing build with WSL-assisted packaging.
 *   **v5.2.5** — Added the System Completion Matrix, Exploration Action Queue, regional passport, reliable resume checkpoints, expedition milestones, session debriefs and profile-aware overlay hotkeys.
