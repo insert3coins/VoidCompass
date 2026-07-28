@@ -531,9 +531,22 @@ class DashboardDBMixin:
     def scan_all_logs_threaded(self):
         import threading
 
-        threading.Thread(target=self.scan_all_logs, daemon=True).start()
+        # Snapshot the profile preference on the UI thread so this rebuild is
+        # not affected by a later profile switch or checkbox change.
+        upload_history_to_edsm = bool(
+            self.config.get("edsm_backfill_on_cache_rebuild", True)
+        )
+        threading.Thread(
+            target=self.scan_all_logs,
+            kwargs={"upload_history_to_edsm": upload_history_to_edsm},
+            daemon=True,
+        ).start()
 
-    def scan_all_logs(self):
+    def scan_all_logs(self, upload_history_to_edsm=None):
+        if upload_history_to_edsm is None:
+            upload_history_to_edsm = bool(
+                self.config.get("edsm_backfill_on_cache_rebuild", True)
+            )
         self.log("📚 STARTING HISTORY REBUILD...")
 
         new_history = self.watcher.scan_history(lambda p, t: self.log(f"⏳ Scanning... {int((p/t)*100)}%"))
@@ -585,8 +598,10 @@ class DashboardDBMixin:
         self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
         self.update_hud()
 
-        if self.config.get("edsm_upload_enabled"):
+        if self.config.get("edsm_upload_enabled") and upload_history_to_edsm:
             self.edsm.run_backfill(self.config.get("journal_path", ""))
+        elif self.config.get("edsm_upload_enabled"):
+            self.log("ℹ️ EDSM history upload skipped for this cache rebuild.")
 
     def load_system_from_db(self, sys_name):
         with self.db_lock:

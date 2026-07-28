@@ -6,6 +6,7 @@
 *   Fixed completed system surveys being allowed to regress to 0%/0 bodies on known-system revisits or application reloads. Body totals and scanned counts are now cumulative across Location, FSS, Nav Beacon, cached body and journal evidence.
 *   Added a profile-aware incremental journal repair that restores existing damaged completion records in the background, then refreshes the Navigation HUD, Dashboard, Survey Status, System Info and Explore views together when the current system is repaired.
 *   Recognised Frontier's `FSSDiscoveryScan Progress=1.0` and `NavBeaconScan` as complete survey evidence in both normal database rebuilds and Deep Survey intelligence, while keeping different commanders' journal history isolated.
+*   Added a profile-aware cache rebuild option for skipping EDSM history backfill without disabling normal live EDSM uploads.
 
 ## Earlier releases
 
