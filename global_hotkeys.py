@@ -15,6 +15,7 @@ import threading
 
 
 OVERLAY_HOTKEY_SPECS = (
+    ("layout_studio", "overlay_hotkey_layout_studio", "Toggle Overlay Layout Studio", None),
     ("toggle_all", "overlay_hotkey_toggle_all", "Show / hide all overlays", None),
     ("navigation", "overlay_hotkey_navigation", "Navigation HUD", "hud"),
     ("survey", "overlay_hotkey_survey", "Survey Status", "survey_status_hud"),
@@ -28,6 +29,7 @@ OVERLAY_HOTKEY_SPECS = (
 )
 
 DEFAULT_OVERLAY_HOTKEYS = {
+    "overlay_hotkey_layout_studio": "Ctrl+Shift+L",
     "overlay_hotkey_toggle_all": "Ctrl+Shift+O",
     "overlay_hotkey_field_bookmark": "Ctrl+Shift+B",
 }

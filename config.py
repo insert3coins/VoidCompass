@@ -92,6 +92,7 @@ PROFILE_TEXT_SETTINGS = (
     "explore_discovery_filter",
     "explore_expedition_section",
     "explore_map_scope",
+    "overlay_hotkey_layout_studio",
     "overlay_hotkey_toggle_all",
     "overlay_hotkey_navigation",
     "overlay_hotkey_survey",
@@ -335,6 +336,7 @@ def apply_profile_config(config, profile_key=None):
         "explore_discovery_filter": "All",
         "explore_expedition_section": "Overview",
         "explore_map_scope": "All History",
+        "overlay_hotkey_layout_studio": "Ctrl+Shift+L",
         "overlay_hotkey_toggle_all": "Ctrl+Shift+O",
         "overlay_hotkey_navigation": "",
         "overlay_hotkey_survey": "",
@@ -420,7 +422,7 @@ def apply_profile_config(config, profile_key=None):
                 "ui_scale_percent": 100,
                 "overlay_text_scale_percent": 100,
                 "overlay_layout_presets": {},
-                "overlay_layout_studio_geometry": "820x620",
+                "overlay_layout_studio_geometry": "1080x720",
             }
             profile[setting] = (
                 profile_defaults[setting] if not is_initial_profile and setting in profile_defaults
@@ -501,6 +503,7 @@ def load_config():
         'overlay_enabled': True,
         'overlay_mouse_passthrough': os.name == 'nt',
         'overlay_hotkeys_enabled': os.name == 'nt',
+        'overlay_hotkey_layout_studio': 'Ctrl+Shift+L',
         'overlay_hotkey_toggle_all': 'Ctrl+Shift+O',
         'overlay_hotkey_navigation': '',
         'overlay_hotkey_survey': '',
@@ -645,7 +648,7 @@ def load_config():
         'ui_scale_percent': 100,
         'overlay_text_scale_percent': 100,
         'overlay_layout_presets': {},
-        'overlay_layout_studio_geometry': '820x620',
+        'overlay_layout_studio_geometry': '1080x720',
         'reduced_motion_enabled': False,
         'ui_theme_name': _themes.DEFAULT_THEME_NAME,
         'ui_custom_themes': {},

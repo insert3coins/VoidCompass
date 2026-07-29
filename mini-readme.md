@@ -1,5 +1,11 @@
 # VoidCompass // UPDATE LOG
 
+## v5.2.9.1 // Visual Overlay Positioning
+**Release Date:** 2026-Jul-29
+
+*   Added a themed virtual-desktop preview to Overlay Layout Studio: drag overlay cards inside the app to move the real HUD windows while mouse passthrough remains enabled.
+*   Added the profile-aware **Ctrl+Shift+L** global shortcut to open or close Layout Studio, and moved all shortcut assignments onto a dedicated Settings → Hotkeys page.
+
 ## v5.2.9 // Explorer Fieldcraft & Reliability
 **Release Date:** 2026-Jul-29
 

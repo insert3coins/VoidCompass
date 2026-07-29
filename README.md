@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.2.9**
+**Current version: 5.2.9.1**
 
 Void Compass is a native Windows companion for Elite Dangerous, with a native Linux x86-64 build currently offered for testing. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
 
@@ -83,9 +83,9 @@ Every overlay can be enabled independently, dragged to a saved position and styl
 - Gravity, touchdown/liftoff, on-foot and other low-noise safety notifications.
 - Toast notifications and the journal/Compass heartbeat pulse.
 
-**Settings → Overlays → Arrange Overlays** opens a live layout studio with edge/alignment snapping, sensible resets and named commander-specific presets. Application scale, overlay text scale and reduced motion are independently configurable under **Settings → Core → Accessibility**.
+**Settings → Overlays → Arrange Overlays** opens a live layout studio with a scaled desktop preview: drag its overlay cards to position the real HUD windows without disabling mouse passthrough. It also provides edge/alignment snapping, sensible resets and named commander-specific presets. Application scale, overlay text scale and reduced motion are independently configurable under **Settings → Core → Accessibility**.
 
-On Windows, profile-aware global shortcuts can temporarily hide or restore all overlays while Elite has focus, with optional individual shortcuts for the main exploration and operations overlays. The default master shortcut is **Ctrl+Shift+O**, and **Ctrl+Shift+B** saves a field bookmark at the current system/body; assignments can be changed or cleared in **Settings → Overlays** without changing which modules are enabled. Linux X11/XWayland builds retain borderless topmost overlays with opaque themed backgrounds; chroma transparency, mouse passthrough and system-wide shortcuts remain Windows-only.
+On Windows, profile-aware global shortcuts can open or close the Layout Studio and temporarily hide or restore all overlays while Elite has focus, with optional individual shortcuts for the main exploration and operations overlays. The defaults are **Ctrl+Shift+L** for Layout Studio, **Ctrl+Shift+O** for all overlays and **Ctrl+Shift+B** for a field bookmark at the current system/body; assignments can be changed or cleared on the dedicated **Settings → Hotkeys** page without changing which modules are enabled. Linux X11/XWayland builds retain borderless topmost overlays with opaque themed backgrounds; chroma transparency, mouse passthrough and system-wide shortcuts remain Windows-only.
 
 ![Navigation HUD](NavHud.PNG)
 

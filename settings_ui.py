@@ -340,6 +340,11 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     # Pages
     core_page = make_page("core", "Core", "Journal and screenshot paths.", scrollable=True)
     overlay_page = make_page("overlays", "Overlays", "Runtime modules and display timing.", scrollable=True)
+    hotkey_page = make_page(
+        "hotkeys", "Hotkeys",
+        "Profile-aware global shortcuts for overlays, layout and field actions.",
+        scrollable=True,
+    )
     crt_page = make_page("crt", "HUD Effects", "CRT styling for the native Navigation HUD.", scrollable=True)
     voice_page = make_page(
         "voice", "Voice", "Optional local neural callouts. Voice audio never leaves this computer.",
@@ -361,6 +366,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
 
     nav_button("core", "Core")
     nav_button("overlays", "Overlays")
+    nav_button("hotkeys", "Hotkeys")
     nav_button("crt", "HUD Effects")
     nav_button("voice", "Voice")
     nav_button("compass", "Compass AI")
@@ -399,7 +405,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     toggle_row(
         overlay_interaction,
         (
-            "Mouse passthrough (turn off to move or click overlays)"
+            "Mouse passthrough (Layout Studio positioning remains available)"
             if os.name == "nt" else
             "Mouse passthrough (Windows only; unavailable on Linux)"
         ),
@@ -412,11 +418,11 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         ).pack(side=tk.LEFT)
         tk.Label(
             layout_actions,
-            text="Live drag, edge snapping and commander-specific layout presets.",
+            text="Drag overlay cards on a desktop preview without disabling passthrough.",
             font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w",
         ).pack(side=tk.LEFT, padx=10)
 
-    overlay_hotkeys = section(overlay_page, "Global Hotkeys")
+    overlay_hotkeys = section(hotkey_page, "Global Hotkeys")
     toggle_row(
         overlay_hotkeys,
         "Enable system-wide overlay hotkeys"
@@ -1455,7 +1461,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
 
     win.protocol("WM_DELETE_WINDOW", close_window)
     for scroll_page in (
-        core_page, overlay_page, crt_page, voice_page, compass_page,
+        core_page, overlay_page, hotkey_page, crt_page, voice_page, compass_page,
         command_page, theme_page, integrations_page, diagnostics_page,
     ):
         bind_scroll_tree(scroll_page)
