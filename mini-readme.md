@@ -1,5 +1,11 @@
 # VoidCompass // UPDATE LOG
 
+## v5.2.9.5 // Carrier Expedition Progress
+**Release Date:** 2026-Jul-29
+
+*   CarrierLocation and CarrierJump arrivals now mark the matching Fleet/Squadron Carrier expedition stop complete on every notification, using system address where available and repairing an unmarked current stop after restart.
+*   Route checkmarks, the next-stop arrow, carrier overlay progress and **Copy Next** now share the first genuinely pending waypoint; repeated systems advance one visit at a time, and a finished route reports that no jumps remain.
+
 ## v5.2.9.4 // Fleet Carrier Arrival State
 **Release Date:** 2026-Jul-29
 
