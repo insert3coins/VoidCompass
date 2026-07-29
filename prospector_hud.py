@@ -116,7 +116,7 @@ class ProspectorHUD:
         default_y = max(30, screen_h - 320)
         x = int(config.get("prospector_hud_x", default_x))
         y = int(config.get("prospector_hud_y", default_y))
-        self.win.geometry(f"+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
 
         self._force_topmost()
         self.win.withdraw()  # start hidden; shown on first ProspectedAsteroid
@@ -138,7 +138,7 @@ class ProspectorHUD:
             # always drive position from config rather than the live geometry.
             x = int(self.config.get("prospector_hud_x", 30))
             y = int(self.config.get("prospector_hud_y", 600))
-            self.win.geometry(f"+{x}+{y}")
+            self.win.geometry(overlay_chrome.position_geometry(x, y))
             self.win.deiconify()
             self.win.attributes("-topmost", True)
             self.win.lift()
@@ -206,7 +206,7 @@ class ProspectorHUD:
     def _drag_move(self, event):
         x = self.win.winfo_x() + (event.x - self._dx)
         y = self.win.winfo_y() + (event.y - self._dy)
-        self.win.geometry(f"+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
 
     def _drag_end(self, event):
         self.config["prospector_hud_x"] = self.win.winfo_x()

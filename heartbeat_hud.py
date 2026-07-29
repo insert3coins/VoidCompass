@@ -53,7 +53,7 @@ class HeartbeatHUD:
         screen_h = root.winfo_screenheight()
         x = self._safe_int(config.get("heartbeat_hud_x"), 12)
         y = self._safe_int(config.get("heartbeat_hud_y"), max(12, screen_h - _SIZE - 12))
-        self.win.geometry(f"+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
 
         self._force_topmost()
         self._redraw()
@@ -137,7 +137,7 @@ class HeartbeatHUD:
     def _drag_move(self, event):
         x = self.win.winfo_x() + (event.x - self._dx)
         y = self.win.winfo_y() + (event.y - self._dy)
-        self.win.geometry(f"+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
 
     def _drag_end(self, event):
         self.config["heartbeat_hud_x"] = self.win.winfo_x()

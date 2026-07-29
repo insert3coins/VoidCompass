@@ -80,7 +80,7 @@ OVERLAY_ENABLE_KEYS = {
 
 def _position_geometry(x, y):
     """Return absolute Tk coordinates, including negative virtual-screen values."""
-    return f"+{int(x)}+{int(y)}"
+    return f"{int(x):+d}{int(y):+d}"
 
 
 class OverlayLayoutStudio:
@@ -149,8 +149,11 @@ class OverlayLayoutStudio:
         except (AttributeError, tk.TclError):
             live_x, live_y = DEFAULT_POSITIONS.get(attr, (30, 30))
             width, height = DEFAULT_SIZES.get(attr, (160, 70))
-        dragging_this = bool(self._drag_state and self._drag_state.get("attr") == attr)
-        if (not shown or dragging_this) and x_key in self.config and y_key in self.config:
+        # Layout Studio edits the saved commander layout, so its coordinates
+        # remain authoritative even while Tk is still delivering a move for a
+        # visible window.  Reading the old live coordinate here made the card
+        # and profile jump back immediately after release on some overlays.
+        if x_key in self.config and y_key in self.config:
             try:
                 live_x = int(float(self.config[x_key]))
                 live_y = int(float(self.config[y_key]))
@@ -161,6 +164,9 @@ class OverlayLayoutStudio:
     def _set_overlay_position(self, row, x, y):
         attr, x_key, y_key, window = row
         x, y = int(round(x)), int(round(y))
+        app_setter = getattr(self.app, "_set_overlay_position", None)
+        if callable(app_setter):
+            return app_setter(attr, x, y, authority_s=3.0)
         # Update the profile and any overlay-owned position cache before moving
         # the Tk window. Dynamic overlays (notably CarrierHUD) redraw on a
         # timer; leaving their private target stale makes that redraw snap the

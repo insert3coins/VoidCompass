@@ -56,7 +56,7 @@ class SystemInfoHUD:
 
         x = int(config.get("system_info_hud_x", 30))
         y = int(config.get("system_info_hud_y", 30))
-        self.win.geometry(f"+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
 
         self._hide_job       = None
         self._save_job       = None
@@ -88,7 +88,7 @@ class SystemInfoHUD:
     def show(self):
         x = int(self.config.get("system_info_hud_x", 30))
         y = int(self.config.get("system_info_hud_y", 30))
-        self.win.geometry(f"+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
         self._redraw()
         self.win.deiconify()
         self.win.attributes("-topmost", True)
@@ -388,7 +388,7 @@ class SystemInfoHUD:
             self._mouse_dragging = True
         x = self.win.winfo_x() + (event.x - self._mx)
         y = self.win.winfo_y() + (event.y - self._my)
-        self.win.geometry(f"+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
         self.config["system_info_hud_x"] = x
         self.config["system_info_hud_y"] = y
         self._schedule_config_save()

@@ -26,7 +26,7 @@ class CargoHUD:
         x = self._safe_int(self.config.get("cargo_hud_x"), default_x)
         y = self._safe_int(self.config.get("cargo_hud_y"), default_y)
         self._desired_pos = (x, y)
-        self.win.geometry(f"300x400+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y, 300, 400))
         self.win.after(0, self._apply_initial_position)
         self.win.after(250, self._apply_initial_position)
         self.win.after(700, self._apply_initial_position)
@@ -45,7 +45,7 @@ class CargoHUD:
     def _apply_initial_position(self):
         try:
             x, y = self._desired_pos
-            self.win.geometry(f"300x400+{x}+{y}")
+            self.win.geometry(overlay_chrome.position_geometry(x, y, 300, 400))
         except Exception:
             pass
 
@@ -69,7 +69,8 @@ class CargoHUD:
         deltay = event.y - self.y
         x = self.win.winfo_x() + deltax
         y = self.win.winfo_y() + deltay
-        self.win.geometry(f"+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
+        self._desired_pos = (x, y)
         # Persist while dragging so release outside the canvas still keeps the new position.
         self.config["cargo_hud_x"] = x
         self.config["cargo_hud_y"] = y
@@ -78,6 +79,7 @@ class CargoHUD:
     def save_final_pos(self, event):
         self.config["cargo_hud_x"] = self.win.winfo_x()
         self.config["cargo_hud_y"] = self.win.winfo_y()
+        self._desired_pos = (self.config["cargo_hud_x"], self.config["cargo_hud_y"])
         self._write_config()
 
     def _write_config(self):
