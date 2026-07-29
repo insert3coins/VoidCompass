@@ -1945,6 +1945,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if spec is None:
             return
         _action, _key, label, attr = spec
+        if action == "layout_studio":
+            studio = getattr(self, "overlay_layout_studio", None)
+            if studio and studio.is_open():
+                studio.close()
+                self.overlay_layout_studio = None
+                message = "Overlay Layout Studio closed"
+            else:
+                self.open_overlay_layout_studio()
+                message = "Overlay Layout Studio opened"
+            self.add_event_feed_entry("SYSTEM", message, severity="INFO")
+            return
         if action == "field_bookmark":
             self._field_bookmark()
             return
