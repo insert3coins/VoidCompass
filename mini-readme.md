@@ -1,5 +1,12 @@
 # VoidCompass // UPDATE LOG
 
+## v5.2.9.6 // Live Carrier Fuel
+**Release Date:** 2026-Jul-29
+
+*   Fleet Carrier expedition arrivals now calculate the actual Tritium depot burn from the completed jump distance, current used carrier capacity and current tank level, keeping Carrier, Dashboard and HUD fuel current between `CarrierStats` snapshots.
+*   Paired `CarrierLocation`/`CarrierJump` notifications are accounted once, older startup evidence cannot overwrite newer fuel, and the next authoritative `CarrierStats` or `CarrierDepositFuel` event reconciles the estimate automatically.
+*   Dashboard Carrier mode now uses the carrier expedition rather than the ship waypoint route: its next stop, 2/44-style progress, current load, calculated next-leg burn, copy action, priority and support card all come from the live Carrier tracker.
+
 ## v5.2.9.5 // Carrier Expedition Progress
 **Release Date:** 2026-Jul-29
 

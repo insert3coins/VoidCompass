@@ -7,6 +7,7 @@ into compact verified facts; it never emits UI or speech itself.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import math
 import re
 import time
 
@@ -748,6 +749,46 @@ def build_snapshot(runtime, *, companion_state=None, cargo_inventory=None,
         matching_cargo.extend(matched)
 
     carrier = dict(carrier_data or {})
+    carrier_route = [
+        row for row in (carrier.get("expedition_route") or [])
+        if isinstance(row, dict) and row.get("system")
+    ]
+    carrier_route_done = sum(1 for row in carrier_route if row.get("visited"))
+    carrier_route_next = next(
+        (row for row in carrier_route if not row.get("visited")), None,
+    )
+    carrier_used_capacity = None
+    try:
+        carrier_used_capacity = max(
+            0, int(carrier.get("space_total")) - int(carrier.get("space_free")),
+        )
+    except (TypeError, ValueError):
+        pass
+    next_stop = None
+    if carrier_route_next:
+        next_stop = {
+            key: carrier_route_next.get(key)
+            for key in (
+                "system", "id64", "distance_ly", "fuel_used_t",
+                "fuel_remaining_t", "tritium_market_t", "must_restock",
+            )
+        }
+        try:
+            distance = float(carrier_route_next.get("distance_ly"))
+            fuel = int(carrier.get("fuel_level"))
+            if carrier_used_capacity is not None:
+                # Match the in-game Fleet Carrier burn, rather than a Spansh
+                # plan produced with an older/different carrier load.
+                calculated = int(math.floor(
+                    5.0 + (distance / 8.0)
+                    * (1.0 + (carrier_used_capacity + fuel) / 25000.0)
+                    + 0.5
+                ))
+                calculated = max(0, min(fuel, calculated))
+                next_stop["calculated_fuel_t"] = calculated
+                next_stop["projected_fuel_t"] = fuel - calculated
+        except (TypeError, ValueError):
+            pass
     strategy = {
         "watched_factions_here": watched_here,
         "conflicts": conflicts[:8],
@@ -757,8 +798,20 @@ def build_snapshot(runtime, *, companion_state=None, cargo_inventory=None,
             "name": carrier.get("name"), "callsign": carrier.get("callsign"),
             "system": carrier.get("system"), "status": carrier.get("status"),
             "fuel_level": carrier.get("fuel_level"), "fuel_capacity": carrier.get("fuel_capacity"),
+            "fuel_level_estimated": bool(carrier.get("fuel_level_estimated")),
             "jump_destination": carrier.get("jump_destination"),
             "trade_orders": len(carrier.get("trade_orders") or []),
+            "available_balance": carrier.get("available_balance"),
+            "space_total": carrier.get("space_total"),
+            "space_free": carrier.get("space_free"),
+            "space_used": carrier_used_capacity,
+            "route_name": carrier.get("expedition_name"),
+            "route_source": carrier.get("expedition_route_source"),
+            "route_completed": carrier_route_done,
+            "route_total": len(carrier_route),
+            "route_remaining": max(0, len(carrier_route) - carrier_route_done),
+            "route_next": next_stop,
+            "route_reserve_fuel": carrier.get("expedition_reserve_fuel"),
         } if carrier.get("carrier_id") else None,
         "colonisation_projects": active_projects[:12],
         "colonisation_matching_cargo": matching_cargo[:12],

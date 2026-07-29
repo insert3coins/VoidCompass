@@ -6,6 +6,7 @@ State is persisted to carrier_state.json so it survives app restarts.
 """
 import json
 import logging
+import math
 import os
 import threading
 from datetime import datetime, timezone
@@ -20,7 +21,8 @@ _PERSIST_KEYS = {
     "squadron_id", "squadron_name", "squadron_rank", "squadron_rank_name",
     "carrier_purchased_at", "carrier_spawn_system",
     "system", "system_address", "body",
-    "fuel_level", "fuel_capacity",
+    "fuel_level", "fuel_capacity", "fuel_level_estimated",
+    "fuel_level_source", "fuel_level_updated_at",
     "jump_range_curr", "jump_range_max",
     "jump_destination", "jump_destination_address", "jump_body", "jump_departure_time",
     "previous_system", "previous_body",
@@ -100,6 +102,9 @@ class CarrierTracker:
             "status": "idle",          # idle | jumping | cooldown | cooldown_cancel
             "fuel_level": None,
             "fuel_capacity": 1000,
+            "fuel_level_estimated": False,
+            "fuel_level_source": None,
+            "fuel_level_updated_at": None,
             "jump_range_curr": None,
             "jump_range_max": None,
             "jump_destination": None,
@@ -434,8 +439,9 @@ class CarrierTracker:
         elif ev == "CarrierDepositFuel":
             total = raw.get("Total")
             if total is not None:
-                self.carrier_data["fuel_level"] = int(total)
-                changed = True
+                changed = self._set_authoritative_fuel(
+                    total, raw, "CarrierDepositFuel",
+                )
         elif ev == "CarrierDockingPermission":
             self.carrier_data["docking_access"] = raw.get("DockingAccess", "all")
             self.carrier_data["allow_notorious"] = bool(raw.get("AllowNotorious", False))
@@ -507,7 +513,7 @@ class CarrierTracker:
 
         fuel = raw.get("FuelLevel")
         if fuel is not None:
-            cd["fuel_level"] = int(fuel)
+            self._set_authoritative_fuel(fuel, raw, "CarrierStats")
         cd["jump_range_curr"] = raw.get("JumpRangeCurr")
         cd["jump_range_max"] = raw.get("JumpRangeMax")
         cd["stats_updated_at"] = raw.get("timestamp") or _utc_stamp()
@@ -650,15 +656,102 @@ class CarrierTracker:
             cd["body"] = body
         if system_address is not None:
             cd["system_address"] = system_address
+        completed_stop = None
         if system_changed:
-            self._advance_expedition(system, raw.get("timestamp"), system_address)
+            completed_stop = self._advance_expedition(
+                system, raw.get("timestamp"), system_address,
+            )
         else:
             # CarrierLocation commonly precedes CarrierJump for one arrival.
             # Repair an entirely unmarked current stop, but do not let the
             # second notification consume a later repeated-system waypoint.
-            self._repair_current_expedition_stop(
+            completed_stop = self._repair_current_expedition_stop(
                 system, raw.get("timestamp"), system_address,
             )
+        if completed_stop is None:
+            completed_stop = self._find_unaccounted_arrival_stop(
+                system, raw.get("timestamp"), system_address,
+            )
+        self._apply_carrier_jump_fuel(completed_stop, raw)
+        return True
+
+    def _set_authoritative_fuel(self, value, raw, source):
+        """Record an exact journal fuel observation without rewinding newer evidence."""
+        cd = self.carrier_data
+        incoming_at = (raw or {}).get("timestamp") or _utc_stamp()
+        current_at = cd.get("fuel_level_updated_at") or cd.get("stats_updated_at")
+        incoming_dt = _parse_dt(incoming_at)
+        current_dt = _parse_dt(current_at)
+        if incoming_dt and current_dt and incoming_dt < current_dt:
+            return False
+        try:
+            fuel = max(0, min(int(cd.get("fuel_capacity") or 1000), int(value)))
+        except (TypeError, ValueError):
+            return False
+        cd["fuel_level"] = fuel
+        cd["fuel_level_estimated"] = False
+        cd["fuel_level_source"] = source
+        cd["fuel_level_updated_at"] = incoming_at
+        return True
+
+    def _find_unaccounted_arrival_stop(self, system, timestamp=None, system_address=None):
+        """Find a pre-5.2.9.6 visited stop belonging to this arrival pair."""
+        event_dt = _parse_dt(timestamp)
+        if event_dt is None:
+            return None
+        target = " ".join(str(system or "").split()).casefold()
+        target_address = str(system_address) if system_address is not None else None
+        candidates = []
+        for row in self.carrier_data.get("expedition_route") or []:
+            if not isinstance(row, dict) or not row.get("visited") or row.get("fuel_accounted_at"):
+                continue
+            row_target = " ".join(str(row.get("system") or "").split()).casefold()
+            row_address = row.get("id64")
+            address_match = (
+                target_address is not None and row_address is not None
+                and str(row_address) == target_address
+            )
+            if not address_match and (not target or row_target != target):
+                continue
+            visited_dt = _parse_dt(row.get("visited_at"))
+            if visited_dt is None:
+                continue
+            delta = abs((event_dt - visited_dt).total_seconds())
+            if delta <= 180:
+                candidates.append((delta, row))
+        return min(candidates, key=lambda item: item[0])[1] if candidates else None
+
+    def _apply_carrier_jump_fuel(self, route_row, raw):
+        """Project depot fuel after an arrival until CarrierStats confirms it."""
+        if not isinstance(route_row, dict) or route_row.get("fuel_accounted_at"):
+            return False
+        cd = self.carrier_data
+        timestamp = (raw or {}).get("timestamp") or _utc_stamp()
+        event_dt = _parse_dt(timestamp)
+        fuel_at = cd.get("fuel_level_updated_at") or cd.get("stats_updated_at")
+        fuel_dt = _parse_dt(fuel_at)
+        if event_dt and fuel_dt and event_dt <= fuel_dt:
+            return False
+        try:
+            fuel = int(cd.get("fuel_level"))
+            distance = float(route_row.get("distance_ly"))
+            total = int(cd.get("space_total"))
+            free = int(cd.get("space_free"))
+        except (TypeError, ValueError):
+            return False
+        used_capacity = max(0, total - free)
+        # Current Fleet Carrier formula: the 25,000 T hull, used carrier
+        # capacity and depot fuel all contribute to the burn for this leg.
+        burn = int(math.floor(
+            5.0 + (distance / 8.0) * (1.0 + (used_capacity + fuel) / 25000.0) + 0.5
+        ))
+        burn = max(0, min(fuel, burn))
+        cd["fuel_level"] = fuel - burn
+        cd["fuel_level_estimated"] = True
+        cd["fuel_level_source"] = "CarrierJump calculation"
+        cd["fuel_level_updated_at"] = timestamp
+        route_row["fuel_accounted_at"] = timestamp
+        route_row["fuel_actual_used_t"] = burn
         return True
 
     def _handle_name_change(self, raw):
@@ -731,6 +824,8 @@ class CarrierTracker:
                 "system": system,
                 "visited": bool(old.get("visited")),
                 "visited_at": old.get("visited_at"),
+                "fuel_accounted_at": old.get("fuel_accounted_at"),
+                "fuel_actual_used_t": old.get("fuel_actual_used_t"),
             })
             route.append(row)
         self.carrier_data["expedition_name"] = (name or "").strip()
@@ -794,6 +889,8 @@ class CarrierTracker:
                 "system": system,
                 "visited": bool(old.get("visited")),
                 "visited_at": old.get("visited_at"),
+                "fuel_accounted_at": old.get("fuel_accounted_at"),
+                "fuel_actual_used_t": old.get("fuel_actual_used_t"),
             })
         cd = self.carrier_data
         cd["expedition_name"] = (name or "").strip()

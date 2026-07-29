@@ -844,8 +844,14 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.wp_info_text.bind("<MouseWheel>", self._on_wp_info_wheel)
         route_actions = tk.Frame(self.wp_panel, bg=self.UI_PANEL)
         route_actions.pack(fill=tk.X, padx=14, pady=(0, 10))
-        self._action_button(route_actions, "COPY NEXT", self._dashboard_copy_next, accent=True).pack(side=tk.LEFT)
-        self._action_button(route_actions, "OPEN EXPLORE", self.open_exploration_window).pack(side=tk.LEFT, padx=(6, 0))
+        self.dashboard_destination_copy_btn = self._action_button(
+            route_actions, "COPY NEXT", self._dashboard_copy_next, accent=True,
+        )
+        self.dashboard_destination_copy_btn.pack(side=tk.LEFT)
+        self.dashboard_destination_open_btn = self._action_button(
+            route_actions, "OPEN EXPLORE", self.open_exploration_window,
+        )
+        self.dashboard_destination_open_btn.pack(side=tk.LEFT, padx=(6, 0))
 
         # Supporting row: one next action, the local companion, and expedition
         # logistics. These remain secondary to the system and route above.
@@ -1261,8 +1267,26 @@ class DashboardUIMixin(ThemedWindowMixin):
         return None
 
     def _dashboard_copy_next(self):
+        deck = getattr(self, "adaptive_command", None)
+        mode = str(getattr(deck, "current_mode", "general") or "general")
+        destination = None
+        if mode == "carrier":
+            carrier = getattr(getattr(self, "carrier_tracker", None), "carrier_data", {}) or {}
+            destination = carrier.get("jump_destination")
+            if not destination:
+                destination = next((
+                    row.get("system")
+                    for row in (carrier.get("expedition_route") or [])
+                    if isinstance(row, dict) and not row.get("visited") and row.get("system")
+                ), None)
+            if destination:
+                self._copy_waypoint_to_clipboard(destination, "NEXT CARRIER STOP")
+                self.dashboard_objective_detail.config(text=f"Copied carrier stop {destination} to the clipboard.")
+            else:
+                self.dashboard_objective_detail.config(text="No pending Fleet Carrier expedition stop is available to copy.")
+            return
         rows = getattr(self, "_operational_queue", None) or []
-        destination = rows[0].get("copy_text") if rows else None
+        destination = destination or (rows[0].get("copy_text") if rows else None)
         destination = destination or self._dashboard_next_destination()
         if destination:
             self._copy_waypoint_to_clipboard(destination, "NEXT DESTINATION")
@@ -1332,6 +1356,11 @@ class DashboardUIMixin(ThemedWindowMixin):
             "support_meta": "Context follows live journal activity",
             "support_progress": cargo_ratio,
             "support_progress_text": f"{cargo}/{cargo_cap} T" if cargo_cap else "",
+            "destination_heading": "NAVIGATION / DESTINATION",
+            "destination_name": next_system,
+            "destination_distance": "",
+            "destination_info": f"Current system: {current_system}",
+            "destination_copy_text": "COPY NEXT",
             "action": f"OPEN {label}",
         }
 
@@ -1503,19 +1532,79 @@ class DashboardUIMixin(ThemedWindowMixin):
                 fuel = self._dashboard_number(carrier.get("fuel_level"))
                 capacity = self._dashboard_number(carrier.get("fuel_capacity"))
                 fuel_ratio = min(1.0, fuel / capacity) if capacity else 0.0
+                route_done = self._dashboard_number(carrier.get("route_completed"))
+                route_total = self._dashboard_number(carrier.get("route_total"))
+                route_remaining = self._dashboard_number(carrier.get("route_remaining"))
+                route_ratio = min(1.0, route_done / route_total) if route_total else 0.0
+                next_stop = carrier.get("route_next") or {}
+                next_system = carrier.get("jump_destination") or next_stop.get("system")
+                scheduled = bool(carrier.get("jump_destination"))
+                next_distance = next_stop.get("distance_ly")
+                next_burn = next_stop.get("calculated_fuel_t")
+                if next_burn is None:
+                    next_burn = next_stop.get("fuel_used_t")
+                projected_fuel = next_stop.get("projected_fuel_t")
+                route_name = carrier.get("route_name") or "Carrier expedition"
+                route_source = str(carrier.get("route_source") or "manual").upper()
+                route_progress = (
+                    f"{route_done}/{route_total} STOPS · {route_remaining} REMAINING"
+                    if route_total else "NO EXPEDITION ROUTE"
+                )
+                distance_text = (
+                    f"{float(next_distance):,.1f} LY" if next_distance is not None else ""
+                )
+                if next_burn is not None:
+                    distance_text += (" · " if distance_text else "") + f"{int(next_burn):,} T"
+                destination_info = f"{route_name} · {route_source}\n{route_progress}"
+                if projected_fuel is not None:
+                    destination_info += f"\nProjected depot after next jump: {int(projected_fuel):,} T"
+                used_capacity = self._dashboard_number(carrier.get("space_used"))
+                total_space = self._dashboard_number(carrier.get("space_total"))
+                status = str(carrier.get("status") or "idle").upper()
+                if route_total and not route_remaining:
+                    badge = "COMPLETE"
+                elif scheduled:
+                    badge = "JUMPING" if status == "JUMPING" else "SCHEDULED"
+                elif route_total:
+                    badge = "EN ROUTE"
+                else:
+                    badge = "READY"
                 context.update({
-                    "heading": "FLEET CARRIER OPERATIONS", "title": carrier.get("name") or "NO CARRIER SYNC",
-                    "detail": f"{carrier.get('system') or current_system}  →  {carrier.get('jump_destination') or 'NO JUMP PLOTTED'}",
+                    "heading": "FLEET CARRIER OPERATIONS", "badge": badge,
+                    "title": carrier.get("name") or "NO CARRIER SYNC",
+                    "detail": f"{carrier.get('system') or current_system}  →  {next_system or 'NO EXPEDITION ROUTE'}",
                     "value": f"TRITIUM {fuel:,}/{capacity:,} T" if capacity else "Carrier fuel awaiting sync",
-                    "progress": fuel_ratio,
+                    "progress": route_ratio if route_total else fuel_ratio,
                     "stats": [
-                        ("STATUS", str(carrier.get("status") or "IDLE").upper()),
+                        ("STATUS", status),
+                        ("ROUTE", f"{route_done}/{route_total}" if route_total else "INACTIVE"),
                         ("FUEL", f"{fuel}/{capacity} T" if capacity else "UNKNOWN"),
-                        ("ORDERS", str(self._dashboard_number(carrier.get("trade_orders")))),
-                        ("DESTINATION", carrier.get("jump_destination") or "NONE"),
+                        ("USED SPACE", f"{used_capacity:,}/{total_space:,} T" if total_space else "UNKNOWN"),
                     ],
-                    "priority": f"Prepare jump to {carrier.get('jump_destination')}" if carrier.get("jump_destination") else "Review carrier expedition logistics",
-                    "priority_detail": "Carrier Command holds route, fuel, service and inventory planning.",
+                    "priority": (
+                        f"Monitor jump to {carrier.get('jump_destination')}" if scheduled
+                        else f"Continue expedition to {next_system}" if next_system
+                        else "Plot a new carrier expedition" if not route_total
+                        else "Carrier expedition complete"
+                    ),
+                    "priority_detail": (
+                        f"{route_progress}. Carrier Command holds route, fuel, service and inventory planning."
+                    ),
+                    "support_heading": "CARRIER EXPEDITION",
+                    "support_badge": status if status != "IDLE" else ("COMPLETE" if route_total and not route_remaining else "READY"),
+                    "support_colour": self.UI_OK if status == "IDLE" else COLOR_ACCENT,
+                    "support_name": route_name,
+                    "support_detail": route_progress,
+                    "support_meta": (
+                        f"NEXT · {next_system}" if next_system else "No pending carrier stop"
+                    ),
+                    "support_progress": route_ratio if route_total else fuel_ratio,
+                    "support_progress_text": f"{route_done}/{route_total}" if route_total else f"{fuel}/{capacity} T",
+                    "destination_heading": "SCHEDULED CARRIER JUMP" if scheduled else "NEXT CARRIER STOP" if next_system else "CARRIER EXPEDITION",
+                    "destination_name": next_system or ("ROUTE COMPLETE" if route_total else "NO EXPEDITION ROUTE"),
+                    "destination_distance": distance_text,
+                    "destination_info": destination_info,
+                    "destination_copy_text": "COPY CARRIER STOP",
                     "action": "OPEN CARRIER",
                 })
             else:
@@ -1590,8 +1679,16 @@ class DashboardUIMixin(ThemedWindowMixin):
             )
             self.dashboard_copy_action_btn.config(text="COPY NEXT", command=self._dashboard_copy_next)
             self.dashboard_explore_action_btn.config(text="GALAXY", command=self.open_bgs_window)
+            self.dashboard_destination_copy_btn.config(text="COPY NEXT", command=self._dashboard_copy_next)
+            self.dashboard_destination_open_btn.config(
+                text="OPEN EXPLORE", command=self.open_exploration_window,
+            )
             self._dashboard_render_mode = "exploration"
             if previous_mode not in (None, "exploration"):
+                try:
+                    self.update_waypoint_display()
+                except Exception:
+                    pass
                 try:
                     self.update_carrier_panel(force=True)
                 except Exception:
@@ -1601,7 +1698,12 @@ class DashboardUIMixin(ThemedWindowMixin):
             return
         self.dashboard_deck_heading.config(text=context["deck"])
         self.dashboard_context_heading.config(text=context["heading"])
-        self.dashboard_destination_heading.config(text="NAVIGATION / DESTINATION")
+        self.dashboard_destination_heading.config(
+            text=context.get("destination_heading") or "NAVIGATION / DESTINATION",
+        )
+        self.wp_name_lbl.config(text=context.get("destination_name") or "NO DESTINATION")
+        self.wp_dist_lbl.config(text=context.get("destination_distance") or "")
+        self._set_wp_info_text(context.get("destination_info") or "")
         self.dashboard_objective_heading.config(text=f"{str(mode).upper()} PRIORITY")
         activity_label = context["deck"].replace(" COMMAND DECK", "")
         self.dashboard_stream_heading.config(text=f"{activity_label} ACTIVITY LOG")
@@ -1645,6 +1747,13 @@ class DashboardUIMixin(ThemedWindowMixin):
         )
         self.dashboard_copy_action_btn.config(text="COPY NEXT", command=self._dashboard_copy_next)
         self.dashboard_explore_action_btn.config(text="EXPLORATION", command=self.open_exploration_window)
+        self.dashboard_destination_copy_btn.config(
+            text=context.get("destination_copy_text") or "COPY NEXT",
+            command=self._dashboard_copy_next,
+        )
+        self.dashboard_destination_open_btn.config(
+            text=context["action"], command=self._adaptive_open_mode_workspace,
+        )
         self._dashboard_render_mode = mode
 
     def _refresh_adaptive_mode_open_button(self, deck_status, queue_rows=None):
@@ -3456,8 +3565,14 @@ class DashboardUIMixin(ThemedWindowMixin):
         txt = "NO ROUTE"
         if self.dest_name:
             txt = self.dest_name
-        
-        if not self.batch_mode and self._widget_alive(getattr(self, "nav_stat", None)):
+
+        deck = getattr(self, "adaptive_command", None)
+        render_mode = str(getattr(deck, "current_mode", "general") or "general")
+        dashboard_route_owned = render_mode in ("general", "exploration")
+        if (
+            dashboard_route_owned and not self.batch_mode
+            and self._widget_alive(getattr(self, "nav_stat", None))
+        ):
             self._ui_post(
                 lambda value=txt: self.nav_stat.config(text=value),
                 key="dashboard-nav-label",
@@ -3510,7 +3625,9 @@ class DashboardUIMixin(ThemedWindowMixin):
     def _refresh_route_progress_labels(self):
         progress = self._current_route_progress()
         route_progress_stat = getattr(self, "route_progress_stat", None)
-        if self._widget_alive(route_progress_stat):
+        deck = getattr(self, "adaptive_command", None)
+        render_mode = str(getattr(deck, "current_mode", "general") or "general")
+        if self._widget_alive(route_progress_stat) and render_mode in ("general", "exploration"):
             self._config_label_if_changed(route_progress_stat, text=progress["text"])
         summary_route = getattr(self, "summary_route", None)
         if self._widget_alive(summary_route):
@@ -4100,7 +4217,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             return
         deck = getattr(self, "adaptive_command", None)
         render_mode = str(deck.current_mode if deck else "exploration")
-        if not force and render_mode not in ("general", "exploration", "carrier"):
+        if not force and render_mode not in ("general", "exploration"):
             # In add-on modes this physical card is intentionally reused for
             # mode-specific support; a carrier refresh must not overwrite it.
             return
@@ -4188,12 +4305,17 @@ class DashboardUIMixin(ThemedWindowMixin):
         if getattr(self, "_startup_restore_active", False):
             self._startup_restore_ui_pending = True
             return
-        self._refresh_route_progress_labels()
+        deck = getattr(self, "adaptive_command", None)
+        render_mode = str(getattr(deck, "current_mode", "general") or "general")
+        dashboard_route_owned = render_mode in ("general", "exploration")
+        if dashboard_route_owned:
+            self._refresh_route_progress_labels()
         if not self.waypoint_manager.waypoints:
             self.target_waypoint = None
-            self.wp_name_lbl.config(text="NO ACTIVE ROUTE")
-            self.wp_dist_lbl.config(text="")
-            self._set_wp_info_text("")
+            if dashboard_route_owned:
+                self.wp_name_lbl.config(text="NO ACTIVE ROUTE")
+                self.wp_dist_lbl.config(text="")
+                self._set_wp_info_text("")
             self.update_hud()
             return
 
@@ -4220,11 +4342,12 @@ class DashboardUIMixin(ThemedWindowMixin):
                 break
         
         if self.target_waypoint is None:
-             self.wp_name_lbl.config(text="ROUTE COMPLETE")
-             self.wp_dist_lbl.config(text="")
-             self._set_wp_info_text("")
-             self.update_hud()
-             return
+            if dashboard_route_owned:
+                self.wp_name_lbl.config(text="ROUTE COMPLETE")
+                self.wp_dist_lbl.config(text="")
+                self._set_wp_info_text("")
+            self.update_hud()
+            return
         
         if self.target_waypoint:
             name = self.target_waypoint['name']
@@ -4268,8 +4391,9 @@ class DashboardUIMixin(ThemedWindowMixin):
                 else:
                      info_text = f"NOTE // {note}  //  {info_text}"
 
-            self.wp_name_lbl.config(text=name)
-            self.wp_dist_lbl.config(text=dist_str)
-            self._set_wp_info_text(info_text)
+            if dashboard_route_owned:
+                self.wp_name_lbl.config(text=name)
+                self.wp_dist_lbl.config(text=dist_str)
+                self._set_wp_info_text(info_text)
             self.update_hud()
 
