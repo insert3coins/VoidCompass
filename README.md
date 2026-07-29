@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.2.9.3**
+**Current version: 5.2.9.4**
 
 Void Compass is a native Windows companion for Elite Dangerous, with a native Linux x86-64 build currently offered for testing. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
 

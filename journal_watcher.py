@@ -4,6 +4,21 @@ import time
 import threading
 import logging
 
+
+def carrier_jump_moves_player(data):
+    """Return whether a CarrierJump is also the commander's location event.
+
+    Odyssey reports commanders walking inside a carrier with ``Docked:false``
+    and ``OnFoot:true``. Those jumps replace the usual Location/FSDJump event
+    just as a ship-docked carrier jump does.
+    """
+    return bool(
+        isinstance(data, dict)
+        and data.get("event") == "CarrierJump"
+        and (data.get("Docked") or data.get("OnFoot"))
+    )
+
+
 class JournalWatcher:
     def __init__(self, journal_path, trace_callback=None, config=None):
         self.journal_path = journal_path
@@ -356,8 +371,9 @@ class JournalWatcher:
                     seeded["startup_location_seed"] = True
                     self._startup_location_event = seeded
                     return
-                # CarrierJump sets player location when they were on board
-                if ev == "CarrierJump" and raw.get("Docked"):
+                # CarrierJump sets player location while ship-docked or walking
+                # on the carrier concourse.
+                if carrier_jump_moves_player(raw):
                     seeded = self._normalize_event(raw)
                     seeded["type"] = "Location"
                     seeded["startup_catchup"] = True
@@ -459,8 +475,8 @@ class JournalWatcher:
                     "market_id": data.get("MarketID"),
                 }
             }
-        # CarrierJump fires when the player is docked on a carrier that jumps.
-        # Normalize the same location fields so dashboard location logic can reuse them.
+        # CarrierJump replaces the player's location event while aboard a
+        # jumping carrier, including Odyssey concourse/on-foot travel.
         if ev == "CarrierJump":
             return {
                 "type": ev,
@@ -471,6 +487,8 @@ class JournalWatcher:
                     "star_pos": data.get("StarPos"),
                     "star_class": None,  # CarrierJump doesn't carry StarClass
                     "docked": data.get("Docked", False),
+                    "on_foot": data.get("OnFoot", False),
+                    "player_location": carrier_jump_moves_player(data),
                     "body": data.get("Body"),
                     "body_id": data.get("BodyID"),
                 }
@@ -911,9 +929,7 @@ class JournalWatcher:
                             if not active_commander:
                                 continue
 
-                            if ev in ["FSDJump", "Location"] or (
-                                ev == "CarrierJump" and data.get("Docked")
-                            ):
+                            if ev in ["FSDJump", "Location"] or carrier_jump_moves_player(data):
                                 sys_name = data.get("StarSystem")
                                 current_sys_context = sys_name
                                 if sys_name:
