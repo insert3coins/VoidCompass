@@ -263,8 +263,7 @@ class CarrierHUD:
                 row.get("fuel_used_t") for row in route if not row.get("visited")
                 and row.get("fuel_used_t") is not None
             ]
-            source = str(cd.get("expedition_route_source") or "manual").upper()
-            route_text = f"ROUTE: {done}/{len(route)}  |  {source}"
+            route_text = f"ROUTE: {done}/{len(route)}"
             if remaining_fuel_rows:
                 route_text += f"  |  {sum(int(float(value)) for value in remaining_fuel_rows)}T REM"
             rows.append((_truncate(route_text, 45), COLOR_ACCENT if next_route else _OK))

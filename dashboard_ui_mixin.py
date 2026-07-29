@@ -1545,7 +1545,6 @@ class DashboardUIMixin(ThemedWindowMixin):
                     next_burn = next_stop.get("fuel_used_t")
                 projected_fuel = next_stop.get("projected_fuel_t")
                 route_name = carrier.get("route_name") or "Carrier expedition"
-                route_source = str(carrier.get("route_source") or "manual").upper()
                 route_progress = (
                     f"{route_done}/{route_total} STOPS · {route_remaining} REMAINING"
                     if route_total else "NO EXPEDITION ROUTE"
@@ -1555,7 +1554,7 @@ class DashboardUIMixin(ThemedWindowMixin):
                 )
                 if next_burn is not None:
                     distance_text += (" · " if distance_text else "") + f"{int(next_burn):,} T"
-                destination_info = f"{route_name} · {route_source}\n{route_progress}"
+                destination_info = f"{route_name}\n{route_progress}"
                 if projected_fuel is not None:
                     destination_info += f"\nProjected depot after next jump: {int(projected_fuel):,} T"
                 used_capacity = self._dashboard_number(carrier.get("space_used"))
