@@ -311,6 +311,18 @@ def apply_profile_config(config, profile_key=None):
         profile["cockpit_advisor_enabled"] = bool(profile["cockpit_llm_advisor_enabled"])
     if "cockpit_advisor_level" not in profile and profile.get("cockpit_llm_advisor_level"):
         profile["cockpit_advisor_level"] = str(profile["cockpit_llm_advisor_level"])
+    # v5.2.9.2 moved the three shipped shortcuts away from common game/GPU
+    # bindings. Only migrate the exact retired defaults; commander-customised
+    # assignments remain untouched.
+    hotkey_default_migration = {
+        "overlay_hotkey_layout_studio": ("Ctrl+Shift+L", "Ctrl+Alt+Shift+F10"),
+        "overlay_hotkey_toggle_all": ("Ctrl+Shift+O", "Ctrl+Alt+Shift+F11"),
+        "overlay_hotkey_field_bookmark": ("Ctrl+Shift+B", "Ctrl+Alt+Shift+F12"),
+    }
+    for setting, (retired, replacement) in hotkey_default_migration.items():
+        for values in (profile, config):
+            if str(values.get(setting) or "").casefold() == retired.casefold():
+                values[setting] = replacement
     is_initial_profile = len(profiles) <= 1
     config["active_commander_profile"] = key
     config["active_commander_name"] = profile.get("commander_name", config.get("active_commander_name", "Unknown Commander"))
@@ -336,8 +348,8 @@ def apply_profile_config(config, profile_key=None):
         "explore_discovery_filter": "All",
         "explore_expedition_section": "Overview",
         "explore_map_scope": "All History",
-        "overlay_hotkey_layout_studio": "Ctrl+Shift+L",
-        "overlay_hotkey_toggle_all": "Ctrl+Shift+O",
+        "overlay_hotkey_layout_studio": "Ctrl+Alt+Shift+F10",
+        "overlay_hotkey_toggle_all": "Ctrl+Alt+Shift+F11",
         "overlay_hotkey_navigation": "",
         "overlay_hotkey_survey": "",
         "overlay_hotkey_system_info": "",
@@ -346,7 +358,7 @@ def apply_profile_config(config, profile_key=None):
         "overlay_hotkey_carrier": "",
         "overlay_hotkey_prospector": "",
         "overlay_hotkey_colony": "",
-        "overlay_hotkey_field_bookmark": "Ctrl+Shift+B",
+        "overlay_hotkey_field_bookmark": "Ctrl+Alt+Shift+F12",
     }
     bool_defaults = {
         "trade_advanced_tools_visible": False,
@@ -503,8 +515,8 @@ def load_config():
         'overlay_enabled': True,
         'overlay_mouse_passthrough': os.name == 'nt',
         'overlay_hotkeys_enabled': os.name == 'nt',
-        'overlay_hotkey_layout_studio': 'Ctrl+Shift+L',
-        'overlay_hotkey_toggle_all': 'Ctrl+Shift+O',
+        'overlay_hotkey_layout_studio': 'Ctrl+Alt+Shift+F10',
+        'overlay_hotkey_toggle_all': 'Ctrl+Alt+Shift+F11',
         'overlay_hotkey_navigation': '',
         'overlay_hotkey_survey': '',
         'overlay_hotkey_system_info': '',
@@ -513,7 +525,7 @@ def load_config():
         'overlay_hotkey_carrier': '',
         'overlay_hotkey_prospector': '',
         'overlay_hotkey_colony': '',
-        'overlay_hotkey_field_bookmark': 'Ctrl+Shift+B',
+        'overlay_hotkey_field_bookmark': 'Ctrl+Alt+Shift+F12',
         'hud_compact_mode': False,
         'cargo_overlay_enabled': False,
         'carrier_overlay_enabled': False,
