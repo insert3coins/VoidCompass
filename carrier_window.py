@@ -837,8 +837,11 @@ class CarrierWindow(ThemedWindowMixin):
 
     def _next_expedition_system(self):
         for row in self.tracker.carrier_data.get("expedition_route") or []:
-            if isinstance(row, dict) and not row.get("visited"):
-                return row.get("system")
+            if not isinstance(row, dict) or row.get("visited"):
+                continue
+            system = str(row.get("system") or "").strip()
+            if system:
+                return system
         return None
 
     def _copy_next_expedition(self):
@@ -847,6 +850,10 @@ class CarrierWindow(ThemedWindowMixin):
             self.win.clipboard_clear()
             self.win.clipboard_append(system)
             self.expedition_status.config(text=f"COPIED NEXT · {system}", fg=self.UI_OK)
+        else:
+            self.expedition_status.config(
+                text="ROUTE COMPLETE · no pending carrier jumps", fg=self.UI_OK,
+            )
 
     def _copy_selected_expedition(self):
         selected = self.expedition_tree.selection()
@@ -1010,12 +1017,20 @@ class CarrierWindow(ThemedWindowMixin):
             self.expedition_reserve_var.set(str(cd.get("expedition_reserve_fuel") or 0))
         done = sum(1 for row in route if isinstance(row, dict) and row.get("visited"))
         remaining = max(0, len(route) - done)
+        next_pending_index = next(
+            (
+                index for index, row in enumerate(route, start=1)
+                if isinstance(row, dict) and not row.get("visited")
+                and str(row.get("system") or "").strip()
+            ),
+            None,
+        )
         desired_tree_rows = []
         for index, row in enumerate(route, start=1):
             if not isinstance(row, dict):
                 continue
             visited = bool(row.get("visited"))
-            marker = "✓" if visited else "→" if index == done + 1 else str(index)
+            marker = "✓" if visited else "→" if index == next_pending_index else str(index)
             distance = row.get("distance_ly")
             fuel_used = row.get("fuel_used_t")
             fuel_left = row.get("fuel_remaining_t")

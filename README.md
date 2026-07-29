@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.2.9.4**
+**Current version: 5.2.9.5**
 
 Void Compass is a native Windows companion for Elite Dangerous, with a native Linux x86-64 build currently offered for testing. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
 
@@ -65,7 +65,7 @@ Mining now lives inside Specialist Console as the single authoritative workflow.
 
 ### Specialist Console
 
-Specialists remains local and journal-driven. Mining runs track confirmed refinery yield, prospector quality, limpet economics and attributable sales; Combat/AX records observed loadout readiness, ammunition snapshots, claims, damage, synthesis and recent sorties. Carrier Command plots Fleet and Squadron Carrier routes through Spansh, can import an existing Fleet Carrier result URL or job, provides deliberate copy controls for the next or any selected jump, and carries route/fuel progress into the carrier overlay. Its Cargo view combines the exact journal cargo total with an explicitly labelled manual/observed commodity manifest and active market orders. Exobiology keeps body-local samples, manual pins and GeoJSON exports, while selected coordinates are handed to the existing Ground tool for navigation.
+Specialists remains local and journal-driven. Mining runs track confirmed refinery yield, prospector quality, limpet economics and attributable sales; Combat/AX records observed loadout readiness, ammunition snapshots, claims, damage, synthesis and recent sorties. Carrier Command plots Fleet and Squadron Carrier routes through Spansh, can import an existing Fleet Carrier result URL or job, marks journal-confirmed arrivals complete and advances Copy Next to the first pending jump, and carries route/fuel progress into the carrier overlay. Its Cargo view combines the exact journal cargo total with an explicitly labelled manual/observed commodity manifest and active market orders. Exobiology keeps body-local samples, manual pins and GeoJSON exports, while selected coordinates are handed to the existing Ground tool for navigation.
 
 ## Adaptive Command Deck
 

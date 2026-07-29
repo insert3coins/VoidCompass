@@ -374,6 +374,13 @@ class CarrierTracker:
             for k in _PERSIST_KEYS:
                 if k in saved:
                     self.carrier_data[k] = saved[k]
+            # Self-heal a route saved before an arrival was observed by the
+            # UI. The carrier's persisted system is authoritative on reload.
+            route_repaired = bool(self._repair_current_expedition_stop(
+                self.carrier_data.get("system"),
+                self.carrier_data.get("last_updated"),
+                self.carrier_data.get("system_address"),
+            ))
             self._update_status()
             self._prev_status = self.carrier_data["status"]
             logging.info(
@@ -382,6 +389,8 @@ class CarrierTracker:
                 f"@ {self.carrier_data.get('system') or '?'}"
             )
             self._ensure_status_ticker()
+            if route_repaired:
+                self.save_state()
         except Exception as exc:
             logging.warning(f"CarrierTracker: could not load state: {exc}")
 
@@ -616,8 +625,9 @@ class CarrierTracker:
         system = raw.get("StarSystem") or raw.get("SystemName")
         system_address = raw.get("SystemAddress")
         body = raw.get("Body")
+        system_changed = bool(system and system != cd.get("system"))
 
-        if system and system != cd.get("system"):
+        if system_changed:
             if cd.get("system"):
                 cd["previous_system"] = cd["system"]
                 cd["previous_body"] = cd.get("body")
@@ -631,7 +641,6 @@ class CarrierTracker:
             cd["system"] = system
             cd["system_address"] = system_address
             cd["body"] = body
-            self._advance_expedition(system, raw.get("timestamp"))
             cd["jump_destination"] = None
             cd["jump_destination_address"] = None
             cd["jump_body"] = None
@@ -641,6 +650,15 @@ class CarrierTracker:
             cd["body"] = body
         if system_address is not None:
             cd["system_address"] = system_address
+        if system_changed:
+            self._advance_expedition(system, raw.get("timestamp"), system_address)
+        else:
+            # CarrierLocation commonly precedes CarrierJump for one arrival.
+            # Repair an entirely unmarked current stop, but do not let the
+            # second notification consume a later repeated-system waypoint.
+            self._repair_current_expedition_stop(
+                system, raw.get("timestamp"), system_address,
+            )
         return True
 
     def _handle_name_change(self, raw):
@@ -655,16 +673,42 @@ class CarrierTracker:
             self.carrier_data["callsign"] = raw.get("Callsign")
         return True
 
-    def _advance_expedition(self, system, timestamp=None):
-        target = (system or "").strip().lower()
-        if not target:
-            return
+    def _advance_expedition(self, system, timestamp=None, system_address=None):
+        target = " ".join(str(system or "").split()).casefold()
+        target_address = str(system_address) if system_address is not None else None
+        if not target and target_address is None:
+            return None
         route = self.carrier_data.get("expedition_route") or []
         for row in route:
-            if isinstance(row, dict) and str(row.get("system") or "").strip().lower() == target:
+            if not isinstance(row, dict) or row.get("visited"):
+                continue
+            row_target = " ".join(str(row.get("system") or "").split()).casefold()
+            row_address = row.get("id64")
+            address_match = (
+                target_address is not None and row_address is not None
+                and str(row_address) == target_address
+            )
+            if address_match or (target and row_target == target):
                 row["visited"] = True
                 row["visited_at"] = timestamp or _utc_stamp()
-                break
+                return row
+        return None
+
+    def _repair_current_expedition_stop(self, system, timestamp=None, system_address=None):
+        """Mark current stop only when this arrival has no completed match."""
+        target = " ".join(str(system or "").split()).casefold()
+        target_address = str(system_address) if system_address is not None else None
+        for row in self.carrier_data.get("expedition_route") or []:
+            if not isinstance(row, dict) or not row.get("visited"):
+                continue
+            row_target = " ".join(str(row.get("system") or "").split()).casefold()
+            row_address = row.get("id64")
+            if (
+                target_address is not None and row_address is not None
+                and str(row_address) == target_address
+            ) or (target and row_target == target):
+                return None
+        return self._advance_expedition(system, timestamp, system_address)
 
     def set_expedition(self, name, systems, reserve_fuel=200):
         """Persist a manually pasted carrier route."""
@@ -706,7 +750,10 @@ class CarrierTracker:
             self.carrier_data["expedition_reserve_fuel"] = max(0, int(reserve_fuel))
         except Exception:
             self.carrier_data["expedition_reserve_fuel"] = 200
-        self._advance_expedition(self.carrier_data.get("system"))
+        self._repair_current_expedition_stop(
+            self.carrier_data.get("system"),
+            system_address=self.carrier_data.get("system_address"),
+        )
         self.save_state()
         if callable(self.on_updated):
             self.on_updated(self.carrier_data)
@@ -770,6 +817,9 @@ class CarrierTracker:
         cd["expedition_starting_tank_t"] = result.get("starting_tank_t")
         cd["expedition_starting_market_tritium_t"] = result.get("starting_market_tritium_t")
         cd["expedition_starting_load_t"] = result.get("starting_load_t")
+        self._repair_current_expedition_stop(
+            cd.get("system"), system_address=cd.get("system_address"),
+        )
         self.save_state()
         if callable(self.on_updated):
             self.on_updated(self.carrier_data)
