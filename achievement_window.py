@@ -36,6 +36,12 @@ class AchievementWindow(ThemedWindowMixin):
         except Exception:
             return False
 
+    def _post_ui(self, callback, key=None):
+        poster = getattr(self.app, "_ui_post", None)
+        if callable(poster):
+            return poster(callback, key=key)
+        return self.win.after(0, callback)
+
     def _button(self, parent, text, command, accent=False, muted=False):
         return self._action_button(parent, text, command, accent=accent, muted=muted)
 
@@ -675,7 +681,11 @@ class AchievementWindow(ThemedWindowMixin):
 
         def progress(done, total, filename):
             try:
-                self.win.after(0, lambda: self.operation_status.config(text=f"Rebuilding journals\n{done:,} / {total:,} files\n{filename}"))
+                text = f"Rebuilding journals\n{done:,} / {total:,} files\n{filename}"
+                self._post_ui(
+                    lambda value=text: self.operation_status.config(text=value),
+                    key="achievement-rebuild-progress",
+                )
             except Exception:
                 pass
 
@@ -683,7 +693,11 @@ class AchievementWindow(ThemedWindowMixin):
             try:
                 result = self.engine.rebuild_history(journal_dir, progress_callback=progress)
             except Exception as exc:
-                self.win.after(0, lambda: messagebox.showerror("Rebuild failed", str(exc), parent=self.win))
+                message = str(exc)
+                self._post_ui(
+                    lambda value=message: messagebox.showerror("Rebuild failed", value, parent=self.win),
+                    key="achievement-rebuild-result",
+                )
                 return
 
             def complete():
@@ -702,7 +716,7 @@ class AchievementWindow(ThemedWindowMixin):
                     severity="INFO",
                 )
 
-            self.win.after(0, complete)
+            self._post_ui(complete, key="achievement-rebuild-result")
 
         threading.Thread(target=work, name="achievement-history-rebuild", daemon=True).start()
 

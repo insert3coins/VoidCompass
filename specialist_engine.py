@@ -181,9 +181,14 @@ class SpecialistEngine:
 
     def _save(self, immediate=False):
         persistence_queue().submit_json(
-            self.path, self.state, indent=2, delay_s=0.75, immediate=immediate,
+            self.path, indent=2, source=self._persistence_snapshot,
+            delay_s=0.75, immediate=immediate,
         )
         self._dirty = False
+
+    def _persistence_snapshot(self):
+        with self._lock:
+            return copy.deepcopy(self.state)
 
     def flush(self, wait=True):
         with self._lock:
@@ -841,11 +846,23 @@ class SpecialistEngine:
         with self._lock:
             return {"mining": self._mining_snapshot(), "combat": self._combat_snapshot(), "carrier": self._carrier_snapshot(carrier_data), "exobiology": self._exobio_snapshot()}
 
+    def mining_snapshot(self):
+        with self._lock:
+            return self._mining_snapshot()
+
+    def combat_snapshot(self):
+        with self._lock:
+            return self._combat_snapshot()
+
     def carrier_snapshot(self, carrier_data=None):
         """Return only Carrier workflow state without rebuilding every Specialist view."""
         with self._lock:
             return self._carrier_snapshot(carrier_data)
 
+    def exobiology_snapshot(self):
+        with self._lock:
+            return self._exobio_snapshot()
+
     def geojson(self):
-        current = self.snapshot().get("exobiology", {}).get("current_map") or {}
+        current = self.exobiology_snapshot().get("current_map") or {}
         return {"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [row["lon"], row["lat"]]}, "properties": {key: row.get(key) for key in ("id", "kind", "label", "timestamp", "source", "heading", "alt_m")}} for row in current.get("pins") or []], "properties": {"system": current.get("system"), "body": current.get("body"), "radius_m": current.get("radius_m")}}

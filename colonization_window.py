@@ -65,7 +65,7 @@ class ColonizationWindow(ThemedWindowMixin):
     UI_MONO_B = ("Consolas", 10, "bold")
 
     def __init__(self, root, config: dict, projects: dict, save_callback, overlay_callback=None,
-                 cargo_capacity_provider=None, embedded=False):
+                 cargo_capacity_provider=None, embedded=False, ui_post_callback=None):
         """
         projects     – live reference to dashboard's colonisation_projects dict
         save_callback – callable(projects) that persists changes to JSON
@@ -76,6 +76,7 @@ class ColonizationWindow(ThemedWindowMixin):
         self.save_callback = save_callback
         self.overlay_callback = overlay_callback
         self.cargo_capacity_provider = cargo_capacity_provider
+        self.ui_post_callback = ui_post_callback
         self._selected_mid = None
         self._notes_dirty  = False
         self._planner_sources = {}
@@ -106,6 +107,11 @@ class ColonizationWindow(ThemedWindowMixin):
             return bool(self.win and self.win.winfo_exists())
         except Exception:
             return False
+
+    def _post_ui(self, callback, key=None):
+        if callable(self.ui_post_callback):
+            return self.ui_post_callback(callback, key=key)
+        return self.root.after(0, callback)
 
     def lift(self):
         try:
@@ -519,7 +525,10 @@ class ColonizationWindow(ThemedWindowMixin):
                     found[row["commodity"]] = "; ".join(labels) if labels else "No local source"
                 except Exception as exc:
                     found[row["commodity"]] = str(exc)[:80]
-            self.root.after(0, lambda: self._render_planner_sources(found, ref_system))
+            self._post_ui(
+                lambda: self._render_planner_sources(found, ref_system),
+                key="colonisation-planner-sources",
+            )
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_planner_sources(self, found, ref_system):

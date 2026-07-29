@@ -6,7 +6,8 @@ import sqlite3
 import threading
 import time
 
-from config import get_active_profile, get_profile_file
+from config import get_active_profile, get_profile_dir, get_profile_file
+from profile_backups import automatic_backup
 
 SCAN_HISTORY_FILE = "scan_history.json"
 DB_FILE = "exploration_data.db"
@@ -181,6 +182,92 @@ def import_scan_journal_history(db_path, journal_path, commander=None, fid=None)
         conn.close()
 
 
+def scan_single_system_journal_evidence(journal_path, system_name, commander=None, fid=None):
+    """Read only the journal facts needed to repair one system record."""
+    result = {
+        "system": str(system_name or "").strip(), "files": 0, "events": 0,
+        "total": 0, "scanned": 0, "complete": False, "bodies": set(),
+        "latest_timestamp": "",
+    }
+    if not result["system"] or not journal_path or not os.path.isdir(journal_path):
+        return result
+    try:
+        files = sorted(
+            os.path.join(journal_path, name) for name in os.listdir(journal_path)
+            if name.startswith("Journal.") and name.endswith(".log")
+        )
+    except OSError:
+        return result
+    wanted_system = result["system"].casefold()
+    markers = tuple(f'"{event}"' for event in _SCAN_HISTORY_EVENTS)
+    for path in files:
+        active = not bool(commander or fid)
+        context = None
+        matched_file = False
+        try:
+            with open(path, "r", encoding="utf-8", errors="ignore") as handle:
+                for line in handle:
+                    if not any(marker in line for marker in markers):
+                        continue
+                    try:
+                        raw = json.loads(line)
+                    except (ValueError, TypeError):
+                        continue
+                    event = raw.get("event")
+                    if event in ("Commander", "LoadGame"):
+                        active = _journal_commander_matches(raw, commander, fid)
+                        context = None
+                        continue
+                    if not active:
+                        continue
+                    if event in ("Location", "FSDJump") or (event == "CarrierJump" and raw.get("Docked")):
+                        context = raw.get("StarSystem") or context
+                        continue
+                    system = raw.get("SystemName") or raw.get("StarSystem") or context
+                    if str(system or "").casefold() != wanted_system:
+                        continue
+                    matched_file = True
+                    result["events"] += 1
+                    result["latest_timestamp"] = max(
+                        result["latest_timestamp"], str(raw.get("timestamp") or ""),
+                    )
+                    if event == "FSSDiscoveryScan":
+                        count = int(raw.get("BodyCount") or 0)
+                        result["total"] = max(result["total"], count)
+                        try:
+                            complete = float(raw.get("Progress")) >= 1.0
+                        except (TypeError, ValueError):
+                            complete = False
+                        if complete:
+                            result["complete"] = True
+                            result["scanned"] = max(result["scanned"], count)
+                    elif event == "FSSAllBodiesFound":
+                        count = int(raw.get("Count") or raw.get("BodyCount") or 0)
+                        result["total"] = max(result["total"], count)
+                        result["scanned"] = max(result["scanned"], count)
+                        result["complete"] = True
+                    elif event == "NavBeaconScan":
+                        count = int(raw.get("NumBodies") or 0)
+                        result["total"] = max(result["total"], count)
+                        result["scanned"] = max(result["scanned"], count)
+                        result["complete"] = True
+                    elif event == "Scan" and ("StarType" in raw or "PlanetClass" in raw):
+                        try:
+                            result["bodies"].add(int(raw.get("BodyID")))
+                        except (TypeError, ValueError):
+                            pass
+        except OSError:
+            continue
+        if matched_file:
+            result["files"] += 1
+    body_count = len(result["bodies"])
+    result["scanned"] = max(result["scanned"], body_count)
+    result["total"] = max(result["total"], result["scanned"])
+    if result["complete"] and result["total"]:
+        result["scanned"] = result["total"]
+    return result
+
+
 class DashboardDBMixin:
     def _profile_file(self, filename):
         return get_profile_file(get_active_profile(self.config), filename)
@@ -204,6 +291,106 @@ class DashboardDBMixin:
             db_path or getattr(self, "db_path", None),
             journal_path, commander, fid,
         )
+
+    def survey_evidence_snapshot(self, system=None):
+        system = str(system or getattr(self, "current_sys", "") or "Unknown")
+        db = {"total": 0, "scanned": 0, "body ids": 0, "cached body details": 0,
+              "latest cached detail": "-", "journal imports indexed": 0}
+        with self.db_lock:
+            try:
+                row = self.conn.execute(
+                    "SELECT total, scanned_count FROM systems WHERE name=?", (system,),
+                ).fetchone() or (0, 0)
+                db["total"], db["scanned"] = int(row[0] or 0), int(row[1] or 0)
+                db["body ids"] = int(self.conn.execute(
+                    "SELECT COUNT(*) FROM bodies WHERE system_name=?", (system,),
+                ).fetchone()[0] or 0)
+                detail = self.conn.execute(
+                    "SELECT COUNT(*), MAX(ts) FROM scan_hud_items WHERE system_name=?", (system,),
+                ).fetchone() or (0, None)
+                db["cached body details"] = int(detail[0] or 0)
+                db["latest cached detail"] = (
+                    time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(float(detail[1])))
+                    if detail[1] else "-"
+                )
+                db["journal imports indexed"] = int(self.conn.execute(
+                    "SELECT COUNT(*) FROM scan_journal_imports"
+                ).fetchone()[0] or 0)
+            except sqlite3.Error as exc:
+                db["database error"] = str(exc)
+        tracker = getattr(self, "deep_survey", None)
+        deep = tracker.snapshot() if tracker else {}
+        route_rows = [
+            row for row in (deep.get("route_points") or [])
+            if str(row.get("system") or "").casefold() == system.casefold()
+        ]
+        edsm = {}
+        try:
+            cache_path = self._profile_file("exploration_edsm_cache.json")
+            with open(cache_path, "r", encoding="utf-8") as handle:
+                edsm = (json.load(handle) or {}).get(system) or {}
+        except (OSError, ValueError, TypeError):
+            pass
+        return {
+            "system": system,
+            "live_ui": {
+                "scanned": int(getattr(self, "scanned", 0) or 0),
+                "total": int(getattr(self, "total", 0) or 0),
+                "body details": len(getattr(self, "scan_items", []) or []),
+                "navigation progress": getattr(self, "navigation_scan_progress", None),
+                "navigation source": getattr(self, "navigation_scan_progress_source", "-") or "-",
+            },
+            "profile_database": db,
+            "deep_survey": {
+                "route observations": len(route_rows),
+                "latest event": str(route_rows[-1].get("timestamp") or "-") if route_rows else "-",
+            },
+            "edsm_cache": {
+                "record present": bool(edsm),
+                "body count": edsm.get("bodyCount") or edsm.get("bodies") or "-",
+                "estimated value": edsm.get("estimatedValue") or "-",
+                "estimated mapped value": edsm.get("estimatedValueMapped") or "-",
+            },
+            "traffic": dict(getattr(self, "system_traffic", {}) or {}),
+        }
+
+    def repair_system_from_journals(self, system):
+        """Repair one system from authoritative local journals without EDSM activity."""
+        system = str(system or "").strip()
+        evidence = scan_single_system_journal_evidence(
+            self.config.get("journal_path") or getattr(getattr(self, "watcher", None), "journal_path", ""),
+            system, getattr(self, "cmdr_name", None), getattr(self, "cmdr_fid", None),
+        )
+        if not evidence.get("events"):
+            return evidence
+        with self.db_lock:
+            try:
+                old = self.conn.execute(
+                    "SELECT total, scanned_count FROM systems WHERE name=?", (system,),
+                ).fetchone() or (0, 0)
+                for body_id in evidence.get("bodies") or ():
+                    self.conn.execute(
+                        "INSERT OR IGNORE INTO bodies (system_name, body_id) VALUES (?, ?)",
+                        (system, body_id),
+                    )
+                total = max(int(old[0] or 0), int(evidence.get("total") or 0))
+                scanned = max(int(old[1] or 0), int(evidence.get("scanned") or 0))
+                total = max(total, scanned)
+                self.conn.execute(
+                    "INSERT OR REPLACE INTO systems (name, total, scanned_count) VALUES (?, ?, ?)",
+                    (system, total, scanned),
+                )
+                self.conn.commit()
+                evidence["total"], evidence["scanned"] = total, scanned
+            except sqlite3.Error:
+                self.conn.rollback()
+                raise
+        repaired = {"systems": {system}, "files": evidence.get("files", 0)}
+        post = getattr(self, "_ui_post", None)
+        if callable(post):
+            post(self._apply_scan_history_repair, repaired, get_active_profile(self.config),
+                 key=f"system-evidence-repair:{system.casefold()}")
+        return evidence
 
     def init_db(self):
         """Initialize SQLite database and migrate JSON if needed."""
@@ -575,6 +762,17 @@ class DashboardDBMixin:
         edsm_requested = edsm_enabled and bool(upload_history_to_edsm)
         edsm_mode = "EDSM history enabled" if edsm_requested else "local cache only"
         self._cache_rebuild_feed(f"Cache rebuild started · {edsm_mode}.")
+        try:
+            profile_key = get_active_profile(self.config)
+            backup = automatic_backup(
+                profile_key, get_profile_dir(profile_key), reason="before_cache_rebuild", keep=5,
+            )
+            if backup:
+                self._cache_rebuild_feed("Profile safety snapshot ready; scanning journals.")
+        except Exception as exc:
+            self._cache_rebuild_feed(
+                f"Profile safety snapshot skipped: {exc}", severity="WARN",
+            )
 
         last_progress_milestone = -10
 
@@ -659,7 +857,10 @@ class DashboardDBMixin:
                     return
 
             self.load_system_from_db(self.current_sys)
-            self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+            self._ui_post(
+                lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"),
+                key="cache-rebuild-scan-progress",
+            )
             self.update_hud()
 
             if edsm_requested:

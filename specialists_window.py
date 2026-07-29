@@ -61,6 +61,7 @@ class SpecialistsWindow(ThemedWindowMixin):
         self.embedded = embedded
         self._tick_job = None
         self._pin_rows = []
+        self._tree_row_cache = {}
         self.win = window_surface(root, embedded=embedded)
         self.win.title("VOID COMPASS // SPECIALISTS")
         self.win.geometry(self.config.get("specialists_geometry", "1100x760"))
@@ -107,7 +108,8 @@ class SpecialistsWindow(ThemedWindowMixin):
         if not self.is_open():
             return
         if getattr(self.app, "_active_page", None) == "SPECIALISTS":
-            self.refresh()
+            if self._active_section() in {"mining", "combat", "exobiology"}:
+                self.refresh()
             self._schedule_tick()
 
     def _panel(self, parent, title, subtitle=""):
@@ -157,6 +159,17 @@ class SpecialistsWindow(ThemedWindowMixin):
         if children:
             tree.delete(*children)
 
+    def _set_tree_rows(self, tree, rows):
+        """Replace Treeview rows only when their displayed values changed."""
+        rows = tuple(tuple(row) for row in rows)
+        if self._tree_row_cache.get(tree) == rows:
+            return False
+        self._clear(tree)
+        for row in rows:
+            tree.insert("", tk.END, values=row)
+        self._tree_row_cache[tree] = rows
+        return True
+
     def _build(self):
         header = tk.Frame(self.win, bg=THEME.header)
         header.pack(fill=tk.X)
@@ -174,6 +187,13 @@ class SpecialistsWindow(ThemedWindowMixin):
         self.tabs.add(self.combat_page, text="⌁  COMBAT / AX")
         self.tabs.add(self.carrier_page, text="⬢  CARRIER")
         self.tabs.add(self.exobio_page, text="⌾  EXOBIOLOGY")
+        self._tab_sections = {
+            str(self.mining_page): "mining",
+            str(self.combat_page): "combat",
+            str(self.carrier_page): "carrier",
+            str(self.exobio_page): "exobiology",
+        }
+        self.tabs.bind("<<NotebookTabChanged>>", self._on_tab_changed, add="+")
         self._build_mining()
         self._build_combat()
         self._build_carrier()
@@ -192,6 +212,15 @@ class SpecialistsWindow(ThemedWindowMixin):
         page = pages.get(str(section or "").strip().casefold())
         if page is not None:
             self.tabs.select(page)
+
+    def _active_section(self):
+        try:
+            return self._tab_sections.get(str(self.tabs.select()), "mining")
+        except Exception:
+            return "mining"
+
+    def _on_tab_changed(self, _event=None):
+        self.refresh()
 
     def _build_mining(self):
         body = self._panel(self.mining_page, "MINING RUN", "journal-counted yield and attributed sales")
@@ -252,7 +281,7 @@ class SpecialistsWindow(ThemedWindowMixin):
         self.combat_history = self._tree(history, (("when", "Started", 145, "w"), ("kills", "Kills", 60, "e"), ("ax", "AX", 55, "e"), ("claims", "Claims", 110, "e"), ("damage", "Damage", 65, "e"), ("reason", "Ended", 80, "w")), 5)
 
     def _build_carrier(self):
-        overview = self._panel(self.carrier_page, "FLEET CARRIER CONTROL", "owner journal snapshots plus explicit planning inputs")
+        overview = self._panel(self.carrier_page, "CARRIER QUICK-LOOK", "journal status; detailed planning lives in Carrier Command")
         actions = tk.Frame(overview, bg=THEME.panel)
         actions.pack(fill=tk.X, pady=(0, 5))
         self.carrier_identity = tk.Label(actions, text="NO OWNER SNAPSHOT", fg=COLOR_ORANGE, bg=THEME.panel, font=self.UI_MONO_BOLD)
@@ -260,40 +289,19 @@ class SpecialistsWindow(ThemedWindowMixin):
         button(actions, "OPEN FULL CARRIER", self.app.open_carrier_window, muted=True).pack(side=tk.RIGHT)
         self.carrier_message = tk.Label(overview, text="", fg=THEME.muted, bg=THEME.panel, font=self.UI_FONT, anchor="w")
         self.carrier_message.pack(fill=tk.X)
-        self.carrier_metrics = self._metric_grid(overview, ("CARRIER BALANCE", "UPKEEP RESERVE", "RESERVE RUNWAY", "TRITIUM TANK", "CARGO USED", "BUY EXPOSURE"))
+        self.carrier_metrics = self._metric_grid(overview, ("CARRIER BALANCE", "UPKEEP RESERVE", "TRITIUM TANK", "CARGO USED", "ROUTE PROGRESS", "BUY EXPOSURE"))
 
-        forms = tk.Frame(self.carrier_page, bg=THEME.bg)
-        forms.pack(fill=tk.X, padx=10, pady=(8, 0))
-        upkeep = tk.Frame(forms, bg=THEME.panel, highlightbackground=THEME.border, highlightthickness=1)
-        inventory = tk.Frame(forms, bg=THEME.panel, highlightbackground=THEME.border, highlightthickness=1)
-        upkeep.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 4))
-        inventory.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(4, 0))
-        tk.Label(upkeep, text="UPKEEP RUNWAY", fg=COLOR_ORANGE, bg=THEME.panel, font=self.UI_BOLD).pack(anchor="w", padx=8, pady=7)
-        self.carrier_weekly = self._entry_row(upkeep, "Weekly upkeep (cr)")
-        self.carrier_target_weeks = self._entry_row(upkeep, "Reserve target (weeks)", "8")
-        button(upkeep, "SAVE LOCAL INPUT", self._save_carrier_upkeep, accent=True).pack(anchor="w", padx=8, pady=8)
-        self.carrier_upkeep_note = tk.Label(upkeep, text="", fg=THEME.muted, bg=THEME.panel, font=("Segoe UI", 8), justify=tk.LEFT, wraplength=420, anchor="w")
-        self.carrier_upkeep_note.pack(fill=tk.X, padx=8, pady=(0, 8))
-        tk.Label(inventory, text="CARRIER CARGO", fg=COLOR_ORANGE, bg=THEME.panel, font=self.UI_BOLD).pack(anchor="w", padx=8, pady=7)
-        self.carrier_inventory = tk.Text(inventory, height=5, bg=THEME.input, fg=COLOR_TEXT, insertbackground=COLOR_ACCENT, font=self.UI_MONO, relief=tk.FLAT)
-        self.carrier_inventory.pack(fill=tk.BOTH, expand=True, padx=8)
-        button(inventory, "SAVE INVENTORY", self._save_carrier_inventory, accent=True).pack(anchor="w", padx=8, pady=8)
-        self.carrier_inventory_note = tk.Label(inventory, text="", fg=THEME.muted, bg=THEME.panel, font=("Segoe UI", 8), anchor="w")
-        self.carrier_inventory_note.pack(fill=tk.X, padx=8, pady=(0, 8))
+        route = self._panel(self.carrier_page, "EXPEDITION READINESS", "same saved route used by Carrier Command and the carrier overlay")
+        self.carrier_route_result = tk.Label(
+            route, text="No carrier expedition is currently saved.", fg=THEME.muted,
+            bg=THEME.panel, font=self.UI_MONO, justify=tk.LEFT, anchor="w",
+            wraplength=980,
+        )
+        self.carrier_route_result.pack(fill=tk.X)
+        button(route, "PLAN / IMPORT / COPY WAYPOINTS", self.app.open_carrier_window, accent=True).pack(anchor="e", pady=(8, 0))
 
-        route = self._panel(self.carrier_page, "TRITIUM ROUTE", "one line per leg: System | distance ly | optional tritium")
-        self.carrier_route = tk.Text(route, height=4, bg=THEME.input, fg=COLOR_TEXT, insertbackground=COLOR_ACCENT, font=self.UI_MONO, relief=tk.FLAT)
-        self.carrier_route.pack(fill=tk.X)
-        opts = tk.Frame(route, bg=THEME.panel)
-        opts.pack(fill=tk.X, pady=(6, 0))
-        self.carrier_per_jump = self._inline_entry(opts, "Fallback t/jump")
-        self.carrier_reserve = self._inline_entry(opts, "Arrival reserve", "0")
-        button(opts, "CHECK ROUTE", self._save_carrier_route, accent=True).pack(side=tk.RIGHT)
-        self.carrier_route_result = tk.Label(route, text="", fg=THEME.muted, bg=THEME.panel, font=self.UI_MONO, justify=tk.LEFT, anchor="w", wraplength=980)
-        self.carrier_route_result.pack(fill=tk.X, pady=(7, 0))
         orders = self._panel(self.carrier_page, "MARKET ORDERS", "latest owner-side CarrierTradeOrder observations")
         self.carrier_orders = self._tree(orders, (("commodity", "Commodity", 220, "w"), ("side", "Side", 70, "w"), ("quantity", "Quantity", 80, "e"), ("price", "Price", 110, "e"), ("exposure", "Exposure / stock", 140, "e")), 5)
-        self._carrier_forms_seeded = False
 
     def _entry_row(self, parent, label, value=""):
         row = tk.Frame(parent, bg=THEME.panel)
@@ -440,8 +448,8 @@ class SpecialistsWindow(ThemedWindowMixin):
         if not selection:
             return None
         try:
-            return self._pin_rows[int(selection[0])]
-        except (ValueError, IndexError):
+            return self._pin_rows[self.exobio_pins.index(selection[0])]
+        except (tk.TclError, ValueError, IndexError):
             return None
 
     def _send_pin_to_ground(self):
@@ -492,14 +500,20 @@ class SpecialistsWindow(ThemedWindowMixin):
         self.global_status.config(text=f"GEOJSON EXPORTED · {os.path.basename(path)}", fg=COLOR_ACCENT)
 
     # Rendering ------------------------------------------------------
-    def refresh(self):
+    def refresh(self, section=None):
         if not self.is_open():
             return
-        snapshot = self.engine.snapshot(self.app.carrier_tracker.carrier_data)
-        self._render_mining(snapshot["mining"])
-        self._render_combat(snapshot["combat"])
-        self._render_carrier(snapshot["carrier"])
-        self._render_exobio(snapshot["exobiology"])
+        section = section or self._active_section()
+        if section == "mining":
+            self._render_mining(self.engine.mining_snapshot())
+        elif section == "combat":
+            self._render_combat(self.engine.combat_snapshot())
+        elif section == "carrier":
+            self._render_carrier(
+                self.engine.carrier_snapshot(self.app.carrier_tracker.carrier_data)
+            )
+        elif section == "exobiology":
+            self._render_exobio(self.engine.exobiology_snapshot())
 
     def _render_mining(self, mining):
         session = mining.get("session") or {}
@@ -509,17 +523,20 @@ class SpecialistsWindow(ThemedWindowMixin):
         values = {"ELAPSED": _duration(session.get("duration_s")) if session else "—", "REFINED": _num(session.get("refined_t"), " t"), "YIELD RATE": _num(session.get("tons_per_hour"), " t/hr"), "PROSPECTED": _num(session.get("asteroids_prospected")), "CORE CRACKS": _num(session.get("asteroids_cracked")), "RUN REVENUE": _cr(session.get("attributed_revenue_cr")) if session else "—"}
         for key, value in values.items():
             self.mining_metrics[key].config(text=value)
-        self._clear(self.mining_yield)
-        for row in session.get("cargo_yield") or []:
-            self.mining_yield.insert("", tk.END, values=(row.get("name"), _num(row.get("count"), " t"), _num(row.get("cargo_delta"), " t"), _num(row.get("sold_t"), " t")))
-        self._clear(self.mining_targets)
-        for row in session.get("prospected_materials") or []:
-            self.mining_targets.insert("", tk.END, values=(row.get("name"), row.get("sightings"), _num(row.get("best_pct"), "%"), _num(row.get("average_pct"), "%")))
+        self._set_tree_rows(self.mining_yield, (
+            (row.get("name"), _num(row.get("count"), " t"), _num(row.get("cargo_delta"), " t"), _num(row.get("sold_t"), " t"))
+            for row in session.get("cargo_yield") or []
+        ))
+        self._set_tree_rows(self.mining_targets, (
+            (row.get("name"), row.get("sightings"), _num(row.get("best_pct"), "%"), _num(row.get("average_pct"), "%"))
+            for row in session.get("prospected_materials") or []
+        ))
         limpets = session.get("limpets") or {}
         self.mining_limpets.config(text=f"Prospectors used: {_num(limpets.get('prospectors_used'))}    Collectors launched: {_num(limpets.get('collectors_launched'))}    Estimated used: {_num(limpets.get('estimated_used'))}    Remaining: {_num(limpets.get('remaining'))}\nCost / tonne: {_cr(limpets.get('cost_per_tonne_cr')) if limpets.get('cost_per_tonne_cr') is not None else '—'} ({limpets.get('cost_source') or 'purchase price not observed'})    Net after limpet cash: {_cr(session.get('net_after_limpet_cash_cr')) if session else '—'}")
-        self._clear(self.mining_history)
-        for row in mining.get("history") or []:
-            self.mining_history.insert("", tk.END, values=(self._stamp(row.get("started_ts")), row.get("system") or "—", _num(sum((item or {}).get("count", 0) for item in (row.get("refined") or {}).values()), " t"), row.get("asteroids_prospected", 0), _human(row.get("end_reason"))))
+        self._set_tree_rows(self.mining_history, (
+            (self._stamp(row.get("started_ts")), row.get("system") or "—", _num(sum((item or {}).get("count", 0) for item in (row.get("refined") or {}).values()), " t"), row.get("asteroids_prospected", 0), _human(row.get("end_reason")))
+            for row in mining.get("history") or []
+        ))
 
     def _render_combat(self, combat):
         readiness = combat.get("readiness") or {}
@@ -528,9 +545,10 @@ class SpecialistsWindow(ThemedWindowMixin):
         self.combat_score.config(text=f"{readiness.get('score', 0)} / 100")
         labels = (("ax_weapons", "AX weapons"), ("heat_sinks", "Heat sinks"), ("xeno_scanners", "Xeno scanner"), ("flak", "Remote-release flak"), ("shutdown_neutralisers", "Shutdown neutraliser"), ("caustic_sinks", "Caustic sinks"), ("repair_or_decon", "Repair / decon limpets"), ("hull_reinforcement", "Hull reinforcement"), ("module_reinforcement", "Module reinforcement"))
         self.combat_checklist.config(text="    ".join(("✓" if readiness.get("checklist", {}).get(key) else "—") + " " + label for key, label in labels))
-        self._clear(self.combat_ammo)
-        for row in (readiness.get("ammo") or {}).get("by_module") or []:
-            self.combat_ammo.insert("", tk.END, values=(_human(row.get("item")), row.get("slot") or "—", row.get("clip", 0), row.get("hopper", 0), row.get("total", 0)))
+        self._set_tree_rows(self.combat_ammo, (
+            (_human(row.get("item")), row.get("slot") or "—", row.get("clip", 0), row.get("hopper", 0), row.get("total", 0))
+            for row in (readiness.get("ammo") or {}).get("by_module") or []
+        ))
         session = combat.get("session") or {}
         active = bool(combat.get("active"))
         self.combat_state.config(text="SESSION ACTIVE" if active else "LAST SESSION" if session else "IDLE", fg=COLOR_ACCENT if active else THEME.muted)
@@ -543,9 +561,10 @@ class SpecialistsWindow(ThemedWindowMixin):
         ax = ", ".join(f"{_human(key)} ×{value}" for key, value in (session.get("ax_kills_by_type") or {}).items()) or "No AX kills in this session"
         synth = ", ".join(f"{_human(key)} ×{value}" for key, value in (session.get("synthesis") or {}).items()) or "No combat synthesis in this session"
         self.combat_detail.config(text=f"AX KILLS BY TYPE  //  {ax}\nSYNTHESIS USED   //  {synth}")
-        self._clear(self.combat_history)
-        for row in combat.get("history") or []:
-            self.combat_history.insert("", tk.END, values=(self._stamp(row.get("started_ts")), row.get("kills", 0), row.get("ax_kills", 0), _cr(row.get("bounty_cr", 0) + row.get("bond_cr", 0)), row.get("damage_events", 0), _human(row.get("end_reason"))))
+        self._set_tree_rows(self.combat_history, (
+            (self._stamp(row.get("started_ts")), row.get("kills", 0), row.get("ax_kills", 0), _cr(row.get("bounty_cr", 0) + row.get("bond_cr", 0)), row.get("damage_events", 0), _human(row.get("end_reason")))
+            for row in combat.get("history") or []
+        ))
 
     def _render_carrier(self, workflow):
         cd, upkeep, route, orders = workflow.get("carrier") or {}, workflow.get("upkeep") or {}, workflow.get("route") or {}, workflow.get("orders") or {}
@@ -555,34 +574,38 @@ class SpecialistsWindow(ThemedWindowMixin):
             identity += f" · {cd['callsign']}"
         self.carrier_identity.config(text=identity if observed else "NO OWNER SNAPSHOT")
         self.carrier_message.config(text=f"{cd.get('system') or 'Location not observed'} · {cd.get('body') or 'body not observed'} · {cd.get('docking_access') or 'access unknown'}" if observed else "Open Carrier Management in game to supply an authoritative status snapshot.")
-        metrics = {"CARRIER BALANCE": _cr(cd.get("balance")) if cd.get("balance") is not None else "—", "UPKEEP RESERVE": _cr(cd.get("reserve_balance")) if cd.get("reserve_balance") is not None else "—", "RESERVE RUNWAY": _num(upkeep.get("reserve_weeks"), " wk"), "TRITIUM TANK": _num(cd.get("fuel_level"), " t"), "CARGO USED": f"{_num(cd.get('space_cargo'))} / {_num(cd.get('space_total'))} t" if cd.get("space_total") is not None else "—", "BUY EXPOSURE": _cr(orders.get("buy_order_exposure_cr"))}
+        expedition = [row for row in cd.get("expedition_route") or [] if isinstance(row, dict)]
+        visited = sum(1 for row in expedition if row.get("visited"))
+        metrics = {"CARRIER BALANCE": _cr(cd.get("balance")) if cd.get("balance") is not None else "—", "UPKEEP RESERVE": _cr(cd.get("reserve_balance")) if cd.get("reserve_balance") is not None else "—", "TRITIUM TANK": _num(cd.get("fuel_level"), " t"), "CARGO USED": f"{_num(cd.get('space_cargo'))} / {_num(cd.get('space_total'))} t" if cd.get("space_total") is not None else "—", "ROUTE PROGRESS": f"{visited} / {len(expedition)}" if expedition else "NO ROUTE", "BUY EXPOSURE": _cr(orders.get("buy_order_exposure_cr"))}
         for key, value in metrics.items():
             self.carrier_metrics[key].config(text=value)
-        if not self._carrier_forms_seeded:
-            if upkeep.get("weekly_cr") is not None:
-                self.carrier_weekly.insert(0, str(upkeep["weekly_cr"]))
-            self.carrier_target_weeks.delete(0, tk.END)
-            self.carrier_target_weeks.insert(0, str(upkeep.get("target_weeks", 8)))
-            inventory = workflow.get("inventory") or {}
-            self.carrier_inventory.insert("1.0", "\n".join(f"{row.get('name') or _human(key)} | {row.get('count', 0)}" for key, row in inventory.items()))
-            self.carrier_route.insert("1.0", "\n".join(f"{row.get('system', '')} | {row.get('distance_ly', '')} | {'' if row.get('tritium_t') is None else row.get('tritium_t')}" for row in route.get("legs") or []))
-            if route.get("tritium_per_jump_t") is not None:
-                self.carrier_per_jump.insert(0, str(route.get("tritium_per_jump_t")))
-            self.carrier_reserve.delete(0, tk.END)
-            self.carrier_reserve.insert(0, str(route.get("reserve_t", 0)))
-            self._carrier_forms_seeded = True
-        shortfall = upkeep.get("target_shortfall_cr") or 0
-        self.carrier_upkeep_note.config(text="Weekly upkeep is an explicit local input; the journal does not reliably provide it." if upkeep.get("weekly_cr") is None else f"{_cr(upkeep.get('weekly_cr'))} / week · {upkeep.get('target_weeks')} week target" + (f" · {_cr(shortfall)} short" if shortfall else " · target covered"))
-        self.carrier_inventory_note.config(text=f"Source: {workflow.get('inventory_source') or 'not supplied'}")
-        issues = " · ".join(f"Leg {row.get('leg')}: {row.get('reason')}" for row in route.get("issues") or [])
-        self.carrier_route_result.config(text="Add exact route legs to check range and tritium coverage." if not route.get("leg_count") else f"{route.get('leg_count')} legs · {_num(route.get('total_distance_ly'), ' ly')} · {_num(route.get('tritium_required_t'), ' t')} required · {_num(route.get('available_t'), ' t')} available" + (f" · {_num(route.get('deficit_t'), ' t')} deficit" if route.get("deficit_t") else "") + f" · source: {route.get('tritium_source')}" + (f" · {issues}" if issues else ""), fg=COLOR_ACCENT if route.get("valid") and not route.get("deficit_t") else COLOR_ORANGE)
-        self._clear(self.carrier_orders)
+        remaining = max(0, len(expedition) - visited)
+        fuel_required = cd.get("expedition_fuel_required_t")
+        reserve = cd.get("expedition_reserve_fuel")
+        route_name = cd.get("expedition_name") or "Carrier expedition"
+        source = str(cd.get("expedition_route_source") or "manual").upper()
+        if expedition:
+            fuel_text = f" · {_num(fuel_required, ' t')} plotted fuel" if fuel_required is not None else " · fuel estimate pending"
+            reserve_text = f" · {_num(reserve, ' t')} reserve" if reserve is not None else ""
+            next_system = next((row.get("system") for row in expedition if not row.get("visited")), None)
+            self.carrier_route_result.config(
+                text=f"{route_name} · {visited}/{len(expedition)} complete · {remaining} remaining{fuel_text}{reserve_text}\n"
+                     f"Next: {next_system or 'route complete'} · source {source}",
+                fg=COLOR_ACCENT if not remaining else COLOR_TEXT,
+            )
+        else:
+            self.carrier_route_result.config(
+                text="No carrier expedition is currently saved. Open Carrier Command to plot with Spansh, import a result, or paste a route.",
+                fg=THEME.muted,
+            )
+        order_rows = []
         for row in orders.get("items") or []:
             exposure = row.get("quantity", 0) * row.get("price_cr", 0) if row.get("side") == "buy" else row.get("quantity", 0)
             commodity = row.get("name") or "—"
             if row.get("black_market"):
                 commodity += "  [BLACK MARKET]"
-            self.carrier_orders.insert("", tk.END, values=(commodity, str(row.get("side") or "").upper(), _num(row.get("quantity"), " t"), _cr(row.get("price_cr")), _cr(exposure) if row.get("side") == "buy" else _num(exposure, " t stock")))
+            order_rows.append((commodity, str(row.get("side") or "").upper(), _num(row.get("quantity"), " t"), _cr(row.get("price_cr")), _cr(exposure) if row.get("side") == "buy" else _num(exposure, " t stock")))
+        self._set_tree_rows(self.carrier_orders, order_rows)
 
     def _render_exobio(self, workflow):
         position, current = workflow.get("position") or {}, workflow.get("current_map") or {}
@@ -596,13 +619,15 @@ class SpecialistsWindow(ThemedWindowMixin):
             self.exobio_sampling.config(text=f"GENETIC SAMPLER  //  {sample.get('species') or sample.get('variant') or sample.get('genus') or 'Organism'}  ·  SAMPLE {sample.get('progress', 0)}/3  ·  {clearance}")
         else:
             self.exobio_sampling.config(text="GENETIC SAMPLER  //  NO ORGANISM IN PROGRESS")
-        self._clear(self.exobio_pins)
         self._pin_rows = list(current.get("pins") or [])
-        for index, row in enumerate(self._pin_rows):
-            self.exobio_pins.insert("", tk.END, iid=str(index), values=(row.get("label") or _human(row.get("kind")), _human(row.get("kind")), _num(row.get("distance_m"), " m"), _num(row.get("bearing_deg"), "°"), row.get("source") or "journal"))
-        self._clear(self.exobio_surveys)
-        for row in workflow.get("surveys") or []:
-            self.exobio_surveys.insert("", tk.END, values=(row.get("system") or "—", row.get("body") or "—", row.get("pins", 0), row.get("completed", 0)))
+        self._set_tree_rows(self.exobio_pins, (
+            (row.get("label") or _human(row.get("kind")), _human(row.get("kind")), _num(row.get("distance_m"), " m"), _num(row.get("bearing_deg"), "°"), row.get("source") or "journal")
+            for row in self._pin_rows
+        ))
+        self._set_tree_rows(self.exobio_surveys, (
+            (row.get("system") or "—", row.get("body") or "—", row.get("pins", 0), row.get("completed", 0))
+            for row in workflow.get("surveys") or []
+        ))
 
     @staticmethod
     def _stamp(value):

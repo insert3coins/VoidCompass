@@ -35,7 +35,8 @@ class RoutePlotter(ThemedWindowMixin):
                  manager=None, on_change_callback=None, event_callback=None, embedded=False,
                  navigation_state_callback=None, copy_waypoint_callback=None,
                  is_active_callback=None, compact=False, flat_navigation=False,
-                 section_change_callback=None, persist_config_callback=None):
+                 section_change_callback=None, persist_config_callback=None,
+                 ui_post_callback=None):
         self.root = root
         self.edsm = edsm_handler
         self.manager = manager if manager else WaypointManager()
@@ -51,6 +52,7 @@ class RoutePlotter(ThemedWindowMixin):
         self.flat_navigation = bool(flat_navigation)
         self.section_change_callback = section_change_callback
         self.persist_config_callback = persist_config_callback
+        self.ui_post_callback = ui_post_callback
         self._flat_sections = []
         self._flat_nav_buttons = {}
         self.route_refresh_running = False
@@ -231,6 +233,12 @@ class RoutePlotter(ThemedWindowMixin):
         tk.Label(game, text="LIVE ELITE ROUTE", font=("Courier", 10, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL, anchor="w").pack(fill=tk.X, padx=10, pady=(9, 2))
         self.game_route_detail = tk.Label(game, text="NavRoute.json has no active route", font=("Courier", 8), fg="#999", bg=COLOR_PANEL, anchor="w")
         self.game_route_detail.pack(fill=tk.X, padx=10, pady=(0, 6))
+        self.game_route_safety = tk.Label(
+            game, text="ROUTE SAFETY · awaiting a plotted route",
+            font=("Courier", 8, "bold"), fg=THEME.muted, bg=COLOR_PANEL,
+            anchor="w", justify=tk.LEFT, wraplength=470,
+        )
+        self.game_route_safety.pack(fill=tk.X, padx=10, pady=(0, 6))
         game_list_frame = tk.Frame(game, bg=COLOR_PANEL)
         game_list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
         self.game_route_list = tk.Listbox(game_list_frame, bg="#050505", fg=COLOR_TEXT, font=("Courier", 9), relief=tk.FLAT, highlightthickness=1, highlightbackground="#333", selectbackground=COLOR_ACCENT, selectforeground="black", activestyle="none")
@@ -326,6 +334,18 @@ class RoutePlotter(ThemedWindowMixin):
             remaining_bits.append(f"{values['remaining_distance']:,.0f} ly")
         self.overview_metrics["REMAINING"].config(text=" / ".join(remaining_bits) or "-")
         self.overview_source_lbl.config(text=f"COPY NEXT SOURCE: {values['source']}")
+        safety = values["state"].get("safety") or {}
+        safety_colour = {
+            "ok": THEME.green, "warn": COLOR_ORANGE,
+            "alert": THEME.red, "info": THEME.yellow,
+        }.get(safety.get("level"), THEME.muted)
+        self.game_route_safety.config(
+            text=(
+                f"ROUTE SAFETY · {safety.get('headline')}\n{safety.get('detail')}"
+                if safety else "ROUTE SAFETY · fuel evidence unavailable"
+            ),
+            fg=safety_colour,
+        )
 
         self.game_route_list.delete(0, tk.END)
         if route:
@@ -631,9 +651,9 @@ class RoutePlotter(ThemedWindowMixin):
         def worker():
             try:
                 route = self._spansh_neutron_route(from_system, to_system, jump_range, efficiency, supercharge_multiplier)
-                self.root.after(0, lambda: self._on_neutron_route_ready(route))
+                self._run_on_ui(lambda: self._on_neutron_route_ready(route))
             except Exception as exc:
-                self.root.after(0, lambda e=exc: self._on_neutron_route_error(e))
+                self._run_on_ui(lambda e=exc: self._on_neutron_route_error(e))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -795,7 +815,9 @@ class RoutePlotter(ThemedWindowMixin):
         return selected[0] if selected else None
 
     def _run_on_ui(self, fn):
-        self.root.after(0, fn)
+        if callable(self.ui_post_callback):
+            return self.ui_post_callback(fn)
+        return self.root.after(0, fn)
 
     def get_selected_indices(self):
         try:

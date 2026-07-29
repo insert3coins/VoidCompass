@@ -37,6 +37,12 @@ class AnalyticsWindow(ThemedWindowMixin):
         except Exception:
             return False
 
+    def _post_ui(self, callback, key=None):
+        poster = getattr(self.app, "_ui_post", None)
+        if callable(poster):
+            return poster(callback, key=key)
+        return self.root.after(0, callback)
+
     def _on_close(self):
         self._request_id += 1
         if self._tick_job is not None:
@@ -240,9 +246,15 @@ class AnalyticsWindow(ThemedWindowMixin):
         def worker():
             try:
                 data = marketdb.trade_analytics(days)
-                self.root.after(0, lambda: self._render_history(data, days, request_id, profile))
+                self._post_ui(
+                    lambda: self._render_history(data, days, request_id, profile),
+                    key="analytics-history",
+                )
             except Exception as exc:
-                self.root.after(0, lambda: self._render_error(str(exc), request_id, profile))
+                self._post_ui(
+                    lambda: self._render_error(str(exc), request_id, profile),
+                    key="analytics-history",
+                )
 
         threading.Thread(target=worker, name="commander-analytics", daemon=True).start()
 

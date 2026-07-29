@@ -124,7 +124,7 @@ class EngineerWindow(ThemedWindowMixin):
     def __init__(self, root, config: dict, materials: dict, save_callback,
                  get_current_system=None, get_current_coords=None,
                  plot_system_callback=None, is_active_callback=None,
-                 embedded=False):
+                 embedded=False, ui_post_callback=None):
         self.root          = root
         self.config        = config
         self.materials     = materials
@@ -133,6 +133,7 @@ class EngineerWindow(ThemedWindowMixin):
         self.get_current_coords = get_current_coords or (lambda: None)
         self.plot_system_callback = plot_system_callback
         self.is_active_callback = is_active_callback
+        self.ui_post_callback = ui_post_callback
         self._active_tab   = "command"
         self._row_meta = {}
         self._selected_engineer = None
@@ -163,6 +164,11 @@ class EngineerWindow(ThemedWindowMixin):
             return bool(self.win and self.win.winfo_exists())
         except Exception:
             return False
+
+    def _post_ui(self, callback, key=None):
+        if callable(self.ui_post_callback):
+            return self.ui_post_callback(callback, key=key)
+        return self.win.after(0, callback)
 
     def lift(self):
         try:
@@ -1317,10 +1323,10 @@ class EngineerWindow(ThemedWindowMixin):
                 for kind in ("raw", "manufactured", "encoded"):
                     rows = spansh.material_traders(system, kind, size=1, coords=coords)
                     found.append((kind, rows[0] if rows else None))
-                self.win.after(0, lambda: self._show_traders(found))
+                self._post_ui(lambda: self._show_traders(found), key="engineer-traders")
             except Exception as exc:
                 message = str(exc)
-                self.win.after(0, lambda msg=message: self._trader_failed(msg))
+                self._post_ui(lambda msg=message: self._trader_failed(msg), key="engineer-traders")
 
         threading.Thread(target=worker, daemon=True).start()
 

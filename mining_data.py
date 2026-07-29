@@ -10,6 +10,16 @@ MINING_DB_FILE = "mining_data.db"
 SPANSH_BODIES_SEARCH_URL = "https://spansh.co.uk/api/bodies/search"
 SPANSH_STATIONS_SEARCH_URL = "https://spansh.co.uk/api/stations/search"
 
+MINING_MATERIALS = {
+    "Alexandrite", "Bauxite", "Benitoite", "Bertrandite", "Bromellite",
+    "Cobalt", "Coltan", "Gallite", "Gold", "Grandidierite", "Indite",
+    "Lepidolite", "Lithium Hydroxide", "Low Temperature Diamonds",
+    "Methanol Monohydrate Crystals", "Monazite", "Musgravite", "Osmium",
+    "Painite", "Palladium", "Platinum", "Praseodymium", "Rhodplumsite",
+    "Rutile", "Samarium", "Serendibite", "Silver", "Tritium", "Uraninite",
+    "Void Opals",
+}
+
 SPANSH_COMMODITY_MAP = {
     "Void Opals": "Void Opal",
     "Low Temperature Diamonds": "Low Temperature Diamond",

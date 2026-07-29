@@ -2963,21 +2963,43 @@ class DashboardUIMixin(ThemedWindowMixin):
         ts_txt = datetime.fromtimestamp(row.get("ts", time.time())).strftime("%H:%M:%S")
         return f"{ts_txt}   {row.get('tag', 'INFO'):<9}  {row.get('message', '')}"
 
-    def _recolor_event_feed_rows(self):
+    def _recolor_event_feed_rows(self, force=False):
         if not hasattr(self, "event_feed_list"):
             return
+        rows = list(getattr(self, "event_feed_view", []))
+        selected_idx = getattr(self, "event_feed_selected_idx", None)
+        fingerprint = tuple(
+            (self._event_feed_row_color(row), idx == selected_idx)
+            for idx, row in enumerate(rows)
+        )
+        if not force and fingerprint == getattr(self, "_event_feed_color_fingerprint", None):
+            return
+
         self.event_feed_list.config(state=tk.NORMAL)
-        for idx in range(max(self.event_feed_display_limit, len(getattr(self, "event_feed_view", []))) + 1):
-            self.event_feed_list.tag_remove(f"event_row_{idx}", "1.0", tk.END)
-        for idx, row in enumerate(getattr(self, "event_feed_view", [])):
-            tag = f"event_row_{idx}"
-            self.event_feed_list.tag_add(tag, f"{idx + 1}.0", f"{idx + 2}.0")
-            selected = idx == getattr(self, "event_feed_selected_idx", None)
-            self.event_feed_list.tag_config(
-                tag,
-                foreground=self._event_feed_row_color(row),
-                background=self.UI_PANEL_2 if selected else "#0b0f13",
-            )
+        old_tags = set(getattr(self, "_event_feed_style_tags", set()))
+        for tag in old_tags:
+            self.event_feed_list.tag_remove(tag, "1.0", tk.END)
+
+        style_tags = set()
+        configured = set(getattr(self, "_event_feed_configured_tags", set()))
+        for idx, (color, selected) in enumerate(fingerprint):
+            color_tag = f"event_fg_{color.lstrip('#').casefold()}"
+            if color_tag not in configured:
+                self.event_feed_list.tag_config(color_tag, foreground=color)
+                configured.add(color_tag)
+            self.event_feed_list.tag_add(color_tag, f"{idx + 1}.0", f"{idx + 2}.0")
+            style_tags.add(color_tag)
+            if selected:
+                selected_tag = "event_feed_selected"
+                if selected_tag not in configured:
+                    self.event_feed_list.tag_config(selected_tag, background=self.UI_PANEL_2)
+                    configured.add(selected_tag)
+                self.event_feed_list.tag_add(selected_tag, f"{idx + 1}.0", f"{idx + 2}.0")
+                self.event_feed_list.tag_raise(selected_tag)
+                style_tags.add(selected_tag)
+        self._event_feed_style_tags = style_tags
+        self._event_feed_configured_tags = configured
+        self._event_feed_color_fingerprint = fingerprint
         self.event_feed_list.config(state=tk.DISABLED)
 
     def _event_feed_delete_rows(self, start_idx, end_idx):
@@ -3044,7 +3066,10 @@ class DashboardUIMixin(ThemedWindowMixin):
 
         self.event_feed_view = rows
         self._event_feed_render_lines = lines
-        self._recolor_event_feed_rows()
+        # Newly inserted text needs tags even when its semantic colours happen
+        # to match the preceding view.
+        self._event_feed_color_fingerprint = None
+        self._recolor_event_feed_rows(force=True)
 
     def _select_event_feed_line(self, event):
         if not hasattr(self, "event_feed_list"):
@@ -3433,7 +3458,10 @@ class DashboardUIMixin(ThemedWindowMixin):
             txt = self.dest_name
         
         if not self.batch_mode and self._widget_alive(getattr(self, "nav_stat", None)):
-            self.root.after(0, lambda: self.nav_stat.config(text=txt))
+            self._ui_post(
+                lambda value=txt: self.nav_stat.config(text=value),
+                key="dashboard-nav-label",
+            )
 
     def _current_route_progress(self):
         """Return compact, truthful progress for the live route or saved waypoints."""
@@ -4048,6 +4076,9 @@ class DashboardUIMixin(ThemedWindowMixin):
 
     def update_dashboard_ui(self):
         """Force update full dashboard, including waypoint panel."""
+        if threading.current_thread() is not threading.main_thread():
+            self._ui_post(self.update_dashboard_ui, key="dashboard-full-refresh")
+            return
         if getattr(self, "_startup_restore_active", False):
             self._startup_restore_ui_pending = True
             self.dashboard_refresh_full_pending = True
@@ -4151,6 +4182,9 @@ class DashboardUIMixin(ThemedWindowMixin):
     def update_waypoint_display(self):
         # Route Plotter uses this same manager and callback. Refresh the
         # Dashboard progress immediately as routes are imported, edited, or cleared.
+        if threading.current_thread() is not threading.main_thread():
+            self._ui_post(self.update_waypoint_display, key="waypoint-display")
+            return
         if getattr(self, "_startup_restore_active", False):
             self._startup_restore_ui_pending = True
             return
@@ -4209,7 +4243,7 @@ class DashboardUIMixin(ThemedWindowMixin):
                         self.waypoint_cache[name] = data
                     else:
                         self.waypoint_cache[name] = {"error": True}
-                    self.root.after(0, self.update_waypoint_display)
+                    self._ui_post(self.update_waypoint_display, key="waypoint-display")
                 self.edsm.fetch_system_details(name, cb)
             
             # Format Info String

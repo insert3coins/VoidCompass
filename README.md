@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.2.8.2**
+**Current version: 5.2.9**
 
 Void Compass is a native Windows companion for Elite Dangerous, with a native Linux x86-64 build currently offered for testing. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
 
@@ -32,12 +32,12 @@ Every group starts expanded, can be collapsed deliberately, remembers that choic
 
 Explore integrates profile-local Deep Survey intelligence directly into its four workflow pages, built from Frontier journal facts:
 
-- **System Survey** combines the current body list, explainable FSS/DSS/biology completion matrix, ranked action queue, architecture, stellar wonders and Colonisation Recon in one filterable view.
+- **System Survey** combines the current body list, explainable FSS/DSS/biology completion matrix, ranked action queue, architecture, stellar wonders and Colonisation Recon in one filterable view. Its evidence inspector compares live, profile-database, Deep Survey, cached EDSM and traffic facts and can repair only the selected system from local journals without triggering uploads.
 - **Expedition** uses one compact section switcher for route overview, waypoints, neutron planning, named Mission Control, and an interactive Elite-style 3D galaxy map with route intelligence.
 - **Discoveries** is one searchable archive for system history, valuable bodies, all 42 passport regions, Codex discoveries, FSS signals, DSS probe efficiency and screenshot metadata; image previews load only when selected, while system records can be copied or opened directly in EDSM.
-- **Logbook** places the live trip summary, reliable resume checkpoint, automatic milestones and retained session debriefs together instead of separating them across Chronicle tabs, and can copy or save a shareable Markdown Expedition Report.
+- **Logbook** places the live trip summary, reliable resume checkpoint, automatic milestones and retained session debriefs together instead of separating them across Chronicle tabs. Its Explorer Data Vault separates unsold cartographic value, biological value and possible first-discovery bonus from recent sale evidence, while reports can be saved as Markdown or a themed local PNG share card.
 
-Named expeditions persist across sessions with journal-verified goals, multi-session statistics, prioritised bookmarks and revisit targets. Their active strip remains visible across Explore, while Compass can brief the next objective and announce verified completion without routine feed spam. The map combines the complete 42-region Universal Cartographics layout with an original procedurally generated, theme-aware Milky Way disc, including stellar arms, central glow and dust lanes. It works fully offline, supports natural orbit, pan, cursor-centred zoom, five camera presets and an in-place full-window focus mode, and overlays scoped actual breadcrumbs, a planned route, direction arrows, an optional return trail plus Valuable, Biology, Codex, Photo, Recon and Bookmark records. Cached detail levels keep live map movement responsive, while expedition plans can be exchanged as VoidCompass JSON or newline waypoint lists and full locally generated Markdown reports include the named route, objectives, evidence and bookmarks.
+Named expeditions persist across sessions with journal-verified goals, multi-session statistics, prioritised bookmarks and revisit targets. Departing a system can add worthwhile unfinished mapping, biology or FSS evidence to the Missed Discoveries queue, which links directly to its Revisit map layer and expedition bookmarks. Their active strip remains visible across Explore, while Compass can brief the next objective and announce verified completion without routine feed spam. The map combines the complete 42-region Universal Cartographics layout with an original procedurally generated, theme-aware Milky Way disc, including stellar arms, central glow and dust lanes. It works fully offline, supports natural orbit, pan, cursor-centred zoom, five camera presets and an in-place full-window focus mode, and overlays scoped actual breadcrumbs, a planned route, direction arrows, an optional return trail plus Valuable, Biology, Codex, Photo, Recon, Revisit and Bookmark records. Cached detail levels keep live map movement responsive, while expedition plans can be exchanged as VoidCompass JSON or newline waypoint lists and full locally generated Markdown reports include the named route, objectives, evidence and bookmarks.
 
 ![Void Compass expedition Galaxy Map](GalaxyMap.PNG)
 
@@ -83,13 +83,17 @@ Every overlay can be enabled independently, dragged to a saved position and styl
 - Gravity, touchdown/liftoff, on-foot and other low-noise safety notifications.
 - Toast notifications and the journal/Compass heartbeat pulse.
 
-On Windows, profile-aware global shortcuts can temporarily hide or restore all overlays while Elite has focus, with optional individual shortcuts for the main exploration and operations overlays. The default master shortcut is **Ctrl+Shift+O**; assignments can be changed or cleared in **Settings → Overlays** without changing which modules are enabled. Linux X11/XWayland builds retain borderless topmost overlays with opaque themed backgrounds; chroma transparency, mouse passthrough and system-wide shortcuts remain Windows-only.
+**Settings → Overlays → Arrange Overlays** opens a live layout studio with edge/alignment snapping, sensible resets and named commander-specific presets. Application scale, overlay text scale and reduced motion are independently configurable under **Settings → Core → Accessibility**.
+
+On Windows, profile-aware global shortcuts can temporarily hide or restore all overlays while Elite has focus, with optional individual shortcuts for the main exploration and operations overlays. The default master shortcut is **Ctrl+Shift+O**, and **Ctrl+Shift+B** saves a field bookmark at the current system/body; assignments can be changed or cleared in **Settings → Overlays** without changing which modules are enabled. Linux X11/XWayland builds retain borderless topmost overlays with opaque themed backgrounds; chroma transparency, mouse passthrough and system-wide shortcuts remain Windows-only.
 
 ![Navigation HUD](NavHud.PNG)
 
 ## Achievements and commander profiles
 
 Achievement progress, companion memory, named expeditions, bookmarks, Captain's Log, Deep Survey history, carrier state, engineering plans, mining history, routes and integration settings are separated by commander profile. The active commander is detected from the journal and can be changed without mixing personal data.
+
+Commander Record can create SQLite-safe manual profile backups and schedule a restore for the next application start. VoidCompass also retains five rotating internal safety snapshots before version changes and cache rebuilds; a restore first preserves the replaced profile as a rollback snapshot.
 
 ![Native Achievement Centre](Achievements.PNG)
 

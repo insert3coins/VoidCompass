@@ -67,6 +67,7 @@ class TacticalHUD:
         self._mouse_down = None
         self._mouse_dragging = False
         self._save_job = None
+        self._last_render_fingerprint = None
         self._anim_interval_ms = int(self.config.get("hud_anim_interval_ms", 100) or 100)
         if self._anim_interval_ms < 80:
             self._anim_interval_ms = 80
@@ -202,6 +203,7 @@ class TacticalHUD:
             return "#101820"
 
     def draw_text(self, x, y, text, fill, font, anchor="w", tags=None):
+        font = overlay_chrome.scaled_font(font, self.config)
         if self._crt_enabled():
             intensity = self._crt_intensity()
             factor = {"Subtle": 0.18, "Standard": 0.26, "Strong": 0.34}[intensity]
@@ -218,7 +220,8 @@ class TacticalHUD:
 
     def _draw_crt_animation(self):
         self.canvas.delete("crt_motion")
-        if not self._crt_enabled() or not self.config.get("hud_crt_motion_enabled", True):
+        if (not self._crt_enabled() or not self.config.get("hud_crt_motion_enabled", True)
+                or self.config.get("reduced_motion_enabled", False)):
             return
         intensity = self._crt_intensity()
         step = {"Subtle": 3, "Standard": 5, "Strong": 7}[intensity]
@@ -508,6 +511,13 @@ class TacticalHUD:
     ):
         nav_context = nav_context or {}
         target_w, target_h = self._target_dimensions()
+        render_fingerprint = repr((
+            target_w, target_h, current_sys, dest_name, dist_ly, scanned, total,
+            r_pos, system_traffic, game_r_pos, route_waypoint, route_counts,
+            hud_status, hud_health, nav_context,
+        ))
+        if render_fingerprint == self._last_render_fingerprint and self.canvas.find_all():
+            return
         self._ensure_dimensions(target_w, target_h)
         self.canvas.delete("all")
         if self._is_compact():
@@ -522,6 +532,7 @@ class TacticalHUD:
                 route_counts=route_counts,
                 nav_context=nav_context,
             )
+            self._last_render_fingerprint = render_fingerprint
             return
 
         w = self.width
@@ -589,3 +600,4 @@ class TacticalHUD:
             x += bw + 6
             if x > w - 60:
                 break
+        self._last_render_fingerprint = render_fingerprint

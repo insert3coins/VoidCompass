@@ -15,6 +15,24 @@ _BG = "#010101"
 _SCANLINE = "#0a0f14"
 
 
+def scaled_font(font, config):
+    """Scale a Tk tuple font for the commander's overlay readability setting."""
+    try:
+        percent = max(75, min(200, int(float((config or {}).get("overlay_text_scale_percent", 100)))))
+    except (TypeError, ValueError):
+        percent = 100
+    if percent == 100 or not isinstance(font, (tuple, list)) or len(font) < 2:
+        return font
+    try:
+        size = int(font[1])
+    except (TypeError, ValueError):
+        return font
+    scaled = max(6, round(abs(size) * percent / 100))
+    if size < 0:
+        scaled = -scaled
+    return tuple([font[0], scaled, *font[2:]])
+
+
 def configure_overlay_window(window, chroma="#ff00ff"):
     """Apply the strongest portable borderless/topmost overlay treatment.
 

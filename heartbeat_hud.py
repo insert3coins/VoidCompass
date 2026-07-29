@@ -110,17 +110,20 @@ class HeartbeatHUD:
 
     def pulse(self, kind="journal"):
         """Flash for stream activity; AI work gets a brief distinct violet pulse."""
+        growth = 1 if self.config.get("reduced_motion_enabled", False) else None
         now = time.monotonic()
         if str(kind).casefold() == "ai":
             self._pulse_kind = "ai"
             self._special_until = now + _AI_HOLD_S
-            self._pulse_level = _AI_MAX_GROWTH
+            self._pulse_level = growth if growth is not None else _AI_MAX_GROWTH
         elif self._pulse_kind == "ai" and now < self._special_until:
             # Frequent Status.json writes must not immediately hide AI activity.
-            self._pulse_level = max(self._pulse_level, _AI_MAX_GROWTH)
+            self._pulse_level = max(
+                self._pulse_level, growth if growth is not None else _AI_MAX_GROWTH,
+            )
         else:
             self._pulse_kind = "journal"
-            self._pulse_level = _MAX_GROWTH
+            self._pulse_level = growth if growth is not None else _MAX_GROWTH
         self._last_pulse_ts = time.time()
         if self._last_render_key != (self._pulse_level, False, self._pulse_kind):
             self._redraw()

@@ -1,17 +1,20 @@
 # VoidCompass // UPDATE LOG
 
-## v5.2.8.2 // Fleet Carrier Spansh Routing Fix
+## v5.2.9 // Explorer Fieldcraft & Reliability
 **Release Date:** 2026-Jul-29
 
-*   Fixed destination names such as `Colonia` being mistaken for Spansh result job IDs and producing `/api/results/<system>` 404 errors in Fleet Carrier Expedition Navigator.
-*   Separated destination plotting from completed-result importing, made calculated routes explicitly auto-save, and prevented Save Details from replacing Spansh jumps with the destination list.
-*   Kept Fleet Carrier jump selection and scroll position stable across live refreshes, with Copy Selected, Enter and double-click copying available.
-*   Added persistent weight-based Tritium readiness showing route fuel, reserve, plotted/current occupied capacity, tank fuel, known stored Tritium, unitemised cargo and confirmed or possible shortfall.
-*   Clarified that docking at a personal or Squadron Carrier exposes aggregate `CarrierStats` and subsequent `CargoTransfer` deltas, not an automatic full commodity manifest.
-*   Added a confirmed Delete Route action that clears manual/Spansh route and fuel-plan state while retaining carrier cargo, jump history and identity data.
+*   Added a live route-safety forecast with scoop horizon, conservative fuel endurance, dry stretches, compact-star hazards and low-noise Navigation HUD warnings.
+*   Added a journal-evidence Missed Discoveries queue for valuable unmapped worlds, unfinished biology and worthwhile incomplete FSS work, including Galaxy Map, bookmark, copy and dismiss actions.
+*   Added a Survey Evidence Inspector that compares live, SQLite, Deep Survey, EDSM-cache and traffic facts, with a safe per-system local-journal repair instead of a full rebuild or upload.
+*   Added the Explorer Data Vault for unsold cartographic and biological value, possible bio bonus and recent sale evidence, plus themed local PNG expedition share cards.
+*   Added a fully themed Overlay Layout Studio with live coordinates, clearer overlay controls, snapping, resets, remembered Studio geometry and isolated commander-specific presets; a new **Ctrl+Shift+B** field-bookmark hotkey; independent application/overlay text scaling; and reduced motion.
+*   Added SQLite-safe profile backups, rotating pre-upgrade/cache-rebuild safety snapshots and a restart-based profile restore with an automatic rollback snapshot.
+*   Completed an app-wide responsiveness pass: cached voice metadata, incremental exploration milestones, stable event-feed/HUD rendering, deferred Specialist persistence and bounded UI-thread delivery for background results.
+*   Reworked Specialists so only its visible workflow refreshes, Mining retains stable live tables, and Carrier becomes a clear quick-look linked to the single authoritative Carrier Command route, cargo, finance and squadron workspace.
 
 ## Earlier releases
 
+*   **v5.2.8.2** — Fixed Fleet Carrier Spansh destination plotting, route persistence and waypoint selection; added weight-aware Tritium readiness, docking cargo evidence and route deletion.
 *   **v5.2.8.1** — Made known-system survey completion persistent and profile-safe, added journal repair, and added profile-aware EDSM cache-rebuild controls with visible Live Feed progress.
 *   **v5.2.8** — Added integrated Spansh Fleet/Squadron Carrier plotting, route progress, tritium logistics, carrier cargo evidence and the expanded carrier overlay; also kept that overlay visible in Exploration mode.
 *   **v5.2.7** — Removed journal-processing stalls through queued carrier persistence, coalesced state snapshots, cheaper Explore refreshes, a UI stall sampler and lightweight first-map rendering.

@@ -349,6 +349,7 @@ class SurveyStatusHUD:
             pass
 
     def _text(self, x, y, text, fill, font, anchor="w"):
+        font = overlay_chrome.scaled_font(font, self.config)
         self.canvas.create_text(x + 1, y + 1, text=text, fill="black", font=font, anchor=anchor)
         self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor)
 

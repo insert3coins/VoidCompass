@@ -47,6 +47,9 @@ DEFAULT_STATE = {
     "unsold_bio_cr": 0,
     "unsold_bio_bonus_potential_cr": 0,
     "unsold_scan_keys": [],
+    "last_exploration_sale": None,
+    "last_bio_sale": None,
+    "exploration_data_lost_at": None,
 }
 
 SQUADRON_ACTIVITY_LIMIT = 60

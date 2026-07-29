@@ -66,6 +66,12 @@ class TradeWindow(ThemedWindowMixin):
         except Exception:
             return False
 
+    def _post_ui(self, callback, key=None):
+        poster = getattr(self.app, "_ui_post", None)
+        if callable(poster):
+            return poster(callback, key=key)
+        return self.root.after(0, callback)
+
     def _is_active_view(self):
         return not self.embedded or getattr(self.app, "_active_page", None) == "TRADE"
 
@@ -1048,9 +1054,15 @@ class TradeWindow(ThemedWindowMixin):
                 eddn_stats = eddn.LISTENER.stats()
                 upload_stats = eddn_upload.UPLOADER.stats()
                 seed_info = seed.SEEDER.progress()
-                self.root.after(0, lambda: self._render_status(info, eddn_stats, seed_info, upload_stats))
+                self._post_ui(
+                    lambda: self._render_status(info, eddn_stats, seed_info, upload_stats),
+                    key="trade-status",
+                )
             except Exception as exc:
-                self.root.after(0, lambda text=str(exc): self._set_db_text(f"Database status failed: {text}", self.UI_FAIL))
+                self._post_ui(
+                    lambda text=str(exc): self._set_db_text(f"Database status failed: {text}", self.UI_FAIL),
+                    key="trade-status",
+                )
             finally:
                 self._status_refresh_running = False
         threading.Thread(target=worker, daemon=True).start()
@@ -1070,7 +1082,9 @@ class TradeWindow(ThemedWindowMixin):
         if not self.is_open():
             return
         if not self._is_active_view():
-            self._schedule_live_poll(750)
+            # Embedded pages stay alive when another workspace is selected;
+            # a slow visibility check is enough until on_shown() wakes Trade.
+            self._schedule_live_poll(3000)
             return
         self._refresh_summary()
         self.refresh_local()
@@ -1269,7 +1283,7 @@ class TradeWindow(ThemedWindowMixin):
         def worker():
             try:
                 names = routes.list_commodities()
-                self.root.after(0, lambda: self._render_commodity_names(names))
+                self._post_ui(lambda: self._render_commodity_names(names), key="trade-commodity-names")
             except Exception:
                 pass
         threading.Thread(target=worker, daemon=True).start()
@@ -1462,9 +1476,9 @@ class TradeWindow(ThemedWindowMixin):
                     buy = routes.search_commodity(item.get("commodity"), "buy", **params).get("results", [])
                     sell = routes.search_commodity(item.get("commodity"), "sell", **params).get("results", [])
                     rows.append((item, buy[0] if buy else None, sell[0] if sell else None))
-                self.root.after(0, lambda: self._render_watchlist(rows))
+                self._post_ui(lambda: self._render_watchlist(rows), key="trade-watchlist")
             except Exception as exc:
-                self.root.after(0, lambda text=str(exc): self.watch_status.config(text=text, fg=self.UI_FAIL))
+                self._post_ui(lambda text=str(exc): self.watch_status.config(text=text, fg=self.UI_FAIL), key="trade-watchlist")
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_watchlist(self, rows):
@@ -1533,9 +1547,9 @@ class TradeWindow(ThemedWindowMixin):
                         ship=query if mode == "ship" else None,
                         **params,
                     )
-                self.root.after(0, lambda: self._render_station_search(rows))
+                self._post_ui(lambda: self._render_station_search(rows), key="trade-station-search")
             except Exception as exc:
-                self.root.after(0, lambda text=str(exc): self.station_search_status.config(text=text, fg=self.UI_FAIL))
+                self._post_ui(lambda text=str(exc): self.station_search_status.config(text=text, fg=self.UI_FAIL), key="trade-station-search")
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_station_search(self, rows):
@@ -1574,9 +1588,9 @@ class TradeWindow(ThemedWindowMixin):
         def worker():
             try:
                 rows = spansh.riches_route(**params)
-                self.root.after(0, lambda: self._render_riches(rows))
+                self._post_ui(lambda: self._render_riches(rows), key="trade-riches")
             except Exception as exc:
-                self.root.after(0, lambda text=str(exc): self.riches_status.config(text=text, fg=self.UI_FAIL))
+                self._post_ui(lambda text=str(exc): self.riches_status.config(text=text, fg=self.UI_FAIL), key="trade-riches")
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_riches(self, rows):
@@ -1675,9 +1689,9 @@ class TradeWindow(ThemedWindowMixin):
         def worker():
             try:
                 rows = routes.find_opportunities(**params)
-                self.root.after(0, lambda: self._render_radar(rows))
+                self._post_ui(lambda: self._render_radar(rows), key="trade-radar")
             except Exception as exc:
-                self.root.after(0, lambda text=str(exc): self.radar_status.config(text=text, fg=self.UI_FAIL))
+                self._post_ui(lambda text=str(exc): self.radar_status.config(text=text, fg=self.UI_FAIL), key="trade-radar")
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_radar(self, rows):
@@ -1718,9 +1732,9 @@ class TradeWindow(ThemedWindowMixin):
         def worker():
             try:
                 rows = routes.sell_cargo(**params)
-                self.root.after(0, lambda: self._render_cargo_sellers(rows))
+                self._post_ui(lambda: self._render_cargo_sellers(rows), key="trade-cargo-sellers")
             except Exception as exc:
-                self.root.after(0, lambda text=str(exc): self.cargo_sell_status.config(text=text, fg=self.UI_FAIL))
+                self._post_ui(lambda text=str(exc): self.cargo_sell_status.config(text=text, fg=self.UI_FAIL), key="trade-cargo-sellers")
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_cargo_sellers(self, rows):
@@ -1765,9 +1779,9 @@ class TradeWindow(ThemedWindowMixin):
         def worker():
             try:
                 result = routes.analyze_station_market(**params)
-                self.root.after(0, lambda: self._render_market_analysis(result))
+                self._post_ui(lambda: self._render_market_analysis(result), key="trade-market-analysis")
             except Exception as exc:
-                self.root.after(0, lambda text=str(exc): self.local_market_status.config(text=text, fg=self.UI_FAIL))
+                self._post_ui(lambda text=str(exc): self.local_market_status.config(text=text, fg=self.UI_FAIL), key="trade-market-analysis")
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_market_analysis(self, result):
@@ -1809,9 +1823,9 @@ class TradeWindow(ThemedWindowMixin):
         def worker():
             try:
                 data = marketdb.trade_analytics(days)
-                self.root.after(0, lambda: self._render_analytics(data, days))
+                self._post_ui(lambda: self._render_analytics(data, days), key="trade-analytics")
             except Exception as exc:
-                self.root.after(0, lambda text=str(exc): self.analytics_summary.config(text=f"Analytics failed: {text}"))
+                self._post_ui(lambda text=str(exc): self.analytics_summary.config(text=f"Analytics failed: {text}"), key="trade-analytics")
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_analytics(self, data, days):
@@ -1873,6 +1887,8 @@ class TradeWindow(ThemedWindowMixin):
             "max_price_age_days": self._get_num(self.route_entries, "age", 30, int),
             "requires_large_pad": self.large_pad_var.get(),
             "include_carriers": self.include_carriers_var.get(),
+            "allow_planetary": self.allow_planetary_var.get(),
+            "unique": self.unique_route_var.get(),
             "max_system_distance": self._get_num(self.route_entries, "max_ls", 1000, int),
             "top_n": self._get_num(self.route_entries, "results", 8, int),
             "max_hops": self._get_num(self.route_entries, "hops", 4, int),
@@ -1908,7 +1924,7 @@ class TradeWindow(ThemedWindowMixin):
                         top_n=params["top_n"],
                     )
                     elapsed = time.monotonic() - search_started
-                    self.root.after(0, lambda r=result, seconds=elapsed: self._render_loops(r, seconds))
+                    self._post_ui(lambda r=result, seconds=elapsed: self._render_loops(r, seconds), key="trade-route-result")
                 else:
                     if ready:
                         result = routes.plan_route_local(
@@ -1927,9 +1943,9 @@ class TradeWindow(ThemedWindowMixin):
                             jump_range=params["jump_range"],
                         )
                         elapsed = time.monotonic() - search_started
-                        self.root.after(
-                            0,
+                        self._post_ui(
                             lambda r=result, seconds=elapsed: self._render_chain(r, "local database", seconds),
+                            key="trade-route-result",
                         )
                     else:
                         result = spansh.plan_route(
@@ -1942,17 +1958,17 @@ class TradeWindow(ThemedWindowMixin):
                             max_system_distance=params["max_system_distance"],
                             max_price_age_days=params["max_price_age_days"],
                             requires_large_pad=params["requires_large_pad"],
-                            allow_planetary=self.allow_planetary_var.get(),
-                            unique=self.unique_route_var.get(),
+                            allow_planetary=params["allow_planetary"],
+                            unique=params["unique"],
                         )
                         elapsed = time.monotonic() - search_started
-                        self.root.after(
-                            0,
+                        self._post_ui(
                             lambda r=result, seconds=elapsed: self._render_chain(r, "Spansh API", seconds),
+                            key="trade-route-result",
                         )
             except Exception as exc:
                 message = str(exc) or exc.__class__.__name__
-                self.root.after(0, lambda text=message: self._render_route_error(text))
+                self._post_ui(lambda text=message: self._render_route_error(text), key="trade-route-result")
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_route_error(self, message):
@@ -2124,9 +2140,9 @@ class TradeWindow(ThemedWindowMixin):
         def worker():
             try:
                 result = routes.search_commodity(**params)
-                self.root.after(0, lambda: self._render_commodity_result(result, params["mode"]))
+                self._post_ui(lambda: self._render_commodity_result(result, params["mode"]), key="trade-commodity-result")
             except Exception as exc:
-                self.root.after(0, lambda text=str(exc): self.commodity_status.config(text=text, fg=self.UI_FAIL))
+                self._post_ui(lambda text=str(exc): self.commodity_status.config(text=text, fg=self.UI_FAIL), key="trade-commodity-result")
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_commodity_result(self, result, mode):

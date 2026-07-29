@@ -38,6 +38,20 @@ class Palette:
 # (themes.py). Theme changes apply on the next launch.
 THEME = Palette(**_themes.normalize_theme(_themes.ACTIVE_PALETTE))
 
+
+def apply_ui_scale(root, percent=100):
+    """Apply a bounded Tk scaling multiplier without compounding repeated saves."""
+    try:
+        percent = max(75, min(200, int(float(percent))))
+        base = getattr(root, "_voidcompass_base_scaling", None)
+        if base is None:
+            base = float(root.tk.call("tk", "scaling"))
+            root._voidcompass_base_scaling = base
+        root.tk.call("tk", "scaling", base * percent / 100.0)
+        return percent
+    except (AttributeError, TypeError, ValueError, tk.TclError):
+        return 100
+
 # Older native panels predate the shared palette and still contain a small set
 # of repeated dark shell colors.  Treat them as semantic tokens when a window
 # is first painted or the profile theme changes.  Overlays never call

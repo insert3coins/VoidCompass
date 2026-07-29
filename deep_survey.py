@@ -26,6 +26,7 @@ LIMITS = {
     "dss": 2000,
     "screenshots": 1000,
     "candidates": 250,
+    "revisit_queue": 250,
     "milestones": 250,
     "milestone_keys": 1200,
     "seen": 12000,
@@ -455,13 +456,16 @@ class DeepSurveyTracker:
         self.lock = threading.RLock()
         self.data = self._empty()
         self._seen = set()
+        self._milestone_furthest = None
+        self._milestone_route_count = 0
+        self._milestone_last_route_key = None
         self.load()
 
     @staticmethod
     def _empty():
         return {
-            "schema": 2, "route_points": [], "codex": [], "signals": [],
-            "dss": [], "screenshots": [], "candidates": [], "seen": [],
+            "schema": 3, "route_points": [], "codex": [], "signals": [],
+            "dss": [], "screenshots": [], "candidates": [], "revisit_queue": [], "seen": [],
             "imported_files": {}, "region_stats": {}, "checkpoint": {},
             "last_departure": {}, "milestones": [], "milestone_keys": [],
             "milestones_initialized": False,
@@ -472,6 +476,9 @@ class DeepSurveyTracker:
             self.path = path
             self.data = self._empty()
             self._seen = set()
+            self._milestone_furthest = None
+            self._milestone_route_count = 0
+            self._milestone_last_route_key = None
             self.load()
 
     def load(self):
@@ -485,7 +492,7 @@ class DeepSurveyTracker:
                 for key in self.data:
                     if key in loaded:
                         self.data[key] = loaded[key]
-                self.data["schema"] = 2
+                self.data["schema"] = 3
                 if upgrading:
                     # Re-index journals once in the existing background import.
                     # The retained seen set deduplicates old facts, while newly
@@ -521,6 +528,7 @@ class DeepSurveyTracker:
                 "checkpoint": copy.deepcopy(self.data.get("checkpoint") or {}),
                 "last_departure": copy.deepcopy(self.data.get("last_departure") or {}),
                 "milestones": copy.deepcopy((self.data.get("milestones") or [])[-8:]),
+                "revisit_queue": copy.deepcopy((self.data.get("revisit_queue") or [])[-8:]),
             }
 
     def save(self, immediate=False):
@@ -872,6 +880,47 @@ class DeepSurveyTracker:
         self.save()
         return row
 
+    def record_revisit(self, candidate):
+        """Add or update one bounded, profile-local missed-opportunity row."""
+        row = copy.deepcopy(candidate) if isinstance(candidate, dict) else {}
+        system = str(row.get("system") or "").strip()
+        if not system:
+            return None
+        row["system"] = system
+        with self.lock:
+            rows = [
+                entry for entry in self.data.get("revisit_queue") or []
+                if str(entry.get("system") or "").casefold() != system.casefold()
+            ]
+            rows.append(row)
+            self.data["revisit_queue"] = rows[-LIMITS["revisit_queue"]:]
+        self.save()
+        return copy.deepcopy(row)
+
+    def revisit_queue(self, limit=30):
+        """Return only revisit rows so live Explore refreshes avoid copying the full archive."""
+        try:
+            limit = max(1, min(LIMITS["revisit_queue"], int(limit)))
+        except (TypeError, ValueError):
+            limit = 30
+        with self.lock:
+            return copy.deepcopy((self.data.get("revisit_queue") or [])[-limit:])
+
+    def dismiss_revisit(self, system):
+        system_key = str(system or "").strip().casefold()
+        if not system_key:
+            return False
+        with self.lock:
+            before = len(self.data.get("revisit_queue") or [])
+            self.data["revisit_queue"] = [
+                row for row in self.data.get("revisit_queue") or []
+                if str(row.get("system") or "").casefold() != system_key
+            ]
+            changed = len(self.data["revisit_queue"]) != before
+        if changed:
+            self.save()
+        return changed
+
     def update_checkpoint(self, payload, immediate=False):
         row = copy.deepcopy(payload) if isinstance(payload, dict) else {}
         with self.lock:
@@ -891,16 +940,61 @@ class DeepSurveyTracker:
         with self.lock:
             route = list(self.data.get("route_points") or [])
             regions = self.data.get("region_stats") or {}
+            region_rows = [row for row in regions.values() if isinstance(row, dict)]
+
+            # Region passport rows already maintain the same cumulative values.
+            # Reading at most 42 regions avoids rescanning up to 5,000 route
+            # points for every Scan/FSS journal event. Distance from Sol is
+            # monotonic for milestone purposes, so only newly appended/current
+            # route points need to be considered after the first evaluation.
+            region_systems = sum(len(row.get("systems") or []) for row in region_rows)
+            region_distance = sum(max(0.0, _number(row.get("distance_ly"))) for row in region_rows)
+            region_fss = sum(max(0, _integer(row.get("fss"))) for row in region_rows)
+            if not region_rows:
+                region_systems = len({
+                    str(row.get("system") or "").casefold()
+                    for row in route if row.get("system")
+                })
+                region_distance = sum(max(0.0, _number(row.get("jump_dist"))) for row in route)
+                region_fss = sum(1 for row in route if row.get("fss_complete"))
+
+            last_route_key = None
+            if route:
+                last = route[-1]
+                last_route_key = (
+                    last.get("timestamp"), last.get("system"),
+                    tuple(_position(last.get("pos")) or ()),
+                )
+            if self._milestone_furthest is None:
+                distance_rows = route
+                self._milestone_furthest = 0.0
+            elif len(route) > self._milestone_route_count:
+                distance_rows = route[self._milestone_route_count:]
+            elif last_route_key != self._milestone_last_route_key:
+                # The bounded route may have rotated at 5,000 entries or the
+                # current row may have gained coordinates after arrival.
+                distance_rows = route[-1:]
+            else:
+                distance_rows = ()
+            for row in distance_rows:
+                pos = _position(row.get("pos"))
+                if pos:
+                    self._milestone_furthest = max(
+                        self._milestone_furthest,
+                        math.sqrt(sum(value * value for value in pos)),
+                    )
+            self._milestone_route_count = len(route)
+            self._milestone_last_route_key = last_route_key
             metrics = {
-                "systems": len({str(row.get("system") or "").casefold() for row in route if row.get("system")}),
-                "distance": sum(max(0.0, _number(row.get("jump_dist"))) for row in route),
-                "regions": len([row for row in regions.values() if _integer(row.get("visits"))]),
-                "fss": sum(1 for row in route if row.get("fss_complete")),
+                "systems": region_systems,
+                "distance": region_distance,
+                "regions": len([row for row in region_rows if _integer(row.get("visits"))]),
+                "fss": region_fss,
                 "dss": len(self.data.get("dss") or []),
-                "biology": sum(_integer(row.get("biology")) for row in regions.values()),
+                "biology": sum(_integer(row.get("biology")) for row in region_rows),
                 "codex": len(self.data.get("codex") or []),
                 "photos": len(self.data.get("screenshots") or []),
-                "furthest": max((math.sqrt(sum(value * value for value in _position(row.get("pos")) or (0, 0, 0))) for row in route), default=0.0),
+                "furthest": self._milestone_furthest,
             }
             definitions = (
                 ("systems", "Systems visited", (100, 250, 500, 1000, 2500, 5000)),

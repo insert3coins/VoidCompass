@@ -876,7 +876,10 @@ class ExpeditionManager:
             "start_system": expedition.get("start_system"),
             "end_system": expedition.get("end_system"), "jumps": _integer(stats.get("jumps")),
             "distance_ly": _number(stats.get("distance_ly")),
+            "fss_surveys": _integer(stats.get("fss_scans")),
+            "dss_maps": _integer(stats.get("dss_maps")),
             "bio_analyses": _integer(stats.get("bio_analyses")),
+            "codex": _integer(stats.get("codex")),
             "screenshots": _integer(stats.get("screenshots")),
             "highlights": copy.deepcopy(expedition.get("events") or []),
         }
