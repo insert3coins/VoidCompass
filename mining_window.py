@@ -1028,6 +1028,7 @@ class MiningWindow(ThemedWindowMixin):
                                 material=material,
                                 ring_type=ring_type,
                                 max_results=150,
+                                max_distance=max_distance,
                             )
                         )
                     except Exception as exc:

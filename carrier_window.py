@@ -1,4 +1,5 @@
 """Personal/Squadron Carrier command, routing and cargo intelligence."""
+import math
 import threading
 import tkinter as tk
 import webbrowser
@@ -6,6 +7,7 @@ from datetime import datetime, timezone
 from tkinter import messagebox, ttk
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
+from mining_data import search_spansh_rings
 from ui_theme import THEME, ThemedWindowMixin, apply_window, button, scrollbar, window_surface
 from trade.spansh import (
     SpanshError,
@@ -66,6 +68,93 @@ def _fmt_dt(ts_str):
         return ts_str
 
 
+def _spansh_tank_schedule(route, starting_tank):
+    """Translate Spansh's post-refill tank rows into arrival tank levels.
+
+    ``fuel_in_tank`` is the depot after Spansh has moved Tritium back from the
+    carrier hold.  Subtract each leg's burn from the previous ready-to-depart
+    tank to show what is actually in the depot on arrival, before that refill.
+    """
+    try:
+        ready_tank = max(0, int(float(starting_tank)))
+    except (TypeError, ValueError):
+        ready_tank = None
+    schedule = []
+    for row in route or []:
+        row = row if isinstance(row, dict) else {}
+        try:
+            burn = max(0, int(float(row.get("fuel_used_t"))))
+        except (TypeError, ValueError):
+            burn = None
+        try:
+            next_ready = max(0, int(float(row.get("fuel_remaining_t"))))
+        except (TypeError, ValueError):
+            next_ready = None
+        arrival = max(0, ready_tank - burn) if ready_tank is not None and burn is not None else None
+        refill = max(0, next_ready - arrival) if next_ready is not None and arrival is not None else None
+        schedule.append({"arrival_t": arrival, "refill_t": refill})
+        ready_tank = next_ready if next_ready is not None else arrival
+    return schedule
+
+
+def _live_tank_schedule(carrier_data, route):
+    """Project pending legs from the journal's real depot and carrier load.
+
+    The projection runs without imaginary between-jump top-ups.  When the next
+    leg cannot be covered, it schedules one full manual depot refill before the
+    jump and accounts for that Tritium moving out of carrier cargo.
+    """
+    cd = carrier_data if isinstance(carrier_data, dict) else {}
+    try:
+        tank = max(0, int(float(cd.get("fuel_level"))))
+        capacity = max(1, int(float(cd.get("fuel_capacity") or 1000)))
+        used_capacity = max(
+            0, int(float(cd.get("space_total"))) - int(float(cd.get("space_free"))),
+        )
+    except (TypeError, ValueError):
+        return None
+    schedule = []
+    for row in route or []:
+        row = row if isinstance(row, dict) else {}
+        if row.get("visited"):
+            schedule.append(None)
+            continue
+        try:
+            distance = max(0.0, float(row.get("distance_ly")))
+        except (TypeError, ValueError):
+            distance = None
+
+        def estimated_burn():
+            if distance is not None:
+                value = int(math.floor(
+                    5.0 + (distance / 8.0)
+                    * (1.0 + (used_capacity + tank) / 25000.0)
+                    + 0.5
+                ))
+                return max(0, value)
+            try:
+                return max(0, int(float(row.get("fuel_used_t"))))
+            except (TypeError, ValueError):
+                return None
+
+        burn = estimated_burn()
+        refill = 0
+        # Recalculate at the same total carrier mass after moving Tritium from
+        # cargo into the depot.  This is the manual action Spansh models but
+        # does not perform in game.
+        raw_burn = burn
+        if raw_burn is not None and tank < raw_burn:
+            refill = max(0, capacity - tank)
+            used_capacity = max(0, used_capacity - refill)
+            tank += refill
+            burn = estimated_burn()
+        arrival = max(0, tank - burn) if burn is not None else None
+        schedule.append({"arrival_t": arrival, "refill_t": refill, "burn_t": burn})
+        if arrival is not None:
+            tank = arrival
+    return schedule
+
+
 class CarrierWindow(ThemedWindowMixin):
     UI_FONT  = ("Segoe UI", 9)
     UI_BOLD  = ("Segoe UI", 9, "bold")
@@ -85,6 +174,10 @@ class CarrierWindow(ThemedWindowMixin):
         self._cargo_dirty = False
         self._active_tab = "Overview"
         self._route_generation = 0
+        self._tritium_search_generation = 0
+        self._tritium_results = []
+        self._tritium_results_profile = None
+        self._tritium_reference_auto = True
         self._cargo_editor_seeded = False
         self._cargo_profile_path = None
         try:
@@ -119,6 +212,7 @@ class CarrierWindow(ThemedWindowMixin):
 
     def _on_close(self):
         self._route_generation += 1
+        self._tritium_search_generation += 1
         try:
             self.config["carrier_window_geometry"] = self.win.geometry()
             save_config(self.config)
@@ -144,6 +238,10 @@ class CarrierWindow(ThemedWindowMixin):
             if profile_path != self._carrier_profile_path:
                 self._carrier_profile_path = profile_path
                 self._route_generation += 1
+                self._tritium_search_generation += 1
+                self._tritium_reference_auto = True
+                self._tritium_results = []
+                self._tritium_results_profile = None
                 self._cargo_editor_seeded = False
                 for name in ("spansh_plot_btn", "spansh_import_btn"):
                     control = getattr(self, name, None)
@@ -159,6 +257,10 @@ class CarrierWindow(ThemedWindowMixin):
     def on_profile_switched(self):
         """Drop transient route/cargo UI state at the commander boundary."""
         self._route_generation += 1
+        self._tritium_search_generation += 1
+        self._tritium_reference_auto = True
+        self._tritium_results = []
+        self._tritium_results_profile = None
         self._cargo_editor_seeded = False
         self._cargo_profile_path = None
         try:
@@ -167,6 +269,8 @@ class CarrierWindow(ThemedWindowMixin):
             self._carrier_profile_path = None
         if hasattr(self, "spansh_import_var"):
             self.spansh_import_var.set("")
+        if hasattr(self, "tritium_search_btn"):
+            self.tritium_search_btn.config(state=tk.NORMAL)
         if self.is_open():
             self._schedule_refresh()
 
@@ -223,7 +327,7 @@ class CarrierWindow(ThemedWindowMixin):
         tab_bar.pack(fill=tk.X)
         self._tabs = {}
         self._tab_frames = {}
-        for name in ("Overview", "Squadron", "Expedition", "Cargo", "Finance", "Services"):
+        for name in ("Overview", "Squadron", "Expedition", "Tritium", "Cargo", "Finance", "Services"):
             btn = button(tab_bar, name, lambda n=name: self._show_tab(n), muted=True, padx=10, pady=6)
             btn.pack(side=tk.LEFT)
             self._tabs[name] = btn
@@ -235,6 +339,7 @@ class CarrierWindow(ThemedWindowMixin):
         self._build_overview_tab()
         self._build_squadron_tab()
         self._build_expedition_tab()
+        self._build_tritium_tab()
         self._build_cargo_tab()
         self._build_finance_tab()
         self._build_services_tab()
@@ -604,7 +709,7 @@ class CarrierWindow(ThemedWindowMixin):
         headings = {
             "stop": ("#", 42, "center"), "system": ("System", 260, "w"),
             "jump": ("Jump", 80, "e"), "fuel": ("Fuel", 75, "e"),
-            "tank": ("Tank after", 85, "e"), "restock": ("Restock", 95, "e"),
+            "tank": ("Tank after", 85, "e"), "restock": ("Refill before", 105, "e"),
         }
         for key, (label, width, anchor) in headings.items():
             self.expedition_tree.heading(key, text=label)
@@ -729,6 +834,14 @@ class CarrierWindow(ThemedWindowMixin):
             return
         total, free = cd.get("space_total"), cd.get("space_free")
         used = max(0, int(total) - int(free)) if total is not None and free is not None else 0
+        fuel_evidence = self._carrier_manifest_fuel_evidence(cd)
+        try:
+            live_tank = max(0, min(1000, int(cd.get("fuel_level"))))
+        except (TypeError, ValueError):
+            live_tank = None
+        manifest_source = str(fuel_evidence.get("source") or "").strip().casefold()
+        manifest_known = manifest_source not in {"", "not supplied", "no manifest baseline"}
+        use_live_fuel = live_tank is not None and manifest_known
         source_id64 = cd.get("system_address")
         carrier_type = cd.get("carrier_type") or "fleet"
         try:
@@ -745,7 +858,9 @@ class CarrierWindow(ThemedWindowMixin):
                 result = fleet_carrier_route(
                     source, destinations, source_id64=source_id64,
                     used_capacity=used, carrier_type=carrier_type,
-                    calculate_starting_fuel=True,
+                    calculate_starting_fuel=not use_live_fuel,
+                    tritium_fuel=live_tank or 0,
+                    tritium_stored=fuel_evidence.get("tritium_t") or 0,
                 )
                 error = None
             except Exception as exc:
@@ -1026,21 +1141,54 @@ class CarrierWindow(ThemedWindowMixin):
             None,
         )
         desired_tree_rows = []
+        live_tank_schedule = _live_tank_schedule(cd, route)
+        spansh_tank_schedule = _spansh_tank_schedule(
+            route, cd.get("expedition_starting_tank_t"),
+        )
+        last_visited_index = max(
+            (index for index, row in enumerate(route) if isinstance(row, dict) and row.get("visited")),
+            default=None,
+        )
         for index, row in enumerate(route, start=1):
             if not isinstance(row, dict):
                 continue
             visited = bool(row.get("visited"))
             marker = "✓" if visited else "→" if index == next_pending_index else str(index)
             distance = row.get("distance_ly")
-            fuel_used = row.get("fuel_used_t")
-            fuel_left = row.get("fuel_remaining_t")
+            live_step = (
+                live_tank_schedule[index - 1]
+                if live_tank_schedule is not None and index <= len(live_tank_schedule)
+                else None
+            )
+            spansh_step = spansh_tank_schedule[index - 1] if index <= len(spansh_tank_schedule) else {}
+            fuel_used = (
+                row.get("fuel_actual_used_t") if visited and row.get("fuel_actual_used_t") is not None
+                else live_step.get("burn_t") if live_step is not None
+                else row.get("fuel_used_t")
+            )
+            if visited and live_tank_schedule is not None:
+                fuel_left = cd.get("fuel_level") if index - 1 == last_visited_index else None
+                tank_text = f"{int(fuel_left):,} T LIVE" if fuel_left is not None else "DONE"
+                depot_refill = None
+            else:
+                tank_step = live_step if live_step is not None else spansh_step
+                fuel_left = tank_step.get("arrival_t")
+                depot_refill = tank_step.get("refill_t")
+                tank_text = f"{int(fuel_left):,} T" if fuel_left is not None else "—"
             restock = row.get("restock_t")
+            refill_parts = []
+            if depot_refill:
+                refill_parts.append(f"{int(depot_refill):,} T")
+            if restock:
+                refill_parts.append(f"+{int(restock):,} T supply")
+            elif row.get("must_restock"):
+                refill_parts.append("SUPPLY REQUIRED")
             desired_tree_rows.append((
                 marker, row.get("system") or "—",
                 f"{float(distance):,.1f} LY" if distance is not None else "—",
                 f"{int(fuel_used):,} T" if fuel_used is not None else "—",
-                f"{int(fuel_left):,} T" if fuel_left is not None else "—",
-                f"{int(restock):,} T" if restock else ("REQUIRED" if row.get("must_restock") else "—"),
+                tank_text,
+                " · ".join(refill_parts) or "—",
             ))
         current_items = self.expedition_tree.get_children()
         current_tree_rows = [
@@ -1100,6 +1248,279 @@ class CarrierWindow(ThemedWindowMixin):
             self.expedition_status.config(
                 text=f"SPANSH route saved · plotted {_fmt_dt(cd.get('expedition_plotted_at'))}", fg=self.UI_MUTED,
             )
+
+    # ---------- Tritium tab ----------
+    def _build_tritium_tab(self):
+        f = tk.Frame(self._tab_area, bg=self.UI_PANEL,
+                     highlightbackground=self.UI_BORDER, highlightthickness=1)
+        self._tab_frames["Tritium"] = f
+        self._section(f, "TRITIUM HOTSPOT FINDER")
+        tk.Label(
+            f,
+            text=("Search community-mapped ring signals around the carrier, copy a system for the galaxy map, "
+                  "or add it to the Expedition Navigator."),
+            font=("Segoe UI", 8), fg=self.UI_MUTED, bg=self.UI_PANEL,
+            anchor="w", justify=tk.LEFT,
+        ).pack(fill=tk.X, padx=10, pady=(0, 7))
+
+        fields = tk.Frame(f, bg=self.UI_PANEL)
+        fields.pack(fill=tk.X, padx=10)
+        tk.Label(fields, text="SEARCH FROM", fg=self.UI_MUTED, bg=self.UI_PANEL,
+                 font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT)
+        self.tritium_reference_var = tk.StringVar()
+        self.tritium_reference_entry = tk.Entry(
+            fields, textvariable=self.tritium_reference_var, bg="#090c10", fg=COLOR_TEXT,
+            insertbackground=COLOR_ACCENT, relief=tk.FLAT, width=30,
+            highlightthickness=1, highlightbackground=self.UI_BORDER,
+            highlightcolor=COLOR_ACCENT,
+        )
+        self.tritium_reference_entry.pack(side=tk.LEFT, padx=(6, 6), ipady=4)
+        self.tritium_reference_entry.bind("<KeyPress>", self._mark_tritium_reference_manual)
+        button(fields, "CURRENT CARRIER", self._use_current_tritium_system, muted=True).pack(side=tk.LEFT)
+        tk.Label(fields, text="RANGE", fg=self.UI_MUTED, bg=self.UI_PANEL,
+                 font=("Segoe UI", 7, "bold")).pack(side=tk.LEFT, padx=(14, 0))
+        self.tritium_range_var = tk.StringVar(value="300")
+        tk.Entry(
+            fields, textvariable=self.tritium_range_var, bg="#090c10", fg=COLOR_TEXT,
+            insertbackground=COLOR_ACCENT, relief=tk.FLAT, width=7,
+            highlightthickness=1, highlightbackground=self.UI_BORDER,
+            highlightcolor=COLOR_ACCENT,
+        ).pack(side=tk.LEFT, padx=(6, 3), ipady=4)
+        tk.Label(fields, text="LY", fg=self.UI_MUTED, bg=self.UI_PANEL).pack(side=tk.LEFT)
+
+        actions = tk.Frame(f, bg=self.UI_PANEL)
+        actions.pack(fill=tk.X, padx=10, pady=(7, 5))
+        self.tritium_search_btn = button(
+            actions, "SEARCH SPANSH", self._search_tritium_hotspots, accent=True,
+        )
+        self.tritium_search_btn.pack(side=tk.LEFT)
+        button(actions, "COPY SYSTEM", self._copy_selected_tritium, muted=True).pack(
+            side=tk.LEFT, padx=(6, 0),
+        )
+        button(actions, "ADD TO EXPEDITION", self._add_selected_tritium_to_expedition, muted=True).pack(
+            side=tk.LEFT, padx=(6, 0),
+        )
+        button(actions, "OPEN IN SPANSH", self._open_selected_tritium, muted=True).pack(
+            side=tk.LEFT, padx=(6, 0),
+        )
+
+        self.tritium_status = tk.Label(
+            f, text="Ready · current carrier location will be used automatically.",
+            fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 8), anchor="w",
+        )
+        self.tritium_status.pack(fill=tk.X, padx=10, pady=(0, 5))
+
+        tree_wrap = tk.Frame(f, bg=self.UI_PANEL)
+        tree_wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 5))
+        columns = ("system", "ring", "hotspots", "type", "distance", "arrival", "reserve")
+        self.tritium_tree = ttk.Treeview(tree_wrap, columns=columns, show="headings", height=15)
+        headings = {
+            "system": ("System", 205, "w"),
+            "ring": ("Ring", 225, "w"),
+            "hotspots": ("Hotspots", 68, "center"),
+            "type": ("Type", 65, "center"),
+            "distance": ("Distance", 75, "e"),
+            "arrival": ("Arrival", 80, "e"),
+            "reserve": ("Reserve", 80, "center"),
+        }
+        for key, (label, width, anchor) in headings.items():
+            self.tritium_tree.heading(key, text=label)
+            self.tritium_tree.column(
+                key, width=width, minwidth=45, anchor=anchor,
+                stretch=key in {"system", "ring"},
+            )
+        tree_y = scrollbar(tree_wrap, orient=tk.VERTICAL, command=self.tritium_tree.yview)
+        self.tritium_tree.configure(yscrollcommand=tree_y.set)
+        self.tritium_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tree_y.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tritium_tree.bind(
+            "<Double-1>", lambda _event: self.win.after_idle(self._copy_selected_tritium),
+        )
+        self.tritium_tree.bind("<Return>", lambda _event: self._copy_selected_tritium())
+
+        tk.Label(
+            f,
+            text=("SOURCE · Spansh community data. Results only include previously reported ring signals and "
+                  "may be incomplete or out of date in lightly surveyed space."),
+            font=("Segoe UI", 8), fg=self.UI_DIM, bg=self.UI_PANEL,
+            anchor="w", justify=tk.LEFT,
+        ).pack(fill=tk.X, padx=10, pady=(0, 8))
+
+    def _mark_tritium_reference_manual(self, _event=None):
+        self._tritium_reference_auto = False
+
+    def _use_current_tritium_system(self):
+        system = str(self.tracker.carrier_data.get("system") or "").strip()
+        self._tritium_reference_auto = True
+        self.tritium_reference_var.set(system)
+        if system:
+            self.tritium_status.config(text=f"SEARCH ORIGIN · {system}", fg=self.UI_OK)
+        else:
+            self.tritium_status.config(
+                text="Carrier location unknown · open Carrier Management or wait for CarrierLocation.",
+                fg=self.UI_WARN,
+            )
+
+    def _refresh_tritium(self, cd):
+        try:
+            profile_path = self.tracker._state_path()
+        except Exception:
+            profile_path = None
+        if self._tritium_results_profile not in (None, profile_path):
+            self._tritium_results = []
+            self._tritium_results_profile = None
+            self.tritium_search_btn.config(state=tk.NORMAL)
+            for item in self.tritium_tree.get_children():
+                self.tritium_tree.delete(item)
+            self.tritium_status.config(text="Profile changed · ready for a new search.", fg=self.UI_MUTED)
+        if self._tritium_reference_auto:
+            system = str(cd.get("system") or "").strip()
+            if self.tritium_reference_var.get() != system:
+                self.tritium_reference_var.set(system)
+
+    def _search_tritium_hotspots(self):
+        reference = self.tritium_reference_var.get().strip()
+        if not reference:
+            self.tritium_status.config(text="Enter a reference system before searching.", fg=self.UI_WARN)
+            return
+        try:
+            max_distance = float(self.tritium_range_var.get().replace(",", ""))
+            if max_distance <= 0:
+                raise ValueError
+        except ValueError:
+            self.tritium_status.config(text="Range must be a number greater than zero.", fg=self.UI_WARN)
+            return
+        try:
+            profile_path = self.tracker._state_path()
+        except Exception:
+            profile_path = None
+        self._tritium_search_generation += 1
+        generation = self._tritium_search_generation
+        self.tritium_search_btn.config(state=tk.DISABLED)
+        self.tritium_status.config(
+            text=f"SPANSH · searching known Tritium hotspots within {max_distance:,.0f} LY of {reference}…",
+            fg=COLOR_ACCENT,
+        )
+
+        def worker():
+            try:
+                rows = search_spansh_rings(
+                    reference, material="Tritium", max_results=200,
+                    max_distance=max_distance,
+                )
+                error = None
+            except Exception as exc:
+                rows, error = [], exc
+            try:
+                self._post_ui(
+                    lambda: self._finish_tritium_search(
+                        generation, profile_path, reference, max_distance, rows, error,
+                    ),
+                    key="carrier-tritium-search",
+                )
+            except Exception:
+                pass
+
+        threading.Thread(target=worker, name="SpanshTritiumSearch", daemon=True).start()
+
+    def _finish_tritium_search(self, generation, profile_path, reference, max_distance, rows, error):
+        try:
+            current_profile_path = self.tracker._state_path()
+        except Exception:
+            current_profile_path = None
+        if (generation != self._tritium_search_generation or profile_path != current_profile_path
+                or not self.is_open()):
+            return
+        self.tritium_search_btn.config(state=tk.NORMAL)
+        if error:
+            self.tritium_status.config(text=f"SPANSH · search failed: {error}", fg=self.UI_FAIL)
+            return
+        self._tritium_results = list(rows or [])
+        self._tritium_results_profile = profile_path
+        for item in self.tritium_tree.get_children():
+            self.tritium_tree.delete(item)
+        for index, row in enumerate(self._tritium_results):
+            distance = row.get("distance_ly")
+            arrival = row.get("ls_distance")
+            self.tritium_tree.insert(
+                "", tk.END, iid=f"tritium-{index}", values=(
+                    row.get("system_name") or "—",
+                    row.get("body_name") or "—",
+                    f"{int(row.get('hotspot_count') or 0):,}",
+                    row.get("ring_type") or "—",
+                    f"{float(distance):,.1f} LY" if distance is not None else "—",
+                    f"{float(arrival):,.0f} LS" if arrival is not None else "—",
+                    row.get("reserve_level") or "—",
+                ),
+            )
+        if self._tritium_results:
+            first = self.tritium_tree.get_children()[0]
+            self.tritium_tree.selection_set(first)
+            self.tritium_tree.focus(first)
+            self.tritium_status.config(
+                text=(f"SPANSH · {len(self._tritium_results):,} known Tritium ring(s) within "
+                      f"{max_distance:,.0f} LY of {reference} · nearest first"),
+                fg=self.UI_OK,
+            )
+        else:
+            self.tritium_status.config(
+                text=(f"SPANSH · no known Tritium hotspots within {max_distance:,.0f} LY of {reference}. "
+                      "Try a wider range."),
+                fg=self.UI_WARN,
+            )
+
+    def _selected_tritium_result(self):
+        selected = self.tritium_tree.selection()
+        if not selected:
+            self.tritium_status.config(text="Select a Tritium hotspot first.", fg=self.UI_WARN)
+            return None
+        try:
+            index = int(str(selected[0]).rsplit("-", 1)[-1])
+            return self._tritium_results[index]
+        except (IndexError, TypeError, ValueError):
+            self.tritium_status.config(text="That hotspot result is no longer available.", fg=self.UI_WARN)
+            return None
+
+    def _copy_selected_tritium(self):
+        row = self._selected_tritium_result()
+        if not row:
+            return
+        system = str(row.get("system_name") or "").strip()
+        if not system:
+            return
+        self.win.clipboard_clear()
+        self.win.clipboard_append(system)
+        self.tritium_status.config(text=f"COPIED TRITIUM SYSTEM · {system}", fg=self.UI_OK)
+
+    def _add_selected_tritium_to_expedition(self):
+        row = self._selected_tritium_result()
+        if not row:
+            return
+        system = str(row.get("system_name") or "").strip()
+        if not system:
+            return
+        existing = self._route_systems_from_editor()
+        if system.casefold() not in {value.casefold() for value in existing}:
+            content = self.expedition_route_text.get("1.0", "end-1c")
+            if content and not content.endswith("\n"):
+                self.expedition_route_text.insert(tk.END, "\n")
+            self.expedition_route_text.insert(tk.END, f"{system}\n", "pending")
+            message = f"TRITIUM STOP ADDED · {system} · click PLOT WITH SPANSH to calculate the route."
+        else:
+            message = f"TRITIUM STOP ALREADY IN EXPEDITION · {system}"
+        self._show_tab("Expedition")
+        self.expedition_status.config(text=message, fg=self.UI_OK)
+
+    def _open_selected_tritium(self):
+        row = self._selected_tritium_result()
+        if not row:
+            webbrowser.open("https://spansh.co.uk/bodies")
+            return
+        body_id64 = row.get("body_id64")
+        if body_id64 is not None:
+            webbrowser.open(f"https://spansh.co.uk/body/{body_id64}")
+        else:
+            webbrowser.open("https://spansh.co.uk/bodies")
 
     # ---------- Cargo tab ----------
     def _build_cargo_tab(self):
@@ -1489,6 +1910,7 @@ class CarrierWindow(ThemedWindowMixin):
             return
         cd = self.tracker.carrier_data
         self._refresh_expedition(cd)
+        self._refresh_tritium(cd)
         self._refresh_cargo(cd)
 
         # Status badge
