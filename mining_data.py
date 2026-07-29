@@ -471,21 +471,36 @@ class MiningDataStore:
         return f'SELECT {", ".join(select_parts)} FROM "{table_name}"'
 
 
-def search_spansh_rings(system_name, material=None, ring_type=None, max_results=100):
-    filters = {
-        "rings": {"value": [True]},
-    }
-    if system_name:
-        filters["reference_system"] = {"value": system_name}
-        filters["distance"] = {"value": [0, 300]}
-    if ring_type and ring_type != "All":
-        filters["rings.type"] = {"value": [ring_type]}
+def search_spansh_rings(system_name, material=None, ring_type=None, max_results=100,
+                        max_distance=300):
+    """Return known ring hotspots near ``system_name`` from Spansh.
+
+    Spansh expects the reference system at the top level and numeric ranges as
+    ``min``/``max`` objects.  Keeping those details here gives both the Mining
+    tools and Carrier Command one reliable, shared search implementation.
+    """
+    filters = {}
+    wanted_material = str(material or "").strip()
+    if wanted_material and wanted_material != "All":
+        spansh_material = SPANSH_COMMODITY_MAP.get(wanted_material, wanted_material)
+        filters["ring_signals"] = [{"name": spansh_material, "value": [1, 50]}]
+    else:
+        filters["rings"] = {"value": [True]}
+    if max_distance is not None:
+        try:
+            distance_limit = max(0.0, float(max_distance))
+        except (TypeError, ValueError):
+            distance_limit = 300.0
+        filters["distance"] = {"min": 0, "max": distance_limit}
 
     payload = {
         "filters": filters,
-        "sort": [{"distance": {"order": "asc"}}],
+        "sort": [{"distance": {"direction": "asc"}}],
         "size": max(1, min(int(max_results or 100), 250)),
+        "page": 0,
     }
+    if system_name:
+        payload["reference_system"] = str(system_name).strip()
     response = requests.post(SPANSH_BODIES_SEARCH_URL, json=payload, timeout=18)
     response.raise_for_status()
     data = response.json()
@@ -498,12 +513,19 @@ def search_spansh_rings(system_name, material=None, ring_type=None, max_results=
         reserve = item.get("reserve_level") or item.get("reserve") or ""
         for ring in item.get("rings", []) or []:
             rtype = ring.get("type") or ring.get("ring_type") or ""
+            if ring_type and ring_type != "All" and rtype.casefold() != str(ring_type).casefold():
+                continue
             ring_name = ring.get("name") or body_name
             hotspots = ring.get("hotspots") or ring.get("signals") or []
+            if isinstance(hotspots, dict):
+                hotspots = hotspots.get("signals") or hotspots.get("values") or []
             if hotspots:
                 for hotspot in hotspots:
+                    if not isinstance(hotspot, dict):
+                        continue
                     hmat = hotspot.get("name") or hotspot.get("type") or hotspot.get("material") or ""
-                    if material and material != "All" and hmat.lower() != material.lower():
+                    if wanted_material and wanted_material != "All" and hmat.casefold() not in {
+                            wanted_material.casefold(), spansh_material.casefold()}:
                         continue
                     rows.append(
                         {
@@ -515,6 +537,9 @@ def search_spansh_rings(system_name, material=None, ring_type=None, max_results=
                             "ls_distance": item.get("distance_to_arrival") or item.get("distanceToArrival"),
                             "distance_ly": distance_ly,
                             "reserve_level": reserve,
+                            "body_id64": item.get("id64"),
+                            "system_id64": item.get("system_id64"),
+                            "updated_at": item.get("updated_at"),
                             "data_source": "Spansh",
                         }
                     )
@@ -529,10 +554,25 @@ def search_spansh_rings(system_name, material=None, ring_type=None, max_results=
                         "ls_distance": item.get("distance_to_arrival") or item.get("distanceToArrival"),
                         "distance_ly": distance_ly,
                         "reserve_level": reserve,
+                        "body_id64": item.get("id64"),
+                        "system_id64": item.get("system_id64"),
+                        "updated_at": item.get("updated_at"),
                         "data_source": "Spansh",
                     }
                 )
-    return rows
+    if max_distance is not None:
+        rows = [
+            row for row in rows
+            if row.get("distance_ly") is None or float(row["distance_ly"]) <= distance_limit
+        ]
+    return sorted(
+        rows,
+        key=lambda row: (
+            float(row.get("distance_ly")) if row.get("distance_ly") is not None else float("inf"),
+            -int(row.get("hotspot_count") or 0),
+            str(row.get("system_name") or "").casefold(),
+        ),
+    )
 
 
 def search_spansh_buyers(commodity, reference_system=None, max_distance=500, max_results=100, exclude_carriers=True):
