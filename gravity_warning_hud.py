@@ -41,7 +41,7 @@ class GravityWarningHUD:
         default_x = max(30, screen_w - self.WIDTH - 30)
         x = self._safe_int(config.get("gravity_warning_hud_x"), default_x)
         y = self._safe_int(config.get("gravity_warning_hud_y"), 530)
-        self.win.geometry(f"+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
 
         self._force_topmost()
         self.win.withdraw()
@@ -67,7 +67,7 @@ class GravityWarningHUD:
         try:
             x = self._safe_int(self.config.get("gravity_warning_hud_x"), 30)
             y = self._safe_int(self.config.get("gravity_warning_hud_y"), 30)
-            self.win.geometry(f"+{x}+{y}")
+            self.win.geometry(overlay_chrome.position_geometry(x, y))
             self.win.deiconify()
             self.win.attributes("-topmost", True)
             self.win.lift()
@@ -145,7 +145,7 @@ class GravityWarningHUD:
     def _drag_move(self, event):
         x = self.win.winfo_x() + (event.x - self._dx)
         y = self.win.winfo_y() + (event.y - self._dy)
-        self.win.geometry(f"+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
 
     def _drag_end(self, event):
         self.config["gravity_warning_hud_x"] = self.win.winfo_x()

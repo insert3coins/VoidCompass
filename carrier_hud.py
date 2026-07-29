@@ -1,4 +1,3 @@
-import os
 import tkinter as tk
 from datetime import datetime, timedelta, timezone
 
@@ -79,7 +78,7 @@ class CarrierHUD:
         x = self._safe_int(self.config.get("carrier_hud_x"), 30)
         y = self._safe_int(self.config.get("carrier_hud_y"), 180)
         self._desired_pos = (x, y)
-        self.win.geometry(f"{WIDTH}x140+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y, WIDTH, 140))
         self.win.after(0, self._apply_initial_position)
         self.win.after(250, self._apply_initial_position)
         self.win.after(700, self._apply_initial_position)
@@ -119,16 +118,19 @@ class CarrierHUD:
             height = getattr(self, "_height", 140)
             x, y = self._fit_position(x, y, height)
             self._desired_pos = (x, y)
-            self.win.geometry(f"{WIDTH}x{height}+{x}+{y}")
+            self.win.geometry(overlay_chrome.position_geometry(x, y, WIDTH, height))
         except Exception:
             pass
 
     def _fit_position(self, x, y, height):
-        """Keep the dynamic overlay above the bottom desktop/taskbar edge."""
-        screen_h = int(self.win.winfo_screenheight() or 900)
-        bottom_margin = 56 if os.name == "nt" else 12
-        max_y = max(0, screen_h - int(height) - bottom_margin)
-        return int(x), max(0, min(int(y), max_y))
+        """Preserve the commander-selected virtual-desktop anchor.
+
+        Dynamic height changes used to clamp Y against the primary screen on
+        every one-second redraw. That silently undid Layout Studio positions
+        near another monitor's edge. Off-screen recovery belongs to Studio's
+        reset/snap controls, not a recurring overlay repaint.
+        """
+        return int(x), int(y)
 
     def show(self):
         """Refresh and raise an enabled overlay after a scene/settings change."""
@@ -179,7 +181,7 @@ class CarrierHUD:
         old_x, old_y = self._desired_pos
         x, y = self._fit_position(old_x, old_y, height)
         self._desired_pos = (x, y)
-        self.win.geometry(f"{WIDTH}x{height}+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y, WIDTH, height))
         if (x, y) != (old_x, old_y):
             self.config["carrier_hud_x"] = x
             self.config["carrier_hud_y"] = y
@@ -324,7 +326,7 @@ class CarrierHUD:
             self._mouse_dragging = True
         x = self.win.winfo_x() + (event.x - self._mx)
         y = self.win.winfo_y() + (event.y - self._my)
-        self.win.geometry(f"+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
         self._desired_pos = (x, y)
         self.config["carrier_hud_x"] = x
         self.config["carrier_hud_y"] = y
@@ -334,7 +336,7 @@ class CarrierHUD:
         x, y = self.win.winfo_x(), self.win.winfo_y()
         x, y = self._fit_position(x, y, getattr(self, "_height", 140))
         self._desired_pos = (x, y)
-        self.win.geometry(f"+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
         if x != 0 or y != 0:
             self.config["carrier_hud_x"] = x
             self.config["carrier_hud_y"] = y

@@ -56,7 +56,7 @@ class ToastHUD:
             screen_w = root.winfo_screenwidth()
             x = screen_w - WIDTH - 40
             y = 60
-        self.win.geometry(f"+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
 
         self._force_topmost()
         self.win.withdraw()
@@ -99,7 +99,7 @@ class ToastHUD:
         try:
             x = self._safe_int(self.config.get("toast_hud_x"), self.win.winfo_x())
             y = self._safe_int(self.config.get("toast_hud_y"), self.win.winfo_y())
-            self.win.geometry(f"+{x}+{y}")
+            self.win.geometry(overlay_chrome.position_geometry(x, y))
             self.win.deiconify()
             self.win.attributes("-topmost", True)
             self.win.lift()
@@ -166,7 +166,7 @@ class ToastHUD:
     def _drag_move(self, event):
         x = self.win.winfo_x() + (event.x - self._dx)
         y = self.win.winfo_y() + (event.y - self._dy)
-        self.win.geometry(f"+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
 
     def _drag_end(self, event):
         self.config["toast_hud_x"] = self.win.winfo_x()

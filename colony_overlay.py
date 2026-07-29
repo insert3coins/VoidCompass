@@ -52,7 +52,7 @@ class ColonyOverlay:
         y = self._safe_int(config.get("colony_overlay_y"), 40)
         w = self._safe_int(config.get("colony_overlay_w"), 380)
         h = self._safe_int(config.get("colony_overlay_h"), 260)
-        self.win.geometry(f"{w}x{h}+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y, w, h))
 
         self.canvas = tk.Canvas(self.win, bg=overlay_bg, highlightthickness=0, bd=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
@@ -227,7 +227,7 @@ class ColonyOverlay:
     def _do_move(self, event):
         x = event.x_root - self._drag_x
         y = event.y_root - self._drag_y
-        self.win.geometry(f"+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
         self.config["colony_overlay_x"] = x
         self.config["colony_overlay_y"] = y
         self._schedule_config_save()
@@ -435,7 +435,7 @@ class ColonyOverlay:
             height = max(130, min(screen_h - 80, panel_h + 14))
             x = int(self.win.winfo_x())
             y = int(self.win.winfo_y())
-            self.win.geometry(f"{width}x{height}+{x}+{y}")
+            self.win.geometry(overlay_chrome.position_geometry(x, y, width, height))
             # Geometry changes reach the canvas via a <Configure> event on the
             # next mainloop tick; sync the embedded panel's width immediately
             # so the header controls aren't clipped for a frame after resize.

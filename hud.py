@@ -28,7 +28,7 @@ class TacticalHUD:
         x = self._safe_int(self.config.get("hud_x"), 100)
         y = self._safe_int(self.config.get("hud_y"), 100)
         self._desired_pos = (x, y)
-        self.win.geometry(f"{self.width}x{self.base_height}+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y, self.width, self.base_height))
         self.win.after(0, self._apply_initial_position)
         self.win.after(250, self._apply_initial_position)
         self.win.after(700, self._apply_initial_position)
@@ -76,7 +76,7 @@ class TacticalHUD:
     def _apply_initial_position(self):
         try:
             x, y = self._desired_pos
-            self.win.geometry(f"{self.width}x{self.base_height}+{x}+{y}")
+            self.win.geometry(overlay_chrome.position_geometry(x, y, self.width, self.base_height))
         except Exception:
             pass
 
@@ -102,7 +102,7 @@ class TacticalHUD:
             self.canvas.config(width=width, height=height)
             x = self.win.winfo_x()
             y = self.win.winfo_y()
-            self.win.geometry(f"{width}x{height}+{x}+{y}")
+            self.win.geometry(overlay_chrome.position_geometry(x, y, width, height))
 
     def force_topmost(self):
         """Keeps the window on top of the game."""
@@ -137,7 +137,8 @@ class TacticalHUD:
         deltay = event.y - self.y
         x = self.win.winfo_x() + deltax
         y = self.win.winfo_y() + deltay
-        self.win.geometry(f"+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
+        self._desired_pos = (x, y)
         # Persist while dragging so release outside the canvas still keeps the new position.
         self.config["hud_x"] = x
         self.config["hud_y"] = y
@@ -146,6 +147,7 @@ class TacticalHUD:
     def save_final_pos(self, event=None):
         self.config["hud_x"] = self.win.winfo_x()
         self.config["hud_y"] = self.win.winfo_y()
+        self._desired_pos = (self.config["hud_x"], self.config["hud_y"])
         self._write_config()
 
     def _write_config(self):

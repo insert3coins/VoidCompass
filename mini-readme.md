@@ -1,5 +1,12 @@
 # VoidCompass // UPDATE LOG
 
+## v5.2.9.7 // Authoritative Overlay Placement
+**Release Date:** 2026-Jul-30
+
+*   Overlay Layout Studio positions now remain authoritative while Tk applies a move, preventing the background position-capture loop from restoring a stale coordinate after a drag, snap or preset change.
+*   Audited every Studio-managed overlay and removed the Fleet Carrier HUD's recurring primary-screen height clamp, so dynamic redraws and visibility changes preserve the commander's chosen position.
+*   Overlay geometry now supports negative virtual-desktop coordinates correctly, keeping layouts reliable on monitors positioned left of or above the primary display.
+
 ## v5.2.9.6 // Live Carrier Fuel
 **Release Date:** 2026-Jul-29
 

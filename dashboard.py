@@ -22,6 +22,7 @@ from config import (
     get_profile_dir, get_profile_file, save_config, save_active_profile_config,
 )
 import themes
+import overlay_chrome
 from ui_theme import apply_theme_live
 from version import APP_VERSION
 import bio_values
@@ -484,6 +485,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._capture_overlay_positions()
         except Exception:
             pass
+        self._overlay_position_authority.clear()
 
         close_methods = {
             "carrier_window": "_on_close",
@@ -1493,6 +1495,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._overlay_pos_last_saved = {
             attr: None for attr, _x_key, _y_key in self._OVERLAY_POSITION_SPECS
         }
+        # Short-lived Studio targets protect asynchronous Tk geometry changes
+        # from the normal live-position capture loop. Without this guard a
+        # stale winfo_x()/winfo_y() can overwrite the position just dragged.
+        self._overlay_position_authority = {}
         self._overlay_sync_grace_until = time.time() + 4.0
         trace_path = resolve_log_path(
             "runtime_trace.log",
@@ -1563,7 +1569,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             try:
                 hx = int(float(self.config.get("hud_x", 100)))
                 hy = int(float(self.config.get("hud_y", 100)))
-                self.hud.win.geometry(f"+{hx}+{hy}")
+                self.hud.win.geometry(overlay_chrome.position_geometry(hx, hy))
             except Exception:
                 pass
         else:
@@ -1574,7 +1580,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             try:
                 cx = int(float(self.config.get("cargo_hud_x", self.cargo_hud.win.winfo_x())))
                 cy = int(float(self.config.get("cargo_hud_y", self.cargo_hud.win.winfo_y())))
-                self.cargo_hud.win.geometry(f"+{cx}+{cy}")
+                self.cargo_hud.win.geometry(overlay_chrome.position_geometry(cx, cy))
             except Exception:
                 pass
             try:
@@ -1801,6 +1807,38 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         threading.Thread(target=worker, name="support-bundle", daemon=True).start()
 
+    def _set_overlay_position(self, attr, x, y, authority_s=0.0):
+        """Move one overlay and synchronize every source of its position."""
+        spec = next(
+            (item for item in self._OVERLAY_POSITION_SPECS if item[0] == attr),
+            None,
+        )
+        if spec is None:
+            raise KeyError(f"Unknown overlay: {attr}")
+        _attr, x_key, y_key = spec
+        x, y = int(round(float(x))), int(round(float(y)))
+        self.config[x_key], self.config[y_key] = x, y
+        overlay = getattr(self, attr, None)
+        if overlay is not None and hasattr(overlay, "_desired_pos"):
+            overlay._desired_pos = (x, y)
+        window = getattr(overlay, "win", overlay)
+        if window is not None:
+            try:
+                if window.winfo_exists():
+                    window.geometry(overlay_chrome.position_geometry(x, y))
+            except (AttributeError, tk.TclError):
+                pass
+        self._overlay_pos_last_saved[attr] = (x, y)
+        if authority_s and authority_s > 0:
+            authority = getattr(self, "_overlay_position_authority", None)
+            if not isinstance(authority, dict):
+                authority = self._overlay_position_authority = {}
+            authority[attr] = {
+                "position": (x, y),
+                "until": time.time() + float(authority_s),
+            }
+        return x, y
+
     def _reapply_overlay_positions(self):
         for attr, x_key, y_key in self._OVERLAY_POSITION_SPECS:
             overlay = getattr(self, attr, None)
@@ -1815,7 +1853,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if hasattr(overlay, "_desired_pos"):
                     overlay._desired_pos = (x, y)
                 # Position-only geometry preserves each HUD's current/dynamic size.
-                win.geometry(f"+{x}+{y}")
+                win.geometry(overlay_chrome.position_geometry(x, y))
                 self._overlay_pos_last_saved[attr] = (x, y)
             except (TypeError, ValueError, tk.TclError):
                 continue
@@ -2057,6 +2095,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def _capture_overlay_positions(self):
         """Copy stable live HUD coordinates into config without writing it."""
         changed = False
+        now = time.time()
+        authorities = getattr(self, "_overlay_position_authority", {})
         for attr, x_key, y_key in self._OVERLAY_POSITION_SPECS:
             overlay = getattr(self, attr, None)
             win = getattr(overlay, "win", None)
@@ -2072,6 +2112,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         int(float(self.config[x_key])),
                         int(float(self.config[y_key])),
                     )
+                authority = authorities.get(attr)
+                if authority and now >= float(authority.get("until") or 0):
+                    authorities.pop(attr, None)
+                    authority = None
+                if authority:
+                    target = tuple(authority.get("position") or configured or pos)
+                    target = (int(target[0]), int(target[1]))
+                    if pos != target:
+                        if hasattr(overlay, "_desired_pos"):
+                            overlay._desired_pos = target
+                        win.geometry(overlay_chrome.position_geometry(*target))
+                    # A Studio move wins until Tk has delivered its Configure
+                    # event; never copy the stale live coordinate back into the
+                    # active commander's saved layout.
+                    pos = configured = target
                 # Withdrawn or not-yet-mapped windows commonly report (0, 0).
                 # Preserve a real configured position, and do not manufacture a
                 # new (0, 0) value when an optional position has never been set.

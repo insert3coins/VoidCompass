@@ -278,7 +278,7 @@ class SurveyStatusHUD:
         self.canvas.bind("<ButtonRelease-1>", self._drag_end)
         x = _safe_int(config.get("survey_status_hud_x"), 30)
         y = _safe_int(config.get("survey_status_hud_y"), 520)
-        self.win.geometry(f"+{x}+{y}")
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
         self._force_topmost()
         self.win.withdraw()
         self._visible = False
@@ -297,7 +297,7 @@ class SurveyStatusHUD:
         try:
             x = _safe_int(self.config.get("survey_status_hud_x"), 30)
             y = _safe_int(self.config.get("survey_status_hud_y"), 520)
-            self.win.geometry(f"+{x}+{y}")
+            self.win.geometry(overlay_chrome.position_geometry(x, y))
             self.win.deiconify()
             self.win.attributes("-topmost", True)
             self.win.lift()
@@ -338,7 +338,9 @@ class SurveyStatusHUD:
         self._dx, self._dy = event.x, event.y
 
     def _drag_move(self, event):
-        self.win.geometry(f"+{self.win.winfo_x() + event.x - self._dx}+{self.win.winfo_y() + event.y - self._dy}")
+        x = self.win.winfo_x() + event.x - self._dx
+        y = self.win.winfo_y() + event.y - self._dy
+        self.win.geometry(overlay_chrome.position_geometry(x, y))
 
     def _drag_end(self, event):
         self.config["survey_status_hud_x"] = self.win.winfo_x()
