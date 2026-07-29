@@ -29,9 +29,9 @@ OVERLAY_HOTKEY_SPECS = (
 )
 
 DEFAULT_OVERLAY_HOTKEYS = {
-    "overlay_hotkey_layout_studio": "Ctrl+Shift+L",
-    "overlay_hotkey_toggle_all": "Ctrl+Shift+O",
-    "overlay_hotkey_field_bookmark": "Ctrl+Shift+B",
+    "overlay_hotkey_layout_studio": "Ctrl+Alt+Shift+F10",
+    "overlay_hotkey_toggle_all": "Ctrl+Alt+Shift+F11",
+    "overlay_hotkey_field_bookmark": "Ctrl+Alt+Shift+F12",
 }
 
 _MODIFIERS = {

@@ -250,31 +250,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         return menu
 
     # Variables
-    ov_var = tk.BooleanVar(value=config.get("overlay_enabled", True))
-    overlay_mouse_passthrough_var = tk.BooleanVar(
-        value=config.get("overlay_mouse_passthrough", True)
-    )
     overlay_hotkeys_var = tk.BooleanVar(value=config.get("overlay_hotkeys_enabled", True))
-    hud_compact_var = tk.BooleanVar(value=config.get("hud_compact_mode", False))
-    cargo_var = tk.BooleanVar(value=config.get("cargo_overlay_enabled", False))
-    carrier_overlay_var = tk.BooleanVar(value=config.get("carrier_overlay_enabled", False))
-    colony_var = tk.BooleanVar(value=config.get("colony_overlay_enabled", False))
-    prosp_var = tk.BooleanVar(value=config.get("prospector_overlay_enabled", True))
-    sysinfo_var = tk.BooleanVar(value=config.get("system_info_enabled", True))
-    gravity_var = tk.BooleanVar(value=config.get("gravity_warning_overlay_enabled", True))
-    station_info_var = tk.BooleanVar(value=config.get("station_info_overlay_enabled", True))
-    survey_status_var = tk.BooleanVar(value=config.get("survey_status_overlay_enabled", True))
-    toast_var = tk.BooleanVar(value=config.get("toast_overlay_enabled", True))
-    hud_crt_var = tk.BooleanVar(value=config.get("hud_crt_enabled", True))
-    hud_crt_motion_var = tk.BooleanVar(value=config.get("hud_crt_motion_enabled", True))
-    hud_crt_intensity_var = tk.StringVar(value=str(config.get("hud_crt_intensity", "Subtle") or "Subtle"))
-    sample_clear_var = tk.BooleanVar(value=config.get("sample_clear_notifications_enabled", True))
-    rebuy_warning_var = tk.BooleanVar(value=config.get("rebuy_warnings_enabled", True))
-    data_risk_var = tk.BooleanVar(value=config.get("data_risk_warnings_enabled", True))
-    heartbeat_var = tk.BooleanVar(value=config.get("heartbeat_overlay_enabled", True))
     reduced_motion_var = tk.BooleanVar(value=config.get("reduced_motion_enabled", False))
     ui_scale_var = tk.StringVar(value=str(config.get("ui_scale_percent", 100)))
-    overlay_text_scale_var = tk.StringVar(value=str(config.get("overlay_text_scale_percent", 100)))
     ss_var = tk.BooleanVar(value=config.get("screenshots_enabled", False))
     edsm_upload_var = tk.BooleanVar(value=config.get("edsm_upload_enabled", False))
     runtime_trace_var = tk.BooleanVar(value=config.get("runtime_trace_enabled", True))
@@ -339,13 +317,11 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
 
     # Pages
     core_page = make_page("core", "Core", "Journal and screenshot paths.", scrollable=True)
-    overlay_page = make_page("overlays", "Overlays", "Runtime modules and display timing.", scrollable=True)
     hotkey_page = make_page(
         "hotkeys", "Hotkeys",
         "Profile-aware global shortcuts for overlays, layout and field actions.",
         scrollable=True,
     )
-    crt_page = make_page("crt", "HUD Effects", "CRT styling for the native Navigation HUD.", scrollable=True)
     voice_page = make_page(
         "voice", "Voice", "Optional local neural callouts. Voice audio never leaves this computer.",
         scrollable=True,
@@ -365,9 +341,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     diagnostics_page = make_page("diagnostics", "Diagnostics", "Runtime tracing and automatic crash or UI-freeze reports.", scrollable=True)
 
     nav_button("core", "Core")
-    nav_button("overlays", "Overlays")
     nav_button("hotkeys", "Hotkeys")
-    nav_button("crt", "HUD Effects")
     nav_button("voice", "Voice")
     nav_button("compass", "Compass AI")
     nav_button("command", "Command Deck")
@@ -384,41 +358,17 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
 
     core_accessibility = section(core_page, "Accessibility")
     option_row(core_accessibility, "Application scale", ui_scale_var, ("90", "100", "110", "125", "140"))
-    option_row(core_accessibility, "Overlay text scale", overlay_text_scale_var, ("90", "100", "110", "125", "140"))
     toggle_row(core_accessibility, "Reduced motion and gentler activity pulses", reduced_motion_var)
 
-    overlay_modules = section(overlay_page, "Modules")
-    toggle_row(overlay_modules, "Tactical Overlay", ov_var)
-    toggle_row(overlay_modules, "Compact Tactical HUD", hud_compact_var)
-    toggle_row(overlay_modules, "Cargo Manifest Overlay", cargo_var)
-    toggle_row(overlay_modules, "Fleet Carrier Overlay", carrier_overlay_var)
-    toggle_row(overlay_modules, "Colony Shopping Overlay", colony_var)
-    toggle_row(overlay_modules, "Prospector Result Overlay", prosp_var)
-    toggle_row(overlay_modules, "System Info Overlay", sysinfo_var)
-    toggle_row(overlay_modules, "Gravity Warning Overlay", gravity_var)
-    toggle_row(overlay_modules, "Station Info Overlay", station_info_var)
-    toggle_row(overlay_modules, "Survey Status Strip", survey_status_var)
-    toggle_row(overlay_modules, "Toast Notifications", toast_var)
-    toggle_row(overlay_modules, "Journal Heartbeat Pulse", heartbeat_var)
-
-    overlay_interaction = section(overlay_page, "Interaction")
-    toggle_row(
-        overlay_interaction,
-        (
-            "Mouse passthrough (Layout Studio positioning remains available)"
-            if os.name == "nt" else
-            "Mouse passthrough (Windows only; unavailable on Linux)"
-        ),
-        overlay_mouse_passthrough_var,
-    )
     if callable(overlay_layout_callback):
-        layout_actions = row(overlay_interaction)
+        overlay_studio = section(core_page, "Overlay Layout Studio")
+        layout_actions = row(overlay_studio)
         action_button(
-            layout_actions, "Arrange Overlays", overlay_layout_callback, accent=True,
+            layout_actions, "Open Overlay Layout Studio", overlay_layout_callback, accent=True,
         ).pack(side=tk.LEFT)
         tk.Label(
             layout_actions,
-            text="Drag overlay cards on a desktop preview without disabling passthrough.",
+            text="Enable, position and configure every overlay from one themed workspace.",
             font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w",
         ).pack(side=tk.LEFT, padx=10)
 
@@ -459,21 +409,6 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         justify=tk.LEFT,
         wraplength=620,
     ).pack(fill=tk.X, padx=12, pady=(0, 12))
-
-    overlay_alerts = section(overlay_page, "Actionable Alerts")
-    toggle_row(overlay_alerts, "Clear-to-sample notifications", sample_clear_var)
-    toggle_row(overlay_alerts, "Rebuy coverage warnings", rebuy_warning_var)
-    toggle_row(overlay_alerts, "Unsold exploration-data risk warnings", data_risk_var)
-
-    overlay_timing = section(overlay_page, "Timing")
-    prosp_timeout_e = input_row(overlay_timing, "Prospector Auto-Hide", "prospector_hud_timeout_s")
-    sysinfo_timeout_e = input_row(overlay_timing, "System Info Auto-Hide", "system_info_timeout_s")
-    gravity_threshold_e = input_row(overlay_timing, "Gravity Warning Threshold (g)", "gravity_warning_threshold_g")
-
-    overlay_crt = section(crt_page, "Navigation HUD CRT")
-    toggle_row(overlay_crt, "CRT effects", hud_crt_var)
-    toggle_row(overlay_crt, "Subtle phosphor shimmer", hud_crt_motion_var)
-    option_row(overlay_crt, "CRT intensity", hud_crt_intensity_var, ("Subtle", "Standard", "Strong"))
 
     # ---- Voice page ----
     voice_general = section(voice_page, "Voice Callouts")
@@ -1349,36 +1284,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             variable.set(str(memory_limits[key]))
         config.update({
             "journal_path": j_e.get().strip(),
-            "overlay_enabled": ov_var.get(),
-            "overlay_mouse_passthrough": overlay_mouse_passthrough_var.get(),
             "overlay_hotkeys_enabled": overlay_hotkeys_var.get(),
-            "hud_compact_mode": hud_compact_var.get(),
-            "cargo_overlay_enabled": cargo_var.get(),
-            "carrier_overlay_enabled": carrier_overlay_var.get(),
-            "colony_overlay_enabled": colony_var.get(),
-            "prospector_overlay_enabled": prosp_var.get(),
-            "prospector_hud_timeout_s": max(5, int(prosp_timeout_e.get().strip() or 45))
-                if prosp_timeout_e.get().strip().isdigit() else
-                config.get("prospector_hud_timeout_s", 45),
-            "system_info_enabled": sysinfo_var.get(),
-            "system_info_timeout_s": max(5, int(sysinfo_timeout_e.get().strip() or 30))
-                if sysinfo_timeout_e.get().strip().isdigit() else
-                config.get("system_info_timeout_s", 30),
-            "gravity_warning_overlay_enabled": gravity_var.get(),
-            "gravity_warning_threshold_g": _parse_float(gravity_threshold_e.get(), config.get("gravity_warning_threshold_g", 3.0)),
-            "station_info_overlay_enabled": station_info_var.get(),
-            "survey_status_overlay_enabled": survey_status_var.get(),
-            "toast_overlay_enabled": toast_var.get(),
-            "hud_crt_enabled": hud_crt_var.get(),
-            "hud_crt_motion_enabled": hud_crt_motion_var.get(),
-            "hud_crt_intensity": hud_crt_intensity_var.get(),
-            "sample_clear_notifications_enabled": sample_clear_var.get(),
-            "rebuy_warnings_enabled": rebuy_warning_var.get(),
-            "data_risk_warnings_enabled": data_risk_var.get(),
-            "heartbeat_overlay_enabled": heartbeat_var.get(),
             "reduced_motion_enabled": reduced_motion_var.get(),
             "ui_scale_percent": int(ui_scale_var.get()),
-            "overlay_text_scale_percent": int(overlay_text_scale_var.get()),
             "ui_theme_name": theme_var.get(),
             "ui_custom_themes": dict(custom_themes),
             "screenshots_enabled": ss_var.get(),
@@ -1461,7 +1369,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
 
     win.protocol("WM_DELETE_WINDOW", close_window)
     for scroll_page in (
-        core_page, overlay_page, hotkey_page, crt_page, voice_page, compass_page,
+        core_page, hotkey_page, voice_page, compass_page,
         command_page, theme_page, integrations_page, diagnostics_page,
     ):
         bind_scroll_tree(scroll_page)

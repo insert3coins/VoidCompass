@@ -27,6 +27,14 @@ DEFAULT_POSITIONS = {
     "heartbeat_hud": (24, 24), "colony_overlay": (40, 40),
 }
 
+DEFAULT_SIZES = {
+    "hud": (430, 230), "cargo_hud": (310, 150), "carrier_hud": (330, 180),
+    "prospector_hud": (320, 120), "system_info_hud": (340, 220),
+    "gravity_warning_hud": (280, 90), "station_info_hud": (340, 200),
+    "survey_status_hud": (340, 300), "toast_hud": (340, 110),
+    "heartbeat_hud": (42, 42), "colony_overlay": (300, 164),
+}
+
 OVERLAY_LABELS = {
     "hud": "Navigation HUD",
     "cargo_hud": "Cargo HUD",
@@ -53,6 +61,20 @@ OVERLAY_CARD_LABELS = {
     "toast_hud": "TOASTS",
     "heartbeat_hud": "HEARTBEAT",
     "colony_overlay": "COLONY",
+}
+
+OVERLAY_ENABLE_KEYS = {
+    "hud": "overlay_enabled",
+    "cargo_hud": "cargo_overlay_enabled",
+    "carrier_hud": "carrier_overlay_enabled",
+    "prospector_hud": "prospector_overlay_enabled",
+    "system_info_hud": "system_info_enabled",
+    "gravity_warning_hud": "gravity_warning_overlay_enabled",
+    "station_info_hud": "station_info_overlay_enabled",
+    "survey_status_hud": "survey_status_overlay_enabled",
+    "toast_hud": "toast_overlay_enabled",
+    "heartbeat_hud": "heartbeat_overlay_enabled",
+    "colony_overlay": "colony_overlay_enabled",
 }
 
 
@@ -102,13 +124,12 @@ class OverlayLayoutStudio:
         for attr, x_key, y_key in self.app._OVERLAY_POSITION_SPECS:
             overlay = getattr(self.app, attr, None)
             window = getattr(overlay, "win", overlay)
-            if window is None:
-                continue
-            try:
-                if not window.winfo_exists():
-                    continue
-            except tk.TclError:
-                continue
+            if window is not None:
+                try:
+                    if not window.winfo_exists():
+                        window = None
+                except (AttributeError, tk.TclError):
+                    window = None
             yield attr, x_key, y_key, window
 
     @staticmethod
@@ -127,7 +148,7 @@ class OverlayLayoutStudio:
             height = max(int(window.winfo_height()), int(window.winfo_reqheight()), 24)
         except (AttributeError, tk.TclError):
             live_x, live_y = DEFAULT_POSITIONS.get(attr, (30, 30))
-            width, height = 160, 70
+            width, height = DEFAULT_SIZES.get(attr, (160, 70))
         dragging_this = bool(self._drag_state and self._drag_state.get("attr") == attr)
         if (not shown or dragging_this) and x_key in self.config and y_key in self.config:
             try:
@@ -140,7 +161,8 @@ class OverlayLayoutStudio:
     def _set_overlay_position(self, row, x, y):
         attr, x_key, y_key, window = row
         x, y = int(round(x)), int(round(y))
-        window.geometry(_position_geometry(x, y))
+        if window is not None:
+            window.geometry(_position_geometry(x, y))
         self.config[x_key], self.config[y_key] = x, y
         saved = getattr(self.app, "_overlay_pos_last_saved", None)
         if isinstance(saved, dict):
@@ -172,7 +194,28 @@ class OverlayLayoutStudio:
             font=("Cascadia Mono", 8, "bold"),
         ).pack(anchor="e", pady=(2, 0))
 
-        guide = panel(self.win)
+        view_nav = tk.Frame(self.win, bg=THEME.bg)
+        view_nav.pack(fill=tk.X, padx=14, pady=(0, 8))
+        self.layout_tab_button = button(
+            view_nav, "LAYOUT", lambda: self._show_view("layout"), accent=True,
+        )
+        self.layout_tab_button.pack(side=tk.LEFT)
+        self.options_tab_button = button(
+            view_nav, "OVERLAY SETTINGS", lambda: self._show_view("options"),
+        )
+        self.options_tab_button.pack(side=tk.LEFT, padx=(7, 0))
+        tk.Label(
+            view_nav,
+            text="ONE WORKSPACE FOR MODULES, POSITIONING AND OVERLAY BEHAVIOUR",
+            bg=THEME.bg, fg=THEME.dim, font=("Cascadia Mono", 8),
+        ).pack(side=tk.RIGHT)
+
+        self.view_host = tk.Frame(self.win, bg=THEME.bg)
+        self.view_host.pack(fill=tk.BOTH, expand=True)
+        self.layout_view = tk.Frame(self.view_host, bg=THEME.bg)
+        self.options_view = tk.Frame(self.view_host, bg=THEME.bg)
+
+        guide = panel(self.layout_view)
         guide.pack(fill=tk.X, padx=14, pady=(0, 8))
         guide_body = tk.Frame(guide, bg=THEME.panel)
         guide_body.pack(fill=tk.X, padx=12, pady=10)
@@ -192,7 +235,7 @@ class OverlayLayoutStudio:
             tk.Label(copy, text=detail, bg=THEME.panel, fg=THEME.dim,
                      font=("Segoe UI", 8), anchor="w").pack(fill=tk.X)
 
-        layout_card = panel(self.win, accent=True)
+        layout_card = panel(self.layout_view, accent=True)
         layout_card.pack(fill=tk.BOTH, expand=True, padx=14, pady=(0, 8))
         workspace = tk.Frame(layout_card, bg=THEME.panel)
         workspace.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
@@ -230,7 +273,7 @@ class OverlayLayoutStudio:
         list_header = tk.Frame(list_side, bg=THEME.panel)
         list_header.pack(fill=tk.X, pady=(0, 7))
         section_label(list_header, "OVERLAY INDEX").pack(side=tk.LEFT)
-        self.count_var = tk.StringVar(value="0 WINDOWS")
+        self.count_var = tk.StringVar(value="0 OVERLAYS")
         tk.Label(list_header, textvariable=self.count_var, bg=THEME.panel,
                  fg=THEME.muted, font=FONT_MONO).pack(side=tk.RIGHT)
 
@@ -273,7 +316,7 @@ class OverlayLayoutStudio:
         bar.pack(side=tk.RIGHT, fill=tk.Y)
         self.tree.bind("<<TreeviewSelect>>", self._selection_changed)
 
-        controls = tk.Frame(self.win, bg=THEME.bg)
+        controls = tk.Frame(self.layout_view, bg=THEME.bg)
         controls.pack(fill=tk.X, padx=14, pady=(0, 8))
 
         preset_card = panel(controls)
@@ -295,7 +338,7 @@ class OverlayLayoutStudio:
         button(preset_inner, "SAVE", self.save_preset).pack(side=tk.LEFT, padx=(6, 0))
         button(preset_inner, "DELETE", self.delete_preset, danger=True).pack(side=tk.LEFT, padx=(6, 0))
 
-        actions = tk.Frame(self.win, bg=THEME.bg)
+        actions = tk.Frame(self.layout_view, bg=THEME.bg)
         actions.pack(fill=tk.X, padx=14, pady=(0, 14))
         self.status_var = tk.StringVar(value="Drag overlay cards above; mouse passthrough can remain enabled.")
         tk.Label(
@@ -307,9 +350,308 @@ class OverlayLayoutStudio:
             anchor="w",
         ).pack(side=tk.LEFT, fill=tk.X, expand=True)
         button(actions, "REFRESH", self.refresh, muted=True).pack(side=tk.LEFT, padx=(8, 0))
+        self.selected_toggle_button = button(
+            actions, "ENABLE SELECTED", self.toggle_selected_overlay,
+        )
+        self.selected_toggle_button.pack(side=tk.LEFT, padx=(6, 0))
         button(actions, "SNAP", self.snap_selected).pack(side=tk.LEFT, padx=(6, 0))
         button(actions, "RESET", self.reset_selected, danger=True).pack(side=tk.LEFT, padx=(6, 0))
         button(actions, "DONE", self.close, accent=True).pack(side=tk.LEFT, padx=(12, 0))
+        self._build_overlay_options()
+        self._show_view("layout")
+
+    @staticmethod
+    def _set_button_resting(widget, bg, fg):
+        widget.configure(bg=bg, fg=fg)
+        widget._theme_resting_bg = bg
+        widget._theme_resting_fg = fg
+
+    def _show_view(self, name):
+        self.layout_view.pack_forget()
+        self.options_view.pack_forget()
+        target = self.options_view if name == "options" else self.layout_view
+        target.pack(fill=tk.BOTH, expand=True)
+        active, inactive = THEME.accent, THEME.panel_raised
+        self._set_button_resting(
+            self.layout_tab_button,
+            active if name == "layout" else inactive,
+            THEME.bg if name == "layout" else THEME.text,
+        )
+        self._set_button_resting(
+            self.options_tab_button,
+            active if name == "options" else inactive,
+            THEME.bg if name == "options" else THEME.text,
+        )
+        if name == "options":
+            self._refresh_overlay_options()
+
+    def _option_card(self, parent, title):
+        card = panel(parent)
+        heading = tk.Frame(card, bg=THEME.panel)
+        heading.pack(fill=tk.X, padx=12, pady=(10, 5))
+        section_label(heading, title).pack(side=tk.LEFT)
+        body = tk.Frame(card, bg=THEME.panel)
+        body.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 10))
+        return card, body
+
+    def _build_overlay_options(self):
+        self._option_buttons = {}
+        self._module_buttons = {}
+        scroll_host = tk.Frame(self.options_view, bg=THEME.bg)
+        scroll_host.pack(fill=tk.BOTH, expand=True, padx=14, pady=(0, 8))
+        self.options_canvas = tk.Canvas(
+            scroll_host,
+            bg=THEME.bg,
+            bd=0,
+            highlightthickness=0,
+        )
+        options_bar = scrollbar(
+            scroll_host,
+            orient=tk.VERTICAL,
+            command=self.options_canvas.yview,
+            prefix="OverlayLayout",
+        )
+        self.options_canvas.configure(yscrollcommand=options_bar.set)
+        self.options_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        options_bar.pack(side=tk.RIGHT, fill=tk.Y, padx=(7, 0))
+
+        body = tk.Frame(self.options_canvas, bg=THEME.bg)
+        self._options_canvas_window = self.options_canvas.create_window(
+            (0, 0), window=body, anchor="nw",
+        )
+        body.bind("<Configure>", self._options_content_resized)
+        self.options_canvas.bind("<Configure>", self._options_canvas_resized)
+
+        modules_card, modules = self._option_card(body, "OVERLAY MODULES")
+        modules_card.pack(fill=tk.X, pady=(0, 8))
+        tk.Label(
+            modules,
+            text="Switch modules live. Disabled modules remain positionable as OFF cards on the Layout view.",
+            bg=THEME.panel, fg=THEME.dim, font=("Segoe UI", 8), anchor="w",
+        ).grid(row=0, column=0, columnspan=4, sticky="ew", pady=(0, 7))
+        for column in range(4):
+            modules.grid_columnconfigure(column, weight=1, uniform="overlay-module")
+        for index, attr in enumerate(OVERLAY_ENABLE_KEYS):
+            module_button = button(
+                modules,
+                OVERLAY_LABELS.get(attr, attr),
+                lambda selected=attr: self.toggle_overlay(selected),
+                padx=8,
+                pady=6,
+            )
+            module_button.grid(
+                row=1 + index // 4, column=index % 4,
+                sticky="ew", padx=(0 if index % 4 == 0 else 6, 0), pady=(0, 6),
+            )
+            self._module_buttons[attr] = module_button
+
+        columns = tk.Frame(body, bg=THEME.bg)
+        columns.pack(fill=tk.BOTH, expand=True)
+        columns.grid_columnconfigure(0, weight=1, uniform="overlay-options")
+        columns.grid_columnconfigure(1, weight=1, uniform="overlay-options")
+        columns.grid_rowconfigure(0, weight=1)
+        columns.grid_rowconfigure(1, weight=1)
+
+        interaction_card, interaction = self._option_card(columns, "DISPLAY & INTERACTION")
+        interaction_card.grid(row=0, column=0, sticky="nsew", padx=(0, 4), pady=(0, 8))
+        self._option_toggle(interaction, "Mouse passthrough", "overlay_mouse_passthrough")
+        self._option_toggle(interaction, "Compact Navigation HUD", "hud_compact_mode")
+        self.overlay_scale_var = tk.StringVar(
+            value=str(self.config.get("overlay_text_scale_percent", 100))
+        )
+        self._option_entry(interaction, "Overlay text scale (%)", self.overlay_scale_var)
+
+        alerts_card, alerts = self._option_card(columns, "ACTIONABLE ALERTS")
+        alerts_card.grid(row=0, column=1, sticky="nsew", padx=(4, 0), pady=(0, 8))
+        self._option_toggle(alerts, "Clear-to-sample notifications", "sample_clear_notifications_enabled")
+        self._option_toggle(alerts, "Rebuy coverage warnings", "rebuy_warnings_enabled")
+        self._option_toggle(alerts, "Unsold data-risk warnings", "data_risk_warnings_enabled")
+
+        timing_card, timing = self._option_card(columns, "TIMING & THRESHOLDS")
+        timing_card.grid(row=1, column=0, sticky="nsew", padx=(0, 4))
+        self.prospector_timeout_var = tk.StringVar(
+            value=str(self.config.get("prospector_hud_timeout_s", 45))
+        )
+        self.system_timeout_var = tk.StringVar(
+            value=str(self.config.get("system_info_timeout_s", 30))
+        )
+        self.gravity_timeout_var = tk.StringVar(
+            value=str(self.config.get("gravity_warning_hud_timeout_s", 20))
+        )
+        self.station_timeout_var = tk.StringVar(
+            value=str(self.config.get("station_info_timeout_s", 25))
+        )
+        self.gravity_threshold_var = tk.StringVar(
+            value=str(self.config.get("gravity_warning_threshold_g", 3.0))
+        )
+        self._option_entry(timing, "Prospector auto-hide (seconds)", self.prospector_timeout_var)
+        self._option_entry(timing, "System Info auto-hide (seconds)", self.system_timeout_var)
+        self._option_entry(timing, "Gravity warning auto-hide (seconds)", self.gravity_timeout_var)
+        self._option_entry(timing, "Station Info auto-hide (seconds)", self.station_timeout_var)
+        self._option_entry(timing, "Gravity warning threshold (g)", self.gravity_threshold_var)
+
+        crt_card, crt = self._option_card(columns, "NAVIGATION HUD EFFECTS")
+        crt_card.grid(row=1, column=1, sticky="nsew", padx=(4, 0))
+        self._option_toggle(crt, "CRT effects", "hud_crt_enabled")
+        self._option_toggle(crt, "Subtle phosphor shimmer", "hud_crt_motion_enabled")
+        intensity_row = tk.Frame(crt, bg=THEME.panel)
+        intensity_row.pack(fill=tk.X, pady=(4, 0))
+        tk.Label(
+            intensity_row, text="CRT intensity", bg=THEME.panel, fg=THEME.text,
+            font=("Segoe UI", 9), anchor="w",
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.crt_intensity_var = tk.StringVar(
+            value=str(self.config.get("hud_crt_intensity", "Subtle") or "Subtle").title()
+        )
+        intensity_menu = tk.OptionMenu(
+            intensity_row, self.crt_intensity_var, "Subtle", "Standard", "Strong",
+        )
+        intensity_menu.configure(
+            bg=THEME.panel_raised, fg=THEME.text, activebackground=THEME.panel_alt,
+            activeforeground=THEME.accent, relief=tk.FLAT, bd=0,
+            highlightthickness=1, highlightbackground=THEME.border, width=10,
+        )
+        intensity_menu["menu"].configure(bg=THEME.panel_raised, fg=THEME.text)
+        intensity_menu.pack(side=tk.RIGHT)
+
+        self._bind_options_mousewheel(body)
+
+        footer = tk.Frame(self.options_view, bg=THEME.bg)
+        footer.pack(fill=tk.X, padx=14, pady=(0, 14))
+        self.options_status_var = tk.StringVar(
+            value="Changes are commander-profile settings and apply to the live overlays."
+        )
+        tk.Label(
+            footer, textvariable=self.options_status_var, bg=THEME.bg, fg=THEME.muted,
+            font=("Cascadia Mono", 8), anchor="w",
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        button(footer, "APPLY SETTINGS", self.save_overlay_options, accent=True).pack(side=tk.RIGHT)
+
+    def _options_content_resized(self, _event=None):
+        try:
+            self.options_canvas.configure(scrollregion=self.options_canvas.bbox("all"))
+        except tk.TclError:
+            pass
+
+    def _options_canvas_resized(self, event):
+        try:
+            self.options_canvas.itemconfigure(self._options_canvas_window, width=max(1, event.width))
+        except tk.TclError:
+            pass
+
+    def _bind_options_mousewheel(self, widget):
+        widget.bind("<MouseWheel>", self._options_mousewheel, add="+")
+        widget.bind("<Button-4>", self._options_mousewheel, add="+")
+        widget.bind("<Button-5>", self._options_mousewheel, add="+")
+        for child in widget.winfo_children():
+            self._bind_options_mousewheel(child)
+
+    def _options_mousewheel(self, event):
+        if getattr(event, "num", None) == 4:
+            units = -1
+        elif getattr(event, "num", None) == 5:
+            units = 1
+        else:
+            delta = int(getattr(event, "delta", 0) or 0)
+            units = -max(-3, min(3, int(delta / 120))) if delta else 0
+        if units:
+            self.options_canvas.yview_scroll(units, "units")
+        return "break"
+
+    def _option_toggle(self, parent, label, key):
+        row = tk.Frame(parent, bg=THEME.panel)
+        row.pack(fill=tk.X, pady=(3, 4))
+        tk.Label(
+            row, text=label, bg=THEME.panel, fg=THEME.text,
+            font=("Segoe UI", 9), anchor="w",
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        control = button(row, "OFF", lambda setting=key: self.toggle_option(setting), padx=10, pady=4)
+        control.pack(side=tk.RIGHT)
+        self._option_buttons[key] = control
+        return control
+
+    @staticmethod
+    def _option_entry(parent, label, variable):
+        row = tk.Frame(parent, bg=THEME.panel)
+        row.pack(fill=tk.X, pady=(3, 4))
+        tk.Label(
+            row, text=label, bg=THEME.panel, fg=THEME.text,
+            font=("Segoe UI", 9), anchor="w",
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        entry = tk.Entry(
+            row, textvariable=variable, width=11, bg=THEME.input, fg=THEME.text,
+            insertbackground=THEME.accent, relief=tk.FLAT, bd=0,
+            highlightthickness=1, highlightbackground=THEME.border,
+            highlightcolor=THEME.accent, justify=tk.RIGHT,
+        )
+        entry.pack(side=tk.RIGHT)
+        return entry
+
+    def _refresh_toggle_button(self, widget, enabled, on_text="ON", off_text="OFF"):
+        bg = THEME.accent if enabled else THEME.panel_raised
+        fg = THEME.bg if enabled else THEME.muted
+        widget.configure(text=on_text if enabled else off_text)
+        self._set_button_resting(widget, bg, fg)
+
+    def _refresh_overlay_options(self):
+        for attr, widget in self._module_buttons.items():
+            enabled = self._overlay_enabled(attr)
+            label = OVERLAY_CARD_LABELS.get(attr, attr.replace("_", " ").upper())
+            self._refresh_toggle_button(widget, enabled, f"{label}  ON", f"{label}  OFF")
+        for key, widget in self._option_buttons.items():
+            self._refresh_toggle_button(widget, bool(self.config.get(key, False)))
+        self.overlay_scale_var.set(str(self.config.get("overlay_text_scale_percent", 100)))
+        self.prospector_timeout_var.set(str(self.config.get("prospector_hud_timeout_s", 45)))
+        self.system_timeout_var.set(str(self.config.get("system_info_timeout_s", 30)))
+        self.gravity_timeout_var.set(str(self.config.get("gravity_warning_hud_timeout_s", 20)))
+        self.station_timeout_var.set(str(self.config.get("station_info_timeout_s", 25)))
+        self.gravity_threshold_var.set(str(self.config.get("gravity_warning_threshold_g", 3.0)))
+        self.crt_intensity_var.set(str(self.config.get("hud_crt_intensity", "Subtle") or "Subtle").title())
+
+    def _overlay_enabled(self, attr):
+        key = OVERLAY_ENABLE_KEYS.get(attr)
+        return bool(self.config.get(key, False)) if key else False
+
+    def toggle_option(self, key):
+        self.config[key] = not bool(self.config.get(key, False))
+        save_config(self.config)
+        if key == "overlay_mouse_passthrough":
+            self.app._apply_overlay_mouse_passthrough()
+        elif key in ("hud_compact_mode", "hud_crt_enabled", "hud_crt_motion_enabled"):
+            self.app.update_hud()
+        self._refresh_overlay_options()
+        self.options_status_var.set(f"Saved {key.replace('_', ' ')} for this commander.")
+
+    def save_overlay_options(self):
+        try:
+            scale = max(75, min(200, int(float(self.overlay_scale_var.get()))))
+            prospector_timeout = max(5, int(float(self.prospector_timeout_var.get())))
+            system_timeout = max(5, int(float(self.system_timeout_var.get())))
+            gravity_timeout = max(5, int(float(self.gravity_timeout_var.get())))
+            station_timeout = max(5, int(float(self.station_timeout_var.get())))
+            gravity_threshold = max(0.5, float(self.gravity_threshold_var.get()))
+        except (TypeError, ValueError):
+            messagebox.showerror(
+                "Overlay Settings",
+                "Use numbers for text scale, auto-hide times and gravity threshold.",
+                parent=self.win,
+            )
+            return
+        self.config.update({
+            "overlay_text_scale_percent": scale,
+            "prospector_hud_timeout_s": prospector_timeout,
+            "system_info_timeout_s": system_timeout,
+            "gravity_warning_hud_timeout_s": gravity_timeout,
+            "station_info_timeout_s": station_timeout,
+            "gravity_warning_threshold_g": gravity_threshold,
+            "hud_crt_intensity": self.crt_intensity_var.get(),
+        })
+        save_config(self.config)
+        self.app.update_hud()
+        self._refresh_overlay_options()
+        self.options_status_var.set(
+            "Overlay settings saved. Text scale applies as overlay windows are reopened."
+        )
 
     def _preview_resized(self, _event=None):
         if self._preview_resize_job is not None:
@@ -387,6 +729,7 @@ class OverlayLayoutStudio:
         selected = self._selected_attr()
         for row, (x, y, width, height, shown) in metrics:
             attr = row[0]
+            enabled = self._overlay_enabled(attr)
             x1 = origin_x + (x - left) * scale
             y1 = origin_y + (y - top) * scale
             display_w = max(50, width * scale)
@@ -400,23 +743,25 @@ class OverlayLayoutStudio:
             if y2 <= y1:
                 y2 = min(origin_y + draw_h, y1 + 24)
             chosen = attr == selected
-            outline = THEME.accent if chosen else (THEME.orange if shown else THEME.muted)
-            fill = THEME.selection if chosen else (THEME.panel_raised if shown else THEME.panel)
+            outline = THEME.accent if chosen else (THEME.orange if enabled else THEME.muted)
+            fill = THEME.selection if chosen else (THEME.panel_raised if enabled else THEME.panel)
             tag = f"overlay:{attr}"
             canvas.create_rectangle(
                 x1, y1, x2, y2,
                 fill=fill,
                 outline=outline,
                 width=2 if chosen else 1,
-                dash=() if shown or chosen else (4, 3),
+                dash=() if enabled or chosen else (4, 3),
                 tags=("overlay-card", tag),
             )
             label = OVERLAY_CARD_LABELS.get(attr, attr.replace("_", " ").upper()[:12])
+            if not enabled:
+                label += " · OFF"
             canvas.create_text(
                 (x1 + x2) / 2, (y1 + y2) / 2,
                 text=label,
                 anchor="center",
-                fill=THEME.text if shown or chosen else THEME.muted,
+                fill=THEME.text if enabled or chosen else THEME.muted,
                 font=("Segoe UI", 7, "bold"),
                 tags=("overlay-card", tag),
             )
@@ -525,11 +870,13 @@ class OverlayLayoutStudio:
             row = (attr, x_key, y_key, window)
             x, y, width, height, shown = self._overlay_metrics(row)
             live_attrs.add(attr)
+            enabled = self._overlay_enabled(attr)
+            state = "OFF" if not enabled else ("SHOWN" if shown else ("READY" if window else "STARTING"))
             values = (
                 OVERLAY_LABELS.get(attr, attr.replace("_", " ").title()),
                 f"{x:+d}, {y:+d}",
                 f"{width} × {height}",
-                "SHOWN" if shown else "HIDDEN",
+                state,
             )
             if self.tree.exists(attr):
                 self.tree.item(attr, values=values)
@@ -545,7 +892,7 @@ class OverlayLayoutStudio:
             chosen = selected_attr if selected_attr in live_attrs else children[0]
             if self.tree.selection() != (chosen,):
                 self.tree.selection_set(chosen)
-        self.count_var.set(f"{len(children)} WINDOW{'S' if len(children) != 1 else ''}")
+        self.count_var.set(f"{len(children)} OVERLAY{'S' if len(children) != 1 else ''}")
 
         names = sorted((self.config.get("overlay_layout_presets") or {}).keys(), key=str.casefold)
         self.preset_box.configure(values=names)
@@ -553,6 +900,7 @@ class OverlayLayoutStudio:
             self.preset_var.set(names[0])
         elif not names:
             self.preset_var.set("")
+        self._refresh_selected_toggle()
         self._draw_desktop_preview()
         if not quiet:
             self._set_status("Overlay positions refreshed from the live desktop.")
@@ -565,7 +913,59 @@ class OverlayLayoutStudio:
         row = self._selected()
         if row:
             self._set_status(f"Selected {OVERLAY_LABELS.get(row[0], row[0])}.")
+            self._refresh_selected_toggle()
             self._draw_desktop_preview(force=True)
+
+    def _refresh_selected_toggle(self):
+        if not hasattr(self, "selected_toggle_button"):
+            return
+        attr = self._selected_attr()
+        enabled = self._overlay_enabled(attr) if attr else False
+        self._refresh_toggle_button(
+            self.selected_toggle_button,
+            enabled,
+            "DISABLE SELECTED",
+            "ENABLE SELECTED",
+        )
+
+    def toggle_selected_overlay(self):
+        attr = self._selected_attr()
+        if not attr:
+            self._set_status("Select an overlay first.")
+            return
+        self.toggle_overlay(attr)
+
+    def toggle_overlay(self, attr):
+        key = OVERLAY_ENABLE_KEYS.get(attr)
+        if not key:
+            return
+        enabled = not bool(self.config.get(key, False))
+        self.config[key] = enabled
+        save_config(self.config)
+        try:
+            self.app._apply_runtime_feature_toggles()
+        except Exception as exc:
+            self.config[key] = not enabled
+            save_config(self.config)
+            messagebox.showerror(
+                "Overlay Module",
+                f"Could not {'enable' if enabled else 'disable'} {OVERLAY_LABELS.get(attr, attr)}:\n{exc}",
+                parent=self.win,
+            )
+            return
+        try:
+            self.app.add_event_feed_entry(
+                "SYSTEM",
+                f"{OVERLAY_LABELS.get(attr, attr)} {'enabled' if enabled else 'disabled'} in Layout Studio",
+                severity="INFO",
+            )
+        except Exception:
+            pass
+        self._set_status(
+            f"{OVERLAY_LABELS.get(attr, attr)} {'enabled' if enabled else 'disabled'} for this commander."
+        )
+        self.win.after(100, lambda: self.refresh(quiet=True))
+        self._refresh_overlay_options()
 
     def _capture(self):
         result = {}
@@ -606,7 +1006,7 @@ class OverlayLayoutStudio:
             return
         attr, _x_key, _y_key, window = row
         x, y, width, height, _shown = self._overlay_metrics(row)
-        left, top, right, bottom = self._desktop_bounds(window)
+        left, top, right, bottom = self._desktop_bounds(window or self.win)
         candidates_x = [left, max(left, right - width)]
         candidates_y = [top, max(top, bottom - height)]
         for other_attr, _x, _y, other in self._overlay_records():

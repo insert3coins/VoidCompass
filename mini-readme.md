@@ -1,5 +1,12 @@
 # VoidCompass // UPDATE LOG
 
+## v5.2.9.2 // Complete Overlay Layout
+**Release Date:** 2026-Jul-29
+
+*   Overlay Layout Studio now lists every configurable overlay from its saved profile position, including disabled/not-yet-created Cargo and Carrier windows, and can enable or disable every module live while retaining its next position.
+*   Consolidated passthrough, compact HUD, overlay text scale, alert policy, auto-hide timing, gravity threshold and Navigation HUD CRT controls into the Studio's new Overlay Settings view; the old duplicate Overlays and HUD Effects settings pages are removed.
+*   Replaced the game/GPU-conflicting shipped shortcuts with **Ctrl+Alt+Shift+F10/F11/F12**, while preserving commander-customised assignments and migrating only the retired defaults.
+
 ## v5.2.9.1 // Visual Overlay Positioning
 **Release Date:** 2026-Jul-29
 
