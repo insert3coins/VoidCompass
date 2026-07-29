@@ -1812,6 +1812,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     continue
                 x = int(float(self.config[x_key]))
                 y = int(float(self.config[y_key]))
+                if hasattr(overlay, "_desired_pos"):
+                    overlay._desired_pos = (x, y)
                 # Position-only geometry preserves each HUD's current/dynamic size.
                 win.geometry(f"+{x}+{y}")
                 self._overlay_pos_last_saved[attr] = (x, y)
@@ -2078,6 +2080,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         continue
                     if configured != (0, 0):
                         pos = configured
+                # Keep timer-driven overlays aligned with the live window.
+                # CarrierHUD and a few startup-safe HUDs retain a desired
+                # position so redraws never need to trust withdrawn (0, 0)
+                # coordinates.
+                if hasattr(overlay, "_desired_pos"):
+                    overlay._desired_pos = pos
                 self._overlay_pos_last_saved[attr] = pos
                 if configured != pos:
                     self.config[x_key], self.config[y_key] = pos
@@ -4709,48 +4717,27 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         return getattr(instance, "win", instance)
 
     def _apply_adaptive_overlay_scene(self, mode=None):
-        deck = getattr(self, "adaptive_command", None)
-        if not deck:
-            return
+        """Retire mode-based overlay hiding while preserving explicit controls.
+
+        Module enable switches are now the single source of truth for overlay
+        availability. Activity modes may still prioritise dashboard content,
+        but cannot withdraw an enabled overlay. Restore anything hidden by an
+        earlier adaptive scene, then reapply deliberate hotkey visibility.
+        """
         hidden = getattr(self, "_adaptive_hidden_overlays", set())
-        if (
-            not self.config.get("adaptive_overlay_scenes_enabled", True)
-            or not self.config.get("adaptive_command_enabled", True)
-        ):
-            for attr in tuple(hidden):
-                window = self._overlay_window(getattr(self, attr, None))
-                try:
-                    if window is not None:
-                        window.deiconify()
-                except (AttributeError, tk.TclError):
-                    pass
-            self._adaptive_hidden_overlays = set()
-            self._enforce_overlay_hotkey_visibility()
-            return
-        scene = deck.scene(mode)
-        persistent = {"hud", "cargo_hud", "carrier_hud", "colony_overlay"}
-        for attr, visible in scene.items():
+        for attr in tuple(hidden):
             instance = getattr(self, attr, None)
             window = self._overlay_window(instance)
             if window is None:
                 continue
             try:
-                if not visible:
-                    window.withdraw()
-                    hidden.add(attr)
-                elif attr in hidden:
-                    hidden.discard(attr)
-                    if attr in persistent:
-                        if attr == "carrier_hud" and hasattr(instance, "show"):
-                            instance.show()
-                        else:
-                            window.deiconify()
+                if attr == "carrier_hud" and hasattr(instance, "show"):
+                    instance.show()
+                else:
+                    window.deiconify()
             except (AttributeError, tk.TclError):
                 pass
-        self._adaptive_hidden_overlays = hidden
-        # Safety feedback is never suppressed by an activity scene.
-        for attr in ("toast_hud", "gravity_warning_hud", "heartbeat_hud"):
-            hidden.discard(attr)
+        self._adaptive_hidden_overlays = set()
         self._enforce_overlay_hotkey_visibility()
 
     def _update_adaptive_command(self, event, raw, startup_replay=False):
