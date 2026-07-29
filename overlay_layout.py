@@ -161,9 +161,16 @@ class OverlayLayoutStudio:
     def _set_overlay_position(self, row, x, y):
         attr, x_key, y_key, window = row
         x, y = int(round(x)), int(round(y))
+        # Update the profile and any overlay-owned position cache before moving
+        # the Tk window. Dynamic overlays (notably CarrierHUD) redraw on a
+        # timer; leaving their private target stale makes that redraw snap the
+        # window back over a position chosen in the Studio.
+        self.config[x_key], self.config[y_key] = x, y
+        overlay = getattr(self.app, attr, None)
+        if overlay is not None and hasattr(overlay, "_desired_pos"):
+            overlay._desired_pos = (x, y)
         if window is not None:
             window.geometry(_position_geometry(x, y))
-        self.config[x_key], self.config[y_key] = x, y
         saved = getattr(self.app, "_overlay_pos_last_saved", None)
         if isinstance(saved, dict):
             saved[attr] = (x, y)

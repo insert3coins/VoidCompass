@@ -259,7 +259,6 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     crash_reporting_var = tk.BooleanVar(value=config.get("crash_reporting_enabled", True))
     recovery_safe_mode_var = tk.BooleanVar(value=config.get("recovery_safe_mode_enabled", True))
     adaptive_enabled_var = tk.BooleanVar(value=config.get("adaptive_command_enabled", True))
-    adaptive_scenes_var = tk.BooleanVar(value=config.get("adaptive_overlay_scenes_enabled", True))
     adaptive_briefings_var = tk.BooleanVar(value=config.get("adaptive_briefings_enabled", True))
     adaptive_debriefings_var = tk.BooleanVar(value=config.get("adaptive_debriefings_enabled", True))
     adaptive_mode_labels = {"Automatic": "auto"}
@@ -925,7 +924,8 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         command_control,
         text=(
             "VoidCompass detects the current activity from verified journal state and prioritises "
-            "the dashboard, objectives and overlays. A manual lock stays with this commander profile."
+            "the dashboard and objectives. A manual lock stays with this commander profile; "
+            "enabled overlays remain independent of the selected activity."
         ),
         font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w", justify=tk.LEFT,
         wraplength=650,
@@ -938,14 +938,13 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     mode_menu.configure(width=20)
 
     command_behavior = section(command_page, "Adaptive Behaviour")
-    toggle_row(command_behavior, "Apply activity-specific overlay scenes", adaptive_scenes_var)
     toggle_row(command_behavior, "Compass pre-flight and mode briefings", adaptive_briefings_var)
     toggle_row(command_behavior, "Compass activity and shutdown debriefs", adaptive_debriefings_var)
     tk.Label(
         command_behavior,
         text=(
-            "Safety overlays remain available in every scene. Hidden activity overlays are restored "
-            "when the mode changes or Automatic is selected."
+            "Activity modes prioritise the dashboard and Compass guidance without hiding any "
+            "overlay enabled in Overlay Layout Studio."
         ),
         font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w", justify=tk.LEFT,
         wraplength=650,
@@ -1299,7 +1298,6 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "crash_reporting_enabled": crash_reporting_var.get(),
             "recovery_safe_mode_enabled": recovery_safe_mode_var.get(),
             "adaptive_command_enabled": adaptive_enabled_var.get(),
-            "adaptive_overlay_scenes_enabled": adaptive_scenes_var.get(),
             "adaptive_briefings_enabled": adaptive_briefings_var.get(),
             "adaptive_debriefings_enabled": adaptive_debriefings_var.get(),
             "adaptive_mode_lock": adaptive_mode_labels.get(adaptive_mode_var.get(), "auto"),

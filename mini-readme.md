@@ -1,5 +1,11 @@
 # VoidCompass // UPDATE LOG
 
+## v5.2.9.3 // Authoritative Overlay Layout
+**Release Date:** 2026-Jul-29
+
+*   Fixed Studio-positioned overlays snapping back during dynamic redraws by synchronising each overlay's live window, profile coordinates and internal position target; this covers every overlay and specifically corrects the recurring Fleet Carrier HUD reset.
+*   Enabled overlays are no longer hidden by adaptive activity modes. Mode switching still prioritises dashboard content and Compass guidance, while Overlay Layout Studio remains the sole authority for module availability.
+
 ## v5.2.9.2 // Complete Overlay Layout
 **Release Date:** 2026-Jul-29
 
