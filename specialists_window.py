@@ -583,19 +583,18 @@ class SpecialistsWindow(ThemedWindowMixin):
         fuel_required = cd.get("expedition_fuel_required_t")
         reserve = cd.get("expedition_reserve_fuel")
         route_name = cd.get("expedition_name") or "Carrier expedition"
-        source = str(cd.get("expedition_route_source") or "manual").upper()
         if expedition:
             fuel_text = f" · {_num(fuel_required, ' t')} plotted fuel" if fuel_required is not None else " · fuel estimate pending"
             reserve_text = f" · {_num(reserve, ' t')} reserve" if reserve is not None else ""
             next_system = next((row.get("system") for row in expedition if not row.get("visited")), None)
             self.carrier_route_result.config(
                 text=f"{route_name} · {visited}/{len(expedition)} complete · {remaining} remaining{fuel_text}{reserve_text}\n"
-                     f"Next: {next_system or 'route complete'} · source {source}",
+                     f"Next: {next_system or 'route complete'}",
                 fg=COLOR_ACCENT if not remaining else COLOR_TEXT,
             )
         else:
             self.carrier_route_result.config(
-                text="No carrier expedition is currently saved. Open Carrier Command to plot with Spansh, import a result, or paste a route.",
+                text="No carrier expedition is currently saved. Open Carrier Command to calculate, import, or paste a route.",
                 fg=THEME.muted,
             )
         order_rows = []

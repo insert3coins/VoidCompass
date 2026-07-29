@@ -657,7 +657,7 @@ class CarrierWindow(ThemedWindowMixin):
         )
         self.spansh_plot_btn.pack(side=tk.LEFT)
         self.expedition_save_btn = button(
-            primary_actions, "SAVE MANUAL ROUTE", self._save_expedition, muted=True,
+            primary_actions, "SAVE ROUTE", self._save_expedition, muted=True,
         )
         self.expedition_save_btn.pack(side=tk.LEFT, padx=(6, 0))
         self.spansh_result_btn = button(
@@ -772,14 +772,14 @@ class CarrierWindow(ThemedWindowMixin):
                 self.expedition_name_var.get(), self.expedition_reserve_var.get(),
             )
             self.expedition_status.config(
-                text="SPANSH · calculated jumps preserved; name and reserve saved.",
+                text="ROUTE DETAILS SAVED · calculated jumps preserved.",
                 fg=self.UI_OK,
             )
             return
         self.tracker.set_expedition(
             self.expedition_name_var.get(), systems, self.expedition_reserve_var.get(),
         )
-        self.expedition_status.config(text="MANUAL · route saved", fg=self.UI_OK)
+        self.expedition_status.config(text="ROUTE SAVED", fg=self.UI_OK)
 
     def _delete_expedition(self):
         cd = self.tracker.carrier_data
@@ -795,7 +795,7 @@ class CarrierWindow(ThemedWindowMixin):
             return
         if not messagebox.askyesno(
             "Delete carrier route",
-            "Delete the saved carrier expedition route and its Spansh fuel plan?\n\n"
+            "Delete the saved carrier expedition route and its calculated fuel plan?\n\n"
             "Carrier cargo, jump history and carrier details will be retained.",
             parent=self.win,
         ):
@@ -851,7 +851,7 @@ class CarrierWindow(ThemedWindowMixin):
         self._route_generation += 1
         generation = self._route_generation
         self.spansh_plot_btn.config(state=tk.DISABLED)
-        self.expedition_status.config(text="SPANSH · resolving systems and calculating carrier jumps…", fg=COLOR_ACCENT)
+        self.expedition_status.config(text="ROUTE · resolving systems and calculating carrier jumps…", fg=COLOR_ACCENT)
 
         def worker():
             try:
@@ -904,7 +904,7 @@ class CarrierWindow(ThemedWindowMixin):
         generation = self._route_generation
         self.spansh_plot_btn.config(state=tk.DISABLED)
         self.spansh_import_btn.config(state=tk.DISABLED)
-        self.expedition_status.config(text="SPANSH · importing completed carrier route…", fg=COLOR_ACCENT)
+        self.expedition_status.config(text="ROUTE · importing completed carrier route…", fg=COLOR_ACCENT)
 
         def worker():
             try:
@@ -935,14 +935,14 @@ class CarrierWindow(ThemedWindowMixin):
         self.spansh_import_btn.config(state=tk.NORMAL)
         if error:
             detail = str(error) if isinstance(error, SpanshError) else f"Unexpected route error: {error}"
-            self.expedition_status.config(text=f"SPANSH · {detail}", fg=self.UI_FAIL)
+            self.expedition_status.config(text=f"ROUTE SERVICE · {detail}", fg=self.UI_FAIL)
             return
         self.tracker.set_spansh_expedition(
             self.expedition_name_var.get() or "Carrier Route", result,
             self.expedition_reserve_var.get(),
         )
         self.expedition_status.config(
-            text=(f"SPANSH · {len(result.get('jumps') or []) - 1:,} jumps · "
+            text=(f"ROUTE · {len(result.get('jumps') or []) - 1:,} jumps · "
                   f"{result.get('total_distance_ly') or 0:,.1f} LY · "
                   f"{result.get('fuel_required_t') or 0:,} T · {action} & saved"),
             fg=self.UI_OK,
@@ -1224,12 +1224,9 @@ class CarrierWindow(ThemedWindowMixin):
         fuel = cd.get("fuel_level")
         reserve = int(cd.get("expedition_reserve_fuel") or 0)
         fuel_text = "fuel unknown" if fuel is None else f"{max(0, int(fuel) - reserve):,} T above reserve"
-        source = str(cd.get("expedition_route_source") or "manual").upper()
-        self.expedition_save_btn.config(
-            text="SAVE DETAILS" if source == "SPANSH" else "SAVE MANUAL ROUTE",
-        )
+        self.expedition_save_btn.config(text="SAVE ROUTE")
         self.expedition_summary.config(
-            text=f"{source} · {done}/{len(route)} stops · {remaining * 20} min nominal · {fuel_text}"
+            text=f"{done}/{len(route)} stops · {remaining * 20} min nominal · {fuel_text}"
         )
         self._refresh_expedition_fuel_readiness(cd, route)
         result_url = cd.get("expedition_spansh_url")
@@ -1246,7 +1243,7 @@ class CarrierWindow(ThemedWindowMixin):
                 self.spansh_import_var.set(desired_result)
         if result_url and not self.expedition_status.cget("text"):
             self.expedition_status.config(
-                text=f"SPANSH route saved · plotted {_fmt_dt(cd.get('expedition_plotted_at'))}", fg=self.UI_MUTED,
+                text=f"Route saved · plotted {_fmt_dt(cd.get('expedition_plotted_at'))}", fg=self.UI_MUTED,
             )
 
     # ---------- Tritium tab ----------
