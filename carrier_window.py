@@ -72,12 +72,18 @@ class CarrierWindow(ThemedWindowMixin):
     UI_MONO  = ("Consolas", 9)
     UI_MONO_B= ("Consolas", 10, "bold")
 
-    def __init__(self, root, config, tracker, embedded=False, specialist_engine=None):
+    def __init__(self, root, config, tracker, embedded=False, specialist_engine=None,
+                 ui_post=None):
         self.root = root
         self.config = config
         self.tracker = tracker
         self.specialist_engine = specialist_engine
+        self._ui_post = ui_post
         self._after_job = None
+        self._pending_full_refresh = False
+        self._pending_cargo_refresh = False
+        self._cargo_dirty = False
+        self._active_tab = "Overview"
         self._route_generation = 0
         self._cargo_editor_seeded = False
         self._cargo_profile_path = None
@@ -105,6 +111,11 @@ class CarrierWindow(ThemedWindowMixin):
             return bool(self.win and self.win.winfo_exists())
         except Exception:
             return False
+
+    def _post_ui(self, callback, key=None):
+        if callable(self._ui_post):
+            return self._ui_post(callback, key=key)
+        return self.win.after(0, callback)
 
     def _on_close(self):
         self._route_generation += 1
@@ -138,12 +149,12 @@ class CarrierWindow(ThemedWindowMixin):
                     control = getattr(self, name, None)
                     if control is not None:
                         control.config(state=tk.NORMAL)
-            self.win.after(0, self._refresh)
+            self._schedule_refresh()
 
     def on_specialist_updated(self):
         """Refresh the observed cargo manifest after a SpecialistEngine delta."""
         if self.is_open():
-            self.win.after(0, lambda: self._refresh_cargo(self.tracker.carrier_data))
+            self._schedule_refresh(cargo_only=True)
 
     def on_profile_switched(self):
         """Drop transient route/cargo UI state at the commander boundary."""
@@ -157,7 +168,39 @@ class CarrierWindow(ThemedWindowMixin):
         if hasattr(self, "spansh_import_var"):
             self.spansh_import_var.set("")
         if self.is_open():
-            self.win.after(0, self._refresh)
+            self._schedule_refresh()
+
+    def _schedule_refresh(self, cargo_only=False):
+        """Coalesce journal bursts into one Tk-thread Carrier repaint."""
+        if not self.is_open():
+            return
+        if threading.current_thread() is not threading.main_thread() and self._ui_post:
+            self._ui_post(
+                self._schedule_refresh, cargo_only=cargo_only,
+                key="carrier-window-refresh",
+            )
+            return
+        self._pending_cargo_refresh = True
+        self._cargo_dirty = True
+        if not cargo_only:
+            self._pending_full_refresh = True
+        if self._after_job is None:
+            self._after_job = self.win.after(40, self._run_pending_refresh)
+
+    def _run_pending_refresh(self):
+        self._after_job = None
+        if not self.is_open():
+            return
+        full = self._pending_full_refresh
+        cargo = self._pending_cargo_refresh
+        self._pending_full_refresh = False
+        self._pending_cargo_refresh = False
+        if full:
+            self._refresh()
+            self._cargo_dirty = False
+        elif cargo and self._active_tab == "Cargo":
+            self._refresh_cargo(self.tracker.carrier_data)
+            self._cargo_dirty = False
 
     # ------------------------------------------------------------------
     # UI build
@@ -204,9 +247,12 @@ class CarrierWindow(ThemedWindowMixin):
             self._tabs[n]._theme_resting_bg = "#0c1014"
             self._tabs[n]._theme_resting_fg = self.UI_MUTED
         self._tab_frames[name].pack(fill=tk.BOTH, expand=True)
+        self._active_tab = name
         self._tabs[name].config(fg=COLOR_TEXT, bg=self.UI_PANEL)
         self._tabs[name]._theme_resting_bg = self.UI_PANEL
         self._tabs[name]._theme_resting_fg = COLOR_TEXT
+        if name == "Cargo" and getattr(self, "_cargo_dirty", False):
+            self._schedule_refresh(cargo_only=True)
 
     def _section(self, parent, title):
         tk.Label(parent, text=title, font=self.UI_BOLD, fg=COLOR_ORANGE,
@@ -705,10 +751,11 @@ class CarrierWindow(ThemedWindowMixin):
             except Exception as exc:
                 result, error = None, exc
             try:
-                self.win.after(
-                    0, lambda: self._finish_spansh_plot(
+                self._post_ui(
+                    lambda: self._finish_spansh_plot(
                         generation, profile_path, result, error, "plotted",
                     ),
+                    key="carrier-spansh-result",
                 )
             except Exception:
                 pass
@@ -750,10 +797,11 @@ class CarrierWindow(ThemedWindowMixin):
             except Exception as exc:
                 result, error = None, exc
             try:
-                self.win.after(
-                    0, lambda: self._finish_spansh_plot(
+                self._post_ui(
+                    lambda: self._finish_spansh_plot(
                         generation, profile_path, result, error, "imported",
                     ),
+                    key="carrier-spansh-result",
                 )
             except Exception:
                 pass

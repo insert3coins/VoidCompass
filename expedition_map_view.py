@@ -29,6 +29,7 @@ LAYER_COLOURS = {
     "Codex": THEME.accent,
     "Photos": THEME.text,
     "Recon": THEME.red,
+    "Revisit": THEME.orange,
     "Bookmarks": THEME.yellow,
     "Planned": THEME.accent,
     "Return": THEME.green,
@@ -441,7 +442,7 @@ class ExpeditionMapView:
             font=("Segoe UI", 8, "bold"),
         ).pack(side=tk.LEFT, padx=(8, 5), pady=4)
         self.layer_vars = {}
-        for name in ("Regions", "Planned", "Return", "Valuable", "Biology", "Codex", "Photos", "Recon", "Bookmarks"):
+        for name in ("Regions", "Planned", "Return", "Valuable", "Biology", "Codex", "Photos", "Recon", "Revisit", "Bookmarks"):
             var = tk.BooleanVar(value=name != "Return")
             self.layer_vars[name] = var
             tk.Checkbutton(
@@ -780,6 +781,31 @@ class ExpeditionMapView:
         self._yaw = -0.55
         self._pitch = -0.62
         self._schedule_render()
+
+    def focus_system(self, system):
+        """Centre the camera on a retained system and expose its markers."""
+        wanted = str(system or "").strip().casefold()
+        position = self._position_by_system.get(wanted)
+        if position is None:
+            position = next(
+                (_position(row.get("position")) for row in self._marker_cache
+                 if str(row.get("system") or "").strip().casefold() == wanted
+                 and _position(row.get("position")) is not None),
+                None,
+            )
+        if position is None:
+            return False
+        if "Revisit" in self.layer_vars:
+            self.layer_vars["Revisit"].set(True)
+        self.view_mode.set("Perspective")
+        self._camera_center = list(position)
+        self._fit_radius = 1200.0
+        self._zoom = 1.25
+        self._pan = [0.0, 0.0]
+        self._yaw = -0.55
+        self._pitch = -0.62
+        self._schedule_render()
+        return True
 
     def _canvas_reset(self, _event=None):
         self._reset_view()
@@ -1554,7 +1580,7 @@ class ExpeditionMapView:
             # while moving, then restore every intelligence marker on release.
             bookmark_indexes = [
                 index for index, marker in enumerate(markers)
-                if marker.get("layer") == "Bookmarks"
+                if marker.get("layer") in {"Bookmarks", "Revisit"}
             ]
             if len(bookmark_indexes) > 40:
                 bookmark_last = len(bookmark_indexes) - 1
@@ -1954,6 +1980,13 @@ class ExpeditionMapView:
                 "layer": "Recon", "kind": "Recon", "system": row.get("system"),
                 "subject": "Recon candidate",
                 "detail": f"{int(row.get('score') or 0)}/100 {row.get('grade') or ''}",
+            })
+        for row in snapshot.get("revisit_queue") or []:
+            markers.append({
+                "layer": "Revisit", "kind": "Revisit", "system": row.get("system"),
+                "subject": "Unfinished exploration",
+                "detail": row.get("detail") or "Worthwhile survey work remains",
+                "position": row.get("position"),
             })
         for row in bookmarks:
             markers.append({

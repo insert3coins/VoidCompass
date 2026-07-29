@@ -24,10 +24,12 @@ OVERLAY_HOTKEY_SPECS = (
     ("carrier", "overlay_hotkey_carrier", "Fleet Carrier", "carrier_hud"),
     ("prospector", "overlay_hotkey_prospector", "Prospector Results", "prospector_hud"),
     ("colony", "overlay_hotkey_colony", "Colony Shopping", "colony_overlay"),
+    ("field_bookmark", "overlay_hotkey_field_bookmark", "Save field bookmark", None),
 )
 
 DEFAULT_OVERLAY_HOTKEYS = {
     "overlay_hotkey_toggle_all": "Ctrl+Shift+O",
+    "overlay_hotkey_field_bookmark": "Ctrl+Shift+B",
 }
 
 _MODIFIERS = {

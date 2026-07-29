@@ -1,6 +1,5 @@
 import json
 import os
-import shutil
 import time
 import tkinter as tk
 import webbrowser
@@ -18,6 +17,7 @@ from ui_theme import (
 )
 import companion_features
 from platform_support import open_path
+from profile_backups import schedule_restore, snapshot_profile, validate_backup
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
@@ -928,6 +928,7 @@ class CommanderProfileWindow(ThemedWindowMixin):
         action_row.pack(fill=tk.X, padx=12, pady=(0, 10))
         self._button(action_row, "Open Profile Folder", self._open_profile_folder, accent=True).pack(side=tk.LEFT)
         self._button(action_row, "Backup Profile", self._backup_profile).pack(side=tk.LEFT, padx=(8, 0))
+        self._button(action_row, "Restore Backup", self._restore_profile).pack(side=tk.LEFT, padx=(8, 0))
 
         integrations = self._band(right, border=COLOR_ORANGE)
         integrations.pack(fill=tk.X, pady=(0, 8))
@@ -976,10 +977,38 @@ class CommanderProfileWindow(ThemedWindowMixin):
         stamp = time.strftime("%Y%m%d_%H%M%S")
         dst = os.path.join(target, f"{name}_{stamp}")
         try:
-            shutil.copytree(src, dst)
+            snapshot_profile(src, dst)
             messagebox.showinfo("Backup Complete", f"Profile copied to:\n{dst}", parent=self.win)
         except Exception as exc:
             messagebox.showerror("Backup Failed", str(exc), parent=self.win)
+
+    def _restore_profile(self):
+        source = filedialog.askdirectory(title="Choose VoidCompass profile backup", parent=self.win)
+        if not source:
+            return
+        valid, detail = validate_backup(source)
+        if not valid:
+            messagebox.showerror("Restore Backup", detail, parent=self.win)
+            return
+        if not messagebox.askyesno(
+            "Restore Commander Profile",
+            "Restore this backup into the active commander profile?\n\n"
+            "The current profile is automatically preserved as a rollback snapshot. "
+            "The restore takes effect after VoidCompass is closed and started again.",
+            parent=self.win,
+        ):
+            return
+        try:
+            schedule_restore(source, get_active_profile(self.config))
+        except Exception as exc:
+            messagebox.showerror("Restore Backup", str(exc), parent=self.win)
+            return
+        messagebox.showinfo(
+            "Restore Scheduled",
+            "The profile backup will be restored on the next VoidCompass start.\n\n"
+            "Close the application normally, then open it again.",
+            parent=self.win,
+        )
 
     def _on_close(self):
         try:

@@ -18,6 +18,7 @@ from deep_survey import (
 from discoveries_view import DiscoveriesView
 from expedition_map_view import ExpeditionMapView
 from expedition_mission_view import ExpeditionMissionView
+from explorer_fieldcraft import data_vault_snapshot, save_expedition_share_card
 from exploration_intelligence import body_completion, build_intelligence
 from route_plotter import RoutePlotter
 from stellar_types import star_type_label
@@ -50,6 +51,7 @@ class ExplorationWindow(ThemedWindowMixin):
         self._last_route_status = {}
         self._exploration_intelligence = {}
         self.action_queue_by_iid = {}
+        self.revisit_rows = {}
         self._last_ledger_refresh_ts = 0.0
         self.system_history_rows = []
         self.ledger_rows = []
@@ -218,6 +220,7 @@ class ExplorationWindow(ThemedWindowMixin):
             flat_navigation=True,
             section_change_callback=self._on_expedition_section_changed,
             persist_config_callback=getattr(self.app, "_persist_config", None),
+            ui_post_callback=getattr(self.app, "_ui_post", None),
         )
         self.route_plotter.win.pack(fill=tk.BOTH, expand=True)
         self.app.route_plotter = self.route_plotter
@@ -565,13 +568,18 @@ class ExplorationWindow(ThemedWindowMixin):
         self.sampling_banner.pack(fill=tk.X, pady=(0, 8))
         self.sampling_banner.pack_forget()
 
+        completion_wrap = tk.Frame(left, bg=self.UI_PANEL_2)
+        completion_wrap.pack(fill=tk.X, pady=(0, 7))
         self.system_completion_banner = tk.Label(
-            left, text="SYSTEM COMPLETION · awaiting journal data",
+            completion_wrap, text="SYSTEM COMPLETION · awaiting journal data",
             fg=COLOR_ACCENT, bg=self.UI_PANEL_2, font=("Consolas", 9, "bold"),
             anchor="w", justify=tk.LEFT, padx=12, pady=7,
             highlightbackground=self.UI_BORDER, highlightthickness=1,
         )
-        self.system_completion_banner.pack(fill=tk.X, pady=(0, 7))
+        self.system_completion_banner.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self._button(completion_wrap, "EVIDENCE", self._open_survey_evidence).pack(
+            side=tk.RIGHT, padx=(6, 0), fill=tk.Y,
+        )
 
         queue_header = tk.Frame(left, bg=self.UI_BG)
         queue_header.pack(fill=tk.X, pady=(0, 4))
@@ -600,6 +608,39 @@ class ExplorationWindow(ThemedWindowMixin):
         self.action_queue_tree.pack(side=tk.LEFT, fill=tk.X, expand=True)
         action_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.action_queue_tree.bind("<Double-Button-1>", self._execute_selected_action)
+
+        revisit_header = tk.Frame(left, bg=self.UI_BG)
+        revisit_header.pack(fill=tk.X, pady=(0, 4))
+        tk.Label(
+            revisit_header, text="MISSED DISCOVERIES / REVISIT QUEUE",
+            fg=COLOR_ORANGE, bg=self.UI_BG, font=("Segoe UI", 8, "bold"),
+        ).pack(side=tk.LEFT)
+        for label, command in (
+            ("DISMISS", self._dismiss_selected_revisit),
+            ("COPY", self._copy_selected_revisit),
+            ("BOOKMARK", self._bookmark_selected_revisit),
+            ("MAP", self._map_selected_revisit),
+        ):
+            self._button(revisit_header, label, command, accent=label == "MAP").pack(
+                side=tk.RIGHT, padx=(6, 0),
+            )
+        revisit_wrap = tk.Frame(left, bg=self.UI_BG)
+        revisit_wrap.pack(fill=tk.X, pady=(0, 8))
+        self.revisit_tree = ttk.Treeview(
+            revisit_wrap, columns=("system", "work", "score"), show="headings",
+            height=2, style="Explore.Treeview",
+        )
+        self.revisit_tree.heading("system", text="System")
+        self.revisit_tree.heading("work", text="Verified unfinished work")
+        self.revisit_tree.heading("score", text="Priority")
+        self.revisit_tree.column("system", width=210, anchor=tk.W)
+        self.revisit_tree.column("work", width=590, anchor=tk.W)
+        self.revisit_tree.column("score", width=70, anchor=tk.E)
+        revisit_scroll = scrollbar(revisit_wrap, orient=tk.VERTICAL, command=self.revisit_tree.yview)
+        self.revisit_tree.configure(yscrollcommand=revisit_scroll.set)
+        self.revisit_tree.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        revisit_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.revisit_tree.bind("<Double-Button-1>", self._map_selected_revisit)
 
         cols = ("body", "type", "action", "priority", "value", "signals", "discover", "distance")
         self.bodies_tree = self._tree(left, cols, {
@@ -662,6 +703,7 @@ class ExplorationWindow(ThemedWindowMixin):
             font=("Segoe UI", 9, "bold"),
         ).pack(side=tk.LEFT)
         self._button(toolbar, "Save Report", self._save_expedition_report).pack(side=tk.RIGHT)
+        self._button(toolbar, "Share Card", self._save_expedition_share_card).pack(side=tk.RIGHT, padx=(0, 7))
         self._button(toolbar, "Copy Report", self._copy_expedition_report, accent=True).pack(side=tk.RIGHT, padx=(0, 7))
         self._button(toolbar, "Copy Session", self._copy_captains_log).pack(side=tk.RIGHT, padx=(0, 7))
         self._button(toolbar, "Reset Session", self._reset_session).pack(side=tk.RIGHT, padx=(0, 7))
@@ -669,6 +711,22 @@ class ExplorationWindow(ThemedWindowMixin):
             toolbar, text="", fg=self.UI_MUTED, bg=self.UI_BG, font=("Consolas", 8),
         )
         self.captains_log_summary.pack(side=tk.RIGHT, padx=12)
+
+        vault = tk.Frame(frame, bg="#0b0f13", highlightbackground=self.UI_BORDER, highlightthickness=1)
+        vault.pack(fill=tk.X, padx=8, pady=(0, 7))
+        self.data_vault_labels = {}
+        for key, title in (
+            ("cartographic", "UNSOLD CARTOGRAPHIC"),
+            ("biology", "UNSOLD BIOLOGY"),
+            ("bonus", "POSSIBLE BIO BONUS"),
+            ("sale", "LAST DATA SALE"),
+        ):
+            cell = tk.Frame(vault, bg="#0b0f13")
+            cell.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=10, pady=7)
+            tk.Label(cell, text=title, fg=COLOR_ORANGE, bg="#0b0f13", font=("Segoe UI", 7, "bold"), anchor="w").pack(fill=tk.X)
+            value = tk.Label(cell, text="-", fg=COLOR_ACCENT, bg="#0b0f13", font=("Consolas", 9, "bold"), anchor="w")
+            value.pack(fill=tk.X, pady=(2, 0))
+            self.data_vault_labels[key] = value
 
         split = tk.PanedWindow(
             frame, orient=tk.HORIZONTAL, bg=self.UI_BG,
@@ -974,6 +1032,7 @@ class ExplorationWindow(ThemedWindowMixin):
                 self.bio_card.config(text=f"{bio_summary['bio_bodies']} bodies | {bio_summary['bio_signals']} signals\n{bio_summary['complete']} complete")
                 self._render_body_metrics(current, bodies, scanned, total, current_value)
                 self._render_exploration_intelligence()
+                self._render_revisit_queue()
                 self._render_bodies(bodies)
                 self._render_bio(bodies, bio_summary)
                 self._render_sampling()
@@ -981,6 +1040,7 @@ class ExplorationWindow(ThemedWindowMixin):
                 self._render_route()
                 self._render_history(current_value, valuable_count, session_stats)
                 self._render_captains_log()
+                self._render_data_vault()
             selected_workspace = self.tabs.select()
             if visible and selected_workspace == str(self.discoveries_workspace) and self.discoveries_view:
                 self.discoveries_view.refresh(self.system_history_rows, self.ledger_rows)
@@ -1193,6 +1253,162 @@ class ExplorationWindow(ThemedWindowMixin):
         text = f"{row.get('title') or 'Next action'} · {row.get('detail') or ''}".strip(" ·")
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
+
+    def _render_revisit_queue(self):
+        if not hasattr(self, "revisit_tree"):
+            return
+        selected_system = None
+        selected = self.revisit_tree.selection()
+        if selected:
+            selected_system = (self.revisit_rows.get(selected[0]) or {}).get("system")
+        children = self.revisit_tree.get_children()
+        if children:
+            self.revisit_tree.delete(*children)
+        self.revisit_rows = {}
+        tracker = getattr(self.app, "deep_survey", None)
+        queue = tracker.revisit_queue(30) if tracker and hasattr(tracker, "revisit_queue") else []
+        chosen = None
+        rows = sorted(
+            queue,
+            key=lambda row: (int(row.get("score") or 0), str(row.get("timestamp") or "")),
+            reverse=True,
+        )
+        for row in rows[:30]:
+            iid = self.revisit_tree.insert("", tk.END, values=(
+                row.get("system") or "-", row.get("detail") or "Unfinished survey evidence",
+                int(row.get("score") or 0),
+            ))
+            self.revisit_rows[iid] = row
+            if selected_system and str(row.get("system") or "").casefold() == str(selected_system).casefold():
+                chosen = iid
+        children = self.revisit_tree.get_children()
+        if children:
+            self.revisit_tree.selection_set(chosen or children[0])
+
+    def _selected_revisit(self):
+        selected = self.revisit_tree.selection() if hasattr(self, "revisit_tree") else ()
+        return self.revisit_rows.get(selected[0]) if selected else None
+
+    def _copy_selected_revisit(self):
+        row = self._selected_revisit()
+        if not row:
+            return
+        text = f"{row.get('system') or ''} · {row.get('detail') or ''}".strip(" ·")
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+
+    def _bookmark_selected_revisit(self):
+        row = self._selected_revisit()
+        if not row:
+            return
+        self._add_expedition_bookmark(
+            "Revisit", system=row.get("system") or "", title=f"Revisit {row.get('system') or 'system'}",
+            tags=["revisit", "unfinished-survey"], source="revisit-queue",
+            position=row.get("position"),
+        )
+
+    def _map_selected_revisit(self, _event=None):
+        row = self._selected_revisit()
+        if not row:
+            return
+        open_map = getattr(self.app, "open_galaxy_map_page", None)
+        if callable(open_map):
+            open_map()
+        view = getattr(self, "expedition_map_view", None)
+        if view:
+            view.refresh(self.system_history_rows, self.ledger_rows)
+            try:
+                self.win.after_idle(lambda: view.focus_system(row.get("system") or ""))
+            except tk.TclError:
+                pass
+
+    def _dismiss_selected_revisit(self):
+        row = self._selected_revisit()
+        tracker = getattr(self.app, "deep_survey", None)
+        if not row or not tracker:
+            return
+        tracker.dismiss_revisit(row.get("system"))
+        self._render_revisit_queue()
+        self._refresh_visible_map()
+
+    def _open_survey_evidence(self):
+        system = str(getattr(self.app, "current_sys", "") or "Unknown")
+        evidence_getter = getattr(self.app, "survey_evidence_snapshot", None)
+        evidence = evidence_getter(system) if callable(evidence_getter) else {
+            "system": system, "note": "Evidence inspector is unavailable.",
+        }
+        win = tk.Toplevel(self.win)
+        win.title(f"Survey Evidence — {system}")
+        win.geometry("760x540")
+        apply_window(win)
+        win.transient(self.win)
+        header = tk.Frame(win, bg=self.UI_PANEL)
+        header.pack(fill=tk.X, padx=10, pady=(10, 6))
+        tk.Label(header, text=f"SURVEY EVIDENCE // {system}", fg=COLOR_ACCENT,
+                 bg=self.UI_PANEL, font=("Segoe UI", 11, "bold"), anchor="w").pack(side=tk.LEFT)
+        status = tk.Label(header, text="READ ONLY", fg=self.UI_MUTED, bg=self.UI_PANEL,
+                          font=("Consolas", 8, "bold"))
+        status.pack(side=tk.RIGHT)
+        output = tk.Text(win, bg="#0b0f13", fg=COLOR_TEXT, insertbackground=COLOR_ACCENT,
+                         relief=tk.FLAT, bd=0, padx=14, pady=12, font=("Consolas", 9), wrap=tk.WORD)
+        output.pack(fill=tk.BOTH, expand=True, padx=10)
+
+        def render(payload):
+            lines = [
+                "This view compares live UI state, retained SQLite evidence, deep-survey history, and journal facts.",
+                "Repair only rebuilds this system; it does not upload journal events.", "",
+            ]
+            for section, values in (payload or {}).items():
+                title = str(section).replace("_", " ").upper()
+                if isinstance(values, dict):
+                    lines.append(title)
+                    lines.extend(f"  {str(key).replace('_', ' ')}: {value}" for key, value in values.items())
+                    lines.append("")
+                else:
+                    lines.append(f"{title}: {values}")
+            output.configure(state=tk.NORMAL)
+            output.delete("1.0", tk.END)
+            output.insert(tk.END, "\n".join(lines))
+            output.configure(state=tk.DISABLED)
+
+        render(evidence)
+        actions = tk.Frame(win, bg=self.UI_BG)
+        actions.pack(fill=tk.X, padx=10, pady=10)
+        self._button(actions, "CLOSE", win.destroy).pack(side=tk.RIGHT)
+
+        def repair():
+            repairer = getattr(self.app, "repair_system_from_journals", None)
+            if not callable(repairer):
+                status.config(text="REPAIR UNAVAILABLE", fg=THEME.red)
+                return
+            repair_button.config(state=tk.DISABLED)
+            status.config(text="REPAIRING FROM JOURNALS…", fg=COLOR_ORANGE)
+
+            def worker():
+                try:
+                    result = repairer(system)
+                    failure = None
+                except Exception as exc:
+                    result, failure = None, str(exc)
+
+                def finish():
+                    if not win.winfo_exists():
+                        return
+                    repair_button.config(state=tk.NORMAL)
+                    if failure:
+                        status.config(text=f"FAILED: {failure}", fg=THEME.red)
+                    else:
+                        status.config(text="REPAIR COMPLETE", fg=self.UI_OK)
+                        render(evidence_getter(system) if callable(evidence_getter) else result)
+                        self.refresh(force=True)
+                post = getattr(self.app, "_ui_post", None)
+                if callable(post):
+                    post(finish, key=f"survey-evidence-window:{system.casefold()}")
+
+            threading.Thread(target=worker, name="survey-system-repair", daemon=True).start()
+
+        repair_button = self._button(actions, "REPAIR THIS SYSTEM", repair, accent=True)
+        repair_button.pack(side=tk.RIGHT, padx=(0, 7))
 
     def _render_bodies(self, bodies):
         self._last_survey_bodies = list(bodies or [])
@@ -1732,6 +1948,18 @@ class ExplorationWindow(ThemedWindowMixin):
         # and brings the owning Explore page forward.
         open_explore = getattr(self.app, "open_exploration_window", None)
         kind = str((record or {}).get("kind") or "")
+        if kind == "Revisit":
+            if callable(open_explore):
+                open_explore(section="survey")
+            else:
+                self.show_section("survey")
+            wanted = str((record or {}).get("system") or "").casefold()
+            for iid, row in self.revisit_rows.items():
+                if str(row.get("system") or "").casefold() == wanted:
+                    self.revisit_tree.selection_set(iid)
+                    self.revisit_tree.see(iid)
+                    break
+            return
         if kind in {"Bookmark", "Recon"}:
             if callable(open_explore):
                 open_explore(section="mission")
@@ -2401,6 +2629,33 @@ class ExplorationWindow(ThemedWindowMixin):
         else:
             self._show_captains_log(None)
 
+    def _render_data_vault(self):
+        labels = getattr(self, "data_vault_labels", {})
+        if not labels:
+            return
+        journal = getattr(self.app, "captains_log", None)
+        sessions = journal.sessions() if journal else []
+        vault = data_vault_snapshot(getattr(self.app, "companion_state", {}) or {}, sessions)
+        labels["cartographic"].config(
+            text=f"{self._format_credits(vault.get('exploration_cr'))} · {int(vault.get('systems_represented') or 0)} systems"
+        )
+        labels["biology"].config(text=self._format_credits(vault.get("biology_cr")))
+        labels["bonus"].config(text=self._format_credits(vault.get("biology_bonus_cr")))
+        sales = [
+            ("Cartographic", vault.get("last_exploration_sale") or {}),
+            ("Biology", vault.get("last_bio_sale") or {}),
+        ]
+        labels["sale"].config(fg=COLOR_ACCENT)
+        sales = [(kind, row) for kind, row in sales if row.get("timestamp") or row.get("value")]
+        if sales:
+            kind, sale = max(sales, key=lambda item: str(item[1].get("timestamp") or ""))
+            when = str(sale.get("timestamp") or "")[:10] or "recent"
+            labels["sale"].config(text=f"{kind} · {self._format_credits(sale.get('value'))} · {when}")
+        elif vault.get("lost_at"):
+            labels["sale"].config(text=f"Data lost · {str(vault.get('lost_at'))[:10]}", fg=THEME.red)
+        else:
+            labels["sale"].config(text="No retained sale evidence", fg=self.UI_MUTED)
+
     def _on_captains_log_selected(self, _event=None):
         selected = self.captains_log_tree.selection()
         self._show_captains_log(self.captains_log_rows.get(selected[0]) if selected else None)
@@ -2536,6 +2791,60 @@ class ExplorationWindow(ThemedWindowMixin):
         if hasattr(self.app, "add_event_feed_entry"):
             self.app.add_event_feed_entry(
                 "SURVEY", f"Expedition report saved: {os.path.basename(path)}", severity="INFO",
+            )
+
+    def _save_expedition_share_card(self):
+        manager = getattr(self.app, "expedition_manager", None)
+        expedition = manager.active() if manager else None
+        session = manager.report_session(expedition) if manager and expedition else self._selected_expedition_session()
+        tracker = getattr(self.app, "deep_survey", None)
+        snapshot = tracker.snapshot() if tracker else {}
+        title = expedition.get("name") if expedition else "Explorer Chronicle"
+        snapshot = dict(snapshot)
+        route_points = list(snapshot.get("route_points") or [])
+        if expedition:
+            system_keys = {
+                str(name).casefold() for name in ((expedition.get("stats") or {}).get("systems") or [])
+            }
+            route_points = [
+                row for row in route_points
+                if str(row.get("system") or "").casefold() in system_keys
+            ]
+        elif session:
+            started, ended = str(session.get("started") or ""), str(session.get("ended") or "")
+            if started:
+                route_points = [
+                    row for row in route_points
+                    if str(row.get("timestamp") or "") >= started
+                    and (not ended or str(row.get("timestamp") or "") <= ended)
+                ]
+        snapshot["route_points"] = route_points
+        report_date = str((session or {}).get("started") or time.strftime("%Y-%m-%d"))[:10]
+        safe_title = "".join(
+            character if character.isalnum() or character in "-_" else "_"
+            for character in str(title or "Expedition")
+        )[:60]
+        path = filedialog.asksaveasfilename(
+            parent=self.win, title="Save Expedition Share Card",
+            initialfile=f"VoidCompass-{safe_title}-{report_date}.png",
+            defaultextension=".png",
+            filetypes=(("PNG image", "*.png"), ("All files", "*.*")),
+        )
+        if not path:
+            return
+        palette = {
+            "bg": THEME.bg, "panel": THEME.panel, "accent": THEME.accent,
+            "orange": THEME.orange, "text": THEME.text, "muted": THEME.muted,
+            "border": THEME.border,
+        }
+        try:
+            save_expedition_share_card(path, title, session or {}, snapshot, palette)
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("Save Expedition Share Card", f"Could not save the card:\n{exc}", parent=self.win)
+            return
+        if hasattr(self.app, "add_event_feed_entry"):
+            self.app.add_event_feed_entry(
+                "EXPEDITION", f"Share card saved: {os.path.basename(path)}", severity="INFO",
             )
 
     def _format_history_time(self, ts):

@@ -18,7 +18,7 @@ from global_hotkeys import (
 from platform_support import default_screenshot_path, open_path
 from ui_theme import (
     THEME, FONT_MONO, FONT_TITLE, FONT_UI, FONT_UI_BOLD,
-    apply_window, button, scrollbar as themed_scrollbar, window_surface,
+    apply_window, apply_ui_scale, button, scrollbar as themed_scrollbar, window_surface,
 )
 
 COLOR_ACCENT = THEME.accent
@@ -43,7 +43,8 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
                   on_close_callback=None, voice_manager=None, cockpit_memory=None,
                   cockpit_brain=None, cockpit_cognition=None,
                   support_bundle_callback=None, rerun_setup_callback=None,
-                  health_provider=None, ui_post_callback=None):
+                  health_provider=None, ui_post_callback=None,
+                  overlay_layout_callback=None):
     win = window_surface(root, embedded=embedded)
     win.title("SYSTEM CONFIGURATION")
     win.geometry(config.get("settings_geometry", "980x800"))
@@ -271,6 +272,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     rebuy_warning_var = tk.BooleanVar(value=config.get("rebuy_warnings_enabled", True))
     data_risk_var = tk.BooleanVar(value=config.get("data_risk_warnings_enabled", True))
     heartbeat_var = tk.BooleanVar(value=config.get("heartbeat_overlay_enabled", True))
+    reduced_motion_var = tk.BooleanVar(value=config.get("reduced_motion_enabled", False))
+    ui_scale_var = tk.StringVar(value=str(config.get("ui_scale_percent", 100)))
+    overlay_text_scale_var = tk.StringVar(value=str(config.get("overlay_text_scale_percent", 100)))
     ss_var = tk.BooleanVar(value=config.get("screenshots_enabled", False))
     edsm_upload_var = tk.BooleanVar(value=config.get("edsm_upload_enabled", False))
     runtime_trace_var = tk.BooleanVar(value=config.get("runtime_trace_enabled", True))
@@ -372,6 +376,11 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     core_shots = section(core_page, "Screenshots")
     toggle_row(core_shots, "Convert BMP screenshots to PNG", ss_var)
 
+    core_accessibility = section(core_page, "Accessibility")
+    option_row(core_accessibility, "Application scale", ui_scale_var, ("90", "100", "110", "125", "140"))
+    option_row(core_accessibility, "Overlay text scale", overlay_text_scale_var, ("90", "100", "110", "125", "140"))
+    toggle_row(core_accessibility, "Reduced motion and gentler activity pulses", reduced_motion_var)
+
     overlay_modules = section(overlay_page, "Modules")
     toggle_row(overlay_modules, "Tactical Overlay", ov_var)
     toggle_row(overlay_modules, "Compact Tactical HUD", hud_compact_var)
@@ -396,6 +405,16 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         ),
         overlay_mouse_passthrough_var,
     )
+    if callable(overlay_layout_callback):
+        layout_actions = row(overlay_interaction)
+        action_button(
+            layout_actions, "Arrange Overlays", overlay_layout_callback, accent=True,
+        ).pack(side=tk.LEFT)
+        tk.Label(
+            layout_actions,
+            text="Live drag, edge snapping and commander-specific layout presets.",
+            font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w",
+        ).pack(side=tk.LEFT, padx=10)
 
     overlay_hotkeys = section(overlay_page, "Global Hotkeys")
     toggle_row(
@@ -1351,6 +1370,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "rebuy_warnings_enabled": rebuy_warning_var.get(),
             "data_risk_warnings_enabled": data_risk_var.get(),
             "heartbeat_overlay_enabled": heartbeat_var.get(),
+            "reduced_motion_enabled": reduced_motion_var.get(),
+            "ui_scale_percent": int(ui_scale_var.get()),
+            "overlay_text_scale_percent": int(overlay_text_scale_var.get()),
             "ui_theme_name": theme_var.get(),
             "ui_custom_themes": dict(custom_themes),
             "screenshots_enabled": ss_var.get(),
@@ -1400,6 +1422,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             memory_summary_var.set(cockpit_memory.summary_text())
         remove_deprecated_keys()
         persist_config(config)
+        apply_ui_scale(root, config.get("ui_scale_percent", 100))
         if voice_manager is not None:
             voice_manager.prune_cache_async()
         saved_name = theme_var.get()

@@ -19,7 +19,7 @@ from config import (
     load_config, CONFIG_FILE,
     COLOR_BG, COLOR_ACCENT, COLOR_TEXT,
     apply_profile_config, commander_profile_key, get_active_profile,
-    get_profile_file, save_config, save_active_profile_config,
+    get_profile_dir, get_profile_file, save_config, save_active_profile_config,
 )
 import themes
 from ui_theme import apply_theme_live
@@ -34,7 +34,7 @@ from settings_ui import open_settings
 from waypoint_manager import WaypointManager
 import route_strip
 from journal_watcher import JournalWatcher
-from mining_window import MINING_MATERIALS
+from mining_data import MINING_MATERIALS
 from carrier_tracker import CarrierTracker
 from carrier_window import CarrierWindow
 from prospector_hud import ProspectorHUD
@@ -83,6 +83,7 @@ import compass_personas
 from captains_log import CaptainsLog
 from deep_survey import DeepSurveyTracker
 from exploration_intelligence import build_intelligence, checkpoint_payload
+from explorer_fieldcraft import revisit_candidate, route_safety_forecast
 from expedition_manager import ExpeditionManager
 from diagnostic_logs import application_base_dir, resolve_log_path
 from adaptive_command import AdaptiveCommandDeck, AUTOMATIC_MODE_IDLE_S, MODE_LABELS
@@ -93,6 +94,9 @@ from session_recovery import ProfileSessionGuard
 from ui_dispatcher import TkDispatcher
 from global_hotkeys import GlobalHotkeyManager, OVERLAY_HOTKEY_SPECS
 from platform_support import default_screenshot_path, open_path
+from overlay_layout import OverlayLayoutStudio
+from ui_theme import apply_ui_scale
+from profile_backups import automatic_backup
 
 
 # One burst of journal events describes a single moment, so the shared
@@ -460,6 +464,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _close_profile_surfaces(self):
         """Close every UI surface holding references to the outgoing profile."""
+        # The Studio temporarily exposes hidden overlays and keeps references to
+        # their windows. Close it while they still belong to the outgoing
+        # commander, so positions/geometry are saved to the correct profile and
+        # the new commander's visibility cannot inherit the old edit session.
+        studio = getattr(self, "overlay_layout_studio", None)
+        try:
+            if studio and studio.is_open():
+                studio.close()
+        except Exception:
+            try:
+                win = getattr(studio, "win", None)
+                if win and win.winfo_exists():
+                    win.destroy()
+            except Exception:
+                pass
+        self.overlay_layout_studio = None
         try:
             self._capture_overlay_positions()
         except Exception:
@@ -718,17 +738,29 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         save_config(self.config)
 
     def _refresh_tool_window(self, attr, method="refresh"):
+        if threading.current_thread() is not threading.main_thread():
+            self._ui_post(
+                self._refresh_tool_window, attr, method,
+                key=f"tool-window:{attr}:{method}",
+            )
+            return
         if getattr(self, "_startup_restore_active", False):
             self._startup_restore_ui_pending = True
             return
         win = getattr(self, attr, None)
         try:
             if win and win.is_open():
-                self.root.after(0, getattr(win, method))
+                getattr(win, method)()
         except Exception:
             pass
 
     def _refresh_commander_profile_window(self):
+        if threading.current_thread() is not threading.main_thread():
+            self._ui_post(
+                self._refresh_commander_profile_window,
+                key="commander-profile-refresh",
+            )
+            return
         if getattr(self, "_startup_restore_active", False):
             self._startup_restore_ui_pending = True
             return
@@ -737,7 +769,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if not window or not window.is_open():
                 return
             if getattr(self, "_active_page", None) == "PROFILE":
-                self.root.after(0, window.refresh)
+                window.refresh()
             else:
                 window._refresh_pending = True
         except Exception:
@@ -750,6 +782,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._refresh_tool_window("colonisation_planner_window")
 
     def _refresh_exploration_window(self):
+        if threading.current_thread() is not threading.main_thread():
+            self._ui_post(
+                self._refresh_exploration_window,
+                key="exploration-window-refresh",
+            )
+            return
         if getattr(self, "_startup_restore_active", False):
             self._startup_restore_ui_pending = True
             return
@@ -1189,15 +1227,30 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def __init__(self, root):
         self.root = root
         self.config = load_config()
+        apply_ui_scale(self.root, self.config.get("ui_scale_percent", 100))
         self._prepare_commander_profile_from_journal()
         self._apply_active_profile_theme()
-        if should_show_onboarding(self.config):
+        first_run = should_show_onboarding(self.config)
+        if first_run:
             self._show_bootstrap_onboarding()
             # The selected journal folder may identify a different commander
             # than the pre-wizard defaults. Establish that profile before any
             # profile-local state, voice worker, overlay or journal watcher.
             self._prepare_commander_profile_from_journal()
             self._apply_active_profile_theme()
+            save_config(self.config)
+        previous_version = str(self.config.get("last_app_version") or "")
+        if not first_run and previous_version != APP_VERSION:
+            try:
+                automatic_backup(
+                    get_active_profile(self.config),
+                    get_profile_dir(get_active_profile(self.config)),
+                    reason=f"before_{APP_VERSION}", keep=5,
+                )
+            except Exception as exc:
+                logging.warning("Automatic pre-upgrade profile backup skipped: %s", exc)
+        if previous_version != APP_VERSION:
+            self.config["last_app_version"] = APP_VERSION
             save_config(self.config)
         # This is the only cross-thread gateway into Tk. Background journal,
         # network and file workers enqueue bounded work here; Tk drains it in
@@ -1490,6 +1543,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.analytics_window = None
         self.achievement_window = None
         self.specialists_window = None
+        self.overlay_layout_studio = None
         self._carrier_panel_tick_job = None
         self._specialist_flush_job = None
         self.carrier_tracker = CarrierTracker()
@@ -1891,6 +1945,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if spec is None:
             return
         _action, _key, label, attr = spec
+        if action == "field_bookmark":
+            self._field_bookmark()
+            return
         if action == "toggle_all":
             if self._overlay_hotkey_global_hidden:
                 self._overlay_hotkey_global_hidden = False
@@ -2034,7 +2091,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         dispatcher = getattr(self, "ui_dispatcher", None)
         if dispatcher:
             return dispatcher.post(callback, *args, key=key, **kwargs)
-        return False
+        try:
+            self.root.after(0, lambda: callback(*args, **kwargs))
+            return True
+        except Exception:
+            return False
 
     def _tick_runtime_trace(self):
         if not self.is_running:
@@ -2191,6 +2252,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return
         self._closing = True
         self.is_running = False
+        studio = getattr(self, "overlay_layout_studio", None)
+        try:
+            if studio and studio.is_open():
+                studio.close()
+        except Exception:
+            pass
+        self.overlay_layout_studio = None
         try:
             self.root.withdraw()
         except Exception:
@@ -2386,7 +2454,73 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "destination": self.dest_name,
             "route": list(self.route_list or []),
             "entries": [dict(row) for row in (self.nav_route_entries or []) if isinstance(row, dict)],
+            "safety": self._route_safety_snapshot(),
         }
+
+    def _route_safety_snapshot(self):
+        return route_safety_forecast(
+            getattr(self, "nav_route_entries", None),
+            getattr(self, "current_sys", None),
+            getattr(self, "star_class", None),
+            getattr(self, "current_fuel_main", None),
+            getattr(self, "fuel_capacity_main", None),
+            list(getattr(self, "_fuel_used_samples", ()) or ()),
+        )
+
+    def _record_departure_revisit(self, timestamp=None):
+        tracker = getattr(self, "deep_survey", None)
+        if tracker is None:
+            return None
+        system = getattr(self, "current_sys", "")
+        candidate = revisit_candidate(
+            system,
+            getattr(self, "scan_items", None),
+            getattr(self, "scanned", 0),
+            getattr(self, "total", 0),
+            position=getattr(self, "current_coords", None),
+            timestamp=timestamp,
+        )
+        if candidate:
+            tracker.record_revisit(candidate)
+            self.add_event_feed_entry(
+                "SURVEY", f"Revisit queued: {system} · {candidate['detail']}",
+                severity="INFO", copy_text=system,
+            )
+            return candidate
+        # Unknown 0/0 state is not proof that a retained opportunity is done.
+        total = int(getattr(self, "total", 0) or 0)
+        if total > 0 and int(getattr(self, "scanned", 0) or 0) >= total:
+            tracker.dismiss_revisit(system)
+        return None
+
+    def _field_bookmark(self):
+        system = str(getattr(self, "current_sys", "") or "").strip()
+        if not system or system in {"---", "Unknown"}:
+            self.add_event_feed_entry(
+                "EXPEDITION", "Field bookmark unavailable until the current system is known",
+                severity="WARN",
+            )
+            return None
+        body = str(getattr(self, "current_body_name", "") or "").strip()
+        title = body or system
+        manager = getattr(self, "expedition_manager", None)
+        if manager is None:
+            return None
+        bookmark = manager.add_bookmark(
+            "Field Note", system=system, body=body, title=title,
+            tags=["field", "quick"], source="field-hotkey",
+            position=getattr(self, "current_coords", None),
+        )
+        self.add_event_feed_entry(
+            "EXPEDITION", f"Field bookmark saved: {title}", severity="INFO",
+            copy_text=system,
+        )
+        if getattr(self, "toast_hud", None):
+            self.toast_hud.push(
+                "FIELD BOOKMARK", title, severity="success", duration_s=8,
+            )
+        self._refresh_exploration_window()
+        return bookmark
 
     def open_mining_window(self):
         """Open the authoritative elite-trader-style mining workflow."""
@@ -2408,6 +2542,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.carrier_window = CarrierWindow(
             self.dashboard_host, self.config, self.carrier_tracker,
             embedded=True, specialist_engine=self.specialist_engine,
+            ui_post=self._ui_post,
         )
         self._show_embedded_page("CARRIER", self.carrier_window.win)
 
@@ -2438,6 +2573,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             overlay_callback=self.toggle_colony_overlay,
             cargo_capacity_provider=lambda: self.cargo_capacity,
             embedded=True,
+            ui_post_callback=self._ui_post,
         )
         self._show_embedded_page("COLONY", self.colonization_window.win)
 
@@ -2478,6 +2614,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             plot_system_callback=self._route_engineering_system,
             is_active_callback=lambda: getattr(self, "_active_page", None) == "ENGINEER",
             embedded=True,
+            ui_post_callback=self._ui_post,
         )
         self._show_embedded_page("ENGINEER", self.engineer_window.win)
         self.engineer_window.on_shown()
@@ -2774,7 +2911,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.navigation_scan_progress_source = "bodies"
             self.db_update_system(self.current_sys, self.total, self.scanned)
             if not self.batch_mode:
-                self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+                scan_text = f"{self.scanned} / {self.total}"
+                self._ui_post(lambda value=scan_text: self.scan_stat.config(text=value), key="scan-progress-label")
                 self.update_hud()
                 self.schedule_dashboard_refresh()
                 self._refresh_exploration_window()
@@ -2959,8 +3097,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 rerun_setup_callback=self._rerun_first_run_onboarding,
                 health_provider=self._adaptive_health_snapshot,
                 ui_post_callback=self._ui_post,
+                overlay_layout_callback=self.open_overlay_layout_studio,
             )
         self._show_embedded_page("SETTINGS", self.settings_page)
+
+    def open_overlay_layout_studio(self):
+        studio = getattr(self, "overlay_layout_studio", None)
+        if studio and studio.is_open():
+            studio.lift()
+            studio.refresh()
+            return
+        self.overlay_layout_studio = OverlayLayoutStudio(self.root, self)
 
     def fetch_system_traffic(self, system_name):
         self.last_edsm_request_ts = time.time()
@@ -3288,11 +3435,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             route_waypoint, route_counts, "OK", None, self._build_navigation_hud_context(),
         )
 
-        def _draw_navigation_hud():
-            if self.hud is target_hud:
-                target_hud.update(*payload)
-
-        self.root.after(0, _draw_navigation_hud)
+        # _perform_hud_update is already reached through the coalesced Tk
+        # scheduler, so another after(0) only lengthens the queue during a
+        # journal burst and permits stale frames to overtake newer state.
+        if self.hud is target_hud:
+            target_hud.update(*payload)
         self.update_scan_hud()
         self._perf_spike("_perform_hud_update", t0, threshold_ms=30.0)
 
@@ -3418,6 +3565,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             badges.append(("DOCKED", "ok"))
         if not badges:
             badges.append(("CLEAR", "muted"))
+        route_safety = self._route_safety_snapshot()
+        if route_safety.get("badge"):
+            badges.insert(0, (
+                route_safety["badge"], route_safety.get("badge_state", "info"),
+            ))
 
         return {
             "route_mode": route_mode,
@@ -3446,6 +3598,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "music_track": getattr(self, "current_music_track", ""),
             "scan_progress": getattr(self, "navigation_scan_progress", None),
             "scan_progress_source": getattr(self, "navigation_scan_progress_source", "bodies"),
+            "route_safety": route_safety,
             "badges": badges[:6],
         }
 
@@ -3671,7 +3824,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 trade_marketdb.log_balance(ts, balance)
                 window = getattr(self, "analytics_window", None)
                 if window and window.is_open() and getattr(self, "_active_page", None) == "ANALYTICS":
-                    self.root.after(0, window.request_refresh)
+                    self._ui_post(window.request_refresh, key="analytics-refresh")
             except Exception:
                 pass
 
@@ -3692,7 +3845,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if changed:
             self._refresh_commander_profile_window()
             if self.trade_window and self.trade_window.is_open():
-                self.root.after(0, self.trade_window._refresh_summary)
+                self._ui_post(self.trade_window._refresh_summary, key="trade-summary")
             try:
                 self.schedule_dashboard_refresh()
             except Exception:
@@ -5442,7 +5595,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._schedule_specialist_flush()
             window = getattr(self, "specialists_window", None)
             if window and window.is_open() and getattr(self, "_active_page", None) == "SPECIALISTS":
-                self.root.after(0, window.refresh)
+                self._ui_post(window.refresh, key="specialists-refresh")
             carrier_window = getattr(self, "carrier_window", None)
             if carrier_window and carrier_window.is_open():
                 carrier_window.on_specialist_updated()
@@ -5777,6 +5930,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "Location" or ev == "FSDJump" or ev == "StartJump" or (ev == "CarrierJump" and d.get("docked")):
             # Do not update HUDs during jump charge; wait for arrival.
             if ev == "StartJump":
+                if not startup_replay:
+                    self._record_departure_revisit(raw.get("timestamp"))
                 self._save_exploration_checkpoint("departure")
                 self.in_fss = False
                 self.fss_summary_active = False
@@ -5946,11 +6101,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 sys_text = self.current_sys.upper()
                 if self.star_class:
                     sys_text += f" [{star_type_label(self.star_class)}]"
-                self.root.after(0, lambda: self.sys_stat.config(text=sys_text))
+                self._ui_post(lambda value=sys_text: self.sys_stat.config(text=value), key="system-label")
                 self.update_nav_label()
             # Bio logs hidden for now (counting disabled)
-                self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
-                self.root.after(0, self.update_waypoint_display)
+                scan_text = f"{self.scanned} / {self.total}"
+                self._ui_post(lambda value=scan_text: self.scan_stat.config(text=value), key="scan-progress-label")
+                self._ui_post(self.update_waypoint_display, key="waypoint-display")
                 self.schedule_dashboard_refresh(full=True)
                 self.update_hud()
                 self.update_scan_hud()
@@ -5960,7 +6116,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     and self.route_plotter.win.winfo_exists()):
                 s_sys = self.current_sys
                 s_coords = self.current_coords
-                self.root.after(0, lambda: self.route_plotter.update_current_system(s_sys, s_coords))
+                self._ui_post(
+                    lambda: self.route_plotter.update_current_system(s_sys, s_coords),
+                    key="route-current-system",
+                )
 
             # Auto-copy next waypoint logic
             if not startup_replay and self.config.get("auto_copy_waypoint", False):
@@ -5984,14 +6143,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 _bs   = dict(self.body_signals)
                 _tot  = self.total
                 _done = self.scanned
-                self.root.after(0, lambda: self.system_info_hud.on_system_arrival(
-                    _sys, _sc, _si, _bs, _tot, scanned_bodies=_done))
+                self._ui_post(
+                    lambda: self.system_info_hud.on_system_arrival(
+                        _sys, _sc, _si, _bs, _tot, scanned_bodies=_done),
+                    key="system-info-arrival",
+                )
             if self.survey_status_hud and not startup_replay:
-                self.root.after(0, lambda: self.survey_status_hud.update(
-                    self.current_sys, self.scanned, self.total, self.scan_items,
-                    self.body_signals, sampling=self._sampling_snapshot(),
-                    focused_body_id=self.current_body_id,
-                    focused_body_name=self.current_body_name))
+                self._ui_post(
+                    lambda: self.survey_status_hud.update(
+                        self.current_sys, self.scanned, self.total, self.scan_items,
+                        self.body_signals, sampling=self._sampling_snapshot(),
+                        focused_body_id=self.current_body_id,
+                        focused_body_name=self.current_body_name),
+                    key="survey-status",
+                )
             self._refresh_exploration_window()
 
         elif ev == "Docked":
@@ -6164,7 +6329,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             else:
                 self.db_update_system(self.current_sys, self.total, self.scanned)
                 if not self.batch_mode:
-                    self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+                    scan_text = f"{self.scanned} / {self.total}"
+                    self._ui_post(lambda value=scan_text: self.scan_stat.config(text=value), key="scan-progress-label")
             self.log(f"🔭 HONK: {self.total} bodies detected.")
             if not startup_replay:
                 self.add_event_feed_entry("SCAN", f"Honk complete: {self.total} bodies", severity="INFO", copy_text=self.current_sys)
@@ -6182,7 +6348,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.total = max(self.total, self.scanned + discovered)
                 self.db_update_system(self.current_sys, self.total, self.scanned)
                 if not self.batch_mode:
-                    self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+                    scan_text = f"{self.scanned} / {self.total}"
+                    self._ui_post(lambda value=scan_text: self.scan_stat.config(text=value), key="scan-progress-label")
                     self.update_hud()
                     self.schedule_dashboard_refresh()
 
@@ -6375,7 +6542,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.scanned = new_count
                     self.db_update_system(self.current_sys, self.total, self.scanned)
                     if not self.batch_mode:
-                        self.root.after(0, lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"))
+                        scan_text = f"{self.scanned} / {self.total}"
+                        self._ui_post(lambda value=scan_text: self.scan_stat.config(text=value), key="scan-progress-label")
                     self.last_scan_event = data
                     self.add_scan_item(raw)
                     self._queue_edsm_upload(raw, startup_replay=startup_replay)
@@ -6517,10 +6685,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         # any multi-event poll, not just startup, which was silently dropping updates.
         if self.prospector_hud and not startup_replay:
             if ev == "ProspectedAsteroid":
-                self.root.after(0, lambda r=raw: self.prospector_hud.update(r))
+                self._ui_post(lambda r=raw: self.prospector_hud.update(r), key="prospector-hud")
             elif ev == "MiningRefined":
                 mat = raw.get("Type_Localised") or raw.get("Type") or ""
-                self.root.after(0, lambda m=mat: self.prospector_hud.add_refined(m))
+                self._ui_post(lambda m=mat: self.prospector_hud.add_refined(m))
 
         self._update_exploration_intelligence(
             ev, raw if isinstance(raw, dict) else d,
@@ -6566,7 +6734,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def _toast_on_main(self, title, message, severity="info", duration=12,
                        voice_text=None, voice_category="safety", voice_key=None):
         if self.toast_hud:
-            self.root.after(0, lambda: self.toast_hud.push(
+            self._ui_post(lambda: self.toast_hud.push(
                 title, message, severity=severity, duration_s=duration,
             ))
         if voice_text:
@@ -6577,7 +6745,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         toast = getattr(self, "toast_hud", None)
         if toast and hasattr(toast, "dismiss"):
             try:
-                self.root.after(0, lambda target=toast: target.dismiss(title="DATA AT RISK"))
+                self._ui_post(
+                    lambda target=toast: target.dismiss(title="DATA AT RISK"),
+                    key="dismiss-data-risk-toast",
+                )
             except Exception:
                 pass
         voice = getattr(self, "voice_callouts", None)
@@ -6889,6 +7060,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._update_sampling_clearance()
 
         elif ev == "Died" and not startup_replay:
+            if (int(state.get("unsold_exploration_cr") or 0)
+                    or int(state.get("unsold_bio_cr") or 0)):
+                state["exploration_data_lost_at"] = raw.get("timestamp")
             state["unsold_exploration_cr"] = 0
             state["unsold_bio_cr"] = 0
             state["unsold_bio_bonus_potential_cr"] = 0
@@ -6934,6 +7108,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if getattr(self, "cockpit_memory", None):
                     self.cockpit_memory.check_bio_sell_anticipation(state.get("unsold_bio_samples"))
             elif ev in ("SellExplorationData", "MultiSellExplorationData"):
+                state["last_exploration_sale"] = {
+                    "timestamp": raw.get("timestamp"),
+                    "value": int(raw.get("TotalEarnings") or raw.get("TotalSale") or 0),
+                    "system": getattr(self, "current_sys", ""),
+                    "station": getattr(self, "current_station_name", ""),
+                }
                 state["unsold_exploration_cr"] = 0
                 state["unsold_scan_keys"] = []
                 self._data_risk_level = 0
@@ -6941,6 +7121,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 changed = True
             elif ev == "SellOrganicData":
                 sold_count = int(state.get("unsold_bio_samples") or 0)
+                sold_value = int(raw.get("TotalEarnings") or 0)
+                if not sold_value:
+                    sold_value = sum(
+                        int(row.get("Value") or 0) + int(row.get("Bonus") or 0)
+                        for row in (raw.get("BioData") or []) if isinstance(row, dict)
+                    )
+                state["last_bio_sale"] = {
+                    "timestamp": raw.get("timestamp"), "value": sold_value,
+                    "system": getattr(self, "current_sys", ""),
+                    "station": getattr(self, "current_station_name", ""),
+                }
                 if sold_count > 0 and getattr(self, "cockpit_memory", None):
                     self.cockpit_memory.record_bio_sale(sold_count)
                 state["unsold_bio_cr"] = 0
@@ -7162,13 +7353,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "exploration", "clear-to-sample",
             )
         if self.survey_status_hud:
-            self.root.after(0, lambda s=sample: self.survey_status_hud.update(
+            self._ui_post(lambda s=sample: self.survey_status_hud.update(
                 self.current_sys, self.scanned, self.total, self.scan_items, self.body_signals, sampling=s,
                 focused_body_id=self.current_body_id,
                 focused_body_name=self.current_body_name,
-            ))
+            ), key="survey-status")
         if getattr(self, "exploration_window", None) and self.exploration_window.is_open():
-            self.root.after(0, self.exploration_window._render_sampling)
+            self._ui_post(self.exploration_window._render_sampling, key="exploration-sampling")
 
     def _check_rebuy_warning(self, event=None, notify=True):
         notify = bool(notify and self.config.get("rebuy_warnings_enabled", True))
@@ -7244,12 +7435,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return
         self._save_engineer_materials(self.engineer_materials)
         if self.engineer_window and self.engineer_window.is_open():
-            self.root.after(0, self.engineer_window.refresh)
+            self._ui_post(self.engineer_window.refresh, key="engineer-refresh")
 
     def update_ship_locker(self, data):
         """Marshal ShipLocker.json updates from the watcher onto the Tk thread."""
         try:
-            self.root.after(0, lambda payload=dict(data or {}): self._apply_ship_locker(payload))
+            self._ui_post(
+                self._apply_ship_locker, dict(data or {}), key="ship-locker",
+            )
         except Exception:
             pass
 
@@ -7380,7 +7573,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 quantity_text = f" for {quantity} modules" if quantity > 1 else ""
                 quantity_badge = f" · {quantity} modules" if quantity > 1 else ""
                 if self.toast_hud:
-                    self.root.after(0, lambda name=blueprint, target_grade=grade, qty_badge=quantity_badge: self.toast_hud.push(
+                    self._ui_post(lambda name=blueprint, target_grade=grade, qty_badge=quantity_badge: self.toast_hud.push(
                         "READY TO ENGINEER",
                         f"{name} G{target_grade} materials complete{qty_badge}",
                         severity="info",
@@ -7457,13 +7650,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if sys_snap and sys_snap != "---":
                     self.load_system_from_db(sys_snap)
                 self.update_dashboard_ui()
+                self.update_hud()
                 self._show_system_info_for_current_system()
                 if self.current_sys and self.current_sys != "---":
                     self.last_traffic_system = self.current_sys
                     self.fetch_system_traffic(self.current_sys)
-            self.root.after(0, _startup_sync)
-            self.root.after(0, self.update_hud)
-            self.root.after(0, self.update_waypoint_display)
+            self._ui_post(_startup_sync, key="startup-ui-sync")
             if self.config.get("auto_copy_waypoint", False):
                 next_wp = self.waypoint_manager.get_next_waypoint(self.current_sys)
                 copied_wp = next_wp
@@ -7475,10 +7667,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                             log_label = "FIRST PENDING WAYPOINT (STARTUP)"
                             break
                 if copied_wp:
-                    self.root.after(0, lambda w=copied_wp, l=log_label: self._copy_waypoint_to_clipboard(w, l))
+                    self._ui_post(
+                        lambda w=copied_wp, l=log_label: self._copy_waypoint_to_clipboard(w, l),
+                        key="startup-waypoint-copy",
+                    )
         else:
-            self.root.after(0, self.update_dashboard_ui)
-            self.root.after(0, self.update_hud)
+            self._ui_post(self.update_dashboard_ui, key="dashboard-full-refresh")
         # Journal events commonly arrive in batches.  Per-event Survey Status
         # redraws are deliberately suppressed while a batch is active, so
         # perform one coalesced refresh now that the committed scan totals are
@@ -7493,7 +7687,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._refresh_bgs_window()
         window = getattr(self, "specialists_window", None)
         if window and window.is_open() and getattr(self, "_active_page", None) == "SPECIALISTS":
-            self.root.after(0, window.refresh)
+            self._ui_post(window.refresh, key="specialists-refresh")
 
     def update_cargo(self, inventory, vessel="Ship"):
         self.last_cargo_event_ts = time.time()
@@ -7513,9 +7707,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.cargo_hud:
             inv = list(self.current_cargo_inventory)
             cap = self.cargo_capacity
-            self.root.after(0, lambda: self.cargo_hud.update(inv, cap))
+            self._ui_post(lambda: self.cargo_hud.update(inv, cap), key="cargo-hud")
         if self.colony_overlay:
-            self.root.after(0, self.colony_overlay.update)
+            self._ui_post(self.colony_overlay.update, key="colony-overlay")
         self._sync_cockpit_intentions()
         self._refresh_commander_profile_window()
 
@@ -7586,14 +7780,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 trade_marketdb.log_trade(ts, log_event, symbol, commodity, count, price, total, profit)
                 window = getattr(self, "analytics_window", None)
                 if window and window.is_open() and getattr(self, "_active_page", None) == "ANALYTICS":
-                    self.root.after(0, window.request_refresh)
+                    self._ui_post(window.request_refresh, key="analytics-refresh")
             except Exception:
                 pass
 
         threading.Thread(target=worker, name="trade-log", daemon=True).start()
         if self.trade_window and self.trade_window.is_open():
-            self.root.after(0, self.trade_window.refresh_session)
-            self.root.after(0, self.trade_window.refresh_analytics)
+            self._ui_post(self.trade_window.refresh_session, key="trade-session")
+            self._ui_post(self.trade_window.refresh_analytics, key="trade-analytics-refresh")
 
     def _market_import_context(self, data):
         return {
@@ -7705,7 +7899,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "items": list(data.get("Items") or []),
         }
         if self.trade_window and self.trade_window.is_open():
-            self.root.after(0, self.trade_window.refresh_local)
+            self._ui_post(self.trade_window.refresh_local, key="trade-local")
         self._enqueue_market_import((dict(data), dict(context)))
 
     def update_nav_route(self, data):
@@ -7734,4 +7928,4 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._refresh_commander_profile_window()
             self._refresh_exploration_window()
         if self.route_plotter and self.route_plotter.win.winfo_exists():
-            self.root.after(0, self.route_plotter.update_navigation_state)
+            self._ui_post(self.route_plotter.update_navigation_state, key="route-navigation-state")

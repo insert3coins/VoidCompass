@@ -219,6 +219,7 @@ class ProspectorHUD:
     # ── Rendering ─────────────────────────────────────────────────────────
 
     def _text(self, x, y, text, fill, font, anchor="w"):
+        font = overlay_chrome.scaled_font(font, self.config)
         """Draw text with a 1-px drop-shadow for on-screen readability."""
         self.canvas.create_text(x + 1, y + 1, text=text, fill="#000000",
                                 font=font, anchor=anchor)

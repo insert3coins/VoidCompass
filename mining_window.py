@@ -8,7 +8,13 @@ from tkinter import filedialog, messagebox, ttk
 from datetime import datetime
 
 from config import COLOR_ACCENT, COLOR_BG, COLOR_GREEN, COLOR_ORANGE, COLOR_TEXT, save_config
-from mining_data import MiningDataStore, normalize_material_name, normalize_ring_type, search_spansh_rings
+from mining_data import (
+    MINING_MATERIALS,
+    MiningDataStore,
+    normalize_material_name,
+    normalize_ring_type,
+    search_spansh_rings,
+)
 from ui_theme import THEME, ThemedWindowMixin, apply_window, button, configure_ttk, scrollbar, window_surface
 
 COLOR_BG = THEME.bg
@@ -42,40 +48,6 @@ def save_mining_sessions_json(sessions, path=None):
             json.dump(sessions, f, indent=2, ensure_ascii=False)
     except Exception:
         pass
-
-
-MINING_MATERIALS = {
-    "Alexandrite",
-    "Bauxite",
-    "Benitoite",
-    "Bertrandite",
-    "Bromellite",
-    "Cobalt",
-    "Coltan",
-    "Gallite",
-    "Gold",
-    "Grandidierite",
-    "Indite",
-    "Lepidolite",
-    "Lithium Hydroxide",
-    "Low Temperature Diamonds",
-    "Methanol Monohydrate Crystals",
-    "Monazite",
-    "Musgravite",
-    "Osmium",
-    "Painite",
-    "Palladium",
-    "Platinum",
-    "Praseodymium",
-    "Rhodplumsite",
-    "Rutile",
-    "Samarium",
-    "Serendibite",
-    "Silver",
-    "Tritium",
-    "Uraninite",
-    "Void Opals",
-}
 
 
 MATERIAL_ALIASES = {

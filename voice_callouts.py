@@ -340,6 +340,15 @@ _process = None
 _process_voice = None
 _process_lock = threading.RLock()
 _cache_lock = threading.Lock()
+_cache_status_lock = threading.Lock()
+_cache_status_rows = {}
+_CACHE_STATUS_TTL_S = 15.0
+
+
+def _invalidate_cache_status():
+    """Forget cached directory metadata after a real cache mutation."""
+    with _cache_status_lock:
+        _cache_status_rows.clear()
 
 
 def _spawn_piper(command, **options):
@@ -500,6 +509,8 @@ def prune_cache(max_age_days=None, max_files=CACHE_KEEP, now=None):
                     freed += size
                 except OSError:
                     pass
+    if removed:
+        _invalidate_cache_status()
     return {"files": removed, "expired": expired, "bytes": freed}
 
 
@@ -508,14 +519,25 @@ def _evict_cache():
 
 
 def cache_status(retention_days=None):
+    try:
+        retention_value = float(retention_days) if retention_days is not None else None
+    except (TypeError, ValueError):
+        retention_value = None
+    cache_key = (os.path.normcase(os.path.abspath(CACHE_DIR)), retention_value)
+    checked_at = time.monotonic()
+    with _cache_status_lock:
+        cached = _cache_status_rows.get(cache_key)
+        if cached and checked_at - cached[0] < _CACHE_STATUS_TTL_S:
+            return dict(cached[1])
+
     files = list(CACHE_DIR.glob("*.wav")) if CACHE_DIR.is_dir() else []
     total_bytes = 0
     oldest_mtime = None
     expired = 0
     cutoff = None
     try:
-        if retention_days is not None and float(retention_days) > 0:
-            cutoff = time.time() - float(retention_days) * 86400.0
+        if retention_value is not None and retention_value > 0:
+            cutoff = time.time() - retention_value * 86400.0
     except (TypeError, ValueError):
         pass
     for path in files:
@@ -528,10 +550,13 @@ def cache_status(retention_days=None):
         except OSError:
             pass
     oldest_days = max(0.0, (time.time() - oldest_mtime) / 86400.0) if oldest_mtime else 0.0
-    return {
+    result = {
         "files": len(files), "bytes": total_bytes, "limit": CACHE_KEEP,
         "expired": expired, "oldest_days": oldest_days,
     }
+    with _cache_status_lock:
+        _cache_status_rows[cache_key] = (checked_at, result)
+    return dict(result)
 
 
 def clear_cache():
@@ -547,6 +572,8 @@ def clear_cache():
                     freed += size
                 except OSError:
                     pass
+    if removed:
+        _invalidate_cache_status()
     return {"files": removed, "bytes": freed}
 
 
@@ -610,6 +637,7 @@ def synthesize(text, voice, cancel_event=None, use_cache=True):
             if size > 44 and size == previous_size:
                 if use_cache:
                     _evict_cache()
+                    _invalidate_cache_status()
                 return output
             previous_size = size
         time.sleep(0.05)
@@ -641,6 +669,7 @@ def _scaled_wav(source, volume):
     with wave.open(str(target), "wb") as writer:
         writer.setparams(params)
         writer.writeframes(samples.tobytes())
+    _invalidate_cache_status()
     return target
 
 

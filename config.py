@@ -101,6 +101,7 @@ PROFILE_TEXT_SETTINGS = (
     "overlay_hotkey_carrier",
     "overlay_hotkey_prospector",
     "overlay_hotkey_colony",
+    "overlay_hotkey_field_bookmark",
 )
 
 PROFILE_BOOL_SETTINGS = (
@@ -152,6 +153,7 @@ PROFILE_BOOL_SETTINGS = (
     "adaptive_overlay_scenes_enabled",
     "adaptive_briefings_enabled",
     "adaptive_debriefings_enabled",
+    "reduced_motion_enabled",
 )
 
 PROFILE_VALUE_SETTINGS = (
@@ -217,6 +219,10 @@ PROFILE_VALUE_SETTINGS = (
     "cockpit_memory_ship_limit",
     "cockpit_memory_episode_limit",
     "adaptive_overlay_scenes",
+    "ui_scale_percent",
+    "overlay_text_scale_percent",
+    "overlay_layout_presets",
+    "overlay_layout_studio_geometry",
 )
 
 PROFILE_SETTINGS = PROFILE_TEXT_SETTINGS + PROFILE_BOOL_SETTINGS + PROFILE_VALUE_SETTINGS
@@ -245,6 +251,7 @@ GLOBAL_ONLY_KEYS = (
     "commander_profiles",
     "onboarding_complete",
     "recovery_safe_mode_enabled",
+    "last_app_version",
 )
 
 
@@ -337,6 +344,7 @@ def apply_profile_config(config, profile_key=None):
         "overlay_hotkey_carrier": "",
         "overlay_hotkey_prospector": "",
         "overlay_hotkey_colony": "",
+        "overlay_hotkey_field_bookmark": "Ctrl+Shift+B",
     }
     bool_defaults = {
         "trade_advanced_tools_visible": False,
@@ -389,6 +397,7 @@ def apply_profile_config(config, profile_key=None):
         "adaptive_overlay_scenes_enabled": True,
         "adaptive_briefings_enabled": True,
         "adaptive_debriefings_enabled": True,
+        "reduced_motion_enabled": False,
     }
     for setting in PROFILE_TEXT_SETTINGS:
         if setting not in profile:
@@ -408,6 +417,10 @@ def apply_profile_config(config, profile_key=None):
                 "cockpit_memory_ship_limit": 30,
                 "cockpit_memory_episode_limit": 80,
                 "adaptive_overlay_scenes": {},
+                "ui_scale_percent": 100,
+                "overlay_text_scale_percent": 100,
+                "overlay_layout_presets": {},
+                "overlay_layout_studio_geometry": "820x620",
             }
             profile[setting] = (
                 profile_defaults[setting] if not is_initial_profile and setting in profile_defaults
@@ -472,6 +485,13 @@ def save_config(config):
 
 def load_config():
     """Loads configuration from file or returns defaults."""
+    # A restore is deliberately deferred until startup so no live SQLite
+    # connection or persistence worker can be writing the profile being replaced.
+    try:
+        from profile_backups import apply_pending_restore
+        apply_pending_restore(PROFILE_DIR)
+    except Exception:
+        pass
     config_existed = os.path.exists(CONFIG_FILE)
     detected_journal = detect_elite_journal_path()
     defaults = {
@@ -490,6 +510,7 @@ def load_config():
         'overlay_hotkey_carrier': '',
         'overlay_hotkey_prospector': '',
         'overlay_hotkey_colony': '',
+        'overlay_hotkey_field_bookmark': 'Ctrl+Shift+B',
         'hud_compact_mode': False,
         'cargo_overlay_enabled': False,
         'carrier_overlay_enabled': False,
@@ -621,12 +642,18 @@ def load_config():
         'explore_expedition_section': 'Overview',
         'explore_map_scope': 'All History',
         'adaptive_overlay_scenes': {},
+        'ui_scale_percent': 100,
+        'overlay_text_scale_percent': 100,
+        'overlay_layout_presets': {},
+        'overlay_layout_studio_geometry': '820x620',
+        'reduced_motion_enabled': False,
         'ui_theme_name': _themes.DEFAULT_THEME_NAME,
         'ui_custom_themes': {},
         # Existing installations migrate silently; only a genuinely new
         # config receives the guided public-release setup.
         'onboarding_complete': bool(config_existed),
         'recovery_safe_mode_enabled': True,
+        'last_app_version': '',
     }
     if os.path.exists(CONFIG_FILE):
         try:
