@@ -5547,10 +5547,29 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "SelfDestruct":
             self._push_live_toast("SELF-DESTRUCT", "Self-destruct sequence initiated", "fail", 15)
 
+    @staticmethod
+    def _carrier_jump_presence(event, raw, data):
+        """Resolve whether/how a CarrierJump moved the active commander."""
+        raw = raw if isinstance(raw, dict) else {}
+        data = data if isinstance(data, dict) else {}
+        if event != "CarrierJump":
+            return False, False, False
+        docked = bool(data.get("docked") or raw.get("Docked"))
+        on_foot = bool(data.get("on_foot") or raw.get("OnFoot"))
+        player_location = bool(data.get("player_location") or docked or on_foot)
+        return player_location, docked, on_foot
+
     def process_event(self, data):
         ev = data.get("type") or data.get("event")
         raw = data.get("raw", data)
         d = data.get("data", data)
+        (
+            carrier_jump_player_location,
+            carrier_jump_docked,
+            carrier_jump_on_foot,
+        ) = self._carrier_jump_presence(
+            ev, raw, d,
+        )
         startup_replay = bool(data.get("startup_catchup"))
         if startup_replay:
             self._startup_restore_active = True
@@ -5925,7 +5944,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self._refresh_system_info_progress()
                 self._speak_pending_cockpit_remark()
 
-        elif ev == "Location" or ev == "FSDJump" or ev == "StartJump" or (ev == "CarrierJump" and d.get("docked")):
+        elif ev in ("Location", "FSDJump", "StartJump") or carrier_jump_player_location:
             # Do not update HUDs during jump charge; wait for arrival.
             if ev == "StartJump":
                 if not startup_replay:
@@ -5948,7 +5967,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 )
                 return
 
-            # CarrierJump counts as a jump for the player when they are docked on board.
+            # CarrierJump counts as a jump for the player while ship-docked or
+            # walking on the carrier concourse.
             is_jump = ev in ("FSDJump", "CarrierJump")
 
             # A login while already docked normally emits Location, not a new
@@ -5961,11 +5981,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if is_jump:
                 self.in_fss = False
                 self.fss_summary_active = False
-                if ev == "CarrierJump" and d.get("docked"):
-                    self.current_docked = True
-                    self.hud_flight_state = "DOCKED"
+                if ev == "CarrierJump":
+                    self.current_docked = carrier_jump_docked
+                    self.current_on_foot = carrier_jump_on_foot
+                    self.hud_flight_state = (
+                        "ONFOOT" if carrier_jump_on_foot
+                        else "DOCKED" if carrier_jump_docked
+                        else "FLIGHT"
+                    )
                 else:
                     self.current_docked = False
+                    self.current_on_foot = False
                     self.hud_flight_state = "FLIGHT"
 
             prev_coords = self.current_coords if isinstance(self.current_coords, list) else None
@@ -5993,6 +6019,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 next_star_class = raw.get("StarClass") if isinstance(raw, dict) else None
             if next_star_class:
                 self.star_class = next_star_class
+            elif ev == "CarrierJump":
+                # CarrierJump identifies the new system but omits StarClass;
+                # never carry the departed system's primary-star class forward.
+                self.star_class = ""
 
             if is_jump and isinstance(raw, dict):
                 try:

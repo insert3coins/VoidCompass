@@ -1,5 +1,11 @@
 # VoidCompass // UPDATE LOG
 
+## v5.2.9.4 // Fleet Carrier Arrival State
+**Release Date:** 2026-Jul-29
+
+*   Fleet Carrier jumps now update the active system, dashboard, Navigation HUD, route context, scan state and traffic when the commander travels on the carrier concourse (`CarrierJump` with `OnFoot:true`) as well as while ship-docked.
+*   Startup journal recovery recognises the same on-foot carrier arrival, preserves its system context, restores the correct ON FOOT/DOCKED state and no longer carries the previous system's star class into a carrier destination.
+
 ## v5.2.9.3 // Authoritative Overlay Layout
 **Release Date:** 2026-Jul-29
 
