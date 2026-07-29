@@ -2832,6 +2832,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return
         try:
             self._ui_post(self.update_carrier_panel, key="carrier-panel")
+            self._ui_post(self._refresh_command_dashboard, key="carrier-dashboard")
             if self.carrier_hud:
                 self._ui_post(lambda d=dict(carrier_data): self.carrier_hud.update(d), key="carrier-hud")
             if carrier_data.get("status") == "jumping":
