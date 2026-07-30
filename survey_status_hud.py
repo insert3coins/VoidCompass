@@ -109,18 +109,53 @@ def _surface_signal_state(bio_count=0, complete=0, geo_count=0, needs_dss=False,
             else ("NO SURFACE SIGNALS", palette["dim"]))
 
 
+# Row kinds that are inferred rather than journal-confirmed. System mode must
+# never show these, so they cannot be mistaken for DSS results.
+PREDICTED_KINDS = frozenset({"predicted", "possible"})
+
+
+def _predicted_display_name(genus, species):
+    """Name the species behind a prediction while the row stays HUD-narrow."""
+    epithets = []
+    for entry in species:
+        name = str(entry.get("name") or "").strip()
+        if not name.startswith(genus):
+            continue
+        epithet = name[len(genus):].strip()
+        if epithet and epithet not in epithets:
+            epithets.append(epithet)
+    if not epithets or len(epithets) > 2:
+        return genus if not epithets else f"{genus} ×{len(epithets)}"
+    return f"{genus} {'/'.join(epithets)}"
+
+
 def _body_value_range(item):
     scans = list((item.get("organic_scans") or {}).values())
     known = sum(_safe_int(bio_values.species_value(scan.get("species"))
                           or scan.get("species_value")) for scan in scans)
     bio_count = _safe_int(item.get("bio_count"))
     unknown = max(0, bio_count - len(scans))
-    genera = [_genus_name(row) for row in (item.get("genuses") or item.get("predicted_genuses") or [])]
-    ranges = [bio_values.genus_info(name) for name in genera if name]
-    lows = [_safe_int(row.get("min_value")) for row in ranges if row.get("min_value")]
-    highs = [_safe_int(row.get("max_value")) for row in ranges if row.get("max_value")]
     if not unknown:
         return known, known
+    lows = []
+    highs = []
+    for row in (item.get("genuses") or item.get("predicted_genuses") or []):
+        # A prediction now names the species that actually fit the body, so the
+        # estimate spans those rather than everything the genus can contain.
+        values = [
+            _safe_int(entry.get("value"))
+            for entry in (row.get("species") or () if isinstance(row, dict) else ())
+            if entry.get("value")
+        ]
+        if not values:
+            info = bio_values.genus_info(_genus_name(row))
+            values = [
+                _safe_int(info.get(bound))
+                for bound in ("min_value", "max_value") if info.get(bound)
+            ]
+        if values:
+            lows.append(min(values))
+            highs.append(max(values))
     if not lows or not highs:
         return known, known
     return known + unknown * min(lows), known + unknown * max(highs)
@@ -155,14 +190,30 @@ def _body_detail_rows(item):
                 continue
             represented.add(key)
             info = bio_values.genus_info(name)
+            low = info.get("min_value")
+            high = info.get("max_value")
+            display = name
+            row_kind = kind
+            status = "DETECTED" if kind == "detected" else "PREDICTED"
+            species = list(raw.get("species") or ()) if isinstance(raw, dict) else []
+            if kind == "predicted" and species:
+                values = [_safe_int(entry.get("value")) for entry in species if entry.get("value")]
+                if values:
+                    low, high = min(values), max(values)
+                # A candidate resting on a requirement this scan cannot test —
+                # galactic region, star class, nearby bodies — is only possible.
+                if not any(entry.get("confirmed") for entry in species):
+                    row_kind = "possible"
+                    status = "POSSIBLE"
+                display = _predicted_display_name(name, species)
             rows.append({
-                "status": "DETECTED" if kind == "detected" else "PREDICTED",
+                "status": status,
                 "name": name,
                 "variant": "",
-                "display_name": name,
-                "min_value": info.get("min_value"),
-                "max_value": info.get("max_value"),
-                "kind": kind,
+                "display_name": display,
+                "min_value": low,
+                "max_value": high,
+                "kind": row_kind,
             })
     return rows
 
@@ -228,7 +279,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
             # the focused-body view so they cannot be mistaken for DSS facts.
             "bio_details": [
                 detail for detail in _body_detail_rows(body)
-                if detail.get("kind") != "predicted"
+                if detail.get("kind") not in PREDICTED_KINDS
             ],
         })
     rows.sort(key=lambda row: (
@@ -428,7 +479,12 @@ class SurveyStatusHUD:
             self._text(WIDTH - 18, y, signal_state, signal_color, SIGNAL_FONT, "e")
             y += 20
             for row in rows:
-                symbol = {"complete": "✓", "sample": "●", "detected": "○", "predicted": "?"}.get(row["kind"], "·")
+                # '?' is a prediction whose every published requirement was
+                # tested; '·' rests on something this scan could not check.
+                symbol = {
+                    "complete": "✓", "sample": "●", "detected": "○",
+                    "predicted": "?", "possible": "·",
+                }.get(row["kind"], "·")
                 color = palette["green"] if row["kind"] == "complete" else (palette["orange"] if row["kind"] == "sample" else palette["text"] if row["kind"] == "detected" else palette["dim"])
                 label = row.get("display_name") or row["name"]
                 value = row.get("value")

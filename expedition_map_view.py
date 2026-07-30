@@ -2012,14 +2012,11 @@ class ExpeditionMapView:
                 px, py, text, label_colour, size=size, bold=True,
             )
             occupied.append(bounds)
-            self._map_points.append({
-                "x": px, "y": py, "depth": depth,
-                "record": {
-                    "kind": "Region", "subject": row["name"],
-                    "detail": f"Universal Cartographics region {row['id']} of 42",
-                    "position": row["position"],
-                },
-            })
+            # Region names are deliberately not hover or click targets. Their
+            # anchors sit at region centroids, which in populated space are
+            # exactly where marker density is highest, so leaving them in the
+            # hit-test pool let a label win clicks meant for a system, cluster
+            # or annotation. Region search still selects a region by name.
 
     def _draw_route_and_markers(self):
         draw = self._background_draw
@@ -2027,7 +2024,7 @@ class ExpeditionMapView:
         self._navigation_waypoint = None
         self._navigation_current = None
         rows = self._route_rows
-        mapped_points = [point for point in self._map_points if point["record"].get("kind") == "Region"]
+        mapped_points = []
         position_by_system = self._position_by_system
         draw_rows = rows
         if self._motion_frame and len(rows) > 160:

@@ -1545,8 +1545,13 @@ class ExplorationWindow(ThemedWindowMixin):
         labels = []
         for pred in item.get("predicted_genuses") or []:
             label = pred.get("name") if isinstance(pred, dict) else str(pred)
-            if label and label not in labels:
-                labels.append(label)
+            if not label or label in labels:
+                continue
+            # Mark a genus whose every candidate species depends on something
+            # the body scan could not test, so it reads as possible not likely.
+            if isinstance(pred, dict) and pred.get("species") and not pred.get("confirmed"):
+                label = f"{label}?"
+            labels.append(label)
         return labels
 
     def _bio_spacing_text(self, item, names):
@@ -1812,7 +1817,17 @@ class ExplorationWindow(ThemedWindowMixin):
                     if lo and hi:
                         value = self._format_credits(lo) if lo == hi else f"{self._format_credits(lo)}-{self._format_credits(hi)}"
                     spacing = f"{int(pred.get('colony_m')):,} m" if pred.get("colony_m") else "-"
-                    lines.append(f"- {pred.get('name') or 'Organic'} | {spacing} spacing | {value}")
+                    confidence = "likely" if pred.get("confirmed") else "possible"
+                    lines.append(
+                        f"- {pred.get('name') or 'Organic'} | {spacing} spacing | {value} | {confidence}"
+                    )
+                    # Name the species behind each genus, with the requirements
+                    # that could not be tested from this body's scan.
+                    for entry in (pred.get("species") or [])[:4]:
+                        unchecked = entry.get("unchecked") or []
+                        note = f" (unverified: {', '.join(unchecked)})" if unchecked else ""
+                        worth = self._format_credits(entry.get("value")) if entry.get("value") else "-"
+                        lines.append(f"    · {entry.get('name') or 'Organic'} | {worth}{note}")
             key = (
                 ("id", str(item.get("body_id"))) if item.get("body_id") is not None
                 else ("name", str(item.get("full_name") or item.get("name") or ""))

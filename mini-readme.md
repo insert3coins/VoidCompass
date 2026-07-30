@@ -1,81 +1,33 @@
 # VoidCompass // UPDATE LOG
 
-## v5.3.2 // Living Galactic Atlas
+## v5.3.3 // Species-Level Biology Prediction
 **Release Date:** 2026-Jul-30
 
-*   Added searchable commander-profile map annotations for notes, danger warnings, regions of interest, survey targets and waypoints: select a mapped record and use MARK, Ctrl-click anywhere to place one, or right-click a marker for direct Edit/Delete actions. The themed editor remembers its size and screen position per commander.
-*   Added zoom-aware smart clustering for visited systems and exploration intelligence. Compact count badges replace dense overlapping markers at long range and expand into their underlying records when clicked or approached, keeping large histories readable and responsive.
-*   Added restrained live-navigation cues above the cached atlas: a gentle current-ship pulse, moving planned-route tracer and next-waypoint beacon. These lightweight Canvas elements pause while moving or hidden, and Reduced Motion retains only the static waypoint cue.
-
-## v5.3.1 // Galactic Atlas
-**Release Date:** 2026-Jul-30
-
-*   Replaced the orbiting 3D galaxy presentation with a smooth, top-down Galactic Atlas built around original game-style Milky Way artwork, the complete 42-region Universal Cartographics layout and theme-aware cartographic overlays.
-*   Preserved profile-local travel history, current position, game and waypoint routes, return trail, expedition bookmarks and Valuable, Biology, Codex, Photo, Recon and Revisit intelligence, including clickable system and region details.
-*   Added retained-system/region search, Atlas, Route Focus and Current Vicinity framing, natural drag/pointer-centred zoom controls and profile-aware saved camera, scope and layer state; visible-image cropping keeps detailed movement bounded and responsive.
-*   Subdued region colours to expose more galactic detail and deferred their translucent fill during live movement, retaining lightweight boundaries while removing the remaining pan/zoom hitch.
-*   Fixed public release packaging so the complete validated runtime `Images` tree ships inside Windows ZIP and Linux tarball builds, is recorded in the release manifest and is checked for the required Galactic Atlas artwork.
-
-## v5.2.9.7 // Authoritative Overlay Placement
-**Release Date:** 2026-Jul-30
-
-*   Overlay Layout Studio positions now remain authoritative while Tk applies a move, preventing the background position-capture loop from restoring a stale coordinate after a drag, snap or preset change.
-*   Audited every Studio-managed overlay and removed the Fleet Carrier HUD's recurring primary-screen height clamp, so dynamic redraws and visibility changes preserve the commander's chosen position.
-*   Overlay geometry now supports negative virtual-desktop coordinates correctly, keeping layouts reliable on monitors positioned left of or above the primary display.
-
-## v5.2.9.6 // Live Carrier Fuel
-**Release Date:** 2026-Jul-29
-
-*   Fleet Carrier expedition arrivals now calculate the actual Tritium depot burn from the completed jump distance, current used carrier capacity and current tank level, keeping Carrier, Dashboard and HUD fuel current between `CarrierStats` snapshots.
-*   Paired `CarrierLocation`/`CarrierJump` notifications are accounted once, older startup evidence cannot overwrite newer fuel, and the next authoritative `CarrierStats` or `CarrierDepositFuel` event reconciles the estimate automatically.
-*   Dashboard Carrier mode now uses the carrier expedition rather than the ship waypoint route: its next stop, 2/44-style progress, current load, calculated next-leg burn, copy action, priority and support card all come from the live Carrier tracker.
-*   Carrier Command now includes a non-blocking Spansh Tritium hotspot finder centred on the live carrier system, with an adjustable range, ring and reserve details, one-click copy, direct Spansh opening and Add to Expedition.
-
-## v5.2.9.5 // Carrier Expedition Progress
-**Release Date:** 2026-Jul-29
-
-*   CarrierLocation and CarrierJump arrivals now mark the matching Fleet/Squadron Carrier expedition stop complete on every notification, using system address where available and repairing an unmarked current stop after restart.
-*   Route checkmarks, the next-stop arrow, carrier overlay progress and **Copy Next** now share the first genuinely pending waypoint; repeated systems advance one visit at a time, and a finished route reports that no jumps remain.
-
-## v5.2.9.4 // Fleet Carrier Arrival State
-**Release Date:** 2026-Jul-29
-
-*   Fleet Carrier jumps now update the active system, dashboard, Navigation HUD, route context, scan state and traffic when the commander travels on the carrier concourse (`CarrierJump` with `OnFoot:true`) as well as while ship-docked.
-*   Startup journal recovery recognises the same on-foot carrier arrival, preserves its system context, restores the correct ON FOOT/DOCKED state and no longer carries the previous system's star class into a carrier destination.
-
-## v5.2.9.3 // Authoritative Overlay Layout
-**Release Date:** 2026-Jul-29
-
-*   Fixed Studio-positioned overlays snapping back during dynamic redraws by synchronising each overlay's live window, profile coordinates and internal position target; this covers every overlay and specifically corrects the recurring Fleet Carrier HUD reset.
-*   Enabled overlays are no longer hidden by adaptive activity modes. Mode switching still prioritises dashboard content and Compass guidance, while Overlay Layout Studio remains the sole authority for module availability.
-
-## v5.2.9.2 // Complete Overlay Layout
-**Release Date:** 2026-Jul-29
-
-*   Overlay Layout Studio now lists every configurable overlay from its saved profile position, including disabled/not-yet-created Cargo and Carrier windows, and can enable or disable every module live while retaining its next position.
-*   Consolidated passthrough, compact HUD, overlay text scale, alert policy, auto-hide timing, gravity threshold and Navigation HUD CRT controls into the Studio's new Overlay Settings view; the old duplicate Overlays and HUD Effects settings pages are removed.
-*   Replaced the game/GPU-conflicting shipped shortcuts with **Ctrl+Alt+Shift+F10/F11/F12**, while preserving commander-customised assignments and migrating only the retired defaults.
-
-## v5.2.9.1 // Visual Overlay Positioning
-**Release Date:** 2026-Jul-29
-
-*   Added a themed virtual-desktop preview to Overlay Layout Studio: drag overlay cards inside the app to move the real HUD windows while mouse passthrough remains enabled.
-*   Added the profile-aware **Ctrl+Shift+L** global shortcut to open or close Layout Studio, and moved all shortcut assignments onto a dedicated Settings → Hotkeys page.
-
-## v5.2.9 // Explorer Fieldcraft & Reliability
-**Release Date:** 2026-Jul-29
-
-*   Added a live route-safety forecast with scoop horizon, conservative fuel endurance, dry stretches, compact-star hazards and low-noise Navigation HUD warnings.
-*   Added a journal-evidence Missed Discoveries queue for valuable unmapped worlds, unfinished biology and worthwhile incomplete FSS work, including Galaxy Map, bookmark, copy and dismiss actions.
-*   Added a Survey Evidence Inspector that compares live, SQLite, Deep Survey, EDSM-cache and traffic facts, with a safe per-system local-journal repair instead of a full rebuild or upload.
-*   Added the Explorer Data Vault for unsold cartographic and biological value, possible bio bonus and recent sale evidence, plus themed local PNG expedition share cards.
-*   Added a fully themed Overlay Layout Studio with live coordinates, clearer overlay controls, snapping, resets, remembered Studio geometry and isolated commander-specific presets; a new **Ctrl+Shift+B** field-bookmark hotkey; independent application/overlay text scaling; and reduced motion.
-*   Added SQLite-safe profile backups, rotating pre-upgrade/cache-rebuild safety snapshots and a restart-based profile restore with an automatic rollback snapshot.
-*   Completed an app-wide responsiveness pass: cached voice metadata, incremental exploration milestones, stable event-feed/HUD rendering, deferred Specialist persistence and bounded UI-thread delivery for background results.
-*   Reworked Specialists so only its visible workflow refreshes, Mining retains stable live tables, and Carrier becomes a clear quick-look linked to the single authoritative Carrier Command route, cargo, finance and squadron workspace.
+*   The Navigation HUD now shows the current Codex region beside the system it belongs to, in both the normal and compact layouts, using the empty middle of the CURRENT SYSTEM row so no existing reading is displaced. Crossing into a new region lifts the text to the accent colour for a short spell, marking a rare event without spending a badge slot on it.
+*   Galactic Atlas region names are no longer hover or click targets. Their anchors sit at region centroids, which in populated space is exactly where marker density is highest, so a label could win a click intended for a system, cluster or annotation. Region names still draw as before, and searching for a region still selects it and holds its label on screen.
+*   Added published **species-level spawn requirements** for 116 organic species across all 20 Codex genus identifiers, covering body type, atmosphere, gravity, temperature, pressure and volcanism. Biological prediction previously worked at genus level from a small hand-maintained ruleset, so it could say *Bacterium* but never *Bacterium Aurasus*.
+*   Biological signals on **airless bodies are now predicted at all**. The previous rules returned nothing unless a body had a thin atmosphere, which silently excluded Anemone, Brain Trees, Sinuous Tubers and Crystalline Shards — four families that only occur on bodies without one.
+*   Predictions now state whether every published requirement could actually be tested. Galactic region, star luminosity, Guardian and nebula proximity and parent-body composition cannot be judged from a body scan, so a species relying on them is reported as possible rather than confirmed instead of being quietly assumed to qualify.
+*   Surface pressure is retained from body scans, since 126 of the published rulesets are bounded by it, and minimum gravity is now enforced — 230 rulesets specify one and the previous rules modelled no lower bound whatsoever, which over-predicted Bacterium on bodies that cannot host it.
+*   The coarser genus rules remain, but only for scans too incomplete to judge. A body that was tested against the published requirements and matched nothing is now a factual answer rather than an invitation to guess.
+*   Biological prediction now uses the commander's own galactic position. Several published requirements are bounded by Codex region, or by distance to a Guardian nebula or Sinuous Tuber zone, and the region groups are expressed in the same 1-42 region identifiers the Galactic Atlas already draws — so the existing offline region map decides them with no further lookup. Across a sweep of locations and body types this ruled out 44% of candidate species that a body scan alone had to keep, and removed region, Guardian and Tuber uncertainty entirely.
+*   Brain Trees are now confined to the six galactic regions the published data restricts them to — Empyrean Straits, Inner Scutum-Centaurus Arm, Norma Expanse, Temple, Inner Orion Spur and Outer Orion Spur — instead of being offered anywhere in the galaxy. The upstream data expresses that restriction under a differently spelled key which its own evaluator has no branch for, so the restriction was never being applied; VoidCompass honours it.
+*   Survey Status now names the species behind a prediction rather than only its genus, and separates a **PREDICTED** candidate whose every published requirement was tested from a **POSSIBLE** one that depends on something a body scan cannot check. System mode continues to show no predictions at all, so they can never be mistaken for completed DSS results.
+*   Estimated survey value for unidentified biological signals now spans only the species that actually fit the body instead of everything its genus can contain. On a cold carbon-dioxide rocky world with two signals the estimate narrowed from 2.0–16.8 million to 2.0–3.3 million credits; where several genuinely different-value species do fit, the range stays wide rather than pretending to precision.
+*   System Survey body rows mark a genus as uncertain when every candidate species behind it rests on an untested requirement, and expedition reports list the candidate species with their values and exactly which requirements could not be verified.
 
 ## Earlier releases
 
+*   **v5.3.2** — Added searchable commander-profile map annotations with direct edit/delete, zoom-aware marker clustering with expanding count badges, and restrained live-navigation cues that respect Reduced Motion.
+*   **v5.3.1** — Replaced the orbiting 3D galaxy with a top-down Galactic Atlas built on original artwork and the full 42-region layout, adding system/region search, framing presets, saved camera state and corrected runtime image packaging.
+*   **v5.2.9.7** — Made Overlay Layout Studio positions authoritative while Tk applies a move, removed the Fleet Carrier HUD height clamp and corrected negative virtual-desktop coordinates.
+*   **v5.2.9.6** — Added live Fleet Carrier Tritium burn calculation between `CarrierStats` snapshots, a carrier-expedition Dashboard mode and a non-blocking Spansh Tritium hotspot finder.
+*   **v5.2.9.5** — Made Fleet Carrier arrivals mark the matching expedition stop complete and unified route checkmarks, the next-stop arrow, overlay progress and Copy Next on one pending waypoint.
+*   **v5.2.9.4** — Made Fleet Carrier jumps update system, dashboard, HUD, route and scan state when travelling on the concourse on foot, including during startup journal recovery.
+*   **v5.2.9.3** — Fixed Studio-positioned overlays snapping back during dynamic redraws and stopped adaptive activity modes hiding enabled overlays.
+*   **v5.2.9.2** — Listed every configurable overlay in Layout Studio including disabled ones, consolidated the overlay settings pages into it and replaced the GPU-conflicting default shortcuts.
+*   **v5.2.9.1** — Added a themed virtual-desktop preview to Overlay Layout Studio for dragging real HUD windows, plus a global open shortcut and a dedicated Hotkeys settings page.
+*   **v5.2.9** — Added route-safety forecasting, a Missed Discoveries queue, the Survey Evidence Inspector, Explorer Data Vault, Overlay Layout Studio, SQLite-safe profile backups and an app-wide responsiveness pass.
 *   **v5.2.8.2** — Fixed Fleet Carrier Spansh destination plotting, route persistence and waypoint selection; added weight-aware Tritium readiness, docking cargo evidence and route deletion.
 *   **v5.2.8.1** — Made known-system survey completion persistent and profile-safe, added journal repair, and added profile-aware EDSM cache-rebuild controls with visible Live Feed progress.
 *   **v5.2.8** — Added integrated Spansh Fleet/Squadron Carrier plotting, route progress, tritium logistics, carrier cargo evidence and the expanded carrier overlay; also kept that overlay visible in Exploration mode.
