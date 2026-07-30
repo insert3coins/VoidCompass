@@ -38,6 +38,9 @@ PUBLIC_FILENAMES = {
 OPTIONAL_LICENSE_PATTERNS = ("LICENSE", "LICENSE.*", "COPYING", "COPYING.*")
 README_IMAGE_PATTERN = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
 PUBLIC_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+REQUIRED_RUNTIME_IMAGES = {
+    "Images/Galaxy/voidcompass-galactic-atlas.png",
+}
 
 
 def _sha256(path: Path) -> str:
@@ -178,6 +181,36 @@ def _copy_readme_images(project: Path, package_dir: Path) -> set[str]:
     return copied
 
 
+def _copy_runtime_images(project: Path, package_dir: Path) -> set[str]:
+    """Copy the public runtime image tree without weakening the privacy guard."""
+    source_root = project / "Images"
+    if not source_root.is_dir():
+        raise FileNotFoundError(f"Required runtime image folder is missing: {source_root}")
+    copied: set[str] = set()
+    for source in sorted(source_root.rglob("*"), key=lambda item: str(item).casefold()):
+        if source.is_symlink():
+            raise RuntimeError(f"Release image tree contains a symlink: {source}")
+        if not source.is_file():
+            continue
+        if source.suffix.casefold() not in PUBLIC_IMAGE_EXTENSIONS:
+            raise RuntimeError(f"Release image tree contains a non-image file: {source}")
+        resolved = source.resolve()
+        try:
+            safe_relative = resolved.relative_to(project)
+        except ValueError as exc:
+            raise RuntimeError(f"Release image escapes the project folder: {source}") from exc
+        destination = package_dir / safe_relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(resolved, destination)
+        copied.add(safe_relative.as_posix())
+    missing = REQUIRED_RUNTIME_IMAGES - copied
+    if missing:
+        raise FileNotFoundError(
+            "Required runtime image assets are missing: " + ", ".join(sorted(missing))
+        )
+    return copied
+
+
 def _assert_public_tree(package_dir: Path, allowed: set[str]) -> None:
     unexpected = []
     for path in package_dir.rglob("*"):
@@ -232,6 +265,7 @@ def create_release(
     if target["linux"] and (project / "icon-source.png").is_file():
         shutil.copy2(project / "icon-source.png", package_dir / "VoidCompass.png")
     readme_images = _copy_readme_images(project, package_dir)
+    runtime_images = _copy_runtime_images(project, package_dir)
 
     optional_names: set[str] = set()
     for pattern in OPTIONAL_LICENSE_PATTERNS:
@@ -260,7 +294,10 @@ def create_release(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
 
-    allowed = PUBLIC_FILENAMES | optional_names | readme_images | {target["executable"]}
+    allowed = (
+        PUBLIC_FILENAMES | optional_names | readme_images | runtime_images
+        | {target["executable"]}
+    )
     if target["linux"]:
         allowed.add("VoidCompass.png")
     _assert_public_tree(package_dir, allowed)
@@ -298,6 +335,7 @@ def create_release(
         "sha256": archive_digest,
         "platform": target["platform"],
         "license_included": bool(optional_names),
+        "runtime_image_count": len(runtime_images),
     }
 
 

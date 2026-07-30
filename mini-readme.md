@@ -1,5 +1,14 @@
 # VoidCompass // UPDATE LOG
 
+## v5.3.1 // Galactic Atlas
+**Release Date:** 2026-Jul-30
+
+*   Replaced the orbiting 3D galaxy presentation with a smooth, top-down Galactic Atlas built around original game-style Milky Way artwork, the complete 42-region Universal Cartographics layout and theme-aware cartographic overlays.
+*   Preserved profile-local travel history, current position, game and waypoint routes, return trail, expedition bookmarks and Valuable, Biology, Codex, Photo, Recon and Revisit intelligence, including clickable system and region details.
+*   Added retained-system/region search, Atlas, Route Focus and Current Vicinity framing, natural drag/pointer-centred zoom controls and profile-aware saved camera, scope and layer state; visible-image cropping keeps detailed movement bounded and responsive.
+*   Subdued region colours to expose more galactic detail and deferred their translucent fill during live movement, retaining lightweight boundaries while removing the remaining pan/zoom hitch.
+*   Fixed public release packaging so the complete validated runtime `Images` tree ships inside Windows ZIP and Linux tarball builds, is recorded in the release manifest and is checked for the required Galactic Atlas artwork.
+
 ## v5.2.9.7 // Authoritative Overlay Placement
 **Release Date:** 2026-Jul-30
 

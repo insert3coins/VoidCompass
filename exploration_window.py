@@ -351,6 +351,11 @@ class ExplorationWindow(ThemedWindowMixin):
                 self.route_plotter.show_flat_section(
                     str(self.config.get("explore_expedition_section") or "Overview")
                 )
+            map_state = self.config.get("explore_map_view_state") or {}
+            if self.expedition_map_view and map_state:
+                self.expedition_map_view.apply_view_state(
+                    map_state
+                )
         finally:
             self._restoring_view_state = False
 
@@ -3073,6 +3078,7 @@ class ExplorationWindow(ThemedWindowMixin):
         self._closing = True
         self._remember_active_page()
         if self.expedition_map_view:
+            self.expedition_map_view._persist_view_state()
             self.expedition_map_view.dispose()
             self.expedition_map_view = None
         if self._widget_alive(self.map_workspace):
