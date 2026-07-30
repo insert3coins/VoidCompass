@@ -3,7 +3,7 @@
 ## v5.3.2 // Living Galactic Atlas
 **Release Date:** 2026-Jul-30
 
-*   Added searchable commander-profile map annotations for notes, danger warnings, regions of interest, survey targets and waypoints: select a mapped record and use MARK, or Ctrl-click anywhere in the galaxy to place an arbitrary marker, then edit or delete it from the same themed dialog.
+*   Added searchable commander-profile map annotations for notes, danger warnings, regions of interest, survey targets and waypoints: select a mapped record and use MARK, or Ctrl-click anywhere in the galaxy to place an arbitrary marker, then edit or delete it from the same themed dialog, which remembers its size and screen position per commander.
 *   Added zoom-aware smart clustering for visited systems and exploration intelligence. Compact count badges replace dense overlapping markers at long range and expand into their underlying records when clicked or approached, keeping large histories readable and responsive.
 *   Added restrained live-navigation cues above the cached atlas: a gentle current-ship pulse, moving planned-route tracer and next-waypoint beacon. These lightweight Canvas elements pause while moving or hidden, and Reduced Motion retains only the static waypoint cue.
 
