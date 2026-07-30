@@ -1,6 +1,7 @@
 """Exobiology reference values and lightweight genus prediction helpers."""
 
 import bio_reference
+import bio_requirements
 
 GENUS_COLONY_M = {
     "Aleoida": 150, "Bacterium": 500, "Cactoida": 300, "Clypeus": 150,
@@ -8,7 +9,7 @@ GENUS_COLONY_M = {
     "Fumerola": 100, "Fungoida": 300, "Osseus": 800, "Recepta": 150,
     "Stratum": 500, "Tubus": 800, "Tussock": 200,
     "Anemone": 100, "Amphora Plant": 100, "Bark Mounds": 100,
-    "Brain Tree": 100, "Sinuous Tubers": 100,
+    "Brain Tree": 100, "Sinuous Tubers": 100, "Crystalline Shards": 100,
 }
 
 SPECIES_VALUES = {
@@ -101,7 +102,63 @@ def genus_info(genus_localised):
     }
 
 
-def predict_genera(planet_class, atmosphere, temp_k, gravity_g, volcanism):
+def predict_genera(planet_class, atmosphere, temp_k, gravity_g, volcanism,
+                   pressure_atm=None, region_id=None, coords=None):
+    """Predict genera present on a body, newest data first.
+
+    The published species requirements cover families that live on airless
+    bodies, so this no longer refuses to answer unless the atmosphere is thin.
+    Each genus reports the species behind it and whether every published
+    requirement could actually be tested. ``PREDICTION_RULES`` remains as a
+    fallback for bodies the species data does not describe.
+    """
+    # Fall back only when the scan is too incomplete to judge against the
+    # published requirements. A body that was tested and matched nothing is a
+    # real answer, and the coarser legacy rules must not overrule it.
+    if not planet_class or (temp_k is None and gravity_g is None):
+        return _predict_genera_legacy(planet_class, atmosphere, temp_k, gravity_g, volcanism)
+    species = bio_requirements.candidate_species(
+        planet_class, atmosphere, temp_k, gravity_g, volcanism, pressure_atm,
+        region_id, coords,
+    )
+    if species:
+        grouped = {}
+        for row in species:
+            # The catalogue's own genus identifier is authoritative: species
+            # names alone cannot be split reliably, because the non-flora
+            # families are named colour-first.
+            genus = bio_requirements.GENUS_FAMILIES.get(row.get("genus_key")) or \
+                bio_requirements.family_for_species(row.get("name"))
+            if not genus:
+                continue
+            entry = grouped.get(genus)
+            if entry is None:
+                entry = genus_info(genus)
+                entry["species"] = []
+                entry["confirmed"] = False
+                grouped[genus] = entry
+            entry["species"].append({
+                "name": row.get("name"), "value": row.get("value"),
+                "unchecked": row.get("unchecked"), "confirmed": row.get("confirmed"),
+            })
+            entry["confirmed"] = entry["confirmed"] or bool(row.get("confirmed"))
+        for entry in grouped.values():
+            # genus_info() spans every species the genus can contain. Now that
+            # the fitting species are known, narrow the range to those, so the
+            # figure cannot contradict the species listed beneath it.
+            values = [row["value"] for row in entry["species"] if row.get("value")]
+            if values:
+                entry["min_value"] = min(values)
+                entry["max_value"] = max(values)
+        if grouped:
+            return sorted(
+                grouped.values(),
+                key=lambda row: (not row.get("confirmed"), row.get("name") or ""),
+            )
+    return []
+
+
+def _predict_genera_legacy(planet_class, atmosphere, temp_k, gravity_g, volcanism):
     atmo = (atmosphere or "").lower()
     if "thin" not in atmo or temp_k is None or gravity_g is None:
         return []

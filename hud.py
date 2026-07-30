@@ -287,6 +287,28 @@ class TacticalHUD:
         self.draw_text(x, y, text=str(label).upper(), fill="#7d8891", font=("Courier", label_size, "bold"), anchor=anchor)
         self.draw_text(x, y + value_gap, text=str(value), fill=color, font=("Courier", value_size, "bold"), anchor=anchor)
 
+    def _draw_region_label(self, nav_context, x, y, max_width):
+        """Draw the Codex region between the CURRENT SYSTEM and STATE labels.
+
+        Shown in the label row's own dim styling so it reads as context, and
+        lifted to the accent colour for a short spell after crossing into a new
+        region — a rare event that would otherwise cost a badge slot.
+        """
+        region = (nav_context or {}).get("region") or {}
+        name = str(region.get("name") or "").strip()
+        if not name:
+            return
+        try:
+            text = f"{int(region.get('id')):02d}  {name.upper()}"
+        except (TypeError, ValueError):
+            text = name.upper()
+        crossed = bool(region.get("crossed"))
+        self.draw_fitted_text(
+            x, y, text,
+            COLOR_ACCENT if crossed else "#7d8891",
+            size=6, max_width=max(60, max_width), anchor="center",
+        )
+
     def _badge_color(self, state):
         if state == "alert":
             return COLOR_ORANGE
@@ -454,6 +476,7 @@ class TacticalHUD:
 
         self.draw_text(16, 36, text="CURRENT SYSTEM", fill="#7d8891", font=("Courier", 6, "bold"), anchor="w")
         self.draw_text(w - 16, 36, text="STATE", fill="#7d8891", font=("Courier", 6, "bold"), anchor="e")
+        self._draw_region_label(nav_context, (16 + (w - 16)) // 2, 36, max_width=w - 210)
         self.draw_fitted_text(16, 50, str(current_display).upper(), COLOR_TEXT, size=10, max_width=w - 160, anchor="w")
         self.draw_fitted_text(w - 16, 50, state_text, state_color, size=9, max_width=130, anchor="e")
         self.canvas.create_line(16, 58, w - 16, 58, fill="#1a2530", width=1)
@@ -557,6 +580,9 @@ class TacticalHUD:
         # ── System / State ──────────────────────────────────────────────
         self._draw_stat(20, 44, "CURRENT SYSTEM", "", COLOR_TEXT)
         self.draw_text(w - 20, 44, text="STATE", fill="#7d8891", font=("Courier", 6, "bold"), anchor="e")
+        # The label row's centre is otherwise empty, and the galactic region is
+        # context for the system name rather than a status of its own.
+        self._draw_region_label(nav_context, (20 + (w - 20)) // 2, 44, max_width=w - 220)
         self.draw_fitted_text(20, 60, str(current_display).upper(), COLOR_TEXT, size=13, max_width=w - 260, anchor="w")
         self.draw_fitted_text(w - 20, 60, state_text, state_color, size=11, max_width=200, anchor="e")
         self.canvas.create_line(20, 72, w - 20, 72, fill="#1a2530", width=1)

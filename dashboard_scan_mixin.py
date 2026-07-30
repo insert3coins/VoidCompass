@@ -799,6 +799,9 @@ class DashboardScanMixin:
             "atmosphere": data.get("Atmosphere") or data.get("AtmosphereType"),
             "atmosphere_type": data.get("AtmosphereType") or data.get("Atmosphere"),
             "atmosphere_composition": list(data.get("AtmosphereComposition") or []),
+            # Published species requirements are bounded by pressure as well as
+            # gravity and temperature, so the reported value is retained.
+            "surface_pressure": data.get("SurfacePressure"),
             "volcanism": data.get("Volcanism"),
             "icons": icons,
             "color": color,
@@ -814,12 +817,16 @@ class DashboardScanMixin:
             "first_footfall": first_footfall,
             "_ts": ts
         }
+        region_id, system_coords = self._bio_location_context()
         item["predicted_genuses"] = bio_values.predict_genera(
             planet_class,
             item.get("atmosphere_type"),
             item.get("surface_temp"),
             item.get("gravity_g"),
             item.get("volcanism"),
+            item.get("surface_pressure"),
+            region_id,
+            system_coords,
         )
 
         existing = None

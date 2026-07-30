@@ -84,6 +84,7 @@ import compass_personas
 from captains_log import CaptainsLog
 from deep_survey import DeepSurveyTracker
 from exploration_intelligence import build_intelligence, checkpoint_payload
+from galactic_regions import find_region
 from explorer_fieldcraft import revisit_candidate, route_safety_forecast
 from expedition_manager import ExpeditionManager
 from diagnostic_logs import application_base_dir, resolve_log_path
@@ -104,6 +105,8 @@ from profile_backups import automatic_backup
 # exploration fact packet is reused for that long instead of being rebuilt
 # for every event in the batch.
 EXPLORATION_INTELLIGENCE_TTL_S = 0.5
+# How long the Navigation HUD marks a freshly entered Codex region.
+HUD_REGION_CROSSED_S = 45.0
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
@@ -189,15 +192,37 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         except Exception:
             return None
 
+    def _bio_location_context(self):
+        """Return ``(codex_region_id, coords)`` for the current system.
+
+        Several published species requirements are bounded by galactic region
+        or by distance to Guardian and Sinuous Tuber zones. Supplying the
+        commander's position lets those be decided instead of reported as
+        untested.
+        """
+        coords = getattr(self, "current_coords", None)
+        try:
+            position = tuple(float(value) for value in coords)[:3]
+        except (TypeError, ValueError):
+            return None, None
+        if len(position) < 3:
+            return None, None
+        region = find_region(*position)
+        return (region[0] if region else None), position
+
     def _bio_predictions_for_scan(self, scan_data):
         if not scan_data:
             return []
+        region_id, coords = self._bio_location_context()
         return bio_values.predict_genera(
             scan_data.get("planet_class"),
             scan_data.get("atmosphere_type") or scan_data.get("atmosphere"),
             scan_data.get("surface_temp") or scan_data.get("temp_k"),
             scan_data.get("gravity_g") or self._gravity_to_g(scan_data.get("surface_gravity")),
             scan_data.get("volcanism"),
+            scan_data.get("surface_pressure"),
+            region_id,
+            coords,
         )
 
     def _enrich_bio_event_context(self, data):
@@ -3674,8 +3699,35 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "scan_progress": getattr(self, "navigation_scan_progress", None),
             "scan_progress_source": getattr(self, "navigation_scan_progress_source", "bodies"),
             "route_safety": route_safety,
+            "region": self._navigation_region_context(),
             "badges": badges[:6],
         }
+
+    def _navigation_region_context(self):
+        """Return the current Codex region for the Navigation HUD.
+
+        ``crossed`` stays true for a short spell after entering a new region so
+        the HUD can mark the transition without spending a badge slot on it.
+        Region changes are rare, so this settles to a stable value quickly and
+        does not keep the render fingerprint churning.
+        """
+        coords = getattr(self, "current_coords", None)
+        try:
+            position = tuple(float(value) for value in coords)[:3]
+        except (TypeError, ValueError):
+            return {}
+        if len(position) < 3:
+            return {}
+        region = find_region(*position)
+        if not region:
+            return {}
+        region_id, name = region
+        if region_id != getattr(self, "_hud_region_id", None):
+            self._hud_region_id = region_id
+            self._hud_region_since = time.monotonic()
+        since = getattr(self, "_hud_region_since", 0.0)
+        crossed = bool(since) and (time.monotonic() - since) < HUD_REGION_CROSSED_S
+        return {"id": region_id, "name": name, "crossed": crossed}
 
     @staticmethod
     def _classify_music_track(track):
