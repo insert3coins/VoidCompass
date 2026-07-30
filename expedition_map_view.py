@@ -13,7 +13,7 @@ import sys
 import threading
 import time
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 import weakref
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageTk
@@ -33,9 +33,18 @@ LAYER_COLOURS = {
     "Recon": THEME.red,
     "Revisit": THEME.orange,
     "Bookmarks": THEME.yellow,
+    "Annotations": THEME.orange,
     "Planned": THEME.accent,
     "Return": THEME.green,
 }
+
+ANNOTATION_TYPES = (
+    "Note",
+    "Danger",
+    "Region of Interest",
+    "Survey Target",
+    "Waypoint",
+)
 
 VIEW_PRESETS = (
     "Galactic Atlas",
@@ -55,6 +64,7 @@ FIT_MARGIN = 0.88
 # motion keeps each step on the cheap redraw path; full detail returns once
 # the commander stops turning the wheel.
 MOTION_WINDOW_S = 0.18
+NAVIGATION_ANIMATION_MS = 120
 GALAXY_TEXTURE_SIZE = 768
 GALAXY_PREVIEW_SIZE = 384
 GALAXY_MOTION_SIZE = 192
@@ -374,6 +384,12 @@ class ExpeditionMapView:
         self._all_route_rows = []
         self._snapshot = {}
         self._bookmarks = []
+        self._annotation_profile_key = str(
+            (getattr(self.app, "config", None) or {}).get("active_commander_profile") or ""
+        )
+        self._annotations = self._normalise_annotations(
+            (getattr(self.app, "config", None) or {}).get("explore_map_annotations")
+        )
         self._position_by_system = {}
         self._marker_cache = []
         self._marker_glow_cache = {}
@@ -406,6 +422,14 @@ class ExpeditionMapView:
         self._motion_until = 0.0
         self._settle_job = None
         self._motion_frame = False
+        self._navigation_route_path = []
+        self._navigation_waypoint = None
+        self._navigation_current = None
+        self._animation_job = None
+        self._animation_phase = 0.0
+        self._animation_items = {}
+        self._animation_route = None
+        self._annotation_dialog = None
         self._disposed = False
         configure_ttk(parent, "ExpeditionMap")
         self._build()
@@ -418,11 +442,12 @@ class ExpeditionMapView:
             bg=THEME.panel, font=("Segoe UI", 9, "bold"),
         ).pack(side=tk.LEFT, padx=10, pady=8)
         tk.Label(
-            toolbar, text="drag move · wheel zoom · click inspect · 2× reset", fg=THEME.muted,
+            toolbar, text="drag move · wheel zoom · click inspect · ctrl+click mark · 2× reset", fg=THEME.muted,
             bg=THEME.panel, font=("Cascadia Mono", 7),
         ).pack(side=tk.LEFT)
         button(toolbar, "RESET", self._reset_and_remember).pack(side=tk.RIGHT, padx=(0, 8), pady=5)
         button(toolbar, "CURRENT", self._focus_current).pack(side=tk.RIGHT, padx=(0, 6), pady=5)
+        button(toolbar, "MARK", self._edit_annotation).pack(side=tk.RIGHT, padx=(0, 6), pady=5)
         self.view_mode = tk.StringVar(value="Galactic Atlas")
         combo = ttk.Combobox(
             toolbar, textvariable=self.view_mode, state="readonly", width=16,
@@ -450,11 +475,12 @@ class ExpeditionMapView:
             font=("Segoe UI", 8, "bold"),
         ).pack(side=tk.LEFT, padx=(8, 5), pady=4)
         self.layer_vars = {}
-        for name in ("Regions", "Planned", "Return", "Valuable", "Biology", "Codex", "Photos", "Recon", "Revisit", "Bookmarks"):
+        for name in ("Regions", "Planned", "Return", "Valuable", "Biology", "Codex", "Photos", "Recon", "Revisit", "Bookmarks", "Annotations"):
             var = tk.BooleanVar(value=name != "Return")
             self.layer_vars[name] = var
             tk.Checkbutton(
-                layers, text=name.upper(), variable=var, command=self._layer_changed,
+                layers, text=("MARKS" if name == "Annotations" else name.upper()),
+                variable=var, command=self._layer_changed,
                 fg=LAYER_COLOURS[name], bg=THEME.inset, selectcolor=THEME.input,
                 activebackground=THEME.inset, activeforeground=LAYER_COLOURS[name],
                 font=("Cascadia Mono", 7, "bold"), bd=0, highlightthickness=0,
@@ -468,7 +494,7 @@ class ExpeditionMapView:
         search.pack(side=tk.RIGHT, padx=(4, 0), pady=3)
         search.bind("<Return>", self._find_target)
         tk.Label(
-            layers, text="SYSTEM / REGION", fg=THEME.muted, bg=THEME.inset,
+            layers, text="SYSTEM / REGION / MARK", fg=THEME.muted, bg=THEME.inset,
             font=("Cascadia Mono", 7, "bold"),
         ).pack(side=tk.RIGHT, padx=(8, 0), pady=3)
 
@@ -485,6 +511,7 @@ class ExpeditionMapView:
         self.canvas.bind("<Configure>", self._on_canvas_configure)
         self.canvas.bind("<Map>", self._on_canvas_mapped)
         self.canvas.bind("<ButtonPress-1>", lambda event: self._begin_drag(event, "pan"))
+        self.canvas.bind("<Control-Button-1>", self._annotate_at_canvas)
         self.canvas.bind("<B1-Motion>", self._drag)
         self.canvas.bind("<ButtonRelease-1>", self._end_drag)
         self.canvas.bind("<Shift-ButtonPress-1>", lambda event: self._begin_drag(event, "pan"))
@@ -510,7 +537,7 @@ class ExpeditionMapView:
 
     def dispose(self):
         self._disposed = True
-        for job in (self._render_job, self._settle_job):
+        for job in (self._render_job, self._settle_job, self._animation_job):
             if job is None:
                 continue
             try:
@@ -519,10 +546,17 @@ class ExpeditionMapView:
                 pass
         self._render_job = None
         self._settle_job = None
+        self._animation_job = None
         self._background_image = None
         self._background_photo = None
         self._galaxy_warp_image = None
         self._atlas_source = None
+        if self._annotation_dialog is not None:
+            try:
+                self._annotation_dialog.destroy()
+            except tk.TclError:
+                pass
+            self._annotation_dialog = None
 
     def _galaxy_texture_key(self):
         return (
@@ -539,6 +573,228 @@ class ExpeditionMapView:
         self._galaxy_warp_key = None
         self._galaxy_warp_image = None
         self._schedule_render()
+
+    @staticmethod
+    def _normalise_annotations(rows):
+        """Return safe, portable commander-owned map annotations."""
+        annotations = []
+        for index, row in enumerate(rows or ()):
+            if not isinstance(row, dict):
+                continue
+            position = _position(row.get("position"))
+            if position is None:
+                continue
+            category = str(row.get("category") or "Note").strip()
+            if category not in ANNOTATION_TYPES:
+                category = "Note"
+            title = str(row.get("title") or category).strip() or category
+            annotation_id = str(row.get("id") or "").strip()
+            if not annotation_id:
+                coordinate_key = "-".join(f"{value:.3f}" for value in position)
+                annotation_id = f"legacy-{index}-{coordinate_key}"
+            annotations.append({
+                "id": annotation_id,
+                "category": category,
+                "title": title[:120],
+                "note": str(row.get("note") or "").strip()[:2000],
+                "system": str(row.get("system") or "").strip()[:120],
+                "position": list(position),
+                "created": str(row.get("created") or ""),
+            })
+        return annotations
+
+    @staticmethod
+    def _annotation_marker(row):
+        note = " ".join(str(row.get("note") or "").split())
+        category = str(row.get("category") or "Note")
+        return {
+            "layer": "Annotations",
+            "kind": "Annotation",
+            "system": row.get("system"),
+            "subject": row.get("title") or category,
+            "detail": f"{category} · {note}" if note else category,
+            "position": row.get("position"),
+            "annotation_id": row.get("id"),
+            "category": category,
+            "note": row.get("note") or "",
+        }
+
+    def _persist_annotations(self):
+        config = getattr(self.app, "config", None)
+        if not isinstance(config, dict):
+            return
+        config["explore_map_annotations"] = [dict(row) for row in self._annotations]
+        persist = getattr(self.app, "_persist_config", None)
+        if callable(persist):
+            persist()
+
+    def _annotation_target(self):
+        record = (self._selected_point or {}).get("record") or {}
+        annotation_id = str(record.get("annotation_id") or "")
+        existing = next(
+            (row for row in self._annotations if row.get("id") == annotation_id),
+            None,
+        )
+        if existing is not None:
+            return _position(existing.get("position")), existing.get("system") or "", existing
+        raw = record.get("raw") or {}
+        position = _position(raw.get("pos") or record.get("position"))
+        system = str(record.get("system") or "")
+        if position is None:
+            position = _position(getattr(self.app, "current_coords", None))
+            system = str(getattr(self.app, "current_sys", "") or "")
+        return position, system, None
+
+    def _annotate_at_canvas(self, event):
+        context = self._projection_context or self._projection()
+        scale = float(context.get("scale") or 0.0)
+        if scale <= 0.0:
+            return "break"
+        position = (
+            self._camera_center[0] + (event.x - context["cx"]) / scale,
+            0.0,
+            self._camera_center[2] - (event.y - context["cy"]) / scale,
+        )
+        region = find_region(*position)
+        suggestion = region[1] if region else "Galactic marker"
+        self._open_annotation_dialog(position, "", None, suggestion)
+        return "break"
+
+    def _edit_annotation(self):
+        position, system, existing = self._annotation_target()
+        if position is None:
+            messagebox.showinfo(
+                "Map Annotation",
+                "Select a mapped system or region first, or wait until the current system has coordinates.",
+                parent=self.parent.winfo_toplevel(),
+            )
+            return
+        suggestion = system or ((self._selected_point or {}).get("record") or {}).get("subject")
+        self._open_annotation_dialog(position, system, existing, suggestion)
+
+    def _open_annotation_dialog(self, position, system="", existing=None, suggestion=""):
+        if self._annotation_dialog is not None:
+            try:
+                if self._annotation_dialog.winfo_exists():
+                    self._annotation_dialog.lift()
+                    self._annotation_dialog.focus_force()
+                    return
+            except tk.TclError:
+                pass
+        position = _position(position)
+        if position is None:
+            return
+        top = tk.Toplevel(self.parent.winfo_toplevel())
+        self._annotation_dialog = top
+        top.title("VoidCompass // Map Annotation")
+        top.configure(bg=THEME.bg)
+        top.geometry("470x360")
+        top.minsize(420, 330)
+        top.transient(self.parent.winfo_toplevel())
+
+        body = tk.Frame(top, bg=THEME.panel, highlightthickness=1, highlightbackground=THEME.border)
+        body.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
+        tk.Label(
+            body, text="GALACTIC MAP ANNOTATION", fg=THEME.orange, bg=THEME.panel,
+            font=("Segoe UI", 10, "bold"), anchor="w",
+        ).pack(fill=tk.X, padx=12, pady=(10, 3))
+        location = system or (find_region(*position) or (None, "Deep space"))[1]
+        tk.Label(
+            body,
+            text=f"{location} · {position[0]:,.1f}, {position[1]:,.1f}, {position[2]:,.1f}",
+            fg=THEME.muted, bg=THEME.panel, font=("Cascadia Mono", 8), anchor="w",
+        ).pack(fill=tk.X, padx=12, pady=(0, 10))
+
+        form = tk.Frame(body, bg=THEME.panel)
+        form.pack(fill=tk.BOTH, expand=True, padx=12)
+        form.columnconfigure(1, weight=1)
+        tk.Label(form, text="TYPE", fg=THEME.muted, bg=THEME.panel, font=("Segoe UI", 8, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 7))
+        category_var = tk.StringVar(value=(existing or {}).get("category") or "Note")
+        category = ttk.Combobox(
+            form, textvariable=category_var, state="readonly", values=ANNOTATION_TYPES,
+            style="ExpeditionMap.TCombobox", width=24,
+        )
+        category.grid(row=0, column=1, sticky="ew", padx=(10, 0), pady=(0, 7))
+        tk.Label(form, text="TITLE", fg=THEME.muted, bg=THEME.panel, font=("Segoe UI", 8, "bold")).grid(row=1, column=0, sticky="w", pady=(0, 7))
+        title_var = tk.StringVar(value=(existing or {}).get("title") or suggestion or "")
+        title_entry = ttk.Entry(form, textvariable=title_var, style="ExpeditionMap.TEntry")
+        title_entry.grid(row=1, column=1, sticky="ew", padx=(10, 0), pady=(0, 7))
+        tk.Label(form, text="NOTES", fg=THEME.muted, bg=THEME.panel, font=("Segoe UI", 8, "bold")).grid(row=2, column=0, sticky="nw", pady=(2, 0))
+        note = tk.Text(
+            form, height=7, wrap="word", bg=THEME.input, fg=THEME.text,
+            insertbackground=THEME.accent, relief=tk.FLAT, highlightthickness=1,
+            highlightbackground=THEME.border, highlightcolor=THEME.accent,
+            font=("Segoe UI", 9),
+        )
+        note.grid(row=2, column=1, sticky="nsew", padx=(10, 0))
+        note.insert("1.0", (existing or {}).get("note") or "")
+        form.rowconfigure(2, weight=1)
+
+        actions = tk.Frame(body, bg=THEME.panel)
+        actions.pack(fill=tk.X, padx=12, pady=12)
+
+        def close_dialog():
+            self._annotation_dialog = None
+            try:
+                top.grab_release()
+            except tk.TclError:
+                pass
+            top.destroy()
+
+        def save_annotation():
+            category_value = category_var.get() if category_var.get() in ANNOTATION_TYPES else "Note"
+            title_value = title_var.get().strip() or category_value
+            row = {
+                "id": (existing or {}).get("id") or f"map-{time.time_ns():x}",
+                "category": category_value,
+                "title": title_value[:120],
+                "note": note.get("1.0", "end-1c").strip()[:2000],
+                "system": str(system or (existing or {}).get("system") or "")[:120],
+                "position": list(position),
+                "created": (existing or {}).get("created") or datetime.now().astimezone().isoformat(),
+            }
+            self._annotations = [
+                item for item in self._annotations if item.get("id") != row["id"]
+            ] + [row]
+            self._persist_annotations()
+            self.layer_vars["Annotations"].set(True)
+            self._persist_view_state()
+            self._marker_cache = self._layer_markers(self._snapshot, self._bookmarks)
+            self._update_summary(self._scoped_route_rows())
+            marker = self._annotation_marker(row)
+            self._selected_point = {"x": -1000, "y": -1000, "record": marker}
+            self._show_record(marker)
+            self._schedule_render()
+            feed = getattr(self.app, "add_event_feed_entry", None)
+            if callable(feed):
+                feed("MAP", f"Annotation saved: {row['title']}", severity="INFO")
+            close_dialog()
+
+        def delete_annotation():
+            if existing is None or not messagebox.askyesno(
+                "Delete Map Annotation",
+                f"Delete ‘{existing.get('title') or 'this annotation'}’ from this commander profile?",
+                parent=top,
+            ):
+                return
+            self._annotations = [
+                item for item in self._annotations if item.get("id") != existing.get("id")
+            ]
+            self._persist_annotations()
+            self._marker_cache = self._layer_markers(self._snapshot, self._bookmarks)
+            self._update_summary(self._scoped_route_rows())
+            self._selected_point = None
+            self.detail.config(text="Map annotation deleted from this commander profile.")
+            self._schedule_render()
+            close_dialog()
+
+        button(actions, "SAVE MARK", save_annotation).pack(side=tk.RIGHT)
+        button(actions, "CANCEL", close_dialog).pack(side=tk.RIGHT, padx=(0, 6))
+        if existing is not None:
+            button(actions, "DELETE", delete_annotation).pack(side=tk.LEFT)
+        top.protocol("WM_DELETE_WINDOW", close_dialog)
+        top.grab_set()
+        title_entry.focus_set()
 
     def view_state(self):
         return {
@@ -631,6 +887,16 @@ class ExpeditionMapView:
         self._route_rows = self._sample_route_rows(scoped_rows)
         manager = getattr(self.app, "expedition_manager", None)
         self._bookmarks = manager.bookmarks() if manager else []
+        annotation_profile_key = str(
+            (getattr(self.app, "config", None) or {}).get("active_commander_profile") or ""
+        )
+        if annotation_profile_key != self._annotation_profile_key:
+            self._annotation_profile_key = annotation_profile_key
+            self._selected_point = None
+            self._hover_point = None
+        self._annotations = self._normalise_annotations(
+            (getattr(self.app, "config", None) or {}).get("explore_map_annotations")
+        )
         self._position_by_system = {
             str(row.get("system") or "").casefold(): position
             for row in scoped_rows
@@ -874,6 +1140,34 @@ class ExpeditionMapView:
             self.search_var.set(display)
             return "break"
 
+        annotation_matches = [
+            row for row in self._annotations
+            if wanted in str(row.get("title") or "").casefold()
+            or wanted in str(row.get("note") or "").casefold()
+        ]
+        if annotation_matches:
+            row = min(
+                annotation_matches,
+                key=lambda item: (
+                    str(item.get("title") or "").casefold() != wanted,
+                    len(str(item.get("title") or "")),
+                ),
+            )
+            position = _position(row.get("position"))
+            self.view_mode.set("Current Vicinity")
+            self.layer_vars["Annotations"].set(True)
+            self._camera_center = list(position)
+            self._fit_radius = 1200.0
+            self._zoom = 1.25
+            self._pan = [0.0, 0.0]
+            self.search_var.set(row.get("title") or "Map annotation")
+            record = self._annotation_marker(row)
+            self._selected_point = {"x": -1000, "y": -1000, "record": record}
+            self._show_record(record)
+            self._schedule_render()
+            self._persist_view_state()
+            return "break"
+
         _segments, regions = region_geometry(16)
         region_matches = [row for row in regions if wanted in row["name"].casefold()]
         if region_matches:
@@ -1055,6 +1349,78 @@ class ExpeditionMapView:
         )
         return point if (point["x"] - x) ** 2 + (point["y"] - y) ** 2 <= radius ** 2 else None
 
+    def _cluster_radius(self):
+        """Return a screen-space grouping radius for the current scale."""
+        visible_radius = self._fit_radius / max(self._zoom, 0.01)
+        if self._motion_frame:
+            return 34.0
+        if visible_radius > 20_000:
+            return 30.0
+        if visible_radius > 6_000:
+            return 26.0
+        if visible_radius > 1_800:
+            return 22.0
+        if visible_radius > 600:
+            return 18.0
+        return 0.0
+
+    @staticmethod
+    def _cluster_screen_items(items, radius):
+        """Group nearby projected records in roughly linear time.
+
+        Each item starts with a projected ``(x, y, depth, perspective)`` tuple.
+        A small spatial hash avoids all-pairs comparisons while neighbouring
+        cells prevent visible seams at grid boundaries.
+        """
+        items = list(items or ())
+        if radius <= 0.0:
+            return [{"items": [item], "x": item[0][0], "y": item[0][1]} for item in items]
+        cell_size = max(1.0, float(radius))
+        radius_sq = float(radius) ** 2
+        clusters = []
+        cells = defaultdict(list)
+        for item in items:
+            x, y = item[0][0], item[0][1]
+            cell = (math.floor(x / cell_size), math.floor(y / cell_size))
+            match = None
+            best_distance = radius_sq + 1.0
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    for cluster in cells.get((cell[0] + dx, cell[1] + dy), ()):
+                        distance = (cluster["x"] - x) ** 2 + (cluster["y"] - y) ** 2
+                        if distance <= radius_sq and distance < best_distance:
+                            match = cluster
+                            best_distance = distance
+            if match is None:
+                match = {"items": [], "x": x, "y": y, "sum_x": 0.0, "sum_y": 0.0}
+                clusters.append(match)
+                cells[cell].append(match)
+            match["items"].append(item)
+            match["sum_x"] += x
+            match["sum_y"] += y
+            count = len(match["items"])
+            match["x"] = match["sum_x"] / count
+            match["y"] = match["sum_y"] / count
+        return clusters
+
+    def _focus_cluster(self, record):
+        positions = [
+            position for value in record.get("positions") or ()
+            if (position := _position(value)) is not None
+        ]
+        if not positions:
+            return
+        centre, radius = self._bounds(positions)
+        self.view_mode.set("Current Vicinity")
+        self._camera_center = list(centre)
+        self._fit_radius = max(100.0, radius * 1.18)
+        self._zoom = 1.0
+        self._pan = [0.0, 0.0]
+        self._fit_to_canvas(positions)
+        self._begin_motion()
+        self._schedule_render()
+        self._persist_view_state()
+
     def _select_at(self, x, y):
         point = self._nearest_point(x, y, 20)
         if not point:
@@ -1062,7 +1428,10 @@ class ExpeditionMapView:
         self._selected_point = point
         record = point["record"]
         self._show_record(record, prefix="SELECTED")
-        if record.get("kind") != "Region" and callable(self.open_record_callback):
+        if record.get("kind") == "Cluster":
+            self._focus_cluster(record)
+            return
+        if record.get("kind") not in {"Region", "Annotation"} and callable(self.open_record_callback):
             self.open_record_callback(record)
 
     def _show_record(self, record, prefix="SELECTED"):
@@ -1151,6 +1520,7 @@ class ExpeditionMapView:
             )
         else:
             canvas.itemconfigure(self._background_item, image=self._background_photo)
+        self._sync_navigation_animation()
 
     @staticmethod
     def _dashed_segment(draw, left, right, colour, width, dash):
@@ -1549,6 +1919,9 @@ class ExpeditionMapView:
 
     def _draw_route_and_markers(self):
         draw = self._background_draw
+        self._navigation_route_path = []
+        self._navigation_waypoint = None
+        self._navigation_current = None
         rows = self._route_rows
         mapped_points = [point for point in self._map_points if point["record"].get("kind") == "Region"]
         position_by_system = self._position_by_system
@@ -1591,51 +1964,40 @@ class ExpeditionMapView:
                 == current_system.casefold()
             )
         }
-        point_limit = 30 if self._motion_frame else 220
-        if len(visible_indexes) > point_limit:
-            last = len(visible_indexes) - 1
-            visible_indexes = sorted(mandatory_indexes | {
-                visible_indexes[round(sample * last / (point_limit - 1))]
+        route_items = [
+            (route_points[index][0], route_points[index][1], route_points[index][2], index)
+            for index in visible_indexes
+        ]
+        mandatory_items = [item for item in route_items if item[3] in mandatory_indexes]
+        ordinary_items = [item for item in route_items if item[3] not in mandatory_indexes]
+        route_clusters = self._cluster_screen_items(ordinary_items, self._cluster_radius())
+        point_limit = 70 if self._motion_frame else 320
+        if len(route_clusters) > point_limit:
+            last = len(route_clusters) - 1
+            route_clusters = [
+                route_clusters[round(sample * last / (point_limit - 1))]
                 for sample in range(point_limit)
-            })
-        ordered = sorted(
-            ((index, route_points[index]) for index in visible_indexes),
-            key=lambda item: item[1][0][2], reverse=True,
-        )
-        for index, (projected, row, pos) in ordered:
-            px, py, depth, perspective = projected
-            if not (-30 <= px <= self._projection_context["width"] + 30
-                    and -30 <= py <= self._projection_context["height"] + 30):
+            ]
+        for cluster in route_clusters:
+            items = cluster["items"]
+            if len(items) == 1:
+                self._draw_route_system(items[0], mapped_points, current_system, len(route_points))
                 continue
-            system = str(row.get("system") or "")
-            is_current = bool(system and system.casefold() == current_system.casefold())
-            is_endpoint = index in {0, len(route_points) - 1}
-            colour = THEME.orange if is_current else _star_colour(row.get("star_class"))
-            radius = max(1.5, min(5.5, (4.2 if is_endpoint else 2.4) * perspective))
-            if not is_current:
-                glow = _mix(THEME.inset, colour, 0.28)
-                draw.ellipse(
-                    (px - radius * 2.2, py - radius * 2.2,
-                     px + radius * 2.2, py + radius * 2.2),
-                    outline=glow,
-                )
-                draw.ellipse(
-                    (px - radius, py - radius, px + radius, py + radius), fill=colour,
-                )
-            if is_endpoint and not is_current:
-                self._background_text(
-                    px + 10, py - 8, system or "UNKNOWN",
-                    THEME.muted,
-                    size=7, bold=True, anchor="w",
-                )
+            positions = [item[2] for item in items]
+            systems = [str(item[1].get("system") or "") for item in items]
+            centre = self._mean_position(positions)
+            self._draw_cluster_badge(cluster["x"], cluster["y"], len(items), THEME.muted)
             mapped_points.append({
-                "x": px, "y": py, "depth": depth,
+                "x": cluster["x"], "y": cluster["y"], "depth": 0.0,
                 "record": {
-                    "kind": "System", "system": system,
-                    "subject": "Current system" if is_current else "Route arrival",
-                    "raw": row, "position": pos,
+                    "kind": "Cluster", "subject": "Visited system cluster",
+                    "detail": f"{len(items)} nearby visited systems · click to expand",
+                    "system": systems[0] if systems and len(set(systems)) == 1 else "",
+                    "position": centre, "positions": positions,
                 },
             })
+        for item in mandatory_items:
+            self._draw_route_system(item, mapped_points, current_system, len(route_points))
 
         markers = self._marker_cache
         if self._motion_frame and len(markers) > 120:
@@ -1648,7 +2010,7 @@ class ExpeditionMapView:
             # while moving, then restore every intelligence marker on release.
             bookmark_indexes = [
                 index for index, marker in enumerate(markers)
-                if marker.get("layer") in {"Bookmarks", "Revisit"}
+                if marker.get("layer") in {"Bookmarks", "Revisit", "Annotations"}
             ]
             if len(bookmark_indexes) > 40:
                 bookmark_last = len(bookmark_indexes) - 1
@@ -1658,7 +2020,6 @@ class ExpeditionMapView:
                 ]
             indexes.update(bookmark_indexes)
             markers = [markers[index] for index in sorted(indexes)]
-        marker_counts = defaultdict(int)
         plotted_markers = 0
         projected_markers = []
         for marker in markers:
@@ -1671,17 +2032,69 @@ class ExpeditionMapView:
             if pos is None:
                 continue
             projected_markers.append((self._project(pos), marker, pos))
-        for projected, marker, pos in sorted(projected_markers, key=lambda item: item[0][2], reverse=True):
-            px, py, depth, perspective = projected
-            if not (-25 <= px <= self._projection_context["width"] + 25
-                    and -25 <= py <= self._projection_context["height"] + 25):
+        projected_markers = [
+            item for item in projected_markers
+            if -25 <= item[0][0] <= self._projection_context["width"] + 25
+            and -25 <= item[0][1] <= self._projection_context["height"] + 25
+        ]
+        annotations = [item for item in projected_markers if item[1]["layer"] == "Annotations"]
+        intelligence = [item for item in projected_markers if item[1]["layer"] != "Annotations"]
+        marker_clusters = self._cluster_screen_items(intelligence, self._cluster_radius())
+        cluster_limit = 80 if self._motion_frame else 320
+        if len(marker_clusters) > cluster_limit:
+            last = len(marker_clusters) - 1
+            marker_clusters = [
+                marker_clusters[round(sample * last / (cluster_limit - 1))]
+                for sample in range(cluster_limit)
+            ]
+        marker_counts = defaultdict(int)
+        for cluster in marker_clusters:
+            items = cluster["items"]
+            plotted_markers += len(items)
+            if len(items) > 1:
+                positions = [item[2] for item in items]
+                counts = defaultdict(int)
+                systems = set()
+                for _projected, marker, _position_value in items:
+                    counts[marker["layer"]] += 1
+                    if marker.get("system"):
+                        systems.add(str(marker["system"]))
+                detail = " · ".join(
+                    f"{layer} {count}" for layer, count in sorted(counts.items())
+                )
+                centre = self._mean_position(positions)
+                self._draw_cluster_badge(cluster["x"], cluster["y"], len(items), THEME.accent)
+                mapped_points.append({
+                    "x": cluster["x"], "y": cluster["y"], "depth": 0.0,
+                    "record": {
+                        "kind": "Cluster", "subject": "Discovery cluster",
+                        "detail": f"{detail} · click to expand",
+                        "system": next(iter(systems)) if len(systems) == 1 else "",
+                        "position": centre, "positions": positions,
+                    },
+                })
                 continue
+            projected, marker, pos = items[0]
+            px, py, depth, _perspective = projected
             system_key = str(marker.get("system") or "").casefold()
             offset_index = marker_counts[system_key]
             marker_counts[system_key] += 1
             px += ((offset_index % 3) - 1) * 9
             py += ((offset_index // 3) % 3 - 1) * 9
-            self._draw_marker(px, py, marker["layer"], LAYER_COLOURS[marker["layer"]])
+            self._draw_marker(
+                px, py, marker["layer"], LAYER_COLOURS[marker["layer"]], marker,
+            )
+            marker["position"] = pos
+            mapped_points.append({"x": px, "y": py, "depth": depth, "record": marker})
+        for projected, marker, pos in annotations:
+            px, py, depth, _perspective = projected
+            system_key = str(marker.get("system") or marker.get("annotation_id") or "").casefold()
+            offset_index = marker_counts[system_key]
+            marker_counts[system_key] += 1
+            px += ((offset_index % 3) - 1) * 11
+            py += ((offset_index // 3) % 3 - 1) * 11
+            colour = self._annotation_colour(marker.get("category"))
+            self._draw_marker(px, py, "Annotations", colour, marker)
             marker["position"] = pos
             mapped_points.append({"x": px, "y": py, "depth": depth, "record": marker})
             plotted_markers += 1
@@ -1696,6 +2109,7 @@ class ExpeditionMapView:
                 and -35 <= py <= self._projection_context["height"] + 35
             ):
                 self._draw_current_locator(px, py, current_system)
+                self._navigation_current = (px, py)
                 mapped_points.append({
                     "x": px, "y": py, "depth": depth,
                     "record": {
@@ -1707,6 +2121,67 @@ class ExpeditionMapView:
                 })
         self._map_points = mapped_points
         self._plotted_markers = plotted_markers
+
+    @staticmethod
+    def _mean_position(positions):
+        positions = [position for position in positions if position is not None]
+        if not positions:
+            return None
+        count = len(positions)
+        return tuple(sum(position[axis] for position in positions) / count for axis in range(3))
+
+    def _draw_route_system(self, item, mapped_points, current_system, total_points):
+        projected, row, pos, index = item
+        px, py, depth, perspective = projected
+        system = str(row.get("system") or "")
+        is_current = bool(system and system.casefold() == current_system.casefold())
+        is_endpoint = index in {0, total_points - 1}
+        colour = THEME.orange if is_current else _star_colour(row.get("star_class"))
+        radius = max(1.5, min(5.5, (4.2 if is_endpoint else 2.4) * perspective))
+        if not is_current:
+            glow = _mix(THEME.inset, colour, 0.28)
+            self._background_draw.ellipse(
+                (px - radius * 2.2, py - radius * 2.2,
+                 px + radius * 2.2, py + radius * 2.2),
+                outline=glow,
+            )
+            self._background_draw.ellipse(
+                (px - radius, py - radius, px + radius, py + radius), fill=colour,
+            )
+        if is_endpoint and not is_current:
+            self._background_text(
+                px + 10, py - 8, system or "UNKNOWN",
+                THEME.muted, size=7, bold=True, anchor="w",
+            )
+        mapped_points.append({
+            "x": px, "y": py, "depth": depth,
+            "record": {
+                "kind": "System", "system": system,
+                "subject": "Current system" if is_current else "Route arrival",
+                "raw": row, "position": pos,
+            },
+        })
+
+    def _draw_cluster_badge(self, x, y, count, colour):
+        draw = self._background_draw
+        radius = 9 if count < 100 else 11
+        glow = _mix(THEME.inset, colour, 0.25)
+        draw.ellipse((x - radius - 3, y - radius - 3, x + radius + 3, y + radius + 3), outline=glow)
+        draw.ellipse(
+            (x - radius, y - radius, x + radius, y + radius),
+            fill=THEME.inset, outline=colour, width=2,
+        )
+        label = str(count) if count < 100 else "99+"
+        self._background_text(x, y, label, colour, size=6, bold=True)
+
+    @staticmethod
+    def _annotation_colour(category):
+        return {
+            "Danger": THEME.red,
+            "Region of Interest": THEME.accent,
+            "Survey Target": THEME.green,
+            "Waypoint": THEME.yellow,
+        }.get(str(category or ""), THEME.orange)
 
     def _draw_route_path(self, route_points):
         sequence = []
@@ -1756,7 +2231,9 @@ class ExpeditionMapView:
                 )
 
     def _draw_planned_route(self):
-        planned = route_context(self.app).get("planned") or ()
+        route = route_context(self.app)
+        planned = route.get("planned") or ()
+        next_system = str(route.get("next_system") or "").casefold()
         for source, dash in (("game", (7, 5)), ("waypoint", (2, 5))):
             points = []
             for row in planned:
@@ -1765,6 +2242,19 @@ class ExpeditionMapView:
                 pos = _position(row.get("pos"))
                 if pos is not None:
                     points.append((self._project(pos), row, pos))
+            if not self._navigation_route_path and len(points) >= 2:
+                self._navigation_route_path = [
+                    (projected[0], projected[1]) for projected, _row, _pos in points
+                ]
+            if self._navigation_waypoint is None and next_system:
+                target = next((
+                    point for point in points
+                    if str(point[1].get("system") or "").casefold() == next_system
+                ), None)
+                if target is not None:
+                    self._navigation_waypoint = (
+                        target[0][0], target[0][1], target[1].get("system") or "Waypoint",
+                    )
             if len(points) < 2:
                 continue
             for index in range(1, len(points)):
@@ -1777,6 +2267,151 @@ class ExpeditionMapView:
                 )
                 if not self._motion_frame and index % max(1, len(points) // 5) == 0:
                     self._draw_direction_arrow(left, right, LAYER_COLOURS["Planned"])
+
+    def _ensure_animation_items(self):
+        if self._animation_items:
+            return
+        canvas = self.canvas
+        self._animation_items = {
+            "pulse": canvas.create_oval(0, 0, 0, 0, outline=THEME.orange, width=1, state="hidden"),
+            "tracer_glow": canvas.create_oval(0, 0, 0, 0, outline=_mix(THEME.inset, THEME.accent, 0.34), width=2, state="hidden"),
+            "tracer": canvas.create_oval(0, 0, 0, 0, fill=THEME.accent, outline=THEME.text, width=1, state="hidden"),
+            "beacon_outer": canvas.create_oval(0, 0, 0, 0, outline=THEME.yellow, width=1, state="hidden"),
+            "beacon_inner": canvas.create_oval(0, 0, 0, 0, outline=_mix(THEME.inset, THEME.yellow, 0.72), width=1, state="hidden"),
+        }
+
+    def _hide_animation_items(self):
+        for item in self._animation_items.values():
+            try:
+                self.canvas.itemconfigure(item, state="hidden")
+            except tk.TclError:
+                return
+
+    @staticmethod
+    def _prepare_animation_route(points):
+        points = [(float(x), float(y)) for x, y in points or ()]
+        if len(points) < 2:
+            return None
+        cumulative = [0.0]
+        for left, right in zip(points, points[1:]):
+            cumulative.append(cumulative[-1] + math.hypot(right[0] - left[0], right[1] - left[1]))
+        if cumulative[-1] < 1.0:
+            return None
+        return points, cumulative, cumulative[-1]
+
+    @staticmethod
+    def _animation_route_point(route, fraction):
+        points, cumulative, total = route
+        distance = max(0.0, min(1.0, fraction)) * total
+        for index in range(1, len(cumulative)):
+            if cumulative[index] < distance:
+                continue
+            span = max(0.001, cumulative[index] - cumulative[index - 1])
+            amount = (distance - cumulative[index - 1]) / span
+            left, right = points[index - 1], points[index]
+            return (
+                left[0] + (right[0] - left[0]) * amount,
+                left[1] + (right[1] - left[1]) * amount,
+            )
+        return points[-1]
+
+    def _sync_navigation_animation(self):
+        """Place cheap Canvas animation above the cached atlas bitmap."""
+        try:
+            self._ensure_animation_items()
+        except tk.TclError:
+            return
+        self._hide_animation_items()
+        if self._disposed or self._moving:
+            return
+        reduced_motion = bool(
+            (getattr(self.app, "config", None) or {}).get("reduced_motion_enabled", False)
+        )
+        self._animation_route = self._prepare_animation_route(self._navigation_route_path)
+        waypoint = self._navigation_waypoint
+        if waypoint is not None:
+            x, y, _name = waypoint
+            radius = 10
+            self.canvas.coords(
+                self._animation_items["beacon_outer"],
+                x - radius, y - radius, x + radius, y + radius,
+            )
+            self.canvas.coords(
+                self._animation_items["beacon_inner"], x - 4, y - 4, x + 4, y + 4,
+            )
+            self.canvas.itemconfigure(self._animation_items["beacon_outer"], state="normal")
+            self.canvas.itemconfigure(self._animation_items["beacon_inner"], state="normal")
+        if reduced_motion:
+            if self._animation_job is not None:
+                try:
+                    self.canvas.after_cancel(self._animation_job)
+                except tk.TclError:
+                    pass
+                self._animation_job = None
+            return
+        self._animate_navigation()
+
+    def _animate_navigation(self):
+        if self._animation_job is not None:
+            try:
+                self.canvas.after_cancel(self._animation_job)
+            except tk.TclError:
+                pass
+            self._animation_job = None
+        if self._disposed or self._moving:
+            self._hide_animation_items()
+            return
+        try:
+            if not self.canvas.winfo_ismapped():
+                self._hide_animation_items()
+                return
+        except tk.TclError:
+            return
+        self._animation_phase = (self._animation_phase + 0.16) % math.tau
+        pulse_amount = (math.sin(self._animation_phase) + 1.0) / 2.0
+        if self._navigation_current is not None:
+            x, y = self._navigation_current
+            radius = 11.0 + pulse_amount * 5.0
+            self.canvas.coords(
+                self._animation_items["pulse"], x - radius, y - radius, x + radius, y + radius,
+            )
+            self.canvas.itemconfigure(
+                self._animation_items["pulse"], state="normal",
+                outline=_mix(THEME.inset, THEME.orange, 0.32 + pulse_amount * 0.34),
+            )
+        if self._animation_route is not None:
+            x, y = self._animation_route_point(
+                self._animation_route, (self._animation_phase / math.tau) % 1.0,
+            )
+            self.canvas.coords(
+                self._animation_items["tracer_glow"], x - 6, y - 6, x + 6, y + 6,
+            )
+            self.canvas.coords(
+                self._animation_items["tracer"], x - 2, y - 2, x + 2, y + 2,
+            )
+            self.canvas.itemconfigure(self._animation_items["tracer_glow"], state="normal")
+            self.canvas.itemconfigure(self._animation_items["tracer"], state="normal")
+        if self._navigation_waypoint is not None:
+            x, y, _name = self._navigation_waypoint
+            beacon_amount = (math.sin(self._animation_phase * 0.72) + 1.0) / 2.0
+            radius = 9.0 + beacon_amount * 4.0
+            self.canvas.coords(
+                self._animation_items["beacon_outer"],
+                x - radius, y - radius, x + radius, y + radius,
+            )
+            self.canvas.itemconfigure(
+                self._animation_items["beacon_outer"], state="normal",
+                outline=_mix(THEME.inset, THEME.yellow, 0.42 + beacon_amount * 0.30),
+            )
+            self.canvas.itemconfigure(self._animation_items["beacon_inner"], state="normal")
+        for item in self._animation_items.values():
+            self.canvas.tag_raise(item)
+        try:
+            self._animation_job = self.canvas.after(
+                NAVIGATION_ANIMATION_MS, self._animate_navigation,
+            )
+        except tk.TclError:
+            self._animation_job = None
 
     def _draw_return_trail(self, route_points):
         points = list(reversed(route_points[-min(60, len(route_points)):]))
@@ -1876,7 +2511,7 @@ class ExpeditionMapView:
                 fill=THEME.accent,
             )
 
-    def _draw_marker(self, x, y, layer, colour):
+    def _draw_marker(self, x, y, layer, colour, marker=None):
         draw = self._background_draw
         glow_key = (THEME.inset, colour)
         glow = self._marker_glow_cache.get(glow_key)
@@ -1884,7 +2519,32 @@ class ExpeditionMapView:
             glow = _mix(THEME.inset, colour, 0.28)
             self._marker_glow_cache[glow_key] = glow
         draw.ellipse((x - 7, y - 7, x + 7, y + 7), outline=glow)
-        if layer == "Valuable":
+        if layer == "Annotations":
+            category = str((marker or {}).get("category") or "Note")
+            if category == "Danger":
+                draw.polygon(
+                    ((x, y - 7), (x + 7, y + 6), (x - 7, y + 6)),
+                    outline=colour, fill=THEME.inset,
+                )
+                self._background_text(x, y + 1, "!", colour, size=6, bold=True)
+            elif category == "Region of Interest":
+                draw.rectangle((x - 6, y - 6, x + 6, y + 6), outline=colour, width=2)
+                draw.ellipse((x - 2, y - 2, x + 2, y + 2), outline=colour)
+            elif category == "Survey Target":
+                draw.polygon(
+                    ((x, y - 6), (x + 6, y + 5), (x - 6, y + 5)),
+                    outline=colour, fill=THEME.inset,
+                )
+                draw.ellipse((x - 1, y, x + 1, y + 2), fill=colour)
+            elif category == "Waypoint":
+                draw.polygon(
+                    ((x, y - 6), (x + 6, y), (x, y + 6), (x - 6, y)),
+                    outline=colour, fill=THEME.inset,
+                )
+            else:
+                draw.ellipse((x - 5, y - 5, x + 5, y + 5), outline=colour, width=2)
+                draw.ellipse((x - 1, y - 1, x + 1, y + 1), fill=colour)
+        elif layer == "Valuable":
             draw.polygon(
                 ((x, y - 5), (x + 5, y), (x, y + 5), (x - 5, y)),
                 outline=colour, fill=THEME.inset,
@@ -1984,7 +2644,9 @@ class ExpeditionMapView:
         self.summary.config(
             text=(
                 f"{scope.upper()} · {unique:,} systems · {total_ly:,.1f} ly journalled · "
-                f"42 Codex regions offline{region_text}{representative}{route_text}"
+                f"42 Codex regions offline"
+                f"{' · ' + str(len(self._annotations)) + ' map mark(s)' if self._annotations else ''}"
+                f"{region_text}{representative}{route_text}"
             )
         )
 
@@ -2045,4 +2707,5 @@ class ExpeditionMapView:
                 "detail": " · ".join(filter(None, (row.get("priority"), ", ".join(row.get("tags") or [])))),
                 "position": row.get("position"), "bookmark_id": row.get("id"),
             })
+        markers.extend(self._annotation_marker(row) for row in self._annotations)
         return markers
