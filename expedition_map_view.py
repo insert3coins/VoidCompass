@@ -430,6 +430,7 @@ class ExpeditionMapView:
         self._animation_items = {}
         self._animation_route = None
         self._annotation_dialog = None
+        self._annotation_dialog_close = None
         self._disposed = False
         configure_ttk(parent, "ExpeditionMap")
         self._build()
@@ -551,12 +552,18 @@ class ExpeditionMapView:
         self._background_photo = None
         self._galaxy_warp_image = None
         self._atlas_source = None
-        if self._annotation_dialog is not None:
+        if callable(self._annotation_dialog_close):
+            try:
+                self._annotation_dialog_close()
+            except tk.TclError:
+                pass
+        elif self._annotation_dialog is not None:
             try:
                 self._annotation_dialog.destroy()
             except tk.TclError:
                 pass
-            self._annotation_dialog = None
+        self._annotation_dialog = None
+        self._annotation_dialog_close = None
 
     def _galaxy_texture_key(self):
         return (
@@ -688,7 +695,11 @@ class ExpeditionMapView:
         self._annotation_dialog = top
         top.title("VoidCompass // Map Annotation")
         top.configure(bg=THEME.bg)
-        top.geometry("470x360")
+        config = getattr(self.app, "config", None) or {}
+        try:
+            top.geometry(str(config.get("explore_map_annotation_geometry") or "470x360"))
+        except tk.TclError:
+            top.geometry("470x360")
         top.minsize(420, 330)
         top.transient(self.parent.winfo_toplevel())
 
@@ -734,7 +745,18 @@ class ExpeditionMapView:
         actions.pack(fill=tk.X, padx=12, pady=12)
 
         def close_dialog():
+            try:
+                geometry = top.geometry()
+            except tk.TclError:
+                geometry = ""
+            config = getattr(self.app, "config", None)
+            if isinstance(config, dict) and geometry:
+                config["explore_map_annotation_geometry"] = geometry
+                persist = getattr(self.app, "_persist_config", None)
+                if callable(persist):
+                    persist()
             self._annotation_dialog = None
+            self._annotation_dialog_close = None
             try:
                 top.grab_release()
             except tk.TclError:
@@ -792,6 +814,7 @@ class ExpeditionMapView:
         button(actions, "CANCEL", close_dialog).pack(side=tk.RIGHT, padx=(0, 6))
         if existing is not None:
             button(actions, "DELETE", delete_annotation).pack(side=tk.LEFT)
+        self._annotation_dialog_close = close_dialog
         top.protocol("WM_DELETE_WINDOW", close_dialog)
         top.grab_set()
         title_entry.focus_set()
