@@ -224,6 +224,7 @@ PROFILE_VALUE_SETTINGS = (
     "overlay_text_scale_percent",
     "overlay_layout_presets",
     "overlay_layout_studio_geometry",
+    "explore_map_view_state",
 )
 
 PROFILE_SETTINGS = PROFILE_TEXT_SETTINGS + PROFILE_BOOL_SETTINGS + PROFILE_VALUE_SETTINGS
@@ -435,6 +436,7 @@ def apply_profile_config(config, profile_key=None):
                 "overlay_text_scale_percent": 100,
                 "overlay_layout_presets": {},
                 "overlay_layout_studio_geometry": "1080x720",
+                "explore_map_view_state": {},
             }
             profile[setting] = (
                 profile_defaults[setting] if not is_initial_profile and setting in profile_defaults
@@ -656,6 +658,7 @@ def load_config():
         'explore_discovery_filter': 'All',
         'explore_expedition_section': 'Overview',
         'explore_map_scope': 'All History',
+        'explore_map_view_state': {},
         'adaptive_overlay_scenes': {},
         'ui_scale_percent': 100,
         'overlay_text_scale_percent': 100,

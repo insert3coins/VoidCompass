@@ -1,4 +1,4 @@
-"""Elite-style interactive 3D expedition and galactic-region map."""
+"""Interactive 2D galactic atlas with expedition intelligence overlays."""
 
 from __future__ import annotations
 
@@ -7,7 +7,9 @@ import colorsys
 from datetime import datetime
 from functools import lru_cache
 import math
+from pathlib import Path
 import random
+import sys
 import threading
 import time
 import tkinter as tk
@@ -36,21 +38,17 @@ LAYER_COLOURS = {
 }
 
 VIEW_PRESETS = (
-    "Perspective",
-    "Galaxy Overview",
-    "Top",
-    "Side",
+    "Galactic Atlas",
     "Route Focus",
+    "Current Vicinity",
 )
 
 GALACTIC_CENTRE = (0.0, 0.0, 25899.0)
 GALAXY_RADIUS_LY = 51500.0
 MAX_ROUTE_POINTS = 1500
 REGION_HUE_STEP = 0.381966  # (3 - sqrt 5) / 2 turns, the golden angle
-REGION_FILL_ALPHA = 42
-REGION_FILL_ALPHA_MOVING = 28
+REGION_FILL_ALPHA = 14
 REGION_FILL_STEP = 8
-REGION_FILL_STEP_MOVING = 32
 REGION_FILL_MIN_TILT = 0.15
 FIT_MARGIN = 0.88
 # Wheel zoom arrives as a burst of discrete events. Treating the burst as
@@ -61,6 +59,7 @@ GALAXY_TEXTURE_SIZE = 768
 GALAXY_PREVIEW_SIZE = 384
 GALAXY_MOTION_SIZE = 192
 MAX_GALAXY_TEXTURE_THEMES = 4
+ATLAS_ASSET = Path("Images") / "Galaxy" / "voidcompass-galactic-atlas.png"
 _GALAXY_TEXTURES = {}
 _GALAXY_TEXTURE_WAITERS = {}
 _GALAXY_TEXTURE_LOCK = threading.Lock()
@@ -105,6 +104,12 @@ def _mix(left, right, amount):
 
 def _rgba(colour, alpha):
     return (*_hex_rgb(colour), max(0, min(255, int(alpha))))
+
+
+def _resource_path(relative_path):
+    """Resolve bundled image assets in source and PyInstaller builds."""
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    return base / relative_path
 
 
 @lru_cache(maxsize=256)
@@ -385,6 +390,9 @@ class ExpeditionMapView:
         self._background_item = None
         self._galaxy_warp_key = None
         self._galaxy_warp_image = None
+        self._atlas_source = None
+        self._atlas_source_failed = False
+        self._last_persisted_state = None
         self._render_job = None
         self._render_pending = False
         self._camera_ready = False
@@ -406,22 +414,22 @@ class ExpeditionMapView:
         toolbar = tk.Frame(self.parent, bg=THEME.panel)
         toolbar.pack(fill=tk.X, pady=(0, 5))
         tk.Label(
-            toolbar, text="GALAXY MAP // EXPEDITION INTELLIGENCE", fg=THEME.orange,
+            toolbar, text="GALACTIC ATLAS // EXPEDITION INTELLIGENCE", fg=THEME.orange,
             bg=THEME.panel, font=("Segoe UI", 9, "bold"),
         ).pack(side=tk.LEFT, padx=10, pady=8)
         tk.Label(
-            toolbar, text="LMB orbit · RMB move · wheel zoom · 2× reset", fg=THEME.muted,
+            toolbar, text="drag move · wheel zoom · click inspect · 2× reset", fg=THEME.muted,
             bg=THEME.panel, font=("Cascadia Mono", 7),
         ).pack(side=tk.LEFT)
-        button(toolbar, "RESET", self._reset_view).pack(side=tk.RIGHT, padx=(0, 8), pady=5)
+        button(toolbar, "RESET", self._reset_and_remember).pack(side=tk.RIGHT, padx=(0, 8), pady=5)
         button(toolbar, "CURRENT", self._focus_current).pack(side=tk.RIGHT, padx=(0, 6), pady=5)
-        self.view_mode = tk.StringVar(value="Perspective")
+        self.view_mode = tk.StringVar(value="Galactic Atlas")
         combo = ttk.Combobox(
             toolbar, textvariable=self.view_mode, state="readonly", width=16,
             values=VIEW_PRESETS, style="ExpeditionMap.TCombobox",
         )
         combo.pack(side=tk.RIGHT, padx=(0, 6), pady=5)
-        combo.bind("<<ComboboxSelected>>", lambda _event: self._reset_view())
+        combo.bind("<<ComboboxSelected>>", self._preset_changed)
         config = getattr(self.app, "config", None) or {}
         initial_scope = str(config.get("explore_map_scope") or "All History")
         if initial_scope not in ("All History", "Current Session", "Active Expedition"):
@@ -446,11 +454,23 @@ class ExpeditionMapView:
             var = tk.BooleanVar(value=name != "Return")
             self.layer_vars[name] = var
             tk.Checkbutton(
-                layers, text=name.upper(), variable=var, command=self._schedule_render,
+                layers, text=name.upper(), variable=var, command=self._layer_changed,
                 fg=LAYER_COLOURS[name], bg=THEME.inset, selectcolor=THEME.input,
                 activebackground=THEME.inset, activeforeground=LAYER_COLOURS[name],
                 font=("Cascadia Mono", 7, "bold"), bd=0, highlightthickness=0,
             ).pack(side=tk.LEFT, padx=(0, 8), pady=3)
+        button(layers, "FIND", self._find_target).pack(side=tk.RIGHT, padx=(4, 8), pady=3)
+        self.search_var = tk.StringVar()
+        search = ttk.Entry(
+            layers, textvariable=self.search_var, width=22,
+            style="ExpeditionMap.TEntry",
+        )
+        search.pack(side=tk.RIGHT, padx=(4, 0), pady=3)
+        search.bind("<Return>", self._find_target)
+        tk.Label(
+            layers, text="SYSTEM / REGION", fg=THEME.muted, bg=THEME.inset,
+            font=("Cascadia Mono", 7, "bold"),
+        ).pack(side=tk.RIGHT, padx=(8, 0), pady=3)
 
         self.summary = tk.Label(
             self.parent, text="", fg=THEME.accent, bg=THEME.bg,
@@ -464,7 +484,7 @@ class ExpeditionMapView:
         self.canvas.pack(fill=tk.BOTH, expand=True)
         self.canvas.bind("<Configure>", self._on_canvas_configure)
         self.canvas.bind("<Map>", self._on_canvas_mapped)
-        self.canvas.bind("<ButtonPress-1>", lambda event: self._begin_drag(event, "rotate"))
+        self.canvas.bind("<ButtonPress-1>", lambda event: self._begin_drag(event, "pan"))
         self.canvas.bind("<B1-Motion>", self._drag)
         self.canvas.bind("<ButtonRelease-1>", self._end_drag)
         self.canvas.bind("<Shift-ButtonPress-1>", lambda event: self._begin_drag(event, "pan"))
@@ -502,6 +522,7 @@ class ExpeditionMapView:
         self._background_image = None
         self._background_photo = None
         self._galaxy_warp_image = None
+        self._atlas_source = None
 
     def _galaxy_texture_key(self):
         return (
@@ -527,44 +548,71 @@ class ExpeditionMapView:
             "fit_radius": float(self._fit_radius),
             "zoom": float(self._zoom),
             "pan": list(self._pan),
-            "yaw": float(self._yaw),
-            "pitch": float(self._pitch),
             "layers": {name: bool(var.get()) for name, var in self.layer_vars.items()},
         }
+
+    def _persist_view_state(self):
+        state = self.view_state()
+        if state == self._last_persisted_state:
+            return
+        self._last_persisted_state = state
+        config = getattr(self.app, "config", None)
+        if not isinstance(config, dict):
+            return
+        config["explore_map_view_state"] = state
+        persist = getattr(self.app, "_persist_config", None)
+        if callable(persist):
+            persist()
+
+    def _layer_changed(self):
+        self._schedule_render()
+        self._persist_view_state()
+
+    def _preset_changed(self, _event=None):
+        self._reset_view()
+        self._persist_view_state()
+
+    def _reset_and_remember(self):
+        self._reset_view()
+        self._persist_view_state()
 
     def apply_view_state(self, state):
         if not isinstance(state, dict):
             return
-        mode = str(state.get("mode") or "Perspective")
+        mode = str(state.get("mode") or "Galactic Atlas")
+        # Migrate profile state saved by the retired 3D camera.
+        legacy_camera = mode in {"Perspective", "Galaxy Overview", "Top", "Side"}
+        if legacy_camera:
+            mode = "Galactic Atlas"
         if mode in VIEW_PRESETS:
             self.view_mode.set(mode)
         scope = str(state.get("scope") or "All History")
         if scope in ("All History", "Current Session", "Active Expedition"):
             self.scope_var.set(scope)
-        centre = _position(state.get("camera_center"))
-        if centre is not None:
-            self._camera_center = list(centre)
-        try:
-            self._fit_radius = max(1.0, float(state.get("fit_radius", self._fit_radius)))
-            self._zoom = max(0.08, min(80.0, float(state.get("zoom", self._zoom))))
-            pan = state.get("pan") or self._pan
-            self._pan = [float(pan[0]), float(pan[1])]
-            self._yaw = float(state.get("yaw", self._yaw))
-            self._pitch = max(
-                -math.pi / 2.0,
-                min(math.pi / 2.0, float(state.get("pitch", self._pitch))),
-            )
-        except (IndexError, TypeError, ValueError):
-            pass
+        if not legacy_camera:
+            centre = _position(state.get("camera_center"))
+            if centre is not None:
+                self._camera_center = list(centre)
+            try:
+                self._fit_radius = max(1.0, float(state.get("fit_radius", self._fit_radius)))
+                self._zoom = max(0.08, min(80.0, float(state.get("zoom", self._zoom))))
+                pan = state.get("pan") or self._pan
+                self._pan = [float(pan[0]), float(pan[1])]
+            except (IndexError, TypeError, ValueError):
+                pass
         for name, enabled in (state.get("layers") or {}).items():
             if name in self.layer_vars:
                 self.layer_vars[name].set(bool(enabled))
         if self._all_route_rows:
             self._route_rows = self._sample_route_rows(self._scoped_route_rows())
+        if legacy_camera:
+            self._reset_view()
+            return
         # A restored camera is the commander's own framing, so it must not be
         # replaced by a deferred automatic fit.
         self._fit_pending = False
         self._camera_ready = True
+        self._last_persisted_state = self.view_state()
         self._schedule_render()
 
     def refresh(self, system_rows=None, value_rows=None):
@@ -585,10 +633,16 @@ class ExpeditionMapView:
         self._bookmarks = manager.bookmarks() if manager else []
         self._position_by_system = {
             str(row.get("system") or "").casefold(): position
-            for row in self._route_rows
+            for row in scoped_rows
             if (position := _position(row.get("pos"))) is not None
             and str(row.get("system") or "").strip()
         }
+        self._position_by_system.update({
+            str(row.get("system") or "").casefold(): position
+            for row in self._bookmarks
+            if (position := _position(row.get("position"))) is not None
+            and str(row.get("system") or "").strip()
+        })
         self._marker_cache = self._layer_markers(self._snapshot, self._bookmarks)
         if not self._camera_ready:
             self._reset_view(render=False)
@@ -644,6 +698,7 @@ class ExpeditionMapView:
             persist()
         self.refresh(self._system_rows, self._value_rows)
         self._reset_view()
+        self._persist_view_state()
 
     @staticmethod
     def _sample_route_rows(rows):
@@ -659,53 +714,49 @@ class ExpeditionMapView:
     def _data_positions(self, recent=False):
         rows = self._route_rows[-50:] if recent else self._route_rows
         positions = [_position(row.get("pos")) for row in rows]
-        positions.extend(
-            _position(bookmark.get("position")) for bookmark in self._bookmarks
-        )
+        if not recent:
+            positions.extend(
+                _position(bookmark.get("position")) for bookmark in self._bookmarks
+            )
         return [position for position in positions if position is not None]
 
     @staticmethod
     def _bounds(positions):
         if not positions:
             return (0.0, 0.0, 0.0), 1000.0
-        mins = [min(position[index] for position in positions) for index in range(3)]
-        maxs = [max(position[index] for position in positions) for index in range(3)]
-        centre = tuple((mins[index] + maxs[index]) / 2.0 for index in range(3))
+        min_x = min(position[0] for position in positions)
+        max_x = max(position[0] for position in positions)
+        min_z = min(position[2] for position in positions)
+        max_z = max(position[2] for position in positions)
+        centre = ((min_x + max_x) / 2.0, 0.0, (min_z + max_z) / 2.0)
         radius = max(
-            math.sqrt(sum((position[index] - centre[index]) ** 2 for index in range(3)))
+            math.hypot(position[0] - centre[0], position[2] - centre[2])
             for position in positions
         )
         return centre, max(100.0, radius * 1.12)
 
     def _reset_view(self, render=True):
         mode = self.view_mode.get()
-        positions = self._data_positions(recent=mode == "Route Focus")
+        positions = self._data_positions(
+            recent=mode in {"Route Focus", "Current Vicinity"},
+        )
         centre, radius = self._bounds(positions)
         self._pan = [0.0, 0.0]
         self._zoom = 1.0
-        if mode == "Galaxy Overview":
+        if mode == "Galactic Atlas":
             self._camera_center = list(GALACTIC_CENTRE)
             self._fit_radius = GALAXY_RADIUS_LY * 1.08
-            self._yaw = 0.0
-            self._pitch = -math.pi / 2.0
             self._zoom = 0.92
-        elif mode == "Top":
-            self._camera_center = list(centre)
-            self._fit_radius = radius
-            self._yaw = 0.0
-            self._pitch = -math.pi / 2.0
-        elif mode == "Side":
-            self._camera_center = list(centre)
-            self._fit_radius = radius
-            self._yaw = 0.0
-            self._pitch = 0.0
+        elif mode == "Current Vicinity":
+            current = _position(getattr(self.app, "current_coords", None))
+            self._camera_center = list(current or centre)
+            self._fit_radius = max(500.0, min(radius, 8000.0))
+            self._zoom = 1.15
         else:
             self._camera_center = list(centre)
             self._fit_radius = radius
-            self._yaw = -0.55 if mode == "Perspective" else -0.35
-            self._pitch = -0.62 if mode == "Perspective" else -0.72
-        if mode != "Galaxy Overview":
-            # Galaxy Overview deliberately frames the whole disc, so only the
+        if mode != "Galactic Atlas":
+            # Galactic Atlas deliberately frames the whole disc, so only the
             # data-driven cameras are re-fitted to the canvas.
             self._fit_to_canvas(positions)
         if render:
@@ -773,14 +824,13 @@ class ExpeditionMapView:
             return
         nearby = self._data_positions(recent=True)
         _centre, radius = self._bounds(nearby)
-        self.view_mode.set("Perspective")
+        self.view_mode.set("Current Vicinity")
         self._camera_center = list(position)
         self._fit_radius = max(500.0, min(radius, 8000.0))
         self._zoom = 1.15
         self._pan = [0.0, 0.0]
-        self._yaw = -0.55
-        self._pitch = -0.62
         self._schedule_render()
+        self._persist_view_state()
 
     def focus_system(self, system):
         """Centre the camera on a retained system and expose its markers."""
@@ -797,15 +847,60 @@ class ExpeditionMapView:
             return False
         if "Revisit" in self.layer_vars:
             self.layer_vars["Revisit"].set(True)
-        self.view_mode.set("Perspective")
+        self.view_mode.set("Current Vicinity")
         self._camera_center = list(position)
         self._fit_radius = 1200.0
         self._zoom = 1.25
         self._pan = [0.0, 0.0]
-        self._yaw = -0.55
-        self._pitch = -0.62
         self._schedule_render()
+        self._persist_view_state()
         return True
+
+    def _find_target(self, _event=None):
+        """Focus a retained system or canonical Codex region by name."""
+        query = str(self.search_var.get() or "").strip()
+        wanted = query.casefold()
+        if not wanted:
+            return "break"
+        matches = [name for name in self._position_by_system if wanted in name]
+        if matches:
+            match = min(matches, key=lambda name: (name != wanted, len(name), name))
+            self.focus_system(match)
+            display = next(
+                (str(row.get("system") or match) for row in self._all_route_rows
+                 if str(row.get("system") or "").casefold() == match),
+                match,
+            )
+            self.search_var.set(display)
+            return "break"
+
+        _segments, regions = region_geometry(16)
+        region_matches = [row for row in regions if wanted in row["name"].casefold()]
+        if region_matches:
+            row = min(
+                region_matches,
+                key=lambda item: (item["name"].casefold() != wanted, len(item["name"])),
+            )
+            self.view_mode.set("Current Vicinity")
+            self.layer_vars["Regions"].set(True)
+            self._camera_center = list(row["position"])
+            self._fit_radius = 12_000.0
+            self._zoom = 1.0
+            self._pan = [0.0, 0.0]
+            self.search_var.set(row["name"])
+            record = {
+                "kind": "Region", "subject": row["name"],
+                "detail": f"Universal Cartographics region {row['id']} of 42",
+                "position": row["position"],
+            }
+            self._selected_point = {"x": -1000, "y": -1000, "record": record}
+            self._show_record(record)
+            self._schedule_render()
+            self._persist_view_state()
+            return "break"
+
+        self.detail.config(text=f"SEARCH · {query} is not present in retained profile map data")
+        return "break"
 
     def _canvas_reset(self, _event=None):
         self._reset_view()
@@ -822,7 +917,7 @@ class ExpeditionMapView:
             # Motion frames are already deliberately lighter, so do not add a
             # long timer delay on top of their render time. Settled redraws can
             # remain gently coalesced because they contain the full data layer.
-            delay = 8 if self._moving else 24
+            delay = 1 if self._moving else 24
             self._render_job = self.canvas.after(delay, self._render)
         except tk.TclError:
             self._render_job = None
@@ -877,6 +972,7 @@ class ExpeditionMapView:
         self._motion_until = 0.0
         if not self._disposed:
             self._schedule_render()
+            self._persist_view_state()
 
     def _begin_drag(self, event, mode):
         self._drag_mode = mode
@@ -891,16 +987,8 @@ class ExpeditionMapView:
         dy = event.y - self._drag_last[1]
         self._drag_last = (event.x, event.y)
         self._drag_distance += abs(dx) + abs(dy)
-        if self._drag_mode == "rotate":
-            # Orbit behaves like grabbing the galaxy: its visible motion follows
-            # the mouse instead of moving opposite to the drag.
-            self._yaw -= dx * 0.005
-            self._pitch = max(-1.50, min(1.35, self._pitch + dy * 0.005))
-            if self.view_mode.get() in {"Top", "Side", "Galaxy Overview"}:
-                self.view_mode.set("Perspective")
-        else:
-            self._pan[0] += dx
-            self._pan[1] += dy
+        self._pan[0] += dx
+        self._pan[1] += dy
         self._schedule_render()
 
     def _end_drag(self, event):
@@ -909,12 +997,13 @@ class ExpeditionMapView:
         self._drag_mode = None
         self._drag_origin = None
         self._drag_last = None
-        if mode == "rotate" and moved < 7:
+        if mode and moved < 7:
             self._select_at(event.x, event.y)
         elif moved >= 7:
             # Restore the full-detail contour pass after the lightweight live
             # drag frame has kept rotation or panning responsive.
             self._schedule_render()
+            self._persist_view_state()
 
     def _wheel(self, event):
         steps = max(-4.0, min(4.0, event.delta / 120.0)) if event.delta else 0.0
@@ -1001,9 +1090,6 @@ class ExpeditionMapView:
             "width": width, "height": height, "scale": scale,
             "cx": width / 2.0 + self._pan[0],
             "cy": height / 2.0 + self._pan[1],
-            "cos_yaw": math.cos(self._yaw), "sin_yaw": math.sin(self._yaw),
-            "cos_pitch": math.cos(self._pitch), "sin_pitch": math.sin(self._pitch),
-            "camera_distance": max(1000.0, self._fit_radius * 3.2),
         }
 
     def _project(self, position):
@@ -1011,17 +1097,11 @@ class ExpeditionMapView:
         dx = position[0] - self._camera_center[0]
         dy = position[1] - self._camera_center[1]
         dz = position[2] - self._camera_center[2]
-        rotated_x = dx * context["cos_yaw"] - dz * context["sin_yaw"]
-        rotated_z = dx * context["sin_yaw"] + dz * context["cos_yaw"]
-        screen_y_world = dy * context["cos_pitch"] - rotated_z * context["sin_pitch"]
-        depth = dy * context["sin_pitch"] + rotated_z * context["cos_pitch"]
-        denominator = max(context["camera_distance"] * 0.18, context["camera_distance"] + depth)
-        perspective = max(0.22, min(4.0, context["camera_distance"] / denominator))
         return (
-            context["cx"] + rotated_x * context["scale"] * perspective,
-            context["cy"] - screen_y_world * context["scale"] * perspective,
-            depth,
-            perspective,
+            context["cx"] + dx * context["scale"],
+            context["cy"] - dz * context["scale"],
+            dy,
+            1.0,
         )
 
     def _visible_line(self, left, right, pad=80):
@@ -1164,20 +1244,11 @@ class ExpeditionMapView:
             self._background_line(points, colour, width=width, dash=dash)
 
     def _regions_will_cover_disc(self):
-        """Whether opaque motion-path region fills will hide the disc texture."""
-        layer = self.layer_vars.get("Regions")
-        return (
-            bool(self._motion_frame) and layer is not None and layer.get()
-            and abs(math.sin(self._pitch)) >= REGION_FILL_MIN_TILT
-        )
+        """The flat atlas always keeps its base imagery under region washes."""
+        return False
 
     def _draw_galaxy_structure(self):
-        mode = self.view_mode.get()
-        if mode != "Galaxy Overview" and self._fit_radius / max(self._zoom, 0.01) < 15000:
-            return
-        # Warping and compositing the disc costs about as much as the rest of a
-        # motion frame, and the flattened region wash paints straight over it.
-        textured = False if self._regions_will_cover_disc() else self._draw_galaxy_texture()
+        textured = self._draw_galaxy_texture()
         rim_divisions = 48 if self._motion_frame else 96
         rim = []
         for index in range(rim_divisions + 1):
@@ -1188,9 +1259,8 @@ class ExpeditionMapView:
                 GALACTIC_CENTRE[2] + math.sin(angle) * GALAXY_RADIUS_LY * 0.92,
             ))
         self._project_polyline(rim, _mix(THEME.inset, THEME.border, 0.74), width=2)
-        # Keep the cheap geometric arms as an immediate fallback while the
-        # one-time texture worker is running. Once ready, the actual star and
-        # dust layer supplies the structure and the cyan scaffolding vanishes.
+        # Retain a lightweight deterministic fallback if a damaged build is
+        # missing the atlas artwork.
         if not textured:
             for arm in range(4):
                 points = []
@@ -1217,58 +1287,70 @@ class ExpeditionMapView:
         self._project_polyline(core, _mix(THEME.inset, THEME.orange, 0.35), width=2)
 
     def _draw_galaxy_texture(self):
-        """Composite a cached, inclination-aware galaxy disc behind the map."""
-        texture_key = self._galaxy_texture_key()
-        bundle = _request_galaxy_texture(self, texture_key)
-        if bundle is None or self._background_image is None:
+        """Crop and scale only the visible part of the 2D atlas artwork.
+
+        Even at very high zoom the resized image never exceeds the canvas.
+        Panning therefore remains bounded and avoids rebuilding an enormous
+        off-screen bitmap, which was the main risk in replacing the 3D map
+        with a detailed raster atlas.
+        """
+        if self._background_image is None:
+            return False
+        if self._atlas_source is None and not self._atlas_source_failed:
+            try:
+                with Image.open(_resource_path(ATLAS_ASSET)) as source:
+                    source = source.convert("RGBA")
+                # Lighten-blend the luminous detail into the active theme.
+                # Near-black source pixels therefore become the real map
+                # backdrop instead of exposing the square image boundary.
+                black = Image.new("RGBA", source.size, (0, 0, 0, 255))
+                source = Image.blend(black, source, 0.78)
+                backdrop = Image.new("RGBA", source.size, _rgba(THEME.inset, 255))
+                self._atlas_source = ImageChops.lighter(backdrop, source)
+            except (OSError, ValueError):
+                self._atlas_source_failed = True
+        source = self._atlas_source
+        if source is None:
             return False
 
+        context = self._projection_context
         centre = self._project(GALACTIC_CENTRE)
-        diameter = (
-            2.0 * GALAXY_RADIUS_LY
-            * self._projection_context["scale"] * centre[3]
-        )
-        # At close route scales the galaxy would become a multi-thousand-pixel
-        # bitmap with no useful detail. The existing 15 kly visibility gate
-        # normally prevents this; this guard covers highly perspective views.
-        if diameter < 36.0 or diameter > 2200.0:
+        diameter = 2.0 * GALAXY_RADIUS_LY * context["scale"]
+        if diameter < 2.0:
             return False
-        target_width = max(36, round(diameter))
-        target_height = max(12, round(diameter * max(0.055, abs(math.sin(self._pitch))) * 0.92))
-        # A dedicated 192px motion source keeps live orbiting cheap. The 384px
-        # derivative covers ordinary settled panels; full detail is reserved
-        # for genuinely large focus-mode displays.
-        if self._motion_frame:
-            source_detail, source = "motion", bundle[2]
-        elif target_width <= 700:
-            source_detail, source = "preview", bundle[1]
-        else:
-            source_detail, source = "full", bundle[0]
-        # Quantising the live orbit angle lets adjacent drag frames reuse the
-        # same low-resolution warp. Panning only changes the paste position.
-        angle_step = 0.045 if self._motion_frame else 0.012
-        quantised_yaw = round(self._yaw / angle_step) * angle_step
+        full_left = centre[0] - diameter / 2.0
+        full_top = centre[1] - diameter / 2.0
+        full_right = full_left + diameter
+        full_bottom = full_top + diameter
+        clip_left = max(0, int(math.floor(full_left)))
+        clip_top = max(0, int(math.floor(full_top)))
+        clip_right = min(context["width"], int(math.ceil(full_right)))
+        clip_bottom = min(context["height"], int(math.ceil(full_bottom)))
+        if clip_right <= clip_left or clip_bottom <= clip_top:
+            return False
+
+        source_width, source_height = source.size
+        sx1 = max(0, min(source_width - 1, round((clip_left - full_left) / diameter * source_width)))
+        sy1 = max(0, min(source_height - 1, round((clip_top - full_top) / diameter * source_height)))
+        sx2 = max(sx1 + 1, min(source_width, round((clip_right - full_left) / diameter * source_width)))
+        sy2 = max(sy1 + 1, min(source_height, round((clip_bottom - full_top) / diameter * source_height)))
+        target_width = clip_right - clip_left
+        target_height = clip_bottom - clip_top
         warp_key = (
-            texture_key, source_detail, bool(self._motion_frame),
-            round(quantised_yaw, 4), target_width, target_height,
+            sx1, sy1, sx2, sy2, target_width, target_height,
+            bool(self._motion_frame), str(THEME.inset),
         )
         if self._galaxy_warp_key != warp_key or self._galaxy_warp_image is None:
             resample = (
                 Image.Resampling.BILINEAR
                 if self._motion_frame else Image.Resampling.BICUBIC
             )
-            rotated = source.rotate(
-                -math.degrees(quantised_yaw),
-                resample=resample, expand=False,
-            )
-            self._galaxy_warp_image = rotated.resize(
+            self._galaxy_warp_image = source.crop((sx1, sy1, sx2, sy2)).resize(
                 (target_width, target_height), resample=resample,
             )
             self._galaxy_warp_key = warp_key
-        left = round(centre[0] - target_width / 2.0)
-        top = round(centre[1] - target_height / 2.0)
         self._background_image.alpha_composite(
-            self._galaxy_warp_image, dest=(left, top),
+            self._galaxy_warp_image, dest=(clip_left, clip_top),
         )
         return True
 
@@ -1279,7 +1361,7 @@ class ExpeditionMapView:
         return min(steps, key=lambda value: abs(value - target))
 
     def _draw_grid(self):
-        if self.view_mode.get() == "Galaxy Overview":
+        if self.view_mode.get() == "Galactic Atlas":
             divisions = 36 if self._motion_frame else 72
             for radius in (10000, 20000, 30000, 40000, 50000):
                 ring = []
@@ -1323,27 +1405,16 @@ class ExpeditionMapView:
         background = self._background_image
         if background is None:
             return
-        # Codex regions divide the galactic plane, so an edge-on camera would
-        # collapse every fill into a meaningless sliver. Boundaries and labels
-        # still draw; only the wash is skipped.
-        if abs(math.sin(self._pitch)) < REGION_FILL_MIN_TILT:
-            return
         width = int(self._projection_context["width"])
         height = int(self._projection_context["height"])
         accent = str(THEME.accent)
-        alpha = REGION_FILL_ALPHA_MOVING if self._motion_frame else REGION_FILL_ALPHA
+        alpha = REGION_FILL_ALPHA
         # Interiors are the one part of the map read as shape rather than
         # detail, so they always use the finest raster; coarse fills stair-step
         # badly. A world-space pre-cull was measured and rejected: at shallow
         # pitch the plane recedes to the horizon, so distant regions really do
         # project into the top of the frame and no finite margin is safe.
-        fill_step = REGION_FILL_STEP_MOVING if self._motion_frame else REGION_FILL_STEP
-        # Compositing a translucent layer measured as costly as everything else
-        # in a motion frame put together, so while the camera moves the wash is
-        # pre-flattened against the backdrop and drawn straight on. Settled
-        # frames keep the true translucency over the galaxy texture.
-        moving = bool(self._motion_frame)
-        backdrop = str(THEME.inset)
+        fill_step = REGION_FILL_STEP
         project = self._project
         visible = []
         # Allocating and compositing a whole-canvas layer costs more than the
@@ -1370,15 +1441,9 @@ class ExpeditionMapView:
             bottom = max(bottom, high_y)
             visible.append((
                 [(corner[0], corner[1]) for corner in corners],
-                _region_fill_opaque(region_id, accent, alpha, backdrop) if moving
-                else _region_fill_rgba(region_id, accent, alpha),
+                _region_fill_rgba(region_id, accent, alpha),
             ))
         if not visible:
-            return
-        if moving:
-            draw = self._background_draw
-            for points, colour in visible:
-                draw.polygon(points, fill=colour)
             return
         left = max(0, int(math.floor(left)))
         top = max(0, int(math.floor(top)))
@@ -1403,8 +1468,11 @@ class ExpeditionMapView:
         # anchors stay fixed so names do not visibly drift between zoom levels.
         segments, _ignored_labels = region_geometry(contour_step)
         _ignored_segments, labels = region_geometry(16)
-        # Interiors sit beneath the boundaries so edges stay crisp on top.
-        self._draw_region_fills(contour_step)
+        # During live movement the boundaries retain geographic context while
+        # the translucent wash is deferred until the settled frame. Avoiding
+        # that per-frame composition is what keeps atlas panning responsive.
+        if not self._motion_frame:
+            self._draw_region_fills(contour_step)
         boundary_colour = _mix(THEME.inset, THEME.orange, 0.38)
         for x1, z1, x2, z2, _left_region, _right_region in segments:
             left = self._project((x1, 0.0, z1))
@@ -1444,7 +1512,7 @@ class ExpeditionMapView:
             item[0]["cells"],
         ), reverse=True)
         occupied = []
-        size = 6 if self.view_mode.get() == "Galaxy Overview" else 7
+        size = 6 if self.view_mode.get() == "Galactic Atlas" else 7
         for row, px, py, depth, perspective in projected_labels:
             text = f"{row['id']:02d}  {row['name'].upper()}"
             half_width = max(22.0, len(text) * size * 0.31)
@@ -1877,38 +1945,20 @@ class ExpeditionMapView:
             )
 
     def _draw_axis_gizmo(self, centre_x, centre_y):
-        context = self._projection_context
-        axes = (
-            ("+X", (1.0, 0.0, 0.0), THEME.red),
-            ("+Y", (0.0, 1.0, 0.0), THEME.green),
-            ("+Z", (0.0, 0.0, 1.0), THEME.accent),
-        )
         self._background_draw.ellipse(
             (centre_x - 2, centre_y - 2, centre_x + 2, centre_y + 2),
             fill=THEME.text,
         )
-        for label, (dx, dy, dz), colour in axes:
-            rotated_x = dx * context["cos_yaw"] - dz * context["sin_yaw"]
-            rotated_z = dx * context["sin_yaw"] + dz * context["cos_yaw"]
-            screen_y_world = dy * context["cos_pitch"] - rotated_z * context["sin_pitch"]
-            screen_dx = rotated_x
-            screen_dy = -screen_y_world
-            length = math.hypot(screen_dx, screen_dy)
-            if length < 0.05:
-                self._background_draw.ellipse(
-                    (centre_x - 5, centre_y - 5, centre_x + 5, centre_y + 5),
-                    outline=colour, width=2,
-                )
-                self._background_text(
-                    centre_x, centre_y + 13, label, colour, size=6, bold=True,
-                )
-                continue
-            end_x = centre_x + screen_dx / length * 18.0
-            end_y = centre_y + screen_dy / length * 18.0
+        for label, screen_dx, screen_dy, colour in (
+            ("+X", 1.0, 0.0, THEME.red),
+            ("+Z", 0.0, -1.0, THEME.accent),
+        ):
+            end_x = centre_x + screen_dx * 18.0
+            end_y = centre_y + screen_dy * 18.0
             self._background_line((centre_x, centre_y, end_x, end_y), colour, width=2)
             self._background_text(
-                end_x + screen_dx / length * 7.0,
-                end_y + screen_dy / length * 7.0,
+                end_x + screen_dx * 7.0,
+                end_y + screen_dy * 7.0,
                 label, colour, size=6, bold=True,
             )
 

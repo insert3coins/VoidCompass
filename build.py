@@ -155,6 +155,7 @@ VSVersionInfo(
     release = create_release(os.getcwd(), APP_VERSION)
     print(f"Created public release folder: {release['package_dir']}")
     print(f"Created public release archive: {release['archive_path']}")
+    print(f"Included runtime images: {release['runtime_image_count']}")
     print(f"Release SHA-256: {release['sha256']}")
     if not release["license_included"]:
         print("Warning: no LICENSE or COPYING file was found to include.")

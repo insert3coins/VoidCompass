@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.2.9.6**
+**Current version: 5.3.1**
 
 Void Compass is a native Windows companion for Elite Dangerous, with a native Linux x86-64 build currently offered for testing. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
 
@@ -33,13 +33,13 @@ Every group starts expanded, can be collapsed deliberately, remembers that choic
 Explore integrates profile-local Deep Survey intelligence directly into its four workflow pages, built from Frontier journal facts:
 
 - **System Survey** combines the current body list, explainable FSS/DSS/biology completion matrix, ranked action queue, architecture, stellar wonders and Colonisation Recon in one filterable view. Its evidence inspector compares live, profile-database, Deep Survey, cached EDSM and traffic facts and can repair only the selected system from local journals without triggering uploads.
-- **Expedition** uses one compact section switcher for route overview, waypoints, neutron planning, named Mission Control, and an interactive Elite-style 3D galaxy map with route intelligence.
+- **Expedition** uses one compact section switcher for route overview, waypoints, neutron planning, named Mission Control, and an interactive Elite-style Galactic Atlas with route intelligence.
 - **Discoveries** is one searchable archive for system history, valuable bodies, all 42 passport regions, Codex discoveries, FSS signals, DSS probe efficiency and screenshot metadata; image previews load only when selected, while system records can be copied or opened directly in EDSM.
 - **Logbook** places the live trip summary, reliable resume checkpoint, automatic milestones and retained session debriefs together instead of separating them across Chronicle tabs. Its Explorer Data Vault separates unsold cartographic value, biological value and possible first-discovery bonus from recent sale evidence, while reports can be saved as Markdown or a themed local PNG share card.
 
-Named expeditions persist across sessions with journal-verified goals, multi-session statistics, prioritised bookmarks and revisit targets. Departing a system can add worthwhile unfinished mapping, biology or FSS evidence to the Missed Discoveries queue, which links directly to its Revisit map layer and expedition bookmarks. Their active strip remains visible across Explore, while Compass can brief the next objective and announce verified completion without routine feed spam. The map combines the complete 42-region Universal Cartographics layout with an original procedurally generated, theme-aware Milky Way disc, including stellar arms, central glow and dust lanes. It works fully offline, supports natural orbit, pan, cursor-centred zoom, five camera presets and an in-place full-window focus mode, and overlays scoped actual breadcrumbs, a planned route, direction arrows, an optional return trail plus Valuable, Biology, Codex, Photo, Recon, Revisit and Bookmark records. Cached detail levels keep live map movement responsive, while expedition plans can be exchanged as VoidCompass JSON or newline waypoint lists and full locally generated Markdown reports include the named route, objectives, evidence and bookmarks.
+Named expeditions persist across sessions with journal-verified goals, multi-session statistics, prioritised bookmarks and revisit targets. Departing a system can add worthwhile unfinished mapping, biology or FSS evidence to the Missed Discoveries queue, which links directly to its Revisit map layer and expedition bookmarks. Their active strip remains visible across Explore, while Compass can brief the next objective and announce verified completion without routine feed spam. The flat Galactic Atlas combines original game-style Milky Way artwork with the complete 42-region Universal Cartographics layout. It works fully offline, supports retained-system/region search, natural drag movement, cursor-centred zoom, Atlas/Route Focus/Current Vicinity framing and an in-place full-window focus mode, and overlays profile-local travel breadcrumbs, game and waypoint routes, direction arrows, an optional return trail plus Valuable, Biology, Codex, Photo, Recon, Revisit and Bookmark records. Visible-image cropping keeps navigation responsive, while expedition plans can be exchanged as VoidCompass JSON or newline waypoint lists and full locally generated Markdown reports include the named route, objectives, evidence and bookmarks.
 
-![Void Compass expedition Galaxy Map](GalaxyMap.PNG)
+![Void Compass Galactic Atlas](GalaxyAtlas.PNG)
 
 *Representative non-private expedition route with the offline 42-region layer and all intelligence overlays enabled.*
 
