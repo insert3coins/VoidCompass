@@ -431,6 +431,7 @@ class ExpeditionMapView:
         self._animation_route = None
         self._annotation_dialog = None
         self._annotation_dialog_close = None
+        self._context_menu = None
         self._disposed = False
         configure_ttk(parent, "ExpeditionMap")
         self._build()
@@ -521,7 +522,7 @@ class ExpeditionMapView:
         self.canvas.bind("<ButtonPress-2>", lambda event: self._begin_drag(event, "pan"))
         self.canvas.bind("<B2-Motion>", self._drag)
         self.canvas.bind("<ButtonRelease-2>", self._end_drag)
-        self.canvas.bind("<ButtonPress-3>", lambda event: self._begin_drag(event, "pan"))
+        self.canvas.bind("<ButtonPress-3>", lambda event: self._begin_drag(event, "context"))
         self.canvas.bind("<B3-Motion>", self._drag)
         self.canvas.bind("<ButtonRelease-3>", self._end_drag)
         self.canvas.bind("<MouseWheel>", self._wheel)
@@ -564,6 +565,12 @@ class ExpeditionMapView:
                 pass
         self._annotation_dialog = None
         self._annotation_dialog_close = None
+        if self._context_menu is not None:
+            try:
+                self._context_menu.destroy()
+            except tk.TclError:
+                pass
+            self._context_menu = None
 
     def _galaxy_texture_key(self):
         return (
@@ -652,16 +659,21 @@ class ExpeditionMapView:
             system = str(getattr(self.app, "current_sys", "") or "")
         return position, system, None
 
-    def _annotate_at_canvas(self, event):
+    def _canvas_position(self, event):
         context = self._projection_context or self._projection()
         scale = float(context.get("scale") or 0.0)
         if scale <= 0.0:
-            return "break"
-        position = (
+            return None
+        return (
             self._camera_center[0] + (event.x - context["cx"]) / scale,
             0.0,
             self._camera_center[2] - (event.y - context["cy"]) / scale,
         )
+
+    def _annotate_at_canvas(self, event):
+        position = self._canvas_position(event)
+        if position is None:
+            return "break"
         region = find_region(*position)
         suggestion = region[1] if region else "Galactic marker"
         self._open_annotation_dialog(position, "", None, suggestion)
@@ -678,6 +690,87 @@ class ExpeditionMapView:
             return
         suggestion = system or ((self._selected_point or {}).get("record") or {}).get("subject")
         self._open_annotation_dialog(position, system, existing, suggestion)
+
+    def _delete_annotation(self, annotation_id, parent=None):
+        existing = next(
+            (row for row in self._annotations if row.get("id") == annotation_id),
+            None,
+        )
+        if existing is None:
+            return False
+        if not messagebox.askyesno(
+            "Delete Map Annotation",
+            f"Delete ‘{existing.get('title') or 'this annotation'}’ from this commander profile?",
+            parent=parent or self.parent.winfo_toplevel(),
+        ):
+            return False
+        self._annotations = [
+            item for item in self._annotations if item.get("id") != annotation_id
+        ]
+        self._persist_annotations()
+        self._marker_cache = self._layer_markers(self._snapshot, self._bookmarks)
+        self._update_summary(self._scoped_route_rows())
+        self._selected_point = None
+        self._hover_point = None
+        self.detail.config(text="Map annotation deleted from this commander profile.")
+        self._schedule_render()
+        feed = getattr(self.app, "add_event_feed_entry", None)
+        if callable(feed):
+            feed(
+                "MAP", f"Annotation deleted: {existing.get('title') or 'Map mark'}",
+                severity="INFO",
+            )
+        return True
+
+    def _show_context_menu(self, event):
+        point = self._nearest_point(event.x, event.y, 20)
+        record = (point or {}).get("record") or {}
+        try:
+            if self._context_menu is not None:
+                self._context_menu.destroy()
+        except tk.TclError:
+            pass
+        menu = tk.Menu(
+            self.canvas, tearoff=False, bg=THEME.panel, fg=THEME.text,
+            activebackground=THEME.accent, activeforeground=THEME.bg,
+            disabledforeground=THEME.dim, relief=tk.FLAT, bd=1,
+        )
+        self._context_menu = menu
+        if record.get("kind") == "Annotation" and record.get("annotation_id"):
+            self._selected_point = point
+            self._show_record(record, prefix="SELECTED")
+            annotation_id = record["annotation_id"]
+            menu.add_command(label="Edit annotation", command=self._edit_annotation)
+            menu.add_command(
+                label="Delete annotation",
+                command=lambda value=annotation_id: self._delete_annotation(value),
+            )
+        else:
+            raw = record.get("raw") or {}
+            position = _position(raw.get("pos") or record.get("position"))
+            system = str(record.get("system") or "")
+            suggestion = str(record.get("subject") or system or "")
+            if position is None:
+                position = self._canvas_position(event)
+            if position is not None:
+                region = find_region(*position)
+                suggestion = suggestion or (region[1] if region else "Galactic marker")
+                menu.add_command(
+                    label="Add annotation here",
+                    command=lambda pos=position, name=system, title=suggestion: (
+                        self._open_annotation_dialog(pos, name, None, title)
+                    ),
+                )
+        if menu.index("end") is None:
+            menu.add_command(label="No map action available", state=tk.DISABLED)
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            try:
+                menu.grab_release()
+            except tk.TclError:
+                pass
+        return "break"
 
     def _open_annotation_dialog(self, position, system="", existing=None, suggestion=""):
         if self._annotation_dialog is not None:
@@ -793,22 +886,8 @@ class ExpeditionMapView:
             close_dialog()
 
         def delete_annotation():
-            if existing is None or not messagebox.askyesno(
-                "Delete Map Annotation",
-                f"Delete ‘{existing.get('title') or 'this annotation'}’ from this commander profile?",
-                parent=top,
-            ):
-                return
-            self._annotations = [
-                item for item in self._annotations if item.get("id") != existing.get("id")
-            ]
-            self._persist_annotations()
-            self._marker_cache = self._layer_markers(self._snapshot, self._bookmarks)
-            self._update_summary(self._scoped_route_rows())
-            self._selected_point = None
-            self.detail.config(text="Map annotation deleted from this commander profile.")
-            self._schedule_render()
-            close_dialog()
+            if existing is not None and self._delete_annotation(existing.get("id"), parent=top):
+                close_dialog()
 
         button(actions, "SAVE MARK", save_annotation).pack(side=tk.RIGHT)
         button(actions, "CANCEL", close_dialog).pack(side=tk.RIGHT, padx=(0, 6))
@@ -1314,7 +1393,9 @@ class ExpeditionMapView:
         self._drag_mode = None
         self._drag_origin = None
         self._drag_last = None
-        if mode and moved < 7:
+        if mode == "context" and moved < 7:
+            self._show_context_menu(event)
+        elif mode and moved < 7:
             self._select_at(event.x, event.y)
         elif moved >= 7:
             # Restore the full-detail contour pass after the lightweight live
