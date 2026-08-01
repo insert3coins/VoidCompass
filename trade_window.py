@@ -1,20 +1,21 @@
-"""Lightweight, journal-aware trading assistance for VoidCompass.
+"""Lightweight, journal-aware online trading assistance for VoidCompass.
 
-The market database and EDDN services are application services; this window
-is deliberately only their small human-facing client. Opening or closing it
-never controls journal market ingestion or community uploads.
+Ardent lookups run only for requested searches. Opening or closing this page
+never controls independent visited-market EDDN uploads.
 """
 
 from __future__ import annotations
 
+import json
 import math
+import os
 import threading
 import time
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 
 from config import save_config
-from trade import eddn, eddn_upload, marketdb, routes, seed
+from trade import ardent, eddn_upload, marketdb, routes
 from ui_theme import (
     THEME,
     ThemedWindowMixin,
@@ -29,13 +30,10 @@ from ui_theme import (
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
 COLOR_TEXT = THEME.text
-_ACTIVE_SEED_PHASES = {"starting", "downloading", "importing", "indexing"}
 
 
 class TradeWindow(ThemedWindowMixin):
     """One-page Trade Assist: sell cargo, find one trade, or inspect the run."""
-
-    _eddn_started = False
 
     def __init__(self, root, app, embedded=False):
         self.root = root
@@ -43,9 +41,7 @@ class TradeWindow(ThemedWindowMixin):
         self.config = app.config
         self.embedded = bool(embedded)
         self._live_poll_after = None
-        self._seed_poll_after = None
         self._status_refresh_running = False
-        self._market_db_ready = False
         self._search_generation = 0
         self._history_loading = False
         self._current_view = "run"
@@ -73,7 +69,7 @@ class TradeWindow(ThemedWindowMixin):
 
         self._build()
         self._load_filter_values()
-        self._start_eddn()
+        self._start_market_services()
         self._refresh_summary()
         self.show_current_run()
         self.refresh_status()
@@ -151,12 +147,12 @@ class TradeWindow(ThemedWindowMixin):
         ).pack(anchor="w", pady=(9, 0))
         self.subtitle = tk.Label(
             titles,
-            text="One useful decision at a time · market services remain automatic",
+            text="One useful decision at a time · online prices only when requested",
             fg=self.UI_MUTED, bg=THEME.header, font=("Consolas", 8),
         )
         self.subtitle.pack(anchor="w", pady=(2, 0))
         self.db_badge = tk.Label(
-            header, text="MARKET CHECKING", fg="black", bg=self.UI_DIM,
+            header, text="ONLINE CHECKING", fg="black", bg=self.UI_DIM,
             font=("Segoe UI", 8, "bold"), padx=10, pady=4,
         )
         self.db_badge.pack(side=tk.RIGHT, padx=14)
@@ -361,7 +357,7 @@ class TradeWindow(ThemedWindowMixin):
         panel = tk.Frame(self.win, bg=self.UI_PANEL)
         panel.pack(fill=tk.X, padx=10, pady=(7, 8))
         self.market_link_status = tk.Label(
-            panel, text="MARKET LINK · CHECKING", fg=self.UI_MUTED,
+            panel, text="ONLINE MARKET · CHECKING", fg=self.UI_MUTED,
             bg=self.UI_PANEL, font=("Consolas", 8, "bold"), anchor="w",
         )
         self.market_link_status.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(9, 6), pady=6)
@@ -369,12 +365,8 @@ class TradeWindow(ThemedWindowMixin):
             panel, "Upload visited markets to EDDN", self.eddn_upload_var,
             self._toggle_eddn_upload,
         ).pack(side=tk.LEFT, padx=(4, 8))
-        self.market_data_btn = button(panel, "MARKET DATA", self._start_full_market_build)
-        self.market_data_btn.pack(side=tk.LEFT, padx=(0, 5), pady=4)
-        button(panel, "REFRESH", self.refresh_status).pack(side=tk.LEFT, padx=(0, 7), pady=4)
-        self.seed_progress = ttk.Progressbar(
-            self.win, mode="determinate", maximum=100,
-            style="TradeAssist.Horizontal.TProgressbar",
+        button(panel, "REFRESH", lambda: self.refresh_status(force=True)).pack(
+            side=tk.LEFT, padx=(0, 7), pady=4,
         )
 
     # ------------------------------------------------------------------
@@ -416,6 +408,36 @@ class TradeWindow(ThemedWindowMixin):
     def _current_coords(self):
         coords = getattr(self.app, "current_coords", None)
         return coords if isinstance(coords, (list, tuple)) and len(coords) >= 3 else None
+
+    def _current_market_snapshot(self):
+        """Return the matching live Market.json without publishing an old file."""
+        expected = getattr(self.app, "current_station_market_id", None)
+        current = getattr(self.app, "current_trade_market", None)
+        if isinstance(current, dict) and current.get("items"):
+            try:
+                if expected is None or int(current.get("market_id")) == int(expected):
+                    return current
+            except (TypeError, ValueError):
+                pass
+        journal_path = self.config.get("journal_path") or ""
+        market_path = os.path.join(journal_path, "Market.json")
+        try:
+            with open(market_path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+            if expected is not None and int(data.get("MarketID")) != int(expected):
+                return None
+            items = list(data.get("Items") or [])
+            if not items:
+                return None
+            return {
+                "market_id": data.get("MarketID"),
+                "station": data.get("StationName") or getattr(self.app, "current_station_name", None),
+                "system": data.get("StarSystem") or self._current_system(),
+                "timestamp": data.get("timestamp"),
+                "items": items,
+            }
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return None
 
     def _ship_jump_range(self):
         ship = getattr(self.app, "cmdr_ship", {}) or {}
@@ -472,7 +494,7 @@ class TradeWindow(ThemedWindowMixin):
             self._refresh_summary()
             if self._current_view == "run":
                 self._render_current_session(load_history=False)
-            if time.monotonic() - getattr(self, "_last_status_poll", 0.0) >= 10.0:
+            if time.monotonic() - getattr(self, "_last_status_poll", 0.0) >= 60.0:
                 self.refresh_status()
         self._schedule_live_poll(2000 if self._is_active_view() else 5000)
 
@@ -582,7 +604,10 @@ class TradeWindow(ThemedWindowMixin):
             )
         suffix = f" · {excluded:,} t mission/stolen cargo excluded" if excluded else ""
         self.result_status.config(
-            text=f"{min(3, len(rows or []))} best buyer(s){suffix}",
+            text=(
+                f"{min(3, len(rows or []))} best buyer(s){suffix}"
+                if rows else f"No online buyers matched the selected filters{suffix}."
+            ),
             fg=self.UI_MUTED if rows else self.UI_WARN,
         )
         self._select_best_result()
@@ -600,6 +625,23 @@ class TradeWindow(ThemedWindowMixin):
             self._set_view(
                 "trade", "FIND A TRADE",
                 "Dock at a market station first so the departure is unambiguous.",
+                self.UI_WARN,
+            )
+            return
+        market = self._current_market_snapshot()
+        if not market:
+            self._set_view(
+                "trade", "FIND A TRADE",
+                "Open the station Commodities Market once so Elite writes the current departure prices.",
+                self.UI_WARN,
+            )
+            return
+        max_age_days = self._filter_number("age", 30, int)
+        market_updated = marketdb.parse_update_time(market.get("timestamp"))
+        if not market_updated or time.time() - market_updated > max(1, max_age_days) * 86400:
+            self._set_view(
+                "trade", "FIND A TRADE",
+                "The departure prices are older than the selected age. Open the Commodities Market to refresh them.",
                 self.UI_WARN,
             )
             return
@@ -621,11 +663,13 @@ class TradeWindow(ThemedWindowMixin):
             "radius": self._filter_number("radius", 80.0),
             "min_profit": self._filter_number("min_profit", 1000, int),
             "min_units": 1,
-            "max_price_age_days": self._filter_number("age", 30, int),
+            "max_price_age_days": max_age_days,
             "requires_large_pad": bool(self.large_pad_var.get()),
             "include_carriers": bool(self.include_carriers_var.get()),
             "max_system_distance": self._filter_number("max_ls", 1000.0),
             "source_market_id": int(market_id),
+            "source_station": station,
+            "market_items": list(market.get("items") or []),
             "limit": 18,
         }
         capital = int(getattr(self.app, "cmdr_balance", 0) or 0)
@@ -710,7 +754,10 @@ class TradeWindow(ThemedWindowMixin):
                 row, detail, plan,
             )
         self.result_status.config(
-            text=f"{len(rows)} departure option(s), ranked by achievable profit.",
+            text=(
+                f"{len(rows)} departure option(s), ranked by achievable profit."
+                if rows else "No profitable online departure matched the selected filters."
+            ),
             fg=self.UI_MUTED if rows else self.UI_WARN,
         )
         self._select_best_result()
@@ -939,19 +986,11 @@ class TradeWindow(ThemedWindowMixin):
         self._log(f"Trade Assist search failed: {message}")
 
     # ------------------------------------------------------------------
-    # Independent market / EDDN status
+    # Online market / independent EDDN upload status
     # ------------------------------------------------------------------
 
-    def _start_eddn(self):
+    def _start_market_services(self):
         eddn_upload.UPLOADER.set_enabled(bool(self.config.get("trade_eddn_upload_enabled", True)))
-        if TradeWindow._eddn_started:
-            return
-        try:
-            import zmq  # noqa: F401
-            eddn.LISTENER.start()
-            TradeWindow._eddn_started = True
-        except Exception as exc:
-            self._log(f"EDDN receiver unavailable: {exc}")
 
     def _toggle_eddn_upload(self):
         enabled = bool(self.eddn_upload_var.get())
@@ -960,7 +999,7 @@ class TradeWindow(ThemedWindowMixin):
         save_config(self.config)
         self.refresh_status()
 
-    def refresh_status(self):
+    def refresh_status(self, force=False):
         self._refresh_summary()
         if self._status_refresh_running:
             return
@@ -969,16 +1008,10 @@ class TradeWindow(ThemedWindowMixin):
 
         def worker():
             try:
-                conn = marketdb.connect()
-                try:
-                    info = marketdb.status(conn)
-                finally:
-                    conn.close()
-                received = eddn.LISTENER.stats()
+                online = ardent.service_status(force=force)
                 uploaded = eddn_upload.UPLOADER.stats()
-                seeding = seed.SEEDER.progress()
                 self._post_ui(
-                    lambda: self._render_market_status(info, received, uploaded, seeding),
+                    lambda: self._render_market_status(online, uploaded),
                     key="trade-assist-status",
                 )
             except Exception as exc:
@@ -991,126 +1024,37 @@ class TradeWindow(ThemedWindowMixin):
 
         threading.Thread(target=worker, name="trade-market-status", daemon=True).start()
 
-    def _render_market_status(self, info, received, uploaded, seeding):
+    def _render_market_status(self, online, uploaded):
         if not self.is_open():
             return
-        ready = bool(info.get("ready"))
-        self._market_db_ready = ready
+        ready = bool(online.get("online"))
         self.db_badge.config(
-            text="MARKET READY" if ready else "MARKET DATA NEEDED",
-            bg=self.UI_OK if ready else self.UI_WARN,
+            text="ONLINE READY" if ready else "ONLINE OFFLINE",
+            bg=self.UI_OK if ready else self.UI_FAIL,
         )
-        receive_text = "CONNECTED" if received.get("connected") else "RECONNECTING"
         upload_text = "ON" if uploaded.get("enabled") else "OFF"
-        latest = info.get("latest_market_updated_at") or "not yet"
+        provider = f"ARDENT {online.get('version')}" if ready else "ARDENT UNAVAILABLE"
+        cache_entries = int(online.get("cache_entries") or 0)
         self.market_link_status.config(
             text=(
-                f"EDDN RECEIVE {receive_text} · UPLOAD {upload_text} · "
-                f"{int(uploaded.get('uploads') or 0):,} sent · latest market {latest}"
+                f"{provider} · {cache_entries} temporary result(s) · "
+                f"EDDN UPLOAD {upload_text} · {int(uploaded.get('uploads') or 0):,} sent"
             ),
-            fg=self.UI_OK if uploaded.get("enabled") else self.UI_MUTED,
+            fg=self.UI_OK if ready else self.UI_FAIL,
         )
         self.eddn_upload_var.set(bool(uploaded.get("enabled")))
-        phase = str(seeding.get("phase") or "idle")
-        self.market_data_btn.config(
-            text="BUILDING…" if phase in _ACTIVE_SEED_PHASES
-            else ("REBUILD MARKET DATA" if ready else "BUILD MARKET DATA"),
-            state=tk.DISABLED if phase in _ACTIVE_SEED_PHASES else tk.NORMAL,
-        )
-        if phase in _ACTIVE_SEED_PHASES:
-            self._show_seed_progress(seeding)
-            self._show_banner(self._seed_text(seeding))
-            self._schedule_seed_poll(1000)
+        if ready:
+            self._hide_banner()
         else:
-            self._hide_seed_progress()
-            if phase == "error":
-                self._show_banner(f"Market data build failed: {seeding.get('error') or 'unknown error'}")
-            elif ready:
-                self._hide_banner()
-            else:
-                self._show_banner(
-                    "Trade searches need the one-time market baseline. EDDN uploads still work independently."
-                )
+            self._show_banner(
+                online.get("last_error")
+                or "Online market service is unavailable. EDDN uploads remain independent."
+            )
 
     def _render_status_error(self, message):
         if not self.is_open():
             return
         self.market_link_status.config(text=f"MARKET LINK ERROR · {message}", fg=self.UI_FAIL)
-
-    def _start_full_market_build(self):
-        phase = str(seed.SEEDER.progress().get("phase") or "idle")
-        if phase in _ACTIVE_SEED_PHASES:
-            self._show_banner("A market data build is already running.")
-            return
-        if self._market_db_ready:
-            prompt = (
-                "Download the full Spansh market snapshot and refresh the local baseline?\n\n"
-                "This is an occasional multi-gigabyte maintenance operation. Newer EDDN and "
-                "journal-market rows will be preserved."
-            )
-        else:
-            prompt = (
-                "Download the one-time Spansh market baseline?\n\n"
-                "The download is several gigabytes. Afterwards, EDDN and markets you visit keep "
-                "the database fresh automatically."
-            )
-        if not messagebox.askyesno("Market Data", prompt, parent=self.win):
-            return
-        if not seed.SEEDER.start(include_carriers=False, keep_dump=False, polite=True):
-            self._show_banner("The market database worker could not be started.")
-            return
-        self._show_banner("Market data build started in low-impact mode.")
-        self._schedule_seed_poll(300)
-        self.refresh_status()
-
-    def _schedule_seed_poll(self, delay_ms=1000):
-        if not self.is_open() or self._seed_poll_after:
-            return
-        self._seed_poll_after = self.root.after(delay_ms, self._seed_poll_tick)
-
-    def _seed_poll_tick(self):
-        self._seed_poll_after = None
-        if not self.is_open():
-            return
-        self.refresh_status()
-        if str(seed.SEEDER.progress().get("phase") or "idle") in _ACTIVE_SEED_PHASES:
-            self._schedule_seed_poll(1000)
-
-    def _show_seed_progress(self, progress):
-        phase = str(progress.get("phase") or "")
-        if not self.seed_progress.winfo_ismapped():
-            self.seed_progress.pack(fill=tk.X, padx=10, pady=(0, 7))
-        if phase == "downloading":
-            total = float(progress.get("total_mb") or 0)
-            done = float(progress.get("downloaded_mb") or 0)
-            value = (done / total) * 100 if total else 0
-            self.seed_progress.stop()
-            self.seed_progress.configure(mode="determinate", value=value)
-        else:
-            self.seed_progress.configure(mode="indeterminate")
-            self.seed_progress.start(12)
-
-    def _hide_seed_progress(self):
-        try:
-            self.seed_progress.stop()
-        except Exception:
-            pass
-        if self.seed_progress.winfo_ismapped():
-            self.seed_progress.pack_forget()
-
-    def _seed_text(self, progress):
-        phase = str(progress.get("phase") or "working").upper()
-        if phase == "DOWNLOADING":
-            return (
-                f"Market baseline downloading · {progress.get('downloaded_mb', 0):,} / "
-                f"{progress.get('total_mb', 0):,} MB · ETA {self._duration(progress.get('eta_s'))}"
-            )
-        if phase == "IMPORTING":
-            return (
-                f"Market baseline importing · {progress.get('systems_done', 0):,} systems · "
-                f"{progress.get('stations_done', 0):,} stations"
-            )
-        return f"Market baseline {phase.lower()}…"
 
     def _show_banner(self, text):
         self.banner.config(text=text)
@@ -1163,16 +1107,6 @@ class TradeWindow(ThemedWindowMixin):
             return ""
         return "fresh" if age_days <= 1 else ("aging" if age_days >= 7 else "")
 
-    @staticmethod
-    def _duration(seconds):
-        try:
-            seconds = max(0, int(seconds))
-        except (TypeError, ValueError):
-            return "--"
-        hours, remainder = divmod(seconds, 3600)
-        minutes, secs = divmod(remainder, 60)
-        return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
-
     def _log(self, message):
         try:
             self.app.log(message)
@@ -1184,9 +1118,6 @@ class TradeWindow(ThemedWindowMixin):
             if self._live_poll_after:
                 self.root.after_cancel(self._live_poll_after)
                 self._live_poll_after = None
-            if self._seed_poll_after:
-                self.root.after_cancel(self._seed_poll_after)
-                self._seed_poll_after = None
             self._save_filters()
             self.config["trade_window_geometry"] = self.win.geometry()
             save_config(self.config)

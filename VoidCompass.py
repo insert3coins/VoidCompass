@@ -1,18 +1,6 @@
 import os
 import sys
 
-
-def run_market_seed_worker():
-    """Run the in-app market builder mode without loading the dashboard."""
-    from trade import seed
-
-    return seed.run_worker(sys.argv[1:])
-
-
-if __name__ == "__main__" and "--trade-seed-worker" in sys.argv:
-    raise SystemExit(run_market_seed_worker())
-
-
 import tkinter as tk
 import logging
 import atexit

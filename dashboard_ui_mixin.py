@@ -1399,7 +1399,7 @@ class DashboardUIMixin(ThemedWindowMixin):
                 ),
                 "support_heading": "MARKET SUPPORT", "support_badge": "PLAN" if plan else "LIVE",
                 "support_name": destination, "support_detail": f"FROM {origin}",
-                "support_meta": f"EXPECTED {self._dashboard_credits(expected)}" if expected else "EDDN market services remain automatic",
+                "support_meta": f"EXPECTED {self._dashboard_credits(expected)}" if expected else "Online market lookup ready on request",
                 "action": "OPEN TRADE",
             })
         elif mode == "mining":
@@ -2470,7 +2470,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             text=(
                 "Void Compass reads Elite's journal and companion files and stores commander "
                 "profiles locally. It needs no Void Compass account or cloud database. At startup "
-                "it asks GitHub Releases for the latest version. EDSM, EDDN, Spansh and Discord "
+                "it asks GitHub Releases for the latest version. EDSM, EDDN, Ardent, Spansh and Discord "
                 "features only connect when enabled or requested. Support bundles are privacy-redacted."
             ),
             fg=COLOR_TEXT, bg=self.UI_PANEL, font=("Segoe UI", 9),

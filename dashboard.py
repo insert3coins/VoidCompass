@@ -12,7 +12,6 @@ import tkinter as tk
 from tkinter import messagebox
 import webbrowser
 import shutil
-import queue
 from collections import deque
 
 from config import (
@@ -1021,23 +1020,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._sync_navigation_hud_flight_state(supercruise=False)
 
     def _start_trade_live_services(self):
-        """Start EDDN at application startup, independently of Trade Assist."""
-        def _start_if_ready():
-            try:
-                conn = trade_marketdb.connect()
-                try:
-                    seeded = trade_marketdb.is_ready(conn)
-                finally:
-                    conn.close()
-                if seeded:
-                    from trade import eddn as trade_eddn
-                    trade_eddn.LISTENER.start()
-            except Exception:
-                pass  # no zmq / no DB yet — Trade window can still start it later
-
-        threading.Thread(
-            target=_start_if_ready, name="trade-live-startup", daemon=True,
-        ).start()
+        """Keep visited-market EDDN uploads independent of the Trade page."""
+        trade_eddn_uploader.set_enabled(
+            bool(self.config.get("trade_eddn_upload_enabled", True))
+        )
 
     def _refresh_gravity_warning(self, body_id, body_name=None):
         if not getattr(self, "gravity_warning_hud", None) or body_id is None:
@@ -1477,9 +1463,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.ai_operational_state = compass_operations.fresh_runtime_state()
         self.combat_awareness = CombatAwareness()
         self._hud_balance_cache = {"ts": 0.0, "balance": None}
-        self._market_import_queue = queue.Queue(maxsize=1)
-        self._market_import_stop = threading.Event()
-        self._market_import_thread = None
         self.last_journal_event_ts = 0.0
         self.last_logged_journal_file = None
         self.last_status_event_ts = 0.0
@@ -1758,7 +1741,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             ),
         )
         self.watcher.prime_market_file()
-        self._start_market_import_worker()
         # Let Tk paint the cached cockpit and overlay windows before the
         # journal worker begins its potentially large startup replay.
         self.root.after(75, self.watcher.start)
@@ -2476,7 +2458,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             except Exception:
                 pass
             
-        self._stop_market_import_worker()
         self.screenshots.stop()
         if time.time() >= self._overlay_sync_grace_until:
             self._capture_overlay_positions()
@@ -8019,90 +8000,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "docked": bool(self.current_docked),
         }
 
-    def _start_market_import_worker(self):
-        if self._market_import_thread and self._market_import_thread.is_alive():
-            return
-        self._market_import_stop.clear()
-        self._market_import_thread = threading.Thread(
-            target=self._market_import_worker,
-            name="trade-market-import",
-            daemon=True,
-        )
-        self._market_import_thread.start()
-
-    def _stop_market_import_worker(self):
-        try:
-            self._market_import_stop.set()
-            self._market_import_queue.put_nowait(None)
-        except Exception:
-            pass
-
-    def _enqueue_market_import(self, snapshot):
-        try:
-            self._market_import_queue.put_nowait(snapshot)
-            return
-        except queue.Full:
-            pass
-        try:
-            self._market_import_queue.get_nowait()
-        except Exception:
-            pass
-        try:
-            self._market_import_queue.put_nowait(snapshot)
-        except Exception:
-            pass
-
-    def _market_import_worker(self):
-        while not self._market_import_stop.is_set():
-            try:
-                item = self._market_import_queue.get(timeout=0.5)
-            except queue.Empty:
-                continue
-            if item is None:
-                continue
-            data, context = item
-            try:
-                conn = trade_marketdb.connect()
-                try:
-                    result = trade_marketdb.import_market_json(conn, data, context)
-                finally:
-                    conn.close()
-            except Exception as exc:
-                self._ui_post(lambda e=exc: self.log(f"Trade market import failed: {e}"))
-                continue
-
-            if context.get("docked"):
-                trade_eddn_uploader.set_enabled(bool(self.config.get("trade_eddn_upload_enabled", True)))
-                trade_eddn_uploader.maybe_publish(data, self.cmdr_name, context)
-
-            if not result.get("updated"):
-                continue
-            self._ui_post(
-                lambda d=data, c=context, r=result: self._apply_market_import_result(d, c, r),
-                key="market-import-result",
-            )
-
-    def _apply_market_import_result(self, data, context, result):
-        self.current_trade_market = {
-            "market_id": result.get("market_id"),
-            "station": result.get("station") or context.get("station_name"),
-            "system": result.get("system") or context.get("system_name"),
-            "timestamp": data.get("timestamp"),
-            "items": list(data.get("Items") or []),
-        }
-        station = result.get("station") or context.get("station_name") or "market"
-        system = result.get("system") or context.get("system_name") or self.current_sys
-        count = result.get("commodities", 0)
-        self.add_event_feed_entry(
-            "TRADE",
-            f"Market updated: {station} ({count} commodities)",
-            severity="INFO",
-            copy_text=system,
-        )
-        if self.trade_window and self.trade_window.is_open():
-            self.trade_window.refresh_status()
-            self.trade_window.refresh_local()
-
     def update_market(self, data):
         if not isinstance(data, dict):
             return
@@ -8116,7 +8013,19 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         }
         if self.trade_window and self.trade_window.is_open():
             self._ui_post(self.trade_window.refresh_local, key="trade-local")
-        self._enqueue_market_import((dict(data), dict(context)))
+        if context.get("docked"):
+            trade_eddn_uploader.set_enabled(
+                bool(self.config.get("trade_eddn_upload_enabled", True))
+            )
+            trade_eddn_uploader.maybe_publish(data, self.cmdr_name, context)
+        station = self.current_trade_market.get("station") or "market"
+        system = self.current_trade_market.get("system") or self.current_sys
+        self.add_event_feed_entry(
+            "TRADE",
+            f"Market available: {station} ({len(self.current_trade_market['items']):,} commodities)",
+            severity="INFO",
+            copy_text=system,
+        )
 
     def update_nav_route(self, data):
         self.last_nav_event_ts = time.time()
