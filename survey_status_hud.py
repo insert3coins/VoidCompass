@@ -225,7 +225,7 @@ def _body_detail_rows(item):
 
 def build_survey_model(system_name, scan_items, focused_body_id=None,
                        focused_body_name=None, sampling=None, scanned=0, total=0,
-                       min_notable_value=50_000, palette=None):
+                       min_notable_value=50_000, palette=None, total_known=True):
     """Build a renderer-neutral survey model for the overlay and tests."""
     bodies = [row for row in (scan_items or []) if not row.get("is_star")]
     notable_rows = build_notable_body_rows(scan_items, min_notable_value, palette)
@@ -249,6 +249,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
                 "min_value": lo, "max_value": hi,
                 "notable_rows": notable_rows,
                 "scanned": _safe_int(scanned), "total": _safe_int(total),
+                "total_known": bool(total_known),
             }
 
     rows = []
@@ -315,6 +316,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
         "mode": "system", "system": system_name or "", "rows": rows,
         "notable_rows": remaining_notable, "sampling": sampling,
         "scanned": _safe_int(scanned), "total": _safe_int(total),
+        "total_known": bool(total_known),
         "notable_count": len(notable_rows),
     }
 
@@ -381,10 +383,11 @@ class SurveyStatusHUD:
             self.update(*self._last_update)
 
     def update(self, system_name, scanned, total, scan_items, body_signals,
-               sampling=None, focused_body_id=None, focused_body_name=None):
+               sampling=None, focused_body_id=None, focused_body_name=None,
+               total_known=True):
         self._last_update = (
             system_name, scanned, total, scan_items, body_signals,
-            sampling, focused_body_id, focused_body_name,
+            sampling, focused_body_id, focused_body_name, total_known,
         )
         if self._suppressed:
             self.hide()
@@ -392,7 +395,7 @@ class SurveyStatusHUD:
         model = build_survey_model(system_name, scan_items, focused_body_id,
                                    focused_body_name, sampling, scanned, total,
                                    _safe_int(self.config.get("system_info_min_value"), 50_000),
-                                   self._palette)
+                                   self._palette, total_known)
         if not model:
             self.hide()
             return
@@ -616,6 +619,7 @@ class SurveyStatusHUD:
             self._text(18, h - 15, "ESTIMATED BASE", palette["dim"], ("Courier", 7, "bold"))
             self._text(WIDTH - 18, h - 15, total, palette["orange"], ("Courier", 8, "bold"), "e")
         else:
-            progress = f"SCAN {model.get('scanned', 0)}/{model.get('total', 0)}"
+            total = model.get("total", 0) if model.get("total_known", True) else "?"
+            progress = f"SCAN {model.get('scanned', 0)}/{total}"
             self._text(18, h - 15, progress, palette["dim"], ("Courier", 7, "bold"))
             self._text(WIDTH - 18, h - 15, f"NOTABLE {model.get('notable_count', 0)}", palette["orange"], ("Courier", 7, "bold"), "e")

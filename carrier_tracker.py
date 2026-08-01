@@ -10,9 +10,12 @@ import math
 import os
 import threading
 import time
+from copy import deepcopy
 from datetime import datetime, timezone
+from urllib.parse import quote_plus
 
 from persistence_queue import persistence_queue
+import themes
 
 CARRIER_STATE_FILE = "carrier_state.json"
 
@@ -46,12 +49,23 @@ _PERSIST_KEYS = {
 
 _COOLDOWN_SECS = 290  # 4m50s post-departure cooldown window
 
-_DISCORD_COLORS = {
-    "jump_plotted":      0x5865F2,   # blurple — departure pending
-    "jump_completed":    0x57F287,   # green — arrived
-    "jump_cancelled":    0xED4245,   # red — cancelled
-    "cooldown_finished": 0x5DADE2,   # blue — ready to jump
-    "status_update":     0xFEE75C,   # yellow — manual status post
+_DISCORD_EVENT_STYLES = {
+    "jump_plotted":      ("JUMP PLOTTED", "accent"),
+    "jump_completed":    ("JUMP COMPLETE", "green"),
+    "jump_cancelled":    ("JUMP CANCELLED", "red"),
+    "cooldown_finished": ("COOLDOWN COMPLETE", "yellow"),
+    "status_update":     ("CARRIER STATUS", "orange"),
+    "test":              ("WEBHOOK TEST", "accent"),
+}
+
+_DISCORD_SERVICE_NAMES = {
+    "Commodities": "Commodity Market",
+    "VoucherRedemption": "Redemption Office",
+    "Exploration": "Universal Cartographics",
+    "VistaGenomics": "Vista Genomics",
+    "BlackMarket": "Secure Warehouse",
+    "CarrierFuel": "Tritium Depot",
+    "PioneerSupplies": "Pioneer Supplies",
 }
 
 CREW_ROLES = [
@@ -71,12 +85,99 @@ def _parse_dt(ts_str):
         return None
 
 
-def _discord_relative(ts_str):
-    """Return a Discord relative timestamp token, e.g. <t:1234567890:R>."""
-    dt = _parse_dt(ts_str)
-    if not dt:
+def _discord_time(ts_value):
+    """Return full and relative Discord timestamp tokens."""
+    try:
+        if isinstance(ts_value, (int, float)):
+            epoch = int(ts_value)
+        else:
+            dt = _parse_dt(ts_value)
+            if not dt:
+                return ""
+            epoch = int(dt.timestamp())
+        return f"<t:{epoch}:F> · <t:{epoch}:R>"
+    except (TypeError, ValueError, OverflowError):
         return ""
-    return f"<t:{int(dt.timestamp())}:R>"
+
+
+def _discord_escape(value):
+    """Escape Discord markdown in journal/user text; links are built separately."""
+    text = str(value or "").replace("\r", "").replace("\x00", "").strip()
+    for char in ("\\", "*", "_", "~", "`", "|", "[", "]", ">"):
+        text = text.replace(char, f"\\{char}")
+    return text
+
+
+def _discord_clip(value, limit=1024):
+    text = str(value or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[:max(0, limit - 1)].rstrip() + "…"
+
+
+def _discord_error_detail(exc):
+    """Describe a webhook failure without leaking its credential-bearing URL."""
+    if isinstance(exc, RuntimeError):
+        return str(exc)
+    error_name = type(exc).__name__
+    if "timeout" in error_name.casefold():
+        return "Discord request timed out."
+    if "connection" in error_name.casefold():
+        return "Could not connect to Discord."
+    return f"Discord webhook request failed ({error_name})."
+
+
+def _edsm_system_url(system):
+    system = " ".join(str(system or "").split())
+    if not system or system.casefold() in {"unknown", "tbd"}:
+        return ""
+    return f"https://www.edsm.net/show-system?systemName={quote_plus(system)}"
+
+
+def _discord_location(system, body=None):
+    """Format an Elite system/body with a safe EDSM system link."""
+    system = " ".join(str(system or "").split()) or "Unknown"
+    body = " ".join(str(body or "").split())
+    escaped_system = _discord_escape(system)
+    url = _edsm_system_url(system)
+    system_text = f"[{escaped_system}]({url})" if url else escaped_system
+    if not body:
+        return system_text
+    suffix = body
+    if body.casefold().startswith(system.casefold()):
+        suffix = body[len(system):].strip()
+    return system_text + (f" · {_discord_escape(suffix)}" if suffix else "")
+
+
+def _discord_number(value, decimals=0):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    if decimals:
+        return f"{number:,.{decimals}f}"
+    return f"{int(round(number)):,}"
+
+
+def _next_pending_route(cd):
+    current = " ".join(str(cd.get("system") or "").split()).casefold()
+    current_address = cd.get("system_address")
+    for row in cd.get("expedition_route") or []:
+        if not isinstance(row, dict) or row.get("visited"):
+            continue
+        system = " ".join(str(row.get("system") or "").split())
+        if not system:
+            continue
+        same_address = (
+            current_address is not None and row.get("id64") is not None
+            and str(row.get("id64")) == str(current_address)
+        )
+        if same_address or (current and system.casefold() == current):
+            continue
+        return row
+    return None
 
 
 def _utc_stamp():
@@ -1213,112 +1314,260 @@ class CarrierTracker:
         if not self._config.get(f"carrier_discord_{event_type}", True):
             return
 
+        with self._profile_lock:
+            snapshot = deepcopy(self.carrier_data)
         threading.Thread(
             target=self._send_discord,
-            args=(url, event_type, dict(self.carrier_data)),
+            args=(url, event_type, snapshot),
             daemon=True,
         ).start()
+
+    def _discord_color(self, event_type):
+        """Resolve webhook colour from the active commander's UI theme."""
+        _name, palette = themes.resolve_theme(
+            self._config.get("ui_theme_name"),
+            self._config.get("ui_custom_themes"),
+        )
+        slot = _DISCORD_EVENT_STYLES.get(event_type, ("CARRIER EVENT", "accent"))[1]
+        value = palette.get(slot) or palette.get("accent") or "#00d1ff"
+        try:
+            return int(value.lstrip("#"), 16)
+        except (TypeError, ValueError):
+            return 0x00D1FF
+
+    def _build_discord_payload(self, event_type, cd):
+        """Build one bounded, themed carrier operations embed."""
+        carrier_type = cd.get("carrier_type")
+        is_squadron = carrier_type == "SquadronCarrier"
+        carrier_label = "Squadron Carrier" if is_squadron else "Fleet Carrier"
+        event_label = _DISCORD_EVENT_STYLES.get(
+            event_type, (str(event_type or "Carrier Event").replace("_", " ").upper(), "accent")
+        )[0]
+        name = _discord_escape(cd.get("name") or carrier_label)
+        callsign = _discord_escape(cd.get("callsign") or "???-???")
+        description = f"**{name}** · `{callsign}`"
+        if event_type == "test":
+            description += "\nThe webhook is connected. This preview uses the active carrier state."
+        if cd.get("pending_decom"):
+            description += "\n**DECOMMISSIONING IS PENDING**"
+
+        fields = []
+
+        def add_field(field_name, value, inline=False):
+            value = _discord_clip(value)
+            if value:
+                fields.append({
+                    "name": _discord_clip(field_name, 256),
+                    "value": value,
+                    "inline": bool(inline),
+                })
+
+        current = _discord_location(cd.get("system"), cd.get("body"))
+        target = _discord_location(cd.get("jump_destination"), cd.get("jump_body"))
+        previous = _discord_location(cd.get("previous_system"), cd.get("previous_body"))
+        if event_type == "jump_plotted":
+            add_field("CURRENT SYSTEM", current, True)
+            add_field("JUMP TARGET", target, True)
+            add_field("DEPARTURE", _discord_time(cd.get("jump_departure_time")))
+        elif event_type == "jump_completed":
+            add_field("ARRIVED", current, True)
+            add_field("DEPARTED FROM", previous, True)
+        elif event_type == "jump_cancelled":
+            add_field("REMAINING AT", current, True)
+            if cd.get("jump_destination"):
+                add_field("CANCELLED TARGET", target, True)
+        else:
+            add_field("CURRENT SYSTEM", current, True)
+            if cd.get("jump_destination") and cd.get("status") == "jumping":
+                add_field("JUMP TARGET", target, True)
+                add_field("DEPARTURE", _discord_time(cd.get("jump_departure_time")))
+
+        manual_departure = _discord_time(cd.get("_manual_departure_ts"))
+        if event_type == "status_update" and manual_departure:
+            add_field("PLANNED DEPARTURE", manual_departure)
+
+        if is_squadron:
+            squadron = _discord_escape(cd.get("squadron_name") or "Awaiting SquadronStartup")
+            rank = cd.get("squadron_rank_name")
+            if rank is None:
+                rank = cd.get("squadron_rank")
+            squadron_text = f"**{squadron}**"
+            if rank is not None and str(rank).strip():
+                squadron_text += f" · {_discord_escape(rank)}"
+            add_field("SQUADRON", squadron_text)
+
+        fuel = _discord_number(cd.get("fuel_level"))
+        capacity = _discord_number(cd.get("fuel_capacity") or 1000)
+        if fuel is not None:
+            fuel_text = f"{fuel} / {capacity} T"
+            fuel_text += " · estimated" if cd.get("fuel_level_estimated") else " · journal confirmed"
+            add_field("TRITIUM", fuel_text, True)
+
+        current_range = _discord_number(cd.get("jump_range_curr"), 1)
+        maximum_range = _discord_number(cd.get("jump_range_max"), 1)
+        range_parts = []
+        if current_range is not None:
+            range_parts.append(f"{current_range} LY current")
+        if maximum_range is not None:
+            range_parts.append(f"{maximum_range} LY max")
+        if range_parts:
+            add_field("JUMP RANGE", " · ".join(range_parts), True)
+
+        capacity_parts = []
+        for key, label in (
+            ("space_cargo", "cargo"),
+            ("space_free", "free"),
+            ("space_total", "total"),
+        ):
+            value = _discord_number(cd.get(key))
+            if value is not None:
+                capacity_parts.append(f"{value} T {label}")
+        if capacity_parts:
+            add_field("CARRIER CAPACITY", " · ".join(capacity_parts), True)
+
+        access_names = {
+            "all": "All commanders",
+            "none": "None",
+            "friends": "Friends",
+            "squadron": "Squadron",
+            "squadronfriends": "Squadron + friends",
+        }
+        access_key = str(cd.get("docking_access") or "all").replace("_", "").casefold()
+        access = access_names.get(access_key, _discord_escape(cd.get("docking_access") or "All"))
+        notorious = "notorious allowed" if cd.get("allow_notorious") else "notorious blocked"
+        add_field("DOCKING ACCESS", f"{access} · {notorious}", True)
+
+        route = [row for row in (cd.get("expedition_route") or []) if isinstance(row, dict)]
+        if route:
+            done = sum(1 for row in route if row.get("visited"))
+            remaining = max(0, len(route) - done)
+            expedition_name = _discord_escape(cd.get("expedition_name") or "Carrier expedition")
+            route_lines = [f"**{expedition_name}**", f"{done}/{len(route)} stops complete · {remaining} remaining"]
+            total_distance = _discord_number(cd.get("expedition_total_distance_ly"), 1)
+            if total_distance is not None:
+                route_lines.append(f"{total_distance} LY plotted")
+            add_field("EXPEDITION", "\n".join(route_lines))
+
+            next_stop = _next_pending_route(cd)
+            if next_stop:
+                next_bits = [_discord_location(next_stop.get("system"), next_stop.get("body"))]
+                next_distance = _discord_number(next_stop.get("distance_ly"), 1)
+                next_fuel = _discord_number(next_stop.get("fuel_used_t"))
+                leg_bits = []
+                if next_distance is not None:
+                    leg_bits.append(f"{next_distance} LY")
+                if next_fuel is not None:
+                    leg_bits.append(f"{next_fuel} T planned")
+                if leg_bits:
+                    next_bits.append(" · ".join(leg_bits))
+                add_field("NEXT EXPEDITION STOP", "\n".join(next_bits))
+
+            remaining_fuel = []
+            for row in route:
+                if row.get("visited") or row.get("fuel_used_t") is None:
+                    continue
+                try:
+                    remaining_fuel.append(max(0, int(float(row.get("fuel_used_t")))))
+                except (TypeError, ValueError):
+                    pass
+            if remaining_fuel:
+                reserve = _discord_number(cd.get("expedition_reserve_fuel") or 0)
+                add_field(
+                    "ROUTE FUEL PLAN",
+                    f"{sum(remaining_fuel):,} T remaining · {reserve} T reserve",
+                    True,
+                )
+
+        active_services = []
+        paused_services = []
+        for member in cd.get("crew") or []:
+            if not isinstance(member, dict) or not member.get("Activated"):
+                continue
+            role = member.get("CrewRole") or "Service"
+            label = _DISCORD_SERVICE_NAMES.get(role, role)
+            (active_services if member.get("Enabled") else paused_services).append(
+                _discord_escape(label)
+            )
+        service_lines = []
+        if active_services:
+            service_lines.append("**Online:** " + " · ".join(active_services))
+        if paused_services:
+            service_lines.append("**Paused:** " + " · ".join(paused_services))
+        if service_lines:
+            add_field("CARRIER SERVICES", "\n".join(service_lines))
+
+        destination_note = _discord_escape(cd.get("destination_note"))
+        if destination_note:
+            add_field("PLANNED DESTINATION", destination_note)
+        note = _discord_escape(cd.get("notes"))
+        if note:
+            add_field("OPERATOR NOTE", note)
+
+        link_system = (
+            cd.get("jump_destination") if event_type == "jump_plotted"
+            else cd.get("system")
+        )
+        author_name = f"VOIDCOMPASS // {carrier_label.upper()} COMMAND"
+        footer_text = f"VoidCompass · {carrier_label} Command · journal-backed"
+        title = _discord_clip(event_label, 256)
+        description = _discord_clip(description, 4096)
+        # Discord applies a 6,000-character aggregate limit across all embed
+        # text. Keep a small margin and preserve earlier operational fields if
+        # unusually long user notes or imported route names consume the rest.
+        text_used = len(author_name) + len(footer_text) + len(title) + len(description)
+        bounded_fields = []
+        for field in fields[:25]:
+            field_name = _discord_clip(field.get("name"), 256)
+            remaining = 5900 - text_used - len(field_name)
+            if remaining <= 1:
+                break
+            field_value = _discord_clip(field.get("value"), min(1024, remaining))
+            if not field_value:
+                continue
+            bounded_fields.append({
+                "name": field_name,
+                "value": field_value,
+                "inline": bool(field.get("inline")),
+            })
+            text_used += len(field_name) + len(field_value)
+        embed = {
+            "author": {"name": author_name},
+            "title": title,
+            "description": description,
+            "color": self._discord_color(event_type),
+            "fields": bounded_fields,
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "footer": {"text": footer_text},
+        }
+        link_url = _edsm_system_url(link_system)
+        if link_url:
+            embed["url"] = link_url
+        return {
+            "username": "Void Compass",
+            "allowed_mentions": {"parse": []},
+            "embeds": [embed],
+        }
 
     def _send_discord(self, url, event_type, cd):
         try:
             import requests
-            carrier_type = cd.get("carrier_type")
-            is_squadron  = carrier_type == "SquadronCarrier"
-            carrier_label = "Squadron Carrier" if is_squadron else "Fleet Carrier"
-            name         = cd.get("name")     or carrier_label
-            callsign     = cd.get("callsign") or "???-???"
-            squadron     = (cd.get("squadron_name") or "").strip()
-            squadron_rank = cd.get("squadron_rank_name") or cd.get("squadron_rank")
-            curr_sys     = cd.get("system")            or "Unknown"
-            curr_body    = cd.get("body")              or ""
-            prev_sys     = cd.get("previous_system")   or "Unknown"
-            prev_body    = cd.get("previous_body")     or ""
-            dest_sys     = cd.get("jump_destination")  or "TBD"
-            dest_body    = cd.get("jump_body")         or ""
-            dep_token    = _discord_relative(cd.get("jump_departure_time"))
-            note          = (cd.get("notes")            or "").strip()
-            dest_note     = (cd.get("destination_note") or "").strip()
-            dest_display  = dest_note or "TBD"
-
-            def _loc(system, body):
-                # Elite body names are "{SystemName} {index}", so strip the
-                # redundant system prefix to avoid "Sol / Sol 3" duplication.
-                if body and body.startswith(system):
-                    suffix = body[len(system):].strip()
-                    return f"**{system}**" + (f" / {suffix}" if suffix else "")
-                return f"**{system}**" + (f" / {body}" if body else "")
-
-            if event_type == "jump_plotted":
-                lines = [
-                    "🚀  **Jump Plotted**",
-                    f"📍  **Current Location:** {_loc(curr_sys, curr_body)}",
-                    # Real game-plotted jump target — label as "Jump Target" to
-                    # distinguish it from the user's stated long-term destination.
-                    f"🎯  **Jump Target:** {_loc(dest_sys, dest_body)}",
-                ]
-                if dep_token:
-                    lines.append(f"⏰  **Departing:** {dep_token}")
-            elif event_type == "jump_completed":
-                lines = [
-                    "✅  **Jump Complete**",
-                    f"📍  **Arrived At:** {_loc(curr_sys, curr_body)}",
-                    f"🔙  **Departed From:** {_loc(prev_sys, prev_body)}",
-                ]
-            elif event_type == "jump_cancelled":
-                lines = [
-                    "❌  **Jump Cancelled**",
-                    f"📍  **Remaining At:** {_loc(curr_sys, curr_body)}",
-                ]
-            elif event_type == "cooldown_finished":
-                lines = [
-                    "🔓  **Cooldown Complete — Ready to Jump**",
-                    f"📍  **Location:** {_loc(curr_sys, curr_body)}",
-                ]
-            elif event_type == "status_update":
-                lines = [
-                    "📢  **Status Update**",
-                    f"📍  **Current Location:** {_loc(curr_sys, curr_body)}",
-                ]
-                manual_dep_ts = cd.get("_manual_departure_ts")
-                if manual_dep_ts:
-                    # Show both full date/time (F) and relative (R) so every
-                    # reader sees it in their own local timezone automatically.
-                    lines.append(
-                        f"🕐  **Departure:** <t:{manual_dep_ts}:F> (<t:{manual_dep_ts}:R>)"
-                    )
-            else:
-                lines = [event_type]
-
-            if is_squadron:
-                squadron_text = f"**{squadron}**" if squadron else "Awaiting SquadronStartup"
-                if squadron and squadron_rank is not None:
-                    squadron_text += f" · rank {squadron_rank}"
-                lines.append(f"🛡️  **Squadron:** {squadron_text}")
-            lines.append(f"📌  **Destination:** {dest_display}")
-            if note:
-                lines.append(f"ℹ️  *{note}*")
-
-            requests.post(
+            response = requests.post(
                 url,
-                json={
-                    "username": "Void Compass",
-                    "embeds": [{
-                        "title": f"{carrier_label} · {name}  ·  {callsign}",
-                        "description": "\n".join(lines),
-                        "color": _DISCORD_COLORS.get(event_type, 0x888888),
-                        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        "footer": {"text": f"VoidCompass · {carrier_label} Command"},
-                    }],
-                },
+                json=self._build_discord_payload(event_type, cd),
                 timeout=8,
             )
+            if response.status_code not in (200, 204):
+                raise RuntimeError(f"Discord returned HTTP {response.status_code}")
+            return True, None
         except Exception as exc:
+            detail = _discord_error_detail(exc)
             self._warn_throttled(
                 "discord-webhook",
                 "Carrier Discord webhook failed: %s",
-                exc,
+                detail,
                 interval_s=300.0,
             )
+            return False, detail
 
     def set_note(self, note: str):
         """Update the operator status note and persist to config."""
@@ -1356,7 +1605,8 @@ class CarrierTracker:
         url = (self._config.get("carrier_discord_webhook_url") or "").strip()
         if not url:
             return False, "No webhook URL configured."
-        snapshot = dict(self.carrier_data)
+        with self._profile_lock:
+            snapshot = deepcopy(self.carrier_data)
         if departure_ts is not None:
             snapshot["_manual_departure_ts"] = int(departure_ts)
         threading.Thread(
@@ -1367,30 +1617,6 @@ class CarrierTracker:
         return True, None
 
     def send_test_discord(self, url):
-        try:
-            import requests
-            cd = self.carrier_data
-            is_squadron = cd.get("carrier_type") == "SquadronCarrier"
-            carrier_label = "Squadron Carrier" if is_squadron else "Fleet Carrier"
-            squadron = cd.get("squadron_name")
-            detail = "Webhook connection confirmed from Void Compass."
-            if is_squadron:
-                detail += f"\nSquadron: **{squadron or 'Awaiting SquadronStartup'}**"
-            resp = requests.post(
-                url.strip(),
-                json={
-                    "username": "Void Compass",
-                    "embeds": [{
-                        "title": f"{carrier_label} — Test Notification",
-                        "description": detail,
-                        "color": _DISCORD_COLORS["cooldown_finished"],
-                        "footer": {"text": f"VoidCompass · {carrier_label} Command"},
-                    }],
-                },
-                timeout=8,
-            )
-            if resp.status_code in (200, 204):
-                return True, None
-            return False, f"HTTP {resp.status_code}"
-        except Exception as exc:
-            return False, str(exc)
+        with self._profile_lock:
+            snapshot = deepcopy(self.carrier_data)
+        return self._send_discord(url.strip(), "test", snapshot)

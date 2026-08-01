@@ -436,6 +436,8 @@ class TacticalHUD:
 
     @staticmethod
     def _scan_progress_state(scanned, total, nav_context):
+        if nav_context.get("scan_progress_source") == "unknown":
+            return 0.0, f"{scanned}/?  ·  --%"
         body_pct = (scanned / total) if total > 0 else 0.0
         body_pct = max(0.0, min(1.0, body_pct))
         if nav_context.get("scan_progress_source") != "fss":

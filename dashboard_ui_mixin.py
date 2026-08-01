@@ -4151,7 +4151,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         sys_text = f"{ship or 'SHIP'} · {flight_state}".upper()
         
         self.sys_stat.config(text=sys_text)
-        self.scan_stat.config(text=f"{self.scanned} / {self.total}")
+        self.scan_stat.config(text=self._scan_progress_count_text())
         self.update_nav_label()
 
         route_progress = self._refresh_route_progress_labels()

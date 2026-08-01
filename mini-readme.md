@@ -1,23 +1,16 @@
 # VoidCompass // UPDATE LOG
 
-## v5.3.5 // Online Trade Assist
+## v5.3.5.1 // Carrier Discord Command
 **Release Date:** 2026-Aug-01
 
-*   Replaced Trade Assist's multi-gigabyte local market baseline with on-demand Ardent Insight queries backed by a bounded ten-minute memory cache—there is no nightly market download or galaxy price database to maintain.
-*   **Sell My Cargo** now asks the online service for nearby buyers only when requested, while **Find a Trade** combines Elite's current `Market.json` departure prices with online destinations and the existing range, age, pad, arrival-distance and carrier filters.
-*   Preserved non-blocking searches, achievable cargo/capital ranking, mission and stolen-cargo exclusion, active Compass trade plans and journal-confirmed Current Run history.
-*   Kept visited-market EDDN uploads completely independent, removed the inbound EDDN/PyZMQ cache receiver and retired the Spansh market-dump worker and its build controls.
-*   Moved Architect Command's construction-commodity source searches to the same online provider, with a courteous bounded parallel lookup instead of depending on the retired price cache.
-*   Added an explicit Online Market health state, temporary-cache count and honest offline/timeout feedback; online trade requests send only the reference system, commodity and selected filters.
-*   Made **Sell My Cargo** react to live `Cargo.json` changes, refreshing an active buyer search immediately or deferring it until the Trade page is visible without repeating unchanged lookups.
-*   Added a profile-aware Trade origin bar with editable system/station fields, **Use Current** and **Find Now** controls; a blank station automatically selects a fresh supplied market, enabling real-price route planning with an empty hold anywhere online market data is available.
-*   Added one-way or verified round-trip planning, live or manual hold sizes, full-load and orbital-only filters, profit/trip, profit/hour, travel-time and freshness ranking, confidence/ETA details, and selectable scrollable 3, 10 or 25-result lists; Current Run now compares the chosen plan with journal-realized profit.
-*   Added the optional profile-aware **Trade Route HUD** with live route stage, outbound/return cargo, journal-confirmed transactions, expected-versus-realized profit and current hold capacity; it is fully integrated with themes, passthrough, hotkeys and Overlay Layout Studio.
-*   Added a persistent commander-isolated **Trade Log** with station and selected-route context, 500-row history browsing, 30/90/180/365-day auto-prune controls and manual pruning; legacy history migrates in place and Analytics now respects the active profile.
-*   Made cargo capacity switch live with the active ship: `ShipyardSwap` immediately invalidates the old hold and the following authoritative `Loadout.CargoCapacity` refreshes Cargo HUD, Trade Assist, Trade Route HUD and colony consumers together.
+*   Rebuilt personal and Squadron Carrier Discord posts as compact VoidCompass command embeds whose event colours follow the active commander theme.
+*   Added safe EDSM links for current, previous, target and expedition systems plus journal-backed Tritium, range, carrier capacity, docking access, active services, squadron identity and route progress.
+*   Unified automatic jump/cooldown alerts, manual status posts and connection tests on the same renderer, disabled Discord mentions from operator text and now report failed automatic webhook HTTP responses in diagnostics without delaying journal processing.
+*   Fixed startup scan recovery treating an auto-scanned arrival star as a confirmed one-body system: unknown totals now display as `1/?` until a honk supplies `BodyCount`, while genuine partial and completed FSS progress still restore from journal/cache evidence.
 
 ## Earlier releases
 
+*   **v5.3.5** — Replaced the multi-gigabyte trade database with on-demand Ardent Insight searches, rebuilt Trade Assist around practical one-way and round-trip planning, added the Trade Route HUD and persistent Trade Log, and kept visited-market EDDN uploads independent.
 *   **v5.3.4** — Replaced Trade Command with the three-action Trade Assist, retained automatic EDDN uploads and journal-confirmed Current Run tracking, removed advanced route-watch machinery and made Station Link auto-hide explicit and immediately applied.
 *   **v5.3.3.1** — Restored biological sample progress and Survey Status lifecycle, corrected legacy bio predictions, simplified carrier expedition editing, reduced danger noise, rebuilt Station Link, completed remaining overlay theming and removed measured persistence stalls.
 *   **v5.3.3** — Added position-aware species-level biological prediction for all 116 published EDMC-BioScan species, including airless families, testable confidence, narrower value estimates, Codex-region HUD awareness and clearer Survey Status and expedition evidence.

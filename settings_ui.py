@@ -1186,7 +1186,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     fc_wh_e = input_row(carrier_section, "Discord Webhook URL", "carrier_discord_webhook_url")
     tk.Label(
         carrier_section,
-        text="One webhook handles personal and Squadron Carrier jump, cooldown, cancellation and manual status posts. Messages identify the carrier type automatically.",
+        text="One webhook handles personal and Squadron Carrier jump, cooldown, cancellation and manual status posts. Themed embeds include EDSM-linked systems plus journal-backed fuel, capacity, access, services and expedition progress.",
         font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w", justify=tk.LEFT,
         wraplength=620,
     ).pack(fill=tk.X, padx=12, pady=(0, 6))
@@ -1198,8 +1198,23 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             return
         if carrier_tracker is not None:
             import threading
-            threading.Thread(target=carrier_tracker.send_test_discord, args=(url,), daemon=True).start()
-            tk.messagebox.showinfo("Test Sent", "Test message dispatched - check your Discord channel.", parent=win)
+
+            def _send_test():
+                ok, error = carrier_tracker.send_test_discord(url)
+                if ok:
+                    ui_post(lambda: tk.messagebox.showinfo(
+                        "Test Sent",
+                        "The themed carrier preview was accepted by Discord.",
+                        parent=win,
+                    ))
+                else:
+                    ui_post(lambda detail=error or "Unknown error": tk.messagebox.showerror(
+                        "Discord Test Failed",
+                        f"The webhook did not accept the preview:\n{detail}",
+                        parent=win,
+                    ))
+
+            threading.Thread(target=_send_test, daemon=True).start()
         else:
             tk.messagebox.showinfo("Not Available", "Carrier tracker not connected; save and reopen settings.", parent=win)
 

@@ -114,7 +114,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     _COCKPIT_STATE_FIELDS = (
         "current_sys", "previous_sys", "previous_coords",
         "current_system_address", "current_coords", "star_class",
-        "scanned", "total", "navigation_scan_progress",
+        "scanned", "total", "scan_total_confirmed", "navigation_scan_progress",
         "navigation_scan_progress_source", "organic_count", "system_bio_signals",
         "system_traffic", "last_traffic_system", "valuable_system",
         "valuable_bodies", "body_signals", "system_undiscovered",
@@ -348,6 +348,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         for field in self._COCKPIT_STATE_FIELDS:
             if field in state:
                 setattr(self, field, state[field])
+        if "scan_total_confirmed" not in state:
+            # Older snapshots could only express an inferred N/N body floor.
+            # A partial system with a confirmed total is N/M, while explicit
+            # completion leaves fss_all_bodies set.
+            self.scan_total_confirmed = bool(
+                self.fss_all_bodies
+                or self.navigation_scan_progress_source == "fss"
+                or int(self.total or 0) > int(self.scanned or 0)
+            )
+        self._cached_scan_total_confirmed = bool(self.scan_total_confirmed)
         self.body_signals = self._restore_int_key_dict(self.body_signals)
         if not isinstance(self.current_coords, list) or len(self.current_coords) != 3:
             self.current_coords = [0, 0, 0]
@@ -361,6 +371,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._cached_cockpit_state_saved_at = float(payload.get("saved_at") or 0.0)
         except (TypeError, ValueError):
             self._cached_cockpit_state_saved_at = 0.0
+        self._cached_cockpit_state_system = self.current_sys
         return bool(self.current_sys and self.current_sys != "---")
 
     def _hydrate_cached_system_scan_state(self):
@@ -369,7 +380,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return
         if not self.current_sys or self.current_sys in ("---", "Unknown"):
             return
-        self.load_system_from_db(self.current_sys)
+        self.load_system_from_db(
+            self.current_sys,
+            preserve_total_confirmation=not bool(
+                getattr(self, "_cached_scan_total_confirmed", False)
+            ),
+        )
         items = self.load_scan_items_from_db(self.current_sys)
         if items:
             self.scan_items = list(items)
@@ -394,6 +410,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.body_signals, sampling=self._sampling_snapshot(),
                 focused_body_id=self.current_body_id,
                 focused_body_name=self.current_body_name,
+                total_known=self.scan_total_confirmed,
             )
         if self.station_info_hud and self.current_docked and self.current_station_name:
             self.station_info_hud.on_docked(self)
@@ -628,6 +645,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.star_class = ""
         self.scanned = 0
         self.total = 0
+        self.scan_total_confirmed = False
         self.navigation_scan_progress = None
         self.navigation_scan_progress_source = "bodies"
         self.organic_count = 0
@@ -949,6 +967,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.body_signals, sampling=self._sampling_snapshot(),
                         focused_body_id=self.current_body_id,
                         focused_body_name=self.current_body_name,
+                        total_known=self.scan_total_confirmed,
                     )
         try:
             self._system_info_refresh_job = self.root.after(150, _run)
@@ -1368,6 +1387,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.star_class = ""
         self.scanned = 0
         self.total = 0
+        self.scan_total_confirmed = False
         self.navigation_scan_progress = None
         self.navigation_scan_progress_source = "bodies"
         self.organic_count = 0
@@ -3037,12 +3057,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if total > 0:
             self.total = max(self.total, total)
         if self.total > 0:
+            self.scan_total_confirmed = True
             self.scanned = self.total
             self.navigation_scan_progress = 1.0
             self.navigation_scan_progress_source = "bodies"
             self.db_update_system(self.current_sys, self.total, self.scanned)
             if not self.batch_mode:
-                scan_text = f"{self.scanned} / {self.total}"
+                scan_text = self._scan_progress_count_text()
                 self._ui_post(lambda value=scan_text: self.scan_stat.config(text=value), key="scan-progress-label")
                 self.update_hud()
                 self.schedule_dashboard_refresh()
@@ -3050,11 +3071,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _seed_navigation_scan_progress(self):
         """Seed the HUD from persisted body knowledge on entering a system."""
-        if self.total > 0:
+        if getattr(self, "scan_total_confirmed", True) is False:
+            self.navigation_scan_progress = None
+            self.navigation_scan_progress_source = "unknown"
+        elif self.total > 0:
             self.navigation_scan_progress = max(0.0, min(1.0, self.scanned / self.total))
+            self.navigation_scan_progress_source = "bodies"
         else:
             self.navigation_scan_progress = None
-        self.navigation_scan_progress_source = "bodies"
+            self.navigation_scan_progress_source = "bodies"
+
+    def _scan_progress_count_text(self, compact=False):
+        separator = "/" if compact else " / "
+        total = self.total if getattr(self, "scan_total_confirmed", True) else "?"
+        return f"{self.scanned}{separator}{total}"
 
     def _record_navigation_fss_progress(self, progress):
         """Keep Frontier's live FSS percentage without corrupting body counts.
@@ -3067,6 +3097,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             progress = float(progress)
         except (TypeError, ValueError):
             return
+        self.scan_total_confirmed = True
         progress = max(0.0, min(1.0, progress))
         body_progress = (self.scanned / self.total) if self.total > 0 else 0.0
         current = self.navigation_scan_progress
@@ -3929,7 +3960,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             status = "FAIL"
 
         mini_stats = [
-            f"SCAN {self.scanned}/{self.total}",
+            f"SCAN {self._scan_progress_count_text(compact=True)}",
             f"BIO {self.organic_count}",
             f"VAL {len(self.valuable_bodies)}",
             f"ROUTE {len(self.route_list)}",
@@ -6298,6 +6329,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
             # State reset for new system
             incoming_sys = d.get("star_system", "Unknown")
+            preserve_unconfirmed_total = bool(
+                startup_replay
+                and getattr(self, "_cached_cockpit_state_loaded", False)
+                and incoming_sys == getattr(self, "_cached_cockpit_state_system", None)
+                and not getattr(self, "_cached_scan_total_confirmed", False)
+            )
             outgoing_sys = self.current_sys if self.current_sys not in ("---", "Unknown", incoming_sys) else None
             traffic_before_reset = dict(self.system_traffic or {})
             preserve_startup_traffic = (
@@ -6351,8 +6388,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 except Exception:
                     pass
             
-            # Load from history if available
-            self.load_system_from_db(self.current_sys)
+            # Load from history if available.  During startup, preserve an
+            # explicitly unconfirmed cached total until a honk/completion
+            # event in the replay supplies authoritative evidence.
+            self.scan_total_confirmed = False
+            self.load_system_from_db(
+                self.current_sys,
+                preserve_total_confirmation=preserve_unconfirmed_total,
+            )
 
             self.organic_count = 0 # Reset bio count for new system
             self.system_bio_signals = 0
@@ -6432,7 +6475,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self._ui_post(lambda value=sys_text: self.sys_stat.config(text=value), key="system-label")
                 self.update_nav_label()
             # Bio logs hidden for now (counting disabled)
-                scan_text = f"{self.scanned} / {self.total}"
+                scan_text = self._scan_progress_count_text()
                 self._ui_post(lambda value=scan_text: self.scan_stat.config(text=value), key="scan-progress-label")
                 self._ui_post(self.update_waypoint_display, key="waypoint-display")
                 self.schedule_dashboard_refresh(full=True)
@@ -6489,7 +6532,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                             self.current_sys, self.scanned, self.total, self.scan_items,
                             self.body_signals, sampling=self._sampling_snapshot(),
                             focused_body_id=self.current_body_id,
-                            focused_body_name=self.current_body_name),
+                            focused_body_name=self.current_body_name,
+                            total_known=self.scan_total_confirmed),
                         key="survey-status",
                     )
             self._refresh_exploration_window()
@@ -6655,23 +6699,29 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             # value that load_system_from_db already restored from the DB.
             if body_count > 0:
                 self.total = max(body_count, self.total)
+                self.scan_total_confirmed = True
                 self._queue_edsm_upload(raw, startup_replay=startup_replay)
-            self.fss_all_bodies = False
-            # Progress=1.0 means every body in this system is already known/discovered
-            # (e.g. Sol and other pre-populated systems). Treat it as fully scanned so
-            # the HUD shows 100% without requiring individual FSS body scans.
             progress = d.get("progress", raw.get("Progress") if isinstance(raw, dict) else None)
             try:
                 progress = float(progress) if progress is not None else None
             except (TypeError, ValueError):
                 progress = None
-            self._record_navigation_fss_progress(progress)
+            if progress is not None and progress < 1.0:
+                self.fss_all_bodies = False
+            if progress is not None:
+                self._record_navigation_fss_progress(progress)
+            else:
+                self._seed_navigation_scan_progress()
             if progress is not None and progress >= 1.0 and self.total > 0:
+                # Frontier defines Progress as system-scan completion.  This
+                # also covers pre-populated systems that may not replay each
+                # individual Scan event on a return visit.
+                self.fss_all_bodies = True
                 self._mark_system_scan_complete(self.total)
             else:
                 self.db_update_system(self.current_sys, self.total, self.scanned)
                 if not self.batch_mode:
-                    scan_text = f"{self.scanned} / {self.total}"
+                    scan_text = self._scan_progress_count_text()
                     self._ui_post(lambda value=scan_text: self.scan_stat.config(text=value), key="scan-progress-label")
             self.log(f"🔭 HONK: {self.total} bodies detected.")
             if not startup_replay:
@@ -6690,7 +6740,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.total = max(self.total, self.scanned + discovered)
                 self.db_update_system(self.current_sys, self.total, self.scanned)
                 if not self.batch_mode:
-                    scan_text = f"{self.scanned} / {self.total}"
+                    scan_text = self._scan_progress_count_text()
                     self._ui_post(lambda value=scan_text: self.scan_stat.config(text=value), key="scan-progress-label")
                     self.update_hud()
                     self.schedule_dashboard_refresh()
@@ -6884,7 +6934,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.scanned = new_count
                     self.db_update_system(self.current_sys, self.total, self.scanned)
                     if not self.batch_mode:
-                        scan_text = f"{self.scanned} / {self.total}"
+                        scan_text = self._scan_progress_count_text()
                         self._ui_post(lambda value=scan_text: self.scan_stat.config(text=value), key="scan-progress-label")
                     self.last_scan_event = data
                     self.add_scan_item(raw)
@@ -7719,6 +7769,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.current_sys, self.scanned, self.total, self.scan_items, self.body_signals, sampling=s,
                 focused_body_id=self.current_body_id,
                 focused_body_name=self.current_body_name,
+                total_known=self.scan_total_confirmed,
             ), key="survey-status")
         if getattr(self, "exploration_window", None) and self.exploration_window.is_open():
             self._ui_post(self.exploration_window._render_sampling, key="exploration-sampling")
@@ -8010,7 +8061,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             sys_snap = self.current_sys
             def _startup_sync():
                 if sys_snap and sys_snap != "---":
-                    self.load_system_from_db(sys_snap)
+                    preserve_unconfirmed = bool(
+                        not getattr(self, "scan_total_confirmed", False)
+                    )
+                    self.load_system_from_db(
+                        sys_snap,
+                        preserve_total_confirmation=preserve_unconfirmed,
+                    )
                 self.update_dashboard_ui()
                 self.update_hud()
                 self._show_system_info_for_current_system()
