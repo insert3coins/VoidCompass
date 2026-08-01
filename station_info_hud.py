@@ -302,9 +302,10 @@ class StationInfoHUD:
             except Exception:
                 pass
             self._hide_job = None
-        timeout_s = max(0, _safe_int(self.config.get("station_info_timeout_s"), 0))
-        if timeout_s:
-            self._hide_job = self.win.after(max(5, timeout_s) * 1000, self._auto_hide)
+        if not self.config.get("station_info_auto_hide_enabled", False):
+            return
+        timeout_s = max(5, _safe_int(self.config.get("station_info_timeout_s"), 30))
+        self._hide_job = self.win.after(timeout_s * 1000, self._auto_hide)
 
     def _auto_hide(self):
         self._hide_job = None

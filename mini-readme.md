@@ -1,21 +1,20 @@
 # VoidCompass // UPDATE LOG
 
-## v5.3.3.1 // Survey & Carrier Reliability
+## v5.3.4 // Lightweight Trade Assist
 **Release Date:** 2026-Aug-01
 
-*   Restored live biological sample progress across Elite's real `Log → Sample → Sample → Analyse` sequence, so Survey Status once again advances through 1/3, 2/3 and 3/3.
-*   Clarified legacy airless-body predictions: colour-first Anemone, Brain Tree and Sinuous Tuber names are assembled correctly, while their value column now says **PREDICTED** or **POSSIBLE** instead of relying on a cryptic grey marker.
-*   Survey Status now stays visible through ordinary in-system supercruise, hides immediately for a hyperspace departure, cannot be resurrected by a queued refresh while between systems, hides while docked and restores the current system survey on undock.
-*   Fleet Carrier Copy Next now ignores a stale pending row for the carrier's current system. Carrier Expedition also adds selected-stop **Mark Done**, **Mark Pending**, **Add**, **Remove**, **Move Up** and **Move Down** controls; structural route edits clear obsolete leg/fuel calculations and invite a fresh Spansh plot rather than presenting invalid figures.
-*   Reduced generic **Ship in danger** noise by limiting it to normal ship flight, suppressing it when overheating or interdiction already provides the actionable warning, and applying a five-minute re-alert cooldown when Elite's broad danger flag flaps.
-*   Rebuilt Station Link as a profile-theme-aware exploration service card with reliable journal service detection, landing-pad and station-state context, truthful economy labels, personal-carrier recognition and live Cartographics/Vista data readiness; it can now remain visible until undocking or use an optional timer.
-*   Removed OBS-visible scanline aliasing from Cargo Manifest rows while retaining its shared overlay border, corners and header separation.
-*   Completed the live per-profile theme pass for Cargo Manifest, Fleet Carrier, System Info and Colony Shopping overlays without moving, showing or hiding them during a palette change.
-*   Moved Engineering Workshop persistence off the Tk thread and reduced repeated cockpit-brain snapshot conversion work, targeting the two clearest UI-stall sources measured in live runtime traces.
-*   Tightened release hygiene by removing the bundled commander exploration cache from source control, trimming unused Python packages and adding throttled diagnostics for carrier callbacks and Discord delivery failures.
+*   Replaced the multi-level Trade Command workspace with one genuine **Trade Assist** page built around **Sell My Cargo**, **Find a Trade** and **Current Run**.
+*   Sell My Cargo now returns only the three strongest nearby buyers, clearly labels estimated sale revenue and deliberately excludes mission and stolen cargo from ordinary market advice.
+*   Find a Trade starts at the currently docked market, uses live credits, free hold capacity and ship context automatically, and ranks three achievable departures instead of exposing route-planner machinery.
+*   Reduced trade controls to search range, station distance, quote age, minimum profit, pad size and carrier inclusion; selected results can become Compass's active plan and copy their destination in one click.
+*   Current Run keeps the active destination, journal-confirmed purchases, sales and real profit together, with compact persisted transaction history when a new app session has no trades yet.
+*   Kept local Market.json ingestion and station-market EDDN uploads independent of the Trade page, with a small live status/toggle strip and the occasional one-time Spansh market-baseline action still available.
+*   Removed the hidden advanced-tab and route-watch machinery, including background alert evaluation, while retaining the shared market database APIs used by colony commodity searches.
+*   Replaced Station Link's hidden `0` timeout convention with a profile-aware **Auto-hide Station Link** switch and a separate delay, applying changes immediately while docked.
 
 ## Earlier releases
 
+*   **v5.3.3.1** — Restored biological sample progress and Survey Status lifecycle, corrected legacy bio predictions, simplified carrier expedition editing, reduced danger noise, rebuilt Station Link, completed remaining overlay theming and removed measured persistence stalls.
 *   **v5.3.3** — Added position-aware species-level biological prediction for all 116 published EDMC-BioScan species, including airless families, testable confidence, narrower value estimates, Codex-region HUD awareness and clearer Survey Status and expedition evidence.
 *   **v5.3.2** — Added searchable commander-profile map annotations with direct edit/delete, zoom-aware marker clustering with expanding count badges, and restrained live-navigation cues that respect Reduced Motion.
 *   **v5.3.1** — Replaced the orbiting 3D galaxy with a top-down Galactic Atlas built on original artwork and the full 42-region layout, adding system/region search, framing presets, saved camera state and corrected runtime image packaging.

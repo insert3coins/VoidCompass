@@ -7,7 +7,7 @@ import threading
 import time
 import zlib
 
-from . import alerts, marketdb
+from . import marketdb
 
 RELAY = "tcp://eddn.edcd.io:9500"
 COMMODITY_SCHEMA = "https://eddn.edcd.io/schemas/commodity/3"
@@ -131,13 +131,6 @@ class EddnListener:
         except Exception:
             conn.rollback()
             return
-        # Alerting is a nicety layered on top of ingestion — keep it outside
-        # the DB try/except so an alert bug can't roll back a committed write
-        # or mask itself as an ingestion failure.
-        try:
-            alerts.on_market_update(market_id, station_name, rows)
-        except Exception:
-            pass
 
 
 LISTENER = EddnListener()

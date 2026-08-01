@@ -492,7 +492,7 @@ class OverlayLayoutStudio:
             value=str(self.config.get("gravity_warning_hud_timeout_s", 20))
         )
         self.station_timeout_var = tk.StringVar(
-            value=str(self.config.get("station_info_timeout_s", 0))
+            value=str(self.config.get("station_info_timeout_s", 30))
         )
         self.gravity_threshold_var = tk.StringVar(
             value=str(self.config.get("gravity_warning_threshold_g", 3.0))
@@ -500,9 +500,9 @@ class OverlayLayoutStudio:
         self._option_entry(timing, "Prospector auto-hide (seconds)", self.prospector_timeout_var)
         self._option_entry(timing, "System Info auto-hide (seconds)", self.system_timeout_var)
         self._option_entry(timing, "Gravity warning auto-hide (seconds)", self.gravity_timeout_var)
-        self._option_entry(
-            timing, "Station Info auto-hide (seconds; 0 = while docked)",
-            self.station_timeout_var,
+        self._option_toggle(timing, "Auto-hide Station Link", "station_info_auto_hide_enabled")
+        self.station_timeout_entry = self._option_entry(
+            timing, "Station Link hide delay (seconds)", self.station_timeout_var,
         )
         self._option_entry(timing, "Gravity warning threshold (g)", self.gravity_threshold_var)
 
@@ -620,9 +620,14 @@ class OverlayLayoutStudio:
         self.prospector_timeout_var.set(str(self.config.get("prospector_hud_timeout_s", 45)))
         self.system_timeout_var.set(str(self.config.get("system_info_timeout_s", 30)))
         self.gravity_timeout_var.set(str(self.config.get("gravity_warning_hud_timeout_s", 20)))
-        self.station_timeout_var.set(str(self.config.get("station_info_timeout_s", 0)))
+        self.station_timeout_var.set(str(self.config.get("station_info_timeout_s", 30)))
         self.gravity_threshold_var.set(str(self.config.get("gravity_warning_threshold_g", 3.0)))
         self.crt_intensity_var.set(str(self.config.get("hud_crt_intensity", "Subtle") or "Subtle").title())
+        self.station_timeout_entry.configure(
+            state=tk.NORMAL if self.config.get("station_info_auto_hide_enabled", False) else tk.DISABLED,
+            disabledbackground=THEME.panel_raised,
+            disabledforeground=THEME.muted,
+        )
 
     def _overlay_enabled(self, attr):
         key = OVERLAY_ENABLE_KEYS.get(attr)
@@ -635,8 +640,26 @@ class OverlayLayoutStudio:
             self.app._apply_overlay_mouse_passthrough()
         elif key in ("hud_compact_mode", "hud_crt_enabled", "hud_crt_motion_enabled"):
             self.app.update_hud()
+        elif key == "station_info_auto_hide_enabled":
+            self._apply_station_info_policy()
         self._refresh_overlay_options()
-        self.options_status_var.set(f"Saved {key.replace('_', ' ')} for this commander.")
+        if key == "station_info_auto_hide_enabled":
+            state = "enabled" if self.config.get(key, False) else "disabled; visible while docked"
+            self.options_status_var.set(f"Station Link auto-hide {state} for this commander.")
+        else:
+            self.options_status_var.set(f"Saved {key.replace('_', ' ')} for this commander.")
+
+    def _apply_station_info_policy(self):
+        """Apply Station Link visibility/timing immediately to the docked session."""
+        station_hud = getattr(self.app, "station_info_hud", None)
+        if station_hud is None:
+            return
+        if getattr(self.app, "current_docked", False) and getattr(
+            self.app, "current_station_name", None
+        ):
+            station_hud.on_docked(self.app)
+        else:
+            station_hud.hide()
 
     def save_overlay_options(self):
         try:
@@ -644,7 +667,7 @@ class OverlayLayoutStudio:
             prospector_timeout = max(5, int(float(self.prospector_timeout_var.get())))
             system_timeout = max(5, int(float(self.system_timeout_var.get())))
             gravity_timeout = max(5, int(float(self.gravity_timeout_var.get())))
-            station_timeout = max(0, int(float(self.station_timeout_var.get())))
+            station_timeout = max(5, int(float(self.station_timeout_var.get())))
             gravity_threshold = max(0.5, float(self.gravity_threshold_var.get()))
         except (TypeError, ValueError):
             messagebox.showerror(
@@ -664,9 +687,10 @@ class OverlayLayoutStudio:
         })
         save_config(self.config)
         self.app.update_hud()
+        self._apply_station_info_policy()
         self._refresh_overlay_options()
         self.options_status_var.set(
-            "Overlay settings saved. Text scale applies as overlay windows are reopened."
+            "Overlay settings saved. Station Link timing is active now; text scale applies as overlays reopen."
         )
 
     def _preview_resized(self, _event=None):
