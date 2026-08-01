@@ -75,10 +75,19 @@ CREATE TABLE IF NOT EXISTS trade_log(
     price INTEGER NOT NULL DEFAULT 0,
     total INTEGER NOT NULL DEFAULT 0,
     profit INTEGER,
-    PRIMARY KEY(ts, event, symbol, total)) WITHOUT ROWID;
+    profile_key TEXT NOT NULL DEFAULT '',
+    system_name TEXT,
+    station_name TEXT,
+    plan_kind TEXT,
+    plan_from TEXT,
+    plan_to TEXT,
+    expected_profit INTEGER,
+    PRIMARY KEY(profile_key, ts, event, symbol, total)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS balance_log(
-    ts INTEGER PRIMARY KEY,
-    balance INTEGER NOT NULL);
+    ts INTEGER NOT NULL,
+    balance INTEGER NOT NULL,
+    profile_key TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY(profile_key, ts)) WITHOUT ROWID;
 """
 
 _init_lock = threading.Lock()
@@ -88,6 +97,103 @@ _status_cache = None
 _status_cache_at = 0.0
 STATUS_CACHE_TTL_S = 30.0
 _swap_lock = threading.Lock()
+
+
+def _ensure_history_schema(conn):
+    """Add profile/route context to databases created by older releases."""
+    trade_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(trade_log)").fetchall()
+    }
+    additions = {
+        "profile_key": "TEXT NOT NULL DEFAULT ''",
+        "system_name": "TEXT",
+        "station_name": "TEXT",
+        "plan_kind": "TEXT",
+        "plan_from": "TEXT",
+        "plan_to": "TEXT",
+        "expected_profit": "INTEGER",
+    }
+    for name, declaration in additions.items():
+        if name not in trade_columns:
+            conn.execute(f"ALTER TABLE trade_log ADD COLUMN {name} {declaration}")
+    balance_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(balance_log)").fetchall()
+    }
+    if "profile_key" not in balance_columns:
+        conn.execute(
+            "ALTER TABLE balance_log ADD COLUMN profile_key TEXT NOT NULL DEFAULT ''"
+        )
+
+    trade_pk = [
+        row[1] for row in sorted(
+            conn.execute("PRAGMA table_info(trade_log)").fetchall(),
+            key=lambda row: row[5] or 999,
+        ) if row[5]
+    ]
+    if trade_pk != ["profile_key", "ts", "event", "symbol", "total"]:
+        conn.executescript(
+            """
+            CREATE TABLE trade_log_profiled(
+                ts INTEGER NOT NULL,
+                event TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                name TEXT,
+                count INTEGER NOT NULL DEFAULT 0,
+                price INTEGER NOT NULL DEFAULT 0,
+                total INTEGER NOT NULL DEFAULT 0,
+                profit INTEGER,
+                profile_key TEXT NOT NULL DEFAULT '',
+                system_name TEXT,
+                station_name TEXT,
+                plan_kind TEXT,
+                plan_from TEXT,
+                plan_to TEXT,
+                expected_profit INTEGER,
+                PRIMARY KEY(profile_key, ts, event, symbol, total)
+            ) WITHOUT ROWID;
+            INSERT OR IGNORE INTO trade_log_profiled(
+                ts, event, symbol, name, count, price, total, profit,
+                profile_key, system_name, station_name, plan_kind,
+                plan_from, plan_to, expected_profit
+            )
+            SELECT ts, event, symbol, name, count, price, total, profit,
+                   profile_key, system_name, station_name, plan_kind,
+                   plan_from, plan_to, expected_profit
+            FROM trade_log;
+            DROP TABLE trade_log;
+            ALTER TABLE trade_log_profiled RENAME TO trade_log;
+            """
+        )
+
+    balance_pk = [
+        row[1] for row in sorted(
+            conn.execute("PRAGMA table_info(balance_log)").fetchall(),
+            key=lambda row: row[5] or 999,
+        ) if row[5]
+    ]
+    if balance_pk != ["profile_key", "ts"]:
+        conn.executescript(
+            """
+            CREATE TABLE balance_log_profiled(
+                ts INTEGER NOT NULL,
+                balance INTEGER NOT NULL,
+                profile_key TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY(profile_key, ts)
+            ) WITHOUT ROWID;
+            INSERT OR REPLACE INTO balance_log_profiled(ts, balance, profile_key)
+            SELECT ts, balance, profile_key FROM balance_log;
+            DROP TABLE balance_log;
+            ALTER TABLE balance_log_profiled RENAME TO balance_log;
+            """
+        )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_trade_log_profile_ts "
+        "ON trade_log(profile_key, ts DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_balance_log_profile_ts "
+        "ON balance_log(profile_key, ts)"
+    )
 
 
 def connect(db_path=None):
@@ -103,11 +209,13 @@ def connect(db_path=None):
             if not _initialized:
                 conn.execute("PRAGMA journal_mode = WAL")
                 conn.executescript(SCHEMA)
+                _ensure_history_schema(conn)
                 conn.commit()
                 _initialized = True
     else:
         conn.execute("PRAGMA journal_mode = WAL")
         conn.executescript(SCHEMA)
+        _ensure_history_schema(conn)
         conn.commit()
     return conn
 
@@ -263,6 +371,8 @@ def swap_in(new_path):
 
 
 def _copy_into_live(build_db_path):
+    prepared = connect(build_db_path)
+    prepared.close()
     conn = connect()
     try:
         cur = conn.cursor()
@@ -288,40 +398,56 @@ def invalidate_status_cache():
         _status_cache_at = 0.0
 
 
-def log_trade(ts, event, symbol, name, count, price, total, profit=None):
+def log_trade(ts, event, symbol, name, count, price, total, profit=None,
+              profile_key=None, system_name=None, station_name=None,
+              plan_kind=None, plan_from=None, plan_to=None,
+              expected_profit=None):
     if not ts or not symbol:
         return
     conn = connect()
     try:
         conn.execute(
-            "INSERT OR IGNORE INTO trade_log(ts, event, symbol, name, count, price, total, profit)"
-            " VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
-            (int(ts), event, symbol, name, int(count or 0), int(price or 0), int(total or 0), profit),
+            "INSERT OR IGNORE INTO trade_log("
+            "ts, event, symbol, name, count, price, total, profit, profile_key, "
+            "system_name, station_name, plan_kind, plan_from, plan_to, expected_profit)"
+            " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                int(ts), event, symbol, name, int(count or 0),
+                int(price or 0), int(total or 0), profit,
+                str(profile_key or ""), system_name, station_name,
+                plan_kind, plan_from, plan_to, expected_profit,
+            ),
         )
         conn.commit()
     finally:
         conn.close()
 
 
-def log_balance(ts, balance):
+def log_balance(ts, balance, profile_key=None):
     if not ts or balance is None:
         return
     conn = connect()
     try:
-        conn.execute("INSERT OR REPLACE INTO balance_log(ts, balance) VALUES(?, ?)", (int(ts), int(balance)))
+        conn.execute(
+            "INSERT OR REPLACE INTO balance_log(ts, balance, profile_key) VALUES(?, ?, ?)",
+            (int(ts), int(balance), str(profile_key or "")),
+        )
         conn.commit()
     finally:
         conn.close()
 
 
-def trade_analytics(days=30):
+def trade_analytics(days=30, profile_key=None):
     days = max(1, min(365, int(days or 30)))
     now = now_epoch()
     since = now - days * 86400
+    profile = str(profile_key or "")
+    profile_sql = " AND profile_key = ?" if profile_key is not None else ""
     conn = connect()
     try:
         balance = conn.execute(
-            "SELECT ts, balance FROM balance_log WHERE ts >= ? ORDER BY ts", (since,)
+            f"SELECT ts, balance FROM balance_log WHERE ts >= ?{profile_sql} ORDER BY ts",
+            (since, profile) if profile_key is not None else (since,),
         ).fetchall()
         if len(balance) > 400:
             step = len(balance) // 400 + 1
@@ -330,22 +456,23 @@ def trade_analytics(days=30):
             """SELECT date(ts, 'unixepoch') AS d,
                       SUM(CASE WHEN event = 'sell' THEN COALESCE(profit, 0) ELSE 0 END),
                       SUM(CASE WHEN event = 'sell' THEN count ELSE 0 END)
-               FROM trade_log WHERE ts >= ? GROUP BY d ORDER BY d""",
-            (since,),
+               FROM trade_log WHERE ts >= ?""" + profile_sql + " GROUP BY d ORDER BY d",
+            (since, profile) if profile_key is not None else (since,),
         ).fetchall()
 
         def profit_since(cutoff):
             row = conn.execute(
                 "SELECT SUM(COALESCE(profit, 0)), SUM(count), COUNT(*) FROM trade_log"
-                " WHERE event = 'sell' AND ts >= ?", (cutoff,)
+                " WHERE event = 'sell' AND ts >= ?" + profile_sql,
+                (cutoff, profile) if profile_key is not None else (cutoff,),
             ).fetchone()
             return {"profit": row[0] or 0, "tons": row[1] or 0, "sales": row[2] or 0}
 
         top = conn.execute(
             """SELECT symbol, name, SUM(COALESCE(profit, 0)) AS p, SUM(count) AS c
-               FROM trade_log WHERE event = 'sell' AND ts >= ?
+               FROM trade_log WHERE event = 'sell' AND ts >= ?""" + profile_sql + """
                GROUP BY symbol, name ORDER BY p DESC LIMIT 12""",
-            (since,),
+            (since, profile) if profile_key is not None else (since,),
         ).fetchall()
         day_start = now - (now % 86400)
         return {
@@ -360,15 +487,18 @@ def trade_analytics(days=30):
         conn.close()
 
 
-def recent_trades(limit=20):
+def recent_trades(limit=20, profile_key=None):
     """Return a small newest-first transaction history for Trade Assist."""
-    limit = max(1, min(100, int(limit or 20)))
+    limit = max(1, min(500, int(limit or 20)))
+    profile = str(profile_key or "")
+    profile_sql = " WHERE profile_key = ?" if profile_key is not None else ""
     conn = connect()
     try:
         rows = conn.execute(
-            "SELECT ts, event, symbol, name, count, price, total, profit "
-            "FROM trade_log ORDER BY ts DESC LIMIT ?",
-            (limit,),
+            "SELECT ts, event, symbol, name, count, price, total, profit, "
+            "system_name, station_name, plan_kind, plan_from, plan_to, expected_profit "
+            f"FROM trade_log{profile_sql} ORDER BY ts DESC LIMIT ?",
+            (profile, limit) if profile_key is not None else (limit,),
         ).fetchall()
         return [
             {
@@ -380,9 +510,75 @@ def recent_trades(limit=20):
                 "price": price,
                 "total": total,
                 "profit": profit,
+                "system": system_name,
+                "station": station_name,
+                "plan_kind": plan_kind,
+                "plan_from": plan_from,
+                "plan_to": plan_to,
+                "expected_profit": expected_profit,
             }
-            for ts, event, symbol, name, count, price, total, profit in rows
+            for (
+                ts, event, symbol, name, count, price, total, profit,
+                system_name, station_name, plan_kind, plan_from, plan_to,
+                expected_profit,
+            ) in rows
         ]
+    finally:
+        conn.close()
+
+
+def claim_unassigned_history(profile_key):
+    """Assign pre-profile trade history to the commander active at upgrade."""
+    profile = str(profile_key or "").strip()
+    if not profile:
+        return 0
+    conn = connect()
+    try:
+        trade = conn.execute(
+            "UPDATE trade_log SET profile_key = ? WHERE profile_key = ''", (profile,)
+        ).rowcount
+        balance = conn.execute(
+            "UPDATE balance_log SET profile_key = ? WHERE profile_key = ''", (profile,)
+        ).rowcount
+        conn.commit()
+        return max(0, int(trade or 0)) + max(0, int(balance or 0))
+    finally:
+        conn.close()
+
+
+def prune_trade_history(retention_days, profile_key=None, now=None):
+    """Delete transaction rows older than the selected retention window."""
+    days = max(1, int(retention_days or 1))
+    cutoff = int(now or now_epoch()) - days * 86400
+    conn = connect()
+    try:
+        if profile_key is None:
+            cursor = conn.execute("DELETE FROM trade_log WHERE ts < ?", (cutoff,))
+        else:
+            cursor = conn.execute(
+                "DELETE FROM trade_log WHERE profile_key = ? AND ts < ?",
+                (str(profile_key or ""), cutoff),
+            )
+        conn.commit()
+        return max(0, int(cursor.rowcount or 0))
+    finally:
+        conn.close()
+
+
+def trade_history_stats(profile_key=None):
+    profile = str(profile_key or "")
+    profile_sql = " WHERE profile_key = ?" if profile_key is not None else ""
+    conn = connect()
+    try:
+        row = conn.execute(
+            f"SELECT COUNT(*), MIN(ts), MAX(ts) FROM trade_log{profile_sql}",
+            (profile,) if profile_key is not None else (),
+        ).fetchone()
+        return {
+            "count": int((row or (0,))[0] or 0),
+            "oldest": (row or (None, None))[1],
+            "newest": (row or (None, None, None))[2],
+        }
     finally:
         conn.close()
 

@@ -27,6 +27,7 @@ STATUS_TTL_S = 5 * 60
 REPORT_TTL_S = 60 * 60
 MAX_CACHE_ENTRIES = 96
 MAX_NEARBY_ROWS = 250
+MAX_STATION_MATCHES = 200
 
 
 class ArdentError(RuntimeError):
@@ -70,10 +71,11 @@ def _remember(key, value, ttl_s):
             _cache.popitem(last=False)
 
 
-def _request(path, params=None, *, ttl_s=CACHE_TTL_S, force=False, row_limit=None):
+def _request(path, params=None, *, ttl_s=CACHE_TTL_S, force=False, row_limit=None,
+             cache_result=True):
     global _cache_misses, _last_success_at, _last_error
     key = _cache_key(path, params)
-    if not force:
+    if cache_result and not force:
         value = _cached(key)
         if value is not None:
             return value
@@ -97,10 +99,14 @@ def _request(path, params=None, *, ttl_s=CACHE_TTL_S, force=False, row_limit=Non
         raise ArdentError(message) from exc
     except requests.RequestException as exc:
         status = getattr(getattr(exc, "response", None), "status_code", None)
-        message = (
-            f"Online market service returned HTTP {status}."
-            if status else "Online market service is unavailable; check the internet connection."
-        )
+        if status == 404:
+            message = "No online market data was found for that system or station."
+        elif status == 429:
+            message = "Online market service is busy; wait a moment and try again."
+        elif status:
+            message = f"Online market service returned HTTP {status}."
+        else:
+            message = "Online market service is unavailable; check the internet connection."
         with _lock:
             _last_error = message
         raise ArdentError(message) from exc
@@ -113,7 +119,8 @@ def _request(path, params=None, *, ttl_s=CACHE_TTL_S, force=False, row_limit=Non
     with _lock:
         _last_success_at = int(time.time())
         _last_error = None
-    _remember(key, value, ttl_s)
+    if cache_result:
+        _remember(key, value, ttl_s)
     return value
 
 
@@ -145,6 +152,53 @@ def commodities_report():
     if not isinstance(payload, list):
         raise ArdentError("Online market service returned an invalid commodity catalogue.")
     return payload
+
+
+def search_stations(station_name):
+    query = str(station_name or "").strip()
+    if not query:
+        return []
+    payload = _request(
+        f"/search/station/name/{quote(query, safe='')}",
+        row_limit=MAX_STATION_MATCHES,
+    )
+    if not isinstance(payload, list):
+        raise ArdentError("Online market service returned an invalid station search.")
+    return payload
+
+
+def market_commodities(system, market_id=None):
+    """Return one market's commodity rows without retaining the large system payload."""
+    system_name = str(system or "").strip()
+    if not system_name:
+        raise ArdentError("Start system is missing.")
+    try:
+        wanted_market = int(market_id) if market_id is not None else None
+    except (TypeError, ValueError) as exc:
+        raise ArdentError("The selected station has no valid market ID.") from exc
+
+    filtered_key = _cache_key(
+        f"/market-source/{quote(system_name, safe='')}/{wanted_market or 'auto'}", None,
+    )
+    cached = _cached(filtered_key)
+    if cached is not None:
+        return cached
+
+    payload = _request(
+        f"/system/name/{quote(system_name, safe='')}/commodities",
+        cache_result=False,
+    )
+    if not isinstance(payload, list):
+        raise ArdentError("Online market service returned invalid station commodity data.")
+    rows = [
+        row for row in payload
+        if isinstance(row, dict)
+        and row.get("marketId") is not None
+        and (wanted_market is None or str(row.get("marketId")) == str(wanted_market))
+    ]
+    if wanted_market is not None:
+        _remember(filtered_key, rows, CACHE_TTL_S)
+    return rows
 
 
 def _nearby(system, commodity, direction, *, min_volume=1, min_price=None,

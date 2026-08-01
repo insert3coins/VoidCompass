@@ -22,6 +22,7 @@ OVERLAY_HOTKEY_SPECS = (
     ("system_info", "overlay_hotkey_system_info", "System Info", "system_info_hud"),
     ("station_info", "overlay_hotkey_station_info", "Station Info", "station_info_hud"),
     ("cargo", "overlay_hotkey_cargo", "Cargo Manifest", "cargo_hud"),
+    ("trade", "overlay_hotkey_trade", "Trade Route", "trade_hud"),
     ("carrier", "overlay_hotkey_carrier", "Fleet Carrier", "carrier_hud"),
     ("prospector", "overlay_hotkey_prospector", "Prospector Results", "prospector_hud"),
     ("colony", "overlay_hotkey_colony", "Colony Shopping", "colony_overlay"),

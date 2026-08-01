@@ -27,6 +27,7 @@ from version import APP_VERSION
 import bio_values
 from hud import TacticalHUD
 from cargo_hud import CargoHUD
+from trade_hud import TradeHUD
 from carrier_hud import CarrierHUD
 from edsm_handler import EDSMHandler
 from screenshot_handler import ScreenshotHandler
@@ -149,6 +150,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     _OVERLAY_POSITION_SPECS = (
         ("hud", "hud_x", "hud_y"),
         ("cargo_hud", "cargo_hud_x", "cargo_hud_y"),
+        ("trade_hud", "trade_hud_x", "trade_hud_y"),
         ("carrier_hud", "carrier_hud_x", "carrier_hud_y"),
         ("prospector_hud", "prospector_hud_x", "prospector_hud_y"),
         ("system_info_hud", "system_info_hud_x", "system_info_hud_y"),
@@ -469,6 +471,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         success = True
         for attr in (
             "cargo_hud",
+            "trade_hud",
             "carrier_hud",
             "system_info_hud",
             "station_info_hud",
@@ -587,7 +590,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             pass
 
         for attr in (
-            "hud", "cargo_hud", "carrier_hud", "prospector_hud",
+            "hud", "cargo_hud", "trade_hud", "carrier_hud", "prospector_hud",
             "system_info_hud", "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "heartbeat_hud", "colony_overlay",
         ):
@@ -1257,6 +1260,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         ).start()
         self._persist_config()
         self._apply_runtime_feature_toggles()
+        self._schedule_trade_history_maintenance()
         self._configure_overlay_hotkeys(announce=False)
         self._apply_navigation_group_state()
         self.show_dashboard_page()
@@ -1642,6 +1646,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         else:
             self.cargo_hud = None
 
+        if self.config.get("trade_overlay_enabled", False):
+            self.trade_hud = TradeHUD(self.root, self.config, self._trade_hud_snapshot)
+        else:
+            self.trade_hud = None
+
         if self.config.get("carrier_overlay_enabled", False):
             self.carrier_hud = CarrierHUD(self.root, self.config, self.carrier_tracker)
         else:
@@ -1745,9 +1754,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         # journal worker begins its potentially large startup replay.
         self.root.after(75, self.watcher.start)
         self._start_trade_live_services()
+        self._schedule_trade_history_maintenance()
         self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
-        if self.colony_overlay:
-            self.colony_overlay.update()
+        self._refresh_cargo_consumers()
 
         self.watcher.force_check_nav()
         self.watcher.force_check_status()
@@ -3096,6 +3105,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.cargo_hud.win.destroy()
             self.cargo_hud = None
 
+        if self.config.get("trade_overlay_enabled", False):
+            if self.trade_hud is None:
+                self.trade_hud = TradeHUD(
+                    self.root, self.config, self._trade_hud_snapshot,
+                )
+            self.trade_hud.update(force=True)
+            try:
+                self.trade_hud.win.deiconify()
+                self.trade_hud.win.attributes("-topmost", True)
+                self.trade_hud.win.lift()
+            except Exception:
+                pass
+        elif self.trade_hud:
+            self.trade_hud.destroy()
+            self.trade_hud = None
+
         if self.config.get("carrier_overlay_enabled", False):
             if self.carrier_hud is None:
                 self.carrier_hud = CarrierHUD(self.root, self.config, self.carrier_tracker)
@@ -3971,17 +3996,47 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if balance is None:
             return
         ts = trade_marketdb.parse_update_time(timestamp) or trade_marketdb.now_epoch()
+        profile_key = get_active_profile(self.config)
 
         def worker():
             try:
-                trade_marketdb.log_balance(ts, balance)
+                trade_marketdb.log_balance(ts, balance, profile_key=profile_key)
                 window = getattr(self, "analytics_window", None)
                 if window and window.is_open() and getattr(self, "_active_page", None) == "ANALYTICS":
                     self._ui_post(window.request_refresh, key="analytics-refresh")
+                trade_window = getattr(self, "trade_window", None)
+                if trade_window and trade_window.is_open():
+                    self._ui_post(
+                        trade_window.refresh_trade_log, key="trade-log-refresh",
+                    )
             except Exception:
                 pass
 
         threading.Thread(target=worker, name="trade-balance-log", daemon=True).start()
+
+    def _schedule_trade_history_maintenance(self):
+        profile_key = get_active_profile(self.config)
+        enabled = bool(self.config.get("trade_log_auto_prune_enabled", True))
+        try:
+            retention_days = max(
+                1, int(self.config.get("trade_log_retention_days", 180) or 180),
+            )
+        except (TypeError, ValueError):
+            retention_days = 180
+
+        def worker():
+            try:
+                trade_marketdb.claim_unassigned_history(profile_key)
+                if enabled:
+                    trade_marketdb.prune_trade_history(
+                        retention_days, profile_key=profile_key,
+                    )
+            except Exception as exc:
+                logging.debug("Trade history maintenance skipped: %s", exc)
+
+        threading.Thread(
+            target=worker, name="trade-history-maintenance", daemon=True,
+        ).start()
 
     def _set_commander_balance(self, balance, loan=None, timestamp=None, log=True):
         try:
@@ -4622,7 +4677,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         """Share a verified Trade Command result with the working brain."""
         self.trade_plan_context = dict(plan or {}) or None
         if self.trade_plan_context:
+            session = getattr(self, "trade_session", {}) or {}
             self.trade_plan_context["_created_at"] = time.time()
+            self.trade_plan_context["_session_profit_start"] = int(session.get("profit") or 0)
+            self.trade_plan_context["_session_transactions_start"] = int(
+                session.get("transactions") or 0
+            )
+            self.trade_plan_context["_session_bought_start"] = int(
+                session.get("bought_units") or 0
+            )
+            self.trade_plan_context["_session_sold_start"] = int(
+                session.get("sold_units") or 0
+            )
         self._refresh_cockpit_brain(
             purpose="trade-route",
             event=(
@@ -4633,6 +4699,104 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._publish_cockpit_ai_changes()
         if self.trade_plan_context:
             self._pulse_cockpit_ai()
+        trade_hud = getattr(self, "trade_hud", None)
+        if trade_hud is not None:
+            try:
+                trade_hud.update(force=True)
+            except Exception:
+                pass
+
+    def _trade_hud_snapshot(self):
+        """Return live, profile-local route progress for the Trade HUD."""
+        plan = dict(getattr(self, "trade_plan_context", None) or {})
+        session = getattr(self, "trade_session", {}) or {}
+        cargo_tons = int(getattr(self, "current_cargo_tons", 0) or 0)
+        bought = max(
+            0, int(session.get("bought_units") or 0)
+            - int(plan.get("_session_bought_start") or 0),
+        ) if plan else 0
+        sold = max(
+            0, int(session.get("sold_units") or 0)
+            - int(plan.get("_session_sold_start") or 0),
+        ) if plan else 0
+        transactions = max(
+            0, int(session.get("transactions") or 0)
+            - int(plan.get("_session_transactions_start") or 0),
+        ) if plan else 0
+        realized = (
+            int(session.get("profit") or 0)
+            - int(plan.get("_session_profit_start") or 0)
+        ) if plan else 0
+        inventory_counts = {}
+        for item in getattr(self, "current_cargo_inventory", []) or []:
+            if not isinstance(item, dict):
+                continue
+            symbol = trade_marketdb.clean_commodity_symbol(
+                item.get("Name") or item.get("Name_Localised")
+            )
+            if symbol:
+                inventory_counts[symbol] = inventory_counts.get(symbol, 0) + int(
+                    item.get("Count") or 0
+                )
+        outbound_symbol = trade_marketdb.clean_commodity_symbol(
+            plan.get("symbol") or plan.get("commodity")
+        )
+        return_symbol = trade_marketdb.clean_commodity_symbol(
+            plan.get("return_symbol") or plan.get("return_commodity")
+        )
+        outbound_aboard = int(inventory_counts.get(outbound_symbol, 0))
+        return_aboard = int(inventory_counts.get(return_symbol, 0))
+
+        stage, stage_index = "WAITING FOR ROUTE", 0
+        if plan:
+            is_loop = plan.get("kind") == "round-trip"
+            outbound_units = max(1, int(plan.get("units") or 1))
+            return_units = max(1, int(plan.get("return_units") or outbound_units))
+            current = str(getattr(self, "current_sys", None) or "").casefold()
+            source = str(plan.get("from_system") or "").casefold()
+            destination = str(plan.get("to_system") or "").casefold()
+            if is_loop:
+                if sold >= outbound_units + return_units:
+                    stage, stage_index = "ROUND TRIP COMPLETE", 4
+                elif (
+                    sold >= outbound_units
+                    and (bought >= outbound_units + return_units or return_aboard > 0)
+                ):
+                    stage, stage_index = "RETURNING TO ORIGIN", 3
+                elif sold >= outbound_units:
+                    stage, stage_index = "LOAD RETURN CARGO", 2
+                elif bought > 0 or outbound_aboard > 0:
+                    stage, stage_index = "DELIVER OUTBOUND", 1
+                else:
+                    stage, stage_index = "LOAD OUTBOUND CARGO", 0
+            elif sold >= outbound_units:
+                stage, stage_index = "TRADE COMPLETE", 4
+            elif bought > 0 or outbound_aboard > 0:
+                stage, stage_index = "DELIVER CARGO", 2
+            else:
+                stage, stage_index = "LOAD CARGO", 0
+
+            if stage_index < 4 and current:
+                if current == destination and (not is_loop or sold < outbound_units):
+                    stage = "AT DESTINATION · SELL CARGO"
+                elif is_loop and sold >= outbound_units and current == destination:
+                    stage = "AT DESTINATION · LOAD RETURN"
+                elif current == source and not bought:
+                    stage = "AT ORIGIN · LOAD CARGO"
+                elif is_loop and current == source and sold >= outbound_units:
+                    stage = "AT ORIGIN · SELL RETURN"
+
+        return {
+            "plan": plan,
+            "stage": stage,
+            "stage_index": stage_index,
+            "transactions": transactions,
+            "realized_profit": realized,
+            "current_system": getattr(self, "current_sys", None),
+            "current_station": getattr(self, "current_station_name", None),
+            "cargo_tons": cargo_tons,
+            "cargo_capacity": int(getattr(self, "cargo_capacity", 0) or 0),
+        }
 
     def _refresh_cockpit_brain(self, purpose=None, event=None, gameplay=None):
         """Persist and return Compass's compact verified working state."""
@@ -5911,8 +6075,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.cmdr_ship, ev, raw
             )
             self.watcher.force_check_cargo()
-            if self.colony_overlay:
-                self.colony_overlay.update()
+            self._refresh_cargo_consumers()
             self._queue_edsm_upload(raw, allow_startup=True)
             self._refresh_commander_profile_window()
 
@@ -5924,6 +6087,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.cargo_capacity = 0
                 self.fuel_capacity_main = None
                 self._low_fuel_warned = False
+                self.watcher.force_check_cargo()
+                self._refresh_cargo_consumers()
             if ship_changed:
                 self._refresh_commander_profile_window()
 
@@ -7886,6 +8051,28 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if window and window.is_open() and getattr(self, "_active_page", None) == "SPECIALISTS":
             self._ui_post(window.refresh, key="specialists-refresh")
 
+    def _refresh_cargo_consumers(self):
+        """Publish inventory and hold capacity as one live ship snapshot."""
+        if self.cargo_hud:
+            cargo_hud = self.cargo_hud
+            inventory = list(self.current_cargo_inventory)
+            capacity = self.cargo_capacity
+            self._ui_post(
+                lambda hud=cargo_hud, inv=inventory, cap=capacity: hud.update(inv, cap),
+                key="cargo-hud",
+            )
+        if self.colony_overlay:
+            colony_overlay = self.colony_overlay
+            self._ui_post(colony_overlay.update, key="colony-overlay")
+        if self.trade_window and self.trade_window.is_open():
+            trade_window = self.trade_window
+            self._ui_post(trade_window.on_cargo_updated, key="trade-cargo-refresh")
+        if self.trade_hud:
+            trade_hud = self.trade_hud
+            self._ui_post(
+                lambda hud=trade_hud: hud.update(force=True), key="trade-hud-refresh",
+            )
+
     def update_cargo(self, inventory, vessel="Ship"):
         self.last_cargo_event_ts = time.time()
         self.current_cargo_inventory = list(inventory or [])
@@ -7901,12 +8088,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             for item in self.current_cargo_inventory
             if isinstance(item, dict)
         )
-        if self.cargo_hud:
-            inv = list(self.current_cargo_inventory)
-            cap = self.cargo_capacity
-            self._ui_post(lambda: self.cargo_hud.update(inv, cap), key="cargo-hud")
-        if self.colony_overlay:
-            self._ui_post(self.colony_overlay.update, key="colony-overlay")
+        self._refresh_cargo_consumers()
         self._sync_cockpit_intentions()
         self._refresh_commander_profile_window()
 
@@ -7971,10 +8153,28 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         symbol = trade_marketdb.clean_commodity_symbol(data.get("Type") or commodity)
         log_event = "buy" if ev == "MarketBuy" else "sell"
         profit = event["profit"] if ev == "MarketSell" else None
+        profile_key = get_active_profile(self.config)
+        system_name = getattr(self, "current_sys", None)
+        station_name = getattr(self, "current_station_name", None)
+        plan = dict(getattr(self, "trade_plan_context", None) or {})
+        plan_from = " / ".join(
+            str(value) for value in (plan.get("from_station"), plan.get("from_system"))
+            if value
+        ) or None
+        plan_to = " / ".join(
+            str(value) for value in (plan.get("to_station"), plan.get("to_system"))
+            if value
+        ) or None
 
         def worker():
             try:
-                trade_marketdb.log_trade(ts, log_event, symbol, commodity, count, price, total, profit)
+                trade_marketdb.log_trade(
+                    ts, log_event, symbol, commodity, count, price, total, profit,
+                    profile_key=profile_key, system_name=system_name,
+                    station_name=station_name, plan_kind=plan.get("kind"),
+                    plan_from=plan_from, plan_to=plan_to,
+                    expected_profit=plan.get("profit_cr"),
+                )
                 window = getattr(self, "analytics_window", None)
                 if window and window.is_open() and getattr(self, "_active_page", None) == "ANALYTICS":
                     self._ui_post(window.request_refresh, key="analytics-refresh")
@@ -7985,6 +8185,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.trade_window and self.trade_window.is_open():
             self._ui_post(self.trade_window.refresh_session, key="trade-session")
             self._ui_post(self.trade_window.refresh_analytics, key="trade-analytics-refresh")
+        if self.trade_hud:
+            trade_hud = self.trade_hud
+            self._ui_post(
+                lambda hud=trade_hud: hud.update(force=True), key="trade-hud-refresh",
+            )
 
     def _market_import_context(self, data):
         return {

@@ -245,7 +245,7 @@ class AnalyticsWindow(ThemedWindowMixin):
 
         def worker():
             try:
-                data = marketdb.trade_analytics(days)
+                data = marketdb.trade_analytics(days, profile_key=profile)
                 self._post_ui(
                     lambda: self._render_history(data, days, request_id, profile),
                     key="analytics-history",
