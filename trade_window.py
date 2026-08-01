@@ -31,6 +31,14 @@ COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
 COLOR_TEXT = THEME.text
 
+RANK_OPTIONS = (
+    "Profit / trip",
+    "Profit / hour",
+    "Shortest travel",
+    "Freshest quotes",
+)
+RESULT_COUNTS = ("3", "10", "25")
+
 
 class TradeWindow(ThemedWindowMixin):
     """One-page Trade Assist: sell cargo, find one trade, or inspect the run."""
@@ -46,6 +54,8 @@ class TradeWindow(ThemedWindowMixin):
         self._history_loading = False
         self._current_view = "run"
         self._last_session_signature = None
+        self._last_cargo_signature = None
+        self._cargo_refresh_pending = False
         self.result_rows = {}
 
         saved = self.config.get("trade_route_form")
@@ -56,8 +66,32 @@ class TradeWindow(ThemedWindowMixin):
         self.include_carriers_var = tk.BooleanVar(
             value=bool(self._saved_filters.get("include_carriers", False))
         )
+        self.orbital_only_var = tk.BooleanVar(
+            value=bool(self._saved_filters.get("orbital_only", False))
+        )
+        self.full_load_var = tk.BooleanVar(
+            value=bool(self._saved_filters.get("full_load", False))
+        )
+        self.round_trip_var = tk.BooleanVar(
+            value=bool(self._saved_filters.get("round_trip", False))
+        )
+        saved_rank = str(self._saved_filters.get("rank", RANK_OPTIONS[0]))
+        self.rank_var = tk.StringVar(
+            value=saved_rank if saved_rank in RANK_OPTIONS else RANK_OPTIONS[0]
+        )
+        saved_count = str(self._saved_filters.get("result_count", RESULT_COUNTS[0]))
+        self.result_count_var = tk.StringVar(
+            value=saved_count if saved_count in RESULT_COUNTS else RESULT_COUNTS[0]
+        )
         self.eddn_upload_var = tk.BooleanVar(
             value=bool(self.config.get("trade_eddn_upload_enabled", True))
+        )
+        self.trade_log_auto_prune_var = tk.BooleanVar(
+            value=bool(self.config.get("trade_log_auto_prune_enabled", True))
+        )
+        saved_retention = str(self.config.get("trade_log_retention_days", 180))
+        self.trade_log_retention_var = tk.StringVar(
+            value=saved_retention if saved_retention in ("30", "90", "180", "365") else "180"
         )
 
         self.win = window_surface(root, embedded=self.embedded)
@@ -92,6 +126,11 @@ class TradeWindow(ThemedWindowMixin):
     def on_shown(self):
         self._refresh_summary()
         self.refresh_session()
+        if self._current_view == "log":
+            self.refresh_trade_log()
+        if self._cargo_refresh_pending and self._current_view == "cargo":
+            self._cargo_refresh_pending = False
+            self.find_cargo_buyers()
         self.refresh_status()
         self._schedule_live_poll()
 
@@ -178,24 +217,30 @@ class TradeWindow(ThemedWindowMixin):
 
         action_row = tk.Frame(self.win, bg=self.UI_BG)
         action_row.pack(fill=tk.X, padx=10, pady=(9, 0))
-        for column in range(3):
+        for column in range(4):
             action_row.grid_columnconfigure(column, weight=1, uniform="trade-actions")
         self._action_card(
             action_row, 0, "SELL MY CARGO",
-            "Find the best nearby buyer for the tradeable cargo aboard.",
-            self.find_cargo_buyers, self.UI_OK,
+            "Find buyers around the selected start system for cargo aboard.",
+            self.find_cargo_buyers, self.UI_OK, "FIND BUYERS",
         )
         self._action_card(
             action_row, 1, "FIND A TRADE",
-            "Show three profitable departures from the current station.",
-            self.find_trade, COLOR_ACCENT,
+            "Plan from the selected station with an empty or available hold.",
+            self.find_trade, COLOR_ACCENT, "FIND NOW",
         )
         self._action_card(
             action_row, 2, "CURRENT RUN",
             "Review the active destination, transactions and real profit.",
-            self.show_current_run, COLOR_ORANGE,
+            self.show_current_run, COLOR_ORANGE, "OPEN",
+        )
+        self._action_card(
+            action_row, 3, "TRADE LOG",
+            "Review profile-local journal buys, sales and route context.",
+            self.show_trade_log, self.UI_MUTED, "HISTORY",
         )
 
+        self._build_origin()
         self._build_filters()
         self._build_results()
         self._build_market_link()
@@ -214,7 +259,7 @@ class TradeWindow(ThemedWindowMixin):
         widget.pack(fill=tk.X)
         return widget
 
-    def _action_card(self, parent, column, title, description, command, colour):
+    def _action_card(self, parent, column, title, description, command, colour, action_text="GO"):
         card = tk.Frame(
             parent, bg=self.UI_PANEL,
             highlightbackground=self.UI_BORDER, highlightthickness=1,
@@ -227,10 +272,48 @@ class TradeWindow(ThemedWindowMixin):
         ).pack(fill=tk.X, padx=11, pady=(9, 2))
         tk.Label(
             card, text=description, fg=self.UI_MUTED, bg=self.UI_PANEL,
-            font=("Segoe UI", 8), anchor="w",
+            font=("Segoe UI", 8), anchor="w", justify=tk.LEFT, wraplength=215,
         ).pack(fill=tk.X, padx=11)
-        button(card, "GO", command, accent=(column == 0)).pack(
+        button(card, action_text, command, accent=(column == 0)).pack(
             anchor="w", padx=11, pady=(8, 10)
+        )
+
+    def _build_origin(self):
+        panel = tk.Frame(
+            self.win, bg=self.UI_PANEL,
+            highlightbackground=self.UI_BORDER, highlightthickness=1,
+        )
+        panel.pack(fill=tk.X, padx=10, pady=(9, 0))
+        tk.Label(
+            panel, text="START FROM", fg=COLOR_ORANGE, bg=self.UI_PANEL,
+            font=("Segoe UI", 8, "bold"),
+        ).pack(side=tk.LEFT, padx=(11, 10), pady=9)
+        self.origin_entries = {}
+        for key, label, width in (
+            ("origin_system", "SYSTEM", 27),
+            ("origin_station", "STATION · BLANK = AUTO", 30),
+        ):
+            box = tk.Frame(panel, bg=self.UI_PANEL)
+            box.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 9), pady=5)
+            tk.Label(
+                box, text=label, fg=self.UI_DIM, bg=self.UI_PANEL,
+                font=("Segoe UI", 6, "bold"),
+            ).pack(anchor="w")
+            entry = tk.Entry(
+                box, width=width, bg=self.UI_PANEL_2, fg=COLOR_TEXT,
+                insertbackground=COLOR_ACCENT, relief=tk.FLAT,
+                highlightthickness=1, highlightbackground=self.UI_BORDER,
+                highlightcolor=COLOR_ACCENT,
+            )
+            entry.pack(fill=tk.X)
+            entry.bind("<FocusOut>", lambda _event: self._save_filters())
+            entry.bind("<Return>", lambda _event: self.find_trade())
+            self.origin_entries[key] = entry
+        button(panel, "USE CURRENT", self._use_current_origin).pack(
+            side=tk.LEFT, padx=(0, 6), pady=(13, 5),
+        )
+        button(panel, "FIND NOW", self.find_trade, accent=True).pack(
+            side=tk.LEFT, padx=(0, 9), pady=(13, 5),
         )
 
     def _build_filters(self):
@@ -239,18 +322,21 @@ class TradeWindow(ThemedWindowMixin):
             highlightbackground=self.UI_BORDER, highlightthickness=1,
         )
         panel.pack(fill=tk.X, padx=10, pady=(9, 0))
+        top = tk.Frame(panel, bg=self.UI_PANEL)
+        top.pack(fill=tk.X, padx=10, pady=(4, 0))
         tk.Label(
-            panel, text="QUICK FILTERS", fg=COLOR_ORANGE, bg=self.UI_PANEL,
+            top, text="QUICK FILTERS", fg=COLOR_ORANGE, bg=self.UI_PANEL,
             font=("Segoe UI", 8, "bold"),
-        ).pack(side=tk.LEFT, padx=(11, 8), pady=8)
+        ).pack(side=tk.LEFT, padx=(0, 8), pady=8)
         self.filter_entries = {}
         for key, label, width in (
-            ("radius", "SEARCH LY", 7),
-            ("max_ls", "MAX LS", 7),
+            ("radius", "RANGE LY", 7),
+            ("max_ls", "MAX ARRIVAL LS", 9),
             ("age", "AGE DAYS", 7),
             ("min_profit", "MIN CR/T", 8),
+            ("cargo_override", "LOAD T · AUTO", 8),
         ):
-            box = tk.Frame(panel, bg=self.UI_PANEL)
+            box = tk.Frame(top, bg=self.UI_PANEL)
             box.pack(side=tk.LEFT, padx=(0, 8), pady=5)
             tk.Label(
                 box, text=label, fg=self.UI_DIM, bg=self.UI_PANEL,
@@ -266,16 +352,38 @@ class TradeWindow(ThemedWindowMixin):
             entry.bind("<FocusOut>", lambda _event: self._save_filters())
             entry.bind("<Return>", lambda _event: self._save_filters())
             self.filter_entries[key] = entry
-        self._checkbutton(panel, "Large pad", self.large_pad_var).pack(
-            side=tk.LEFT, padx=(4, 0), pady=(13, 5)
-        )
-        self._checkbutton(panel, "Carriers", self.include_carriers_var).pack(
-            side=tk.LEFT, padx=(4, 0), pady=(13, 5)
-        )
         tk.Label(
-            panel, text="Cargo, capital and jump range come from the live ship.",
+            top, text="Blank load uses live free hold.",
             fg=self.UI_DIM, bg=self.UI_PANEL, font=("Segoe UI", 7),
         ).pack(side=tk.RIGHT, padx=11)
+
+        bottom = tk.Frame(panel, bg=self.UI_PANEL)
+        bottom.pack(fill=tk.X, padx=10, pady=(0, 5))
+        for label, variable in (
+            ("Large pad", self.large_pad_var),
+            ("Carriers", self.include_carriers_var),
+            ("Orbital only", self.orbital_only_var),
+            ("Full load", self.full_load_var),
+            ("Round trip", self.round_trip_var),
+        ):
+            self._checkbutton(
+                bottom, label, variable, self._save_filters,
+            ).pack(side=tk.LEFT, padx=(0, 7), pady=4)
+
+        for label, variable, values, width in (
+            ("RANK", self.rank_var, RANK_OPTIONS, 16),
+            ("RESULTS", self.result_count_var, RESULT_COUNTS, 4),
+        ):
+            tk.Label(
+                bottom, text=label, fg=self.UI_DIM, bg=self.UI_PANEL,
+                font=("Segoe UI", 6, "bold"),
+            ).pack(side=tk.LEFT, padx=(8, 4))
+            combo = ttk.Combobox(
+                bottom, textvariable=variable, values=values,
+                state="readonly", width=width,
+            )
+            combo.pack(side=tk.LEFT, pady=4)
+            combo.bind("<<ComboboxSelected>>", lambda _event: self._save_filters())
 
     def _checkbutton(self, parent, text, variable, command=None):
         return tk.Checkbutton(
@@ -356,17 +464,46 @@ class TradeWindow(ThemedWindowMixin):
     def _build_market_link(self):
         panel = tk.Frame(self.win, bg=self.UI_PANEL)
         panel.pack(fill=tk.X, padx=10, pady=(7, 8))
+        market_row = tk.Frame(panel, bg=self.UI_PANEL)
+        market_row.pack(fill=tk.X)
         self.market_link_status = tk.Label(
-            panel, text="ONLINE MARKET · CHECKING", fg=self.UI_MUTED,
+            market_row, text="ONLINE MARKET · CHECKING", fg=self.UI_MUTED,
             bg=self.UI_PANEL, font=("Consolas", 8, "bold"), anchor="w",
         )
         self.market_link_status.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(9, 6), pady=6)
         self._checkbutton(
-            panel, "Upload visited markets to EDDN", self.eddn_upload_var,
+            market_row, "Upload visited markets to EDDN", self.eddn_upload_var,
             self._toggle_eddn_upload,
         ).pack(side=tk.LEFT, padx=(4, 8))
-        button(panel, "REFRESH", lambda: self.refresh_status(force=True)).pack(
+        button(market_row, "REFRESH", lambda: self.refresh_status(force=True)).pack(
             side=tk.LEFT, padx=(0, 7), pady=4,
+        )
+
+        history_row = tk.Frame(panel, bg=self.UI_PANEL)
+        history_row.pack(fill=tk.X, padx=9, pady=(0, 6))
+        self._checkbutton(
+            history_row, "Auto-prune trade log", self.trade_log_auto_prune_var,
+            self._save_trade_log_settings,
+        ).pack(side=tk.LEFT)
+        tk.Label(
+            history_row, text="KEEP", fg=self.UI_DIM, bg=self.UI_PANEL,
+            font=("Segoe UI", 6, "bold"),
+        ).pack(side=tk.LEFT, padx=(12, 4))
+        self.trade_log_retention_combo = ttk.Combobox(
+            history_row, textvariable=self.trade_log_retention_var,
+            values=("30", "90", "180", "365"), state="readonly", width=5,
+        )
+        self.trade_log_retention_combo.pack(side=tk.LEFT)
+        self.trade_log_retention_combo.bind(
+            "<<ComboboxSelected>>", lambda _event: self._save_trade_log_settings(),
+        )
+        tk.Label(
+            history_row, text="DAYS · commander profile only", fg=self.UI_DIM,
+            bg=self.UI_PANEL, font=("Segoe UI", 7),
+        ).pack(side=tk.LEFT, padx=(4, 0))
+        button(history_row, "PRUNE NOW", self.prune_trade_log_now).pack(side=tk.RIGHT)
+        button(history_row, "OPEN LOG", self.show_trade_log).pack(
+            side=tk.RIGHT, padx=(0, 6),
         )
 
     # ------------------------------------------------------------------
@@ -379,9 +516,25 @@ class TradeWindow(ThemedWindowMixin):
             "max_ls": self._saved_filters.get("max_ls", 1000),
             "age": self._saved_filters.get("age", 30),
             "min_profit": self._saved_filters.get("min_profit", 1000),
+            "cargo_override": self._saved_filters.get("cargo_override", ""),
         }
         for key, value in defaults.items():
             entry = self.filter_entries[key]
+            entry.delete(0, tk.END)
+            entry.insert(0, str(value))
+        origin_defaults = {
+            "origin_system": self._saved_filters.get(
+                "origin_system", self._current_system() or "",
+            ),
+            "origin_station": (
+                self._saved_filters.get(
+                    "origin_station",
+                    getattr(self.app, "current_station_name", None) or "",
+                )
+            ),
+        }
+        for key, value in origin_defaults.items():
+            entry = self.origin_entries[key]
             entry.delete(0, tk.END)
             entry.insert(0, str(value))
 
@@ -390,8 +543,16 @@ class TradeWindow(ThemedWindowMixin):
             key: entry.get().strip() for key, entry in self.filter_entries.items()
         }
         self.config["trade_route_form"].update({
+            key: entry.get().strip() for key, entry in self.origin_entries.items()
+        })
+        self.config["trade_route_form"].update({
             "large_pad": bool(self.large_pad_var.get()),
             "include_carriers": bool(self.include_carriers_var.get()),
+            "orbital_only": bool(self.orbital_only_var.get()),
+            "full_load": bool(self.full_load_var.get()),
+            "round_trip": bool(self.round_trip_var.get()),
+            "rank": self.rank_var.get(),
+            "result_count": self.result_count_var.get(),
         })
 
     def _filter_number(self, key, default, cast=float):
@@ -400,6 +561,45 @@ class TradeWindow(ThemedWindowMixin):
             return cast(float(value)) if cast is int else cast(value)
         except (KeyError, TypeError, ValueError):
             return default
+
+    def _origin_values(self):
+        return (
+            self.origin_entries["origin_system"].get().strip(),
+            self.origin_entries["origin_station"].get().strip(),
+        )
+
+    def _result_count(self):
+        try:
+            value = str(self.result_count_var.get())
+            return int(value) if value in RESULT_COUNTS else 3
+        except (AttributeError, TypeError, ValueError):
+            return 3
+
+    def _planned_load_capacity(self):
+        override = self._filter_number("cargo_override", 0, int)
+        if override > 0:
+            return override, True
+        capacity = max(0, int(getattr(self.app, "cargo_capacity", 0) or 0))
+        aboard = max(0, int(getattr(self.app, "current_cargo_tons", 0) or 0))
+        if capacity:
+            return max(0, capacity - aboard), False
+        return 64, False
+
+    def _use_current_origin(self):
+        system = self._current_system() or ""
+        station = getattr(self.app, "current_station_name", None) or ""
+        for key, value in (("origin_system", system), ("origin_station", station)):
+            entry = self.origin_entries[key]
+            entry.delete(0, tk.END)
+            entry.insert(0, value)
+        self._save_filters()
+        self.result_status.config(
+            text=(
+                f"Start set to {station} / {system}" if station
+                else f"Start system set to {system}; station will be selected automatically."
+            ),
+            fg=self.UI_OK if system else self.UI_WARN,
+        )
 
     def _current_system(self):
         system = getattr(self.app, "current_sys", None)
@@ -416,7 +616,11 @@ class TradeWindow(ThemedWindowMixin):
         if isinstance(current, dict) and current.get("items"):
             try:
                 if expected is None or int(current.get("market_id")) == int(expected):
-                    return current
+                    snapshot = dict(current)
+                    snapshot.setdefault("station_type", getattr(self.app, "current_station_type", None))
+                    snapshot.setdefault("dist_ls", getattr(self.app, "current_station_dist_ls", None))
+                    snapshot.setdefault("large_pad", self._current_station_has_large_pad())
+                    return snapshot
             except (TypeError, ValueError):
                 pass
         journal_path = self.config.get("journal_path") or ""
@@ -434,10 +638,22 @@ class TradeWindow(ThemedWindowMixin):
                 "station": data.get("StationName") or getattr(self.app, "current_station_name", None),
                 "system": data.get("StarSystem") or self._current_system(),
                 "timestamp": data.get("timestamp"),
+                "station_type": getattr(self.app, "current_station_type", None),
+                "dist_ls": getattr(self.app, "current_station_dist_ls", None),
+                "large_pad": self._current_station_has_large_pad(),
                 "items": items,
             }
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
             return None
+
+    def _current_station_has_large_pad(self):
+        pads = getattr(self.app, "current_station_landing_pads", None)
+        if isinstance(pads, dict):
+            try:
+                return int(pads.get("Large") or pads.get("large") or 0) > 0
+            except (TypeError, ValueError):
+                return False
+        return None
 
     def _ship_jump_range(self):
         ship = getattr(self.app, "cmdr_ship", {}) or {}
@@ -445,6 +661,67 @@ class TradeWindow(ThemedWindowMixin):
             return max(1.0, float(ship.get("max_jump_range") or 1.0))
         except (TypeError, ValueError):
             return 1.0
+
+    @staticmethod
+    def _estimated_jumps(distance_ly, jump_range):
+        try:
+            distance = max(0.0, float(distance_ly or 0))
+            jump = max(1.0, float(jump_range or 1))
+        except (TypeError, ValueError):
+            return 0
+        return int(math.ceil(distance / jump)) if distance else 0
+
+    @staticmethod
+    def _leg_time_seconds(distance_ly, distance_ls, jump_range):
+        jumps = TradeWindow._estimated_jumps(distance_ly, jump_range)
+        try:
+            arrival = max(0.0, float(distance_ls))
+        except (TypeError, ValueError):
+            arrival = 1000.0
+        supercruise = 60.0 + 170.0 * ((arrival / 1000.0) ** 0.35)
+        return int(jumps * 50 + supercruise + 180)
+
+    @staticmethod
+    def _duration(seconds):
+        try:
+            total = max(0, int(seconds))
+        except (TypeError, ValueError):
+            return "?"
+        if total < 3600:
+            minutes = max(1, int(round(total / 60.0)))
+            return f"{minutes}m"
+        hours, remainder = divmod(total, 3600)
+        minutes = int(round(remainder / 60.0))
+        return f"{hours}h {minutes:02d}m"
+
+    @staticmethod
+    def _route_confidence(row, planned_load, max_age_days, round_trip=False):
+        epochs = [
+            row.get("source_updated_at"), row.get("updated_at"),
+        ]
+        if round_trip:
+            epochs.append(row.get("return_updated_at"))
+        usable_epochs = [float(value) for value in epochs if value]
+        oldest = min(usable_epochs) if usable_epochs else None
+        if oldest:
+            age_days = max(0.0, (time.time() - oldest) / 86400.0)
+            freshness = max(0.0, 1.0 - age_days / max(1.0, float(max_age_days)))
+        else:
+            freshness = 0.25
+        load = max(1, int(planned_load or 1))
+        outbound_cover = min(
+            int(row.get("supply") or 0), int(row.get("demand") or 0), load,
+        ) / load
+        coverage = outbound_cover
+        if round_trip:
+            return_cover = min(
+                int(row.get("return_supply") or 0),
+                int(row.get("return_demand") or 0), load,
+            ) / load
+            coverage = min(coverage, return_cover)
+        score = max(0.0, min(1.0, freshness * 0.55 + coverage * 0.45))
+        label = "HIGH" if score >= 0.8 else ("MEDIUM" if score >= 0.55 else "LOW")
+        return label, score, oldest
 
     def _refresh_summary(self):
         if not self.is_open():
@@ -466,6 +743,20 @@ class TradeWindow(ThemedWindowMixin):
     def refresh_local(self):
         """Dashboard compatibility hook; market ingest itself stays independent."""
         self._refresh_summary()
+
+    def on_cargo_updated(self):
+        """Refresh an open cargo search when Elite changes the hold snapshot."""
+        signature = self._cargo_signature()
+        changed = signature != self._last_cargo_signature
+        self._last_cargo_signature = signature
+        self._refresh_summary()
+        if not changed or self._current_view != "cargo":
+            return
+        if self._is_active_view():
+            self._cargo_refresh_pending = False
+            self.find_cargo_buyers()
+        else:
+            self._cargo_refresh_pending = True
 
     def refresh_session(self):
         self._refresh_summary()
@@ -520,7 +811,26 @@ class TradeWindow(ThemedWindowMixin):
             usable.append(item)
         return usable, excluded
 
+    def _cargo_signature(self):
+        rows = []
+        for item in list(getattr(self.app, "current_cargo_inventory", []) or []):
+            if not isinstance(item, dict):
+                continue
+            name = item.get("Name") or item.get("name") or item.get("Name_Localised") or ""
+            try:
+                count = int(item.get("Count", item.get("count", 0)) or 0)
+                stolen = int(item.get("Stolen", item.get("stolen", 0)) or 0)
+            except (TypeError, ValueError):
+                count, stolen = 0, 0
+            rows.append((
+                str(name).casefold(), count,
+                str(item.get("MissionID") or item.get("mission_id") or ""), stolen,
+            ))
+        return tuple(sorted(rows))
+
     def find_cargo_buyers(self):
+        self._cargo_refresh_pending = False
+        self._last_cargo_signature = self._cargo_signature()
         self._save_filters()
         cargo, excluded = self._tradeable_cargo(
             list(getattr(self.app, "current_cargo_inventory", []) or [])
@@ -529,28 +839,37 @@ class TradeWindow(ThemedWindowMixin):
             note = " Mission and stolen cargo are deliberately excluded." if excluded else ""
             self._set_view("cargo", "SELL MY CARGO", "No tradeable cargo is currently aboard." + note)
             return
-        if not self._current_system():
-            self._set_view("cargo", "SELL MY CARGO", "Current system is not known yet.", self.UI_WARN)
+        origin_system, origin_station = self._origin_values()
+        if not origin_system:
+            self._set_view(
+                "cargo", "SELL MY CARGO",
+                "Enter a start system or choose USE CURRENT.", self.UI_WARN,
+            )
             return
-        self._set_view("cargo", "SELL MY CARGO", "Finding nearby buyers…")
+        self._set_view(
+            "cargo", "SELL MY CARGO", f"Finding buyers around {origin_system}…",
+        )
         token = self._next_search()
         params = {
             "cargo_items": cargo,
-            "system": self._current_system(),
-            "star_pos": self._current_coords(),
+            "system": origin_system,
+            "star_pos": None,
             "radius": self._filter_number("radius", 80.0),
             "max_price_age_days": self._filter_number("age", 30, int),
             "requires_large_pad": bool(self.large_pad_var.get()),
             "include_carriers": bool(self.include_carriers_var.get()),
             "max_system_distance": self._filter_number("max_ls", 1000.0),
-            "limit": 10,
+            "orbital_only": bool(self.orbital_only_var.get()),
+            "limit": self._result_count(),
         }
 
         def worker():
             try:
                 rows = routes.sell_cargo(**params)
                 self._post_ui(
-                    lambda: self._render_cargo_buyers(rows, excluded, token),
+                    lambda: self._render_cargo_buyers(
+                        rows, excluded, token, origin_system, origin_station,
+                    ),
                     key="trade-assist-cargo",
                 )
             except Exception as exc:
@@ -561,11 +880,14 @@ class TradeWindow(ThemedWindowMixin):
 
         threading.Thread(target=worker, name="trade-cargo-buyers", daemon=True).start()
 
-    def _render_cargo_buyers(self, rows, excluded, token):
+    def _render_cargo_buyers(self, rows, excluded, token, origin_system=None,
+                             origin_station=None):
         if token != self._search_generation or not self.is_open():
             return
         self._set_view("cargo", "SELL MY CARGO", "")
-        for row in list(rows or [])[:3]:
+        result_count = self._result_count()
+        shown_rows = list(rows or [])[:result_count]
+        for row in shown_rows:
             items = list(row.get("items") or [])
             cargo_text = ", ".join(
                 f"{item.get('name')} {self._num(item.get('units'))}t"
@@ -590,8 +912,8 @@ class TradeWindow(ThemedWindowMixin):
                 )
             plan = {
                 "kind": "sell-cargo",
-                "from_system": self._current_system(),
-                "from_station": getattr(self.app, "current_station_name", None),
+                "from_system": origin_system or self._current_system(),
+                "from_station": origin_station or None,
                 "to_system": row.get("system"),
                 "to_station": row.get("station"),
                 "revenue_cr": int(row.get("total") or 0),
@@ -605,7 +927,7 @@ class TradeWindow(ThemedWindowMixin):
         suffix = f" · {excluded:,} t mission/stolen cargo excluded" if excluded else ""
         self.result_status.config(
             text=(
-                f"{min(3, len(rows or []))} best buyer(s){suffix}"
+                f"{len(shown_rows)} best buyer(s) around {origin_system}{suffix}"
                 if rows else f"No online buyers matched the selected filters{suffix}."
             ),
             fg=self.UI_MUTED if rows else self.UI_WARN,
@@ -618,90 +940,193 @@ class TradeWindow(ThemedWindowMixin):
 
     def find_trade(self):
         self._save_filters()
-        system = self._current_system()
-        station = getattr(self.app, "current_station_name", None)
-        market_id = getattr(self.app, "current_station_market_id", None)
-        if not system or not station or not market_id or not getattr(self.app, "current_docked", False):
+        system, station = self._origin_values()
+        if not system:
             self._set_view(
                 "trade", "FIND A TRADE",
-                "Dock at a market station first so the departure is unambiguous.",
-                self.UI_WARN,
-            )
-            return
-        market = self._current_market_snapshot()
-        if not market:
-            self._set_view(
-                "trade", "FIND A TRADE",
-                "Open the station Commodities Market once so Elite writes the current departure prices.",
+                "Enter a start system or choose USE CURRENT.",
                 self.UI_WARN,
             )
             return
         max_age_days = self._filter_number("age", 30, int)
-        market_updated = marketdb.parse_update_time(market.get("timestamp"))
-        if not market_updated or time.time() - market_updated > max(1, max_age_days) * 86400:
+        result_count = self._result_count()
+        round_trip = bool(self.round_trip_var.get())
+        full_load = bool(self.full_load_var.get())
+        orbital_only = bool(self.orbital_only_var.get())
+        planned_load, load_overridden = self._planned_load_capacity()
+        if planned_load <= 0:
             self._set_view(
                 "trade", "FIND A TRADE",
-                "The departure prices are older than the selected age. Open the Commodities Market to refresh them.",
+                "The cargo hold is full. Set a planned load or free cargo space before searching.",
                 self.UI_WARN,
             )
             return
-        capacity = int(getattr(self.app, "cargo_capacity", 0) or 0)
-        aboard = int(getattr(self.app, "current_cargo_tons", 0) or 0)
-        free_hold = max(0, capacity - aboard)
-        if capacity and free_hold <= 0:
-            self._set_view(
-                "trade", "FIND A TRADE",
-                "The cargo hold is full. Sell or transfer cargo before planning a purchase.",
-                self.UI_WARN,
-            )
-            return
-        self._set_view("trade", "FIND A TRADE", f"Scanning departures from {station}…")
+        current_system = self._current_system()
+        current_station = getattr(self.app, "current_station_name", None)
+        current_market_id = getattr(self.app, "current_station_market_id", None)
+        use_live_market = bool(
+            station and current_system and current_station and current_market_id
+            and getattr(self.app, "current_docked", False)
+            and system.casefold() == current_system.casefold()
+            and station.casefold() == str(current_station).casefold()
+        )
+        market = self._current_market_snapshot() if use_live_market else None
+        if market:
+            market_updated = marketdb.parse_update_time(market.get("timestamp"))
+            if (
+                not market_updated
+                or time.time() - market_updated > max(1, max_age_days) * 86400
+            ):
+                market = None
+            elif self.large_pad_var.get() and market.get("large_pad") is not True:
+                market = None
+            elif orbital_only and routes.is_surface_station(market.get("station_type")):
+                market = None
+            elif (
+                not self.include_carriers_var.get()
+                and "carrier" in str(market.get("station_type") or "").casefold()
+            ):
+                market = None
+        origin_label = f"{station} / {system}" if station else f"an automatically selected market in {system}"
+        self._set_view("trade", "FIND A TRADE", f"Resolving {origin_label}…")
         token = self._next_search()
-        params = {
-            "system": system,
-            "star_pos": self._current_coords(),
+        filters = {
             "radius": self._filter_number("radius", 80.0),
             "min_profit": self._filter_number("min_profit", 1000, int),
-            "min_units": 1,
             "max_price_age_days": max_age_days,
             "requires_large_pad": bool(self.large_pad_var.get()),
             "include_carriers": bool(self.include_carriers_var.get()),
             "max_system_distance": self._filter_number("max_ls", 1000.0),
-            "source_market_id": int(market_id),
-            "source_station": station,
-            "market_items": list(market.get("items") or []),
-            "limit": 18,
+            "orbital_only": orbital_only,
         }
-        capital = int(getattr(self.app, "cmdr_balance", 0) or 0)
-        free_hold = free_hold or capacity or 64
+        balance = getattr(self.app, "cmdr_balance", None)
+        capital = int(balance) if balance is not None else None
         jump_range = self._ship_jump_range()
+        rank_mode = self.rank_var.get()
 
         def worker():
             try:
+                source = market or routes.resolve_market_origin(
+                    system, station,
+                    max_price_age_days=filters["max_price_age_days"],
+                    requires_large_pad=filters["requires_large_pad"],
+                    include_carriers=filters["include_carriers"],
+                    orbital_only=filters["orbital_only"],
+                )
+                self._post_ui(
+                    lambda resolved=source: self._render_origin_resolved(resolved, token),
+                    key="trade-assist-origin",
+                )
+                params = {
+                    "system": source.get("system") or system,
+                    "star_pos": None,
+                    "radius": filters["radius"],
+                    "min_profit": filters["min_profit"],
+                    "min_units": planned_load if full_load else 1,
+                    "max_price_age_days": filters["max_price_age_days"],
+                    "requires_large_pad": filters["requires_large_pad"],
+                    "include_carriers": filters["include_carriers"],
+                    "max_system_distance": filters["max_system_distance"],
+                    "orbital_only": filters["orbital_only"],
+                    "source_updated_at": source.get("timestamp"),
+                    "source_market_id": int(source.get("market_id")),
+                    "source_station": source.get("station") or station,
+                    "market_items": list(source.get("items") or []),
+                    "limit": min(75, max(30, result_count * 3)),
+                }
                 rows = routes.find_opportunities(**params)
                 ranked = []
                 for row in rows:
                     buy_price = max(0, int(row.get("buy_price") or 0))
-                    affordable = capital // buy_price if buy_price and capital else free_hold
-                    units = min(int(row.get("units") or 0), free_hold, affordable)
+                    affordable = (
+                        capital // buy_price
+                        if buy_price and capital is not None else planned_load
+                    )
+                    units = min(int(row.get("units") or 0), planned_load, affordable)
                     if units <= 0:
+                        continue
+                    if full_load and units < planned_load:
                         continue
                     copy = dict(row)
                     copy["trade_units"] = units
                     copy["projected_profit"] = units * int(row.get("profit_each") or 0)
-                    copy["estimated_jumps"] = max(
-                        1, math.ceil(float(row.get("distance") or 0) / jump_range),
+                    copy["estimated_jumps"] = self._estimated_jumps(
+                        row.get("distance"), jump_range,
                     )
-                    copy["achievable_score"] = (
-                        copy["projected_profit"] / copy["estimated_jumps"]
+                    copy["outbound_time_s"] = self._leg_time_seconds(
+                        row.get("distance"), row.get("to_dist_ls"), jump_range,
                     )
+                    copy["from_dist_ls"] = source.get("dist_ls")
                     ranked.append(copy)
                 ranked.sort(
-                    key=lambda item: float(item.get("achievable_score") or 0),
+                    key=lambda item: int(item.get("projected_profit") or 0),
                     reverse=True,
                 )
+                if round_trip and ranked:
+                    candidate_count = min(
+                        len(ranked), max(result_count, min(36, result_count + 10)),
+                    )
+                    ranked = ranked[:candidate_count]
+                    self._post_ui(
+                        lambda count=candidate_count: self._render_return_progress(count, token),
+                        key="trade-assist-return-progress",
+                    )
+                    ranked = routes.attach_return_trades(
+                        ranked, list(source.get("items") or []),
+                        cargo_units=planned_load, capital=capital,
+                        source_updated_at=source.get("timestamp"),
+                        max_price_age_days=filters["max_price_age_days"],
+                    )
+                    if full_load:
+                        ranked = [
+                            row for row in ranked
+                            if int(row.get("return_units") or 0) >= planned_load
+                        ]
+
+                final_rows = []
+                for row in ranked:
+                    copy = dict(row)
+                    return_profit = int(copy.get("return_profit") or 0) if round_trip else 0
+                    total_profit = int(copy.get("projected_profit") or 0) + return_profit
+                    return_time = (
+                        self._leg_time_seconds(
+                            copy.get("distance"), source.get("dist_ls"), jump_range,
+                        ) if round_trip else 0
+                    )
+                    total_time = int(copy.get("outbound_time_s") or 0) + return_time
+                    confidence, confidence_score, quote_epoch = self._route_confidence(
+                        copy, planned_load, filters["max_price_age_days"], round_trip,
+                    )
+                    copy.update({
+                        "round_trip": round_trip,
+                        "total_profit": total_profit,
+                        "total_time_s": total_time,
+                        "profit_per_hour": int(total_profit * 3600 / max(1, total_time)),
+                        "confidence": confidence,
+                        "confidence_score": confidence_score,
+                        "quote_epoch": quote_epoch,
+                        "planned_load": planned_load,
+                        "load_overridden": load_overridden,
+                    })
+                    final_rows.append(copy)
+
+                if rank_mode == "Profit / hour":
+                    rank_key = lambda item: float(item.get("profit_per_hour") or 0)
+                    reverse = True
+                elif rank_mode == "Shortest travel":
+                    rank_key = lambda item: float(item.get("total_time_s") or float("inf"))
+                    reverse = False
+                elif rank_mode == "Freshest quotes":
+                    rank_key = lambda item: float(item.get("quote_epoch") or 0)
+                    reverse = True
+                else:
+                    rank_key = lambda item: float(item.get("total_profit") or 0)
+                    reverse = True
+                final_rows.sort(key=rank_key, reverse=reverse)
                 self._post_ui(
-                    lambda: self._render_trade_results(ranked[:3], token),
+                    lambda: self._render_trade_results(
+                        final_rows[:result_count], token, source, rank_mode,
+                    ),
                     key="trade-assist-route",
                 )
             except Exception as exc:
@@ -712,55 +1137,254 @@ class TradeWindow(ThemedWindowMixin):
 
         threading.Thread(target=worker, name="trade-quick-route", daemon=True).start()
 
-    def _render_trade_results(self, rows, token):
+    def _render_return_progress(self, count, token):
         if token != self._search_generation or not self.is_open():
             return
+        self.result_status.config(
+            text=f"Checking real return cargo for {count} candidate route(s)…",
+            fg=self.UI_MUTED,
+        )
+
+    def _render_origin_resolved(self, source, token):
+        if token != self._search_generation or not self.is_open():
+            return
+        station = source.get("station") or "selected market"
+        system = source.get("system") or "selected system"
+        self.result_status.config(
+            text=f"Scanning departures from {station} / {system}…",
+            fg=self.UI_MUTED,
+        )
+
+    def _render_trade_results(self, rows, token, source=None, rank_mode="Profit / trip"):
+        if token != self._search_generation or not self.is_open():
+            return
+        if source and source.get("online"):
+            for key, value in (
+                ("origin_system", source.get("system")),
+                ("origin_station", source.get("station")),
+            ):
+                if value:
+                    entry = self.origin_entries[key]
+                    entry.delete(0, tk.END)
+                    entry.insert(0, value)
+            self._save_filters()
         self._set_view("trade", "FIND A TRADE", "")
         for row in rows:
             units = int(row.get("trade_units") or 0)
-            profit = int(row.get("projected_profit") or 0)
+            outbound_profit = int(row.get("projected_profit") or 0)
+            total_profit = int(row.get("total_profit") or outbound_profit)
+            profit_per_hour = int(row.get("profit_per_hour") or 0)
+            is_loop = bool(row.get("round_trip"))
             destination = f"{row.get('to_station')} / {row.get('to_system')}"
-            jumps = int(row.get("estimated_jumps") or 1)
+            jumps = int(row.get("estimated_jumps") or 0)
+            total_jumps = jumps * (2 if is_loop else 1)
             distance = (
-                f"{float(row.get('distance') or 0):.1f} ly · "
-                f"{jumps} jump{'s' if jumps != 1 else ''}"
+                f"{self._duration(row.get('total_time_s'))} · "
+                f"{total_jumps} jump{'s' if total_jumps != 1 else ''}"
             )
-            if row.get("to_dist_ls") is not None:
-                distance += f" · {self._num(row.get('to_dist_ls'))} ls"
-            detail = (
+            detail_lines = [
                 f"BUY {self._num(units)} t {row.get('commodity')} at "
-                f"{row.get('from_station')} ({row.get('from_system')})\n"
+                f"{row.get('from_station')} ({row.get('from_system')})",
                 f"Buy {self._credits(row.get('buy_price'))}/t · sell "
                 f"{self._credits(row.get('sell_price'))}/t at {row.get('to_station')} "
-                f"({row.get('to_system')})\n"
-                f"Projected profit {self._credits(profit)} · "
-                f"{self._credits(row.get('profit_each'))}/t · quote age {self._age(row.get('updated_at'))}"
+                f"({row.get('to_system')})",
+                f"Outbound {self._credits(outbound_profit)} · "
+                f"{self._credits(row.get('profit_each'))}/t · "
+                f"supply {self._num(row.get('supply'))} / demand {self._num(row.get('demand'))}",
+                f"TRAVEL {float(row.get('distance') or 0):.1f} ly · "
+                f"{jumps} jump{'s' if jumps != 1 else ''} · destination arrival "
+                f"{self._num(row.get('to_dist_ls')) if row.get('to_dist_ls') is not None else '?'} ls"
+                f" · {row.get('to_type') or 'station type unknown'}",
+            ]
+            if is_loop:
+                detail_lines.extend([
+                    f"RETURN WITH {self._num(row.get('return_units'))} t "
+                    f"{row.get('return_commodity')}",
+                    f"Buy {self._credits(row.get('return_buy_price'))}/t at "
+                    f"{row.get('to_station')} · sell {self._credits(row.get('return_sell_price'))}/t "
+                    f"at {row.get('from_station')}",
+                    f"Return {self._credits(row.get('return_profit'))} · "
+                    f"{self._credits(row.get('return_profit_each'))}/t · "
+                    f"supply {self._num(row.get('return_supply'))} / demand {self._num(row.get('return_demand'))}",
+                ])
+            detail_lines.append(
+                f"TOTAL {self._credits(total_profit)} · {self._credits(profit_per_hour)}/hour · "
+                f"about {self._duration(row.get('total_time_s'))} · "
+                f"{float(row.get('distance') or 0):.1f} ly each way · "
+                f"confidence {row.get('confidence')} · oldest quote {self._age(row.get('quote_epoch'))}"
             )
             plan = {
-                "kind": "quick-trade",
+                "kind": "round-trip" if is_loop else "quick-trade",
                 "from_system": row.get("from_system"),
                 "from_station": row.get("from_station"),
                 "to_system": row.get("to_system"),
                 "to_station": row.get("to_station"),
                 "commodity": row.get("commodity"),
+                "symbol": row.get("symbol"),
                 "units": units,
-                "profit_cr": profit,
+                "return_commodity": row.get("return_commodity") if is_loop else None,
+                "return_symbol": row.get("return_symbol") if is_loop else None,
+                "return_units": int(row.get("return_units") or 0) if is_loop else 0,
+                "profit_cr": total_profit,
+                "profit_per_hour": profit_per_hour,
+                "estimated_seconds": int(row.get("total_time_s") or 0),
+                "confidence": row.get("confidence"),
                 "distance_ly": float(row.get("distance") or 0),
             }
+            cargo_text = f"{self._num(units)} t"
+            if is_loop:
+                cargo_text += f" + {self._num(row.get('return_units'))} t"
             self._insert_result(
                 row.get("commodity"), destination,
-                f"{self._credits(row.get('profit_each'))}/t · {self._credits(profit)}",
-                f"{self._num(units)} t", distance, self._age(row.get("updated_at")),
-                row, detail, plan,
+                f"{self._credits(total_profit)} · {self._credits(profit_per_hour)}/h",
+                cargo_text, distance,
+                f"{row.get('confidence')} · {self._age(row.get('quote_epoch'))}",
+                row, "\n".join(detail_lines), plan,
             )
         self.result_status.config(
             text=(
-                f"{len(rows)} departure option(s), ranked by achievable profit."
-                if rows else "No profitable online departure matched the selected filters."
+                f"{len(rows)} {'round-trip' if rows and rows[0].get('round_trip') else 'one-way'} option(s) "
+                f"from {(source or {}).get('station') or 'the selected market'} · ranked by {rank_mode.lower()}."
+                if rows else (
+                    f"No profitable {'round trip' if self.round_trip_var.get() else 'departure'} from "
+                    f"{(source or {}).get('station') or 'the selected market'} "
+                    "matched the selected filters."
+                )
             ),
             fg=self.UI_MUTED if rows else self.UI_WARN,
         )
         self._select_best_result()
+
+    # ------------------------------------------------------------------
+    # Persistent trade log
+    # ------------------------------------------------------------------
+
+    def show_trade_log(self):
+        self._current_view = "log"
+        self._set_view("log", "TRADE LOG", "Loading this commander's journal trades…")
+        token = self._next_search()
+        profile = self.config.get("active_commander_profile")
+
+        def worker():
+            try:
+                rows = marketdb.recent_trades(limit=500, profile_key=profile)
+                stats = marketdb.trade_history_stats(profile_key=profile)
+                self._post_ui(
+                    lambda: self._render_trade_log(rows, stats, token, profile),
+                    key="trade-log-history",
+                )
+            except Exception as exc:
+                self._post_ui(
+                    lambda text=str(exc): self._search_failed("TRADE LOG", text, token),
+                    key="trade-log-history",
+                )
+
+        threading.Thread(target=worker, name="trade-log-history", daemon=True).start()
+
+    def refresh_trade_log(self):
+        if self._current_view == "log" and self.is_open():
+            self.show_trade_log()
+
+    def _render_trade_log(self, rows, stats, token, profile):
+        if (
+            token != self._search_generation or not self.is_open()
+            or self._current_view != "log"
+            or profile != self.config.get("active_commander_profile")
+        ):
+            return
+        self._set_view("log", "TRADE LOG", "")
+        rows = list(rows or [])
+        if not rows:
+            self._finish_trade_log(rows, stats, token, profile)
+            return
+
+        self.result_status.config(
+            text=f"Loading {len(rows):,} journal trade(s)…",
+            fg=self.UI_MUTED,
+        )
+
+        def insert_batch(offset=0):
+            if (
+                token != self._search_generation or not self.is_open()
+                or self._current_view != "log"
+                or profile != self.config.get("active_commander_profile")
+            ):
+                return
+            stop = min(offset + 50, len(rows))
+            for row in rows[offset:stop]:
+                self._insert_trade_log_row(row)
+            if stop < len(rows):
+                self.root.after(1, lambda: insert_batch(stop))
+            else:
+                self._finish_trade_log(rows, stats, token, profile)
+
+        insert_batch()
+
+    def _insert_trade_log_row(self, row):
+        event = str(row.get("event") or "trade").upper()
+        profit = row.get("profit")
+        if event == "BUY":
+            value = -int(row.get("total") or 0)
+        else:
+            value = int(profit if profit is not None else row.get("total") or 0)
+        location = " / ".join(
+            str(item) for item in (row.get("station"), row.get("system")) if item
+        ) or "Location unavailable"
+        try:
+            stamp = time.strftime(
+                "%d %b %Y %H:%M", time.localtime(int(row.get("ts") or 0)),
+            )
+        except (TypeError, ValueError, OSError):
+            stamp = "Unknown time"
+        detail_lines = [
+            f"{event} {self._num(row.get('count'))} t {row.get('name') or row.get('symbol')}",
+            f"{location} · {self._credits(row.get('price'))}/t · "
+            f"total {self._credits(row.get('total'))}",
+            f"Journal time {stamp}",
+        ]
+        if row.get("plan_kind"):
+            route = " → ".join(
+                str(item) for item in (row.get("plan_from"), row.get("plan_to")) if item
+            )
+            detail_lines.append(
+                f"PLAN {str(row.get('plan_kind')).upper()} · {route or 'route context unavailable'}"
+            )
+            if row.get("expected_profit") is not None:
+                detail_lines.append(
+                    f"Planned route profit {self._credits(row.get('expected_profit'))}"
+                )
+        self._insert_result(
+            event, row.get("name") or row.get("symbol"), self._credits(value),
+            f"{self._num(row.get('count'))} t", self._truncate(location, 28),
+            stamp, row, "\n".join(detail_lines), None, tag="history",
+        )
+
+    def _finish_trade_log(self, rows, stats, token, profile):
+        if (
+            token != self._search_generation or not self.is_open()
+            or self._current_view != "log"
+            or profile != self.config.get("active_commander_profile")
+        ):
+            return
+        count = int((stats or {}).get("count") or 0)
+        oldest = (stats or {}).get("oldest")
+        oldest_text = self._age(oldest) if oldest else "none"
+        self.result_status.config(
+            text=(
+                f"Showing {len(rows or []):,} newest of {count:,} transaction(s) · "
+                f"oldest {oldest_text} · local to this commander."
+                if rows else "No journal-confirmed trades are stored for this commander yet."
+            ),
+            fg=self.UI_MUTED if rows else self.UI_WARN,
+        )
+        children = self.result_tree.get_children()
+        if children:
+            iid = children[0]
+            self.result_tree.selection_set(iid)
+            self.result_tree.focus(iid)
+            self._on_result_selected()
+        else:
+            self._set_detail("MarketBuy and MarketSell journal events will appear here.")
 
     # ------------------------------------------------------------------
     # Current run and recent activity
@@ -791,6 +1415,7 @@ class TradeWindow(ThemedWindowMixin):
             ),
             plan.get("kind"), plan.get("from_system"), plan.get("from_station"),
             plan.get("to_system"), plan.get("to_station"), plan.get("profit_cr"),
+            plan.get("_created_at"), plan.get("_session_profit_start"),
         )
         if not load_history and signature == self._last_session_signature:
             return
@@ -801,11 +1426,23 @@ class TradeWindow(ThemedWindowMixin):
                 f"{plan.get('from_station') or plan.get('from_system') or '?'} → "
                 f"{plan.get('to_station') or plan.get('to_system') or '?'}"
             )
+        realized_profit = int(session.get("profit") or 0) - int(
+            plan.get("_session_profit_start") or 0
+        ) if plan else 0
+        realized_transactions = int(session.get("transactions") or 0) - int(
+            plan.get("_session_transactions_start") or 0
+        ) if plan else 0
+        plan_progress = ""
+        if plan and plan.get("profit_cr") is not None:
+            plan_progress = (
+                f" · Expected {self._credits(plan.get('profit_cr'))} · "
+                f"realized {self._credits(realized_profit)} in {max(0, realized_transactions)} trade(s)"
+            )
         self._set_view(
             "run", "CURRENT RUN",
             f"Bought {self._num(session.get('bought_units', 0))} t · "
             f"Sold {self._num(session.get('sold_units', 0))} t · "
-            f"Profit {self._credits(session.get('profit', 0))} · {plan_text}",
+            f"Profit {self._credits(session.get('profit', 0))} · {plan_text}{plan_progress}",
         )
         for event in events[-25:][::-1]:
             try:
@@ -823,11 +1460,22 @@ class TradeWindow(ThemedWindowMixin):
                 stamp, event, detail, None, tag="history",
             )
         if plan:
-            self._set_detail(
+            cargo_label = plan.get('commodity') or plan.get('kind') or 'Trade'
+            if plan.get("return_commodity"):
+                cargo_label += f" out · {plan.get('return_commodity')} back"
+            detail_lines = [
                 f"ACTIVE PLAN\n{plan_text}\n"
-                f"{plan.get('commodity') or plan.get('kind') or 'Trade'} · "
+                f"{cargo_label} · "
                 f"expected {self._credits(plan.get('profit_cr')) if plan.get('profit_cr') is not None else 'sale destination'}"
-            )
+            ]
+            if plan.get("profit_cr") is not None:
+                variance = realized_profit - int(plan.get("profit_cr") or 0)
+                detail_lines.append(
+                    f"REALIZED SINCE PLAN · {self._credits(realized_profit)} across "
+                    f"{max(0, realized_transactions)} trade(s) · "
+                    f"variance {variance:+,} cr"
+                )
+            self._set_detail("\n".join(detail_lines))
         elif not events:
             self._set_detail("No trade has been recorded in this application session.")
         if not events and load_history and not self._history_loading:
@@ -836,7 +1484,10 @@ class TradeWindow(ThemedWindowMixin):
 
             def worker():
                 try:
-                    rows = marketdb.recent_trades(limit=18)
+                    rows = marketdb.recent_trades(
+                        limit=18,
+                        profile_key=self.config.get("active_commander_profile"),
+                    )
                 except Exception:
                     rows = []
                 self._post_ui(
@@ -889,13 +1540,16 @@ class TradeWindow(ThemedWindowMixin):
             "cargo": ("BUYER", "SYSTEM", "EST. SALE", "ACCEPTED", "TRAVEL", "AGE"),
             "trade": ("COMMODITY", "DESTINATION", "PROFIT", "LOAD", "TRAVEL", "AGE"),
             "run": ("TYPE", "COMMODITY", "VALUE / PROFIT", "TONS", "PRICE", "WHEN"),
+            "log": ("TYPE", "COMMODITY", "VALUE / PROFIT", "TONS", "LOCATION", "WHEN"),
         }.get(view, ("ITEM", "DESTINATION", "VALUE", "CARGO", "TRAVEL", "AGE"))
         for column, label in zip(self.result_tree["columns"], headings):
             self.result_tree.heading(column, text=label)
 
     def _insert_result(self, primary, destination, value, cargo, distance, age,
                        raw, detail, plan, tag=None):
-        row_tag = tag or self._freshness_tag((raw or {}).get("updated_at"))
+        row_tag = tag or self._freshness_tag(
+            (raw or {}).get("quote_epoch") or (raw or {}).get("updated_at")
+        )
         iid = self.result_tree.insert(
             "", tk.END,
             values=(primary or "---", destination or "---", value or "---",
@@ -998,6 +1652,64 @@ class TradeWindow(ThemedWindowMixin):
         eddn_upload.UPLOADER.set_enabled(enabled)
         save_config(self.config)
         self.refresh_status()
+
+    def _save_trade_log_settings(self):
+        try:
+            retention = int(self.trade_log_retention_var.get())
+        except (TypeError, ValueError):
+            retention = 180
+        retention = min(365, max(30, retention))
+        self.trade_log_retention_var.set(str(retention))
+        self.config["trade_log_auto_prune_enabled"] = bool(
+            self.trade_log_auto_prune_var.get()
+        )
+        self.config["trade_log_retention_days"] = retention
+        save_config(self.config)
+        if self.trade_log_auto_prune_var.get():
+            maintainer = getattr(self.app, "_schedule_trade_history_maintenance", None)
+            if callable(maintainer):
+                maintainer()
+
+    def prune_trade_log_now(self):
+        self._save_trade_log_settings()
+        profile = self.config.get("active_commander_profile")
+        retention = int(self.trade_log_retention_var.get() or 180)
+        self.result_status.config(
+            text=f"Pruning this commander's trade log beyond {retention} days…",
+            fg=self.UI_MUTED,
+        )
+
+        def worker():
+            try:
+                removed = marketdb.prune_trade_history(
+                    retention, profile_key=profile,
+                )
+                self._post_ui(
+                    lambda: self._trade_log_pruned(removed, profile),
+                    key="trade-log-prune",
+                )
+            except Exception as exc:
+                self._post_ui(
+                    lambda text=str(exc): self._trade_log_prune_failed(text, profile),
+                    key="trade-log-prune",
+                )
+
+        threading.Thread(target=worker, name="trade-log-prune", daemon=True).start()
+
+    def _trade_log_pruned(self, removed, profile):
+        if not self.is_open() or profile != self.config.get("active_commander_profile"):
+            return
+        if self._current_view == "log":
+            self.show_trade_log()
+        else:
+            self.result_status.config(
+                text=f"Trade log pruned · {int(removed or 0):,} old transaction(s) removed.",
+                fg=self.UI_OK,
+            )
+
+    def _trade_log_prune_failed(self, message, profile):
+        if self.is_open() and profile == self.config.get("active_commander_profile"):
+            self.result_status.config(text=f"Trade log prune failed: {message}", fg=self.UI_FAIL)
 
     def refresh_status(self, force=False):
         self._refresh_summary()

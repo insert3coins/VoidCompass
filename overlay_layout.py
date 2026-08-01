@@ -20,7 +20,8 @@ from ui_theme import (
 
 
 DEFAULT_POSITIONS = {
-    "hud": (100, 100), "cargo_hud": (800, 400), "carrier_hud": (30, 180),
+    "hud": (100, 100), "cargo_hud": (800, 400), "trade_hud": (820, 560),
+    "carrier_hud": (30, 180),
     "prospector_hud": (30, 600), "system_info_hud": (30, 30),
     "gravity_warning_hud": (1200, 530), "station_info_hud": (30, 380),
     "survey_status_hud": (30, 520), "toast_hud": (1200, 80),
@@ -28,7 +29,8 @@ DEFAULT_POSITIONS = {
 }
 
 DEFAULT_SIZES = {
-    "hud": (430, 230), "cargo_hud": (310, 150), "carrier_hud": (330, 180),
+    "hud": (430, 230), "cargo_hud": (310, 150), "trade_hud": (380, 250),
+    "carrier_hud": (330, 180),
     "prospector_hud": (320, 120), "system_info_hud": (340, 220),
     "gravity_warning_hud": (280, 90), "station_info_hud": (520, 300),
     "survey_status_hud": (340, 300), "toast_hud": (340, 110),
@@ -38,6 +40,7 @@ DEFAULT_SIZES = {
 OVERLAY_LABELS = {
     "hud": "Navigation HUD",
     "cargo_hud": "Cargo HUD",
+    "trade_hud": "Trade Route HUD",
     "carrier_hud": "Fleet Carrier HUD",
     "prospector_hud": "Prospector HUD",
     "system_info_hud": "System Information",
@@ -52,6 +55,7 @@ OVERLAY_LABELS = {
 OVERLAY_CARD_LABELS = {
     "hud": "NAVIGATION",
     "cargo_hud": "CARGO",
+    "trade_hud": "TRADE",
     "carrier_hud": "CARRIER",
     "prospector_hud": "PROSPECTOR",
     "system_info_hud": "SYSTEM INFO",
@@ -66,6 +70,7 @@ OVERLAY_CARD_LABELS = {
 OVERLAY_ENABLE_KEYS = {
     "hud": "overlay_enabled",
     "cargo_hud": "cargo_overlay_enabled",
+    "trade_hud": "trade_overlay_enabled",
     "carrier_hud": "carrier_overlay_enabled",
     "prospector_hud": "prospector_overlay_enabled",
     "system_info_hud": "system_info_enabled",
