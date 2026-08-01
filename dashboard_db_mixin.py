@@ -858,7 +858,7 @@ class DashboardDBMixin:
 
             self.load_system_from_db(self.current_sys)
             self._ui_post(
-                lambda: self.scan_stat.config(text=f"{self.scanned} / {self.total}"),
+                lambda: self.scan_stat.config(text=self._scan_progress_count_text()),
                 key="cache-rebuild-scan-progress",
             )
             self.update_hud()
@@ -881,7 +881,7 @@ class DashboardDBMixin:
             self._cache_rebuild_running = False
             self._post_cache_rebuild_progress(False)
 
-    def load_system_from_db(self, sys_name):
+    def load_system_from_db(self, sys_name, preserve_total_confirmation=False):
         with self.db_lock:
             try:
                 cursor = self.conn.cursor()
@@ -889,6 +889,8 @@ class DashboardDBMixin:
                 row = cursor.fetchone()
                 if row:
                     self.total = row[0] or 0
+                    if not preserve_total_confirmation:
+                        self.scan_total_confirmed = self.total > 0
                     # scanned_count may have been set by FSSAllBodiesFound or history
                     # builder without individual body IDs being written; use it as a floor.
                     db_scanned_count = row[1] or 0
@@ -904,7 +906,13 @@ class DashboardDBMixin:
                             (sys_name, self.total, self.scanned),
                         )
                         self._db_maybe_commit(reason="system_reconcile")
+                    elif preserve_total_confirmation and self.total > self.scanned:
+                        # An N/M cache row (N < M) necessarily contains a
+                        # separately observed system total, so it is safe to
+                        # improve an older unconfirmed shutdown snapshot.
+                        self.scan_total_confirmed = True
                 else:
+                    self.scan_total_confirmed = False
                     cursor.execute("SELECT body_id FROM bodies WHERE system_name=?", (sys_name,))
                     self.scanned_bodies = set(r[0] for r in cursor.fetchall())
                     self.scanned = len(self.scanned_bodies)
