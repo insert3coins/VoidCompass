@@ -110,7 +110,7 @@ The deterministic cognition engine learns personal baselines and whether advice 
 - **Ardent Insight** supplies on-demand EDDN-backed buyers and sellers when a Trade Assist or Architect commodity search is requested.
 - **EDDN** optionally receives visited-station market uploads from Void Compass; it is not required for online searches.
 - **Spansh** supports neutron routes, ring/hotspot searches, trader lookups and integrated Fleet/Squadron Carrier route calculation.
-- **Discord webhooks** can announce personal or Squadron Carrier operations with active-theme event colours, EDSM-linked systems and journal-backed jump, Tritium, capacity, docking, service and expedition context. User-entered notes cannot trigger Discord mentions, and carrier finances remain local.
+- **Discord webhooks** announce personal or Squadron Carrier operations with compact event-specific, active-theme cards and EDSM-linked systems. Automatic posts keep only the jump, Tritium and relevant expedition context; a deliberate manual status post provides the fuller capacity, docking, service and route snapshot. User-entered notes cannot trigger Discord mentions, and carrier finances remain local.
 - **Piper** voice packs are optional; regular system TTS remains available.
 
 Void Compass does not require an account or Void Compass cloud database. It checks GitHub Releases for a newer version at startup; other network integrations only run when their associated feature is enabled or requested. Online market searches send Ardent Insight the reference system, commodity and search filters, never commander credentials or journal files.

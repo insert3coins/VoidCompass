@@ -1350,6 +1350,7 @@ class CarrierTracker:
             description += "\nThe webhook is connected. This preview uses the active carrier state."
         if cd.get("pending_decom"):
             description += "\n**DECOMMISSIONING IS PENDING**"
+        detailed_status = event_type == "status_update"
 
         fields = []
 
@@ -1378,7 +1379,11 @@ class CarrierTracker:
                 add_field("CANCELLED TARGET", target, True)
         else:
             add_field("CURRENT SYSTEM", current, True)
-            if cd.get("jump_destination") and cd.get("status") == "jumping":
+            if (
+                event_type in {"status_update", "test"}
+                and cd.get("jump_destination")
+                and cd.get("status") == "jumping"
+            ):
                 add_field("JUMP TARGET", target, True)
                 add_field("DEPARTURE", _discord_time(cd.get("jump_departure_time")))
 
@@ -1398,110 +1403,137 @@ class CarrierTracker:
 
         fuel = _discord_number(cd.get("fuel_level"))
         capacity = _discord_number(cd.get("fuel_capacity") or 1000)
-        if fuel is not None:
+        if fuel is not None and event_type in {
+            "jump_plotted", "jump_cancelled", "status_update", "test",
+        }:
             fuel_text = f"{fuel} / {capacity} T"
             fuel_text += " · estimated" if cd.get("fuel_level_estimated") else " · journal confirmed"
             add_field("TRITIUM", fuel_text, True)
 
-        current_range = _discord_number(cd.get("jump_range_curr"), 1)
-        maximum_range = _discord_number(cd.get("jump_range_max"), 1)
-        range_parts = []
-        if current_range is not None:
-            range_parts.append(f"{current_range} LY current")
-        if maximum_range is not None:
-            range_parts.append(f"{maximum_range} LY max")
-        if range_parts:
-            add_field("JUMP RANGE", " · ".join(range_parts), True)
+        if detailed_status:
+            current_range = _discord_number(cd.get("jump_range_curr"), 1)
+            maximum_range = _discord_number(cd.get("jump_range_max"), 1)
+            range_parts = []
+            if current_range is not None:
+                range_parts.append(f"{current_range} LY current")
+            if maximum_range is not None:
+                range_parts.append(f"{maximum_range} LY max")
+            if range_parts:
+                add_field("JUMP RANGE", " · ".join(range_parts), True)
 
-        capacity_parts = []
-        for key, label in (
-            ("space_cargo", "cargo"),
-            ("space_free", "free"),
-            ("space_total", "total"),
-        ):
-            value = _discord_number(cd.get(key))
-            if value is not None:
-                capacity_parts.append(f"{value} T {label}")
-        if capacity_parts:
-            add_field("CARRIER CAPACITY", " · ".join(capacity_parts), True)
+            capacity_parts = []
+            for key, label in (
+                ("space_cargo", "cargo"),
+                ("space_free", "free"),
+                ("space_total", "total"),
+            ):
+                value = _discord_number(cd.get(key))
+                if value is not None:
+                    capacity_parts.append(f"{value} T {label}")
+            if capacity_parts:
+                add_field("CARRIER CAPACITY", " · ".join(capacity_parts), True)
 
-        access_names = {
-            "all": "All commanders",
-            "none": "None",
-            "friends": "Friends",
-            "squadron": "Squadron",
-            "squadronfriends": "Squadron + friends",
-        }
-        access_key = str(cd.get("docking_access") or "all").replace("_", "").casefold()
-        access = access_names.get(access_key, _discord_escape(cd.get("docking_access") or "All"))
-        notorious = "notorious allowed" if cd.get("allow_notorious") else "notorious blocked"
-        add_field("DOCKING ACCESS", f"{access} · {notorious}", True)
+            access_names = {
+                "all": "All commanders",
+                "none": "None",
+                "friends": "Friends",
+                "squadron": "Squadron",
+                "squadronfriends": "Squadron + friends",
+            }
+            access_key = str(cd.get("docking_access") or "all").replace("_", "").casefold()
+            access = access_names.get(access_key, _discord_escape(cd.get("docking_access") or "All"))
+            notorious = "notorious allowed" if cd.get("allow_notorious") else "notorious blocked"
+            add_field("DOCKING ACCESS", f"{access} · {notorious}", True)
 
         route = [row for row in (cd.get("expedition_route") or []) if isinstance(row, dict)]
         if route:
             done = sum(1 for row in route if row.get("visited"))
             remaining = max(0, len(route) - done)
             expedition_name = _discord_escape(cd.get("expedition_name") or "Carrier expedition")
-            route_lines = [f"**{expedition_name}**", f"{done}/{len(route)} stops complete · {remaining} remaining"]
-            total_distance = _discord_number(cd.get("expedition_total_distance_ly"), 1)
-            if total_distance is not None:
-                route_lines.append(f"{total_distance} LY plotted")
-            add_field("EXPEDITION", "\n".join(route_lines))
-
             next_stop = _next_pending_route(cd)
-            if next_stop:
-                next_bits = [_discord_location(next_stop.get("system"), next_stop.get("body"))]
-                next_distance = _discord_number(next_stop.get("distance_ly"), 1)
-                next_fuel = _discord_number(next_stop.get("fuel_used_t"))
-                leg_bits = []
-                if next_distance is not None:
-                    leg_bits.append(f"{next_distance} LY")
-                if next_fuel is not None:
-                    leg_bits.append(f"{next_fuel} T planned")
-                if leg_bits:
-                    next_bits.append(" · ".join(leg_bits))
-                add_field("NEXT EXPEDITION STOP", "\n".join(next_bits))
+            if detailed_status:
+                route_lines = [
+                    f"**{expedition_name}**",
+                    f"{done}/{len(route)} stops complete · {remaining} remaining",
+                ]
+                total_distance = _discord_number(cd.get("expedition_total_distance_ly"), 1)
+                if total_distance is not None:
+                    route_lines.append(f"{total_distance} LY plotted")
+                add_field("EXPEDITION", "\n".join(route_lines))
 
-            remaining_fuel = []
-            for row in route:
-                if row.get("visited") or row.get("fuel_used_t") is None:
+                if next_stop:
+                    next_bits = [_discord_location(next_stop.get("system"), next_stop.get("body"))]
+                    next_distance = _discord_number(next_stop.get("distance_ly"), 1)
+                    next_fuel = _discord_number(next_stop.get("fuel_used_t"))
+                    leg_bits = []
+                    if next_distance is not None:
+                        leg_bits.append(f"{next_distance} LY")
+                    if next_fuel is not None:
+                        leg_bits.append(f"{next_fuel} T planned")
+                    if leg_bits:
+                        next_bits.append(" · ".join(leg_bits))
+                    add_field("NEXT EXPEDITION STOP", "\n".join(next_bits))
+            else:
+                route_lines = [f"**{expedition_name}** · {done}/{len(route)} stops"]
+                if next_stop and event_type in {
+                    "jump_completed", "jump_cancelled", "cooldown_finished",
+                }:
+                    next_bits = [_discord_location(next_stop.get("system"), next_stop.get("body"))]
+                    next_distance = _discord_number(next_stop.get("distance_ly"), 1)
+                    next_fuel = _discord_number(next_stop.get("fuel_used_t"))
+                    leg_bits = []
+                    if next_distance is not None:
+                        leg_bits.append(f"{next_distance} LY")
+                    if next_fuel is not None:
+                        leg_bits.append(f"{next_fuel} T")
+                    route_lines.append(
+                        "**Next:** " + next_bits[0]
+                        + (f" · {' · '.join(leg_bits)}" if leg_bits else "")
+                    )
+                add_field("EXPEDITION", "\n".join(route_lines))
+
+            if detailed_status:
+                remaining_fuel = []
+                for row in route:
+                    if row.get("visited") or row.get("fuel_used_t") is None:
+                        continue
+                    try:
+                        remaining_fuel.append(max(0, int(float(row.get("fuel_used_t")))))
+                    except (TypeError, ValueError):
+                        pass
+                if remaining_fuel:
+                    reserve = _discord_number(cd.get("expedition_reserve_fuel") or 0)
+                    add_field(
+                        "ROUTE FUEL PLAN",
+                        f"{sum(remaining_fuel):,} T remaining · {reserve} T reserve",
+                        True,
+                    )
+
+        if detailed_status:
+            active_services = []
+            paused_services = []
+            for member in cd.get("crew") or []:
+                if not isinstance(member, dict) or not member.get("Activated"):
                     continue
-                try:
-                    remaining_fuel.append(max(0, int(float(row.get("fuel_used_t")))))
-                except (TypeError, ValueError):
-                    pass
-            if remaining_fuel:
-                reserve = _discord_number(cd.get("expedition_reserve_fuel") or 0)
-                add_field(
-                    "ROUTE FUEL PLAN",
-                    f"{sum(remaining_fuel):,} T remaining · {reserve} T reserve",
-                    True,
+                role = member.get("CrewRole") or "Service"
+                label = _DISCORD_SERVICE_NAMES.get(role, role)
+                (active_services if member.get("Enabled") else paused_services).append(
+                    _discord_escape(label)
                 )
+            service_lines = []
+            if active_services:
+                service_lines.append("**Online:** " + " · ".join(active_services))
+            if paused_services:
+                service_lines.append("**Paused:** " + " · ".join(paused_services))
+            if service_lines:
+                add_field("CARRIER SERVICES", "\n".join(service_lines))
 
-        active_services = []
-        paused_services = []
-        for member in cd.get("crew") or []:
-            if not isinstance(member, dict) or not member.get("Activated"):
-                continue
-            role = member.get("CrewRole") or "Service"
-            label = _DISCORD_SERVICE_NAMES.get(role, role)
-            (active_services if member.get("Enabled") else paused_services).append(
-                _discord_escape(label)
-            )
-        service_lines = []
-        if active_services:
-            service_lines.append("**Online:** " + " · ".join(active_services))
-        if paused_services:
-            service_lines.append("**Paused:** " + " · ".join(paused_services))
-        if service_lines:
-            add_field("CARRIER SERVICES", "\n".join(service_lines))
-
-        destination_note = _discord_escape(cd.get("destination_note"))
-        if destination_note:
-            add_field("PLANNED DESTINATION", destination_note)
-        note = _discord_escape(cd.get("notes"))
-        if note:
-            add_field("OPERATOR NOTE", note)
+            destination_note = _discord_escape(cd.get("destination_note"))
+            if destination_note:
+                add_field("PLANNED DESTINATION", destination_note)
+            note = _discord_escape(cd.get("notes"))
+            if note:
+                add_field("OPERATOR NOTE", note)
 
         link_system = (
             cd.get("jump_destination") if event_type == "jump_plotted"

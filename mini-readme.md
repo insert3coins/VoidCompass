@@ -3,8 +3,8 @@
 ## v5.3.5.1 // Carrier Discord Command
 **Release Date:** 2026-Aug-01
 
-*   Rebuilt personal and Squadron Carrier Discord posts as compact VoidCompass command embeds whose event colours follow the active commander theme.
-*   Added safe EDSM links for current, previous, target and expedition systems plus journal-backed Tritium, range, carrier capacity, docking access, active services, squadron identity and route progress.
+*   Rebuilt personal and Squadron Carrier Discord posts as compact, event-specific VoidCompass command embeds whose colours follow the active commander theme; richer capacity, access, service and route telemetry is reserved for deliberate manual status posts.
+*   Added safe EDSM links for current, previous, target and expedition systems plus concise journal-backed Tritium, squadron identity and route progress where each event needs them.
 *   Unified automatic jump/cooldown alerts, manual status posts and connection tests on the same renderer, disabled Discord mentions from operator text and now report failed automatic webhook HTTP responses in diagnostics without delaying journal processing.
 *   Fixed startup scan recovery treating an auto-scanned arrival star as a confirmed one-body system: unknown totals now display as `1/?` until a honk supplies `BodyCount`, while genuine partial and completed FSS progress still restore from journal/cache evidence.
 
