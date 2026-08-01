@@ -106,7 +106,6 @@ PROFILE_TEXT_SETTINGS = (
 )
 
 PROFILE_BOOL_SETTINGS = (
-    "trade_advanced_tools_visible",
     "edsm_upload_enabled",
     "edsm_backfill_on_cache_rebuild",
     "overlay_enabled",
@@ -120,6 +119,7 @@ PROFILE_BOOL_SETTINGS = (
     "system_info_enabled",
     "gravity_warning_overlay_enabled",
     "station_info_overlay_enabled",
+    "station_info_auto_hide_enabled",
     "survey_status_overlay_enabled",
     "toast_overlay_enabled",
     "sample_clear_notifications_enabled",
@@ -210,7 +210,6 @@ PROFILE_VALUE_SETTINGS = (
     "trade_window_geometry",
     "trade_route_form",
     "system_plotter_form",
-    "trade_watchlist",
     "ui_custom_themes",
     "achievements_disabled_categories",
     "achievement_window_geometry",
@@ -344,6 +343,20 @@ def apply_profile_config(config, profile_key=None):
         except (TypeError, ValueError):
             pass
         profile["station_info_timeout_semantics_version"] = 1
+    # Replace the implicit "0 means persistent" control with an explicit switch.
+    # Existing positive timeouts remain enabled; persistent profiles remain
+    # persistent and receive a useful delay ready for the switch to be turned on.
+    if "station_info_auto_hide_enabled" not in profile:
+        station_timeout = profile.get(
+            "station_info_timeout_s", config.get("station_info_timeout_s", 30)
+        )
+        try:
+            station_timeout = int(float(station_timeout))
+        except (TypeError, ValueError):
+            station_timeout = 30
+        profile["station_info_auto_hide_enabled"] = station_timeout > 0
+        if station_timeout <= 0:
+            profile["station_info_timeout_s"] = 30
     is_initial_profile = len(profiles) <= 1
     config["active_commander_profile"] = key
     config["active_commander_name"] = profile.get("commander_name", config.get("active_commander_name", "Unknown Commander"))
@@ -382,7 +395,6 @@ def apply_profile_config(config, profile_key=None):
         "overlay_hotkey_field_bookmark": "Ctrl+Alt+Shift+F12",
     }
     bool_defaults = {
-        "trade_advanced_tools_visible": False,
         "edsm_upload_enabled": False,
         "edsm_backfill_on_cache_rebuild": True,
         "overlay_enabled": True,
@@ -396,6 +408,7 @@ def apply_profile_config(config, profile_key=None):
         "system_info_enabled": True,
         "gravity_warning_overlay_enabled": True,
         "station_info_overlay_enabled": True,
+        "station_info_auto_hide_enabled": False,
         "survey_status_overlay_enabled": True,
         "toast_overlay_enabled": True,
         "sample_clear_notifications_enabled": True,
@@ -534,7 +547,6 @@ def load_config():
     detected_journal = detect_elite_journal_path()
     defaults = {
         'journal_path': '',
-        'trade_advanced_tools_visible': False,
         'nav_collapsed_groups': [],
         'overlay_enabled': True,
         'overlay_mouse_passthrough': os.name == 'nt',
@@ -580,9 +592,8 @@ def load_config():
         'gravity_warning_threshold_g': 3.0,
         'station_info_hud_x': 30,
         'station_info_hud_y': 380,
-        # Zero keeps Station Link visible for the whole docking visit. A
-        # positive commander-profile value restores timed auto-hide.
-        'station_info_timeout_s': 0,
+        'station_info_auto_hide_enabled': False,
+        'station_info_timeout_s': 30,
         'station_info_timeout_semantics_version': 1,
         'survey_status_hud_x': 30,
         'survey_status_hud_y': 520,
@@ -638,7 +649,6 @@ def load_config():
         'trade_window_geometry': '1080x700',
         'trade_route_form': {},
         'system_plotter_form': {},
-        'trade_watchlist': [],
         'route_auto_note_from_edsm': True,
         'auto_copy_waypoint': False,
         'trade_eddn_upload_enabled': True,

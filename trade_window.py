@@ -1,19 +1,39 @@
+"""Lightweight, journal-aware trading assistance for VoidCompass.
+
+The market database and EDDN services are application services; this window
+is deliberately only their small human-facing client. Opening or closing it
+never controls journal market ingestion or community uploads.
+"""
+
+from __future__ import annotations
+
+import math
 import threading
 import time
 import tkinter as tk
-import webbrowser
 from tkinter import messagebox, ttk
 
-from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
-from trade import alerts, eddn, eddn_upload, marketdb, routes, seed, spansh
-from ui_theme import THEME, ThemedWindowMixin, apply_window, button, configure_ttk, scrollbar, window_surface
+from config import save_config
+from trade import eddn, eddn_upload, marketdb, routes, seed
+from ui_theme import (
+    THEME,
+    ThemedWindowMixin,
+    apply_window,
+    button,
+    configure_ttk,
+    scrollbar,
+    window_surface,
+)
+
 
 COLOR_ACCENT = THEME.accent
 COLOR_ORANGE = THEME.orange
 COLOR_TEXT = THEME.text
+_ACTIVE_SEED_PHASES = {"starting", "downloading", "importing", "indexing"}
 
 
 class TradeWindow(ThemedWindowMixin):
+    """One-page Trade Assist: sell cargo, find one trade, or inspect the run."""
 
     _eddn_started = False
 
@@ -21,50 +41,63 @@ class TradeWindow(ThemedWindowMixin):
         self.root = root
         self.app = app
         self.config = app.config
-        self.route_rows = []
-        self.route_detail_by_iid = {}
-        self.route_payload_by_iid = {}
-        self.commodity_names = []
-        self._seed_poll_after = None
-        self._seed_polling = False
+        self.embedded = bool(embedded)
         self._live_poll_after = None
-        self._last_db_poll = 0
+        self._seed_poll_after = None
         self._status_refresh_running = False
         self._market_db_ready = False
-        self.market_sort = ("sell", -1)
-        self.market_analysis = {}
-        self.market_rows = {}
-        self.commodity_rows = {}
-        self.commodity_name_values = []
-        self.radar_rows = {}
-        self.cargo_sell_rows = {}
-        self.watchlist_rows = {}
-        self._tree_sort_state = {}
-        self.loop_mode = tk.StringVar(value="loop")
-        self.search_mode = tk.StringVar(value="sell")
-        self.allow_planetary_var = tk.BooleanVar(value=True)
-        self.unique_route_var = tk.BooleanVar(value=False)
-        self.include_carriers_var = tk.BooleanVar(value=False)
-        self.radar_large_pad_var = tk.BooleanVar(value=False)
-        self.radar_include_carriers_var = tk.BooleanVar(value=False)
-        self.embedded = embedded
-        self.win = window_surface(root, embedded=embedded)
-        self.win.title("Trade")
+        self._search_generation = 0
+        self._history_loading = False
+        self._current_view = "run"
+        self._last_session_signature = None
+        self.result_rows = {}
+
+        saved = self.config.get("trade_route_form")
+        self._saved_filters = saved if isinstance(saved, dict) else {}
+        self.large_pad_var = tk.BooleanVar(
+            value=bool(self._saved_filters.get("large_pad", False))
+        )
+        self.include_carriers_var = tk.BooleanVar(
+            value=bool(self._saved_filters.get("include_carriers", False))
+        )
+        self.eddn_upload_var = tk.BooleanVar(
+            value=bool(self.config.get("trade_eddn_upload_enabled", True))
+        )
+
+        self.win = window_surface(root, embedded=self.embedded)
+        self.win.title("Trade Assist")
         self.win.geometry(self.config.get("trade_window_geometry", "1080x700"))
-        apply_window(self.win)
         self.win.minsize(900, 560)
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
+        apply_window(self.win)
+
         self._build()
+        self._load_filter_values()
         self._start_eddn()
-        self._seed_defaults()
+        self._refresh_summary()
+        self.show_current_run()
         self.refresh_status()
         self._schedule_live_poll()
+
+    # ------------------------------------------------------------------
+    # Window and shared UI
+    # ------------------------------------------------------------------
 
     def is_open(self):
         try:
             return bool(self.win and self.win.winfo_exists())
         except Exception:
             return False
+
+    def lift(self):
+        self.win.lift()
+        self.win.focus_force()
+
+    def on_shown(self):
+        self._refresh_summary()
+        self.refresh_session()
+        self.refresh_status()
+        self._schedule_live_poll()
 
     def _post_ui(self, callback, key=None):
         poster = getattr(self.app, "_ui_post", None)
@@ -75,952 +108,306 @@ class TradeWindow(ThemedWindowMixin):
     def _is_active_view(self):
         return not self.embedded or getattr(self.app, "_active_page", None) == "TRADE"
 
-    def on_shown(self):
-        self._refresh_summary()
-        self.refresh_local()
-        self.refresh_session()
-        self.refresh_route_alerts()
-        self._schedule_live_poll()
-
-    def lift(self):
-        self.win.lift()
-        self.win.focus_force()
-
     def _build(self):
-        header = tk.Frame(self.win, bg="#0c1014", height=64)
+        style = configure_ttk(self.win, "TradeAssist")
+        style.configure(
+            "TradeAssist.Treeview",
+            background=THEME.input,
+            foreground=COLOR_TEXT,
+            fieldbackground=THEME.input,
+            rowheight=25,
+            borderwidth=0,
+        )
+        style.configure(
+            "TradeAssist.Treeview.Heading",
+            background=self.UI_PANEL_2,
+            foreground=COLOR_ORANGE,
+            relief="flat",
+            font=("Segoe UI", 8, "bold"),
+        )
+        style.map(
+            "TradeAssist.Treeview",
+            background=[("selected", THEME.selection)],
+            foreground=[("selected", COLOR_TEXT)],
+        )
+        style.configure(
+            "TradeAssist.Horizontal.TProgressbar",
+            background=COLOR_ACCENT,
+            troughcolor=self.UI_BG,
+            bordercolor=self.UI_BG,
+            lightcolor=COLOR_ACCENT,
+            darkcolor=COLOR_ACCENT,
+            thickness=8,
+        )
+
+        header = tk.Frame(self.win, bg=THEME.header, height=64)
         header.pack(fill=tk.X)
         header.pack_propagate(False)
-        title_box = tk.Frame(header, bg="#0c1014")
-        title_box.pack(side=tk.LEFT, fill=tk.Y, padx=14)
-        tk.Label(title_box, text="TRADE COMMAND", font=("Segoe UI", 16, "bold"), fg=COLOR_ACCENT, bg="#0c1014").pack(anchor="w", pady=(10, 0))
-        self.subtitle = tk.Label(title_box, text="", font=("Consolas", 8), fg=self.UI_MUTED, bg="#0c1014")
+        titles = tk.Frame(header, bg=THEME.header)
+        titles.pack(side=tk.LEFT, fill=tk.Y, padx=14)
+        tk.Label(
+            titles, text="TRADE ASSIST", fg=COLOR_ACCENT, bg=THEME.header,
+            font=("Segoe UI", 16, "bold"),
+        ).pack(anchor="w", pady=(9, 0))
+        self.subtitle = tk.Label(
+            titles,
+            text="One useful decision at a time · market services remain automatic",
+            fg=self.UI_MUTED, bg=THEME.header, font=("Consolas", 8),
+        )
         self.subtitle.pack(anchor="w", pady=(2, 0))
-        self.db_badge = tk.Label(header, text="DB CHECKING", font=("Segoe UI", 8, "bold"), fg="black", bg=self.UI_DIM, padx=10, pady=4)
+        self.db_badge = tk.Label(
+            header, text="MARKET CHECKING", fg="black", bg=self.UI_DIM,
+            font=("Segoe UI", 8, "bold"), padx=10, pady=4,
+        )
         self.db_badge.pack(side=tk.RIGHT, padx=14)
 
-        self.banner = tk.Label(self.win, text="", bg="#4a2c00", fg=self.UI_WARN, font=("Segoe UI", 9), anchor="w", padx=14, pady=6)
+        self.banner = tk.Label(
+            self.win, text="", bg=THEME.selection, fg=self.UI_WARN,
+            font=("Segoe UI", 9), anchor="w", padx=14, pady=6,
+        )
 
-        style = configure_ttk(self.win, "Trade")
-        style.configure("Trade.TNotebook", background=self.UI_BG, borderwidth=0)
-        style.configure("Trade.TNotebook.Tab", background=self.UI_PANEL, foreground=COLOR_TEXT, padding=(12, 7), borderwidth=0)
-        style.map("Trade.TNotebook.Tab", background=[("selected", self.UI_PANEL_2)], foreground=[("selected", COLOR_ACCENT)])
-        style.configure("Trade.Sub.TNotebook", background=self.UI_BG, borderwidth=0)
-        style.configure("Trade.Sub.TNotebook.Tab", background="#0e1318", foreground=self.UI_MUTED,
-                        padding=(10, 5), borderwidth=0)
-        style.map("Trade.Sub.TNotebook.Tab", background=[("selected", self.UI_PANEL)],
-                  foreground=[("selected", COLOR_ORANGE)])
-        style.configure("Trade.Treeview", background="#0b0f13", foreground=COLOR_TEXT, fieldbackground="#0b0f13", rowheight=24, borderwidth=0)
-        style.configure("Trade.Treeview.Heading", background=self.UI_PANEL, foreground=COLOR_ORANGE, relief="flat", font=("Segoe UI", 8, "bold"))
-        style.map("Trade.Treeview", background=[("selected", "#12313c")], foreground=[("selected", COLOR_TEXT)])
-        style.configure("Trade.Horizontal.TProgressbar", background=COLOR_ACCENT,
-                        troughcolor=self.UI_BG, bordercolor=self.UI_BG,
-                        lightcolor=COLOR_ACCENT, darkcolor=COLOR_ACCENT,
-                        thickness=9)
-
-        self.summary = tk.Frame(self.win, bg=self.UI_PANEL, highlightbackground=self.UI_BORDER, highlightthickness=1, bd=0)
+        self.summary = tk.Frame(
+            self.win, bg=self.UI_PANEL,
+            highlightbackground=self.UI_BORDER, highlightthickness=1,
+        )
         self.summary.pack(fill=tk.X, padx=10, pady=(10, 0))
         tk.Frame(self.summary, bg=COLOR_ACCENT, height=2).pack(fill=tk.X)
-        inner = tk.Frame(self.summary, bg=self.UI_PANEL)
-        inner.pack(fill=tk.X, padx=12, pady=10)
-        self.system_value = self._summary_stat(inner, "CURRENT SYSTEM", "---", COLOR_ACCENT)
-        self.station_value = self._summary_stat(inner, "STATION", "---", COLOR_TEXT)
-        self.credits_value = self._summary_stat(inner, "CREDITS", "---", COLOR_ORANGE)
-        self.cargo_value = self._summary_stat(inner, "CARGO", "---", COLOR_TEXT)
-        self.fuel_value = self._summary_stat(inner, "FUEL", "---", COLOR_TEXT)
-        self.legal_value = self._summary_stat(inner, "LEGAL", "---", COLOR_TEXT)
-        self.jump_value = self._summary_stat(inner, "JUMP", "---", COLOR_TEXT)
-        self.destination_value = self._summary_stat(inner, "DESTINATION", "---", COLOR_TEXT)
+        summary_inner = tk.Frame(self.summary, bg=self.UI_PANEL)
+        summary_inner.pack(fill=tk.X, padx=12, pady=9)
+        self.system_value = self._summary_stat(summary_inner, "LOCATION", "---", COLOR_ACCENT)
+        self.credits_value = self._summary_stat(summary_inner, "CREDITS", "---", COLOR_ORANGE)
+        self.cargo_value = self._summary_stat(summary_inner, "CARGO", "---", COLOR_TEXT)
+        self.profit_value = self._summary_stat(summary_inner, "RUN PROFIT", "---", self.UI_OK)
+        self.plan_value = self._summary_stat(summary_inner, "ACTIVE PLAN", "NONE", COLOR_TEXT)
 
-        self.tabs = ttk.Notebook(self.win, style="Trade.TNotebook")
-        self.tabs.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        self._build_quick_trade_tab()
-        self._build_routes_group()
-        self._build_markets_group()
-        self._build_local_tab()
-        self._build_tracking_group()
-        self._build_database_tab()
-        self._advanced_trade_tabs = (
-            (self.routes_group_frame, "Routes"),
-            (self.markets_group_frame, "Markets"),
-            (self.local_group_frame, "Local"),
-            (self.tracking_group_frame, "Tracking"),
-            (self.database_group_frame, "Database / EDDN"),
+        action_row = tk.Frame(self.win, bg=self.UI_BG)
+        action_row.pack(fill=tk.X, padx=10, pady=(9, 0))
+        for column in range(3):
+            action_row.grid_columnconfigure(column, weight=1, uniform="trade-actions")
+        self._action_card(
+            action_row, 0, "SELL MY CARGO",
+            "Find the best nearby buyer for the tradeable cargo aboard.",
+            self.find_cargo_buyers, self.UI_OK,
         )
-        self._advanced_tools_visible = True
-        self._build_footer()
-        self._set_advanced_tools_visible(
-            bool(self.config.get("trade_advanced_tools_visible", False)),
-            persist=False,
+        self._action_card(
+            action_row, 1, "FIND A TRADE",
+            "Show three profitable departures from the current station.",
+            self.find_trade, COLOR_ACCENT,
+        )
+        self._action_card(
+            action_row, 2, "CURRENT RUN",
+            "Review the active destination, transactions and real profit.",
+            self.show_current_run, COLOR_ORANGE,
         )
 
-    def _build_quick_trade_tab(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tabs.add(frame, text="Simple Trade")
-        self.quick_trade_frame = frame
-        tk.Label(frame, text="SIMPLE TRADE", fg=COLOR_ORANGE, bg=self.UI_BG,
-                 font=("Segoe UI", 11, "bold"), anchor="w").pack(fill=tk.X, padx=12, pady=(14, 2))
-        tk.Label(
-            frame,
-            text="The useful everyday actions first. EDDN and journal markets stay automatic; detailed controls are optional.",
-            fg=self.UI_MUTED, bg=self.UI_BG, font=("Segoe UI", 9), anchor="w",
-        ).pack(fill=tk.X, padx=12, pady=(0, 7))
-        status_row = tk.Frame(frame, bg=self.UI_PANEL, highlightbackground=self.UI_BORDER, highlightthickness=1)
-        status_row.pack(fill=tk.X, padx=12, pady=(0, 10))
-        self.quick_eddn_status = tk.Label(
-            status_row, text="EDDN STATUS · CHECKING", fg=COLOR_TEXT, bg=self.UI_PANEL,
-            font=("Consolas", 9, "bold"), anchor="w",
-        )
-        self.quick_eddn_status.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=12, pady=8)
-        self._button(status_row, "EDDN SETTINGS", self._quick_database).pack(side=tk.RIGHT, padx=8, pady=6)
-        grid = tk.Frame(frame, bg=self.UI_BG)
-        grid.pack(fill=tk.BOTH, expand=True, padx=12)
-        actions = (
-            ("SELL MY CARGO", "Find the best nearby buyers for the live cargo hold.", self._quick_cargo, self.UI_OK),
-            ("BEST ROUTES NOW", "Find profitable loops from the current system.", self._quick_routes, COLOR_ACCENT),
-            ("CURRENT MARKET", "Open the live station market and price analysis.", self._quick_market, COLOR_TEXT),
-            ("ADVANCED TOOLS", "Routes, markets, tracking, commodities and database maintenance.", self._show_advanced_tools, "#a5b4fc"),
-        )
-        for index, (title, subtitle, command, colour) in enumerate(actions):
-            card = tk.Frame(grid, bg=self.UI_PANEL, highlightbackground=self.UI_BORDER, highlightthickness=1)
-            card.grid(row=index // 2, column=index % 2, sticky="nsew", padx=(0, 8), pady=(0, 8))
-            tk.Frame(card, bg=colour, height=3).pack(fill=tk.X)
-            tk.Label(card, text=title, fg=colour, bg=self.UI_PANEL,
-                     font=("Segoe UI", 10, "bold"), anchor="w").pack(fill=tk.X, padx=12, pady=(12, 3))
-            tk.Label(card, text=subtitle, fg=self.UI_MUTED, bg=self.UI_PANEL,
-                     font=("Segoe UI", 9), anchor="w").pack(fill=tk.X, padx=12)
-            self._button(card, "GO", command, accent=(index == 0)).pack(anchor="w", padx=12, pady=12)
-        grid.grid_columnconfigure(0, weight=1)
-        grid.grid_columnconfigure(1, weight=1)
-        for row in range(2):
-            grid.grid_rowconfigure(row, weight=1)
+        self._build_filters()
+        self._build_results()
+        self._build_market_link()
 
-    def _open_advanced_tab(self, frame):
-        self._set_advanced_tools_visible(True)
-        self.tabs.select(frame)
-
-    def _quick_routes(self):
-        self._open_advanced_tab(self.routes_group_frame)
-        self.route_tabs.select(0)
-        self.use_current_system()
-        self.find_routes()
-
-    def _quick_cargo(self):
-        self._open_advanced_tab(self.markets_group_frame)
-        self.market_tabs.select(0)
-        self.refresh_cargo_sellers()
-
-    def _quick_radar(self):
-        self._open_advanced_tab(self.markets_group_frame)
-        self.market_tabs.select(0)
-        self.refresh_radar()
-
-    def _quick_market(self):
-        self._open_advanced_tab(self.local_group_frame)
-        self.refresh_local()
-
-    def _quick_tracking(self):
-        self._open_advanced_tab(self.tracking_group_frame)
-        self.tracking_tabs.select(0)
-        self.refresh_watchlist()
-
-    def _quick_database(self):
-        self._open_advanced_tab(self.database_group_frame)
-        self.refresh_status()
-
-    def _show_advanced_tools(self):
-        self._set_advanced_tools_visible(True)
-        self.tabs.select(self.routes_group_frame)
-
-    def _set_advanced_tools_visible(self, visible, persist=True):
-        visible = bool(visible)
-        tabs = getattr(self, "_advanced_trade_tabs", ())
-        if not tabs:
-            return
-        if visible:
-            for frame, label in tabs:
-                try:
-                    self.tabs.add(frame, text=label)
-                except tk.TclError:
-                    pass
-        else:
-            try:
-                self.tabs.select(self.quick_trade_frame)
-            except tk.TclError:
-                pass
-            for frame, _label in tabs:
-                try:
-                    self.tabs.hide(frame)
-                except tk.TclError:
-                    pass
-        self._advanced_tools_visible = visible
-        button_widget = getattr(self, "advanced_view_btn", None)
-        if button_widget is not None:
-            button_widget.configure(
-                text="SIMPLE VIEW" if visible else "SHOW ADVANCED"
-            )
-        if persist:
-            self.config["trade_advanced_tools_visible"] = visible
-            save_config(self.config)
-
-    def _toggle_advanced_view(self):
-        self._set_advanced_tools_visible(not self._advanced_tools_visible)
-        if not self._advanced_tools_visible:
-            self.tabs.select(self.quick_trade_frame)
-
-    def _sub_notebook(self, parent):
-        notebook = ttk.Notebook(parent, style="Trade.Sub.TNotebook")
-        notebook.pack(fill=tk.BOTH, expand=True)
-        return notebook
-
-    def _build_routes_group(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.routes_group_frame = frame
-        self.tabs.add(frame, text="Routes")
-        self.route_tabs = self._sub_notebook(frame)
-        self._build_routes_tab(self.route_tabs, "TRADE ROUTES")
-        self._build_guides_tab(self.route_tabs, "ROAD TO RICHES")
-
-    def _build_markets_group(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.markets_group_frame = frame
-        self.tabs.add(frame, text="Markets")
-        self.market_tabs = self._sub_notebook(frame)
-        self._build_radar_tab(self.market_tabs, "RADAR + CARGO")
-        self._build_commodity_tab(self.market_tabs, "COMMODITIES")
-        self._build_station_search_tab(self.market_tabs, "STATIONS")
-
-    def _build_tracking_group(self):
-        frame = tk.Frame(self.tabs, bg=self.UI_BG)
-        self.tracking_group_frame = frame
-        self.tabs.add(frame, text="Tracking")
-        self.tracking_tabs = self._sub_notebook(frame)
-        self._build_watchlist_tab(self.tracking_tabs, "WATCHLIST")
-
-    def _summary_stat(self, parent, label, value, fg):
+    def _summary_stat(self, parent, label, value, colour):
         box = tk.Frame(parent, bg=self.UI_PANEL)
-        box.pack(side=tk.LEFT, padx=(0, 28))
-        tk.Label(box, text=label, fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Segoe UI", 7, "bold")).pack(anchor="w")
-        lbl = tk.Label(box, text=value, fg=fg, bg=self.UI_PANEL, font=("Segoe UI", 12, "bold"))
-        lbl.pack(anchor="w")
-        return lbl
-
-    def _card(self, parent, title, subtitle=""):
-        card = tk.Frame(parent, bg=self.UI_PANEL, highlightbackground=self.UI_BORDER, highlightthickness=1, bd=0)
-        card.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-        tk.Frame(card, bg=COLOR_ACCENT, height=2).pack(fill=tk.X)
-        head = tk.Frame(card, bg=self.UI_PANEL)
-        head.pack(fill=tk.X, padx=12, pady=(10, 4))
-        text = title if not subtitle else f"{title}  {subtitle}"
-        tk.Label(head, text=text, fg=COLOR_ORANGE, bg=self.UI_PANEL, font=("Segoe UI", 8, "bold"), anchor="w").pack(side=tk.LEFT)
-        body = tk.Frame(card, bg=self.UI_PANEL)
-        body.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 12))
-        return body
-
-    def _build_footer(self):
-        footer = tk.Frame(self.win, bg=self.UI_BG)
-        footer.pack(fill=tk.X, padx=10, pady=(0, 8))
-        self.advanced_view_btn = self._button(
-            footer, "SIMPLE VIEW", self._toggle_advanced_view, accent=True,
-        )
-        self.advanced_view_btn.pack(side=tk.LEFT, padx=(0, 10))
-        tk.Label(footer, text="External lookups:", fg=self.UI_MUTED, bg=self.UI_BG, font=("Segoe UI", 8)).pack(side=tk.LEFT)
-        for label, site in (
-            ("Inara Routes", "inara_routes"),
-            ("Inara Commodities", "inara_commodities"),
-            ("Inara System", "inara_system"),
-            ("EDSM", "edsm"),
-            ("Spansh", "spansh"),
-        ):
-            self._button(footer, label, lambda s=site: self.open_external(s)).pack(side=tk.LEFT, padx=(6, 0))
+        box.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 18))
         tk.Label(
-            footer,
-            text="Trade data: Spansh galaxy dump + EDDN + local journal Market.json",
-            fg=self.UI_MUTED,
-            bg=self.UI_BG,
-            font=("Segoe UI", 8),
-        ).pack(side=tk.RIGHT)
-
-    def _button(self, parent, text, cmd, accent=False):
-        return button(parent, text, cmd, accent=accent)
-
-    def _entry(self, parent, width=10):
-        return tk.Entry(parent, width=width, bg=self.UI_PANEL_2, fg=COLOR_TEXT, insertbackground=COLOR_ACCENT, relief=tk.FLAT, highlightthickness=1, highlightbackground=self.UI_BORDER, highlightcolor=COLOR_ACCENT)
-
-    def _label(self, parent, text):
-        tk.Label(parent, text=text, fg=self.UI_MUTED, bg=parent.cget("bg"), font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=(10, 4))
-
-    def _field(self, parent, key, label, width=9):
-        box = tk.Frame(parent, bg=parent.cget("bg"))
-        box.pack(side=tk.LEFT, padx=(0, 8), pady=(0, 6))
-        lbl = tk.Label(box, text=label, fg=self.UI_MUTED, bg=parent.cget("bg"), font=("Segoe UI", 7, "bold"))
-        lbl.pack(anchor="w")
-        ent = self._entry(box, width)
-        ent.pack(anchor="w")
-        self.route_entries[key] = ent
-        if not hasattr(self, "route_field_boxes"):
-            self.route_field_boxes = {}
-        self.route_field_boxes[key] = (box, lbl, ent)
-        ent.bind("<FocusOut>", lambda _e: self._save_route_form())
-        ent.bind("<Return>", lambda _e: self._save_route_form())
-        return ent
-
-    def _style_option(self, menu):
-        menu.configure(bg=self.UI_PANEL_2, fg=COLOR_TEXT, activebackground=self.UI_PANEL_2, activeforeground=COLOR_ACCENT, relief=tk.FLAT, bd=0, highlightthickness=1, highlightbackground=self.UI_BORDER)
-        try:
-            menu["menu"].configure(bg=self.UI_PANEL_2, fg=COLOR_TEXT, activebackground=COLOR_ACCENT, activeforeground="black")
-        except Exception:
-            pass
-        return menu
-
-    def _tree(self, parent, cols, specs):
-        wrap = tk.Frame(parent, bg=parent.cget("bg"))
-        wrap.pack(fill=tk.BOTH, expand=True)
-        tree = ttk.Treeview(wrap, columns=cols, show="headings", style="Trade.Treeview")
-        tree._vc_heading_labels = {}
-        for col in cols:
-            label, width, anchor = specs[col]
-            tree._vc_heading_labels[col] = label
-            tree.heading(col, text=label, command=lambda c=col, t=tree: self._sort_tree_by_column(t, c))
-            tree.column(col, width=width, anchor=anchor)
-        scroll = scrollbar(wrap, orient=tk.VERTICAL, command=tree.yview)
-        tree.configure(yscrollcommand=scroll.set)
-        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        self._configure_tree_tags(tree)
-        return tree
-
-    def _sort_tree_by_column(self, tree, col):
-        try:
-            children = list(tree.get_children(""))
-        except Exception:
-            return
-        if not children:
-            return
-        previous = self._tree_sort_state.get(id(tree))
-        if previous and previous[0] == col:
-            reverse = not previous[1]
-        else:
-            reverse = self._default_tree_sort_reverse(col, [tree.set(iid, col) for iid in children])
-        self._tree_sort_state[id(tree)] = (col, reverse)
-
-        valued = []
-        missing = []
-        for iid in children:
-            value = tree.set(iid, col)
-            parsed, is_missing = self._tree_sort_value(col, value)
-            if is_missing:
-                missing.append(iid)
-            else:
-                valued.append((parsed, iid))
-        valued.sort(key=lambda row: row[0], reverse=reverse)
-        for index, (_value, iid) in enumerate(valued + [(None, iid) for iid in missing]):
-            tree.move(iid, "", index)
-        self._update_tree_sort_headings(tree, col, reverse)
-
-    def _default_tree_sort_reverse(self, col, values):
-        key = str(col).lower()
-        if key in {"station", "system", "commodity", "name", "type", "pad", "signal", "note"}:
-            return False
-        if key in {"age", "when"}:
-            return False
-        if key in {"updated", "last"}:
-            return True
-        return any(not self._tree_sort_value(col, value)[1] and self._tree_sort_value(col, value)[0][0] == 0 for value in values)
-
-    def _tree_sort_value(self, col, value):
-        text = str(value or "").strip()
-        if not text or text in {"-", "?", "? cr"}:
-            return ((2, ""), True)
-        key = str(col).lower()
-        if key in {"age", "when"}:
-            age = self._sort_age_minutes(text)
-            if age is not None:
-                return ((0, age), False)
-        numeric = self._sort_number(text)
-        if numeric is not None:
-            return ((0, numeric), False)
-        return ((1, text.lower()), False)
-
-    @staticmethod
-    def _sort_number(text):
-        cleaned = (
-            str(text).lower()
-            .replace(",", "")
-            .replace("cr", "")
-            .replace("ly", "")
-            .replace("ls", "")
-            .replace("/t", "")
-            .replace("%", "")
-            .strip()
+            box, text=label, fg=self.UI_MUTED, bg=self.UI_PANEL,
+            font=("Segoe UI", 7, "bold"),
+        ).pack(anchor="w")
+        widget = tk.Label(
+            box, text=value, fg=colour, bg=self.UI_PANEL,
+            font=("Segoe UI", 11, "bold"), anchor="w",
         )
-        if cleaned.startswith("+"):
-            cleaned = cleaned[1:]
-        parts = cleaned.split()
-        if parts:
-            cleaned = parts[0]
-        try:
-            return float(cleaned)
-        except Exception:
-            return None
+        widget.pack(fill=tk.X)
+        return widget
 
-    @staticmethod
-    def _sort_age_minutes(text):
-        raw = str(text).strip().lower()
-        if raw == "now":
-            return 0.0
-        try:
-            unit = raw[-1]
-            value = float(raw[:-1])
-            if unit == "m":
-                return value
-            if unit == "h":
-                return value * 60.0
-            if unit == "d":
-                return value * 1440.0
-        except Exception:
-            return None
-        return None
+    def _action_card(self, parent, column, title, description, command, colour):
+        card = tk.Frame(
+            parent, bg=self.UI_PANEL,
+            highlightbackground=self.UI_BORDER, highlightthickness=1,
+        )
+        card.grid(row=0, column=column, sticky="nsew", padx=(0 if column == 0 else 5, 0))
+        tk.Frame(card, bg=colour, height=3).pack(fill=tk.X)
+        tk.Label(
+            card, text=title, fg=colour, bg=self.UI_PANEL,
+            font=("Segoe UI", 10, "bold"), anchor="w",
+        ).pack(fill=tk.X, padx=11, pady=(9, 2))
+        tk.Label(
+            card, text=description, fg=self.UI_MUTED, bg=self.UI_PANEL,
+            font=("Segoe UI", 8), anchor="w",
+        ).pack(fill=tk.X, padx=11)
+        button(card, "GO", command, accent=(column == 0)).pack(
+            anchor="w", padx=11, pady=(8, 10)
+        )
 
-    def _update_tree_sort_headings(self, tree, active_col, reverse):
-        labels = getattr(tree, "_vc_heading_labels", {}) or {}
-        for col, label in labels.items():
-            suffix = ""
-            if col == active_col:
-                suffix = " v" if reverse else " ^"
-            try:
-                tree.heading(col, text=f"{label}{suffix}", command=lambda c=col, t=tree: self._sort_tree_by_column(t, c))
-            except Exception:
-                pass
-
-    def _configure_tree_tags(self, tree):
-        tree.tag_configure("fresh", foreground=COLOR_TEXT)
-        tree.tag_configure("stale", foreground=self.UI_WARN)
-        tree.tag_configure("old", foreground=self.UI_FAIL)
-
-    def _freshness_tag(self, epoch):
-        try:
-            age_days = (time.time() - float(epoch)) / 86400.0
-            if age_days <= 2:
-                return "fresh"
-            if age_days <= 14:
-                return "stale"
-            return "old"
-        except Exception:
-            return ""
-
-    def _copy_text(self, text, label="Copied"):
-        if not text:
-            return
-        try:
-            self.root.clipboard_clear()
-            self.root.clipboard_append(str(text))
-            self._show_banner(f"{label} copied to clipboard.")
-        except Exception as exc:
-            self._show_banner(f"Copy failed: {exc}")
-
-    def _copy_selected_tree(self, tree, row_map, label="Selection"):
-        selected = tree.selection()
-        if not selected:
-            self._show_banner("Select a row first.")
-            return
-        row = row_map.get(selected[0])
-        if isinstance(row, str):
-            self._copy_text(row, label)
-        elif row:
-            self._copy_text(" | ".join(f"{k}: {v}" for k, v in row.items() if v not in (None, "")), label)
-
-    def _copy_route_detail(self):
-        selected = self.route_tree.selection()
-        text = self.route_detail_by_iid.get(selected[0], "") if selected else self.route_detail.get("1.0", tk.END).strip()
-        self._copy_text(text, "Route detail")
-
-    def _build_radar_tab(self, notebook=None, text="Radar"):
-        notebook = notebook or self.tabs
-        frame = tk.Frame(notebook, bg=self.UI_BG)
-        notebook.add(frame, text=text)
-        wrap = tk.Frame(frame, bg=self.UI_BG)
-        wrap.pack(fill=tk.BOTH, expand=True)
-        left = tk.Frame(wrap, bg=self.UI_BG)
-        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
-        right = tk.Frame(wrap, bg=self.UI_BG)
-        right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
-
-        radar = self._card(left, "OPPORTUNITY RADAR", "profitable nearby station-to-station flows")
-        controls = tk.Frame(radar, bg=self.UI_PANEL)
-        controls.pack(fill=tk.X, pady=(0, 8))
-        self.radar_radius = self._simple_field(controls, "RADIUS LY", 7)
-        self.radar_min_profit = self._simple_field(controls, "MIN CR/T", 8)
-        self.radar_min_units = self._simple_field(controls, "MIN UNITS", 7)
-        self.radar_limit = self._simple_field(controls, "RESULTS", 6)
-        tk.Checkbutton(controls, text="Large pad", variable=self.radar_large_pad_var, bg=self.UI_PANEL, fg=COLOR_TEXT, selectcolor=self.UI_PANEL_2, activebackground=self.UI_PANEL).pack(side=tk.LEFT, padx=8, pady=(12, 6))
-        tk.Checkbutton(controls, text="Carriers", variable=self.radar_include_carriers_var, bg=self.UI_PANEL, fg=COLOR_TEXT, selectcolor=self.UI_PANEL_2, activebackground=self.UI_PANEL).pack(side=tk.LEFT, padx=8, pady=(12, 6))
-        self._button(controls, "Scan", self.refresh_radar, accent=True).pack(side=tk.LEFT, padx=(8, 0), pady=(12, 6))
-        self._button(controls, "Copy", lambda: self._copy_selected_tree(self.radar_tree, self.radar_rows, "Radar row")).pack(side=tk.LEFT, padx=(6, 0), pady=(12, 6))
-        self.radar_status = tk.Label(radar, text="", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 9), anchor="w")
-        self.radar_status.pack(fill=tk.X, pady=(0, 6))
-        self.radar_tree = self._tree(radar, ("commodity", "profit", "units", "from", "to", "dist", "age"), {
-            "commodity": ("Commodity", 160, tk.W),
-            "profit": ("Profit/t", 85, tk.E),
-            "units": ("Units", 70, tk.E),
-            "from": ("Buy From", 210, tk.W),
-            "to": ("Sell To", 210, tk.W),
-            "dist": ("Leg", 70, tk.E),
-            "age": ("Age", 60, tk.E),
-        })
-
-        cargo = self._card(right, "CARGO SELL FINDER", "best nearby buyers for what is in your hold")
-        row = tk.Frame(cargo, bg=self.UI_PANEL)
-        row.pack(fill=tk.X, pady=(0, 8))
-        self._button(row, "Find Buyers", self.refresh_cargo_sellers, accent=True).pack(side=tk.LEFT, pady=(0, 6))
-        self._button(row, "Copy", lambda: self._copy_selected_tree(self.cargo_sell_tree, self.cargo_sell_rows, "Cargo sell row")).pack(side=tk.LEFT, padx=(6, 0), pady=(0, 6))
-        self.cargo_sell_status = tk.Label(row, text="", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 9), anchor="w")
-        self.cargo_sell_status.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=8, pady=(5, 0))
-        self.cargo_sell_tree = self._tree(cargo, ("station", "system", "sale", "items", "jump", "ls", "age"), {
-            "station": ("Station", 190, tk.W),
-            "system": ("System", 160, tk.W),
-            "sale": ("Est Sale", 95, tk.E),
-            "items": ("Cargo Accepted", 260, tk.W),
-            "jump": ("Jump", 65, tk.E),
-            "ls": ("Star Dist", 75, tk.E),
-            "age": ("Age", 55, tk.E),
-        })
-
-        session = self._card(right, "TRADE SESSION", "journal buy/sell events since app start")
-        self.session_status = tk.Label(session, text="", fg=COLOR_TEXT, bg=self.UI_PANEL, font=("Consolas", 10), justify=tk.LEFT, anchor="w")
-        self.session_status.pack(fill=tk.X, pady=(0, 6))
-        self.session_tree = self._tree(session, ("time", "event", "commodity", "count", "price", "profit"), {
-            "time": ("Time", 70, tk.W),
-            "event": ("Type", 55, tk.CENTER),
-            "commodity": ("Commodity", 160, tk.W),
-            "count": ("Tons", 55, tk.E),
-            "price": ("Price", 80, tk.E),
-            "profit": ("Profit", 90, tk.E),
-        })
-
-    def _build_routes_tab(self, notebook=None, text="Trade Routes"):
-        notebook = notebook or self.tabs
-        frame = tk.Frame(notebook, bg=self.UI_BG)
-        notebook.add(frame, text=text)
-        body = self._card(frame, "TRADE ROUTES", "computed locally, with Spansh fallback for chain routes")
-        controls = tk.Frame(body, bg=self.UI_PANEL)
-        controls.pack(fill=tk.X, pady=(0, 8))
-        self.route_entries = {}
-        type_box = tk.Frame(controls, bg=self.UI_PANEL)
-        type_box.pack(side=tk.LEFT, padx=(0, 8), pady=(0, 6))
-        tk.Label(type_box, text="TYPE", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Segoe UI", 7, "bold")).pack(anchor="w")
-        self._style_option(tk.OptionMenu(type_box, self.loop_mode, "loop", "chain")).pack(anchor="w")
-        self.loop_mode.trace_add("write", lambda *_: self._on_route_mode_changed())
-        start = self._field(controls, "system", "START SYSTEM", 18)
-        start.bind("<Return>", lambda _e: self.find_routes())
-        self._button(controls, "Use Current", self.use_current_system).pack(side=tk.LEFT, padx=(0, 8), pady=(12, 6))
+    def _build_filters(self):
+        panel = tk.Frame(
+            self.win, bg=self.UI_PANEL,
+            highlightbackground=self.UI_BORDER, highlightthickness=1,
+        )
+        panel.pack(fill=tk.X, padx=10, pady=(9, 0))
+        tk.Label(
+            panel, text="QUICK FILTERS", fg=COLOR_ORANGE, bg=self.UI_PANEL,
+            font=("Segoe UI", 8, "bold"),
+        ).pack(side=tk.LEFT, padx=(11, 8), pady=8)
+        self.filter_entries = {}
         for key, label, width in (
-            ("capital", "CAPITAL", 10),
-            ("cargo", "CARGO", 6),
             ("radius", "SEARCH LY", 7),
-            ("max_leg", "MAX LEG", 7),
-            ("jump", "JUMP LY", 7),
-            ("results", "RESULTS", 6),
-            ("hops", "HOPS", 5),
-            ("min_units", "MIN UNITS", 7),
             ("max_ls", "MAX LS", 7),
             ("age", "AGE DAYS", 7),
+            ("min_profit", "MIN CR/T", 8),
         ):
-            self._field(controls, key, label, width)
-        self.large_pad_var = tk.BooleanVar(value=False)
-        tk.Checkbutton(controls, text="Large pad", variable=self.large_pad_var, bg=self.UI_PANEL, fg=COLOR_TEXT, selectcolor=self.UI_PANEL_2, activebackground=self.UI_PANEL, command=self._save_route_form).pack(side=tk.LEFT, padx=8, pady=(12, 6))
-        tk.Checkbutton(controls, text="Carriers", variable=self.include_carriers_var, bg=self.UI_PANEL, fg=COLOR_TEXT, selectcolor=self.UI_PANEL_2, activebackground=self.UI_PANEL, command=self._save_route_form).pack(side=tk.LEFT, padx=8, pady=(12, 6))
-        self.allow_planetary_check = tk.Checkbutton(controls, text="Planetary", variable=self.allow_planetary_var, bg=self.UI_PANEL, fg=COLOR_TEXT, selectcolor=self.UI_PANEL_2, activebackground=self.UI_PANEL, command=self._save_route_form)
-        self.allow_planetary_check.pack(side=tk.LEFT, padx=8, pady=(12, 6))
-        self.unique_route_check = tk.Checkbutton(controls, text="Unique", variable=self.unique_route_var, bg=self.UI_PANEL, fg=COLOR_TEXT, selectcolor=self.UI_PANEL_2, activebackground=self.UI_PANEL, command=self._save_route_form)
-        self.unique_route_check.pack(side=tk.LEFT, padx=8, pady=(12, 6))
-        self._button(controls, "Find Routes", self.find_routes, accent=True).pack(side=tk.LEFT, padx=(8, 0), pady=(12, 6))
-        self._button(controls, "Copy", self._copy_route_detail).pack(side=tk.LEFT, padx=(6, 0), pady=(12, 6))
-        self._button(controls, "Watch Loop", self.watch_selected_loop).pack(side=tk.LEFT, padx=(6, 0), pady=(12, 6))
-
-        self.route_status = tk.Label(body, text="", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 9), anchor="w")
-        self.route_status.pack(fill=tk.X, pady=(0, 6))
-        self.route_tree = self._tree(body, ("kind", "from", "to", "profit", "metric", "distance"), {
-            "kind": ("Type", 80, tk.CENTER),
-            "from": ("From", 250, tk.W),
-            "to": ("To", 250, tk.W),
-            "profit": ("Profit", 110, tk.E),
-            "metric": ("Rate / Trip", 120, tk.E),
-            "distance": ("Distance", 90, tk.E),
-        })
-        self.route_tree.bind("<<TreeviewSelect>>", self._on_route_selected)
-        self.route_detail = tk.Text(body, height=9, bg="#0b0f13", fg=COLOR_TEXT, relief=tk.FLAT, padx=10, pady=8, font=("Consolas", 9), wrap=tk.WORD)
-        self.route_detail.pack(fill=tk.X, pady=(8, 0))
-        self.route_detail.configure(state=tk.DISABLED)
-
-    def _build_commodity_tab(self, notebook=None, text="Commodities"):
-        notebook = notebook or self.tabs
-        frame = tk.Frame(notebook, bg=self.UI_BG)
-        notebook.add(frame, text=text)
-        body = self._card(frame, "COMMODITY SEARCH", "local database: where to buy or sell near you")
-        controls = tk.Frame(body, bg=self.UI_PANEL)
-        controls.pack(fill=tk.X, pady=(0, 8))
-        combo_box = tk.Frame(controls, bg=self.UI_PANEL)
-        combo_box.pack(side=tk.LEFT, padx=(0, 8), pady=(0, 6))
-        tk.Label(combo_box, text="COMMODITY", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Segoe UI", 7, "bold")).pack(anchor="w")
-        self.commodity_entry = ttk.Combobox(combo_box, width=24, values=[], state="normal")
-        self.commodity_entry.pack(anchor="w")
-        self.commodity_entry.bind("<Return>", lambda _e: self.search_commodity())
-        self.commodity_entry.bind("<KeyRelease>", self._on_commodity_typing)
-        self.commodity_entry.bind("<FocusIn>", lambda _e: self._refresh_commodity_suggestions())
-        mode_box = tk.Frame(controls, bg=self.UI_PANEL)
-        mode_box.pack(side=tk.LEFT, padx=(0, 8), pady=(0, 6))
-        tk.Label(mode_box, text="I WANT TO", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Segoe UI", 7, "bold")).pack(anchor="w")
-        self._style_option(tk.OptionMenu(mode_box, self.search_mode, "sell", "buy")).pack(anchor="w")
-        self.commodity_radius = self._simple_field(controls, "RADIUS LY", 7)
-        self.commodity_min = self._simple_field(controls, "MIN UNITS", 7)
-        self.commodity_limit = self._simple_field(controls, "RESULTS", 6)
-        self.commodity_large_pad = tk.BooleanVar(value=False)
-        self.commodity_include_carriers = tk.BooleanVar(value=False)
-        tk.Checkbutton(controls, text="Large pad", variable=self.commodity_large_pad, bg=self.UI_PANEL, fg=COLOR_TEXT, selectcolor=self.UI_PANEL_2, activebackground=self.UI_PANEL).pack(side=tk.LEFT, padx=8, pady=(12, 6))
-        tk.Checkbutton(controls, text="Carriers", variable=self.commodity_include_carriers, bg=self.UI_PANEL, fg=COLOR_TEXT, selectcolor=self.UI_PANEL_2, activebackground=self.UI_PANEL).pack(side=tk.LEFT, padx=8, pady=(12, 6))
-        self._button(controls, "Search", self.search_commodity, accent=True).pack(side=tk.LEFT, padx=(8, 0), pady=(12, 6))
-        self._button(controls, "Copy", lambda: self._copy_selected_tree(self.commodity_tree, getattr(self, "commodity_rows", {}), "Commodity row")).pack(side=tk.LEFT, padx=(6, 0), pady=(12, 6))
-        self.commodity_status = tk.Label(body, text="", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 9), anchor="w")
-        self.commodity_status.pack(fill=tk.X, pady=(0, 6))
-        self.commodity_tree = self._tree(body, ("station", "system", "price", "units", "jump", "ls", "age", "pad"), {
-            "station": ("Station", 260, tk.W),
-            "system": ("System", 220, tk.W),
-            "price": ("Price", 90, tk.E),
-            "units": ("Units", 90, tk.E),
-            "jump": ("Jump", 80, tk.E),
-            "ls": ("Star Dist", 90, tk.E),
-            "age": ("Age", 70, tk.E),
-            "pad": ("Pad", 50, tk.CENTER),
-        })
-
-    def _build_station_search_tab(self, notebook=None, text="Station Search"):
-        notebook = notebook or self.tabs
-        frame = tk.Frame(notebook, bg=self.UI_BG)
-        notebook.add(frame, text=text)
-        body = self._card(frame, "OUTFITTING + SHIPYARD SEARCH", "Spansh station search near your current system")
-        controls = tk.Frame(body, bg=self.UI_PANEL)
-        controls.pack(fill=tk.X, pady=(0, 8))
-        self.station_search_mode = tk.StringVar(value="module")
-        mode_box = tk.Frame(controls, bg=self.UI_PANEL)
-        mode_box.pack(side=tk.LEFT, padx=(0, 8), pady=(0, 6))
-        tk.Label(mode_box, text="TYPE", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Segoe UI", 7, "bold")).pack(anchor="w")
-        self._style_option(tk.OptionMenu(mode_box, self.station_search_mode, "module", "ship", "service")).pack(anchor="w")
-        self.station_search_query = self._simple_field(controls, "SEARCH", 26)
-        self.station_search_query.bind("<Return>", lambda _e: self.search_station_inventory())
-        self.station_search_limit = self._simple_field(controls, "RESULTS", 6)
-        self.station_search_limit.insert(0, "20")
-        self._button(controls, "Search", self.search_station_inventory, accent=True).pack(side=tk.LEFT, padx=(8, 0), pady=(12, 6))
-        self._button(controls, "Copy", lambda: self._copy_selected_tree(self.station_search_tree, getattr(self, "station_search_rows", {}), "Station search row")).pack(side=tk.LEFT, padx=(6, 0), pady=(12, 6))
-        self.station_search_status = tk.Label(body, text="Try '6A Fuel Scoop', 'Python', or service names such as Interstellar Factors / Vista Genomics.", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 9), anchor="w")
-        self.station_search_status.pack(fill=tk.X, pady=(0, 6))
-        self.station_search_tree = self._tree(body, ("station", "system", "distance", "ls", "type", "pad", "updated"), {
-            "station": ("Station", 240, tk.W),
-            "system": ("System", 190, tk.W),
-            "distance": ("Jump", 80, tk.E),
-            "ls": ("Star Dist", 90, tk.E),
-            "type": ("Type", 120, tk.W),
-            "pad": ("Pad", 50, tk.CENTER),
-            "updated": ("Updated", 130, tk.W),
-        })
-
-    def _build_guides_tab(self, notebook=None, text="Guides"):
-        notebook = notebook or self.tabs
-        frame = tk.Frame(notebook, bg=self.UI_BG)
-        notebook.add(frame, text=text)
-        wrap = tk.Frame(frame, bg=self.UI_BG)
-        wrap.pack(fill=tk.BOTH, expand=True)
-
-        riches = self._card(wrap, "ROAD TO RICHES", "high-value scan/mapping targets via Spansh")
-        controls = tk.Frame(riches, bg=self.UI_PANEL)
-        controls.pack(fill=tk.X, pady=(0, 8))
-        self.riches_to = self._simple_field(controls, "TO SYSTEM", 18)
-        self.riches_jump = self._simple_field(controls, "JUMP LY", 7)
-        self.riches_jump.insert(0, str(((getattr(self.app, "cmdr_ship", {}) or {}).get("max_jump_range") or 30)))
-        self.riches_radius = self._simple_field(controls, "RADIUS", 7)
-        self.riches_radius.insert(0, "50")
-        self.riches_results = self._simple_field(controls, "RESULTS", 7)
-        self.riches_results.insert(0, "30")
-        self.riches_min_value = self._simple_field(controls, "MIN VALUE", 9)
-        self.riches_min_value.insert(0, "300000")
-        self._button(controls, "Find", self.find_riches_route, accent=True).pack(side=tk.LEFT, padx=(8, 0), pady=(12, 6))
-        self._button(controls, "Copy", lambda: self._copy_selected_tree(self.riches_tree, getattr(self, "riches_rows", {}), "Riches row")).pack(side=tk.LEFT, padx=(6, 0), pady=(12, 6))
-        self.riches_status = tk.Label(riches, text="", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 9), anchor="w")
-        self.riches_status.pack(fill=tk.X, pady=(0, 6))
-        self.riches_tree = self._tree(riches, ("system", "jumps", "value", "bodies"), {
-            "system": ("System", 220, tk.W),
-            "jumps": ("Jumps", 70, tk.E),
-            "value": ("Value", 110, tk.E),
-            "bodies": ("Targets", 320, tk.W),
-        })
-
-    def _simple_field(self, parent, label, width=10):
-        box = tk.Frame(parent, bg=parent.cget("bg"))
-        box.pack(side=tk.LEFT, padx=(0, 8), pady=(0, 6))
-        tk.Label(box, text=label, fg=self.UI_MUTED, bg=parent.cget("bg"), font=("Segoe UI", 7, "bold")).pack(anchor="w")
-        ent = self._entry(box, width)
-        ent.pack(anchor="w")
-        return ent
-
-    def _build_local_tab(self, notebook=None, text="Local"):
-        notebook = notebook or self.tabs
-        frame = tk.Frame(notebook, bg=self.UI_BG)
-        if notebook is self.tabs:
-            self.local_group_frame = frame
-        notebook.add(frame, text=text)
-        wrap = tk.Frame(frame, bg=self.UI_BG)
-        wrap.pack(fill=tk.BOTH, expand=True)
-        left_col = tk.Frame(wrap, bg=self.UI_BG)
-        left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
-        right_col = tk.Frame(wrap, bg=self.UI_BG)
-        right_col.pack(side=tk.RIGHT, fill=tk.BOTH, expand=False, padx=(5, 0))
-        left = self._card(left_col, "STATION MARKET", "from Market.json after opening commodities")
-        filter_row = tk.Frame(left, bg=self.UI_PANEL)
-        filter_row.pack(fill=tk.X, pady=(0, 6))
-        self.market_filter = self._simple_field(filter_row, "FILTER", 18)
-        self.market_filter.bind("<KeyRelease>", lambda _e: self.refresh_local())
-        self.local_market_status = tk.Label(filter_row, text="", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 9), anchor="w")
-        self.local_market_status.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=8, pady=(13, 0))
-        self.market_tree = self._tree(left, ("name", "sell", "buy", "demand", "stock", "signal", "note"), {
-            "name": ("Commodity", 250, tk.W),
-            "sell": ("Sell", 90, tk.E),
-            "buy": ("Buy", 90, tk.E),
-            "demand": ("Demand", 90, tk.E),
-            "stock": ("Stock", 90, tk.E),
-            "signal": ("Signal", 75, tk.CENTER),
-            "note": ("Analyzer", 260, tk.W),
-        })
-        for col in ("name", "sell", "buy", "demand", "stock"):
-            self.market_tree.heading(col, command=lambda c=col: self.sort_market(c))
-        self._button(filter_row, "Analyze", self.analyze_local_market).pack(side=tk.LEFT, padx=(6, 0), pady=(10, 0))
-        self._button(filter_row, "Copy", lambda: self._copy_selected_tree(self.market_tree, getattr(self, "market_rows", {}), "Market row")).pack(side=tk.LEFT, padx=(6, 0), pady=(10, 0))
-
-        jumps = self._card(right_col, "JUMP HISTORY", "recent session jumps")
-        self.jump_tree = self._tree(jumps, ("system", "distance", "age"), {
-            "system": ("System", 220, tk.W),
-            "distance": ("Dist", 80, tk.E),
-            "age": ("When", 70, tk.E),
-        })
-
-        right = self._card(right_col, "CARGO HOLD", "current journal cargo")
-        self.cargo_tree = self._tree(right, ("name", "count"), {
-            "name": ("Commodity", 220, tk.W),
-            "count": ("Units", 80, tk.E),
-        })
-
-    def _build_database_tab(self, notebook=None, text="Database"):
-        notebook = notebook or self.tabs
-        frame = tk.Frame(notebook, bg=self.UI_BG)
-        if notebook is self.tabs:
-            self.database_group_frame = frame
-        notebook.add(frame, text=text)
-        panel = self._card(
-            frame, "MARKET DATABASE",
-            "full Spansh baseline once; incremental EDDN and journal-market updates thereafter")
-        self.db_status = tk.Label(panel, text="", fg=COLOR_TEXT, bg=self.UI_PANEL, font=("Consolas", 9), justify=tk.LEFT, anchor="w")
-        self.db_status.pack(fill=tk.X, padx=12, pady=8)
-        self.seed_progress = ttk.Progressbar(
-            panel, mode="determinate", maximum=100,
-            style="Trade.Horizontal.TProgressbar",
+            box = tk.Frame(panel, bg=self.UI_PANEL)
+            box.pack(side=tk.LEFT, padx=(0, 8), pady=5)
+            tk.Label(
+                box, text=label, fg=self.UI_DIM, bg=self.UI_PANEL,
+                font=("Segoe UI", 6, "bold"),
+            ).pack(anchor="w")
+            entry = tk.Entry(
+                box, width=width, bg=self.UI_PANEL_2, fg=COLOR_TEXT,
+                insertbackground=COLOR_ACCENT, relief=tk.FLAT,
+                highlightthickness=1, highlightbackground=self.UI_BORDER,
+                highlightcolor=COLOR_ACCENT,
+            )
+            entry.pack(anchor="w")
+            entry.bind("<FocusOut>", lambda _event: self._save_filters())
+            entry.bind("<Return>", lambda _event: self._save_filters())
+            self.filter_entries[key] = entry
+        self._checkbutton(panel, "Large pad", self.large_pad_var).pack(
+            side=tk.LEFT, padx=(4, 0), pady=(13, 5)
         )
-        self.seed_progress.pack(fill=tk.X, padx=12, pady=(0, 10))
-        self.seed_progress.pack_forget()
-        self.eddn_upload_var = tk.BooleanVar(value=bool(self.config.get("trade_eddn_upload_enabled", True)))
-        self.seed_low_impact_var = tk.BooleanVar(value=True)
-        self.seed_include_carriers_var = tk.BooleanVar(value=False)
-        self.seed_keep_dump_var = tk.BooleanVar(value=False)
-        tk.Checkbutton(
-            panel,
-            text="Publish visited station markets to EDDN",
-            variable=self.eddn_upload_var,
-            command=self._toggle_eddn_upload,
-            bg=self.UI_PANEL,
-            fg=COLOR_TEXT,
-            selectcolor=self.UI_PANEL_2,
-            activebackground=self.UI_PANEL,
-        ).pack(anchor="w", padx=12, pady=(0, 10))
-        row = tk.Frame(panel, bg=self.UI_PANEL)
-        row.pack(fill=tk.X, padx=12, pady=(0, 12))
-        self.seed_btn = self._button(row, "FIRST FULL BUILD", self._start_full_market_build, accent=True)
-        self.seed_btn.pack(side=tk.LEFT)
-        self._button(row, "Refresh Status", self.refresh_status).pack(side=tk.LEFT, padx=(6, 10))
-        for text, variable in (
-            ("Low impact", self.seed_low_impact_var),
-            ("Include carriers", self.seed_include_carriers_var),
-            ("Keep 4+ GB dump", self.seed_keep_dump_var),
-        ):
-            tk.Checkbutton(
-                row, text=text, variable=variable, bg=self.UI_PANEL, fg=COLOR_TEXT,
-                selectcolor=self.UI_PANEL_2, activebackground=self.UI_PANEL,
-            ).pack(side=tk.LEFT, padx=(0, 10))
+        self._checkbutton(panel, "Carriers", self.include_carriers_var).pack(
+            side=tk.LEFT, padx=(4, 0), pady=(13, 5)
+        )
+        tk.Label(
+            panel, text="Cargo, capital and jump range come from the live ship.",
+            fg=self.UI_DIM, bg=self.UI_PANEL, font=("Segoe UI", 7),
+        ).pack(side=tk.RIGHT, padx=11)
 
-    def _build_analytics_tab(self, notebook=None, text="Analytics"):
-        notebook = notebook or self.tabs
-        frame = tk.Frame(notebook, bg=self.UI_BG)
-        notebook.add(frame, text=text)
-        body = self._card(frame, "TRADE ANALYTICS", "persistent trade and balance history from journal events")
-        controls = tk.Frame(body, bg=self.UI_PANEL)
-        controls.pack(fill=tk.X, pady=(0, 8))
-        self.analytics_days = self._simple_field(controls, "DAYS", 6)
-        self.analytics_days.insert(0, "30")
-        self._button(controls, "Refresh", self.refresh_analytics, accent=True).pack(side=tk.LEFT, padx=(8, 0), pady=(12, 6))
-        self.analytics_summary = tk.Label(body, text="", fg=COLOR_TEXT, bg=self.UI_PANEL, font=("Consolas", 10), justify=tk.LEFT, anchor="w")
-        self.analytics_summary.pack(fill=tk.X, pady=(0, 8))
-        wrap = tk.Frame(body, bg=self.UI_PANEL)
-        wrap.pack(fill=tk.BOTH, expand=True)
-        left = tk.Frame(wrap, bg=self.UI_PANEL)
-        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
-        right = tk.Frame(wrap, bg=self.UI_PANEL)
-        right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
-        tk.Label(left, text="DAILY PROFIT", fg=COLOR_ORANGE, bg=self.UI_PANEL, font=("Segoe UI", 8, "bold")).pack(anchor="w")
-        self.analytics_daily_tree = self._tree(left, ("date", "profit", "tons"), {
-            "date": ("Date", 120, tk.W),
-            "profit": ("Profit", 120, tk.E),
-            "tons": ("Tons", 80, tk.E),
-        })
-        tk.Label(right, text="TOP COMMODITIES", fg=COLOR_ORANGE, bg=self.UI_PANEL, font=("Segoe UI", 8, "bold")).pack(anchor="w")
-        self.analytics_top_tree = self._tree(right, ("commodity", "profit", "tons"), {
-            "commodity": ("Commodity", 180, tk.W),
-            "profit": ("Profit", 120, tk.E),
-            "tons": ("Tons", 80, tk.E),
-        })
+    def _checkbutton(self, parent, text, variable, command=None):
+        return tk.Checkbutton(
+            parent, text=text, variable=variable, command=command,
+            bg=self.UI_PANEL, fg=COLOR_TEXT, selectcolor=self.UI_PANEL_2,
+            activebackground=self.UI_PANEL, activeforeground=COLOR_ACCENT,
+            highlightthickness=0, font=("Segoe UI", 8),
+        )
 
-    def _toggle_eddn_upload(self):
-        enabled = bool(self.eddn_upload_var.get())
-        self.config["trade_eddn_upload_enabled"] = enabled
-        eddn_upload.UPLOADER.set_enabled(enabled)
-        save_config(self.config)
-        self.refresh_status()
+    def _build_results(self):
+        panel = tk.Frame(
+            self.win, bg=self.UI_PANEL,
+            highlightbackground=self.UI_BORDER, highlightthickness=1,
+        )
+        panel.pack(fill=tk.BOTH, expand=True, padx=10, pady=(9, 0))
+        head = tk.Frame(panel, bg=self.UI_PANEL)
+        head.pack(fill=tk.X, padx=11, pady=(9, 5))
+        self.result_title = tk.Label(
+            head, text="CURRENT RUN", fg=COLOR_ORANGE, bg=self.UI_PANEL,
+            font=("Segoe UI", 9, "bold"), anchor="w",
+        )
+        self.result_title.pack(side=tk.LEFT)
+        self.result_status = tk.Label(
+            head, text="", fg=self.UI_MUTED, bg=self.UI_PANEL,
+            font=("Consolas", 8), anchor="e",
+        )
+        self.result_status.pack(side=tk.RIGHT, fill=tk.X, expand=True)
 
-    def _start_full_market_build(self):
-        phase = seed.SEEDER.progress().get("phase")
-        if phase in ("starting", "downloading", "importing", "indexing"):
-            self._show_banner("A full market database build is already running.")
-            return
-        if self._market_db_ready:
-            prompt = (
-                "Download the full Spansh populated-galaxy snapshot and rebase the local database?\n\n"
-                "This is an occasional 4+ GB maintenance operation, not the normal update path. "
-                "EDDN and visited Market.json files already maintain prices incrementally.\n\n"
-                "Newer local market rows will be preserved."
-            )
-        else:
-            prompt = (
-                "Download the full Spansh populated-galaxy snapshot and create the first market database?\n\n"
-                "This initial download is roughly 4+ GB. Normal updates afterwards are automatic through "
-                "EDDN and visited Market.json files."
-            )
-        if not messagebox.askyesno("Full Spansh Market Build", prompt, parent=self.win):
-            return
-        if not seed.SEEDER.start(
-                include_carriers=self.seed_include_carriers_var.get(),
-                keep_dump=self.seed_keep_dump_var.get(),
-                polite=self.seed_low_impact_var.get()):
-            self._show_banner("The market database worker could not be started.")
-            return
-        self._show_banner("Full market database worker started. The current database remains available.")
-        self._schedule_seed_poll(300)
-        self.refresh_status()
-
-    def _seed_defaults(self):
-        defaults = {
-            "system": self._current_system() or "",
-            "capital": getattr(self.app, "cmdr_balance", None) or 1000000,
-            "cargo": getattr(self.app, "cargo_capacity", None) or 64,
-            "radius": 100,
-            "max_leg": 80,
-            "jump": ((getattr(self.app, "cmdr_ship", {}) or {}).get("max_jump_range") or 30),
-            "results": 8,
-            "hops": 4,
-            "min_units": getattr(self.app, "cargo_capacity", None) or 64,
-            "max_ls": 1000,
-            "age": 30,
+        tree_wrap = tk.Frame(panel, bg=self.UI_PANEL)
+        tree_wrap.pack(fill=tk.BOTH, expand=True, padx=11)
+        columns = ("primary", "destination", "value", "cargo", "distance", "age")
+        self.result_tree = ttk.Treeview(
+            tree_wrap, columns=columns, show="headings",
+            style="TradeAssist.Treeview", selectmode="browse", height=8,
+        )
+        widths = {
+            "primary": (170, tk.W), "destination": (285, tk.W),
+            "value": (155, tk.E), "cargo": (85, tk.E),
+            "distance": (120, tk.E), "age": (70, tk.E),
         }
-        saved = self.config.get("trade_route_form") or {}
-        defaults.update({k: v for k, v in saved.items() if k in defaults})
-        if "mode" in saved:
-            self.loop_mode.set(saved.get("mode") or "loop")
-        if "large_pad" in saved:
-            self.large_pad_var.set(bool(saved.get("large_pad")))
-        if "include_carriers" in saved:
-            self.include_carriers_var.set(bool(saved.get("include_carriers")))
-        if "allow_planetary" in saved:
-            self.allow_planetary_var.set(bool(saved.get("allow_planetary")))
-        if "unique" in saved:
-            self.unique_route_var.set(bool(saved.get("unique")))
+        for name, (width, anchor) in widths.items():
+            self.result_tree.heading(name, text=name.upper())
+            self.result_tree.column(name, width=width, anchor=anchor, stretch=name in ("primary", "destination"))
+        ybar = scrollbar(
+            tree_wrap, orient=tk.VERTICAL, command=self.result_tree.yview,
+            prefix="TradeAssist",
+        )
+        xbar = scrollbar(
+            tree_wrap, orient=tk.HORIZONTAL, command=self.result_tree.xview,
+            prefix="TradeAssist",
+        )
+        self.result_tree.configure(yscrollcommand=ybar.set, xscrollcommand=xbar.set)
+        self.result_tree.grid(row=0, column=0, sticky="nsew")
+        ybar.grid(row=0, column=1, sticky="ns")
+        xbar.grid(row=1, column=0, sticky="ew")
+        tree_wrap.grid_rowconfigure(0, weight=1)
+        tree_wrap.grid_columnconfigure(0, weight=1)
+        self.result_tree.tag_configure("fresh", foreground=self.UI_OK)
+        self.result_tree.tag_configure("aging", foreground=self.UI_WARN)
+        self.result_tree.tag_configure("history", foreground=self.UI_MUTED)
+        self.result_tree.bind("<<TreeviewSelect>>", self._on_result_selected)
+        self.result_tree.bind("<Double-1>", lambda _event: self.use_selected_result())
+
+        self.detail = tk.Text(
+            panel, height=4, bg=THEME.input, fg=COLOR_TEXT,
+            insertbackground=COLOR_ACCENT, relief=tk.FLAT, padx=9, pady=7,
+            font=("Consolas", 8), wrap=tk.WORD,
+        )
+        self.detail.pack(fill=tk.X, padx=11, pady=(7, 5))
+        self.detail.configure(state=tk.DISABLED)
+
+        actions = tk.Frame(panel, bg=self.UI_PANEL)
+        actions.pack(fill=tk.X, padx=11, pady=(0, 9))
+        button(actions, "USE SELECTED", self.use_selected_result, accent=True).pack(side=tk.LEFT)
+        button(actions, "COPY DESTINATION", self.copy_selected_destination).pack(side=tk.LEFT, padx=(6, 0))
+        button(actions, "COPY DETAILS", self.copy_selected_details).pack(side=tk.LEFT, padx=(6, 0))
+
+    def _build_market_link(self):
+        panel = tk.Frame(self.win, bg=self.UI_PANEL)
+        panel.pack(fill=tk.X, padx=10, pady=(7, 8))
+        self.market_link_status = tk.Label(
+            panel, text="MARKET LINK · CHECKING", fg=self.UI_MUTED,
+            bg=self.UI_PANEL, font=("Consolas", 8, "bold"), anchor="w",
+        )
+        self.market_link_status.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(9, 6), pady=6)
+        self._checkbutton(
+            panel, "Upload visited markets to EDDN", self.eddn_upload_var,
+            self._toggle_eddn_upload,
+        ).pack(side=tk.LEFT, padx=(4, 8))
+        self.market_data_btn = button(panel, "MARKET DATA", self._start_full_market_build)
+        self.market_data_btn.pack(side=tk.LEFT, padx=(0, 5), pady=4)
+        button(panel, "REFRESH", self.refresh_status).pack(side=tk.LEFT, padx=(0, 7), pady=4)
+        self.seed_progress = ttk.Progressbar(
+            self.win, mode="determinate", maximum=100,
+            style="TradeAssist.Horizontal.TProgressbar",
+        )
+
+    # ------------------------------------------------------------------
+    # Filter and live state
+    # ------------------------------------------------------------------
+
+    def _load_filter_values(self):
+        defaults = {
+            "radius": self._saved_filters.get("radius", 80),
+            "max_ls": self._saved_filters.get("max_ls", 1000),
+            "age": self._saved_filters.get("age", 30),
+            "min_profit": self._saved_filters.get("min_profit", 1000),
+        }
         for key, value in defaults.items():
-            self.route_entries[key].delete(0, tk.END)
-            if isinstance(value, str):
-                text = value
-            else:
-                text = str(int(value) if isinstance(value, int) or float(value).is_integer() else value)
-            self.route_entries[key].insert(0, text)
-        self.commodity_radius.insert(0, "50")
-        self.commodity_min.insert(0, str(getattr(self.app, "cargo_capacity", None) or 64))
-        self.commodity_limit.insert(0, "40")
-        self.radar_radius.insert(0, "80")
-        self.radar_min_profit.insert(0, "1000")
-        self.radar_min_units.insert(0, str(getattr(self.app, "cargo_capacity", None) or 32))
-        self.radar_limit.insert(0, "50")
-        self.load_commodity_list()
-        self.refresh_local()
-        self.refresh_session()
-        self.refresh_watchlist()
-        self.refresh_analytics()
-        self.refresh_route_alerts()
-        self._on_route_mode_changed(save=False)
+            entry = self.filter_entries[key]
+            entry.delete(0, tk.END)
+            entry.insert(0, str(value))
 
-    def _save_route_form(self):
-        form = {key: ent.get().strip() for key, ent in self.route_entries.items()}
-        form.update({
-            "mode": self.loop_mode.get(),
-            "large_pad": self.large_pad_var.get(),
-            "include_carriers": self.include_carriers_var.get(),
-            "allow_planetary": self.allow_planetary_var.get(),
-            "unique": self.unique_route_var.get(),
+    def _save_filters(self):
+        self.config["trade_route_form"] = {
+            key: entry.get().strip() for key, entry in self.filter_entries.items()
+        }
+        self.config["trade_route_form"].update({
+            "large_pad": bool(self.large_pad_var.get()),
+            "include_carriers": bool(self.include_carriers_var.get()),
         })
-        self.config["trade_route_form"] = form
 
-    def _set_route_field_enabled(self, key, enabled):
-        item = getattr(self, "route_field_boxes", {}).get(key)
-        if not item:
-            return
-        _box, lbl, ent = item
-        ent.configure(state=tk.NORMAL if enabled else tk.DISABLED)
-        lbl.configure(fg=self.UI_MUTED if enabled else self.UI_DIM)
-
-    def _on_route_mode_changed(self, save=True):
-        mode = self.loop_mode.get()
-        for key in ("max_leg", "results"):
-            self._set_route_field_enabled(key, mode == "loop")
-        for key in ("hops",):
-            self._set_route_field_enabled(key, mode == "chain")
-        # Jump range feeds the travel-time model in BOTH modes now that
-        # chain routes are ranked by profit/hour like loops.
-        self._set_route_field_enabled("jump", True)
-        state = tk.NORMAL if mode == "chain" else tk.DISABLED
-        self.allow_planetary_check.configure(state=state)
-        self.unique_route_check.configure(state=state)
-        if save:
-            self._save_route_form()
-
-    def use_current_system(self):
-        current = self._current_system()
-        if not current:
-            self.route_status.config(text="No current system known yet.", fg=self.UI_WARN)
-            return
-        self.route_entries["system"].delete(0, tk.END)
-        self.route_entries["system"].insert(0, current)
-
-    def _start_eddn(self):
-        eddn_upload.UPLOADER.set_enabled(bool(self.config.get("trade_eddn_upload_enabled", True)))
-        if TradeWindow._eddn_started:
-            return
+    def _filter_number(self, key, default, cast=float):
         try:
-            import zmq  # noqa: F401
-            eddn.LISTENER.start()
-            TradeWindow._eddn_started = True
-        except Exception as exc:
-            self._log(f"EDDN disabled: {exc}")
+            value = self.filter_entries[key].get().strip()
+            return cast(float(value)) if cast is int else cast(value)
+        except (KeyError, TypeError, ValueError):
+            return default
 
     def _current_system(self):
         system = getattr(self.app, "current_sys", None)
@@ -1030,44 +417,44 @@ class TradeWindow(ThemedWindowMixin):
         coords = getattr(self.app, "current_coords", None)
         return coords if isinstance(coords, (list, tuple)) and len(coords) >= 3 else None
 
-    def _get_num(self, entries, key, default, cast=float):
+    def _ship_jump_range(self):
+        ship = getattr(self.app, "cmdr_ship", {}) or {}
         try:
-            raw = entries[key].get().strip()
-            if raw == "":
-                return default
-            return cast(float(raw)) if cast is int else cast(raw)
-        except Exception:
-            return default
+            return max(1.0, float(ship.get("max_jump_range") or 1.0))
+        except (TypeError, ValueError):
+            return 1.0
 
-    def refresh_status(self):
-        self._refresh_summary()
-        if self._status_refresh_running:
+    def _refresh_summary(self):
+        if not self.is_open():
             return
-        self._status_refresh_running = True
-        def worker():
-            try:
-                conn = marketdb.connect()
-                try:
-                    info = marketdb.status(conn)
-                finally:
-                    conn.close()
-                eddn_stats = eddn.LISTENER.stats()
-                upload_stats = eddn_upload.UPLOADER.stats()
-                seed_info = seed.SEEDER.progress()
-                self._post_ui(
-                    lambda: self._render_status(info, eddn_stats, seed_info, upload_stats),
-                    key="trade-status",
-                )
-            except Exception as exc:
-                self._post_ui(
-                    lambda text=str(exc): self._set_db_text(f"Database status failed: {text}", self.UI_FAIL),
-                    key="trade-status",
-                )
-            finally:
-                self._status_refresh_running = False
-        threading.Thread(target=worker, daemon=True).start()
+        system = self._current_system() or "---"
+        station = getattr(self.app, "current_station_name", None)
+        self.system_value.config(text=self._truncate(f"{system} / {station}" if station else system, 34))
+        balance = getattr(self.app, "cmdr_balance", None)
+        self.credits_value.config(text=self._credits(balance) if balance is not None else "---")
+        cargo = int(getattr(self.app, "current_cargo_tons", 0) or 0)
+        capacity = int(getattr(self.app, "cargo_capacity", 0) or 0)
+        self.cargo_value.config(text=f"{cargo}/{capacity} t" if capacity else f"{cargo} t")
+        session = getattr(self.app, "trade_session", {}) or {}
+        self.profit_value.config(text=self._credits(session.get("profit", 0)))
+        plan = getattr(self.app, "trade_plan_context", None) or {}
+        destination = plan.get("to_system") or plan.get("destination") or "NONE"
+        self.plan_value.config(text=self._truncate(str(destination).upper(), 22))
 
-    def _schedule_live_poll(self, delay_ms=1500):
+    def refresh_local(self):
+        """Dashboard compatibility hook; market ingest itself stays independent."""
+        self._refresh_summary()
+
+    def refresh_session(self):
+        self._refresh_summary()
+        if self._current_view == "run":
+            self._render_current_session(load_history=False)
+
+    def refresh_analytics(self):
+        """Trade events used to refresh an advanced analytics tab."""
+        self.refresh_session()
+
+    def _schedule_live_poll(self, delay_ms=2000):
         if not self.is_open():
             return
         if self._live_poll_after:
@@ -1081,155 +468,649 @@ class TradeWindow(ThemedWindowMixin):
         self._live_poll_after = None
         if not self.is_open():
             return
-        if not self._is_active_view():
-            # Embedded pages stay alive when another workspace is selected;
-            # a slow visibility check is enough until on_shown() wakes Trade.
-            self._schedule_live_poll(3000)
-            return
-        self._refresh_summary()
-        self.refresh_local()
-        self.refresh_session()
-        self.refresh_route_alerts()
-        now = time.time()
-        if now - self._last_db_poll >= 5.0:
-            self._last_db_poll = now
-            self.refresh_status()
-        self._schedule_live_poll()
+        if self._is_active_view():
+            self._refresh_summary()
+            if self._current_view == "run":
+                self._render_current_session(load_history=False)
+            if time.monotonic() - getattr(self, "_last_status_poll", 0.0) >= 10.0:
+                self.refresh_status()
+        self._schedule_live_poll(2000 if self._is_active_view() else 5000)
 
-    def _render_status(self, info, eddn_stats, seed_info, upload_stats=None):
-        upload_stats = upload_stats or {}
+    # ------------------------------------------------------------------
+    # Sell cargo
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _tradeable_cargo(items):
+        usable = []
+        excluded = 0
+        for item in items or []:
+            if not isinstance(item, dict):
+                continue
+            mission = item.get("MissionID") or item.get("mission_id")
+            try:
+                stolen = int(item.get("Stolen") or item.get("stolen") or 0)
+            except (TypeError, ValueError):
+                stolen = 0
+            if mission or stolen:
+                excluded += int(item.get("Count") or item.get("count") or 0)
+                continue
+            usable.append(item)
+        return usable, excluded
+
+    def find_cargo_buyers(self):
+        self._save_filters()
+        cargo, excluded = self._tradeable_cargo(
+            list(getattr(self.app, "current_cargo_inventory", []) or [])
+        )
+        if not cargo:
+            note = " Mission and stolen cargo are deliberately excluded." if excluded else ""
+            self._set_view("cargo", "SELL MY CARGO", "No tradeable cargo is currently aboard." + note)
+            return
+        if not self._current_system():
+            self._set_view("cargo", "SELL MY CARGO", "Current system is not known yet.", self.UI_WARN)
+            return
+        self._set_view("cargo", "SELL MY CARGO", "Finding nearby buyers…")
+        token = self._next_search()
+        params = {
+            "cargo_items": cargo,
+            "system": self._current_system(),
+            "star_pos": self._current_coords(),
+            "radius": self._filter_number("radius", 80.0),
+            "max_price_age_days": self._filter_number("age", 30, int),
+            "requires_large_pad": bool(self.large_pad_var.get()),
+            "include_carriers": bool(self.include_carriers_var.get()),
+            "max_system_distance": self._filter_number("max_ls", 1000.0),
+            "limit": 10,
+        }
+
+        def worker():
+            try:
+                rows = routes.sell_cargo(**params)
+                self._post_ui(
+                    lambda: self._render_cargo_buyers(rows, excluded, token),
+                    key="trade-assist-cargo",
+                )
+            except Exception as exc:
+                self._post_ui(
+                    lambda text=str(exc): self._search_failed("SELL MY CARGO", text, token),
+                    key="trade-assist-cargo",
+                )
+
+        threading.Thread(target=worker, name="trade-cargo-buyers", daemon=True).start()
+
+    def _render_cargo_buyers(self, rows, excluded, token):
+        if token != self._search_generation or not self.is_open():
+            return
+        self._set_view("cargo", "SELL MY CARGO", "")
+        for row in list(rows or [])[:3]:
+            items = list(row.get("items") or [])
+            cargo_text = ", ".join(
+                f"{item.get('name')} {self._num(item.get('units'))}t"
+                for item in items[:3]
+            )
+            if len(items) > 3:
+                cargo_text += f" +{len(items) - 3} more"
+            destination = f"{row.get('station')} / {row.get('system')}"
+            distance_ly = float(row.get("distance") or 0)
+            jumps = max(1, math.ceil(distance_ly / self._ship_jump_range()))
+            distance = f"{distance_ly:.1f} ly · {jumps} jump{'s' if jumps != 1 else ''}"
+            if row.get("dist_ls") is not None:
+                distance += f" · {self._num(row.get('dist_ls'))} ls"
+            detail_lines = [
+                f"SELL AT {row.get('station')} ({row.get('system')})",
+                f"Estimated gross sale: {self._credits(row.get('total'))}. This is revenue, not profit.",
+            ]
+            for item in items:
+                detail_lines.append(
+                    f"• {item.get('name')} · {self._num(item.get('units'))} t "
+                    f"at {self._credits(item.get('sell_price'))}/t · {self._credits(item.get('payout'))}"
+                )
+            plan = {
+                "kind": "sell-cargo",
+                "from_system": self._current_system(),
+                "from_station": getattr(self.app, "current_station_name", None),
+                "to_system": row.get("system"),
+                "to_station": row.get("station"),
+                "revenue_cr": int(row.get("total") or 0),
+                "distance_ly": float(row.get("distance") or 0),
+            }
+            self._insert_result(
+                row.get("station"), row.get("system"), self._credits(row.get("total")),
+                cargo_text, distance, self._age(row.get("updated_at")),
+                row, "\n".join(detail_lines), plan,
+            )
+        suffix = f" · {excluded:,} t mission/stolen cargo excluded" if excluded else ""
+        self.result_status.config(
+            text=f"{min(3, len(rows or []))} best buyer(s){suffix}",
+            fg=self.UI_MUTED if rows else self.UI_WARN,
+        )
+        self._select_best_result()
+
+    # ------------------------------------------------------------------
+    # One-click departure trade
+    # ------------------------------------------------------------------
+
+    def find_trade(self):
+        self._save_filters()
+        system = self._current_system()
+        station = getattr(self.app, "current_station_name", None)
+        market_id = getattr(self.app, "current_station_market_id", None)
+        if not system or not station or not market_id or not getattr(self.app, "current_docked", False):
+            self._set_view(
+                "trade", "FIND A TRADE",
+                "Dock at a market station first so the departure is unambiguous.",
+                self.UI_WARN,
+            )
+            return
+        capacity = int(getattr(self.app, "cargo_capacity", 0) or 0)
+        aboard = int(getattr(self.app, "current_cargo_tons", 0) or 0)
+        free_hold = max(0, capacity - aboard)
+        if capacity and free_hold <= 0:
+            self._set_view(
+                "trade", "FIND A TRADE",
+                "The cargo hold is full. Sell or transfer cargo before planning a purchase.",
+                self.UI_WARN,
+            )
+            return
+        self._set_view("trade", "FIND A TRADE", f"Scanning departures from {station}…")
+        token = self._next_search()
+        params = {
+            "system": system,
+            "star_pos": self._current_coords(),
+            "radius": self._filter_number("radius", 80.0),
+            "min_profit": self._filter_number("min_profit", 1000, int),
+            "min_units": 1,
+            "max_price_age_days": self._filter_number("age", 30, int),
+            "requires_large_pad": bool(self.large_pad_var.get()),
+            "include_carriers": bool(self.include_carriers_var.get()),
+            "max_system_distance": self._filter_number("max_ls", 1000.0),
+            "source_market_id": int(market_id),
+            "limit": 18,
+        }
+        capital = int(getattr(self.app, "cmdr_balance", 0) or 0)
+        free_hold = free_hold or capacity or 64
+        jump_range = self._ship_jump_range()
+
+        def worker():
+            try:
+                rows = routes.find_opportunities(**params)
+                ranked = []
+                for row in rows:
+                    buy_price = max(0, int(row.get("buy_price") or 0))
+                    affordable = capital // buy_price if buy_price and capital else free_hold
+                    units = min(int(row.get("units") or 0), free_hold, affordable)
+                    if units <= 0:
+                        continue
+                    copy = dict(row)
+                    copy["trade_units"] = units
+                    copy["projected_profit"] = units * int(row.get("profit_each") or 0)
+                    copy["estimated_jumps"] = max(
+                        1, math.ceil(float(row.get("distance") or 0) / jump_range),
+                    )
+                    copy["achievable_score"] = (
+                        copy["projected_profit"] / copy["estimated_jumps"]
+                    )
+                    ranked.append(copy)
+                ranked.sort(
+                    key=lambda item: float(item.get("achievable_score") or 0),
+                    reverse=True,
+                )
+                self._post_ui(
+                    lambda: self._render_trade_results(ranked[:3], token),
+                    key="trade-assist-route",
+                )
+            except Exception as exc:
+                self._post_ui(
+                    lambda text=str(exc): self._search_failed("FIND A TRADE", text, token),
+                    key="trade-assist-route",
+                )
+
+        threading.Thread(target=worker, name="trade-quick-route", daemon=True).start()
+
+    def _render_trade_results(self, rows, token):
+        if token != self._search_generation or not self.is_open():
+            return
+        self._set_view("trade", "FIND A TRADE", "")
+        for row in rows:
+            units = int(row.get("trade_units") or 0)
+            profit = int(row.get("projected_profit") or 0)
+            destination = f"{row.get('to_station')} / {row.get('to_system')}"
+            jumps = int(row.get("estimated_jumps") or 1)
+            distance = (
+                f"{float(row.get('distance') or 0):.1f} ly · "
+                f"{jumps} jump{'s' if jumps != 1 else ''}"
+            )
+            if row.get("to_dist_ls") is not None:
+                distance += f" · {self._num(row.get('to_dist_ls'))} ls"
+            detail = (
+                f"BUY {self._num(units)} t {row.get('commodity')} at "
+                f"{row.get('from_station')} ({row.get('from_system')})\n"
+                f"Buy {self._credits(row.get('buy_price'))}/t · sell "
+                f"{self._credits(row.get('sell_price'))}/t at {row.get('to_station')} "
+                f"({row.get('to_system')})\n"
+                f"Projected profit {self._credits(profit)} · "
+                f"{self._credits(row.get('profit_each'))}/t · quote age {self._age(row.get('updated_at'))}"
+            )
+            plan = {
+                "kind": "quick-trade",
+                "from_system": row.get("from_system"),
+                "from_station": row.get("from_station"),
+                "to_system": row.get("to_system"),
+                "to_station": row.get("to_station"),
+                "commodity": row.get("commodity"),
+                "units": units,
+                "profit_cr": profit,
+                "distance_ly": float(row.get("distance") or 0),
+            }
+            self._insert_result(
+                row.get("commodity"), destination,
+                f"{self._credits(row.get('profit_each'))}/t · {self._credits(profit)}",
+                f"{self._num(units)} t", distance, self._age(row.get("updated_at")),
+                row, detail, plan,
+            )
+        self.result_status.config(
+            text=f"{len(rows)} departure option(s), ranked by achievable profit.",
+            fg=self.UI_MUTED if rows else self.UI_WARN,
+        )
+        self._select_best_result()
+
+    # ------------------------------------------------------------------
+    # Current run and recent activity
+    # ------------------------------------------------------------------
+
+    def show_current_run(self):
+        self._next_search()
+        self._current_view = "run"
+        self._render_current_session(load_history=True)
+
+    def _render_current_session(self, load_history=False):
+        if not self.is_open() or self._current_view != "run":
+            return
+        session = getattr(self.app, "trade_session", {}) or {}
+        events = list(session.get("events") or [])
+        plan = getattr(self.app, "trade_plan_context", None) or {}
+        signature = (
+            int(session.get("bought_units") or 0),
+            int(session.get("sold_units") or 0),
+            int(session.get("profit") or 0),
+            tuple(
+                (
+                    event.get("time"), event.get("event"), event.get("commodity"),
+                    event.get("count"), event.get("profit"),
+                )
+                for event in events[-25:]
+                if isinstance(event, dict)
+            ),
+            plan.get("kind"), plan.get("from_system"), plan.get("from_station"),
+            plan.get("to_system"), plan.get("to_station"), plan.get("profit_cr"),
+        )
+        if not load_history and signature == self._last_session_signature:
+            return
+        self._last_session_signature = signature
+        plan_text = "No destination selected"
+        if plan:
+            plan_text = (
+                f"{plan.get('from_station') or plan.get('from_system') or '?'} → "
+                f"{plan.get('to_station') or plan.get('to_system') or '?'}"
+            )
+        self._set_view(
+            "run", "CURRENT RUN",
+            f"Bought {self._num(session.get('bought_units', 0))} t · "
+            f"Sold {self._num(session.get('sold_units', 0))} t · "
+            f"Profit {self._credits(session.get('profit', 0))} · {plan_text}",
+        )
+        for event in events[-25:][::-1]:
+            try:
+                stamp = time.strftime("%H:%M", time.localtime(float(event.get("time") or time.time())))
+            except (TypeError, ValueError, OSError):
+                stamp = "--:--"
+            profit = int(event.get("profit") or 0)
+            detail = (
+                f"{event.get('event')} {event.get('commodity')} · {self._num(event.get('count'))} t\n"
+                f"Price {self._credits(event.get('price'))}/t · value/profit {self._credits(profit)}"
+            )
+            self._insert_result(
+                event.get("event"), event.get("commodity"), self._credits(profit),
+                f"{self._num(event.get('count'))} t", self._credits(event.get("price")),
+                stamp, event, detail, None, tag="history",
+            )
+        if plan:
+            self._set_detail(
+                f"ACTIVE PLAN\n{plan_text}\n"
+                f"{plan.get('commodity') or plan.get('kind') or 'Trade'} · "
+                f"expected {self._credits(plan.get('profit_cr')) if plan.get('profit_cr') is not None else 'sale destination'}"
+            )
+        elif not events:
+            self._set_detail("No trade has been recorded in this application session.")
+        if not events and load_history and not self._history_loading:
+            self._history_loading = True
+            token = self._search_generation
+
+            def worker():
+                try:
+                    rows = marketdb.recent_trades(limit=18)
+                except Exception:
+                    rows = []
+                self._post_ui(
+                    lambda: self._render_recent_history(rows, token),
+                    key="trade-assist-history",
+                )
+
+            threading.Thread(target=worker, name="trade-recent-history", daemon=True).start()
+
+    def _render_recent_history(self, rows, token):
+        self._history_loading = False
+        if token != self._search_generation or self._current_view != "run" or not self.is_open():
+            return
+        if (getattr(self.app, "trade_session", {}) or {}).get("events"):
+            return
+        for row in rows:
+            stamp = time.strftime("%d %b %H:%M", time.localtime(int(row.get("ts") or 0)))
+            value = row.get("profit") if row.get("profit") is not None else row.get("total")
+            detail = (
+                f"RECENT {str(row.get('event') or '').upper()} · {row.get('name') or row.get('symbol')}\n"
+                f"{self._num(row.get('count'))} t at {self._credits(row.get('price'))}/t · "
+                f"{self._credits(value)}"
+            )
+            self._insert_result(
+                str(row.get("event") or "").upper(), row.get("name") or row.get("symbol"),
+                self._credits(value), f"{self._num(row.get('count'))} t",
+                self._credits(row.get("price")), stamp,
+                row, detail, None, tag="history",
+            )
+        if rows:
+            self.result_status.config(text=f"Recent history · {len(rows)} transaction(s)")
+
+    # ------------------------------------------------------------------
+    # Result helpers
+    # ------------------------------------------------------------------
+
+    def _next_search(self):
+        self._search_generation += 1
+        return self._search_generation
+
+    def _set_view(self, view, title, status="", colour=None):
+        self._current_view = view
+        self.result_title.config(text=title)
+        self.result_status.config(text=status, fg=colour or self.UI_MUTED)
+        for iid in self.result_tree.get_children():
+            self.result_tree.delete(iid)
+        self.result_rows = {}
+        self._set_detail("")
+        headings = {
+            "cargo": ("BUYER", "SYSTEM", "EST. SALE", "ACCEPTED", "TRAVEL", "AGE"),
+            "trade": ("COMMODITY", "DESTINATION", "PROFIT", "LOAD", "TRAVEL", "AGE"),
+            "run": ("TYPE", "COMMODITY", "VALUE / PROFIT", "TONS", "PRICE", "WHEN"),
+        }.get(view, ("ITEM", "DESTINATION", "VALUE", "CARGO", "TRAVEL", "AGE"))
+        for column, label in zip(self.result_tree["columns"], headings):
+            self.result_tree.heading(column, text=label)
+
+    def _insert_result(self, primary, destination, value, cargo, distance, age,
+                       raw, detail, plan, tag=None):
+        row_tag = tag or self._freshness_tag((raw or {}).get("updated_at"))
+        iid = self.result_tree.insert(
+            "", tk.END,
+            values=(primary or "---", destination or "---", value or "---",
+                    cargo or "---", distance or "---", age or "---"),
+            tags=(row_tag,) if row_tag else (),
+        )
+        self.result_rows[iid] = {
+            "raw": raw or {}, "detail": detail or "", "plan": plan,
+            "destination": (plan or {}).get("to_system") if plan else None,
+        }
+        return iid
+
+    def _select_best_result(self):
+        children = self.result_tree.get_children()
+        if not children:
+            self._set_detail("No result matched the current filters.")
+            setter = getattr(self.app, "_set_compass_trade_plan", None)
+            if callable(setter):
+                setter(None)
+            return
+        iid = children[0]
+        self.result_tree.selection_set(iid)
+        self.result_tree.focus(iid)
+        self.result_tree.see(iid)
+        self._on_result_selected()
+        plan = self.result_rows.get(iid, {}).get("plan")
+        setter = getattr(self.app, "_set_compass_trade_plan", None)
+        if plan and callable(setter):
+            setter(plan)
+        self._refresh_summary()
+
+    def _on_result_selected(self, _event=None):
+        selected = self.result_tree.selection()
+        row = self.result_rows.get(selected[0]) if selected else None
+        self._set_detail((row or {}).get("detail") or "Select a result to see its details.")
+
+    def use_selected_result(self):
+        selected = self.result_tree.selection()
+        row = self.result_rows.get(selected[0]) if selected else None
+        if not row or not row.get("plan"):
+            self.result_status.config(text="Select a cargo buyer or trade first.", fg=self.UI_WARN)
+            return
+        setter = getattr(self.app, "_set_compass_trade_plan", None)
+        if callable(setter):
+            setter(row["plan"])
+        destination = row.get("destination")
+        if destination:
+            self._copy_text(destination)
+            self.result_status.config(text=f"Active plan set · copied {destination}", fg=self.UI_OK)
+        self._refresh_summary()
+
+    def copy_selected_destination(self):
+        selected = self.result_tree.selection()
+        row = self.result_rows.get(selected[0]) if selected else None
+        destination = (row or {}).get("destination")
+        if not destination:
+            self.result_status.config(text="This row has no destination to copy.", fg=self.UI_WARN)
+            return
+        self._copy_text(destination)
+        self.result_status.config(text=f"Copied destination · {destination}", fg=self.UI_OK)
+
+    def copy_selected_details(self):
+        selected = self.result_tree.selection()
+        row = self.result_rows.get(selected[0]) if selected else None
+        detail = (row or {}).get("detail")
+        if not detail:
+            self.result_status.config(text="Select a result first.", fg=self.UI_WARN)
+            return
+        self._copy_text(detail)
+        self.result_status.config(text="Copied trade details.", fg=self.UI_OK)
+
+    def _copy_text(self, text):
+        self.win.clipboard_clear()
+        self.win.clipboard_append(str(text))
+        self.win.update_idletasks()
+
+    def _set_detail(self, text):
+        self.detail.configure(state=tk.NORMAL)
+        self.detail.delete("1.0", tk.END)
+        if text:
+            self.detail.insert("1.0", text)
+        self.detail.configure(state=tk.DISABLED)
+
+    def _search_failed(self, title, message, token):
+        if token != self._search_generation or not self.is_open():
+            return
+        self._set_view(self._current_view, title, message, self.UI_FAIL)
+        self._log(f"Trade Assist search failed: {message}")
+
+    # ------------------------------------------------------------------
+    # Independent market / EDDN status
+    # ------------------------------------------------------------------
+
+    def _start_eddn(self):
+        eddn_upload.UPLOADER.set_enabled(bool(self.config.get("trade_eddn_upload_enabled", True)))
+        if TradeWindow._eddn_started:
+            return
+        try:
+            import zmq  # noqa: F401
+            eddn.LISTENER.start()
+            TradeWindow._eddn_started = True
+        except Exception as exc:
+            self._log(f"EDDN receiver unavailable: {exc}")
+
+    def _toggle_eddn_upload(self):
+        enabled = bool(self.eddn_upload_var.get())
+        self.config["trade_eddn_upload_enabled"] = enabled
+        eddn_upload.UPLOADER.set_enabled(enabled)
+        save_config(self.config)
+        self.refresh_status()
+
+    def refresh_status(self):
+        self._refresh_summary()
+        if self._status_refresh_running:
+            return
+        self._status_refresh_running = True
+        self._last_status_poll = time.monotonic()
+
+        def worker():
+            try:
+                conn = marketdb.connect()
+                try:
+                    info = marketdb.status(conn)
+                finally:
+                    conn.close()
+                received = eddn.LISTENER.stats()
+                uploaded = eddn_upload.UPLOADER.stats()
+                seeding = seed.SEEDER.progress()
+                self._post_ui(
+                    lambda: self._render_market_status(info, received, uploaded, seeding),
+                    key="trade-assist-status",
+                )
+            except Exception as exc:
+                self._post_ui(
+                    lambda text=str(exc): self._render_status_error(text),
+                    key="trade-assist-status",
+                )
+            finally:
+                self._status_refresh_running = False
+
+        threading.Thread(target=worker, name="trade-market-status", daemon=True).start()
+
+    def _render_market_status(self, info, received, uploaded, seeding):
+        if not self.is_open():
+            return
         ready = bool(info.get("ready"))
         self._market_db_ready = ready
-        self.db_badge.config(text="DB READY" if ready else "DB EMPTY", bg=self.UI_OK if ready else self.UI_WARN)
-        self.subtitle.config(text=f"{self._current_system() or 'No current system'} | trade data: Spansh dump + EDDN + journal markets")
-        phase = seed_info.get("phase")
-        if phase in ("starting", "downloading", "importing", "indexing"):
-            self.seed_btn.config(state=tk.DISABLED)
-            self._show_seed_progress()
-        else:
-            self.seed_btn.config(
-                state=tk.NORMAL,
-                text="FULL SPANSH REBUILD" if ready else "FIRST FULL BUILD",
-            )
-            if self.seed_progress.winfo_ismapped():
-                self.seed_progress.pack_forget()
-        eddn_txt = "connected" if eddn_stats.get("connected") else "offline/reconnecting"
-        upload_txt = "disabled"
-        if upload_stats.get("enabled"):
-            upload_txt = f"{upload_stats.get('uploads', 0):,} uploaded"
-            if upload_stats.get("last_error"):
-                upload_txt += f" | last error: {upload_stats.get('last_error')}"
-        if hasattr(self, "quick_eddn_status"):
-            receive_state = "CONNECTED" if eddn_stats.get("connected") else "RECONNECTING"
-            upload_state = "ON" if upload_stats.get("enabled") else "OFF"
-            self.quick_eddn_status.config(
-                text=(
-                    f"EDDN RECEIVE · {receive_state}   |   UPLOAD · {upload_state}   |   "
-                    f"{int(upload_stats.get('uploads') or 0):,} SENT"
-                ),
-                fg=self.UI_OK if upload_stats.get("enabled") else self.UI_MUTED,
-            )
-        rate_txt = "--"
-        if phase == "starting":
-            self.seed_progress.configure(mode="indeterminate")
-            self.seed_progress.start(12)
-            seed_txt = "Starting worker process"
-            self.seed_btn.config(text="Starting...")
-        elif phase == "downloading":
-            total = seed_info.get("total_mb") or 0
-            done = seed_info.get("downloaded_mb") or 0
-            pct = int((done / total) * 100) if total else 0
-            try:
-                self.seed_progress.stop()
-            except Exception:
-                pass
-            self.seed_progress.configure(mode="determinate", value=pct)
-            seed_txt = f"Downloading Spansh dump: {done} / {total} MB ({pct}%)"
-            self.seed_btn.config(text=f"Downloading {pct}%")
-            rate_txt = f"{(seed_info.get('rate') or 0) / 1_000_000:.1f} MB/s"
-        elif phase == "importing":
-            self.seed_progress.configure(mode="indeterminate")
-            self.seed_progress.start(12)
-            seed_txt = f"Importing: {seed_info.get('systems_done'):,} systems, {seed_info.get('stations_done'):,} stations"
-            self.seed_btn.config(text=f"Importing {seed_info.get('stations_done'):,} markets")
-            rate_txt = f"{seed_info.get('rate', 0):.1f} systems/s"
-        elif phase == "indexing":
-            self.seed_progress.configure(mode="indeterminate")
-            self.seed_progress.start(12)
-            seed_txt = "Creating search indexes"
-            self.seed_btn.config(text="Indexing...")
-            rate_txt = "index build"
-        elif phase == "error":
-            try:
-                self.seed_progress.stop()
-            except Exception:
-                pass
-            seed_txt = f"Seed error: {seed_info.get('error')}"
-            self.seed_btn.config(text="FULL SPANSH REBUILD" if ready else "FIRST FULL BUILD")
-        else:
-            try:
-                self.seed_progress.stop()
-            except Exception:
-                pass
-            seed_txt = f"Full baseline: {info.get('seeded_at') or 'not yet'}"
-        if phase in ("starting", "downloading", "importing", "indexing"):
-            mode_txt = "low impact" if seed_info.get("polite", True) else "fast"
-            timing_txt = (
-                f"elapsed {self._duration(seed_info.get('elapsed_s'))}, "
-                f"ETA {self._duration(seed_info.get('eta_s'))}, {rate_txt}"
-            )
-            self._show_banner(f"{seed_txt} ({mode_txt} mode, {timing_txt})")
-        elif not ready:
-            self._show_banner("Market database is empty. Chain routes can use Spansh, but loops and commodity search need the local database.")
-        else:
-            self._hide_banner()
-        self._set_db_text(
-            f"{info.get('stations', 0):,} stations | {info.get('commodity_rows', 0):,} price rows | {info.get('db_size_mb', 0)} MB\n"
-            f"{seed_txt} | mode: {'low impact' if seed_info.get('polite', True) else 'fast'}"
-            + (f" | elapsed {self._duration(seed_info.get('elapsed_s'))} | ETA {self._duration(seed_info.get('eta_s'))} | {rate_txt}" if phase in ("starting", "downloading", "importing", "indexing") else "")
-            + "\n"
-            f"EDDN: {eddn_txt} | updated this session: {eddn_stats.get('markets_updated', 0):,} | skipped unknown: {eddn_stats.get('skipped_unknown', 0):,}\n"
-            f"EDDN upload: {upload_txt}\n"
-            f"Journal markets: {info.get('journal_market_updated_at') or 'not yet'}\n"
-            f"Latest market: {info.get('latest_market_updated_at') or 'not yet'} | "
-            f"fresh <24h: {info.get('fresh_markets_1d', 0):,} | "
-            f"stale >7d: {info.get('stale_markets_7d', 0):,} | "
-            f">30d: {info.get('stale_markets_30d', 0):,}\n"
-            f"Full Spansh rebuilds are occasional maintenance; newer live rows preserved: "
-            f"{info.get('live_markets_preserved', 0):,}\n"
-            f"DB: {info.get('db_path')}",
-            self.UI_MUTED if ready else self.UI_WARN,
+        self.db_badge.config(
+            text="MARKET READY" if ready else "MARKET DATA NEEDED",
+            bg=self.UI_OK if ready else self.UI_WARN,
         )
-        if phase in ("starting", "downloading", "importing"):
-            self.root.after(1600, self.refresh_status)
+        receive_text = "CONNECTED" if received.get("connected") else "RECONNECTING"
+        upload_text = "ON" if uploaded.get("enabled") else "OFF"
+        latest = info.get("latest_market_updated_at") or "not yet"
+        self.market_link_status.config(
+            text=(
+                f"EDDN RECEIVE {receive_text} · UPLOAD {upload_text} · "
+                f"{int(uploaded.get('uploads') or 0):,} sent · latest market {latest}"
+            ),
+            fg=self.UI_OK if uploaded.get("enabled") else self.UI_MUTED,
+        )
+        self.eddn_upload_var.set(bool(uploaded.get("enabled")))
+        phase = str(seeding.get("phase") or "idle")
+        self.market_data_btn.config(
+            text="BUILDING…" if phase in _ACTIVE_SEED_PHASES
+            else ("REBUILD MARKET DATA" if ready else "BUILD MARKET DATA"),
+            state=tk.DISABLED if phase in _ACTIVE_SEED_PHASES else tk.NORMAL,
+        )
+        if phase in _ACTIVE_SEED_PHASES:
+            self._show_seed_progress(seeding)
+            self._show_banner(self._seed_text(seeding))
+            self._schedule_seed_poll(1000)
+        else:
+            self._hide_seed_progress()
+            if phase == "error":
+                self._show_banner(f"Market data build failed: {seeding.get('error') or 'unknown error'}")
+            elif ready:
+                self._hide_banner()
+            else:
+                self._show_banner(
+                    "Trade searches need the one-time market baseline. EDDN uploads still work independently."
+                )
 
-    def _set_db_text(self, text, fg=None):
-        self.db_status.config(text=text, fg=fg or COLOR_TEXT)
-
-    def _show_seed_progress(self):
-        if not self.seed_progress.winfo_ismapped():
-            self.seed_progress.pack(fill=tk.X, padx=12, pady=(0, 10))
-
-    def _schedule_seed_poll(self, delay_ms=800):
+    def _render_status_error(self, message):
         if not self.is_open():
-            self._seed_polling = False
             return
-        if self._seed_poll_after:
-            try:
-                self.root.after_cancel(self._seed_poll_after)
-            except Exception:
-                pass
-        self._seed_polling = True
+        self.market_link_status.config(text=f"MARKET LINK ERROR · {message}", fg=self.UI_FAIL)
+
+    def _start_full_market_build(self):
+        phase = str(seed.SEEDER.progress().get("phase") or "idle")
+        if phase in _ACTIVE_SEED_PHASES:
+            self._show_banner("A market data build is already running.")
+            return
+        if self._market_db_ready:
+            prompt = (
+                "Download the full Spansh market snapshot and refresh the local baseline?\n\n"
+                "This is an occasional multi-gigabyte maintenance operation. Newer EDDN and "
+                "journal-market rows will be preserved."
+            )
+        else:
+            prompt = (
+                "Download the one-time Spansh market baseline?\n\n"
+                "The download is several gigabytes. Afterwards, EDDN and markets you visit keep "
+                "the database fresh automatically."
+            )
+        if not messagebox.askyesno("Market Data", prompt, parent=self.win):
+            return
+        if not seed.SEEDER.start(include_carriers=False, keep_dump=False, polite=True):
+            self._show_banner("The market database worker could not be started.")
+            return
+        self._show_banner("Market data build started in low-impact mode.")
+        self._schedule_seed_poll(300)
+        self.refresh_status()
+
+    def _schedule_seed_poll(self, delay_ms=1000):
+        if not self.is_open() or self._seed_poll_after:
+            return
         self._seed_poll_after = self.root.after(delay_ms, self._seed_poll_tick)
 
     def _seed_poll_tick(self):
         self._seed_poll_after = None
+        if not self.is_open():
+            return
         self.refresh_status()
-        phase = seed.SEEDER.progress().get("phase")
-        if phase in ("starting", "downloading", "importing", "indexing", "idle"):
+        if str(seed.SEEDER.progress().get("phase") or "idle") in _ACTIVE_SEED_PHASES:
             self._schedule_seed_poll(1000)
+
+    def _show_seed_progress(self, progress):
+        phase = str(progress.get("phase") or "")
+        if not self.seed_progress.winfo_ismapped():
+            self.seed_progress.pack(fill=tk.X, padx=10, pady=(0, 7))
+        if phase == "downloading":
+            total = float(progress.get("total_mb") or 0)
+            done = float(progress.get("downloaded_mb") or 0)
+            value = (done / total) * 100 if total else 0
+            self.seed_progress.stop()
+            self.seed_progress.configure(mode="determinate", value=value)
         else:
-            self._seed_polling = False
+            self.seed_progress.configure(mode="indeterminate")
+            self.seed_progress.start(12)
+
+    def _hide_seed_progress(self):
+        try:
+            self.seed_progress.stop()
+        except Exception:
+            pass
+        if self.seed_progress.winfo_ismapped():
+            self.seed_progress.pack_forget()
+
+    def _seed_text(self, progress):
+        phase = str(progress.get("phase") or "working").upper()
+        if phase == "DOWNLOADING":
+            return (
+                f"Market baseline downloading · {progress.get('downloaded_mb', 0):,} / "
+                f"{progress.get('total_mb', 0):,} MB · ETA {self._duration(progress.get('eta_s'))}"
+            )
+        if phase == "IMPORTING":
+            return (
+                f"Market baseline importing · {progress.get('systems_done', 0):,} systems · "
+                f"{progress.get('stations_done', 0):,} stations"
+            )
+        return f"Market baseline {phase.lower()}…"
 
     def _show_banner(self, text):
         self.banner.config(text=text)
@@ -1240,994 +1121,73 @@ class TradeWindow(ThemedWindowMixin):
         if self.banner.winfo_ismapped():
             self.banner.pack_forget()
 
-    def open_external(self, site):
-        system = self._current_system() or self.route_entries.get("system").get().strip()
-        if not system:
-            self._show_banner("No system known yet for external lookup.")
-            return
-        q = system.replace(" ", "+")
-        urls = {
-            "inara_routes": f"https://inara.cz/elite/market-traderoutes/?formbrief=1&ps1={q}",
-            "inara_commodities": f"https://inara.cz/elite/commodities/?formbrief=1&ps1={q}",
-            "inara_system": f"https://inara.cz/elite/starsystem/?search={q}",
-            "edsm": f"https://www.edsm.net/en/system?systemName={q}",
-            "spansh": "https://spansh.co.uk/trade",
-        }
-        webbrowser.open(urls[site])
+    # ------------------------------------------------------------------
+    # Formatting and teardown
+    # ------------------------------------------------------------------
 
-    def _refresh_summary(self):
-        self.system_value.config(text=self._current_system() or "---")
-        station = getattr(self.app, "current_station_name", None) or "---"
-        self.station_value.config(text=station)
-        self.credits_value.config(text=self._credits(getattr(self.app, "cmdr_balance", None)) if getattr(self.app, "cmdr_balance", None) else "---")
-        cargo_cap = getattr(self.app, "cargo_capacity", None) or 0
-        cargo_now = getattr(self.app, "current_cargo_tons", None)
-        if cargo_now is None:
-            cargo_now = sum(int(i.get("Count", i.get("count", 0)) or 0) for i in getattr(self.app, "current_cargo_inventory", []) or [])
-        self.cargo_value.config(text=f"{cargo_now}/{cargo_cap} t" if cargo_cap else f"{cargo_now} t")
-        fuel = getattr(self.app, "current_fuel_main", None)
-        reservoir = getattr(self.app, "current_fuel_reservoir", None)
-        if fuel is not None:
-            fuel_txt = f"{float(fuel):.1f}"
-            if reservoir is not None:
-                fuel_txt += f" + {float(reservoir):.1f}"
-        else:
-            fuel_txt = "---"
-        self.fuel_value.config(text=fuel_txt)
-        self.legal_value.config(text=getattr(self.app, "current_legal_state", None) or "---")
-        jump = ((getattr(self.app, "cmdr_ship", {}) or {}).get("max_jump_range") or None)
-        self.jump_value.config(text=f"{float(jump):.1f} ly" if jump else "---")
-        self.destination_value.config(text=getattr(self.app, "current_destination", None) or "---")
+    @staticmethod
+    def _truncate(value, limit):
+        text = str(value or "")
+        return text if len(text) <= limit else text[: max(1, limit - 1)] + "…"
 
-    def load_commodity_list(self):
-        def worker():
-            try:
-                names = routes.list_commodities()
-                self._post_ui(lambda: self._render_commodity_names(names), key="trade-commodity-names")
-            except Exception:
-                pass
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _render_commodity_names(self, names):
-        self.commodity_names = list(names or [])
-        self.commodity_name_values = sorted(
-            {c.get("name") for c in self.commodity_names if c.get("name")},
-            key=str.lower,
-        )
-        try:
-            self.commodity_entry.configure(values=self.commodity_name_values)
-        except Exception:
-            pass
-        if self.commodity_names and not self.commodity_entry.get().strip():
-            self.commodity_status.config(text=f"{len(self.commodity_names):,} commodities loaded. Type a name, e.g. Gold.", fg=self.UI_MUTED)
-
-    def _on_commodity_typing(self, event=None):
-        if event and event.keysym in {"Return", "Escape", "Tab", "Up", "Down", "Left", "Right", "Home", "End"}:
-            return
-        self._refresh_commodity_suggestions()
-
-    def _refresh_commodity_suggestions(self):
-        if not hasattr(self, "commodity_entry"):
-            return
-        names = self.commodity_name_values or []
-        query = self.commodity_entry.get().strip().lower()
-        if not query:
-            matches = names[:80]
-        else:
-            starts = [name for name in names if name.lower().startswith(query)]
-            contains = [name for name in names if query in name.lower() and name not in starts]
-            matches = (starts + contains)[:80]
-        try:
-            self.commodity_entry.configure(values=matches)
-        except Exception:
-            return
-        if query and hasattr(self, "commodity_status"):
-            self.commodity_status.config(text=f"{len(matches)} commodity suggestion(s). Press Down to pick one, or Enter to search.", fg=self.UI_MUTED)
-
-    def refresh_local(self):
-        if not hasattr(self, "market_tree"):
-            return
-        for tree in (self.market_tree, self.cargo_tree, self.jump_tree):
-            for iid in tree.get_children():
-                tree.delete(iid)
-        self.market_rows = {}
-        market = getattr(self.app, "current_trade_market", None) or {}
-        items = list(market.get("items") or [])
-        needle = (self.market_filter.get().strip().lower() if hasattr(self, "market_filter") else "")
-        rows = []
-        shown = 0
-        for item in items:
-            name = item.get("Name_Localised") or str(item.get("Name") or "").replace("_", " ").title()
-            if needle and needle not in name.lower():
-                continue
-            analysis = self.market_analysis.get(name.lower(), {})
-            rows.append({
-                "name": name,
-                "sell": int(item.get("SellPrice") or 0),
-                "buy": int(item.get("BuyPrice") or 0),
-                "demand": int(item.get("Demand") or 0),
-                "stock": int(item.get("Stock") or 0),
-                "signal": analysis.get("signal", ""),
-                "note": analysis.get("note", ""),
-            })
-            shown += 1
-        sort_key, sort_dir = self.market_sort
-        rows.sort(key=lambda r: str(r[sort_key]).lower() if sort_key == "name" else r[sort_key], reverse=sort_dir < 0)
-        for row in rows:
-            iid = self.market_tree.insert("", tk.END, values=(
-                row["name"],
-                self._credits(row["sell"]),
-                self._credits(row["buy"]),
-                self._num(row["demand"]),
-                self._num(row["stock"]),
-                row["signal"],
-                row["note"],
-            ))
-            self.market_rows[iid] = row
-        if market:
-            self.local_market_status.config(text=f"{shown}/{len(items)} commodities at {market.get('station') or '?'}")
-        else:
-            self.local_market_status.config(text="No market data yet. Open the commodity market at a station.")
-
-        for jump in list(getattr(self.app, "trade_jump_history", []) or []):
-            self.jump_tree.insert("", tk.END, values=(
-                jump.get("system") or "?",
-                f"{float(jump.get('distance') or 0):.1f} ly",
-                self._age(jump.get("timestamp")),
-            ))
-
-        for item in getattr(self.app, "current_cargo_inventory", []) or []:
-            name = item.get("Name_Localised") or item.get("name") or str(item.get("Name") or "").replace("_", " ").title()
-            count = item.get("Count", item.get("count", 0))
-            self.cargo_tree.insert("", tk.END, values=(name, self._num(count)))
-
-    def _build_watchlist_tab(self, notebook=None, text="Watchlist"):
-        notebook = notebook or self.tabs
-        frame = tk.Frame(notebook, bg=self.UI_BG)
-        notebook.add(frame, text=text)
-        body = self._card(frame, "ROUTE WATCHLIST", "saved commodities, systems, and station pairs for quick checks")
-        controls = tk.Frame(body, bg=self.UI_PANEL)
-        controls.pack(fill=tk.X, pady=(0, 8))
-        self.watch_commodity = self._simple_field(controls, "COMMODITY", 20)
-        self.watch_note = self._simple_field(controls, "NOTE", 28)
-        self._button(controls, "Add", self.add_watchlist_item, accent=True).pack(side=tk.LEFT, padx=(8, 0), pady=(12, 6))
-        self._button(controls, "Remove", self.remove_watchlist_item).pack(side=tk.LEFT, padx=(6, 0), pady=(12, 6))
-        self._button(controls, "Refresh", self.refresh_watchlist).pack(side=tk.LEFT, padx=(6, 0), pady=(12, 6))
-        self._button(controls, "Copy", lambda: self._copy_selected_tree(self.watch_tree, self.watchlist_rows, "Watchlist row")).pack(side=tk.LEFT, padx=(6, 0), pady=(12, 6))
-        self.watch_status = tk.Label(body, text="", fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 9), anchor="w")
-        self.watch_status.pack(fill=tk.X, pady=(0, 6))
-        self.watch_tree = self._tree(body, ("commodity", "note", "best_buy", "best_sell", "spread", "age"), {
-            "commodity": ("Commodity", 170, tk.W),
-            "note": ("Note", 220, tk.W),
-            "best_buy": ("Best Buy", 220, tk.W),
-            "best_sell": ("Best Sell", 220, tk.W),
-            "spread": ("Spread", 90, tk.E),
-            "age": ("Age", 60, tk.E),
-        })
-        alert_row = tk.Frame(body, bg=self.UI_PANEL)
-        alert_row.pack(fill=tk.X, pady=(8, 4))
-        tk.Label(alert_row, text="LIVE ROUTE WATCHES", fg=COLOR_ORANGE, bg=self.UI_PANEL, font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT)
-        self._button(alert_row, "Refresh Alerts", self.refresh_route_alerts).pack(side=tk.LEFT, padx=(8, 0))
-        self._button(alert_row, "Clear Alerts", self.clear_route_alerts).pack(side=tk.LEFT, padx=(6, 0))
-        self._button(alert_row, "Remove Watch", self.remove_selected_route_watch).pack(side=tk.LEFT, padx=(6, 0))
-        self.route_watch_tree = self._tree(body, ("kind", "detail", "value"), {
-            "kind": ("Type", 70, tk.CENTER),
-            "detail": ("Watch / Alert", 560, tk.W),
-            "value": ("Value", 120, tk.E),
-        })
-
-    def _watchlist(self):
-        value = self.config.get("trade_watchlist")
-        if not isinstance(value, list):
-            value = []
-            self.config["trade_watchlist"] = value
-        return value
-
-    def add_watchlist_item(self):
-        commodity = self.watch_commodity.get().strip()
-        if not commodity:
-            self.watch_status.config(text="Enter a commodity name first.", fg=self.UI_WARN)
-            return
-        item = {"commodity": commodity, "note": self.watch_note.get().strip(), "created_at": time.time()}
-        watch = self._watchlist()
-        watch.append(item)
-        save_config(self.config)
-        self.watch_commodity.delete(0, tk.END)
-        self.watch_note.delete(0, tk.END)
-        self.refresh_watchlist()
-
-    def remove_watchlist_item(self):
-        selected = self.watch_tree.selection()
-        if not selected:
-            return
-        idx = self.watch_tree.index(selected[0])
-        watch = self._watchlist()
-        if 0 <= idx < len(watch):
-            watch.pop(idx)
-            save_config(self.config)
-        self.refresh_watchlist()
-
-    def refresh_watchlist(self):
-        if not hasattr(self, "watch_tree"):
-            return
-        for iid in self.watch_tree.get_children():
-            self.watch_tree.delete(iid)
-        self.watchlist_rows = {}
-        watch = list(self._watchlist())
-        if not watch:
-            self.watch_status.config(text="No watchlist items yet.", fg=self.UI_MUTED)
-            return
-        self.watch_status.config(text="Refreshing watchlist prices...", fg=self.UI_MUTED)
-        params = {
-            "system": self._current_system(),
-            "star_pos": self._current_coords(),
-            "radius": self._entry_float(getattr(self, "radar_radius", None), 80.0),
-            "min_units": self._entry_int(getattr(self, "radar_min_units", None), 1),
-            "max_price_age_days": self._get_num(self.route_entries, "age", 30, int),
-            "requires_large_pad": self.radar_large_pad_var.get(),
-            "include_carriers": self.radar_include_carriers_var.get(),
-            "limit": 8,
-        }
-
-        def worker():
-            rows = []
-            try:
-                for item in watch:
-                    buy = routes.search_commodity(item.get("commodity"), "buy", **params).get("results", [])
-                    sell = routes.search_commodity(item.get("commodity"), "sell", **params).get("results", [])
-                    rows.append((item, buy[0] if buy else None, sell[0] if sell else None))
-                self._post_ui(lambda: self._render_watchlist(rows), key="trade-watchlist")
-            except Exception as exc:
-                self._post_ui(lambda text=str(exc): self.watch_status.config(text=text, fg=self.UI_FAIL), key="trade-watchlist")
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _render_watchlist(self, rows):
-        for iid in self.watch_tree.get_children():
-            self.watch_tree.delete(iid)
-        self.watchlist_rows = {}
-        for item, buy, sell in rows:
-            spread = ""
-            age_epoch = 0
-            if buy and sell:
-                spread = self._credits(int(sell.get("sell_price") or 0) - int(buy.get("buy_price") or 0))
-                age_epoch = min(buy.get("updated_at") or 0, sell.get("updated_at") or 0)
-            elif buy:
-                age_epoch = buy.get("updated_at") or 0
-            elif sell:
-                age_epoch = sell.get("updated_at") or 0
-            iid = self.watch_tree.insert("", tk.END, values=(
-                item.get("commodity"),
-                item.get("note", ""),
-                self._station_label(buy, "buy"),
-                self._station_label(sell, "sell"),
-                spread or "-",
-                self._age(age_epoch),
-            ), tags=(self._freshness_tag(age_epoch),))
-            self.watchlist_rows[iid] = {
-                "commodity": item.get("commodity"),
-                "best_buy": self._station_label(buy, "buy"),
-                "best_sell": self._station_label(sell, "sell"),
-                "spread": spread,
-            }
-        self.watch_status.config(text=f"{len(rows)} watchlist item(s).", fg=self.UI_MUTED)
-
-    def _station_label(self, row, mode):
-        if not row:
-            return "-"
-        price = row.get("buy_price") if mode == "buy" else row.get("sell_price")
-        return f"{row.get('station')} / {row.get('system')} @ {self._credits(price)}"
-
-    def search_station_inventory(self):
-        query = self.station_search_query.get().strip()
-        if not query:
-            self.station_search_status.config(text="Enter a module, ship, or service name.", fg=self.UI_WARN)
-            return
-        system = self._current_system()
-        if not system:
-            self.station_search_status.config(text="No current system known yet.", fg=self.UI_WARN)
-            return
-        self.station_search_status.config(text="Searching Spansh station data...", fg=self.UI_MUTED)
-        for iid in self.station_search_tree.get_children():
-            self.station_search_tree.delete(iid)
-        self.station_search_rows = {}
-        mode = self.station_search_mode.get()
-        params = {"reference_system": system, "size": self._entry_int(self.station_search_limit, 20)}
-
-        def worker():
-            try:
-                if mode == "service":
-                    rows = spansh.service_stations(
-                        service=query,
-                        coords=getattr(self.app, "current_coords", None),
-                        **params,
-                    )
-                else:
-                    rows = spansh.station_search(
-                        module=query if mode == "module" else None,
-                        ship=query if mode == "ship" else None,
-                        **params,
-                    )
-                self._post_ui(lambda: self._render_station_search(rows), key="trade-station-search")
-            except Exception as exc:
-                self._post_ui(lambda text=str(exc): self.station_search_status.config(text=text, fg=self.UI_FAIL), key="trade-station-search")
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _render_station_search(self, rows):
-        for row in rows:
-            iid = self.station_search_tree.insert("", tk.END, values=(
-                row.get("station"),
-                row.get("system"),
-                f"{float(row.get('distance') or 0):.1f} ly",
-                f"{self._num(row.get('dist_ls'))} ls",
-                row.get("type") or "-",
-                "L" if row.get("large_pad") else "-",
-                row.get("updated_at") or "-",
-            ))
-            self.station_search_rows[iid] = row
-        self.station_search_status.config(text=f"{len(rows)} station(s) found.", fg=self.UI_MUTED)
-
-    def find_riches_route(self):
-        system = self._current_system()
-        if not system:
-            self.riches_status.config(text="No current system known yet.", fg=self.UI_WARN)
-            return
-        self.riches_status.config(text="Computing Road to Riches route...", fg=self.UI_MUTED)
-        for iid in self.riches_tree.get_children():
-            self.riches_tree.delete(iid)
-        self.riches_rows = {}
-        params = {
-            "from_system": system,
-            "to_system": self.riches_to.get().strip() or None,
-            "jump_range": self._entry_float(self.riches_jump, 30.0),
-            "radius": self._entry_int(self.riches_radius, 50),
-            "max_results": self._entry_int(self.riches_results, 30),
-            "min_value": self._entry_int(self.riches_min_value, 300000),
-            "loop": not bool(self.riches_to.get().strip()),
-        }
-
-        def worker():
-            try:
-                rows = spansh.riches_route(**params)
-                self._post_ui(lambda: self._render_riches(rows), key="trade-riches")
-            except Exception as exc:
-                self._post_ui(lambda text=str(exc): self.riches_status.config(text=text, fg=self.UI_FAIL), key="trade-riches")
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _render_riches(self, rows):
-        for row in rows:
-            bodies = row.get("bodies") or []
-            body_text = ", ".join(
-                f"{b.get('name')} {self._credits(b.get('map_value') or b.get('scan_value') or 0)}"
-                for b in bodies[:2]
-            )
-            if len(bodies) > 2:
-                body_text += f" +{len(bodies) - 2} more"
-            iid = self.riches_tree.insert("", tk.END, values=(
-                row.get("system"),
-                self._num(row.get("jumps")),
-                self._credits(row.get("total_value")),
-                body_text,
-            ))
-            self.riches_rows[iid] = row
-        self.riches_status.config(text=f"{len(rows)} high-value system(s) found.", fg=self.UI_MUTED)
-
-    def watch_selected_loop(self):
-        selected = self.route_tree.selection()
-        if not selected:
-            self._show_banner("Select a loop route first.")
-            return
-        payload = self.route_payload_by_iid.get(selected[0]) or {}
-        if "a" not in payload or "b" not in payload:
-            self._show_banner("Only loop routes can be watched.")
-            return
-        try:
-            watch = alerts.add_loop_watch(payload)
-            self._show_banner(f"Watching loop: {watch.get('label')}")
-            self.refresh_route_alerts()
-        except Exception as exc:
-            self._show_banner(f"Route watch failed: {exc}")
-
-    def clear_route_alerts(self):
-        alerts.clear_alerts()
-        self.refresh_route_alerts()
-
-    def remove_selected_route_watch(self):
-        selected = self.route_watch_tree.selection()
-        if not selected:
-            self._show_banner("Select a watch row first.")
-            return
-        wid = getattr(self, "route_watch_ids", {}).get(selected[0])
-        if not wid:
-            self._show_banner("Select a WATCH row, not an alert.")
-            return
-        if alerts.remove_watch(wid):
-            self._show_banner(f"Removed route watch #{wid}.")
-        self.refresh_route_alerts()
-
-    def refresh_route_alerts(self):
-        if not hasattr(self, "route_watch_tree"):
-            return
-        for iid in self.route_watch_tree.get_children():
-            self.route_watch_tree.delete(iid)
-        self.route_watch_ids = {}
-        snap = alerts.snapshot()
-        for watch in snap.get("watches", []):
-            iid = self.route_watch_tree.insert("", tk.END, values=(
-                "WATCH",
-                f"#{watch.get('id')} {watch.get('label')} since {watch.get('created')}",
-                self._credits(watch.get("profit")),
-            ))
-            self.route_watch_ids[iid] = watch.get("id")
-        for alert in snap.get("alerts", []):
-            self.route_watch_tree.insert("", tk.END, values=(
-                "ALERT",
-                f"{alert.get('ts')}  {alert.get('text')}",
-                f"#{alert.get('watch_id')}",
-            ), tags=("old",))
-
-    def refresh_radar(self):
-        if not self._current_system():
-            self.radar_status.config(text="No current system known yet.", fg=self.UI_WARN)
-            return
-        self.radar_status.config(text="Scanning local market opportunities...", fg=self.UI_MUTED)
-        for iid in self.radar_tree.get_children():
-            self.radar_tree.delete(iid)
-        self.radar_rows = {}
-        params = {
-            "system": self._current_system(),
-            "star_pos": self._current_coords(),
-            "radius": self._entry_float(self.radar_radius, 80.0),
-            "min_profit": self._entry_int(self.radar_min_profit, 1000),
-            "min_units": self._entry_int(self.radar_min_units, 1),
-            "max_price_age_days": self._get_num(self.route_entries, "age", 30, int),
-            "requires_large_pad": self.radar_large_pad_var.get(),
-            "include_carriers": self.radar_include_carriers_var.get(),
-            "max_system_distance": self._get_num(self.route_entries, "max_ls", 1000, int),
-            "limit": self._entry_int(self.radar_limit, 50),
-        }
-
-        def worker():
-            try:
-                rows = routes.find_opportunities(**params)
-                self._post_ui(lambda: self._render_radar(rows), key="trade-radar")
-            except Exception as exc:
-                self._post_ui(lambda text=str(exc): self.radar_status.config(text=text, fg=self.UI_FAIL), key="trade-radar")
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _render_radar(self, rows):
-        for row in rows:
-            iid = self.radar_tree.insert("", tk.END, values=(
-                row.get("commodity"),
-                self._credits(row.get("profit_each")),
-                self._num(row.get("units")),
-                f"{row.get('from_station')} / {row.get('from_system')}",
-                f"{row.get('to_station')} / {row.get('to_system')}",
-                f"{float(row.get('distance') or 0):.1f} ly",
-                self._age(row.get("updated_at")),
-            ), tags=(self._freshness_tag(row.get("updated_at")),))
-            self.radar_rows[iid] = row
-        self.radar_status.config(text=f"{len(rows)} opportunity row(s), sorted by profit per ton.", fg=self.UI_MUTED)
-
-    def refresh_cargo_sellers(self):
-        cargo = list(getattr(self.app, "current_cargo_inventory", []) or [])
-        if not cargo:
-            self.cargo_sell_status.config(text="Cargo hold is empty or unavailable.", fg=self.UI_WARN)
-            return
-        self.cargo_sell_status.config(text="Finding cargo buyers...", fg=self.UI_MUTED)
-        for iid in self.cargo_sell_tree.get_children():
-            self.cargo_sell_tree.delete(iid)
-        self.cargo_sell_rows = {}
-        params = {
-            "cargo_items": cargo,
-            "system": self._current_system(),
-            "star_pos": self._current_coords(),
-            "radius": self._entry_float(self.radar_radius, 80.0),
-            "max_price_age_days": self._get_num(self.route_entries, "age", 30, int),
-            "requires_large_pad": self.radar_large_pad_var.get(),
-            "include_carriers": self.radar_include_carriers_var.get(),
-            "max_system_distance": self._get_num(self.route_entries, "max_ls", 1000, int),
-            "limit": 10,
-        }
-
-        def worker():
-            try:
-                rows = routes.sell_cargo(**params)
-                self._post_ui(lambda: self._render_cargo_sellers(rows), key="trade-cargo-sellers")
-            except Exception as exc:
-                self._post_ui(lambda text=str(exc): self.cargo_sell_status.config(text=text, fg=self.UI_FAIL), key="trade-cargo-sellers")
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _render_cargo_sellers(self, rows):
-        for row in rows:
-            item_summary = ", ".join(
-                f"{i.get('name')} {self._num(i.get('units'))}t"
-                + (" partial" if i.get("partial") else "")
-                for i in row.get("items", [])[:3]
-            )
-            if len(row.get("items", []) or []) > 3:
-                item_summary += f" +{len(row.get('items')) - 3} more"
-            iid = self.cargo_sell_tree.insert("", tk.END, values=(
-                row.get("station"),
-                row.get("system"),
-                self._credits(row.get("total")),
-                item_summary,
-                f"{float(row.get('distance') or 0):.1f} ly",
-                f"{self._num(row.get('dist_ls'))} ls",
-                self._age(row.get("updated_at")),
-            ), tags=(self._freshness_tag(row.get("updated_at")),))
-            self.cargo_sell_rows[iid] = row
-        self.cargo_sell_status.config(text=f"{len(rows)} buyer row(s).", fg=self.UI_MUTED)
-
-    def analyze_local_market(self):
-        market = getattr(self.app, "current_trade_market", None) or {}
-        items = list(market.get("items") or [])
-        if not items:
-            self.local_market_status.config(text="No market data to analyze.", fg=self.UI_WARN)
-            return
-        self.local_market_status.config(text="Analyzing station market...", fg=self.UI_MUTED)
-        params = {
-            "market_items": items,
-            "system": self._current_system(),
-            "star_pos": self._current_coords(),
-            "radius": self._entry_float(self.radar_radius, 80.0),
-            "max_price_age_days": self._get_num(self.route_entries, "age", 30, int),
-            "requires_large_pad": self.radar_large_pad_var.get(),
-            "include_carriers": self.radar_include_carriers_var.get(),
-            "max_system_distance": self._get_num(self.route_entries, "max_ls", 1000, int),
-        }
-
-        def worker():
-            try:
-                result = routes.analyze_station_market(**params)
-                self._post_ui(lambda: self._render_market_analysis(result), key="trade-market-analysis")
-            except Exception as exc:
-                self._post_ui(lambda text=str(exc): self.local_market_status.config(text=text, fg=self.UI_FAIL), key="trade-market-analysis")
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _render_market_analysis(self, result):
-        self.market_analysis = result or {}
-        self.refresh_local()
-        self.local_market_status.config(text=f"{len(self.market_analysis)} market signal(s) found.", fg=self.UI_MUTED)
-
-    def refresh_session(self):
-        if not hasattr(self, "session_tree"):
-            return
-        session = getattr(self.app, "trade_session", {}) or {}
-        self.session_status.config(text=(
-            f"Bought: {self._num(session.get('bought_units', 0))} t / {self._credits(session.get('spent', 0))}   "
-            f"Sold: {self._num(session.get('sold_units', 0))} t / {self._credits(session.get('earned', 0))}   "
-            f"Est Profit: {self._credits(session.get('profit', 0))}"
-        ))
-        for iid in self.session_tree.get_children():
-            self.session_tree.delete(iid)
-        for event in list(session.get("events", []) or [])[-25:][::-1]:
-            try:
-                stamp = time.strftime("%H:%M", time.localtime(float(event.get("time") or time.time())))
-            except Exception:
-                stamp = "--:--"
-            self.session_tree.insert("", tk.END, values=(
-                stamp,
-                event.get("event"),
-                event.get("commodity"),
-                self._num(event.get("count")),
-                self._credits(event.get("price")),
-                self._credits(event.get("profit")),
-            ))
-
-    def refresh_analytics(self):
-        if not hasattr(self, "analytics_daily_tree"):
-            return
-        days = self._entry_int(self.analytics_days, 30)
-        self.analytics_summary.config(text="Loading trade analytics...")
-
-        def worker():
-            try:
-                data = marketdb.trade_analytics(days)
-                self._post_ui(lambda: self._render_analytics(data, days), key="trade-analytics")
-            except Exception as exc:
-                self._post_ui(lambda text=str(exc): self.analytics_summary.config(text=f"Analytics failed: {text}"), key="trade-analytics")
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _render_analytics(self, data, days):
-        for tree in (self.analytics_daily_tree, self.analytics_top_tree):
-            for iid in tree.get_children():
-                tree.delete(iid)
-        today = data.get("today", {})
-        week = data.get("week", {})
-        period = data.get("period", {})
-        balance = data.get("balance") or []
-        balance_txt = ""
-        if balance:
-            delta = int(balance[-1].get("balance", 0)) - int(balance[0].get("balance", 0))
-            balance_txt = f" | Balance delta: {self._credits(delta)}"
-        self.analytics_summary.config(text=(
-            f"Today: {self._credits(today.get('profit', 0))} / {self._num(today.get('tons', 0))} t   "
-            f"7 days: {self._credits(week.get('profit', 0))} / {self._num(week.get('tons', 0))} t   "
-            f"{days} days: {self._credits(period.get('profit', 0))} / {self._num(period.get('tons', 0))} t"
-            f"{balance_txt}"
-        ))
-        for row in data.get("daily", [])[-60:][::-1]:
-            self.analytics_daily_tree.insert("", tk.END, values=(
-                row.get("date"),
-                self._credits(row.get("profit", 0)),
-                self._num(row.get("tons", 0)),
-            ))
-        for row in data.get("top", []):
-            self.analytics_top_tree.insert("", tk.END, values=(
-                row.get("name") or row.get("symbol"),
-                self._credits(row.get("profit", 0)),
-                self._num(row.get("tons", 0)),
-            ))
-
-    def sort_market(self, key):
-        current_key, current_dir = self.market_sort
-        self.market_sort = (key, -current_dir if key == current_key else (1 if key == "name" else -1))
-        self.refresh_local()
-
-    def find_routes(self):
-        self.route_status.config(text="Searching trade routes...", fg=self.UI_MUTED)
-        self._clear_route_results()
-        search_started = time.monotonic()
-        system_value = self.route_entries["system"].get().strip() or self._current_system()
-        current = self._current_system()
-        star_pos = self._current_coords() if current and system_value and system_value.lower() == current.lower() else None
-        station_value = None
-        if current and system_value and system_value.lower() == current.lower() and getattr(self.app, "current_docked", False):
-            station_value = getattr(self.app, "current_station_name", None)
-        params = {
-            "system": system_value,
-            "station": station_value,
-            "star_pos": star_pos,
-            "capital": self._get_num(self.route_entries, "capital", 1000000, int),
-            "max_cargo": self._get_num(self.route_entries, "cargo", 64, int),
-            "radius": self._get_num(self.route_entries, "radius", 100.0, float),
-            "max_leg": self._get_num(self.route_entries, "max_leg", 80.0, float),
-            "jump_range": self._get_num(self.route_entries, "jump", 30.0, float),
-            "min_supply": self._get_num(self.route_entries, "min_units", 1, int),
-            "max_price_age_days": self._get_num(self.route_entries, "age", 30, int),
-            "requires_large_pad": self.large_pad_var.get(),
-            "include_carriers": self.include_carriers_var.get(),
-            "allow_planetary": self.allow_planetary_var.get(),
-            "unique": self.unique_route_var.get(),
-            "max_system_distance": self._get_num(self.route_entries, "max_ls", 1000, int),
-            "top_n": self._get_num(self.route_entries, "results", 8, int),
-            "max_hops": self._get_num(self.route_entries, "hops", 4, int),
-        }
-        mode = self.loop_mode.get()
-        if not params["system"]:
-            self.route_status.config(text="Enter a start system or wait for the journal to detect your current system.", fg=self.UI_WARN)
-            return
-
-        def worker():
-            try:
-                conn = marketdb.connect()
-                try:
-                    ready = marketdb.is_ready(conn)
-                finally:
-                    conn.close()
-                if mode == "loop":
-                    if not ready:
-                        raise routes.RouteError("Loop routes need the local database. Build it from the Database tab first.")
-                    result = routes.plan_loops(
-                        system=params["system"],
-                        star_pos=params["star_pos"],
-                        capital=params["capital"],
-                        max_cargo=params["max_cargo"],
-                        radius=params["radius"],
-                        max_system_distance=params["max_system_distance"],
-                        max_price_age_days=params["max_price_age_days"],
-                        requires_large_pad=params["requires_large_pad"],
-                        include_carriers=params["include_carriers"],
-                        min_supply=params["min_supply"],
-                        jump_range=params["jump_range"],
-                        max_leg=params["max_leg"],
-                        top_n=params["top_n"],
-                    )
-                    elapsed = time.monotonic() - search_started
-                    self._post_ui(lambda r=result, seconds=elapsed: self._render_loops(r, seconds), key="trade-route-result")
-                else:
-                    if ready:
-                        result = routes.plan_route_local(
-                            system=params["system"],
-                            station=params["station"],
-                            star_pos=params["star_pos"],
-                            capital=params["capital"],
-                            max_cargo=params["max_cargo"],
-                            max_hop_distance=params["radius"],
-                            max_hops=params["max_hops"],
-                            max_system_distance=params["max_system_distance"],
-                            max_price_age_days=params["max_price_age_days"],
-                            requires_large_pad=params["requires_large_pad"],
-                            include_carriers=params["include_carriers"],
-                            min_supply=params["min_supply"],
-                            jump_range=params["jump_range"],
-                        )
-                        elapsed = time.monotonic() - search_started
-                        self._post_ui(
-                            lambda r=result, seconds=elapsed: self._render_chain(r, "local database", seconds),
-                            key="trade-route-result",
-                        )
-                    else:
-                        result = spansh.plan_route(
-                            system=params["system"],
-                            station=params["station"],
-                            capital=params["capital"],
-                            max_cargo=params["max_cargo"],
-                            max_hop_distance=params["radius"],
-                            max_hops=params["max_hops"],
-                            max_system_distance=params["max_system_distance"],
-                            max_price_age_days=params["max_price_age_days"],
-                            requires_large_pad=params["requires_large_pad"],
-                            allow_planetary=params["allow_planetary"],
-                            unique=params["unique"],
-                        )
-                        elapsed = time.monotonic() - search_started
-                        self._post_ui(
-                            lambda r=result, seconds=elapsed: self._render_chain(r, "Spansh API", seconds),
-                            key="trade-route-result",
-                        )
-            except Exception as exc:
-                message = str(exc) or exc.__class__.__name__
-                self._post_ui(lambda text=message: self._render_route_error(text), key="trade-route-result")
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _render_route_error(self, message):
-        self.route_status.config(text=message, fg=self.UI_FAIL)
-        self._log(f"Trade route search failed: {message}")
-
-    def _clear_route_results(self):
-        for iid in self.route_tree.get_children():
-            self.route_tree.delete(iid)
-        self.route_detail_by_iid = {}
-        self.route_payload_by_iid = {}
-        self._set_route_detail("")
-
-    def _render_loops(self, loops, elapsed=None):
-        self._clear_route_results()
-        cards = []
-        for idx, loop in enumerate(loops, 1):
-            frm = f"{loop['a']['station']} / {loop['a']['system']}"
-            to = f"{loop['b']['station']} / {loop['b']['system']}"
-            iid = self.route_tree.insert("", tk.END, values=(
-                f"Loop #{idx}", frm, to, self._credits(loop.get("profit")),
-                f"{self._credits(loop.get('profit_per_hour'))}/hr", f"{loop.get('distance')} ly",
-            ))
-            self.route_detail_by_iid[iid] = self._loop_detail(loop)
-            self.route_payload_by_iid[iid] = loop
-            cards.append(f"LOOP #{idx}\n{self._loop_detail(loop)}")
-        timing = f" in {elapsed:.1f}s" if elapsed is not None else ""
-        self.route_status.config(
-            text=f"{len(loops)} loop route(s){timing}, ranked by estimated profit/hour.",
-            fg=self.UI_MUTED,
-        )
-        self._set_route_detail(("\n\n" + "-" * 72 + "\n\n").join(cards) if cards else "")
-        if loops and callable(getattr(self.app, "_set_compass_trade_plan", None)):
-            best = loops[0]
-            self.app._set_compass_trade_plan({
-                "kind": "loop",
-                "from_system": best["a"].get("system"),
-                "from_station": best["a"].get("station"),
-                "to_system": best["b"].get("system"),
-                "to_station": best["b"].get("station"),
-                "profit_cr": int(best.get("profit") or 0),
-                "profit_per_hour_cr": int(best.get("profit_per_hour") or 0),
-                "distance_ly": float(best.get("distance") or 0),
-            })
-        elif callable(getattr(self.app, "_set_compass_trade_plan", None)):
-            self.app._set_compass_trade_plan(None)
-        if loops and callable(getattr(self.app, "_speak", None)):
-            best = loops[0]
-            hourly_m = int(best.get("profit_per_hour") or 0) / 1_000_000
-            self.app._speak(
-                f"Best trade loop found. {best['a']['station']} to {best['b']['station']}. "
-                f"Estimated {hourly_m:.1f} million credits per hour.",
-                category="objectives", cooldown_s=60,
-                key=f"best-trade-loop:{best['a']['station']}:{best['b']['station']}",
-            )
-
-    def _render_chain(self, hops, source, elapsed=None):
-        self._clear_route_results()
-        total = sum(int(h.get("profit") or 0) for h in hops)
-        cards = []
-        for idx, hop in enumerate(hops, 1):
-            frm = f"{hop.get('from_station')} / {hop.get('from_system')}"
-            to = f"{hop.get('to_station')} / {hop.get('to_system')}"
-            iid = self.route_tree.insert("", tk.END, values=(
-                f"Hop {idx}", frm, to, self._credits(hop.get("profit")),
-                self._credits(hop.get("cumulative_profit")), f"{float(hop.get('distance') or 0):.1f} ly",
-            ))
-            self.route_detail_by_iid[iid] = self._hop_detail(hop)
-            self.route_payload_by_iid[iid] = hop
-            cards.append(f"HOP {idx}\n{self._hop_detail(hop)}")
-        timing = f" in {elapsed:.1f}s" if elapsed is not None else ""
-        self.route_status.config(
-            text=f"{len(hops)} hop(s) via {source}{timing} | total {self._credits(total)}",
-            fg=self.UI_MUTED,
-        )
-        self._set_route_detail(f"TOTAL {self._credits(total)} via {source}\n\n" + ("\n\n" + "-" * 72 + "\n\n").join(cards) if cards else "")
-        if hops and callable(getattr(self.app, "_set_compass_trade_plan", None)):
-            first, last = hops[0], hops[-1]
-            self.app._set_compass_trade_plan({
-                "kind": "chain",
-                "source": source,
-                "hops": len(hops),
-                "from_system": first.get("from_system"),
-                "from_station": first.get("from_station"),
-                "to_system": last.get("to_system"),
-                "to_station": last.get("to_station"),
-                "profit_cr": total,
-                "distance_ly": round(sum(float(hop.get("distance") or 0) for hop in hops), 1),
-            })
-        elif callable(getattr(self.app, "_set_compass_trade_plan", None)):
-            self.app._set_compass_trade_plan(None)
-        if hops and callable(getattr(self.app, "_speak", None)):
-            first, last = hops[0], hops[-1]
-            total_m = total / 1_000_000
-            self.app._speak(
-                f"Trade route found. {len(hops)} hops from {first.get('from_station')} "
-                f"to {last.get('to_station')}. Estimated {total_m:.1f} million credits total.",
-                category="objectives", cooldown_s=60,
-                key=f"best-trade-route:{first.get('from_station')}:{last.get('to_station')}",
-            )
-
-    def _on_route_selected(self, _event=None):
-        selected = self.route_tree.selection()
-        self._set_route_detail(self.route_detail_by_iid.get(selected[0], "") if selected else "")
-
-    def _set_route_detail(self, text):
-        self.route_detail.configure(state=tk.NORMAL)
-        self.route_detail.delete("1.0", tk.END)
-        self.route_detail.insert("1.0", text or "Select a route row to view commodities.")
-        self.route_detail.configure(state=tk.DISABLED)
-
-    def _loop_detail(self, loop):
-        lines = [
-            f"{loop['a']['station']} ({loop['a']['system']}) <-> {loop['b']['station']} ({loop['b']['system']})",
-            f"Round trip: {self._credits(loop.get('profit'))} | {self._credits(loop.get('profit_per_hour'))}/hr | ~{loop.get('minutes_per_trip')} min",
-            "",
-            f"OUTBOUND +{self._credits(loop['outbound'].get('profit'))}",
-        ]
-        lines.extend(self._commodity_lines(loop["outbound"].get("commodities") or []))
-        lines.append("")
-        lines.append(f"RETURN +{self._credits(loop['inbound'].get('profit'))}")
-        lines.extend(self._commodity_lines(loop["inbound"].get("commodities") or []))
-        return "\n".join(lines)
-
-    def _hop_detail(self, hop):
-        lines = [
-            f"{hop.get('from_station')} ({hop.get('from_system')}) -> {hop.get('to_station')} ({hop.get('to_system')})",
-            f"Profit: {self._credits(hop.get('profit'))} | Distance: {float(hop.get('distance') or 0):.1f} ly | Station: {self._num(hop.get('to_dist_ls'))} ls",
-            "",
-        ]
-        lines.extend(self._commodity_lines(hop.get("commodities") or []))
-        return "\n".join(lines)
-
-    def _commodity_lines(self, commodities):
-        if not commodities:
-            return ["- fly empty"]
-        lines = []
-        for c in commodities:
-            amount = int(c.get("amount") or 0)
-            profit = int(c.get("profit") or 0)
-            per_ton = int(profit / amount) if amount else 0
-            lines.append(
-                f"- {c.get('name')} | {self._num(amount)} t | buy {self._credits(c.get('buy_price'))} | "
-                f"sell {self._credits(c.get('sell_price'))} | profit {self._credits(profit)} | {self._credits(per_ton)}/t"
-            )
-        return lines
-
-    def search_commodity(self):
-        query = self.commodity_entry.get().strip()
-        if not query:
-            self.commodity_status.config(text="Enter a commodity name.", fg=self.UI_WARN)
-            return
-        self.commodity_status.config(text="Searching commodity markets...", fg=self.UI_MUTED)
-        for iid in self.commodity_tree.get_children():
-            self.commodity_tree.delete(iid)
-        params = {
-            "query": query,
-            "mode": self.search_mode.get(),
-            "system": self._current_system(),
-            "star_pos": self._current_coords(),
-            "radius": self._entry_float(self.commodity_radius, 50.0),
-            "min_units": self._entry_int(self.commodity_min, 1),
-            "requires_large_pad": self.commodity_large_pad.get(),
-            "include_carriers": self.commodity_include_carriers.get(),
-            "max_price_age_days": self._get_num(self.route_entries, "age", 30, int),
-            "limit": self._entry_int(self.commodity_limit, 40),
-        }
-
-        def worker():
-            try:
-                result = routes.search_commodity(**params)
-                self._post_ui(lambda: self._render_commodity_result(result, params["mode"]), key="trade-commodity-result")
-            except Exception as exc:
-                self._post_ui(lambda text=str(exc): self.commodity_status.config(text=text, fg=self.UI_FAIL), key="trade-commodity-result")
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _render_commodity_result(self, result, mode):
-        self.commodity_rows = {}
-        for row in result.get("results", []):
-            price = row.get("buy_price") if mode == "buy" else row.get("sell_price")
-            units = row.get("supply") if mode == "buy" else row.get("demand")
-            iid = self.commodity_tree.insert("", tk.END, values=(
-                row.get("station"), row.get("system"), self._credits(price), self._num(units),
-                f"{float(row.get('distance') or 0):.1f} ly", f"{self._num(row.get('dist_ls'))} ls",
-                self._age(row.get("updated_at")), "L" if row.get("large_pad") else "-",
-            ), tags=(self._freshness_tag(row.get("updated_at")),))
-            self.commodity_rows[iid] = row
-        self.commodity_status.config(
-            text=f"{len(result.get('results') or [])} station(s) for {result.get('commodity')}.",
-            fg=self.UI_MUTED,
-        )
-
-    def _entry_float(self, entry, default):
-        try:
-            if entry is None:
-                return default
-            return float(entry.get().strip() or default)
-        except Exception:
-            return default
-
-    def _entry_int(self, entry, default):
-        try:
-            if entry is None:
-                return default
-            return int(float(entry.get().strip() or default))
-        except Exception:
-            return default
-
-    def _num(self, value):
+    @staticmethod
+    def _num(value):
         try:
             return f"{float(value):,.0f}"
-        except Exception:
+        except (TypeError, ValueError):
             return "?"
 
-    def _credits(self, value):
+    @staticmethod
+    def _credits(value):
         try:
             return f"{int(value):,} cr"
-        except Exception:
+        except (TypeError, ValueError):
             return "? cr"
 
-    def _duration(self, seconds):
-        if seconds is None:
-            return "--"
+    @staticmethod
+    def _age(epoch):
+        try:
+            minutes = max(0.0, (time.time() - float(epoch)) / 60.0)
+        except (TypeError, ValueError):
+            return "?"
+        if minutes < 60:
+            return f"{int(minutes)}m"
+        if minutes < 2880:
+            return f"{int(minutes / 60)}h"
+        return f"{int(minutes / 1440)}d"
+
+    def _freshness_tag(self, epoch):
+        try:
+            age_days = max(0.0, (time.time() - float(epoch)) / 86400.0)
+        except (TypeError, ValueError):
+            return ""
+        return "fresh" if age_days <= 1 else ("aging" if age_days >= 7 else "")
+
+    @staticmethod
+    def _duration(seconds):
         try:
             seconds = max(0, int(seconds))
-        except Exception:
+        except (TypeError, ValueError):
             return "--"
-        h, rem = divmod(seconds, 3600)
-        m, s = divmod(rem, 60)
-        if h:
-            return f"{h:d}:{m:02d}:{s:02d}"
-        return f"{m:d}:{s:02d}"
+        hours, remainder = divmod(seconds, 3600)
+        minutes, secs = divmod(remainder, 60)
+        return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
 
-    def _age(self, epoch):
+    def _log(self, message):
         try:
-            mins = max(0, (time.time() - float(epoch)) / 60.0)
-            if mins < 60:
-                return f"{int(mins)}m"
-            if mins < 2880:
-                return f"{int(mins / 60)}h"
-            return f"{int(mins / 1440)}d"
-        except Exception:
-            return "?"
-
-    def _log(self, msg):
-        try:
-            self.app.log(msg)
+            self.app.log(message)
         except Exception:
             pass
 
     def _on_close(self):
         try:
-            if self._seed_poll_after:
-                self.root.after_cancel(self._seed_poll_after)
-                self._seed_poll_after = None
             if self._live_poll_after:
                 self.root.after_cancel(self._live_poll_after)
                 self._live_poll_after = None
-            self._save_route_form()
+            if self._seed_poll_after:
+                self.root.after_cancel(self._seed_poll_after)
+                self._seed_poll_after = None
+            self._save_filters()
             self.config["trade_window_geometry"] = self.win.geometry()
             save_config(self.config)
         except Exception:

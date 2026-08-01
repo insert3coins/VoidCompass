@@ -47,7 +47,7 @@ Explore remembers its active page, survey/discovery filters and Expedition secti
 
 Existing journals are indexed on a background worker the first time Deep Survey opens for a profile. Stored collections, expedition facts and visible rows are bounded so a long expedition does not turn map, ledger or startup recovery into a cockpit stall.
 
-Trade opens in a compact **Simple Trade** view with cargo selling, routes, the current market and a clear EDDN receive/upload status. Routes, commodities, tracking, station search and database maintenance remain available through **Advanced Tools** and can be returned to the simple view at any time.
+Optional **Trade Assist** stays intentionally small: **Sell My Cargo** finds three practical buyers, **Find a Trade** ranks three achievable departures from the current station, and **Current Run** keeps the active destination beside journal-confirmed purchases, sales and profit. Mission and stolen cargo are excluded from ordinary advice, while range, freshness, landing-pad and carrier filters remain available without exposing a full trading console. Local Market.json ingestion and visited-station EDDN uploads run independently in the background even when Trade Assist is never opened; its compact Market Link strip only reports or changes that service and provides the occasional one-time Spansh market-baseline build.
 
 ### Squadron Command
 

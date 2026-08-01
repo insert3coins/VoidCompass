@@ -69,7 +69,6 @@ from exploration_window import ExplorationWindow
 from trade_window import TradeWindow
 from analytics_window import AnalyticsWindow
 from trade import marketdb as trade_marketdb
-from trade import alerts as trade_alerts
 from trade.eddn_upload import UPLOADER as trade_eddn_uploader
 from achievement_engine import AchievementEngine
 from achievement_window import AchievementWindow
@@ -1022,19 +1021,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._sync_navigation_hud_flight_state(supercruise=False)
 
     def _start_trade_live_services(self):
-        """Start the EDDN listener at app startup (not first Trade-window open,
-        which let the market DB silently age) and surface fired trade-watch
-        alerts as toasts instead of waiting for the Watchlist tab."""
-        def _on_trade_alert(alert):
-            toast = getattr(self, "toast_hud", None)
-            if toast:
-                # Called from the EDDN thread — hop through the shared Tk dispatcher.
-                self._ui_post(lambda a=alert: toast.push(
-                    "TRADE WATCH", a.get("text") or "", severity="warn", duration_s=15))
-        try:
-            trade_alerts.set_notify_callback(_on_trade_alert)
-        except Exception:
-            pass
+        """Start EDDN at application startup, independently of Trade Assist."""
         def _start_if_ready():
             try:
                 conn = trade_marketdb.connect()

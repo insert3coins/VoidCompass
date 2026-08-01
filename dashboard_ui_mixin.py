@@ -2257,8 +2257,8 @@ class DashboardUIMixin(ThemedWindowMixin):
         for row in range(2):
             operations_grid.grid_rowconfigure(row, weight=1)
         self._workspace_hub_card(
-            operations_grid, 0, 0, "SIMPLE TRADE",
-            "Cargo selling, routes and EDDN status first; detailed market tools remain one click away.",
+            operations_grid, 0, 0, "TRADE ASSIST",
+            "One-click cargo buyers, three practical departures and a compact live trade run.",
             self.open_trade_window, "OPEN TRADE",
         )
         self._workspace_hub_card(

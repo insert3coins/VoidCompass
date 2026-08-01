@@ -596,6 +596,7 @@ def find_opportunities(
     requires_large_pad=False,
     include_carriers=True,
     max_system_distance=None,
+    source_market_id=None,
     limit=60,
 ):
     conn = marketdb.connect()
@@ -617,6 +618,14 @@ def find_opportunities(
         if len(by_id) < 2:
             return []
         _load_temp_ids(conn, by_id.keys())
+        source_filter = ""
+        query_values = [
+            max(1, int(min_units)), max(1, int(min_units)), int(min_profit),
+        ]
+        if source_market_id is not None:
+            source_filter = " AND buy.market_id = ?"
+            query_values.append(int(source_market_id))
+        query_values.append(int(limit) * 4)
         rows = conn.execute(
             f"""SELECT buy.market_id, sell.market_id, buy.symbol, buy.buy_price, sell.sell_price,
                        buy.supply, sell.demand
@@ -628,9 +637,10 @@ def find_opportunities(
                   AND buy.supply >= ? AND sell.demand >= ?
                   AND buy.buy_price > 0 AND sell.sell_price > buy.buy_price
                   AND (sell.sell_price - buy.buy_price) >= ?
+                  {source_filter}
                 ORDER BY (sell.sell_price - buy.buy_price) DESC
                 LIMIT ?""",
-            [max(1, int(min_units)), max(1, int(min_units)), int(min_profit), int(limit) * 4],
+            query_values,
         ).fetchall()
         names = marketdb.commodity_display_names(conn, {r[2] for r in rows})
         out = []
@@ -662,6 +672,8 @@ def find_opportunities(
                 "demand": demand,
                 "distance": round(_dist(src, dst), 1),
                 "from_player": round(_dist(start, src), 1),
+                "from_dist_ls": src.get("dist_ls"),
+                "to_dist_ls": dst.get("dist_ls"),
                 "large_pad": bool(src.get("large_pad") and dst.get("large_pad")),
                 "updated_at": updated_at,
                 "_rank": profit_each * _freshness_factor(updated_at),

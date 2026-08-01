@@ -78,10 +78,6 @@ CREATE TABLE IF NOT EXISTS trade_log(
 CREATE TABLE IF NOT EXISTS balance_log(
     ts INTEGER PRIMARY KEY,
     balance INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS watches(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    created TEXT NOT NULL,
-    payload TEXT NOT NULL);
 """
 
 _init_lock = threading.Lock()
@@ -359,6 +355,33 @@ def trade_analytics(days=30):
             "period": profit_since(since),
             "top": [{"symbol": s, "name": n, "profit": p or 0, "tons": c or 0} for s, n, p, c in top],
         }
+    finally:
+        conn.close()
+
+
+def recent_trades(limit=20):
+    """Return a small newest-first transaction history for Trade Assist."""
+    limit = max(1, min(100, int(limit or 20)))
+    conn = connect()
+    try:
+        rows = conn.execute(
+            "SELECT ts, event, symbol, name, count, price, total, profit "
+            "FROM trade_log ORDER BY ts DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [
+            {
+                "ts": ts,
+                "event": event,
+                "symbol": symbol,
+                "name": name,
+                "count": count,
+                "price": price,
+                "total": total,
+                "profit": profit,
+            }
+            for ts, event, symbol, name, count, price, total, profit in rows
+        ]
     finally:
         conn.close()
 
