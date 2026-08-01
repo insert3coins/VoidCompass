@@ -1,11 +1,15 @@
 import tkinter as tk
-from config import COLOR_ACCENT, COLOR_GREEN, COLOR_TEXT, COLOR_ORANGE, save_config
+from config import save_config
 import overlay_chrome
+import themes
 
 class CargoHUD:
     def __init__(self, root, config):
         self.win = tk.Toplevel(root)
         self.config = config
+        self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
+        self._last_inventory = []
+        self._last_capacity = 0
         
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, "#ff00ff")
         
@@ -107,18 +111,28 @@ class CargoHUD:
 
     def update(self, inventory, capacity=0):
         inventory = list(inventory or [])
+        self._last_inventory = list(inventory)
+        self._last_capacity = capacity
+        palette = self._palette
         self.canvas.delete("all")
         
         w = 300
         h = 400
         
         # Chrome
-        overlay_chrome.draw_chrome(self.canvas, w, h)
+        # OBS scaling can alias the three-pixel scanline texture into a strong
+        # horizontal rule beside every manifest row. Cargo keeps the shared
+        # border/corner chrome but uses a clean field behind its dense list.
+        overlay_chrome.draw_chrome(
+            self.canvas, w, h, accent=palette["accent"], scanlines=False,
+        )
         # Header separator
-        self.canvas.create_line(16, 45, w-16, 45, fill="#1a2530", width=1)
+        self.canvas.create_line(
+            16, 45, w-16, 45, fill=palette["border_soft"], width=1,
+        )
 
         # Title + total (line 1)
-        self.draw_text(16, 20, text="CARGO MANIFEST", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
+        self.draw_text(16, 20, text="CARGO MANIFEST", fill=palette["accent"], font=("Courier", 10, "bold"), anchor="w")
         
         # Total Count
         total = sum(item.get("Count", 0) for item in inventory)
@@ -141,24 +155,24 @@ class CargoHUD:
             if pct > 1.0: pct = 1.0
             idx = int(pct * 10)
             idx = max(0, min(idx, 10))
-            self.draw_text(w-16, 35, text=bars[idx], fill=COLOR_ORANGE, font=("Segoe UI Symbol", 10), anchor="e")
+            self.draw_text(w-16, 35, text=bars[idx], fill=palette["orange"], font=("Segoe UI Symbol", 10), anchor="e")
             total_str = f"TOTAL: {total}/{capacity}"
         else:
             total_str = f"TOTAL: {total}"
-            self.draw_text(w-16, 35, text=bars[0], fill="#777", font=("Segoe UI Symbol", 10), anchor="e")
+            self.draw_text(w-16, 35, text=bars[0], fill=palette["dim"], font=("Segoe UI Symbol", 10), anchor="e")
 
-        self.draw_text(w-16, 20, text=total_str, fill=COLOR_ORANGE, font=("Courier", 10, "bold"), anchor="e")
+        self.draw_text(w-16, 20, text=total_str, fill=palette["orange"], font=("Courier", 10, "bold"), anchor="e")
         
         y_pos = 60
         if not inventory:
-            self.draw_text(w//2, h//2, text="[ HOLD EMPTY ]", fill="#555", font=("Courier", 10), anchor="center")
+            self.draw_text(w//2, h//2, text="[ HOLD EMPTY ]", fill=palette["dim"], font=("Courier", 10), anchor="center")
         else:
             # Sort alphabetically
             inventory.sort(key=lambda x: x.get("Name_Localised", x.get("Name", "Unknown")))
             
             for item in inventory:
                 if y_pos > h - 25:
-                    self.draw_text(w//2, y_pos, text="... overflow ...", fill="#555", font=("Courier", 8), anchor="center")
+                    self.draw_text(w//2, y_pos, text="... overflow ...", fill=palette["dim"], font=("Courier", 8), anchor="center")
                     break
                 
                 name = item.get("Name_Localised", item.get("Name", "Unknown"))
@@ -167,7 +181,12 @@ class CargoHUD:
                 # Truncate name
                 display_name = (name[:22] + '..') if len(name) > 22 else name
                 
-                self.draw_text(16, y_pos, text=display_name, fill=COLOR_TEXT, font=("Courier", 9), anchor="w")
-                self.draw_text(w-16, y_pos, text=str(count), fill=COLOR_GREEN, font=("Courier", 9, "bold"), anchor="e")
+                self.draw_text(16, y_pos, text=display_name, fill=palette["text"], font=("Courier", 9), anchor="w")
+                self.draw_text(w-16, y_pos, text=str(count), fill=palette["green"], font=("Courier", 9, "bold"), anchor="e")
                 
                 y_pos += 20
+
+    def apply_theme(self, palette=None):
+        """Apply the active commander palette without moving the overlay."""
+        self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)
+        self.update(self._last_inventory, self._last_capacity)

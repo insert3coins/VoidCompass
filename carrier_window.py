@@ -4,7 +4,7 @@ import threading
 import tkinter as tk
 import webbrowser
 from datetime import datetime, timezone
-from tkinter import messagebox, ttk
+from tkinter import messagebox, simpledialog, ttk
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 from mining_data import search_spansh_rings
@@ -677,6 +677,15 @@ class CarrierWindow(ThemedWindowMixin):
             bg=self.UI_PANEL, font=("Segoe UI", 7),
         ).pack(side=tk.LEFT, padx=(8, 0))
 
+        edit_actions = tk.Frame(f, bg=self.UI_PANEL)
+        edit_actions.pack(fill=tk.X, padx=10, pady=(0, 6))
+        button(edit_actions, "MARK DONE", self._mark_selected_expedition_done, muted=True).pack(side=tk.LEFT)
+        button(edit_actions, "MARK PENDING", self._mark_selected_expedition_pending, muted=True).pack(side=tk.LEFT, padx=(6, 0))
+        button(edit_actions, "ADD STOP", self._add_expedition_stop, muted=True).pack(side=tk.LEFT, padx=(6, 0))
+        button(edit_actions, "REMOVE", self._remove_selected_expedition, danger=True).pack(side=tk.LEFT, padx=(6, 0))
+        button(edit_actions, "MOVE DOWN", lambda: self._move_selected_expedition(1), muted=True).pack(side=tk.RIGHT)
+        button(edit_actions, "MOVE UP", lambda: self._move_selected_expedition(-1), muted=True).pack(side=tk.RIGHT, padx=(0, 6))
+
         import_row = tk.Frame(f, bg=self.UI_PANEL)
         import_row.pack(fill=tk.X, padx=10, pady=(0, 6))
         tk.Label(
@@ -951,13 +960,8 @@ class CarrierWindow(ThemedWindowMixin):
         self._refresh()
 
     def _next_expedition_system(self):
-        for row in self.tracker.carrier_data.get("expedition_route") or []:
-            if not isinstance(row, dict) or row.get("visited"):
-                continue
-            system = str(row.get("system") or "").strip()
-            if system:
-                return system
-        return None
+        row = self.tracker.next_expedition_stop()
+        return str((row or {}).get("system") or "").strip() or None
 
     def _copy_next_expedition(self):
         system = self._next_expedition_system()
@@ -984,6 +988,83 @@ class CarrierWindow(ThemedWindowMixin):
         self.win.clipboard_clear()
         self.win.clipboard_append(system)
         self.expedition_status.config(text=f"COPIED WAYPOINT · {system}", fg=self.UI_OK)
+
+    def _selected_expedition_index(self, required=True):
+        selected = self.expedition_tree.selection()
+        if selected:
+            item = str(selected[0])
+            if item.startswith("route-"):
+                try:
+                    return int(item.split("-", 1)[1])
+                except ValueError:
+                    pass
+        if required:
+            self.expedition_status.config(
+                text="Select a route row first.", fg=self.UI_WARN,
+            )
+        return None
+
+    def _mark_selected_expedition_done(self):
+        index = self._selected_expedition_index()
+        if index is None:
+            return
+        if self.tracker.set_expedition_stop_visited(index, True):
+            self._refresh()
+            self.expedition_status.config(text="STOP MARKED COMPLETE", fg=self.UI_OK)
+
+    def _mark_selected_expedition_pending(self):
+        index = self._selected_expedition_index()
+        if index is None:
+            return
+        if self.tracker.set_expedition_stop_visited(index, False):
+            self._refresh()
+            self.expedition_status.config(text="STOP RETURNED TO PENDING", fg=self.UI_OK)
+
+    def _add_expedition_stop(self):
+        system = simpledialog.askstring(
+            "Add carrier stop", "System name:", parent=self.win,
+        )
+        if not system or not system.strip():
+            return
+        selected = self._selected_expedition_index(required=False)
+        if self.tracker.add_expedition_stop(system, selected):
+            self._refresh()
+            self.expedition_status.config(
+                text="STOP ADDED · calculated leg/fuel data cleared; re-plot if required.",
+                fg=self.UI_WARN,
+            )
+
+    def _remove_selected_expedition(self):
+        index = self._selected_expedition_index()
+        if index is None:
+            return
+        route = self.tracker.carrier_data.get("expedition_route") or []
+        system = str((route[index] if index < len(route) else {}).get("system") or "this stop")
+        if not messagebox.askyesno(
+            "Remove carrier stop", f"Remove {system} from this expedition?\n\n"
+            "Calculated leg and fuel data will be cleared.", parent=self.win,
+        ):
+            return
+        if self.tracker.delete_expedition_stop(index):
+            self._refresh()
+            self.expedition_status.config(
+                text="STOP REMOVED · calculated leg/fuel data cleared.", fg=self.UI_WARN,
+            )
+
+    def _move_selected_expedition(self, offset):
+        index = self._selected_expedition_index()
+        if index is None:
+            return
+        if not self.tracker.move_expedition_stop(index, offset):
+            self.expedition_status.config(text="STOP CANNOT MOVE FURTHER", fg=self.UI_MUTED)
+            return
+        self._refresh()
+        target = self.expedition_tree.get_children()[index + offset]
+        self.expedition_tree.selection_set(target)
+        self.expedition_tree.focus(target)
+        self.expedition_status.config(
+            text="STOP MOVED · calculated leg/fuel data cleared.", fg=self.UI_WARN,
+        )
 
     def _open_spansh_result(self):
         url = self.tracker.carrier_data.get("expedition_spansh_url")
@@ -1210,8 +1291,10 @@ class CarrierWindow(ThemedWindowMixin):
             for item in current_items:
                 self.expedition_tree.delete(item)
             restored_selection = None
-            for values in desired_tree_rows:
-                item = self.expedition_tree.insert("", tk.END, values=values)
+            for index, values in enumerate(desired_tree_rows):
+                item = self.expedition_tree.insert(
+                    "", tk.END, iid=f"route-{index}", values=values,
+                )
                 if selected_system and str(values[1]).casefold() == selected_system:
                     restored_selection = item
             if restored_selection:

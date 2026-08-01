@@ -30,7 +30,7 @@ DEFAULT_POSITIONS = {
 DEFAULT_SIZES = {
     "hud": (430, 230), "cargo_hud": (310, 150), "carrier_hud": (330, 180),
     "prospector_hud": (320, 120), "system_info_hud": (340, 220),
-    "gravity_warning_hud": (280, 90), "station_info_hud": (340, 200),
+    "gravity_warning_hud": (280, 90), "station_info_hud": (520, 300),
     "survey_status_hud": (340, 300), "toast_hud": (340, 110),
     "heartbeat_hud": (42, 42), "colony_overlay": (300, 164),
 }
@@ -492,7 +492,7 @@ class OverlayLayoutStudio:
             value=str(self.config.get("gravity_warning_hud_timeout_s", 20))
         )
         self.station_timeout_var = tk.StringVar(
-            value=str(self.config.get("station_info_timeout_s", 25))
+            value=str(self.config.get("station_info_timeout_s", 0))
         )
         self.gravity_threshold_var = tk.StringVar(
             value=str(self.config.get("gravity_warning_threshold_g", 3.0))
@@ -500,7 +500,10 @@ class OverlayLayoutStudio:
         self._option_entry(timing, "Prospector auto-hide (seconds)", self.prospector_timeout_var)
         self._option_entry(timing, "System Info auto-hide (seconds)", self.system_timeout_var)
         self._option_entry(timing, "Gravity warning auto-hide (seconds)", self.gravity_timeout_var)
-        self._option_entry(timing, "Station Info auto-hide (seconds)", self.station_timeout_var)
+        self._option_entry(
+            timing, "Station Info auto-hide (seconds; 0 = while docked)",
+            self.station_timeout_var,
+        )
         self._option_entry(timing, "Gravity warning threshold (g)", self.gravity_threshold_var)
 
         crt_card, crt = self._option_card(columns, "NAVIGATION HUD EFFECTS")
@@ -617,7 +620,7 @@ class OverlayLayoutStudio:
         self.prospector_timeout_var.set(str(self.config.get("prospector_hud_timeout_s", 45)))
         self.system_timeout_var.set(str(self.config.get("system_info_timeout_s", 30)))
         self.gravity_timeout_var.set(str(self.config.get("gravity_warning_hud_timeout_s", 20)))
-        self.station_timeout_var.set(str(self.config.get("station_info_timeout_s", 25)))
+        self.station_timeout_var.set(str(self.config.get("station_info_timeout_s", 0)))
         self.gravity_threshold_var.set(str(self.config.get("gravity_warning_threshold_g", 3.0)))
         self.crt_intensity_var.set(str(self.config.get("hud_crt_intensity", "Subtle") or "Subtle").title())
 
@@ -641,7 +644,7 @@ class OverlayLayoutStudio:
             prospector_timeout = max(5, int(float(self.prospector_timeout_var.get())))
             system_timeout = max(5, int(float(self.system_timeout_var.get())))
             gravity_timeout = max(5, int(float(self.gravity_timeout_var.get())))
-            station_timeout = max(5, int(float(self.station_timeout_var.get())))
+            station_timeout = max(0, int(float(self.station_timeout_var.get())))
             gravity_threshold = max(0.5, float(self.gravity_threshold_var.get()))
         except (TypeError, ValueError):
             messagebox.showerror(

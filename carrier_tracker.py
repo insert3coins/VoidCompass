@@ -9,6 +9,7 @@ import logging
 import math
 import os
 import threading
+import time
 from datetime import datetime, timezone
 
 from persistence_queue import persistence_queue
@@ -161,6 +162,7 @@ class CarrierTracker:
         self._prev_status = "idle"
         self._profile_generation = 0
         self._profile_lock = threading.RLock()
+        self._diagnostic_last = {}
         self._config = {}
         self.on_updated = None          # callback(carrier_data) — grabbed by CarrierWindow
         self.on_panel_updated = None    # callback(carrier_data) — persistent, used by dashboard panel
@@ -787,6 +789,121 @@ class CarrierTracker:
                 return row
         return None
 
+    def next_expedition_stop(self):
+        """Return the next pending row, never a stale copy of our current stop."""
+        current = " ".join(str(self.carrier_data.get("system") or "").split()).casefold()
+        current_address = self.carrier_data.get("system_address")
+        for row in self.carrier_data.get("expedition_route") or []:
+            if not isinstance(row, dict) or row.get("visited"):
+                continue
+            system = " ".join(str(row.get("system") or "").split())
+            if not system:
+                continue
+            same_address = (
+                current_address is not None and row.get("id64") is not None
+                and str(row.get("id64")) == str(current_address)
+            )
+            if same_address or (current and system.casefold() == current):
+                # An interrupted/manual route can leave the arrival row
+                # pending.  Copy Next must still move the commander forward.
+                continue
+            return row
+        return None
+
+    def _publish_expedition_change(self):
+        self.save_state()
+        if callable(self.on_updated):
+            self.on_updated(self.carrier_data)
+        if callable(self.on_panel_updated):
+            self.on_panel_updated(self.carrier_data)
+
+    def set_expedition_stop_visited(self, index, visited=True):
+        """Manually correct one route row without discarding its fuel plan."""
+        route = self.carrier_data.get("expedition_route") or []
+        try:
+            row = route[int(index)]
+        except (IndexError, TypeError, ValueError):
+            return False
+        if not isinstance(row, dict):
+            return False
+        visited = bool(visited)
+        row["visited"] = visited
+        row["visited_at"] = _utc_stamp() if visited else None
+        row["manual_progress"] = visited
+        if not visited:
+            # A later real arrival must be allowed to account for this leg.
+            row["fuel_accounted_at"] = None
+            row["fuel_actual_used_t"] = None
+        self._publish_expedition_change()
+        return True
+
+    def _invalidate_edited_expedition_plan(self):
+        """Turn a structurally edited calculated route into a truthful manual one."""
+        cd = self.carrier_data
+        leg_fields = (
+            "distance_ly", "distance_to_destination_ly", "fuel_remaining_t",
+            "fuel_used_t", "tritium_market_t", "restock_t", "must_restock",
+            "icy_ring", "pristine", "desired_destination",
+        )
+        for row in cd.get("expedition_route") or []:
+            if isinstance(row, dict):
+                for key in leg_fields:
+                    row.pop(key, None)
+        cd["expedition_requested_destinations"] = [
+            str(row.get("system") or "").strip()
+            for row in cd.get("expedition_route") or []
+            if isinstance(row, dict) and str(row.get("system") or "").strip()
+        ]
+        cd["expedition_route_source"] = "manual"
+        cd["expedition_spansh_job"] = None
+        cd["expedition_spansh_url"] = None
+        cd["expedition_plotted_at"] = None
+        for key in (
+            "expedition_total_distance_ly", "expedition_used_capacity_t",
+            "expedition_fuel_required_t", "expedition_starting_tank_t",
+            "expedition_starting_market_tritium_t", "expedition_starting_load_t",
+        ):
+            cd[key] = None
+
+    def add_expedition_stop(self, system, after_index=None):
+        system = " ".join(str(system or "").split())
+        if not system:
+            return False
+        route = self.carrier_data.setdefault("expedition_route", [])
+        row = {"system": system, "visited": False, "visited_at": None}
+        try:
+            index = int(after_index) + 1
+        except (TypeError, ValueError):
+            index = len(route)
+        route.insert(max(0, min(index, len(route))), row)
+        self._invalidate_edited_expedition_plan()
+        self._publish_expedition_change()
+        return True
+
+    def delete_expedition_stop(self, index):
+        route = self.carrier_data.get("expedition_route") or []
+        try:
+            route.pop(int(index))
+        except (IndexError, TypeError, ValueError):
+            return False
+        self._invalidate_edited_expedition_plan()
+        self._publish_expedition_change()
+        return True
+
+    def move_expedition_stop(self, index, offset):
+        route = self.carrier_data.get("expedition_route") or []
+        try:
+            old = int(index)
+            new = old + int(offset)
+        except (TypeError, ValueError):
+            return False
+        if old < 0 or old >= len(route) or new < 0 or new >= len(route):
+            return False
+        route[old], route[new] = route[new], route[old]
+        self._invalidate_edited_expedition_plan()
+        self._publish_expedition_change()
+        return True
+
     def _repair_current_expedition_stop(self, system, timestamp=None, system_address=None):
         """Mark current stop only when this arrival has no completed match."""
         target = " ".join(str(system or "").split()).casefold()
@@ -1059,10 +1176,22 @@ class CarrierTracker:
         if callable(self.on_status_changed):
             try:
                 self.on_status_changed(old_status, new_status, self.carrier_data)
-            except Exception:
-                pass
+            except Exception as exc:
+                self._warn_throttled(
+                    "status-callback",
+                    "Carrier status callback failed: %s",
+                    exc,
+                )
         if discord:
             self._maybe_discord(old_status, new_status)
+
+    def _warn_throttled(self, key, message, *args, interval_s=120.0):
+        """Retain useful carrier diagnostics without flooding normal logs."""
+        now = time.monotonic()
+        if now - float(self._diagnostic_last.get(key) or 0.0) < interval_s:
+            return
+        self._diagnostic_last[key] = now
+        logging.warning(message, *args)
 
     def _maybe_discord(self, old_status, new_status):
         url = (self._config.get("carrier_discord_webhook_url") or "").strip()
@@ -1183,8 +1312,13 @@ class CarrierTracker:
                 },
                 timeout=8,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            self._warn_throttled(
+                "discord-webhook",
+                "Carrier Discord webhook failed: %s",
+                exc,
+                interval_s=300.0,
+            )
 
     def set_note(self, note: str):
         """Update the operator status note and persist to config."""
@@ -1193,8 +1327,12 @@ class CarrierTracker:
         if callable(self.on_panel_updated):
             try:
                 self.on_panel_updated(self.carrier_data)
-            except Exception:
-                pass
+            except Exception as exc:
+                self._warn_throttled(
+                    "panel-note-callback",
+                    "Carrier note panel refresh failed: %s",
+                    exc,
+                )
 
     def set_destination_note(self, destination: str):
         """Update the operator's stated destination and persist."""
@@ -1203,8 +1341,12 @@ class CarrierTracker:
         if callable(self.on_panel_updated):
             try:
                 self.on_panel_updated(self.carrier_data)
-            except Exception:
-                pass
+            except Exception as exc:
+                self._warn_throttled(
+                    "panel-destination-callback",
+                    "Carrier destination panel refresh failed: %s",
+                    exc,
+                )
 
     def send_status_update(self, departure_ts=None):
         """Manually fire a Discord status-update notification with current state.

@@ -1,75 +1,284 @@
-"""StationInfoHUD — transient overlay showing economy/government/faction/
-services info for the station the commander just docked at.
+"""Exploration-first station overlay built from Elite journal evidence.
 
-All data comes from the raw Docked journal event (dashboard.py captures it
-into self.current_station_* attributes) — no network calls needed.
+The renderer consumes the station state captured by :mod:`dashboard` from
+``Docked``/``Location`` events.  The model builder is intentionally independent
+of Tk so journal examples can be validated without constructing a window.
 """
 
+import re
 import tkinter as tk
-from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, save_config
+
+from config import save_config
 import overlay_chrome
+import themes
+
 
 _CHROMA = "#ff00ff"
-_DIM = "#7a8a98"
+WIDTH = 520
 
-WIDTH = 480
+_CORE_SERVICES = (
+    ("REFUEL", ("refuel",)),
+    ("REPAIR", ("repair",)),
+    ("REARM", ("rearm",)),
+    ("OUTFITTING", ("outfitting",)),
+)
+_EXPLORATION_SERVICES = (
+    ("UNIVERSAL CARTOGRAPHICS", ("exploration",)),
+    ("VISTA GENOMICS", ("vistagenomics",)),
+    ("SEARCH & RESCUE", ("searchrescue",)),
+    ("COLONISATION", ("registeringcolonisation", "colonisationconstruction")),
+)
+_SPECIAL_SERVICES = (
+    ("SHIPYARD", ("shipyard",)),
+    ("TECH BROKER", ("techbroker",)),
+    ("MATERIAL TRADER", ("materialtrader",)),
+    ("BLACK MARKET", ("blackmarket",)),
+    ("ENGINEER", ("engineer",)),
+)
+_STATION_TYPE_LABELS = {
+    "asteroidbase": "ASTEROID BASE",
+    "coriolis": "CORIOLIS STARPORT",
+    "fleetcarrier": "FLEET CARRIER",
+    "megaship": "MEGASHIP",
+    "ocellus": "OCELLUS STARPORT",
+    "orbis": "ORBIS STARPORT",
+    "outpost": "OUTPOST",
+    "planetaryconstructiondepot": "SURFACE DEPOT",
+    "spaceconstructiondepot": "ORBITAL DEPOT",
+    "surfacestation": "SURFACE PORT",
+}
 
 
 def _truncate(text, max_chars):
+    text = str(text or "")
+    return text if len(text) <= max_chars else text[:max_chars - 1] + "…"
+
+
+def _safe_int(value, default=0):
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return int(default)
+
+
+def _display_name(value):
+    """Turn a localised label or Frontier token into compact readable text."""
+    text = str(value or "").strip()
     if not text:
         return ""
-    text = str(text)
-    return text if len(text) <= max_chars else text[:max_chars - 1] + "…"
+    if text.startswith("$") and text.endswith(";"):
+        text = text[1:-1]
+        text = re.sub(r"^(economy|government|stationtype)_", "", text, flags=re.I)
+    text = text.replace("_", " ")
+    text = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", text)
+    return " ".join(text.split()).strip()
+
+
+def _credits(value):
+    value = max(0, _safe_int(value))
+    if value >= 1_000_000_000:
+        return f"{value / 1_000_000_000:.2f} B CR"
+    if value >= 1_000_000:
+        return f"{value / 1_000_000:.1f} M CR"
+    if value >= 1_000:
+        return f"{value / 1_000:.0f} K CR"
+    return f"{value:,} CR"
+
+
+def _service_keys(services):
+    return {
+        str(service or "").strip().casefold().replace("_", "")
+        for service in (services or ()) if service
+    }
+
+
+def _has_service(service_keys, aliases):
+    return any(alias.casefold().replace("_", "") in service_keys for alias in aliases)
+
+
+def _service_rows(definitions, service_keys):
+    return [
+        {"label": label, "available": _has_service(service_keys, aliases)}
+        for label, aliases in definitions
+    ]
+
+
+def _economy_summary(economies, fallback=None):
+    rows = []
+    for economy in economies or ():
+        if not isinstance(economy, dict):
+            continue
+        name = _display_name(economy.get("Name_Localised") or economy.get("Name"))
+        if not name:
+            continue
+        proportion = economy.get("Proportion")
+        try:
+            proportion = float(proportion)
+        except (TypeError, ValueError):
+            proportion = None
+        rows.append((name, proportion))
+    rows.sort(key=lambda item: item[1] if item[1] is not None else -1, reverse=True)
+    rows = rows[:3]
+    # Frontier journal examples can report economy weights whose total exceeds
+    # one (including individual values over one).  Those values are ordering
+    # weights, not safe percentages, so only render percentages when the whole
+    # set is demonstrably fractional.
+    valid_percentages = bool(rows) and all(
+        value is not None and 0 <= value <= 1 for _, value in rows
+    ) and sum(value for _, value in rows) <= 1.05
+    if valid_percentages:
+        return " · ".join(f"{name} {value * 100:.0f}%" for name, value in rows)
+    if rows:
+        return " · ".join(name for name, _ in rows)
+    return _display_name(fallback)
+
+
+def _station_type_label(station_type):
+    raw = str(station_type or "").strip()
+    key = raw.casefold().replace(" ", "").replace("_", "")
+    return _STATION_TYPE_LABELS.get(key) or _display_name(raw).upper() or "STATION"
+
+
+def _same_market_id(left, right):
+    if left in (None, "") or right in (None, ""):
+        return False
+    try:
+        return int(left) == int(right)
+    except (TypeError, ValueError):
+        return str(left).strip().casefold() == str(right).strip().casefold()
+
+
+def build_station_model(dash):
+    """Return a truthful, renderer-neutral station status card."""
+    service_keys = _service_keys(getattr(dash, "current_station_services", None))
+    carrier = getattr(getattr(dash, "carrier_tracker", None), "carrier_data", None) or {}
+    market_id = getattr(dash, "current_station_market_id", None)
+    is_personal_carrier = _same_market_id(market_id, carrier.get("carrier_id"))
+    station_type = _station_type_label(getattr(dash, "current_station_type", None))
+
+    pads = getattr(dash, "current_station_landing_pads", None) or {}
+    pad_parts = []
+    for key, short in (("Large", "L"), ("Medium", "M"), ("Small", "S")):
+        value = _safe_int(pads.get(key))
+        if value:
+            pad_parts.append(f"{short} {value}")
+
+    distance = getattr(dash, "current_station_dist_ls", None)
+    try:
+        distance_text = f"{float(distance):,.0f} Ls" if distance is not None else ""
+    except (TypeError, ValueError):
+        distance_text = ""
+
+    faction = getattr(dash, "current_station_faction", None) or {}
+    authority_parts = []
+    for value in (
+        faction.get("name"),
+        getattr(dash, "current_station_government", None),
+        getattr(dash, "current_station_allegiance", None),
+        faction.get("state"),
+    ):
+        label = _display_name(value)
+        if label and label.casefold() != "none" and label.casefold() not in {
+            item.casefold() for item in authority_parts
+        }:
+            authority_parts.append(label)
+
+    state = getattr(dash, "companion_state", None) or {}
+    exploration_value = max(0, _safe_int(state.get("unsold_exploration_cr")))
+    bio_value = max(0, _safe_int(state.get("unsold_bio_cr")))
+    bio_bonus = max(0, _safe_int(state.get("unsold_bio_bonus_potential_cr")))
+    bio_samples = max(0, _safe_int(state.get("unsold_bio_samples")))
+    data_rows = []
+    if exploration_value:
+        data_rows.append({
+            "label": "EXPLORATION",
+            "value": _credits(exploration_value),
+            "available": "exploration" in service_keys,
+            "service": "CARTOGRAPHICS",
+        })
+    if bio_value:
+        value = _credits(bio_value)
+        if bio_bonus:
+            value = f"{value.removesuffix(' CR')}–{_credits(bio_value + bio_bonus)}"
+        data_rows.append({
+            "label": f"BIOLOGY · {bio_samples} ANALYSES" if bio_samples else "BIOLOGY",
+            "value": value,
+            "available": "vistagenomics" in service_keys,
+            "service": "VISTA",
+        })
+
+    station_state = _display_name(getattr(dash, "current_station_state", None))
+    type_parts = [station_type]
+    if station_state and station_state.casefold() not in ("none", "normal"):
+        type_parts.append(station_state.upper())
+
+    return {
+        "station": getattr(dash, "current_station_name", None) or "UNKNOWN STATION",
+        "system": getattr(dash, "current_sys", None) or "UNKNOWN SYSTEM",
+        "type": " · ".join(type_parts),
+        "badge": "PERSONAL CARRIER" if is_personal_carrier else "DOCKED",
+        "is_personal_carrier": is_personal_carrier,
+        "distance": distance_text,
+        "pads": " · ".join(pad_parts),
+        "core_services": _service_rows(_CORE_SERVICES, service_keys),
+        "exploration_services": _service_rows(_EXPLORATION_SERVICES, service_keys),
+        "special_services": [
+            row["label"] for row in _service_rows(_SPECIAL_SERVICES, service_keys)
+            if row["available"]
+        ],
+        "data_rows": data_rows,
+        "economies": _economy_summary(
+            getattr(dash, "current_station_economies", None),
+            getattr(dash, "current_station_economy", None),
+        ),
+        "authority": " · ".join(authority_parts),
+    }
 
 
 class StationInfoHUD:
     def __init__(self, root, config):
         self.root = root
         self.config = config
+        self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
+        self._last_model = None
         self._hide_job = None
+        self._visible = False
 
         self.win = tk.Toplevel(root)
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
-
-        self.canvas = tk.Canvas(self.win, width=WIDTH, height=100, bg=overlay_bg, highlightthickness=0)
+        self.canvas = tk.Canvas(
+            self.win, width=WIDTH, height=100, bg=overlay_bg, highlightthickness=0,
+        )
         self.canvas.pack()
-
         self.canvas.bind("<Button-1>", self._drag_start)
         self.canvas.bind("<B1-Motion>", self._drag_move)
         self.canvas.bind("<ButtonRelease-1>", self._drag_end)
 
-        x = self._safe_int(config.get("station_info_hud_x"), 30)
-        y = self._safe_int(config.get("station_info_hud_y"), 380)
+        x = _safe_int(config.get("station_info_hud_x"), 30)
+        y = _safe_int(config.get("station_info_hud_y"), 380)
         self.win.geometry(overlay_chrome.position_geometry(x, y))
-
         self._force_topmost()
         self.win.withdraw()
-
-    @staticmethod
-    def _safe_int(value, default):
-        try:
-            return int(float(value))
-        except Exception:
-            return int(default)
-
-    # ── Lifecycle ────────────────────────────────────────────────────────
 
     def _force_topmost(self):
         try:
             self.win.attributes("-topmost", True)
         except Exception:
             pass
-        refresh_ms = max(2000, int(self.config.get("overlay_topmost_refresh_ms", 12000) or 12000))
+        refresh_ms = max(2000, _safe_int(
+            self.config.get("overlay_topmost_refresh_ms"), 12000,
+        ))
         self.win.after(refresh_ms, self._force_topmost)
 
     def show(self):
         try:
-            x = self._safe_int(self.config.get("station_info_hud_x"), 30)
-            y = self._safe_int(self.config.get("station_info_hud_y"), 380)
+            x = _safe_int(self.config.get("station_info_hud_x"), 30)
+            y = _safe_int(self.config.get("station_info_hud_y"), 380)
             self.win.geometry(overlay_chrome.position_geometry(x, y))
             self.win.deiconify()
             self.win.attributes("-topmost", True)
             self.win.lift()
+            self._visible = True
         except Exception:
             pass
 
@@ -84,6 +293,7 @@ class StationInfoHUD:
             self.win.withdraw()
         except Exception:
             pass
+        self._visible = False
 
     def _schedule_hide(self):
         if self._hide_job:
@@ -91,87 +301,42 @@ class StationInfoHUD:
                 self.win.after_cancel(self._hide_job)
             except Exception:
                 pass
-        timeout_s = max(5, int(self.config.get("station_info_timeout_s") or 25))
-        self._hide_job = self.win.after(timeout_s * 1000, self._auto_hide)
+            self._hide_job = None
+        timeout_s = max(0, _safe_int(self.config.get("station_info_timeout_s"), 0))
+        if timeout_s:
+            self._hide_job = self.win.after(max(5, timeout_s) * 1000, self._auto_hide)
 
     def _auto_hide(self):
         self._hide_job = None
         self.hide()
 
-    # ── Data interface ───────────────────────────────────────────────────
-
     def on_docked(self, dash):
-        """dash is the MainDashboard instance — reads its current_station_* attrs."""
-        rows = self._build_rows(dash)
-        self._redraw(dash.current_station_name or "UNKNOWN STATION", rows)
+        self.refresh(dash)
         self.show()
         self._schedule_hide()
 
-    def _build_rows(self, dash):
-        rows = []
+    def refresh(self, dash):
+        """Repaint live docked data without restarting the auto-hide timer."""
+        model = build_station_model(dash)
+        if model == self._last_model:
+            return
+        self._last_model = model
+        self._redraw(model)
 
-        stype = dash.current_station_type
-        pads = dash.current_station_landing_pads or {}
-        pad_txt = ""
-        if pads:
-            parts = [f"{v}×{k[0]}" for k, v in (("Large", pads.get("Large")), ("Medium", pads.get("Medium")), ("Small", pads.get("Small"))) if v]
-            pad_txt = "  ·  ".join(parts)
-        dist = dash.current_station_dist_ls
-        dist_txt = f"{dist:,.0f} Ls" if isinstance(dist, (int, float)) else ""
-        line1 = "  ·  ".join(p for p in (stype, pad_txt, dist_txt) if p)
-        if line1:
-            rows.append((line1, _DIM))
-
-        economies = dash.current_station_economies or []
-        if economies:
-            parts = []
-            for econ in sorted(economies, key=lambda e: e.get("Proportion") or 0, reverse=True)[:3]:
-                name = econ.get("Name_Localised") or econ.get("Name") or ""
-                pct = econ.get("Proportion")
-                if name and isinstance(pct, (int, float)):
-                    parts.append(f"{name} {pct*100:.0f}%")
-                elif name:
-                    parts.append(name)
-            if parts:
-                rows.append(("  ·  ".join(parts), COLOR_TEXT))
-        elif dash.current_station_economy:
-            rows.append((dash.current_station_economy, COLOR_TEXT))
-
-        gov = dash.current_station_government
-        alleg = dash.current_station_allegiance
-        gov_parts = [p for p in (gov, alleg) if p]
-        if gov_parts:
-            rows.append(("  ·  ".join(gov_parts), _DIM))
-
-        faction = dash.current_station_faction
-        if faction and faction.get("name"):
-            state = faction.get("state")
-            txt = faction["name"] if not state or state == "None" else f"{faction['name']} ({state})"
-            rows.append((_truncate(txt, 46), COLOR_ORANGE))
-
-        services = dash.current_station_services or []
-        notable = [s for s in services if s in (
-            "Refuel", "Repair", "Rearm", "Outfitting", "Shipyard", "BlackMarket",
-            "Contacts", "Missions", "Market", "TechBroker", "MaterialTrader",
-            "Engineer", "Crew", "Dock",
-        ) and s not in ("Dock", "Contacts", "Crew")]
-        if notable:
-            rows.append((", ".join(notable[:8]), _DIM))
-
-        return rows
-
-    # ── Drag-to-move ─────────────────────────────────────────────────────
+    def apply_theme(self, palette=None):
+        self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)
+        if self._last_model is not None:
+            self._redraw(self._last_model)
 
     def _drag_start(self, event):
-        self._dx = event.x
-        self._dy = event.y
+        self._dx, self._dy = event.x, event.y
 
     def _drag_move(self, event):
-        x = self.win.winfo_x() + (event.x - self._dx)
-        y = self.win.winfo_y() + (event.y - self._dy)
+        x = self.win.winfo_x() + event.x - self._dx
+        y = self.win.winfo_y() + event.y - self._dy
         self.win.geometry(overlay_chrome.position_geometry(x, y))
 
-    def _drag_end(self, event):
+    def _drag_end(self, _event):
         self.config["station_info_hud_x"] = self.win.winfo_x()
         self.config["station_info_hud_y"] = self.win.winfo_y()
         try:
@@ -179,25 +344,103 @@ class StationInfoHUD:
         except Exception:
             pass
 
-    # ── Rendering ────────────────────────────────────────────────────────
-
     def _text(self, x, y, text, fill, font, anchor="w"):
         font = overlay_chrome.scaled_font(font, self.config)
-        self.canvas.create_text(x + 1, y + 1, text=text, fill="black", font=font, anchor=anchor)
+        self.canvas.create_text(
+            x + 1, y + 1, text=text, fill="black", font=font, anchor=anchor,
+        )
         self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor)
 
-    def _redraw(self, station_name, rows):
-        LINE_H = 20
-        total_h = max(60, 35 + len(rows) * LINE_H + 10)
-        self.canvas.config(width=WIDTH, height=total_h)
-        self.win.geometry(f"{WIDTH}x{total_h}")
+    def _section(self, y, label, right=""):
+        palette = self._palette
+        self._text(18, y, label, palette["dim"], ("Courier", 7, "bold"))
+        if right:
+            self._text(WIDTH - 18, y, right, palette["dim"], ("Courier", 7, "bold"), "e")
+        return y + 18
+
+    def _service(self, x, y, row, max_chars=22):
+        available = row["available"]
+        color = self._palette["green"] if available else self._palette["dim"]
+        symbol = "●" if available else "○"
+        self._text(x, y, f"{symbol} {_truncate(row['label'], max_chars)}", color,
+                   ("Courier", 8, "bold"))
+
+    def _redraw(self, model):
+        palette = self._palette
+        special = model.get("special_services") or []
+        data_rows = model.get("data_rows") or []
+        h = 206 + (19 if special else 0) + (20 + len(data_rows) * 20 if data_rows else 0)
+        if model.get("economies"):
+            h += 18
+        if model.get("authority"):
+            h += 18
+        h += 13
+
+        self.canvas.config(width=WIDTH, height=h)
+        self.win.geometry(f"{WIDTH}x{h}")
         self.canvas.delete("all")
+        overlay_chrome.draw_chrome(
+            self.canvas, WIDTH, h, accent=palette["accent"], bracket_len=10,
+        )
 
-        overlay_chrome.draw_chrome(self.canvas, WIDTH, total_h)
-        self.canvas.create_line(20, 35, WIDTH - 20, 35, fill="#1a2530", width=1)
-        self._text(20, 20, _truncate(station_name.upper(), 40), COLOR_ACCENT, ("Courier", 10, "bold"))
+        self._text(18, 18, "STATION LINK", palette["accent"], ("Courier", 9, "bold"))
+        badge_color = palette["orange"] if model.get("is_personal_carrier") else palette["green"]
+        self._text(WIDTH - 18, 18, model["badge"], badge_color,
+                   ("Courier", 8, "bold"), "e")
+        self.canvas.create_line(18, 29, WIDTH - 18, 29, fill=palette["border_soft"], width=1)
 
-        y = 44
-        for text, color in rows:
-            self._text(20, y, _truncate(text, 64), color, ("Courier", 9, "bold"))
-            y += LINE_H
+        self._text(18, 45, _truncate(model["station"].upper(), 37), palette["text"],
+                   ("Courier", 11, "bold"))
+        self._text(WIDTH - 18, 45, _truncate(model["type"], 27), palette["orange"],
+                   ("Courier", 8, "bold"), "e")
+        location = model["system"].upper()
+        if model.get("distance"):
+            location += f" · {model['distance']}"
+        self._text(18, 64, _truncate(location, 44), palette["muted"],
+                   ("Courier", 8, "bold"))
+        if model.get("pads"):
+            self._text(WIDTH - 18, 64, model["pads"], palette["muted"],
+                       ("Courier", 8, "bold"), "e")
+        self.canvas.create_line(18, 76, WIDTH - 18, 76, fill=palette["border_soft"], width=1)
+
+        y = self._section(89, "CORE SERVICES", "AVAILABLE / UNAVAILABLE")
+        core_x = (18, 145, 272, 399)
+        for x, row in zip(core_x, model["core_services"]):
+            self._service(x, y, row, 12)
+        y += 25
+
+        y = self._section(y, "EXPLORATION SERVICES")
+        for index, row in enumerate(model["exploration_services"]):
+            x = 18 if index % 2 == 0 else 272
+            row_y = y + (index // 2) * 19
+            self._service(x, row_y, row, 27)
+        y += 43
+
+        if special:
+            self._text(18, y, "SPECIALISTS", palette["dim"], ("Courier", 7, "bold"))
+            self._text(WIDTH - 18, y, _truncate(" · ".join(special), 49), palette["muted"],
+                       ("Courier", 7, "bold"), "e")
+            y += 19
+
+        if data_rows:
+            y = self._section(y, "DATA ONBOARD", "ESTIMATED VALUE")
+            for row in data_rows:
+                color = palette["green"] if row["available"] else palette["yellow"]
+                readiness = f"{row['label']} · {row['service']} " + (
+                    "READY" if row["available"] else "UNAVAILABLE"
+                )
+                self._text(18, y, _truncate(readiness, 43), color,
+                           ("Courier", 8, "bold"))
+                self._text(WIDTH - 18, y, row["value"], color,
+                           ("Courier", 8, "bold"), "e")
+                y += 20
+
+        self.canvas.create_line(18, y, WIDTH - 18, y, fill=palette["border_soft"], width=1)
+        y += 14
+        if model.get("economies"):
+            self._text(18, y, _truncate(model["economies"].upper(), 65), palette["text"],
+                       ("Courier", 8, "bold"))
+            y += 18
+        if model.get("authority"):
+            self._text(18, y, _truncate(model["authority"].upper(), 65), palette["muted"],
+                       ("Courier", 7, "bold"))

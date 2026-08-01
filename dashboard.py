@@ -53,7 +53,7 @@ from dashboard_ui_mixin import DashboardUIMixin
 from dashboard_scan_mixin import DashboardScanMixin
 from colonization_window import ColonizationWindow, save_colonisation_data, load_colonisation_data
 from engineer_window import (
-    EngineerWindow, load_engineer_materials, save_engineer_materials,
+    EngineerWindow, load_engineer_materials,
     get_material_category,
 )
 from engineering_data import ready_blueprints
@@ -125,6 +125,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         "cmdr_reputation", "cmdr_ship", "game_version", "game_build",
         "game_horizons", "game_odyssey", "current_station_name",
         "current_station_type", "current_station_market_id",
+        "current_station_state",
         "current_station_economy", "current_station_economies",
         "current_station_government", "current_station_faction",
         "current_station_allegiance", "current_station_services",
@@ -463,14 +464,32 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.config["ui_theme_name"] = theme_name
         try:
             apply_theme_live(self.root, theme_name, palette)
-            survey = getattr(self, "survey_status_hud", None)
-            apply_survey_theme = getattr(survey, "apply_theme", None)
-            if callable(apply_survey_theme):
-                apply_survey_theme(palette)
-            return True
         except Exception as exc:
             logging.warning("Could not apply profile theme %s: %s", theme_name, exc)
             return False
+
+        success = True
+        for attr in (
+            "cargo_hud",
+            "carrier_hud",
+            "system_info_hud",
+            "station_info_hud",
+            "survey_status_hud",
+            "colony_overlay",
+        ):
+            overlay = getattr(self, attr, None)
+            apply_overlay_theme = getattr(overlay, "apply_theme", None)
+            if not callable(apply_overlay_theme):
+                continue
+            try:
+                apply_overlay_theme(palette)
+            except Exception as exc:
+                success = False
+                logging.warning(
+                    "Could not apply profile theme %s to %s: %s",
+                    theme_name, attr, exc,
+                )
+        return success
 
     @staticmethod
     def _new_trade_session():
@@ -654,6 +673,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_station_name = None
         self.current_station_type = None
         self.current_station_market_id = None
+        self.current_station_state = None
         self.current_station_economy = None
         self.current_station_economies = []
         self.current_station_government = None
@@ -687,6 +707,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._low_fuel_warned = False
         self._toast_hull_thresholds_seen = set()
         self._toast_status_alerts = set()
+        self._toast_status_last_emitted = {}
         self._toast_legal_state = None
         self._toast_shields_up = None
         self.current_legal_state = None
@@ -919,12 +940,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     star_class=self.star_class, scanned_bodies=self.scanned,
                 )
             if self.survey_status_hud:
-                self.survey_status_hud.update(
-                    self.current_sys, self.scanned, self.total, self.scan_items,
-                    self.body_signals, sampling=self._sampling_snapshot(),
-                    focused_body_id=self.current_body_id,
-                    focused_body_name=self.current_body_name,
-                )
+                if self.current_docked:
+                    self.survey_status_hud.suppress()
+                else:
+                    self.survey_status_hud.update(
+                        self.current_sys, self.scanned, self.total, self.scan_items,
+                        self.body_signals, sampling=self._sampling_snapshot(),
+                        focused_body_id=self.current_body_id,
+                        focused_body_name=self.current_body_name,
+                    )
         try:
             self._system_info_refresh_job = self.root.after(150, _run)
         except Exception:
@@ -941,7 +965,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._system_info_refresh_job = None
         survey = getattr(self, "survey_status_hud", None)
         if survey:
-            survey.hide()
+            survey.suppress()
 
     def _apply_location_navigation_state(self, raw, data):
         """Seed navigation/station state from a Location login event."""
@@ -966,6 +990,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_station_name = station_name
             self.current_station_type = data.get("station_type") or location.get("StationType") or None
             self.current_station_market_id = data.get("market_id") or location.get("MarketID")
+            self.current_station_state = location.get("StationState")
             self.current_station_economy = (
                 location.get("StationEconomy_Localised") or location.get("StationEconomy")
             )
@@ -985,6 +1010,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_station_name = None
             self.current_station_type = None
             self.current_station_market_id = None
+            self.current_station_state = None
             self.current_station_economy = None
             self.current_station_economies = []
             self.current_station_government = None
@@ -1065,7 +1091,23 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         save_colonisation_data(projects, self.config.get("colonisation_data_file"))
 
     def _save_engineer_materials(self, materials):
-        return save_engineer_materials(materials, self.config.get("engineer_materials_file"))
+        path = self.config.get("engineer_materials_file") or os.path.join(
+            os.getcwd(), "engineer_materials.json",
+        )
+        payload = {
+            key: value for key, value in (materials or {}).items()
+            if not str(key).startswith("_")
+        }
+        try:
+            persistence_queue().submit_json(path, payload, indent=2, delay_s=0.35)
+            if isinstance(materials, dict):
+                materials.pop("_save_error", None)
+            return True
+        except Exception as exc:
+            if isinstance(materials, dict):
+                materials["_save_error"] = str(exc)
+            logging.warning("Could not queue engineering state: %s", exc)
+            return False
 
     def _save_companion_state(self):
         companion_features.save_state(self.config.get("companion_state_file"), self.companion_state)
@@ -1101,7 +1143,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.cockpit_memory.session_debrief(
                 "Profile changed", close=True, insights=insights,
             )
+        outgoing_engineer_path = self.config.get("engineer_materials_file")
         self._close_profile_surfaces()
+        if outgoing_engineer_path:
+            # A profile boundary is rare and worth a short durability wait;
+            # it also ensures the unknown-profile migration below sees the
+            # most recent Engineering Workshop state.
+            if not persistence_queue().flush(outgoing_engineer_path, timeout=0.75):
+                logging.warning(
+                    "Engineering state was still pending during profile switch: %s",
+                    outgoing_engineer_path,
+                )
         try:
             self.voice_callouts.shutdown()
         except Exception:
@@ -1391,6 +1443,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_station_name = None
         self.current_station_type = None
         self.current_station_market_id = None
+        self.current_station_state = None
         self.current_station_economy = None
         self.current_station_economies = []
         self.current_station_government = None
@@ -1422,6 +1475,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._low_fuel_warned = False
         self._toast_hull_thresholds_seen = set()
         self._toast_status_alerts = set()
+        self._toast_status_last_emitted = {}
         self._toast_legal_state = None
         self._toast_shields_up = None
         self.current_legal_state = None
@@ -3115,6 +3169,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.config.get("station_info_overlay_enabled", True):
             if self.station_info_hud is None:
                 self.station_info_hud = StationInfoHUD(self.root, self.config)
+                if self.current_docked and self.current_station_name:
+                    self.station_info_hud.on_docked(self)
         elif self.station_info_hud:
             try:
                 self.station_info_hud.win.destroy()
@@ -3125,6 +3181,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.config.get("survey_status_overlay_enabled", True):
             if self.survey_status_hud is None:
                 self.survey_status_hud = SurveyStatusHUD(self.root, self.config)
+                if self.current_docked:
+                    self.survey_status_hud.suppress()
         elif self.survey_status_hud:
             try:
                 self.survey_status_hud.win.destroy()
@@ -6055,14 +6113,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev in ("Location", "FSDJump", "StartJump") or carrier_jump_player_location:
             # Do not update HUDs during jump charge; wait for arrival.
             if ev == "StartJump":
-                if not startup_replay:
-                    self._record_departure_revisit(raw.get("timestamp"))
-                self._save_exploration_checkpoint("departure")
-                self.in_fss = False
-                self.fss_summary_active = False
-                self._hide_survey_status_for_jump()
                 jump_type = d.get("jump_type") or (raw.get("JumpType") if isinstance(raw, dict) else "")
                 jump_type = str(jump_type or "").lower()
+                if jump_type != "supercruise":
+                    if not startup_replay:
+                        self._record_departure_revisit(raw.get("timestamp"))
+                    self._save_exploration_checkpoint("departure")
+                    self._hide_survey_status_for_jump()
+                self.in_fss = False
+                self.fss_summary_active = False
                 self.hud_flight_state = "SUPERCRUISE" if jump_type == "supercruise" else "HYPERSPACE"
                 self.update_hud()
                 compass_snapshot = None
@@ -6284,15 +6343,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         _sys, _sc, _si, _bs, _tot, scanned_bodies=_done),
                     key="system-info-arrival",
                 )
-            if self.survey_status_hud and not startup_replay:
-                self._ui_post(
-                    lambda: self.survey_status_hud.update(
-                        self.current_sys, self.scanned, self.total, self.scan_items,
-                        self.body_signals, sampling=self._sampling_snapshot(),
-                        focused_body_id=self.current_body_id,
-                        focused_body_name=self.current_body_name),
-                    key="survey-status",
-                )
+            if self.survey_status_hud:
+                if self.current_docked:
+                    self.survey_status_hud.suppress()
+                else:
+                    # The following update carries the arrived system, so do
+                    # not briefly repaint the cached system we just departed.
+                    self.survey_status_hud.resume(refresh=False)
+                if not startup_replay:
+                    self._ui_post(
+                        lambda: self.survey_status_hud.update(
+                            self.current_sys, self.scanned, self.total, self.scan_items,
+                            self.body_signals, sampling=self._sampling_snapshot(),
+                            focused_body_id=self.current_body_id,
+                            focused_body_name=self.current_body_name),
+                        key="survey-status",
+                    )
             self._refresh_exploration_window()
 
         elif ev == "Docked":
@@ -6306,6 +6372,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_station_name = station
             self.current_station_type = stype or None
             self.current_station_market_id = d.get("MarketID") or d.get("market_id")
+            self.current_station_state = d.get("StationState")
             # Docked has no dedicated journal_watcher normalization, so `d` here
             # is the raw ED journal dict — these fields are already present on it.
             self.current_station_economy = d.get("StationEconomy_Localised") or d.get("StationEconomy")
@@ -6320,6 +6387,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_station_services = d.get("StationServices") or []
             self.current_station_dist_ls = d.get("DistFromStarLS")
             self.current_station_landing_pads = d.get("LandingPads")
+            if self.survey_status_hud:
+                self.survey_status_hud.suppress()
             label = f"{station} ({stype})" if stype else station
             self._queue_edsm_upload(raw, startup_replay=startup_replay)
             self.update_hud()
@@ -6336,6 +6405,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_station_name = None
             self.current_station_type = None
             self.current_station_market_id = None
+            self.current_station_state = None
             self.current_station_economy = None
             self.current_station_economies = []
             self.current_station_government = None
@@ -6348,6 +6418,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.update_hud()
             if self.station_info_hud:
                 self.station_info_hud.hide()
+            if self.survey_status_hud:
+                self.survey_status_hud.resume()
+                self._refresh_system_info_progress()
             if not self.batch_mode and not startup_replay:
                 self.add_event_feed_entry("DOCK", f"Undocked: {station}", severity="INFO", copy_text=station)
 
@@ -6860,6 +6933,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             try:
                 if self.bgs_window and self.bgs_window.is_open():
                     self.bgs_window.refresh_current()
+            except Exception:
+                pass
+            try:
+                station = getattr(self, "station_info_hud", None)
+                if station and self.current_docked and self.current_station_name:
+                    station.refresh(self)
             except Exception:
                 pass
         try:
@@ -7430,13 +7509,27 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.current_latitude is not None and self.current_longitude is not None:
             point = {"lat": self.current_latitude, "lon": self.current_longitude, "body": body}
         if scan_type in ("log", "sample"):
-            if not self.bio_sampling or self.bio_sampling.get("species") != species or self.bio_sampling.get("body") != body:
+            same_sample = bool(
+                self.bio_sampling
+                and self.bio_sampling.get("species") == species
+                and self.bio_sampling.get("body") == body
+            )
+            if not same_sample:
                 self.bio_sample_points = []
             if point:
                 self.bio_sample_points.append(point)
+            if scan_type == "log":
+                progress = 1
+            else:
+                progress = int(self.bio_sampling.get("progress") or 0) + 1 if same_sample else 0
+                body_key = self._normalize_body_id(body)
+                species_key = f"{body_key}|{species}" if body_key is not None else species
+                prior = self.last_bio_scan.get(species_key, {})
+                progress = max(progress, int(prior.get("sample_idx") or 0) + 1)
+                progress = max(1, min(3, progress))
             self.bio_sampling = {
                 "species": species, "genus": genus, "body": body,
-                "progress": 1 if scan_type == "log" else 2,
+                "progress": progress,
                 "colony_m": bio_values.GENUS_COLONY_M.get(genus),
             }
             self._sample_clear_announced = False

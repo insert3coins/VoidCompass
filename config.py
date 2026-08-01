@@ -182,6 +182,7 @@ PROFILE_VALUE_SETTINGS = (
     "station_info_hud_x",
     "station_info_hud_y",
     "station_info_timeout_s",
+    "station_info_timeout_semantics_version",
     "survey_status_hud_x",
     "survey_status_hud_y",
     "toast_hud_x",
@@ -326,6 +327,23 @@ def apply_profile_config(config, profile_key=None):
         for values in (profile, config):
             if str(values.get(setting) or "").casefold() == retired.casefold():
                 values[setting] = replacement
+    # v5.3.3.1 changed Station Link from a transient arrival card into docked
+    # context. Migrate only the retired shipped 25-second default; commanders
+    # can still select 25 (or any positive value) after this one-time step.
+    try:
+        station_timeout_semantics = int(
+            profile.get("station_info_timeout_semantics_version") or 0
+        )
+    except (TypeError, ValueError):
+        station_timeout_semantics = 0
+    if station_timeout_semantics < 1:
+        old_timeout = profile.get("station_info_timeout_s", config.get("station_info_timeout_s"))
+        try:
+            if int(float(old_timeout)) == 25:
+                profile["station_info_timeout_s"] = 0
+        except (TypeError, ValueError):
+            pass
+        profile["station_info_timeout_semantics_version"] = 1
     is_initial_profile = len(profiles) <= 1
     config["active_commander_profile"] = key
     config["active_commander_name"] = profile.get("commander_name", config.get("active_commander_name", "Unknown Commander"))
@@ -562,7 +580,10 @@ def load_config():
         'gravity_warning_threshold_g': 3.0,
         'station_info_hud_x': 30,
         'station_info_hud_y': 380,
-        'station_info_timeout_s': 25,
+        # Zero keeps Station Link visible for the whole docking visit. A
+        # positive commander-profile value restores timed auto-hide.
+        'station_info_timeout_s': 0,
+        'station_info_timeout_semantics_version': 1,
         'survey_status_hud_x': 30,
         'survey_status_hud_y': 520,
         'low_fuel_threshold_pct': 0.25,
