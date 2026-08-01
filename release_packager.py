@@ -125,8 +125,9 @@ INSTALL
 
 Void Compass creates configuration, commander profiles, logs and downloaded
 data beside the application. Keep the whole folder together when moving it.
-Piper voice packs and the optional market database are downloaded or built
-from inside the app when requested. Linux voice playback uses pw-play, paplay,
+Piper voice packs are downloaded from inside the app when requested. Online
+Trade Assist searches require internet access but download no market database.
+Linux voice playback uses pw-play, paplay,
 aplay or ffplay, whichever is installed.
 
 Linux overlay windows support X11/XWayland topmost positioning. Windows-only
@@ -146,8 +147,8 @@ INSTALL
 
 Void Compass creates configuration, commander profiles, logs and downloaded
 data beside the application. Keep the whole folder together when moving it.
-Piper voice packs and the optional market database are downloaded or built
-from inside the app when requested.
+Piper voice packs are downloaded from inside the app when requested. Online
+Trade Assist searches require internet access but download no market database.
 
 Windows SmartScreen may display an unrecognised-app warning because community
 builds are not code-signed. The ZIP checksum is published alongside this file.

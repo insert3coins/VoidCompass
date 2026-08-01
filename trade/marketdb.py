@@ -1,8 +1,9 @@
-"""Local market database (SQLite): seeded from the Spansh galaxy dump, kept
-fresh by the EDDN listener, queried by the local route planner.
+"""Local commander trade/balance history and legacy market-cache helpers.
 
-Keying: stations by in-game MarketID (the Spansh dump's station "id" is the
-MarketID), commodities by lowercase symbol (matches EDDN commodity names)."""
+VoidCompass v5.3.5 searches prices through Ardent Insight and no longer seeds
+or maintains the galaxy-wide quote tables.  The compatible schema remains so
+existing trade history and older profile data continue to open safely.
+"""
 
 import os
 import re

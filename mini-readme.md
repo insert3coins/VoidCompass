@@ -1,19 +1,18 @@
 # VoidCompass // UPDATE LOG
 
-## v5.3.4 // Lightweight Trade Assist
+## v5.3.5 // Online Trade Assist
 **Release Date:** 2026-Aug-01
 
-*   Replaced the multi-level Trade Command workspace with one genuine **Trade Assist** page built around **Sell My Cargo**, **Find a Trade** and **Current Run**.
-*   Sell My Cargo now returns only the three strongest nearby buyers, clearly labels estimated sale revenue and deliberately excludes mission and stolen cargo from ordinary market advice.
-*   Find a Trade starts at the currently docked market, uses live credits, free hold capacity and ship context automatically, and ranks three achievable departures instead of exposing route-planner machinery.
-*   Reduced trade controls to search range, station distance, quote age, minimum profit, pad size and carrier inclusion; selected results can become Compass's active plan and copy their destination in one click.
-*   Current Run keeps the active destination, journal-confirmed purchases, sales and real profit together, with compact persisted transaction history when a new app session has no trades yet.
-*   Kept local Market.json ingestion and station-market EDDN uploads independent of the Trade page, with a small live status/toggle strip and the occasional one-time Spansh market-baseline action still available.
-*   Removed the hidden advanced-tab and route-watch machinery, including background alert evaluation, while retaining the shared market database APIs used by colony commodity searches.
-*   Replaced Station Link's hidden `0` timeout convention with a profile-aware **Auto-hide Station Link** switch and a separate delay, applying changes immediately while docked.
+*   Replaced Trade Assist's multi-gigabyte local market baseline with on-demand Ardent Insight queries backed by a bounded ten-minute memory cache—there is no nightly market download or galaxy price database to maintain.
+*   **Sell My Cargo** now asks the online service for nearby buyers only when requested, while **Find a Trade** combines Elite's current `Market.json` departure prices with online destinations and the existing range, age, pad, arrival-distance and carrier filters.
+*   Preserved non-blocking searches, achievable cargo/capital ranking, mission and stolen-cargo exclusion, three-result presentation, active Compass trade plans and journal-confirmed Current Run history.
+*   Kept visited-market EDDN uploads completely independent, removed the inbound EDDN/PyZMQ cache receiver and retired the Spansh market-dump worker and its build controls.
+*   Moved Architect Command's construction-commodity source searches to the same online provider, with a courteous bounded parallel lookup instead of depending on the retired price cache.
+*   Added an explicit Online Market health state, temporary-cache count and honest offline/timeout feedback; online trade requests send only the reference system, commodity and selected filters.
 
 ## Earlier releases
 
+*   **v5.3.4** — Replaced Trade Command with the three-action Trade Assist, retained automatic EDDN uploads and journal-confirmed Current Run tracking, removed advanced route-watch machinery and made Station Link auto-hide explicit and immediately applied.
 *   **v5.3.3.1** — Restored biological sample progress and Survey Status lifecycle, corrected legacy bio predictions, simplified carrier expedition editing, reduced danger noise, rebuilt Station Link, completed remaining overlay theming and removed measured persistence stalls.
 *   **v5.3.3** — Added position-aware species-level biological prediction for all 116 published EDMC-BioScan species, including airless families, testable confidence, narrower value estimates, Codex-region HUD awareness and clearer Survey Status and expedition evidence.
 *   **v5.3.2** — Added searchable commander-profile map annotations with direct edit/delete, zoom-aware marker clustering with expanding count badges, and restrained live-navigation cues that respect Reduced Motion.

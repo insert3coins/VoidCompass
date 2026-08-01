@@ -101,7 +101,6 @@ VSVersionInfo(
         f'--add-data=mining_data.db{data_sep}.',
         f'--add-data=codexRef.json{data_sep}.',
         f'--add-data=data/achievements.json{data_sep}data',
-        '--hidden-import=zmq',
     ]
     if is_windows:
         opts.extend([

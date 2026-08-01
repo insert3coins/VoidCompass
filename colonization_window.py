@@ -15,6 +15,7 @@ import os
 import threading
 import time
 import tkinter as tk
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from tkinter import messagebox, ttk
 
@@ -504,7 +505,12 @@ class ColonizationWindow(ThemedWindowMixin):
 
         def worker():
             found = {}
-            for row in rows:
+            try:
+                routes.list_commodities()  # warm the shared one-hour catalogue cache
+            except Exception:
+                pass
+
+            def lookup(row):
                 try:
                     result = routes.search_commodity(
                         query=row["commodity"],
@@ -522,9 +528,15 @@ class ColonizationWindow(ThemedWindowMixin):
                         labels.append(
                             f"{src.get('station')} / {src.get('system')} @ {int(src.get('buy_price') or 0):,}"
                         )
-                    found[row["commodity"]] = "; ".join(labels) if labels else "No local source"
+                    return row["commodity"], "; ".join(labels) if labels else "No online source"
                 except Exception as exc:
-                    found[row["commodity"]] = str(exc)[:80]
+                    return row["commodity"], str(exc)[:80]
+
+            with ThreadPoolExecutor(max_workers=min(4, len(rows))) as pool:
+                futures = [pool.submit(lookup, row) for row in rows]
+                for future in as_completed(futures):
+                    commodity, value = future.result()
+                    found[commodity] = value
             self._post_ui(
                 lambda: self._render_planner_sources(found, ref_system),
                 key="colonisation-planner-sources",

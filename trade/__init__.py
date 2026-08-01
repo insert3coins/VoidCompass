@@ -1,2 +1,1 @@
-"""Trade data and planning helpers vendored from the local elite-trader project."""
-
+"""Online Trade Assist, EDDN upload and local commander trade-history helpers."""

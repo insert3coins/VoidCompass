@@ -47,7 +47,7 @@ Explore remembers its active page, survey/discovery filters and Expedition secti
 
 Existing journals are indexed on a background worker the first time Deep Survey opens for a profile. Stored collections, expedition facts and visible rows are bounded so a long expedition does not turn map, ledger or startup recovery into a cockpit stall.
 
-Optional **Trade Assist** stays intentionally small: **Sell My Cargo** finds three practical buyers, **Find a Trade** ranks three achievable departures from the current station, and **Current Run** keeps the active destination beside journal-confirmed purchases, sales and profit. Mission and stolen cargo are excluded from ordinary advice, while range, freshness, landing-pad and carrier filters remain available without exposing a full trading console. Local Market.json ingestion and visited-station EDDN uploads run independently in the background even when Trade Assist is never opened; its compact Market Link strip only reports or changes that service and provides the occasional one-time Spansh market-baseline build.
+Optional **Trade Assist** stays intentionally small: **Sell My Cargo** finds three practical buyers, **Find a Trade** ranks three achievable departures from the current station, and **Current Run** keeps the active destination beside journal-confirmed purchases, sales and profit. Mission and stolen cargo are excluded from ordinary advice, while range, freshness, landing-pad and carrier filters remain available without exposing a full trading console. Searches combine the current station's `Market.json` with on-demand [Ardent Insight](https://ardent-insight.com/) market results held only in a short-lived memory cache—there is no galaxy market download or local price database to maintain. Visited-station EDDN uploads remain an independent optional community service.
 
 ### Squadron Command
 
@@ -107,12 +107,13 @@ The deterministic cognition engine learns personal baselines and whether advice 
 
 - **Elite journal and companion files** provide all live game state.
 - **EDSM** upload and traffic lookup are optional and use per-commander credentials.
-- **EDDN** incrementally maintains the local market database after its initial seed.
+- **Ardent Insight** supplies on-demand EDDN-backed buyers and sellers when a Trade Assist or Architect commodity search is requested.
+- **EDDN** optionally receives visited-station market uploads from Void Compass; it is not required for online searches.
 - **Spansh** supports neutron routes, ring/hotspot searches, trader lookups and integrated Fleet/Squadron Carrier route calculation.
 - **Discord webhooks** can announce personal or Squadron Carrier operations.
 - **Piper** voice packs are optional; regular system TTS remains available.
 
-Void Compass does not require an account or cloud database. It checks GitHub Releases for a newer version at startup; other network integrations only run when their associated feature is enabled or requested.
+Void Compass does not require an account or Void Compass cloud database. It checks GitHub Releases for a newer version at startup; other network integrations only run when their associated feature is enabled or requested. Online market searches send Ardent Insight the reference system, commodity and search filters, never commander credentials or journal files.
 
 ## First run, recovery and diagnostics
 
