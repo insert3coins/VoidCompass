@@ -119,9 +119,14 @@ def _predicted_display_name(genus, species):
     epithets = []
     for entry in species:
         name = str(entry.get("name") or "").strip()
-        if not name.startswith(genus):
+        if name.casefold().startswith(genus.casefold()):
+            epithet = name[len(genus):].strip()
+        elif name.casefold().endswith(genus.casefold()):
+            # Legacy families are colour-first: Luteolum Anemone, Roseum
+            # Brain Tree, and so on.
+            epithet = name[:-len(genus)].strip()
+        else:
             continue
-        epithet = name[len(genus):].strip()
         if epithet and epithet not in epithets:
             epithets.append(epithet)
     if not epithets or len(epithets) > 2:
@@ -320,6 +325,7 @@ class SurveyStatusHUD:
         self.config = config
         self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
         self._last_update = None
+        self._suppressed = False
         self.win = tk.Toplevel(root)
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
         self.canvas = tk.Canvas(self.win, width=WIDTH, height=90, bg=overlay_bg, highlightthickness=0)
@@ -343,7 +349,7 @@ class SurveyStatusHUD:
         self.win.after(refresh_ms, self._force_topmost)
 
     def show(self):
-        if self._visible:
+        if self._visible or self._suppressed:
             return
         try:
             x = _safe_int(self.config.get("survey_status_hud_x"), 30)
@@ -363,12 +369,26 @@ class SurveyStatusHUD:
             pass
         self._visible = False
 
+    def suppress(self):
+        """Hide while retaining the current survey for a later undock."""
+        self._suppressed = True
+        self.hide()
+
+    def resume(self, refresh=True):
+        """Permit survey display again, optionally repainting cached data."""
+        self._suppressed = False
+        if refresh and self._last_update is not None:
+            self.update(*self._last_update)
+
     def update(self, system_name, scanned, total, scan_items, body_signals,
                sampling=None, focused_body_id=None, focused_body_name=None):
         self._last_update = (
             system_name, scanned, total, scan_items, body_signals,
             sampling, focused_body_id, focused_body_name,
         )
+        if self._suppressed:
+            self.hide()
+            return
         model = build_survey_model(system_name, scan_items, focused_body_id,
                                    focused_body_name, sampling, scanned, total,
                                    _safe_int(self.config.get("system_info_min_value"), 50_000),
@@ -493,6 +513,10 @@ class SurveyStatusHUD:
                 else:
                     lo, hi = row.get("min_value"), row.get("max_value")
                     value_text = _credits(lo) if lo == hi else f"{_credits(lo)}–{_credits(hi)}"
+                if row["kind"] in PREDICTED_KINDS:
+                    # A punctuation-only distinction made a dim possible
+                    # organism look like a confirmed grey scan result.
+                    value_text = f"{row.get('status')} · {value_text}"
                 self._text(20, y, symbol, color, ("Courier", 9, "bold"))
                 self._text(38, y, _truncate(label, 34), color, ("Courier", 8, "bold"))
                 self._text(WIDTH - 18, y, value_text, color, ("Courier", 8, "bold"), "e")

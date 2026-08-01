@@ -6,6 +6,7 @@ small current view for the deterministic adviser, persona and settings UI.
 
 from __future__ import annotations
 
+import copy
 from datetime import datetime, timezone
 import json
 import os
@@ -88,12 +89,29 @@ class CockpitBrain:
 
     def _save(self):
         immediate = bool(self._sync_next_save)
-        persistence_queue().submit_json(
-            self.path, self.state, indent=2, delay_s=1.0, immediate=immediate,
-        )
+        if immediate:
+            # The first snapshot must exist before startup continues. Keep its
+            # isolated copy local so the worker never waits on our lock while
+            # this thread is waiting for flush().
+            persistence_queue().submit_json(
+                self.path, copy.deepcopy(self.state), indent=2,
+                delay_s=1.0, immediate=True,
+            )
+        else:
+            # Normal event bursts coalesce first, then snapshot under the
+            # brain lock on the persistence worker. Large learned state no
+            # longer gets copied on Tk's UI thread for every observation.
+            persistence_queue().submit_json(
+                self.path, indent=2, delay_s=1.0,
+                source=self._snapshot_state,
+            )
         if immediate:
             persistence_queue().flush(self.path, timeout=2.0)
             self._sync_next_save = False
+
+    def _snapshot_state(self):
+        with self._lock:
+            return copy.deepcopy(self.state)
 
     @staticmethod
     def _session_view(memory):
@@ -202,22 +220,20 @@ class CockpitBrain:
                 },
             })
             self._save()
-            return json.loads(json.dumps(self.state, ensure_ascii=False, default=str))
+            return copy.deepcopy(self.state)
 
     def cognition_state(self):
         """Return an isolated copy of the bounded adaptive cognition state."""
         with self._lock:
             value = self.state.get("cognition")
-            return json.loads(json.dumps(value if isinstance(value, dict) else {}))
+            return copy.deepcopy(value if isinstance(value, dict) else {})
 
     def set_cognition_state(self, value, save=False):
         """Replace cognition state without exposing the brain's internal lock."""
         with self._lock:
-            self.state["cognition"] = json.loads(json.dumps(
-                value if isinstance(value, dict) else {},
-                ensure_ascii=False,
-                default=str,
-            ))
+            self.state["cognition"] = copy.deepcopy(
+                value if isinstance(value, dict) else {}
+            )
             self.state["updated_at"] = _now()
             if save:
                 self._save()

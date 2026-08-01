@@ -141,6 +141,14 @@ class DashboardScanMixin:
             hud_state_changed = self._sync_navigation_hud_flight_state(
                 supercruise=in_supercruise,
             )
+        if was_docked != bool(getattr(self, "current_docked", False)):
+            survey = getattr(self, "survey_status_hud", None)
+            if survey:
+                if self.current_docked:
+                    survey.suppress()
+                else:
+                    survey.resume()
+                    self._refresh_system_info_progress()
         try:
             compass_operations.observe_status(self.ai_operational_state, data)
         except Exception:
@@ -195,17 +203,39 @@ class DashboardScanMixin:
             return
         active = getattr(self, "_toast_status_alerts", set())
 
-        checks = (
-            ("overheat", isinstance(flags, int) and bool(flags & 0x00100000), "OVERHEATING", "Ship temperature above 100%", "warn"),
-            ("danger", isinstance(flags, int) and bool(flags & 0x00400000), "DANGER", "Ship is in danger", "warn"),
-            ("interdicted", isinstance(flags, int) and bool(flags & 0x00800000), "INTERDICTION", "Interdiction in progress", "warn"),
+        overheat = isinstance(flags, int) and bool(flags & 0x00100000)
+        interdicted = isinstance(flags, int) and bool(flags & 0x00800000)
+        generic_danger = isinstance(flags, int) and bool(flags & 0x00400000)
+        # InDanger is a broad, frequently flapping game flag.  It is useful as
+        # a last-resort warning in normal ship flight, but not while a specific
+        # actionable alert already explains it or while safely docked/landed.
+        generic_danger = bool(
+            generic_danger and not overheat and not interdicted
+            and not getattr(self, "current_docked", False)
+            and not getattr(self, "current_landed", False)
+            and not getattr(self, "current_on_foot", False)
+            and not getattr(self, "current_in_srv", False)
+            and not getattr(self, "current_in_fighter", False)
         )
+        checks = (
+            ("overheat", overheat, "OVERHEATING", "Ship temperature above 100%", "warn"),
+            ("danger", generic_danger, "DANGER", "Ship is in danger", "warn"),
+            ("interdicted", interdicted, "INTERDICTION", "Interdiction in progress", "warn"),
+        )
+        emitted = getattr(self, "_toast_status_last_emitted", {})
+        now = time.monotonic()
+        if overheat or interdicted:
+            emitted["danger"] = now
         for key, enabled, title, message, severity in checks:
             if enabled and key not in active:
                 active.add(key)
-                if toast:
+                cooldown = 300.0 if key == "danger" else 0.0
+                may_emit = now - float(emitted.get(key, -cooldown)) >= cooldown
+                if toast and may_emit:
                     toast.push(title, message, severity=severity, duration_s=12)
-                if key in ("overheat", "interdicted"):
+                if may_emit:
+                    emitted[key] = now
+                if may_emit and key in ("overheat", "interdicted"):
                     spoken = (
                         (
                             "Warning. Ship overheating.",
@@ -280,6 +310,7 @@ class DashboardScanMixin:
         if legal:
             self._toast_legal_state = legal
         self._toast_status_alerts = active
+        self._toast_status_last_emitted = emitted
 
     def _check_low_fuel(self):
         """Toast once when main tank drops below threshold; re-arms once it

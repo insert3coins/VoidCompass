@@ -2,7 +2,7 @@ import json
 import math
 import tkinter as tk
 
-from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
+from config import save_config
 from colonisation_commodities import (
     CATEGORY_ORDER,
     SOURCE_ORDER,
@@ -12,6 +12,7 @@ from colonisation_commodities import (
     normalize_commodity_name,
 )
 import overlay_chrome
+import themes
 
 
 class ColonyOverlay:
@@ -27,7 +28,7 @@ class ColonyOverlay:
     PANEL_2 = "#0b1117"
     MUTED = "#7a8a98"
     DIM = "#46525d"
-    BLUE = COLOR_ACCENT
+    BLUE = "#00d1ff"
 
     def __init__(self, root, config, projects_getter, cargo_getter, capacity_getter, site_getter=None):
         self.root = root
@@ -36,6 +37,7 @@ class ColonyOverlay:
         self.cargo_getter = cargo_getter
         self.capacity_getter = capacity_getter
         self.site_getter = site_getter
+        self._set_palette(themes.ACTIVE_PALETTE)
         self._font_scale = 1.0
         self._sort_mode = "alpha"
         self._show_trips = True
@@ -125,14 +127,14 @@ class ColonyOverlay:
         header = tk.Frame(self.panel, bg=self.PANEL)
         header.pack(fill=tk.X)
         self.title_label = tk.Label(
-            header, text="COLONY SHOPPING", fg=COLOR_ACCENT, bg=self.PANEL,
+            header, text="COLONY SHOPPING", fg=self.ACCENT, bg=self.PANEL,
             font=("Courier", self._font(10), "bold"),
         )
         self.title_label.pack(side=tk.LEFT, padx=10, pady=(8, 6))
 
         close = tk.Button(
             header, text="X", command=self.win.destroy, bg=self.PANEL,
-            fg=self.MUTED, activebackground=self.PANEL_2, activeforeground=COLOR_ACCENT,
+            fg=self.MUTED, activebackground=self.PANEL_2, activeforeground=self.ACCENT,
             relief=tk.FLAT, bd=0, padx=7, pady=2,
             font=("Courier", self._font(8), "bold"),
         )
@@ -145,7 +147,7 @@ class ColonyOverlay:
         tk.Checkbutton(
             header, text="Trips", variable=self.trips_var, command=self._toggle_trips,
             bg=self.PANEL, fg=self.MUTED, selectcolor=self.PANEL,
-            activebackground=self.PANEL, activeforeground=COLOR_ACCENT,
+            activebackground=self.PANEL, activeforeground=self.ACCENT,
             highlightthickness=0, font=("Courier", self._font(8), "bold"),
         ).pack(side=tk.RIGHT, padx=(6, 0), pady=(6, 4))
 
@@ -153,7 +155,7 @@ class ColonyOverlay:
         tk.Checkbutton(
             header, text="Site", variable=self.site_only_var, command=self._toggle_site_only,
             bg=self.PANEL, fg=self.MUTED, selectcolor=self.PANEL,
-            activebackground=self.PANEL, activeforeground=COLOR_ACCENT,
+            activebackground=self.PANEL, activeforeground=self.ACCENT,
             highlightthickness=0, font=("Courier", self._font(8), "bold"),
         ).pack(side=tk.RIGHT, padx=(6, 0), pady=(6, 4))
 
@@ -164,7 +166,7 @@ class ColonyOverlay:
         self.title_label.bind("<B1-Motion>", self._do_move)
         self.title_label.bind("<ButtonRelease-1>", self._end_move)
 
-        tk.Frame(self.panel, bg=COLOR_ACCENT, height=1).pack(fill=tk.X, padx=0, pady=(0, 6))
+        tk.Frame(self.panel, bg=self.ACCENT, height=1).pack(fill=tk.X, padx=0, pady=(0, 6))
 
         sort_row = tk.Frame(self.panel, bg=self.PANEL)
         sort_row.pack(fill=tk.X, padx=10, pady=(0, 5))
@@ -175,12 +177,12 @@ class ColonyOverlay:
                 sort_row, text=text.upper(), value=value, variable=self.sort_var,
                 command=self._set_sort_mode, bg=self.PANEL, fg=self.MUTED,
                 selectcolor=self.PANEL, activebackground=self.PANEL,
-                activeforeground=COLOR_ACCENT, highlightthickness=0,
+                activeforeground=self.ACCENT, highlightthickness=0,
                 font=("Courier", self._font(8), "bold"),
             ).pack(side=tk.LEFT, padx=(0, 6))
 
         self.summary_label = tk.Label(
-            self.panel, text="", fg=COLOR_ORANGE, bg=self.PANEL,
+            self.panel, text="", fg=self.ORANGE, bg=self.PANEL,
             font=("Courier", self._font(9), "bold"), anchor="w",
         )
         self.summary_label.pack(fill=tk.X, padx=10, pady=(0, 4))
@@ -192,7 +194,7 @@ class ColonyOverlay:
         return tk.Button(
             parent, text=text, command=command,
             bg=self.PANEL, fg=self.MUTED,
-            activebackground=self.PANEL_2, activeforeground=COLOR_ACCENT,
+            activebackground=self.PANEL_2, activeforeground=self.ACCENT,
             relief=tk.FLAT, bd=0, padx=5, pady=2,
             font=("Courier", self._font(8), "bold"),
         )
@@ -241,7 +243,10 @@ class ColonyOverlay:
             h = max(int(self.canvas.winfo_height()), 50)
             m = 12
             self.canvas.delete("bg")
-            overlay_chrome.draw_chrome(self.canvas, w, h, bracket_len=10, bg=self.PANEL, tags="bg")
+            overlay_chrome.draw_chrome(
+                self.canvas, w, h, accent=self.ACCENT, bracket_len=10,
+                bg=self.PANEL, scanline_color=self.PANEL_2, tags="bg",
+            )
             self.canvas.tag_lower("bg")
             self.canvas.coords(self.panel_window, m, m)
             self.canvas.itemconfig(self.panel_window, width=max(0, w - 2 * m), height=max(0, h - 2 * m))
@@ -396,9 +401,9 @@ class ColonyOverlay:
             for item in self._sorted_items(items):
                 if "header" in item:
                     if self.body.winfo_children():
-                        tk.Frame(self.body, bg="#1a2228", height=1).pack(fill=tk.X, pady=(4, 3))
+                        tk.Frame(self.body, bg=self.BORDER_SOFT, height=1).pack(fill=tk.X, pady=(4, 3))
                     tk.Label(
-                        self.body, text=str(item["header"]).upper(), fg=COLOR_ORANGE,
+                        self.body, text=str(item["header"]).upper(), fg=self.ORANGE,
                         bg=self.PANEL, font=("Courier", self._font(8), "bold"),
                         anchor="w",
                     ).pack(fill=tk.X, pady=(0, 1))
@@ -406,20 +411,45 @@ class ColonyOverlay:
                 row = tk.Frame(self.body, bg=self.PANEL)
                 row.pack(fill=tk.X, pady=1)
                 tk.Label(
-                    row, text=self._display_name(item), fg=COLOR_TEXT, bg=self.PANEL,
+                    row, text=self._display_name(item), fg=self.TEXT, bg=self.PANEL,
                     font=("Courier", self._font(9), "bold"), anchor="w",
                 ).pack(side=tk.LEFT)
                 qty = f"{int(item.get('needed') or 0):,}"
                 if item.get("in_hold"):
                     qty = f"{qty}  ({int(item.get('in_hold')):,} hold)"
                 tk.Label(
-                    row, text=qty, fg=self.BLUE if item.get("in_hold") else "#9ad",
+                    row, text=qty, fg=self.BLUE if item.get("in_hold") else self.MUTED,
                     bg=self.PANEL, font=("Courier", self._font(9), "bold"),
                     anchor="e",
                 ).pack(side=tk.RIGHT)
 
             self._fit_height()
         except Exception:
+            pass
+
+    def _set_palette(self, palette):
+        self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)
+        self.PANEL = self._palette["bg"]
+        self.PANEL_2 = self._palette["panel_alt"]
+        self.MUTED = self._palette["muted"]
+        self.DIM = self._palette["dim"]
+        self.BLUE = self._palette["accent"]
+        self.ACCENT = self._palette["accent"]
+        self.ORANGE = self._palette["orange"]
+        self.TEXT = self._palette["text"]
+        self.BORDER_SOFT = self._palette["border_soft"]
+
+    def apply_theme(self, palette=None):
+        """Rebuild the compact controls with the active commander palette."""
+        self._set_palette(palette or themes.ACTIVE_PALETTE)
+        try:
+            self.panel.config(bg=self.PANEL)
+            for child in list(self.panel.winfo_children()):
+                child.destroy()
+            self._build_ui()
+            self._redraw_background()
+            self.update()
+        except (AttributeError, tk.TclError):
             pass
 
     def _fit_height(self, fallback=None):

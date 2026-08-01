@@ -1,19 +1,14 @@
 import tkinter as tk
 from datetime import datetime, timedelta, timezone
 
-from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
+from config import save_config
 import overlay_chrome
+import themes
 
 
 WIDTH = 380
 _CHROMA = "#ff00ff"
 _COOLDOWN_SECS = 290
-_MUTED = "#7a8a98"
-_OK = "#21d189"
-_WARN = "#ff9a3c"
-_FAIL = "#ff5c5c"
-
-
 def _parse_dt(ts_str):
     if not ts_str:
         return None
@@ -61,6 +56,7 @@ class CarrierHUD:
         self._mouse_down = None
         self._mouse_dragging = False
         self._mx = self._my = 0
+        self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
 
         self.win = tk.Toplevel(root)
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
@@ -188,13 +184,18 @@ class CarrierHUD:
             self._schedule_config_save()
         self.canvas.delete("all")
 
-        overlay_chrome.draw_chrome(self.canvas, WIDTH, height)
-        self.canvas.create_line(20, 35, WIDTH - 20, 35, fill="#1a2530", width=1)
+        palette = self._palette
+        overlay_chrome.draw_chrome(
+            self.canvas, WIDTH, height, accent=palette["accent"],
+        )
+        self.canvas.create_line(
+            20, 35, WIDTH - 20, 35, fill=palette["border_soft"], width=1,
+        )
         carrier_title = (
             "SQUADRON CARRIER" if cd.get("carrier_type") == "SquadronCarrier"
             else "FLEET CARRIER"
         )
-        self._draw_text(20, 20, carrier_title, COLOR_ACCENT, ("Courier", 10, "bold"))
+        self._draw_text(20, 20, carrier_title, palette["accent"], ("Courier", 10, "bold"))
         self._draw_text(WIDTH - 20, 20, status_text, status_color, ("Courier", 10, "bold"), anchor="e")
 
         y = 47
@@ -203,22 +204,23 @@ class CarrierHUD:
             y += line_h
 
     def _build_rows(self, cd):
+        palette = self._palette
         status = cd.get("status") or "idle"
         badge = {
-            "idle": ("IDLE", _MUTED),
-            "jumping": ("JUMPING", COLOR_ACCENT),
-            "cooldown": ("COOLDOWN", _WARN),
-            "cooldown_cancel": ("CANCELLED", _FAIL),
-        }.get(status, (status.upper(), _MUTED))
+            "idle": ("IDLE", palette["muted"]),
+            "jumping": ("JUMPING", palette["accent"]),
+            "cooldown": ("COOLDOWN", palette["yellow"]),
+            "cooldown_cancel": ("CANCELLED", palette["red"]),
+        }.get(status, (status.upper(), palette["muted"]))
 
         name = cd.get("name") or "Fleet Carrier"
         callsign = cd.get("callsign") or "---"
-        rows = [(f"{_truncate(name.upper(), 24)}  [{callsign}]", COLOR_TEXT)]
+        rows = [(f"{_truncate(name.upper(), 24)}  [{callsign}]", palette["text"])]
 
         system = cd.get("system") or "Unknown"
         body = cd.get("body") or ""
         loc = _fmt_location(system, body)
-        rows.append((f"LOC: {_truncate(loc, 42)}", COLOR_TEXT))
+        rows.append((f"LOC: {_truncate(loc, 42)}", palette["text"]))
 
         now = datetime.now(timezone.utc)
         dep = _parse_dt(cd.get("jump_departure_time"))
@@ -229,16 +231,16 @@ class CarrierHUD:
             dest = cd.get("jump_destination") or "TBD"
             dest_body = cd.get("jump_body") or ""
             target = _fmt_location(dest, dest_body)
-            rows.append((f"DST: {_truncate(target, 42)}", COLOR_ORANGE))
-            rows.append((f"DEPARTS IN: {_fmt_duration((dep - now).total_seconds())}", COLOR_ACCENT))
+            rows.append((f"DST: {_truncate(target, 42)}", palette["orange"]))
+            rows.append((f"DEPARTS IN: {_fmt_duration((dep - now).total_seconds())}", palette["accent"]))
         elif status == "cooldown" and dep:
             ready_at = dep + timedelta(seconds=_COOLDOWN_SECS)
-            rows.append((f"READY IN: {_fmt_duration((ready_at - now).total_seconds())}", _WARN))
+            rows.append((f"READY IN: {_fmt_duration((ready_at - now).total_seconds())}", palette["yellow"]))
             prev = cd.get("previous_system") or ""
             if prev:
-                rows.append((f"FROM: {_truncate(prev, 42)}", _MUTED))
+                rows.append((f"FROM: {_truncate(prev, 42)}", palette["muted"]))
         elif status == "cooldown_cancel":
-            rows.append(("JUMP CANCELLED - BRIEF COOLDOWN", _FAIL))
+            rows.append(("JUMP CANCELLED - BRIEF COOLDOWN", palette["red"]))
         else:
             dest = (
                 cd.get("destination_note") or cd.get("jump_destination")
@@ -254,9 +256,9 @@ class CarrierHUD:
                         detail += f" · {float(distance):.1f}LY"
                     if tritium is not None:
                         detail += f"/{int(float(tritium))}T"
-                rows.append((f"{label}: {_truncate(str(dest) + detail, 42)}", COLOR_ORANGE))
+                rows.append((f"{label}: {_truncate(str(dest) + detail, 42)}", palette["orange"]))
             else:
-                rows.append(("READY TO PLOT JUMP", _MUTED))
+                rows.append(("READY TO PLOT JUMP", palette["muted"]))
 
         if route:
             remaining_fuel_rows = [
@@ -266,7 +268,7 @@ class CarrierHUD:
             route_text = f"ROUTE: {done}/{len(route)}"
             if remaining_fuel_rows:
                 route_text += f"  |  {sum(int(float(value)) for value in remaining_fuel_rows)}T REM"
-            rows.append((_truncate(route_text, 45), COLOR_ACCENT if next_route else _OK))
+            rows.append((_truncate(route_text, 45), palette["accent"] if next_route else palette["green"]))
 
         fuel = cd.get("fuel_level")
         cap = cd.get("fuel_capacity") or 1000
@@ -280,15 +282,15 @@ class CarrierHUD:
         elif jump_max:
             parts.append(f"MAX {float(jump_max):.1f}LY")
         if parts:
-            fuel_color = _OK
+            fuel_color = palette["green"]
             try:
                 pct = float(fuel) / float(cap)
                 if pct <= 0.15:
-                    fuel_color = _FAIL
+                    fuel_color = palette["red"]
                 elif pct <= 0.4:
-                    fuel_color = _WARN
+                    fuel_color = palette["yellow"]
             except Exception:
-                fuel_color = _MUTED
+                fuel_color = palette["muted"]
             rows.append(("  |  ".join(parts), fuel_color))
 
         cargo = cd.get("space_cargo")
@@ -302,9 +304,14 @@ class CarrierHUD:
         if orders:
             capacity_parts.append(f"ORDERS {len(orders)}")
         if capacity_parts:
-            rows.append(("  |  ".join(capacity_parts), _MUTED))
+            rows.append(("  |  ".join(capacity_parts), palette["muted"]))
 
         return rows, badge[0], badge[1]
+
+    def apply_theme(self, palette=None):
+        """Apply the active commander palette without changing its anchor."""
+        self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)
+        self.update()
 
     def _draw_text(self, x, y, text, fill, font, anchor="w"):
         font = overlay_chrome.scaled_font(font, self.config)

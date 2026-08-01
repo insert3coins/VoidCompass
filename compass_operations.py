@@ -754,8 +754,13 @@ def build_snapshot(runtime, *, companion_state=None, cargo_inventory=None,
         if isinstance(row, dict) and row.get("system")
     ]
     carrier_route_done = sum(1 for row in carrier_route if row.get("visited"))
+    carrier_system = _clean(carrier.get("system")).casefold()
     carrier_route_next = next(
-        (row for row in carrier_route if not row.get("visited")), None,
+        (
+            row for row in carrier_route
+            if not row.get("visited")
+            and _clean(row.get("system")).casefold() != carrier_system
+        ), None,
     )
     carrier_used_capacity = None
     try:

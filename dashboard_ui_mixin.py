@@ -1271,14 +1271,15 @@ class DashboardUIMixin(ThemedWindowMixin):
         mode = str(getattr(deck, "current_mode", "general") or "general")
         destination = None
         if mode == "carrier":
-            carrier = getattr(getattr(self, "carrier_tracker", None), "carrier_data", {}) or {}
+            tracker = getattr(self, "carrier_tracker", None)
+            carrier = getattr(tracker, "carrier_data", {}) or {}
             destination = carrier.get("jump_destination")
-            if not destination:
-                destination = next((
-                    row.get("system")
-                    for row in (carrier.get("expedition_route") or [])
-                    if isinstance(row, dict) and not row.get("visited") and row.get("system")
-                ), None)
+            if (destination and str(destination).strip().casefold()
+                    == str(carrier.get("system") or "").strip().casefold()):
+                destination = None
+            if not destination and tracker:
+                next_stop = tracker.next_expedition_stop()
+                destination = (next_stop or {}).get("system")
             if destination:
                 self._copy_waypoint_to_clipboard(destination, "NEXT CARRIER STOP")
                 self.dashboard_objective_detail.config(text=f"Copied carrier stop {destination} to the clipboard.")
@@ -1537,8 +1538,12 @@ class DashboardUIMixin(ThemedWindowMixin):
                 route_remaining = self._dashboard_number(carrier.get("route_remaining"))
                 route_ratio = min(1.0, route_done / route_total) if route_total else 0.0
                 next_stop = carrier.get("route_next") or {}
-                next_system = carrier.get("jump_destination") or next_stop.get("system")
-                scheduled = bool(carrier.get("jump_destination"))
+                jump_destination = carrier.get("jump_destination")
+                if (jump_destination and str(jump_destination).strip().casefold()
+                        == str(carrier.get("system") or "").strip().casefold()):
+                    jump_destination = None
+                next_system = jump_destination or next_stop.get("system")
+                scheduled = bool(jump_destination)
                 next_distance = next_stop.get("distance_ly")
                 next_burn = next_stop.get("calculated_fuel_t")
                 if next_burn is None:
@@ -1581,7 +1586,7 @@ class DashboardUIMixin(ThemedWindowMixin):
                         ("USED SPACE", f"{used_capacity:,}/{total_space:,} T" if total_space else "UNKNOWN"),
                     ],
                     "priority": (
-                        f"Monitor jump to {carrier.get('jump_destination')}" if scheduled
+                        f"Monitor jump to {jump_destination}" if scheduled
                         else f"Continue expedition to {next_system}" if next_system
                         else "Plot a new carrier expedition" if not route_total
                         else "Carrier expedition complete"

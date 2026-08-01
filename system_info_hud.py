@@ -1,14 +1,12 @@
 import tkinter as tk
-from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, save_config
+from config import save_config
 import overlay_chrome
 from stellar_types import star_type_label
+import themes
 
 WIDTH = 460
 
 _CHROMA = "#ff00ff"
-
-_COL_DIM  = "#7a8a98"
-_COL_GOLD = "#e8c97a"
 
 _STARPORT_TYPES = {
     "Coriolis Starport", "Orbis Starport", "Ocellus Starport",
@@ -40,6 +38,7 @@ class SystemInfoHUD:
     def __init__(self, root, config):
         self.root   = root
         self.config = config
+        self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
 
         self.win = tk.Toplevel(root)
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
@@ -252,6 +251,7 @@ class SystemInfoHUD:
     # ── Rendering ─────────────────────────────────────────────────────────
 
     def _redraw(self):
+        palette = self._palette
         rows = self._build_rows()
         LINE_H  = 20
         total_h = 35 + len(rows) * LINE_H + 10
@@ -262,23 +262,28 @@ class SystemInfoHUD:
         self.win.geometry(f"{WIDTH}x{total_h}")
         self.canvas.delete("all")
 
-        overlay_chrome.draw_chrome(self.canvas, WIDTH, total_h)
-        self.canvas.create_line(20, 35, WIDTH - 20, 35, fill="#1a2530", width=1)
-        self._draw_text(20, 20, "SYSTEM INFO", COLOR_ACCENT, ("Courier", 10, "bold"))
+        overlay_chrome.draw_chrome(
+            self.canvas, WIDTH, total_h, accent=palette["accent"],
+        )
+        self.canvas.create_line(
+            20, 35, WIDTH - 20, 35, fill=palette["border_soft"], width=1,
+        )
+        self._draw_text(20, 20, "SYSTEM INFO", palette["accent"], ("Courier", 10, "bold"))
 
         y = 44
         for i, (text, color) in enumerate(rows):
             self._draw_text(20, y, text, color, ("Courier", 10, "bold"))
             if i == 0 and self._star_class:
-                self._draw_text(WIDTH - 20, y, f"[{self._star_class}]", _COL_GOLD,
+                self._draw_text(WIDTH - 20, y, f"[{self._star_class}]", palette["yellow"],
                                 ("Courier", 10, "bold"), anchor="e")
             y += LINE_H
 
     def _build_rows(self):
+        palette = self._palette
         rows = []
 
         sys_name = _truncate(self._system.upper(), 34)
-        rows.append((sys_name, COLOR_ACCENT))
+        rows.append((sys_name, palette["accent"]))
 
         if self._spansh:
             # Stars line: "2 STARS  G · M"
@@ -291,7 +296,7 @@ class SystemInfoHUD:
             planet_str = f"{pc} PLANET{'S' if pc != 1 else ''}"
             if lc:
                 planet_str += f"  {lc} Landable"
-            rows.append((f"{star_str}  ·  {planet_str}", _COL_DIM))
+            rows.append((f"{star_str}  ·  {planet_str}", palette["dim"]))
 
             # Scanned / bio progress from local data
             prog_parts = []
@@ -300,7 +305,7 @@ class SystemInfoHUD:
             if self._bio_total > 0:
                 prog_parts.append(f"{self._bio_total} Bio Signals")
             if prog_parts:
-                rows.append(("  ·  ".join(prog_parts), _COL_DIM))
+                rows.append(("  ·  ".join(prog_parts), palette["dim"]))
         else:
             # No Spansh yet — fall back to local DB counts
             scan_parts = []
@@ -311,7 +316,7 @@ class SystemInfoHUD:
             if self._bio_total > 0:
                 scan_parts.append(f"{self._bio_total} Bio Signals")
             if scan_parts:
-                rows.append(("  ·  ".join(scan_parts), _COL_DIM))
+                rows.append(("  ·  ".join(scan_parts), palette["dim"]))
 
         if self._spansh:
             c = self._spansh["counts"]
@@ -322,20 +327,20 @@ class SystemInfoHUD:
                 (f"×{c['settlement']} Settlement" if c["settlement"] else ""),
                 (f"×{c['fc']} Fleet Carrier"    if c["fc"]         else ""),
             ] if p]
-            rows.append(("  ·  ".join(port_parts) if port_parts else "No Stations", _COL_DIM))
+            rows.append(("  ·  ".join(port_parts) if port_parts else "No Stations", palette["dim"]))
             svc_parts = [p for p in [
                 ("Material Trader" if s["mat_trader"]  else ""),
                 ("Tech Broker"     if s["tech_broker"] else ""),
                 ("Engineer"        if s["engineer"]    else ""),
             ] if p]
             if svc_parts:
-                rows.append(("  ·  ".join(svc_parts), COLOR_ORANGE))
+                rows.append(("  ·  ".join(svc_parts), palette["orange"]))
         else:
-            rows.append(("Stations  ...", _COL_DIM))
+            rows.append(("Stations  ...", palette["dim"]))
 
         if self._edsm_info is None:
             # Still waiting for EDSM response
-            rows.append(("Faction info  ...", _COL_DIM))
+            rows.append(("Faction info  ...", palette["dim"]))
         elif self._edsm_info:
             # Has faction/population data (inhabited system)
             info    = self._edsm_info
@@ -351,7 +356,7 @@ class SystemInfoHUD:
                 (f"POP {pop}" if pop else ""), alleg, gov,
             ] if p]
             if pol_parts:
-                rows.append(("  ·  ".join(pol_parts), _COL_DIM))
+                rows.append(("  ·  ".join(pol_parts), palette["dim"]))
 
             fac_parts = [p for p in [
                 faction,
@@ -360,10 +365,19 @@ class SystemInfoHUD:
                 (economy if economy and economy not in ("NONE", "") else ""),
             ] if p]
             if fac_parts:
-                rows.append(("  ·  ".join(fac_parts), _COL_DIM))
+                rows.append(("  ·  ".join(fac_parts), palette["dim"]))
         # else: empty dict = arrived, uninhabited system — show nothing
 
         return rows
+
+    def apply_theme(self, palette=None):
+        """Apply the active commander palette without resetting visibility."""
+        self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)
+        try:
+            if self.win.state() != "withdrawn":
+                self._redraw()
+        except (AttributeError, tk.TclError):
+            pass
 
     def _draw_text(self, x, y, text, fill, font, anchor="w"):
         font = overlay_chrome.scaled_font(font, self.config)
