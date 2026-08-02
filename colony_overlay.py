@@ -1,4 +1,3 @@
-import json
 import math
 import tkinter as tk
 
@@ -97,29 +96,26 @@ class ColonyOverlay:
         refresh_ms = max(2000, int(self.config.get("overlay_topmost_refresh_ms", 12000) or 12000))
         self.win.after(refresh_ms, self.force_topmost)
 
-    def _prefs_path(self):
-        return "colony_overlay_prefs.json"
-
     def _load_prefs(self):
+        """Load display preferences from the active commander profile."""
+        sort_mode = str(self.config.get("colony_overlay_sort_mode") or "alpha")
+        self._sort_mode = sort_mode if sort_mode in {"alpha", "category", "source"} else "alpha"
+        self._show_trips = bool(self.config.get("colony_overlay_show_trips", True))
+        self._site_only = bool(self.config.get("colony_overlay_site_only", False))
         try:
-            with open(self._prefs_path(), "r", encoding="utf-8") as f:
-                data = json.load(f)
-            self._sort_mode = str(data.get("sort_mode") or "alpha")
-            self._show_trips = bool(data.get("show_trips", True))
-            self._site_only = bool(data.get("site_only", False))
-            self._font_scale = max(0.8, min(1.8, float(data.get("font_scale", 1.0))))
-        except Exception:
-            pass
+            self._font_scale = max(
+                0.8, min(1.8, float(self.config.get("colony_overlay_font_scale", 1.0)))
+            )
+        except (TypeError, ValueError):
+            self._font_scale = 1.0
 
     def _save_prefs(self):
+        self.config["colony_overlay_sort_mode"] = self._sort_mode
+        self.config["colony_overlay_show_trips"] = self._show_trips
+        self.config["colony_overlay_site_only"] = self._site_only
+        self.config["colony_overlay_font_scale"] = round(self._font_scale, 1)
         try:
-            with open(self._prefs_path(), "w", encoding="utf-8") as f:
-                json.dump({
-                    "sort_mode": self._sort_mode,
-                    "show_trips": self._show_trips,
-                    "site_only": self._site_only,
-                    "font_scale": self._font_scale,
-                }, f, indent=2)
+            save_config(self.config)
         except Exception:
             pass
 
@@ -127,7 +123,7 @@ class ColonyOverlay:
         header = tk.Frame(self.panel, bg=self.PANEL)
         header.pack(fill=tk.X)
         self.title_label = tk.Label(
-            header, text="COLONY SHOPPING", fg=self.ACCENT, bg=self.PANEL,
+            header, text="COLONY LOGISTICS", fg=self.ACCENT, bg=self.PANEL,
             font=("Courier", self._font(10), "bold"),
         )
         self.title_label.pack(side=tk.LEFT, padx=10, pady=(8, 6))
@@ -145,7 +141,7 @@ class ColonyOverlay:
 
         self.trips_var = tk.BooleanVar(value=self._show_trips)
         tk.Checkbutton(
-            header, text="Trips", variable=self.trips_var, command=self._toggle_trips,
+            header, text="TRIPS", variable=self.trips_var, command=self._toggle_trips,
             bg=self.PANEL, fg=self.MUTED, selectcolor=self.PANEL,
             activebackground=self.PANEL, activeforeground=self.ACCENT,
             highlightthickness=0, font=("Courier", self._font(8), "bold"),
@@ -153,7 +149,7 @@ class ColonyOverlay:
 
         self.site_only_var = tk.BooleanVar(value=self._site_only)
         tk.Checkbutton(
-            header, text="Site", variable=self.site_only_var, command=self._toggle_site_only,
+            header, text="SITE", variable=self.site_only_var, command=self._toggle_site_only,
             bg=self.PANEL, fg=self.MUTED, selectcolor=self.PANEL,
             activebackground=self.PANEL, activeforeground=self.ACCENT,
             highlightthickness=0, font=("Courier", self._font(8), "bold"),
@@ -205,6 +201,13 @@ class ColonyOverlay:
     def _scale(self, delta):
         self._font_scale = max(0.8, min(1.8, self._font_scale + delta))
         self._save_prefs()
+        try:
+            for child in list(self.panel.winfo_children()):
+                child.destroy()
+            self._build_ui()
+            self._redraw_background()
+        except (AttributeError, tk.TclError):
+            pass
         self.update()
 
     def _toggle_trips(self):
@@ -375,14 +378,14 @@ class ColonyOverlay:
             for child in list(self.body.children.values()):
                 child.destroy()
 
-            self.title_label.config(text="SITE CHECKLIST" if self._site_only else "COLONY SHOPPING")
+            self.title_label.config(text="SITE LOGISTICS" if self._site_only else "COLONY LOGISTICS")
             items = self._shopping_items()
             total_needed = sum(int(i.get("needed") or 0) for i in items)
             capacity = int(self.capacity_getter() or 0)
             if self._show_trips and capacity > 0 and total_needed > 0:
-                self.summary_label.config(text=f"Trips Left: {math.ceil(total_needed / capacity)}  (Cap: {capacity}t)")
+                self.summary_label.config(text=f"TRIPS {math.ceil(total_needed / capacity)}  ·  HOLD {capacity:,} T")
             elif capacity > 0:
-                self.summary_label.config(text=f"Capacity: {capacity}t")
+                self.summary_label.config(text=f"CARGO HOLD  ·  {capacity:,} T")
             else:
                 self.summary_label.config(text="")
 
@@ -440,8 +443,9 @@ class ColonyOverlay:
         self.BORDER_SOFT = self._palette["border_soft"]
 
     def apply_theme(self, palette=None):
-        """Rebuild the compact controls with the active commander palette."""
+        """Reload profile preferences and rebuild with its active palette."""
         self._set_palette(palette or themes.ACTIVE_PALETTE)
+        self._load_prefs()
         try:
             self.panel.config(bg=self.PANEL)
             for child in list(self.panel.winfo_children()):

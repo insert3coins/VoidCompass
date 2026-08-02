@@ -92,6 +92,7 @@ PROFILE_TEXT_SETTINGS = (
     "explore_discovery_filter",
     "explore_expedition_section",
     "explore_map_scope",
+    "colony_overlay_sort_mode",
     "overlay_hotkey_layout_studio",
     "overlay_hotkey_toggle_all",
     "overlay_hotkey_navigation",
@@ -117,6 +118,8 @@ PROFILE_BOOL_SETTINGS = (
     "trade_overlay_enabled",
     "carrier_overlay_enabled",
     "colony_overlay_enabled",
+    "colony_overlay_show_trips",
+    "colony_overlay_site_only",
     "prospector_overlay_enabled",
     "system_info_enabled",
     "gravity_warning_overlay_enabled",
@@ -180,6 +183,7 @@ PROFILE_VALUE_SETTINGS = (
     "colony_overlay_y",
     "colony_overlay_w",
     "colony_overlay_h",
+    "colony_overlay_font_scale",
     "gravity_warning_hud_x",
     "gravity_warning_hud_y",
     "gravity_warning_hud_timeout_s",
@@ -388,6 +392,7 @@ def apply_profile_config(config, profile_key=None):
         "explore_discovery_filter": "All",
         "explore_expedition_section": "Overview",
         "explore_map_scope": "All History",
+        "colony_overlay_sort_mode": "alpha",
         "overlay_hotkey_layout_studio": "Ctrl+Alt+Shift+F10",
         "overlay_hotkey_toggle_all": "Ctrl+Alt+Shift+F11",
         "overlay_hotkey_navigation": "",
@@ -412,6 +417,8 @@ def apply_profile_config(config, profile_key=None):
         "trade_overlay_enabled": False,
         "carrier_overlay_enabled": False,
         "colony_overlay_enabled": False,
+        "colony_overlay_show_trips": True,
+        "colony_overlay_site_only": False,
         "prospector_overlay_enabled": True,
         "system_info_enabled": True,
         "gravity_warning_overlay_enabled": True,
@@ -482,6 +489,7 @@ def apply_profile_config(config, profile_key=None):
                 "explore_map_view_state": {},
                 "explore_map_annotations": [],
                 "explore_map_annotation_geometry": "470x360",
+                "colony_overlay_font_scale": 1.0,
             }
             profile[setting] = (
                 profile_defaults[setting] if not is_initial_profile and setting in profile_defaults
@@ -578,6 +586,9 @@ def load_config():
         'trade_overlay_enabled': False,
         'carrier_overlay_enabled': False,
         'colony_overlay_enabled': False,
+        'colony_overlay_show_trips': True,
+        'colony_overlay_site_only': False,
+        'colony_overlay_sort_mode': 'alpha',
         'prospector_overlay_enabled': True,
         'prospector_hud_timeout_s': 45,
         'prospector_hud_x': 30,
@@ -598,6 +609,7 @@ def load_config():
         'colony_overlay_y': 40,
         'colony_overlay_w': 380,
         'colony_overlay_h': 260,
+        'colony_overlay_font_scale': 1.0,
         # gravity_warning_hud_x intentionally omitted — defaults to a
         # screen-width-relative right-edge position computed in its own
         # constructor (matches toast_hud_x/_y).

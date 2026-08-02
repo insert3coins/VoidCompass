@@ -1,3 +1,5 @@
+"""Compact Fleet/Squadron Carrier command overlay."""
+
 import tkinter as tk
 from datetime import datetime, timedelta, timezone
 
@@ -6,17 +8,17 @@ import overlay_chrome
 import themes
 
 
-WIDTH = 380
+WIDTH = 430
 _CHROMA = "#ff00ff"
 _COOLDOWN_SECS = 290
+
+
 def _parse_dt(ts_str):
     if not ts_str:
         return None
     try:
         dt = datetime.fromisoformat(str(ts_str).replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt
+        return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
     except Exception:
         return None
 
@@ -28,14 +30,12 @@ def _fmt_duration(seconds):
         seconds = 0
     mins, secs = divmod(seconds, 60)
     hrs, mins = divmod(mins, 60)
-    if hrs:
-        return f"{hrs:d}:{mins:02d}:{secs:02d}"
-    return f"{mins:d}:{secs:02d}"
+    return f"{hrs:d}:{mins:02d}:{secs:02d}" if hrs else f"{mins:d}:{secs:02d}"
 
 
 def _truncate(text, max_chars):
     text = str(text or "")
-    return text if len(text) <= max_chars else text[:max_chars - 1] + "..."
+    return text if len(text) <= max_chars else text[:max_chars - 1] + "…"
 
 
 def _fmt_location(system, body):
@@ -44,6 +44,113 @@ def _fmt_location(system, body):
     if body and body.lower().startswith(system.lower()):
         body = body[len(system):].strip()
     return system if not body else f"{system} / {body}"
+
+
+def _number(value, default=None):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def build_carrier_hud_model(carrier_data, now=None):
+    """Build a renderer-neutral live carrier command summary."""
+    cd = carrier_data if isinstance(carrier_data, dict) else {}
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+
+    status = str(cd.get("status") or "idle").lower()
+    badge, badge_tone = {
+        "idle": ("READY", "muted"),
+        "jumping": ("JUMPING", "accent"),
+        "cooldown": ("COOLDOWN", "yellow"),
+        "cooldown_cancel": ("CANCELLED", "red"),
+    }.get(status, (status.upper(), "muted"))
+
+    route = [row for row in (cd.get("expedition_route") or []) if isinstance(row, dict)]
+    done = sum(1 for row in route if row.get("visited"))
+    next_route = next((row for row in route if not row.get("visited")), None)
+    remaining_fuel = sum(
+        max(0, int(_number(row.get("fuel_used_t"), 0)))
+        for row in route if not row.get("visited") and row.get("fuel_used_t") is not None
+    )
+
+    dep = _parse_dt(cd.get("jump_departure_time"))
+    movement_label = "NEXT JUMP"
+    movement_value = "READY TO PLOT JUMP"
+    movement_tone = "muted"
+    movement_detail = ""
+    if status == "jumping":
+        movement_value = _fmt_location(cd.get("jump_destination") or "TBD", cd.get("jump_body"))
+        movement_tone = "orange"
+        movement_detail = f"DEPARTS IN {_fmt_duration((dep - now).total_seconds())}" if dep else "DEPARTURE SCHEDULED"
+    elif status == "cooldown":
+        movement_label = "JUMP COOLDOWN"
+        movement_value = f"READY IN {_fmt_duration(((dep + timedelta(seconds=_COOLDOWN_SECS)) - now).total_seconds())}" if dep else "RECOVERY ACTIVE"
+        movement_tone = "yellow"
+        previous = cd.get("previous_system")
+        movement_detail = f"FROM {previous}" if previous else ""
+    elif status == "cooldown_cancel":
+        movement_label = "JUMP STATUS"
+        movement_value = "JUMP CANCELLED"
+        movement_tone = "red"
+        movement_detail = "BRIEF COOLDOWN ACTIVE"
+    else:
+        destination = cd.get("destination_note") or cd.get("jump_destination") or (next_route or {}).get("system")
+        if destination:
+            movement_value = str(destination)
+            movement_tone = "orange"
+            if next_route and str(destination) == str(next_route.get("system")):
+                detail = []
+                distance = _number(next_route.get("distance_ly"))
+                tritium = _number(next_route.get("fuel_used_t"))
+                if distance is not None:
+                    detail.append(f"{distance:.1f} LY")
+                if tritium is not None:
+                    detail.append(f"{int(tritium)} T TRITIUM")
+                movement_detail = "  ·  ".join(detail)
+
+    fuel = _number(cd.get("fuel_level"))
+    capacity = _number(cd.get("fuel_capacity"), 1000.0) or 1000.0
+    fuel_ratio = None if fuel is None or capacity <= 0 else max(0.0, min(1.0, fuel / capacity))
+    fuel_tone = "muted"
+    if fuel_ratio is not None:
+        fuel_tone = "red" if fuel_ratio <= 0.15 else "yellow" if fuel_ratio <= 0.4 else "green"
+
+    current_range = _number(cd.get("jump_range_curr"))
+    maximum_range = _number(cd.get("jump_range_max"))
+    cargo = _number(cd.get("space_cargo"))
+    free = _number(cd.get("space_free"))
+    orders = cd.get("trade_orders") or []
+    return {
+        "carrier_type": "SQUADRON CARRIER" if cd.get("carrier_type") == "SquadronCarrier" else "FLEET CARRIER",
+        "name": cd.get("name") or "Fleet Carrier",
+        "callsign": cd.get("callsign") or "---",
+        "location": _fmt_location(cd.get("system"), cd.get("body")),
+        "status": status,
+        "badge": badge,
+        "badge_tone": badge_tone,
+        "movement_label": movement_label,
+        "movement_value": movement_value,
+        "movement_tone": movement_tone,
+        "movement_detail": movement_detail,
+        "route_name": str(cd.get("expedition_name") or "EXPEDITION ROUTE"),
+        "route_total": len(route),
+        "route_done": done,
+        "route_complete": bool(route) and done == len(route),
+        "remaining_fuel": remaining_fuel,
+        "fuel": fuel,
+        "fuel_capacity": capacity,
+        "fuel_ratio": fuel_ratio,
+        "fuel_tone": fuel_tone,
+        "fuel_estimated": bool(cd.get("fuel_level_estimated")),
+        "range": current_range if current_range is not None else maximum_range,
+        "range_is_max": current_range is None and maximum_range is not None,
+        "cargo": cargo,
+        "free": free,
+        "orders": len(orders) if isinstance(orders, (list, tuple, dict)) else 0,
+    }
 
 
 class CarrierHUD:
@@ -56,17 +163,17 @@ class CarrierHUD:
         self._mouse_down = None
         self._mouse_dragging = False
         self._mx = self._my = 0
+        self._height = 206
+        self._last_render_key = None
         self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
 
         self.win = tk.Toplevel(root)
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
-
         self.canvas = tk.Canvas(
             self.win, bg=overlay_bg, highlightthickness=0,
-            width=WIDTH, height=140,
+            width=WIDTH, height=self._height,
         )
         self.canvas.pack()
-
         self.canvas.bind("<Button-1>", self._on_mouse_down)
         self.canvas.bind("<B1-Motion>", self._on_mouse_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_mouse_up)
@@ -74,11 +181,10 @@ class CarrierHUD:
         x = self._safe_int(self.config.get("carrier_hud_x"), 30)
         y = self._safe_int(self.config.get("carrier_hud_y"), 180)
         self._desired_pos = (x, y)
-        self.win.geometry(overlay_chrome.position_geometry(x, y, WIDTH, 140))
+        self.win.geometry(overlay_chrome.position_geometry(x, y, WIDTH, self._height))
         self.win.after(0, self._apply_initial_position)
         self.win.after(250, self._apply_initial_position)
         self.win.after(700, self._apply_initial_position)
-
         self._force_topmost()
         self.update()
         self._schedule_tick()
@@ -111,25 +217,16 @@ class CarrierHUD:
     def _apply_initial_position(self):
         try:
             x, y = self._desired_pos
-            height = getattr(self, "_height", 140)
-            x, y = self._fit_position(x, y, height)
-            self._desired_pos = (x, y)
-            self.win.geometry(overlay_chrome.position_geometry(x, y, WIDTH, height))
+            self.win.geometry(overlay_chrome.position_geometry(x, y, WIDTH, self._height))
         except Exception:
             pass
 
-    def _fit_position(self, x, y, height):
-        """Preserve the commander-selected virtual-desktop anchor.
-
-        Dynamic height changes used to clamp Y against the primary screen on
-        every one-second redraw. That silently undid Layout Studio positions
-        near another monitor's edge. Off-screen recovery belongs to Studio's
-        reset/snap controls, not a recurring overlay repaint.
-        """
+    @staticmethod
+    def _fit_position(x, y, _height):
+        """Preserve the commander-selected virtual-desktop anchor."""
         return int(x), int(y)
 
     def show(self):
-        """Refresh and raise an enabled overlay after a scene/settings change."""
         if not self.is_open():
             return
         self.update()
@@ -159,158 +256,115 @@ class CarrierHUD:
 
     def _tick(self):
         self._tick_job = None
-        if not self.is_open():
-            return
-        self.update()
-        self._schedule_tick()
+        if self.is_open():
+            self.update()
+            self._schedule_tick()
 
     def update(self, carrier_data=None):
         if not self.is_open():
             return
         cd = carrier_data or getattr(self.tracker, "carrier_data", {}) or {}
-        rows, status_text, status_color = self._build_rows(cd)
-
-        line_h = 19
-        height = max(116, 43 + len(rows) * line_h + 10)
+        model = build_carrier_hud_model(cd)
+        render_key = repr(model)
+        if render_key == self._last_render_key:
+            return
+        self._last_render_key = render_key
+        route_extra = 47 if model["route_total"] else 0
+        detail_extra = 16 if model["movement_detail"] else 0
+        height = 206 + route_extra + detail_extra
         self._height = height
         self.canvas.config(width=WIDTH, height=height)
-        old_x, old_y = self._desired_pos
-        x, y = self._fit_position(old_x, old_y, height)
-        self._desired_pos = (x, y)
+        x, y = self._desired_pos
         self.win.geometry(overlay_chrome.position_geometry(x, y, WIDTH, height))
-        if (x, y) != (old_x, old_y):
-            self.config["carrier_hud_x"] = x
-            self.config["carrier_hud_y"] = y
-            self._schedule_config_save()
         self.canvas.delete("all")
 
         palette = self._palette
-        overlay_chrome.draw_chrome(
-            self.canvas, WIDTH, height, accent=palette["accent"],
-        )
-        self.canvas.create_line(
-            20, 35, WIDTH - 20, 35, fill=palette["border_soft"], width=1,
-        )
-        carrier_title = (
-            "SQUADRON CARRIER" if cd.get("carrier_type") == "SquadronCarrier"
-            else "FLEET CARRIER"
-        )
-        self._draw_text(20, 20, carrier_title, palette["accent"], ("Courier", 10, "bold"))
-        self._draw_text(WIDTH - 20, 20, status_text, status_color, ("Courier", 10, "bold"), anchor="e")
+        overlay_chrome.draw_chrome(self.canvas, WIDTH, height, accent=palette["accent"])
+        self._draw_text(18, 18, model["carrier_type"], palette["accent"], ("Courier", 10, "bold"))
+        self._draw_text(WIDTH - 18, 18, model["badge"], palette[model["badge_tone"]],
+                        ("Courier", 9, "bold"), anchor="e")
+        self._line(32)
 
-        y = 47
-        for text, color in rows:
-            self._draw_text(20, y, text, color, ("Courier", 9, "bold"))
-            y += line_h
+        self._draw_text(18, 50, _truncate(str(model["name"]).upper(), 32), palette["text"],
+                        ("Courier", 11, "bold"))
+        self._draw_text(WIDTH - 18, 50, f'[{model["callsign"]}]', palette["orange"],
+                        ("Courier", 9, "bold"), anchor="e")
+        self._draw_text(18, 68, _truncate(model["location"], 52), palette["muted"], ("Courier", 8))
+        self._line(80)
+
+        y = 94
+        self._draw_text(18, y, model["movement_label"], palette["dim"], ("Courier", 8, "bold"))
+        y += 18
+        self._draw_text(18, y, _truncate(model["movement_value"].upper(), 47),
+                        palette[model["movement_tone"]], ("Courier", 10, "bold"))
+        if model["movement_detail"]:
+            y += 16
+            self._draw_text(18, y, _truncate(model["movement_detail"], 55), palette["muted"], ("Courier", 8))
+        y += 15
+        self._line(y)
+
+        if model["route_total"]:
+            y += 15
+            route_tone = "green" if model["route_complete"] else "accent"
+            self._draw_text(18, y, _truncate(model["route_name"].upper(), 30), palette["dim"],
+                            ("Courier", 8, "bold"))
+            route_text = f'{model["route_done"]}/{model["route_total"]} COMPLETE'
+            self._draw_text(WIDTH - 18, y, route_text, palette[route_tone],
+                            ("Courier", 8, "bold"), anchor="e")
+            y += 17
+            fuel_need = f'{model["remaining_fuel"]:,} T REMAINING' if model["remaining_fuel"] else "ROUTE FUEL CLEAR"
+            self._draw_text(18, y, fuel_need, palette["muted"], ("Courier", 8))
+            y += 15
+            self._line(y)
+
+        y += 15
+        self._draw_text(18, y, "LOGISTICS", palette["dim"], ("Courier", 8, "bold"))
+        fuel_text = "TRITIUM UNKNOWN"
+        if model["fuel"] is not None:
+            estimate = " ~" if model["fuel_estimated"] else " "
+            fuel_text = f'TRITIUM{estimate}{int(model["fuel"]):,}/{int(model["fuel_capacity"]):,} T'
+        self._draw_text(18, y + 18, fuel_text, palette[model["fuel_tone"]], ("Courier", 9, "bold"))
+        if model["range"] is not None:
+            prefix = "MAX " if model["range_is_max"] else ""
+            self._draw_text(WIDTH - 18, y + 18, f'{prefix}RANGE {model["range"]:.1f} LY', palette["text"],
+                            ("Courier", 9, "bold"), anchor="e")
+
+        bar_y = y + 29
+        self.canvas.create_rectangle(18, bar_y, WIDTH - 18, bar_y + 5,
+                                     fill=palette["panel_alt"], outline="")
+        if model["fuel_ratio"] is not None:
+            fill_x = 18 + int((WIDTH - 36) * model["fuel_ratio"])
+            self.canvas.create_rectangle(18, bar_y, fill_x, bar_y + 5,
+                                         fill=palette[model["fuel_tone"]], outline="")
+        cargo_parts = []
+        if model["cargo"] is not None:
+            cargo_parts.append(f'CARGO {int(model["cargo"]):,} T')
+        if model["free"] is not None:
+            cargo_parts.append(f'FREE {int(model["free"]):,} T')
+        if model["orders"]:
+            cargo_parts.append(f'{model["orders"]} ORDERS')
+        if cargo_parts:
+            self._draw_text(18, y + 47, "  ·  ".join(cargo_parts), palette["muted"], ("Courier", 8))
 
     def _build_rows(self, cd):
+        """Compatibility view for callers that previously consumed flat rows."""
+        model = build_carrier_hud_model(cd)
         palette = self._palette
-        status = cd.get("status") or "idle"
-        badge = {
-            "idle": ("IDLE", palette["muted"]),
-            "jumping": ("JUMPING", palette["accent"]),
-            "cooldown": ("COOLDOWN", palette["yellow"]),
-            "cooldown_cancel": ("CANCELLED", palette["red"]),
-        }.get(status, (status.upper(), palette["muted"]))
+        rows = [
+            (f'{_truncate(str(model["name"]).upper(), 30)}  [{model["callsign"]}]', palette["text"]),
+            (f'LOC: {_truncate(model["location"], 42)}', palette["text"]),
+            (f'{model["movement_label"]}: {_truncate(model["movement_value"], 35)}', palette[model["movement_tone"]]),
+        ]
+        if model["route_total"]:
+            rows.append((f'ROUTE: {model["route_done"]}/{model["route_total"]}', palette["accent"]))
+        return rows, model["badge"], palette[model["badge_tone"]]
 
-        name = cd.get("name") or "Fleet Carrier"
-        callsign = cd.get("callsign") or "---"
-        rows = [(f"{_truncate(name.upper(), 24)}  [{callsign}]", palette["text"])]
-
-        system = cd.get("system") or "Unknown"
-        body = cd.get("body") or ""
-        loc = _fmt_location(system, body)
-        rows.append((f"LOC: {_truncate(loc, 42)}", palette["text"]))
-
-        now = datetime.now(timezone.utc)
-        dep = _parse_dt(cd.get("jump_departure_time"))
-        route = [row for row in (cd.get("expedition_route") or []) if isinstance(row, dict)]
-        done = sum(1 for row in route if row.get("visited"))
-        next_route = next((row for row in route if not row.get("visited")), None)
-        if status == "jumping" and dep:
-            dest = cd.get("jump_destination") or "TBD"
-            dest_body = cd.get("jump_body") or ""
-            target = _fmt_location(dest, dest_body)
-            rows.append((f"DST: {_truncate(target, 42)}", palette["orange"]))
-            rows.append((f"DEPARTS IN: {_fmt_duration((dep - now).total_seconds())}", palette["accent"]))
-        elif status == "cooldown" and dep:
-            ready_at = dep + timedelta(seconds=_COOLDOWN_SECS)
-            rows.append((f"READY IN: {_fmt_duration((ready_at - now).total_seconds())}", palette["yellow"]))
-            prev = cd.get("previous_system") or ""
-            if prev:
-                rows.append((f"FROM: {_truncate(prev, 42)}", palette["muted"]))
-        elif status == "cooldown_cancel":
-            rows.append(("JUMP CANCELLED - BRIEF COOLDOWN", palette["red"]))
-        else:
-            dest = (
-                cd.get("destination_note") or cd.get("jump_destination")
-                or (next_route or {}).get("system") or ""
-            )
-            if dest:
-                label = "NEXT" if next_route and dest == next_route.get("system") else "PLAN"
-                detail = ""
-                if label == "NEXT":
-                    distance = next_route.get("distance_ly")
-                    tritium = next_route.get("fuel_used_t")
-                    if distance is not None:
-                        detail += f" · {float(distance):.1f}LY"
-                    if tritium is not None:
-                        detail += f"/{int(float(tritium))}T"
-                rows.append((f"{label}: {_truncate(str(dest) + detail, 42)}", palette["orange"]))
-            else:
-                rows.append(("READY TO PLOT JUMP", palette["muted"]))
-
-        if route:
-            remaining_fuel_rows = [
-                row.get("fuel_used_t") for row in route if not row.get("visited")
-                and row.get("fuel_used_t") is not None
-            ]
-            route_text = f"ROUTE: {done}/{len(route)}"
-            if remaining_fuel_rows:
-                route_text += f"  |  {sum(int(float(value)) for value in remaining_fuel_rows)}T REM"
-            rows.append((_truncate(route_text, 45), palette["accent"] if next_route else palette["green"]))
-
-        fuel = cd.get("fuel_level")
-        cap = cd.get("fuel_capacity") or 1000
-        jump_curr = cd.get("jump_range_curr")
-        jump_max = cd.get("jump_range_max")
-        parts = []
-        if fuel is not None:
-            parts.append(f"FUEL {int(fuel)}/{int(cap)}T")
-        if jump_curr:
-            parts.append(f"RANGE {float(jump_curr):.1f}LY")
-        elif jump_max:
-            parts.append(f"MAX {float(jump_max):.1f}LY")
-        if parts:
-            fuel_color = palette["green"]
-            try:
-                pct = float(fuel) / float(cap)
-                if pct <= 0.15:
-                    fuel_color = palette["red"]
-                elif pct <= 0.4:
-                    fuel_color = palette["yellow"]
-            except Exception:
-                fuel_color = palette["muted"]
-            rows.append(("  |  ".join(parts), fuel_color))
-
-        cargo = cd.get("space_cargo")
-        free = cd.get("space_free")
-        orders = cd.get("trade_orders") or []
-        capacity_parts = []
-        if cargo is not None:
-            capacity_parts.append(f"CARGO {int(cargo):,}T")
-        if free is not None:
-            capacity_parts.append(f"FREE {int(free):,}T")
-        if orders:
-            capacity_parts.append(f"ORDERS {len(orders)}")
-        if capacity_parts:
-            rows.append(("  |  ".join(capacity_parts), palette["muted"]))
-
-        return rows, badge[0], badge[1]
+    def _line(self, y):
+        self.canvas.create_line(18, y, WIDTH - 18, y, fill=self._palette["border_soft"], width=1)
 
     def apply_theme(self, palette=None):
-        """Apply the active commander palette without changing its anchor."""
         self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)
+        self._last_render_key = None
         self.update()
 
     def _draw_text(self, x, y, text, fill, font, anchor="w"):
@@ -340,7 +394,7 @@ class CarrierHUD:
 
     def _on_mouse_up(self, _event):
         x, y = self.win.winfo_x(), self.win.winfo_y()
-        x, y = self._fit_position(x, y, getattr(self, "_height", 140))
+        x, y = self._fit_position(x, y, self._height)
         self._desired_pos = (x, y)
         self.win.geometry(overlay_chrome.position_geometry(x, y))
         if x != 0 or y != 0:

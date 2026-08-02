@@ -108,6 +108,33 @@ EXPLORATION_INTELLIGENCE_TTL_S = 0.5
 HUD_REGION_CROSSED_S = 45.0
 
 
+def _preserve_unconfirmed_scan_total(startup_replay, event_data, incoming_system,
+                                     current_system, current_confirmed,
+                                     cached_loaded=False, cached_system=None,
+                                     cached_confirmed=False):
+    """Keep startup-only body floors from masquerading as confirmed totals.
+
+    The final startup location seed deliberately repeats the newest arrival.
+    If the only evidence since that arrival is an automatic primary-star Scan,
+    SQLite contains 1/1 as a storage floor—not proof that the system has one
+    body. A known revisit remains confirmed because ``current_confirmed`` was
+    restored before the duplicate seed arrives.
+    """
+    if not startup_replay:
+        return False
+    seed_repeats_unconfirmed_arrival = bool(
+        (event_data or {}).get("startup_location_seed")
+        and incoming_system == current_system
+        and not current_confirmed
+    )
+    cached_state_was_unconfirmed = bool(
+        cached_loaded
+        and incoming_system == cached_system
+        and not cached_confirmed
+    )
+    return seed_repeats_unconfirmed_arrival or cached_state_was_unconfirmed
+
+
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     _COCKPIT_STATE_FILE = "last_cockpit_state.json"
     _COCKPIT_STATE_SCHEMA = 1
@@ -490,6 +517,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "cargo_hud",
             "trade_hud",
             "carrier_hud",
+            "prospector_hud",
             "system_info_hud",
             "station_info_hud",
             "survey_status_hud",
@@ -957,6 +985,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.system_info_hud.update_scan_progress(
                     self.scan_items, self.body_signals, self.total,
                     star_class=self.star_class, scanned_bodies=self.scanned,
+                    total_known=self.scan_total_confirmed,
                 )
             if self.survey_status_hud:
                 if self.current_docked:
@@ -2189,6 +2218,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         int(float(self.config[x_key])),
                         int(float(self.config[y_key])),
                     )
+                try:
+                    window_is_shown = (
+                        bool(win.winfo_viewable())
+                        and str(win.state()) not in ("withdrawn", "iconic")
+                    )
+                except AttributeError:
+                    # Lightweight diagnostic/test windows without Tk mapping
+                    # APIs represent ordinary visible windows.
+                    window_is_shown = True
+                except tk.TclError:
+                    window_is_shown = False
                 authority = authorities.get(attr)
                 if authority and now >= float(authority.get("until") or 0):
                     authorities.pop(attr, None)
@@ -2204,6 +2244,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     # event; never copy the stale live coordinate back into the
                     # active commander's saved layout.
                     pos = configured = target
+                elif not window_is_shown:
+                    # A withdrawn Tk window can keep reporting the position at
+                    # which it was last mapped even after Layout Studio moved
+                    # it. Hidden overlays therefore have no trustworthy live
+                    # geometry: the commander-profile coordinate is the source
+                    # of truth until the window is shown again.
+                    desired = getattr(overlay, "_desired_pos", None)
+                    target = configured if configured is not None else desired
+                    if target is not None:
+                        pos = (int(target[0]), int(target[1]))
+                        if hasattr(overlay, "_desired_pos"):
+                            overlay._desired_pos = pos
                 # Withdrawn or not-yet-mapped windows commonly report (0, 0).
                 # Preserve a real configured position, and do not manufacture a
                 # new (0, 0) value when an optional position has never been set.
@@ -3499,6 +3551,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             dict(self.body_signals),
             self.total,
             scanned_bodies=self.scanned,
+            total_known=self.scan_total_confirmed,
         )
 
     def _copy_waypoint_to_clipboard(self, waypoint_name, log_label="NEXT WAYPOINT"):
@@ -6329,11 +6382,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
             # State reset for new system
             incoming_sys = d.get("star_system", "Unknown")
-            preserve_unconfirmed_total = bool(
-                startup_replay
-                and getattr(self, "_cached_cockpit_state_loaded", False)
-                and incoming_sys == getattr(self, "_cached_cockpit_state_system", None)
-                and not getattr(self, "_cached_scan_total_confirmed", False)
+            preserve_unconfirmed_total = _preserve_unconfirmed_scan_total(
+                startup_replay, data, incoming_sys, self.current_sys,
+                getattr(self, "scan_total_confirmed", False),
+                cached_loaded=getattr(self, "_cached_cockpit_state_loaded", False),
+                cached_system=getattr(self, "_cached_cockpit_state_system", None),
+                cached_confirmed=getattr(self, "_cached_scan_total_confirmed", False),
             )
             outgoing_sys = self.current_sys if self.current_sys not in ("---", "Unknown", incoming_sys) else None
             traffic_before_reset = dict(self.system_traffic or {})
@@ -6514,9 +6568,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 _bs   = dict(self.body_signals)
                 _tot  = self.total
                 _done = self.scanned
+                _known = self.scan_total_confirmed
                 self._ui_post(
                     lambda: self.system_info_hud.on_system_arrival(
-                        _sys, _sc, _si, _bs, _tot, scanned_bodies=_done),
+                        _sys, _sc, _si, _bs, _tot,
+                        scanned_bodies=_done, total_known=_known),
                     key="system-info-arrival",
                 )
             if self.survey_status_hud:

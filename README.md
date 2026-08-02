@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.3.2**
+**Current version: 5.3.5.2**
 
 Void Compass is a native Windows companion for Elite Dangerous, with a native Linux x86-64 build currently offered for testing. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
 
@@ -78,8 +78,9 @@ Each mode can apply a focused overlay scene while gravity, toast and heartbeat s
 Every overlay can be enabled independently, dragged to a saved position and styled with the active theme:
 
 - Navigation HUD with game-route/waypoint switching, scan progress, traffic, biology, value and optional CRT effects.
-- Survey Status with body names, scan state, notable worlds and biological sampling progress.
-- Cargo, Fleet Carrier, Prospector, System Information, Station Information and Colony overlays.
+- Survey Operations with persistent body targets, biological and geological signals, species/sample progress, completed discoveries and notable-world value evidence; Navigation remains the single owner of system scan percentage.
+- A dynamic Cargo Manifest with hold utilisation plus mission/stolen distinctions; Fleet/Squadron Carrier Command with jump, expedition, Tritium and capacity status; and Prospector Analysis with themed material composition, core and refinery evidence.
+- System Intelligence, Station Link and profile-local Colony Logistics overlays for contextual system, market and construction work without duplicating the Navigation HUD.
 - Gravity, touchdown/liftoff, on-foot and other low-noise safety notifications.
 - Toast notifications and the journal/Compass heartbeat pulse.
 
