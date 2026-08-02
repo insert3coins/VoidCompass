@@ -165,8 +165,10 @@ class GravityWarningHUD:
     def _redraw(self, body_name, gravity_g):
         w, h = self.WIDTH, self.HEIGHT
         self.canvas.delete("all")
-        overlay_chrome.draw_chrome(self.canvas, w, h, accent=_RED, bracket_len=10)
-        self.canvas.create_line(16, 30, w - 16, 30, fill=_RED, width=1)
+        overlay_chrome.draw_chrome(
+            self.canvas, w, h, accent=_RED, bracket_len=10,
+            scanlines=False,
+        )
         self._text(w / 2, 18, "⚠  HIGH GRAVITY WORLD  ⚠", _RED, ("Courier", 10, "bold"), anchor="center")
         self._text(w / 2, 48, body_name.upper() if len(body_name) <= 30 else body_name[:29].upper() + "…",
                     COLOR_TEXT, ("Courier", 11, "bold"), anchor="center")

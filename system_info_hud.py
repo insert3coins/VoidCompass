@@ -492,9 +492,7 @@ class SystemInfoHUD:
         return y + 16
 
     def _separator(self, y):
-        self.canvas.create_line(
-            18, y, WIDTH - 18, y, fill=self._palette["border_soft"], width=1,
-        )
+        """Separate sections with whitespace rather than decorative rules."""
         return y + 12
 
     def _redraw(self, force=False):
@@ -514,6 +512,7 @@ class SystemInfoHUD:
         self.canvas.delete("all")
         overlay_chrome.draw_chrome(
             self.canvas, WIDTH, total_h, accent=palette["accent"], bracket_len=10,
+            scanlines=False,
         )
 
         self._draw_text(
@@ -525,10 +524,6 @@ class SystemInfoHUD:
             WIDTH - 18, 18, model["badge"], badge_color,
             ("Courier", 8, "bold"), anchor="e",
         )
-        self.canvas.create_line(
-            18, 29, WIDTH - 18, 29, fill=palette["border_soft"], width=1,
-        )
-
         self._draw_text(
             18, 45, _truncate(model["system"].upper(), 49), palette["text"],
             ("Courier", 11, "bold"),
@@ -544,10 +539,6 @@ class SystemInfoHUD:
             WIDTH - 18, 64, total_label, palette["muted"],
             ("Courier", 8, "bold"), anchor="e",
         )
-        self.canvas.create_line(
-            18, 76, WIDTH - 18, 76, fill=palette["border_soft"], width=1,
-        )
-
         y = self._section(89, "SYSTEM PROFILE", model["profile_source"])
         for row in model["profile_rows"]:
             color = palette["text"] if model["profile_source"] != "RESOLVING" else palette["dim"]

@@ -164,10 +164,6 @@ class CargoHUD:
         self.canvas.create_text(x + 1, y + 1, text=text, fill="black", font=font, anchor=anchor)
         self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor)
 
-    def _line(self, y):
-        self.canvas.create_line(16, y, WIDTH - 16, y,
-                                fill=self._palette["border_soft"], width=1)
-
     def _capacity_bar(self, y, utilisation, tone):
         """Draw the original ten-segment cargo meter in the refreshed layout."""
         left = 16
@@ -221,8 +217,6 @@ class CargoHUD:
             total_text += " T"
         self.draw_text(WIDTH - 16, 18, total_text, palette["orange"],
                        ("Courier", 10, "bold"), anchor="e")
-        self._line(32)
-
         utilisation = model["utilisation"]
         status_text = "CAPACITY UNKNOWN"
         status_tone = "dim"
@@ -232,8 +226,6 @@ class CargoHUD:
         self.draw_text(16, 48, status_text, palette[status_tone], ("Courier", 8, "bold"))
         bar_y = 58
         self._capacity_bar(bar_y, utilisation, status_tone)
-        self._line(76)
-
         self.draw_text(16, 90, "COMMODITY", palette["dim"], ("Courier", 8, "bold"))
         self.draw_text(WIDTH - 16, 90, "TONNES", palette["dim"],
                        ("Courier", 8, "bold"), anchor="e")
@@ -267,7 +259,6 @@ class CargoHUD:
                            palette["dim"], ("Courier", 8), anchor="center")
             y_pos += 21
 
-        self._line(y_pos + 2)
         footer = []
         if model["mission"]:
             footer.append(f'MISSION {model["mission"]:,} T')

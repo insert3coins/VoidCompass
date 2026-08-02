@@ -382,14 +382,13 @@ class StationInfoHUD:
         self.canvas.delete("all")
         overlay_chrome.draw_chrome(
             self.canvas, WIDTH, h, accent=palette["accent"], bracket_len=10,
+            scanlines=False,
         )
 
         self._text(18, 18, "STATION LINK", palette["accent"], ("Courier", 9, "bold"))
         badge_color = palette["orange"] if model.get("is_personal_carrier") else palette["green"]
         self._text(WIDTH - 18, 18, model["badge"], badge_color,
                    ("Courier", 8, "bold"), "e")
-        self.canvas.create_line(18, 29, WIDTH - 18, 29, fill=palette["border_soft"], width=1)
-
         self._text(18, 45, _truncate(model["station"].upper(), 37), palette["text"],
                    ("Courier", 11, "bold"))
         self._text(WIDTH - 18, 45, _truncate(model["type"], 27), palette["orange"],
@@ -402,8 +401,6 @@ class StationInfoHUD:
         if model.get("pads"):
             self._text(WIDTH - 18, 64, model["pads"], palette["muted"],
                        ("Courier", 8, "bold"), "e")
-        self.canvas.create_line(18, 76, WIDTH - 18, 76, fill=palette["border_soft"], width=1)
-
         y = self._section(89, "CORE SERVICES", "AVAILABLE / UNAVAILABLE")
         core_x = (18, 145, 272, 399)
         for x, row in zip(core_x, model["core_services"]):
@@ -436,7 +433,6 @@ class StationInfoHUD:
                            ("Courier", 8, "bold"), "e")
                 y += 20
 
-        self.canvas.create_line(18, y, WIDTH - 18, y, fill=palette["border_soft"], width=1)
         y += 14
         if model.get("economies"):
             self._text(18, y, _truncate(model["economies"].upper(), 65), palette["text"],

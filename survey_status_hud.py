@@ -500,12 +500,12 @@ class SurveyStatusHUD:
         self.canvas.delete("all")
         overlay_chrome.draw_chrome(
             self.canvas, WIDTH, h, accent=palette["accent"], bracket_len=10,
+            scanlines=False,
         )
         title = "SURVEY OPERATIONS"
         mode_badge = "BODY FOCUS" if is_body else "SYSTEM SURVEY"
         self._text(18, 18, title, palette["accent"], ("Courier", 10, "bold"))
         self._text(WIDTH - 18, 18, mode_badge, palette["orange"] if is_body else palette["muted"], ("Courier", 8, "bold"), "e")
-        self.canvas.create_line(18, 31, WIDTH - 18, 31, fill=palette["border_soft"], width=1)
         self._text(18, 48, _truncate(model["system"].upper(), 58), palette["text"], ("Courier", 10, "bold"))
         if is_body:
             body = model["body"]
@@ -519,7 +519,6 @@ class SurveyStatusHUD:
             geo_total = sum(_safe_int(row.get("geo_count")) for row in rows)
             header_summary = f"{len(active_rows)} ACTIVE · {len(completed_rows)} COMPLETE · BIO {bio_total} · GEO {geo_total}"
         self._text(18, 66, header_summary, palette["muted"], ("Courier", 8, "bold"))
-        self.canvas.create_line(18, 78, WIDTH - 18, 78, fill=palette["border_soft"], width=1)
         y = self._sample_row(model.get("sampling"), 93)
 
         if is_body:
@@ -562,9 +561,7 @@ class SurveyStatusHUD:
                 self._text(18, y, "ACTIVE SURVEY TARGETS", palette["dim"], ("Courier", 7, "bold"))
                 self._text(WIDTH - 18, y, "STATUS / EST. VALUE", palette["dim"], ("Courier", 7, "bold"), "e")
                 y += 20
-            for index, row in enumerate(active_rows):
-                if index:
-                    self.canvas.create_line(28, y - 6, WIDTH - 18, y - 6, fill=palette["border_soft"], width=1)
+            for row in active_rows:
                 bio = row["bio_count"]
                 geo = row["geo_count"]
                 state, color = _surface_signal_state(
@@ -604,14 +601,12 @@ class SurveyStatusHUD:
                     y += 15
 
         if notable_rows:
-            self.canvas.create_line(18, y - 2, WIDTH - 18, y - 2, fill=palette["border"], width=1)
             self._text(18, y + 8, f"NOTABLE BODIES ({len(notable_rows)})", palette["dim"], ("Courier", 7, "bold"))
             y += 24
             for row in notable_rows:
                 y = self._notable_row(row, y)
 
         if completed_rows:
-            self.canvas.create_line(18, y - 2, WIDTH - 18, y - 2, fill=palette["border"], width=1)
             self._text(
                 18, y + 8, f"COMPLETED BIO ({len(completed_rows)})",
                 palette["green"], ("Courier", 7, "bold"),
