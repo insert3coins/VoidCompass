@@ -1,8 +1,15 @@
 import tkinter as tk
 import tkinter.font as tkfont
 import time
-from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, COLOR_MUTED, COLOR_YELLOW, save_config
-import route_strip
+from config import (
+    COLOR_ACCENT,
+    COLOR_GREEN,
+    COLOR_TEXT,
+    COLOR_ORANGE,
+    COLOR_MUTED,
+    COLOR_YELLOW,
+    save_config,
+)
 import overlay_chrome
 
 class TacticalHUD:
@@ -14,9 +21,9 @@ class TacticalHUD:
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, "#ff00ff")
 
         self.full_width = 560
-        self.full_height = 246
+        self.full_height = 224
         self.compact_width = 450
-        self.compact_height = 180
+        self.compact_height = 172
         self.width, self.base_height = self._target_dimensions()
         self.canvas = tk.Canvas(self.win, width=self.width, height=self.base_height, bg=overlay_bg, highlightthickness=0)
         self.canvas.pack()
@@ -283,10 +290,6 @@ class TacticalHUD:
             overlay_chrome.draw_crt_vignette(self.canvas, self.width, self.base_height, intensity)
             overlay_chrome.draw_crt_noise(self.canvas, self.width, self.base_height, intensity)
 
-    def _draw_stat(self, x, y, label, value, color=COLOR_TEXT, anchor="w", label_size=6, value_size=9, value_gap=13):
-        self.draw_text(x, y, text=str(label).upper(), fill="#7d8891", font=("Courier", label_size, "bold"), anchor=anchor)
-        self.draw_text(x, y + value_gap, text=str(value), fill=color, font=("Courier", value_size, "bold"), anchor=anchor)
-
     def _draw_region_label(self, nav_context, x, y, max_width):
         """Draw the Codex region between the CURRENT SYSTEM and STATE labels.
 
@@ -313,7 +316,7 @@ class TacticalHUD:
         if state == "alert":
             return COLOR_ORANGE
         if state == "ok":
-            return COLOR_ACCENT
+            return COLOR_GREEN
         if state == "info":
             return COLOR_YELLOW
         return COLOR_MUTED
@@ -371,7 +374,7 @@ class TacticalHUD:
             return flight_state
         if flight_state == "ONFOOT" or nav_context.get("on_foot") or music_mode == "ONFOOT":
             return "ONFOOT"
-        if nav_context.get("docked") and nav_context.get("station"):
+        if nav_context.get("docked"):
             return "DOCKED"
         if nav_context.get("in_fss"):
             return "FSS"
@@ -394,45 +397,154 @@ class TacticalHUD:
             return COLOR_ORANGE
         return "#7d8891"
 
-    def _route_header(self, nav_context, route_waypoint, route_counts, game_r_pos, remaining):
-        """A single consolidated route-status string: what we're following, plus
-        how far through it we are — replaces the old duplicated ROUTE/WAYPOINT
-        footer and the separate GAME/ROUTE progress readout."""
-        route_mode = str(nav_context.get("route_mode", "NO ROUTE"))
-        if route_waypoint:
-            label = route_waypoint.upper()
-            color = COLOR_ORANGE
-        else:
-            label = route_mode
-            color = COLOR_ORANGE if route_mode != "NO ROUTE" else "#7d8891"
+    def _draw_status_pill(self, right_x, center_y, text, color, height=16):
+        """Draw a restrained state indicator that does not resemble a button."""
+        label = str(text or "FLIGHT").upper()
+        font = tkfont.Font(family="Courier", size=8, weight="bold")
+        width = max(54, font.measure(label) + 16)
+        left_x = right_x - width
+        top_y = center_y - (height / 2)
+        bottom_y = top_y + height
+        self.canvas.create_rectangle(
+            left_x, top_y, right_x, bottom_y,
+            fill=self._glow_color(color, 0.18), outline=color, width=1,
+        )
+        self.draw_text(
+            (left_x + right_x) / 2, center_y,
+            text=label, fill=color, font=("Courier", 8, "bold"), anchor="center",
+        )
+        return width
 
-        progress = ""
+    @staticmethod
+    def _traffic_summary(system_traffic, compact=False):
+        traffic = system_traffic or {}
+        try:
+            day = int(traffic.get("day", 0) or 0)
+            week = int(traffic.get("week", 0) or 0)
+            total = int(traffic.get("total", 0) or 0)
+        except (TypeError, ValueError):
+            day, week, total = 0, 0, 0
+        if compact:
+            return f"TRAFFIC {day} TODAY · {total} TOTAL"
+        return f"TRAFFIC {day} TODAY · {week} THIS WEEK · {total} TOTAL"
+
+    @staticmethod
+    def _survey_summary(nav_context):
+        context = nav_context or {}
+
+        def _number(key):
+            try:
+                return max(0, int(context.get(key, 0) or 0))
+            except (TypeError, ValueError):
+                return 0
+
+        dss = _number("dss_complete")
+        bio_done = _number("bio_complete")
+        bio_total = _number("bio_signals")
+        geo_total = _number("geo_signals")
+        return f"DSS {dss} · BIO {bio_done}/{bio_total} · GEO {geo_total}"
+
+    @staticmethod
+    def _route_presentation(nav_context, route_waypoint, route_counts, game_r_pos, r_pos):
+        context = nav_context or {}
+        source = str(context.get("route_mode") or "NO ROUTE").upper()
+        target = str(route_waypoint or context.get("next") or "---").upper()
+        remaining = context.get("route_remaining")
+        hops = list(context.get("hops") or [])
+        active = source != "NO ROUTE" and target not in ("", "---")
+        progress = 0.0
+        progress_text = ""
+
+        if route_counts and len(route_counts) >= 2 and route_counts[1] > 0:
+            done, total = max(0, int(route_counts[0])), max(1, int(route_counts[1]))
+            progress = max(0.0, min(1.0, done / total))
+            progress_text = f"{done}/{total} STOPS"
+        elif game_r_pos and len(game_r_pos) >= 2 and game_r_pos[1] > 0:
+            current_pos, total = max(1, int(game_r_pos[0])), max(1, int(game_r_pos[1]))
+            denominator = max(1, total - 1)
+            progress = max(0.0, min(1.0, (current_pos - 1) / denominator))
+
         if isinstance(remaining, int):
-            progress = f"{remaining} JUMPS"
-        elif route_counts and route_counts[1] > 0:
-            pct = int(max(0.0, min(1.0, route_counts[0] / route_counts[1])) * 100)
-            progress = f"{route_counts[0]}/{route_counts[1]} {pct}%"
-        elif game_r_pos and game_r_pos[1] > 0:
-            pct = int(max(0.0, min(1.0, game_r_pos[0] / game_r_pos[1])) * 100)
-            progress = f"{game_r_pos[0]}/{game_r_pos[1]} {pct}%"
+            jump_text = "ROUTE COMPLETE" if remaining <= 0 else f"{remaining} JUMP{'S' if remaining != 1 else ''}"
+        elif hops:
+            jump_text = f"{len(hops)}+ JUMPS" if context.get("hops_truncated") else f"{len(hops)} JUMP{'S' if len(hops) != 1 else ''}"
+        else:
+            jump_text = ""
 
-        if progress:
-            label = f"{label}  ·  {progress}" if label else progress
-        return label, color
+        distance = ""
+        if route_waypoint and r_pos and len(r_pos) >= 3:
+            distance = str(r_pos[2] or "")
+        if not distance:
+            distance = str(context.get("next_distance") or "")
+        if distance == "--":
+            distance = ""
 
-    def _draw_route_strip(self, x1, x2, strip_y, nav_context, header_color, dot_radius):
-        hops = nav_context.get("hops") or []
-        if self._crt_enabled():
-            glow = self._glow_color(header_color, 0.22 if self._crt_intensity() == "Subtle" else 0.32)
-            self.canvas.create_line(x1, strip_y, x2, strip_y, fill=glow, width=5)
-        self.canvas.create_line(x1, strip_y, x2, strip_y, fill="#1a2530", width=2)
-        theme = {"accent": COLOR_ACCENT, "orange": COLOR_ORANGE}
-        if hops:
-            route_strip.draw_pip_line(self.canvas, x1, x2, strip_y, hops, theme, dot_radius=dot_radius, bg="#010101")
-        self.canvas.create_oval(x1 - dot_radius - 1, strip_y - dot_radius - 1, x1 + dot_radius + 1, strip_y + dot_radius + 1,
-                                 outline=COLOR_ACCENT, width=2, fill="#010101")
-        dest_color = COLOR_ORANGE if hops else "#7d8891"
-        return dest_color
+        meta_parts = [part for part in (jump_text, distance, progress_text) if part]
+        if not active:
+            source = "NO ACTIVE ROUTE"
+            target = "NO DESTINATION PLOTTED"
+            meta_parts = []
+        return {
+            "source": source,
+            "target": target,
+            "meta": " · ".join(meta_parts),
+            "progress": progress,
+            "active": active,
+            "hops": hops,
+        }
+
+    def _draw_progress_track(self, x1, x2, top_y, pct, fill):
+        pct = max(0.0, min(1.0, float(pct or 0.0)))
+        self.canvas.create_rectangle(x1, top_y, x2, top_y + 7, outline="#26313a", width=1)
+        if pct > 0:
+            end_x = x1 + ((x2 - x1) * pct)
+            self.canvas.create_rectangle(x1, top_y, end_x, top_y + 7, fill=fill, outline=fill)
+
+    def _draw_route_track(self, x1, x2, y, route):
+        active = bool(route.get("active"))
+        progress = max(0.0, min(1.0, float(route.get("progress") or 0.0)))
+        base_color = "#26313a"
+        self.canvas.create_line(x1, y, x2, y, fill=base_color, width=2)
+        if not active:
+            self.canvas.create_oval(x1 - 3, y - 3, x1 + 3, y + 3, outline="#7d8891", width=1)
+            return
+
+        current_x = x1 + ((x2 - x1) * progress)
+        if current_x > x1:
+            self.canvas.create_line(x1, y, current_x, y, fill=COLOR_ACCENT, width=3)
+        self.canvas.create_oval(current_x - 4, y - 4, current_x + 4, y + 4,
+                                fill="#010101", outline=COLOR_ACCENT, width=2)
+
+        # One quiet beacon indicates the immediate leg without recreating the
+        # dense pip chain that previously dominated this small overlay.
+        hops = route.get("hops") or []
+        if hops and progress < 1.0:
+            remaining_span = max(1.0, x2 - current_x)
+            next_x = current_x + (remaining_span / max(2, min(8, len(hops) + 1)))
+            self.canvas.create_line(next_x, y - 4, next_x, y + 4, fill=COLOR_ACCENT, width=2)
+
+        self.canvas.create_polygon(
+            x2, y - 5, x2 + 5, y, x2, y + 5, x2 - 5, y,
+            fill="#010101", outline=COLOR_ORANGE, width=2,
+        )
+
+    @staticmethod
+    def _attention_summary(nav_context):
+        labels = []
+        state = "muted"
+        for label, badge_state in (nav_context or {}).get("badges", []):
+            label = str(label or "").strip().upper()
+            if (not label or label in {"FSS", "DOCKED", "CLEAR"}
+                    or label.startswith("BIO ")):
+                continue
+            labels.append(label)
+            if badge_state == "alert":
+                state = "alert"
+            elif badge_state == "info" and state != "alert":
+                state = "info"
+            elif badge_state == "ok" and state == "muted":
+                state = "ok"
+        return " · ".join(labels[:3]), state
 
     @staticmethod
     def _scan_progress_state(scanned, total, nav_context):
@@ -466,59 +578,54 @@ class TacticalHUD:
         current_display = nav_context.get("current") or current_sys or "---"
         state_text = self._state_text(nav_context)
         state_color = self._state_color(state_text)
-        remaining = nav_context.get("route_remaining")
-
         pct, scan_progress_text = self._scan_progress_state(scanned, total, nav_context)
-        traffic_text = f"{system_traffic.get('day', 0)}/{system_traffic.get('week', 0)}/{system_traffic.get('total', 0)}"
+        scan_color = COLOR_GREEN if pct >= 1.0 and total > 0 else COLOR_ACCENT
+        route = self._route_presentation(nav_context, route_waypoint, route_counts, game_r_pos, r_pos)
+        survey_text = self._survey_summary(nav_context)
+        traffic_text = self._traffic_summary(system_traffic, compact=True)
+        attention_text, attention_state = self._attention_summary(nav_context)
 
         self._draw_chrome(bracket_len=10)
         self.draw_text(16, 14, text="NAVIGATION HUD", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
         self._draw_title_anim()
         self.canvas.create_line(16, 26, w - 16, 26, fill="#1a2530", width=1)
 
-        self.draw_text(16, 36, text="CURRENT SYSTEM", fill="#7d8891", font=("Courier", 6, "bold"), anchor="w")
-        self.draw_text(w - 16, 36, text="STATE", fill="#7d8891", font=("Courier", 6, "bold"), anchor="e")
-        self._draw_region_label(nav_context, (16 + (w - 16)) // 2, 36, max_width=w - 210)
-        self.draw_fitted_text(16, 50, str(current_display).upper(), COLOR_TEXT, size=10, max_width=w - 160, anchor="w")
-        self.draw_fitted_text(w - 16, 50, state_text, state_color, size=9, max_width=130, anchor="e")
-        self.canvas.create_line(16, 58, w - 16, 58, fill="#1a2530", width=1)
+        # System / state
+        self.draw_text(16, 35, text="CURRENT SYSTEM", fill="#7d8891", font=("Courier", 6, "bold"), anchor="w")
+        self.draw_text(w - 16, 35, text="STATE", fill="#7d8891", font=("Courier", 6, "bold"), anchor="e")
+        self._draw_region_label(nav_context, (16 + (w - 16)) // 2, 35, max_width=w - 210)
+        pill_width = self._draw_status_pill(w - 16, 49, state_text, state_color, height=16)
+        self.draw_fitted_text(
+            16, 49, str(current_display).upper(), COLOR_TEXT,
+            size=10, max_width=w - pill_width - 52, anchor="w",
+        )
+        self.canvas.create_line(16, 60, w - 16, 60, fill="#1a2530", width=1)
 
-        header_label, header_color = self._route_header(nav_context, route_waypoint, route_counts, game_r_pos, remaining)
+        # Route
         left_x, right_x = 16, w - 16
-        strip_y = 82
-        self.draw_fitted_text(left_x, 68, header_label, header_color, size=7, max_width=(right_x - left_x) - 80, anchor="w")
-        dest_color = self._draw_route_strip(left_x, right_x, strip_y, nav_context, header_color, dot_radius=4)
-        self.draw_text((left_x + right_x) // 2, 68, text=nav_context.get("next_distance", "--"), fill=dest_color, font=("Courier", 7, "bold"), anchor="center")
-        total_dist_text = nav_context.get("total_distance_text")
-        if total_dist_text:
-            self.draw_text(right_x, 68, text=total_dist_text, fill=COLOR_ORANGE, font=("Courier", 7, "bold"), anchor="e")
-        self.draw_text(left_x, 94, text="CURRENT", fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="w")
-        self.draw_text(right_x, 94, text="DEST" if (nav_context.get("hops") or []) else "NEXT", fill=dest_color, font=("Courier", 8, "bold"), anchor="e")
-        self.canvas.create_line(16, 102, w - 16, 102, fill="#1a2530", width=1)
+        self.draw_text(left_x, 69, text=route["source"], fill=COLOR_ORANGE if route["active"] else "#7d8891",
+                       font=("Courier", 6, "bold"), anchor="w")
+        self.draw_fitted_text(right_x, 69, route["meta"], COLOR_ORANGE, size=6,
+                              max_width=190, anchor="e")
+        self.draw_fitted_text(left_x, 82, route["target"], COLOR_TEXT if route["active"] else "#7d8891",
+                              size=8, max_width=w - 32, anchor="w")
+        self._draw_route_track(left_x, right_x - 5, 98, route)
+        self.canvas.create_line(16, 106, w - 16, 106, fill="#1a2530", width=1)
 
-        self.draw_text(16, 112, text="SCAN PROGRESS", fill="#7d8891", font=("Courier", 7, "bold"), anchor="w")
-        self.draw_text(w - 16, 112, text=scan_progress_text, fill=COLOR_TEXT, font=("Courier", 8, "bold"), anchor="e")
-        self.canvas.create_rectangle(16, 120, w - 16, 126, outline="#26313a", width=1)
-        if pct > 0:
-            self.canvas.create_rectangle(16, 120, 16 + ((w - 32) * pct), 126, fill=COLOR_ACCENT, outline=COLOR_ACCENT)
-        self.canvas.create_line(16, 134, w - 16, 134, fill="#1a2530", width=1)
+        # Survey progress remains permanently visible, including on known systems.
+        self.draw_text(16, 116, text="SYSTEM SURVEY", fill="#7d8891", font=("Courier", 7, "bold"), anchor="w")
+        self.draw_text(w - 16, 116, text=scan_progress_text, fill=scan_color,
+                       font=("Courier", 8, "bold"), anchor="e")
+        self._draw_progress_track(16, w - 16, 124, pct, scan_color)
+        self.draw_fitted_text(16, 143, survey_text, COLOR_TEXT, size=6, max_width=245, anchor="w")
+        self.draw_fitted_text(w - 16, 143, traffic_text, "#7d8891", size=6, max_width=175, anchor="e")
 
-        badge_row_y = 144
-        badge_row_h = 16
-        traffic_label = f"TRAFFIC {traffic_text}"
-        traffic_font = tkfont.Font(family="Courier", size=8, weight="bold")
-        traffic_reserve = traffic_font.measure(traffic_label) + 16
-        self.draw_text(w - 16, badge_row_y + badge_row_h / 2, text=traffic_label,
-                        fill="#7d8891", font=("Courier", 8, "bold"), anchor="e")
-
-        badges = nav_context.get("badges", [])
-        x = 16
-        badge_limit = w - 16 - traffic_reserve
-        for badge, state in badges:
-            bw = self._draw_badge(x, badge_row_y, str(badge), state, height=badge_row_h)
-            x += bw + 5
-            if x > badge_limit:
-                break
+        if attention_text:
+            attention_color = self._badge_color(attention_state)
+            self.draw_fitted_text(16, 161, attention_text, attention_color, size=7, max_width=w - 32, anchor="w")
+        elif nav_context.get("docked") and nav_context.get("station"):
+            self.draw_fitted_text(16, 161, f"STATION · {nav_context['station']}", COLOR_ACCENT,
+                                  size=7, max_width=w - 32, anchor="w")
 
     def update(
         self,
@@ -564,15 +671,14 @@ class TacticalHUD:
 
         w = self.width
         current_display = nav_context.get("current") or current_sys or "---"
-        credits = nav_context.get("credits", "---")
-        cargo = nav_context.get("cargo", "0T")
-        trade_profit = nav_context.get("trade_profit", "---")
         state_text = self._state_text(nav_context)
         state_color = self._state_color(state_text)
-        remaining = nav_context.get("route_remaining")
-        t_day = system_traffic.get('day', 0)
-        t_week = system_traffic.get('week', 0)
-        t_total = system_traffic.get('total', 0)
+        route = self._route_presentation(nav_context, route_waypoint, route_counts, game_r_pos, r_pos)
+        pct, scan_progress_text = self._scan_progress_state(scanned, total, nav_context)
+        scan_color = COLOR_GREEN if pct >= 1.0 and total > 0 else COLOR_ACCENT
+        survey_text = self._survey_summary(nav_context)
+        traffic_text = self._traffic_summary(system_traffic)
+        attention_text, attention_state = self._attention_summary(nav_context)
 
         self._draw_chrome(bracket_len=14)
         self.draw_text(20, 18, text="NAVIGATION HUD", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
@@ -580,54 +686,51 @@ class TacticalHUD:
         self.canvas.create_line(20, 32, w - 20, 32, fill="#1a2530", width=1)
 
         # ── System / State ──────────────────────────────────────────────
-        self._draw_stat(20, 44, "CURRENT SYSTEM", "", COLOR_TEXT)
+        self.draw_text(20, 44, text="CURRENT SYSTEM", fill="#7d8891", font=("Courier", 6, "bold"), anchor="w")
         self.draw_text(w - 20, 44, text="STATE", fill="#7d8891", font=("Courier", 6, "bold"), anchor="e")
-        # The label row's centre is otherwise empty, and the galactic region is
-        # context for the system name rather than a status of its own.
         self._draw_region_label(nav_context, (20 + (w - 20)) // 2, 44, max_width=w - 220)
-        self.draw_fitted_text(20, 60, str(current_display).upper(), COLOR_TEXT, size=13, max_width=w - 260, anchor="w")
-        self.draw_fitted_text(w - 20, 60, state_text, state_color, size=11, max_width=200, anchor="e")
+        pill_width = self._draw_status_pill(w - 20, 60, state_text, state_color, height=18)
+        self.draw_fitted_text(20, 60, str(current_display).upper(), COLOR_TEXT, size=13,
+                              max_width=w - pill_width - 70, anchor="w")
         self.canvas.create_line(20, 72, w - 20, 72, fill="#1a2530", width=1)
 
-        # ── Stat grid ────────────────────────────────────────────────────
-        col_xs = (20, 160, 300, 430)
-        for x, label, value, color in (
-            (col_xs[0], "CREDITS", str(credits), COLOR_ACCENT),
-            (col_xs[1], "CARGO", str(cargo), COLOR_TEXT),
-            (col_xs[2], "PROFIT", str(trade_profit), COLOR_ORANGE),
-            (col_xs[3], "TRAFFIC", f"{t_day}/{t_week}/{t_total}", "#7d8891"),
-        ):
-            self._draw_stat(x, 84, label, value, color)
-        self.canvas.create_line(20, 108, w - 20, 108, fill="#1a2530", width=1)
-
-        # ── Route header + pip line ─────────────────────────────────────
-        header_label, header_color = self._route_header(nav_context, route_waypoint, route_counts, game_r_pos, remaining)
+        # ── Route ────────────────────────────────────────────────────────
         left_x, right_x = 20, w - 20
-        strip_y = 136
-        self.draw_fitted_text(left_x, 120, header_label, header_color, size=8, max_width=(right_x - left_x) * 0.4, anchor="w")
-        dest_color = self._draw_route_strip(left_x, right_x, strip_y, nav_context, header_color, dot_radius=5)
-        self.draw_text((left_x + right_x) // 2, 120, text=nav_context.get("next_distance", "--"), fill=dest_color, font=("Courier", 8, "bold"), anchor="center")
-        total_dist_text = nav_context.get("total_distance_text")
-        if total_dist_text:
-            self.draw_text(right_x, 120, text=total_dist_text, fill=COLOR_ORANGE, font=("Courier", 8, "bold"), anchor="e")
-        self.draw_text(left_x, 152, text="CURRENT", fill=COLOR_ACCENT, font=("Courier", 8, "bold"), anchor="w")
-        self.draw_text(right_x, 152, text="DEST" if (nav_context.get("hops") or []) else "NEXT", fill=dest_color, font=("Courier", 8, "bold"), anchor="e")
-        self.canvas.create_line(20, 162, w - 20, 162, fill="#1a2530", width=1)
+        self.draw_text(left_x, 84, text=route["source"], fill=COLOR_ORANGE if route["active"] else "#7d8891",
+                       font=("Courier", 7, "bold"), anchor="w")
+        self.draw_fitted_text(right_x, 84, route["meta"], COLOR_ORANGE, size=7,
+                              max_width=270, anchor="e")
+        self.draw_fitted_text(left_x, 101, route["target"], COLOR_TEXT if route["active"] else "#7d8891",
+                              size=11, max_width=w - 40, anchor="w")
+        self._draw_route_track(left_x, right_x - 5, 118, route)
+        self.canvas.create_line(20, 130, w - 20, 130, fill="#1a2530", width=1)
 
-        # ── Scan progress ────────────────────────────────────────────────
-        pct, scan_progress_text = self._scan_progress_state(scanned, total, nav_context)
-        self.draw_text(20, 174, text="SCAN PROGRESS", fill="#7d8891", font=("Courier", 7, "bold"), anchor="w")
-        self.draw_text(w - 20, 174, text=scan_progress_text, fill=COLOR_TEXT, font=("Courier", 8, "bold"), anchor="e")
-        self.canvas.create_rectangle(20, 182, w - 20, 190, outline="#26313a", width=1)
-        if pct > 0:
-            self.canvas.create_rectangle(20, 182, 20 + ((w - 40) * pct), 190, fill=COLOR_ACCENT, outline=COLOR_ACCENT)
-        self.canvas.create_line(20, 200, w - 20, 200, fill="#1a2530", width=1)
+        # ── Survey ───────────────────────────────────────────────────────
+        self.draw_text(20, 143, text="SYSTEM SURVEY", fill="#7d8891", font=("Courier", 7, "bold"), anchor="w")
+        self.draw_text(w - 20, 143, text=scan_progress_text, fill=scan_color,
+                       font=("Courier", 9, "bold"), anchor="e")
+        self._draw_progress_track(20, w - 20, 152, pct, scan_color)
+        self.draw_fitted_text(20, 174, survey_text, COLOR_TEXT, size=8, max_width=315, anchor="w")
+        self.draw_fitted_text(w - 20, 174, traffic_text, "#7d8891", size=7, max_width=215, anchor="e")
+        self.canvas.create_line(20, 190, w - 20, 190, fill="#1a2530", width=1)
 
-        # ── Badges ───────────────────────────────────────────────────────
-        x = 20
-        for badge, state in nav_context.get("badges", []):
-            bw = self._draw_badge(x, 208, str(badge), state)
-            x += bw + 6
-            if x > w - 60:
-                break
+        # ── Context / attention ──────────────────────────────────────────
+        context_detail = ""
+        if nav_context.get("docked") and nav_context.get("station"):
+            context_detail = f"STATION · {nav_context['station']}"
+        elif nav_context.get("body"):
+            context_detail = f"BODY · {nav_context['body']}"
+        if context_detail:
+            self.draw_fitted_text(20, 208, context_detail, COLOR_ACCENT, size=8,
+                                  max_width=310, anchor="w")
+        elif attention_text:
+            self.draw_fitted_text(20, 208, attention_text, self._badge_color(attention_state),
+                                  size=8, max_width=310, anchor="w")
+
+        if context_detail and attention_text:
+            self.draw_fitted_text(w - 20, 208, attention_text, self._badge_color(attention_state),
+                                  size=8, max_width=210, anchor="e")
+        elif not context_detail and not attention_text:
+            self.draw_text(20, 208, text="NAVIGATION NOMINAL", fill="#7d8891",
+                           font=("Courier", 8, "bold"), anchor="w")
         self._last_render_fingerprint = render_fingerprint
