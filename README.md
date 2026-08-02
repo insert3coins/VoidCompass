@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.3.5.2**
+**Current version: 5.3.5.3**
 
 Void Compass is an exploration-first companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a persistent command dashboard, deep survey intelligence, expedition planning, native in-game overlays and a local cockpit companion.
 
@@ -21,7 +21,7 @@ The Dashboard stays exploration-first, then adapts from verified journal activit
 
 ![Void Compass exploration dashboard](DashBoard.PNG)
 
-*Current v5.3.5.2 exploration dashboard with Arrival Intelligence, route progress, Compass context, expedition support and the curated Flight Log.*
+*The current exploration dashboard with Arrival Intelligence, route progress, Compass context, expedition support and the curated Flight Log.*
 
 ## Command workspaces
 
@@ -52,7 +52,7 @@ Named expeditions persist across sessions with journal-verified goals, multi-ses
 
 ![Void Compass Galactic Atlas](GalaxyAtlas.PNG)
 
-*The integrated v5.3.5.2 Galactic Atlas showing the offline Milky Way layer, 42 regions, profile-local travel history, route tracers, clusters, filters and current-ship position.*
+*The integrated Galactic Atlas showing the offline Milky Way layer, 42 regions, profile-local travel history, route tracers, clusters, filters and current-ship position.*
 
 Explore remembers its active page, survey/discovery filters and Expedition section independently for each commander. Colonisation Recon produces a conservative survey-readiness dossier, saved candidate list and direct Architect Command handoff; it does not claim that survey readiness guarantees game eligibility. System architecture follows journal `Parents` relationships, while wonders detection flags unusual measured characteristics without inventing missing orbits.
 
@@ -88,7 +88,7 @@ Each mode can apply a focused overlay scene while gravity, toast and heartbeat s
 
 Every overlay can be enabled independently, dragged to a saved position and styled with the active theme:
 
-- Navigation HUD with game-route/waypoint switching, scan progress, traffic, biology, value and optional CRT effects.
+- Navigation HUD with distinct Game/Waypoint/Void route context, a restrained progress track, permanently visible FSS scan progress, DSS/biology/geology evidence, readable traffic totals, flight-state indicators and optional CRT effects.
 - Survey Operations with persistent body targets, biological and geological signals, species/sample progress, completed discoveries and notable-world value evidence; Navigation remains the single owner of system scan percentage.
 - A dynamic Cargo Manifest with hold utilisation plus mission/stolen distinctions; Fleet/Squadron Carrier Command with jump, expedition, Tritium and capacity status; and Prospector Analysis with themed material composition, core and refinery evidence.
 - System Intelligence, Station Link and profile-local Colony Logistics overlays for contextual system, market and construction work without duplicating the Navigation HUD.

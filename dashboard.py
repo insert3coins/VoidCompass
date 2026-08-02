@@ -3800,9 +3800,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
 
         if waypoint_manager and waypoint_manager.waypoints:
-            route_mode = "WAYPOINTS"
+            route_mode = "WAYPOINT ROUTE"
         elif route:
-            route_mode = "GAME NAV ROUTE"
+            route_mode = "GAME ROUTE"
         elif self.dest_name:
             route_mode = "VOID ROUTE"
         else:
@@ -3816,17 +3816,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 cargo_tons = 0
         cargo_cap = int(getattr(self, "cargo_capacity", 0) or 0)
         trade_profit = int((getattr(self, "trade_session", {}) or {}).get("profit", 0) or 0)
+        geo_signals = sum(
+            int(signals.get("geo", 0) or 0)
+            for signals in (getattr(self, "body_signals", None) or {}).values()
+        )
+        valuable_count = len(getattr(self, "valuable_bodies", None) or ())
         badges = []
         if self.system_undiscovered:
             badges.append(("UNDISC", "alert"))
-        if self.system_bio_signals > 0:
-            badges.append(("BIO", "ok" if self.organic_count >= self.system_bio_signals else "alert"))
-        if self.total > 0:
-            badges.append(("FSS", "ok" if self.scanned >= self.total else "info"))
-        if self.current_docked:
-            badges.append(("DOCKED", "ok"))
-        if not badges:
-            badges.append(("CLEAR", "muted"))
+        if valuable_count:
+            badges.append((f"VALUE {valuable_count}", "info"))
+        if self.system_bio_signals > self.organic_count:
+            badges.append((f"BIO {self.organic_count}/{self.system_bio_signals}", "alert"))
         route_safety = self._route_safety_snapshot()
         if route_safety.get("badge"):
             badges.insert(0, (
@@ -3860,6 +3861,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "music_track": getattr(self, "current_music_track", ""),
             "scan_progress": getattr(self, "navigation_scan_progress", None),
             "scan_progress_source": getattr(self, "navigation_scan_progress_source", "bodies"),
+            "dss_complete": len(getattr(self, "body_dss_complete", None) or ()),
+            "bio_complete": int(getattr(self, "organic_count", 0) or 0),
+            "bio_signals": int(getattr(self, "system_bio_signals", 0) or 0),
+            "geo_signals": geo_signals,
+            "valuable_count": valuable_count,
+            "undiscovered": bool(getattr(self, "system_undiscovered", False)),
+            "body": getattr(self, "current_body_name", "") or "",
+            "latitude": getattr(self, "current_latitude", None),
+            "longitude": getattr(self, "current_longitude", None),
             "route_safety": route_safety,
             "region": self._navigation_region_context(),
             "badges": badges[:6],
