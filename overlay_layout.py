@@ -29,27 +29,27 @@ DEFAULT_POSITIONS = {
 }
 
 DEFAULT_SIZES = {
-    "hud": (430, 230), "cargo_hud": (310, 150), "trade_hud": (380, 250),
-    "carrier_hud": (330, 180),
-    "prospector_hud": (320, 120), "system_info_hud": (340, 220),
+    "hud": (430, 230), "cargo_hud": (360, 220), "trade_hud": (380, 250),
+    "carrier_hud": (430, 270),
+    "prospector_hud": (380, 220), "system_info_hud": (520, 260),
     "gravity_warning_hud": (280, 90), "station_info_hud": (520, 300),
-    "survey_status_hud": (340, 300), "toast_hud": (340, 110),
-    "heartbeat_hud": (42, 42), "colony_overlay": (300, 164),
+    "survey_status_hud": (520, 340), "toast_hud": (340, 110),
+    "heartbeat_hud": (42, 42), "colony_overlay": (380, 220),
 }
 
 OVERLAY_LABELS = {
     "hud": "Navigation HUD",
     "cargo_hud": "Cargo HUD",
     "trade_hud": "Trade Route HUD",
-    "carrier_hud": "Fleet Carrier HUD",
-    "prospector_hud": "Prospector HUD",
-    "system_info_hud": "System Information",
+    "carrier_hud": "Fleet / Squadron Carrier HUD",
+    "prospector_hud": "Prospector Analysis",
+    "system_info_hud": "System Intelligence",
     "gravity_warning_hud": "Gravity Warning",
     "station_info_hud": "Station Information",
-    "survey_status_hud": "Survey Status",
+    "survey_status_hud": "Survey Operations",
     "toast_hud": "Event Toast",
     "heartbeat_hud": "Journal Heartbeat",
-    "colony_overlay": "Colony Overlay",
+    "colony_overlay": "Colony Logistics",
 }
 
 OVERLAY_CARD_LABELS = {
@@ -58,7 +58,7 @@ OVERLAY_CARD_LABELS = {
     "trade_hud": "TRADE",
     "carrier_hud": "CARRIER",
     "prospector_hud": "PROSPECTOR",
-    "system_info_hud": "SYSTEM INFO",
+    "system_info_hud": "SYS INTEL",
     "gravity_warning_hud": "GRAVITY",
     "station_info_hud": "STATION",
     "survey_status_hud": "SURVEY",
@@ -503,7 +503,7 @@ class OverlayLayoutStudio:
             value=str(self.config.get("gravity_warning_threshold_g", 3.0))
         )
         self._option_entry(timing, "Prospector auto-hide (seconds)", self.prospector_timeout_var)
-        self._option_entry(timing, "System Info auto-hide (seconds)", self.system_timeout_var)
+        self._option_entry(timing, "System Intelligence auto-hide (seconds)", self.system_timeout_var)
         self._option_entry(timing, "Gravity warning auto-hide (seconds)", self.gravity_timeout_var)
         self._option_toggle(timing, "Auto-hide Station Link", "station_info_auto_hide_enabled")
         self.station_timeout_entry = self._option_entry(

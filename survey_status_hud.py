@@ -9,7 +9,7 @@ import overlay_chrome
 from notable_bodies import build_notable_body_rows
 
 _CHROMA = "#ff00ff"
-WIDTH = 480
+WIDTH = 520
 SIGNAL_FONT = ("Courier", 10, "bold")
 BIO_DETAIL_FONT = ("Courier", 9, "bold")
 BIO_SYMBOL_FONT = ("Courier", 10, "bold")
@@ -327,6 +327,7 @@ class SurveyStatusHUD:
         self.config = config
         self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
         self._last_update = None
+        self._last_render_key = None
         self._suppressed = False
         self.win = tk.Toplevel(root)
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
@@ -337,6 +338,7 @@ class SurveyStatusHUD:
         self.canvas.bind("<ButtonRelease-1>", self._drag_end)
         x = _safe_int(config.get("survey_status_hud_x"), 30)
         y = _safe_int(config.get("survey_status_hud_y"), 520)
+        self._desired_pos = (x, y)
         self.win.geometry(overlay_chrome.position_geometry(x, y))
         self._force_topmost()
         self.win.withdraw()
@@ -356,6 +358,7 @@ class SurveyStatusHUD:
         try:
             x = _safe_int(self.config.get("survey_status_hud_x"), 30)
             y = _safe_int(self.config.get("survey_status_hud_y"), 520)
+            self._desired_pos = (x, y)
             self.win.geometry(overlay_chrome.position_geometry(x, y))
             self.win.deiconify()
             self.win.attributes("-topmost", True)
@@ -397,14 +400,19 @@ class SurveyStatusHUD:
                                    _safe_int(self.config.get("system_info_min_value"), 50_000),
                                    self._palette, total_known)
         if not model:
+            self._last_render_key = None
             self.hide()
             return
-        self._redraw(model)
+        render_key = repr(model)
+        if render_key != self._last_render_key:
+            self._last_render_key = render_key
+            self._redraw(model)
         self.show()
 
     def apply_theme(self, palette=None):
         """Adopt the active profile palette and repaint the cached survey."""
         self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)
+        self._last_render_key = None
         if self._last_update is not None:
             self.update(*self._last_update)
 
@@ -415,10 +423,15 @@ class SurveyStatusHUD:
         x = self.win.winfo_x() + event.x - self._dx
         y = self.win.winfo_y() + event.y - self._dy
         self.win.geometry(overlay_chrome.position_geometry(x, y))
+        self._desired_pos = (x, y)
+        self.config["survey_status_hud_x"] = x
+        self.config["survey_status_hud_y"] = y
 
-    def _drag_end(self, event):
-        self.config["survey_status_hud_x"] = self.win.winfo_x()
-        self.config["survey_status_hud_y"] = self.win.winfo_y()
+    def _drag_end(self, _event):
+        x, y = self.win.winfo_x(), self.win.winfo_y()
+        self._desired_pos = (x, y)
+        self.config["survey_status_hud_x"] = x
+        self.config["survey_status_hud_y"] = y
         try:
             save_config(self.config)
         except Exception:
@@ -438,9 +451,13 @@ class SurveyStatusHUD:
         clear = sampling.get("clear")
         status = "CLEAR" if clear else (f"{_safe_int(minimum):,}/{_safe_int(colony):,} M" if minimum is not None and colony else "MOVE TO NEXT SAMPLE")
         palette = self._palette
-        self._text(18, y, f"SAMPLE {progress}/3 · {_truncate(sampling.get('species'), 27)}", palette["orange"], ("Courier", 8, "bold"))
-        self._text(WIDTH - 18, y, status, palette["green"] if clear else palette["text"], ("Courier", 8, "bold"), "e")
-        return y + 19
+        self.canvas.create_rectangle(
+            16, y - 11, WIDTH - 16, y + 12,
+            fill=palette["panel_alt"], outline=palette["border_soft"],
+        )
+        self._text(24, y, f"SAMPLE {progress}/3 · {_truncate(sampling.get('species'), 31)}", palette["orange"], ("Courier", 8, "bold"))
+        self._text(WIDTH - 24, y, status, palette["green"] if clear else palette["text"], ("Courier", 8, "bold"), "e")
+        return y + 28
 
     def _notable_row(self, row, y):
         label = row.get("display_name") or row["name"]
@@ -457,7 +474,7 @@ class SurveyStatusHUD:
         active_rows = rows if is_body else [row for row in rows if not row.get("bio_complete")]
         completed_rows = [] if is_body else [row for row in rows if row.get("bio_complete")]
         notable_rows = model.get("notable_rows") or []
-        sample_h = 19 if model.get("sampling") else 0
+        sample_h = 28 if model.get("sampling") else 0
         if is_body:
             content_h = 20 + max(1, len(rows)) * 19
         else:
@@ -476,18 +493,34 @@ class SurveyStatusHUD:
             )
         ) if completed_rows else 0
         notable_h = (20 + len(notable_rows) * 34) if notable_rows else 0
-        h = 48 + sample_h + content_h + notable_h + completed_h + 27
+        h = 97 + sample_h + content_h + notable_h + completed_h + 27
         self.canvas.config(width=WIDTH, height=h)
-        self.win.geometry(f"{WIDTH}x{h}")
+        x, y_pos = self._desired_pos
+        self.win.geometry(overlay_chrome.position_geometry(x, y_pos, WIDTH, h))
         self.canvas.delete("all")
         overlay_chrome.draw_chrome(
             self.canvas, WIDTH, h, accent=palette["accent"], bracket_len=10,
         )
-        title = "BIO SURVEY" if is_body else "SURVEY STATUS"
-        self._text(18, 18, title, palette["accent"], ("Courier", 9, "bold"))
-        self._text(WIDTH - 18, 18, _truncate(model["system"].upper(), 30), palette["text"], ("Courier", 9, "bold"), "e")
-        self.canvas.create_line(18, 28, WIDTH - 18, 28, fill=palette["border_soft"], width=1)
-        y = self._sample_row(model.get("sampling"), 42)
+        title = "SURVEY OPERATIONS"
+        mode_badge = "BODY FOCUS" if is_body else "SYSTEM SURVEY"
+        self._text(18, 18, title, palette["accent"], ("Courier", 10, "bold"))
+        self._text(WIDTH - 18, 18, mode_badge, palette["orange"] if is_body else palette["muted"], ("Courier", 8, "bold"), "e")
+        self.canvas.create_line(18, 31, WIDTH - 18, 31, fill=palette["border_soft"], width=1)
+        self._text(18, 48, _truncate(model["system"].upper(), 58), palette["text"], ("Courier", 10, "bold"))
+        if is_body:
+            body = model["body"]
+            bio_count = _safe_int(body.get("bio_count"))
+            bio_done = _safe_int(body.get("organic_complete_count"))
+            geo_count = _safe_int(body.get("geo_count"))
+            dss_state = "DSS MAPPED" if body.get("dss_complete") else "DSS PENDING"
+            header_summary = f"BIO {bio_done}/{bio_count} · GEO {geo_count} · {dss_state}"
+        else:
+            bio_total = sum(_safe_int(row.get("bio_count")) for row in rows)
+            geo_total = sum(_safe_int(row.get("geo_count")) for row in rows)
+            header_summary = f"{len(active_rows)} ACTIVE · {len(completed_rows)} COMPLETE · BIO {bio_total} · GEO {geo_total}"
+        self._text(18, 66, header_summary, palette["muted"], ("Courier", 8, "bold"))
+        self.canvas.create_line(18, 78, WIDTH - 18, 78, fill=palette["border_soft"], width=1)
+        y = self._sample_row(model.get("sampling"), 93)
 
         if is_body:
             body = model["body"]
@@ -526,10 +559,12 @@ class SurveyStatusHUD:
                 y += 19
         else:
             if active_rows:
-                self._text(18, y, "SURVEY TARGETS", palette["dim"], ("Courier", 7, "bold"))
+                self._text(18, y, "ACTIVE SURVEY TARGETS", palette["dim"], ("Courier", 7, "bold"))
                 self._text(WIDTH - 18, y, "STATUS / EST. VALUE", palette["dim"], ("Courier", 7, "bold"), "e")
                 y += 20
-            for row in active_rows:
+            for index, row in enumerate(active_rows):
+                if index:
+                    self.canvas.create_line(28, y - 6, WIDTH - 18, y - 6, fill=palette["border_soft"], width=1)
                 bio = row["bio_count"]
                 geo = row["geo_count"]
                 state, color = _surface_signal_state(
@@ -619,7 +654,6 @@ class SurveyStatusHUD:
             self._text(18, h - 15, "ESTIMATED BASE", palette["dim"], ("Courier", 7, "bold"))
             self._text(WIDTH - 18, h - 15, total, palette["orange"], ("Courier", 8, "bold"), "e")
         else:
-            total = model.get("total", 0) if model.get("total_known", True) else "?"
-            progress = f"SCAN {model.get('scanned', 0)}/{total}"
-            self._text(18, h - 15, progress, palette["dim"], ("Courier", 7, "bold"))
+            footer = f"ACTIVE {len(active_rows)} · COMPLETE {len(completed_rows)}"
+            self._text(18, h - 15, footer, palette["dim"], ("Courier", 7, "bold"))
             self._text(WIDTH - 18, h - 15, f"NOTABLE {model.get('notable_count', 0)}", palette["orange"], ("Courier", 7, "bold"), "e")

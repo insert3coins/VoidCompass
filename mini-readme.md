@@ -1,15 +1,21 @@
 # VoidCompass // UPDATE LOG
 
-## v5.3.5.1 // Carrier Discord Command
-**Release Date:** 2026-Aug-01
+## v5.3.5.2 // Overlay Intelligence Pass
+**Release Date:** 2026-Aug-02
 
-*   Rebuilt personal and Squadron Carrier Discord posts as compact, event-specific VoidCompass command embeds whose colours follow the active commander theme; richer capacity, access, service and route telemetry is reserved for deliberate manual status posts.
-*   Added safe EDSM links for current, previous, target and expedition systems plus concise journal-backed Tritium, squadron identity and route progress where each event needs them.
-*   Unified automatic jump/cooldown alerts, manual status posts and connection tests on the same renderer, disabled Discord mentions from operator text and now report failed automatic webhook HTTP responses in diagnostics without delaying journal processing.
-*   Fixed startup scan recovery treating an auto-scanned arrival star as a confirmed one-body system: unknown totals now display as `1/?` until a honk supplies `BodyCount`, while genuine partial and completed FSS progress still restore from journal/cache evidence.
+*   Rebuilt the transient System Information overlay as a theme-aware **System Intelligence** card with the same visual hierarchy as Station Link, a wider readable layout and a matching Layout Studio preview.
+*   Focused the card on information not already owned by the Navigation HUD or Survey Operations: primary star and system composition, landable bodies, biological/geological totals, stations, carriers, specialists, population and local authority.
+*   Added truthful local-scan fallback while remote profile data resolves, corrected multi-star counting when spectral classes repeat, distinguished inhabited, uninhabited and carrier-present systems, and avoided redundant redraws when the model has not changed.
+*   Rebuilt Prospector Analysis around live commander themes, clearer content/core evidence, readable material bars and a compact refinery log backed by a renderer-neutral journal model.
+*   Reworked the Fleet/Squadron Carrier overlay into a command card for jump state, expedition progress, remaining route fuel, Tritium confidence, range, cargo capacity and market orders.
+*   Replaced the fixed Cargo box with a dynamic manifest showing utilisation, free space, mission and stolen cargo, overflow totals and theme-aware capacity warnings.
+*   Moved Colony Logistics sorting, site/trip filters and font scale into commander profiles, refreshed its compact presentation, aligned every changed overlay with Layout Studio previews and stopped withdrawn overlays from restoring stale pre-Studio coordinates.
+*   Rebuilt Survey Status as the wider **Survey Operations** card with clearer system/body hierarchy, live-sample emphasis, separated active and completed biology, retained geological/notable evidence and no duplicate Navigation scan percentage.
+*   Fixed startup recovery after an offline Fleet Carrier jump so the automatic primary-star scan cannot turn an unconfirmed 1/1 cache floor into a false 100% system survey.
 
 ## Earlier releases
 
+*   **v5.3.5.1** — Added compact theme-aware personal/Squadron Carrier Discord embeds with safe EDSM links and detailed manual status posts, and corrected unknown startup scan totals until journal evidence confirms them.
 *   **v5.3.5** — Replaced the multi-gigabyte trade database with on-demand Ardent Insight searches, rebuilt Trade Assist around practical one-way and round-trip planning, added the Trade Route HUD and persistent Trade Log, and kept visited-market EDDN uploads independent.
 *   **v5.3.4** — Replaced Trade Command with the three-action Trade Assist, retained automatic EDDN uploads and journal-confirmed Current Run tracking, removed advanced route-watch machinery and made Station Link auto-hide explicit and immediately applied.
 *   **v5.3.3.1** — Restored biological sample progress and Survey Status lifecycle, corrected legacy bio predictions, simplified carrier expedition editing, reduced danger noise, rebuilt Station Link, completed remaining overlay theming and removed measured persistence stalls.

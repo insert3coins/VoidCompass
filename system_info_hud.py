@@ -1,10 +1,18 @@
+"""Transient exploration-first system intelligence overlay.
+
+Navigation HUD owns scan progress and Survey Status owns individual bodies;
+this card instead summarises composition, signals, facilities and authority.
+The model builder remains independent of Tk for journal-shaped validation.
+"""
+
 import tkinter as tk
+
 from config import save_config
 import overlay_chrome
 from stellar_types import star_type_label
 import themes
 
-WIDTH = 460
+WIDTH = 520
 
 _CHROMA = "#ff00ff"
 
@@ -27,11 +35,177 @@ def _fmt_pop(n):
     return str(n)
 
 
+def _safe_int(value, default=0):
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return int(default)
+
+
 def _truncate(text, max_chars):
     if not text:
         return ""
     text = str(text)
     return text if len(text) <= max_chars else text[:max_chars - 1] + "…"
+
+
+def _count_label(value, singular, plural=None):
+    value = max(0, _safe_int(value))
+    return f"{value} {singular if value == 1 else (plural or singular + 'S')}"
+
+
+def _local_stellar_profile(scan_items):
+    stars = 0
+    planets = 0
+    landable = 0
+    classes = []
+    for row in scan_items or ():
+        if not isinstance(row, dict):
+            continue
+        if row.get("is_star"):
+            stars += 1
+            raw_class = row.get("star_type") or row.get("class") or ""
+            label = star_type_label(raw_class) or str(raw_class).strip()
+            if label and label not in classes:
+                classes.append(label)
+        else:
+            planets += 1
+            if row.get("landable"):
+                landable += 1
+    if not (stars or planets):
+        return None
+    return {
+        "star_count": stars,
+        "star_classes": classes,
+        "planet_count": planets,
+        "landable_count": landable,
+    }
+
+
+def build_system_model(system_name, star_class, body_count,
+                       bio_total=0, geo_total=0, total_known=False,
+                       local_profile=None, edsm_info=None, spansh=None):
+    """Return a renderer-neutral exploration summary for one system."""
+    total = max(0, _safe_int(body_count))
+    known = bool(total_known and total > 0)
+
+    signals = []
+    if _safe_int(bio_total) > 0:
+        signals.append(f"BIO {_safe_int(bio_total)}")
+    if _safe_int(geo_total) > 0:
+        signals.append(f"GEO {_safe_int(geo_total)}")
+
+    profile = spansh or local_profile
+    profile_rows = []
+    profile_source = "RESOLVING"
+    if profile:
+        profile_source = "SYSTEM RECORD" if spansh else "LOCAL SCANS"
+        star_count = max(0, _safe_int(profile.get("star_count")))
+        planet_count = max(0, _safe_int(profile.get("planet_count")))
+        landable_count = max(0, _safe_int(profile.get("landable_count")))
+        parts = [
+            _count_label(star_count, "STAR"),
+            _count_label(planet_count, "PLANET"),
+        ]
+        if landable_count:
+            parts.append(_count_label(landable_count, "LANDABLE BODY", "LANDABLE BODIES"))
+        if signals:
+            parts.extend(signals)
+        profile_rows.append(" · ".join(parts))
+        classes = [str(value).strip() for value in profile.get("star_classes") or () if value]
+        if len(classes) > 1:
+            profile_rows.append("STELLAR CLASSES · " + " / ".join(classes))
+    else:
+        profile_rows.append("STELLAR PROFILE DATA RESOLVING")
+        if signals:
+            profile_rows.append("SURFACE SIGNALS · " + " · ".join(signals))
+
+    facility_rows = []
+    facility_state = "RESOLVING"
+    facility_detected = False
+    if spansh:
+        counts = spansh.get("counts") or {}
+        count_parts = []
+        for key, singular in (
+            ("starport", "STARPORT"),
+            ("outpost", "OUTPOST"),
+            ("settlement", "SETTLEMENT"),
+            ("fc", "CARRIER"),
+        ):
+            value = max(0, _safe_int(counts.get(key)))
+            if value:
+                count_parts.append(_count_label(value, singular))
+        facility_detected = bool(count_parts)
+        facility_state = "DETECTED" if facility_detected else "NONE REPORTED"
+        facility_rows.append(" · ".join(count_parts) if count_parts else "NO STATIONS OR CARRIERS REPORTED")
+        services = spansh.get("services") or {}
+        service_parts = [
+            label for key, label in (
+                ("mat_trader", "MATERIAL TRADER"),
+                ("tech_broker", "TECH BROKER"),
+                ("engineer", "ENGINEER"),
+            ) if services.get(key)
+        ]
+        if service_parts:
+            facility_rows.append("SPECIALISTS · " + " · ".join(service_parts))
+    else:
+        facility_rows.append("FACILITY DATA RESOLVING")
+
+    authority_rows = []
+    authority_state = "RESOLVING"
+    if edsm_info is None:
+        authority_rows.append("LOCAL AUTHORITY DATA RESOLVING")
+    elif not edsm_info:
+        authority_state = "UNINHABITED"
+        authority_rows.append("NO POPULATION OR LOCAL AUTHORITY REPORTED")
+    else:
+        info = edsm_info
+        population = _fmt_pop(info.get("population"))
+        authority_state = f"POP {population}" if population else "INHABITED"
+        civic = []
+        for value in (
+            info.get("allegiance"), info.get("government"),
+            info.get("security"), info.get("economy"),
+        ):
+            label = str(value or "").strip().upper()
+            if label and label != "NONE" and label not in civic:
+                civic.append(label)
+        if civic:
+            authority_rows.append(" · ".join(civic))
+        faction = str(info.get("faction") or "").strip().upper()
+        state = str(info.get("factionState") or info.get("state") or "").strip().upper()
+        faction_parts = [value for value in (faction, state) if value and value != "NONE"]
+        if faction_parts:
+            authority_rows.append(" · ".join(faction_parts))
+        if not authority_rows:
+            authority_rows.append("NO LOCAL AUTHORITY DETAILS REPORTED")
+
+    if edsm_info:
+        badge = "INHABITED"
+        badge_tone = "green"
+    elif facility_detected:
+        badge = "HUMAN PRESENCE"
+        badge_tone = "orange"
+    elif edsm_info is not None and spansh is not None:
+        badge = "UNINHABITED"
+        badge_tone = "muted"
+    else:
+        badge = "SYSTEM PROFILE"
+        badge_tone = "accent"
+
+    return {
+        "system": str(system_name or "Unknown").strip(),
+        "primary_star": str(star_class or "").strip(),
+        "badge": badge,
+        "badge_tone": badge_tone,
+        "body_total": total if known else None,
+        "profile_source": profile_source,
+        "profile_rows": profile_rows,
+        "facility_state": facility_state,
+        "facility_rows": facility_rows,
+        "authority_state": authority_state,
+        "authority_rows": authority_rows,
+    }
 
 
 class SystemInfoHUD:
@@ -66,10 +240,13 @@ class SystemInfoHUD:
         self._system        = ""
         self._star_class    = ""
         self._body_count    = 0
-        self._scanned_count = 0
         self._bio_total     = 0
+        self._geo_total     = 0
+        self._total_known   = False
+        self._local_profile = None
         self._edsm_info     = None
         self._spansh        = None  # parsed station/service summary
+        self._last_model    = None
 
         self._force_topmost()
         self.win.withdraw()
@@ -122,32 +299,36 @@ class SystemInfoHUD:
     # ── Data interface ────────────────────────────────────────────────────
 
     def _apply_scan_progress(self, scan_items, body_signals, total_bodies,
-                             scanned_bodies=None):
-        self._body_count    = int(total_bodies or 0)
-        if scanned_bodies is None:
-            self._scanned_count = sum(
-                1 for it in (scan_items or []) if not it.get("is_star")
-            )
-        else:
-            self._scanned_count = max(0, int(scanned_bodies or 0))
-        self._bio_total = sum(
-            s.get("bio", 0) for s in (body_signals or {}).values()
+                             scanned_bodies=None, total_known=None):
+        self._body_count = max(0, _safe_int(total_bodies))
+        self._total_known = (
+            self._body_count > 0 if total_known is None else bool(total_known)
         )
+        self._bio_total = sum(
+            max(0, _safe_int(signals.get("bio")))
+            for signals in (body_signals or {}).values() if isinstance(signals, dict)
+        )
+        self._geo_total = sum(
+            max(0, _safe_int(signals.get("geo")))
+            for signals in (body_signals or {}).values() if isinstance(signals, dict)
+        )
+        self._local_profile = _local_stellar_profile(scan_items)
 
     def on_system_arrival(self, system_name, star_class,
                           scan_items, body_signals, total_bodies,
-                          scanned_bodies=None):
+                          scanned_bodies=None, total_known=None):
         self._system        = system_name or "Unknown"
         self._star_class    = star_type_label(star_class)
         self._edsm_info     = None
         self._spansh        = None
+        self._last_model    = None
         self._apply_scan_progress(
-            scan_items, body_signals, total_bodies, scanned_bodies,
+            scan_items, body_signals, total_bodies, scanned_bodies, total_known,
         )
         self.show()
 
     def update_scan_progress(self, scan_items, body_signals, total_bodies,
-                             star_class=None, scanned_bodies=None):
+                             star_class=None, scanned_bodies=None, total_known=None):
         """Incremental refresh as the current system is surveyed further.
 
         Unlike on_system_arrival(), this never shows/repositions the window
@@ -155,7 +336,7 @@ class SystemInfoHUD:
         place if the panel happens to already be visible.
         """
         self._apply_scan_progress(
-            scan_items, body_signals, total_bodies, scanned_bodies,
+            scan_items, body_signals, total_bodies, scanned_bodies, total_known,
         )
         if star_class:
             self._star_class = star_type_label(star_class)
@@ -190,11 +371,13 @@ class SystemInfoHUD:
 
         # ── Bodies: stars & planets ───────────────────────────────────────
         star_classes = []   # spectral class strings, e.g. ["G", "M"]
+        star_count = 0
         planet_count = 0
         landable_count = 0
         for body in bodies:
             btype = (body.get("type") or "").lower()
             if btype == "star":
+                star_count += 1
                 sc = (body.get("spectralClass") or body.get("subType") or "").strip()
                 # Keep just the leading letter(s), e.g. "G" from "G (White-Yellow) Star"
                 if sc:
@@ -218,26 +401,29 @@ class SystemInfoHUD:
             stype    = st.get("type") or ""
             svc_list = st.get("services") or []
             gov      = st.get("government") or ""
+            type_key = str(stype).strip().casefold()
+            service_keys = {str(value).strip().casefold() for value in svc_list if value}
 
-            if stype == "Drake-Class Carrier":
+            if "carrier" in type_key:
                 counts["fc"] += 1
-            elif stype == "Settlement":
+            elif "settlement" in type_key:
                 counts["settlement"] += 1
-            elif stype == "Outpost":
-                counts["outpost"] += 1
-            elif stype in _STARPORT_TYPES or (st.get("landingPads") and "Mega ship" in stype):
+            elif stype in _STARPORT_TYPES or (st.get("landingPads") and "mega ship" in type_key):
                 counts["starport"] += 1
+            elif "outpost" in type_key:
+                counts["outpost"] += 1
 
-            if "Material Trader" in svc_list:
+            if "material trader" in service_keys:
                 services["mat_trader"] = True
-            if "Technology Broker" in svc_list:
+            if "technology broker" in service_keys:
                 services["tech_broker"] = True
-            if gov == "Engineer":
+            if str(gov).strip().casefold() == "engineer":
                 services["engineer"] = True
 
         self._spansh = {
             "counts":         counts,
             "services":       services,
+            "star_count":     star_count,
             "star_classes":   star_classes,
             "planet_count":   planet_count,
             "landable_count": landable_count,
@@ -250,132 +436,117 @@ class SystemInfoHUD:
 
     # ── Rendering ─────────────────────────────────────────────────────────
 
-    def _redraw(self):
-        palette = self._palette
-        rows = self._build_rows()
-        LINE_H  = 20
-        total_h = 35 + len(rows) * LINE_H + 10
+    def _build_model(self):
+        return build_system_model(
+            self._system,
+            self._star_class,
+            self._body_count,
+            self._bio_total,
+            self._geo_total,
+            self._total_known,
+            self._local_profile,
+            self._edsm_info,
+            self._spansh,
+        )
 
-        total_h = max(total_h, 60)
+    def _section(self, y, label, right=""):
+        palette = self._palette
+        self._draw_text(18, y, label, palette["dim"], ("Courier", 7, "bold"))
+        if right:
+            self._draw_text(
+                WIDTH - 18, y, _truncate(right, 34), palette["dim"],
+                ("Courier", 7, "bold"), anchor="e",
+            )
+        return y + 16
+
+    def _separator(self, y):
+        self.canvas.create_line(
+            18, y, WIDTH - 18, y, fill=self._palette["border_soft"], width=1,
+        )
+        return y + 12
+
+    def _redraw(self, force=False):
+        palette = self._palette
+        model = self._build_model()
+        if not force and model == self._last_model:
+            return
+        self._last_model = model
+
+        sections = (
+            model["profile_rows"], model["facility_rows"], model["authority_rows"],
+        )
+        total_h = 89 + sum(28 + len(rows) * 17 for rows in sections) + 8
 
         self.canvas.config(width=WIDTH, height=total_h)
         self.win.geometry(f"{WIDTH}x{total_h}")
         self.canvas.delete("all")
-
         overlay_chrome.draw_chrome(
-            self.canvas, WIDTH, total_h, accent=palette["accent"],
+            self.canvas, WIDTH, total_h, accent=palette["accent"], bracket_len=10,
+        )
+
+        self._draw_text(
+            18, 18, "SYSTEM INTELLIGENCE", palette["accent"],
+            ("Courier", 9, "bold"),
+        )
+        badge_color = palette.get(model["badge_tone"], palette["accent"])
+        self._draw_text(
+            WIDTH - 18, 18, model["badge"], badge_color,
+            ("Courier", 8, "bold"), anchor="e",
         )
         self.canvas.create_line(
-            20, 35, WIDTH - 20, 35, fill=palette["border_soft"], width=1,
+            18, 29, WIDTH - 18, 29, fill=palette["border_soft"], width=1,
         )
-        self._draw_text(20, 20, "SYSTEM INFO", palette["accent"], ("Courier", 10, "bold"))
 
-        y = 44
-        for i, (text, color) in enumerate(rows):
-            self._draw_text(20, y, text, color, ("Courier", 10, "bold"))
-            if i == 0 and self._star_class:
-                self._draw_text(WIDTH - 20, y, f"[{self._star_class}]", palette["yellow"],
-                                ("Courier", 10, "bold"), anchor="e")
-            y += LINE_H
+        self._draw_text(
+            18, 45, _truncate(model["system"].upper(), 49), palette["text"],
+            ("Courier", 11, "bold"),
+        )
+        primary = model["primary_star"].upper() or "CLASSIFICATION PENDING"
+        self._draw_text(
+            18, 64, _truncate(f"PRIMARY · {primary}", 43), palette["muted"],
+            ("Courier", 8, "bold"),
+        )
+        body_total = model.get("body_total")
+        total_label = _count_label(body_total, "BODY", "BODIES") if body_total else "BODY COUNT PENDING"
+        self._draw_text(
+            WIDTH - 18, 64, total_label, palette["muted"],
+            ("Courier", 8, "bold"), anchor="e",
+        )
+        self.canvas.create_line(
+            18, 76, WIDTH - 18, 76, fill=palette["border_soft"], width=1,
+        )
 
-    def _build_rows(self):
-        palette = self._palette
-        rows = []
+        y = self._section(89, "SYSTEM PROFILE", model["profile_source"])
+        for row in model["profile_rows"]:
+            color = palette["text"] if model["profile_source"] != "RESOLVING" else palette["dim"]
+            self._draw_text(18, y, _truncate(row, 65), color, ("Courier", 8, "bold"))
+            y += 17
+        y = self._separator(y)
 
-        sys_name = _truncate(self._system.upper(), 34)
-        rows.append((sys_name, palette["accent"]))
+        y = self._section(y, "HUMAN FOOTPRINT", model["facility_state"])
+        for index, row in enumerate(model["facility_rows"]):
+            color = palette["orange"] if index > 0 else (
+                palette["text"] if model["facility_state"] != "RESOLVING" else palette["dim"]
+            )
+            self._draw_text(18, y, _truncate(row, 65), color, ("Courier", 8, "bold"))
+            y += 17
+        y = self._separator(y)
 
-        if self._spansh:
-            # Stars line: "2 STARS  G · M"
-            sc = self._spansh["star_classes"]
-            pc = self._spansh["planet_count"]
-            lc = self._spansh["landable_count"]
-            star_str = f"{len(sc)} STAR{'S' if len(sc) != 1 else ''}"
-            if sc:
-                star_str += "  " + "  ".join(sc)
-            planet_str = f"{pc} PLANET{'S' if pc != 1 else ''}"
-            if lc:
-                planet_str += f"  {lc} Landable"
-            rows.append((f"{star_str}  ·  {planet_str}", palette["dim"]))
-
-            # Scanned / bio progress from local data
-            prog_parts = []
-            if self._scanned_count > 0:
-                prog_parts.append(f"{self._scanned_count} Scanned")
-            if self._bio_total > 0:
-                prog_parts.append(f"{self._bio_total} Bio Signals")
-            if prog_parts:
-                rows.append(("  ·  ".join(prog_parts), palette["dim"]))
-        else:
-            # No Spansh yet — fall back to local DB counts
-            scan_parts = []
-            if self._body_count > 0:
-                scan_parts.append(f"{self._body_count} Bodies")
-            if self._scanned_count > 0:
-                scan_parts.append(f"{self._scanned_count} Scanned")
-            if self._bio_total > 0:
-                scan_parts.append(f"{self._bio_total} Bio Signals")
-            if scan_parts:
-                rows.append(("  ·  ".join(scan_parts), palette["dim"]))
-
-        if self._spansh:
-            c = self._spansh["counts"]
-            s = self._spansh["services"]
-            port_parts = [p for p in [
-                (f"×{c['starport']} Starport"   if c["starport"]   else ""),
-                (f"×{c['outpost']} Outpost"     if c["outpost"]    else ""),
-                (f"×{c['settlement']} Settlement" if c["settlement"] else ""),
-                (f"×{c['fc']} Fleet Carrier"    if c["fc"]         else ""),
-            ] if p]
-            rows.append(("  ·  ".join(port_parts) if port_parts else "No Stations", palette["dim"]))
-            svc_parts = [p for p in [
-                ("Material Trader" if s["mat_trader"]  else ""),
-                ("Tech Broker"     if s["tech_broker"] else ""),
-                ("Engineer"        if s["engineer"]    else ""),
-            ] if p]
-            if svc_parts:
-                rows.append(("  ·  ".join(svc_parts), palette["orange"]))
-        else:
-            rows.append(("Stations  ...", palette["dim"]))
-
-        if self._edsm_info is None:
-            # Still waiting for EDSM response
-            rows.append(("Faction info  ...", palette["dim"]))
-        elif self._edsm_info:
-            # Has faction/population data (inhabited system)
-            info    = self._edsm_info
-            pop     = _fmt_pop(info.get("population"))
-            alleg   = (info.get("allegiance")   or "").upper()
-            gov     = (info.get("government")   or "").upper()
-            sec     = (info.get("security")     or "").upper()
-            state   = (info.get("factionState") or info.get("state") or "").upper()
-            faction = _truncate((info.get("faction") or "").upper(), 30)
-            economy = (info.get("economy") or "").upper()
-
-            pol_parts = [p for p in [
-                (f"POP {pop}" if pop else ""), alleg, gov,
-            ] if p]
-            if pol_parts:
-                rows.append(("  ·  ".join(pol_parts), palette["dim"]))
-
-            fac_parts = [p for p in [
-                faction,
-                sec,
-                (state  if state  and state  not in ("NONE", "") else ""),
-                (economy if economy and economy not in ("NONE", "") else ""),
-            ] if p]
-            if fac_parts:
-                rows.append(("  ·  ".join(fac_parts), palette["dim"]))
-        # else: empty dict = arrived, uninhabited system — show nothing
-
-        return rows
+        y = self._section(y, "LOCAL AUTHORITY", model["authority_state"])
+        for index, row in enumerate(model["authority_rows"]):
+            color = palette["text"] if index == 0 and model["authority_state"] != "RESOLVING" else palette["muted"]
+            if model["authority_state"] == "RESOLVING":
+                color = palette["dim"]
+            self._draw_text(18, y, _truncate(row, 65), color, ("Courier", 8, "bold"))
+            y += 17
+        self._separator(y)
 
     def apply_theme(self, palette=None):
         """Apply the active commander palette without resetting visibility."""
         self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)
         try:
             if self.win.state() != "withdrawn":
-                self._redraw()
+                self._redraw(force=True)
         except (AttributeError, tk.TclError):
             pass
 
