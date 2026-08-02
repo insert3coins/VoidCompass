@@ -23,7 +23,7 @@ class TacticalHUD:
         self.full_width = 560
         self.full_height = 224
         self.compact_width = 450
-        self.compact_height = 172
+        self.compact_height = 176
         self.width, self.base_height = self._target_dimensions()
         self.canvas = tk.Canvas(self.win, width=self.width, height=self.base_height, bg=overlay_bg, highlightthickness=0)
         self.canvas.pack()
@@ -309,7 +309,7 @@ class TacticalHUD:
         self.draw_fitted_text(
             x, y, text,
             COLOR_ACCENT if crossed else "#7d8891",
-            size=6, max_width=max(60, max_width), anchor="center",
+            size=7, max_width=max(60, max_width), anchor="center",
         )
 
     def _badge_color(self, state):
@@ -326,7 +326,7 @@ class TacticalHUD:
     def _draw_badge(self, x, y, text, state="muted", height=18):
         color = self._badge_color(state)
         label = f"{self._BADGE_GLYPHS.get(state, '○')} {text}"
-        font = tkfont.Font(family="Courier", size=8, weight="bold")
+        font = tkfont.Font(family="Courier", size=9, weight="bold")
         text_w = font.measure(label)
         width = max(52, text_w + 16)
         cx, cy = x + width / 2, y + height / 2
@@ -411,7 +411,7 @@ class TacticalHUD:
         )
         self.draw_text(
             (left_x + right_x) / 2, center_y,
-            text=label, fill=color, font=("Courier", 8, "bold"), anchor="center",
+            text=label, fill=color, font=("Courier", 9, "bold"), anchor="center",
         )
         return width
 
@@ -586,46 +586,46 @@ class TacticalHUD:
         attention_text, attention_state = self._attention_summary(nav_context)
 
         self._draw_chrome(bracket_len=10)
-        self.draw_text(16, 14, text="NAVIGATION HUD", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
+        self.draw_text(16, 14, text="NAVIGATION HUD", fill=COLOR_ACCENT, font=("Courier", 11, "bold"), anchor="w")
         self._draw_title_anim()
         self.canvas.create_line(16, 26, w - 16, 26, fill="#1a2530", width=1)
 
         # System / state
-        self.draw_text(16, 35, text="CURRENT SYSTEM", fill="#7d8891", font=("Courier", 6, "bold"), anchor="w")
-        self.draw_text(w - 16, 35, text="STATE", fill="#7d8891", font=("Courier", 6, "bold"), anchor="e")
+        self.draw_text(16, 35, text="CURRENT SYSTEM", fill="#7d8891", font=("Courier", 7, "bold"), anchor="w")
+        self.draw_text(w - 16, 35, text="STATE", fill="#7d8891", font=("Courier", 7, "bold"), anchor="e")
         self._draw_region_label(nav_context, (16 + (w - 16)) // 2, 35, max_width=w - 210)
         pill_width = self._draw_status_pill(w - 16, 49, state_text, state_color, height=16)
         self.draw_fitted_text(
             16, 49, str(current_display).upper(), COLOR_TEXT,
-            size=10, max_width=w - pill_width - 52, anchor="w",
+            size=11, max_width=w - pill_width - 52, anchor="w",
         )
         self.canvas.create_line(16, 60, w - 16, 60, fill="#1a2530", width=1)
 
         # Route
         left_x, right_x = 16, w - 16
         self.draw_text(left_x, 69, text=route["source"], fill=COLOR_ORANGE if route["active"] else "#7d8891",
-                       font=("Courier", 6, "bold"), anchor="w")
-        self.draw_fitted_text(right_x, 69, route["meta"], COLOR_ORANGE, size=6,
+                       font=("Courier", 7, "bold"), anchor="w")
+        self.draw_fitted_text(right_x, 69, route["meta"], COLOR_ORANGE, size=7,
                               max_width=190, anchor="e")
         self.draw_fitted_text(left_x, 82, route["target"], COLOR_TEXT if route["active"] else "#7d8891",
-                              size=8, max_width=w - 32, anchor="w")
+                              size=9, max_width=w - 32, anchor="w")
         self._draw_route_track(left_x, right_x - 5, 98, route)
         self.canvas.create_line(16, 106, w - 16, 106, fill="#1a2530", width=1)
 
         # Survey progress remains permanently visible, including on known systems.
-        self.draw_text(16, 116, text="SYSTEM SURVEY", fill="#7d8891", font=("Courier", 7, "bold"), anchor="w")
+        self.draw_text(16, 116, text="SYSTEM SURVEY", fill="#7d8891", font=("Courier", 8, "bold"), anchor="w")
         self.draw_text(w - 16, 116, text=scan_progress_text, fill=scan_color,
-                       font=("Courier", 8, "bold"), anchor="e")
+                       font=("Courier", 9, "bold"), anchor="e")
         self._draw_progress_track(16, w - 16, 124, pct, scan_color)
-        self.draw_fitted_text(16, 143, survey_text, COLOR_TEXT, size=6, max_width=245, anchor="w")
-        self.draw_fitted_text(w - 16, 143, traffic_text, "#7d8891", size=6, max_width=175, anchor="e")
+        self.draw_fitted_text(16, 143, survey_text, COLOR_TEXT, size=7, min_size=6, max_width=235, anchor="w")
+        self.draw_fitted_text(w - 16, 143, traffic_text, "#7d8891", size=7, min_size=6, max_width=185, anchor="e")
 
         if attention_text:
             attention_color = self._badge_color(attention_state)
-            self.draw_fitted_text(16, 161, attention_text, attention_color, size=7, max_width=w - 32, anchor="w")
+            self.draw_fitted_text(16, 161, attention_text, attention_color, size=8, min_size=7, max_width=w - 32, anchor="w")
         elif nav_context.get("docked") and nav_context.get("station"):
             self.draw_fitted_text(16, 161, f"STATION · {nav_context['station']}", COLOR_ACCENT,
-                                  size=7, max_width=w - 32, anchor="w")
+                                  size=8, min_size=7, max_width=w - 32, anchor="w")
 
     def update(
         self,
@@ -681,13 +681,13 @@ class TacticalHUD:
         attention_text, attention_state = self._attention_summary(nav_context)
 
         self._draw_chrome(bracket_len=14)
-        self.draw_text(20, 18, text="NAVIGATION HUD", fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="w")
+        self.draw_text(20, 18, text="NAVIGATION HUD", fill=COLOR_ACCENT, font=("Courier", 11, "bold"), anchor="w")
         self._draw_title_anim()
         self.canvas.create_line(20, 32, w - 20, 32, fill="#1a2530", width=1)
 
         # ── System / State ──────────────────────────────────────────────
-        self.draw_text(20, 44, text="CURRENT SYSTEM", fill="#7d8891", font=("Courier", 6, "bold"), anchor="w")
-        self.draw_text(w - 20, 44, text="STATE", fill="#7d8891", font=("Courier", 6, "bold"), anchor="e")
+        self.draw_text(20, 44, text="CURRENT SYSTEM", fill="#7d8891", font=("Courier", 7, "bold"), anchor="w")
+        self.draw_text(w - 20, 44, text="STATE", fill="#7d8891", font=("Courier", 7, "bold"), anchor="e")
         self._draw_region_label(nav_context, (20 + (w - 20)) // 2, 44, max_width=w - 220)
         pill_width = self._draw_status_pill(w - 20, 60, state_text, state_color, height=18)
         self.draw_fitted_text(20, 60, str(current_display).upper(), COLOR_TEXT, size=13,
@@ -697,21 +697,21 @@ class TacticalHUD:
         # ── Route ────────────────────────────────────────────────────────
         left_x, right_x = 20, w - 20
         self.draw_text(left_x, 84, text=route["source"], fill=COLOR_ORANGE if route["active"] else "#7d8891",
-                       font=("Courier", 7, "bold"), anchor="w")
-        self.draw_fitted_text(right_x, 84, route["meta"], COLOR_ORANGE, size=7,
+                       font=("Courier", 8, "bold"), anchor="w")
+        self.draw_fitted_text(right_x, 84, route["meta"], COLOR_ORANGE, size=8,
                               max_width=270, anchor="e")
         self.draw_fitted_text(left_x, 101, route["target"], COLOR_TEXT if route["active"] else "#7d8891",
-                              size=11, max_width=w - 40, anchor="w")
+                              size=12, max_width=w - 40, anchor="w")
         self._draw_route_track(left_x, right_x - 5, 118, route)
         self.canvas.create_line(20, 130, w - 20, 130, fill="#1a2530", width=1)
 
         # ── Survey ───────────────────────────────────────────────────────
-        self.draw_text(20, 143, text="SYSTEM SURVEY", fill="#7d8891", font=("Courier", 7, "bold"), anchor="w")
+        self.draw_text(20, 143, text="SYSTEM SURVEY", fill="#7d8891", font=("Courier", 8, "bold"), anchor="w")
         self.draw_text(w - 20, 143, text=scan_progress_text, fill=scan_color,
-                       font=("Courier", 9, "bold"), anchor="e")
+                       font=("Courier", 10, "bold"), anchor="e")
         self._draw_progress_track(20, w - 20, 152, pct, scan_color)
-        self.draw_fitted_text(20, 174, survey_text, COLOR_TEXT, size=8, max_width=315, anchor="w")
-        self.draw_fitted_text(w - 20, 174, traffic_text, "#7d8891", size=7, max_width=215, anchor="e")
+        self.draw_fitted_text(20, 174, survey_text, COLOR_TEXT, size=9, min_size=7, max_width=315, anchor="w")
+        self.draw_fitted_text(w - 20, 174, traffic_text, "#7d8891", size=8, min_size=7, max_width=215, anchor="e")
         self.canvas.create_line(20, 190, w - 20, 190, fill="#1a2530", width=1)
 
         # ── Context / attention ──────────────────────────────────────────
@@ -721,16 +721,16 @@ class TacticalHUD:
         elif nav_context.get("body"):
             context_detail = f"BODY · {nav_context['body']}"
         if context_detail:
-            self.draw_fitted_text(20, 208, context_detail, COLOR_ACCENT, size=8,
+            self.draw_fitted_text(20, 208, context_detail, COLOR_ACCENT, size=9,
                                   max_width=310, anchor="w")
         elif attention_text:
             self.draw_fitted_text(20, 208, attention_text, self._badge_color(attention_state),
-                                  size=8, max_width=310, anchor="w")
+                                  size=9, max_width=310, anchor="w")
 
         if context_detail and attention_text:
             self.draw_fitted_text(w - 20, 208, attention_text, self._badge_color(attention_state),
-                                  size=8, max_width=210, anchor="e")
+                                  size=9, max_width=210, anchor="e")
         elif not context_detail and not attention_text:
             self.draw_text(20, 208, text="NAVIGATION NOMINAL", fill="#7d8891",
-                           font=("Courier", 8, "bold"), anchor="w")
+                           font=("Courier", 9, "bold"), anchor="w")
         self._last_render_fingerprint = render_fingerprint
