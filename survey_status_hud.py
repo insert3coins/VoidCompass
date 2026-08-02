@@ -321,6 +321,25 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
     }
 
 
+def _survey_render_key(model):
+    """Key only presentation data, coarsening fast-moving sample distance."""
+    keyed = dict(model or {})
+    sampling = keyed.get("sampling")
+    if sampling:
+        sampling = {
+            key: sampling.get(key)
+            for key in ("species", "progress", "colony_m", "min_distance_m", "clear")
+        }
+        minimum = sampling.get("min_distance_m")
+        if minimum is not None:
+            # Ten-metre steps stay useful in the cockpit without rebuilding
+            # the whole overlay for every metre reported by Status.json.
+            minimum = _safe_int(minimum)
+            sampling["min_distance_m"] = int(round(minimum / 10.0) * 10)
+        keyed["sampling"] = sampling
+    return repr(keyed)
+
+
 class SurveyStatusHUD:
     def __init__(self, root, config):
         self.root = root
@@ -354,7 +373,7 @@ class SurveyStatusHUD:
 
     def show(self):
         if self._visible or self._suppressed:
-            return
+            return False
         try:
             x = _safe_int(self.config.get("survey_status_hud_x"), 30)
             y = _safe_int(self.config.get("survey_status_hud_y"), 520)
@@ -364,20 +383,26 @@ class SurveyStatusHUD:
             self.win.attributes("-topmost", True)
             self.win.lift()
             self._visible = True
+            return True
         except Exception:
-            pass
+            return False
 
     def hide(self):
+        if not self._visible:
+            return False
         try:
             self.win.withdraw()
         except Exception:
-            pass
+            return False
         self._visible = False
+        return True
 
     def suppress(self):
         """Hide while retaining the current survey for a later undock."""
+        if self._suppressed and not self._visible:
+            return False
         self._suppressed = True
-        self.hide()
+        return self.hide()
 
     def resume(self, refresh=True):
         """Permit survey display again, optionally repainting cached data."""
@@ -393,7 +418,6 @@ class SurveyStatusHUD:
             sampling, focused_body_id, focused_body_name, total_known,
         )
         if self._suppressed:
-            self.hide()
             return
         model = build_survey_model(system_name, scan_items, focused_body_id,
                                    focused_body_name, sampling, scanned, total,
@@ -403,7 +427,7 @@ class SurveyStatusHUD:
             self._last_render_key = None
             self.hide()
             return
-        render_key = repr(model)
+        render_key = _survey_render_key(model)
         if render_key != self._last_render_key:
             self._last_render_key = render_key
             self._redraw(model)

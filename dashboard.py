@@ -136,6 +136,14 @@ def _preserve_unconfirmed_scan_total(startup_replay, event_data, incoming_system
 
 
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
+    _SURVEY_REFRESH_EVENTS = frozenset({
+        "Location", "FSDJump", "CarrierJump", "StartJump",
+        "Docked", "Undocked", "ApproachBody", "LeaveBody",
+        "FSSDiscoveryScan", "DiscoveryScan", "NavBeaconScan",
+        "FSSAllBodiesFound", "FSSBodySignals", "SAASignalsFound",
+        "SAAScanComplete", "Scan", "ScanOrganic",
+    })
+
     _COCKPIT_STATE_FILE = "last_cockpit_state.json"
     _COCKPIT_STATE_SCHEMA = 1
     _COCKPIT_STATE_FIELDS = (
@@ -8168,12 +8176,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     )
         else:
             self._ui_post(self.update_dashboard_ui, key="dashboard-full-refresh")
-        # Journal events commonly arrive in batches.  Per-event Survey Status
-        # redraws are deliberately suppressed while a batch is active, so
-        # perform one coalesced refresh now that the committed scan totals are
-        # authoritative (for example, after FSSAllBodiesFound changes 10/11 to
-        # 11/11).
-        self._refresh_system_info_progress()
+        # Per-event scan-overlay redraws are suppressed while a batch is
+        # active. Refresh once only when that batch actually changed survey
+        # state; unrelated cargo, combat and status events must not churn the
+        # persistent Survey Operations window.
+        survey_changed = startup_final or any(
+            (event.get("type") or event.get("event")) in self._SURVEY_REFRESH_EVENTS
+            for event in events if isinstance(event, dict)
+        )
+        if survey_changed:
+            self._refresh_system_info_progress()
         self._refresh_cockpit_brain(event="journal_batch")
         self._refresh_commander_profile_window()
         self._refresh_value_ledger_window()
