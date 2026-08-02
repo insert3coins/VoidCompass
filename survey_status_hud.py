@@ -322,22 +322,63 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
 
 
 def _survey_render_key(model):
-    """Key only presentation data, coarsening fast-moving sample distance."""
-    keyed = dict(model or {})
-    sampling = keyed.get("sampling")
+    """Key only pixels the Survey Operations renderer can actually change."""
+    model = model or {}
+    sampling = model.get("sampling")
+    sampling_key = None
     if sampling:
-        sampling = {
-            key: sampling.get(key)
-            for key in ("species", "progress", "colony_m", "min_distance_m", "clear")
-        }
         minimum = sampling.get("min_distance_m")
         if minimum is not None:
             # Ten-metre steps stay useful in the cockpit without rebuilding
             # the whole overlay for every metre reported by Status.json.
             minimum = _safe_int(minimum)
-            sampling["min_distance_m"] = int(round(minimum / 10.0) * 10)
-        keyed["sampling"] = sampling
-    return repr(keyed)
+            minimum = int(round(minimum / 10.0) * 10)
+        sampling_key = (
+            sampling.get("species"), _safe_int(sampling.get("progress"), 1),
+            sampling.get("colony_m"), minimum, sampling.get("clear"),
+        )
+
+    def notable_key(row):
+        row = row or {}
+        return (
+            row.get("display_name") or row.get("name"), row.get("icons"),
+            row.get("name_color"), row.get("value_line"), row.get("value_color"),
+        )
+
+    def detail_key(row):
+        row = row or {}
+        return (
+            row.get("kind"), row.get("status"),
+            row.get("display_name") or row.get("name"),
+            row.get("value"), row.get("min_value"), row.get("max_value"),
+        )
+
+    common = (
+        model.get("mode"), model.get("system"), sampling_key,
+        tuple(notable_key(row) for row in model.get("notable_rows") or ()),
+    )
+    if model.get("mode") == "body":
+        body = model.get("body") or {}
+        return common + (
+            model.get("body_display") or body.get("name"),
+            _safe_int(body.get("bio_count")),
+            _safe_int(body.get("organic_complete_count")),
+            _safe_int(body.get("geo_count")), bool(body.get("dss_complete")),
+            tuple(detail_key(row) for row in model.get("rows") or ()),
+            model.get("min_value"), model.get("max_value"),
+        )
+
+    row_keys = []
+    for row in model.get("rows") or ():
+        row_keys.append((
+            row.get("display_name") or row.get("name"),
+            _safe_int(row.get("bio_count")), _safe_int(row.get("geo_count")),
+            _safe_int(row.get("complete")), bool(row.get("bio_complete")),
+            bool(row.get("needs_dss")), row.get("min_value"), row.get("max_value"),
+            notable_key(row.get("notable")) if row.get("notable") else None,
+            tuple(detail_key(detail) for detail in row.get("bio_details") or ()),
+        ))
+    return common + (tuple(row_keys), _safe_int(model.get("notable_count")))
 
 
 class SurveyStatusHUD:
@@ -364,12 +405,11 @@ class SurveyStatusHUD:
         self._visible = False
 
     def _force_topmost(self):
+        """Set persistent topmost state once; show() reapplies it after hiding."""
         try:
             self.win.attributes("-topmost", True)
         except Exception:
             pass
-        refresh_ms = max(2000, _safe_int(self.config.get("overlay_topmost_refresh_ms"), 12000))
-        self.win.after(refresh_ms, self._force_topmost)
 
     def show(self):
         if self._visible or self._suppressed:
