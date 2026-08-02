@@ -248,7 +248,7 @@ class ColonyOverlay:
             self.canvas.delete("bg")
             overlay_chrome.draw_chrome(
                 self.canvas, w, h, accent=self.ACCENT, bracket_len=10,
-                bg=self.PANEL, scanline_color=self.PANEL_2, tags="bg",
+                bg=self.PANEL, scanlines=False, tags="bg",
             )
             self.canvas.tag_lower("bg")
             self.canvas.coords(self.panel_window, m, m)

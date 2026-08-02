@@ -167,10 +167,6 @@ class TradeHUD:
             self.canvas, self.WIDTH, self.HEIGHT, accent=palette["accent"],
             scanlines=False,
         )
-        self.canvas.create_line(
-            16, 45, self.WIDTH - 16, 45,
-            fill=palette["border_soft"], width=1,
-        )
         self._text(16, 21, "TRADE ROUTE", palette["accent"], ("Courier", 10, "bold"))
         route_type = "ROUND TRIP" if plan.get("kind") == "round-trip" else "ONE WAY"
         self._text(

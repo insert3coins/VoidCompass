@@ -217,12 +217,6 @@ class ProspectorHUD:
         self.canvas.create_text(x + 1, y + 1, text=text, fill="#000000", font=font, anchor=anchor)
         self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor)
 
-    def _line(self, y, inset=16):
-        self.canvas.create_line(
-            inset, y, self.WIDTH - inset, y,
-            fill=self._palette["border_soft"], width=1,
-        )
-
     def _redraw(self):
         if not self._last_raw:
             return
@@ -240,27 +234,25 @@ class ProspectorHUD:
         self.win.geometry(overlay_chrome.position_geometry(x, y, self.WIDTH, height))
         self.canvas.delete("all")
         accent = palette["orange"] if core_mat else palette["accent"]
-        overlay_chrome.draw_chrome(self.canvas, self.WIDTH, height, accent=accent, bracket_len=10)
+        overlay_chrome.draw_chrome(
+            self.canvas, self.WIDTH, height, accent=accent, bracket_len=10,
+            scanlines=False,
+        )
 
         self._text(16, 17, "PROSPECTOR ANALYSIS", accent, ("Courier", 10, "bold"))
         badge = "CORE DETECTED" if core_mat else f'{model["content_label"]} CONTENT'
         badge_color = palette["orange"] if core_mat else palette.get(model["content_tone"], palette["text"])
         self._text(self.WIDTH - 16, 17, badge, badge_color, ("Courier", 8, "bold"), "e")
-        self._line(31)
-
         remaining = model["remaining"]
         remaining_text = f"{remaining:.1f}% REMAINING" if remaining is not None else "REMAINING UNKNOWN"
         self._text(16, 48, model["mining_type"].upper(), palette["text"], ("Courier", 11, "bold"))
         self._text(self.WIDTH - 16, 48, remaining_text, palette["muted"], ("Courier", 8), "e")
-        self._line(64)
         y = 73
 
         if core_mat:
             self._text(16, y + 7, f"◆ MOTHERLODE  {core_mat.upper()}", palette["orange"],
                        ("Courier", 9, "bold"))
             y += 27
-            self._line(y - 4)
-
         self._text(16, y + 5, "MATERIAL COMPOSITION", palette["dim"], ("Courier", 8, "bold"))
         y += 20
         bar_x = 154
@@ -293,7 +285,6 @@ class ProspectorHUD:
                 self._text(bar_end + 7, row_y + 4, f"{proportion:.1f}%", color, ("Courier", 8))
                 y += self._MAT_H
 
-        self._line(y + 5)
         if model["refined_total"]:
             parts = "  ·  ".join(f'{item["tonnes"]}t {item["name"]}' for item in model["refined"])
             summary = f'{model["refined_total"]}t REFINED  ·  {parts}'

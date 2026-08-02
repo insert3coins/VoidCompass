@@ -279,19 +279,18 @@ class CarrierHUD:
         self.canvas.delete("all")
 
         palette = self._palette
-        overlay_chrome.draw_chrome(self.canvas, WIDTH, height, accent=palette["accent"])
+        overlay_chrome.draw_chrome(
+            self.canvas, WIDTH, height, accent=palette["accent"],
+            scanlines=False,
+        )
         self._draw_text(18, 18, model["carrier_type"], palette["accent"], ("Courier", 10, "bold"))
         self._draw_text(WIDTH - 18, 18, model["badge"], palette[model["badge_tone"]],
                         ("Courier", 9, "bold"), anchor="e")
-        self._line(32)
-
         self._draw_text(18, 50, _truncate(str(model["name"]).upper(), 32), palette["text"],
                         ("Courier", 11, "bold"))
         self._draw_text(WIDTH - 18, 50, f'[{model["callsign"]}]', palette["orange"],
                         ("Courier", 9, "bold"), anchor="e")
         self._draw_text(18, 68, _truncate(model["location"], 52), palette["muted"], ("Courier", 8))
-        self._line(80)
-
         y = 94
         self._draw_text(18, y, model["movement_label"], palette["dim"], ("Courier", 8, "bold"))
         y += 18
@@ -301,8 +300,6 @@ class CarrierHUD:
             y += 16
             self._draw_text(18, y, _truncate(model["movement_detail"], 55), palette["muted"], ("Courier", 8))
         y += 15
-        self._line(y)
-
         if model["route_total"]:
             y += 15
             route_tone = "green" if model["route_complete"] else "accent"
@@ -315,8 +312,6 @@ class CarrierHUD:
             fuel_need = f'{model["remaining_fuel"]:,} T REMAINING' if model["remaining_fuel"] else "ROUTE FUEL CLEAR"
             self._draw_text(18, y, fuel_need, palette["muted"], ("Courier", 8))
             y += 15
-            self._line(y)
-
         y += 15
         self._draw_text(18, y, "LOGISTICS", palette["dim"], ("Courier", 8, "bold"))
         fuel_text = "TRITIUM UNKNOWN"
@@ -358,9 +353,6 @@ class CarrierHUD:
         if model["route_total"]:
             rows.append((f'ROUTE: {model["route_done"]}/{model["route_total"]}', palette["accent"]))
         return rows, model["badge"], palette[model["badge_tone"]]
-
-    def _line(self, y):
-        self.canvas.create_line(18, y, WIDTH - 18, y, fill=self._palette["border_soft"], width=1)
 
     def apply_theme(self, palette=None):
         self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)
