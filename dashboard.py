@@ -977,10 +977,24 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return
         if not getattr(self, "system_info_hud", None) and not getattr(self, "survey_status_hud", None):
             return
+        generation = getattr(self, "_system_info_refresh_generation", 0)
+        self._ui_post(
+            self._schedule_system_info_refresh_ui,
+            generation,
+            key="system-info-progress-schedule",
+        )
+
+    def _schedule_system_info_refresh_ui(self, generation):
+        """Debounce scan overlays on Tk's thread after journal state settles."""
+        if generation != getattr(self, "_system_info_refresh_generation", 0):
+            return
         if getattr(self, "_system_info_refresh_job", None) is not None:
             return
+
         def _run():
             self._system_info_refresh_job = None
+            if generation != getattr(self, "_system_info_refresh_generation", 0):
+                return
             if self.system_info_hud:
                 self.system_info_hud.update_scan_progress(
                     self.scan_items, self.body_signals, self.total,
@@ -1015,6 +1029,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         survey = getattr(self, "survey_status_hud", None)
         if survey:
             survey.suppress()
+        self._system_info_refresh_generation = (
+            getattr(self, "_system_info_refresh_generation", 0) + 1
+        )
 
     def _apply_location_navigation_state(self, raw, data):
         """Seed navigation/station state from a Location login event."""
@@ -6800,6 +6817,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self._ui_post(lambda value=scan_text: self.scan_stat.config(text=value), key="scan-progress-label")
                     self.update_hud()
                     self.schedule_dashboard_refresh()
+                    self._refresh_system_info_progress()
 
         elif ev == "NavBeaconScan":
             if not self._matches_current_system_address(d):
@@ -6861,7 +6879,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.update_hud()
                         self.schedule_dashboard_refresh()
                         self._refresh_exploration_window()
-                        self._refresh_system_info_progress()
+                if not self.batch_mode:
+                    self._refresh_system_info_progress()
 
         elif ev == "SAASignalsFound":
             if not self._matches_current_system_address(d):
@@ -6895,7 +6914,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.update_hud()
                         self.schedule_dashboard_refresh()
                         self._refresh_exploration_window()
-                        self._refresh_system_info_progress()
+                if not self.batch_mode:
+                    self._refresh_system_info_progress()
 
         elif ev == "SAAScanComplete":
             if not self._matches_current_system_address(d):

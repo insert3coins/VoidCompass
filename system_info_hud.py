@@ -84,7 +84,8 @@ def _local_stellar_profile(scan_items):
 
 def build_system_model(system_name, star_class, body_count,
                        bio_total=0, geo_total=0, total_known=False,
-                       local_profile=None, edsm_info=None, spansh=None):
+                       local_profile=None, edsm_info=None, spansh=None,
+                       scanned_count=0):
     """Return a renderer-neutral exploration summary for one system."""
     total = max(0, _safe_int(body_count))
     known = bool(total_known and total > 0)
@@ -115,10 +116,32 @@ def build_system_model(system_name, star_class, body_count,
         classes = [str(value).strip() for value in profile.get("star_classes") or () if value]
         if len(classes) > 1:
             profile_rows.append("STELLAR CLASSES · " + " / ".join(classes))
+
+        # Spansh supplies useful whole-system context, but it must not hide the
+        # commander's live journal discoveries. Keep this as a compact catalogue
+        # readout rather than duplicating the Navigation HUD's progress bar.
+        if spansh and local_profile:
+            local_parts = [
+                _count_label(local_profile.get("star_count"), "STAR"),
+                _count_label(local_profile.get("planet_count"), "PLANET"),
+            ]
+            local_landable = max(0, _safe_int(local_profile.get("landable_count")))
+            if local_landable:
+                local_parts.append(
+                    _count_label(local_landable, "LANDABLE BODY", "LANDABLE BODIES")
+                )
+            profile_rows.append("LOCAL CATALOGUE · " + " · ".join(local_parts))
     else:
         profile_rows.append("STELLAR PROFILE DATA RESOLVING")
         if signals:
             profile_rows.append("SURFACE SIGNALS · " + " · ".join(signals))
+
+    scanned = max(0, _safe_int(scanned_count))
+    if scanned:
+        profile_source = (
+            f"RECORD + LIVE · {scanned} CATALOGUED"
+            if spansh else f"LIVE SURVEY · {scanned} CATALOGUED"
+        )
 
     facility_rows = []
     facility_state = "RESOLVING"
@@ -240,6 +263,7 @@ class SystemInfoHUD:
         self._system        = ""
         self._star_class    = ""
         self._body_count    = 0
+        self._scanned_count = 0
         self._bio_total     = 0
         self._geo_total     = 0
         self._total_known   = False
@@ -301,6 +325,13 @@ class SystemInfoHUD:
     def _apply_scan_progress(self, scan_items, body_signals, total_bodies,
                              scanned_bodies=None, total_known=None):
         self._body_count = max(0, _safe_int(total_bodies))
+        if scanned_bodies is None:
+            self._scanned_count = sum(
+                1 for item in (scan_items or ())
+                if isinstance(item, dict) and item.get("body_id") is not None
+            )
+        else:
+            self._scanned_count = max(0, _safe_int(scanned_bodies))
         self._total_known = (
             self._body_count > 0 if total_known is None else bool(total_known)
         )
@@ -447,6 +478,7 @@ class SystemInfoHUD:
             self._local_profile,
             self._edsm_info,
             self._spansh,
+            self._scanned_count,
         )
 
     def _section(self, y, label, right=""):
