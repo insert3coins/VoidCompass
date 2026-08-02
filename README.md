@@ -2,19 +2,26 @@
 
 **Current version: 5.3.5.2**
 
-Void Compass is a native Windows companion for Elite Dangerous, with a native Linux x86-64 build currently offered for testing. It turns Frontier's live journal, status and companion files into a command dashboard, persistent expedition tools, specialised workspaces, in-game overlays and a local cockpit companion.
+Void Compass is an exploration-first companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a persistent command dashboard, deep survey intelligence, expedition planning, native in-game overlays and a local cockpit companion.
 
 [Download releases](https://github.com/insert3coins/VoidCompass/releases) · [Read the wiki](https://github.com/insert3coins/VoidCompass/wiki) · [Report an issue](https://github.com/insert3coins/VoidCompass/issues/new/choose)
 
-Exploration is the primary experience. Trade, Mining, Combat/AX, Engineering, Powerplay and strategy tools remain fully available as optional add-on workspaces without crowding the live exploration view.
+Windows is the primary native release. A native Linux x86-64 build is also available for testing; neither build requires Python to be installed.
 
-The Dashboard defaults to exploration, then transforms from verified journal activity for Trade, Mining, Combat, Ground, Engineering, Powerplay, Carrier, Colony and station operations. Its hero, telemetry, priority, support and primary action change together; automatic mode returns to exploration context when wider activity is no longer active. A themed mode selector can manually lock and inspect any Dashboard or immediately return to Automatic detection.
+## At a glance
 
-The Dashboard's activity log follows the current mode and keeps a curated Flight Log for discoveries, surveys, navigation, operations, Compass, alerts and support services. Frontier's unfiltered journal stream remains one click away in a separate diagnostics view.
+- **Exploration command deck** — live flight, route, traffic, survey, discovery value, expedition and next-action intelligence in one view.
+- **Deep Survey** — explainable FSS, DSS, biological and geological progress; valuable bodies; system architecture; revisit targets; Colonisation Recon and a searchable discovery archive.
+- **Galactic Atlas** — a fully offline Milky Way map with all 42 Universal Cartographics regions, routes, travel history, smart clusters, intelligence layers and commander annotations.
+- **Native overlays** — themed, profile-aware HUDs with mouse passthrough, global hotkeys and a visual Overlay Layout Studio.
+- **Compass companion** — local deterministic cognition, bounded commander memory, 15 personas and optional cached Piper voices without an LLM or GPU workload.
+- **Optional operations** — focused Trade Assist, Mining, Combat/AX, Engineering, Powerplay, Fleet/Squadron Carrier and colony tools remain available without displacing exploration.
+
+The Dashboard stays exploration-first, then adapts from verified journal activity for Trade, Mining, Combat, Ground, Engineering, Powerplay, Carrier, Colony and station operations. Automatic mode can be manually locked, while its curated Flight Log keeps useful events separate from Frontier's raw journal stream.
 
 ![Void Compass exploration dashboard](DashBoard.PNG)
 
-*Representative non-private 5.2 exploration state with the full navigation rail and curated Flight Log.*
+*Current v5.3.5.2 exploration dashboard with Arrival Intelligence, route progress, Compass context, expedition support and the curated Flight Log.*
 
 ## Command workspaces
 
@@ -37,11 +44,15 @@ Explore integrates profile-local Deep Survey intelligence directly into its four
 - **Discoveries** is one searchable archive for system history, valuable bodies, all 42 passport regions, Codex discoveries, FSS signals, DSS probe efficiency and screenshot metadata; image previews load only when selected, while system records can be copied or opened directly in EDSM.
 - **Logbook** places the live trip summary, reliable resume checkpoint, automatic milestones and retained session debriefs together instead of separating them across Chronicle tabs. Its Explorer Data Vault separates unsold cartographic value, biological value and possible first-discovery bonus from recent sale evidence, while reports can be saved as Markdown or a themed local PNG share card.
 
+![Void Compass System Survey](ExploreSurvey.PNG)
+
+*System Survey combines verified completion, the action queue, missed-discovery revisit work, system architecture, body detail and Colonisation Recon.*
+
 Named expeditions persist across sessions with journal-verified goals, multi-session statistics, prioritised bookmarks and revisit targets. Departing a system can add worthwhile unfinished mapping, biology or FSS evidence to the Missed Discoveries queue, which links directly to its Revisit map layer and expedition bookmarks. Their active strip remains visible across Explore, while Compass can brief the next objective and announce verified completion without routine feed spam. The flat Galactic Atlas combines original game-style Milky Way artwork with the complete 42-region Universal Cartographics layout. It works fully offline, supports retained-system, region and annotation search, natural drag movement, cursor-centred zoom, Atlas/Route Focus/Current Vicinity framing and an in-place full-window focus mode, and overlays profile-local travel breadcrumbs, game and waypoint routes, direction arrows, an optional return trail plus Valuable, Biology, Codex, Photo, Recon, Revisit, Bookmark and custom Annotation records. Notes, danger warnings, regions of interest, survey targets and waypoints can be placed directly on the map; zoom-aware cluster badges keep dense histories legible, while a restrained ship pulse, planned-route tracer and next-waypoint beacon add live navigation context without rebuilding the cached atlas. Visible-image cropping keeps navigation responsive, while expedition plans can be exchanged as VoidCompass JSON or newline waypoint lists and full locally generated Markdown reports include the named route, objectives, evidence and bookmarks.
 
 ![Void Compass Galactic Atlas](GalaxyAtlas.PNG)
 
-*Representative non-private expedition route with the offline 42-region layer and all intelligence overlays enabled.*
+*The integrated v5.3.5.2 Galactic Atlas showing the offline Milky Way layer, 42 regions, profile-local travel history, route tracers, clusters, filters and current-ship position.*
 
 Explore remembers its active page, survey/discovery filters and Expedition section independently for each commander. Colonisation Recon produces a conservative survey-readiness dossier, saved candidate list and direct Architect Command handoff; it does not claim that survey readiness guarantees game eligibility. System architecture follows journal `Parents` relationships, while wonders detection flags unusual measured characteristics without inventing missing orbits.
 
@@ -57,7 +68,7 @@ Frontier does not publish a complete member roster, online presence, squadron ch
 
 ![Squadron Command workspace](SquadronCommand.PNG)
 
-*Representative populated Squadron Command state; the page only displays facts reported by the commander's own journal.*
+*Current Squadron Command within the unified navigation shell; unavailable journal facts remain clearly identified instead of being inferred.*
 
 ### Mining Specialist
 
@@ -88,7 +99,11 @@ Every overlay can be enabled independently, dragged to a saved position and styl
 
 On Windows, profile-aware global shortcuts can open or close the Layout Studio and temporarily hide or restore all overlays while Elite has focus, with optional individual shortcuts for the main exploration and operations overlays. The low-conflict defaults are **Ctrl+Alt+Shift+F10** for Layout Studio, **Ctrl+Alt+Shift+F11** for all overlays and **Ctrl+Alt+Shift+F12** for a field bookmark at the current system/body; assignments can be changed or cleared on the dedicated **Settings → Hotkeys** page without changing which modules are enabled. Linux X11/XWayland builds retain borderless topmost overlays with opaque themed backgrounds; chroma transparency, mouse passthrough and system-wide shortcuts remain Windows-only.
 
-![Navigation HUD](NavHud.PNG)
+| Navigation HUD | Fleet Carrier HUD |
+| :---: | :---: |
+| ![Navigation HUD](NavHud.PNG) | ![Fleet Carrier HUD](CarrierHud.PNG) |
+
+*Current Navigation and Fleet Carrier overlays. Enabled overlays remain visible regardless of Dashboard mode and retain their commander-specific positions.*
 
 ## Achievements and commander profiles
 
@@ -102,7 +117,7 @@ Commander Record can create SQLite-safe manual profile backups and schedule a re
 
 Compass runs locally without an LLM, Ollama service or GPU workload. Its bounded per-commander memory combines verified navigation, named-expedition objectives, survey, biology, mission, trade, mining, engineering, carrier, social and data-sale context.
 
-The deterministic cognition engine learns personal baselines and whether advice was useful, varies verified wording, remembers notable episodes, chooses useful silence and supports 15 behavioural personas. Optional Piper voice packs provide cached neural speech; urgent safety callouts remain isolated from persona styling.
+The deterministic cognition engine learns personal baselines and whether advice was useful, varies verified wording, remembers notable episodes, chooses useful silence and supports 15 behavioural personas. Routine docking clears stale non-safety chatter and permits only useful contextual advice before a short quiet period; urgent safety callouts remain available. Optional Piper voice packs provide cached neural speech.
 
 ## Integrations
 
