@@ -1,5 +1,6 @@
 """Compact, theme-aware cargo manifest overlay."""
 
+import math
 import tkinter as tk
 
 from config import save_config
@@ -167,6 +168,28 @@ class CargoHUD:
         self.canvas.create_line(16, y, WIDTH - 16, y,
                                 fill=self._palette["border_soft"], width=1)
 
+    def _capacity_bar(self, y, utilisation, tone):
+        """Draw the original ten-segment cargo meter in the refreshed layout."""
+        left = 16
+        right = WIDTH - 16
+        segment_count = 10
+        gap = 3
+        segment_width = (right - left - (gap * (segment_count - 1))) / segment_count
+        filled = 0
+        if utilisation is not None and utilisation > 0:
+            filled = min(segment_count, math.ceil(utilisation * segment_count))
+
+        for index in range(segment_count):
+            x1 = left + index * (segment_width + gap)
+            x2 = x1 + segment_width
+            active = index < filled
+            self.canvas.create_rectangle(
+                x1, y, x2, y + 7,
+                fill=self._palette[tone] if active else self._palette["panel_alt"],
+                outline=self._palette[tone] if active else self._palette["border_soft"],
+                width=1,
+            )
+
     def update(self, inventory, capacity=0):
         inventory = list(inventory or [])
         self._last_inventory = list(inventory)
@@ -208,12 +231,7 @@ class CargoHUD:
             status_tone = "red" if utilisation >= 0.95 else "yellow" if utilisation >= 0.8 else "green"
         self.draw_text(16, 48, status_text, palette[status_tone], ("Courier", 8, "bold"))
         bar_y = 58
-        self.canvas.create_rectangle(16, bar_y, WIDTH - 16, bar_y + 6,
-                                     fill=palette["panel_alt"], outline="")
-        if utilisation is not None:
-            fill_x = 16 + int((WIDTH - 32) * utilisation)
-            self.canvas.create_rectangle(16, bar_y, fill_x, bar_y + 6,
-                                         fill=palette[status_tone], outline="")
+        self._capacity_bar(bar_y, utilisation, status_tone)
         self._line(76)
 
         self.draw_text(16, 90, "COMMODITY", palette["dim"], ("Courier", 8, "bold"))
