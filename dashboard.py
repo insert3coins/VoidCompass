@@ -815,6 +815,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._data_risk_level = 0
         self._compass_advisor_last = {}
         self._compass_advisor_last_any = 0.0
+        self._cockpit_docking_quiet_until = 0.0
         self._hud_balance_cache = {"ts": 0.0, "balance": None}
         self.last_journal_event_ts = 0.0
         self.last_logged_journal_file = None
@@ -1482,6 +1483,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._data_risk_level = 0
         self._compass_advisor_last = {}
         self._compass_advisor_last_any = 0.0
+        self._cockpit_docking_quiet_until = 0.0
         self._stale_bio_warned = set()
         # Bio tracking: star/body scan conditions for prediction
         self.system_stars: dict  = {}   # body_id → star_type str
@@ -4979,6 +4981,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def _speak(self, text, category="safety", cooldown_s=20, key=None):
         if getattr(self, "_closing", False):
             return False
+        if (
+            category != "safety"
+            and time.monotonic() < getattr(self, "_cockpit_docking_quiet_until", 0.0)
+        ):
+            return False
         try:
             if (self.config.get("cockpit_memory_enabled", True)
                     and getattr(self, "cockpit_memory", None)):
@@ -5171,10 +5178,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.add_event_feed_entry(
                 "AI", f"Command Deck: {briefing}", severity="INFO",
             )
-            self._speak(
-                briefing, category="objectives", cooldown_s=0,
-                key=f"adaptive-mode:{mode}",
-            )
+            # Docked already receives one context-aware adviser pass. Keep the
+            # generic station-mode transition in the feed instead of speaking
+            # a second line during a routine arrival.
+            if event != "Docked":
+                self._speak(
+                    briefing, category="objectives", cooldown_s=0,
+                    key=f"adaptive-mode:{mode}",
+                )
         self.schedule_dashboard_refresh(full=True)
 
     def _adaptive_startup_briefing(self):
@@ -6620,8 +6631,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._refresh_exploration_window()
 
         elif ev == "Docked":
-            if not startup_replay:
-                self._speak_pending_cockpit_remark()
+            memory = getattr(self, "cockpit_memory", None)
+            if memory:
+                # Routine debriefs and stale ambient lines are not useful
+                # while station UI and telemetry already demand attention.
+                memory.clear_pending_topics("session-debrief", "ambient-idle")
+            voice = getattr(self, "voice_callouts", None)
+            if voice and hasattr(voice, "cancel"):
+                for category in ("ambient", "navigation", "exploration", "objectives"):
+                    voice.cancel(category=category)
             station = d.get("StationName") or d.get("station_name", "Unknown")
             stype = d.get("StationType") or d.get("station_type", "")
             self.current_docked = True
@@ -7178,6 +7196,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             ev, raw, d, startup_replay=startup_replay,
             snapshot=compass_snapshot,
         )
+        if ev == "Docked" and not startup_replay:
+            # The Docked cognition pass above may provide one useful station
+            # action. Silence the routine follow-up event burst after that.
+            self._cockpit_docking_quiet_until = time.monotonic() + 20.0
 
     # ── Companion feature state ───────────────────────────────────────────────
 

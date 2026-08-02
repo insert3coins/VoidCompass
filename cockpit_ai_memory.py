@@ -1891,9 +1891,9 @@ class CockpitMemory:
                         self.state["expeditions"] = self.state["expeditions"][-30:]
                         self.state["active_expedition"] = None
                         self._remember("expedition", f"Completed {active['name']} after {active['jumps']:,} jumps", 5, timestamp)
-                    debrief = self.session_debrief("Docking report", close=False)
-                    if debrief:
-                        self._queue_remark((debrief,), "navigation", "session-debrief", 2)
+                    # Keep learning across station visits. Spoken session
+                    # debriefs belong to Elite's Shutdown boundary; repeating
+                    # one at every dock became cockpit noise.
 
         if event == "ScanOrganic" and (bool(data.get("is_complete")) or str(raw.get("ScanType") or "").casefold() == "analyse"):
             self._set_mood("proud", 0.55, "biological analysis completed")
