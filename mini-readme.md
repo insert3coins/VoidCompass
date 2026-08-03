@@ -9,6 +9,7 @@
 *   Kept recovered known-system FSS progress accurate and permanent, with a theme-aware completion state only when the scan is genuinely complete.
 *   Added a single state-aware context line for biological sampling, body gravity, surface coordinates or docking, plus restrained traffic and valuable/undiscovered attention cues.
 *   Made the activity beacon follow live Galaxy Map, System Map, Orrery, FSS, DSS, Codex and on-foot focus instead of leaving the underlying flight state displayed.
+*   Fixed live theme switching so the dashboard root and every open overlay repaint immediately when Settings is saved, including Navigation, gravity, toast and heartbeat overlays.
 *   Preserved commander-specific position, compact mode, live themes, CRT controls, mouse passthrough, global hotkeys, Nomad/SRV/Fighter/on-foot states and Overlay Layout Studio ownership.
 *   Quieted routine docking by clearing stale non-safety Compass chatter, keeping only useful contextual advice before a short silence while urgent safety callouts remain available.
 

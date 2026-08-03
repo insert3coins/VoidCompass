@@ -522,13 +522,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         success = True
         for attr in (
+            "hud",
             "cargo_hud",
             "trade_hud",
             "carrier_hud",
             "prospector_hud",
             "system_info_hud",
+            "gravity_warning_hud",
             "station_info_hud",
             "survey_status_hud",
+            "toast_hud",
+            "heartbeat_hud",
             "colony_overlay",
         ):
             overlay = getattr(self, attr, None)

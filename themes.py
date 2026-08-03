@@ -2,8 +2,8 @@
 
 Standalone (stdlib-only) so both config.py and ui_theme.py can import it
 without cycles. The active theme is resolved ONCE at import time, before any
-UI module binds its color constants — theme changes therefore take effect on
-the next app start, matching the settings page's restart convention.
+UI module binds its color constants. The live theme bridge rebinds loaded
+modules and explicitly repaints open overlays when Settings is saved.
 
 Profile-aware: the theme name and any custom themes live in the active
 commander profile's config (profiles/<key>/config.json), so each commander
