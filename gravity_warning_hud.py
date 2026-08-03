@@ -7,11 +7,11 @@ as ProspectorHUD.
 """
 
 import tkinter as tk
-from config import COLOR_TEXT, COLOR_ORANGE, save_config
+from config import save_config
 import overlay_chrome
+import themes
 
 _CHROMA = "#ff00ff"
-_RED = "#ff5a5a"
 
 
 class GravityWarningHUD:
@@ -24,6 +24,7 @@ class GravityWarningHUD:
         self._hide_job = None
         self._last_body = None
         self._last_gravity = None
+        self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
 
         self.win = tk.Toplevel(root)
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
@@ -164,13 +165,19 @@ class GravityWarningHUD:
 
     def _redraw(self, body_name, gravity_g):
         w, h = self.WIDTH, self.HEIGHT
+        palette = self._palette
         self.canvas.delete("all")
         overlay_chrome.draw_chrome(
-            self.canvas, w, h, accent=_RED, bracket_len=10,
+            self.canvas, w, h, accent=palette["red"], bracket_len=10,
             scanlines=False,
         )
-        self._text(w / 2, 18, "⚠  HIGH GRAVITY WORLD  ⚠", _RED, ("Courier", 10, "bold"), anchor="center")
+        self._text(w / 2, 18, "⚠  HIGH GRAVITY WORLD  ⚠", palette["red"], ("Courier", 10, "bold"), anchor="center")
         self._text(w / 2, 48, body_name.upper() if len(body_name) <= 30 else body_name[:29].upper() + "…",
-                    COLOR_TEXT, ("Courier", 11, "bold"), anchor="center")
+                    palette["text"], ("Courier", 11, "bold"), anchor="center")
         self._text(w / 2, 70, f"{gravity_g:.2f} g   (threshold {self._threshold():.1f} g)",
-                    COLOR_ORANGE, ("Courier", 9, "bold"), anchor="center")
+                    palette["orange"], ("Courier", 9, "bold"), anchor="center")
+
+    def apply_theme(self, palette=None):
+        self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)
+        if self._last_body is not None and self._last_gravity is not None:
+            self._redraw(self._last_body, self._last_gravity)

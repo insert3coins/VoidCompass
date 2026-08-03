@@ -58,9 +58,8 @@ DEPRECATED_CONFIG_KEYS = (
     'cockpit_llm_advisor_level',
     'cockpit_llm_timeout_s',
 )
-# Overlay/HUD colors come from the active theme, resolved once at startup
-# (themes.py reads the active commander profile's config from disk before
-# any UI module binds these). Theme changes apply on next launch.
+# Overlay/HUD colors are seeded from the active theme at startup; the live
+# theme bridge rebinds these module constants and repaints open overlays.
 import themes as _themes
 
 COLOR_BG = _themes.ACTIVE_PALETTE["bg"]

@@ -8,19 +8,12 @@ corner anchor and auto-dismiss individually after their own timeout.
 
 import time
 import tkinter as tk
-from config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE, save_config
+from config import save_config
 import overlay_chrome
+import themes
 
 _CHROMA = "#ff00ff"
-_RED = "#ff5a5a"
-_GREEN = "#54e39a"
-
-_SEVERITY_COLOR = {
-    "info": COLOR_ACCENT,
-    "warn": COLOR_ORANGE,
-    "fail": _RED,
-    "success": _GREEN,
-}
+_SEVERITIES = frozenset(("info", "warn", "fail", "success"))
 
 WIDTH = 320
 _TOAST_H = 46
@@ -39,6 +32,7 @@ class ToastHUD:
         self._toasts = []  # list of {id, title, message, severity, expire_at}
         self._next_id = 1
         self._tick_job = None
+        self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
 
         self.win = tk.Toplevel(root)
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
@@ -87,7 +81,7 @@ class ToastHUD:
             "title": str(title or ""),
             "message": str(message or ""),
             "icon": str(icon or ""),
-            "severity": severity if severity in _SEVERITY_COLOR else "info",
+            "severity": severity if severity in _SEVERITIES else "info",
             "expire_at": time.time() + max(2.0, float(duration_s or 6.0)),
         }
         self._next_id += 1
@@ -190,6 +184,13 @@ class ToastHUD:
 
     def _redraw(self):
         w = WIDTH
+        palette = self._palette
+        severity_colors = {
+            "info": palette["accent"],
+            "warn": palette["orange"],
+            "fail": palette["red"],
+            "success": palette["green"],
+        }
         n = len(self._toasts)
         h = max(1, n * _TOAST_H + max(0, n - 1) * _GAP)
         self.canvas.config(width=w, height=h)
@@ -198,7 +199,7 @@ class ToastHUD:
 
         y = 0
         for toast in self._toasts:
-            color = _SEVERITY_COLOR[toast["severity"]]
+            color = severity_colors[toast["severity"]]
             self.canvas.create_rectangle(0, y, w, y + _TOAST_H, fill="#010101", outline="")
             self.canvas.create_rectangle(0, y, 4, y + _TOAST_H, fill=color, outline="")
             self.canvas.create_rectangle(4, y, w, y + _TOAST_H, outline=color, width=1)
@@ -207,7 +208,7 @@ class ToastHUD:
                     _ICON_X,
                     y + (_TOAST_H // 2),
                     toast["icon"],
-                    COLOR_TEXT,
+                    palette["text"],
                     ("Segoe UI Emoji", 18),
                     anchor="center",
                 )
@@ -223,7 +224,12 @@ class ToastHUD:
                     _TEXT_X,
                     y + 32,
                     self._truncate(toast["message"], _MESSAGE_CHARS),
-                    COLOR_TEXT,
+                    palette["text"],
                     ("Courier", 8),
                 )
             y += _TOAST_H + _GAP
+
+    def apply_theme(self, palette=None):
+        self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)
+        if self._toasts:
+            self._redraw()

@@ -1357,7 +1357,12 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         if saved_name != themes.ACTIVE_THEME_NAME or saved_palette != themes.ACTIVE_PALETTE:
             from ui_theme import apply_theme_live
             try:
-                apply_theme_live(root, saved_name, saved_palette)
+                # Settings is embedded inside the dashboard.  Walking only
+                # this frame updates the global palette before the dashboard
+                # and its Toplevel overlays have been recoloured, leaving the
+                # later whole-app pass with no old/new mapping to apply.
+                live_root = root.winfo_toplevel()
+                apply_theme_live(live_root, saved_name, saved_palette)
             except Exception:
                 pass
         on_save_callback()

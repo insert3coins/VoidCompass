@@ -78,6 +78,7 @@ class TacticalHUD:
         self._mouse_dragging = False
         self._save_job = None
         self._last_render_fingerprint = None
+        self._last_update_args = None
         self._anim_interval_ms = int(self.config.get("hud_anim_interval_ms", 100) or 100)
         if self._anim_interval_ms < 80:
             self._anim_interval_ms = 80
@@ -847,6 +848,11 @@ class TacticalHUD:
         nav_context=None,
     ):
         nav_context = nav_context or {}
+        self._last_update_args = (
+            current_sys, dest_name, dist_ly, scanned, total, r_pos,
+            system_traffic, game_r_pos, route_waypoint, route_counts,
+            hud_status, hud_health, nav_context,
+        )
         target_w, target_h = self._target_dimensions()
         presentation = (
             self._text_scale_percent(), self._crt_enabled(), self._crt_intensity(),
@@ -963,3 +969,10 @@ class TacticalHUD:
         self.draw_fitted_text(w - 20, 249, secondary_text, secondary_color,
                               size=9, min_size=9, max_width=210, anchor="e")
         self._last_render_fingerprint = render_fingerprint
+
+    def apply_theme(self, palette=None):
+        """Force an immediate repaint after the shared palette is rebound."""
+        del palette
+        self._last_render_fingerprint = None
+        if self._last_update_args is not None:
+            self.update(*self._last_update_args)

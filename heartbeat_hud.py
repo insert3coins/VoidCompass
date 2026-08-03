@@ -16,8 +16,9 @@ reasoning that kept toast_hud.py's compact notification cards plain.
 
 import time
 import tkinter as tk
-from config import COLOR_ACCENT, save_config
+from config import save_config
 import overlay_chrome
+import themes
 
 _CHROMA = "#ff00ff"
 _SIZE = 34
@@ -39,6 +40,7 @@ class HeartbeatHUD:
         self._last_pulse_ts = time.time()
         self._tick_job = None
         self._last_render_key = None
+        self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
 
         self.win = tk.Toplevel(root)
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
@@ -155,7 +157,7 @@ class HeartbeatHUD:
         stalled = (time.time() - self._last_pulse_ts) > _STALL_AFTER_S
         pulse_kind = getattr(self, "_pulse_kind", "journal")
         self._last_render_key = (self._pulse_level, stalled, pulse_kind)
-        color = _STALL_COLOR if stalled else _AI_COLOR if pulse_kind == "ai" else COLOR_ACCENT
+        color = _STALL_COLOR if stalled else _AI_COLOR if pulse_kind == "ai" else self._palette["accent"]
         base_r = 5
         r = base_r if stalled else base_r + self._pulse_level
         self.canvas.create_oval(cx - r - 2, cy - r - 2, cx + r + 2, cy + r + 2, outline=color, width=1)
@@ -164,3 +166,8 @@ class HeartbeatHUD:
             self.canvas.create_oval(cx - 2, cy - 2, cx + 2, cy + 2, fill=color, outline="")
             if pulse_kind == "ai":
                 self.canvas.create_rectangle(cx - 4, cy - 4, cx + 4, cy + 4, outline=color, width=1)
+
+    def apply_theme(self, palette=None):
+        self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)
+        self._last_render_key = None
+        self._redraw()
