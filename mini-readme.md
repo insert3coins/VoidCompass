@@ -3,10 +3,11 @@
 ## v5.3.5.3 // Navigation HUD Refresh
 **Release Date:** 2026-Aug-03
 
-*   Rebuilt compact and full Navigation HUD layouts around three glanceable layers: current system/state, active route and system survey.
-*   Kept scan progress permanently visible, including recovered known-system FSS progress, with a theme-aware completion state only when the scan is genuinely complete.
-*   Replaced the dense pip chain and full-mode trade grid with a restrained route track, explicit Game/Waypoint/Void route source, destination, remaining jumps, distance and waypoint progress.
-*   Added readable DSS, biological and geological evidence, plain-language traffic totals, valuable/undiscovered attention cues and docked station or surface-body context without duplicating Survey Operations detail.
+*   Rebuilt compact and full Navigation HUD layouts as a clearer cockpit instrument: current system first, one active route command strip, then a permanently visible system-survey readout.
+*   Added large DSS, biology and geology instruments in full mode, with a purpose-built compact evidence row instead of squeezing the normal layout into less space.
+*   Enforced a 9-point readability floor with safe ellipsis instead of tiny fallback text, while retaining the commander-specific overlay text-scale control and immediate style redraws.
+*   Kept recovered known-system FSS progress accurate and permanent, with a theme-aware completion state only when the scan is genuinely complete.
+*   Added a single state-aware context line for biological sampling, body gravity, surface coordinates or docking, plus restrained traffic and valuable/undiscovered attention cues.
 *   Preserved commander-specific position, compact mode, live themes, CRT controls, mouse passthrough, global hotkeys, Nomad/SRV/Fighter/on-foot states and Overlay Layout Studio ownership.
 *   Quieted routine docking by clearing stale non-safety Compass chatter, keeping only useful contextual advice before a short silence while urgent safety callouts remain available.
 

@@ -3834,6 +3834,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 route_safety["badge"], route_safety.get("badge_state", "info"),
             ))
 
+        sampling = self._sampling_snapshot() if getattr(self, "bio_sampling", None) else None
+        gravity_g = None
+        body_id = self._normalize_body_id(getattr(self, "current_body_id", None))
+        if body_id is not None:
+            scan_data = (getattr(self, "body_scan_data", None) or {}).get(body_id, {})
+            scan_item = (getattr(self, "scan_items_by_id", None) or {}).get(body_id, {})
+            gravity_g = scan_data.get("gravity_g") or scan_item.get("gravity_g")
+            if gravity_g is None:
+                gravity_g = self._gravity_to_g(
+                    scan_data.get("surface_gravity") or scan_item.get("surface_gravity")
+                )
+
         return {
             "route_mode": route_mode,
             "previous": previous,
@@ -3868,6 +3880,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "valuable_count": valuable_count,
             "undiscovered": bool(getattr(self, "system_undiscovered", False)),
             "body": getattr(self, "current_body_name", "") or "",
+            "gravity_g": gravity_g,
+            "sampling": sampling,
             "latitude": getattr(self, "current_latitude", None),
             "longitude": getattr(self, "current_longitude", None),
             "route_safety": route_safety,
