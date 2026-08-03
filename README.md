@@ -88,7 +88,7 @@ Each mode can apply a focused overlay scene while gravity, toast and heartbeat s
 
 Every overlay can be enabled independently, dragged to a saved position and styled with the active theme:
 
-- Navigation HUD with a large current-system readout, distinct Game/Waypoint/Void route command strip, permanently visible FSS progress, dedicated DSS/biology/geology instruments, state-aware sampling/body/surface/docking context, a 9-point readability floor and optional CRT effects.
+- Readable Classic Navigation HUD with the original stacked cockpit structure, a large current-system readout, distinct Game/Waypoint/Void route context, distance-proportional cyan/orange hop pips, permanent FSS progress, DSS/biology/geology evidence, state-aware sampling/body/surface/docking context, a 9-point readability floor and optional CRT effects.
 - Survey Operations with persistent body targets, biological and geological signals, species/sample progress, completed discoveries and notable-world value evidence; Navigation remains the single owner of system scan percentage.
 - A dynamic Cargo Manifest with hold utilisation plus mission/stolen distinctions; Fleet/Squadron Carrier Command with jump, expedition, Tritium and capacity status; and Prospector Analysis with themed material composition, core and refinery evidence.
 - System Intelligence, Station Link and profile-local Colony Logistics overlays for contextual system, market and construction work without duplicating the Navigation HUD.
