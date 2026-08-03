@@ -753,6 +753,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_music_track = ""
         self.current_music_mode = ""
         self.current_music_label = ""
+        self.current_gui_focus = -1
         self._last_music_event_ts = 0.0
         self.current_fuel_main = None
         self.current_fuel_reservoir = None
@@ -1519,6 +1520,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_music_track = ""
         self.current_music_mode = ""
         self.current_music_label = ""
+        self.current_gui_focus = -1
         self._last_music_event_ts = 0.0
         self.current_fuel_main = None
         self.current_fuel_reservoir = None
@@ -3871,6 +3873,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "flight_state": getattr(self, "hud_flight_state", "FLIGHT"),
             "music_mode": getattr(self, "current_music_mode", ""),
             "music_track": getattr(self, "current_music_track", ""),
+            "gui_focus": getattr(self, "current_gui_focus", -1),
             "scan_progress": getattr(self, "navigation_scan_progress", None),
             "scan_progress_source": getattr(self, "navigation_scan_progress_source", "bodies"),
             "dss_complete": len(getattr(self, "body_dss_complete", None) or ()),
@@ -3953,7 +3956,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if not track:
             return
         previous_track = getattr(self, "current_music_track", "")
-        previous_mode = getattr(self, "current_music_mode", "")
         if track == previous_track:
             return
 
@@ -3963,8 +3965,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._last_music_event_ts = time.time()
         if mode == "ONFOOT":
             self.current_on_foot = True
-        if mode != previous_mode:
-            self.update_hud()
+        # The exact track matters to the HUD: GalaxyMap and SystemMap share the
+        # MAP category, but must still repaint as distinct cockpit activities.
+        self.update_hud()
 
         if visible and not self.batch_mode and not startup_replay:
             self.add_event_feed_entry("MUSIC", f"{mode.title()}: {label}", severity=severity, copy_text=track)

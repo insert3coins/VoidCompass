@@ -79,6 +79,7 @@ class DashboardScanMixin:
         was_in_fighter = bool(getattr(self, "current_in_fighter", False))
         was_in_srv = bool(getattr(self, "current_in_srv", False))
         was_on_foot = bool(getattr(self, "current_on_foot", False))
+        was_gui_focus = getattr(self, "current_gui_focus", -1)
         fuel = data.get("Fuel") or {}
         self.current_fuel_main = fuel.get("FuelMain")
         self.current_fuel_reservoir = fuel.get("FuelReservoir")
@@ -155,13 +156,17 @@ class DashboardScanMixin:
             pass
 
         gui_focus = data.get("GuiFocus", -1)
+        self.current_gui_focus = gui_focus
+        gui_focus_changed = gui_focus != was_gui_focus
         in_fss = gui_focus == 9 or gui_focus == "FSS"
-        if in_fss != self.in_fss:
+        fss_changed = in_fss != self.in_fss
+        if fss_changed:
             self.in_fss = in_fss
             self.fss_summary_active = not in_fss
-            if not self.batch_mode:
-                self.update_hud()
-                self.schedule_dashboard_refresh()
+        if (gui_focus_changed or fss_changed) and not self.batch_mode:
+            self.update_hud()
+        if fss_changed and not self.batch_mode:
+            self.schedule_dashboard_refresh()
 
         on_planet_changed = (was_on_planet != bool(self.on_planet))
         status_key = None
