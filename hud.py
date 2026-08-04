@@ -527,7 +527,7 @@ class TacticalHUD:
         except (TypeError, ValueError):
             day, week, total = 0, 0, 0
         if compact:
-            return f"TRAFFIC {day} TODAY · {total} TOTAL"
+            return f"TRAFFIC {day}/{week}/{total}"
         return f"TRAFFIC {day} TODAY · {week} THIS WEEK · {total} TOTAL"
 
     @staticmethod
@@ -582,15 +582,6 @@ class TacticalHUD:
     def _context_presentation(nav_context, attention_text="", attention_state="muted"):
         """Choose the single most useful contextual line for the current state."""
         context = nav_context or {}
-        sampling = context.get("sampling") or {}
-        if sampling:
-            try:
-                progress = max(1, min(3, int(sampling.get("progress") or 1)))
-            except (TypeError, ValueError):
-                progress = 1
-            species = str(sampling.get("species") or sampling.get("genus") or "ORGANIC").upper()
-            clearance = " · CLEAR" if sampling.get("clear") else ""
-            return f"BIO SAMPLE {progress}/3 · {species}{clearance}", COLOR_GREEN
         if context.get("docked") and context.get("station"):
             return f"STATION · {context['station']}", COLOR_ACCENT
         body = str(context.get("body") or "").strip()
@@ -609,6 +600,12 @@ class TacticalHUD:
                 return "SURFACE OPERATIONS", COLOR_ACCENT
         if attention_text:
             return attention_text, COLOR_ORANGE if attention_state == "alert" else COLOR_YELLOW
+        fuel_percent = context.get("fuel_percent")
+        if fuel_percent is not None:
+            fuel_color = COLOR_GREEN if fuel_percent > 40 else (
+                COLOR_YELLOW if fuel_percent > 15 else COLOR_ORANGE
+            )
+            return f"FUEL {fuel_percent}%", fuel_color
         return "NAVIGATION NOMINAL", "#7d8891"
 
     @staticmethod
@@ -825,11 +822,10 @@ class TacticalHUD:
 
         self._draw_inline_metrics(16, w - 16, 186, survey_metrics, value_size=11)
 
-        footer_text, footer_color = context_text, context_color
-        if footer_text == "NAVIGATION NOMINAL":
-            footer_text, footer_color = traffic_text, "#7d8891"
-        self.draw_fitted_text(16, 205, footer_text, footer_color,
-                              size=9, min_size=8, max_width=w - 32, anchor="w")
+        self.draw_fitted_text(16, 205, context_text, context_color,
+                              size=9, min_size=8, max_width=w - 32 - 128, anchor="w")
+        self.draw_fitted_text(w - 16, 205, traffic_text, "#7d8891",
+                              size=9, min_size=8, max_width=120, anchor="e")
 
     def update(
         self,
