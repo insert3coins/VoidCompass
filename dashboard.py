@@ -3835,10 +3835,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.system_bio_signals > self.organic_count:
             badges.append((f"BIO {self.organic_count}/{self.system_bio_signals}", "alert"))
         route_safety = self._route_safety_snapshot()
-        if route_safety.get("badge"):
-            badges.insert(0, (
-                route_safety["badge"], route_safety.get("badge_state", "info"),
-            ))
+        fuel_percent = self._current_fuel_percent()
 
         sampling = self._sampling_snapshot() if getattr(self, "bio_sampling", None) else None
         gravity_g = None
@@ -3891,6 +3888,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "sampling": sampling,
             "latitude": getattr(self, "current_latitude", None),
             "longitude": getattr(self, "current_longitude", None),
+            "fuel_percent": fuel_percent,
             "route_safety": route_safety,
             "region": self._navigation_region_context(),
             "badges": badges[:6],

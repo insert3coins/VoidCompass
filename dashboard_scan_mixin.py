@@ -68,6 +68,17 @@ class DashboardScanMixin:
             return
         self._apply_status_update(data)
 
+    def _current_fuel_percent(self):
+        """Tank percentage the Navigation HUD displays, rounded to match it."""
+        fuel_main = getattr(self, "current_fuel_main", None)
+        fuel_capacity = getattr(self, "fuel_capacity_main", None)
+        try:
+            if fuel_capacity and float(fuel_capacity) > 0 and fuel_main is not None:
+                return max(0, min(100, round(float(fuel_main) * 100 / float(fuel_capacity))))
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
+        return None
+
     def _apply_status_update(self, data):
         t0 = self._perf_start()
         self.last_status_event_ts = time.time()
@@ -80,6 +91,7 @@ class DashboardScanMixin:
         was_in_srv = bool(getattr(self, "current_in_srv", False))
         was_on_foot = bool(getattr(self, "current_on_foot", False))
         was_gui_focus = getattr(self, "current_gui_focus", -1)
+        was_fuel_percent = self._current_fuel_percent()
         fuel = data.get("Fuel") or {}
         self.current_fuel_main = fuel.get("FuelMain")
         self.current_fuel_reservoir = fuel.get("FuelReservoir")
@@ -193,7 +205,8 @@ class DashboardScanMixin:
             or was_in_srv != bool(getattr(self, "current_in_srv", False))
             or was_on_foot != bool(getattr(self, "current_on_foot", False))
         )
-        if (vehicle_state_changed or hud_state_changed) and not self.batch_mode:
+        fuel_percent_changed = self._current_fuel_percent() != was_fuel_percent
+        if (vehicle_state_changed or hud_state_changed or fuel_percent_changed) and not self.batch_mode:
             self.update_hud()
         if not self.batch_mode:
             self._check_low_fuel()
