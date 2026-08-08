@@ -66,10 +66,10 @@ _EDSM_DISCARD_EVENTS = frozenset({
     "DockingRequested", "DockingGranted", "DockingDenied",
     "DockingCancelled", "DockingTimeout",
     "Market", "Shipyard", "Outfitting",
-    "StoredModules", "StoredShips",
+    "StoredModules",
     "ModuleBuy", "ModuleSell", "ModuleRetrieve", "ModuleStore",
     "ModuleSwap", "ModuleTransfer",
-    "ShipyardBuy", "ShipyardNew", "ShipyardSell", "ShipyardSwap", "ShipyardTransfer",
+    "ShipyardBuy", "ShipyardNew", "ShipyardSell", "ShipyardTransfer",
     "Bounty", "RedeemVoucher", "CrimeVictim",
     "PowerplayCollect", "PowerplayDeliver", "PowerplayDefect", "PowerplayEnlist",
     "PowerplayFastTrack", "PowerplayJoin", "PowerplayLeave", "PowerplaySalary",
@@ -114,6 +114,7 @@ class EDSMHandler:
         self._pending_cargo_signature = None
         self._pending_cargo_since = 0.0
         self._last_cargo_signature = None
+        self._fleet_sync_generation = None
 
     def set_log_callback(self, callback):
         """Wire up a function(tag, msg, severity) to post feed entries on upload."""
@@ -151,6 +152,7 @@ class EDSMHandler:
             self._pending_cargo_signature = None
             self._pending_cargo_since = 0.0
             self._last_cargo_signature = None
+            self._fleet_sync_generation = None
             self._retry_count = 0
 
     def switch_profile(self, config, conn, lock):
@@ -377,6 +379,111 @@ class EDSMHandler:
             args=(journal_path, generation, db_conn, db_lock),
             daemon=True,
         ).start()
+
+    def sync_latest_fleet_snapshot(self, journal_path):
+        """Queue the newest StoredShips snapshot once for this profile.
+
+        Older VoidCompass builds discarded this EDSM-supported event, so an
+        ordinary live-only fix would leave an existing fleet wrong until the
+        commander next opened a shipyard. This bounded background repair reads
+        backwards only until it finds the newest authoritative snapshot.
+        """
+        if not self._db_conn or not self.config.get("edsm_upload_enabled"):
+            return False
+        if not self.config.get("edsm_cmdr_name", "").strip():
+            return False
+        if not self.config.get("edsm_api_key", "").strip():
+            return False
+        if not self._game_version or not self._game_build:
+            return False
+        if not journal_path or not os.path.isdir(journal_path):
+            return False
+        with self._queue_lock:
+            generation = self._profile_generation
+            if self._fleet_sync_generation == generation:
+                return False
+            self._fleet_sync_generation = generation
+            db_conn = self._db_conn
+            db_lock = self._db_lock
+        threading.Thread(
+            target=self._sync_latest_fleet_snapshot,
+            args=(journal_path, generation, db_conn, db_lock),
+            name="edsm-fleet-snapshot",
+            daemon=True,
+        ).start()
+        return True
+
+    def _sync_latest_fleet_snapshot(self, journal_path, generation, db_conn, db_lock):
+        try:
+            filenames = sorted(
+                (
+                    name for name in os.listdir(journal_path)
+                    if name.startswith("Journal.") and name.endswith(".log")
+                ),
+                key=lambda name: os.path.getmtime(os.path.join(journal_path, name)),
+                reverse=True,
+            )
+            snapshot = None
+            for filename in filenames[:80]:
+                if generation != self._profile_generation:
+                    return
+                path = os.path.join(journal_path, filename)
+                try:
+                    with open(path, "r", encoding="utf-8", errors="ignore") as handle:
+                        lines = handle.readlines()
+                except OSError:
+                    continue
+                for line in reversed(lines):
+                    if '"StoredShips"' not in line:
+                        continue
+                    try:
+                        candidate = json.loads(line)
+                    except (TypeError, ValueError):
+                        continue
+                    if candidate.get("event") == "StoredShips":
+                        snapshot = candidate
+                        break
+                if snapshot is not None:
+                    break
+            if snapshot is None or generation != self._profile_generation:
+                return
+
+            stamp = str(snapshot.get("timestamp") or "unknown")
+            marker = f"__fleet_snapshot__:{stamp}"
+            with db_lock:
+                if db_conn.execute(
+                    "SELECT 1 FROM edsm_backfill WHERE journal_file = ?", (marker,),
+                ).fetchone():
+                    return
+                enriched = dict(snapshot)
+                if snapshot.get("StarSystem"):
+                    enriched["_systemName"] = snapshot["StarSystem"]
+                if snapshot.get("MarketID") is not None:
+                    enriched["_marketId"] = snapshot["MarketID"]
+                db_conn.execute(
+                    "INSERT INTO edsm_queue (queued_ts, event_json) VALUES (?, ?)",
+                    (time.time(), json.dumps(enriched)),
+                )
+                db_conn.execute(
+                    "INSERT INTO edsm_backfill (journal_file, backfilled_ts) VALUES (?, ?)",
+                    (marker, time.time()),
+                )
+                db_conn.commit()
+
+            ships = len(snapshot.get("ShipsHere") or []) + len(snapshot.get("ShipsRemote") or [])
+            if self._log_callback:
+                self._log_callback(
+                    "EDSM",
+                    f"Fleet snapshot queued: {ships} ship(s) from {snapshot.get('StarSystem') or 'latest shipyard'}",
+                    "INFO",
+                )
+            self._arm_flush(immediate=True, expected_generation=generation)
+        except Exception as exc:
+            logging.warning("EDSM fleet snapshot sync failed: %s", exc)
+        finally:
+            with self._queue_lock:
+                if self._fleet_sync_generation == generation:
+                    self._fleet_sync_generation = None
 
     def _do_backfill(self, journal_path, generation, db_conn, db_lock):
         try:

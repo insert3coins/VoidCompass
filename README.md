@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.3.5.3**
+**Current version: 5.3.5.5**
 
 Void Compass is an exploration-first companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a persistent command dashboard, deep survey intelligence, expedition planning, native in-game overlays and a local cockpit companion.
 
@@ -58,7 +58,7 @@ Explore remembers its active page, survey/discovery filters and Expedition secti
 
 Existing journals are indexed on a background worker the first time Deep Survey opens for a profile. Stored collections, expedition facts and visible rows are bounded so a long expedition does not turn map, ledger or startup recovery into a cockpit stall.
 
-Optional **Trade Assist** stays intentionally focused: **Sell My Cargo** finds practical buyers, **Find a Trade** ranks one-way or genuine return-cargo routes from either the current location or a typed system/station, **Current Run** compares the plan with journal-realized profit, and **Trade Log** preserves commander-local purchases, sales, locations and route context with configurable automatic retention. A blank station lets the online provider choose a supplied departure market, so planning works with an empty hold and without docking there first. Live or manual load size, full-load, orbital-only, range, freshness, landing-pad and carrier filters are joined by profit/trip, profit/hour, travel-time and quote-freshness ranking, with compact 3, expanded 10 or scrollable 25-result views. The optional Trade Route HUD tracks route stage, outbound/return cargo, hold capacity and expected-versus-realized profit on screen, and participates in themes, passthrough, hotkeys and Overlay Layout Studio. Mission and stolen cargo are excluded from ordinary advice. Searches combine current `Market.json` evidence when available with on-demand [Ardent Insight](https://ardent-insight.com/) results held only in a short-lived memory cache—there is no galaxy market download or local price database to maintain. Visited-station EDDN uploads remain an independent optional community service.
+Optional **Trade Assist** stays intentionally focused: **Sell My Cargo** finds practical buyers, **Find a Trade** searches every eligible departure market in a typed system—or galaxy-wide when the system is blank—**Current Run** compares the selected plan with journal-realized profit, and **Trade Log** preserves commander-local purchases, sales, locations and route context with configurable retention. `USE CURRENT` is deliberate rather than automatic. Filters cover cargo capacity, route distance, quote age, minimum supply/demand, station arrival distance (unlimited by default), pad size, surface stations, carriers, full loads and real return loops, with one-click restoration of search defaults. The responsive results table fits the embedded page, supports sorting directly from every heading and expands to 50 alternatives; full station, price, supply/demand, confidence and profit/hour evidence remains in the scrollable selected-route detail. The optional Trade Route HUD tracks route stage, outbound/return cargo, hold capacity and expected-versus-realized profit on screen. Mission and stolen cargo are excluded from ordinary advice. Searches use request-driven [Ardent Insight](https://ardent-insight.com/) data held only in a short memory cache—there is no galaxy market download or local price database to maintain. Visited-station EDDN uploads remain an independent optional community service.
 
 ### Squadron Command
 
@@ -88,7 +88,7 @@ Each mode can apply a focused overlay scene while gravity, toast and heartbeat s
 
 Every overlay can be enabled independently, dragged to a saved position and styled with the active theme:
 
-- Readable Classic Navigation HUD with the original stacked cockpit structure, a large current-system readout, distinct Game/Waypoint/Void route context, distance-proportional cyan/orange hop pips, permanent FSS progress, DSS/biology/geology evidence, state-aware sampling/body/surface/docking context, a 9-point readability floor and optional CRT effects.
+- Readable Classic Navigation HUD with the original stacked cockpit structure, a large current-system readout, distinct Game/Waypoint/Void route context, distance-proportional cyan/orange hop pips, permanent FSS progress, live fuel plus biology/geology evidence, far-right day/week/total traffic, state-aware sampling/body/surface/docking context, a 9-point readability floor and optional CRT effects.
 - Survey Operations with persistent body targets, biological and geological signals, species/sample progress, completed discoveries and notable-world value evidence; Navigation remains the single owner of system scan percentage.
 - A dynamic Cargo Manifest with hold utilisation plus mission/stolen distinctions; Fleet/Squadron Carrier Command with jump, expedition, Tritium and capacity status; and Prospector Analysis with themed material composition, core and refinery evidence.
 - System Intelligence, Station Link and profile-local Colony Logistics overlays for contextual system, market and construction work without duplicating the Navigation HUD.
@@ -122,11 +122,11 @@ The deterministic cognition engine learns personal baselines and whether advice 
 ## Integrations
 
 - **Elite journal and companion files** provide all live game state.
-- **EDSM** upload and traffic lookup are optional and use per-commander credentials.
+- **EDSM** upload and traffic lookup are optional and use per-commander credentials; accepted stored-fleet snapshots, ship movements and belt-cluster celestial scans are included while mining prospect events remain filtered.
 - **Ardent Insight** supplies on-demand EDDN-backed buyers and sellers when a Trade Assist or Architect commodity search is requested.
 - **EDDN** optionally receives visited-station market uploads from Void Compass; it is not required for online searches.
 - **Spansh** supports neutron routes, ring/hotspot searches, trader lookups and integrated Fleet/Squadron Carrier route calculation.
-- **Discord webhooks** announce personal or Squadron Carrier operations with compact event-specific, active-theme cards and EDSM-linked systems. Automatic posts keep only the jump, Tritium and relevant expedition context; a deliberate manual status post provides the fuller capacity, docking, service and route snapshot. User-entered notes cannot trigger Discord mentions, and carrier finances remain local.
+- **Discord webhooks** announce personal or Squadron Carrier operations with compact event-specific, active-theme cards. Completed and current locations can link to EDSM, while a newly plotted jump remains plain text until arrival. Automatic posts keep only the jump, Tritium and relevant expedition context; a deliberate manual status post provides the fuller capacity, docking, service and route snapshot. User-entered notes cannot trigger Discord mentions, and carrier finances remain local.
 - **Piper** voice packs are optional; regular system TTS remains available.
 
 Void Compass does not require an account or Void Compass cloud database. It checks GitHub Releases for a newer version at startup; other network integrations only run when their associated feature is enabled or requested. Online market searches send Ardent Insight the reference system, commodity and search filters, never commander credentials or journal files.

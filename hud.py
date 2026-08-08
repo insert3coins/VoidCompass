@@ -556,19 +556,29 @@ class TacticalHUD:
             except (TypeError, ValueError):
                 return 0
 
+        fuel_percent = context.get("fuel_percent")
+        try:
+            fuel_percent = max(0, min(100, int(round(float(fuel_percent)))))
+        except (TypeError, ValueError):
+            fuel_percent = None
+        fuel_color = COLOR_GREEN if fuel_percent is not None and fuel_percent > 40 else (
+            COLOR_YELLOW if fuel_percent is not None and fuel_percent > 15 else (
+                COLOR_ORANGE if fuel_percent is not None else "#7d8891"
+            )
+        )
         bio_done = _number("bio_complete")
         bio_total = _number("bio_signals")
         bio_color = COLOR_GREEN if bio_total > 0 and bio_done >= bio_total else (
             COLOR_ORANGE if bio_total > 0 else "#7d8891"
         )
         return (
-            ("DSS", str(_number("dss_complete")), COLOR_ACCENT),
+            ("FUEL", f"{fuel_percent}%" if fuel_percent is not None else "--", fuel_color),
             ("BIO", f"{bio_done}/{bio_total}", bio_color),
             ("GEO", str(_number("geo_signals")), COLOR_YELLOW),
         )
 
     def _draw_inline_metrics(self, left_x, right_x, y, metrics, value_size=11):
-        """Draw open, unboxed DSS/BIO/GEO readouts in three stable columns."""
+        """Draw open, unboxed FUEL/BIO/GEO readouts in three stable columns."""
         column_width = (right_x - left_x) / 3
         for index, (label, value, color) in enumerate(metrics):
             x1 = left_x + index * column_width
@@ -600,12 +610,6 @@ class TacticalHUD:
                 return "SURFACE OPERATIONS", COLOR_ACCENT
         if attention_text:
             return attention_text, COLOR_ORANGE if attention_state == "alert" else COLOR_YELLOW
-        fuel_percent = context.get("fuel_percent")
-        if fuel_percent is not None:
-            fuel_color = COLOR_GREEN if fuel_percent > 40 else (
-                COLOR_YELLOW if fuel_percent > 15 else COLOR_ORANGE
-            )
-            return f"FUEL {fuel_percent}%", fuel_color
         return "NAVIGATION NOMINAL", "#7d8891"
 
     @staticmethod
@@ -911,11 +915,11 @@ class TacticalHUD:
                               size=15, min_size=11, max_width=w - 40, anchor="w")
         self.canvas.create_line(20, 78, w - 20, 78, fill="#1a2530", width=1)
 
-        # The old four-column grid now carries exploration evidence, not trade data.
+        # Fuel stays immediately visible; traffic keeps the far-right day/week/total slot.
         compact_traffic = "/".join(str(int((system_traffic or {}).get(key, 0) or 0))
                                    for key in ("day", "week", "total"))
         stat_rows = (
-            (20, "DSS", survey_metrics[0][1], survey_metrics[0][2]),
+            (20, "FUEL", survey_metrics[0][1], survey_metrics[0][2]),
             (170, "BIO", survey_metrics[1][1], survey_metrics[1][2]),
             (320, "GEO", survey_metrics[2][1], survey_metrics[2][2]),
             (470, "TRAFFIC", compact_traffic, "#7d8891"),

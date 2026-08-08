@@ -1,20 +1,21 @@
 # VoidCompass // UPDATE LOG
 
-## v5.3.5.3 // Navigation HUD Refresh
-**Release Date:** 2026-Aug-03
+## v5.3.5.5 // Trade Search & EDSM Fleet Sync
+**Release Date:** 2026-Aug-08
 
-*   Restored the Navigation HUD's original stacked cockpit character as a larger Readable Classic layout, preserving its dividers, route labels, current/destination markers and restrained centred activity beacon.
-*   Restored distance-proportional cyan/orange pips for the actual upcoming route hops, while full mode adds a four-column DSS, biology, geology and traffic evidence grid and compact mode keeps a purpose-built inline row.
-*   Enforced a 9-point readability floor with safe ellipsis instead of tiny fallback text, while retaining the commander-specific overlay text-scale control and immediate style redraws.
-*   Kept recovered known-system FSS progress accurate and permanent, with a theme-aware completion state only when the scan is genuinely complete.
-*   Added a single state-aware context line for biological sampling, body gravity, surface coordinates or docking, plus restrained traffic and valuable/undiscovered attention cues.
-*   Made the activity beacon follow live Galaxy Map, System Map, Orrery, FSS, DSS, Codex and on-foot focus instead of leaving the underlying flight state displayed.
-*   Fixed live theme switching so the dashboard root and every open overlay repaint immediately when Settings is saved, including Navigation, gravity, toast and heartbeat overlays.
-*   Preserved commander-specific position, compact mode, live themes, CRT controls, mouse passthrough, global hotkeys, Nomad/SRV/Fighter/on-foot states and Overlay Layout Studio ownership.
-*   Quieted routine docking by clearing stale non-safety Compass chatter, keeping only useful contextual advice before a short silence while urgent safety callouts remain available.
+*   Rebuilt Trade Assist so a typed departure system searches every eligible market in that exact system, while a blank system searches galaxy-wide; `USE CURRENT` is now an explicit choice rather than an invisible dependency.
+*   Added Inara-style route controls for cargo capacity, maximum route and station distance, quote age, landing-pad size, minimum supply and demand, surface policy, carriers, full loads and genuine return loops.
+*   Added multi-route result counts up to 50 and ordering by profit, profit per hour, last update or route distance, with both departure and destination visible in every route row.
+*   Reworked the embedded results area with width-aware columns, compact route evidence, scrollable selected details and clickable sortable headings, plus a persistent `RESET DEFAULTS` action for every Trade search control.
+*   Corrected EDSM fleet synchronisation by uploading accepted `StoredShips`, `ShipyardSwap` and ship-name events, plus a bounded one-time repair using the newest authoritative stored-fleet snapshot from local journals.
+*   Added EDSM uploads for scanned belt clusters while deliberately continuing to exclude mining `ProspectedAsteroid` events and belt clusters from VoidCompass survey-body totals.
+*   Replaced the Navigation HUD's left DSS counter with live fuel percentage in both layouts while retaining permanent system-survey progress and far-right day/week/total traffic.
+*   Kept Carrier Discord plotted-jump systems as plain text instead of premature clickable EDSM links; completed-arrival and ordinary status locations remain linked.
+*   Retained the v5.3.5.3 live-theme overlay repair and quieter docking behaviour.
 
 ## Earlier releases
 
+*   **v5.3.5.3** — Restored the readable classic Navigation HUD with real route pips, permanent survey progress, live flight/map state, larger text, state-aware context, immediate overlay theme changes and quieter routine docking.
 *   **v5.3.5.2** — Rebuilt System Intelligence, Survey Operations, Prospector Analysis, Carrier, Cargo and Colony overlays around theme-aware journal models; removed redundant redraws and corrected false startup survey completion after offline Carrier jumps.
 *   **v5.3.5.1** — Added compact theme-aware personal/Squadron Carrier Discord embeds with safe EDSM links and detailed manual status posts, and corrected unknown startup scan totals until journal evidence confirms them.
 *   **v5.3.5** — Replaced the multi-gigabyte trade database with on-demand Ardent Insight searches, rebuilt Trade Assist around practical one-way and round-trip planning, added the Trade Route HUD and persistent Trade Log, and kept visited-market EDDN uploads independent.

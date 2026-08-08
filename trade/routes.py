@@ -8,6 +8,7 @@ memory by :mod:`trade.ardent`; no local galaxy market database is required.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import math
 import re
 
 from colonisation_commodities import COMMODITY_NAME_MAPPING
@@ -104,13 +105,19 @@ def is_surface_station(station_type):
 
 
 def _station_allowed(row, *, requires_large_pad=False, include_carriers=False,
-                     max_system_distance=None, orbital_only=False):
+                     max_system_distance=None, orbital_only=False,
+                     min_pad_size=0, surface_mode=None):
     if not include_carriers and _is_carrier(row):
         return False
     pad = _int(row.get("maxLandingPadSize"), 0)
-    if requires_large_pad and pad < 3:
+    required_pad = max(3 if requires_large_pad else 0, _int(min_pad_size, 0))
+    if required_pad and pad < required_pad:
         return False
-    if orbital_only and is_surface_station(row.get("stationType")):
+    mode = str(surface_mode or ("exclude" if orbital_only else "include")).casefold()
+    surface = is_surface_station(row.get("stationType"))
+    if mode == "exclude" and surface:
+        return False
+    if mode == "only" and not surface:
         return False
     dist_ls = _float(row.get("distanceToArrival"))
     if dist_ls is None and _is_carrier(row):
@@ -163,7 +170,8 @@ def list_commodities():
 
 def resolve_market_origin(system, station=None, *, max_price_age_days=30,
                           requires_large_pad=False, include_carriers=False,
-                          orbital_only=False):
+                          orbital_only=False, min_pad_size=0,
+                          surface_mode=None):
     """Resolve a typed station, or choose a supplied market when station is blank."""
     system_query = str(system or "").strip()
     station_query = str(station or "").strip()
@@ -207,7 +215,8 @@ def resolve_market_origin(system, station=None, *, max_price_age_days=30,
                 if not _station_allowed(
                     first, requires_large_pad=requires_large_pad,
                     include_carriers=include_carriers,
-                    orbital_only=orbital_only,
+                    orbital_only=orbital_only, min_pad_size=min_pad_size,
+                    surface_mode=surface_mode,
                 ):
                     continue
                 supplied = [
@@ -236,12 +245,13 @@ def resolve_market_origin(system, station=None, *, max_price_age_days=30,
         if not _station_allowed(
             selected, requires_large_pad=requires_large_pad,
             include_carriers=include_carriers,
-            orbital_only=orbital_only,
+            orbital_only=orbital_only, min_pad_size=min_pad_size,
+            surface_mode=surface_mode,
         ):
-            if requires_large_pad:
-                restriction = "large-pad access"
-            elif orbital_only and is_surface_station(selected.get("stationType")):
-                restriction = "the orbital-only filter"
+            if requires_large_pad or _int(min_pad_size, 0):
+                restriction = "the selected landing-pad size"
+            elif str(surface_mode or "").casefold() in {"exclude", "only"} or orbital_only:
+                restriction = "the selected surface-station policy"
             else:
                 restriction = "the selected carrier filter"
             raise RouteError(f"{selected.get('stationName') or station_query} does not satisfy {restriction}.")
@@ -285,7 +295,8 @@ def resolve_market_origin(system, station=None, *, max_price_age_days=30,
 def search_commodity(query, mode, system=None, star_pos=None, radius=50.0,
                      min_units=1, max_price_age_days=30,
                      requires_large_pad=False, include_carriers=True,
-                     max_system_distance=None, orbital_only=False, limit=40):
+                     max_system_distance=None, orbital_only=False,
+                     min_pad_size=0, surface_mode=None, limit=40):
     del star_pos
     if mode not in ("buy", "sell"):
         raise RouteError("mode must be 'buy' or 'sell'.")
@@ -309,7 +320,8 @@ def search_commodity(query, mode, system=None, star_pos=None, radius=50.0,
             row, requires_large_pad=requires_large_pad,
             include_carriers=include_carriers,
             max_system_distance=max_system_distance,
-            orbital_only=orbital_only,
+            orbital_only=orbital_only, min_pad_size=min_pad_size,
+            surface_mode=surface_mode,
         ):
             continue
         station = _normalise_station(row)
@@ -335,7 +347,8 @@ def search_commodity(query, mode, system=None, star_pos=None, radius=50.0,
 def sell_cargo(cargo_items, system=None, star_pos=None, radius=80.0,
                max_price_age_days=30, requires_large_pad=False,
                include_carriers=False, max_system_distance=1000.0,
-               orbital_only=False, limit=10):
+               orbital_only=False, min_pad_size=0,
+               surface_mode=None, limit=10):
     del star_pos
     try:
         report_index = _report_index(ardent.commodities_report())
@@ -377,7 +390,8 @@ def sell_cargo(cargo_items, system=None, star_pos=None, radius=80.0,
                 row, requires_large_pad=requires_large_pad,
                 include_carriers=include_carriers,
                 max_system_distance=max_system_distance,
-                orbital_only=orbital_only,
+                orbital_only=orbital_only, min_pad_size=min_pad_size,
+                surface_mode=surface_mode,
             ):
                 continue
             price = _int(row.get("sellPrice"))
@@ -411,7 +425,8 @@ def find_opportunities(system=None, star_pos=None, radius=80.0,
                        min_profit=1000, min_units=1,
                        max_price_age_days=30, requires_large_pad=False,
                        include_carriers=False, max_system_distance=1000.0,
-                       orbital_only=False, source_updated_at=None,
+                       orbital_only=False, min_pad_size=0,
+                       surface_mode=None, source_updated_at=None,
                        source_market_id=None, source_station=None,
                        market_items=None, limit=18):
     del star_pos
@@ -493,7 +508,8 @@ def find_opportunities(system=None, star_pos=None, radius=80.0,
                 row, requires_large_pad=requires_large_pad,
                 include_carriers=include_carriers,
                 max_system_distance=max_system_distance,
-                orbital_only=orbital_only,
+                orbital_only=orbital_only, min_pad_size=min_pad_size,
+                surface_mode=surface_mode,
             ):
                 continue
             sell_price = _int(row.get("sellPrice"))
@@ -534,6 +550,502 @@ def find_opportunities(system=None, star_pos=None, radius=80.0,
         key=lambda row: (
             -(int(row["profit_each"]) * int(row["units"])),
             float(row.get("distance") or 0),
+        )
+    )
+    return opportunities[: max(1, int(limit))]
+
+
+def find_system_market_routes(system, *, max_route_distance=80.0,
+                              min_profit=1000, cargo_units=64,
+                              min_supply=1, min_demand=1,
+                              max_price_age_days=7, min_pad_size=0,
+                              include_carriers=False, max_system_distance=None,
+                              surface_mode="include", full_load=False,
+                              round_trip=False, limit=75):
+    """Search every eligible departure market in one exact star system."""
+    system_name = str(system or "").strip()
+    if not system_name:
+        raise RouteError("Enter a departure system or leave it blank for galaxy-wide search.")
+    max_route_distance = max(1.0, min(500.0, float(max_route_distance or 80.0)))
+    min_profit = max(1, int(min_profit or 1))
+    min_supply = max(1, int(min_supply or 1))
+    min_demand = max(1, int(min_demand or 1))
+    cargo_units = max(1, int(cargo_units or 1))
+    cutoff = marketdb.now_epoch() - max(1, int(max_price_age_days)) * 86400
+    try:
+        report = ardent.commodities_report()
+        all_market_rows = ardent.market_commodities(system_name)
+    except ardent.ArdentError as exc:
+        raise RouteError(str(exc)) from exc
+    report_index = _report_index(report)
+
+    markets = {}
+    for item in all_market_rows:
+        if not isinstance(item, dict):
+            continue
+        market_id = _int(item.get("marketId"))
+        if market_id:
+            markets.setdefault(market_id, []).append(item)
+
+    sources = []
+    eligible_markets = {}
+    for market_id, items in markets.items():
+        first = items[0]
+        if not _station_allowed(
+            first, include_carriers=include_carriers,
+            max_system_distance=max_system_distance,
+            min_pad_size=min_pad_size, surface_mode=surface_mode,
+        ):
+            continue
+        eligible_markets[market_id] = items
+        for item in items:
+            buy_price = _int(item.get("buyPrice"))
+            stock = _int(item.get("stock"))
+            updated = _row_updated_at(item)
+            if buy_price <= 0 or stock < min_supply or (updated and updated < cutoff):
+                continue
+            symbol = _resolve_symbol(item.get("commodityName"), report_index)
+            if not symbol:
+                continue
+            summary = report_index.get(_key(symbol), {})
+            possible_margin = _int(summary.get("maxSellPrice")) - buy_price
+            if summary and possible_margin < min_profit:
+                continue
+            sources.append({
+                "market_id": market_id,
+                "station": first.get("stationName") or "Unknown station",
+                "station_type": first.get("stationType") or "",
+                "system": first.get("systemName") or system_name,
+                "dist_ls": _float(first.get("distanceToArrival")),
+                "symbol": symbol,
+                "commodity": (
+                    item.get("commodityName_Localised")
+                    or COMMODITY_NAME_MAPPING.get(symbol)
+                    or symbol.replace("_", " ").title()
+                ),
+                "buy_price": buy_price,
+                "supply": stock,
+                "updated_at": updated or None,
+                "score": max(min_profit, possible_margin) * min(stock, cargo_units),
+            })
+    if not eligible_markets:
+        raise RouteError(
+            f"No market in {system_name} matches the selected pad, surface, carrier and station-distance filters."
+        )
+    if not sources:
+        raise RouteError(
+            f"Markets were found in {system_name}, but none has fresh commodity supply matching the filters."
+        )
+
+    # Query each promising commodity once for the system, then apply those
+    # buyers to every departure station that actually sells it.
+    symbol_scores = {}
+    for source in sources:
+        key = _key(source["symbol"])
+        symbol_scores[key] = max(symbol_scores.get(key, 0), int(source["score"]))
+    selected_keys = {
+        key for key, _score in sorted(
+            symbol_scores.items(), key=lambda item: item[1], reverse=True,
+        )[:12]
+    }
+    sources = [source for source in sources if _key(source["symbol"]) in selected_keys]
+    symbols = {}
+    for source in sources:
+        symbols.setdefault(_key(source["symbol"]), source["symbol"])
+
+    def find_buyers(symbol):
+        return ardent.nearby_importers(
+            system_name, symbol,
+            min_volume=min_demand,
+            max_distance=max_route_distance,
+            max_days_ago=max_price_age_days,
+            include_carriers=include_carriers,
+        )
+
+    query_results, errors = _parallel(list(symbols.values()), find_buyers, workers=6)
+    buyers_by_symbol = {
+        _key(symbol): list(rows or []) for symbol, rows in query_results
+    }
+    opportunities = []
+    seen = set()
+    for source in sources:
+        for destination in buyers_by_symbol.get(_key(source["symbol"]), []):
+            if not isinstance(destination, dict):
+                continue
+            destination_market = _int(destination.get("marketId"))
+            if destination_market == source["market_id"]:
+                continue
+            if not _station_allowed(
+                destination, include_carriers=include_carriers,
+                max_system_distance=max_system_distance,
+                min_pad_size=min_pad_size, surface_mode=surface_mode,
+            ):
+                continue
+            sell_price = _int(destination.get("sellPrice"))
+            demand = _int(destination.get("demand"))
+            profit_each = sell_price - source["buy_price"]
+            units = min(cargo_units, source["supply"], demand)
+            if profit_each < min_profit or demand < min_demand or units <= 0:
+                continue
+            if full_load and units < cargo_units:
+                continue
+            identity = (
+                source["market_id"], destination_market,
+                _key(source["symbol"]),
+            )
+            if identity in seen:
+                continue
+            seen.add(identity)
+            station = _normalise_station(destination)
+            opportunities.append({
+                "from_market": source["market_id"],
+                "from_station": source["station"],
+                "from_system": source["system"],
+                "from_dist_ls": source["dist_ls"],
+                "from_type": source["station_type"],
+                "to_market": destination_market,
+                "to_station": station["station"],
+                "to_system": station["system"],
+                "to_dist_ls": station["dist_ls"],
+                "to_type": station["type"],
+                "commodity": source["commodity"],
+                "symbol": source["symbol"],
+                "buy_price": source["buy_price"],
+                "sell_price": sell_price,
+                "profit_each": profit_each,
+                "supply": source["supply"],
+                "demand": demand,
+                "units": units,
+                "distance": station["distance"],
+                "source_updated_at": source["updated_at"],
+                "updated_at": station["updated_at"],
+            })
+    if not opportunities and errors:
+        raise RouteError(str(errors[0]))
+
+    opportunities.sort(
+        key=lambda row: -int(row.get("profit_each") or 0) * int(row.get("units") or 0)
+    )
+    if round_trip and opportunities:
+        candidate_limit = min(len(opportunities), max(12, min(40, int(limit))))
+        candidates = opportunities[:candidate_limit]
+        grouped = {}
+        for row in candidates:
+            grouped.setdefault(_int(row.get("from_market")), []).append(row)
+        loops = []
+        for market_id, rows in grouped.items():
+            loops.extend(attach_return_trades(
+                rows, eligible_markets.get(market_id) or [],
+                cargo_units=cargo_units, capital=None,
+                max_price_age_days=max_price_age_days,
+            ))
+        opportunities = [
+            row for row in loops
+            if int(row.get("return_supply") or 0) >= min_supply
+            and int(row.get("return_demand") or 0) >= min_demand
+            and (not full_load or int(row.get("return_units") or 0) >= cargo_units)
+        ]
+        opportunities.sort(
+            key=lambda row: -(
+                int(row.get("profit_each") or 0) * int(row.get("units") or 0)
+                + int(row.get("return_profit") or 0)
+            )
+        )
+    return opportunities[: max(1, int(limit))]
+
+
+def _station_coordinates(row):
+    values = (row.get("systemX"), row.get("systemY"), row.get("systemZ"))
+    try:
+        return tuple(float(value) for value in values)
+    except (TypeError, ValueError):
+        return None
+
+
+def _market_distance(source, destination):
+    left = _station_coordinates(source)
+    right = _station_coordinates(destination)
+    if left is None or right is None:
+        return None
+    return math.sqrt(sum((a - b) ** 2 for a, b in zip(left, right)))
+
+
+def _route_commodity_candidates(report, min_profit, min_supply, min_demand, limit=10):
+    candidates = []
+    for item in report or []:
+        if not isinstance(item, dict) or item.get("rare"):
+            continue
+        symbol = str(item.get("commodityName") or "").strip()
+        buy = _int(item.get("minBuyPrice"))
+        sell = _int(item.get("maxSellPrice"))
+        stock = _int(item.get("totalStock"))
+        demand = _int(item.get("totalDemand"))
+        margin = sell - buy
+        if (
+            not symbol or buy <= 0 or margin < max(1, int(min_profit))
+            or stock < max(1, int(min_supply))
+            or demand < max(1, int(min_demand))
+        ):
+            continue
+        # Potential margin finds good routes; a restrained volume term keeps
+        # a one-off exotic quote from displacing consistently traded goods.
+        volume_weight = math.log10(max(10, min(stock, demand)))
+        candidates.append((margin * volume_weight, symbol))
+    candidates.sort(reverse=True)
+    return [symbol for _score, symbol in candidates[: max(1, int(limit))]]
+
+
+def find_market_routes(reference_system=None, *, max_route_distance=80.0,
+                       min_profit=1000, cargo_units=64,
+                       min_supply=1, min_demand=1,
+                       max_price_age_days=7, min_pad_size=0,
+                       include_carriers=False, max_system_distance=1000.0,
+                       surface_mode="include", full_load=False,
+                       round_trip=False, limit=75):
+    """Find real station pairs near a system, or galaxy-wide when blank.
+
+    Unlike :func:`find_opportunities`, this does not require the commander to
+    be docked at a source market. It pairs bounded, current Ardent exporter and
+    importer results and therefore remains request-driven with no local galaxy
+    market database.
+    """
+    reference_system = str(reference_system or "").strip()
+    max_route_distance = max(1.0, min(500.0, float(max_route_distance or 80.0)))
+    min_supply = max(1, int(min_supply or 1))
+    min_demand = max(1, int(min_demand or 1))
+    cargo_units = max(1, int(cargo_units or 1))
+    min_profit = max(1, int(min_profit or 1))
+    try:
+        report = ardent.commodities_report()
+    except ardent.ArdentError as exc:
+        raise RouteError(str(exc)) from exc
+    symbols = _route_commodity_candidates(
+        report, min_profit, min_supply, min_demand, limit=10,
+    )
+    if not symbols:
+        return []
+
+    def load_markets(symbol):
+        common = {
+            "max_days_ago": max_price_age_days,
+            "include_carriers": include_carriers,
+        }
+        if reference_system:
+            exports = ardent.nearby_exporters(
+                reference_system, symbol,
+                min_volume=min_supply, max_distance=max_route_distance, **common,
+            )
+            imports = ardent.nearby_importers(
+                reference_system, symbol,
+                min_volume=min_demand, max_distance=max_route_distance, **common,
+            )
+        else:
+            exports = ardent.global_exporters(
+                symbol, min_volume=min_supply, **common,
+            )
+            imports = ardent.global_importers(
+                symbol, min_volume=min_demand, **common,
+            )
+        return list(exports or []), list(imports or [])
+
+    query_results, errors = _parallel(symbols, load_markets, workers=5)
+    if not query_results and errors:
+        raise RouteError(str(errors[0]))
+
+    report_index = _report_index(report)
+    market_exports = {}
+    market_imports = {}
+    opportunities = []
+    seen = set()
+    for symbol, pair in query_results:
+        exports, imports = pair
+        allowed_exports = [
+            row for row in exports
+            if isinstance(row, dict)
+            and _int(row.get("buyPrice")) > 0
+            and _int(row.get("stock")) >= min_supply
+            and _station_allowed(
+                row, include_carriers=include_carriers,
+                max_system_distance=max_system_distance,
+                min_pad_size=min_pad_size, surface_mode=surface_mode,
+            )
+        ]
+        allowed_imports = [
+            row for row in imports
+            if isinstance(row, dict)
+            and _int(row.get("sellPrice")) > 0
+            and _int(row.get("demand")) >= min_demand
+            and _station_allowed(
+                row, include_carriers=include_carriers,
+                max_system_distance=max_system_distance,
+                min_pad_size=min_pad_size, surface_mode=surface_mode,
+            )
+        ]
+        allowed_exports.sort(key=lambda row: _int(row.get("buyPrice")))
+        allowed_imports.sort(key=lambda row: _int(row.get("sellPrice")), reverse=True)
+        allowed_exports = allowed_exports[:60]
+        allowed_imports = allowed_imports[:60]
+        for row in allowed_exports:
+            market_exports[(_int(row.get("marketId")), _key(symbol))] = row
+        for row in allowed_imports:
+            market_imports[(_int(row.get("marketId")), _key(symbol))] = row
+
+        summary = report_index.get(_key(symbol), {})
+        commodity = (
+            COMMODITY_NAME_MAPPING.get(symbol)
+            or str(summary.get("commodityName") or symbol).replace("_", " ").title()
+        )
+        for source in allowed_exports:
+            source_market = _int(source.get("marketId"))
+            buy_price = _int(source.get("buyPrice"))
+            supply = _int(source.get("stock"))
+            for destination in allowed_imports:
+                destination_market = _int(destination.get("marketId"))
+                if source_market and source_market == destination_market:
+                    continue
+                distance = _market_distance(source, destination)
+                if distance is None or distance > max_route_distance:
+                    continue
+                sell_price = _int(destination.get("sellPrice"))
+                demand = _int(destination.get("demand"))
+                profit_each = sell_price - buy_price
+                units = min(cargo_units, supply, demand)
+                if profit_each < min_profit or units <= 0:
+                    continue
+                if full_load and units < cargo_units:
+                    continue
+                identity = (source_market, destination_market, _key(symbol))
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                opportunities.append({
+                    "from_market": source_market,
+                    "from_station": source.get("stationName") or "Unknown station",
+                    "from_system": source.get("systemName") or "Unknown system",
+                    "from_dist_ls": _float(source.get("distanceToArrival")),
+                    "from_type": source.get("stationType") or "",
+                    "to_market": destination_market,
+                    "to_station": destination.get("stationName") or "Unknown station",
+                    "to_system": destination.get("systemName") or "Unknown system",
+                    "to_dist_ls": _float(destination.get("distanceToArrival")),
+                    "to_type": destination.get("stationType") or "",
+                    "commodity": commodity,
+                    "symbol": symbol,
+                    "buy_price": buy_price,
+                    "sell_price": sell_price,
+                    "profit_each": profit_each,
+                    "supply": supply,
+                    "demand": demand,
+                    "units": units,
+                    "distance": distance,
+                    "reference_distance": _float(source.get("distance")),
+                    "source_updated_at": _row_updated_at(source) or None,
+                    "updated_at": _row_updated_at(destination) or None,
+                })
+
+    if round_trip:
+        outbound_candidates = list(opportunities)
+        loops = []
+        for row in opportunities:
+            best = None
+            source_market = _int(row.get("from_market"))
+            destination_market = _int(row.get("to_market"))
+            outbound_symbol = _key(row.get("symbol"))
+            for symbol in symbols:
+                symbol_key = _key(symbol)
+                if symbol_key == outbound_symbol:
+                    continue
+                return_source = market_exports.get((destination_market, symbol_key))
+                return_destination = market_imports.get((source_market, symbol_key))
+                if not return_source or not return_destination:
+                    continue
+                buy_price = _int(return_source.get("buyPrice"))
+                sell_price = _int(return_destination.get("sellPrice"))
+                supply = _int(return_source.get("stock"))
+                demand = _int(return_destination.get("demand"))
+                margin = sell_price - buy_price
+                units = min(cargo_units, supply, demand)
+                if margin <= 0 or units <= 0 or (full_load and units < cargo_units):
+                    continue
+                profit = units * margin
+                candidate = {
+                    "return_symbol": symbol,
+                    "return_commodity": symbol.replace("_", " ").title(),
+                    "return_buy_price": buy_price,
+                    "return_sell_price": sell_price,
+                    "return_profit_each": margin,
+                    "return_units": units,
+                    "return_profit": profit,
+                    "return_supply": supply,
+                    "return_demand": demand,
+                    "return_updated_at": min(
+                        value for value in (
+                            _row_updated_at(return_source),
+                            _row_updated_at(return_destination),
+                        ) if value
+                    ) if (_row_updated_at(return_source) or _row_updated_at(return_destination)) else None,
+                }
+                if best is None or profit > int(best.get("return_profit") or 0):
+                    best = candidate
+            if best:
+                row.update(best)
+                loops.append(row)
+
+        # Galaxy-wide top-price lists may not contain the reverse commodity at
+        # both exact markets. Fill a bounded number of missing loops from the
+        # two real station market snapshots rather than inventing a return leg.
+        target_loops = min(12, max(3, int(limit)))
+        if len(loops) < target_loops:
+            existing = {
+                (_int(row.get("from_market")), _int(row.get("to_market")), _key(row.get("symbol")))
+                for row in loops
+            }
+            remaining = [
+                row for row in outbound_candidates
+                if (
+                    _int(row.get("from_market")),
+                    _int(row.get("to_market")),
+                    _key(row.get("symbol")),
+                ) not in existing
+            ]
+            remaining.sort(
+                key=lambda row: -int(row.get("profit_each") or 0) * int(row.get("units") or 0)
+            )
+
+            def load_direct_return(row):
+                source_items = ardent.market_commodities(
+                    row.get("from_system"), row.get("from_market"),
+                )
+                enriched = attach_return_trades(
+                    [row], source_items,
+                    cargo_units=cargo_units, capital=None,
+                    source_updated_at=row.get("source_updated_at"),
+                    max_price_age_days=max_price_age_days,
+                )
+                return enriched[0] if enriched else None
+
+            needed = target_loops - len(loops)
+            direct_results, _direct_errors = _parallel(
+                remaining[: max(needed * 2, 6)], load_direct_return, workers=4,
+            )
+            for _candidate, enriched in direct_results:
+                if not enriched:
+                    continue
+                if (
+                    int(enriched.get("return_supply") or 0) < min_supply
+                    or int(enriched.get("return_demand") or 0) < min_demand
+                    or (full_load and int(enriched.get("return_units") or 0) < cargo_units)
+                ):
+                    continue
+                loops.append(enriched)
+                if len(loops) >= target_loops:
+                    break
+        opportunities = loops
+
+    opportunities.sort(
+        key=lambda row: -(
+            int(row.get("profit_each") or 0) * int(row.get("units") or 0)
+            + int(row.get("return_profit") or 0)
         )
     )
     return opportunities[: max(1, int(limit))]

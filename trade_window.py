@@ -6,9 +6,7 @@ never controls independent visited-market EDDN uploads.
 
 from __future__ import annotations
 
-import json
 import math
-import os
 import threading
 import time
 import tkinter as tk
@@ -32,12 +30,12 @@ COLOR_ORANGE = THEME.orange
 COLOR_TEXT = THEME.text
 
 RANK_OPTIONS = (
-    "Profit / trip",
+    "Profit",
     "Profit / hour",
-    "Shortest travel",
-    "Freshest quotes",
+    "Last update",
+    "Route distance",
 )
-RESULT_COUNTS = ("3", "10", "25")
+RESULT_COUNTS = ("3", "10", "25", "50")
 
 
 class TradeWindow(ThemedWindowMixin):
@@ -57,18 +55,33 @@ class TradeWindow(ThemedWindowMixin):
         self._last_cargo_signature = None
         self._cargo_refresh_pending = False
         self.result_rows = {}
+        self._result_headings = {}
+        self._result_sort_column = None
+        self._result_sort_descending = False
 
         saved = self.config.get("trade_route_form")
-        self._saved_filters = saved if isinstance(saved, dict) else {}
-        self.large_pad_var = tk.BooleanVar(
-            value=bool(self._saved_filters.get("large_pad", False))
-        )
+        self._saved_filters = dict(saved) if isinstance(saved, dict) else {}
+        try:
+            form_version = int(self._saved_filters.get("form_version") or 0)
+        except (TypeError, ValueError):
+            form_version = 0
+        if form_version < 2:
+            # Earlier builds silently selected one station and defaulted to a
+            # 1,000 ls ceiling. Migrate to system-wide departure markets.
+            self._saved_filters.pop("origin_station", None)
+            self._saved_filters["max_ls"] = "ANY"
+            self._saved_filters["form_version"] = 2
+        saved_pad = str(self._saved_filters.get("pad_size") or "").title()
+        if saved_pad not in ("Any", "Small", "Medium", "Large"):
+            saved_pad = "Large" if self._saved_filters.get("large_pad") else "Any"
+        self.pad_size_var = tk.StringVar(value=saved_pad)
         self.include_carriers_var = tk.BooleanVar(
             value=bool(self._saved_filters.get("include_carriers", False))
         )
-        self.orbital_only_var = tk.BooleanVar(
-            value=bool(self._saved_filters.get("orbital_only", False))
-        )
+        saved_surface = str(self._saved_filters.get("surface_mode") or "").title()
+        if saved_surface not in ("Include", "Exclude", "Only"):
+            saved_surface = "Exclude" if self._saved_filters.get("orbital_only") else "Include"
+        self.surface_mode_var = tk.StringVar(value=saved_surface)
         self.full_load_var = tk.BooleanVar(
             value=bool(self._saved_filters.get("full_load", False))
         )
@@ -76,6 +89,11 @@ class TradeWindow(ThemedWindowMixin):
             value=bool(self._saved_filters.get("round_trip", False))
         )
         saved_rank = str(self._saved_filters.get("rank", RANK_OPTIONS[0]))
+        saved_rank = {
+            "Profit / trip": "Profit",
+            "Shortest travel": "Route distance",
+            "Freshest quotes": "Last update",
+        }.get(saved_rank, saved_rank)
         self.rank_var = tk.StringVar(
             value=saved_rank if saved_rank in RANK_OPTIONS else RANK_OPTIONS[0]
         )
@@ -226,7 +244,7 @@ class TradeWindow(ThemedWindowMixin):
         )
         self._action_card(
             action_row, 1, "FIND A TRADE",
-            "Plan from the selected station with an empty or available hold.",
+            "Search every eligible market in one system, or across the galaxy.",
             self.find_trade, COLOR_ACCENT, "FIND NOW",
         )
         self._action_card(
@@ -285,30 +303,26 @@ class TradeWindow(ThemedWindowMixin):
         )
         panel.pack(fill=tk.X, padx=10, pady=(9, 0))
         tk.Label(
-            panel, text="START FROM", fg=COLOR_ORANGE, bg=self.UI_PANEL,
+            panel, text="DEPARTURE SYSTEM", fg=COLOR_ORANGE, bg=self.UI_PANEL,
             font=("Segoe UI", 8, "bold"),
         ).pack(side=tk.LEFT, padx=(11, 10), pady=9)
         self.origin_entries = {}
-        for key, label, width in (
-            ("origin_system", "SYSTEM", 27),
-            ("origin_station", "STATION · BLANK = AUTO", 30),
-        ):
-            box = tk.Frame(panel, bg=self.UI_PANEL)
-            box.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 9), pady=5)
-            tk.Label(
-                box, text=label, fg=self.UI_DIM, bg=self.UI_PANEL,
-                font=("Segoe UI", 6, "bold"),
-            ).pack(anchor="w")
-            entry = tk.Entry(
-                box, width=width, bg=self.UI_PANEL_2, fg=COLOR_TEXT,
-                insertbackground=COLOR_ACCENT, relief=tk.FLAT,
-                highlightthickness=1, highlightbackground=self.UI_BORDER,
-                highlightcolor=COLOR_ACCENT,
-            )
-            entry.pack(fill=tk.X)
-            entry.bind("<FocusOut>", lambda _event: self._save_filters())
-            entry.bind("<Return>", lambda _event: self.find_trade())
-            self.origin_entries[key] = entry
+        box = tk.Frame(panel, bg=self.UI_PANEL)
+        box.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 9), pady=5)
+        tk.Label(
+            box, text="ALL ELIGIBLE MARKETS IN SYSTEM · BLANK = GALAXY-WIDE",
+            fg=self.UI_DIM, bg=self.UI_PANEL, font=("Segoe UI", 6, "bold"),
+        ).pack(anchor="w")
+        entry = tk.Entry(
+            box, width=48, bg=self.UI_PANEL_2, fg=COLOR_TEXT,
+            insertbackground=COLOR_ACCENT, relief=tk.FLAT,
+            highlightthickness=1, highlightbackground=self.UI_BORDER,
+            highlightcolor=COLOR_ACCENT,
+        )
+        entry.pack(fill=tk.X)
+        entry.bind("<FocusOut>", lambda _event: self._save_filters())
+        entry.bind("<Return>", lambda _event: self.find_trade())
+        self.origin_entries["origin_system"] = entry
         button(panel, "USE CURRENT", self._use_current_origin).pack(
             side=tk.LEFT, padx=(0, 6), pady=(13, 5),
         )
@@ -329,40 +343,52 @@ class TradeWindow(ThemedWindowMixin):
             font=("Segoe UI", 8, "bold"),
         ).pack(side=tk.LEFT, padx=(0, 8), pady=8)
         self.filter_entries = {}
-        for key, label, width in (
-            ("radius", "RANGE LY", 7),
-            ("max_ls", "MAX ARRIVAL LS", 9),
-            ("age", "AGE DAYS", 7),
-            ("min_profit", "MIN CR/T", 8),
-            ("cargo_override", "LOAD T · AUTO", 8),
-        ):
-            box = tk.Frame(top, bg=self.UI_PANEL)
-            box.pack(side=tk.LEFT, padx=(0, 8), pady=5)
-            tk.Label(
-                box, text=label, fg=self.UI_DIM, bg=self.UI_PANEL,
-                font=("Segoe UI", 6, "bold"),
-            ).pack(anchor="w")
-            entry = tk.Entry(
-                box, width=width, bg=self.UI_PANEL_2, fg=COLOR_TEXT,
-                insertbackground=COLOR_ACCENT, relief=tk.FLAT,
-                highlightthickness=1, highlightbackground=self.UI_BORDER,
-                highlightcolor=COLOR_ACCENT,
-            )
-            entry.pack(anchor="w")
-            entry.bind("<FocusOut>", lambda _event: self._save_filters())
-            entry.bind("<Return>", lambda _event: self._save_filters())
-            self.filter_entries[key] = entry
         tk.Label(
-            top, text="Blank load uses live free hold.",
+            top, text="Blank system searches galaxy-wide · enter ANY for unlimited station distance.",
             fg=self.UI_DIM, bg=self.UI_PANEL, font=("Segoe UI", 7),
-        ).pack(side=tk.RIGHT, padx=11)
+        ).pack(side=tk.RIGHT, padx=(8, 6))
+        button(top, "RESET DEFAULTS", self._reset_trade_defaults).pack(
+            side=tk.RIGHT, padx=(6, 0), pady=3,
+        )
+
+        entry_rows = (
+            (
+                ("radius", "MAX ROUTE LY", 9),
+                ("cargo_override", "CARGO T", 8),
+                ("age", "MAX AGE DAYS", 9),
+                ("min_profit", "MIN PROFIT CR/T", 11),
+            ),
+            (
+                ("max_ls", "MAX STATION LS", 10),
+                ("min_supply", "MIN SUPPLY", 9),
+                ("min_demand", "MIN DEMAND", 9),
+            ),
+        )
+        for row_index, fields in enumerate(entry_rows):
+            row = tk.Frame(panel, bg=self.UI_PANEL)
+            row.pack(fill=tk.X, padx=10, pady=(0, 2 if row_index == 0 else 0))
+            for key, label, width in fields:
+                box = tk.Frame(row, bg=self.UI_PANEL)
+                box.pack(side=tk.LEFT, padx=(0, 10), pady=3)
+                tk.Label(
+                    box, text=label, fg=self.UI_DIM, bg=self.UI_PANEL,
+                    font=("Segoe UI", 6, "bold"),
+                ).pack(anchor="w")
+                entry = tk.Entry(
+                    box, width=width, bg=self.UI_PANEL_2, fg=COLOR_TEXT,
+                    insertbackground=COLOR_ACCENT, relief=tk.FLAT,
+                    highlightthickness=1, highlightbackground=self.UI_BORDER,
+                    highlightcolor=COLOR_ACCENT,
+                )
+                entry.pack(anchor="w")
+                entry.bind("<FocusOut>", lambda _event: self._save_filters())
+                entry.bind("<Return>", lambda _event: self.find_trade())
+                self.filter_entries[key] = entry
 
         bottom = tk.Frame(panel, bg=self.UI_PANEL)
         bottom.pack(fill=tk.X, padx=10, pady=(0, 5))
         for label, variable in (
-            ("Large pad", self.large_pad_var),
             ("Carriers", self.include_carriers_var),
-            ("Orbital only", self.orbital_only_var),
             ("Full load", self.full_load_var),
             ("Round trip", self.round_trip_var),
         ):
@@ -371,7 +397,9 @@ class TradeWindow(ThemedWindowMixin):
             ).pack(side=tk.LEFT, padx=(0, 7), pady=4)
 
         for label, variable, values, width in (
-            ("RANK", self.rank_var, RANK_OPTIONS, 16),
+            ("PAD", self.pad_size_var, ("Any", "Small", "Medium", "Large"), 7),
+            ("SURFACE", self.surface_mode_var, ("Include", "Exclude", "Only"), 8),
+            ("ORDER BY", self.rank_var, RANK_OPTIONS, 14),
             ("RESULTS", self.result_count_var, RESULT_COUNTS, 4),
         ):
             tk.Label(
@@ -398,19 +426,25 @@ class TradeWindow(ThemedWindowMixin):
             self.win, bg=self.UI_PANEL,
             highlightbackground=self.UI_BORDER, highlightthickness=1,
         )
+        self.results_panel = panel
         panel.pack(fill=tk.BOTH, expand=True, padx=10, pady=(9, 0))
         head = tk.Frame(panel, bg=self.UI_PANEL)
-        head.pack(fill=tk.X, padx=11, pady=(9, 5))
+        head.pack(fill=tk.X, padx=11, pady=(8, 2))
         self.result_title = tk.Label(
             head, text="CURRENT RUN", fg=COLOR_ORANGE, bg=self.UI_PANEL,
             font=("Segoe UI", 9, "bold"), anchor="w",
         )
         self.result_title.pack(side=tk.LEFT)
-        self.result_status = tk.Label(
-            head, text="", fg=self.UI_MUTED, bg=self.UI_PANEL,
-            font=("Consolas", 8), anchor="e",
+        self.result_sort_hint = tk.Label(
+            head, text="CLICK A COLUMN TO SORT", fg=self.UI_DIM, bg=self.UI_PANEL,
+            font=("Segoe UI", 7, "bold"), anchor="e",
         )
-        self.result_status.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+        self.result_sort_hint.pack(side=tk.RIGHT)
+        self.result_status = tk.Label(
+            panel, text="", fg=self.UI_MUTED, bg=self.UI_PANEL,
+            font=("Consolas", 8), anchor="w", justify=tk.LEFT,
+        )
+        self.result_status.pack(fill=tk.X, padx=11, pady=(0, 5))
 
         tree_wrap = tk.Frame(panel, bg=self.UI_PANEL)
         tree_wrap.pack(fill=tk.BOTH, expand=True, padx=11)
@@ -420,25 +454,20 @@ class TradeWindow(ThemedWindowMixin):
             style="TradeAssist.Treeview", selectmode="browse", height=8,
         )
         widths = {
-            "primary": (170, tk.W), "destination": (285, tk.W),
-            "value": (155, tk.E), "cargo": (85, tk.E),
-            "distance": (120, tk.E), "age": (70, tk.E),
+            "primary": (125, tk.W), "destination": (300, tk.W),
+            "value": (120, tk.E), "cargo": (75, tk.E),
+            "distance": (105, tk.E), "age": (85, tk.E),
         }
         for name, (width, anchor) in widths.items():
             self.result_tree.heading(name, text=name.upper())
-            self.result_tree.column(name, width=width, anchor=anchor, stretch=name in ("primary", "destination"))
+            self.result_tree.column(name, width=width, minwidth=45, anchor=anchor, stretch=False)
         ybar = scrollbar(
             tree_wrap, orient=tk.VERTICAL, command=self.result_tree.yview,
             prefix="TradeAssist",
         )
-        xbar = scrollbar(
-            tree_wrap, orient=tk.HORIZONTAL, command=self.result_tree.xview,
-            prefix="TradeAssist",
-        )
-        self.result_tree.configure(yscrollcommand=ybar.set, xscrollcommand=xbar.set)
+        self.result_tree.configure(yscrollcommand=ybar.set)
         self.result_tree.grid(row=0, column=0, sticky="nsew")
         ybar.grid(row=0, column=1, sticky="ns")
-        xbar.grid(row=1, column=0, sticky="ew")
         tree_wrap.grid_rowconfigure(0, weight=1)
         tree_wrap.grid_columnconfigure(0, weight=1)
         self.result_tree.tag_configure("fresh", foreground=self.UI_OK)
@@ -446,13 +475,22 @@ class TradeWindow(ThemedWindowMixin):
         self.result_tree.tag_configure("history", foreground=self.UI_MUTED)
         self.result_tree.bind("<<TreeviewSelect>>", self._on_result_selected)
         self.result_tree.bind("<Double-1>", lambda _event: self.use_selected_result())
+        self.result_tree.bind("<Configure>", self._resize_result_columns, add="+")
 
+        detail_wrap = tk.Frame(panel, bg=THEME.input)
+        detail_wrap.pack(fill=tk.X, padx=11, pady=(7, 5))
         self.detail = tk.Text(
-            panel, height=4, bg=THEME.input, fg=COLOR_TEXT,
+            detail_wrap, height=4, bg=THEME.input, fg=COLOR_TEXT,
             insertbackground=COLOR_ACCENT, relief=tk.FLAT, padx=9, pady=7,
             font=("Consolas", 8), wrap=tk.WORD,
         )
-        self.detail.pack(fill=tk.X, padx=11, pady=(7, 5))
+        detail_bar = scrollbar(
+            detail_wrap, orient=tk.VERTICAL, command=self.detail.yview,
+            prefix="TradeAssist",
+        )
+        self.detail.configure(yscrollcommand=detail_bar.set)
+        self.detail.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        detail_bar.pack(side=tk.RIGHT, fill=tk.Y)
         self.detail.configure(state=tk.DISABLED)
 
         actions = tk.Frame(panel, bg=self.UI_PANEL)
@@ -513,30 +551,20 @@ class TradeWindow(ThemedWindowMixin):
     def _load_filter_values(self):
         defaults = {
             "radius": self._saved_filters.get("radius", 80),
-            "max_ls": self._saved_filters.get("max_ls", 1000),
-            "age": self._saved_filters.get("age", 30),
+            "max_ls": self._saved_filters.get("max_ls", "ANY"),
+            "age": self._saved_filters.get("age", 7),
             "min_profit": self._saved_filters.get("min_profit", 1000),
-            "cargo_override": self._saved_filters.get("cargo_override", ""),
+            "cargo_override": self._saved_filters.get("cargo_override", 64) or 64,
+            "min_supply": self._saved_filters.get("min_supply", 1),
+            "min_demand": self._saved_filters.get("min_demand", 1),
         }
         for key, value in defaults.items():
             entry = self.filter_entries[key]
             entry.delete(0, tk.END)
             entry.insert(0, str(value))
-        origin_defaults = {
-            "origin_system": self._saved_filters.get(
-                "origin_system", self._current_system() or "",
-            ),
-            "origin_station": (
-                self._saved_filters.get(
-                    "origin_station",
-                    getattr(self.app, "current_station_name", None) or "",
-                )
-            ),
-        }
-        for key, value in origin_defaults.items():
-            entry = self.origin_entries[key]
-            entry.delete(0, tk.END)
-            entry.insert(0, str(value))
+        entry = self.origin_entries["origin_system"]
+        entry.delete(0, tk.END)
+        entry.insert(0, str(self._saved_filters.get("origin_system", "")))
 
     def _save_filters(self):
         self.config["trade_route_form"] = {
@@ -546,14 +574,50 @@ class TradeWindow(ThemedWindowMixin):
             key: entry.get().strip() for key, entry in self.origin_entries.items()
         })
         self.config["trade_route_form"].update({
-            "large_pad": bool(self.large_pad_var.get()),
+            "form_version": 2,
+            "pad_size": self.pad_size_var.get(),
             "include_carriers": bool(self.include_carriers_var.get()),
-            "orbital_only": bool(self.orbital_only_var.get()),
+            "surface_mode": self.surface_mode_var.get(),
             "full_load": bool(self.full_load_var.get()),
             "round_trip": bool(self.round_trip_var.get()),
             "rank": self.rank_var.get(),
             "result_count": self.result_count_var.get(),
         })
+
+    def _reset_trade_defaults(self):
+        """Restore only Trade search controls; integration/log settings remain intact."""
+        self._next_search()
+        defaults = {
+            "radius": 80,
+            "cargo_override": 64,
+            "age": 7,
+            "min_profit": 1000,
+            "max_ls": "ANY",
+            "min_supply": 1,
+            "min_demand": 1,
+        }
+        for key, value in defaults.items():
+            entry = self.filter_entries.get(key)
+            if entry is None:
+                continue
+            entry.delete(0, tk.END)
+            entry.insert(0, str(value))
+        for entry in self.origin_entries.values():
+            entry.delete(0, tk.END)
+        self.pad_size_var.set("Any")
+        self.surface_mode_var.set("Include")
+        self.include_carriers_var.set(False)
+        self.full_load_var.set(False)
+        self.round_trip_var.set(False)
+        self.rank_var.set("Profit")
+        self.result_count_var.set(RESULT_COUNTS[0])
+        self._save_filters()
+        save_config(self.config)
+        self._set_view(
+            "trade", "FIND A TRADE",
+            "Trade search defaults restored · blank system searches galaxy-wide.",
+            self.UI_OK,
+        )
 
     def _filter_number(self, key, default, cast=float):
         try:
@@ -562,11 +626,31 @@ class TradeWindow(ThemedWindowMixin):
         except (KeyError, TypeError, ValueError):
             return default
 
+    def _optional_filter_number(self, key):
+        try:
+            value = self.filter_entries[key].get().strip()
+        except (AttributeError, KeyError):
+            return None
+        if not value or value.casefold() in {"any", "none", "unlimited", "all"}:
+            return None
+        try:
+            return max(0.0, float(value))
+        except (TypeError, ValueError):
+            return None
+
+    def _minimum_pad_size(self):
+        return {
+            "small": 1,
+            "medium": 2,
+            "large": 3,
+        }.get(str(self.pad_size_var.get() or "").casefold(), 0)
+
+    def _surface_mode(self):
+        value = str(self.surface_mode_var.get() or "Include").casefold()
+        return value if value in {"include", "exclude", "only"} else "include"
+
     def _origin_values(self):
-        return (
-            self.origin_entries["origin_system"].get().strip(),
-            self.origin_entries["origin_station"].get().strip(),
-        )
+        return self.origin_entries["origin_system"].get().strip()
 
     def _result_count(self):
         try:
@@ -579,24 +663,20 @@ class TradeWindow(ThemedWindowMixin):
         override = self._filter_number("cargo_override", 0, int)
         if override > 0:
             return override, True
-        capacity = max(0, int(getattr(self.app, "cargo_capacity", 0) or 0))
-        aboard = max(0, int(getattr(self.app, "current_cargo_tons", 0) or 0))
-        if capacity:
-            return max(0, capacity - aboard), False
+        # Trade planning is location/ship independent unless USE CURRENT is
+        # explicitly chosen; a blank/invalid field receives a useful baseline.
         return 64, False
 
     def _use_current_origin(self):
         system = self._current_system() or ""
-        station = getattr(self.app, "current_station_name", None) or ""
-        for key, value in (("origin_system", system), ("origin_station", station)):
-            entry = self.origin_entries[key]
-            entry.delete(0, tk.END)
-            entry.insert(0, value)
+        entry = self.origin_entries["origin_system"]
+        entry.delete(0, tk.END)
+        entry.insert(0, system)
         self._save_filters()
         self.result_status.config(
             text=(
-                f"Start set to {station} / {system}" if station
-                else f"Start system set to {system}; station will be selected automatically."
+                f"Departure set to {system}; every eligible market in the system will be searched."
+                if system else "Current system is not known yet."
             ),
             fg=self.UI_OK if system else self.UI_WARN,
         )
@@ -608,52 +688,6 @@ class TradeWindow(ThemedWindowMixin):
     def _current_coords(self):
         coords = getattr(self.app, "current_coords", None)
         return coords if isinstance(coords, (list, tuple)) and len(coords) >= 3 else None
-
-    def _current_market_snapshot(self):
-        """Return the matching live Market.json without publishing an old file."""
-        expected = getattr(self.app, "current_station_market_id", None)
-        current = getattr(self.app, "current_trade_market", None)
-        if isinstance(current, dict) and current.get("items"):
-            try:
-                if expected is None or int(current.get("market_id")) == int(expected):
-                    snapshot = dict(current)
-                    snapshot.setdefault("station_type", getattr(self.app, "current_station_type", None))
-                    snapshot.setdefault("dist_ls", getattr(self.app, "current_station_dist_ls", None))
-                    snapshot.setdefault("large_pad", self._current_station_has_large_pad())
-                    return snapshot
-            except (TypeError, ValueError):
-                pass
-        journal_path = self.config.get("journal_path") or ""
-        market_path = os.path.join(journal_path, "Market.json")
-        try:
-            with open(market_path, "r", encoding="utf-8") as handle:
-                data = json.load(handle)
-            if expected is not None and int(data.get("MarketID")) != int(expected):
-                return None
-            items = list(data.get("Items") or [])
-            if not items:
-                return None
-            return {
-                "market_id": data.get("MarketID"),
-                "station": data.get("StationName") or getattr(self.app, "current_station_name", None),
-                "system": data.get("StarSystem") or self._current_system(),
-                "timestamp": data.get("timestamp"),
-                "station_type": getattr(self.app, "current_station_type", None),
-                "dist_ls": getattr(self.app, "current_station_dist_ls", None),
-                "large_pad": self._current_station_has_large_pad(),
-                "items": items,
-            }
-        except (OSError, TypeError, ValueError, json.JSONDecodeError):
-            return None
-
-    def _current_station_has_large_pad(self):
-        pads = getattr(self.app, "current_station_landing_pads", None)
-        if isinstance(pads, dict):
-            try:
-                return int(pads.get("Large") or pads.get("large") or 0) > 0
-            except (TypeError, ValueError):
-                return False
-        return None
 
     def _ship_jump_range(self):
         ship = getattr(self.app, "cmdr_ship", {}) or {}
@@ -839,7 +873,7 @@ class TradeWindow(ThemedWindowMixin):
             note = " Mission and stolen cargo are deliberately excluded." if excluded else ""
             self._set_view("cargo", "SELL MY CARGO", "No tradeable cargo is currently aboard." + note)
             return
-        origin_system, origin_station = self._origin_values()
+        origin_system = self._origin_values()
         if not origin_system:
             self._set_view(
                 "cargo", "SELL MY CARGO",
@@ -855,11 +889,11 @@ class TradeWindow(ThemedWindowMixin):
             "system": origin_system,
             "star_pos": None,
             "radius": self._filter_number("radius", 80.0),
-            "max_price_age_days": self._filter_number("age", 30, int),
-            "requires_large_pad": bool(self.large_pad_var.get()),
+            "max_price_age_days": self._filter_number("age", 7, int),
+            "min_pad_size": self._minimum_pad_size(),
             "include_carriers": bool(self.include_carriers_var.get()),
-            "max_system_distance": self._filter_number("max_ls", 1000.0),
-            "orbital_only": bool(self.orbital_only_var.get()),
+            "max_system_distance": self._optional_filter_number("max_ls"),
+            "surface_mode": self._surface_mode(),
             "limit": self._result_count(),
         }
 
@@ -868,7 +902,7 @@ class TradeWindow(ThemedWindowMixin):
                 rows = routes.sell_cargo(**params)
                 self._post_ui(
                     lambda: self._render_cargo_buyers(
-                        rows, excluded, token, origin_system, origin_station,
+                        rows, excluded, token, origin_system,
                     ),
                     key="trade-assist-cargo",
                 )
@@ -880,8 +914,7 @@ class TradeWindow(ThemedWindowMixin):
 
         threading.Thread(target=worker, name="trade-cargo-buyers", daemon=True).start()
 
-    def _render_cargo_buyers(self, rows, excluded, token, origin_system=None,
-                             origin_station=None):
+    def _render_cargo_buyers(self, rows, excluded, token, origin_system=None):
         if token != self._search_generation or not self.is_open():
             return
         self._set_view("cargo", "SELL MY CARGO", "")
@@ -889,22 +922,21 @@ class TradeWindow(ThemedWindowMixin):
         shown_rows = list(rows or [])[:result_count]
         for row in shown_rows:
             items = list(row.get("items") or [])
-            cargo_text = ", ".join(
-                f"{item.get('name')} {self._num(item.get('units'))}t"
-                for item in items[:3]
+            accepted_units = sum(
+                int(item.get("units") or 0)
+                for item in items if isinstance(item, dict)
             )
-            if len(items) > 3:
-                cargo_text += f" +{len(items) - 3} more"
+            cargo_text = f"{self._num(accepted_units)} t"
             destination = f"{row.get('station')} / {row.get('system')}"
             distance_ly = float(row.get("distance") or 0)
             jumps = max(1, math.ceil(distance_ly / self._ship_jump_range()))
-            distance = f"{distance_ly:.1f} ly · {jumps} jump{'s' if jumps != 1 else ''}"
-            if row.get("dist_ls") is not None:
-                distance += f" · {self._num(row.get('dist_ls'))} ls"
+            distance = f"{distance_ly:.1f} LY · {jumps}J"
             detail_lines = [
                 f"SELL AT {row.get('station')} ({row.get('system')})",
                 f"Estimated gross sale: {self._credits(row.get('total'))}. This is revenue, not profit.",
             ]
+            if row.get("dist_ls") is not None:
+                detail_lines.append(f"Station arrival: {self._num(row.get('dist_ls'))} ls")
             for item in items:
                 detail_lines.append(
                     f"• {item.get('name')} · {self._num(item.get('units'))} t "
@@ -913,7 +945,7 @@ class TradeWindow(ThemedWindowMixin):
             plan = {
                 "kind": "sell-cargo",
                 "from_system": origin_system or self._current_system(),
-                "from_station": origin_station or None,
+                "from_station": None,
                 "to_system": row.get("system"),
                 "to_station": row.get("station"),
                 "revenue_cr": int(row.get("total") or 0),
@@ -940,109 +972,97 @@ class TradeWindow(ThemedWindowMixin):
 
     def find_trade(self):
         self._save_filters()
-        system, station = self._origin_values()
-        if not system:
-            self._set_view(
-                "trade", "FIND A TRADE",
-                "Enter a start system or choose USE CURRENT.",
-                self.UI_WARN,
-            )
-            return
-        max_age_days = self._filter_number("age", 30, int)
+        system = self._origin_values()
+        max_age_days = max(1, self._filter_number("age", 7, int))
         result_count = self._result_count()
         round_trip = bool(self.round_trip_var.get())
         full_load = bool(self.full_load_var.get())
-        orbital_only = bool(self.orbital_only_var.get())
         planned_load, load_overridden = self._planned_load_capacity()
         if planned_load <= 0:
             self._set_view(
                 "trade", "FIND A TRADE",
-                "The cargo hold is full. Set a planned load or free cargo space before searching.",
+                "Enter a cargo capacity greater than zero before searching.",
                 self.UI_WARN,
             )
             return
-        current_system = self._current_system()
-        current_station = getattr(self.app, "current_station_name", None)
-        current_market_id = getattr(self.app, "current_station_market_id", None)
-        use_live_market = bool(
-            station and current_system and current_station and current_market_id
-            and getattr(self.app, "current_docked", False)
-            and system.casefold() == current_system.casefold()
-            and station.casefold() == str(current_station).casefold()
-        )
-        market = self._current_market_snapshot() if use_live_market else None
-        if market:
-            market_updated = marketdb.parse_update_time(market.get("timestamp"))
-            if (
-                not market_updated
-                or time.time() - market_updated > max(1, max_age_days) * 86400
-            ):
-                market = None
-            elif self.large_pad_var.get() and market.get("large_pad") is not True:
-                market = None
-            elif orbital_only and routes.is_surface_station(market.get("station_type")):
-                market = None
-            elif (
-                not self.include_carriers_var.get()
-                and "carrier" in str(market.get("station_type") or "").casefold()
-            ):
-                market = None
-        origin_label = f"{station} / {system}" if station else f"an automatically selected market in {system}"
-        self._set_view("trade", "FIND A TRADE", f"Resolving {origin_label}…")
+        min_pad_size = self._minimum_pad_size()
+        surface_mode = self._surface_mode()
+        max_station_distance = self._optional_filter_number("max_ls")
+        if system:
+            origin_label = f"all markets in {system}"
+        else:
+            origin_label = "galaxy-wide routes"
+        self._set_view("trade", "FIND A TRADE", f"Searching {origin_label}…")
         token = self._next_search()
         filters = {
-            "radius": self._filter_number("radius", 80.0),
-            "min_profit": self._filter_number("min_profit", 1000, int),
+            "radius": max(1.0, self._filter_number("radius", 80.0)),
+            "min_profit": max(1, self._filter_number("min_profit", 1000, int)),
+            "min_supply": max(1, self._filter_number("min_supply", 1, int)),
+            "min_demand": max(1, self._filter_number("min_demand", 1, int)),
             "max_price_age_days": max_age_days,
-            "requires_large_pad": bool(self.large_pad_var.get()),
+            "min_pad_size": min_pad_size,
             "include_carriers": bool(self.include_carriers_var.get()),
-            "max_system_distance": self._filter_number("max_ls", 1000.0),
-            "orbital_only": orbital_only,
+            "max_system_distance": max_station_distance,
+            "surface_mode": surface_mode,
         }
-        balance = getattr(self.app, "cmdr_balance", None)
-        capital = int(balance) if balance is not None else None
         jump_range = self._ship_jump_range()
         rank_mode = self.rank_var.get()
 
         def worker():
             try:
-                source = market or routes.resolve_market_origin(
-                    system, station,
-                    max_price_age_days=filters["max_price_age_days"],
-                    requires_large_pad=filters["requires_large_pad"],
-                    include_carriers=filters["include_carriers"],
-                    orbital_only=filters["orbital_only"],
-                )
-                self._post_ui(
-                    lambda resolved=source: self._render_origin_resolved(resolved, token),
-                    key="trade-assist-origin",
-                )
-                params = {
-                    "system": source.get("system") or system,
-                    "star_pos": None,
-                    "radius": filters["radius"],
-                    "min_profit": filters["min_profit"],
-                    "min_units": planned_load if full_load else 1,
-                    "max_price_age_days": filters["max_price_age_days"],
-                    "requires_large_pad": filters["requires_large_pad"],
-                    "include_carriers": filters["include_carriers"],
-                    "max_system_distance": filters["max_system_distance"],
-                    "orbital_only": filters["orbital_only"],
-                    "source_updated_at": source.get("timestamp"),
-                    "source_market_id": int(source.get("market_id")),
-                    "source_station": source.get("station") or station,
-                    "market_items": list(source.get("items") or []),
-                    "limit": min(75, max(30, result_count * 3)),
-                }
-                rows = routes.find_opportunities(**params)
+                if system:
+                    source = {
+                        "station": f"all eligible markets in {system}",
+                        "system": system,
+                        "online": False,
+                    }
+                    rows = routes.find_system_market_routes(
+                        system,
+                        max_route_distance=filters["radius"],
+                        min_profit=filters["min_profit"],
+                        cargo_units=planned_load,
+                        min_supply=filters["min_supply"],
+                        min_demand=filters["min_demand"],
+                        max_price_age_days=filters["max_price_age_days"],
+                        min_pad_size=filters["min_pad_size"],
+                        include_carriers=filters["include_carriers"],
+                        max_system_distance=filters["max_system_distance"],
+                        surface_mode=filters["surface_mode"],
+                        full_load=full_load,
+                        round_trip=round_trip,
+                        limit=min(150, max(40, result_count * 4)),
+                    )
+                else:
+                    source = {
+                        "station": "galaxy-wide markets",
+                        "system": "",
+                        "online": False,
+                    }
+                    rows = routes.find_market_routes(
+                        None,
+                        max_route_distance=filters["radius"],
+                        min_profit=filters["min_profit"],
+                        cargo_units=planned_load,
+                        min_supply=filters["min_supply"],
+                        min_demand=filters["min_demand"],
+                        max_price_age_days=filters["max_price_age_days"],
+                        min_pad_size=filters["min_pad_size"],
+                        include_carriers=filters["include_carriers"],
+                        max_system_distance=filters["max_system_distance"],
+                        surface_mode=filters["surface_mode"],
+                        full_load=full_load,
+                        round_trip=round_trip,
+                        limit=min(150, max(40, result_count * 4)),
+                    )
+
                 ranked = []
                 for row in rows:
-                    buy_price = max(0, int(row.get("buy_price") or 0))
-                    affordable = (
-                        capital // buy_price
-                        if buy_price and capital is not None else planned_load
-                    )
-                    units = min(int(row.get("units") or 0), planned_load, affordable)
+                    if (
+                        int(row.get("supply") or 0) < filters["min_supply"]
+                        or int(row.get("demand") or 0) < filters["min_demand"]
+                    ):
+                        continue
+                    units = min(int(row.get("units") or 0), planned_load)
                     if units <= 0:
                         continue
                     if full_load and units < planned_load:
@@ -1056,41 +1076,39 @@ class TradeWindow(ThemedWindowMixin):
                     copy["outbound_time_s"] = self._leg_time_seconds(
                         row.get("distance"), row.get("to_dist_ls"), jump_range,
                     )
-                    copy["from_dist_ls"] = source.get("dist_ls")
+                    if copy.get("from_dist_ls") is None:
+                        copy["from_dist_ls"] = source.get("dist_ls")
                     ranked.append(copy)
                 ranked.sort(
                     key=lambda item: int(item.get("projected_profit") or 0),
                     reverse=True,
                 )
-                if round_trip and ranked:
-                    candidate_count = min(
-                        len(ranked), max(result_count, min(36, result_count + 10)),
-                    )
-                    ranked = ranked[:candidate_count]
-                    self._post_ui(
-                        lambda count=candidate_count: self._render_return_progress(count, token),
-                        key="trade-assist-return-progress",
-                    )
-                    ranked = routes.attach_return_trades(
-                        ranked, list(source.get("items") or []),
-                        cargo_units=planned_load, capital=capital,
-                        source_updated_at=source.get("timestamp"),
-                        max_price_age_days=filters["max_price_age_days"],
-                    )
-                    if full_load:
-                        ranked = [
-                            row for row in ranked
-                            if int(row.get("return_units") or 0) >= planned_load
-                        ]
 
                 final_rows = []
                 for row in ranked:
                     copy = dict(row)
-                    return_profit = int(copy.get("return_profit") or 0) if round_trip else 0
+                    if round_trip and not copy.get("return_symbol"):
+                        continue
+                    if round_trip and (
+                        int(copy.get("return_supply") or 0) < filters["min_supply"]
+                        or int(copy.get("return_demand") or 0) < filters["min_demand"]
+                    ):
+                        continue
+                    return_units = min(
+                        planned_load, int(copy.get("return_units") or 0),
+                    ) if round_trip else 0
+                    if round_trip and full_load and return_units < planned_load:
+                        continue
+                    copy["return_units"] = return_units
+                    return_profit = (
+                        return_units * int(copy.get("return_profit_each") or 0)
+                        if round_trip else 0
+                    )
+                    copy["return_profit"] = return_profit
                     total_profit = int(copy.get("projected_profit") or 0) + return_profit
                     return_time = (
                         self._leg_time_seconds(
-                            copy.get("distance"), source.get("dist_ls"), jump_range,
+                            copy.get("distance"), copy.get("from_dist_ls"), jump_range,
                         ) if round_trip else 0
                     )
                     total_time = int(copy.get("outbound_time_s") or 0) + return_time
@@ -1113,10 +1131,13 @@ class TradeWindow(ThemedWindowMixin):
                 if rank_mode == "Profit / hour":
                     rank_key = lambda item: float(item.get("profit_per_hour") or 0)
                     reverse = True
-                elif rank_mode == "Shortest travel":
-                    rank_key = lambda item: float(item.get("total_time_s") or float("inf"))
+                elif rank_mode == "Route distance":
+                    rank_key = lambda item: (
+                        float(item.get("distance"))
+                        if item.get("distance") is not None else float("inf")
+                    )
                     reverse = False
-                elif rank_mode == "Freshest quotes":
+                elif rank_mode == "Last update":
                     rank_key = lambda item: float(item.get("quote_epoch") or 0)
                     reverse = True
                 else:
@@ -1137,37 +1158,9 @@ class TradeWindow(ThemedWindowMixin):
 
         threading.Thread(target=worker, name="trade-quick-route", daemon=True).start()
 
-    def _render_return_progress(self, count, token):
+    def _render_trade_results(self, rows, token, source=None, rank_mode="Profit"):
         if token != self._search_generation or not self.is_open():
             return
-        self.result_status.config(
-            text=f"Checking real return cargo for {count} candidate route(s)…",
-            fg=self.UI_MUTED,
-        )
-
-    def _render_origin_resolved(self, source, token):
-        if token != self._search_generation or not self.is_open():
-            return
-        station = source.get("station") or "selected market"
-        system = source.get("system") or "selected system"
-        self.result_status.config(
-            text=f"Scanning departures from {station} / {system}…",
-            fg=self.UI_MUTED,
-        )
-
-    def _render_trade_results(self, rows, token, source=None, rank_mode="Profit / trip"):
-        if token != self._search_generation or not self.is_open():
-            return
-        if source and source.get("online"):
-            for key, value in (
-                ("origin_system", source.get("system")),
-                ("origin_station", source.get("station")),
-            ):
-                if value:
-                    entry = self.origin_entries[key]
-                    entry.delete(0, tk.END)
-                    entry.insert(0, value)
-            self._save_filters()
         self._set_view("trade", "FIND A TRADE", "")
         for row in rows:
             units = int(row.get("trade_units") or 0)
@@ -1175,13 +1168,10 @@ class TradeWindow(ThemedWindowMixin):
             total_profit = int(row.get("total_profit") or outbound_profit)
             profit_per_hour = int(row.get("profit_per_hour") or 0)
             is_loop = bool(row.get("round_trip"))
-            destination = f"{row.get('to_station')} / {row.get('to_system')}"
+            destination = f"{row.get('from_system')}  →  {row.get('to_system')}"
             jumps = int(row.get("estimated_jumps") or 0)
             total_jumps = jumps * (2 if is_loop else 1)
-            distance = (
-                f"{self._duration(row.get('total_time_s'))} · "
-                f"{total_jumps} jump{'s' if total_jumps != 1 else ''}"
-            )
+            distance = f"{float(row.get('distance') or 0):.1f} LY · {total_jumps}J"
             detail_lines = [
                 f"BUY {self._num(units)} t {row.get('commodity')} at "
                 f"{row.get('from_station')} ({row.get('from_system')})",
@@ -1196,6 +1186,12 @@ class TradeWindow(ThemedWindowMixin):
                 f"{self._num(row.get('to_dist_ls')) if row.get('to_dist_ls') is not None else '?'} ls"
                 f" · {row.get('to_type') or 'station type unknown'}",
             ]
+            if row.get("from_dist_ls") is not None:
+                detail_lines.insert(
+                    1,
+                    f"Departure arrival {self._num(row.get('from_dist_ls'))} ls · "
+                    f"{row.get('from_type') or 'station type unknown'}",
+                )
             if is_loop:
                 detail_lines.extend([
                     f"RETURN WITH {self._num(row.get('return_units'))} t "
@@ -1233,12 +1229,12 @@ class TradeWindow(ThemedWindowMixin):
             }
             cargo_text = f"{self._num(units)} t"
             if is_loop:
-                cargo_text += f" + {self._num(row.get('return_units'))} t"
+                cargo_text = f"{self._num(units)}↔{self._num(row.get('return_units'))} t"
             self._insert_result(
                 row.get("commodity"), destination,
-                f"{self._credits(total_profit)} · {self._credits(profit_per_hour)}/h",
+                self._credits(total_profit),
                 cargo_text, distance,
-                f"{row.get('confidence')} · {self._age(row.get('quote_epoch'))}",
+                self._age(row.get("quote_epoch")),
                 row, "\n".join(detail_lines), plan,
             )
         self.result_status.config(
@@ -1530,20 +1526,146 @@ class TradeWindow(ThemedWindowMixin):
 
     def _set_view(self, view, title, status="", colour=None):
         self._current_view = view
+        self._result_sort_column = None
+        self._result_sort_descending = False
         self.result_title.config(text=title)
         self.result_status.config(text=status, fg=colour or self.UI_MUTED)
+        self.result_sort_hint.config(text="CLICK A COLUMN TO SORT", fg=self.UI_DIM)
         for iid in self.result_tree.get_children():
             self.result_tree.delete(iid)
         self.result_rows = {}
         self._set_detail("")
         headings = {
-            "cargo": ("BUYER", "SYSTEM", "EST. SALE", "ACCEPTED", "TRAVEL", "AGE"),
-            "trade": ("COMMODITY", "DESTINATION", "PROFIT", "LOAD", "TRAVEL", "AGE"),
+            "cargo": ("BUYER", "SYSTEM", "EST. SALE", "ACCEPTED", "DISTANCE", "UPDATED"),
+            "trade": ("COMMODITY", "ROUTE", "PROFIT", "LOAD", "DISTANCE", "UPDATED"),
             "run": ("TYPE", "COMMODITY", "VALUE / PROFIT", "TONS", "PRICE", "WHEN"),
             "log": ("TYPE", "COMMODITY", "VALUE / PROFIT", "TONS", "LOCATION", "WHEN"),
         }.get(view, ("ITEM", "DESTINATION", "VALUE", "CARGO", "TRAVEL", "AGE"))
-        for column, label in zip(self.result_tree["columns"], headings):
-            self.result_tree.heading(column, text=label)
+        self._result_headings = dict(zip(self.result_tree["columns"], headings))
+        self._apply_result_headings()
+
+    def _apply_result_headings(self):
+        for column in self.result_tree["columns"]:
+            label = self._result_headings.get(column, str(column).upper())
+            if column == self._result_sort_column:
+                label += " ▼" if self._result_sort_descending else " ▲"
+            self.result_tree.heading(
+                column, text=label,
+                command=lambda name=column: self._sort_results(name),
+            )
+
+    def _resize_result_columns(self, event=None):
+        """Keep all result columns inside the embedded page at every width."""
+        try:
+            available = int(event.width if event is not None else self.result_tree.winfo_width()) - 4
+        except (AttributeError, TypeError, ValueError):
+            return
+        if available < 360:
+            return
+        columns = tuple(self.result_tree["columns"])
+        weights = {
+            "primary": 0.15,
+            "destination": 0.36,
+            "value": 0.15,
+            "cargo": 0.09,
+            "distance": 0.13,
+            "age": 0.12,
+        }
+        assigned = 0
+        for column in columns[:-1]:
+            width = max(45, int(available * weights.get(column, 0.15)))
+            assigned += width
+            self.result_tree.column(column, width=width, stretch=False)
+        final_width = max(45, available - assigned)
+        self.result_tree.column(columns[-1], width=final_width, stretch=False)
+        self.result_status.configure(wraplength=max(320, available - 4))
+
+    @staticmethod
+    def _first_number(*values):
+        for value in values:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    def _result_sort_value(self, iid, column):
+        data = self.result_rows.get(iid) or {}
+        raw = data.get("raw") or {}
+        plan = data.get("plan") or {}
+        values = data.get("values") or self.result_tree.item(iid, "values")
+        column_index = list(self.result_tree["columns"]).index(column)
+        display = values[column_index] if column_index < len(values) else ""
+        if column in ("primary", "destination"):
+            return str(display or "").casefold()
+
+        view = self._current_view
+        if column == "value":
+            if view == "trade":
+                return self._first_number(raw.get("total_profit"), plan.get("profit_cr"), raw.get("projected_profit"))
+            if view == "cargo":
+                return self._first_number(raw.get("total"), plan.get("revenue_cr"))
+            return self._first_number(raw.get("profit"), raw.get("total"), raw.get("value"))
+        if column == "cargo":
+            if view == "trade":
+                return self._first_number(
+                    int(raw.get("trade_units") or 0) + int(raw.get("return_units") or 0)
+                )
+            if view == "cargo":
+                return self._first_number(sum(
+                    int(item.get("units") or 0)
+                    for item in raw.get("items") or [] if isinstance(item, dict)
+                ))
+            return self._first_number(raw.get("count"), raw.get("units"))
+        if column == "distance":
+            if view in ("trade", "cargo"):
+                return self._first_number(raw.get("distance"), plan.get("distance_ly"))
+            if view == "log":
+                return str(display or "").casefold()
+            return self._first_number(raw.get("price"), raw.get("distance"))
+        if column == "age":
+            return self._first_number(
+                raw.get("quote_epoch"), raw.get("updated_at"),
+                raw.get("ts"), raw.get("time"),
+            )
+        return str(display or "").casefold()
+
+    def _sort_results(self, column):
+        children = list(self.result_tree.get_children())
+        if not children:
+            return
+        if self._result_sort_column == column:
+            descending = not self._result_sort_descending
+        else:
+            descending = column in {"value", "cargo", "age"}
+        self._result_sort_column = column
+        self._result_sort_descending = descending
+
+        populated, missing = [], []
+        for iid in children:
+            value = self._result_sort_value(iid, column)
+            (missing if value is None else populated).append((value, iid))
+        populated.sort(key=lambda item: item[0], reverse=descending)
+        ordered = [iid for _value, iid in populated] + [iid for _value, iid in missing]
+        selected = self.result_tree.selection()
+        for index, iid in enumerate(ordered):
+            self.result_tree.move(iid, "", index)
+        if selected and selected[0] in children:
+            self.result_tree.selection_set(selected[0])
+            self.result_tree.focus(selected[0])
+            self.result_tree.see(selected[0])
+        label = self._result_headings.get(column, column).replace("/", " ")
+        direction = "HIGH TO LOW" if descending else "LOW TO HIGH"
+        if column in {"primary", "destination"} or (
+            column == "distance" and self._current_view == "log"
+        ):
+            direction = "Z TO A" if descending else "A TO Z"
+        elif column == "age":
+            direction = "NEWEST FIRST" if descending else "OLDEST FIRST"
+        self.result_sort_hint.config(
+            text=f"SORTED: {label} · {direction}", fg=COLOR_ACCENT,
+        )
+        self._apply_result_headings()
 
     def _insert_result(self, primary, destination, value, cargo, distance, age,
                        raw, detail, plan, tag=None):
@@ -1559,6 +1681,8 @@ class TradeWindow(ThemedWindowMixin):
         self.result_rows[iid] = {
             "raw": raw or {}, "detail": detail or "", "plan": plan,
             "destination": (plan or {}).get("to_system") if plan else None,
+            "values": (primary or "---", destination or "---", value or "---",
+                       cargo or "---", distance or "---", age or "---"),
         }
         return iid
 

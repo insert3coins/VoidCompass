@@ -134,13 +134,13 @@ def _edsm_system_url(system):
     return f"https://www.edsm.net/show-system?systemName={quote_plus(system)}"
 
 
-def _discord_location(system, body=None):
+def _discord_location(system, body=None, *, link=True):
     """Format an Elite system/body with a safe EDSM system link."""
     system = " ".join(str(system or "").split()) or "Unknown"
     body = " ".join(str(body or "").split())
     escaped_system = _discord_escape(system)
     url = _edsm_system_url(system)
-    system_text = f"[{escaped_system}]({url})" if url else escaped_system
+    system_text = f"[{escaped_system}]({url})" if link and url else escaped_system
     if not body:
         return system_text
     suffix = body
@@ -1363,9 +1363,16 @@ class CarrierTracker:
                     "inline": bool(inline),
                 })
 
-        current = _discord_location(cd.get("system"), cd.get("body"))
-        target = _discord_location(cd.get("jump_destination"), cd.get("jump_body"))
-        previous = _discord_location(cd.get("previous_system"), cd.get("previous_body"))
+        location_links = event_type != "jump_plotted"
+        current = _discord_location(
+            cd.get("system"), cd.get("body"), link=location_links,
+        )
+        target = _discord_location(
+            cd.get("jump_destination"), cd.get("jump_body"), link=location_links,
+        )
+        previous = _discord_location(
+            cd.get("previous_system"), cd.get("previous_body"), link=location_links,
+        )
         if event_type == "jump_plotted":
             add_field("CURRENT SYSTEM", current, True)
             add_field("JUMP TARGET", target, True)
@@ -1572,7 +1579,7 @@ class CarrierTracker:
             "footer": {"text": footer_text},
         }
         link_url = _edsm_system_url(link_system)
-        if link_url:
+        if link_url and event_type != "jump_plotted":
             embed["url"] = link_url
         return {
             "username": "Void Compass",
