@@ -57,6 +57,16 @@ DEPRECATED_CONFIG_KEYS = (
     'cockpit_llm_inference_profile',
     'cockpit_llm_advisor_level',
     'cockpit_llm_timeout_s',
+    'overlay_hotkey_trade',
+    'trade_overlay_enabled',
+    'trade_eddn_upload_enabled',
+    'trade_log_auto_prune_enabled',
+    'trade_hud_x',
+    'trade_hud_y',
+    'big_trade_profit_threshold',
+    'trade_window_geometry',
+    'trade_route_form',
+    'trade_log_retention_days',
 )
 # Overlay/HUD colors are seeded from the active theme at startup; the live
 # theme bridge rebinds these module constants and repaints open overlays.
@@ -99,7 +109,6 @@ PROFILE_TEXT_SETTINGS = (
     "overlay_hotkey_system_info",
     "overlay_hotkey_station_info",
     "overlay_hotkey_cargo",
-    "overlay_hotkey_trade",
     "overlay_hotkey_carrier",
     "overlay_hotkey_prospector",
     "overlay_hotkey_colony",
@@ -109,12 +118,12 @@ PROFILE_TEXT_SETTINGS = (
 PROFILE_BOOL_SETTINGS = (
     "edsm_upload_enabled",
     "edsm_backfill_on_cache_rebuild",
+    "eddn_market_upload_enabled",
     "overlay_enabled",
     "overlay_mouse_passthrough",
     "overlay_hotkeys_enabled",
     "hud_compact_mode",
     "cargo_overlay_enabled",
-    "trade_overlay_enabled",
     "carrier_overlay_enabled",
     "colony_overlay_enabled",
     "colony_overlay_show_trips",
@@ -135,8 +144,6 @@ PROFILE_BOOL_SETTINGS = (
     "ground_target_active",
     "auto_copy_waypoint",
     "route_auto_note_from_edsm",
-    "trade_eddn_upload_enabled",
-    "trade_log_auto_prune_enabled",
     "achievements_enabled",
     "achievement_notifications_enabled",
     "voice_callouts_enabled",
@@ -174,8 +181,6 @@ PROFILE_VALUE_SETTINGS = (
     "hud_y",
     "cargo_hud_x",
     "cargo_hud_y",
-    "trade_hud_x",
-    "trade_hud_y",
     "carrier_hud_x",
     "carrier_hud_y",
     "colony_overlay_x",
@@ -198,7 +203,6 @@ PROFILE_VALUE_SETTINGS = (
     "heartbeat_hud_x",
     "heartbeat_hud_y",
     "low_fuel_threshold_pct",
-    "big_trade_profit_threshold",
     "ground_target_window_geometry",
     "ground_popup_geometry",
     "ground_target_lat",
@@ -215,9 +219,6 @@ PROFILE_VALUE_SETTINGS = (
     "value_ledger_geometry",
     "colonisation_planner_geometry",
     "exploration_window_geometry",
-    "trade_window_geometry",
-    "trade_route_form",
-    "trade_log_retention_days",
     "system_plotter_form",
     "ui_custom_themes",
     "achievements_disabled_categories",
@@ -323,6 +324,16 @@ def apply_profile_config(config, profile_key=None):
         profile["cockpit_advisor_enabled"] = bool(profile["cockpit_llm_advisor_enabled"])
     if "cockpit_advisor_level" not in profile and profile.get("cockpit_llm_advisor_level"):
         profile["cockpit_advisor_level"] = str(profile["cockpit_llm_advisor_level"])
+    # Trade Assist was retired, but its independent EDDN publisher remains.
+    # Preserve each commander's previous upload preference under the clearer
+    # integration-only setting name.
+    if "eddn_market_upload_enabled" not in profile:
+        profile["eddn_market_upload_enabled"] = bool(
+            profile.get(
+                "trade_eddn_upload_enabled",
+                config.get("trade_eddn_upload_enabled", True),
+            )
+        )
     # v5.2.9.2 moved the three shipped shortcuts away from common game/GPU
     # bindings. Only migrate the exact retired defaults; commander-customised
     # assignments remain untouched.
@@ -399,7 +410,6 @@ def apply_profile_config(config, profile_key=None):
         "overlay_hotkey_system_info": "",
         "overlay_hotkey_station_info": "",
         "overlay_hotkey_cargo": "",
-        "overlay_hotkey_trade": "",
         "overlay_hotkey_carrier": "",
         "overlay_hotkey_prospector": "",
         "overlay_hotkey_colony": "",
@@ -408,12 +418,12 @@ def apply_profile_config(config, profile_key=None):
     bool_defaults = {
         "edsm_upload_enabled": False,
         "edsm_backfill_on_cache_rebuild": True,
+        "eddn_market_upload_enabled": True,
         "overlay_enabled": True,
         "overlay_mouse_passthrough": os.name == "nt",
         "overlay_hotkeys_enabled": os.name == "nt",
         "hud_compact_mode": False,
         "cargo_overlay_enabled": False,
-        "trade_overlay_enabled": False,
         "carrier_overlay_enabled": False,
         "colony_overlay_enabled": False,
         "colony_overlay_show_trips": True,
@@ -434,8 +444,6 @@ def apply_profile_config(config, profile_key=None):
         "ground_target_active": False,
         "auto_copy_waypoint": False,
         "route_auto_note_from_edsm": True,
-        "trade_eddn_upload_enabled": True,
-        "trade_log_auto_prune_enabled": True,
         "achievements_enabled": True,
         "achievement_notifications_enabled": True,
         "voice_callouts_enabled": False,
@@ -475,7 +483,6 @@ def apply_profile_config(config, profile_key=None):
                 "nav_collapsed_groups": [],
                 "voice_volume": 0.8,
                 "voice_cache_retention_days": 7,
-                "trade_log_retention_days": 180,
                 "cockpit_memory_system_limit": 300,
                 "cockpit_memory_species_limit": 200,
                 "cockpit_memory_ship_limit": 30,
@@ -575,14 +582,12 @@ def load_config():
         'overlay_hotkey_system_info': '',
         'overlay_hotkey_station_info': '',
         'overlay_hotkey_cargo': '',
-        'overlay_hotkey_trade': '',
         'overlay_hotkey_carrier': '',
         'overlay_hotkey_prospector': '',
         'overlay_hotkey_colony': '',
         'overlay_hotkey_field_bookmark': 'Ctrl+Alt+Shift+F12',
         'hud_compact_mode': False,
         'cargo_overlay_enabled': False,
-        'trade_overlay_enabled': False,
         'carrier_overlay_enabled': False,
         'colony_overlay_enabled': False,
         'colony_overlay_show_trips': True,
@@ -600,8 +605,6 @@ def load_config():
         'hud_y': 100,
         'cargo_hud_x': 800,
         'cargo_hud_y': 400,
-        'trade_hud_x': 820,
-        'trade_hud_y': 560,
         'carrier_hud_x': 30,
         'carrier_hud_y': 180,
         'colony_overlay_x': 40,
@@ -623,7 +626,6 @@ def load_config():
         'survey_status_hud_x': 30,
         'survey_status_hud_y': 520,
         'low_fuel_threshold_pct': 0.25,
-        'big_trade_profit_threshold': 1000000,
         'main_geometry': '1000x700',
         'settings_geometry': '980x800',
         'ground_target_window_geometry': '430x230+1220+260',
@@ -671,14 +673,10 @@ def load_config():
         'value_ledger_geometry': '980x620',
         'colonisation_planner_geometry': '900x560',
         'exploration_window_geometry': '1040x680',
-        'trade_window_geometry': '1080x700',
-        'trade_route_form': {},
-        'trade_log_auto_prune_enabled': True,
-        'trade_log_retention_days': 180,
         'system_plotter_form': {},
         'route_auto_note_from_edsm': True,
         'auto_copy_waypoint': False,
-        'trade_eddn_upload_enabled': True,
+        'eddn_market_upload_enabled': True,
         'achievements_enabled': True,
         'achievement_notifications_enabled': True,
         'achievements_disabled_categories': [],

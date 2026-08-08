@@ -12,15 +12,12 @@ Usage:
 
 import json
 import os
-import threading
 import time
 import tkinter as tk
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from tkinter import messagebox, ttk
 
 from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
-from trade import routes
 from ui_theme import THEME, ThemedWindowMixin, apply_window, button, configure_ttk, scrollbar, window_surface
 
 COLOR_ACCENT = THEME.accent
@@ -80,7 +77,6 @@ class ColonizationWindow(ThemedWindowMixin):
         self.ui_post_callback = ui_post_callback
         self._selected_mid = None
         self._notes_dirty  = False
-        self._planner_sources = {}
 
         self.embedded = embedded
         self.win = window_surface(root, embedded=embedded)
@@ -383,10 +379,6 @@ class ColonizationWindow(ThemedWindowMixin):
             header, "Copy Shopping List",
             self._copy_global_shopping_list, accent=True,
         ).pack(side=tk.LEFT)
-        self._action_button(
-            header, "Find Sources",
-            self._find_planner_sources,
-        ).pack(side=tk.LEFT, padx=(6, 0))
 
         style = configure_ttk(self.win, "Colony")
         style.configure(
@@ -412,15 +404,14 @@ class ColonizationWindow(ThemedWindowMixin):
 
         frame = tk.Frame(parent, bg=self.UI_BG)
         frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
-        cols = ("commodity", "remaining", "required", "delivered", "projects", "sources")
+        cols = ("commodity", "remaining", "required", "delivered", "projects")
         self._planner_tree = ttk.Treeview(frame, columns=cols, show="headings", style="ColonyPlanner.Treeview")
         specs = (
             ("commodity", "Commodity", 210, tk.W),
             ("remaining", "Remaining", 90, tk.E),
             ("required", "Required", 90, tk.E),
             ("delivered", "Delivered", 90, tk.E),
-            ("projects", "Projects", 210, tk.W),
-            ("sources", "Nearest Sources", 260, tk.W),
+            ("projects", "Projects", 260, tk.W),
         )
         for col, label, width, anchor in specs:
             self._planner_tree.heading(col, text=label)
@@ -472,81 +463,11 @@ class ColonizationWindow(ThemedWindowMixin):
                     f"{row['required']:,}",
                     f"{row['delivered']:,}",
                     ", ".join(sorted(row["projects"])[:4]),
-                    self._planner_sources.get(row["commodity"], ""),
                 ),
             )
         self._planner_summary.config(
             text=f"{active_projects} active projects | {sum(r['remaining'] for r in rows):,} tons remaining"
         )
-
-    def _source_reference_system(self):
-        if self._selected_mid is not None and self._selected_mid in self.projects:
-            return self.projects[self._selected_mid].get("system_name")
-        active = [
-            p for p in self.projects.values()
-            if not p.get("complete") and not p.get("failed") and p.get("system_name")
-        ]
-        if not active:
-            return None
-        best = max(active, key=lambda p: p.get("last_updated") or 0)
-        return best.get("system_name")
-
-    def _find_planner_sources(self):
-        ref_system = self._source_reference_system()
-        if not ref_system:
-            self._planner_summary.config(text="Select or visit a construction site before finding sources.")
-            return
-        _active, rows = self._planner_rows()
-        rows = rows[:10]
-        if not rows:
-            self._planner_summary.config(text="No remaining commodities to source.")
-            return
-        self._planner_summary.config(text=f"Finding sources near {ref_system}...")
-
-        def worker():
-            found = {}
-            try:
-                routes.list_commodities()  # warm the shared one-hour catalogue cache
-            except Exception:
-                pass
-
-            def lookup(row):
-                try:
-                    result = routes.search_commodity(
-                        query=row["commodity"],
-                        mode="buy",
-                        system=ref_system,
-                        radius=50.0,
-                        min_units=1,
-                        max_price_age_days=30,
-                        requires_large_pad=False,
-                        include_carriers=False,
-                        limit=2,
-                    )
-                    labels = []
-                    for src in result.get("results", []):
-                        labels.append(
-                            f"{src.get('station')} / {src.get('system')} @ {int(src.get('buy_price') or 0):,}"
-                        )
-                    return row["commodity"], "; ".join(labels) if labels else "No online source"
-                except Exception as exc:
-                    return row["commodity"], str(exc)[:80]
-
-            with ThreadPoolExecutor(max_workers=min(4, len(rows))) as pool:
-                futures = [pool.submit(lookup, row) for row in rows]
-                for future in as_completed(futures):
-                    commodity, value = future.result()
-                    found[commodity] = value
-            self._post_ui(
-                lambda: self._render_planner_sources(found, ref_system),
-                key="colonisation-planner-sources",
-            )
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _render_planner_sources(self, found, ref_system):
-        self._planner_sources = found or {}
-        self._refresh_planner()
-        self._planner_summary.config(text=f"{len(self._planner_sources)} source checks near {ref_system}")
 
     def _copy_global_shopping_list(self):
         _active_projects, rows = self._planner_rows()

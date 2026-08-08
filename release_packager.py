@@ -125,8 +125,7 @@ INSTALL
 
 Void Compass creates configuration, commander profiles, logs and downloaded
 data beside the application. Keep the whole folder together when moving it.
-Piper voice packs are downloaded from inside the app when requested. Online
-Trade Assist searches require internet access but download no market database.
+Piper voice packs are downloaded from inside the app when requested.
 Linux voice playback uses pw-play, paplay,
 aplay or ffplay, whichever is installed.
 
@@ -147,8 +146,7 @@ INSTALL
 
 Void Compass creates configuration, commander profiles, logs and downloaded
 data beside the application. Keep the whole folder together when moving it.
-Piper voice packs are downloaded from inside the app when requested. Online
-Trade Assist searches require internet access but download no market database.
+Piper voice packs are downloaded from inside the app when requested.
 
 Windows SmartScreen may display an unrecognised-app warning because community
 builds are not code-signed. The ZIP checksum is published alongside this file.

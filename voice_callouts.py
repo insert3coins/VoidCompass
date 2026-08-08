@@ -26,9 +26,10 @@ from pathlib import Path
 
 import requests
 
-from trade.marketdb import DATA_DIR
+from platform_support import application_dir
 
 
+DATA_DIR = application_dir() / "data"
 TTS_DIR = DATA_DIR / "tts"
 CACHE_DIR = TTS_DIR / "cache"
 DEFAULT_VOICE = "en_GB-alba-medium"

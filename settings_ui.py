@@ -16,6 +16,7 @@ from global_hotkeys import (
     validate_hotkey_bindings,
 )
 from platform_support import default_screenshot_path, open_path
+from trade.eddn_upload import UPLOADER as eddn_market_uploader
 from ui_theme import (
     THEME, FONT_MONO, FONT_TITLE, FONT_UI, FONT_UI_BOLD,
     apply_window, apply_ui_scale, button, scrollbar as themed_scrollbar, window_surface,
@@ -255,6 +256,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     ui_scale_var = tk.StringVar(value=str(config.get("ui_scale_percent", 100)))
     ss_var = tk.BooleanVar(value=config.get("screenshots_enabled", False))
     edsm_upload_var = tk.BooleanVar(value=config.get("edsm_upload_enabled", False))
+    eddn_market_upload_var = tk.BooleanVar(
+        value=config.get("eddn_market_upload_enabled", True)
+    )
     runtime_trace_var = tk.BooleanVar(value=config.get("runtime_trace_enabled", True))
     crash_reporting_var = tk.BooleanVar(value=config.get("crash_reporting_enabled", True))
     recovery_safe_mode_var = tk.BooleanVar(value=config.get("recovery_safe_mode_enabled", True))
@@ -336,7 +340,11 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         scrollable=True,
     )
     theme_page = make_page("theme", "Theme", "Color theme for this commander profile. Applies when you save.", scrollable=True)
-    integrations_page = make_page("integrations", "Integrations", "EDSM upload and fleet carrier Discord.", scrollable=True)
+    integrations_page = make_page(
+        "integrations", "Integrations",
+        "Optional EDSM, EDDN and fleet carrier services.",
+        scrollable=True,
+    )
     diagnostics_page = make_page("diagnostics", "Diagnostics", "Runtime tracing and automatic crash or UI-freeze reports.", scrollable=True)
 
     nav_button("core", "Core")
@@ -415,7 +423,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     toggle_row(voice_general, "Safety and danger", voice_safety_var)
     toggle_row(voice_general, "Exploration and biology", voice_exploration_var)
     toggle_row(voice_general, "Navigation milestones", voice_navigation_var)
-    toggle_row(voice_general, "Trade, Engineering, and missions", voice_objectives_var)
+    toggle_row(voice_general, "Engineering and missions", voice_objectives_var)
     toggle_row(voice_general, "Cache generated callouts", voice_cache_var)
     toggle_row(voice_general, "Automatically prune unused cached audio", voice_cache_auto_prune_var)
     option_row(
@@ -1182,6 +1190,47 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     edsm_actions = row(edsm_section)
     action_button(edsm_actions, "Test API Key", _test_edsm).pack(side=tk.LEFT)
 
+    eddn_section = section(integrations_page, "EDDN Community Market Uploads")
+    toggle_row(
+        eddn_section,
+        "Upload fresh markets visited in game",
+        eddn_market_upload_var,
+    )
+    tk.Label(
+        eddn_section,
+        text=(
+            "When enabled, VoidCompass publishes fresh Market.json commodity snapshots "
+            "from stations you visit. EDDN receives the commander name as uploader ID, "
+            "game version, system, station and commodity market data. VoidCompass does "
+            "not download an EDDN feed or maintain a local trade database."
+        ),
+        font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w", justify=tk.LEFT,
+        wraplength=620,
+    ).pack(fill=tk.X, padx=12, pady=(0, 6))
+    eddn_status_var = tk.StringVar(value="")
+    tk.Label(
+        eddn_section, textvariable=eddn_status_var,
+        font=UI_MONO, fg=COLOR_TEXT, bg=UI_PANEL, anchor="w", justify=tk.LEFT,
+        wraplength=620,
+    ).pack(fill=tk.X, padx=12, pady=(0, 6))
+
+    def _refresh_eddn_status():
+        stats = eddn_market_uploader.stats()
+        enabled = eddn_market_upload_var.get()
+        parts = [
+            "ENABLED" if enabled else "DISABLED",
+            f"{int(stats.get('uploads') or 0):,} upload(s) this run",
+        ]
+        if stats.get("last_upload_at"):
+            parts.append(f"last {stats['last_upload_at']}")
+        if stats.get("last_error"):
+            parts.append(f"last error: {stats['last_error']}")
+        eddn_status_var.set("  ·  ".join(parts))
+
+    eddn_actions = row(eddn_section)
+    action_button(eddn_actions, "Refresh Status", _refresh_eddn_status).pack(side=tk.LEFT)
+    _refresh_eddn_status()
+
     carrier_section = section(integrations_page, "Carrier Discord (Personal / Squadron)")
     fc_wh_e = input_row(carrier_section, "Discord Webhook URL", "carrier_discord_webhook_url")
     tk.Label(
@@ -1309,6 +1358,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "edsm_cmdr_name": edsm_cmdr_e.get().strip(),
             "edsm_api_key": edsm_key_e.get().strip(),
             "edsm_upload_enabled": edsm_upload_var.get(),
+            "eddn_market_upload_enabled": eddn_market_upload_var.get(),
             "runtime_trace_enabled": runtime_trace_var.get(),
             "crash_reporting_enabled": crash_reporting_var.get(),
             "recovery_safe_mode_enabled": recovery_safe_mode_var.get(),
@@ -1349,6 +1399,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             memory_summary_var.set(cockpit_memory.summary_text())
         remove_deprecated_keys()
         persist_config(config)
+        eddn_market_uploader.set_enabled(eddn_market_upload_var.get())
         apply_ui_scale(root, config.get("ui_scale_percent", 100))
         if voice_manager is not None:
             voice_manager.prune_cache_async()
