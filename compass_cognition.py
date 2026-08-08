@@ -882,6 +882,8 @@ class CompassCognition:
                     f"Arrival check: we are off the plotted route, {distance_text} from {nearest}.",
                     f"Route comparison places us {distance_text} from the nearest plotted point, {nearest}.",
                     f"This arrival sits outside the active route; {nearest} is the nearest plotted reference at {distance_text}.",
+                    f"Position check: {distance_text} separates us from {nearest} on the plotted line.",
+                    f"We have drifted from the route; {nearest} is the closest plotted system, {distance_text} away.",
                 ), ("route", "survey", "navigation"), category="exploration",
                 sources=("journal", "navigation"),
             ))
@@ -896,6 +898,8 @@ class CompassCognition:
                         f"FSS is resolved. The next survey priority is {next_action}.",
                         f"System matrix updated; highest remaining priority is {next_action}.",
                         f"Survey pass complete. I have {next_action} at the top of the action queue.",
+                        f"Next recommended action: {next_action}.",
+                        f"With the FSS complete, {next_action} is the leading priority.",
                     ), ("survey", "goal", "progress"), category="exploration",
                     sources=("journal",),
                 ))
@@ -911,6 +915,8 @@ class CompassCognition:
                         f"Departure checkpoint saved at {int(departure_completion.get('percent') or 0)} percent; {reasons[0]}.",
                         f"I have retained the unfinished survey state: {reasons[0]}.",
                         f"System departure logged with work remaining: {reasons[0]}.",
+                        f"Checkpoint recorded before departure: {reasons[0]}.",
+                        f"Leaving at {int(departure_completion.get('percent') or 0)} percent complete; noted for return: {reasons[0]}.",
                     ), ("survey", "memory", "progress"), category="ambient",
                     sources=("journal",),
                 ))
@@ -978,7 +984,6 @@ class CompassCognition:
         destination_station = raw.get("DestinationStation") or raw.get("destination_station")
         destination_settlement = raw.get("DestinationSettlement") or raw.get("destination_settlement")
         if event == "MissionAccepted" and destination:
-            templates = [f"Mission logged for {destination}."]
             mission_row = next(
                 (row for row in mission_context.get("rows") or []
                  if str(row.get("id")) == str(raw.get("MissionID"))),
@@ -986,6 +991,12 @@ class CompassCognition:
             )
             minutes = mission_row.get("expiry_minutes")
             deadline = f" The deadline is in {int(minutes)} minutes." if minutes is not None and int(minutes) > 0 else ""
+            templates = [
+                f"Mission logged for {destination}.{deadline}",
+                f"New objective recorded: {destination}.{deadline}",
+                f"Mission destination confirmed: {destination}.{deadline}",
+                f"I have logged this mission against {destination}.{deadline}",
+            ]
             if destination_settlement:
                 templates.extend((
                     f"Ground objective logged for {destination_settlement} in {destination}.{deadline}",
@@ -1128,20 +1139,52 @@ class CompassCognition:
                      "DisbandedSquadron", "WonATrophyForSquadron"):
             squadron = strategy.get("squadron") or {}
             name = raw.get("SquadronName") or squadron.get("name") or "the squadron"
-            detail = {
-                "SquadronCreated": f"Squadron record created for {name}.",
-                "JoinedSquadron": f"Squadron membership confirmed with {name}.",
-                "SquadronPromotion": f"Squadron promotion recorded in {name}.",
-                "SquadronDemotion": f"Squadron rank change recorded in {name}.",
-                "LeftSquadron": f"Squadron membership with {name} has ended.",
-                "KickedFromSquadron": f"Removal from {name} has been recorded.",
-                "DisbandedSquadron": f"Squadron {name} has been disbanded.",
-                "WonATrophyForSquadron": f"A squadron trophy has been recorded for {name}.",
+            templates = {
+                "SquadronCreated": (
+                    f"Squadron record created for {name}.",
+                    f"New squadron established: {name}.",
+                    f"{name} is now on record as our squadron.",
+                ),
+                "JoinedSquadron": (
+                    f"Squadron membership confirmed with {name}.",
+                    f"We are now registered with {name}.",
+                    f"Membership recorded: {name}.",
+                ),
+                "SquadronPromotion": (
+                    f"Squadron promotion recorded in {name}.",
+                    f"Rank increase confirmed within {name}.",
+                    f"{name} has promoted our standing.",
+                ),
+                "SquadronDemotion": (
+                    f"Squadron rank change recorded in {name}.",
+                    f"Our standing in {name} has been adjusted downward.",
+                    f"Rank change noted within {name}.",
+                ),
+                "LeftSquadron": (
+                    f"Squadron membership with {name} has ended.",
+                    f"We have left {name}.",
+                    f"Membership record for {name} is now closed.",
+                ),
+                "KickedFromSquadron": (
+                    f"Removal from {name} has been recorded.",
+                    f"We have been removed from {name}.",
+                    f"{name} membership ended by removal.",
+                ),
+                "DisbandedSquadron": (
+                    f"Squadron {name} has been disbanded.",
+                    f"{name} no longer exists as an active squadron.",
+                    f"Disbandment confirmed for {name}.",
+                ),
+                "WonATrophyForSquadron": (
+                    f"A squadron trophy has been recorded for {name}.",
+                    f"{name} has won a trophy.",
+                    f"Trophy credited to {name}.",
+                ),
             }[event]
             candidates.append(self._candidate(
                 "squadron-status", 74 if event not in ("KickedFromSquadron", "DisbandedSquadron") else 84,
                 "A meaningful squadron membership or achievement event was verified.",
-                (detail,), ("strategy", "milestone", "social"), category="objectives",
+                templates, ("strategy", "milestone", "social"), category="objectives",
             ))
 
         services = " ".join(str(item).casefold() for item in station.get("services") or [])
@@ -1208,6 +1251,8 @@ class CompassCognition:
                         f"Full spectrum survey complete: {total} bodies, including {joined}.",
                         f"System survey resolved {total} bodies and identified {joined}.",
                         f"FSS analysis is complete with {joined} among {total} bodies.",
+                        f"Survey briefing: {total} bodies scanned, notably {joined}.",
+                        f"This system's {total} bodies include {joined}, now confirmed.",
                     ), ("survey", "biology", "valuable", "progress"), outcome="survey", category="exploration",
                 ))
 
@@ -1325,6 +1370,8 @@ class CompassCognition:
                     f"The trade ledger has reached {profit:,} credits of session profit.",
                     f"Session trading profit now stands at {profit:,} credits.",
                     f"Trade milestone recorded: {profit:,} credits of session profit.",
+                    f"Profit milestone crossed: {profit:,} credits this session.",
+                    f"Running trade total is now {profit:,} credits.",
                 ), ("trade", "progress", "milestone"), category="objectives",
             ))
         if event == "MarketBuy" and trade.get("last_transaction"):
