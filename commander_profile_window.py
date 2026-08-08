@@ -10,7 +10,6 @@ from config import (
     COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, get_active_profile, get_profile_dir,
     get_profile_file, save_config,
 )
-from trade import marketdb as trade_marketdb
 from ui_theme import (
     THEME, ThemedWindowMixin, apply_window, button, configure_ttk, scrollbar,
     window_surface,
@@ -277,23 +276,11 @@ class CommanderProfileWindow(ThemedWindowMixin):
             lock.release()
 
     def _session_credit_delta(self):
-        if not isinstance(getattr(self.app, "cmdr_balance", None), (int, float)):
+        current = getattr(self.app, "cmdr_balance", None)
+        start = getattr(self.app, "session_start_balance", None)
+        if not isinstance(current, (int, float)) or not isinstance(start, (int, float)):
             return None
-        try:
-            start_ts = float(getattr(self.app, "session_start_ts", 0) or 0)
-            conn = trade_marketdb.connect()
-            try:
-                row = conn.execute(
-                    "SELECT balance FROM balance_log WHERE ts >= ? ORDER BY ts ASC LIMIT 1",
-                    (int(start_ts),),
-                ).fetchone()
-            finally:
-                conn.close()
-            if row and isinstance(row[0], (int, float)):
-                return int(self.app.cmdr_balance) - int(row[0])
-        except Exception:
-            pass
-        return None
+        return int(current) - int(start)
 
     def _folder_size(self, path):
         total = 0

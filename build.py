@@ -33,12 +33,6 @@ if __name__ == '__main__':
     if os.path.exists('build'):
         print("Removing previous build folder...")
         shutil.rmtree('build')
-    for legacy_name in ('VoidCompassMarketBuilder.exe', 'VoidCompassMarketBuilder'):
-        legacy_market_builder = os.path.join('dist', legacy_name)
-        if os.path.exists(legacy_market_builder):
-            os.remove(legacy_market_builder)
-            print(f"Removed legacy dist/{legacy_name}")
-
     # Convert "1.3.0" -> (1, 3, 0, 0) for Windows Version Info
     v_parts = [int(x) for x in APP_VERSION.split('.')]
     while len(v_parts) < 4:

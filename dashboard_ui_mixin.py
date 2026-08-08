@@ -232,7 +232,6 @@ class DashboardUIMixin(ThemedWindowMixin):
             )),
             ("OPERATIONS", (
                 ("▦", "OPERATIONS", "OVERVIEW", self.show_operations_page),
-                ("⇌", "TRADE", "TRADE", self.open_trade_window),
                 ("▦", "SPECIALISTS", "SPECIALISTS", self.open_specialists_window),
             )),
             ("SYSTEM", (
@@ -1325,7 +1324,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         cargo_ratio = min(1.0, cargo / cargo_cap) if cargo_cap else 0.0
         next_system = navigation.get("next_system") or navigation.get("final_destination") or "NO DESTINATION"
         mode_labels = {
-            "trade": "TRADE", "mining": "MINING", "combat": "COMBAT",
+            "mining": "MINING", "combat": "COMBAT",
             "ground": "GROUND OPS", "engineering": "ENGINEERING",
             "carrier": "CARRIER OPS", "colony": "ARCHITECT",
             "station": "STATION OPS", "powerplay": "POWERPLAY",
@@ -1365,44 +1364,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             "action": f"OPEN {label}",
         }
 
-        if mode == "trade":
-            trade = snapshot.get("trade") or {}
-            plan = trade.get("plan") or {}
-            last = trade.get("last_transaction") or {}
-            commodity = (
-                last.get("commodity") or plan.get("commodity")
-                or next(iter((trade.get("commodities_bought") or {}).keys()), None)
-                or next(iter((trade.get("commodities_sold") or {}).keys()), None)
-                or "TRADE RUN"
-            )
-            destination = plan.get("to_station") or plan.get("to_system") or next_system
-            origin = plan.get("from_station") or plan.get("from_system") or current_system
-            profit = self._dashboard_number(trade.get("profit_cr"))
-            expected = self._dashboard_number(plan.get("profit_cr"))
-            context.update({
-                "heading": "TRADE RUN", "badge": "PLANNED" if plan else "ACTIVE",
-                "title": str(commodity),
-                "detail": f"{origin}  →  {destination}" if plan else f"Market activity in {current_system}",
-                "value": f"SESSION PROFIT {self._dashboard_credits(profit)}" + (
-                    f"  ·  PLAN {self._dashboard_credits(expected)}" if expected else ""
-                ),
-                "stats": [
-                    ("CARGO", f"{cargo}/{cargo_cap} T" if cargo_cap else f"{cargo} T"),
-                    ("BOUGHT", f"{self._dashboard_number(trade.get('bought_units')):,} T"),
-                    ("SOLD", f"{self._dashboard_number(trade.get('sold_units')):,} T"),
-                    ("PROFIT", self._dashboard_credits(profit)),
-                ],
-                "priority": f"Deliver trade plan to {destination}" if plan else "Review the next profitable market",
-                "priority_detail": (
-                    f"The active plan runs from {origin} to {destination}."
-                    if plan else "No planned market destination is currently recorded."
-                ),
-                "support_heading": "MARKET SUPPORT", "support_badge": "PLAN" if plan else "LIVE",
-                "support_name": destination, "support_detail": f"FROM {origin}",
-                "support_meta": f"EXPECTED {self._dashboard_credits(expected)}" if expected else "Online market lookup ready on request",
-                "action": "OPEN TRADE",
-            })
-        elif mode == "mining":
+        if mode == "mining":
             mining = snapshot.get("mining") or {}
             body = mining.get("body") or mining.get("system") or current_system
             refined = self._dashboard_number(mining.get("refined_tons"))
@@ -1768,7 +1730,6 @@ class DashboardUIMixin(ThemedWindowMixin):
         mode_actions = {
             "exploration": "OPEN EXPLORE",
             "mining": "OPEN MINING",
-            "trade": "OPEN TRADE",
             "combat": "OPEN COMBAT",
             "ground": "OPEN GROUND",
             "engineering": "OPEN ENGINEER",
@@ -1804,7 +1765,6 @@ class DashboardUIMixin(ThemedWindowMixin):
         options = (
             ("auto", "Automatic · follow journal activity"),
             ("exploration", "Exploration"),
-            ("trade", "Trade"),
             ("mining", "Mining"),
             ("combat", "Combat / AX"),
             ("ground", "Ground Operations"),
@@ -2031,10 +1991,8 @@ class DashboardUIMixin(ThemedWindowMixin):
             operations.append(f"ARCHITECT  {len(active_colonies)} site{'s' if len(active_colonies) != 1 else ''} · {colony_remaining:,} T remaining")
         if mission_rows:
             operations.append(f"MISSIONS   {len(mission_rows)} active")
-        trade = getattr(self, "trade_session", {}) or {}
-        trade_profit = int(trade.get("profit") or 0)
-        if cargo or trade_profit:
-            operations.append(f"TRADE      {cargo:,} T aboard · {self._dashboard_credits(trade_profit)} session")
+        if cargo:
+            operations.append(f"CARGO      {cargo:,} T aboard")
         specialist_engine = getattr(self, "specialist_engine", None)
         if specialist_engine and specialist_engine.mining_active():
             operations.append("MINING     session active")
@@ -2085,7 +2043,7 @@ class DashboardUIMixin(ThemedWindowMixin):
                         )
                     )
             queue_ids_by_mode = {
-                "trade": {"trade-plan"}, "mining": {"mining"},
+                "mining": {"mining"},
                 "ground": {"biology"}, "engineering": {"engineering"},
                 "carrier": {"carrier"}, "colony": {"colony"},
                 "powerplay": {"powerplay", "powerplay-delivery"},
@@ -2257,9 +2215,9 @@ class DashboardUIMixin(ThemedWindowMixin):
         for row in range(2):
             operations_grid.grid_rowconfigure(row, weight=1)
         self._workspace_hub_card(
-            operations_grid, 0, 0, "TRADE ASSIST",
-            "One-click cargo buyers, three practical departures and a compact live trade run.",
-            self.open_trade_window, "OPEN TRADE",
+            operations_grid, 0, 0, "GROUND OPERATIONS",
+            "Surface coordinates, target bearing and field navigation for planetary work.",
+            self.open_ground_target_window, "OPEN GROUND OPS",
         )
         self._workspace_hub_card(
             operations_grid, 0, 1, "MINING",
@@ -2470,7 +2428,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             text=(
                 "Void Compass reads Elite's journal and companion files and stores commander "
                 "profiles locally. It needs no Void Compass account or cloud database. At startup "
-                "it asks GitHub Releases for the latest version. EDSM, EDDN, Ardent, Spansh and Discord "
+                "it asks GitHub Releases for the latest version. EDSM, EDDN, Spansh and Discord "
                 "features only connect when enabled or requested. Support bundles are privacy-redacted."
             ),
             fg=COLOR_TEXT, bg=self.UI_PANEL, font=("Segoe UI", 9),
@@ -3044,7 +3002,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             "NAVIGATION": {"JUMP", "ROUTE", "SYSTEM", "DOCK"},
             "COMPASS": {"AI", "MUSIC"},
             "OPERATIONS": {
-                "TRADE", "CARRIER", "EDSM", "EDDN", "ACHIEVEMENT",
+                "CARRIER", "EDSM", "EDDN", "ACHIEVEMENT",
                 "PROFILE", "INFO", "CACHE",
             },
         }

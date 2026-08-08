@@ -1,12 +1,12 @@
 # VoidCompass // UPDATE LOG
 
-## v5.3.5.5 // Trade Search & EDSM Fleet Sync
+## v5.3.5.5 // Exploration Focus & EDSM Fleet Sync
 **Release Date:** 2026-Aug-08
 
-*   Rebuilt Trade Assist so a typed departure system searches every eligible market in that exact system, while a blank system searches galaxy-wide; `USE CURRENT` is now an explicit choice rather than an invisible dependency.
-*   Added Inara-style route controls for cargo capacity, maximum route and station distance, quote age, landing-pad size, minimum supply and demand, surface policy, carriers, full loads and genuine return loops.
-*   Added multi-route result counts up to 50 and ordering by profit, profit per hour, last update or route distance, with both departure and destination visible in every route row.
-*   Reworked the embedded results area with width-aware columns, compact route evidence, scrollable selected details and clickable sortable headings, plus a persistent `RESET DEFAULTS` action for every Trade search control.
+*   Retired Trade Assist, its route HUD, route search, local market database, populated-galaxy dump builder and inbound EDDN listener so Void Compass remains focused on exploration and journal-backed operations.
+*   Kept fresh visited-market EDDN publishing as an independent, profile-aware option under **Settings → Integrations**, with transparent payload guidance and live upload status.
+*   Rebuilt Analytics around profile-aware Captain's Log exploration history, including current-session pace, distance, survey activity and recent expedition sessions without a market database.
+*   Removed Trade from Adaptive Command modes and navigation while retaining shared cargo, credits, carrier orders, Elite career statistics and Compass transaction awareness.
 *   Corrected EDSM fleet synchronisation by uploading accepted `StoredShips`, `ShipyardSwap` and ship-name events, plus a bounded one-time repair using the newest authoritative stored-fleet snapshot from local journals.
 *   Added EDSM uploads for scanned belt clusters while deliberately continuing to exclude mining `ProspectedAsteroid` events and belt clusters from VoidCompass survey-body totals.
 *   Replaced the Navigation HUD's left DSS counter with live fuel percentage in both layouts while retaining permanent system-survey progress and far-right day/week/total traffic.

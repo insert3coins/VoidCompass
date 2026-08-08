@@ -15,9 +15,9 @@ Windows is the primary native release. A native Linux x86-64 build is also avail
 - **Galactic Atlas** — a fully offline Milky Way map with all 42 Universal Cartographics regions, routes, travel history, smart clusters, intelligence layers and commander annotations.
 - **Native overlays** — themed, profile-aware HUDs with mouse passthrough, global hotkeys and a visual Overlay Layout Studio.
 - **Compass companion** — local deterministic cognition, bounded commander memory, 15 personas and optional cached Piper voices without an LLM or GPU workload.
-- **Optional operations** — focused Trade Assist, Mining, Combat/AX, Engineering, Powerplay, Fleet/Squadron Carrier and colony tools remain available without displacing exploration.
+- **Optional operations** — Mining, Combat/AX, Engineering, Powerplay, Fleet/Squadron Carrier and colony tools remain available without displacing exploration.
 
-The Dashboard stays exploration-first, then adapts from verified journal activity for Trade, Mining, Combat, Ground, Engineering, Powerplay, Carrier, Colony and station operations. Automatic mode can be manually locked, while its curated Flight Log keeps useful events separate from Frontier's raw journal stream.
+The Dashboard stays exploration-first, then adapts from verified journal activity for Mining, Combat, Ground, Engineering, Powerplay, Carrier, Colony and station operations. Automatic mode can be manually locked, while its curated Flight Log keeps useful events separate from Frontier's raw journal stream.
 
 ![Void Compass exploration dashboard](DashBoard.PNG)
 
@@ -30,7 +30,7 @@ The Dashboard stays exploration-first, then adapts from verified journal activit
 | **Core** | Dashboard and Profile. |
 | **Explore** | Explore and Galaxy. Explore uses four clear pages—System Survey, Expedition, Discoveries and Logbook—without nested Survey or Chronicle tabs; named Mission Control lives inside Expedition. |
 | **Expedition** | Expedition overview plus direct Analytics, Achievements, Carrier and Colony access. |
-| **Operations** | Operations overview plus direct Trade and Specialists access, including Mining and Combat/AX. |
+| **Operations** | Operations overview plus direct Specialists access, including Mining and Combat/AX. |
 | **System** | Engineer and About. |
 
 Every group starts expanded, can be collapsed deliberately, remembers that choice per commander and remains reachable through a themed scrolling rail on smaller windows. Full secondary workspaces are still created only when first opened.
@@ -58,7 +58,7 @@ Explore remembers its active page, survey/discovery filters and Expedition secti
 
 Existing journals are indexed on a background worker the first time Deep Survey opens for a profile. Stored collections, expedition facts and visible rows are bounded so a long expedition does not turn map, ledger or startup recovery into a cockpit stall.
 
-Optional **Trade Assist** stays intentionally focused: **Sell My Cargo** finds practical buyers, **Find a Trade** searches every eligible departure market in a typed system—or galaxy-wide when the system is blank—**Current Run** compares the selected plan with journal-realized profit, and **Trade Log** preserves commander-local purchases, sales, locations and route context with configurable retention. `USE CURRENT` is deliberate rather than automatic. Filters cover cargo capacity, route distance, quote age, minimum supply/demand, station arrival distance (unlimited by default), pad size, surface stations, carriers, full loads and real return loops, with one-click restoration of search defaults. The responsive results table fits the embedded page, supports sorting directly from every heading and expands to 50 alternatives; full station, price, supply/demand, confidence and profit/hour evidence remains in the scrollable selected-route detail. The optional Trade Route HUD tracks route stage, outbound/return cargo, hold capacity and expected-versus-realized profit on screen. Mission and stolen cargo are excluded from ordinary advice. Searches use request-driven [Ardent Insight](https://ardent-insight.com/) data held only in a short memory cache—there is no galaxy market download or local price database to maintain. Visited-station EDDN uploads remain an independent optional community service.
+Void Compass deliberately leaves trade-route planning to dedicated services. It does not download a galaxy market dump, listen to the live EDDN feed or maintain a local price database. The independent **EDDN Community Market Upload** option remains in **Settings → Integrations**, publishing only fresh markets that the commander visits in game.
 
 ### Squadron Command
 
@@ -80,7 +80,7 @@ Specialists remains local and journal-driven. Mining runs track confirmed refine
 
 ## Adaptive Command Deck
 
-Void Compass keeps the Dashboard centred on exploration: current flight, route or waypoint progress, system survey, valuable discoveries, expedition support and the next verified exploration priority remain prominent. It still detects Mining, Trade, Combat, Ground, Engineering, Powerplay, Carrier, Architect and station activity from live journal evidence, but presents those optional workflows in a compact add-on strip and their dedicated workspaces instead of displacing exploration.
+Void Compass keeps the Dashboard centred on exploration: current flight, route or waypoint progress, system survey, valuable discoveries, expedition support and the next verified exploration priority remain prominent. It still detects Mining, Combat, Ground, Engineering, Powerplay, Carrier, Architect and station activity from live journal evidence, but presents those optional workflows in a compact add-on strip and their dedicated workspaces instead of displacing exploration.
 
 Each mode can apply a focused overlay scene while gravity, toast and heartbeat safety feedback remains available. Automatic detection can be locked to a chosen mode per commander, and overlay scenes or deterministic Compass briefings/debriefs can be disabled independently in **Settings → Command Deck**.
 
@@ -123,13 +123,12 @@ The deterministic cognition engine learns personal baselines and whether advice 
 
 - **Elite journal and companion files** provide all live game state.
 - **EDSM** upload and traffic lookup are optional and use per-commander credentials; accepted stored-fleet snapshots, ship movements and belt-cluster celestial scans are included while mining prospect events remain filtered.
-- **Ardent Insight** supplies on-demand EDDN-backed buyers and sellers when a Trade Assist or Architect commodity search is requested.
-- **EDDN** optionally receives visited-station market uploads from Void Compass; it is not required for online searches.
-- **Spansh** supports neutron routes, ring/hotspot searches, trader lookups and integrated Fleet/Squadron Carrier route calculation.
+- **EDDN** can optionally receive fresh commodity snapshots from markets visited in game. Uploads include the commander name as EDDN uploader ID plus game version, system, station and commodity data; Void Compass does not download the EDDN feed.
+- **Spansh** supports neutron routes, ring/hotspot searches, material-trader lookups and integrated Fleet/Squadron Carrier route calculation.
 - **Discord webhooks** announce personal or Squadron Carrier operations with compact event-specific, active-theme cards. Completed and current locations can link to EDSM, while a newly plotted jump remains plain text until arrival. Automatic posts keep only the jump, Tritium and relevant expedition context; a deliberate manual status post provides the fuller capacity, docking, service and route snapshot. User-entered notes cannot trigger Discord mentions, and carrier finances remain local.
 - **Piper** voice packs are optional; regular system TTS remains available.
 
-Void Compass does not require an account or Void Compass cloud database. It checks GitHub Releases for a newer version at startup; other network integrations only run when their associated feature is enabled or requested. Online market searches send Ardent Insight the reference system, commodity and search filters, never commander credentials or journal files.
+Void Compass does not require an account or Void Compass cloud database. It checks GitHub Releases for a newer version at startup; other network integrations only run when their associated feature is enabled or requested. Retired Trade data from an older installation is ignored and is never opened, updated or deleted by Void Compass.
 
 ## First run, recovery and diagnostics
 

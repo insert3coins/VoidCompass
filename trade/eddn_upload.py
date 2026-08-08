@@ -4,11 +4,11 @@ import gzip
 import json
 import os
 import threading
+from datetime import datetime, timezone
 
 import requests
 
 from version import APP_VERSION
-from . import marketdb
 
 UPLOAD_URL = "https://eddn.edcd.io:4430/upload/"
 SCHEMA = "https://eddn.edcd.io/schemas/commodity/3"
@@ -17,7 +17,37 @@ MAX_AGE_S = 120
 
 
 def _symbol(raw):
-    return marketdb.clean_commodity_symbol(raw)
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    if text.startswith("$") and text.endswith(";"):
+        text = text[1:-1]
+    lower = text.lower()
+    for suffix in ("_name", "_name_localised"):
+        if lower.endswith(suffix):
+            lower = lower[: -len(suffix)]
+            break
+    return lower
+
+
+def _epoch(value):
+    if not value:
+        return None
+    text = str(value).strip().replace(" ", "T").replace("Z", "+00:00")
+    if text.endswith("+00"):
+        text += ":00"
+    try:
+        return int(datetime.fromisoformat(text).timestamp())
+    except (TypeError, ValueError):
+        return None
+
+
+def _now_epoch():
+    return int(datetime.now(timezone.utc).timestamp())
+
+
+def _utc_now_iso():
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def _clean_int(value, default=0):
@@ -80,8 +110,8 @@ class EddnUploader:
         timestamp = market.get("timestamp")
         if not market_id or not timestamp or "Items" not in market:
             return
-        updated = marketdb.parse_update_time(timestamp)
-        if not updated or marketdb.now_epoch() - updated > MAX_AGE_S:
+        updated = _epoch(timestamp)
+        if not updated or _now_epoch() - updated > MAX_AGE_S:
             return
         key = (market_id, timestamp)
         with self._lock:
@@ -167,7 +197,7 @@ class EddnUploader:
             with self._lock:
                 if resp.status_code == 200:
                     self.uploads += 1
-                    self.last_upload_at = marketdb.utc_now_iso()
+                    self.last_upload_at = _utc_now_iso()
                     self.last_error = None
                     error = None
                 else:

@@ -1,1 +1,1 @@
-"""Online Trade Assist, EDDN upload and local commander trade-history helpers."""
+"""Shared Spansh services and independent EDDN market publishing."""

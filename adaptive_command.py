@@ -10,7 +10,7 @@ from persistence_queue import persistence_queue
 
 
 MODES = (
-    "general", "exploration", "mining", "trade", "combat", "ground",
+    "general", "exploration", "mining", "combat", "ground",
     "engineering", "carrier", "colony", "station",
     "powerplay",
 )
@@ -21,7 +21,6 @@ MODE_LABELS = {
     "general": "GENERAL FLIGHT",
     "exploration": "EXPLORATION",
     "mining": "MINING",
-    "trade": "TRADE",
     "combat": "COMBAT",
     "ground": "GROUND OPS",
     "engineering": "ENGINEERING",
@@ -32,7 +31,7 @@ MODE_LABELS = {
 }
 
 MODE_WORKSPACES = {
-    "exploration": "EXPLORE", "mining": "SPECIALISTS", "trade": "TRADE",
+    "exploration": "EXPLORE", "mining": "SPECIALISTS",
     "combat": "SPECIALISTS", "engineering": "ENGINEER", "carrier": "CARRIER",
     "colony": "COLONY", "ground": "GROUND", "station": "DASHBOARD",
     "general": "DASHBOARD",
@@ -54,10 +53,6 @@ DEFAULT_OVERLAY_SCENES = {
                "prospector_hud": True, "system_info_hud": False,
                "station_info_hud": False, "survey_status_hud": False,
                "colony_overlay": False},
-    "trade": {"hud": True, "cargo_hud": True, "carrier_hud": False,
-              "prospector_hud": False, "system_info_hud": False,
-              "station_info_hud": True, "survey_status_hud": False,
-              "colony_overlay": False},
     "combat": {"hud": True, "cargo_hud": False, "carrier_hud": False,
                "prospector_hud": False, "system_info_hud": False,
                "station_info_hud": False, "survey_status_hud": False,
@@ -183,7 +178,7 @@ class AdaptiveCommandDeck:
         return {
             "mode": mode, "started_at": now, "last_event_at": now,
             "events": 0, "jumps": 0, "scans": 0, "refined_t": 0,
-            "trade_profit_cr": 0, "kills": 0, "materials": 0,
+            "kills": 0, "materials": 0,
         }
 
     @staticmethod
@@ -196,8 +191,6 @@ class AdaptiveCommandDeck:
             session["scans"] = int(session.get("scans") or 0) + 1
         if event == "MiningRefined":
             session["refined_t"] = int(session.get("refined_t") or 0) + max(1, int(raw.get("Count") or 1))
-        if event == "MarketSell":
-            session["trade_profit_cr"] = int(session.get("trade_profit_cr") or 0) + int(raw.get("Profit") or 0)
         if event in ("Bounty", "FactionKillBond", "CapShipBond"):
             session["kills"] = int(session.get("kills") or 0) + 1
         if event in ("MaterialCollected", "MaterialTrade", "EngineerCraft"):
@@ -216,9 +209,6 @@ class AdaptiveCommandDeck:
             value = int(session.get(key) or 0)
             if value:
                 parts.append(f"{value:,} {label}")
-        profit = int(session.get("trade_profit_cr") or 0)
-        if profit:
-            parts.append(f"{profit:,} credits trade profit")
         duration = max(0, int((float(session.get("last_event_at") or time.time()) - float(session.get("started_at") or time.time())) / 60))
         label = MODE_LABELS.get(session.get("mode"), "ACTIVITY").title()
         return f"{label} complete: " + (", ".join(parts) if parts else f"{int(session.get('events') or 0):,} journal actions") + f" over {duration} min."
@@ -275,7 +265,6 @@ class AdaptiveCommandDeck:
             "general": "General flight configuration active. Core navigation and safety systems are standing by.",
             "exploration": "Exploration configuration active. Survey progress, route context and biological work have priority.",
             "mining": "Mining configuration active. Prospecting, refinery yield, limpets and cargo movement have priority.",
-            "trade": "Trade configuration active. Cargo, market objectives and destination economics have priority.",
             "combat": "Combat configuration active. Threat, claims, ammunition and recovery state have priority.",
             "ground": "Ground operations active. Surface position, biological sampling and local hazards have priority.",
             "engineering": "Engineering configuration active. Material shortages and pinned goals have priority.",
@@ -335,18 +324,11 @@ class AdaptiveCommandDeck:
             groups = missions.get("grouped_destinations") or objectives.get("mission_destinations") or []
             first = groups[0] if groups else {}
             system = first.get("system") if isinstance(first, dict) else None
-            add("missions", f"Review {mission_count} active mission{'s' if mission_count != 1 else ''}", f"Next recorded destination: {system}." if system else "Mission objectives remain active.", "PROFILE", 60, copy_text=system, modes=("general", "combat", "trade"))
+            add("missions", f"Review {mission_count} active mission{'s' if mission_count != 1 else ''}", f"Next recorded destination: {system}." if system else "Mission objectives remain active.", "PROFILE", 60, copy_text=system, modes=("general", "combat"))
 
         mining = snapshot.get("mining") or {}
         if mining.get("active"):
             add("mining", "Continue the active mining run", f"{int(mining.get('refined_tons') or 0)} tonnes refined this run.", "SPECIALISTS", 75, modes=("mining",))
-
-        trade = snapshot.get("trade") or {}
-        plan = trade.get("plan") or {}
-        if plan:
-            commodity = plan.get("commodity") or "planned cargo"
-            destination = plan.get("to_station") or plan.get("destination")
-            add("trade-plan", f"Deliver {commodity}", f"Trade plan destination: {destination or 'review the Trade workspace'}.", "TRADE", 65, copy_text=destination, modes=("trade",))
 
         powerplay = snapshot.get("powerplay") or {}
         outstanding_units = int(powerplay.get("outstanding_units") or 0)
@@ -354,7 +336,7 @@ class AdaptiveCommandDeck:
             add(
                 "powerplay-delivery", "Deliver Powerplay commodities",
                 f"{outstanding_units:,} collected units remain outstanding for {powerplay.get('power') or 'the pledged power'}.",
-                "GALAXY", 72, modes=("powerplay", "trade"),
+                "GALAXY", 72, modes=("powerplay",),
             )
         elif mode == "powerplay" and powerplay.get("pledged"):
             add(
@@ -371,7 +353,7 @@ class AdaptiveCommandDeck:
         colonies = strategy.get("colonisation_projects") or []
         if colonies:
             remaining_units = sum(int(row.get("remaining_units") or 0) for row in colonies if isinstance(row, dict))
-            add("colony", f"Supply {len(colonies)} construction site{'s' if len(colonies) != 1 else ''}", f"{remaining_units:,} required units remain journal-confirmed.", "COLONY", 50, modes=("colony", "trade"))
+            add("colony", f"Supply {len(colonies)} construction site{'s' if len(colonies) != 1 else ''}", f"{remaining_units:,} required units remain journal-confirmed.", "COLONY", 50, modes=("colony",))
 
         carrier = strategy.get("carrier") or {}
         if carrier.get("jump_destination"):

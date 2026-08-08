@@ -27,7 +27,6 @@ from version import APP_VERSION
 import bio_values
 from hud import TacticalHUD
 from cargo_hud import CargoHUD
-from trade_hud import TradeHUD
 from carrier_hud import CarrierHUD
 from edsm_handler import EDSMHandler
 from screenshot_handler import ScreenshotHandler
@@ -66,10 +65,8 @@ from system_value_ledger import SystemValueLedger
 from stellar_types import star_type_label
 from colonisation_planner import ColonisationPlanner
 from exploration_window import ExplorationWindow
-from trade_window import TradeWindow
 from analytics_window import AnalyticsWindow
-from trade import marketdb as trade_marketdb
-from trade.eddn_upload import UPLOADER as trade_eddn_uploader
+from trade.eddn_upload import UPLOADER as eddn_market_uploader
 from achievement_engine import AchievementEngine
 from achievement_window import AchievementWindow
 from voice_callouts import VoiceCalloutManager, choose_line
@@ -185,7 +182,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     _OVERLAY_POSITION_SPECS = (
         ("hud", "hud_x", "hud_y"),
         ("cargo_hud", "cargo_hud_x", "cargo_hud_y"),
-        ("trade_hud", "trade_hud_x", "trade_hud_y"),
         ("carrier_hud", "carrier_hud_x", "carrier_hud_y"),
         ("prospector_hud", "prospector_hud_x", "prospector_hud_y"),
         ("system_info_hud", "system_info_hud_x", "system_info_hud_y"),
@@ -524,7 +520,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         for attr in (
             "hud",
             "cargo_hud",
-            "trade_hud",
             "carrier_hud",
             "prospector_hud",
             "system_info_hud",
@@ -598,7 +593,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "value_ledger_window": "_on_close",
             "colonisation_planner_window": "_on_close",
             "exploration_window": "_on_close",
-            "trade_window": "_on_close",
             "analytics_window": "_on_close",
             "achievement_window": "_on_close",
             "specialists_window": "_on_close",
@@ -647,7 +641,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             pass
 
         for attr in (
-            "hud", "cargo_hud", "trade_hud", "carrier_hud", "prospector_hud",
+            "hud", "cargo_hud", "carrier_hud", "prospector_hud",
             "system_info_hud", "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "heartbeat_hud", "colony_overlay",
         ):
@@ -719,6 +713,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.cmdr_name = commander_name or "CMDR"
         self.cmdr_fid = fid or ""
         self.cmdr_balance = None
+        self.session_start_balance = None
         self.cmdr_loan = None
         self.cmdr_ranks = {}
         self.cmdr_rank_progress = {}
@@ -741,7 +736,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_station_services = []
         self.current_station_dist_ls = None
         self.current_station_landing_pads = None
-        self.current_trade_market = None
         self.current_colonisation_market = None
         self.current_docked = False
 
@@ -776,9 +770,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.cargo_capacity = 0
         self.current_cargo_tons = 0
         self.current_cargo_inventory = []
-        self.trade_jump_history = deque(maxlen=20)
         self.trade_session = self._new_trade_session()
-        self.trade_plan_context = None
         self.mining_ai_session = self._new_mining_ai_session()
         self.ai_operational_state = compass_operations.fresh_runtime_state()
         self.colonisation_projects = {}
@@ -1101,10 +1093,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_station_landing_pads = None
         self._sync_navigation_hud_flight_state(supercruise=False)
 
-    def _start_trade_live_services(self):
-        """Keep visited-market EDDN uploads independent of the Trade page."""
-        trade_eddn_uploader.set_enabled(
-            bool(self.config.get("trade_eddn_upload_enabled", True))
+    def _start_eddn_market_upload(self):
+        """Apply the independent visited-market EDDN integration setting."""
+        eddn_market_uploader.set_enabled(
+            bool(self.config.get("eddn_market_upload_enabled", True))
         )
 
     def _refresh_gravity_warning(self, body_id, body_name=None):
@@ -1339,7 +1331,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         ).start()
         self._persist_config()
         self._apply_runtime_feature_toggles()
-        self._schedule_trade_history_maintenance()
+        self._start_eddn_market_upload()
         self._configure_overlay_hotkeys(announce=False)
         self._apply_navigation_group_state()
         self.show_dashboard_page()
@@ -1510,7 +1502,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_station_services = []
         self.current_station_dist_ls = None
         self.current_station_landing_pads = None
-        self.current_trade_market = None
         self.current_docked = False
         self.hud_flight_state = "FLIGHT"
         self.current_landed = False
@@ -1539,12 +1530,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._toast_shields_up = None
         self.current_legal_state = None
         self.current_destination = None
-        self.trade_jump_history = deque(maxlen=20)
         self.cargo_capacity = 0
         self.current_cargo_tons = 0
         self.current_cargo_inventory = []
         self.trade_session = self._new_trade_session()
-        self.trade_plan_context = None
         self.mining_ai_session = self._new_mining_ai_session()
         self.ai_operational_state = compass_operations.fresh_runtime_state()
         self.combat_awareness = CombatAwareness()
@@ -1647,6 +1636,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.runtime_trace.start()
         self._cached_cockpit_state_saved_at = 0.0
         self._cached_cockpit_state_loaded = self._load_profile_cockpit_state()
+        self.session_start_balance = self.cmdr_balance
         
         self.setup_layout()
         self.waypoint_manager = WaypointManager(self.config.get("waypoints_file"))
@@ -1661,7 +1651,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.add_event_feed_entry, tag, msg, severity=sev,
             )
         )
-        trade_eddn_uploader.set_log_callback(
+        eddn_market_uploader.set_log_callback(
             lambda tag, msg, sev: self._ui_post(
                 self.add_event_feed_entry, tag, msg, severity=sev,
             )
@@ -1680,7 +1670,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.value_ledger_window = None
         self.colonisation_planner_window = None
         self.exploration_window = None
-        self.trade_window = None
         self.analytics_window = None
         self.achievement_window = None
         self.specialists_window = None
@@ -1727,11 +1716,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 pass
         else:
             self.cargo_hud = None
-
-        if self.config.get("trade_overlay_enabled", False):
-            self.trade_hud = TradeHUD(self.root, self.config, self._trade_hud_snapshot)
-        else:
-            self.trade_hud = None
 
         if self.config.get("carrier_overlay_enabled", False):
             self.carrier_hud = CarrierHUD(self.root, self.config, self.carrier_tracker)
@@ -1835,8 +1819,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         # Let Tk paint the cached cockpit and overlay windows before the
         # journal worker begins its potentially large startup replay.
         self.root.after(75, self.watcher.start)
-        self._start_trade_live_services()
-        self._schedule_trade_history_maintenance()
+        self._start_eddn_market_upload()
         self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
         self._refresh_cargo_consumers()
 
@@ -2539,8 +2522,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.bgs_window._on_close()
         if self.exploration_window and self.exploration_window.is_open():
             self.exploration_window._on_close()
-        if self.trade_window and self.trade_window.is_open():
-            self.trade_window._on_close()
         if self.analytics_window and self.analytics_window.is_open():
             self.analytics_window._on_close()
         if self.specialists_window and self.specialists_window.is_open():
@@ -2924,20 +2905,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._show_embedded_page("MAP", workspace)
         self.exploration_window.on_map_shown()
 
-    def open_trade_window(self):
-        if self.trade_window and self.trade_window.is_open():
-            self._show_embedded_page("TRADE", self.trade_window.win)
-            self.trade_window.on_shown()
-            return
-        try:
-            self.trade_window = TradeWindow(self.dashboard_host, self, embedded=True)
-            self._show_embedded_page("TRADE", self.trade_window.win)
-            self.trade_window.on_shown()
-        except Exception as exc:
-            self.trade_window = None
-            self.log(f"Trade window failed to open: {exc}")
-            self.add_event_feed_entry("TRADE", f"Trade window failed: {exc}", severity="WARN")
-
     def open_achievement_window(self):
         if self.achievement_window and self.achievement_window.is_open():
             self.achievement_window.refresh()
@@ -3220,22 +3187,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif self.cargo_hud:
             self.cargo_hud.win.destroy()
             self.cargo_hud = None
-
-        if self.config.get("trade_overlay_enabled", False):
-            if self.trade_hud is None:
-                self.trade_hud = TradeHUD(
-                    self.root, self.config, self._trade_hud_snapshot,
-                )
-            self.trade_hud.update(force=True)
-            try:
-                self.trade_hud.win.deiconify()
-                self.trade_hud.win.attributes("-topmost", True)
-                self.trade_hud.win.lift()
-            except Exception:
-                pass
-        elif self.trade_hud:
-            self.trade_hud.destroy()
-            self.trade_hud = None
 
         if self.config.get("carrier_overlay_enabled", False):
             if self.carrier_hud is None:
@@ -3738,22 +3689,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.cmdr_balance is not None:
             self._hud_balance_cache = {"ts": time.time(), "balance": self.cmdr_balance}
             return self.cmdr_balance
-        now = time.time()
-        if now - float(self._hud_balance_cache.get("ts") or 0) < 5.0:
-            return self._hud_balance_cache.get("balance")
-        balance = None
-        try:
-            conn = trade_marketdb.connect()
-            try:
-                row = conn.execute("SELECT balance FROM balance_log ORDER BY ts DESC LIMIT 1").fetchone()
-            finally:
-                conn.close()
-            if row:
-                balance = row[0]
-        except Exception:
-            balance = None
-        self._hud_balance_cache = {"ts": now, "balance": balance}
-        return balance
+        return self._hud_balance_cache.get("balance")
 
     def _build_navigation_hud_context(self):
         current = self.current_sys if self.current_sys and self.current_sys != "---" else "---"
@@ -3821,7 +3757,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             except Exception:
                 cargo_tons = 0
         cargo_cap = int(getattr(self, "cargo_capacity", 0) or 0)
-        trade_profit = int((getattr(self, "trade_session", {}) or {}).get("profit", 0) or 0)
         geo_signals = sum(
             int(signals.get("geo", 0) or 0)
             for signals in (getattr(self, "body_signals", None) or {}).values()
@@ -3861,7 +3796,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "hops_truncated": hops_truncated,
             "total_distance_text": route_strip.total_distance_text(hops, hops_truncated),
             "cargo": f"{cargo_tons}/{cargo_cap}T" if cargo_cap else f"{cargo_tons}T",
-            "trade_profit": self._format_hud_credits(trade_profit),
             "credits": self._format_hud_credits(self._latest_hud_balance()),
             "station": self.current_station_name or "",
             "docked": bool(self.current_docked),
@@ -4132,68 +4066,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._refresh_commander_profile_window()
         return True
 
-    def _log_balance_async(self, timestamp, balance):
-        if balance is None:
-            return
-        ts = trade_marketdb.parse_update_time(timestamp) or trade_marketdb.now_epoch()
-        profile_key = get_active_profile(self.config)
-
-        def worker():
-            try:
-                trade_marketdb.log_balance(ts, balance, profile_key=profile_key)
-                window = getattr(self, "analytics_window", None)
-                if window and window.is_open() and getattr(self, "_active_page", None) == "ANALYTICS":
-                    self._ui_post(window.request_refresh, key="analytics-refresh")
-                trade_window = getattr(self, "trade_window", None)
-                if trade_window and trade_window.is_open():
-                    self._ui_post(
-                        trade_window.refresh_trade_log, key="trade-log-refresh",
-                    )
-            except Exception:
-                pass
-
-        threading.Thread(target=worker, name="trade-balance-log", daemon=True).start()
-
-    def _schedule_trade_history_maintenance(self):
-        profile_key = get_active_profile(self.config)
-        enabled = bool(self.config.get("trade_log_auto_prune_enabled", True))
-        try:
-            retention_days = max(
-                1, int(self.config.get("trade_log_retention_days", 180) or 180),
-            )
-        except (TypeError, ValueError):
-            retention_days = 180
-
-        def worker():
-            try:
-                trade_marketdb.claim_unassigned_history(profile_key)
-                if enabled:
-                    trade_marketdb.prune_trade_history(
-                        retention_days, profile_key=profile_key,
-                    )
-            except Exception as exc:
-                logging.debug("Trade history maintenance skipped: %s", exc)
-
-        threading.Thread(
-            target=worker, name="trade-history-maintenance", daemon=True,
-        ).start()
-
     def _set_commander_balance(self, balance, loan=None, timestamp=None, log=True):
         try:
             balance = int(balance)
         except Exception:
             return False
+        if self.session_start_balance is None:
+            self.session_start_balance = balance
         changed = self.cmdr_balance != balance or (loan is not None and self.cmdr_loan != loan)
         self.cmdr_balance = balance
         self._hud_balance_cache = {"ts": time.time(), "balance": balance}
         if loan is not None:
             self.cmdr_loan = loan
-        if log:
-            self._log_balance_async(timestamp, balance)
         if changed:
             self._refresh_commander_profile_window()
-            if self.trade_window and self.trade_window.is_open():
-                self._ui_post(self.trade_window._refresh_summary, key="trade-summary")
             try:
                 self.schedule_dashboard_refresh()
             except Exception:
@@ -4792,12 +4678,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         }
 
     def _compass_trade_snapshot(self):
+        """Retain journal awareness without exposing a Trade workspace."""
         trade = getattr(self, "trade_session", {}) or {}
         events = list(trade.get("events") or [])
-        plan = dict(getattr(self, "trade_plan_context", None) or {}) or None
-        if plan and time.time() - float(plan.get("_created_at") or time.time()) > 21600:
-            self.trade_plan_context = None
-            plan = None
         return {
             "transactions": int(trade.get("transactions") or len(events)),
             "bought_units": int(trade.get("bought_units") or 0),
@@ -4810,132 +4693,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "best_sale": trade.get("best_sale"),
             "worst_sale": trade.get("worst_sale"),
             "last_transaction": dict(events[-1]) if events else None,
-            "plan": plan,
-        }
-
-    def _set_compass_trade_plan(self, plan):
-        """Share a verified Trade Command result with the working brain."""
-        self.trade_plan_context = dict(plan or {}) or None
-        if self.trade_plan_context:
-            session = getattr(self, "trade_session", {}) or {}
-            self.trade_plan_context["_created_at"] = time.time()
-            self.trade_plan_context["_session_profit_start"] = int(session.get("profit") or 0)
-            self.trade_plan_context["_session_transactions_start"] = int(
-                session.get("transactions") or 0
-            )
-            self.trade_plan_context["_session_bought_start"] = int(
-                session.get("bought_units") or 0
-            )
-            self.trade_plan_context["_session_sold_start"] = int(
-                session.get("sold_units") or 0
-            )
-        self._refresh_cockpit_brain(
-            purpose="trade-route",
-            event=(
-                f"trade-route:{self.trade_plan_context.get('kind') or 'plan'}"
-                if self.trade_plan_context else "trade-route:cleared"
-            ),
-        )
-        self._publish_cockpit_ai_changes()
-        if self.trade_plan_context:
-            self._pulse_cockpit_ai()
-        trade_hud = getattr(self, "trade_hud", None)
-        if trade_hud is not None:
-            try:
-                trade_hud.update(force=True)
-            except Exception:
-                pass
-
-    def _trade_hud_snapshot(self):
-        """Return live, profile-local route progress for the Trade HUD."""
-        plan = dict(getattr(self, "trade_plan_context", None) or {})
-        session = getattr(self, "trade_session", {}) or {}
-        cargo_tons = int(getattr(self, "current_cargo_tons", 0) or 0)
-        bought = max(
-            0, int(session.get("bought_units") or 0)
-            - int(plan.get("_session_bought_start") or 0),
-        ) if plan else 0
-        sold = max(
-            0, int(session.get("sold_units") or 0)
-            - int(plan.get("_session_sold_start") or 0),
-        ) if plan else 0
-        transactions = max(
-            0, int(session.get("transactions") or 0)
-            - int(plan.get("_session_transactions_start") or 0),
-        ) if plan else 0
-        realized = (
-            int(session.get("profit") or 0)
-            - int(plan.get("_session_profit_start") or 0)
-        ) if plan else 0
-        inventory_counts = {}
-        for item in getattr(self, "current_cargo_inventory", []) or []:
-            if not isinstance(item, dict):
-                continue
-            symbol = trade_marketdb.clean_commodity_symbol(
-                item.get("Name") or item.get("Name_Localised")
-            )
-            if symbol:
-                inventory_counts[symbol] = inventory_counts.get(symbol, 0) + int(
-                    item.get("Count") or 0
-                )
-        outbound_symbol = trade_marketdb.clean_commodity_symbol(
-            plan.get("symbol") or plan.get("commodity")
-        )
-        return_symbol = trade_marketdb.clean_commodity_symbol(
-            plan.get("return_symbol") or plan.get("return_commodity")
-        )
-        outbound_aboard = int(inventory_counts.get(outbound_symbol, 0))
-        return_aboard = int(inventory_counts.get(return_symbol, 0))
-
-        stage, stage_index = "WAITING FOR ROUTE", 0
-        if plan:
-            is_loop = plan.get("kind") == "round-trip"
-            outbound_units = max(1, int(plan.get("units") or 1))
-            return_units = max(1, int(plan.get("return_units") or outbound_units))
-            current = str(getattr(self, "current_sys", None) or "").casefold()
-            source = str(plan.get("from_system") or "").casefold()
-            destination = str(plan.get("to_system") or "").casefold()
-            if is_loop:
-                if sold >= outbound_units + return_units:
-                    stage, stage_index = "ROUND TRIP COMPLETE", 4
-                elif (
-                    sold >= outbound_units
-                    and (bought >= outbound_units + return_units or return_aboard > 0)
-                ):
-                    stage, stage_index = "RETURNING TO ORIGIN", 3
-                elif sold >= outbound_units:
-                    stage, stage_index = "LOAD RETURN CARGO", 2
-                elif bought > 0 or outbound_aboard > 0:
-                    stage, stage_index = "DELIVER OUTBOUND", 1
-                else:
-                    stage, stage_index = "LOAD OUTBOUND CARGO", 0
-            elif sold >= outbound_units:
-                stage, stage_index = "TRADE COMPLETE", 4
-            elif bought > 0 or outbound_aboard > 0:
-                stage, stage_index = "DELIVER CARGO", 2
-            else:
-                stage, stage_index = "LOAD CARGO", 0
-
-            if stage_index < 4 and current:
-                if current == destination and (not is_loop or sold < outbound_units):
-                    stage = "AT DESTINATION · SELL CARGO"
-                elif is_loop and sold >= outbound_units and current == destination:
-                    stage = "AT DESTINATION · LOAD RETURN"
-                elif current == source and not bought:
-                    stage = "AT ORIGIN · LOAD CARGO"
-                elif is_loop and current == source and sold >= outbound_units:
-                    stage = "AT ORIGIN · SELL RETURN"
-
-        return {
-            "plan": plan,
-            "stage": stage,
-            "stage_index": stage_index,
-            "transactions": transactions,
-            "realized_profit": realized,
-            "current_system": getattr(self, "current_sys", None),
-            "current_station": getattr(self, "current_station_name", None),
-            "cargo_tons": cargo_tons,
-            "cargo_capacity": int(getattr(self, "cargo_capacity", 0) or 0),
+            "plan": None,
         }
 
     def _refresh_cockpit_brain(self, purpose=None, event=None, gameplay=None):
@@ -5245,6 +5003,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             (getattr(self, "ai_operational_state", {}) or {}).get("activity") or {}
         )
         mode = activity.get("mode") or "general"
+        if mode == "trade":
+            mode = "general"
         observed_at = float(activity.get("last_event_at") or activity.get("since") or 0)
         if (
             mode != "general" and observed_at
@@ -5309,7 +5069,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "DASHBOARD": self.show_dashboard_page,
             "PROFILE": self.open_commander_profile_window,
             "EXPLORE": lambda: self.open_exploration_window(section=section),
-            "TRADE": self.open_trade_window,
             "SPECIALISTS": lambda: self.open_specialists_window(section=section),
             "CARRIER": self.open_carrier_window,
             "COLONY": self.open_colonization_window,
@@ -5415,13 +5174,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             intentions["rescue_cargo"] = int(rescue.get("rescue_units") or 0)
         if int(rescue.get("stolen_units") or 0):
             intentions["legal_cargo"] = int(rescue.get("stolen_units") or 0)
-        trade_plan = (snapshot.get("trade") or {}).get("plan")
-        if trade_plan:
-            intentions["trade_plan"] = {
-                key: trade_plan.get(key)
-                for key in ("kind", "from_station", "to_station", "commodity")
-                if trade_plan.get(key) is not None
-            }
         strategy = snapshot.get("strategy") or {}
         carrier = strategy.get("carrier") or {}
         if carrier.get("jump_destination"):
@@ -6512,11 +6264,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     jump_ly = math.sqrt(sum((a - b) ** 2 for a, b in zip(prev_coords, self.current_coords)))
                     self.session_jump_count += 1
                     self.session_ly += jump_ly
-                    self.trade_jump_history.appendleft({
-                        "system": self.current_sys,
-                        "distance": jump_ly,
-                        "timestamp": time.time(),
-                    })
                 except Exception:
                     pass
             
@@ -8283,14 +8030,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.colony_overlay:
             colony_overlay = self.colony_overlay
             self._ui_post(colony_overlay.update, key="colony-overlay")
-        if self.trade_window and self.trade_window.is_open():
-            trade_window = self.trade_window
-            self._ui_post(trade_window.on_cargo_updated, key="trade-cargo-refresh")
-        if self.trade_hud:
-            trade_hud = self.trade_hud
-            self._ui_post(
-                lambda hud=trade_hud: hud.update(force=True), key="trade-hud-refresh",
-            )
 
     def update_cargo(self, inventory, vessel="Ship"):
         self.last_cargo_event_ts = time.time()
@@ -8359,58 +8098,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             worst = self.trade_session.get("worst_sale")
             if not isinstance(worst, dict) or profit < int(worst.get("profit") or 0):
                 self.trade_session["worst_sale"] = dict(event)
-            big_trade_threshold = int(self.config.get("big_trade_profit_threshold", 1_000_000) or 1_000_000)
-            if profit >= big_trade_threshold and self.toast_hud:
-                self.toast_hud.push(
-                    "BIG TRADE",
-                    f"{commodity} x{count}  +{profit:,} CR",
-                    severity="success",
-                    duration_s=12,
-                )
         self.trade_session["events"].append(event)
-        ts = trade_marketdb.parse_update_time(data.get("timestamp")) or int(time.time())
-        symbol = trade_marketdb.clean_commodity_symbol(data.get("Type") or commodity)
-        log_event = "buy" if ev == "MarketBuy" else "sell"
-        profit = event["profit"] if ev == "MarketSell" else None
-        profile_key = get_active_profile(self.config)
-        system_name = getattr(self, "current_sys", None)
-        station_name = getattr(self, "current_station_name", None)
-        plan = dict(getattr(self, "trade_plan_context", None) or {})
-        plan_from = " / ".join(
-            str(value) for value in (plan.get("from_station"), plan.get("from_system"))
-            if value
-        ) or None
-        plan_to = " / ".join(
-            str(value) for value in (plan.get("to_station"), plan.get("to_system"))
-            if value
-        ) or None
 
-        def worker():
-            try:
-                trade_marketdb.log_trade(
-                    ts, log_event, symbol, commodity, count, price, total, profit,
-                    profile_key=profile_key, system_name=system_name,
-                    station_name=station_name, plan_kind=plan.get("kind"),
-                    plan_from=plan_from, plan_to=plan_to,
-                    expected_profit=plan.get("profit_cr"),
-                )
-                window = getattr(self, "analytics_window", None)
-                if window and window.is_open() and getattr(self, "_active_page", None) == "ANALYTICS":
-                    self._ui_post(window.request_refresh, key="analytics-refresh")
-            except Exception:
-                pass
-
-        threading.Thread(target=worker, name="trade-log", daemon=True).start()
-        if self.trade_window and self.trade_window.is_open():
-            self._ui_post(self.trade_window.refresh_session, key="trade-session")
-            self._ui_post(self.trade_window.refresh_analytics, key="trade-analytics-refresh")
-        if self.trade_hud:
-            trade_hud = self.trade_hud
-            self._ui_post(
-                lambda hud=trade_hud: hud.update(force=True), key="trade-hud-refresh",
-            )
-
-    def _market_import_context(self, data):
+    def _eddn_market_context(self, data):
         return {
             "system_name": data.get("StarSystem") or self.current_sys,
             "system_address": self.current_system_address,
@@ -8422,33 +8112,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "horizons": self.game_horizons,
             "odyssey": self.game_odyssey,
             "docked": bool(self.current_docked),
+            "commander_name": self.cmdr_name,
         }
 
     def update_market(self, data):
         if not isinstance(data, dict):
             return
-        context = self._market_import_context(data)
-        self.current_trade_market = {
-            "market_id": data.get("MarketID"),
-            "station": data.get("StationName") or context.get("station_name"),
-            "system": data.get("StarSystem") or context.get("system_name"),
-            "timestamp": data.get("timestamp"),
-            "items": list(data.get("Items") or []),
-        }
-        if self.trade_window and self.trade_window.is_open():
-            self._ui_post(self.trade_window.refresh_local, key="trade-local")
-        if context.get("docked"):
-            trade_eddn_uploader.set_enabled(
-                bool(self.config.get("trade_eddn_upload_enabled", True))
-            )
-            trade_eddn_uploader.maybe_publish(data, self.cmdr_name, context)
-        station = self.current_trade_market.get("station") or "market"
-        system = self.current_trade_market.get("system") or self.current_sys
-        self.add_event_feed_entry(
-            "TRADE",
-            f"Market available: {station} ({len(self.current_trade_market['items']):,} commodities)",
-            severity="INFO",
-            copy_text=system,
+        context = self._eddn_market_context(data)
+        if not context.get("docked"):
+            return
+        eddn_market_uploader.set_enabled(
+            bool(self.config.get("eddn_market_upload_enabled", True))
+        )
+        eddn_market_uploader.maybe_publish(
+            dict(data), context.get("commander_name") or self.cmdr_name, context,
         )
 
     def update_nav_route(self, data):
