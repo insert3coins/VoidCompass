@@ -1186,7 +1186,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     fc_wh_e = input_row(carrier_section, "Discord Webhook URL", "carrier_discord_webhook_url")
     tk.Label(
         carrier_section,
-        text="One webhook handles personal and Squadron Carrier jump, cooldown, cancellation and manual status posts. Themed embeds include EDSM-linked systems plus journal-backed fuel, capacity, access, services and expedition progress.",
+        text="One webhook handles personal and Squadron Carrier jump, cooldown, cancellation and manual status posts. Themed embeds include journal-backed fuel, capacity, access, services and expedition progress; plotted targets stay plain text until arrival.",
         font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w", justify=tk.LEFT,
         wraplength=620,
     ).pack(fill=tk.X, padx=12, pady=(0, 6))

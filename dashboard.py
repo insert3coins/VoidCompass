@@ -6240,6 +6240,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self._refresh_cargo_consumers()
             if ship_changed:
                 self._refresh_commander_profile_window()
+            # Buy is already queued by the shared credit-event path and New is
+            # discarded by EDSM. Swap and naming events are accepted fleet
+            # updates and must not be silently lost.
+            if ev in ("ShipyardSwap", "SetUserShipName"):
+                self._queue_edsm_upload(raw, allow_startup=True)
+
+        elif ev == "StoredShips":
+            # EDSM uses this authoritative shipyard snapshot to update every
+            # stored ship, including a whole fleet parked aboard one carrier.
+            self._queue_edsm_upload(raw, allow_startup=True, flush=True)
 
         elif ev == "Cargo":
             # Journal can emit Cargo before/without immediate file polling update.
@@ -6318,6 +6328,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if credits is not None:
                 self._set_commander_balance(credits, loan=loan, timestamp=raw.get("timestamp"))
                 self._queue_edsm_upload(raw, allow_startup=True, flush=True)
+            self.edsm.sync_latest_fleet_snapshot(
+                self.config.get("journal_path", ""),
+            )
             self.cmdr_ship, _ = companion_features.update_active_ship(
                 self.cmdr_ship, ev, raw
             )
@@ -7013,6 +7026,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             # Track star types for bio prediction: build parent-star lookup
             if star_type:
                 self.system_stars[body_id] = star_type
+
+            # Belt clusters are celestial Scan journal events and belong in
+            # EDSM. Keep them outside VoidCompass's star/planet survey count,
+            # and continue filtering mining ProspectedAsteroid events.
+            if (
+                not d.get("is_body_scan")
+                and isinstance(body_name, str)
+                and "belt cluster" in body_name.casefold()
+            ):
+                self._queue_edsm_upload(raw, startup_replay=startup_replay)
 
             # Store planet conditions for bio prediction when we have a planet scan
             if d.get("planet_class") and body_id is not None:

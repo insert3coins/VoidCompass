@@ -27,6 +27,7 @@ STATUS_TTL_S = 5 * 60
 REPORT_TTL_S = 60 * 60
 MAX_CACHE_ENTRIES = 96
 MAX_NEARBY_ROWS = 250
+MAX_GLOBAL_ROWS = 150
 MAX_STATION_MATCHES = 200
 
 
@@ -168,7 +169,7 @@ def search_stations(station_name):
 
 
 def market_commodities(system, market_id=None):
-    """Return one market's commodity rows without retaining the large system payload."""
+    """Return commodity rows for every market in a system, or one market ID."""
     system_name = str(system or "").strip()
     if not system_name:
         raise ArdentError("Start system is missing.")
@@ -238,6 +239,40 @@ def nearby_importers(system, commodity, **filters):
 
 def nearby_exporters(system, commodity, **filters):
     return _nearby(system, commodity, "exports", **filters)
+
+
+def _global_markets(commodity, direction, *, min_volume=1, min_price=None,
+                    max_price=None, max_days_ago=30, include_carriers=False):
+    commodity_name = str(commodity or "").strip()
+    if not commodity_name:
+        raise ArdentError("Commodity name is missing.")
+    if direction not in ("imports", "exports"):
+        raise ValueError("direction must be imports or exports")
+    params = {
+        "minVolume": max(1, int(min_volume or 1)),
+        "maxDaysAgo": max(1, int(float(max_days_ago or 30))),
+        "fleetCarriers": "true" if include_carriers else "false",
+    }
+    if min_price is not None:
+        params["minPrice"] = max(1, int(min_price))
+    if max_price is not None:
+        params["maxPrice"] = max(1, int(max_price))
+    payload = _request(
+        f"/commodity/name/{quote(commodity_name, safe='')}/{direction}",
+        params=params,
+        row_limit=MAX_GLOBAL_ROWS,
+    )
+    if not isinstance(payload, list):
+        raise ArdentError("Online market service returned an invalid galaxy-market result.")
+    return payload
+
+
+def global_importers(commodity, **filters):
+    return _global_markets(commodity, "imports", **filters)
+
+
+def global_exporters(commodity, **filters):
+    return _global_markets(commodity, "exports", **filters)
 
 
 def clear_cache():
