@@ -1821,6 +1821,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.root.after(75, self.watcher.start)
         self._start_eddn_market_upload()
         self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
+        latest_fuel_capacity = self.watcher.get_latest_fuel_capacity()
+        if latest_fuel_capacity > 0:
+            self.fuel_capacity_main = latest_fuel_capacity
         self._refresh_cargo_consumers()
 
         self.watcher.force_check_nav()
@@ -5969,8 +5972,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         elif ev == "Loadout":
             self.cargo_capacity = d.get("cargo_capacity", 0)
-            fuel_cap = (raw.get("FuelCapacity") or {}) if isinstance(raw, dict) else {}
-            self.fuel_capacity_main = fuel_cap.get("Main")
+            fuel_cap = d.get("fuel_capacity")
+            if fuel_cap is None and isinstance(raw, dict):
+                fuel_cap = raw.get("FuelCapacity")
+            if isinstance(fuel_cap, dict):
+                fuel_cap = fuel_cap.get("Main")
+            try:
+                if fuel_cap is not None and float(fuel_cap) > 0:
+                    self.fuel_capacity_main = float(fuel_cap)
+            except (TypeError, ValueError):
+                pass
             self._low_fuel_warned = False
             self.cmdr_ship, _ = companion_features.update_active_ship(
                 self.cmdr_ship, ev, raw
@@ -6086,7 +6097,46 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.cmdr_ship, _ = companion_features.update_active_ship(
                 self.cmdr_ship, ev, raw
             )
+            try:
+                if d.get("fuel_level") is not None:
+                    self.current_fuel_main = float(d.get("fuel_level"))
+            except (TypeError, ValueError):
+                pass
+            fuel_capacity = d.get("fuel_capacity")
+            if isinstance(fuel_capacity, dict):
+                fuel_capacity = fuel_capacity.get("Main")
+            try:
+                if fuel_capacity is not None and float(fuel_capacity) > 0:
+                    self.fuel_capacity_main = float(fuel_capacity)
+            except (TypeError, ValueError):
+                pass
             self._refresh_commander_profile_window()
+
+        elif ev == "FuelScoop":
+            # FuelScoop.Total is the journal-confirmed tank level after the
+            # scoop. Status.json supplies the finer-grained readings while the
+            # scoop is still running.
+            total_fuel = raw.get("Total") if isinstance(raw, dict) else None
+            if total_fuel is None and isinstance(d, dict):
+                total_fuel = d.get("Total")
+            try:
+                if total_fuel is not None:
+                    self.current_fuel_main = float(total_fuel)
+            except (TypeError, ValueError):
+                pass
+            self.watcher.force_check_status()
+            if not self.batch_mode:
+                self.update_hud()
+
+        elif ev in ("RefuelAll", "RefuelPartial"):
+            # Refuel events report the amount purchased rather than a reliable
+            # post-transaction main-tank level. Force an immediate Status.json
+            # read and use the known full capacity for RefuelAll in the interim.
+            if ev == "RefuelAll" and self.fuel_capacity_main:
+                self.current_fuel_main = float(self.fuel_capacity_main)
+            self.watcher.force_check_status()
+            if not self.batch_mode:
+                self.update_hud()
 
         elif ev == "ScanOrganic":
             if not self._matches_current_system_address(d):
@@ -7997,6 +8047,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     )
         else:
             self._ui_post(self.update_dashboard_ui, key="dashboard-full-refresh")
+            # Live journal polls commonly contain an FSDJump plus companion
+            # events. Per-event HUD work is deliberately suppressed while the
+            # batch is active, so publish the final combined state once here.
+            # TacticalHUD's render fingerprint makes this a no-op when none of
+            # the displayed navigation facts changed.
+            self.update_hud()
         # Per-event scan-overlay redraws are suppressed while a batch is
         # active. Refresh once only when that batch actually changed survey
         # state; unrelated cargo, combat and status events must not churn the
