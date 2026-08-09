@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.3.5.5**
+**Current version: 5.3.5.6**
 
 Void Compass is an exploration-first companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a persistent command dashboard, deep survey intelligence, expedition planning, native in-game overlays and a local cockpit companion.
 
