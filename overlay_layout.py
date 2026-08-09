@@ -31,7 +31,7 @@ DEFAULT_POSITIONS = {
 DEFAULT_SIZES = {
     "hud": (430, 230), "cargo_hud": (360, 220),
     "carrier_hud": (430, 270),
-    "prospector_hud": (380, 220), "system_info_hud": (520, 260),
+    "prospector_hud": (380, 220), "system_info_hud": (560, 386),
     "gravity_warning_hud": (280, 90), "station_info_hud": (520, 300),
     "survey_status_hud": (520, 340), "toast_hud": (340, 110),
     "heartbeat_hud": (42, 42), "colony_overlay": (380, 220),
