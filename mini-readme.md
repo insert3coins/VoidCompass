@@ -1,20 +1,18 @@
 # VoidCompass // UPDATE LOG
 
-## v5.3.5.5 // Exploration Focus & EDSM Fleet Sync
-**Release Date:** 2026-Aug-08
+## v5.3.5.6 // Navigation HUD Refinement
+**Release Date:** 2026-Aug-09
 
-*   Retired Trade Assist, its route HUD, route search, local market database, populated-galaxy dump builder and inbound EDDN listener so Void Compass remains focused on exploration and journal-backed operations.
-*   Kept fresh visited-market EDDN publishing as an independent, profile-aware option under **Settings → Integrations**, with transparent payload guidance and live upload status.
-*   Rebuilt Analytics around profile-aware Captain's Log exploration history, including current-session pace, distance, survey activity and recent expedition sessions without a market database.
-*   Removed Trade from Adaptive Command modes and navigation while retaining shared cargo, credits, carrier orders, Elite career statistics and Compass transaction awareness.
-*   Corrected EDSM fleet synchronisation by uploading accepted `StoredShips`, `ShipyardSwap` and ship-name events, plus a bounded one-time repair using the newest authoritative stored-fleet snapshot from local journals.
-*   Added EDSM uploads for scanned belt clusters while deliberately continuing to exclude mining `ProspectedAsteroid` events and belt clusters from VoidCompass survey-body totals.
-*   Replaced the Navigation HUD's left DSS counter with live fuel percentage in both layouts while retaining permanent system-survey progress and far-right day/week/total traffic.
-*   Kept Carrier Discord plotted-jump systems as plain text instead of premature clickable EDSM links; completed-arrival and ordinary status locations remain linked.
-*   Retained the v5.3.5.3 live-theme overlay repair and quieter docking behaviour.
+*   Polished the full and compact Navigation HUD while preserving its classic cockpit identity, distance-proportional route pips and permanent survey progress.
+*   Added a cleaner flight-mode beacon, illuminated current-system locator, open telemetry instruments and restrained section indexing for stronger visual hierarchy without boxed clutter.
+*   Improved readability with larger labels and values, more deliberate spacing, a segmented survey track and clearer context/traffic separation in both layouts.
+*   Removed the redundant **Navigation Nominal** filler so the context footer stays quiet until it has meaningful flight, body, station, surface or alert information.
+*   Corrected live fuel percentage after ship changes and startup recovery by restoring the latest profile-safe `Loadout` tank capacity instead of retaining another ship's capacity.
+*   Kept fuel current from `Status.json`, `FSDJump`, `LoadGame`, `FuelScoop` and refuelling events, with one final HUD refresh after live journal batches.
 
 ## Earlier releases
 
+*   **v5.3.5.5** — Refocused Void Compass by retiring Trade Assist and its market database while retaining independent visited-market EDDN uploads, exploration Analytics, belt-cluster EDSM uploads, fleet synchronisation and the first live-fuel Navigation HUD readout.
 *   **v5.3.5.3** — Restored the readable classic Navigation HUD with real route pips, permanent survey progress, live flight/map state, larger text, state-aware context, immediate overlay theme changes and quieter routine docking.
 *   **v5.3.5.2** — Rebuilt System Intelligence, Survey Operations, Prospector Analysis, Carrier, Cargo and Colony overlays around theme-aware journal models; removed redundant redraws and corrected false startup survey completion after offline Carrier jumps.
 *   **v5.3.5.1** — Added compact theme-aware personal/Squadron Carrier Discord embeds with safe EDSM links and detailed manual status posts, and corrected unknown startup scan totals until journal evidence confirms them.
