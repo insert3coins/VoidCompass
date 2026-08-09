@@ -18,6 +18,7 @@ from deep_survey import (
 from discoveries_view import DiscoveriesView
 from expedition_map_view import ExpeditionMapView
 from expedition_mission_view import ExpeditionMissionView
+from exploration_field_view import ExplorationFieldView
 from explorer_fieldcraft import data_vault_snapshot, save_expedition_share_card
 from exploration_intelligence import body_completion, build_intelligence
 from route_plotter import RoutePlotter
@@ -62,6 +63,7 @@ class ExplorationWindow(ThemedWindowMixin):
         self.discoveries_view = None
         self.expedition_map_view = None
         self.expedition_mission_view = None
+        self.exploration_field_view = None
         self.map_workspace = None
         self._map_host = None
         self.embedded = embedded
@@ -221,6 +223,8 @@ class ExplorationWindow(ThemedWindowMixin):
             section_change_callback=self._on_expedition_section_changed,
             persist_config_callback=getattr(self.app, "_persist_config", None),
             ui_post_callback=getattr(self.app, "_ui_post", None),
+            expedition_state_callback=self._expedition_command_snapshot,
+            expedition_action_callback=self._expedition_command_action,
         )
         self.route_plotter.win.pack(fill=tk.BOTH, expand=True)
         self.app.route_plotter = self.route_plotter
@@ -233,10 +237,81 @@ class ExplorationWindow(ThemedWindowMixin):
         # The per-system route table sits with the other route tools. It used
         # to share the map's window, where it competed for the space the map
         # now uses in full.
-        self._build_route_tab(
-            self.route_plotter.add_section("Route Intelligence"), embedded=True,
+        intelligence_section = self.route_plotter.add_section("Route Intelligence")
+        self.exploration_field_view = ExplorationFieldView(
+            intelligence_section, self.app, on_change=self._on_expedition_changed,
         )
+        self._build_route_tab(intelligence_section, embedded=True)
         self._build_map_workspace()
+
+    def _expedition_command_snapshot(self):
+        """Return one compact packet for the Expedition Overview."""
+        manager = getattr(self.app, "expedition_manager", None)
+        expedition = manager.active() if manager else None
+        intelligence = {}
+        getter = getattr(self.app, "_exploration_intelligence_snapshot", None)
+        try:
+            intelligence = getter(compact=True) if callable(getter) else build_intelligence(self.app)
+        except Exception:
+            intelligence = {}
+        return_plan = intelligence.get("return_plan") or {}
+        return {
+            "expedition": expedition or {},
+            "bookmarks": manager.bookmarks(expedition.get("id")) if manager and expedition else [],
+            "events": list((expedition or {}).get("events") or []),
+            "return_plan": return_plan,
+            "endurance": intelligence.get("endurance") or {},
+            "unsold_min_cr": int(return_plan.get("unsold_min_cr") or 0),
+            "unsold_max_cr": int(return_plan.get("unsold_max_cr") or return_plan.get("unsold_min_cr") or 0),
+        }
+
+    def _expedition_command_action(self, action):
+        action = str(action or "").casefold()
+        mission = self.expedition_mission_view
+        if action in {"new", "mission", "add_objective"}:
+            self.show_section("mission")
+            if action == "new" and mission:
+                self.win.after_idle(mission._new_expedition)
+            elif action == "add_objective" and mission:
+                if mission._selected_expedition():
+                    self.win.after_idle(mission._add_objective)
+                else:
+                    self.win.after_idle(mission._new_expedition)
+            return True
+        if action == "bookmark":
+            system = str(getattr(self.app, "current_sys", "") or "")
+            if not system or system in {"---", "Unknown"}:
+                messagebox.showinfo(
+                    "Expedition Bookmark", "Arrive in a known system before bookmarking the current position.",
+                    parent=self.win,
+                )
+                return False
+            self._add_expedition_bookmark(
+                "POI", system=system,
+                body=str(getattr(self.app, "current_body_name", "") or ""),
+                title=system, tags=["field", "expedition"], source="expedition-overview",
+                position=getattr(self.app, "current_coords", None),
+            )
+            return True
+        if action == "logbook":
+            self.show_section("logbook")
+            return True
+        if action == "atlas":
+            opener = getattr(self.app, "open_galaxy_map_page", None)
+            if callable(opener):
+                opener()
+                return True
+        if action == "intelligence" and self.route_plotter:
+            return self.route_plotter.show_flat_section("Route Intelligence")
+        if action == "report":
+            expedition = getattr(self.app, "expedition_manager", None)
+            expedition = expedition.active() if expedition else None
+            if expedition:
+                self._copy_named_expedition_report(expedition.get("id"))
+            else:
+                self._copy_expedition_report()
+            return True
+        return False
 
     def _build_map_workspace(self):
         """Build the galaxy map as its own top-level workspace.
@@ -316,6 +391,8 @@ class ExplorationWindow(ThemedWindowMixin):
             # This callback also runs while restoring the saved Explore state,
             # before the outer notebook necessarily emits its own change event.
             self.expedition_mission_view.on_shown()
+        elif value == "Route Intelligence" and self.exploration_field_view:
+            self.exploration_field_view.refresh()
 
     def _map_workspace_is_visible(self):
         """Report whether the rail is currently showing the map workspace."""
@@ -410,6 +487,7 @@ class ExplorationWindow(ThemedWindowMixin):
             self.route_plotter.on_shown()
             section_name = {
                 "route": "Overview", "route planning": "Overview",
+                "expedition": "Overview",
                 "waypoints": "Waypoints", "neutron": "Neutron",
                 "mission": "Mission Control", "mission control": "Mission Control",
                 "objectives": "Mission Control", "bookmarks": "Mission Control",
@@ -506,6 +584,10 @@ class ExplorationWindow(ThemedWindowMixin):
         self._refresh_expedition_strip()
         if self.expedition_mission_view:
             self.expedition_mission_view.refresh()
+        if self.exploration_field_view:
+            self.exploration_field_view.refresh()
+        if self.route_plotter:
+            self.route_plotter._refresh_route_overview()
         self._refresh_visible_map()
         try:
             self.app.schedule_dashboard_refresh()
@@ -647,12 +729,13 @@ class ExplorationWindow(ThemedWindowMixin):
         revisit_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.revisit_tree.bind("<Double-Button-1>", self._map_selected_revisit)
 
-        cols = ("body", "type", "action", "priority", "value", "signals", "discover", "distance")
+        cols = ("body", "type", "action", "priority", "significance", "value", "signals", "discover", "distance")
         self.bodies_tree = self._tree(left, cols, {
             "body": ("System architecture", 250, tk.W),
             "type": ("Type", 180, tk.W),
             "action": ("Next action", 130, tk.W),
             "priority": ("Priority", 65, tk.E),
+            "significance": ("Significance", 100, tk.CENTER),
             "value": ("Value", 90, tk.E),
             "signals": ("Signals", 95, tk.CENTER),
             "discover": ("Discovery", 90, tk.CENTER),
@@ -1043,6 +1126,16 @@ class ExplorationWindow(ThemedWindowMixin):
                 self._render_sampling()
                 self._render_system_history()
                 self._render_route()
+                if (
+                    self.exploration_field_view and self.route_plotter
+                    and self.route_plotter.current_section() == "Route Intelligence"
+                ):
+                    self.exploration_field_view.refresh()
+                if (
+                    self.route_plotter
+                    and self.route_plotter.current_section() == "Overview"
+                ):
+                    self.route_plotter._refresh_route_overview()
                 self._render_history(current_value, valuable_count, session_stats)
                 self._render_captains_log()
                 self._render_data_vault()
@@ -1172,7 +1265,9 @@ class ExplorationWindow(ThemedWindowMixin):
         activity = "Exploring system"
         if next_route:
             activity = f"Next route: {next_route}"
-        labels["status"].config(text=f"{current}\n{status} | star {star}")
+        significance = (self._exploration_intelligence.get("significance") or {})
+        significance_text = f"{significance.get('tier', 'ROUTINE').title()} {int(significance.get('score') or 0)}"
+        labels["status"].config(text=f"{current}\n{status} | {significance_text} | star {star}")
         labels["bodies"].config(text=f"{scanned} of {total or len(bodies)}")
         labels["signals"].config(text=f"Bio {bio_total} | Geo {geo_total}")
         labels["value"].config(text=f"Local {self._format_credits(current_value)}\nEDSM {edsm_value}")
@@ -1226,7 +1321,7 @@ class ExplorationWindow(ThemedWindowMixin):
         row = self._selected_action()
         if not row:
             return
-        if row.get("kind") == "body":
+        if row.get("kind") in {"body", "biology"}:
             wanted_id = row.get("body_id")
             wanted_name = str(row.get("body") or "").casefold()
             for iid, item in self.body_items_by_iid.items():
@@ -1460,6 +1555,15 @@ class ExplorationWindow(ThemedWindowMixin):
 
         architecture = architecture_rows(bodies)
         rows = [row for row in architecture if visible(row["item"])]
+        significance_rows = (self._exploration_intelligence.get("significance") or {}).get("bodies") or []
+        significance_by_id = {
+            str(row.get("body_id")): row for row in significance_rows
+            if row.get("body_id") is not None
+        }
+        significance_by_name = {
+            str(row.get("body") or "").casefold(): row for row in significance_rows
+            if row.get("body")
+        }
         chosen = None
         for architecture_row in rows:
             item = architecture_row["item"]
@@ -1474,6 +1578,10 @@ class ExplorationWindow(ThemedWindowMixin):
             plan = self._survey_plan_by_key.get(key_for(item))
             action = plan.get("action") if plan else ("Primary star" if item.get("is_star") else "Reference")
             priority = plan.get("score") if plan else "-"
+            significance = (
+                significance_by_id.get(str(item.get("body_id")))
+                if item.get("body_id") is not None else None
+            ) or significance_by_name.get(str(body).casefold()) or {}
             tags = []
             if item.get("is_star"):
                 tags.append("star")
@@ -1491,6 +1599,7 @@ class ExplorationWindow(ThemedWindowMixin):
                     body_class,
                     action,
                     priority,
+                    f"{significance.get('tier', 'ROUTINE').title()} {int(significance.get('score') or 0)}",
                     self._format_credits(value),
                     self._signal_text(item),
                     self._body_discovery_text(item),
@@ -1686,26 +1795,34 @@ class ExplorationWindow(ThemedWindowMixin):
         banner = getattr(self, "sampling_banner", None)
         if not banner:
             return
-        sample = self.app._sampling_snapshot() if hasattr(self.app, "_sampling_snapshot") else None
-        if not sample:
+        assistant = self._exploration_intelligence.get("bio_assistant") or {}
+        if not assistant or assistant.get("state") == "CLEAR":
             banner.pack_forget()
             return
         if not banner.winfo_manager():
             banner.pack(fill=tk.X, pady=(0, 8), before=self.survey_tree_wrap)
-        minimum = sample.get("min_distance_m")
-        colony = sample.get("colony_m")
-        if sample.get("clear"):
-            status = "CLEAR TO SAMPLE"
-            color = self.UI_OK
-        elif minimum is not None and colony:
-            status = f"MOVE · {minimum:,} / {colony:,} m"
-            color = COLOR_ORANGE
+        if assistant.get("state") == "ACTIVE":
+            color = self.UI_OK if assistant.get("clear") else COLOR_ORANGE
+            value = assistant.get("min_value_cr")
+            worth = f" · {self._format_credits(value)}" if value else ""
+            text = (
+                f"BIO FIELD ASSISTANT · {assistant.get('species')} · sample {assistant.get('progress', 1)}/3 · "
+                f"{assistant.get('detail')}{worth}\n"
+                f"SEARCH · {assistant.get('terrain') or 'follow local terrain contrast'}"
+            )
         else:
-            status = "MOVE TO THE NEXT SAMPLE SITE"
             color = COLOR_ORANGE
+            low = assistant.get("min_value_cr")
+            high = assistant.get("max_value_cr")
+            value = ""
+            if low and high:
+                value = self._format_credits(low) if low == high else f"{self._format_credits(low)}-{self._format_credits(high)}"
+            text = (
+                f"BIO FIELD ASSISTANT · {assistant.get('headline') or 'NEXT TARGET'}"
+                f"{' · ' + value if value else ''}\n{assistant.get('detail') or ''}"
+            )
         banner.config(
-            text=f"GENETIC SAMPLER · {sample.get('species')} · sample {sample.get('progress', 1)}/3 · {status}",
-            fg=color,
+            text=text, fg=color, justify=tk.LEFT,
         )
 
     def _route_entries(self):
@@ -1782,6 +1899,22 @@ class ExplorationWindow(ThemedWindowMixin):
                 "",
                 f"Signals: {self._signal_text(item)}",
             ])
+            significance_rows = (self._exploration_intelligence.get("significance") or {}).get("bodies") or []
+            significance = next((
+                row for row in significance_rows
+                if (
+                    item.get("body_id") is not None
+                    and str(row.get("body_id")) == str(item.get("body_id"))
+                ) or str(row.get("body") or "").casefold() == str(
+                    item.get("full_name") or item.get("name") or ""
+                ).casefold()
+            ), None)
+            if significance:
+                lines.extend([
+                    "",
+                    f"Discovery significance: {significance.get('tier')} · {int(significance.get('score') or 0)}/100",
+                    f"Why: {', '.join(significance.get('reasons') or [])}",
+                ])
             if matrix.get("geo_detected"):
                 lines.append(
                     "Geology: detected by the journal; Elite does not report site inspection completion."

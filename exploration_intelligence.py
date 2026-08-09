@@ -11,6 +11,10 @@ from datetime import datetime
 import math
 
 from deep_survey import HIGH_VALUE_WORLDS, item_value, survey_plan, wonder_rows
+from explorer_fieldcraft import (
+    bio_field_assistant, return_to_base_plan, route_endurance_monitor,
+    route_safety_forecast, sector_grid, system_significance,
+)
 from galactic_regions import find_region, region_names
 from stellar_types import star_type_label
 
@@ -18,6 +22,13 @@ from stellar_types import star_type_label
 def _integer(value, default=0):
     try:
         return int(value or default)
+    except (TypeError, ValueError):
+        return default
+
+
+def _number(value, default=0.0):
+    try:
+        return float(value)
     except (TypeError, ValueError):
         return default
 
@@ -301,6 +312,16 @@ def action_queue(app, completion=None, route=None, snapshot=None):
             "detail": f"Sample {progress}/3 on {sampling.get('body') or 'the current body'}",
             "system": current_system, "body": sampling.get("body"),
         })
+    elif snapshot and isinstance(snapshot.get("bio_assistant"), dict):
+        assistant = snapshot["bio_assistant"]
+        if assistant.get("state") == "TARGET":
+            rows.append({
+                "id": "bio-field-target", "priority": 92, "kind": "biology",
+                "title": str(assistant.get("headline") or "Review biological target"),
+                "detail": str(assistant.get("detail") or "Biological survey work remains"),
+                "system": current_system, "body": assistant.get("body"),
+                "body_id": assistant.get("body_id"),
+            })
     companion = getattr(app, "companion_state", None) or {}
     unsold = _integer(companion.get("unsold_exploration_cr")) + _integer(
         companion.get("unsold_bio_cr")
@@ -427,14 +448,20 @@ def build_intelligence(app):
         row for row in snapshot.get("codex") or []
         if str(row.get("system") or "").casefold() == current_system.casefold()
     ]
+    bodies = list(getattr(app, "scan_items", None) or ())
     completion = system_completion(
-        getattr(app, "scan_items", None) or (),
+        bodies,
         getattr(app, "scanned", 0), getattr(app, "total", 0),
         fss_complete=bool(getattr(app, "fss_all_bodies", False)),
         codex_rows=codex_rows, current_system=current_system,
     )
     route = route_context(app)
-    actions = action_queue(app, completion, route, snapshot)
+    field = build_field_intelligence(
+        app, tracker_snapshot=snapshot, route=route, codex_rows=codex_rows,
+    )
+    action_source = dict(snapshot or {})
+    action_source.update(field)
+    actions = action_queue(app, completion, route, action_source)
     arrival = arrival_brief(app, completion, route, snapshot)
     regions = snapshot.get("region_stats") or {}
     visited_regions = len([row for row in regions.values() if _integer(row.get("visits"))])
@@ -451,6 +478,136 @@ def build_intelligence(app):
         "checkpoint": dict(snapshot.get("checkpoint") or {}),
         "last_departure": dict(snapshot.get("last_departure") or {}),
         "milestones": list(snapshot.get("milestones") or [])[-8:],
+        **field,
+    }
+
+
+def _system_position_from_state(app, system, tracker_snapshot=None):
+    wanted = str(system or "").strip().casefold()
+    if not wanted:
+        return None
+    if wanted == str(getattr(app, "current_sys", "") or "").casefold():
+        return _position(getattr(app, "current_coords", None))
+    for row in getattr(app, "nav_route_entries", None) or ():
+        if not isinstance(row, dict):
+            continue
+        name = row.get("StarSystem") or row.get("system")
+        if str(name or "").casefold() == wanted:
+            pos = _position(row.get("StarPos") or row.get("pos"))
+            if pos:
+                return pos
+    waypoint_manager = getattr(app, "waypoint_manager", None)
+    for row in getattr(waypoint_manager, "waypoints", None) or ():
+        if isinstance(row, dict) and str(row.get("name") or "").casefold() == wanted:
+            pos = _position(row.get("coords"))
+            if pos:
+                return pos
+    for row in reversed((tracker_snapshot or {}).get("route_points") or []):
+        if isinstance(row, dict) and str(row.get("system") or "").casefold() == wanted:
+            pos = _position(row.get("pos"))
+            if pos:
+                return pos
+    return None
+
+
+def build_field_intelligence(app, tracker_snapshot=None, route=None, codex_rows=()):
+    """Build the exploration field-computer packet from cached local facts."""
+    tracker_snapshot = tracker_snapshot if isinstance(tracker_snapshot, dict) else {}
+    route = route if isinstance(route, dict) else route_context(app)
+    bodies = list(getattr(app, "scan_items", None) or ())
+    sampling = None
+    try:
+        sampling = app._sampling_snapshot()
+    except Exception:
+        sampling = getattr(app, "bio_sampling", None)
+    bio = bio_field_assistant(
+        bodies, sampling=sampling,
+        focused_body=getattr(app, "current_body_name", ""),
+    )
+    significance = system_significance(bodies, codex_rows)
+
+    entries = list(getattr(app, "nav_route_entries", None) or ())
+    try:
+        forecast = app._route_safety_snapshot()
+    except Exception:
+        forecast = route_safety_forecast(
+            entries,
+            str(getattr(app, "current_sys", "") or ""),
+            str(getattr(app, "star_class", "") or ""),
+            getattr(app, "current_fuel_main", None),
+            getattr(app, "fuel_capacity_main", None),
+            getattr(app, "_fuel_used_samples", None) or (),
+        )
+
+    manager = getattr(app, "expedition_manager", None)
+    active = manager.active() if manager else None
+    target = str((active or {}).get("return_system") or "").strip()
+    route_names = [
+        str(row.get("StarSystem") or row.get("system") or "").strip()
+        for row in entries if isinstance(row, dict)
+    ]
+    if not target and route_names:
+        target = route_names[-1]
+    current_system = str(getattr(app, "current_sys", "") or "")
+    current_pos = _position(getattr(app, "current_coords", None))
+    target_pos = _system_position_from_state(app, target, tracker_snapshot)
+    distance = _distance(current_pos, target_pos)
+    exact_jumps = None
+    if target and route_names and route_names[-1].casefold() == target.casefold():
+        exact_jumps = route.get("remaining")
+
+    state = getattr(app, "companion_state", None) or {}
+    loadout = state.get("loadout") or {}
+    jump_range = loadout.get("MaxJumpRange") or (getattr(app, "cmdr_ship", None) or {}).get("max_jump_range")
+    fuel_percent = None
+    try:
+        fuel = float(getattr(app, "current_fuel_main", None))
+        capacity = float(getattr(app, "fuel_capacity_main", None))
+        if capacity > 0:
+            fuel_percent = max(0, min(100, round(fuel * 100 / capacity)))
+    except (TypeError, ValueError):
+        pass
+    hull = _number(getattr(app, "current_hull_percent", None), None)
+    minimum_data = _integer(state.get("unsold_exploration_cr")) + _integer(state.get("unsold_bio_cr"))
+    maximum_data = minimum_data + _integer(state.get("unsold_bio_bonus_potential_cr"))
+    known_services = (
+        list(getattr(app, "current_station_services", None) or [])
+        if target and target.casefold() == current_system.casefold()
+        and bool(getattr(app, "current_docked", False)) else []
+    )
+    return_plan = return_to_base_plan(
+        current_system=current_system, target_system=target,
+        distance_ly=distance, exact_jumps=exact_jumps,
+        jump_range_ly=jump_range, fuel_percent=fuel_percent,
+        hull_percent=hull, unsold_min_cr=minimum_data,
+        unsold_max_cr=maximum_data, route_forecast=forecast,
+        known_services=known_services,
+    )
+    raw_materials = (getattr(app, "engineer_materials", None) or {}).get("raw") or {}
+    module_text = " ".join(
+        str(row.get("Item") or row.get("Item_Localised") or "").casefold()
+        for row in loadout.get("Modules") or () if isinstance(row, dict)
+    )
+    srv_available = None if not loadout else any(
+        marker in module_text for marker in ("vehiclebay", "planetary vehicle")
+    )
+    endurance = route_endurance_monitor(
+        forecast, loadout, raw_materials, hull_percent=hull,
+        srv_available=srv_available,
+    )
+    sector = {"active": False, "cells": [], "summary": "No active expedition sector"}
+    sector_plan = (active or {}).get("sector_plan")
+    if isinstance(sector_plan, dict) and sector_plan.get("center"):
+        sector = sector_grid(
+            tracker_snapshot.get("route_points") or (), sector_plan.get("center"),
+            sector_plan.get("radius_ly", 500), sector_plan.get("cell_size_ly", 100),
+        )
+        sector["name"] = sector_plan.get("name") or "Expedition sector"
+        sector["plan"] = dict(sector_plan)
+    return {
+        "bio_assistant": bio, "significance": significance,
+        "return_plan": return_plan, "endurance": endurance,
+        "sector": sector,
     }
 
 

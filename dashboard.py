@@ -69,22 +69,19 @@ from analytics_window import AnalyticsWindow
 from trade.eddn_upload import UPLOADER as eddn_market_uploader
 from achievement_engine import AchievementEngine
 from achievement_window import AchievementWindow
-from voice_callouts import VoiceCalloutManager, choose_line
-from cockpit_ai_memory import CockpitMemory, ordinal
-from cockpit_ai_brain import CockpitBrain
-from compass_cognition import CompassCognition
 from combat_awareness import CombatAwareness
 from specialist_engine import SpecialistEngine
 from specialists_window import SpecialistsWindow
-import compass_personas
 from captains_log import CaptainsLog
 from deep_survey import DeepSurveyTracker
 from exploration_intelligence import build_intelligence, checkpoint_payload
 from galactic_regions import find_region
-from explorer_fieldcraft import revisit_candidate, route_safety_forecast
+from explorer_fieldcraft import revisit_candidate, route_safety_forecast, surface_trail_snapshot
 from expedition_manager import ExpeditionManager
 from diagnostic_logs import application_base_dir, resolve_log_path
-from adaptive_command import AdaptiveCommandDeck, AUTOMATIC_MODE_IDLE_S, MODE_LABELS
+from adaptive_command import (
+    AdaptiveCommandDeck, AUTOMATIC_MODE_IDLE_S, FOCUSED_MODES, MODE_LABELS,
+)
 from diagnostic_bundle import create_support_bundle
 from onboarding import should_show as should_show_onboarding, show_first_run
 from persistence_queue import flush_persistence, persistence_queue
@@ -756,6 +753,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_fuel_main = None
         self.current_fuel_reservoir = None
         self.fuel_capacity_main = None
+        self.current_hull_percent = None
         self._fuel_used_samples = deque(maxlen=8)
         self._fuel_advisory_signature = None
         self._low_fuel_warned = False
@@ -805,6 +803,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.ground_popup_enabled = bool(self.config.get("ground_popup_enabled", True))
         self._ground_ui_needs_update = True
         self._ground_last_status_key = None
+        self.surface_trail = []
+        self.surface_trail_body = ""
+        self.surface_ship_position = None
         self._pending_status_data = None
         self._status_dispatch_scheduled = False
 
@@ -1180,16 +1181,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         # Close and persist the outgoing commander's session while every live
         # fact and UI position still belongs to that profile.
         self._save_exploration_checkpoint("profile-change", immediate=True)
-        if getattr(self, "cockpit_memory", None):
-            insights = (
-                self.compass_cognition.observe_session_close(
-                    self._compass_gameplay_snapshot(), self.cockpit_memory,
-                )
-                if getattr(self, "compass_cognition", None) else []
-            )
-            self.cockpit_memory.session_debrief(
-                "Profile changed", close=True, insights=insights,
-            )
         outgoing_engineer_path = self.config.get("engineer_materials_file")
         self._close_profile_surfaces()
         if outgoing_engineer_path:
@@ -1201,10 +1192,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     "Engineering state was still pending during profile switch: %s",
                     outgoing_engineer_path,
                 )
-        try:
-            self.voice_callouts.shutdown()
-        except Exception:
-            pass
         try:
             self.edsm.prepare_profile_switch()
         except Exception:
@@ -1252,19 +1239,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         # rebinding them makes the profile boundary explicit and future-proof.
         self.screenshots.config = self.config
         self.watcher.config = self.config
-        self.voice_callouts = VoiceCalloutManager(self.config)
-        if getattr(self, "cockpit_memory", None):
-            self.cockpit_memory.switch(
-                get_profile_file(new_key, "cockpit_ai_memory.json"),
-                limits=self._cockpit_memory_limits(),
-            )
-            if getattr(self, "cockpit_brain", None):
-                self.cockpit_brain.switch(
-                    get_profile_file(new_key, "cockpit_ai_brain.json")
-                )
-            self.compass_cognition = CompassCognition(self.cockpit_brain, self.config)
-            self.cockpit_memory.begin_app_session()
-            self._publish_cockpit_ai_online()
+        self.voice_callouts = None
+        self.cockpit_memory = None
+        self.cockpit_brain = None
+        self.compass_cognition = None
         self.captains_log = CaptainsLog(
             get_profile_file(new_key, "captains_log.json")
         )
@@ -1284,7 +1262,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.adaptive_command.switch(
                 self.config.get("adaptive_command_file"), self.config,
             )
-            self._adaptive_startup_briefed = False
+            self._adaptive_startup_synced = False
         if getattr(self, "session_guard", None):
             self.session_guard.switch(self._profile_path("session.active"))
             self._startup_recovery_mode = bool(
@@ -1362,7 +1340,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._show_bootstrap_onboarding()
             # The selected journal folder may identify a different commander
             # than the pre-wizard defaults. Establish that profile before any
-            # profile-local state, voice worker, overlay or journal watcher.
+            # profile-local state, overlay or journal watcher.
             self._prepare_commander_profile_from_journal()
             self._apply_active_profile_theme()
             save_config(self.config)
@@ -1393,14 +1371,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 key=f"overlay-hotkey:{action}",
             )
         )
-        self.voice_callouts = VoiceCalloutManager(self.config)
-        self.cockpit_memory = CockpitMemory(
-            get_profile_file(get_active_profile(self.config), "cockpit_ai_memory.json"),
-            limits=self._cockpit_memory_limits(),
-        )
-        self.cockpit_brain = CockpitBrain(
-            get_profile_file(get_active_profile(self.config), "cockpit_ai_brain.json")
-        )
+        self.voice_callouts = None
+        self.cockpit_memory = None
+        self.cockpit_brain = None
         self.captains_log = CaptainsLog(
             get_profile_file(get_active_profile(self.config), "captains_log.json")
         )
@@ -1414,7 +1387,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.adaptive_command = AdaptiveCommandDeck(
             self.config.get("adaptive_command_file"), self.config,
         )
-        self._adaptive_startup_briefed = False
+        self._adaptive_startup_synced = False
         self.session_guard = ProfileSessionGuard(
             self._profile_path("session.active"), APP_VERSION,
         )
@@ -1422,8 +1395,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.session_guard.unclean
             and self.config.get("recovery_safe_mode_enabled", True)
         )
-        self.compass_cognition = CompassCognition(self.cockpit_brain, self.config)
-        self.cockpit_memory.begin_app_session()
+        self.compass_cognition = None
         self.root.title(f"VOID COMPASS // v{APP_VERSION}")
         self.root.geometry(self.config.get("main_geometry", "1320x820"))
         self.root.minsize(1080, 700)
@@ -1572,6 +1544,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_longitude = None
         self.current_heading = None
         self.current_planet_radius = None
+        self.current_hull_percent = None
         self.on_planet = False
         self._ground_last_on_planet = False
         self.ground_popup = None
@@ -1586,6 +1559,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.ground_popup_enabled = bool(self.config.get("ground_popup_enabled", True))
         self._ground_ui_needs_update = False
         self._ground_last_status_key = None
+        self.surface_trail = []
+        self.surface_trail_body = ""
+        self.surface_ship_position = None
         self._pending_status_data = None
         self._status_dispatch_scheduled = False
         self.log_filter = "ALL"
@@ -1777,7 +1753,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.batch_mode = False
         self._startup_restore_active = False
         self._startup_restore_ui_pending = False
-        self._publish_cockpit_ai_online()
         self.init_db()
         self.edsm.set_db(self.conn, self.db_lock)
         self.colonisation_projects = self.db_load_colonisation_projects()
@@ -1872,7 +1847,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._tick_runtime_trace()
         self._tick_overlay_position_sync()
         self._tick_overlay_hotkey_guard()
-        self._tick_cockpit_ambient()
 
     def _show_bootstrap_onboarding(self):
         """Block construction so first-run setup is the only visible window."""
@@ -2500,21 +2474,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.overlay_hotkeys.stop()
         if getattr(self, "ui_dispatcher", None):
             self.ui_dispatcher.stop()
-        # Cancellation comes before any state work. Piper synthesis, playback
-        # and queued callouts must never keep the application open.
-        try:
-            self.voice_callouts.stop()
-        except Exception:
-            pass
         # This is intentionally the only write site for the last cockpit
         # snapshot. It provides a fast visual restore after a normal quit
         # without turning live journal traffic into continuous disk writes.
         self._save_profile_cockpit_state()
         self._save_exploration_checkpoint("app-close", immediate=True)
-        # Elite's Shutdown journal event owns the Compass debrief. Closing
-        # only the companion leaves an in-progress game session intact and
-        # avoids running another cognition pass during application teardown.
-        
+
         if self.route_plotter and self.route_plotter.win.winfo_exists():
             self.route_plotter.on_close()
         if self.colonization_window and self.colonization_window.is_open():
@@ -2624,6 +2589,101 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         z = (math.sin(lat1_r) * math.sin(lat2_r)) + (math.cos(lat1_r) * math.cos(lat2_r) * math.cos(dlon_r))
         z = max(-1.0, min(1.0, z))
         return math.acos(z) * radius_m
+
+    def _record_surface_trail_point(self, kind="trail", label="", force=False):
+        if (
+            self.current_latitude is None or self.current_longitude is None
+            or not self.current_planet_radius or self.current_planet_radius <= 0
+        ):
+            return False
+        body = str(getattr(self, "current_body_name", "") or getattr(self, "current_body_id", "") or "")
+        if self.surface_trail_body and body and body.casefold() != self.surface_trail_body.casefold():
+            self.surface_trail = []
+            self.surface_ship_position = None
+        if body:
+            self.surface_trail_body = body
+        point = {
+            "lat": float(self.current_latitude), "lon": float(self.current_longitude),
+            "heading": self.current_heading, "kind": str(kind or "trail"),
+            "label": str(label or ""), "timestamp": time.time(),
+        }
+        last = self.surface_trail[-1] if self.surface_trail else None
+        if last and not force:
+            distance = self._surface_distance_m(
+                last["lat"], last["lon"], point["lat"], point["lon"],
+                self.current_planet_radius,
+            )
+            if distance is not None and distance < 25.0:
+                return False
+        self.surface_trail.append(point)
+        self.surface_trail = self.surface_trail[-600:]
+        self._ground_ui_needs_update = True
+        return True
+
+    def _surface_trail_snapshot(self):
+        pins = []
+        specialist = getattr(self, "specialist_engine", None)
+        if specialist:
+            try:
+                pins = (specialist.exobiology_snapshot().get("current_map") or {}).get("pins") or []
+            except Exception:
+                pins = []
+        current = None
+        if self.current_latitude is not None and self.current_longitude is not None:
+            current = {"lat": self.current_latitude, "lon": self.current_longitude}
+        return surface_trail_snapshot(
+            self.surface_trail, current=current, ship=self.surface_ship_position,
+            radius_m=self.current_planet_radius, sample_pins=pins,
+        )
+
+    def clear_surface_trail(self, quiet=False):
+        self.surface_trail = []
+        self.surface_trail_body = ""
+        self.surface_ship_position = None
+        self._ground_ui_needs_update = True
+        if not quiet and not self.batch_mode:
+            self.add_event_feed_entry("BIO", "Surface survey trail cleared", severity="INFO")
+        try:
+            self.update_ground_target_ui()
+        except Exception:
+            pass
+
+    def _observe_surface_trail_event(self, ev, raw, startup_replay=False):
+        raw = raw if isinstance(raw, dict) else {}
+        if ev == "HullDamage":
+            try:
+                health = float(raw.get("Health"))
+                self.current_hull_percent = max(0.0, min(100.0, health * 100 if health <= 1 else health))
+            except (TypeError, ValueError):
+                pass
+            self._invalidate_exploration_intelligence()
+        elif ev == "RepairAll":
+            self.current_hull_percent = 100.0
+            self._invalidate_exploration_intelligence()
+        if startup_replay:
+            return
+        if ev == "Touchdown":
+            self.surface_trail = []
+            self.surface_trail_body = str(raw.get("Body") or raw.get("BodyName") or getattr(self, "current_body_name", "") or "")
+            lat = raw.get("Latitude", self.current_latitude)
+            lon = raw.get("Longitude", self.current_longitude)
+            try:
+                self.surface_ship_position = {"lat": float(lat), "lon": float(lon), "kind": "ship"}
+            except (TypeError, ValueError):
+                self.surface_ship_position = None
+            if self.surface_ship_position:
+                self.surface_trail.append({
+                    **self.surface_ship_position, "heading": self.current_heading,
+                    "label": "Landing site", "timestamp": time.time(),
+                })
+                self._ground_ui_needs_update = True
+        elif ev == "ScanOrganic":
+            label = raw.get("Species_Localised") or raw.get("Genus_Localised") or raw.get("Species") or "Biological sample"
+            self._record_surface_trail_point("sample", label, force=True)
+        elif ev in {"FSDJump", "CarrierJump", "LeaveBody", "Docked", "Died"} or (
+            ev == "StartJump" and str(raw.get("JumpType") or "").casefold() == "hyperspace"
+        ):
+            self.clear_surface_trail(quiet=True)
 
     @staticmethod
     def _format_ground_distance(distance_m):
@@ -2742,7 +2802,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         return bookmark
 
     def open_mining_window(self):
-        """Open the authoritative elite-trader-style mining workflow."""
+        """Open the focused Mining Operations workspace."""
         self.open_specialists_window(section="mining")
 
     def open_analytics_window(self):
@@ -2855,9 +2915,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         except Exception:
             pass
 
-    def open_bgs_window(self):
+    def open_bgs_window(self, section=None):
         if self.bgs_window and self.bgs_window.is_open():
             self._show_embedded_page("GALAXY", self.bgs_window.win)
+            self.bgs_window.select_section(section)
             return
         self.bgs_window = BGSWindow(
             self.dashboard_host,
@@ -2874,6 +2935,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             embedded=True,
         )
         self._show_embedded_page("GALAXY", self.bgs_window.win)
+        self.bgs_window.select_section(section)
 
     def open_commander_profile_window(self):
         if self.commander_profile_window and self.commander_profile_window.is_open():
@@ -3297,8 +3359,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._apply_active_profile_theme()
             self._apply_runtime_feature_toggles()
             self._configure_overlay_hotkeys()
-            self._refresh_cockpit_brain(event="settings_saved")
-            self._publish_cockpit_ai_changes()
             self.show_dashboard_page()
 
         page = getattr(self, "settings_page", None)
@@ -3310,10 +3370,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 carrier_tracker=self.carrier_tracker,
                 embedded=True,
                 on_close_callback=self.show_dashboard_page,
-                voice_manager=self.voice_callouts,
-                cockpit_memory=self.cockpit_memory,
-                cockpit_brain=self.cockpit_brain,
-                cockpit_cognition=self.compass_cognition,
                 support_bundle_callback=self._create_support_bundle,
                 rerun_setup_callback=self._rerun_first_run_onboarding,
                 health_provider=self._adaptive_health_snapshot,
@@ -3338,10 +3394,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if self.current_sys != system_name:
                     return
                 self._apply_system_traffic_context(system_name, traffic_data)
-                self._process_compass_cognition(
-                    "TrafficUpdate", traffic_data, traffic_data,
-                    startup_replay=bool(getattr(self, "is_first_load", False)),
-                )
                 self.update_dashboard_ui()
                 self.update_hud()
                 if self.system_info_hud and isinstance(traffic_data, dict):
@@ -3394,20 +3446,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _system_has_known_traffic(self, system_name=None):
         system_name = system_name or self.current_sys
-        if system_name == self.current_sys and self._traffic_has_visits(self.system_traffic):
-            return True
-        memory = getattr(self, "cockpit_memory", None)
-        return bool(memory and memory.system_has_traffic(system_name))
+        return bool(
+            system_name == self.current_sys
+            and self._traffic_has_visits(self.system_traffic)
+        )
 
     def _apply_system_traffic_context(self, system_name, traffic_data):
-        """Share HUD traffic with Compass and resolve delayed discovery wording."""
+        """Share HUD traffic and resolve delayed discovery wording."""
         self._system_traffic_resolved = True
         if isinstance(traffic_data, dict):
             self.last_edsm_event_ts = time.time()
             self.system_traffic = self._normalize_system_traffic(traffic_data)
-            if (self.config.get("cockpit_memory_enabled", True)
-                    and getattr(self, "cockpit_memory", None)):
-                self.cockpit_memory.observe_system_traffic(system_name, self.system_traffic)
 
         pending = self._pending_system_discovery
         if pending and pending[0] == system_name:
@@ -3433,64 +3482,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if startup_replay:
             return True
 
-        discovery_voice = [
-            f"First discovery. {self.current_sys} appears undiscovered.",
-            f"I found no prior survey records or traffic for {self.current_sys}. This one may be ours.",
-            f"Uncharted system confirmed. I am opening a new survey record for {self.current_sys}.",
-            f"Interesting. Neither the Codex nor traffic records show a prior visit to {self.current_sys}.",
-        ]
-        if (self.config.get("cockpit_memory_enabled", True)
-                and getattr(self, "cockpit_memory", None)):
-            discoveries = self.cockpit_memory.count("first_discoveries")
-            if self.cockpit_memory.should_reference_repeat(
-                    discoveries, self.config.get("cockpit_personality_level", "Balanced")):
-                discovery_voice.append(
-                    f"Another uncharted system for our shared record. That makes {discoveries:,} first discoveries together."
-                )
-        self._speak(
-            discovery_voice,
-            category="exploration", cooldown_s=600,
-            key=f"first-discovery:{self.current_sys}",
-        )
         return True
-
-    @staticmethod
-    def _valuable_world_voice_lines(body_name, planet_class, terraformable=False):
-        body_name = str(body_name or "this body")
-        if planet_class == "Earthlike body":
-            return (
-                f"Earth-like world confirmed at {body_name}. That is a rare and valuable find.",
-                f"Sensors identify {body_name} as an Earth-like world. This one deserves a full surface map.",
-                f"Now that is worth slowing down for. Earth-like world at {body_name}.",
-                f"A blue-green world in the black. {body_name} is Earth-like.",
-            )
-        if planet_class == "Water world":
-            if terraformable:
-                return (
-                    f"Terraformable water world detected at {body_name}. High-value mapping target confirmed.",
-                    f"Water world at {body_name}, and the atmosphere is suitable for terraforming. An excellent find.",
-                    f"The survey just became profitable. {body_name} is a terraformable water world.",
-                    f"Blue planet confirmed at {body_name}. Terraformable, valuable, and well worth mapping.",
-                )
-            return (
-                f"Water world detected at {body_name}. High-value mapping target confirmed.",
-                f"Sensors show a water world at {body_name}. Worth a closer look before we leave.",
-                f"A valuable blue world at {body_name}. I have marked it for surface mapping.",
-                f"Water world confirmed. {body_name} is a strong addition to our survey data.",
-            )
-        if planet_class == "Ammonia world":
-            return (
-                f"Ammonia world confirmed at {body_name}. A rare and valuable survey target.",
-                f"Sensors identify an ammonia world at {body_name}. I recommend a full surface map.",
-                f"Unusual chemistry at {body_name}. Ammonia world, and worth recording properly.",
-                f"High-value ammonia world detected at {body_name}. The exploration ledger approves.",
-            )
-        return (
-            f"Terraformable world detected at {body_name}. Worth mapping before we leave.",
-            f"The survey data marks {body_name} as terraformable. That makes it a valuable target.",
-            f"Promising world at {body_name}. Terraforming candidate confirmed.",
-            f"{body_name} has long-term potential. I have flagged it as a high-value mapping target.",
-        )
 
     @staticmethod
     def _valuable_body_is_tracked(rows, body_name):
@@ -3518,11 +3510,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.add_event_feed_entry(
                 "VALUABLE", f"{icon} Valuable world: {body_name}",
                 severity="WARN", copy_text=body_name,
-            )
-            self._speak(
-                self._valuable_world_voice_lines(body_name, planet_class, terraformable),
-                category="exploration", cooldown_s=86_400,
-                key=f"valuable-world:{self.current_sys}:{body_name}",
             )
         return True
 
@@ -4168,9 +4155,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "LoadGame", "Location", "FSDJump", "CarrierJump", "Docked", "Shutdown",
             "FSSDiscoveryScan", "FSSAllBodiesFound", "Scan", "SAAScanComplete",
             "SAASignalsFound", "ScanOrganic", "CodexEntry", "Screenshot",
+            "HullDamage", "RepairAll", "Loadout", "Synthesis", "JetConeBoost",
         }
         if ev not in relevant:
             return
+        self._invalidate_exploration_intelligence()
         timestamp = raw.get("timestamp") if isinstance(raw, dict) else None
         try:
             milestones = tracker.evaluate_milestones(
@@ -4216,15 +4205,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.add_event_feed_entry("MILESTONE", f"{title} · {detail}", severity="INFO")
             if ev != "Shutdown" and getattr(self, "captains_log", None):
                 self.captains_log.add_manual_highlight("MILESTONE", title, detail)
-        self._pulse_cockpit_ai()
-        major = next((row for row in reversed(milestones) if int(row.get("level") or 0) >= 4), None)
-        if major:
-            title = major.get("title") or "Exploration milestone"
-            self._speak((
-                f"Milestone recorded. {title}.",
-                f"Expedition log updated. {title}.",
-                f"That is worth marking. {title}.",
-            ), category="exploration", cooldown_s=5, key=f"milestone:{major.get('key')}")
 
     def _compass_gameplay_snapshot(self):
         """Return compact verified live facts for the local Compass brain."""
@@ -4769,49 +4749,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         return candidate
 
     def _speak(self, text, category="safety", cooldown_s=20, key=None):
-        if getattr(self, "_closing", False):
-            return False
-        if (
-            category != "safety"
-            and time.monotonic() < getattr(self, "_cockpit_docking_quiet_until", 0.0)
-        ):
-            return False
-        try:
-            if (self.config.get("cockpit_memory_enabled", True)
-                    and getattr(self, "cockpit_memory", None)):
-                text = self.cockpit_memory.voice_pool(
-                    text, key=key,
-                    personality_level=self.config.get("cockpit_personality_level", "Balanced"),
-                )
-            text = choose_line(text, key=key)
-            advice = None
-            if (
-                category in ("navigation", "exploration", "objectives", "ambient")
-                and self.config.get("voice_callouts_enabled", False)
-                and self.voice_callouts.can_say(category)
-            ):
-                advice = self._compass_advisory_point(
-                    self._compass_gameplay_snapshot(), key,
-                )
-                if advice:
-                    text = (
-                        f"{str(text).rstrip('.!')}; "
-                        f"{str(advice['line']).rstrip('.!')}."
-                    )
-            if category != "safety":
-                text = compass_personas.style_line(
-                    text, self.config.get("cockpit_persona", "Compass"), key=key,
-                )
-            spoken = self.voice_callouts.say(text, category=category, cooldown_s=cooldown_s, key=key)
-            if spoken:
-                if advice:
-                    self._mark_compass_advisor(advice["topic"])
-                    self.compass_cognition.record_spoken(advice, line=text)
-                self._pulse_cockpit_ai()
-            return spoken
-        except Exception as exc:
-            logging.debug("Voice callout skipped: %s", exc)
-            return False
+        """Retained call-site shim; spoken cockpit feedback was retired in v5.3.6."""
+        return False
 
     def _speak_pending_cockpit_remark(self, force=False):
         if (not self.config.get("cockpit_memory_enabled", True)
@@ -4949,11 +4888,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if not deck or startup_replay:
             return
         if event == "Shutdown":
-            summary = deck.close_session("Session complete")
-            if summary and self.config.get("adaptive_debriefings_enabled", True):
-                self.add_event_feed_entry("AI", summary, severity="INFO")
-                # The established Compass shutdown summary owns TTS for this
-                # boundary, avoiding two spoken debriefs for the same event.
+            deck.close_session("Session complete")
             return
         detected = self._detected_adaptive_mode()
         transition = deck.observe(event, detected, raw, historical=False)
@@ -4961,27 +4896,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return
         mode = transition.get("mode") or "general"
         self._apply_adaptive_overlay_scene(mode)
-        if transition.get("debrief") and self.config.get("adaptive_debriefings_enabled", True):
-            self.add_event_feed_entry("AI", transition["debrief"], severity="INFO")
-        briefing = transition.get("briefing")
-        if briefing and self.config.get("adaptive_briefings_enabled", True):
-            self.add_event_feed_entry(
-                "AI", f"Command Deck: {briefing}", severity="INFO",
-            )
-            # Docked already receives one context-aware adviser pass. Keep the
-            # generic station-mode transition in the feed instead of speaking
-            # a second line during a routine arrival.
-            if event != "Docked":
-                self._speak(
-                    briefing, category="objectives", cooldown_s=0,
-                    key=f"adaptive-mode:{mode}",
-                )
         self.schedule_dashboard_refresh(full=True)
 
-    def _adaptive_startup_briefing(self):
-        if getattr(self, "_adaptive_startup_briefed", False):
+    def _adaptive_startup_mode(self):
+        if getattr(self, "_adaptive_startup_synced", False):
             return
-        self._adaptive_startup_briefed = True
+        self._adaptive_startup_synced = True
         deck = getattr(self, "adaptive_command", None)
         if not deck or not self.config.get("adaptive_command_enabled", True):
             return
@@ -4990,15 +4910,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             deck.observe("StartupReady", detected, {}, historical=False)
         mode = deck.current_mode
         self._apply_adaptive_overlay_scene(mode)
-        briefing = deck.briefing(mode)
-        if self.config.get("adaptive_briefings_enabled", True):
-            self.add_event_feed_entry(
-                "AI", f"Command Deck ready: {briefing}", severity="INFO",
-            )
-            self._speak(
-                briefing, category="objectives", cooldown_s=0,
-                key=f"adaptive-startup:{mode}",
-            )
 
     def _detected_adaptive_mode(self):
         """Return live activity, aging stale automatic evidence to general flight."""
@@ -5006,7 +4917,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             (getattr(self, "ai_operational_state", {}) or {}).get("activity") or {}
         )
         mode = activity.get("mode") or "general"
-        if mode == "trade":
+        if mode not in FOCUSED_MODES:
             mode = "general"
         observed_at = float(activity.get("last_event_at") or activity.get("since") or 0)
         if (
@@ -5366,11 +5277,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if not line:
             return False
         self.add_event_feed_entry("EXPEDITION", line, severity="INFO")
-        self._speak(
-            line,
-            category="exploration", cooldown_s=0,
-            key=f"expedition-resume:{snapshot.get('id')}:{snapshot.get('jumps')}",
-        )
         return True
 
     def _handle_cockpit_load_game(self, raw, data, startup_replay=False):
@@ -5455,6 +5361,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         summary = memory.session_debrief(
             "Shutdown summary", close=True, insights=insights,
+            exploration_focus=self.config.get("cockpit_exploration_focus_enabled", False),
         )
         self._cockpit_feed_state = self._cockpit_ai_feed_snapshot()
         if not summary:
@@ -5474,66 +5381,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if heartbeat:
             heartbeat.pulse("ai")
 
-    def _announce_system_arrival(self, system_name, startup_replay=False):
-        """Announce a live jump once, preferring useful route context."""
-        if startup_replay or not system_name or system_name in ("---", "Unknown"):
-            return False
-        route = list(getattr(self, "route_list", None) or [])
-        route_index = next(
-            (idx for idx, name in enumerate(route)
-             if str(name).casefold() == str(system_name).casefold()),
-            -1,
-        )
-        if route_index == len(route) - 1 and route:
-            return self._speak(
-                (
-                    f"Navigation confirms our destination. Welcome to {system_name}.",
-                    f"We have arrived at {system_name}. I am closing the active route now.",
-                    f"Destination confirmed. {system_name}. Route objectives complete.",
-                    f"Hyperspace transition stable. This is {system_name}, our final destination.",
-                ), category="navigation",
-                cooldown_s=300, key=f"route-arrival:{system_name}",
-            )
-        if route_index >= 0:
-            next_system = route[route_index + 1]
-            return self._speak(
-                (
-                    f"Waypoint {route_index + 1} of {len(route)} reached. Next, {next_system}.",
-                    f"Navigation checkpoint confirmed. I have {next_system} queued as our next system.",
-                    f"That is waypoint {route_index + 1}. Updating the flight plan for {next_system}.",
-                    f"Route telemetry updated. Next jump target, {next_system}.",
-                ),
-                category="navigation", cooldown_s=300,
-                key=f"route-waypoint:{system_name}",
-            )
-        if (self.config.get("cockpit_memory_enabled", True)
-                and getattr(self, "cockpit_memory", None)):
-            remembered = self.cockpit_memory.arrival_lines(
-                system_name, self.config.get("cockpit_personality_level", "Balanced")
-            )
-            if remembered:
-                return self._speak(
-                    remembered, category="navigation", cooldown_s=20,
-                    key=f"system-arrival:{system_name}",
-                )
-        return self._speak(
-            (
-                f"Entered system. {system_name}.",
-                f"Welcome to {system_name}.",
-                f"Hyperspace exit stable. We are now in {system_name}.",
-                f"Jump complete. Navigation identifies this system as {system_name}.",
-                f"Frame shift transition complete. Welcome to {system_name}.",
-            ), category="navigation",
-            cooldown_s=20, key=f"system-arrival:{system_name}",
-        )
-
     def _push_live_toast(self, title, message="", severity="info", duration_s=10,
                          voice_text=None, voice_category="safety", voice_key=None):
         toast = getattr(self, "toast_hud", None)
         if toast:
             toast.push(title, message, severity=severity, duration_s=duration_s)
-        if voice_text:
-            self._speak(voice_text, category=voice_category, key=voice_key)
 
     def _srv_toast_vehicle_name(self, raw=None, data=None):
         """Return NOMAD when Elite's SRV-shaped events belong to the Nomad."""
@@ -5692,28 +5544,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             else:
                 sample = existing.get("sample_idx") or max_samples
             detail = "Analysis complete" if complete else f"Sample {sample}/{max_samples}"
-            bio_voice = None
-            if complete:
-                bio_voice = [
-                    f"Biological analysis complete. {species}.",
-                    f"Excellent work. My bio lab has completed the {species} analysis.",
-                    f"Third sample confirmed. I have prepared {species} for Vista Genomics.",
-                    f"Genetic sequence locked. {species} analysis is complete.",
-                ]
-                if (self.config.get("cockpit_memory_enabled", True)
-                        and getattr(self, "cockpit_memory", None)):
-                    previous = self.cockpit_memory.species_analyses(species)
-                    completed = previous + 1
-                    if self.cockpit_memory.should_reference_repeat(
-                            completed, self.config.get("cockpit_personality_level", "Balanced")):
-                        bio_voice.append(
-                            f"I remember this species. This is our {ordinal(completed)} completed {species} analysis."
-                        )
             self._push_live_toast(
                 "BIO COMPLETE" if complete else "BIO SAMPLE", f"{species}: {detail}",
                 "success" if complete else "info", 12,
-                bio_voice,
-                voice_category="exploration", voice_key=f"bio-complete:{species}",
             )
         elif ev == "CodexEntry":
             name = d.get("name") or raw.get("Name_Localised") or raw.get("Name") or "New Codex entry"
@@ -5783,6 +5616,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             fid = d.get("fid")
             if commander:
                 self._switch_commander_profile(commander, fid)
+        self._observe_surface_trail_event(
+            ev, raw if isinstance(raw, dict) else d,
+            startup_replay=startup_replay,
+        )
         specialist_changed = False
         at_own_carrier = bool(
             getattr(self, "current_docked", False)
@@ -5828,7 +5665,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             logging.warning(f"Achievement engine event error [{ev}]: {exc}")
         if not startup_replay:
             self._record_journal_event()
-        # Apply personal-credit changes before optional AI, toast and tool
+        # Apply personal-credit changes before toast and tool
         # handlers. A failure in a secondary feature must never leave the HUD
         # balance behind a confirmed journal transaction.
         if ev != "LoadGame":
@@ -5868,6 +5705,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     context={
                         "system": getattr(self, "current_sys", None),
                         "body": d.get("body_name") if isinstance(d, dict) else getattr(self, "current_body_name", None),
+                        "star_pos": list(getattr(self, "current_coords", None) or ()),
                     },
                     event_uid=data.get("_journal_uid"),
                     historical=startup_replay,
@@ -5886,15 +5724,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.captains_log.add_manual_highlight(
                     "OBJECTIVE", f"Expedition objective complete: {summary}",
                 )
-            self._speak(
-                (
-                    f"Expedition objective complete. {summary}.",
-                    f"Mission Control confirms completion of {summary}.",
-                    f"Objective log updated. {summary} is complete.",
-                ),
-                category="objectives", cooldown_s=2,
-                key=f"expedition-objective:{'|'.join(completed_titles)}",
-            )
         self._handle_live_journal_toast(ev, raw, d, startup_replay=startup_replay)
         self._observe_ai_economy_event(
             ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay,
@@ -5921,23 +5750,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 startup_replay=startup_replay,
             )
         if ev == "LoadGame":
-            self._handle_cockpit_load_game(raw, d, startup_replay=startup_replay)
             if not startup_replay:
                 self._publish_expedition_resume_briefing()
-        if (self.config.get("cockpit_memory_enabled", True)
-                and getattr(self, "cockpit_memory", None)):
-            try:
-                self.cockpit_memory.set_current_system(getattr(self, "current_sys", None))
-                self.cockpit_memory.memory_callbacks_enabled = self.config.get("cockpit_memory_callbacks_enabled", True)
-                learned = self.cockpit_memory.observe(ev, raw, d, startup_replay=startup_replay)
-                if not startup_replay:
-                    self._publish_cockpit_ai_changes()
-                    if learned:
-                        self._pulse_cockpit_ai()
-            except Exception as exc:
-                logging.debug("Cockpit memory event skipped [%s]: %s", ev, exc)
-        if ev == "Shutdown" and not startup_replay:
-            self._handle_cockpit_shutdown()
         self._process_companion_event(ev, raw if isinstance(raw, dict) else {}, d,
                                       startup_replay=startup_replay)
         if ev != "LoadGame" and self.edsm.is_credit_event(ev):
@@ -6205,7 +6019,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.schedule_dashboard_refresh()
                 self._refresh_exploration_window()
                 self._refresh_system_info_progress()
-                self._speak_pending_cockpit_remark()
 
         elif ev in ("Location", "FSDJump", "StartJump") or carrier_jump_player_location:
             # Do not update HUDs during jump charge; wait for arrival.
@@ -6221,14 +6034,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.fss_summary_active = False
                 self.hud_flight_state = "SUPERCRUISE" if jump_type == "supercruise" else "HYPERSPACE"
                 self.update_hud()
-                compass_snapshot = None
-                if not startup_replay:
-                    compass_snapshot = self._compass_gameplay_snapshot()
-                    self._sync_cockpit_intentions(compass_snapshot)
-                self._process_compass_cognition(
-                    ev, raw, d, startup_replay=startup_replay,
-                    snapshot=compass_snapshot,
-                )
                 return
 
             # CarrierJump counts as a jump for the player while ship-docked or
@@ -6353,13 +6158,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._rebuild_scan_index()
             self._rebuild_system_state_from_scan_items()
             self._seed_navigation_scan_progress()
-            if is_jump:
-                # Speak only after the incoming system's persisted scan state is
-                # loaded; otherwise cognitive context can accidentally describe
-                # unresolved bodies from the system we just left.
-                self._announce_system_arrival(incoming_sys, startup_replay=startup_replay)
-                if not startup_replay:
-                    self._speak_pending_cockpit_remark()
 
             if ev == "CarrierJump":
                 log_msg = f"CARRIER JUMP: {self.current_sys}"
@@ -6470,15 +6268,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._refresh_exploration_window()
 
         elif ev == "Docked":
-            memory = getattr(self, "cockpit_memory", None)
-            if memory:
-                # Routine debriefs and stale ambient lines are not useful
-                # while station UI and telemetry already demand attention.
-                memory.clear_pending_topics("session-debrief", "ambient-idle")
-            voice = getattr(self, "voice_callouts", None)
-            if voice and hasattr(voice, "cancel"):
-                for category in ("ambient", "navigation", "exploration", "objectives"):
-                    voice.cancel(category=category)
             station = d.get("StationName") or d.get("station_name", "Unknown")
             stype = d.get("StationType") or d.get("station_type", "")
             self.current_docked = True
@@ -6852,17 +6641,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     "bio_signals_count": d.get("bio_signals_count", 0),
                 }
                 self.body_scan_data[body_id]["predicted_genuses"] = self._bio_predictions_for_scan(self.body_scan_data[body_id])
-                if (not startup_replay
-                        and self.config.get("cockpit_memory_enabled", True)
-                        and getattr(self, "cockpit_memory", None)):
-                    predictions_learned = self.cockpit_memory.observe_bio_predictions(
-                        self.current_sys,
-                        body_name or f"Body {body_id}",
-                        self.body_scan_data[body_id]["predicted_genuses"],
-                    )
-                    if predictions_learned:
-                        self._publish_cockpit_ai_changes()
-                        self._pulse_cockpit_ai()
             
             # Only count scans of stars or planets/moons, not belts.
             if d.get("is_body_scan"):
@@ -7037,18 +6815,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             ev, raw if isinstance(raw, dict) else d,
             startup_replay=startup_replay,
         )
-        compass_snapshot = None
-        if not startup_replay:
-            compass_snapshot = self._compass_gameplay_snapshot()
-            self._sync_cockpit_intentions(compass_snapshot)
-        self._process_compass_cognition(
-            ev, raw, d, startup_replay=startup_replay,
-            snapshot=compass_snapshot,
-        )
-        if ev == "Docked" and not startup_replay:
-            # The Docked cognition pass above may provide one useful station
-            # action. Silence the routine follow-up event burst after that.
-            self._cockpit_docking_quiet_until = time.monotonic() + 20.0
 
     # ── Companion feature state ───────────────────────────────────────────────
 
@@ -7090,8 +6856,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._ui_post(lambda: self.toast_hud.push(
                 title, message, severity=severity, duration_s=duration,
             ))
-        if voice_text:
-            self._speak(voice_text, category=voice_category, key=voice_key)
 
     def _clear_sold_data_warnings(self, biological=False):
         """Cancel risk output that became obsolete during a data sale."""
@@ -7102,20 +6866,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     lambda target=toast: target.dismiss(title="DATA AT RISK"),
                     key="dismiss-data-risk-toast",
                 )
-            except Exception:
-                pass
-        voice = getattr(self, "voice_callouts", None)
-        if voice and hasattr(voice, "cancel"):
-            prefixes = ["data-risk", "advisor:unsold-data"]
-            if biological:
-                prefixes.append("cockpit-context:bio-sell-anticipation")
-            try:
-                voice.cancel(key_prefixes=prefixes)
-            except Exception:
-                pass
-        if biological and getattr(self, "cockpit_memory", None):
-            try:
-                self.cockpit_memory.clear_pending_topics("bio-sell-anticipation")
             except Exception:
                 pass
 
@@ -7938,7 +7688,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                             if row.get("name") == blueprint), {})
                 grade = int(pin.get("target_grade", pin.get("grade", 5)))
                 quantity = max(1, int(pin.get("quantity", 1)))
-                quantity_text = f" for {quantity} modules" if quantity > 1 else ""
                 quantity_badge = f" · {quantity} modules" if quantity > 1 else ""
                 if self.toast_hud:
                     self._ui_post(lambda name=blueprint, target_grade=grade, qty_badge=quantity_badge: self.toast_hud.push(
@@ -7947,14 +7696,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         severity="info",
                         duration_s=12,
                     ))
-                self._speak(
-                    (f"Materials complete for {blueprint}, grade {grade}{quantity_text}.",
-                     f"Engineering inventory reconciled. {blueprint}, grade {grade}{quantity_text}, is ready.",
-                     f"I have confirmed every material for {blueprint}, grade {grade}{quantity_text}.",
-                     f"Fabrication requirements satisfied. We can engineer {blueprint} to grade {grade}{quantity_text}."),
-                    category="objectives", cooldown_s=300,
-                    key=f"engineering-ready:{blueprint}:{grade}",
-                )
 
     def process_batch(self, events):
         startup_batch = any(
@@ -8004,7 +7745,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._startup_recovery_mode = False
             self._freeze_startup_heap()
             self._apply_adaptive_overlay_scene()
-            self._adaptive_startup_briefing()
+            self._adaptive_startup_mode()
             self._publish_expedition_resume_briefing()
             try:
                 self.root.title(f"VOID COMPASS // v{APP_VERSION}")
@@ -8063,7 +7804,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         if survey_changed:
             self._refresh_system_info_progress()
-        self._refresh_cockpit_brain(event="journal_batch")
         self._refresh_commander_profile_window()
         self._refresh_value_ledger_window()
         self._refresh_colonisation_planner_window()

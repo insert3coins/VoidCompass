@@ -24,7 +24,6 @@ OVERLAY_HOTKEY_SPECS = (
     ("cargo", "overlay_hotkey_cargo", "Cargo Manifest", "cargo_hud"),
     ("carrier", "overlay_hotkey_carrier", "Fleet Carrier", "carrier_hud"),
     ("prospector", "overlay_hotkey_prospector", "Prospector Results", "prospector_hud"),
-    ("colony", "overlay_hotkey_colony", "Colony Shopping", "colony_overlay"),
     ("field_bookmark", "overlay_hotkey_field_bookmark", "Save field bookmark", None),
 )
 

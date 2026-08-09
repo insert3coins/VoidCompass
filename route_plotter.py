@@ -10,7 +10,6 @@ from tkinter import ttk
 from config import COLOR_BG, COLOR_PANEL, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT, save_config
 from ui_theme import THEME, ThemedWindowMixin, apply_window, button, configure_ttk, scrollbar, window_surface
 from waypoint_manager import WaypointManager
-from stellar_types import star_type_label
 
 COLOR_BG = THEME.bg
 COLOR_PANEL = THEME.panel
@@ -36,7 +35,8 @@ class RoutePlotter(ThemedWindowMixin):
                  navigation_state_callback=None, copy_waypoint_callback=None,
                  is_active_callback=None, compact=False, flat_navigation=False,
                  section_change_callback=None, persist_config_callback=None,
-                 ui_post_callback=None):
+                 ui_post_callback=None, expedition_state_callback=None,
+                 expedition_action_callback=None):
         self.root = root
         self.edsm = edsm_handler
         self.manager = manager if manager else WaypointManager()
@@ -53,6 +53,8 @@ class RoutePlotter(ThemedWindowMixin):
         self.section_change_callback = section_change_callback
         self.persist_config_callback = persist_config_callback
         self.ui_post_callback = ui_post_callback
+        self.expedition_state_callback = expedition_state_callback
+        self.expedition_action_callback = expedition_action_callback
         self._flat_sections = []
         self._flat_nav_buttons = {}
         self.route_refresh_running = False
@@ -210,63 +212,145 @@ class RoutePlotter(ThemedWindowMixin):
             nav_button.configure(bg=bg, fg=fg)
 
     def _build_route_overview_tab(self, wrapper):
-        summary = tk.Frame(wrapper, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
-        summary.pack(fill=tk.X, pady=(0, 8))
+        hero = tk.Frame(
+            wrapper, bg=COLOR_PANEL, highlightbackground=COLOR_ACCENT,
+            highlightthickness=1,
+        )
+        hero.pack(fill=tk.X, pady=(0, 7))
+        tk.Frame(hero, bg=COLOR_ORANGE, width=4).pack(side=tk.LEFT, fill=tk.Y)
+        hero_body = tk.Frame(hero, bg=COLOR_PANEL)
+        hero_body.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=7)
+        hero_title = tk.Frame(hero_body, bg=COLOR_PANEL)
+        hero_title.pack(fill=tk.X)
+        self.expedition_hero_name = tk.Label(
+            hero_title, text="NO ACTIVE EXPEDITION", font=("Courier", 12, "bold"),
+            fg=COLOR_ACCENT, bg=COLOR_PANEL, anchor="w",
+        )
+        self.expedition_hero_name.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.expedition_hero_status = tk.Label(
+            hero_title, text="STANDBY", font=("Courier", 8, "bold"),
+            fg=THEME.muted, bg=THEME.inset, padx=8, pady=2,
+        )
+        self.expedition_hero_status.pack(side=tk.RIGHT)
+        self.expedition_hero_route = tk.Label(
+            hero_body, text="Start an expedition to track objectives, discoveries and field readiness.",
+            font=("Courier", 8), fg=COLOR_TEXT, bg=COLOR_PANEL, anchor="w",
+        )
+        self.expedition_hero_route.pack(fill=tk.X, pady=(3, 3))
+        progress_row = tk.Frame(hero_body, bg=COLOR_PANEL)
+        progress_row.pack(fill=tk.X)
+        self.expedition_goal_progress = ttk.Progressbar(
+            progress_row, orient=tk.HORIZONTAL, mode="determinate", maximum=100,
+            style="Horizontal.TProgressbar",
+        )
+        self.expedition_goal_progress.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.expedition_goal_text = tk.Label(
+            progress_row, text="0/0 GOALS", font=("Courier", 8, "bold"),
+            fg=THEME.muted, bg=COLOR_PANEL, width=16, anchor="e",
+        )
+        self.expedition_goal_text.pack(side=tk.RIGHT, padx=(8, 0))
+
+        hero_actions = tk.Frame(hero, bg=COLOR_PANEL)
+        hero_actions.pack(side=tk.RIGHT, padx=(0, 8), pady=6)
+        button(hero_actions, "NEW", lambda: self._expedition_action("new"), accent=True).grid(row=0, column=0, padx=2, pady=2)
+        button(hero_actions, "MISSION", lambda: self._expedition_action("mission")).grid(row=0, column=1, padx=2, pady=2)
+        button(hero_actions, "ADD GOAL", lambda: self._expedition_action("add_objective")).grid(row=1, column=0, padx=2, pady=2)
+        button(hero_actions, "REPORT", lambda: self._expedition_action("report")).grid(row=1, column=1, padx=2, pady=2)
+
+        summary = tk.Frame(wrapper, bg=COLOR_BG)
+        summary.pack(fill=tk.X, pady=(0, 7))
         self.overview_metrics = {}
-        for idx, label in enumerate(("GAME ROUTE", "EXPEDITION", "NEXT STOP", "REMAINING")):
-            card = tk.Frame(summary, bg=COLOR_PANEL)
-            card.grid(row=0, column=idx, sticky="nsew", padx=10, pady=8)
-            summary.grid_columnconfigure(idx, weight=1, uniform="route_overview_metrics")
-            tk.Label(card, text=label, font=("Courier", 8, "bold"), fg="#777", bg=COLOR_PANEL, anchor="w").pack(fill=tk.X)
-            value = tk.Label(card, text="-", font=("Courier", 10, "bold"), fg=COLOR_ACCENT if idx < 2 else COLOR_TEXT, bg=COLOR_PANEL, anchor="w")
-            value.pack(fill=tk.X, pady=(2, 0))
+        metric_labels = ("SYSTEMS", "DISTANCE", "JUMPS", "SURVEY", "OBJECTIVES", "UNSOLD DATA")
+        for idx, label in enumerate(metric_labels):
+            card = tk.Frame(
+                summary, bg=COLOR_PANEL, highlightbackground=THEME.border,
+                highlightthickness=1,
+            )
+            card.grid(row=0, column=idx, sticky="nsew", padx=(0, 4) if idx < len(metric_labels) - 1 else 0)
+            summary.grid_columnconfigure(idx, weight=1, uniform="expedition_metrics")
+            tk.Label(card, text=label, font=("Courier", 7, "bold"), fg=THEME.muted, bg=COLOR_PANEL, anchor="w").pack(fill=tk.X, padx=8, pady=(6, 0))
+            value = tk.Label(card, text="-", font=("Courier", 9, "bold"), fg=COLOR_TEXT, bg=COLOR_PANEL, anchor="w")
+            value.pack(fill=tk.X, padx=8, pady=(2, 6))
             self.overview_metrics[label] = value
 
-        lanes = tk.Frame(wrapper, bg=COLOR_BG)
-        lanes.pack(fill=tk.BOTH, expand=True)
-        lanes.grid_columnconfigure(0, weight=1, uniform="route_lanes")
-        lanes.grid_columnconfigure(1, weight=1, uniform="route_lanes")
-        lanes.grid_rowconfigure(0, weight=1)
+        body = tk.Frame(wrapper, bg=COLOR_BG)
+        body.pack(fill=tk.BOTH, expand=True)
+        body.grid_columnconfigure(0, weight=5, uniform="expedition_body")
+        body.grid_columnconfigure(1, weight=5, uniform="expedition_body")
+        body.grid_rowconfigure(0, weight=1)
 
-        game = tk.Frame(lanes, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
-        game.grid(row=0, column=0, sticky="nsew", padx=(0, 4))
-        tk.Label(game, text="LIVE ELITE ROUTE", font=("Courier", 10, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL, anchor="w").pack(fill=tk.X, padx=10, pady=(9, 2))
-        self.game_route_detail = tk.Label(game, text="NavRoute.json has no active route", font=("Courier", 8), fg="#999", bg=COLOR_PANEL, anchor="w")
-        self.game_route_detail.pack(fill=tk.X, padx=10, pady=(0, 6))
-        self.game_route_safety = tk.Label(
-            game, text="ROUTE SAFETY · awaiting a plotted route",
-            font=("Courier", 8, "bold"), fg=THEME.muted, bg=COLOR_PANEL,
-            anchor="w", justify=tk.LEFT, wraplength=470,
+        mission = tk.Frame(body, bg=COLOR_PANEL, highlightbackground=THEME.border, highlightthickness=1)
+        mission.grid(row=0, column=0, sticky="nsew", padx=(0, 4))
+        tk.Label(mission, text="MISSION QUEUE & RECENT ACTIVITY", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL, anchor="w").pack(fill=tk.X, padx=9, pady=(7, 3))
+        self.expedition_mission_list = tk.Listbox(
+            mission, bg=THEME.inset, fg=COLOR_TEXT, font=("Courier", 8),
+            relief=tk.FLAT, highlightthickness=0, activestyle="none",
+            selectbackground=THEME.inset, selectforeground=COLOR_TEXT,
         )
-        self.game_route_safety.pack(fill=tk.X, padx=10, pady=(0, 6))
-        game_list_frame = tk.Frame(game, bg=COLOR_PANEL)
-        game_list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
-        self.game_route_list = tk.Listbox(game_list_frame, bg="#050505", fg=COLOR_TEXT, font=("Courier", 9), relief=tk.FLAT, highlightthickness=1, highlightbackground="#333", selectbackground=COLOR_ACCENT, selectforeground="black", activestyle="none")
-        self.game_route_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        game_sb = scrollbar(game_list_frame, orient=tk.VERTICAL, command=self.game_route_list.yview)
-        game_sb.pack(side=tk.RIGHT, fill=tk.Y)
-        self.game_route_list.config(yscrollcommand=game_sb.set)
+        self.expedition_mission_list.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 7))
 
-        expedition = tk.Frame(lanes, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
-        expedition.grid(row=0, column=1, sticky="nsew", padx=(4, 0))
-        tk.Label(expedition, text="EXPEDITION WAYPOINTS", font=("Courier", 10, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL, anchor="w").pack(fill=tk.X, padx=10, pady=(9, 2))
-        self.expedition_detail = tk.Label(expedition, text="No saved waypoints", font=("Courier", 8), fg="#999", bg=COLOR_PANEL, anchor="w")
-        self.expedition_detail.pack(fill=tk.X, padx=10, pady=(0, 6))
-        expedition_list_frame = tk.Frame(expedition, bg=COLOR_PANEL)
-        expedition_list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
-        self.expedition_route_list = tk.Listbox(expedition_list_frame, bg="#050505", fg=COLOR_TEXT, font=("Courier", 9), relief=tk.FLAT, highlightthickness=1, highlightbackground="#333", selectbackground=COLOR_ACCENT, selectforeground="black", activestyle="none")
-        self.expedition_route_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        expedition_sb = scrollbar(expedition_list_frame, orient=tk.VERTICAL, command=self.expedition_route_list.yview)
-        expedition_sb.pack(side=tk.RIGHT, fill=tk.Y)
-        self.expedition_route_list.config(yscrollcommand=expedition_sb.set)
+        flight = tk.Frame(body, bg=COLOR_PANEL, highlightbackground=THEME.border, highlightthickness=1)
+        flight.grid(row=0, column=1, sticky="nsew", padx=(4, 0))
+        tk.Label(flight, text="CURRENT LEG & FIELD READINESS", font=("Courier", 9, "bold"), fg=COLOR_ORANGE, bg=COLOR_PANEL, anchor="w").pack(fill=tk.X, padx=9, pady=(7, 2))
+        self.expedition_leg_text = tk.Label(
+            flight, text="CURRENT -\nNEXT -", font=("Courier", 8, "bold"),
+            fg=COLOR_TEXT, bg=COLOR_PANEL, anchor="w", justify=tk.LEFT,
+        )
+        self.expedition_leg_text.pack(fill=tk.X, padx=9, pady=(0, 2))
+        self.expedition_progress_canvas = tk.Canvas(
+            flight, height=34, bg=COLOR_PANEL, highlightthickness=0, bd=0,
+        )
+        self.expedition_progress_canvas.pack(fill=tk.X, padx=9, pady=(0, 2))
+        self.expedition_progress_canvas.bind("<Configure>", lambda _event: self._draw_overview_progress())
+        self.game_route_safety = tk.Label(
+            flight, text="ROUTE SAFETY · awaiting navigation evidence",
+            font=("Courier", 8), fg=THEME.muted, bg=COLOR_PANEL,
+            anchor="w", justify=tk.LEFT, wraplength=500,
+        )
+        self.game_route_safety.pack(fill=tk.X, padx=9, pady=(1, 2))
+        self.expedition_return_text = tk.Label(
+            flight, text="RETURN · no return system selected",
+            font=("Courier", 8), fg=THEME.muted, bg=COLOR_PANEL,
+            anchor="w", justify=tk.LEFT, wraplength=500,
+        )
+        self.expedition_return_text.pack(fill=tk.X, padx=9, pady=(1, 2))
+        self.expedition_readiness_text = tk.Label(
+            flight, text="READINESS · awaiting ship telemetry",
+            font=("Courier", 8), fg=THEME.muted, bg=COLOR_PANEL,
+            anchor="w", justify=tk.LEFT, wraplength=500,
+        )
+        self.expedition_readiness_text.pack(fill=tk.X, padx=9, pady=(1, 7))
 
-        actions = tk.Frame(wrapper, bg=COLOR_PANEL, highlightbackground="#333", highlightthickness=1)
-        actions.pack(fill=tk.X, pady=(8, 0))
-        button(actions, "COPY NEXT", self.copy_next_destination, accent=True).pack(side=tk.LEFT, padx=8, pady=8)
-        button(actions, "MANAGE WAYPOINTS", lambda: self.tabs.select(1)).pack(side=tk.LEFT, padx=(0, 8), pady=8)
-        button(actions, "PLOT NEUTRON ROUTE", lambda: self.tabs.select(2)).pack(side=tk.LEFT, padx=(0, 8), pady=8)
-        self.overview_source_lbl = tk.Label(actions, text="Game navigation and saved waypoints remain separate", font=("Courier", 8), fg="#888", bg=COLOR_PANEL)
-        self.overview_source_lbl.pack(side=tk.RIGHT, padx=10)
+        actions = tk.Frame(wrapper, bg=COLOR_PANEL, highlightbackground=THEME.border, highlightthickness=1)
+        actions.pack(fill=tk.X, pady=(7, 0))
+        button(actions, "COPY NEXT", self.copy_next_destination, accent=True).pack(side=tk.LEFT, padx=(7, 4), pady=6)
+        button(actions, "BOOKMARK HERE", lambda: self._expedition_action("bookmark")).pack(side=tk.LEFT, padx=4, pady=6)
+        button(actions, "CAPTAIN'S LOG", lambda: self._expedition_action("logbook")).pack(side=tk.LEFT, padx=4, pady=6)
+        button(actions, "GALACTIC ATLAS", lambda: self._expedition_action("atlas")).pack(side=tk.LEFT, padx=4, pady=6)
+        button(actions, "ROUTE INTELLIGENCE", lambda: self._expedition_action("intelligence")).pack(side=tk.LEFT, padx=4, pady=6)
+        self.overview_source_lbl = tk.Label(
+            actions, text="NAVIGATION STANDBY", font=("Courier", 8, "bold"),
+            fg=THEME.muted, bg=COLOR_PANEL,
+        )
+        self.overview_source_lbl.pack(side=tk.RIGHT, padx=9)
+
+    def _expedition_state(self):
+        if callable(self.expedition_state_callback):
+            try:
+                value = self.expedition_state_callback()
+                if isinstance(value, dict):
+                    return value
+            except Exception:
+                pass
+        return {}
+
+    def _expedition_action(self, action):
+        if callable(self.expedition_action_callback):
+            try:
+                return self.expedition_action_callback(str(action or ""))
+            except Exception:
+                return False
+        return False
 
     def _navigation_state(self):
         if callable(self.navigation_state_callback):
@@ -316,24 +400,103 @@ class RoutePlotter(ThemedWindowMixin):
         }
 
     def _refresh_route_overview(self):
-        if not hasattr(self, "game_route_list"):
+        if not hasattr(self, "expedition_hero_name"):
             return
         values = self._route_overview_values()
-        route = values["route"]
-        game_pending = values["game_pending"]
         waypoints = self.manager.waypoints
         pending = values["pending_waypoints"]
         visited = len(waypoints) - len(pending)
-        self.overview_metrics["GAME ROUTE"].config(text=f"{len(game_pending)} JUMPS" if route else "NO ROUTE")
-        self.overview_metrics["EXPEDITION"].config(text=f"{visited}/{len(waypoints)} COMPLETE" if waypoints else "NO WAYPOINTS")
-        self.overview_metrics["NEXT STOP"].config(text=values["next"] or "-")
-        remaining_bits = []
-        if game_pending:
-            remaining_bits.append(f"{len(game_pending)} jumps")
-        if pending:
-            remaining_bits.append(f"{values['remaining_distance']:,.0f} ly")
-        self.overview_metrics["REMAINING"].config(text=" / ".join(remaining_bits) or "-")
+        command = self._expedition_state()
+        expedition = command.get("expedition") or {}
+        stats = expedition.get("stats") or {}
+        objectives = list(expedition.get("objectives") or [])
+        complete = sum(1 for row in objectives if row.get("status") == "complete")
+        total = len(objectives)
+        active = bool(expedition)
+        status = str(expedition.get("status") or "standby").upper()
+        goal_percent = round(complete * 100 / total) if total else 0
+
+        if active:
+            self.expedition_hero_name.config(text=str(expedition.get("name") or "UNNAMED EXPEDITION").upper())
+            self.expedition_hero_status.config(
+                text=status,
+                fg=THEME.green if status == "ACTIVE" else COLOR_ORANGE if status == "PAUSED" else THEME.muted,
+            )
+            route_bits = [expedition.get("start_system") or values["current"]]
+            if expedition.get("destination"):
+                route_bits.append(expedition.get("destination"))
+            if expedition.get("return_system"):
+                route_bits.append(f"RETURN {expedition.get('return_system')}")
+            self.expedition_hero_route.config(
+                text="  →  ".join(filter(None, route_bits)) or "Route destination not set"
+            )
+        else:
+            self.expedition_hero_name.config(text="NO ACTIVE EXPEDITION")
+            self.expedition_hero_status.config(text="STANDBY", fg=THEME.muted)
+            self.expedition_hero_route.config(
+                text=f"Current system {values['current'] or '-'} · start a named expedition or resume one in Mission Control"
+            )
+        self.expedition_goal_progress["value"] = goal_percent
+        self.expedition_goal_text.config(
+            text=f"{complete}/{total} GOALS · {goal_percent}%" if total else "NO GOALS SET"
+        )
+
+        systems = len(stats.get("systems") or [])
+        distance = float(stats.get("distance_ly") or 0)
+        jumps = int(stats.get("jumps") or 0)
+        fss = int(stats.get("fss_scans") or 0)
+        dss = int(stats.get("dss_maps") or 0)
+        bio = int(stats.get("bio_analyses") or 0)
+        data_min = int(command.get("unsold_min_cr") or 0)
+        data_max = int(command.get("unsold_max_cr") or data_min)
+        data_text = self._compact_credits(data_min)
+        if data_max > data_min:
+            data_text = f"{data_text}-{self._compact_credits(data_max)}"
+        self.overview_metrics["SYSTEMS"].config(text=f"{systems:,}")
+        self.overview_metrics["DISTANCE"].config(text=f"{distance:,.0f} LY")
+        self.overview_metrics["JUMPS"].config(text=f"{jumps:,}")
+        self.overview_metrics["SURVEY"].config(text=f"{fss}F / {dss}D / {bio}B")
+        self.overview_metrics["OBJECTIVES"].config(text=f"{complete}/{total}" if total else "NONE")
+        self.overview_metrics["UNSOLD DATA"].config(text=data_text if data_max else "NONE")
         self.overview_source_lbl.config(text=f"COPY NEXT SOURCE: {values['source']}")
+
+        self.expedition_mission_list.delete(0, tk.END)
+        pending_objectives = [row for row in objectives if row.get("status") != "complete"]
+        for row in pending_objectives[:4]:
+            progress = f"{int(row.get('progress') or 0)}/{max(1, int(row.get('count') or 1))}"
+            self.expedition_mission_list.insert(tk.END, f"GOAL  {progress:<7} {row.get('title') or 'Objective'}")
+            self.expedition_mission_list.itemconfig(tk.END, fg=COLOR_ORANGE)
+        bookmarks = [row for row in command.get("bookmarks") or [] if row.get("status") != "visited"]
+        for row in bookmarks[:2]:
+            location = " · ".join(filter(None, (row.get("system"), row.get("body"))))
+            self.expedition_mission_list.insert(
+                tk.END, f"POI   {str(row.get('priority') or 'Normal').upper():<7} {row.get('title') or location or 'Bookmark'}"
+            )
+            self.expedition_mission_list.itemconfig(tk.END, fg=COLOR_ACCENT)
+        for row in list(command.get("events") or [])[-3:][::-1]:
+            self.expedition_mission_list.insert(
+                tk.END, f"LOG   {str(row.get('kind') or 'EVENT'):<7} {row.get('title') or 'Expedition event'}"
+            )
+            self.expedition_mission_list.itemconfig(tk.END, fg=THEME.muted)
+        if not self.expedition_mission_list.size():
+            self.expedition_mission_list.insert(tk.END, "START  Create an expedition from the current system")
+            self.expedition_mission_list.insert(tk.END, "PLAN   Add goals, a destination and return system")
+            self.expedition_mission_list.insert(tk.END, "FLY    Journal evidence will fill this command centre")
+            for index in range(self.expedition_mission_list.size()):
+                self.expedition_mission_list.itemconfig(index, fg=THEME.muted)
+
+        next_stop = values.get("next") or "No pending route stop"
+        destination = values["state"].get("destination") or expedition.get("destination") or "-"
+        remaining_text = (
+            f"{len(values['game_pending'])} game jumps"
+            if values["game_pending"] else
+            f"{len(pending)} waypoints · {values['remaining_distance']:,.1f} ly"
+            if pending else "route complete / not plotted"
+        )
+        self.expedition_leg_text.config(text=(
+            f"CURRENT  {values['current'] or '-'}\n"
+            f"NEXT     {next_stop}  ·  DEST {destination}  ·  {remaining_text}"
+        ))
         safety = values["state"].get("safety") or {}
         safety_colour = {
             "ok": THEME.green, "warn": COLOR_ORANGE,
@@ -346,60 +509,74 @@ class RoutePlotter(ThemedWindowMixin):
             ),
             fg=safety_colour,
         )
+        return_plan = command.get("return_plan") or {}
+        issues = list(return_plan.get("issues") or [])
+        return_detail = str(return_plan.get("headline") or "SET RETURN · no return destination")
+        if issues:
+            return_detail += f"\n{issues[0]}"
+        self.expedition_return_text.config(
+            text=f"RETURN · {return_detail}",
+            fg=COLOR_ORANGE if issues or return_plan.get("state") == "CAUTION" else THEME.green if return_plan.get("state") == "READY" else THEME.muted,
+        )
+        endurance = command.get("endurance") or {}
+        readiness = str(endurance.get("headline") or "Awaiting ship telemetry")
+        hardware = []
+        for label, key in (("HULL", "hull_percent"), ("FSD", "fsd_health_percent")):
+            value = endurance.get(key)
+            hardware.append(f"{label} {value:g}%" if isinstance(value, (int, float)) else f"{label} ?")
+        hardware.append("AFMU YES" if endurance.get("afmu_installed") else "AFMU NO" if endurance.get("afmu_installed") is False else "AFMU ?")
+        hardware.append("SRV YES" if endurance.get("srv_available") else "SRV NO" if endurance.get("srv_available") is False else "SRV ?")
+        self.expedition_readiness_text.config(
+            text=f"READINESS · {readiness}\n{' · '.join(hardware)}",
+            fg=COLOR_ORANGE if endurance.get("state") == "CAUTION" else THEME.green if endurance.get("state") == "READY" else THEME.muted,
+        )
+        self._overview_progress_state = {
+            "total": len(waypoints) if waypoints else len(values["route"]),
+            "complete": visited if waypoints else max(0, len(values["route"]) - len(values["game_pending"]) - 1),
+            "has_route": bool(waypoints or values["route"]),
+        }
+        self._draw_overview_progress()
 
-        self.game_route_list.delete(0, tk.END)
-        if route:
-            current = values["current"]
-            entry_by_name = {
-                str(row.get("StarSystem") or "").casefold(): row
-                for row in values["entries"] if isinstance(row, dict)
-            }
-            for index, name in enumerate(route):
-                if str(name).casefold() == str(current).casefold():
-                    marker = "CURRENT"
-                elif name == values["next_game"]:
-                    marker = "NEXT"
-                else:
-                    marker = f"{index + 1:02d}"
-                star_class = entry_by_name.get(str(name).casefold(), {}).get("StarClass")
-                suffix = f"  [{star_type_label(star_class)}]" if star_class else ""
-                self.game_route_list.insert(tk.END, f"{marker:<8} {name}{suffix}")
-                row_index = self.game_route_list.size() - 1
-                if marker == "CURRENT":
-                    self.game_route_list.itemconfig(row_index, {"fg": COLOR_ORANGE})
-                elif marker == "NEXT":
-                    self.game_route_list.itemconfig(row_index, {"fg": COLOR_ACCENT})
-            destination = values["state"].get("destination") or route[-1]
-            self.game_route_detail.config(text=f"{len(game_pending)} jumps remaining · destination {destination}")
-        else:
-            self.game_route_list.insert(tk.END, "NO ACTIVE GAME ROUTE")
-            self.game_route_list.itemconfig(0, {"fg": "#777"})
-            self.game_route_detail.config(text="NavRoute.json has no active route")
+    @staticmethod
+    def _compact_credits(value):
+        value = max(0, int(value or 0))
+        if value >= 1_000_000_000:
+            return f"{value / 1_000_000_000:.1f}B"
+        if value >= 1_000_000:
+            return f"{value / 1_000_000:.1f}M"
+        if value >= 1_000:
+            return f"{value / 1_000:.0f}K"
+        return str(value)
 
-        self.expedition_route_list.delete(0, tk.END)
-        if waypoints:
-            next_name = values["next_waypoint"]
-            for index, row in enumerate(waypoints):
-                name = row.get("name") or "Unknown"
-                if row.get("visited", False):
-                    marker = "DONE"
-                elif name == next_name:
-                    marker = "NEXT"
-                else:
-                    marker = f"{index + 1:02d}"
-                note_value = str(row.get("note") or "")
-                note = f" · {note_value[:60]}" if note_value else ""
-                self.expedition_route_list.insert(tk.END, f"{marker:<6} {name}{note}")
-                row_index = self.expedition_route_list.size() - 1
-                if marker == "DONE":
-                    self.expedition_route_list.itemconfig(row_index, {"fg": "#666"})
-                elif marker == "NEXT":
-                    self.expedition_route_list.itemconfig(row_index, {"fg": COLOR_ACCENT})
-            self.expedition_detail.config(text=f"{len(pending)} pending · {visited} complete · {values['remaining_distance']:,.1f} ly remaining")
-        else:
-            self.expedition_route_list.insert(tk.END, "NO SAVED WAYPOINTS")
-            self.expedition_route_list.itemconfig(0, {"fg": "#777"})
-            self.expedition_detail.config(text="No saved waypoint expedition")
+    def _draw_overview_progress(self):
+        canvas = getattr(self, "expedition_progress_canvas", None)
+        if canvas is None:
+            return
+        canvas.delete("all")
+        state = getattr(self, "_overview_progress_state", {}) or {}
+        total = int(state.get("total") or 0)
+        complete = max(0, min(total, int(state.get("complete") or 0)))
+        width = max(120, canvas.winfo_width())
+        y = 17
+        if total <= 0:
+            canvas.create_text(2, y, text="NO ACTIVE ROUTE · plotting remains available in Elite, Waypoints or Neutron",
+                               anchor="w", fill=THEME.dim, font=("Courier", 8))
+            return
+        visible = min(14, total)
+        left, right = 8, width - 8
+        step = (right - left) / max(1, visible - 1)
+        canvas.create_line(left, y, right, y, fill=THEME.border, width=2)
+        for index in range(visible):
+            logical = round(index * (total - 1) / max(1, visible - 1))
+            x = left + index * step
+            if logical < complete:
+                colour, radius = THEME.green, 4
+            elif logical == complete:
+                colour, radius = COLOR_ORANGE, 6
+            else:
+                colour, radius = THEME.dim, 4
+            canvas.create_oval(x - radius, y - radius, x + radius, y + radius,
+                               fill=colour, outline=COLOR_BG, width=1)
 
     def copy_next_destination(self):
         values = self._route_overview_values()

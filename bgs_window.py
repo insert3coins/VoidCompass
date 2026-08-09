@@ -117,6 +117,22 @@ class BGSWindow(ThemedWindowMixin):
         except Exception:
             pass
 
+    def select_section(self, section=None):
+        """Select the optional-operation area requested by the launchpad."""
+        key = str(section or "galaxy").strip().casefold()
+        target = {
+            "galaxy": self._galaxy_tab,
+            "overview": self._galaxy_tab,
+            "powerplay": self._galaxy_tab,
+            "squadron": self._squadron_tab,
+            "bgs": self._history_tab,
+            "history": self._history_tab,
+        }.get(key, self._galaxy_tab)
+        try:
+            self._tabs.select(target)
+        except tk.TclError:
+            pass
+
     def refresh_current(self):
         """Reload the system list and re-render the selected system."""
         if not self.is_open():

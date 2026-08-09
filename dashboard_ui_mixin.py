@@ -35,7 +35,7 @@ _FEED_TAG_COLORS = {
     "EDDN":    "#38bdf8",  # blue   — EDDN market upload status
     "CACHE":   "#7dd3fc",  # sky    — history/cache maintenance
     "MUSIC":   "#22d3ee",  # cyan   — music mood / soft state
-    "AI":      "#c084fc",  # violet — Compass mood / memory evolution
+    "AI":      "#c084fc",  # violet — retained legacy activity entries
     "EXPEDITION":"#d8b4fe", # purple — named expedition progress
     "MILESTONE":"#facc15", # gold — durable exploration milestones
     "VALUABLE":"#FF7100",  # orange — high-value worlds
@@ -213,29 +213,23 @@ class DashboardUIMixin(ThemedWindowMixin):
         ).pack(fill=tk.X, padx=8, pady=(3, 14))
         tk.Frame(self.brand_row, bg=THEME.accent, height=1).pack(fill=tk.X, padx=8)
 
+        # Exploration remains the product surface. Mining is retained as the
+        # one deliberate side activity and lives with the small set of field
+        # tools that directly support long-range survey work.
         nav_groups = (
-            ("CORE", (
+            ("EXPLORATION", (
                 ("⌖", "DASHBOARD", "DASHBOARD", self.show_dashboard_page),
+                ("✦", "EXPLORE", "EXPLORE & SURVEY", self.open_exploration_window),
+                ("◍", "MAP", "GALACTIC ATLAS", self.open_galaxy_map_page),
+            )),
+            ("RECORDS", (
+                ("∿", "ANALYTICS", "ANALYTICS", self.open_analytics_window),
                 ("◉", "PROFILE", "PROFILE", self.open_commander_profile_window),
             )),
-            ("EXPLORE", (
-                ("✦", "EXPLORE", "EXPLORE", self.open_exploration_window),
-                ("⚑", "GALAXY", "GALAXY", self.open_bgs_window),
-            )),
-            ("EXPEDITION", (
-                ("◍", "MAP", "MAP", self.open_galaxy_map_page),
-                ("⬢", "EXPEDITION", "OVERVIEW", self.show_expedition_page),
-                ("∿", "ANALYTICS", "ANALYTICS", self.open_analytics_window),
-                ("★", "ACHIEVE", "ACHIEVEMENTS", self.open_achievement_window),
-                ("⬢", "CARRIER", "CARRIER", self.open_carrier_window),
-                ("⌂", "COLONY", "COLONY", self.open_colonization_window),
-            )),
-            ("OPERATIONS", (
-                ("▦", "OPERATIONS", "OVERVIEW", self.show_operations_page),
-                ("▦", "SPECIALISTS", "SPECIALISTS", self.open_specialists_window),
+            ("FIELD TOOLS", (
+                ("▦", "OPERATIONS", "FIELD TOOLS", self.show_operations_page),
             )),
             ("SYSTEM", (
-                ("⚙", "ENGINEER", "ENGINEER", self.open_engineer_window),
                 ("ⓘ", "ABOUT", "ABOUT", self.show_about_page),
             )),
         )
@@ -642,7 +636,6 @@ class DashboardUIMixin(ThemedWindowMixin):
             ("ROUTE",   "ROUTE"),
             ("SYSTEM",  "SYSTEM"),
             ("MUSIC",   "MUSIC"),
-            ("AI",      "AI"),
             ("DSS",     "DSS"),
             ("DOCK",    "DOCK"),
             ("INFO",    "INFO"),
@@ -852,13 +845,12 @@ class DashboardUIMixin(ThemedWindowMixin):
         )
         self.dashboard_destination_open_btn.pack(side=tk.LEFT, padx=(6, 0))
 
-        # Supporting row: one next action, the local companion, and expedition
+        # Supporting row: one verified exploration action and expedition
         # logistics. These remain secondary to the system and route above.
         active_row = tk.Frame(body, bg=self.UI_BG)
         active_row.pack(fill=tk.X, pady=(0, 8))
-        active_row.grid_columnconfigure(0, weight=4, uniform="active")
+        active_row.grid_columnconfigure(0, weight=7, uniform="active")
         active_row.grid_columnconfigure(1, weight=3, uniform="active")
-        active_row.grid_columnconfigure(2, weight=3, uniform="active")
         active_row.grid_rowconfigure(0, weight=1)
 
         objective_card = self._panel(active_row, border=COLOR_ACCENT)
@@ -873,7 +865,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         )
         self.dashboard_objective_primary.pack(fill=tk.X, padx=12, pady=(7, 2))
         self.dashboard_objective_detail = tk.Label(
-            objective_card, text="Compass will promote verified exploration work as the situation changes.",
+            objective_card, text="Verified exploration work will appear here as the situation changes.",
             fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 8), anchor="nw",
             justify=tk.LEFT, wraplength=390,
         )
@@ -893,35 +885,8 @@ class DashboardUIMixin(ThemedWindowMixin):
         )
         self.dashboard_explore_action_btn.pack(side=tk.LEFT, padx=(6, 0))
 
-        compass_card = self._panel(active_row)
-        compass_card.grid(row=0, column=1, sticky="nsew", padx=(0, 8))
-        compass_head = tk.Frame(compass_card, bg=self.UI_PANEL)
-        compass_head.pack(fill=tk.X, padx=12, pady=(9, 0))
-        self._section_label(compass_head, "COMPASS").pack(side=tk.LEFT)
-        self.dashboard_compass_badge = tk.Label(
-            compass_head, text="CALM", fg="black", bg=self.UI_OK,
-            font=("Segoe UI", 7, "bold"), padx=6, pady=2,
-        )
-        self.dashboard_compass_badge.pack(side=tk.RIGHT)
-        self.dashboard_compass_identity = tk.Label(
-            compass_card, text="Compass · Newly activated", fg=COLOR_ACCENT,
-            bg=self.UI_PANEL, font=("Segoe UI", 10, "bold"), anchor="w",
-        )
-        self.dashboard_compass_identity.pack(fill=tk.X, padx=12, pady=(8, 3))
-        self.dashboard_compass_advice = tk.Label(
-            compass_card, text="Standing by for verified flight context.", fg=COLOR_TEXT,
-            bg=self.UI_PANEL, font=("Segoe UI", 9), anchor="nw", justify=tk.LEFT,
-            wraplength=300,
-        )
-        self.dashboard_compass_advice.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 4))
-        self.dashboard_compass_meta = tk.Label(
-            compass_card, text="", fg=self.UI_MUTED, bg=self.UI_PANEL,
-            font=("Consolas", 8), anchor="w",
-        )
-        self.dashboard_compass_meta.pack(fill=tk.X, padx=12, pady=(2, 9))
-
         self.carrier_panel = self._panel(active_row)
-        self.carrier_panel.grid(row=0, column=2, sticky="nsew")
+        self.carrier_panel.grid(row=0, column=1, sticky="nsew")
         carrier_hdr = tk.Frame(self.carrier_panel, bg=self.UI_PANEL)
         carrier_hdr.pack(fill=tk.X, padx=12, pady=(9, 4))
         self.dashboard_support_heading = self._section_label(carrier_hdr, "EXPEDITION SUPPORT")
@@ -961,16 +926,16 @@ class DashboardUIMixin(ThemedWindowMixin):
         addon_strip = self._panel(body)
         addon_strip.pack(fill=tk.X, pady=(0, 8))
         tk.Label(
-            addon_strip, text="ADD-ON ACTIVITY", fg=self.UI_DIM, bg=self.UI_PANEL,
+            addon_strip, text="FIELD ACTIVITY", fg=self.UI_DIM, bg=self.UI_PANEL,
             font=("Segoe UI", 7, "bold"),
         ).pack(side=tk.LEFT, padx=(12, 8), pady=8)
         self.dashboard_operations_text = tk.Label(
-            addon_strip, text="No active add-on work", fg=self.UI_MUTED,
+            addon_strip, text="No active field work", fg=self.UI_MUTED,
             bg=self.UI_PANEL, font=("Consolas", 8), anchor="w",
         )
         self.dashboard_operations_text.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=6)
         self._action_button(
-            addon_strip, "OPEN ADD-ONS", self.show_operations_page, muted=True,
+            addon_strip, "FIELD TOOLS", self.show_operations_page, muted=True,
         ).pack(side=tk.RIGHT, padx=10, pady=5)
 
         # Exploration log: a curated flight record by default, with the raw
@@ -985,7 +950,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.dashboard_stream_heading.pack(anchor="w")
         self.dashboard_stream_subtitle = tk.Label(
             stream_title,
-            text="Curated discoveries, navigation and Compass activity",
+            text="Curated discoveries, navigation and expedition activity",
             fg=self.UI_DIM, bg=self.UI_PANEL, font=("Segoe UI", 8), anchor="w",
         )
         self.dashboard_stream_subtitle.pack(anchor="w", pady=(2, 0))
@@ -1638,7 +1603,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             self.dashboard_support_heading.config(text="EXPEDITION SUPPORT")
             self.dashboard_stream_heading.config(text="EXPLORATION LOG")
             self.dashboard_stream_subtitle.config(
-                text="Curated discoveries, navigation and Compass activity"
+                text="Curated discoveries, navigation and expedition activity"
             )
             self.dashboard_primary_action_btn.config(
                 text="OPEN EXPLORE", command=self.open_exploration_window,
@@ -1674,7 +1639,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         activity_label = context["deck"].replace(" COMMAND DECK", "")
         self.dashboard_stream_heading.config(text=f"{activity_label} ACTIVITY LOG")
         self.dashboard_stream_subtitle.config(
-            text="Curated mode events, navigation, Compass decisions and support services"
+            text="Curated mode events, navigation and exploration support services"
         )
         self.dashboard_survey_badge.config(
             text=context["badge"], bg=context.get("badge_colour") or COLOR_ACCENT,
@@ -1766,13 +1731,9 @@ class DashboardUIMixin(ThemedWindowMixin):
             ("auto", "Automatic · follow journal activity"),
             ("exploration", "Exploration"),
             ("mining", "Mining"),
-            ("combat", "Combat / AX"),
-            ("ground", "Ground Operations"),
-            ("engineering", "Engineering"),
-            ("powerplay", "Powerplay"),
-            ("carrier", "Fleet Carrier"),
-            ("colony", "Colony / Architect"),
-            ("station", "Station Operations"),
+            ("ground", "Surface Survey"),
+            ("carrier", "Carrier Expedition"),
+            ("station", "Station / Data Sale"),
         )
         for index, (mode, label) in enumerate(options):
             if index == 1:
@@ -1846,41 +1807,6 @@ class DashboardUIMixin(ThemedWindowMixin):
         if legal and str(legal).casefold() not in ("clean", "none"):
             flight_bits.append(str(legal))
         self.dashboard_flight_meta.config(text="  ·  ".join(flight_bits) or "Ship telemetry awaiting journal state")
-
-        # Compass identity and latest verified decision.
-        memory = getattr(self, "cockpit_memory", None)
-        cognition = getattr(self, "compass_cognition", None)
-        persona = str(self.config.get("cockpit_persona") or "Compass")
-        mood = {"name": "calm", "reason": "systems nominal"}
-        summary = {}
-        if memory:
-            try:
-                mood = memory.current_mood()
-                summary = memory.summary()
-            except Exception:
-                pass
-        mood_name = str(mood.get("name") or "calm")
-        mood_colour = self.UI_WARN if mood_name in ("alert", "shaken") else self.UI_OK
-        self.dashboard_compass_badge.config(text=mood_name.upper(), bg=mood_colour)
-        relationship = summary.get("relationship") or "Local flight companion"
-        self.dashboard_compass_identity.config(text=f"{persona} · {relationship}")
-        cognition_state = cognition.status() if cognition else {}
-        decision = cognition_state.get("last_decision") or {}
-        advice = decision.get("line")
-        if advice:
-            advice_text = advice
-        elif decision.get("action") == "silence":
-            advice_text = "Standing by. No observation currently clears the usefulness threshold."
-        elif cognition_state.get("goals"):
-            goal = cognition_state["goals"][0]
-            advice_text = str(goal.get("detail") or goal.get("label") or goal.get("topic") or "Monitoring active objectives.")
-        else:
-            advice_text = "Monitoring verified flight context and active objectives."
-        self.dashboard_compass_advice.config(text=advice_text)
-        self.dashboard_compass_meta.config(text=(
-            f"{summary.get('systems', 0):,} systems · {summary.get('memories', 0):,} memories · "
-            f"{int(cognition_state.get('decisions') or 0):,} decisions"
-        ))
 
         # Choose one truthful exploration priority instead of allowing optional
         # workspaces to displace the app's primary purpose.
@@ -1977,31 +1903,19 @@ class DashboardUIMixin(ThemedWindowMixin):
             )
             self.dashboard_survey_value.config(text="  ·  ".join(value_bits))
 
-        # Active operation roll-up; omit inactive/noise rows.
+        # Mining is the one deliberate non-exploration activity in the focused
+        # product. Broader journal facts remain available to safety systems but
+        # do not compete for Dashboard attention.
         operations = []
-        active_colonies = [
-            project for project in (getattr(self, "colonisation_projects", {}) or {}).values()
-            if not project.get("complete") and not project.get("failed")
-        ]
-        colony_remaining = sum(
-            max(0, int(resource.get("required") or 0) - int(resource.get("provided") or 0))
-            for project in active_colonies for resource in (project.get("resources") or [])
-        )
-        if active_colonies:
-            operations.append(f"ARCHITECT  {len(active_colonies)} site{'s' if len(active_colonies) != 1 else ''} · {colony_remaining:,} T remaining")
-        if mission_rows:
-            operations.append(f"MISSIONS   {len(mission_rows)} active")
-        if cargo:
-            operations.append(f"CARGO      {cargo:,} T aboard")
         specialist_engine = getattr(self, "specialist_engine", None)
         if specialist_engine and specialist_engine.mining_active():
             operations.append("MINING     session active")
         self.dashboard_operations_text.config(
-            text="  ·  ".join(operations[:3]) or "No active add-on work · optional workspaces remain ready"
+            text="  ·  ".join(operations) or "No active field work · survey and mining tools remain ready"
         )
 
-        # The operational queue still drives adaptive mode actions, but only
-        # non-exploration rows are summarised in the add-on strip. It no longer
+        # The focused queue still drives adaptive mode actions, but only
+        # non-exploration rows are summarised in the field strip. It no longer
         # replaces the exploration priority above.
         command_snapshot = {}
         if deck:
@@ -2024,7 +1938,7 @@ class DashboardUIMixin(ThemedWindowMixin):
                 control = "AUTO" if deck_status.get("automatic") else "LOCKED"
                 session_events = int((deck_status.get("session") or {}).get("events") or 0)
                 self.dashboard_mode_detail.config(
-                    text=f"{control} · {session_events:,} context event{'s' if session_events != 1 else ''} · {len(addon_rows)} active add-on{'s' if len(addon_rows) != 1 else ''}"
+                    text=f"{control} · {session_events:,} context event{'s' if session_events != 1 else ''} · {len(addon_rows)} active field task{'s' if len(addon_rows) != 1 else ''}"
                 )
                 self._refresh_adaptive_mode_open_button(deck_status, rows)
 
@@ -2081,8 +1995,18 @@ class DashboardUIMixin(ThemedWindowMixin):
         page.pack(fill=tk.BOTH, expand=True)
         page.tkraise()
         self._active_page = label
+        nav_label = {
+            # Retained tools live behind the exploration/mining Field Tools page.
+            "SPECIALISTS": "OPERATIONS",
+            "ENGINEER": "OPERATIONS",
+            "GALAXY": "OPERATIONS",
+            "COLONY": "OPERATIONS",
+            "ACHIEVE": "OPERATIONS",
+            # Carrier Command supports the Expedition page inside Explore.
+            "CARRIER": "EXPLORE",
+        }.get(label, label)
         for name, btn in self.nav_buttons.items():
-            active = name == label
+            active = name == nav_label
             bg = THEME.panel_alt if active else THEME.header
             btn.master.configure(bg=bg)
             btn.configure(bg=bg, fg=THEME.accent if active else THEME.muted)
@@ -2156,7 +2080,6 @@ class DashboardUIMixin(ThemedWindowMixin):
 
     def _build_workspace_hubs(self):
         """Build small launch pages while leaving full tools first-open lazy."""
-        self.expedition_page = tk.Frame(self.dashboard_host, bg=self.UI_BG)
         self.operations_page = tk.Frame(self.dashboard_host, bg=self.UI_BG)
 
         def hero(page, title, subtitle):
@@ -2172,52 +2095,20 @@ class DashboardUIMixin(ThemedWindowMixin):
             ).pack(fill=tk.X, padx=16, pady=(0, 13))
 
         hero(
-            self.expedition_page,
-            "EXPEDITION COMMAND",
-            "Long-range planning and commander progress · every tool remains directly available",
-        )
-        expedition_grid = tk.Frame(self.expedition_page, bg=self.UI_BG)
-        expedition_grid.pack(fill=tk.BOTH, expand=True, padx=9, pady=(0, 10))
-        for column in range(2):
-            expedition_grid.grid_columnconfigure(column, weight=1, uniform="expedition")
-        for row in range(2):
-            expedition_grid.grid_rowconfigure(row, weight=1)
-        self._workspace_hub_card(
-            expedition_grid, 0, 0, "FLEET CARRIER",
-            "Personal and Squadron Carrier jumps, fuel, finance, services and expedition route.",
-            self.open_carrier_window, "OPEN CARRIER",
-        )
-        self._workspace_hub_card(
-            expedition_grid, 0, 1, "COLONY LOGISTICS",
-            "Architect projects, construction requirements, contributions and cargo planning.",
-            self.open_colonization_window, "OPEN COLONY",
-        )
-        self._workspace_hub_card(
-            expedition_grid, 1, 0, "ANALYTICS",
-            "Session pace, exploration history, balances and local performance trends.",
-            self.open_analytics_window, "OPEN ANALYTICS",
-        )
-        self._workspace_hub_card(
-            expedition_grid, 1, 1, "ACHIEVEMENTS",
-            "Journal-driven progress across exploration, travel and the wider commander career.",
-            self.open_achievement_window, "OPEN ACHIEVEMENTS",
-        )
-
-        hero(
             self.operations_page,
-            "OPERATIONS",
-            "Optional roles kept together without hiding their direct navigation shortcuts",
+            "EXPLORER FIELD TOOLS",
+            "Surface survey, mining and long-range preparation without general career clutter",
         )
         operations_grid = tk.Frame(self.operations_page, bg=self.UI_BG)
         operations_grid.pack(fill=tk.BOTH, expand=True, padx=9, pady=(0, 10))
         for column in range(2):
             operations_grid.grid_columnconfigure(column, weight=1, uniform="operations")
-        for row in range(2):
+        for row in range(3):
             operations_grid.grid_rowconfigure(row, weight=1)
         self._workspace_hub_card(
-            operations_grid, 0, 0, "GROUND OPERATIONS",
-            "Surface coordinates, target bearing and field navigation for planetary work.",
-            self.open_ground_target_window, "OPEN GROUND OPS",
+            operations_grid, 0, 0, "GROUND & EXOBIOLOGY",
+            "Surface navigation, biological sampling, coordinate targets, bearing and distance guidance.",
+            self.open_ground_target_window, "OPEN GROUND TOOL",
         )
         self._workspace_hub_card(
             operations_grid, 0, 1, "MINING",
@@ -2225,18 +2116,20 @@ class DashboardUIMixin(ThemedWindowMixin):
             self.open_mining_window, "OPEN MINING",
         )
         self._workspace_hub_card(
-            operations_grid, 1, 0, "COMBAT / AX",
-            "Observed readiness, ammunition, claims, damage, synthesis and sortie history.",
-            lambda: self.open_specialists_window(section="combat"), "OPEN COMBAT / AX",
+            operations_grid, 1, 0, "ENGINEERING & SYNTHESIS",
+            "Exploration ship materials, FSD injections, synthesis readiness and pinned upgrades.",
+            self.open_engineer_window, "OPEN ENGINEERING",
         )
         self._workspace_hub_card(
-            operations_grid, 1, 1, "SPECIALIST CONSOLE",
-            "Mining, Combat/AX, Carrier logistics and Exobiology role workflows in one place.",
-            self.open_specialists_window, "OPEN SPECIALISTS",
+            operations_grid, 1, 1, "COLONISATION RECON",
+            "Assess surveyed systems as possible expansion candidates without opening logistics management.",
+            lambda: self.open_exploration_window(section="recon"), "OPEN RECON",
         )
-
-    def show_expedition_page(self):
-        self._show_embedded_page("EXPEDITION", self.expedition_page)
+        self._workspace_hub_card(
+            operations_grid, 2, 0, "EXPLORER ACHIEVEMENTS",
+            "Journal-driven milestones for exploration, travel, biology, mining and expeditions.",
+            self.open_achievement_window, "OPEN ACHIEVEMENTS",
+        )
 
     def show_operations_page(self):
         self._show_embedded_page("OPERATIONS", self.operations_page)
@@ -2539,14 +2432,13 @@ class DashboardUIMixin(ThemedWindowMixin):
 
         self.event_filter_row = tk.Frame(feed_wrap, bg=self.UI_PANEL)
         self.event_filter_row.pack(fill=tk.X, pady=(6, 4))
-        for col in range(6):
+        for col in range(5):
             self.event_filter_row.grid_columnconfigure(col, weight=1, uniform="event_filter")
         self.event_filter_buttons = {}
         event_filters = (
             ("ALL", "ALL"),
             ("DISCOVERY", "DISCOVERIES"),
             ("NAVIGATION", "NAVIGATION"),
-            ("COMPASS", "COMPASS"),
             ("ALERTS", "ALERTS"),
             ("OPERATIONS", "OPERATIONS"),
         )
@@ -2655,7 +2547,6 @@ class DashboardUIMixin(ThemedWindowMixin):
                 "ALL": "ALL ACTIVITY",
                 "DISCOVERY": "DISCOVERIES & SURVEYS",
                 "NAVIGATION": "ROUTE & FLIGHT",
-                "COMPASS": "COMPASS ACTIVITY",
                 "ALERTS": "WARNINGS & FAILURES",
                 "OPERATIONS": "OPERATIONS & SERVICES",
             }
@@ -3000,7 +2891,6 @@ class DashboardUIMixin(ThemedWindowMixin):
         groups = {
             "DISCOVERY": {"VALUABLE", "SCAN", "DSS", "BIO", "MILESTONE", "EXPEDITION"},
             "NAVIGATION": {"JUMP", "ROUTE", "SYSTEM", "DOCK"},
-            "COMPASS": {"AI", "MUSIC"},
             "OPERATIONS": {
                 "CARRIER", "EDSM", "EDDN", "ACHIEVEMENT",
                 "PROFILE", "INFO", "CACHE",
@@ -3372,10 +3262,10 @@ class DashboardUIMixin(ThemedWindowMixin):
 
         win = tk.Toplevel(self.root)
         self.ground_target_window = win
-        win.title("Ground Target")
-        win.geometry(self.config.get("ground_target_window_geometry", "430x230+1220+260"))
+        win.title("Surface Survey Trail")
+        win.geometry(self.config.get("ground_target_window_geometry", "650x560+1120+210"))
         win.configure(bg=self.UI_BG)
-        win.minsize(390, 210)
+        win.minsize(560, 480)
 
         def _close():
             try:
@@ -3384,7 +3274,11 @@ class DashboardUIMixin(ThemedWindowMixin):
             except Exception:
                 pass
             self.ground_target_window = None
-            for attr in ("ground_lat_entry", "ground_lon_entry", "ground_status_lbl", "ground_detail_lbl", "ground_popup_toggle_btn"):
+            for attr in (
+                "ground_lat_entry", "ground_lon_entry", "ground_status_lbl",
+                "ground_detail_lbl", "ground_popup_toggle_btn", "ground_trail_canvas",
+                "ground_trail_status_lbl",
+            ):
                 try:
                     setattr(self, attr, None)
                 except Exception:
@@ -3400,7 +3294,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         panel.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         header = tk.Frame(panel, bg=self.UI_PANEL)
         header.pack(fill=tk.X, padx=12, pady=(10, 4))
-        self._section_label(header, "GROUND TARGET").pack(side=tk.LEFT)
+        self._section_label(header, "SURFACE SURVEY TRAIL").pack(side=tk.LEFT)
         self.ground_popup_toggle_btn = tk.Button(
             header,
             text="Popup On" if getattr(self, "ground_popup_enabled", True) else "Popup Off",
@@ -3436,7 +3330,33 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.ground_status_lbl = tk.Label(panel, text="Target: OFF", font=self.UI_MONO_BOLD, fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w")
         self.ground_status_lbl.pack(fill=tk.X, padx=12)
         self.ground_detail_lbl = tk.Label(panel, text="Set a lat/lon target to start tracking.", font=self.UI_MONO, fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w")
-        self.ground_detail_lbl.pack(fill=tk.X, padx=12, pady=(3, 12))
+        self.ground_detail_lbl.pack(fill=tk.X, padx=12, pady=(3, 8))
+
+        trail_head = tk.Frame(panel, bg=self.UI_PANEL)
+        trail_head.pack(fill=tk.X, padx=12, pady=(4, 5))
+        tk.Label(
+            trail_head, text="LOCAL TRAIL", fg=COLOR_ORANGE, bg=self.UI_PANEL,
+            font=("Segoe UI", 8, "bold"),
+        ).pack(side=tk.LEFT)
+        self._action_button(
+            trail_head, "Return to Ship", self.set_ground_target_ship, accent=True,
+        ).pack(side=tk.RIGHT)
+        self._action_button(
+            trail_head, "Clear Trail", self.clear_surface_trail, muted=True,
+        ).pack(side=tk.RIGHT, padx=(0, 7))
+        self.ground_trail_status_lbl = tk.Label(
+            trail_head, text="", fg=self.UI_MUTED, bg=self.UI_PANEL,
+            font=self.UI_MONO, anchor="e",
+        )
+        self.ground_trail_status_lbl.pack(side=tk.RIGHT, padx=10)
+        self.ground_trail_canvas = tk.Canvas(
+            panel, bg="#090c10", highlightbackground=self.UI_BORDER,
+            highlightthickness=1, bd=0, height=230,
+        )
+        self.ground_trail_canvas.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 12))
+        self.ground_trail_canvas.bind(
+            "<Configure>", lambda _event: self._draw_surface_trail(),
+        )
         self.update_ground_target_ui()
 
     def _post_update_result(self, callback):
@@ -3795,6 +3715,108 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.update_ground_target_ui()
         self.add_event_feed_entry("SYSTEM", "Ground target cleared", severity="INFO")
 
+    def set_ground_target_ship(self):
+        ship = getattr(self, "surface_ship_position", None)
+        if not isinstance(ship, dict):
+            if self._widget_alive(getattr(self, "ground_trail_status_lbl", None)):
+                self.ground_trail_status_lbl.config(
+                    text="Landing position unavailable", fg=COLOR_ORANGE,
+                )
+            return
+        self.target_lat = float(ship["lat"])
+        self.target_lon = float(ship["lon"])
+        self.target_latlon_active = True
+        self.config["ground_target_active"] = True
+        self.config["ground_target_lat"] = self.target_lat
+        self.config["ground_target_lon"] = self.target_lon
+        self._save_config_file()
+        for widget, value in (
+            (getattr(self, "ground_lat_entry", None), self.target_lat),
+            (getattr(self, "ground_lon_entry", None), self.target_lon),
+        ):
+            if self._widget_alive(widget):
+                widget.delete(0, tk.END)
+                widget.insert(0, f"{value:.6f}")
+        self.update_ground_target_ui()
+
+    def _draw_surface_trail(self):
+        canvas = getattr(self, "ground_trail_canvas", None)
+        if not self._widget_alive(canvas):
+            return
+        snapshot = self._surface_trail_snapshot()
+        plot = list(snapshot.get("plot") or [])
+        raw_points = list(snapshot.get("points") or [])
+        last_raw = raw_points[-1] if raw_points else {}
+        width = max(300, canvas.winfo_width())
+        height = max(180, canvas.winfo_height())
+        signature = (
+            width, height, len(plot), round(float(snapshot.get("travelled_m") or 0), 1),
+            snapshot.get("return_distance_m"), snapshot.get("return_bearing_deg"),
+            len(snapshot.get("sample_pins") or []),
+            str(getattr(self, "surface_trail_body", "")),
+            round(float(last_raw.get("lat") or 0), 6),
+            round(float(last_raw.get("lon") or 0), 6),
+        )
+        if signature == getattr(self, "_surface_trail_render_signature", None):
+            return
+        self._surface_trail_render_signature = signature
+        canvas.delete("all")
+        for fraction in (0.25, 0.5, 0.75):
+            x = width * fraction
+            y = height * fraction
+            canvas.create_line(x, 0, x, height, fill=self.UI_BORDER, dash=(2, 7))
+            canvas.create_line(0, y, width, y, fill=self.UI_BORDER, dash=(2, 7))
+        if not plot:
+            canvas.create_text(
+                width / 2, height / 2,
+                text=(
+                    "AWAITING PLANET RADIUS\nTrail anchor has been retained"
+                    if raw_points else
+                    "TRAIL BEGINS AFTER TOUCHDOWN\nWalk or drive to record your route"
+                ),
+                fill=self.UI_MUTED, font=self.UI_MONO_BOLD, justify=tk.CENTER,
+            )
+            return
+        east = [float(row.get("east_m") or 0) for row in plot]
+        north = [float(row.get("north_m") or 0) for row in plot]
+        extent = max(75.0, max((abs(value) for value in east + north), default=0.0) * 1.15)
+        scale = min((width - 40) / (extent * 2), (height - 40) / (extent * 2))
+
+        def project(east_m, north_m):
+            return width / 2 + east_m * scale, height / 2 - north_m * scale
+
+        points = [project(east[index], north[index]) for index in range(len(plot))]
+        if len(points) > 1:
+            canvas.create_line(*[coord for point in points for coord in point], fill=COLOR_ACCENT, width=2, smooth=True)
+        for point, row in zip(points, plot):
+            kind = row.get("kind")
+            if kind == "ship":
+                x, y = point
+                canvas.create_polygon(x, y - 8, x + 7, y + 6, x, y + 3, x - 7, y + 6, fill="#090c10", outline=COLOR_ORANGE, width=2)
+            elif kind == "sample":
+                x, y = point
+                canvas.create_oval(x - 4, y - 4, x + 4, y + 4, fill=self.UI_OK, outline="")
+        x, y = points[-1]
+        canvas.create_oval(x - 5, y - 5, x + 5, y + 5, fill=COLOR_ACCENT, outline=COLOR_TEXT, width=1)
+        canvas.create_text(10, 10, anchor="nw", text=f"±{extent:,.0f} m", fill=self.UI_MUTED, font=("Consolas", 8))
+
+    def _update_surface_trail_ui(self):
+        snapshot = self._surface_trail_snapshot()
+        status = getattr(self, "ground_trail_status_lbl", None)
+        if self._widget_alive(status):
+            travelled = self._format_ground_distance(snapshot.get("travelled_m"))
+            distance = snapshot.get("return_distance_m")
+            bearing = snapshot.get("return_bearing_deg")
+            home = (
+                f" · ship {self._format_ground_distance(distance)} @ {bearing:03.0f}°"
+                if distance is not None and bearing is not None else " · ship not anchored"
+            )
+            self._config_label_if_changed(
+                status, text=f"Travelled {travelled}{home}",
+                fg=COLOR_ACCENT if snapshot.get("points") else self.UI_MUTED,
+            )
+        self._draw_surface_trail()
+
     def toggle_ground_popup(self):
         self.ground_popup_enabled = not bool(self.ground_popup_enabled)
         self.config["ground_popup_enabled"] = bool(self.ground_popup_enabled)
@@ -4061,6 +4083,7 @@ class DashboardUIMixin(ThemedWindowMixin):
                 text="Popup On" if self.ground_popup_enabled else "Popup Off",
                 fg=COLOR_TEXT if self.ground_popup_enabled else self.UI_MUTED,
             )
+        self._update_surface_trail_ui()
 
         if not self.target_latlon_active:
             if has_status:

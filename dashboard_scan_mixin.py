@@ -3,9 +3,7 @@ import time
 import threading
 
 import bio_values
-import companion_features
 import compass_operations
-import flight_callouts
 from config import COLOR_ACCENT, COLOR_TEXT
 from stellar_types import star_type_label
 
@@ -208,8 +206,19 @@ class DashboardScanMixin:
         if moved and getattr(self, "bio_sampling", None):
             self._update_sampling_clearance()
 
-        # Only request live ground updates while target tracking is active.
-        needs_live_ground_update = bool(self.on_planet and self.target_latlon_active and moved)
+        if moved and self.on_planet and (
+            getattr(self, "current_in_srv", False) or getattr(self, "current_on_foot", False)
+        ):
+            self._record_surface_trail_point()
+
+        # Trail drawing and target tracking share this coalesced ground update.
+        needs_live_ground_update = bool(
+            self.on_planet and moved and (
+                self.target_latlon_active
+                or bool(getattr(self, "surface_trail", None))
+                or self._widget_alive(getattr(self, "ground_target_window", None))
+            )
+        )
         if on_planet_changed or needs_live_ground_update:
             self._ground_ui_needs_update = True
         vehicle_state_changed = (
@@ -220,18 +229,18 @@ class DashboardScanMixin:
             or was_on_foot != bool(getattr(self, "current_on_foot", False))
         )
         fuel_percent_changed = self._current_fuel_percent() != was_fuel_percent
+        if fuel_percent_changed:
+            self._invalidate_exploration_intelligence()
         if (vehicle_state_changed or hud_state_changed or fuel_percent_changed) and not self.batch_mode:
             self.update_hud()
         if not self.batch_mode:
             self._check_low_fuel()
-            self._check_route_fuel_callout()
             self._check_status_toasts(data, flags, flags2)
         self._perf_spike("_apply_status_update", t0, threshold_ms=20.0)
 
     def _check_status_toasts(self, data, flags, flags2):
         toast = getattr(self, "toast_hud", None)
-        voice_enabled = bool(self.config.get("voice_callouts_enabled", False))
-        if not toast and not voice_enabled:
+        if not toast:
             return
         active = getattr(self, "_toast_status_alerts", set())
 
@@ -267,21 +276,6 @@ class DashboardScanMixin:
                     toast.push(title, message, severity=severity, duration_s=12)
                 if may_emit:
                     emitted[key] = now
-                if may_emit and key in ("overheat", "interdicted"):
-                    spoken = (
-                        (
-                            "Warning. Ship overheating.",
-                            "Thermal limit exceeded. Reduce heat now.",
-                            "Ship temperature is above the safe operating range.",
-                            "Heat warning active. Cooling action recommended.",
-                        ) if key == "overheat" else (
-                            "Warning. Interdiction detected.",
-                            "Frame-shift tether detected. Interdiction in progress.",
-                            "Navigation warning. A hostile interdiction is active.",
-                            "Interdiction confirmed. Escape telemetry is live.",
-                        )
-                    )
-                    self._speak(spoken, key="ship-overheat" if key == "overheat" else "interdiction")
             elif not enabled:
                 active.discard(key)
 
@@ -302,13 +296,6 @@ class DashboardScanMixin:
                     active.add(state_key)
                     if toast:
                         toast.push(f"LOW {label}" if key == "oxygen" else f"LOW {label}", f"{pct:.0f}% remaining", severity="fail" if pct <= 25 else "warn", duration_s=15)
-                    if pct <= 25:
-                        self._speak((
-                            f"Warning. {label.lower()} at {pct:.0f} percent.",
-                            f"Critical suit alert. {label.lower()} has fallen to {pct:.0f} percent.",
-                            f"Suit telemetry reports {pct:.0f} percent {label.lower()} remaining.",
-                            f"Immediate attention. {label.lower()} reserve is now {pct:.0f} percent.",
-                        ), key=state_key)
                 elif not state_key and pct > 55:
                     active.difference_update(old_keys)
 
@@ -321,12 +308,6 @@ class DashboardScanMixin:
                 active.add("suit_temperature")
                 if toast:
                     toast.push("SUIT TEMPERATURE", f"{temperature:.0f} K — environmental hazard", severity="warn", duration_s=15)
-                self._speak((
-                    "Warning. Hazardous suit temperature.",
-                    "Suit thermal limits are outside the safe range.",
-                    "Environmental temperature is hazardous. Seek protection.",
-                    "Thermal exposure warning. The suit cannot sustain this environment indefinitely.",
-                ), key="suit-temperature")
             # Wide recovery band (matching the oxygen/health checks' generous
             # margin above) so ambient temperature hovering near the trigger
             # on a hot/cold world can't flap in and out of a narrow gap and
@@ -355,7 +336,7 @@ class DashboardScanMixin:
         if self.current_docked or self.current_on_foot or self.current_in_srv or self.current_in_fighter:
             return
         toast_hud = getattr(self, "toast_hud", None)
-        if not toast_hud and not self.config.get("voice_callouts_enabled", False):
+        if not toast_hud:
             return
         pct = main / cap
         threshold = float(self.config.get("low_fuel_threshold_pct", 0.25) or 0.25)
@@ -366,54 +347,6 @@ class DashboardScanMixin:
                     toast_hud.push("LOW FUEL", f"Main tank at {int(pct*100)}%  ({main:.1f}/{cap:.1f}T)", severity="warn", duration_s=15)
         elif pct > threshold + 0.05:
             self._low_fuel_warned = False
-
-    def _check_route_fuel_callout(self):
-        """Speak only when the most important route/fuel situation changes."""
-        if (not self.config.get("voice_callouts_enabled", False)
-                or not self.config.get("voice_safety_enabled", True)):
-            return
-        if getattr(self, "is_first_load", True):
-            return
-        # current_fuel_main reflects whichever vehicle is currently controlled —
-        # in SRV/fighter/on-foot it's that vehicle's tiny fuel reading, not the
-        # mothership's, so it reads as near-empty against fuel_capacity_main and
-        # falsely triggers route/scoop warnings. Same guard as _check_low_fuel.
-        if self.current_docked or self.current_on_foot or self.current_in_srv or self.current_in_fighter:
-            return
-        ahead = flight_callouts.route_ahead(
-            getattr(self, "nav_route_entries", None),
-            getattr(self, "current_sys", None),
-            getattr(self, "star_class", None),
-        )
-        samples = list(getattr(self, "_fuel_used_samples", ()) or ())
-        fuel_per_jump = max(samples) if samples else None
-        raw_counts = {
-            symbol: int(item.get("count", 0) if isinstance(item, dict) else item or 0)
-            for symbol, item in ((getattr(self, "engineer_materials", None) or {}).get("raw") or {}).items()
-        }
-        synthesis = companion_features.fsd_injections(raw_counts)
-        advisory = flight_callouts.fuel_advisory(
-            ahead,
-            getattr(self, "current_fuel_main", None),
-            getattr(self, "fuel_capacity_main", None),
-            fuel_per_jump,
-            synthesis,
-        )
-        signature = (
-            f"{advisory['code']}|{getattr(self, 'current_sys', '')}"
-            if advisory else None
-        )
-        if signature == getattr(self, "_fuel_advisory_signature", None):
-            return
-        if advisory:
-            spoken = self._speak(
-                advisory["say"], category="safety", cooldown_s=300,
-                key=f"fuel-route:{signature}",
-            )
-            if spoken:
-                self._fuel_advisory_signature = signature
-        else:
-            self._fuel_advisory_signature = None
 
     def update_scan_hud(self):
         pass  # ScanHUD overlay removed — scan data now lives on the main dashboard

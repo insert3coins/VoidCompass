@@ -26,6 +26,25 @@ MAX_METRIC_SAMPLES = 24
 MAX_GOALS = 8
 MAX_PREDICTIONS = 18
 
+FOCUS_CORE_GOAL_TOPICS = {
+    "exploration", "biology", "survey", "route", "expedition", "data", "signals",
+}
+FOCUS_BLOCKED_TAGS = {
+    "combat", "trade", "powerplay", "mission", "engineering", "colonisation",
+    "legal", "rescue",
+}
+FOCUS_CONTEXT_TAGS = {"mining", "ground", "strategy", "logistics", "cargo", "ship"}
+FOCUS_MODE_TAGS = {
+    "exploration": {"survey", "biology", "signals", "valuable", "route", "data", "navigation"},
+    "mining": {"mining", "cargo", "logistics", "ship", "fuel", "navigation"},
+    "ground": {"ground", "biology", "survey", "signals", "navigation"},
+    "carrier": {"strategy", "logistics", "cargo", "route", "fuel", "navigation"},
+    "station": {"data", "cargo", "fuel", "navigation"},
+}
+FOCUS_HIDDEN_MARKERS = (
+    "combat", "trade", "powerplay", "mission", "engineering", "colonisation", "legal",
+)
+
 MOOD_CLAUSES = {
     "curious": (
         "worth a closer look", "the pattern merits attention",
@@ -123,6 +142,25 @@ class CompassCognition:
     @property
     def enabled(self):
         return bool(self.config.get("cockpit_cognition_enabled", True))
+
+    @property
+    def exploration_focus(self):
+        return bool(self.config.get("cockpit_exploration_focus_enabled", False))
+
+    @staticmethod
+    def _focused_mode(snapshot):
+        mode = str(((snapshot or {}).get("activity") or {}).get("mode") or "general").casefold()
+        return mode if mode in FOCUS_MODE_TAGS else "exploration"
+
+    @staticmethod
+    def _focused_prediction(row):
+        key = str((row or {}).get("key") or "").casefold()
+        return not any(marker in key for marker in FOCUS_HIDDEN_MARKERS)
+
+    @staticmethod
+    def _focused_topic(row):
+        topic = str((row or {}).get("topic") or "").casefold()
+        return not any(marker in topic for marker in FOCUS_HIDDEN_MARKERS)
 
     @staticmethod
     def _empty_state():
@@ -320,14 +358,14 @@ class CompassCognition:
             )
         if refined:
             insights.append(f"Mining contributed {refined} refined tonnes to this session.")
-        if transactions and profit:
+        if not self.exploration_focus and transactions and profit:
             insights.append(f"Trade closed at {profit:,} credits across {transactions} market transactions.")
-        if int(combat_summary.get("victories") or 0):
+        if not self.exploration_focus and int(combat_summary.get("victories") or 0):
             insights.append(
                 f"PvE combat closed with {int(combat_summary.get('victories') or 0)} victories "
                 f"and {int(combat_summary.get('reward_cr') or 0):,} credits recorded."
             )
-        if session_merits or session_delivered:
+        if not self.exploration_focus and (session_merits or session_delivered):
             insights.append(
                 f"Powerplay closed with {session_merits:,} merits and {session_delivered:,} delivered units recorded."
             )
@@ -702,8 +740,23 @@ class CompassCognition:
             self._observe_metric(state, "powerplay_collection_batch", (raw or {}).get("Count"))
         elif event == "PowerplayDeliver":
             self._observe_metric(state, "powerplay_delivery_batch", (raw or {}).get("Count"))
-        state["goals"] = self._goals(snapshot)
+        goals = self._goals(snapshot)
+        if self.exploration_focus:
+            focus_mode = self._focused_mode(snapshot)
+            goals = [
+                goal for goal in goals
+                if goal.get("topic") in FOCUS_CORE_GOAL_TOPICS
+                or (focus_mode == "mining" and goal.get("topic") == "mining")
+                or (focus_mode == "ground" and goal.get("key") == "ground-supplies")
+                or (focus_mode == "carrier" and str(goal.get("key") or "").startswith("carrier-"))
+            ]
+        state["goals"] = goals[:MAX_GOALS]
         new_predictions = self._refresh_predictions(state, memory)
+        if self.exploration_focus:
+            new_predictions = [
+                prediction for prediction in new_predictions
+                if self._focused_prediction(prediction)
+            ]
         for prediction in new_predictions:
             notices.append(
                 f"New pilot prediction: {prediction['label'].lower()} is about "
@@ -901,6 +954,28 @@ class CompassCognition:
                         f"Next recommended action: {next_action}.",
                         f"With the FSS complete, {next_action} is the leading priority.",
                     ), ("survey", "goal", "progress"), category="exploration",
+                    sources=("journal",),
+                ))
+        significance = exploration.get("significance") or {}
+        if event in {"Scan", "SAAScanComplete", "ScanOrganic", "CodexEntry"}:
+            top = significance.get("top") or {}
+            score = int(significance.get("score") or top.get("score") or 0)
+            tier = str(significance.get("tier") or top.get("tier") or "ROUTINE")
+            if score >= 50:
+                subject = top.get("body") or current_system or "this system"
+                reasons = list(top.get("reasons") or [])
+                reason = reasons[0] if reasons else "the combined survey evidence"
+                candidates.append(self._candidate(
+                    f"discovery-significance-{str(current_system or '').casefold()}-{score}", 72,
+                    "The local survey score crossed the rare-discovery threshold using measured facts.",
+                    (
+                        f"{subject} now rates {tier.lower()} in the survey record: {score} out of 100, led by {reason}.",
+                        f"This is not a routine result. {subject} has reached a {score} significance rating; {reason} is the leading factor.",
+                        f"Discovery assessment: {tier.lower()}, {score} out of 100 for {subject}. The strongest evidence is {reason}.",
+                        f"I have marked {subject} as {tier.lower()}; its current significance score is {score}, principally from {reason}.",
+                        f"The survey evidence puts {subject} in the {tier.lower()} tier at {score} out of 100. {reason.capitalize()} stands out.",
+                        f"A notable record is developing here: {subject}, {score} out of 100, with {reason} carrying the most weight.",
+                    ), ("survey", "valuable", "anomaly"), category="exploration",
                     sources=("journal",),
                 ))
         if event == "StartJump":
@@ -1828,6 +1903,13 @@ class CompassCognition:
                 score *= 1.15
             elif tags & operational_tags and "risk" not in tags:
                 score *= 0.70
+        if self.exploration_focus:
+            focus_mode = mode if mode in FOCUS_MODE_TAGS else "exploration"
+            allowed = FOCUS_MODE_TAGS[focus_mode]
+            if tags & FOCUS_BLOCKED_TAGS and "risk" not in tags:
+                score *= 0.18
+            if tags & FOCUS_CONTEXT_TAGS and not tags & allowed and "risk" not in tags:
+                score *= 0.25
         quality = fact_quality if isinstance(fact_quality, dict) else {}
         source_rows = quality.get("sources") or {}
         confidences = [
@@ -1997,18 +2079,30 @@ class CompassCognition:
                     "topic": topic, "confidence": confidence, "resolved": resolved,
                     "offered": int(row.get("offered") or 0),
                 })
+        if self.exploration_focus:
+            useful = [row for row in useful if self._focused_topic(row)]
         useful.sort(key=lambda row: (row["resolved"], abs(row["confidence"] - 0.5)), reverse=True)
+        predictions = list(state.get("predictions") or [])
+        goals = list(state.get("goals") or [])
+        metrics = state.get("metrics") or {}
+        if self.exploration_focus:
+            predictions = [row for row in predictions if self._focused_prediction(row)]
+            goals = [row for row in goals if self._focused_topic(row)]
+            metrics = {
+                key: row for key, row in metrics.items()
+                if not any(marker in str(key).casefold() for marker in FOCUS_HIDDEN_MARKERS)
+            }
         return {
             "enabled": self.enabled,
             "last_decision": state.get("last_decision"),
             "decisions": len(state.get("recent_decisions") or []),
-            "predictions": list(state.get("predictions") or []),
-            "goals": list(state.get("goals") or []),
+            "predictions": predictions,
+            "goals": goals,
             "learned_topics": useful[:8],
             "pending_outcomes": len(state.get("pending_outcomes") or []),
             "metrics": {
                 key: {name: value for name, value in row.items() if name != "samples"}
-                for key, row in (state.get("metrics") or {}).items()
+                for key, row in metrics.items()
             },
             "anomalies": list(state.get("last_anomalies") or [])[-4:],
             "learning_notices": list(state.get("learning_notices") or [])[-4:],

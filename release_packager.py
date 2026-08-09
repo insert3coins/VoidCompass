@@ -1,7 +1,7 @@
 """Create a clean, public Void Compass release from the local test build.
 
 ``dist`` is intentionally a runnable development installation and may contain
-commander profiles, logs, downloaded voices, cached speech and multi-gigabyte
+commander profiles, logs, downloaded data and multi-gigabyte
 databases. This module copies only an explicit public allowlist into a fresh,
 versioned release folder, then creates a platform-native archive and SHA-256
 checksum.
@@ -125,9 +125,6 @@ INSTALL
 
 Void Compass creates configuration, commander profiles, logs and downloaded
 data beside the application. Keep the whole folder together when moving it.
-Piper voice packs are downloaded from inside the app when requested.
-Linux voice playback uses pw-play, paplay,
-aplay or ffplay, whichever is installed.
 
 Linux overlay windows support X11/XWayland topmost positioning. Windows-only
 chroma transparency, mouse passthrough and system-wide hotkeys are disabled;
@@ -146,7 +143,6 @@ INSTALL
 
 Void Compass creates configuration, commander profiles, logs and downloaded
 data beside the application. Keep the whole folder together when moving it.
-Piper voice packs are downloaded from inside the app when requested.
 
 Windows SmartScreen may display an unrecognised-app warning because community
 builds are not code-signed. The ZIP checksum is published alongside this file.
