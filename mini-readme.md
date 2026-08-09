@@ -19,6 +19,7 @@
 *   Added seven Mission Control goal templates: Galactic Region Passport, Valuable Worlds Survey, Odyssey Genus Collection, Local Sector Survey, Codex Fieldwork, Photo Chronicle and Deep Survey.
 *   Expanded the Ground tool into a temporary **Surface Survey Trail** that begins at touchdown, records walking/SRV travel and bio samples, and guides the commander back to the ship without persisting stale trips across profiles or systems.
 *   Rebuilt **Expedition Overview** as a live command centre with goal progress, survey yield, current-leg route tracking, a lightweight route strip, unsold-data exposure, return planning, ship readiness, bookmarks, recent activity and direct mission actions.
+*   Refined the **System Intelligence overlay** into a stable cockpit dossier with larger text, an inhabited-status beacon, primary/body/landable/signal instruments, contextual exploration highlights and compact stellar, human-footprint and authority panels.
 
 ## Earlier releases
 

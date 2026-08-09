@@ -12,7 +12,8 @@ import overlay_chrome
 from stellar_types import star_type_label
 import themes
 
-WIDTH = 520
+WIDTH = 560
+HEIGHT = 386
 
 _CHROMA = "#ff00ff"
 
@@ -97,25 +98,30 @@ def build_system_model(system_name, star_class, body_count,
         signals.append(f"GEO {_safe_int(geo_total)}")
 
     profile = spansh or local_profile
+    profile_star_count = max(0, _safe_int((profile or {}).get("star_count")))
+    profile_planet_count = max(0, _safe_int((profile or {}).get("planet_count")))
+    profile_landable_count = max(0, _safe_int((profile or {}).get("landable_count")))
+    profile_classes = [
+        str(value).strip() for value in (profile or {}).get("star_classes") or ()
+        if value
+    ]
     profile_rows = []
     profile_source = "RESOLVING"
     if profile:
         profile_source = "SYSTEM RECORD" if spansh else "LOCAL SCANS"
-        star_count = max(0, _safe_int(profile.get("star_count")))
-        planet_count = max(0, _safe_int(profile.get("planet_count")))
-        landable_count = max(0, _safe_int(profile.get("landable_count")))
         parts = [
-            _count_label(star_count, "STAR"),
-            _count_label(planet_count, "PLANET"),
+            _count_label(profile_star_count, "STAR"),
+            _count_label(profile_planet_count, "PLANET"),
         ]
-        if landable_count:
-            parts.append(_count_label(landable_count, "LANDABLE BODY", "LANDABLE BODIES"))
+        if profile_landable_count:
+            parts.append(_count_label(
+                profile_landable_count, "LANDABLE BODY", "LANDABLE BODIES",
+            ))
         if signals:
             parts.extend(signals)
         profile_rows.append(" · ".join(parts))
-        classes = [str(value).strip() for value in profile.get("star_classes") or () if value]
-        if len(classes) > 1:
-            profile_rows.append("STELLAR CLASSES · " + " / ".join(classes))
+        if len(profile_classes) > 1:
+            profile_rows.append("STELLAR CLASSES · " + " / ".join(profile_classes))
 
         # Spansh supplies useful whole-system context, but it must not hide the
         # commander's live journal discoveries. Keep this as a compact catalogue
@@ -146,6 +152,7 @@ def build_system_model(system_name, star_class, body_count,
     facility_rows = []
     facility_state = "RESOLVING"
     facility_detected = False
+    specialist_parts = []
     if spansh:
         counts = spansh.get("counts") or {}
         count_parts = []
@@ -162,15 +169,15 @@ def build_system_model(system_name, star_class, body_count,
         facility_state = "DETECTED" if facility_detected else "NONE REPORTED"
         facility_rows.append(" · ".join(count_parts) if count_parts else "NO STATIONS OR CARRIERS REPORTED")
         services = spansh.get("services") or {}
-        service_parts = [
+        specialist_parts = [
             label for key, label in (
                 ("mat_trader", "MATERIAL TRADER"),
                 ("tech_broker", "TECH BROKER"),
                 ("engineer", "ENGINEER"),
             ) if services.get(key)
         ]
-        if service_parts:
-            facility_rows.append("SPECIALISTS · " + " · ".join(service_parts))
+        if specialist_parts:
+            facility_rows.append("SPECIALISTS · " + " · ".join(specialist_parts))
     else:
         facility_rows.append("FACILITY DATA RESOLVING")
 
@@ -216,6 +223,104 @@ def build_system_model(system_name, star_class, body_count,
         badge = "SYSTEM PROFILE"
         badge_tone = "accent"
 
+    primary = str(star_class or "").strip()
+    primary_upper = primary.upper()
+    body_value = str(total) if known else "PENDING"
+    landable_value = str(profile_landable_count) if profile else "PENDING"
+    if _safe_int(bio_total) or _safe_int(geo_total):
+        surface_value = f"{_safe_int(bio_total)} BIO · {_safe_int(geo_total)} GEO"
+        surface_tone = "orange"
+    elif profile:
+        surface_value = "NONE YET"
+        surface_tone = "muted"
+    else:
+        surface_value = "RESOLVING"
+        surface_tone = "dim"
+
+    metrics = (
+        {"label": "PRIMARY", "value": primary_upper or "PENDING", "tone": "accent"},
+        {"label": "BODIES", "value": body_value, "tone": "text" if known else "dim"},
+        {"label": "LANDABLE", "value": landable_value, "tone": "green" if profile_landable_count else "muted" if profile else "dim"},
+        {"label": "SURFACE", "value": surface_value, "tone": surface_tone},
+    )
+
+    notable_tokens = (
+        "BLACK HOLE", "NEUTRON", "WHITE DWARF", "WOLF-RAYET", "CARBON",
+        "SUPERGIANT", "GIANT", "HERBIG", "T TAURI",
+    )
+    if primary_upper and any(token in primary_upper for token in notable_tokens):
+        insight = {
+            "label": "NOTABLE PRIMARY",
+            "text": f"{primary_upper} · elevated stellar-interest profile",
+            "tone": "orange",
+        }
+    elif _safe_int(bio_total):
+        insight = {
+            "label": "EXPLORATION CHARACTER",
+            "text": f"BIOLOGICAL SIGNALS DETECTED · {_safe_int(bio_total)} signal(s) across the current system",
+            "tone": "green",
+        }
+    elif _safe_int(geo_total):
+        insight = {
+            "label": "EXPLORATION CHARACTER",
+            "text": f"GEOLOGICAL ACTIVITY DETECTED · {_safe_int(geo_total)} signal(s) recorded",
+            "tone": "orange",
+        }
+    elif specialist_parts:
+        insight = {
+            "label": "SPECIALIST ACCESS",
+            "text": " · ".join(specialist_parts),
+            "tone": "green",
+        }
+    elif profile_star_count > 1:
+        insight = {
+            "label": "SYSTEM CHARACTER",
+            "text": f"MULTI-STAR ARCHITECTURE · {profile_star_count} stellar bodies catalogued",
+            "tone": "accent",
+        }
+    elif profile_landable_count:
+        insight = {
+            "label": "SURFACE ACCESS",
+            "text": _count_label(
+                profile_landable_count, "LANDABLE BODY", "LANDABLE BODIES",
+            ) + " catalogued",
+            "tone": "accent",
+        }
+    elif edsm_info is not None and spansh is not None and not facility_detected:
+        insight = {
+            "label": "REMOTE SYSTEM",
+            "text": "No human footprint or surface signals currently reported",
+            "tone": "muted",
+        }
+    else:
+        insight = {
+            "label": "INTELLIGENCE SYNC",
+            "text": "Arrival facts ready · external system catalogues resolving",
+            "tone": "muted",
+        }
+
+    source_states = (
+        "JOURNAL LIVE",
+        "EDSM READY" if edsm_info is not None else "EDSM RESOLVING",
+        "SYSTEM RECORD READY" if spansh is not None else "SYSTEM RECORD RESOLVING",
+    )
+    if profile:
+        compact_profile = [
+            f"{profile_star_count} STAR{'S' if profile_star_count != 1 else ''}",
+            f"{profile_planet_count} PLANET{'S' if profile_planet_count != 1 else ''}",
+        ]
+        if profile_landable_count:
+            compact_profile.append(f"LANDABLE {profile_landable_count}")
+        dossier_profile_rows = [" · ".join(compact_profile)]
+        if len(profile_classes) > 1:
+            dossier_profile_rows.append("CLASSES · " + " / ".join(profile_classes))
+    else:
+        dossier_profile_rows = list(profile_rows)
+    dossier_facility_rows = [
+        row[len("SPECIALISTS · "):] if row.startswith("SPECIALISTS · ") else row
+        for row in facility_rows
+    ]
+
     return {
         "system": str(system_name or "Unknown").strip(),
         "primary_star": str(star_class or "").strip(),
@@ -228,6 +333,11 @@ def build_system_model(system_name, star_class, body_count,
         "facility_rows": facility_rows,
         "authority_state": authority_state,
         "authority_rows": authority_rows,
+        "metrics": metrics,
+        "insight": insight,
+        "source_states": source_states,
+        "dossier_profile_rows": dossier_profile_rows,
+        "dossier_facility_rows": dossier_facility_rows,
     }
 
 
@@ -481,19 +591,88 @@ class SystemInfoHUD:
             self._scanned_count,
         )
 
-    def _section(self, y, label, right=""):
-        palette = self._palette
-        self._draw_text(18, y, label, palette["dim"], ("Courier", 7, "bold"))
-        if right:
-            self._draw_text(
-                WIDTH - 18, y, _truncate(right, 34), palette["dim"],
-                ("Courier", 7, "bold"), anchor="e",
-            )
-        return y + 16
+    def _tone(self, name, fallback="text"):
+        return self._palette.get(str(name or ""), self._palette[fallback])
 
-    def _separator(self, y):
-        """Separate sections with whitespace rather than decorative rules."""
-        return y + 12
+    def _status_beacon(self, text, tone):
+        """Draw one restrained angular status plate shared with the HUD language."""
+        palette = self._palette
+        color = self._tone(tone, "accent")
+        right, left = WIDTH - 18, WIDTH - 178
+        top, bottom, chamfer = 10, 32, 7
+        plate = (
+            left + chamfer, top, right - chamfer, top,
+            right, (top + bottom) / 2,
+            right - chamfer, bottom, left + chamfer, bottom,
+            left, (top + bottom) / 2,
+        )
+        self.canvas.create_polygon(
+            plate, fill=palette["inset"], outline=palette["border_soft"], width=2,
+        )
+        self.canvas.create_polygon(plate, fill="", outline=color, width=1)
+        self._draw_text(
+            (left + right) / 2, 21, _truncate(text, 21), color,
+            ("Courier", 9, "bold"), anchor="center",
+        )
+
+    def _instrument(self, x, y, width, metric):
+        palette = self._palette
+        tone = self._tone(metric.get("tone"), "text")
+        self.canvas.create_rectangle(
+            x, y, x + width, y + 51,
+            fill=palette["panel"], outline=palette["border_soft"], width=1,
+        )
+        self.canvas.create_line(x + 1, y + 1, x + 44, y + 1, fill=tone, width=2)
+        self._draw_text(
+            x + 9, y + 14, metric.get("label") or "-", palette["dim"],
+            ("Courier", 9, "bold"),
+        )
+        self._draw_text(
+            x + 9, y + 36, _truncate(metric.get("value"), 17), tone,
+            ("Courier", 10, "bold"),
+        )
+
+    def _detail_panel(self, x, y, width, height, label, state, rows, tone="accent"):
+        palette = self._palette
+        color = self._tone(tone, "accent")
+        state = self._compact_panel_state(state)
+        self.canvas.create_rectangle(
+            x, y, x + width, y + height,
+            fill=palette["panel"], outline=palette["border_soft"], width=1,
+        )
+        self.canvas.create_line(x + 1, y + 1, x + 62, y + 1, fill=color, width=2)
+        self._draw_text(
+            x + 10, y + 15, label, color, ("Courier", 9, "bold"),
+        )
+        self._draw_text(
+            x + width - 10, y + 15, _truncate(state, 19), palette["dim"],
+            ("Courier", 9, "bold"), anchor="e",
+        )
+        visible = list(rows or ())[:2]
+        if not visible:
+            visible = ["NO DETAILS REPORTED"]
+        max_chars = max(20, min(68, int((width - 20) / 7)))
+        for index, row in enumerate(visible):
+            self._draw_text(
+                x + 10, y + 42 + index * 21, _truncate(row, max_chars),
+                palette["text"] if index == 0 else palette["muted"],
+                ("Courier", 9, "bold"),
+            )
+
+    @staticmethod
+    def _compact_panel_state(state):
+        state = str(state or "").strip().upper()
+        if state.startswith("RECORD + LIVE"):
+            try:
+                count = state.split("·", 1)[1].strip().split()[0]
+            except (IndexError, AttributeError):
+                count = ""
+            return f"LIVE {count}".strip()
+        if state == "SYSTEM RECORD":
+            return "RECORD"
+        if state == "LOCAL SCANS":
+            return "LIVE"
+        return _truncate(state, 15)
 
     def _redraw(self, force=False):
         palette = self._palette
@@ -502,67 +681,76 @@ class SystemInfoHUD:
             return
         self._last_model = model
 
-        sections = (
-            model["profile_rows"], model["facility_rows"], model["authority_rows"],
-        )
-        total_h = 89 + sum(28 + len(rows) * 17 for rows in sections) + 8
-
-        self.canvas.config(width=WIDTH, height=total_h)
-        self.win.geometry(f"{WIDTH}x{total_h}")
+        self.canvas.config(width=WIDTH, height=HEIGHT)
+        self.win.geometry(f"{WIDTH}x{HEIGHT}")
         self.canvas.delete("all")
         overlay_chrome.draw_chrome(
-            self.canvas, WIDTH, total_h, accent=palette["accent"], bracket_len=10,
-            scanlines=False,
+            self.canvas, WIDTH, HEIGHT, accent=palette["accent"], bracket_len=12,
+            scanlines=True, scanline_step=4,
         )
 
         self._draw_text(
-            18, 18, "SYSTEM INTELLIGENCE", palette["accent"],
+            18, 20, "SYSTEM INTELLIGENCE", palette["accent"],
+            ("Courier", 10, "bold"),
+        )
+        self._status_beacon(model["badge"], model["badge_tone"])
+        self._draw_text(
+            18, 51, _truncate(model["system"].upper(), 52), palette["text"],
+            ("Courier", 14, "bold"),
+        )
+        self._draw_text(
+            18, 75, _truncate(
+                "ARRIVAL DOSSIER · " + " · ".join(model.get("source_states") or ()), 70,
+            ),
+            palette["muted"], ("Courier", 9, "bold"),
+        )
+
+        metrics = list(model.get("metrics") or ())
+        gap = 6
+        card_w = (WIDTH - 36 - gap * 3) / 4
+        for index, metric in enumerate(metrics[:4]):
+            self._instrument(18 + index * (card_w + gap), 89, card_w, metric)
+
+        insight = model.get("insight") or {}
+        insight_tone = self._tone(insight.get("tone"), "accent")
+        self.canvas.create_rectangle(
+            18, 149, WIDTH - 18, 191,
+            fill=palette["panel"], outline=palette["border_soft"], width=1,
+        )
+        self.canvas.create_rectangle(18, 149, 22, 191, fill=insight_tone, outline="")
+        self._draw_text(
+            31, 162, insight.get("label") or "SYSTEM CHARACTER", insight_tone,
             ("Courier", 9, "bold"),
         )
-        badge_color = palette.get(model["badge_tone"], palette["accent"])
         self._draw_text(
-            WIDTH - 18, 18, model["badge"], badge_color,
-            ("Courier", 8, "bold"), anchor="e",
+            31, 181, _truncate(insight.get("text"), 67), palette["text"],
+            ("Courier", 9, "bold"),
         )
-        self._draw_text(
-            18, 45, _truncate(model["system"].upper(), 49), palette["text"],
-            ("Courier", 11, "bold"),
-        )
-        primary = model["primary_star"].upper() or "CLASSIFICATION PENDING"
-        self._draw_text(
-            18, 64, _truncate(f"PRIMARY · {primary}", 43), palette["muted"],
-            ("Courier", 8, "bold"),
-        )
-        body_total = model.get("body_total")
-        total_label = _count_label(body_total, "BODY", "BODIES") if body_total else "BODY COUNT PENDING"
-        self._draw_text(
-            WIDTH - 18, 64, total_label, palette["muted"],
-            ("Courier", 8, "bold"), anchor="e",
-        )
-        y = self._section(89, "SYSTEM PROFILE", model["profile_source"])
-        for row in model["profile_rows"]:
-            color = palette["text"] if model["profile_source"] != "RESOLVING" else palette["dim"]
-            self._draw_text(18, y, _truncate(row, 65), color, ("Courier", 8, "bold"))
-            y += 17
-        y = self._separator(y)
 
-        y = self._section(y, "HUMAN FOOTPRINT", model["facility_state"])
-        for index, row in enumerate(model["facility_rows"]):
-            color = palette["orange"] if index > 0 else (
-                palette["text"] if model["facility_state"] != "RESOLVING" else palette["dim"]
-            )
-            self._draw_text(18, y, _truncate(row, 65), color, ("Courier", 8, "bold"))
-            y += 17
-        y = self._separator(y)
-
-        y = self._section(y, "LOCAL AUTHORITY", model["authority_state"])
-        for index, row in enumerate(model["authority_rows"]):
-            color = palette["text"] if index == 0 and model["authority_state"] != "RESOLVING" else palette["muted"]
-            if model["authority_state"] == "RESOLVING":
-                color = palette["dim"]
-            self._draw_text(18, y, _truncate(row, 65), color, ("Courier", 8, "bold"))
-            y += 17
-        self._separator(y)
+        panel_gap = 8
+        panel_w = (WIDTH - 36 - panel_gap) / 2
+        self._detail_panel(
+            18, 201, panel_w, 88,
+            "STELLAR CHARACTER", model["profile_source"],
+            model.get("dossier_profile_rows") or model["profile_rows"],
+            tone="accent",
+        )
+        facility_tone = "orange" if model["facility_state"] == "DETECTED" else "muted"
+        self._detail_panel(
+            18 + panel_w + panel_gap, 201, panel_w, 88,
+            "HUMAN FOOTPRINT", model["facility_state"],
+            model.get("dossier_facility_rows") or model["facility_rows"],
+            tone=facility_tone,
+        )
+        authority_tone = (
+            "green" if model["authority_state"].startswith("POP")
+            or model["authority_state"] == "INHABITED" else "muted"
+        )
+        self._detail_panel(
+            18, 298, WIDTH - 36, 75,
+            "LOCAL AUTHORITY", model["authority_state"], model["authority_rows"],
+            tone=authority_tone,
+        )
 
     def apply_theme(self, palette=None):
         """Apply the active commander palette without resetting visibility."""
