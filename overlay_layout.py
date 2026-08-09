@@ -79,6 +79,10 @@ OVERLAY_ENABLE_KEYS = {
     "colony_overlay": "colony_overlay_enabled",
 }
 
+# Retained internally so existing profile data and old releases remain
+# readable, but no longer offered by the exploration/mining cockpit catalogue.
+HIDDEN_LEGACY_OVERLAYS = {"colony_overlay"}
+
 
 def _position_geometry(x, y):
     """Return absolute Tk coordinates, including negative virtual-screen values."""
@@ -124,6 +128,8 @@ class OverlayLayoutStudio:
 
     def _overlay_records(self):
         for attr, x_key, y_key in self.app._OVERLAY_POSITION_SPECS:
+            if attr in HIDDEN_LEGACY_OVERLAYS:
+                continue
             overlay = getattr(self.app, attr, None)
             window = getattr(overlay, "win", overlay)
             if window is not None:

@@ -606,8 +606,6 @@ class CommanderProfileWindow(ThemedWindowMixin):
                 ("Companion State", self.config.get("companion_state_file", "")),
                 ("Achievements", get_profile_file(profile_key, "achievements_state.json")),
                 ("Captain's Log", get_profile_file(profile_key, "captains_log.json")),
-                ("Compass Memory", get_profile_file(profile_key, "cockpit_ai_memory.json")),
-                ("Compass Brain", get_profile_file(profile_key, "cockpit_ai_brain.json")),
             ]
             model["folder_size"] = self._cached_folder_size(model["profile_dir"], force=force)
             model["queue_count"] = self._queue_count()
@@ -910,7 +908,7 @@ class CommanderProfileWindow(ThemedWindowMixin):
         actions = self._panel(left)
         actions.pack(fill=tk.X, pady=(0, 8))
         self._section_label(actions, "PROFILE CUSTODY")
-        tk.Label(actions, text="Backups include the active commander's databases, route state, achievements, Compass memory, Captain's Log and companion data.", wraplength=590, justify=tk.LEFT, font=("Consolas", 8), fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w").pack(fill=tk.X, padx=12, pady=(0, 8))
+        tk.Label(actions, text="Backups include the active commander's databases, route state, achievements, Captain's Log and exploration data.", wraplength=590, justify=tk.LEFT, font=("Consolas", 8), fg=self.UI_MUTED, bg=self.UI_PANEL, anchor="w").pack(fill=tk.X, padx=12, pady=(0, 8))
         action_row = tk.Frame(actions, bg=self.UI_PANEL)
         action_row.pack(fill=tk.X, padx=12, pady=(0, 10))
         self._button(action_row, "Open Profile Folder", self._open_profile_folder, accent=True).pack(side=tk.LEFT)

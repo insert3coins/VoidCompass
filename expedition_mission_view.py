@@ -7,7 +7,7 @@ import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from expedition_manager import OBJECTIVE_KINDS
+from expedition_manager import OBJECTIVE_KINDS, OBJECTIVE_TEMPLATES
 from ui_theme import THEME, button, configure_ttk, scrollbar
 
 
@@ -44,6 +44,7 @@ class ExpeditionMissionView:
             bg=THEME.panel, font=("Segoe UI", 9, "bold"),
         ).pack(side=tk.LEFT, padx=10, pady=8)
         button(toolbar, "NEW", self._new_expedition, accent=True).pack(side=tk.LEFT, padx=(4, 6), pady=5)
+        button(toolbar, "TEMPLATES", self._objective_templates).pack(side=tk.LEFT, padx=(0, 6), pady=5)
         self.status_btn = button(toolbar, "PAUSE / RESUME", self._toggle_status)
         self.status_btn.pack(side=tk.LEFT, padx=(0, 6), pady=5)
         button(toolbar, "COMPLETE", self._complete_expedition).pack(side=tk.LEFT, padx=(0, 6), pady=5)
@@ -348,6 +349,60 @@ class ExpeditionMissionView:
             self._changed()
 
         button(dialog, "ADD OBJECTIVE", add, accent=True).pack(pady=14)
+
+    def _objective_templates(self):
+        expedition = self._selected_expedition()
+        if not expedition:
+            messagebox.showinfo(
+                "Expedition Templates", "Select or create an expedition first.",
+                parent=self.parent,
+            )
+            return
+        dialog = self._dialog("Expedition Goal Templates", "600x430")
+        tk.Label(
+            dialog, text="MISSION TEMPLATE", fg=THEME.orange, bg=THEME.bg,
+            font=("Segoe UI", 9, "bold"),
+        ).pack(anchor="w", padx=18, pady=(16, 5))
+        keys = tuple(OBJECTIVE_TEMPLATES)
+        names = {row["name"]: key for key, row in OBJECTIVE_TEMPLATES.items()}
+        selected = tk.StringVar(value=OBJECTIVE_TEMPLATES[keys[0]]["name"] if keys else "")
+        chooser = ttk.Combobox(
+            dialog, textvariable=selected, values=tuple(names), state="readonly",
+            style="Mission.TCombobox",
+        )
+        chooser.pack(fill=tk.X, padx=18, ipady=3)
+        description = tk.Label(
+            dialog, text="", fg=THEME.text, bg=THEME.inset,
+            font=("Cascadia Mono", 9), justify=tk.LEFT, anchor="nw",
+            wraplength=540, padx=12, pady=12,
+            highlightbackground=THEME.border, highlightthickness=1,
+        )
+        description.pack(fill=tk.BOTH, expand=True, padx=18, pady=14)
+
+        def render(_event=None):
+            template = OBJECTIVE_TEMPLATES.get(names.get(selected.get(), "")) or {}
+            objectives = template.get("objectives") or ()
+            kinds = [OBJECTIVE_KINDS.get(kind, kind) for kind, _target, _count in objectives]
+            description.config(text=(
+                f"{template.get('description') or ''}\n\n"
+                f"ADDS {len(objectives)} OBJECTIVE(S)\n" + "\n".join(f"· {kind}" for kind in kinds)
+            ))
+
+        def apply_template():
+            added = self.manager.apply_objective_template(
+                expedition["id"], names.get(selected.get(), ""),
+            )
+            dialog.destroy()
+            self._changed()
+            messagebox.showinfo(
+                "Expedition Templates",
+                f"Added {len(added)} new objective(s) to {expedition.get('name') or 'the expedition'}.",
+                parent=self.parent,
+            )
+
+        chooser.bind("<<ComboboxSelected>>", render)
+        render()
+        button(dialog, "ADD TO EXPEDITION", apply_template, accent=True).pack(pady=(0, 16))
 
     def _add_current_bookmark(self):
         expedition = self._selected_expedition()

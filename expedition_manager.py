@@ -5,10 +5,12 @@ from __future__ import annotations
 import copy
 from datetime import datetime, timezone
 import json
+import math
 import os
 import threading
 import uuid
 
+from galactic_regions import find_region
 from persistence_queue import persistence_queue
 
 
@@ -22,19 +24,69 @@ MAX_FACTS_PER_KIND = 5000
 OBJECTIVE_KINDS = {
     "reach_system": "Reach system",
     "fss_system": "Complete system FSS",
+    "sector_fss_count": "Complete FSS surveys inside expedition sector",
     "dss_body": "Map body with DSS",
     "dss_count": "Map bodies with DSS",
     "bio_species": "Analyse biological species",
+    "bio_genus": "Complete biological genus",
     "bio_count": "Complete biological analyses",
     "codex_category": "Record Codex category",
     "codex_count": "Record Codex entries",
     "screenshot_system": "Capture system screenshot",
     "screenshot_count": "Capture screenshots",
     "visit_region": "Record galactic region",
+    "region_count": "Visit distinct galactic regions",
     "valuable_count": "Find valuable worlds",
     "first_discovery_count": "Find undiscovered bodies",
     "recon_system": "Complete system recon",
     "manual": "Manual objective",
+}
+
+OBJECTIVE_TEMPLATES = {
+    "regional_passport": {
+        "name": "Galactic Region Passport",
+        "description": "Visit all 42 Universal Cartographics regions using journal-confirmed arrivals.",
+        "objectives": (("region_count", "", 42),),
+    },
+    "valuable_worlds": {
+        "name": "Valuable Worlds Survey",
+        "description": "Record ten valuable or terraformable worlds.",
+        "objectives": (("valuable_count", "", 10),),
+    },
+    "biology_collection": {
+        "name": "Odyssey Genus Collection",
+        "description": "Complete one analysis from each major Odyssey biological genus.",
+        "objectives": tuple(
+            ("bio_genus", genus, 1) for genus in (
+                "Aleoida", "Bacterium", "Cactoida", "Clypeus", "Concha",
+                "Electricae", "Fonticulua", "Frutexa", "Fumerola", "Fungoida",
+                "Osseus", "Recepta", "Stratum", "Tubus", "Tussock",
+            )
+        ),
+    },
+    "sector_survey": {
+        "name": "Local Sector Survey",
+        "description": "Complete the FSS survey in twenty-five systems inside a chosen sector.",
+        "objectives": (("sector_fss_count", "", 25),),
+    },
+    "codex_fieldwork": {
+        "name": "Codex Fieldwork",
+        "description": "Record twenty-five distinct Codex entries.",
+        "objectives": (("codex_count", "", 25),),
+    },
+    "photo_chronicle": {
+        "name": "Expedition Photo Chronicle",
+        "description": "Capture twenty-five journal-confirmed expedition screenshots.",
+        "objectives": (("screenshot_count", "", 25),),
+    },
+    "deep_survey": {
+        "name": "Deep Survey",
+        "description": "Combine complete systems, DSS mappings, biology and valuable discoveries.",
+        "objectives": (
+            ("fss_system", "", 20), ("dss_count", "", 20),
+            ("bio_count", "", 10), ("valuable_count", "", 5),
+        ),
+    },
 }
 
 SUPPORTED_EVENTS = frozenset({
@@ -177,6 +229,20 @@ class ExpeditionManager:
             event for event in (row.get("events") or []) if isinstance(event, dict)
         ][-MAX_EVENTS:]
         row["stats"] = self._bounded_stats(row.get("stats"))
+        plan = row.get("sector_plan")
+        if isinstance(plan, dict) and isinstance(plan.get("center"), (list, tuple)):
+            try:
+                row["sector_plan"] = {
+                    "name": str(plan.get("name") or "Expedition sector")[:100],
+                    "center": [round(float(plan["center"][index]), 5) for index in range(3)],
+                    "radius_ly": max(25.0, min(5000.0, _number(plan.get("radius_ly"), 500))),
+                    "cell_size_ly": max(10.0, min(1000.0, _number(plan.get("cell_size_ly"), 100))),
+                    "updated": str(plan.get("updated") or _stamp()),
+                }
+            except (IndexError, TypeError, ValueError):
+                row["sector_plan"] = None
+        else:
+            row["sector_plan"] = None
         return row
 
     def snapshot(self):
@@ -243,6 +309,7 @@ class ExpeditionManager:
             "dss_efficient": 0, "bio_analyses": 0, "codex": 0,
             "signals": 0, "screenshots": 0, "valuable_worlds": 0,
             "first_discoveries": 0, "recon": 0,
+            "regions": 0,
             "facts": {},
         }
 
@@ -262,6 +329,7 @@ class ExpeditionManager:
                 "destination": str(destination or "")[:120],
                 "return_system": str(return_system or "")[:120],
                 "objectives": [], "events": [], "stats": self._stats(),
+                "sector_plan": None,
             }
             # A named expedition is always created during an active
             # VoidCompass session. Future LoadGame records count subsequent
@@ -347,6 +415,82 @@ class ExpeditionManager:
             expedition["updated"] = _stamp()
         self.save()
         return copy.deepcopy(objective)
+
+    def apply_objective_template(self, expedition_id, template_key):
+        template = OBJECTIVE_TEMPLATES.get(str(template_key or ""))
+        if not template:
+            return []
+        added = []
+        with self.lock:
+            expedition = self._find_ref(expedition_id)
+            if not expedition:
+                return []
+            rows = expedition.setdefault("objectives", [])
+            existing = {
+                (str(row.get("kind") or ""), str(row.get("target") or "").casefold())
+                for row in rows
+            }
+            for kind, target, count in template["objectives"]:
+                identity = (kind, str(target or "").casefold())
+                if identity in existing:
+                    continue
+                objective = {
+                    "id": uuid.uuid4().hex[:10], "kind": kind,
+                    "title": self._objective_title(kind, target, count),
+                    "target": str(target or "")[:200], "system": "", "body": "",
+                    "count": max(1, _integer(count, 1)), "progress": 0,
+                    "status": "pending", "automatic": True,
+                    "notes": f"Template: {template['name']}",
+                    "created": _stamp(), "completed": None, "evidence": [],
+                }
+                rows.append(objective)
+                added.append(copy.deepcopy(objective))
+                existing.add(identity)
+            expedition["objectives"] = rows[-MAX_OBJECTIVES:]
+            expedition["updated"] = _stamp()
+        if added:
+            self.save()
+        return added
+
+    def set_sector_plan(self, expedition_id, center, radius_ly=500, cell_size_ly=100,
+                        name="Expedition sector"):
+        if not isinstance(center, (list, tuple)) or len(center) < 3:
+            raise ValueError("A three-coordinate sector centre is required")
+        plan = {
+            "name": str(name or "Expedition sector").strip()[:100],
+            "center": [round(float(center[index]), 5) for index in range(3)],
+            "radius_ly": max(25.0, min(5000.0, _number(radius_ly, 500))),
+            "cell_size_ly": max(10.0, min(1000.0, _number(cell_size_ly, 100))),
+            "updated": _stamp(),
+        }
+        with self.lock:
+            expedition = self._find_ref(expedition_id)
+            if not expedition:
+                return None
+            expedition["sector_plan"] = plan
+            expedition["updated"] = _stamp()
+        self.save()
+        return copy.deepcopy(plan)
+
+    def clear_sector_plan(self, expedition_id):
+        with self.lock:
+            expedition = self._find_ref(expedition_id)
+            if not expedition:
+                return False
+            expedition["sector_plan"] = None
+            expedition["updated"] = _stamp()
+        self.save()
+        return True
+
+    def set_return_system(self, expedition_id, system):
+        with self.lock:
+            expedition = self._find_ref(expedition_id)
+            if not expedition:
+                return False
+            expedition["return_system"] = str(system or "").strip()[:120]
+            expedition["updated"] = _stamp()
+        self.save()
+        return True
 
     def toggle_objective(self, expedition_id, objective_id):
         with self.lock:
@@ -492,6 +636,7 @@ class ExpeditionManager:
                 raw_body or context.get("body") or context.get("body_name")
                 or generic_body or ""
             ),
+            "position": raw.get("StarPos") or context.get("star_pos") or context.get("position"),
         }
 
     @staticmethod
@@ -637,6 +782,25 @@ class ExpeditionManager:
                     lambda objective: _same(objective.get("target") or objective.get("system"), system),
                     f"Arrived in {system}",
                 )
+                position = facts.get("position")
+                region = None
+                if isinstance(position, (list, tuple)) and len(position) >= 3:
+                    try:
+                        region = find_region(*(float(position[index]) for index in range(3)))
+                    except (TypeError, ValueError):
+                        region = None
+                if region and self._new_fact(stats, "regions", region[0]):
+                    stats["regions"] = _integer(stats.get("regions")) + 1
+                    completed += self._advance(
+                        expedition, raw, "region_count", lambda _objective: True,
+                        f"Entered region {region[0]:02d} {region[1]}",
+                    )
+                    completed += self._advance(
+                        expedition, raw, "visit_region",
+                        lambda objective: _same(objective.get("target"), region[1])
+                        or _same(objective.get("target"), str(region[0])),
+                        f"Entered region {region[0]:02d} {region[1]}",
+                    )
                 changed = True
             elif event == "FSSDiscoveryScan":
                 fact = raw.get("SystemAddress") or system
@@ -653,6 +817,25 @@ class ExpeditionManager:
                         and self._objective_matches_context(objective, system, body),
                         f"FSS identified all {_integer(raw.get('Count'))} bodies in {system}",
                     )
+                    plan = expedition.get("sector_plan") or {}
+                    position = facts.get("position")
+                    inside_sector = False
+                    if (
+                        isinstance(position, (list, tuple)) and len(position) >= 3
+                        and isinstance(plan.get("center"), (list, tuple))
+                        and len(plan["center"]) >= 3
+                    ):
+                        try:
+                            dx = float(position[0]) - float(plan["center"][0])
+                            dz = float(position[2]) - float(plan["center"][2])
+                            inside_sector = math.hypot(dx, dz) <= float(plan.get("radius_ly") or 0)
+                        except (TypeError, ValueError):
+                            inside_sector = False
+                    if inside_sector:
+                        completed += self._advance(
+                            expedition, raw, "sector_fss_count", lambda _objective: True,
+                            f"Completed sector FSS survey in {system}",
+                        )
                     changed = True
             elif event == "Scan":
                 planet_class = _localized(raw, "PlanetClass").casefold()
@@ -690,6 +873,7 @@ class ExpeditionManager:
                     changed = True
             elif event == "ScanOrganic" and str(raw.get("ScanType") or "").casefold() == "analyse":
                 species = _localized(raw, "Species") or _localized(raw, "Genus")
+                genus = _localized(raw, "Genus") or str(species).split(" ", 1)[0]
                 fact = self._body_fact_key(raw, system, body, species)
                 if self._new_fact(stats, "bio_analyses", fact):
                     stats["bio_analyses"] = _integer(stats.get("bio_analyses")) + 1
@@ -698,6 +882,11 @@ class ExpeditionManager:
                         lambda objective: _same(objective.get("target"), species)
                         and self._objective_matches_context(objective, system, body),
                         f"Analysed {species} on {body or system}",
+                    )
+                    completed += self._advance(
+                        expedition, raw, "bio_genus",
+                        lambda objective: _same(objective.get("target"), genus),
+                        f"Completed genus {genus} on {body or system}",
                     )
                     completed += self._advance(expedition, raw, "bio_count", lambda _objective: True, f"Analysed {species}")
                     changed = True

@@ -14,6 +14,35 @@ def _get_config_file():
 CONFIG_FILE = _get_config_file()
 PROFILE_DIR = str(application_dir() / "profiles")
 PROFILE_CONFIG_NAME = "config.json"
+RETIRED_COMPASS_CONFIG_KEYS = (
+    "voice_callouts_enabled",
+    "voice_safety_enabled",
+    "voice_exploration_enabled",
+    "voice_navigation_enabled",
+    "voice_objectives_enabled",
+    "voice_cache_enabled",
+    "voice_cache_auto_prune_enabled",
+    "voice_cache_retention_days",
+    "voice_name",
+    "voice_volume",
+    "cockpit_memory_enabled",
+    "cockpit_ambient_chatter_enabled",
+    "cockpit_session_greetings_enabled",
+    "cockpit_memory_callbacks_enabled",
+    "cockpit_advisor_enabled",
+    "cockpit_advisor_level",
+    "cockpit_cognition_enabled",
+    "cockpit_cognition_learning_enabled",
+    "cockpit_exploration_focus_enabled",
+    "cockpit_personality_level",
+    "cockpit_persona",
+    "cockpit_memory_system_limit",
+    "cockpit_memory_species_limit",
+    "cockpit_memory_ship_limit",
+    "cockpit_memory_episode_limit",
+    "adaptive_briefings_enabled",
+    "adaptive_debriefings_enabled",
+)
 DEPRECATED_CONFIG_KEYS = (
     'scan_overlay_enabled',
     'scan_hud_x',
@@ -67,7 +96,7 @@ DEPRECATED_CONFIG_KEYS = (
     'trade_window_geometry',
     'trade_route_form',
     'trade_log_retention_days',
-)
+) + RETIRED_COMPASS_CONFIG_KEYS
 # Overlay/HUD colors are seeded from the active theme at startup; the live
 # theme bridge rebinds these module constants and repaints open overlays.
 import themes as _themes
@@ -82,6 +111,17 @@ COLOR_MUTED = _themes.ACTIVE_PALETTE["muted"]
 COLOR_YELLOW = _themes.ACTIVE_PALETTE["yellow"]
 
 
+EXPLORATION_MINING_ACHIEVEMENT_CATEGORIES = {
+    "Exploration", "Routes", "Exobiology", "Travel", "Places", "SRV",
+    "Carrier", "Colonisation", "Mining",
+}
+NON_FOCUSED_ACHIEVEMENT_CATEGORIES = {
+    "Combat", "Trading", "General", "Session", "Engineering", "Factions",
+    "Odyssey", "Crime", "CQC", "Powerplay", "Ranks", "Passengers",
+    "Operations", "Ships", "SLV", "Streamer",
+}
+
+
 PROFILE_TEXT_SETTINGS = (
     "edsm_cmdr_name",
     "edsm_api_key",
@@ -90,10 +130,6 @@ PROFILE_TEXT_SETTINGS = (
     "carrier_discord_webhook_url",
     "screenshots_path",
     "ui_theme_name",
-    "voice_name",
-    "cockpit_personality_level",
-    "cockpit_persona",
-    "cockpit_advisor_level",
     "hud_crt_intensity",
     "adaptive_mode_lock",
     "explore_active_page",
@@ -146,26 +182,12 @@ PROFILE_BOOL_SETTINGS = (
     "route_auto_note_from_edsm",
     "achievements_enabled",
     "achievement_notifications_enabled",
-    "voice_callouts_enabled",
-    "voice_safety_enabled",
-    "voice_exploration_enabled",
-    "voice_navigation_enabled",
-    "voice_objectives_enabled",
-    "voice_cache_enabled",
-    "voice_cache_auto_prune_enabled",
-    "cockpit_memory_enabled",
-    "cockpit_ambient_chatter_enabled",
-    "cockpit_session_greetings_enabled",
-    "cockpit_memory_callbacks_enabled",
-    "cockpit_advisor_enabled",
-    "cockpit_cognition_enabled",
-    "cockpit_cognition_learning_enabled",
     "hud_crt_enabled",
     "hud_crt_motion_enabled",
     "adaptive_command_enabled",
     "adaptive_overlay_scenes_enabled",
-    "adaptive_briefings_enabled",
-    "adaptive_debriefings_enabled",
+    "exploration_focus_enabled",
+    "exploration_focus_migrated",
     "reduced_motion_enabled",
 )
 
@@ -223,12 +245,6 @@ PROFILE_VALUE_SETTINGS = (
     "ui_custom_themes",
     "achievements_disabled_categories",
     "achievement_window_geometry",
-    "voice_volume",
-    "voice_cache_retention_days",
-    "cockpit_memory_system_limit",
-    "cockpit_memory_species_limit",
-    "cockpit_memory_ship_limit",
-    "cockpit_memory_episode_limit",
     "adaptive_overlay_scenes",
     "ui_scale_percent",
     "overlay_text_scale_percent",
@@ -318,12 +334,12 @@ def apply_profile_config(config, profile_key=None):
                 profile.update(json.load(f))
         except Exception:
             pass
-    # One-time migration from the retired local-language settings. The adviser
-    # remains a native Python feature, so preserve the commander's preference.
-    if "cockpit_advisor_enabled" not in profile and "cockpit_llm_advisor_enabled" in profile:
-        profile["cockpit_advisor_enabled"] = bool(profile["cockpit_llm_advisor_enabled"])
-    if "cockpit_advisor_level" not in profile and profile.get("cockpit_llm_advisor_level"):
-        profile["cockpit_advisor_level"] = str(profile["cockpit_llm_advisor_level"])
+    # Speech/persona settings were retired in v5.3.6. Memory and cached audio
+    # files remain on disk for rollback, but their old switches are no longer
+    # copied into the live profile or written back to configuration.
+    for setting in RETIRED_COMPASS_CONFIG_KEYS:
+        profile.pop(setting, None)
+        config.pop(setting, None)
     # Trade Assist was retired, but its independent EDDN publisher remains.
     # Preserve each commander's previous upload preference under the clearer
     # integration-only setting name.
@@ -377,6 +393,24 @@ def apply_profile_config(config, profile_key=None):
         profile["station_info_auto_hide_enabled"] = station_timeout > 0
         if station_timeout <= 0:
             profile["station_info_timeout_s"] = 30
+    # v5.3.6 narrows the visible product to exploration plus mining. Preserve
+    # every stored achievement and legacy workspace setting, but disable broad
+    # career packs and the retired colony-logistics overlay once per profile.
+    if not profile.get("exploration_focus_migrated", False):
+        disabled = set(
+            profile.get(
+                "achievements_disabled_categories",
+                config.get("achievements_disabled_categories", []),
+            ) or []
+        )
+        disabled.update(NON_FOCUSED_ACHIEVEMENT_CATEGORIES)
+        profile["achievements_disabled_categories"] = sorted(disabled)
+        profile["colony_overlay_enabled"] = False
+        if str(profile.get("adaptive_mode_lock") or "auto") not in {
+                "auto", "general", "exploration", "mining", "ground", "carrier", "station"}:
+            profile["adaptive_mode_lock"] = "auto"
+        profile["exploration_focus_enabled"] = True
+        profile["exploration_focus_migrated"] = True
     is_initial_profile = len(profiles) <= 1
     config["active_commander_profile"] = key
     config["active_commander_name"] = profile.get("commander_name", config.get("active_commander_name", "Unknown Commander"))
@@ -389,12 +423,6 @@ def apply_profile_config(config, profile_key=None):
         "carrier_discord_webhook_url": "",
         "screenshots_path": default_screenshot_path(config.get("journal_path")),
         "ui_theme_name": _themes.DEFAULT_THEME_NAME,
-        "voice_name": "en_GB-alba-medium",
-        "cockpit_personality_level": "Balanced",
-        "cockpit_persona": "Compass",
-        "cockpit_advisor_level": str(
-            profile.get("cockpit_llm_advisor_level") or "Balanced"
-        ),
         "hud_crt_intensity": "Subtle",
         "adaptive_mode_lock": "auto",
         "explore_active_page": "System Survey",
@@ -446,28 +474,12 @@ def apply_profile_config(config, profile_key=None):
         "route_auto_note_from_edsm": True,
         "achievements_enabled": True,
         "achievement_notifications_enabled": True,
-        "voice_callouts_enabled": False,
-        "voice_safety_enabled": True,
-        "voice_exploration_enabled": True,
-        "voice_navigation_enabled": True,
-        "voice_objectives_enabled": True,
-        "voice_cache_enabled": True,
-        "voice_cache_auto_prune_enabled": True,
-        "cockpit_memory_enabled": True,
-        "cockpit_ambient_chatter_enabled": True,
-        "cockpit_session_greetings_enabled": True,
-        "cockpit_memory_callbacks_enabled": True,
-        "cockpit_advisor_enabled": bool(
-            profile.get("cockpit_llm_advisor_enabled", True)
-        ),
-        "cockpit_cognition_enabled": True,
-        "cockpit_cognition_learning_enabled": True,
         "hud_crt_enabled": True,
         "hud_crt_motion_enabled": True,
         "adaptive_command_enabled": True,
         "adaptive_overlay_scenes_enabled": True,
-        "adaptive_briefings_enabled": True,
-        "adaptive_debriefings_enabled": True,
+        "exploration_focus_enabled": True,
+        "exploration_focus_migrated": False,
         "reduced_motion_enabled": False,
     }
     for setting in PROFILE_TEXT_SETTINGS:
@@ -481,12 +493,6 @@ def apply_profile_config(config, profile_key=None):
             profile_defaults = {
                 "ui_custom_themes": {},
                 "nav_collapsed_groups": [],
-                "voice_volume": 0.8,
-                "voice_cache_retention_days": 7,
-                "cockpit_memory_system_limit": 300,
-                "cockpit_memory_species_limit": 200,
-                "cockpit_memory_ship_limit": 30,
-                "cockpit_memory_episode_limit": 80,
                 "adaptive_overlay_scenes": {},
                 "ui_scale_percent": 100,
                 "overlay_text_scale_percent": 100,
@@ -681,37 +687,13 @@ def load_config():
         'achievement_notifications_enabled': True,
         'achievements_disabled_categories': [],
         'achievement_window_geometry': '1080x700',
-        'voice_callouts_enabled': False,
-        'voice_safety_enabled': True,
-        'voice_exploration_enabled': True,
-        'voice_navigation_enabled': True,
-        'voice_objectives_enabled': True,
-        'voice_cache_enabled': True,
-        'voice_cache_auto_prune_enabled': True,
-        'voice_cache_retention_days': 7,
-        'cockpit_memory_enabled': True,
-        'cockpit_ambient_chatter_enabled': True,
-        'cockpit_session_greetings_enabled': True,
-        'cockpit_memory_callbacks_enabled': True,
-        'cockpit_advisor_enabled': True,
-        'cockpit_advisor_level': 'Balanced',
-        'cockpit_cognition_enabled': True,
-        'cockpit_cognition_learning_enabled': True,
         'hud_crt_enabled': True,
         'hud_crt_motion_enabled': True,
         'hud_crt_intensity': 'Subtle',
-        'voice_name': 'en_GB-alba-medium',
-        'cockpit_personality_level': 'Balanced',
-        'cockpit_persona': 'Compass',
-        'voice_volume': 0.8,
-        'cockpit_memory_system_limit': 300,
-        'cockpit_memory_species_limit': 200,
-        'cockpit_memory_ship_limit': 30,
-        'cockpit_memory_episode_limit': 80,
         'adaptive_command_enabled': True,
         'adaptive_overlay_scenes_enabled': True,
-        'adaptive_briefings_enabled': True,
-        'adaptive_debriefings_enabled': True,
+        'exploration_focus_enabled': True,
+        'exploration_focus_migrated': False,
         'adaptive_mode_lock': 'auto',
         'explore_active_page': 'System Survey',
         'explore_survey_filter': 'All bodies',

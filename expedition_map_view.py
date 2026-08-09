@@ -19,6 +19,7 @@ import weakref
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageTk
 
 from galactic_regions import find_region, region_fills, region_geometry
+from explorer_fieldcraft import sector_grid
 from exploration_intelligence import route_context
 from stellar_types import star_type_label
 from ui_theme import THEME, button, configure_ttk
@@ -36,6 +37,7 @@ LAYER_COLOURS = {
     "Annotations": THEME.orange,
     "Planned": THEME.accent,
     "Return": THEME.green,
+    "Sectors": THEME.dim,
 }
 
 ANNOTATION_TYPES = (
@@ -477,11 +479,14 @@ class ExpeditionMapView:
             font=("Segoe UI", 8, "bold"),
         ).pack(side=tk.LEFT, padx=(8, 5), pady=4)
         self.layer_vars = {}
-        for name in ("Regions", "Planned", "Return", "Valuable", "Biology", "Codex", "Photos", "Recon", "Revisit", "Bookmarks", "Annotations"):
+        for name in ("Regions", "Sectors", "Planned", "Return", "Valuable", "Biology", "Codex", "Photos", "Recon", "Revisit", "Bookmarks", "Annotations"):
             var = tk.BooleanVar(value=name != "Return")
             self.layer_vars[name] = var
             tk.Checkbutton(
-                layers, text=("MARKS" if name == "Annotations" else name.upper()),
+                layers, text=(
+                    "MARKS" if name == "Annotations" else
+                    "GRID" if name == "Sectors" else name.upper()
+                ),
                 variable=var, command=self._layer_changed,
                 fg=LAYER_COLOURS[name], bg=THEME.inset, selectcolor=THEME.input,
                 activebackground=THEME.inset, activeforeground=LAYER_COLOURS[name],
@@ -2183,7 +2188,7 @@ class ExpeditionMapView:
             px += ((offset_index % 3) - 1) * 9
             py += ((offset_index // 3) % 3 - 1) * 9
             self._draw_marker(
-                px, py, marker["layer"], LAYER_COLOURS[marker["layer"]], marker,
+                px, py, marker["layer"], marker.get("colour") or LAYER_COLOURS[marker["layer"]], marker,
             )
             marker["position"] = pos
             mapped_points.append({"x": px, "y": py, "depth": depth, "record": marker})
@@ -2667,6 +2672,13 @@ class ExpeditionMapView:
         elif layer == "Recon":
             self._background_line((x - 5, y, x + 5, y), colour, width=2)
             self._background_line((x, y - 5, x, y + 5), colour, width=2)
+        elif layer == "Sectors":
+            status = str((marker or {}).get("status") or "untouched")
+            draw.rectangle((x - 4, y - 4, x + 4, y + 4), outline=colour, width=2)
+            if status == "surveyed":
+                self._background_line((x - 3, y, x - 1, y + 3, x + 4, y - 3), colour, width=1)
+            elif status == "incomplete":
+                draw.ellipse((x - 1, y - 1, x + 1, y + 1), fill=colour)
         else:
             draw.ellipse((x - 5, y - 5, x + 5, y + 5), outline=colour, width=2)
             draw.ellipse((x - 1, y - 1, x + 1, y + 1), fill=colour)
@@ -2741,13 +2753,23 @@ class ExpeditionMapView:
                 f" · OFF ROUTE {distance:,.1f} ly from {route.get('nearest_system')}"
                 if distance is not None else " · OFF ROUTE"
             )
+        sector_text = ""
+        manager = getattr(self.app, "expedition_manager", None)
+        active = manager.active() if manager else None
+        plan = (active or {}).get("sector_plan")
+        if isinstance(plan, dict) and plan.get("center"):
+            sector = sector_grid(
+                self._snapshot.get("route_points") or (), plan.get("center"),
+                plan.get("radius_ly", 500), plan.get("cell_size_ly", 100),
+            )
+            sector_text = f" · sector {sector.get('completion_percent', 0)}%"
         scope = self.scope_var.get() if hasattr(self, "scope_var") else "All History"
         self.summary.config(
             text=(
                 f"{scope.upper()} · {unique:,} systems · {total_ly:,.1f} ly journalled · "
                 f"42 Codex regions offline"
                 f"{' · ' + str(len(self._annotations)) + ' map mark(s)' if self._annotations else ''}"
-                f"{region_text}{representative}{route_text}"
+                f"{region_text}{representative}{route_text}{sector_text}"
             )
         )
 
@@ -2808,5 +2830,41 @@ class ExpeditionMapView:
                 "detail": " · ".join(filter(None, (row.get("priority"), ", ".join(row.get("tags") or [])))),
                 "position": row.get("position"), "bookmark_id": row.get("id"),
             })
+        manager = getattr(self.app, "expedition_manager", None)
+        active = manager.active() if manager else None
+        plan = (active or {}).get("sector_plan")
+        if isinstance(plan, dict) and plan.get("center"):
+            grid = sector_grid(
+                snapshot.get("route_points") or (), plan.get("center"),
+                plan.get("radius_ly", 500), plan.get("cell_size_ly", 100),
+            )
+            cells = list(grid.get("cells") or [])
+            important = [row for row in cells if row.get("status") != "untouched"]
+            untouched = [row for row in cells if row.get("status") == "untouched"]
+            # Keep the planning layer light on a galaxy-wide view. Visited
+            # cells are never sampled out; untouched cells provide a bounded
+            # wireframe around them.
+            allowance = max(0, 140 - len(important))
+            if allowance and len(untouched) > allowance:
+                last = len(untouched) - 1
+                untouched = [
+                    untouched[round(index * last / max(1, allowance - 1))]
+                    for index in range(allowance)
+                ]
+            for cell in important + untouched[:allowance]:
+                status = str(cell.get("status") or "untouched")
+                colour = (
+                    THEME.green if status == "surveyed"
+                    else THEME.orange if status == "incomplete" else THEME.dim
+                )
+                markers.append({
+                    "layer": "Sectors", "kind": "Sector", "system": "",
+                    "subject": f"{plan.get('name') or 'Expedition sector'} · cell {cell.get('id')}",
+                    "detail": (
+                        f"{status.title()} · {int(cell.get('surveyed_systems') or 0)}/"
+                        f"{int(cell.get('visited_systems') or 0)} visited systems FSS complete"
+                    ),
+                    "position": cell.get("position"), "status": status, "colour": colour,
+                })
         markers.extend(self._annotation_marker(row) for row in self._annotations)
         return markers

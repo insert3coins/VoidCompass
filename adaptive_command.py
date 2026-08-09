@@ -15,6 +15,14 @@ MODES = (
     "powerplay",
 )
 
+# Modes presented by the exploration-focused application shell.  The broader
+# legacy set above remains readable so old profile locks and saved sessions do
+# not lose data, but only these activities can be selected or detected by the
+# current command deck.
+FOCUSED_MODES = (
+    "general", "exploration", "mining", "ground", "carrier", "station",
+)
+
 AUTOMATIC_MODE_IDLE_S = 1800.0
 
 MODE_LABELS = {
@@ -270,7 +278,7 @@ class AdaptiveCommandDeck:
             "engineering": "Engineering configuration active. Material shortages and pinned goals have priority.",
             "carrier": "Carrier operations active. Fuel, route, services and logistics have priority.",
             "colony": "Architect configuration active. Construction requirements and matched cargo have priority.",
-            "station": "Station operations active. Services, transactions and outstanding objectives have priority.",
+            "station": "Station and data-sale configuration active. Cartographics, Vista Genomics and useful services have priority.",
             "powerplay": "Powerplay configuration active. Merits, commodities and regional strategy have priority.",
         }
         return lines.get(normalize_mode(mode), lines["general"])
@@ -358,6 +366,12 @@ class AdaptiveCommandDeck:
         carrier = strategy.get("carrier") or {}
         if carrier.get("jump_destination"):
             add("carrier", f"Carrier jump to {carrier['jump_destination']}", f"{carrier.get('name') or 'Fleet Carrier'} has a plotted destination.", "CARRIER", 68, copy_text=carrier.get("jump_destination"), modes=("carrier",))
+
+        if self.config.get("exploration_focus_enabled", False):
+            focused_ids = {
+                "biology", "survey-data", "survey", "route", "mining", "carrier",
+            }
+            rows = [row for row in rows if row.get("id") in focused_ids]
 
         rows.sort(key=lambda row: (-int(row["priority"]), row["label"].casefold()))
         return rows[:12]

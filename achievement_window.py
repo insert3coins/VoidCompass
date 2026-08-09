@@ -4,7 +4,7 @@ import tkinter as tk
 from datetime import datetime
 from tkinter import filedialog, messagebox, ttk
 
-from config import save_config
+from config import EXPLORATION_MINING_ACHIEVEMENT_CATEGORIES, save_config
 from ui_theme import FONT_MONO, THEME, ThemedWindowMixin, apply_window, configure_ttk, scrollbar, window_surface
 
 
@@ -22,7 +22,7 @@ class AchievementWindow(ThemedWindowMixin):
         self._tree_generation = 0
         self._tree_insert_job = None
         self.win = window_surface(root, embedded=embedded)
-        self.win.title("Achievements")
+        self.win.title("Explorer Achievements")
         self.win.geometry(self.config.get("achievement_window_geometry", "1080x700"))
         self.win.minsize(880, 560)
         apply_window(self.win)
@@ -53,7 +53,7 @@ class AchievementWindow(ThemedWindowMixin):
         title_box.pack(side=tk.LEFT, fill=tk.Y, padx=14)
         tk.Label(
             title_box,
-            text="ACHIEVEMENTS",
+            text="EXPLORER ACHIEVEMENTS",
             font=("Segoe UI", 16, "bold"),
             fg=THEME.accent,
             bg=THEME.header,
@@ -61,7 +61,7 @@ class AchievementWindow(ThemedWindowMixin):
         ).pack(anchor="w", pady=(12, 0))
         self.header_subtitle = tk.Label(
             title_box,
-            text="Elite career milestones // commander profile",
+            text="Exploration · travel · exobiology · mining // commander profile",
             font=("Consolas", 8),
             fg=self.UI_MUTED,
             bg=THEME.header,
@@ -465,11 +465,16 @@ class AchievementWindow(ThemedWindowMixin):
         if not self.is_open():
             return
         self._snapshot = self.engine.snapshot()
-        achievements = self._snapshot.get("achievements", [])
+        achievements = [
+            item for item in self._snapshot.get("achievements", [])
+            if item.get("category") in EXPLORATION_MINING_ACHIEVEMENT_CATEGORIES
+        ]
         self._items = {str(item.get("id")): item for item in achievements if item.get("id")}
-        unlocked = self._snapshot.get("unlocked", 0)
-        total = self._snapshot.get("total", 0)
-        points = self._snapshot.get("totalPoints", 0)
+        unlocked = sum(1 for item in achievements if item.get("unlocked"))
+        total = len(achievements)
+        points = sum(
+            int(item.get("points") or 0) for item in achievements if item.get("unlocked")
+        )
         percent = (unlocked / total * 100.0) if total else 0.0
         recent = sorted(
             (item for item in achievements if item.get("unlockedAt")),
@@ -481,10 +486,14 @@ class AchievementWindow(ThemedWindowMixin):
         self.summary_progress.config(text=f"{percent:.1f}%")
         self.summary_recent.config(text=(recent[0].get("title") if recent else "No unlocks yet"))
         active = "ACTIVE" if self._snapshot.get("enabled") else "PAUSED"
-        self.header_status.config(text=f"{active}\n{len(self._snapshot.get('categories', []))} CATEGORY PACKS")
-        self._rebuild_category_menu(self._snapshot.get("categories", []))
+        categories = [
+            category for category in self._snapshot.get("categories", [])
+            if category in EXPLORATION_MINING_ACHIEVEMENT_CATEGORIES
+        ]
+        self.header_status.config(text=f"{active}\n{len(categories)} EXPLORER PACKS")
+        self._rebuild_category_menu(categories)
         self._rebuild_pack_checks(
-            self._snapshot.get("categories", []), set(self._snapshot.get("disabledCategories", []))
+            categories, set(self._snapshot.get("disabledCategories", []))
         )
         self.enabled_var.set(bool(self.config.get("achievements_enabled", True)))
         self.notifications_var.set(bool(self.config.get("achievement_notifications_enabled", True)))
@@ -615,7 +624,16 @@ class AchievementWindow(ThemedWindowMixin):
         self.refresh()
 
     def _save_settings(self):
-        disabled = sorted(category for category, variable in self._category_vars.items() if not variable.get())
+        # Broad career packs remain archived and disabled even though their old
+        # unlock state is preserved in the profile file.
+        hidden = {
+            category for category in self._snapshot.get("categories", [])
+            if category not in EXPLORATION_MINING_ACHIEVEMENT_CATEGORIES
+        }
+        disabled = sorted(hidden | {
+            category for category, variable in self._category_vars.items()
+            if not variable.get()
+        })
         self.config["achievements_enabled"] = bool(self.enabled_var.get())
         self.config["achievement_notifications_enabled"] = bool(self.notifications_var.get())
         self.config["achievements_disabled_categories"] = disabled

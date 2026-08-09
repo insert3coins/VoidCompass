@@ -51,7 +51,6 @@ def show_first_run(root, config, on_complete, *, standalone=False):
     adaptive_var = tk.BooleanVar(value=bool(config.get("adaptive_command_enabled", True)))
     overlays_var = tk.BooleanVar(value=bool(config.get("overlay_enabled", True)))
     passthrough_var = tk.BooleanVar(value=bool(config.get("overlay_mouse_passthrough", True)))
-    voice_var = tk.BooleanVar(value=bool(config.get("voice_callouts_enabled", False)))
     for text, variable in (
         ("Adaptive Command Deck and activity modes", adaptive_var),
         ("Native navigation and safety overlays", overlays_var),
@@ -61,7 +60,6 @@ def show_first_run(root, config, on_complete, *, standalone=False):
             "Mouse passthrough (Windows only; Linux overlays remain interactive)",
             passthrough_var,
         ),
-        ("Voice callouts (uses the configured local Piper voice)", voice_var),
     ):
         tk.Checkbutton(panel, text=text, variable=variable, bg=THEME.panel, fg=THEME.text,
                        selectcolor=THEME.input, activebackground=THEME.panel,
@@ -76,7 +74,6 @@ def show_first_run(root, config, on_complete, *, standalone=False):
             "adaptive_command_enabled": adaptive_var.get(),
             "overlay_enabled": overlays_var.get(),
             "overlay_mouse_passthrough": passthrough_var.get(),
-            "voice_callouts_enabled": voice_var.get(),
             "onboarding_complete": True,
         })
         try:

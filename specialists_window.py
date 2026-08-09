@@ -1,4 +1,4 @@
-"""Integrated Mining, Combat/AX, Carrier, and Exobiology role console."""
+"""Journal-driven Mining Operations workspace."""
 
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ class SpecialistsWindow(ThemedWindowMixin):
         self._pin_rows = []
         self._tree_row_cache = {}
         self.win = window_surface(root, embedded=embedded)
-        self.win.title("VOID COMPASS // SPECIALISTS")
+        self.win.title("VOID COMPASS // MINING OPERATIONS")
         self.win.geometry(self.config.get("specialists_geometry", "1100x760"))
         apply_window(self.win)
         configure_ttk(self.win, prefix="Specialists")
@@ -108,7 +108,7 @@ class SpecialistsWindow(ThemedWindowMixin):
         if not self.is_open():
             return
         if getattr(self.app, "_active_page", None) == "SPECIALISTS":
-            if self._active_section() in {"mining", "combat", "exobiology"}:
+            if self._active_section() == "mining":
                 self.refresh()
             self._schedule_tick()
 
@@ -173,43 +173,33 @@ class SpecialistsWindow(ThemedWindowMixin):
     def _build(self):
         header = tk.Frame(self.win, bg=THEME.header)
         header.pack(fill=tk.X)
-        tk.Label(header, text="SPECIALIST CONSOLE", fg=COLOR_ACCENT, bg=THEME.header, font=("Bahnschrift SemiCondensed", 16, "bold")).pack(side=tk.LEFT, padx=14, pady=10)
-        self.global_status = tk.Label(header, text="LOCAL · PROFILE AWARE · JOURNAL DRIVEN", fg=THEME.muted, bg=THEME.header, font=("Consolas", 8, "bold"))
+        tk.Label(header, text="MINING OPERATIONS", fg=COLOR_ACCENT, bg=THEME.header, font=("Bahnschrift SemiCondensed", 16, "bold")).pack(side=tk.LEFT, padx=14, pady=10)
+        self.global_status = tk.Label(header, text="MINING · PROSPECTOR · JOURNAL DRIVEN", fg=THEME.muted, bg=THEME.header, font=("Consolas", 8, "bold"))
         self.global_status.pack(side=tk.RIGHT, padx=14)
 
         self.tabs = ttk.Notebook(self.win, style="Specialists.TNotebook")
         self.tabs.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
         self.mining_page = tk.Frame(self.tabs, bg=THEME.bg)
-        self.combat_page = tk.Frame(self.tabs, bg=THEME.bg)
-        self.carrier_page = tk.Frame(self.tabs, bg=THEME.bg)
-        self.exobio_page = tk.Frame(self.tabs, bg=THEME.bg)
         self.tabs.add(self.mining_page, text="◆  MINING")
-        self.tabs.add(self.combat_page, text="⌁  COMBAT / AX")
-        self.tabs.add(self.carrier_page, text="⬢  CARRIER")
-        self.tabs.add(self.exobio_page, text="⌾  EXOBIOLOGY")
         self._tab_sections = {
             str(self.mining_page): "mining",
-            str(self.combat_page): "combat",
-            str(self.carrier_page): "carrier",
-            str(self.exobio_page): "exobiology",
         }
         self.tabs.bind("<<NotebookTabChanged>>", self._on_tab_changed, add="+")
         self._build_mining()
-        self._build_combat()
-        self._build_carrier()
-        self._build_exobio()
 
     def select_section(self, section):
         """Select a workflow when another dashboard control links here."""
+        key = str(section or "").strip().casefold()
+        if key == "carrier":
+            self.app.open_carrier_window()
+            return
+        if key in ("exobiology", "exobio"):
+            self.app.open_exploration_window(section="biology")
+            return
         pages = {
             "mining": self.mining_page,
-            "combat": self.combat_page,
-            "ax": self.combat_page,
-            "carrier": self.carrier_page,
-            "exobiology": self.exobio_page,
-            "exobio": self.exobio_page,
         }
-        page = pages.get(str(section or "").strip().casefold())
+        page = pages.get(key)
         if page is not None:
             self.tabs.select(page)
 
@@ -503,17 +493,7 @@ class SpecialistsWindow(ThemedWindowMixin):
     def refresh(self, section=None):
         if not self.is_open():
             return
-        section = section or self._active_section()
-        if section == "mining":
-            self._render_mining(self.engine.mining_snapshot())
-        elif section == "combat":
-            self._render_combat(self.engine.combat_snapshot())
-        elif section == "carrier":
-            self._render_carrier(
-                self.engine.carrier_snapshot(self.app.carrier_tracker.carrier_data)
-            )
-        elif section == "exobiology":
-            self._render_exobio(self.engine.exobiology_snapshot())
+        self._render_mining(self.engine.mining_snapshot())
 
     def _render_mining(self, mining):
         session = mining.get("session") or {}
