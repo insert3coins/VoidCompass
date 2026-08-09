@@ -52,6 +52,10 @@ Explore integrates profile-local Deep Survey intelligence directly into its four
 
 Expedition Overview acts as a live command centre, combining current-leg navigation, route progress, objectives, survey yield, unsold data, return planning, ship readiness and recent activity without replacing the detailed Mission Control, Waypoints or Route Intelligence tools.
 
+![Void Compass Expedition Command](ExpeditionCommand.PNG)
+
+*Expedition Command brings the current leg, route safety, return plan, ship readiness, objectives and recent field activity into one live overview.*
+
 Named expeditions persist across sessions with journal-verified goals, multi-session statistics, prioritised bookmarks and revisit targets. Seven ready-made goal templates cover region passports, valuable worlds, Odyssey genera, local sectors, Codex fieldwork, expedition photography and mixed deep surveys. Departing a system can add worthwhile unfinished mapping, biology or FSS evidence to the Missed Discoveries queue, which links directly to its Revisit map layer and expedition bookmarks. Their active strip remains visible across Explore, while verified progress appears through the native feed, toasts and expedition panels. The flat Galactic Atlas combines original game-style Milky Way artwork with the complete 42-region Universal Cartographics layout. It works fully offline, supports retained-system, region and annotation search, natural drag movement, cursor-centred zoom, Atlas/Route Focus/Current Vicinity framing and an in-place full-window focus mode, and overlays profile-local travel breadcrumbs, game and waypoint routes, direction arrows, an optional return trail plus Valuable, Biology, Codex, Photo, Recon, Revisit, Bookmark, custom Annotation and bounded Expedition Sector records. Notes, danger warnings, regions of interest, survey targets and waypoints can be placed directly on the map; zoom-aware cluster badges keep dense histories legible, while a restrained ship pulse, planned-route tracer and next-waypoint beacon add live navigation context without rebuilding the cached atlas. Sector cells retain surveyed and incomplete evidence while untouched cells are sampled for responsive galaxy-wide control. Visible-image cropping keeps navigation responsive, while expedition plans can be exchanged as VoidCompass JSON or newline waypoint lists and full locally generated Markdown reports include the named route, objectives, evidence and bookmarks.
 
 ![Void Compass Galactic Atlas](GalaxyAtlas.PNG)
@@ -67,6 +71,10 @@ Void Compass deliberately leaves trade-route planning to dedicated services. It 
 ### Explorer Field Tools
 
 Mining is the single intentional side activity. Its journal-driven workspace records prospector quality, refinery and cargo yield, core cracks, limpets and their observed cost, attributable commodity sales, hourly performance and per-commander history; the Prospector Analysis overlay remains a first-class cockpit surface. The Ground tool starts a temporary, profile-isolated trail at touchdown, records meaningful walking/SRV movement and bio sample sites, then shows distance and bearing back to the ship or makes the landing point the active ground target. Ground/Exobiology, exploration Engineering/Synthesis, Colonisation Recon and exploration/mining achievement packs complete the focused Field Tools page without exposing general Combat, Powerplay, Squadron or BGS workspaces.
+
+![Void Compass Explorer Field Tools](FieldTools.PNG)
+
+*The deliberately compact Field Tools hub keeps Ground/Exobiology, Mining, exploration Engineering, Colonisation Recon and Explorer Achievements available without crowding the primary rail.*
 
 Carrier Command plots Fleet and Squadron Carrier routes through Spansh, can import an existing Fleet Carrier result URL or job, marks journal-confirmed arrivals complete and advances Copy Next to the first pending jump, and carries route/fuel progress into the carrier overlay. Its Tritium view finds known hotspots around the carrier through Spansh and can copy or add a selected system to the expedition; its Cargo view combines the exact journal cargo total with an explicitly labelled manual/observed commodity manifest and active market orders.
 
@@ -104,6 +112,8 @@ Achievement progress, exploration history, named expeditions, bookmarks, Captain
 Commander Record can create SQLite-safe manual profile backups and schedule a restore for the next application start. VoidCompass also retains five rotating internal safety snapshots before version changes and cache rebuilds; a restore first preserves the replaced profile as a rollback snapshot.
 
 ![Native Achievement Centre](Achievements.PNG)
+
+*Explorer Achievements keeps the active packs centred on exploration, travel, exobiology, expeditions, carriers, colonisation and mining.*
 
 ## Native feedback
 
