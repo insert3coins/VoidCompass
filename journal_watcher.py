@@ -152,6 +152,56 @@ class JournalWatcher:
             return 0
         return 0
 
+    def get_latest_fuel_capacity(self, tail_bytes=2 * 1024 * 1024):
+        """Return the active ship's latest verified main-tank capacity.
+
+        Startup journal recovery intentionally reads only a small tail of the
+        current log.  A ship swap/loadout can therefore predate that tail, so
+        the cached cockpit state's capacity must be checked against journal
+        history instead of being allowed to follow a different ship.
+        """
+        if not self.journal_path or not os.path.exists(self.journal_path):
+            return 0.0
+        try:
+            files = sorted(
+                (
+                    os.path.join(self.journal_path, filename)
+                    for filename in os.listdir(self.journal_path)
+                    if filename.startswith("Journal.") and filename.endswith(".log")
+                ),
+                reverse=True,
+            )
+            if not files:
+                return 0.0
+            # Do not cross into an older journal: it may belong to another
+            # commander profile. The active session's LoadGame/Loadout is the
+            # only safe source for the active ship.
+            path = files[0]
+            size = os.path.getsize(path)
+            start = max(0, size - int(tail_bytes))
+            with open(path, "rb") as handle:
+                handle.seek(start)
+                content = handle.read().decode("utf-8", errors="ignore")
+            for line in reversed(content.splitlines()):
+                try:
+                    data = json.loads(line)
+                except Exception:
+                    continue
+                if data.get("event") not in ("Loadout", "LoadGame"):
+                    continue
+                capacity = data.get("FuelCapacity")
+                if isinstance(capacity, dict):
+                    capacity = capacity.get("Main")
+                try:
+                    capacity = float(capacity)
+                except (TypeError, ValueError):
+                    continue
+                if capacity > 0:
+                    return capacity
+        except Exception:
+            return 0.0
+        return 0.0
+
     @staticmethod
     def detect_latest_commander(journal_path, tail_bytes=2 * 1024 * 1024):
         """Best-effort commander/FID detection from the newest journal file."""
@@ -403,6 +453,7 @@ class JournalWatcher:
                 "raw": data,
                 "data": {
                     "cargo_capacity": data.get("CargoCapacity", 0),
+                    "fuel_capacity": data.get("FuelCapacity"),
                     "ship": data.get("Ship"),
                     "ship_localised": data.get("Ship_Localised"),
                     "ship_id": data.get("ShipID"),

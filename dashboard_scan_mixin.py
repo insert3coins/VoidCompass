@@ -93,8 +93,22 @@ class DashboardScanMixin:
         was_gui_focus = getattr(self, "current_gui_focus", -1)
         was_fuel_percent = self._current_fuel_percent()
         fuel = data.get("Fuel") or {}
-        self.current_fuel_main = fuel.get("FuelMain")
-        self.current_fuel_reservoir = fuel.get("FuelReservoir")
+        # Status.json is the live source while scooping and during ordinary
+        # supercruise consumption. Some vehicle/on-foot snapshots omit Fuel,
+        # so never erase the last verified mothership reading with ``None``.
+        if isinstance(fuel, dict):
+            fuel_main = fuel.get("FuelMain")
+            fuel_reservoir = fuel.get("FuelReservoir")
+            try:
+                if fuel_main is not None:
+                    self.current_fuel_main = float(fuel_main)
+            except (TypeError, ValueError):
+                pass
+            try:
+                if fuel_reservoir is not None:
+                    self.current_fuel_reservoir = float(fuel_reservoir)
+            except (TypeError, ValueError):
+                pass
         self.current_legal_state = data.get("LegalState")
         dest = data.get("Destination") or {}
         self.current_destination = dest.get("Name") or None
