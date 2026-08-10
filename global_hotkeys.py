@@ -68,6 +68,100 @@ _NAMED_KEYS = {
     "DEL": (0x2E, "Delete"),
 }
 
+_TK_MODIFIER_KEYSYMS = {
+    "ALT", "ALTL", "ALTR",
+    "CONTROL", "CONTROLL", "CONTROLR",
+    "CTRL", "CTRLL", "CTRLR",
+    "META", "METAL", "METAR",
+    "SHIFT", "SHIFTL", "SHIFTR",
+    "SUPER", "SUPERL", "SUPERR",
+    "WIN", "WINL", "WINR",
+}
+_TK_NAMED_KEYSYMS = {
+    "BACKSPACE": "Backspace",
+    "TAB": "Tab",
+    "ISOLEFTTAB": "Tab",
+    "RETURN": "Enter",
+    "KPENTER": "Enter",
+    "ESC": "Escape",
+    "ESCAPE": "Escape",
+    "SPACE": "Space",
+    "PRIOR": "PageUp",
+    "PAGEUP": "PageUp",
+    "NEXT": "PageDown",
+    "PAGEDOWN": "PageDown",
+    "END": "End",
+    "HOME": "Home",
+    "LEFT": "Left",
+    "UP": "Up",
+    "RIGHT": "Right",
+    "DOWN": "Down",
+    "INSERT": "Insert",
+    "DELETE": "Delete",
+}
+
+
+def _tk_keysym_token(keysym):
+    return re.sub(r"[\s_-]+", "", str(keysym or "")).upper()
+
+
+def tk_modifier_labels(keysym="", state=0):
+    """Return canonical modifiers held during a Tk key event.
+
+    Tk's portable modifier masks cover Shift/Control/Mod1/Mod4.  Windows can
+    additionally report Alt through its extended state bit, so accept both.
+    Including the modifier currently being pressed keeps the recorder preview
+    responsive before Tk adds that key to the event state.
+    """
+    try:
+        state = int(state or 0)
+    except (TypeError, ValueError):
+        state = 0
+    held = set()
+    if state & 0x0004:
+        held.add("Ctrl")
+    if state & (0x0008 | 0x20000):
+        held.add("Alt")
+    if state & 0x0001:
+        held.add("Shift")
+    if state & 0x0040:
+        held.add("Win")
+
+    token = _tk_keysym_token(keysym)
+    if token.startswith(("CONTROL", "CTRL")):
+        held.add("Ctrl")
+    elif token.startswith("ALT"):
+        held.add("Alt")
+    elif token.startswith("SHIFT"):
+        held.add("Shift")
+    elif token.startswith(("SUPER", "META", "WIN")):
+        held.add("Win")
+    return tuple(label for _bit, label in _MODIFIER_ORDER if label in held)
+
+
+def hotkey_from_tk_event(keysym, state=0):
+    """Convert a Tk key press into the canonical global-hotkey syntax.
+
+    Modifier-only events return an empty string so a recorder can show the
+    partial chord. Unsupported keys and unmodified final keys raise the same
+    friendly validation errors as manually entered bindings.
+    """
+    token = _tk_keysym_token(keysym)
+    if token in _TK_MODIFIER_KEYSYMS:
+        return ""
+    if len(token) == 1 and token in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789":
+        key_label = token
+    elif token in _TK_NAMED_KEYSYMS:
+        key_label = _TK_NAMED_KEYSYMS[token]
+    elif re.fullmatch(r"F(?:[1-9]|1[0-9]|2[0-4])", token):
+        key_label = token
+    else:
+        raise ValueError(f"unsupported key '{keysym}'")
+    modifiers = tk_modifier_labels("", state)
+    if not modifiers:
+        raise ValueError("hold Ctrl, Alt, Shift or Win before pressing the final key")
+    return normalize_hotkey("+".join((*modifiers, key_label)))
+
 
 def parse_hotkey(value):
     """Return ``(modifiers, virtual_key, canonical)`` or ``None`` when blank."""

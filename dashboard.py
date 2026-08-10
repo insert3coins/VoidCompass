@@ -6049,6 +6049,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             # cannot retain the outgoing commander's HUD label or station.
             if ev == "Location":
                 self._apply_location_navigation_state(raw, d)
+                if self.station_info_hud and not self.batch_mode and not startup_replay:
+                    self.station_info_hud.reconcile(self, present=True)
 
             # Reset FSS state on jump completion
             if is_jump:
@@ -7710,6 +7712,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             bool(event.get("startup_catchup_final"))
             for event in events if isinstance(event, dict)
         )
+        batch_event_types = {
+            str(event.get("type") or event.get("event") or "")
+            for event in events if isinstance(event, dict)
+        }
         if startup_batch:
             self._startup_restore_active = True
             self._startup_restore_ui_pending = True
@@ -7739,6 +7745,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         # batch silent and draw only after the watcher marks the final batch.
         if startup_batch and not startup_final:
             return
+
+        # Docked/Location rendering is deliberately suppressed while a batch
+        # is being reduced.  Reconcile once from the final state so Station
+        # Link cannot remain withdrawn until its setting is toggled.  A carrier
+        # jump refreshes an already-visible carrier card without reopening one
+        # that auto-hide previously dismissed.
+        station_transition = bool(
+            batch_event_types.intersection({"Docked", "Undocked", "Location"})
+        )
+        station_refresh = station_transition or "CarrierJump" in batch_event_types
+        startup_presentation = bool(startup_final or self.is_first_load)
+        if self.station_info_hud and (startup_presentation or station_refresh):
+            self.station_info_hud.reconcile(
+                self,
+                present=bool(startup_presentation or station_transition),
+            )
 
         if startup_final or self.is_first_load:
             self._startup_restore_active = False
