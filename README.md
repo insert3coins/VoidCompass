@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.3.6**
+**Current version: 5.3.7**
 
 Void Compass is an exploration-first companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a persistent command dashboard, deep survey intelligence, expedition planning and native in-game overlays.
 
@@ -18,11 +18,11 @@ Windows is the primary native release. A native Linux x86-64 build is also avail
 - **Quiet by design** — native overlays, toasts and a curated flight log provide useful feedback without cockpit chatter, speech synthesis or an AI service.
 - **Explorer field tools** — a touchdown-anchored Surface Survey Trail, Ground/Exobiology, Mining, exploration Engineering/Synthesis, Colonisation Recon and focused Achievements remain available without turning the app into a general career suite.
 
-The Dashboard stays centred on exploration and adapts only for Mining, Surface Survey, Carrier Expeditions and Station/Data Sale activity. Automatic mode can be manually locked, while its curated Flight Log keeps useful events separate from Frontier's raw journal stream.
+The Dashboard is a single live exploration briefing: Current Survey, one unified game-route/waypoint Next Leg, three ranked Next Actions, Expedition Pulse, Discovery Summary and the curated Flight Log. It reflows on narrower windows and adapts only for Mining, Surface Survey, Carrier Expeditions and Station/Data Sale activity. Automatic mode can be manually locked, while raw Frontier journal events remain secondary diagnostics.
 
 ![Void Compass exploration dashboard](DashBoard.PNG)
 
-*The current exploration dashboard with Arrival Intelligence, route progress, exploration priorities, expedition support and the curated Flight Log.*
+*The exploration briefing keeps the current survey, route, priorities, expedition and discovery record together above the curated Flight Log.*
 
 ## Command workspaces
 
@@ -35,7 +35,7 @@ The Dashboard stays centred on exploration and adapts only for Mining, Surface S
 
 Every group starts expanded, can be collapsed deliberately, remembers that choice per commander and remains reachable through a themed scrolling rail on smaller windows. Full secondary workspaces are still created only when first opened.
 
-Settings is focused on the application itself: profiles and themes, journal paths, integrations, Adaptive Command, overlays and hotkeys, diagnostics and first-run setup. Voice packs, personas, learned cockpit memory and speech controls are no longer part of the active application.
+Settings is focused on the application itself: profiles and themes, journal paths, integrations, Adaptive Command, overlays and hotkeys, diagnostics, journal cache maintenance and first-run setup. Voice packs, personas, learned cockpit memory and speech controls are no longer part of the active application.
 
 ### Deep Survey Intelligence
 
@@ -56,7 +56,7 @@ Expedition Overview acts as a live command centre, combining current-leg navigat
 
 *Expedition Command brings the current leg, route safety, return plan, ship readiness, objectives and recent field activity into one live overview.*
 
-Named expeditions persist across sessions with journal-verified goals, multi-session statistics, prioritised bookmarks and revisit targets. Seven ready-made goal templates cover region passports, valuable worlds, Odyssey genera, local sectors, Codex fieldwork, expedition photography and mixed deep surveys. Departing a system can add worthwhile unfinished mapping, biology or FSS evidence to the Missed Discoveries queue, which links directly to its Revisit map layer and expedition bookmarks. Their active strip remains visible across Explore, while verified progress appears through the native feed, toasts and expedition panels. The flat Galactic Atlas combines original game-style Milky Way artwork with the complete 42-region Universal Cartographics layout. It works fully offline, supports retained-system, region and annotation search, natural drag movement, cursor-centred zoom, Atlas/Route Focus/Current Vicinity framing and an in-place full-window focus mode, and overlays profile-local travel breadcrumbs, game and waypoint routes, direction arrows, an optional return trail plus Valuable, Biology, Codex, Photo, Recon, Revisit, Bookmark, custom Annotation and bounded Expedition Sector records. Notes, danger warnings, regions of interest, survey targets and waypoints can be placed directly on the map; zoom-aware cluster badges keep dense histories legible, while a restrained ship pulse, planned-route tracer and next-waypoint beacon add live navigation context without rebuilding the cached atlas. Sector cells retain surveyed and incomplete evidence while untouched cells are sampled for responsive galaxy-wide control. Visible-image cropping keeps navigation responsive, while expedition plans can be exchanged as VoidCompass JSON or newline waypoint lists and full locally generated Markdown reports include the named route, objectives, evidence and bookmarks.
+Named expeditions persist across sessions with journal-verified goals, multi-session statistics, prioritised bookmarks and revisit targets. Thirteen ready-made templates range from focused region, value, biology, sector, Codex, photography and mixed-survey goals to long-range cartography, exobiology field seasons, sector mapping, regional science, Outer Rim discovery and full galactic-circumnavigation campaigns. Applying a larger campaign extends matching objectives in place, preserving their verified progress instead of creating duplicate counters. Departing a system can add worthwhile unfinished mapping, biology or FSS evidence to the Missed Discoveries queue, which links directly to its Revisit map layer and expedition bookmarks. Their active strip remains visible across Explore, while verified progress appears through the native feed, toasts and expedition panels. The flat Galactic Atlas combines original game-style Milky Way artwork with the complete 42-region Universal Cartographics layout. It works fully offline, supports retained-system, region and annotation search, natural drag movement, cursor-centred zoom, Atlas/Route Focus/Current Vicinity framing and an in-place full-window focus mode, and overlays profile-local travel breadcrumbs, game and waypoint routes, direction arrows, an optional return trail plus Valuable, Biology, Codex, Photo, Recon, Revisit, Bookmark, custom Annotation and bounded Expedition Sector records. Notes, danger warnings, regions of interest, survey targets and waypoints can be placed directly on the map; zoom-aware cluster badges keep dense histories legible, while a restrained ship pulse, planned-route tracer and next-waypoint beacon add live navigation context without rebuilding the cached atlas. Sector cells retain surveyed and incomplete evidence while untouched cells are sampled for responsive galaxy-wide control. Visible-image cropping keeps navigation responsive, while expedition plans can be exchanged as VoidCompass JSON or newline waypoint lists and full locally generated Markdown reports include the named route, objectives, evidence and bookmarks.
 
 ![Void Compass Galactic Atlas](GalaxyAtlas.PNG)
 
@@ -80,7 +80,7 @@ Carrier Command plots Fleet and Squadron Carrier routes through Spansh, can impo
 
 ## Adaptive Command Deck
 
-Void Compass keeps the Dashboard centred on exploration: current flight, route or waypoint progress, system survey, valuable discoveries, expedition support and the next verified exploration priority remain prominent. Its focused activity modes are General Flight, Exploration, Mining, Surface Survey, Carrier Expedition and Station/Data Sale. Broader journal facts may still be retained for profile continuity and universal safety handling, but no longer create dashboard objectives or modes.
+Void Compass keeps the Dashboard centred on exploration: Current Survey exposes FSS, DSS, biological and geological progress; Next Leg resolves both Elite routes and saved waypoints through one source; Next Actions ranks three verified priorities; Expedition Pulse tracks the active named campaign; and Discovery Summary retains value, first-discovery, surface-signal and notable-body evidence. Its focused activity modes are General Flight, Exploration, Mining, Surface Survey, Carrier Expedition and Station/Data Sale. Broader journal facts may still be retained for profile continuity and universal safety handling, but no longer create dashboard objectives or modes.
 
 Each mode can apply a focused overlay scene while gravity, toast and heartbeat safety feedback remains available. Automatic detection can be locked to a chosen mode per commander, and overlay scenes can be disabled independently in **Settings → Command Deck**.
 

@@ -42,49 +42,152 @@ OBJECTIVE_KINDS = {
     "manual": "Manual objective",
 }
 
+ODYSSEY_GENERA = (
+    "Aleoida", "Bacterium", "Cactoida", "Clypeus", "Concha",
+    "Electricae", "Fonticulua", "Frutexa", "Fumerola", "Fungoida",
+    "Osseus", "Recepta", "Stratum", "Tubus", "Tussock",
+)
+
 OBJECTIVE_TEMPLATES = {
     "regional_passport": {
         "name": "Galactic Region Passport",
         "description": "Visit all 42 Universal Cartographics regions using journal-confirmed arrivals.",
+        "tier": "Epic",
+        "duration": "Galaxy-spanning passport",
         "objectives": (("region_count", "", 42),),
     },
     "valuable_worlds": {
         "name": "Valuable Worlds Survey",
         "description": "Record ten valuable or terraformable worlds.",
+        "tier": "Standard",
+        "duration": "Focused survey",
         "objectives": (("valuable_count", "", 10),),
     },
     "biology_collection": {
         "name": "Odyssey Genus Collection",
         "description": "Complete one analysis from each major Odyssey biological genus.",
+        "tier": "Extended",
+        "duration": "Multi-session collection",
         "objectives": tuple(
-            ("bio_genus", genus, 1) for genus in (
-                "Aleoida", "Bacterium", "Cactoida", "Clypeus", "Concha",
-                "Electricae", "Fonticulua", "Frutexa", "Fumerola", "Fungoida",
-                "Osseus", "Recepta", "Stratum", "Tubus", "Tussock",
-            )
+            ("bio_genus", genus, 1) for genus in ODYSSEY_GENERA
         ),
     },
     "sector_survey": {
         "name": "Local Sector Survey",
         "description": "Complete the FSS survey in twenty-five systems inside a chosen sector.",
+        "tier": "Standard",
+        "duration": "Local mapping project",
         "objectives": (("sector_fss_count", "", 25),),
     },
     "codex_fieldwork": {
         "name": "Codex Fieldwork",
         "description": "Record twenty-five distinct Codex entries.",
+        "tier": "Standard",
+        "duration": "Focused fieldwork",
         "objectives": (("codex_count", "", 25),),
     },
     "photo_chronicle": {
         "name": "Expedition Photo Chronicle",
         "description": "Capture twenty-five journal-confirmed expedition screenshots.",
+        "tier": "Standard",
+        "duration": "Short chronicle",
         "objectives": (("screenshot_count", "", 25),),
     },
     "deep_survey": {
         "name": "Deep Survey",
         "description": "Combine complete systems, DSS mappings, biology and valuable discoveries.",
+        "tier": "Standard",
+        "duration": "Balanced expedition",
         "objectives": (
             ("fss_system", "", 20), ("dss_count", "", 20),
             ("bio_count", "", 10), ("valuable_count", "", 5),
+        ),
+    },
+    "long_range_cartography": {
+        "name": "Long-Range Cartographic Survey",
+        "description": (
+            "A sustained charting run balancing complete system surveys, detailed "
+            "mapping, valuable worlds, first discoveries and a photographic record."
+        ),
+        "tier": "Extended",
+        "duration": "Long multi-session expedition",
+        "objectives": (
+            ("fss_system", "", 200), ("dss_count", "", 125),
+            ("valuable_count", "", 25), ("first_discovery_count", "", 50),
+            ("screenshot_count", "", 40),
+        ),
+    },
+    "exobiology_field_season": {
+        "name": "Exobiology Field Season",
+        "description": (
+            "Build a substantial biological archive with repeated fieldwork across "
+            "every major Odyssey genus, backed by surface maps and field photography."
+        ),
+        "tier": "Extended",
+        "duration": "Long biological campaign",
+        "objectives": (
+            (("bio_count", "", 120),)
+            + tuple(("bio_genus", genus, 3) for genus in ODYSSEY_GENERA)
+            + (("dss_count", "", 60), ("screenshot_count", "", 40))
+        ),
+    },
+    "sector_mapping_campaign": {
+        "name": "Sector Mapping Campaign",
+        "description": (
+            "Methodically chart a configured expedition sector through FSS completion, "
+            "DSS mapping, first discoveries, valuable worlds and VoidCompass recon."
+        ),
+        "tier": "Extended",
+        "duration": "Long regional survey",
+        "objectives": (
+            ("sector_fss_count", "", 250), ("dss_count", "", 175),
+            ("first_discovery_count", "", 75), ("valuable_count", "", 35),
+            ("recon_system", "", 100), ("screenshot_count", "", 60),
+        ),
+    },
+    "regional_science_tour": {
+        "name": "Regional Science Grand Tour",
+        "description": (
+            "Cross many galactic regions while building a balanced stellar, planetary, "
+            "biological, Codex and photographic science record."
+        ),
+        "tier": "Epic",
+        "duration": "Major cross-region campaign",
+        "objectives": (
+            ("region_count", "", 18), ("fss_system", "", 300),
+            ("dss_count", "", 180), ("bio_count", "", 100),
+            ("codex_count", "", 120), ("screenshot_count", "", 90),
+        ),
+    },
+    "outer_rim_discovery": {
+        "name": "Outer Rim Discovery Run",
+        "description": (
+            "A deep-space discovery programme weighted toward untouched systems, "
+            "complete surveys, valuable worlds and a durable scientific archive."
+        ),
+        "tier": "Epic",
+        "duration": "Major deep-space expedition",
+        "objectives": (
+            ("fss_system", "", 500), ("dss_count", "", 300),
+            ("first_discovery_count", "", 200), ("valuable_count", "", 75),
+            ("bio_count", "", 150), ("codex_count", "", 100),
+            ("screenshot_count", "", 100),
+        ),
+    },
+    "galactic_circumnavigation": {
+        "name": "Galactic Circumnavigation",
+        "description": (
+            "The longest Mission Control programme: visit every galactic region while "
+            "building a large, mixed exploration archive over an open-ended campaign."
+        ),
+        "tier": "Epic",
+        "duration": "Open-ended galaxy campaign",
+        "objectives": (
+            ("region_count", "", 42), ("fss_system", "", 1000),
+            ("dss_count", "", 600), ("first_discovery_count", "", 300),
+            ("valuable_count", "", 150), ("bio_count", "", 300),
+            ("codex_count", "", 300), ("screenshot_count", "", 250),
+            ("recon_system", "", 200),
         ),
     },
 }
@@ -420,37 +523,59 @@ class ExpeditionManager:
         template = OBJECTIVE_TEMPLATES.get(str(template_key or ""))
         if not template:
             return []
-        added = []
+        affected = []
         with self.lock:
             expedition = self._find_ref(expedition_id)
             if not expedition:
                 return []
             rows = expedition.setdefault("objectives", [])
             existing = {
-                (str(row.get("kind") or ""), str(row.get("target") or "").casefold())
+                (str(row.get("kind") or ""), str(row.get("target") or "").casefold()): row
                 for row in rows
             }
             for kind, target, count in template["objectives"]:
                 identity = (kind, str(target or "").casefold())
-                if identity in existing:
+                count = max(1, min(100000, _integer(count, 1)))
+                current = existing.get(identity)
+                if current:
+                    # A commander can start with a focused template and later
+                    # grow the same expedition into a long-haul campaign. Raise
+                    # the target in place so verified progress and evidence are
+                    # retained without creating two objectives that advance from
+                    # the same journal fact.
+                    if count <= max(1, _integer(current.get("count"), 1)):
+                        continue
+                    current["count"] = count
+                    current["title"] = self._objective_title(kind, target, count)
+                    if _integer(current.get("progress")) < count:
+                        current["status"] = "pending"
+                        current["completed"] = None
+                    current["template"] = template["name"]
+                    current["template_tier"] = template.get("tier") or "Standard"
+                    if not current.get("notes") or str(current.get("notes")).startswith("Template:"):
+                        current["notes"] = f"Template: {template['name']}"
+                    affected.append(copy.deepcopy(current))
                     continue
                 objective = {
                     "id": uuid.uuid4().hex[:10], "kind": kind,
                     "title": self._objective_title(kind, target, count),
                     "target": str(target or "")[:200], "system": "", "body": "",
-                    "count": max(1, _integer(count, 1)), "progress": 0,
+                    "count": count, "progress": 0,
                     "status": "pending", "automatic": True,
                     "notes": f"Template: {template['name']}",
+                    "template": template["name"],
+                    "template_tier": template.get("tier") or "Standard",
                     "created": _stamp(), "completed": None, "evidence": [],
                 }
                 rows.append(objective)
-                added.append(copy.deepcopy(objective))
-                existing.add(identity)
+                affected.append(copy.deepcopy(objective))
+                existing[identity] = objective
             expedition["objectives"] = rows[-MAX_OBJECTIVES:]
-            expedition["updated"] = _stamp()
-        if added:
+            if affected:
+                expedition["updated"] = _stamp()
+        if affected:
             self.save()
-        return added
+        return affected
 
     def set_sector_plan(self, expedition_id, center, radius_ly=500, cell_size_ly=100,
                         name="Expedition sector"):
@@ -949,7 +1074,9 @@ class ExpeditionManager:
             stats["recon"] = _integer(stats.get("recon")) + 1
             completed = self._advance(
                 expedition, raw, "recon_system",
-                lambda objective: _same(objective.get("target") or objective.get("system"), system),
+                lambda objective: (
+                    not objective.get("target") and not objective.get("system")
+                ) or _same(objective.get("target") or objective.get("system"), system),
                 f"Recon {score}/100 for {system}",
             )
             self._record(expedition, raw, "RECON", f"Recon saved for {system}", f"{_integer(score)}/100")

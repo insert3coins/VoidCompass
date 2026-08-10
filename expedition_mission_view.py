@@ -358,23 +358,44 @@ class ExpeditionMissionView:
                 parent=self.parent,
             )
             return
-        dialog = self._dialog("Expedition Goal Templates", "600x430")
+        dialog = self._dialog("Expedition Goal Templates", "660x520")
         tk.Label(
-            dialog, text="MISSION TEMPLATE", fg=THEME.orange, bg=THEME.bg,
+            dialog, text=f"MISSION TEMPLATE LIBRARY · {len(OBJECTIVE_TEMPLATES)} PLANS",
+            fg=THEME.orange, bg=THEME.bg,
             font=("Segoe UI", 9, "bold"),
         ).pack(anchor="w", padx=18, pady=(16, 5))
-        keys = tuple(OBJECTIVE_TEMPLATES)
-        names = {row["name"]: key for key, row in OBJECTIVE_TEMPLATES.items()}
-        selected = tk.StringVar(value=OBJECTIVE_TEMPLATES[keys[0]]["name"] if keys else "")
+        tk.Label(
+            dialog,
+            text="STANDARD for focused goals · EXTENDED for long surveys · EPIC for major campaigns",
+            fg=THEME.muted, bg=THEME.bg, font=("Cascadia Mono", 8), anchor="w",
+        ).pack(fill=tk.X, padx=18, pady=(0, 7))
+        tier_order = {"Standard": 0, "Extended": 1, "Epic": 2}
+        keys = tuple(sorted(
+            OBJECTIVE_TEMPLATES,
+            key=lambda key: (
+                tier_order.get(OBJECTIVE_TEMPLATES[key].get("tier"), 99),
+                OBJECTIVE_TEMPLATES[key].get("name") or key,
+            ),
+        ))
+        names = {
+            f"{(row.get('tier') or 'Standard').upper()} · {row['name']}": key
+            for key, row in OBJECTIVE_TEMPLATES.items()
+        }
+        labels = tuple(
+            f"{(OBJECTIVE_TEMPLATES[key].get('tier') or 'Standard').upper()} · "
+            f"{OBJECTIVE_TEMPLATES[key]['name']}"
+            for key in keys
+        )
+        selected = tk.StringVar(value=labels[0] if labels else "")
         chooser = ttk.Combobox(
-            dialog, textvariable=selected, values=tuple(names), state="readonly",
+            dialog, textvariable=selected, values=labels, state="readonly",
             style="Mission.TCombobox",
         )
         chooser.pack(fill=tk.X, padx=18, ipady=3)
         description = tk.Label(
             dialog, text="", fg=THEME.text, bg=THEME.inset,
             font=("Cascadia Mono", 9), justify=tk.LEFT, anchor="nw",
-            wraplength=540, padx=12, pady=12,
+            wraplength=600, padx=12, pady=12,
             highlightbackground=THEME.border, highlightthickness=1,
         )
         description.pack(fill=tk.BOTH, expand=True, padx=18, pady=14)
@@ -382,23 +403,44 @@ class ExpeditionMissionView:
         def render(_event=None):
             template = OBJECTIVE_TEMPLATES.get(names.get(selected.get(), "")) or {}
             objectives = template.get("objectives") or ()
-            kinds = [OBJECTIVE_KINDS.get(kind, kind) for kind, _target, _count in objectives]
+            rows = []
+            for kind, target, count in objectives[:9]:
+                detail = OBJECTIVE_KINDS.get(kind, kind)
+                if target:
+                    detail += f" · {target}"
+                detail += f" · TARGET {int(count):,}"
+                rows.append(f"· {detail}")
+            if len(objectives) > len(rows):
+                rows.append(f"· … plus {len(objectives) - len(rows)} more objective lines")
+            requirements = ""
+            if any(kind == "sector_fss_count" for kind, _target, _count in objectives):
+                requirements = "\n\nSETUP · Define the expedition sector from Field Computer before surveying."
             description.config(text=(
+                f"{(template.get('tier') or 'Standard').upper()} CAMPAIGN\n"
+                f"PACE · {template.get('duration') or 'Commander-paced'}\n\n"
                 f"{template.get('description') or ''}\n\n"
-                f"ADDS {len(objectives)} OBJECTIVE(S)\n" + "\n".join(f"· {kind}" for kind in kinds)
+                f"TRACKS {len(objectives)} OBJECTIVE LINE(S) · "
+                f"{sum(max(1, int(count)) for _kind, _target, count in objectives):,} TARGET UNITS\n"
+                + "\n".join(rows) + requirements
             ))
 
         def apply_template():
-            added = self.manager.apply_objective_template(
+            template_key = names.get(selected.get(), "")
+            template = OBJECTIVE_TEMPLATES.get(template_key) or {}
+            affected = self.manager.apply_objective_template(
                 expedition["id"], names.get(selected.get(), ""),
             )
             dialog.destroy()
             self._changed()
-            messagebox.showinfo(
-                "Expedition Templates",
-                f"Added {len(added)} new objective(s) to {expedition.get('name') or 'the expedition'}.",
-                parent=self.parent,
-            )
+            if affected:
+                message = (
+                    f"Applied {template.get('name') or 'the template'} across "
+                    f"{len(affected)} objective(s) in {expedition.get('name') or 'the expedition'}.\n\n"
+                    "Matching goals were extended in place so their verified progress was retained."
+                )
+            else:
+                message = "This expedition already meets or exceeds every target in that template."
+            messagebox.showinfo("Expedition Templates", message, parent=self.parent)
 
         chooser.bind("<<ComboboxSelected>>", render)
         render()
