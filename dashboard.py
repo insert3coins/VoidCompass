@@ -3375,6 +3375,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 health_provider=self._adaptive_health_snapshot,
                 ui_post_callback=self._ui_post,
                 overlay_layout_callback=self.open_overlay_layout_studio,
+                cache_rebuild_callback=self.scan_all_logs_threaded,
+                cache_rebuild_button_register=(
+                    lambda widget: setattr(self, "cache_rebuild_button", widget)
+                ),
             )
         self._show_embedded_page("SETTINGS", self.settings_page)
 

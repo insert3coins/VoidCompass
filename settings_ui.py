@@ -41,7 +41,8 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
                   on_close_callback=None,
                   support_bundle_callback=None, rerun_setup_callback=None,
                   health_provider=None, ui_post_callback=None,
-                  overlay_layout_callback=None):
+                  overlay_layout_callback=None, cache_rebuild_callback=None,
+                  cache_rebuild_button_register=None):
     win = window_surface(root, embedded=embedded)
     win.title("SYSTEM CONFIGURATION")
     win.geometry(config.get("settings_geometry", "980x800"))
@@ -738,6 +739,42 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         anchor="w",
         justify=tk.LEFT,
         wraplength=620,
+    ).pack(fill=tk.X, padx=12, pady=(2, 12))
+
+    cache_section = section(diagnostics_page, "Journal Cache Maintenance")
+    cache_edsm_var = tk.BooleanVar(
+        value=bool(config.get("edsm_backfill_on_cache_rebuild", True)),
+    )
+
+    def _rebuild_journal_cache():
+        config["edsm_backfill_on_cache_rebuild"] = bool(cache_edsm_var.get())
+        persist_config(config)
+        if callable(cache_rebuild_callback):
+            cache_rebuild_callback()
+
+    cache_actions = row(cache_section)
+    cache_button = action_button(
+        cache_actions, "Rebuild Cache", _rebuild_journal_cache, muted=True,
+    )
+    cache_button.pack(side=tk.LEFT)
+    if callable(cache_rebuild_button_register):
+        cache_rebuild_button_register(cache_button)
+    tk.Checkbutton(
+        cache_actions, text="Also upload history to EDSM",
+        variable=cache_edsm_var, bg=UI_PANEL, fg=UI_DIM,
+        activebackground=UI_PANEL, activeforeground=THEME.accent,
+        selectcolor=THEME.input, highlightthickness=0, bd=0,
+        font=("Segoe UI", 8), cursor="hand2",
+    ).pack(side=tk.LEFT, padx=(10, 0))
+    tk.Label(
+        cache_section,
+        text=(
+            "Rebuild the profile-local journal cache when historical scan evidence needs "
+            "repair. Progress is reported in the Dashboard Flight Log. Historical EDSM "
+            "upload remains optional."
+        ),
+        font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w",
+        justify=tk.LEFT, wraplength=620,
     ).pack(fill=tk.X, padx=12, pady=(2, 12))
 
     def remove_deprecated_keys():

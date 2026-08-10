@@ -171,7 +171,7 @@ class DashboardUIMixin(ThemedWindowMixin):
 
     def _update_cache_rebuild_button(self, running, percent=None):
         button_widget = getattr(self, "cache_rebuild_button", None)
-        if button_widget is None:
+        if button_widget is None or not self._widget_alive(button_widget):
             return
         if running:
             if percent is None:
@@ -695,17 +695,17 @@ class DashboardUIMixin(ThemedWindowMixin):
         mode_bar = self._panel(body, border=COLOR_ACCENT)
         mode_bar.pack(fill=tk.X, pady=(0, 8))
         self.dashboard_deck_heading = tk.Label(
-            mode_bar, text="EXPLORATION COMMAND DECK", fg=self.UI_DIM,
-            bg=self.UI_PANEL, font=("Segoe UI", 7, "bold"),
+            mode_bar, text="EXPLORATION BRIEFING", fg=self.UI_DIM,
+            bg=self.UI_PANEL, font=("Segoe UI", 8, "bold"),
         )
-        self.dashboard_deck_heading.pack(side=tk.LEFT, padx=(12, 8), pady=8)
+        self.dashboard_deck_heading.pack(side=tk.LEFT, padx=(12, 8), pady=7)
         self.dashboard_mode_badge = tk.Label(
             mode_bar, text="GENERAL FLIGHT", fg="black", bg=COLOR_ACCENT,
             font=("Segoe UI", 8, "bold"), padx=8, pady=3,
         )
         self.dashboard_mode_badge.pack(side=tk.LEFT, pady=7)
         self.dashboard_mode_detail = tk.Label(
-            mode_bar, text="AUTOMATIC · awaiting journal activity", fg=COLOR_TEXT,
+            mode_bar, text="AUTO · exploration context", fg=COLOR_TEXT,
             bg=self.UI_PANEL, font=self.UI_MONO, anchor="w",
         )
         self.dashboard_mode_detail.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=10)
@@ -726,16 +726,18 @@ class DashboardUIMixin(ThemedWindowMixin):
         # Hero row: the current system and route own the dashboard's strongest
         # visual weight. Everything below supports these two exploration jobs.
         hero = tk.Frame(body, bg=self.UI_BG)
+        self.dashboard_hero = hero
         hero.pack(fill=tk.X, pady=(0, 8))
-        hero.grid_columnconfigure(0, weight=6, uniform="hero")
-        hero.grid_columnconfigure(1, weight=4, uniform="hero")
+        hero.grid_columnconfigure(0, weight=7, uniform="hero")
+        hero.grid_columnconfigure(1, weight=5, uniform="hero")
         hero.grid_rowconfigure(0, weight=1)
 
         system_card = self._panel(hero, border=COLOR_ACCENT)
+        self.dashboard_system_card = system_card
         system_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         system_head = tk.Frame(system_card, bg=self.UI_PANEL)
         system_head.pack(fill=tk.X, padx=14, pady=(11, 0))
-        self.dashboard_context_heading = self._section_label(system_head, "CURRENT SYSTEM")
+        self.dashboard_context_heading = self._section_label(system_head, "CURRENT SURVEY")
         self.dashboard_context_heading.pack(side=tk.LEFT)
         self.dashboard_survey_badge = tk.Label(
             system_head, text="AWAITING", fg="black", bg=self.UI_DIM,
@@ -768,22 +770,20 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.dashboard_survey_progress_fill.place(
             x=0, y=0, relheight=1.0, relwidth=0.0,
         )
-        tk.Frame(system_card, bg=self.UI_BORDER, height=1).pack(fill=tk.X, padx=14)
-
-        flight_stats = tk.Frame(system_card, bg=self.UI_PANEL)
-        flight_stats.pack(fill=tk.X, padx=2, pady=(0, 2))
-        stat_zones = []
+        survey_metrics = tk.Frame(system_card, bg=self.UI_PANEL)
+        survey_metrics.pack(fill=tk.X, padx=2, pady=(0, 4))
+        metric_zones = []
         for _index in range(4):
-            zone = tk.Frame(flight_stats, bg=self.UI_PANEL)
+            zone = tk.Frame(survey_metrics, bg=self.UI_PANEL)
             zone.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-            stat_zones.append(zone)
+            metric_zones.append(zone)
 
         self.dashboard_stat_labels = []
         self.dashboard_stat_values = []
         for zone, label, value in zip(
-            stat_zones,
-            ("SHIP / STATE", "NAVIGATION", "ROUTE", "SURVEY"),
-            ("AWAITING LOADOUT", "NO TARGET", "NO ACTIVE ROUTE", "0 / 0"),
+            metric_zones,
+            ("FSS", "DSS", "BIOLOGY", "GEOLOGY"),
+            ("0 / 0", "0 / 0", "0 / 0", "NONE"),
         ):
             label_widget = tk.Label(
                 zone, text=label, font=("Segoe UI", 8, "bold"),
@@ -797,7 +797,30 @@ class DashboardUIMixin(ThemedWindowMixin):
             value_widget.pack(fill=tk.X, padx=12)
             self.dashboard_stat_labels.append(label_widget)
             self.dashboard_stat_values.append(value_widget)
-        self.sys_stat, self.nav_stat, self.route_progress_stat, self.scan_stat = self.dashboard_stat_values
+        self.scan_stat = self.dashboard_stat_values[0]
+
+        tk.Frame(system_card, bg=self.UI_BORDER, height=1).pack(fill=tk.X, padx=14)
+        flight_stats = tk.Frame(system_card, bg=self.UI_PANEL)
+        flight_stats.pack(fill=tk.X, padx=2, pady=(0, 2))
+        flight_values = []
+        for label, value in (
+            ("SHIP / STATE", "AWAITING LOADOUT"),
+            ("NAV TARGET", "NO TARGET"),
+            ("ROUTE", "NO ACTIVE ROUTE"),
+        ):
+            zone = tk.Frame(flight_stats, bg=self.UI_PANEL)
+            zone.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            tk.Label(
+                zone, text=label, font=("Segoe UI", 7, "bold"),
+                fg=self.UI_DIM, bg=self.UI_PANEL, anchor="w",
+            ).pack(fill=tk.X, padx=12, pady=(7, 0))
+            value_widget = tk.Label(
+                zone, text=value, font=self.UI_MONO_BOLD, fg=COLOR_TEXT,
+                bg=self.UI_PANEL, anchor="w",
+            )
+            value_widget.pack(fill=tk.X, padx=12)
+            flight_values.append(value_widget)
+        self.sys_stat, self.nav_stat, self.route_progress_stat = flight_values
         self.dashboard_flight_meta = tk.Label(
             system_card, text="", fg=self.UI_MUTED, bg=self.UI_PANEL,
             font=("Consolas", 8), anchor="w",
@@ -809,7 +832,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.wp_panel.grid(row=0, column=1, sticky="nsew")
         wp_head = tk.Frame(self.wp_panel, bg=self.UI_PANEL)
         wp_head.pack(fill=tk.X, padx=14, pady=(11, 0))
-        self.dashboard_destination_heading = self._section_label(wp_head, "NEXT DESTINATION")
+        self.dashboard_destination_heading = self._section_label(wp_head, "NEXT LEG")
         self.dashboard_destination_heading.pack(side=tk.LEFT)
         self.wp_dist_lbl = tk.Label(wp_head, text="", font=self.UI_MONO_BOLD,
                                     fg=COLOR_ACCENT, bg=self.UI_PANEL)
@@ -841,35 +864,68 @@ class DashboardUIMixin(ThemedWindowMixin):
         )
         self.dashboard_destination_copy_btn.pack(side=tk.LEFT)
         self.dashboard_destination_open_btn = self._action_button(
-            route_actions, "OPEN EXPLORE", self.open_exploration_window,
+            route_actions, "OPEN ROUTE", lambda: self.open_exploration_window(section="route"),
         )
         self.dashboard_destination_open_btn.pack(side=tk.LEFT, padx=(6, 0))
 
-        # Supporting row: one verified exploration action and expedition
-        # logistics. These remain secondary to the system and route above.
+        # Briefing row: ranked work, long-running expedition state and the
+        # discoveries worth carrying forward. Detailed tools remain one click
+        # away instead of being reproduced on the Dashboard.
         active_row = tk.Frame(body, bg=self.UI_BG)
+        self.dashboard_briefing_row = active_row
         active_row.pack(fill=tk.X, pady=(0, 8))
-        active_row.grid_columnconfigure(0, weight=7, uniform="active")
-        active_row.grid_columnconfigure(1, weight=3, uniform="active")
+        active_row.grid_columnconfigure(0, weight=5, uniform="active")
+        active_row.grid_columnconfigure(1, weight=4, uniform="active")
+        active_row.grid_columnconfigure(2, weight=3, uniform="active")
         active_row.grid_rowconfigure(0, weight=1)
 
         objective_card = self._panel(active_row, border=COLOR_ACCENT)
+        self.dashboard_objective_card = objective_card
         objective_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         self.dashboard_objective_heading = self._section_label(
-            objective_card, "EXPLORATION PRIORITY",
+            objective_card, "NEXT ACTIONS",
         )
         self.dashboard_objective_heading.pack(anchor="w", padx=12, pady=(9, 0))
-        self.dashboard_objective_primary = tk.Label(
-            objective_card, text="No urgent objective", fg=COLOR_TEXT, bg=self.UI_PANEL,
-            font=("Segoe UI", 11, "bold"), anchor="w",
-        )
-        self.dashboard_objective_primary.pack(fill=tk.X, padx=12, pady=(7, 2))
-        self.dashboard_objective_detail = tk.Label(
-            objective_card, text="Verified exploration work will appear here as the situation changes.",
-            fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 8), anchor="nw",
-            justify=tk.LEFT, wraplength=390,
-        )
-        self.dashboard_objective_detail.pack(fill=tk.X, padx=12, pady=(0, 8))
+        self.dashboard_actions_host = tk.Frame(objective_card, bg=self.UI_PANEL)
+        self.dashboard_actions_host.pack(fill=tk.BOTH, expand=True, padx=12, pady=(5, 5))
+        self.dashboard_action_rows = []
+        self.dashboard_action_badges = []
+        self.dashboard_action_titles = []
+        self.dashboard_action_details = []
+        for index in range(3):
+            action_row = tk.Frame(self.dashboard_actions_host, bg=self.UI_PANEL)
+            action_row.pack(fill=tk.X, pady=(2, 3))
+            badge = tk.Label(
+                action_row, text=f"{index + 1:02d}", fg="black",
+                bg=COLOR_ACCENT if index == 0 else self.UI_PANEL_2,
+                font=("Cascadia Mono", 8, "bold"), padx=5, pady=3,
+            )
+            badge.pack(side=tk.LEFT, anchor="n", padx=(0, 8))
+            copy = tk.Frame(action_row, bg=self.UI_PANEL)
+            copy.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            title = tk.Label(
+                copy,
+                text="No urgent objective" if index == 0 else "Awaiting verified exploration work",
+                fg=COLOR_TEXT if index == 0 else self.UI_DIM, bg=self.UI_PANEL,
+                font=("Segoe UI", 10 if index == 0 else 9, "bold"), anchor="w",
+            )
+            title.pack(fill=tk.X)
+            detail = tk.Label(
+                copy,
+                text=(
+                    "Continue surveying or follow the current route."
+                    if index == 0 else "Journal-backed recommendations will appear here."
+                ),
+                fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 8),
+                anchor="nw", justify=tk.LEFT, wraplength=430,
+            )
+            detail.pack(fill=tk.X, pady=(1, 0))
+            self.dashboard_action_rows.append(action_row)
+            self.dashboard_action_badges.append(badge)
+            self.dashboard_action_titles.append(title)
+            self.dashboard_action_details.append(detail)
+        self.dashboard_objective_primary = self.dashboard_action_titles[0]
+        self.dashboard_objective_detail = self.dashboard_action_details[0]
         objective_actions = tk.Frame(objective_card, bg=self.UI_PANEL)
         objective_actions.pack(fill=tk.X, padx=12, pady=(0, 9))
         self.dashboard_primary_action_btn = self._action_button(
@@ -886,33 +942,35 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.dashboard_explore_action_btn.pack(side=tk.LEFT, padx=(6, 0))
 
         self.carrier_panel = self._panel(active_row)
-        self.carrier_panel.grid(row=0, column=1, sticky="nsew")
+        self.carrier_panel.grid(row=0, column=1, sticky="nsew", padx=(0, 8))
         carrier_hdr = tk.Frame(self.carrier_panel, bg=self.UI_PANEL)
         carrier_hdr.pack(fill=tk.X, padx=12, pady=(9, 4))
-        self.dashboard_support_heading = self._section_label(carrier_hdr, "EXPEDITION SUPPORT")
+        self.dashboard_support_heading = self._section_label(carrier_hdr, "EXPEDITION PULSE")
         self.dashboard_support_heading.pack(side=tk.LEFT)
         self.carrier_panel_badge = tk.Label(
-            carrier_hdr, text="IDLE", fg="black", bg=self.UI_DIM,
+            carrier_hdr, text="NO MISSION", fg="black", bg=self.UI_DIM,
             font=("Segoe UI", 7, "bold"), padx=6, pady=2,
         )
         self.carrier_panel_badge.pack(side=tk.RIGHT)
         self.carrier_panel_name = tk.Label(
-            self.carrier_panel, text="Dock at your carrier to sync.", fg=self.UI_DIM,
-            bg=self.UI_PANEL, font=self.UI_MONO_BOLD, anchor="w",
+            self.carrier_panel, text="NO ACTIVE EXPEDITION", fg=self.UI_DIM,
+            bg=self.UI_PANEL, font=("Segoe UI", 10, "bold"), anchor="w",
         )
-        self.carrier_panel_name.pack(fill=tk.X, padx=12)
+        self.carrier_panel_name.pack(fill=tk.X, padx=12, pady=(3, 0))
         self.carrier_panel_loc = tk.Label(
-            self.carrier_panel, text="", fg=self.UI_MUTED, bg=self.UI_PANEL,
-            font=self.UI_MONO, anchor="w",
+            self.carrier_panel, text="Create or resume a named expedition in Mission Control.",
+            fg=self.UI_MUTED, bg=self.UI_PANEL, font=self.UI_MONO,
+            anchor="nw", justify=tk.LEFT, wraplength=390,
         )
-        self.carrier_panel_loc.pack(fill=tk.X, padx=12, pady=(1, 0))
+        self.carrier_panel_loc.pack(fill=tk.X, padx=12, pady=(2, 0))
         self.carrier_panel_jump = tk.Label(
-            self.carrier_panel, text="", fg=COLOR_ACCENT, bg=self.UI_PANEL,
-            font=("Segoe UI", 8, "bold"), anchor="w",
+            self.carrier_panel, text="Systems, distance and next milestone will appear here.",
+            fg=COLOR_ACCENT, bg=self.UI_PANEL,
+            font=("Segoe UI", 8, "bold"), anchor="w", wraplength=390,
         )
-        self.carrier_panel_jump.pack(fill=tk.X, padx=12, pady=(1, 0))
+        self.carrier_panel_jump.pack(fill=tk.X, padx=12, pady=(3, 0))
         fuel_row = tk.Frame(self.carrier_panel, bg=self.UI_PANEL)
-        fuel_row.pack(fill=tk.X, padx=12, pady=(7, 9))
+        fuel_row.pack(fill=tk.X, padx=12, pady=(8, 5))
         self.carrier_fuel_bar_bg = tk.Frame(fuel_row, bg="#1a2430", height=7)
         self.carrier_fuel_bar_bg.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.carrier_fuel_fill = tk.Frame(self.carrier_fuel_bar_bg, bg=self.UI_OK, height=7)
@@ -920,23 +978,66 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.carrier_fuel_txt = tk.Label(fuel_row, text="", fg=self.UI_DIM,
                                          bg=self.UI_PANEL, font=("Segoe UI", 7))
         self.carrier_fuel_txt.pack(side=tk.LEFT, padx=(8, 0))
-
-        # Optional workspaces remain available, but no longer compete with the
-        # primary exploration briefing.
-        addon_strip = self._panel(body)
-        addon_strip.pack(fill=tk.X, pady=(0, 8))
-        tk.Label(
-            addon_strip, text="FIELD ACTIVITY", fg=self.UI_DIM, bg=self.UI_PANEL,
-            font=("Segoe UI", 7, "bold"),
-        ).pack(side=tk.LEFT, padx=(12, 8), pady=8)
-        self.dashboard_operations_text = tk.Label(
-            addon_strip, text="No active field work", fg=self.UI_MUTED,
-            bg=self.UI_PANEL, font=("Consolas", 8), anchor="w",
+        expedition_actions = tk.Frame(self.carrier_panel, bg=self.UI_PANEL)
+        expedition_actions.pack(fill=tk.X, padx=12, pady=(3, 9))
+        self.dashboard_support_open_btn = self._action_button(
+            expedition_actions, "MISSION CONTROL",
+            lambda: self.open_exploration_window(section="mission"), accent=True,
         )
-        self.dashboard_operations_text.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=6)
+        self.dashboard_support_open_btn.pack(side=tk.LEFT)
+
+        discovery_card = self._panel(active_row)
+        self.dashboard_discovery_card = discovery_card
+        discovery_card.grid(row=0, column=2, sticky="nsew")
+        discovery_head = tk.Frame(discovery_card, bg=self.UI_PANEL)
+        discovery_head.pack(fill=tk.X, padx=12, pady=(9, 4))
+        self._section_label(discovery_head, "DISCOVERY SUMMARY").pack(side=tk.LEFT)
+        self.dashboard_discovery_badge = tk.Label(
+            discovery_head, text="QUIET", fg="black", bg=self.UI_DIM,
+            font=("Segoe UI", 7, "bold"), padx=6, pady=2,
+        )
+        self.dashboard_discovery_badge.pack(side=tk.RIGHT)
+        self.dashboard_discovery_value = tk.Label(
+            discovery_card, text="SYSTEM VALUE AWAITING SCANS", fg=COLOR_ORANGE,
+            bg=self.UI_PANEL, font=("Segoe UI", 9, "bold"), anchor="w",
+        )
+        self.dashboard_discovery_value.pack(fill=tk.X, padx=12, pady=(3, 5))
+        discovery_metrics = tk.Frame(discovery_card, bg=self.UI_PANEL)
+        discovery_metrics.pack(fill=tk.X, padx=8)
+        self.dashboard_discovery_labels = []
+        self.dashboard_discovery_values = []
+        for index, label in enumerate(("VALUABLE", "FIRSTS", "BIO", "SIGNALS")):
+            row, column = divmod(index, 2)
+            cell = tk.Frame(discovery_metrics, bg=self.UI_PANEL)
+            cell.grid(row=row, column=column, sticky="nsew", padx=4, pady=2)
+            discovery_metrics.grid_columnconfigure(column, weight=1, uniform="discoveries")
+            label_widget = tk.Label(
+                cell, text=label, fg=self.UI_DIM, bg=self.UI_PANEL,
+                font=("Segoe UI", 7, "bold"), anchor="w",
+            )
+            label_widget.pack(fill=tk.X)
+            value_widget = tk.Label(
+                cell, text="0", fg=COLOR_TEXT, bg=self.UI_PANEL,
+                font=self.UI_MONO_BOLD, anchor="w",
+            )
+            value_widget.pack(fill=tk.X)
+            self.dashboard_discovery_labels.append(label_widget)
+            self.dashboard_discovery_values.append(value_widget)
+        self.dashboard_discovery_notable = tk.Label(
+            discovery_card, text="No notable bodies recorded yet.", fg=self.UI_MUTED,
+            bg=self.UI_PANEL, font=("Consolas", 8), anchor="nw", justify=tk.LEFT,
+            wraplength=300,
+        )
+        self.dashboard_discovery_notable.pack(fill=tk.X, padx=12, pady=(6, 5))
         self._action_button(
-            addon_strip, "FIELD TOOLS", self.show_operations_page, muted=True,
-        ).pack(side=tk.RIGHT, padx=10, pady=5)
+            discovery_card, "OPEN DISCOVERIES",
+            lambda: self.open_exploration_window(section="discoveries"), muted=True,
+        ).pack(anchor="w", padx=12, pady=(2, 9))
+
+        # Compatibility sink for older activity-refresh paths. Field work now
+        # enters the ranked action queue instead of consuming a permanent row.
+        self.dashboard_operations_text = tk.Label(body, text="", bg=self.UI_BG)
+        body.bind("<Configure>", self._layout_dashboard_briefing, add="+")
 
         # Exploration log: a curated flight record by default, with the raw
         # Frontier journal kept deliberately secondary for diagnostics.
@@ -1007,8 +1108,9 @@ class DashboardUIMixin(ThemedWindowMixin):
 
         footer = tk.Frame(body, bg=self.UI_BG)
         footer.pack(fill=tk.X, pady=(5, 0))
-        self._add_cache_rebuild_controls(footer)
-        self._action_button(footer, "Screenshots", self.open_screenshots_folder, muted=True).pack(side=tk.LEFT, padx=(6, 0))
+        self._action_button(
+            footer, "Screenshots", self.open_screenshots_folder, muted=True,
+        ).pack(side=tk.LEFT)
         self._console_toggle_btn = tk.Button(
             footer, text="▶  DIAGNOSTICS", command=self._toggle_console,
             bg=self.UI_BG, fg=self.UI_DIM, font=("Segoe UI", 8, "bold"),
@@ -1228,7 +1330,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         for waypoint in waypoints:
             if not waypoint.get("visited") and waypoint.get("name"):
                 return waypoint["name"]
-        return None
+        return getattr(self, "dest_name", None) or None
 
     def _dashboard_copy_next(self):
         deck = getattr(self, "adaptive_command", None)
@@ -1251,8 +1353,11 @@ class DashboardUIMixin(ThemedWindowMixin):
                 self.dashboard_objective_detail.config(text="No pending Fleet Carrier expedition stop is available to copy.")
             return
         rows = getattr(self, "_operational_queue", None) or []
-        destination = destination or (rows[0].get("copy_text") if rows else None)
-        destination = destination or self._dashboard_next_destination()
+        if mode in ("general", "exploration"):
+            destination = self._dashboard_next_destination()
+        else:
+            destination = (rows[0].get("copy_text") if rows else None)
+            destination = destination or self._dashboard_next_destination()
         if destination:
             self._copy_waypoint_to_clipboard(destination, "NEXT DESTINATION")
             self.dashboard_objective_detail.config(text=f"Copied {destination} to the clipboard.")
@@ -1276,6 +1381,213 @@ class DashboardUIMixin(ThemedWindowMixin):
             return int(float(value or 0))
         except (TypeError, ValueError):
             return default
+
+    def _layout_dashboard_briefing(self, event=None):
+        """Reflow briefing cards once at each width breakpoint."""
+        width = int(getattr(event, "width", 0) or 0)
+        if width <= 1:
+            return
+        stacked_hero = width < 900
+        stacked_briefing = width < 980
+        layout = (stacked_hero, stacked_briefing)
+        if layout == getattr(self, "_dashboard_briefing_layout", None):
+            return
+        self._dashboard_briefing_layout = layout
+
+        hero = getattr(self, "dashboard_hero", None)
+        system_card = getattr(self, "dashboard_system_card", None)
+        route_card = getattr(self, "wp_panel", None)
+        if hero is not None and system_card is not None and route_card is not None:
+            if stacked_hero:
+                hero.grid_columnconfigure(0, weight=1)
+                hero.grid_columnconfigure(1, weight=0)
+                system_card.grid_configure(
+                    row=0, column=0, columnspan=2, padx=0, pady=(0, 8), sticky="nsew",
+                )
+                route_card.grid_configure(
+                    row=1, column=0, columnspan=2, padx=0, pady=0, sticky="nsew",
+                )
+            else:
+                hero.grid_columnconfigure(0, weight=7, uniform="hero")
+                hero.grid_columnconfigure(1, weight=5, uniform="hero")
+                system_card.grid_configure(
+                    row=0, column=0, columnspan=1, padx=(0, 8), pady=0, sticky="nsew",
+                )
+                route_card.grid_configure(
+                    row=0, column=1, columnspan=1, padx=0, pady=0, sticky="nsew",
+                )
+
+        briefing = getattr(self, "dashboard_briefing_row", None)
+        objective = getattr(self, "dashboard_objective_card", None)
+        expedition = getattr(self, "carrier_panel", None)
+        discovery = getattr(self, "dashboard_discovery_card", None)
+        if all(widget is not None for widget in (briefing, objective, expedition, discovery)):
+            if stacked_briefing:
+                briefing.grid_columnconfigure(0, weight=1, uniform="briefing_compact")
+                briefing.grid_columnconfigure(1, weight=1, uniform="briefing_compact")
+                briefing.grid_columnconfigure(2, weight=0, uniform="")
+                objective.grid_configure(
+                    row=0, column=0, columnspan=2, padx=0, pady=(0, 8), sticky="nsew",
+                )
+                expedition.grid_configure(
+                    row=1, column=0, columnspan=1, padx=(0, 8), pady=0, sticky="nsew",
+                )
+                discovery.grid_configure(
+                    row=1, column=1, columnspan=1, padx=0, pady=0, sticky="nsew",
+                )
+            else:
+                briefing.grid_columnconfigure(0, weight=5, uniform="active")
+                briefing.grid_columnconfigure(1, weight=4, uniform="active")
+                briefing.grid_columnconfigure(2, weight=3, uniform="active")
+                objective.grid_configure(
+                    row=0, column=0, columnspan=1, padx=(0, 8), pady=0, sticky="nsew",
+                )
+                expedition.grid_configure(
+                    row=0, column=1, columnspan=1, padx=(0, 8), pady=0, sticky="nsew",
+                )
+                discovery.grid_configure(
+                    row=0, column=2, columnspan=1, padx=0, pady=0, sticky="nsew",
+                )
+        self._schedule_workspace_scrollregion()
+
+    def _set_dashboard_actions(self, actions):
+        """Render a compact ranked queue without rebuilding Dashboard widgets."""
+        if not hasattr(self, "dashboard_action_rows"):
+            return
+        actions = [row for row in (actions or ()) if isinstance(row, dict)][:3]
+        if not actions:
+            actions = [{
+                "title": "No urgent objective",
+                "detail": "Flight state is stable. Continue surveying or follow the current route.",
+            }]
+        for index, row_widget in enumerate(self.dashboard_action_rows):
+            if index >= len(actions):
+                row_widget.pack_forget()
+                continue
+            row_widget.pack(fill=tk.X, pady=(2, 3))
+            action = actions[index]
+            self.dashboard_action_titles[index].config(
+                text=str(action.get("title") or action.get("label") or "Exploration task"),
+                fg=COLOR_TEXT if index == 0 else self.UI_DIM,
+            )
+            self.dashboard_action_details[index].config(
+                text=str(action.get("detail") or "Journal-backed exploration objective."),
+            )
+            self.dashboard_action_badges[index].config(
+                bg=COLOR_ACCENT if index == 0 else self.UI_PANEL_2,
+                fg="black" if index == 0 else self.UI_DIM,
+            )
+
+    def _refresh_dashboard_next_leg(self, route_progress=None):
+        """Render game routes and saved waypoint plans through one truthful model."""
+        if not hasattr(self, "wp_name_lbl"):
+            return
+        route_progress = route_progress or self._current_route_progress()
+        destination = self._dashboard_next_destination()
+        route = list(getattr(self, "route_list", None) or [])
+        waypoint_manager = getattr(self, "waypoint_manager", None)
+        waypoints = list(getattr(waypoint_manager, "waypoints", None) or [])
+
+        source = "NO ROUTE"
+        final_destination = None
+        if route:
+            source = "GAME ROUTE"
+            final_destination = route[-1]
+        elif waypoints:
+            source = "WAYPOINT PLAN"
+            pending = [row for row in waypoints if not row.get("visited")]
+            final_destination = pending[-1].get("name") if pending else waypoints[-1].get("name")
+        elif getattr(self, "dest_name", None):
+            source = "NAV TARGET"
+            destination = destination or self.dest_name
+            final_destination = self.dest_name
+
+        next_coords = None
+        for entry in getattr(self, "nav_route_entries", None) or ():
+            if not isinstance(entry, dict):
+                continue
+            if str(entry.get("StarSystem") or "").casefold() == str(destination or "").casefold():
+                next_coords = entry.get("StarPos")
+                break
+        if next_coords is None:
+            for waypoint in waypoints:
+                if str(waypoint.get("name") or "").casefold() == str(destination or "").casefold():
+                    next_coords = waypoint.get("coords")
+                    break
+        distance_text = ""
+        if destination and next_coords and getattr(self, "current_coords", None) and waypoint_manager:
+            try:
+                distance_text = f"{waypoint_manager.get_distance(self.current_coords, next_coords):,.1f} LY"
+            except (TypeError, ValueError):
+                distance_text = ""
+
+        if destination:
+            details = [source, route_progress.get("text") or "ROUTE ACTIVE"]
+            if final_destination and str(final_destination).casefold() != str(destination).casefold():
+                details.append(f"FINAL · {final_destination}")
+            self.wp_name_lbl.config(text=str(destination).upper())
+            self.wp_dist_lbl.config(text=distance_text)
+            self._set_wp_info_text("\n".join(details))
+            self.dashboard_destination_copy_btn.config(state=tk.NORMAL)
+        else:
+            self.wp_name_lbl.config(text="NO ACTIVE ROUTE")
+            self.wp_dist_lbl.config(text="")
+            self._set_wp_info_text(
+                "Plot a route in Elite or add expedition waypoints to establish the next leg."
+            )
+            self.dashboard_destination_copy_btn.config(state=tk.DISABLED)
+
+    def _refresh_dashboard_discovery(self, intelligence, survey_summary, unsold, potential_bonus):
+        if not hasattr(self, "dashboard_discovery_value"):
+            return
+        completion = (intelligence or {}).get("completion") or {}
+        valuable = len(getattr(self, "valuable_bodies", None) or ())
+        first_discoveries = int(completion.get("first_discoveries") or 0)
+        first_footfalls = int(completion.get("first_footfalls") or 0)
+        bio_complete = int(completion.get("bio_complete") or 0)
+        bio_total = int(completion.get("bio_total") or 0)
+        geo_total = int(completion.get("geo_detected") or 0)
+        system_value = str((survey_summary or {}).get("total") or "AWAITING SCANS")
+        value_text = f"SYSTEM {system_value}"
+        if unsold:
+            aboard = self._dashboard_credits(unsold)
+            if potential_bonus:
+                aboard = f"{aboard}–{self._dashboard_credits(unsold + potential_bonus)}"
+            value_text += f"  ·  ABOARD {aboard}"
+        self.dashboard_discovery_value.config(text=value_text.upper())
+
+        values = (
+            str(valuable),
+            f"{first_discoveries} / {first_footfalls} FF",
+            f"{bio_complete} / {bio_total}",
+            f"{bio_total} BIO · {geo_total} GEO",
+        )
+        for widget, value in zip(self.dashboard_discovery_values, values):
+            widget.config(text=value)
+
+        if getattr(self, "system_undiscovered", False):
+            badge, colour = "NEW SYSTEM", self.UI_WARN
+        elif valuable:
+            badge, colour = "NOTABLE", COLOR_ORANGE
+        elif bio_total:
+            badge, colour = "BIOLOGY", self.UI_OK
+        else:
+            badge, colour = "QUIET", self.UI_DIM
+        self.dashboard_discovery_badge.config(text=badge, bg=colour)
+        notable = list((survey_summary or {}).get("high_value") or [])
+        arrival_notable = list(((intelligence or {}).get("arrival") or {}).get("notable") or [])
+        if notable:
+            text = "\n".join(notable[:2])
+        elif arrival_notable:
+            text = "\n".join(
+                str(row.get("body") or row.get("title") or "Notable discovery")
+                for row in arrival_notable[:2] if isinstance(row, dict)
+            )
+        elif bio_total or geo_total:
+            text = f"Surface signals · {bio_total} biological · {geo_total} geological"
+        else:
+            text = "No notable bodies or surface signals recorded yet."
+        self.dashboard_discovery_notable.config(text=text)
 
     def _dashboard_activity_context(self, mode, snapshot, queue_rows=None):
         """Build one verified, display-only context for an adaptive add-on mode."""
@@ -1592,15 +1904,15 @@ class DashboardUIMixin(ThemedWindowMixin):
         exploration = mode in ("general", "exploration", None)
         if exploration:
             previous_mode = getattr(self, "_dashboard_render_mode", None)
-            self.dashboard_deck_heading.config(text="EXPLORATION COMMAND DECK")
-            self.dashboard_context_heading.config(text="ARRIVAL INTELLIGENCE")
-            self.dashboard_destination_heading.config(text="NEXT DESTINATION")
-            self.dashboard_objective_heading.config(text="EXPLORATION PRIORITY")
+            self.dashboard_deck_heading.config(text="EXPLORATION BRIEFING")
+            self.dashboard_context_heading.config(text="CURRENT SURVEY")
+            self.dashboard_destination_heading.config(text="NEXT LEG")
+            self.dashboard_objective_heading.config(text="NEXT ACTIONS")
             for widget, text_value in zip(
-                self.dashboard_stat_labels, ("SHIP / STATE", "NAVIGATION", "ROUTE", "SURVEY"),
+                self.dashboard_stat_labels, ("FSS", "DSS", "BIOLOGY", "GEOLOGY"),
             ):
                 widget.config(text=text_value)
-            self.dashboard_support_heading.config(text="EXPEDITION SUPPORT")
+            self.dashboard_support_heading.config(text="EXPEDITION PULSE")
             self.dashboard_stream_heading.config(text="EXPLORATION LOG")
             self.dashboard_stream_subtitle.config(
                 text="Curated discoveries, navigation and expedition activity"
@@ -1612,7 +1924,11 @@ class DashboardUIMixin(ThemedWindowMixin):
             self.dashboard_explore_action_btn.config(text="GALAXY", command=self.open_bgs_window)
             self.dashboard_destination_copy_btn.config(text="COPY NEXT", command=self._dashboard_copy_next)
             self.dashboard_destination_open_btn.config(
-                text="OPEN EXPLORE", command=self.open_exploration_window,
+                text="OPEN ROUTE", command=lambda: self.open_exploration_window(section="route"),
+            )
+            self.dashboard_support_open_btn.config(
+                text="MISSION CONTROL",
+                command=lambda: self.open_exploration_window(section="mission"),
             )
             self._dashboard_render_mode = "exploration"
             if previous_mode not in (None, "exploration"):
@@ -1658,8 +1974,9 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.dashboard_flight_meta.config(
             text=f"Adaptive mode · verified from live journal state · {context['detail']}"
         )
-        self.dashboard_objective_primary.config(text=context["priority"])
-        self.dashboard_objective_detail.config(text=context["priority_detail"])
+        self._set_dashboard_actions(({
+            "title": context["priority"], "detail": context["priority_detail"],
+        },))
         self.dashboard_support_heading.config(text=context["support_heading"])
         self.carrier_panel_badge.config(
             text=context["support_badge"], bg=context.get("support_colour") or self.UI_OK,
@@ -1680,9 +1997,12 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.dashboard_explore_action_btn.config(text="EXPLORATION", command=self.open_exploration_window)
         self.dashboard_destination_copy_btn.config(
             text=context.get("destination_copy_text") or "COPY NEXT",
-            command=self._dashboard_copy_next,
+            command=self._dashboard_copy_next, state=tk.NORMAL,
         )
         self.dashboard_destination_open_btn.config(
+            text=context["action"], command=self._adaptive_open_mode_workspace,
+        )
+        self.dashboard_support_open_btn.config(
             text=context["action"], command=self._adaptive_open_mode_workspace,
         )
         self._dashboard_render_mode = mode
@@ -1763,16 +2083,14 @@ class DashboardUIMixin(ThemedWindowMixin):
             deck_status = deck.status()
             health = self._adaptive_health_snapshot()
             self.dashboard_mode_badge.config(text=deck_status.get("label") or "GENERAL FLIGHT")
-            session = deck_status.get("session") or {}
-            event_count = int(session.get("events") or 0)
             control = "AUTO" if deck_status.get("automatic") else "LOCKED"
             self.dashboard_mode_detail.config(
-                text=f"{control} · {event_count:,} mode event{'s' if event_count != 1 else ''} · {len(getattr(self, '_operational_queue', []) or [])} queued objectives"
+                text=f"{control} · {(deck_status.get('label') or 'exploration').casefold()} context"
             )
             level = health.get("level") or "NOMINAL"
             colour = self.UI_OK if level == "NOMINAL" else self.UI_WARN if level == "BUSY" else self.UI_FAIL
             self.dashboard_health_badge.config(
-                text=f"{level} · UI {health.get('ui_pending', 0)} · IO {health.get('writes_pending', 0)}",
+                text=level,
                 bg=colour,
             )
             selected_label = str(deck_status.get("label") or "MODE")
@@ -1808,39 +2126,15 @@ class DashboardUIMixin(ThemedWindowMixin):
             flight_bits.append(str(legal))
         self.dashboard_flight_meta.config(text="  ·  ".join(flight_bits) or "Ship telemetry awaiting journal state")
 
-        # Choose one truthful exploration priority instead of allowing optional
-        # workspaces to displace the app's primary purpose.
-        primary = "No urgent objective"
-        detail = "Flight state is stable. Continue surveying or follow the current route."
+        # Use one shared ranked source so survey and route recommendations
+        # cannot contradict one another.
         intelligence = self._exploration_intelligence_snapshot()
         exploration_actions = list(intelligence.get("actions") or [])
-        if exploration_actions:
-            primary = str(exploration_actions[0].get("title") or primary)
-            detail = str(exploration_actions[0].get("detail") or detail)
-        sample = getattr(self, "bio_sampling", None)
-        remaining_bodies = max(0, int(getattr(self, "total", 0) or 0) - int(getattr(self, "scanned", 0) or 0))
-        missions = state.get("missions") or {}
-        mission_rows = list(missions.values()) if isinstance(missions, dict) else list(missions)
-        next_destination = self._dashboard_next_destination()
-        if isinstance(sample, dict):
-            species = sample.get("species") or sample.get("genus") or "biological sample"
-            progress = int(sample.get("sample_idx") or sample.get("progress") or 1)
-            primary = f"Continue {species} sampling"
-            detail = f"Active biological analysis is at sample {progress}/3 on {sample.get('body') or 'the current body'}."
-        elif unsold >= 20_000_000:
-            primary = "Secure valuable survey data"
-            detail = f"Approximately {self._dashboard_credits(unsold)} remains unsold and is currently at risk."
-        elif remaining_bodies and not exploration_actions:
-            primary = "Complete the current system survey"
-            detail = f"{remaining_bodies} bod{'ies remain' if remaining_bodies != 1 else 'y remains'} unresolved in {getattr(self, 'current_sys', 'this system')}."
-        elif route_progress.get("remaining") and next_destination:
-            primary = f"Continue to {next_destination}"
-            detail = route_progress.get("text") or "A navigation route remains active."
-        self.dashboard_objective_primary.config(text=primary)
-        self.dashboard_objective_detail.config(text=detail)
+        self._set_dashboard_actions(exploration_actions)
 
         # Current-system survey intelligence stays visible even when the
         # transient survey overlay is hidden or the activity stream moves on.
+        survey_summary = None
         if hasattr(self, "dashboard_survey_name"):
             completion = intelligence.get("completion") or {}
             arrival = intelligence.get("arrival") or {}
@@ -1870,6 +2164,16 @@ class DashboardUIMixin(ThemedWindowMixin):
             )
             self.dashboard_survey_progress_fill.place_configure(relwidth=survey_ratio)
             self.dashboard_survey_name.config(text=system_name.upper())
+            survey_values = (
+                f"{int(completion.get('scanned') or scanned)} / {int(completion.get('total') or total)}"
+                if int(completion.get("total") or total) else str(int(completion.get("scanned") or scanned)),
+                f"{int(completion.get('dss_complete') or 0)} / {int(completion.get('dss_targets') or 0)}",
+                f"{int(completion.get('bio_complete') or 0)} / {int(completion.get('bio_total') or 0)}",
+                f"{int(completion.get('geo_detected') or geo_signals)} DETECTED"
+                if int(completion.get("geo_detected") or geo_signals) else "NONE",
+            )
+            for widget, value in zip(self.dashboard_stat_values, survey_values):
+                widget.config(text=value)
             signal_bits = [completion.get("summary") or (f"FSS {scanned}/{total}" if total else f"FSS {scanned}")]
             if bio_signals and not completion:
                 signal_bits.append(f"BIO {bio_signals}")
@@ -1877,7 +2181,6 @@ class DashboardUIMixin(ThemedWindowMixin):
                 signal_bits.append(f"GEO {geo_signals}")
             if notable and not completion:
                 signal_bits.append(f"NOTABLE {notable}")
-            survey_summary = None
             try:
                 survey_summary = self._get_fss_summary()
             except Exception:
@@ -1903,9 +2206,13 @@ class DashboardUIMixin(ThemedWindowMixin):
             )
             self.dashboard_survey_value.config(text="  ·  ".join(value_bits))
 
-        # Mining is the one deliberate non-exploration activity in the focused
-        # product. Broader journal facts remain available to safety systems but
-        # do not compete for Dashboard attention.
+        self._refresh_dashboard_discovery(
+            intelligence, survey_summary, unsold, potential_bonus,
+        )
+        self._refresh_dashboard_next_leg(route_progress)
+
+        # Retained compatibility state for the adaptive queue. Field activity
+        # now appears in Next Actions rather than taking a permanent strip.
         operations = []
         specialist_engine = getattr(self, "specialist_engine", None)
         if specialist_engine and specialist_engine.mining_active():
@@ -1914,9 +2221,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             text="  ·  ".join(operations) or "No active field work · survey and mining tools remain ready"
         )
 
-        # The focused queue still drives adaptive mode actions, but only
-        # non-exploration rows are summarised in the field strip. It no longer
-        # replaces the exploration priority above.
+        # The focused queue still drives deliberate add-on modes.
         command_snapshot = {}
         if deck:
             try:
@@ -1936,9 +2241,11 @@ class DashboardUIMixin(ThemedWindowMixin):
             if hasattr(self, "dashboard_mode_detail"):
                 deck_status = deck.status()
                 control = "AUTO" if deck_status.get("automatic") else "LOCKED"
-                session_events = int((deck_status.get("session") or {}).get("events") or 0)
                 self.dashboard_mode_detail.config(
-                    text=f"{control} · {session_events:,} context event{'s' if session_events != 1 else ''} · {len(addon_rows)} active field task{'s' if len(addon_rows) != 1 else ''}"
+                    text=(
+                        f"{control} · {str(route_progress.get('text') or 'exploration context').casefold()}"
+                        f" · {len(exploration_actions)} ranked action{'s' if len(exploration_actions) != 1 else ''}"
+                    )
                 )
                 self._refresh_adaptive_mode_open_button(deck_status, rows)
 
@@ -1972,6 +2279,13 @@ class DashboardUIMixin(ThemedWindowMixin):
                 if render_mode not in ("general", "exploration") else None
             )
             self._apply_dashboard_activity_context(render_mode, activity_context)
+            if render_mode not in ("general", "exploration"):
+                self.dashboard_mode_detail.config(
+                    text=(
+                        f"{control} · {str(deck_status.get('label') or render_mode).casefold()} context"
+                        f" · {len(mode_rows)} active task{'s' if len(mode_rows) != 1 else ''}"
+                    )
+                )
         else:
             self._apply_dashboard_activity_context("exploration")
 
@@ -4194,92 +4508,88 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.update_waypoint_display()
 
     def update_carrier_panel(self, force=False):
-        """Refresh the sidebar Fleet Carrier status panel from carrier_tracker data."""
+        """Refresh the Dashboard expedition pulse in its exploration context."""
         if getattr(self, "_startup_restore_active", False):
             self._startup_restore_ui_pending = True
             return
-        if not hasattr(self, "carrier_panel") or not hasattr(self, "carrier_tracker"):
+        if not hasattr(self, "carrier_panel"):
             return
         deck = getattr(self, "adaptive_command", None)
-        render_mode = str(deck.current_mode if deck else "exploration")
+        render_mode = str(
+            getattr(self, "_dashboard_render_mode", None)
+            or (deck.current_mode if deck else "exploration")
+        )
         if not force and render_mode not in ("general", "exploration"):
             # In add-on modes this physical card is intentionally reused for
-            # mode-specific support; a carrier refresh must not overwrite it.
+            # mode-specific support; expedition refresh must not overwrite it.
             return
-        cd = self.carrier_tracker.carrier_data
-        name     = cd.get("name")
-        callsign = cd.get("callsign") or ""
-        system   = cd.get("system") or ""
-        status   = cd.get("status", "idle")
-
-        _badge_color = {
-            "idle":            self.UI_OK,
-            "jumping":         COLOR_ACCENT,
-            "cooldown":        self.UI_WARN,
-            "cooldown_cancel": self.UI_FAIL,
-        }
-        _badge_text = {
-            "idle":            "IDLE",
-            "jumping":         "JUMPING",
-            "cooldown":        "COOLDOWN",
-            "cooldown_cancel": "CANCELLED",
-        }
-
-        self.carrier_panel_badge.config(
-            text=_badge_text.get(status, status.upper()),
-            bg=_badge_color.get(status, self.UI_DIM),
+        manager = getattr(self, "expedition_manager", None)
+        try:
+            snapshot = manager.compass_snapshot(
+                next_waypoint=self._dashboard_next_destination(),
+            ) if manager else {}
+        except Exception:
+            snapshot = {}
+        self.dashboard_support_heading.config(text="EXPEDITION PULSE")
+        self.dashboard_support_open_btn.config(
+            text="MISSION CONTROL",
+            command=lambda: self.open_exploration_window(section="mission"),
         )
-
-        if name:
-            name_txt = f"{name}  ({callsign})" if callsign else name
-            self._config_label_if_changed(self.carrier_panel_name, text=name_txt, fg=COLOR_TEXT)
-        else:
+        if not snapshot.get("active"):
+            self.carrier_panel_badge.config(text="NO MISSION", bg=self.UI_DIM)
             self._config_label_if_changed(
-                self.carrier_panel_name,
-                text="Dock at your carrier to sync.",
-                fg=self.UI_DIM,
+                self.carrier_panel_name, text="NO ACTIVE EXPEDITION", fg=self.UI_DIM,
             )
-
-        self._config_label_if_changed(self.carrier_panel_loc, text=system, fg=self.UI_MUTED)
-
-        dest = cd.get("jump_destination")
-        dep  = cd.get("jump_departure_time")
-        if status == "jumping" and dest:
-            ct = _carrier_countdown(dep)
-            jump_txt = f"→ {dest}   {ct}" if ct else f"→ {dest}"
-            self._config_label_if_changed(self.carrier_panel_jump, text=jump_txt, fg=COLOR_ACCENT)
-        elif status == "cooldown":
             self._config_label_if_changed(
-                self.carrier_panel_jump,
-                text="Jump complete — cooling down",
-                fg=self.UI_WARN,
-            )
-        elif status == "cooldown_cancel":
-            self._config_label_if_changed(
-                self.carrier_panel_jump,
-                text="Jump cancelled — cooling down",
-                fg=self.UI_FAIL,
-            )
-        else:
-            self._config_label_if_changed(self.carrier_panel_jump, text="", fg=self.UI_DIM)
-
-        fuel = cd.get("fuel_level")
-        cap  = cd.get("fuel_capacity") or 1000
-        if fuel is not None:
-            pct   = max(0.0, min(1.0, fuel / cap))
-            bar_base_w = self.carrier_fuel_bar_bg.winfo_width() or 240
-            bar_w = int(bar_base_w * pct)
-            color = self.UI_OK if pct > 0.4 else (self.UI_WARN if pct > 0.15 else self.UI_FAIL)
-            self.carrier_fuel_fill.place(x=0, y=0, relheight=1.0, width=bar_w)
-            self.carrier_fuel_fill.config(bg=color)
-            self._config_label_if_changed(
-                self.carrier_fuel_txt,
-                text=f"{fuel:,} / {cap:,} T",
+                self.carrier_panel_loc,
+                text="Create or resume a named expedition in Mission Control.",
                 fg=self.UI_MUTED,
             )
-        else:
-            self.carrier_fuel_fill.place(x=0, y=0, relheight=1.0, width=0)
-            self._config_label_if_changed(self.carrier_fuel_txt, text="", fg=self.UI_DIM)
+            self._config_label_if_changed(
+                self.carrier_panel_jump,
+                text="Long-running goals and milestones will be tracked here.",
+                fg=COLOR_ACCENT,
+            )
+            self.carrier_fuel_fill.place(x=0, y=0, relheight=1.0, relwidth=0.0)
+            self._config_label_if_changed(self.carrier_fuel_txt, text="0 / 0", fg=self.UI_DIM)
+            return
+
+        complete = max(0, int(snapshot.get("objectives_complete") or 0))
+        total = max(0, int(snapshot.get("objectives_total") or 0))
+        ratio = min(1.0, complete / total) if total else 0.0
+        status = str(snapshot.get("status") or "active").upper()
+        badge_colour = self.UI_OK if status == "ACTIVE" else self.UI_WARN
+        self.carrier_panel_badge.config(text=status, bg=badge_colour)
+        self._config_label_if_changed(
+            self.carrier_panel_name,
+            text=str(snapshot.get("name") or "NAMED EXPEDITION").upper(),
+            fg=COLOR_TEXT,
+        )
+        self._config_label_if_changed(
+            self.carrier_panel_loc,
+            text=(
+                f"{complete}/{total} objectives · {int(snapshot.get('systems') or 0):,} systems · "
+                f"{int(snapshot.get('jumps') or 0):,} jumps · {float(snapshot.get('distance_ly') or 0):,.1f} ly"
+            ),
+            fg=self.UI_MUTED,
+        )
+        next_step = snapshot.get("next_objective") or snapshot.get("next_waypoint")
+        if not next_step and total and complete >= total:
+            next_step = "All expedition objectives complete"
+        self._config_label_if_changed(
+            self.carrier_panel_jump,
+            text=f"NEXT · {next_step}" if next_step else "No pending objective or waypoint",
+            fg=self.UI_OK if total and complete >= total else COLOR_ACCENT,
+        )
+        self.carrier_fuel_fill.place(x=0, y=0, relheight=1.0, relwidth=ratio)
+        self.carrier_fuel_fill.config(
+            bg=self.UI_OK if total and complete >= total else COLOR_ACCENT,
+        )
+        self._config_label_if_changed(
+            self.carrier_fuel_txt,
+            text=f"{complete} / {total}",
+            fg=self.UI_MUTED,
+        )
 
     def update_waypoint_display(self):
         # Route Plotter uses this same manager and callback. Refresh the
@@ -4291,94 +4601,43 @@ class DashboardUIMixin(ThemedWindowMixin):
             self._startup_restore_ui_pending = True
             return
         deck = getattr(self, "adaptive_command", None)
-        render_mode = str(getattr(deck, "current_mode", "general") or "general")
+        render_mode = str(
+            getattr(self, "_dashboard_render_mode", None)
+            or getattr(deck, "current_mode", "general") or "general"
+        )
         dashboard_route_owned = render_mode in ("general", "exploration")
-        if dashboard_route_owned:
-            self._refresh_route_progress_labels()
-        if not self.waypoint_manager.waypoints:
+        route_progress = self._refresh_route_progress_labels() if dashboard_route_owned else None
+        manager = getattr(self, "waypoint_manager", None)
+        waypoints = list(getattr(manager, "waypoints", None) or [])
+        if not waypoints:
             self.target_waypoint = None
             if dashboard_route_owned:
-                self.wp_name_lbl.config(text="NO ACTIVE ROUTE")
-                self.wp_dist_lbl.config(text="")
-                self._set_wp_info_text("")
+                self._refresh_dashboard_next_leg(route_progress)
             self.update_hud()
             return
 
         # Auto-mark visited based on location
-        idx = self.waypoint_manager.get_waypoint_index(self.current_sys)
+        idx = manager.get_waypoint_index(self.current_sys)
         if idx != -1:
             changed = False
             visited_now = []
             for i in range(idx + 1):
-                if not self.waypoint_manager.waypoints[i].get('visited', False):
-                    self.waypoint_manager.waypoints[i]['visited'] = True
+                if not waypoints[i].get('visited', False):
+                    waypoints[i]['visited'] = True
                     changed = True
-                    visited_now.append(self.waypoint_manager.waypoints[i].get("name", f"Waypoint {i+1}"))
+                    visited_now.append(waypoints[i].get("name", f"Waypoint {i+1}"))
             if changed:
-                self.waypoint_manager.save()
+                manager.save()
                 for wp_name in visited_now:
                     self.add_event_feed_entry("ROUTE", f"Waypoint visited: {wp_name}", severity="INFO", copy_text=wp_name)
 
         # Find next target (first unvisited)
         self.target_waypoint = None
-        for wp in self.waypoint_manager.waypoints:
+        for wp in waypoints:
             if not wp.get('visited', False):
                 self.target_waypoint = wp
                 break
-        
-        if self.target_waypoint is None:
-            if dashboard_route_owned:
-                self.wp_name_lbl.config(text="ROUTE COMPLETE")
-                self.wp_dist_lbl.config(text="")
-                self._set_wp_info_text("")
-            self.update_hud()
-            return
-        
-        if self.target_waypoint:
-            name = self.target_waypoint['name']
-            coords = self.target_waypoint['coords']
-            note = self.target_waypoint.get('note')
-            dist_str = ""
-            if coords and self.current_coords:
-                d = self.waypoint_manager.get_distance(self.current_coords, coords)
-                dist_str = f"({d:,.1f} LY)"
-
-            # Fetch EDSM Info if not cached
-            if name not in self.waypoint_cache:
-                self.waypoint_cache[name] = {"fetching": True}
-                def cb(data):
-                    if data:
-                        self.waypoint_cache[name] = data
-                    else:
-                        self.waypoint_cache[name] = {"error": True}
-                    self._ui_post(self.update_waypoint_display, key="waypoint-display")
-                self.edsm.fetch_system_details(name, cb)
-            
-            # Format Info String
-            info_text = "Fetching data..."
-            cached = self.waypoint_cache.get(name)
-            if cached and not cached.get("fetching"):
-                if cached.get("error"):
-                    info_text = "EDSM Data Unavailable"
-                else:
-                    p_star = cached.get("primaryStar", {}).get("type", "Unknown Star")
-                    if "Main Sequence" in p_star: p_star = p_star.replace(" Main Sequence Star", "")
-                    
-                    info = cached.get("information", {})
-                    gov = info.get("government", "None")
-                    alg = info.get("allegiance", "Independent")
-                    
-                    info_text = f"STAR {p_star}  //  GOV {gov}  //  ALLEGIANCE {alg}"
-            
-            if note:
-                if info_text == "Fetching data..." or info_text == "EDSM Data Unavailable":
-                     info_text = f"NOTE // {note}"
-                else:
-                     info_text = f"NOTE // {note}  //  {info_text}"
-
-            if dashboard_route_owned:
-                self.wp_name_lbl.config(text=name)
-                self.wp_dist_lbl.config(text=dist_str)
-                self._set_wp_info_text(info_text)
-            self.update_hud()
+        if dashboard_route_owned:
+            self._refresh_dashboard_next_leg(route_progress)
+        self.update_hud()
 
