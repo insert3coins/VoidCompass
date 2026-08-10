@@ -10,7 +10,7 @@ from config import DEPRECATED_CONFIG_KEYS, COLOR_ACCENT, COLOR_ORANGE, COLOR_TEX
 from diagnostic_logs import application_base_dir
 from global_hotkeys import (
     DEFAULT_OVERLAY_HOTKEYS, OVERLAY_HOTKEY_SPECS,
-    validate_hotkey_bindings,
+    hotkey_from_tk_event, tk_modifier_labels, validate_hotkey_bindings,
 )
 from platform_support import default_screenshot_path, open_path
 from trade.eddn_upload import UPLOADER as eddn_market_uploader
@@ -77,8 +77,12 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     scroll_canvases = {}
     active_page = {"key": None}
 
-    def action_button(parent, text, command, accent=False, muted=False):
-        return button(parent, text, command, accent=accent, muted=muted, padx=12, pady=7)
+    def action_button(parent, text, command, accent=False, muted=False, **kwargs):
+        kwargs.setdefault("padx", 12)
+        kwargs.setdefault("pady", 7)
+        return button(
+            parent, text, command, accent=accent, muted=muted, **kwargs,
+        )
 
     def ui_post(callback):
         if callable(ui_post_callback):
@@ -326,8 +330,171 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         overlay_hotkeys_var,
     )
     hotkey_entries = {}
+    hotkey_status_var = tk.StringVar(
+        value="Click Record beside an action, then press the shortcut you want to use.",
+    )
+    hotkey_status_label = tk.Label(
+        overlay_hotkeys, textvariable=hotkey_status_var,
+        font=UI_MONO, fg=UI_MUTED, bg=UI_PANEL, anchor="w", justify=tk.LEFT,
+        wraplength=620,
+    )
+
+    def _set_hotkey_entry(action, value):
+        entry = hotkey_entries[action]
+        entry.delete(0, tk.END)
+        if value:
+            entry.insert(0, value)
+
+    def _binding_conflict(action):
+        values = {
+            name: entry.get().strip()
+            for name, entry in hotkey_entries.items()
+        }
+        _normalized, errors = validate_hotkey_bindings(values)
+        return errors.get(action)
+
+    def _clear_hotkey(action, label):
+        _set_hotkey_entry(action, "")
+        hotkey_status_var.set(f"{label} cleared. Save Settings to apply the change.")
+        hotkey_status_label.config(fg=UI_MUTED)
+
+    def _record_hotkey(action, label):
+        owner = win.winfo_toplevel()
+        capture = tk.Toplevel(owner)
+        capture.title(f"Record Hotkey · {label}")
+        capture.resizable(False, False)
+        capture.transient(owner)
+        capture.configure(bg=UI_BG)
+        capture.attributes("-topmost", True)
+
+        shell = tk.Frame(
+            capture, bg=UI_PANEL, highlightbackground=UI_BORDER,
+            highlightthickness=1,
+        )
+        shell.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
+        tk.Label(
+            shell, text="PRESS YOUR SHORTCUT", font=UI_FONT_TITLE,
+            fg=COLOR_ACCENT, bg=UI_PANEL, anchor="w",
+        ).pack(fill=tk.X, padx=14, pady=(14, 3))
+        tk.Label(
+            shell, text=label.upper(), font=UI_FONT_BOLD,
+            fg=COLOR_ORANGE, bg=UI_PANEL, anchor="w",
+        ).pack(fill=tk.X, padx=14)
+        tk.Label(
+            shell,
+            text="Hold one or more modifiers, then press a letter, number, F-key or navigation key.",
+            font=UI_FONT, fg=UI_MUTED, bg=UI_PANEL, anchor="w",
+            justify=tk.LEFT, wraplength=480,
+        ).pack(fill=tk.X, padx=14, pady=(8, 12))
+
+        capture_var = tk.StringVar(value="WAITING FOR INPUT…")
+        capture_readout = tk.Label(
+            shell, textvariable=capture_var, font=("Cascadia Mono", 14, "bold"),
+            fg=COLOR_TEXT, bg=UI_INPUT, anchor="center", height=2,
+            highlightbackground=UI_BORDER, highlightthickness=1,
+        )
+        capture_readout.pack(fill=tk.X, padx=14)
+        hint_var = tk.StringVar(value="Esc cancels · use Clear Binding to leave this action unbound")
+        hint = tk.Label(
+            shell, textvariable=hint_var, font=UI_FONT, fg=UI_DIM,
+            bg=UI_PANEL, anchor="center",
+        )
+        hint.pack(fill=tk.X, padx=14, pady=(8, 10))
+
+        def close_capture():
+            try:
+                capture.grab_release()
+            except tk.TclError:
+                pass
+            capture.destroy()
+            try:
+                win.focus_force()
+            except tk.TclError:
+                pass
+
+        def clear_binding():
+            _set_hotkey_entry(action, "")
+            hotkey_status_var.set(f"{label} cleared. Save Settings to apply the change.")
+            hotkey_status_label.config(fg=UI_MUTED)
+            close_capture()
+
+        def capture_key(event):
+            modifiers = tk_modifier_labels(event.keysym, event.state)
+            token = str(event.keysym or "").replace("_", "").casefold()
+            if token in {"escape", "esc"} and not modifiers:
+                close_capture()
+                return "break"
+            try:
+                canonical = hotkey_from_tk_event(event.keysym, event.state)
+            except ValueError as exc:
+                capture_var.set(" + ".join((*modifiers, "…")) if modifiers else "WAITING FOR MODIFIER…")
+                hint_var.set(str(exc))
+                hint.config(fg=THEME.yellow)
+                return "break"
+            if not canonical:
+                capture_var.set(" + ".join((*modifiers, "…")) or "WAITING FOR INPUT…")
+                hint_var.set("Keep holding the modifier, then press the final key.")
+                hint.config(fg=UI_DIM)
+                return "break"
+
+            _set_hotkey_entry(action, canonical)
+            conflict = _binding_conflict(action)
+            if conflict:
+                hotkey_status_var.set(f"{label}: {conflict}. Change one binding before saving.")
+                hotkey_status_label.config(fg=THEME.yellow)
+            else:
+                hotkey_status_var.set(
+                    f"Captured {canonical} for {label}. Save Settings to activate it.",
+                )
+                hotkey_status_label.config(fg=THEME.green)
+            close_capture()
+            return "break"
+
+        actions = tk.Frame(shell, bg=UI_PANEL)
+        actions.pack(fill=tk.X, padx=14, pady=(0, 14))
+        action_button(actions, "Clear Binding", clear_binding, muted=True).pack(side=tk.LEFT)
+        action_button(actions, "Cancel", close_capture, muted=True).pack(side=tk.RIGHT)
+
+        capture.bind("<KeyPress>", capture_key)
+        capture.protocol("WM_DELETE_WINDOW", close_capture)
+        capture.update_idletasks()
+        width, height = 540, max(290, capture.winfo_reqheight())
+        try:
+            x = owner.winfo_rootx() + max(0, (owner.winfo_width() - width) // 2)
+            y = owner.winfo_rooty() + max(0, (owner.winfo_height() - height) // 2)
+            capture.geometry(f"{width}x{height}+{x}+{y}")
+        except tk.TclError:
+            capture.geometry(f"{width}x{height}")
+        capture.grab_set()
+        capture.after(60, capture.focus_force)
+
     for action, key, label, _overlay_attr in OVERLAY_HOTKEY_SPECS:
-        hotkey_entries[action] = input_row(overlay_hotkeys, label, key)
+        binding_row = row(overlay_hotkeys)
+        tk.Label(
+            binding_row, text=label, font=UI_FONT_BOLD, fg=UI_MUTED,
+            bg=UI_PANEL, anchor="w", width=24,
+        ).pack(side=tk.LEFT)
+        entry = tk.Entry(
+            binding_row, bg=UI_INPUT, fg=COLOR_TEXT, font=UI_MONO,
+            insertbackground=COLOR_ACCENT, relief=tk.FLAT,
+            highlightthickness=1, highlightbackground=UI_BORDER,
+            highlightcolor=COLOR_ACCENT,
+        )
+        entry.insert(0, str(config.get(key, "")))
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=5)
+        hotkey_entries[action] = entry
+        action_button(
+            binding_row, "Record",
+            lambda name=action, title=label: _record_hotkey(name, title),
+            padx=9, pady=5,
+        ).pack(side=tk.LEFT, padx=(7, 0))
+        action_button(
+            binding_row, "Clear",
+            lambda name=action, title=label: _clear_hotkey(name, title),
+            muted=True, padx=8, pady=5,
+        ).pack(side=tk.LEFT, padx=(5, 0))
+
+    hotkey_status_label.pack(fill=tk.X, padx=12, pady=(3, 5))
 
     hotkey_actions = row(overlay_hotkeys)
 
@@ -338,14 +505,17 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             default = DEFAULT_OVERLAY_HOTKEYS.get(key, "")
             if default:
                 entry.insert(0, default)
+        hotkey_status_var.set("Default hotkeys restored. Save Settings to activate them.")
+        hotkey_status_label.config(fg=THEME.green)
 
     action_button(hotkey_actions, "Restore Defaults", _reset_overlay_hotkeys, muted=True).pack(side=tk.RIGHT)
     tk.Label(
         overlay_hotkeys,
         text=(
             "Shortcuts are system-wide and work while Elite Dangerous has focus. "
+            "Click Record and press the full chord, or continue to edit a value manually. "
             "Use Ctrl, Alt, Shift or Win plus a letter, number, F-key or navigation key. "
-            "Clear a field to leave that action unbound."
+            "Clear leaves that action unbound."
         ),
         font=UI_FONT,
         fg=UI_MUTED,

@@ -7,6 +7,9 @@
 *   Unified live game routes, saved waypoint plans and direct navigation targets behind the same Dashboard route model, removing contradictory “no route” and jumps-remaining states and avoiding unnecessary Dashboard-only EDSM waypoint lookups.
 *   Added responsive briefing-card reflow for narrower windows, reduced the adaptive context strip to useful status, kept detailed UI/I/O counts in Command Health and moved journal cache rebuilding to **Settings → Diagnostics**.
 *   Expanded **Mission Control** to thirteen selectable expedition templates, adding six deep multi-session campaigns for long-range cartography, exobiology, sector mapping, regional science, Outer Rim discovery and galactic circumnavigation; larger templates extend matching goals without losing verified progress.
+*   Refined the **Station Link overlay** into a docked dossier with clearer station identity, arrival/pad/support instruments, separated core and explorer services, data-sale readiness and a quieter local profile, with a matching Layout Studio footprint.
+*   Corrected Station Link lifecycle recovery after batched Docked or login Location events, including startup catch-up and Carrier-jump refreshes, without reopening an auto-hidden card or restarting its timer for unrelated journal activity.
+*   Added a themed keyboard **hotkey recorder** to Settings with per-action Record and Clear controls, live canonical chord capture, conflict feedback and retained manual editing and profile-aware persistence.
 
 ## Earlier releases
 

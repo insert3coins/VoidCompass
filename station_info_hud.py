@@ -312,9 +312,25 @@ class StationInfoHUD:
         self.hide()
 
     def on_docked(self, dash):
+        self.reconcile(dash, present=True)
+
+    def reconcile(self, dash, present=False):
+        """Bring the overlay into line with the settled journal dock state.
+
+        ``present`` is reserved for a real docking/login transition.  Ordinary
+        batches may refresh an already-visible card, but must not resurrect a
+        card the commander deliberately auto-hid or restart its hide timer.
+        """
+        docked = bool(getattr(dash, "current_docked", False))
+        station = getattr(dash, "current_station_name", None)
+        if not docked or not station:
+            self.hide()
+            return False
         self.refresh(dash)
-        self.show()
-        self._schedule_hide()
+        if present:
+            self.show()
+            self._schedule_hide()
+        return bool(self._visible)
 
     def refresh(self, dash):
         """Repaint live docked data without restarting the auto-hide timer."""
