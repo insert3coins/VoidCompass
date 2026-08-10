@@ -9,7 +9,7 @@
 *   Expanded **Mission Control** to thirteen selectable expedition templates, adding six deep multi-session campaigns for long-range cartography, exobiology, sector mapping, regional science, Outer Rim discovery and galactic circumnavigation; larger templates extend matching goals without losing verified progress.
 *   Refined the **Station Link overlay** into a docked dossier with clearer station identity, arrival/pad/support instruments, separated core and explorer services, data-sale readiness and a quieter local profile, with a matching Layout Studio footprint.
 *   Corrected Station Link lifecycle recovery after batched Docked or login Location events, including startup catch-up and Carrier-jump refreshes, without reopening an auto-hidden card or restarting its timer for unrelated journal activity.
-*   Added a themed keyboard **hotkey recorder** to Settings with per-action Record and Clear controls, live canonical chord capture, conflict feedback and retained manual editing and profile-aware persistence.
+*   Added a themed keyboard **hotkey recorder** to Settings with per-action Record and Clear controls, live canonical chord capture, conflict feedback and retained manual editing and profile-aware persistence; existing Void Compass shortcuts pause while the recorder is listening and resume safely when it closes.
 
 ## Earlier releases
 

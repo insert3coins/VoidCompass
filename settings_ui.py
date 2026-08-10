@@ -42,7 +42,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
                   support_bundle_callback=None, rerun_setup_callback=None,
                   health_provider=None, ui_post_callback=None,
                   overlay_layout_callback=None, cache_rebuild_callback=None,
-                  cache_rebuild_button_register=None):
+                  cache_rebuild_button_register=None,
+                  hotkey_capture_begin_callback=None,
+                  hotkey_capture_end_callback=None):
     win = window_surface(root, embedded=embedded)
     win.title("SYSTEM CONFIGURATION")
     win.geometry(config.get("settings_geometry", "980x800"))
@@ -401,16 +403,37 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         )
         hint.pack(fill=tk.X, padx=14, pady=(8, 10))
 
+        capture_state = {"closed": False, "hotkeys_suspended": False}
+
+        def resume_global_hotkeys():
+            if not capture_state["hotkeys_suspended"]:
+                return
+            capture_state["hotkeys_suspended"] = False
+            if callable(hotkey_capture_end_callback):
+                hotkey_capture_end_callback()
+
         def close_capture():
+            if capture_state["closed"]:
+                return
+            capture_state["closed"] = True
             try:
                 capture.grab_release()
             except tk.TclError:
                 pass
-            capture.destroy()
+            try:
+                capture.destroy()
+            except tk.TclError:
+                pass
+            resume_global_hotkeys()
             try:
                 win.focus_force()
             except tk.TclError:
                 pass
+
+        def capture_destroyed(event):
+            if event.widget is capture:
+                capture_state["closed"] = True
+                resume_global_hotkeys()
 
         def clear_binding():
             _set_hotkey_entry(action, "")
@@ -425,7 +448,9 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
                 close_capture()
                 return "break"
             try:
-                canonical = hotkey_from_tk_event(event.keysym, event.state)
+                canonical = hotkey_from_tk_event(
+                    event.keysym, event.state, event.keycode,
+                )
             except ValueError as exc:
                 capture_var.set(" + ".join((*modifiers, "…")) if modifiers else "WAITING FOR MODIFIER…")
                 hint_var.set(str(exc))
@@ -456,6 +481,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
         action_button(actions, "Cancel", close_capture, muted=True).pack(side=tk.RIGHT)
 
         capture.bind("<KeyPress>", capture_key)
+        capture.bind("<Destroy>", capture_destroyed, add="+")
         capture.protocol("WM_DELETE_WINDOW", close_capture)
         capture.update_idletasks()
         width, height = 540, max(290, capture.winfo_reqheight())
@@ -465,6 +491,10 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             capture.geometry(f"{width}x{height}+{x}+{y}")
         except tk.TclError:
             capture.geometry(f"{width}x{height}")
+        if callable(hotkey_capture_begin_callback):
+            hotkey_capture_begin_callback()
+            capture_state["hotkeys_suspended"] = True
+            hint_var.set("Void Compass shortcuts paused · Esc cancels")
         capture.grab_set()
         capture.after(60, capture.focus_force)
 
