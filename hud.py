@@ -524,55 +524,65 @@ class TacticalHUD:
             return COLOR_ORANGE
         return "#7d8891"
 
-    def _draw_status_beacon(self, center_x, center_y, text, color):
-        """Draw the active flight mode as an integrated cockpit beacon."""
+    def _draw_navigation_state_marker(self, center_x, center_y, text, color):
+        """Draw the active flight mode as a compact heading/bearing marker."""
         label = str(text or "FLIGHT").upper()
-        rendered = self._readable_font(("Courier", 10, "bold"))
-        font = tkfont.Font(family=rendered[0], size=rendered[1], weight="bold")
-        half_width = max(48, font.measure(label) / 2 + 16)
-        left_edge = center_x - half_width
-        right_edge = center_x + half_width
-        top = center_y - 10
-        bottom = center_y + 10
-        chamfer = 7
-        line_span = 17
-        glow = self._glow_color(color, 0.28)
+        rail_y = center_y - 5
+        text_y = center_y + 7
+        rail_half = 70
+        center_gap = 9
+        dim = self._glow_color(color, 0.52)
+        glow = self._glow_color(color, 0.24)
 
-        plate = (
-            left_edge + chamfer, top,
-            right_edge - chamfer, top,
-            right_edge, center_y,
-            right_edge - chamfer, bottom,
-            left_edge + chamfer, bottom,
-            left_edge, center_y,
-        )
-        self.canvas.create_polygon(plate, fill="#03070a", outline=glow, width=3)
-        self.canvas.create_polygon(plate, fill="#03070a", outline=color, width=1)
-        self.canvas.create_line(
-            left_edge - line_span, center_y, left_edge - 3, center_y,
-            fill=glow, width=3,
-        )
-        self.canvas.create_line(
-            right_edge + 3, center_y, right_edge + line_span, center_y,
-            fill=glow, width=3,
-        )
-        self.canvas.create_line(
-            left_edge - line_span, center_y, left_edge - 3, center_y,
-            fill=color, width=1,
-        )
-        self.canvas.create_line(
-            right_edge + 3, center_y, right_edge + line_span, center_y,
-            fill=color, width=1,
-        )
-        for marker_x in (left_edge - line_span, right_edge + line_span):
-            self.canvas.create_polygon(
-                marker_x, center_y - 3, marker_x + 3, center_y,
-                marker_x, center_y + 3, marker_x - 3, center_y,
-                fill="#010101", outline=color, width=1,
+        # One fixed bearing tape replaces the variable-width boxed badge. Its
+        # geometry never jumps when SUPERCRUISE changes to FSS, MAP or ONFOOT.
+        if self._crt_enabled():
+            self.canvas.create_line(
+                center_x - rail_half, rail_y, center_x - center_gap, rail_y,
+                fill=glow, width=3,
             )
-        self.draw_text(center_x, center_y, text=label, fill=color,
+            self.canvas.create_line(
+                center_x + center_gap, rail_y, center_x + rail_half, rail_y,
+                fill=glow, width=3,
+            )
+        self.canvas.create_line(
+            center_x - rail_half, rail_y, center_x - center_gap, rail_y,
+            fill=dim, width=1,
+        )
+        self.canvas.create_line(
+            center_x + center_gap, rail_y, center_x + rail_half, rail_y,
+            fill=dim, width=1,
+        )
+
+        # Sparse symmetric ticks read like a heading scale without pretending
+        # to expose a compass bearing the journal does not actually provide.
+        for offset, length in ((-52, 2), (-34, 3), (-18, 2),
+                               (18, 2), (34, 3), (52, 2)):
+            x = center_x + offset
+            self.canvas.create_line(
+                x, rail_y - length, x, rail_y + length,
+                fill=color if abs(offset) == 34 else dim, width=1,
+            )
+
+        # The hollow nose and centre index are the only bright geometry: a
+        # small, unmistakable own-ship/course reference rather than decoration.
+        nose_top = rail_y - 6
+        if self._crt_enabled():
+            self.canvas.create_line(
+                center_x - 5, rail_y - 1, center_x, nose_top,
+                center_x + 5, rail_y - 1, fill=glow, width=4,
+            )
+        self.canvas.create_line(
+            center_x - 5, rail_y - 1, center_x, nose_top,
+            center_x + 5, rail_y - 1, fill=color, width=2,
+        )
+        self.canvas.create_line(
+            center_x, nose_top, center_x, rail_y + 3,
+            fill=color, width=1,
+        )
+        self.draw_text(center_x, text_y, text=label, fill=color,
                        font=("Courier", 10, "bold"), anchor="center")
-        return (right_edge + line_span) - (left_edge - line_span)
+        return rail_half * 2
 
     @staticmethod
     def _traffic_summary(system_traffic, compact=False):
@@ -865,7 +875,7 @@ class TacticalHUD:
         self.draw_text(16, 17, text="NAVIGATION HUD", fill=COLOR_ACCENT,
                        font=("Courier", 11, "bold"), anchor="w")
         self._draw_title_anim()
-        self._draw_status_beacon(w / 2, 17, state_text, state_color)
+        self._draw_navigation_state_marker(w / 2, 17, state_text, state_color)
         self._draw_section_rule(16, w - 16, 34)
 
         # The current system is the primary landmark, held by a lit locator rail.
@@ -984,7 +994,7 @@ class TacticalHUD:
         self.draw_text(20, 19, text="NAVIGATION HUD", fill=COLOR_ACCENT,
                        font=("Courier", 12, "bold"), anchor="w")
         self._draw_title_anim()
-        self._draw_status_beacon(w / 2, 19, state_text, state_color)
+        self._draw_navigation_state_marker(w / 2, 19, state_text, state_color)
         self._draw_section_rule(20, w - 20, 37)
 
         # Original system block, now anchored as the display's primary landmark.
