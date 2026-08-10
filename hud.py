@@ -104,7 +104,10 @@ class TacticalHUD:
         try:
             self._draw_navigation_marker_animation()
             self._draw_crt_animation()
-            self._nav_marker_phase = (self._nav_marker_phase + 1) % 48
+            # Each motion profile owns its own cadence. Keeping one monotonic
+            # phase avoids a second artificial reset when unlike periods (for
+            # example the 42-frame survey tracer) meet an outer 48-frame wrap.
+            self._nav_marker_phase += 1
         except Exception:
             pass
         finally:
