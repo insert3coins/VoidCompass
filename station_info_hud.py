@@ -352,92 +352,193 @@ class StationInfoHUD:
         )
         self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor)
 
-    def _section(self, y, label, right=""):
+    def _status_beacon(self, text, color):
+        """Draw the compact chamfered state plate shared by refined overlays."""
         palette = self._palette
-        self._text(18, y, label, palette["dim"], ("Courier", 7, "bold"))
-        if right:
-            self._text(WIDTH - 18, y, right, palette["dim"], ("Courier", 7, "bold"), "e")
-        return y + 18
+        right, left = WIDTH - 18, WIDTH - 176
+        top, bottom, chamfer = 10, 32, 7
+        plate = (
+            left + chamfer, top, right - chamfer, top,
+            right, (top + bottom) / 2,
+            right - chamfer, bottom, left + chamfer, bottom,
+            left, (top + bottom) / 2,
+        )
+        self.canvas.create_polygon(
+            plate, fill=palette["inset"], outline=palette["border_soft"], width=2,
+        )
+        self.canvas.create_polygon(plate, fill="", outline=color, width=1)
+        self._text(
+            (left + right) / 2, 21, _truncate(text, 20), color,
+            ("Courier", 9, "bold"), "center",
+        )
 
-    def _service(self, x, y, row, max_chars=22):
-        available = row["available"]
-        color = self._palette["green"] if available else self._palette["dim"]
-        symbol = "●" if available else "○"
-        self._text(x, y, f"{symbol} {_truncate(row['label'], max_chars)}", color,
-                   ("Courier", 8, "bold"))
+    def _instrument(self, x, y, width, label, value, tone="text"):
+        palette = self._palette
+        color = palette.get(tone, palette["text"])
+        self.canvas.create_rectangle(
+            x, y, x + width, y + 49,
+            fill=palette["panel"], outline=palette["border_soft"], width=1,
+        )
+        self.canvas.create_line(x + 1, y + 1, x + 42, y + 1, fill=color, width=2)
+        self._text(x + 8, y + 14, label, palette["dim"], ("Courier", 8, "bold"))
+        self._text(
+            x + 8, y + 34, _truncate(value or "NOT REPORTED", 16), color,
+            ("Courier", 9, "bold"),
+        )
+
+    def _panel(self, x, y, width, height, label, state="", tone="accent"):
+        palette = self._palette
+        color = palette.get(tone, palette["accent"])
+        self.canvas.create_rectangle(
+            x, y, x + width, y + height,
+            fill=palette["panel"], outline=palette["border_soft"], width=1,
+        )
+        self.canvas.create_line(x + 1, y + 1, x + 58, y + 1, fill=color, width=2)
+        self._text(x + 9, y + 15, label, color, ("Courier", 8, "bold"))
+        if state:
+            self._text(
+                x + width - 9, y + 15, _truncate(state, 19), palette["dim"],
+                ("Courier", 8, "bold"), "e",
+            )
+
+    def _service_grid(self, x, y, width, rows):
+        """Draw a quiet two-column availability grid without row dividers."""
+        column_width = width / 2
+        compact_labels = {
+            "UNIVERSAL CARTOGRAPHICS": "CARTOGRAPHICS",
+            "VISTA GENOMICS": "VISTA GENOMICS",
+            "SEARCH & RESCUE": "SEARCH/RESCUE",
+        }
+        for index, row in enumerate(rows[:4]):
+            column = index % 2
+            line = index // 2
+            item_x = x + column * column_width
+            item_y = y + line * 21
+            available = bool(row.get("available"))
+            color = self._palette["green"] if available else self._palette["dim"]
+            symbol = "●" if available else "○"
+            label = compact_labels.get(row.get("label"), row.get("label"))
+            self._text(
+                item_x, item_y,
+                f"{symbol} {_truncate(label, 13)}",
+                color, ("Courier", 8, "bold"),
+            )
 
     def _redraw(self, model):
         palette = self._palette
         special = model.get("special_services") or []
         data_rows = model.get("data_rows") or []
-        h = 206 + (19 if special else 0) + (20 + len(data_rows) * 20 if data_rows else 0)
-        if model.get("economies"):
-            h += 18
-        if model.get("authority"):
-            h += 18
-        h += 13
+        core_rows = model.get("core_services") or []
+        explorer_rows = model.get("exploration_services") or []
+        core_online = sum(bool(row.get("available")) for row in core_rows)
+        explorer_online = sum(bool(row.get("available")) for row in explorer_rows)
+
+        data_h = 58 if not data_rows else 39 + min(2, len(data_rows)) * 23
+        local_rows = [
+            value for value in (
+                model.get("economies"), model.get("authority"),
+                " · ".join(special) if special else "",
+            ) if value
+        ]
+        local_h = 39 + max(1, min(3, len(local_rows))) * 18
+        data_y = 241
+        local_y = data_y + data_h + 9
+        h = local_y + local_h + 14
 
         self.canvas.config(width=WIDTH, height=h)
         self.win.geometry(f"{WIDTH}x{h}")
         self.canvas.delete("all")
         overlay_chrome.draw_chrome(
-            self.canvas, WIDTH, h, accent=palette["accent"], bracket_len=10,
-            scanlines=False,
+            self.canvas, WIDTH, h, accent=palette["accent"], bracket_len=12,
+            scanlines=True, scanline_step=5,
         )
 
-        self._text(18, 18, "STATION LINK", palette["accent"], ("Courier", 9, "bold"))
-        badge_color = palette["orange"] if model.get("is_personal_carrier") else palette["green"]
-        self._text(WIDTH - 18, 18, model["badge"], badge_color,
-                   ("Courier", 8, "bold"), "e")
-        self._text(18, 45, _truncate(model["station"].upper(), 37), palette["text"],
-                   ("Courier", 11, "bold"))
-        self._text(WIDTH - 18, 45, _truncate(model["type"], 27), palette["orange"],
-                   ("Courier", 8, "bold"), "e")
-        location = model["system"].upper()
-        if model.get("distance"):
-            location += f" · {model['distance']}"
-        self._text(18, 64, _truncate(location, 44), palette["muted"],
-                   ("Courier", 8, "bold"))
-        if model.get("pads"):
-            self._text(WIDTH - 18, 64, model["pads"], palette["muted"],
-                       ("Courier", 8, "bold"), "e")
-        y = self._section(89, "CORE SERVICES", "AVAILABLE / UNAVAILABLE")
-        core_x = (18, 145, 272, 399)
-        for x, row in zip(core_x, model["core_services"]):
-            self._service(x, y, row, 12)
-        y += 25
+        self._text(18, 20, "STATION LINK", palette["accent"], ("Courier", 10, "bold"))
+        badge_color = (
+            palette["orange"] if model.get("is_personal_carrier") else palette["green"]
+        )
+        self._status_beacon(model["badge"], badge_color)
+        self._text(
+            18, 51, _truncate(model["station"].upper(), 47), palette["text"],
+            ("Courier", 13, "bold"),
+        )
+        identity = f"{model['system'].upper()} · {model['type']}"
+        self._text(
+            18, 74, _truncate(identity, 67), palette["muted"],
+            ("Courier", 8, "bold"),
+        )
 
-        y = self._section(y, "EXPLORATION SERVICES")
-        for index, row in enumerate(model["exploration_services"]):
-            x = 18 if index % 2 == 0 else 272
-            row_y = y + (index // 2) * 19
-            self._service(x, row_y, row, 27)
-        y += 43
+        gap = 6
+        instrument_w = (WIDTH - 36 - gap * 3) / 4
+        pad_grid = " / ".join(
+            part.replace(" ", "") for part in str(model.get("pads") or "").split(" · ")
+            if part
+        )
+        metrics = (
+            ("CONNECTION", "CARRIER" if model.get("is_personal_carrier") else "LINKED", "orange" if model.get("is_personal_carrier") else "green"),
+            ("ARRIVAL", model.get("distance") or "LOCAL", "text"),
+            ("PAD GRID", pad_grid or "NOT REPORTED", "text"),
+            ("SUPPORT", f"{core_online} CORE · {explorer_online} EXP", "accent"),
+        )
+        for index, (label, value, tone) in enumerate(metrics):
+            self._instrument(
+                18 + index * (instrument_w + gap), 89, instrument_w,
+                label, value, tone,
+            )
 
-        if special:
-            self._text(18, y, "SPECIALISTS", palette["dim"], ("Courier", 7, "bold"))
-            self._text(WIDTH - 18, y, _truncate(" · ".join(special), 49), palette["muted"],
-                       ("Courier", 7, "bold"), "e")
-            y += 19
+        panel_gap = 8
+        panel_w = (WIDTH - 36 - panel_gap) / 2
+        core_tone = "green" if core_online == len(core_rows) else "orange"
+        explorer_tone = "green" if explorer_online else "orange"
+        self._panel(
+            18, 147, panel_w, 85, "CORE SERVICES",
+            f"{core_online}/{len(core_rows)} ONLINE", core_tone,
+        )
+        self._service_grid(28, 181, panel_w - 20, core_rows)
+        self._panel(
+            18 + panel_w + panel_gap, 147, panel_w, 85, "EXPLORER SUPPORT",
+            f"{explorer_online}/{len(explorer_rows)} ONLINE", explorer_tone,
+        )
+        self._service_grid(
+            28 + panel_w + panel_gap, 181, panel_w - 20, explorer_rows,
+        )
 
+        data_ready = sum(bool(row.get("available")) for row in data_rows)
+        data_tone = "green" if data_rows and data_ready == len(data_rows) else (
+            "orange" if data_rows else "muted"
+        )
+        data_state = (
+            f"{data_ready}/{len(data_rows)} READY" if data_rows else "NONE REPORTED"
+        )
+        self._panel(18, data_y, WIDTH - 36, data_h, "DATA ONBOARD", data_state, data_tone)
         if data_rows:
-            y = self._section(y, "DATA ONBOARD", "ESTIMATED VALUE")
-            for row in data_rows:
-                color = palette["green"] if row["available"] else palette["yellow"]
-                readiness = f"{row['label']} · {row['service']} " + (
-                    "READY" if row["available"] else "UNAVAILABLE"
+            for index, row in enumerate(data_rows[:2]):
+                color = palette["green"] if row.get("available") else palette["yellow"]
+                readiness = "SALE READY" if row.get("available") else "SERVICE UNAVAILABLE"
+                label = f"{row['label']} · {readiness}"
+                row_y = data_y + 42 + index * 23
+                self._text(28, row_y, _truncate(label, 45), color, ("Courier", 8, "bold"))
+                self._text(
+                    WIDTH - 28, row_y, row.get("value") or "-", color,
+                    ("Courier", 8, "bold"), "e",
                 )
-                self._text(18, y, _truncate(readiness, 43), color,
-                           ("Courier", 8, "bold"))
-                self._text(WIDTH - 18, y, row["value"], color,
-                           ("Courier", 8, "bold"), "e")
-                y += 20
+        else:
+            self._text(
+                28, data_y + 42, "NO UNSOLD EXPLORATION OR BIOLOGY DATA REPORTED",
+                palette["muted"], ("Courier", 8, "bold"),
+            )
 
-        y += 14
-        if model.get("economies"):
-            self._text(18, y, _truncate(model["economies"].upper(), 65), palette["text"],
-                       ("Courier", 8, "bold"))
-            y += 18
-        if model.get("authority"):
-            self._text(18, y, _truncate(model["authority"].upper(), 65), palette["muted"],
-                       ("Courier", 7, "bold"))
+        profile_state = f"{len(special)} SPECIALIST" + ("S" if len(special) != 1 else "")
+        self._panel(
+            18, local_y, WIDTH - 36, local_h, "LOCAL PROFILE",
+            profile_state if special else "PORT DOSSIER", "accent",
+        )
+        if not local_rows:
+            local_rows = ["NO ECONOMY OR AUTHORITY DETAILS REPORTED"]
+        for index, value in enumerate(local_rows[:3]):
+            label = ("SPECIALISTS · " + value) if special and value == " · ".join(special) else value
+            self._text(
+                28, local_y + 41 + index * 18, _truncate(str(label).upper(), 66),
+                palette["text"] if index == 0 else palette["muted"],
+                ("Courier", 8, "bold"),
+            )
