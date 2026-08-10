@@ -99,6 +99,23 @@ _TK_NAMED_KEYSYMS = {
     "INSERT": "Insert",
     "DELETE": "Delete",
 }
+_TK_SHIFTED_DIGIT_KEYSYMS = {
+    # Tk reports the produced symbol rather than the number-row key whenever
+    # Shift is held. Global RegisterHotKey needs the underlying 0-9 key.
+    "EXCLAM": "1",
+    "AT": "2",
+    "QUOTEDBL": "2",
+    "NUMBERSIGN": "3",
+    "STERLING": "3",
+    "DOLLAR": "4",
+    "PERCENT": "5",
+    "ASCIICIRCUM": "6",
+    "CARET": "6",
+    "AMPERSAND": "7",
+    "ASTERISK": "8",
+    "PARENLEFT": "9",
+    "PARENRIGHT": "0",
+}
 
 
 def _tk_keysym_token(keysym):
@@ -139,7 +156,7 @@ def tk_modifier_labels(keysym="", state=0):
     return tuple(label for _bit, label in _MODIFIER_ORDER if label in held)
 
 
-def hotkey_from_tk_event(keysym, state=0):
+def hotkey_from_tk_event(keysym, state=0, keycode=None):
     """Convert a Tk key press into the canonical global-hotkey syntax.
 
     Modifier-only events return an empty string so a recorder can show the
@@ -149,8 +166,19 @@ def hotkey_from_tk_event(keysym, state=0):
     token = _tk_keysym_token(keysym)
     if token in _TK_MODIFIER_KEYSYMS:
         return ""
-    if len(token) == 1 and token in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789":
+    try:
+        virtual_key = int(keycode) if keycode is not None else None
+    except (TypeError, ValueError):
+        virtual_key = None
+    if os.name == "nt" and virtual_key is not None and 0x30 <= virtual_key <= 0x39:
+        # On Windows Tk's keycode is the same virtual-key value consumed by
+        # RegisterHotKey, so it remains layout-safe even when Shift turns 9
+        # into the ``parenleft`` keysym (and similarly for the other digits).
+        key_label = chr(virtual_key)
+    elif len(token) == 1 and token in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789":
         key_label = token
+    elif token in _TK_SHIFTED_DIGIT_KEYSYMS:
+        key_label = _TK_SHIFTED_DIGIT_KEYSYMS[token]
     elif token in _TK_NAMED_KEYSYMS:
         key_label = _TK_NAMED_KEYSYMS[token]
     elif re.fullmatch(r"F(?:[1-9]|1[0-9]|2[0-4])", token):

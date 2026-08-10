@@ -2077,6 +2077,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 )
         return report
 
+    def _suspend_overlay_hotkeys_for_capture(self):
+        """Prevent an existing app shortcut from firing inside its recorder."""
+        manager = getattr(self, "overlay_hotkeys", None)
+        self._overlay_hotkeys_capture_suspended = bool(manager is not None)
+        if manager is not None:
+            manager.stop()
+
+    def _resume_overlay_hotkeys_after_capture(self):
+        """Restore saved bindings; recorder edits remain pending until Save."""
+        if not getattr(self, "_overlay_hotkeys_capture_suspended", False):
+            return
+        self._overlay_hotkeys_capture_suspended = False
+        if getattr(self, "is_running", True):
+            self._configure_overlay_hotkeys(announce=False)
+
     def _handle_overlay_hotkey(self, action):
         if not self.is_running:
             return
@@ -3379,6 +3394,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 cache_rebuild_button_register=(
                     lambda widget: setattr(self, "cache_rebuild_button", widget)
                 ),
+                hotkey_capture_begin_callback=self._suspend_overlay_hotkeys_for_capture,
+                hotkey_capture_end_callback=self._resume_overlay_hotkeys_after_capture,
             )
         self._show_embedded_page("SETTINGS", self.settings_page)
 
