@@ -10,7 +10,7 @@
 *   Refined the **Station Link overlay** into a docked dossier with clearer station identity, arrival/pad/support instruments, separated core and explorer services, data-sale readiness and a quieter local profile, with a matching Layout Studio footprint.
 *   Corrected Station Link lifecycle recovery after batched Docked or login Location events, including startup catch-up and Carrier-jump refreshes, without reopening an auto-hidden card or restarting its timer for unrelated journal activity.
 *   Added a themed keyboard **hotkey recorder** to Settings with per-action Record and Clear controls, live canonical chord capture, conflict feedback and retained manual editing and profile-aware persistence; existing Void Compass shortcuts pause while the recorder is listening and resume safely when it closes.
-*   Simplified the Navigation HUD centre-state display into a stable heading marker with a hollow ship nose, restrained bearing ticks and the same readable full flight/map/scanner labels in both normal and compact layouts.
+*   Refined the Navigation HUD centre-state display into a single theme-aware data row: route and system-survey motion now combines with distinct restrained signatures for flight, supercruise, jumps, docking, landing, on-foot travel, SRV/Nomad driving, scanners, maps and combat in both normal and compact layouts, with reduced-motion and hidden-overlay safeguards; retired the unrelated far-right title pip so the new instrument can use the full remaining header width.
 
 ## Earlier releases
 

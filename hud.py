@@ -45,35 +45,9 @@ class TacticalHUD:
 
         self.force_topmost()
 
-        self.anim_step = 0
+        self._nav_marker_phase = 0
+        self._nav_marker_model = None
         self._crt_phase = 0
-        self.anim_frames = [
-            "⢄",
-            "⢂",
-            "⢁",
-            " ",
-            "⡈",
-            "⡐",
-            "⡠",
-            "⡰",
-            "⣠",
-            "⣐",
-            "⣈",
-            "⣁",
-            "⣂",
-            "⣄",
-            "⣆",
-            "⣇",
-            "⣧",
-            "⣷",
-            "⣾",
-            "⣶",
-            "⣼",
-            "⣸",
-            "⣙",
-            "⣉",
-            "⣁",
-        ]
         self._mouse_down = None
         self._mouse_dragging = False
         self._save_job = None
@@ -128,9 +102,9 @@ class TacticalHUD:
 
     def animate_ui(self):
         try:
-            self._draw_title_anim()
+            self._draw_navigation_marker_animation()
             self._draw_crt_animation()
-            self.anim_step = (self.anim_step + 1) % len(self.anim_frames)
+            self._nav_marker_phase = (self._nav_marker_phase + 1) % 48
         except Exception:
             pass
         finally:
@@ -272,15 +246,6 @@ class TacticalHUD:
                 fill=color, outline="", tags="crt_motion",
             )
         self._crt_phase = (self._crt_phase + step) % max(1, self.base_height)
-
-    def _draw_title_anim(self):
-        self.canvas.delete("anim_title")
-        if not self.anim_frames:
-            return
-        frame = self.anim_frames[self.anim_step]
-        x = getattr(self, "_title_anim_x", 170)
-        y = getattr(self, "_title_anim_y", 17)
-        self.draw_text(x, y, text=frame, fill=COLOR_ACCENT, font=("Courier", 10, "bold"), anchor="e", tags="anim_title")
 
     @staticmethod
     def _ellipsize(text, font, max_width):
@@ -524,65 +489,306 @@ class TacticalHUD:
             return COLOR_ORANGE
         return "#7d8891"
 
-    def _draw_navigation_state_marker(self, center_x, center_y, text, color):
-        """Draw the active flight mode as a compact heading/bearing marker."""
+    @staticmethod
+    def _navigation_motion_profile(state_text):
+        """Map journal/UI states to small, visually distinct motion families."""
+        state = str(state_text or "FLIGHT").upper()
+        if state in {"DOCKED", "STATION"}:
+            return "docked"
+        if state == "LANDED":
+            return "landed"
+        if state == "ONFOOT":
+            return "on_foot"
+        if state in {"SRV", "NOMAD"}:
+            return "surface_vehicle"
+        if state in {"FSS", "DSS"}:
+            return "scanner"
+        if state in {"MAP", "GALAXY MAP", "SYSTEM MAP", "POWER MAP", "ORRERY", "CODEX"}:
+            return "map"
+        if state in {"HYPERSPACE", "JUMPING"}:
+            return "jump"
+        if state == "SUPERCRUISE":
+            return "supercruise"
+        if state == "FIGHTER":
+            return "fighter"
+        if state == "COMBAT":
+            return "combat"
+        if state == "EXPLORATION":
+            return "exploration"
+        return "flight"
+
+    def _draw_navigation_state_marker(
+        self,
+        center_x,
+        center_y,
+        text,
+        color,
+        *,
+        route=None,
+        survey_progress=0.0,
+        survey_known=False,
+        survey_color=None,
+        compact=False,
+        track_left=None,
+        track_right=None,
+    ):
+        """Draw route motion, flight state and survey progress on one row."""
         label = str(text or "FLIGHT").upper()
-        rail_y = center_y - 5
-        text_y = center_y + 7
-        rail_half = 70
-        center_gap = 9
-        dim = self._glow_color(color, 0.52)
-        glow = self._glow_color(color, 0.24)
+        route = route or {}
+        survey_color = survey_color or COLOR_ACCENT
+        try:
+            survey_progress = max(0.0, min(1.0, float(survey_progress or 0.0)))
+        except (TypeError, ValueError):
+            survey_progress = 0.0
 
-        # One fixed bearing tape replaces the variable-width boxed badge. Its
-        # geometry never jumps when SUPERCRUISE changes to FSS, MAP or ONFOOT.
-        if self._crt_enabled():
-            self.canvas.create_line(
-                center_x - rail_half, rail_y, center_x - center_gap, rail_y,
-                fill=glow, width=3,
-            )
-            self.canvas.create_line(
-                center_x + center_gap, rail_y, center_x + rail_half, rail_y,
-                fill=glow, width=3,
-            )
-        self.canvas.create_line(
-            center_x - rail_half, rail_y, center_x - center_gap, rail_y,
-            fill=dim, width=1,
-        )
-        self.canvas.create_line(
-            center_x + center_gap, rail_y, center_x + rail_half, rail_y,
-            fill=dim, width=1,
-        )
+        rendered = self._readable_font(("Courier", 10, "bold"))
+        font = tkfont.Font(family=rendered[0], size=rendered[1], weight="bold")
+        label_width = font.measure(label)
+        group_width = label_width + 18
+        group_left = center_x - (group_width / 2)
+        group_right = center_x + (group_width / 2)
+        marker_x = group_left + 5
+        label_x = group_left + 14
+        half_span = 98 if compact else 110
+        left_edge = float(track_left) if track_left is not None else center_x - half_span
+        right_edge = float(track_right) if track_right is not None else center_x + half_span
+        route_end = group_left - 8
+        survey_start = group_right + 8
+        muted = COLOR_MUTED
+        dim = self._glow_color(muted, 0.62)
+        route_active = bool(route.get("active"))
+        route_color = COLOR_ORANGE if route_active else muted
 
-        # Sparse symmetric ticks read like a heading scale without pretending
-        # to expose a compass bearing the journal does not actually provide.
-        for offset, length in ((-52, 2), (-34, 3), (-18, 2),
-                               (18, 2), (34, 3), (52, 2)):
-            x = center_x + offset
+        # The left channel represents the active route. A small inward-moving
+        # course light is added by the animation pass only while a route exists.
+        self.canvas.create_line(left_edge, center_y, route_end, center_y,
+                                fill=dim, width=1, tags="nav_state_static")
+        self.canvas.create_line(left_edge, center_y - 3, left_edge, center_y + 3,
+                                fill=route_color, width=1, tags="nav_state_static")
+        try:
+            route_progress = max(0.0, min(1.0, float(route.get("progress", 0.0) or 0.0)))
+        except (TypeError, ValueError):
+            route_progress = 0.0
+        if route_progress > 0 and route_end > left_edge:
+            route_fill_end = left_edge + ((route_end - left_edge) * route_progress)
+            self.canvas.create_line(left_edge, center_y, route_fill_end, center_y,
+                                    fill=route_color, width=2, tags="nav_state_static")
+        if route_active:
             self.canvas.create_line(
-                x, rail_y - length, x, rail_y + length,
-                fill=color if abs(offset) == 34 else dim, width=1,
+                route_end - 4, center_y - 3, route_end, center_y,
+                route_end - 4, center_y + 3,
+                fill=route_color, width=1, tags="nav_state_static",
             )
 
-        # The hollow nose and centre index are the only bright geometry: a
-        # small, unmistakable own-ship/course reference rather than decoration.
-        nose_top = rail_y - 6
-        if self._crt_enabled():
-            self.canvas.create_line(
-                center_x - 5, rail_y - 1, center_x, nose_top,
-                center_x + 5, rail_y - 1, fill=glow, width=4,
+        # The hollow diamond is the own-ship reference. The state remains full
+        # text and shares the row instead of sitting below an artificial scale.
+        diamond = 4
+        self.canvas.create_polygon(
+            marker_x, center_y - diamond,
+            marker_x + diamond, center_y,
+            marker_x, center_y + diamond,
+            marker_x - diamond, center_y,
+            fill="#010101", outline=color, width=1, tags="nav_state_static",
+        )
+        self.draw_text(label_x, center_y, text=label, fill=color,
+                       font=("Courier", 10, "bold"), anchor="w",
+                       tags="nav_state_static")
+
+        # The right channel is a tiny, data-backed system-survey bar. Unknown
+        # systems remain quiet; known progress adopts the active theme colours.
+        self.canvas.create_line(survey_start, center_y, right_edge, center_y,
+                                fill=dim, width=1, tags="nav_state_static")
+        self.canvas.create_line(right_edge, center_y - 3, right_edge, center_y + 3,
+                                fill=survey_color if survey_known else muted,
+                                width=1, tags="nav_state_static")
+        survey_front = survey_start
+        if survey_known and right_edge > survey_start:
+            survey_front = survey_start + ((right_edge - survey_start) * survey_progress)
+            if survey_progress > 0:
+                self.canvas.create_line(
+                    survey_start, center_y, survey_front, center_y,
+                    fill=survey_color, width=2, tags="nav_state_static",
+                )
+            for fraction in (0.5, 1.0):
+                tick_x = survey_start + ((right_edge - survey_start) * fraction)
+                self.canvas.create_line(
+                    tick_x, center_y - 2, tick_x, center_y + 2,
+                    fill=survey_color if survey_progress >= fraction else dim,
+                    width=1, tags="nav_state_static",
+                )
+
+        self._nav_marker_model = {
+            "y": center_y,
+            "state": label,
+            "state_color": color,
+            "motion_profile": self._navigation_motion_profile(label),
+            "marker_x": marker_x,
+            "group_left": group_left,
+            "group_right": group_right,
+            "route_active": route_active,
+            "route_x1": left_edge,
+            "route_x2": route_end,
+            "route_color": route_color,
+            "survey_active": bool(survey_known and 0.0 < survey_progress < 1.0),
+            "survey_x1": survey_start,
+            "survey_x2": right_edge,
+            "survey_front": survey_front,
+            "survey_color": survey_color,
+        }
+        return right_edge - left_edge
+
+    def _draw_navigation_marker_animation(self):
+        """Animate only the data-bearing lights in the centre-state row."""
+        self.canvas.delete("nav_state_motion")
+        model = self._nav_marker_model
+        if not model or self.config.get("reduced_motion_enabled", False):
+            return
+        try:
+            if (not self.win.winfo_viewable()
+                    or str(self.win.state()) in ("withdrawn", "iconic")):
+                return
+        except Exception:
+            return
+
+        y = model["y"]
+        profile = model["motion_profile"]
+        travel_profiles = {"flight", "fighter", "supercruise", "surface_vehicle"}
+        if (model["route_active"] and profile in travel_profiles
+                and model["route_x2"] > model["route_x1"]):
+            travel = (self._nav_marker_phase % 36) / 35.0
+            x = model["route_x1"] + ((model["route_x2"] - model["route_x1"]) * travel)
+            self.canvas.create_oval(
+                x - 1, y - 1, x + 1, y + 1,
+                fill=model["route_color"], outline="",
+                tags="nav_state_motion",
             )
-        self.canvas.create_line(
-            center_x - 5, rail_y - 1, center_x, nose_top,
-            center_x + 5, rail_y - 1, fill=color, width=2,
-        )
-        self.canvas.create_line(
-            center_x, nose_top, center_x, rail_y + 3,
-            fill=color, width=1,
-        )
-        self.draw_text(center_x, text_y, text=label, fill=color,
-                       font=("Courier", 10, "bold"), anchor="center")
-        return rail_half * 2
+
+        # A slow breathing point marks the live survey frontier without
+        # repainting the HUD or implying progress that the journal did not send.
+        survey_profiles = {"flight", "fighter", "supercruise", "scanner", "exploration"}
+        if (model["survey_active"] and profile in survey_profiles
+                and (self._nav_marker_phase % 16) < 5):
+            x = model["survey_front"]
+            self.canvas.create_oval(
+                x - 2, y - 2, x + 2, y + 2,
+                fill="#010101", outline=model["survey_color"], width=1,
+                tags="nav_state_motion",
+            )
+
+        self._draw_navigation_state_motion(model)
+
+    def _draw_navigation_state_motion(self, model):
+        """Add the current activity's restrained motion signature."""
+        profile = model["motion_profile"]
+        phase = self._nav_marker_phase
+        y = model["y"]
+        marker_x = model["marker_x"]
+        color = model["state_color"]
+        dim = self._glow_color(color, 0.46)
+        tags = "nav_state_motion"
+
+        if profile == "docked":
+            # Two clamps hold the whole annunciator: visibly powered, but locked.
+            wave = abs(((phase % 32) / 31.0) * 2.0 - 1.0)
+            offset = 3 + (wave * 2)
+            for x, side in ((model["group_left"] - offset, -1),
+                            (model["group_right"] + offset, 1)):
+                inward = x - (side * 3)
+                self.canvas.create_line(x, y - 3, x, y + 3, fill=color, width=1, tags=tags)
+                self.canvas.create_line(x, y - 3, inward, y - 3, fill=dim, width=1, tags=tags)
+                self.canvas.create_line(x, y + 3, inward, y + 3, fill=dim, width=1, tags=tags)
+            return
+
+        if profile == "landed":
+            # Ground-contact points spread and settle outside the annunciator.
+            wave = abs(((phase % 30) / 29.0) * 2.0 - 1.0)
+            spread = 3 + (wave * 4)
+            for x in (model["group_left"] - spread, model["group_right"] + spread):
+                self.canvas.create_oval(x - 1, y + 2, x + 1, y + 4,
+                                        fill=color, outline="", tags=tags)
+            return
+
+        if profile == "on_foot":
+            # Alternating points evoke steps without adding a literal foot icon.
+            active = (phase // 6) % 2
+            for index, (dx, dy) in enumerate(((-4, -1), (4, 1))):
+                radius = 2 if index == active else 1
+                fill = color if index == active else dim
+                self.canvas.create_oval(
+                    marker_x + dx - radius, y + dy - radius,
+                    marker_x + dx + radius, y + dy + radius,
+                    fill=fill, outline="", tags=tags,
+                )
+            return
+
+        if profile == "surface_vehicle":
+            # A three-cell tread crawls along the short approach to the marker.
+            active = (phase // 4) % 3
+            start_x = model["group_left"] - 18
+            for index in range(3):
+                x = start_x + (index * 5)
+                fill = color if index == active else dim
+                self.canvas.create_rectangle(x, y - 1, x + 2, y + 1,
+                                             fill=fill, outline="", tags=tags)
+            return
+
+        if profile == "scanner":
+            # Paired scan gates expand away from the state group.
+            travel = (phase % 24) / 23.0
+            offset = 2 + (travel * 12)
+            left_x = model["group_left"] - offset
+            right_x = model["group_right"] + offset
+            self.canvas.create_line(left_x, y - 3, left_x, y + 3,
+                                    fill=color, width=1, tags=tags)
+            self.canvas.create_line(right_x, y - 3, right_x, y + 3,
+                                    fill=color, width=1, tags=tags)
+            return
+
+        if profile == "map":
+            # A single cursor sweeps the right-hand data channel and reverses.
+            x1, x2 = model["survey_x1"], model["survey_x2"]
+            if x2 > x1:
+                travel = abs(((phase % 48) / 47.0) * 2.0 - 1.0)
+                x = x1 + ((x2 - x1) * travel)
+                self.canvas.create_line(x, y - 3, x, y + 3,
+                                        fill=color, width=1, tags=tags)
+            return
+
+        if profile == "jump":
+            # Fast paired chevrons converge on the central state during a jump.
+            travel = (phase % 14) / 13.0
+            left_x = model["route_x1"] + ((model["route_x2"] - model["route_x1"]) * travel)
+            right_x = model["survey_x2"] - ((model["survey_x2"] - model["survey_x1"]) * travel)
+            self.canvas.create_line(left_x - 3, y - 2, left_x, y, left_x - 3, y + 2,
+                                    fill=color, width=1, tags=tags)
+            self.canvas.create_line(right_x + 3, y - 2, right_x, y, right_x + 3, y + 2,
+                                    fill=color, width=1, tags=tags)
+            return
+
+        if profile == "combat":
+            # Alternating alert brackets remain deliberately quieter than a flash.
+            bright_left = ((phase // 5) % 2) == 0
+            for x, bright in ((model["group_left"] - 5, bright_left),
+                              (model["group_right"] + 5, not bright_left)):
+                self.canvas.create_line(x, y - 4, x, y + 4,
+                                        fill=color if bright else dim, width=1, tags=tags)
+            return
+
+        # Flight, fighter, supercruise and exploration retain the same visual
+        # language but breathe at different rates. Route motion still provides
+        # the directional cue whenever an actual route is active.
+        period = {"supercruise": 18, "fighter": 22, "exploration": 36}.get(profile, 28)
+        pulse = phase % period
+        if pulse < 7:
+            size = 5 + (pulse / 3.0)
+            self.canvas.create_polygon(
+                marker_x, y - size,
+                marker_x + size, y,
+                marker_x, y + size,
+                marker_x - size, y,
+                fill="", outline=dim if pulse > 3 else color,
+                width=1, tags=tags,
+            )
 
     @staticmethod
     def _traffic_summary(system_traffic, compact=False):
@@ -871,11 +1077,26 @@ class TacticalHUD:
         )
 
         self._draw_chrome(bracket_len=11)
-        self._title_anim_x, self._title_anim_y = w - 16, 17
-        self.draw_text(16, 17, text="NAVIGATION HUD", fill=COLOR_ACCENT,
-                       font=("Courier", 11, "bold"), anchor="w")
-        self._draw_title_anim()
-        self._draw_navigation_state_marker(w / 2, 17, state_text, state_color)
+        title_x = 16
+        title_font = ("Courier", 11, "bold")
+        rendered_title = self._readable_font(title_font)
+        title_width = tkfont.Font(
+            family=rendered_title[0], size=rendered_title[1], weight="bold",
+        ).measure("NAVIGATION HUD")
+        marker_left, marker_right = title_x + title_width + 16, w - 16
+        marker_center = (marker_left + marker_right) / 2
+        self.draw_text(title_x, 17, text="NAVIGATION HUD", fill=COLOR_ACCENT,
+                       font=title_font, anchor="w")
+        self._draw_navigation_state_marker(
+            marker_center, 17, state_text, state_color,
+            route=route,
+            survey_progress=pct,
+            survey_known=total > 0 and nav_context.get("scan_progress_source") != "unknown",
+            survey_color=scan_color,
+            compact=True,
+            track_left=marker_left,
+            track_right=marker_right,
+        )
         self._draw_section_rule(16, w - 16, 34)
 
         # The current system is the primary landmark, held by a lit locator rail.
@@ -990,11 +1211,25 @@ class TacticalHUD:
         )
 
         self._draw_chrome(bracket_len=15)
-        self._title_anim_x, self._title_anim_y = w - 20, 19
-        self.draw_text(20, 19, text="NAVIGATION HUD", fill=COLOR_ACCENT,
-                       font=("Courier", 12, "bold"), anchor="w")
-        self._draw_title_anim()
-        self._draw_navigation_state_marker(w / 2, 19, state_text, state_color)
+        title_x = 20
+        title_font = ("Courier", 12, "bold")
+        rendered_title = self._readable_font(title_font)
+        title_width = tkfont.Font(
+            family=rendered_title[0], size=rendered_title[1], weight="bold",
+        ).measure("NAVIGATION HUD")
+        marker_left, marker_right = title_x + title_width + 18, w - 20
+        marker_center = (marker_left + marker_right) / 2
+        self.draw_text(title_x, 19, text="NAVIGATION HUD", fill=COLOR_ACCENT,
+                       font=title_font, anchor="w")
+        self._draw_navigation_state_marker(
+            marker_center, 19, state_text, state_color,
+            route=route,
+            survey_progress=pct,
+            survey_known=total > 0 and nav_context.get("scan_progress_source") != "unknown",
+            survey_color=scan_color,
+            track_left=marker_left,
+            track_right=marker_right,
+        )
         self._draw_section_rule(20, w - 20, 37)
 
         # Original system block, now anchored as the display's primary landmark.
