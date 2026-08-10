@@ -557,12 +557,14 @@ class TacticalHUD:
         muted = COLOR_MUTED
         dim = self._glow_color(muted, 0.62)
         route_active = bool(route.get("active"))
-        route_color = COLOR_ORANGE if route_active else muted
+        route_color = COLOR_ORANGE if route_active else color
+        route_base = self._glow_color(route_color, 0.68 if route_active else 0.62)
 
-        # The left channel represents the active route. A small inward-moving
-        # course light is added by the animation pass only while a route exists.
+        # The left channel retains the current state colour at rest and carries
+        # route progress when active. Motion is added only for a real route.
         self.canvas.create_line(left_edge, center_y, route_end, center_y,
-                                fill=dim, width=1, tags="nav_state_static")
+                                fill=route_base, width=2,
+                                tags="nav_state_static")
         self.canvas.create_line(left_edge, center_y - 3, left_edge, center_y + 3,
                                 fill=route_color, width=1, tags="nav_state_static")
         try:
@@ -629,7 +631,8 @@ class TacticalHUD:
             "route_x1": left_edge,
             "route_x2": route_end,
             "route_color": route_color,
-            "survey_active": bool(survey_known and 0.0 < survey_progress < 1.0),
+            "survey_known": bool(survey_known),
+            "survey_progress": survey_progress,
             "survey_x1": survey_start,
             "survey_x2": right_edge,
             "survey_front": survey_front,
@@ -657,23 +660,43 @@ class TacticalHUD:
                 and model["route_x2"] > model["route_x1"]):
             travel = (self._nav_marker_phase % 36) / 35.0
             x = model["route_x1"] + ((model["route_x2"] - model["route_x1"]) * travel)
+            tail_x = max(model["route_x1"], x - 6)
+            self.canvas.create_line(
+                tail_x, y, x, y,
+                fill=self._glow_color(model["route_color"], 0.72),
+                width=2, tags="nav_state_motion",
+            )
             self.canvas.create_oval(
                 x - 1, y - 1, x + 1, y + 1,
                 fill=model["route_color"], outline="",
                 tags="nav_state_motion",
             )
 
-        # A slow breathing point marks the live survey frontier without
-        # repainting the HUD or implying progress that the journal did not send.
-        survey_profiles = {"flight", "fighter", "supercruise", "scanner", "exploration"}
-        if (model["survey_active"] and profile in survey_profiles
-                and (self._nav_marker_phase % 16) < 5):
-            x = model["survey_front"]
-            self.canvas.create_oval(
-                x - 2, y - 2, x + 2, y + 2,
-                fill="#010101", outline=model["survey_color"], width=1,
-                tags="nav_state_motion",
-            )
+        # A restrained data light travels over only the known portion of the
+        # survey channel. It remains visible at 100%, unlike the old endpoint
+        # blink, but never crosses into progress the journal has not reported.
+        if model["survey_known"] and profile not in {"map", "jump"}:
+            x1, x2 = model["survey_x1"], model["survey_front"]
+            if x2 - x1 >= 3:
+                travel = (self._nav_marker_phase % 42) / 41.0
+                x = x1 + ((x2 - x1) * travel)
+                tail_x = max(x1, x - 6)
+                self.canvas.create_line(
+                    tail_x, y, x, y,
+                    fill=self._glow_color(model["survey_color"], 0.62),
+                    width=2, tags="nav_state_motion",
+                )
+                self.canvas.create_oval(
+                    x - 1, y - 1, x + 1, y + 1,
+                    fill=model["survey_color"], outline="",
+                    tags="nav_state_motion",
+                )
+            elif model["survey_progress"] <= 0 and (self._nav_marker_phase % 20) < 4:
+                self.canvas.create_oval(
+                    x1 - 1, y - 1, x1 + 1, y + 1,
+                    fill=model["survey_color"], outline="",
+                    tags="nav_state_motion",
+                )
 
         self._draw_navigation_state_motion(model)
 
