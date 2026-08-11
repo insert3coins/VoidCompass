@@ -138,6 +138,68 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         "SAAScanComplete", "Scan", "ScanOrganic",
     })
 
+    # Short, live-only Navigation HUD animations. Tuple values are:
+    # (motion kind, lane, theme tone, duration seconds, batch priority).
+    _NAV_HUD_EVENT_SPECS = {
+        "LoadGame": ("wake", "all", "accent", 1.6, 20),
+        "NavRoute": ("route_set", "left", "orange", 1.4, 58),
+        "NavRouteClear": ("route_clear", "left", "muted", 1.1, 58),
+        "FSDTarget": ("route_target", "left", "orange", 1.0, 45),
+        "StartJump": ("jump_charge", "all", "orange", 1.7, 90),
+        "FSDJump": ("arrival", "all", "accent", 1.8, 95),
+        "CarrierJump": ("arrival", "all", "accent", 1.8, 95),
+        "SupercruiseEntry": ("supercruise_enter", "center", "orange", 1.2, 62),
+        "SupercruiseExit": ("supercruise_exit", "center", "accent", 1.2, 62),
+        "SupercruiseDestinationDrop": ("supercruise_exit", "center", "accent", 1.2, 62),
+        "DockingRequested": ("dock_request", "center", "green", 1.2, 60),
+        "DockingGranted": ("dock_request", "center", "green", 1.2, 60),
+        "DockingCancelled": ("dock_denied", "center", "yellow", 1.1, 65),
+        "DockingDenied": ("dock_denied", "center", "orange", 1.3, 75),
+        "Docked": ("dock", "center", "accent", 1.5, 78),
+        "Undocked": ("undock", "center", "accent", 1.3, 78),
+        "Touchdown": ("touchdown", "center", "accent", 1.3, 68),
+        "Liftoff": ("liftoff", "center", "orange", 1.3, 68),
+        "ApproachBody": ("body_approach", "center", "accent", 1.1, 42),
+        "LeaveBody": ("body_leave", "center", "accent", 1.1, 42),
+        "LaunchSRV": ("vehicle_deploy", "center", "accent", 1.4, 68),
+        "DockSRV": ("vehicle_board", "center", "accent", 1.4, 68),
+        "LaunchFighter": ("vehicle_deploy", "center", "accent", 1.4, 68),
+        "DockFighter": ("vehicle_board", "center", "accent", 1.4, 68),
+        "FighterDestroyed": ("warning", "all", "orange", 1.6, 98),
+        "VehicleSwitch": ("vehicle_switch", "center", "accent", 1.2, 64),
+        "Embark": ("vehicle_board", "center", "accent", 1.3, 66),
+        "Disembark": ("vehicle_deploy", "center", "accent", 1.3, 66),
+        "DiscoveryScan": ("honk", "right", "accent", 1.5, 52),
+        "NavBeaconScan": ("honk", "right", "accent", 1.5, 52),
+        "FSSDiscoveryScan": ("fss_progress", "right", "accent", 1.1, 54),
+        "FSSSignalDiscovered": ("fss_signal", "right", "accent", 1.0, 44),
+        "Scan": ("body_scan", "right", "accent", 1.1, 50),
+        "ScanBaryCentre": ("body_scan", "right", "accent", 1.1, 50),
+        "DatalinkScan": ("body_scan", "right", "accent", 1.1, 50),
+        "DataScanned": ("body_scan", "right", "accent", 1.1, 50),
+        "FSSBodySignals": ("signals", "right", "yellow", 1.3, 62),
+        "SAASignalsFound": ("signals", "right", "yellow", 1.3, 62),
+        "FSSAllBodiesFound": ("survey_complete", "right", "green", 1.9, 84),
+        "SAAScanComplete": ("mapping_complete", "right", "green", 1.7, 82),
+        "ScanOrganic": ("bio_sample", "right", "green", 1.6, 72),
+        "CodexEntry": ("codex", "right", "yellow", 1.7, 76),
+        "SellExplorationData": ("data_sale", "right", "green", 1.8, 80),
+        "MultiSellExplorationData": ("data_sale", "right", "green", 1.8, 80),
+        "SellOrganicData": ("data_sale", "right", "green", 1.8, 80),
+        "FuelScoop": ("fuel", "left", "green", 1.3, 56),
+        "RefuelAll": ("fuel", "left", "green", 1.3, 56),
+        "RefuelPartial": ("fuel", "left", "green", 1.3, 56),
+        "ReservoirReplenished": ("fuel", "left", "green", 1.3, 56),
+        "JetConeBoost": ("boost", "left", "accent", 1.5, 65),
+        "ProspectedAsteroid": ("mining", "right", "yellow", 1.3, 58),
+        "MiningRefined": ("mining", "right", "yellow", 1.2, 58),
+        "HeatWarning": ("warning", "all", "orange", 1.6, 100),
+        "HullDamage": ("warning", "all", "orange", 1.6, 100),
+        "UnderAttack": ("warning", "all", "orange", 1.6, 100),
+        "JetConeDamage": ("warning", "all", "orange", 1.6, 100),
+        "Died": ("warning", "all", "orange", 1.9, 100),
+    }
+
     _COCKPIT_STATE_FILE = "last_cockpit_state.json"
     _COCKPIT_STATE_SCHEMA = 1
     _COCKPIT_STATE_FIELDS = (
@@ -815,6 +877,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._compass_advisor_last_any = 0.0
         self._cockpit_docking_quiet_until = 0.0
         self._hud_balance_cache = {"ts": 0.0, "balance": None}
+        self._hud_event_pulse = None
+        self._hud_event_batch_priority = None
         self.last_journal_event_ts = 0.0
         self.last_logged_journal_file = None
         self.last_status_event_ts = 0.0
@@ -1511,6 +1575,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.combat_awareness = CombatAwareness()
         self._hud_balance_cache = {"ts": 0.0, "balance": None}
         self.last_journal_event_ts = 0.0
+        self._hud_event_sequence = 0
+        self._hud_event_pulse = None
+        self._hud_event_batch_priority = None
         self.last_logged_journal_file = None
         self.last_status_event_ts = 0.0
         self.last_nav_event_ts = 0.0
@@ -3836,6 +3903,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "fuel_percent": fuel_percent,
             "route_safety": route_safety,
             "region": self._navigation_region_context(),
+            "journal_event": self._navigation_hud_event_context(),
             "badges": badges[:6],
         }
 
@@ -3926,6 +3994,87 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         cutoff = now - 120
         while self._event_rate_ts and self._event_rate_ts[0] < cutoff:
             self._event_rate_ts.popleft()
+
+    def _observe_navigation_hud_event(self, event, raw, data, startup_replay=False):
+        """Publish one compact, live-only event pulse to the Navigation HUD."""
+        if (startup_replay or getattr(self, "_startup_restore_active", False)
+                or not event):
+            return False
+        spec = self._NAV_HUD_EVENT_SPECS.get(str(event))
+        if not spec:
+            return False
+
+        kind, lane, tone, duration_s, priority = spec
+        now = time.monotonic()
+        previous = getattr(self, "_hud_event_pulse", None)
+        recent = bool(previous and now - float(previous.get("observed", 0.0) or 0.0) < 0.55)
+
+        # A live watcher batch often contains several descriptions of one
+        # moment. Preserve its strongest cue; repeated scans of the same kind
+        # are coalesced into a bounded count for the right-hand pulse train.
+        batch_priority = getattr(self, "_hud_event_batch_priority", None)
+        if (getattr(self, "batch_mode", False)
+                and batch_priority is not None
+                and previous.get("kind") != kind
+                and int(batch_priority) > priority):
+            return False
+
+        count = 1
+        if recent and previous.get("kind") == kind:
+            count = min(3, int(previous.get("count", 1) or 1) + 1)
+
+        payload = raw if isinstance(raw, dict) else {}
+        normalised = data if isinstance(data, dict) else {}
+        detail = {}
+        if kind == "bio_sample":
+            scan_type = str(
+                normalised.get("scan_type") or payload.get("ScanType") or ""
+            ).strip().casefold()
+            detail["sample_step"] = 3 if scan_type == "analyse" else 1 if scan_type == "log" else 2
+        elif kind == "fss_progress":
+            progress = normalised.get("progress", payload.get("Progress"))
+            try:
+                detail["progress"] = max(0.0, min(1.0, float(progress)))
+            except (TypeError, ValueError):
+                pass
+        elif kind == "honk":
+            body_count = normalised.get("body_count", payload.get("BodyCount"))
+            try:
+                detail["body_count"] = max(0, int(body_count or 0))
+            except (TypeError, ValueError):
+                pass
+
+        self._hud_event_sequence = int(getattr(self, "_hud_event_sequence", 0) or 0) + 1
+        self._hud_event_pulse = {
+            "seq": self._hud_event_sequence,
+            "event": str(event),
+            "kind": kind,
+            "lane": lane,
+            "tone": tone,
+            "duration": float(duration_s),
+            "priority": int(priority),
+            "count": count,
+            "observed": now,
+            **detail,
+        }
+        if getattr(self, "batch_mode", False):
+            self._hud_event_batch_priority = priority
+        else:
+            self.update_hud()
+        return True
+
+    def _navigation_hud_event_context(self):
+        pulse = getattr(self, "_hud_event_pulse", None)
+        if not isinstance(pulse, dict):
+            return None
+        try:
+            age = time.monotonic() - float(pulse.get("observed", 0.0))
+            duration = float(pulse.get("duration", 0.0))
+        except (TypeError, ValueError):
+            return None
+        if age < 0 or age > duration + 0.5:
+            return None
+        return dict(pulse)
 
     @staticmethod
     def _source_state_for_age(age_seconds, ok_age, warn_age, unknown_state="FAIL"):
@@ -5637,6 +5786,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             fid = d.get("fid")
             if commander:
                 self._switch_commander_profile(commander, fid)
+        self._observe_navigation_hud_event(
+            ev,
+            raw if isinstance(raw, dict) else d,
+            d,
+            startup_replay=startup_replay,
+        )
         self._observe_surface_trail_event(
             ev, raw if isinstance(raw, dict) else d,
             startup_replay=startup_replay,
@@ -7736,6 +7891,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if startup_batch:
             self._startup_restore_active = True
             self._startup_restore_ui_pending = True
+        self._hud_event_batch_priority = None
         self.batch_mode = True
         try:
             with self.db_lock:
@@ -7751,6 +7907,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self._request_db_commit(reason="journal_batch")
         finally:
             self.batch_mode = False
+            self._hud_event_batch_priority = None
         try:
             specialist_engine = getattr(self, "specialist_engine", None)
             if specialist_engine:

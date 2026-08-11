@@ -1,19 +1,13 @@
 # VoidCompass // UPDATE LOG
 
-## v5.3.7 // Explorer's Briefing
+## v5.3.7.2 // Journal-Aware Navigation
 **Release Date:** 2026-Aug-11
 
-*   Rebuilt the **Dashboard** as one exploration briefing centred on Current Survey, a truthful Next Leg, three ranked Next Actions, Expedition Pulse, Discovery Summary and the curated Flight Log.
-*   Unified live game routes, saved waypoint plans and direct navigation targets behind the same Dashboard route model, removing contradictory “no route” and jumps-remaining states and avoiding unnecessary Dashboard-only EDSM waypoint lookups.
-*   Added responsive briefing-card reflow for narrower windows, reduced the adaptive context strip to useful status, kept detailed UI/I/O counts in Command Health and moved journal cache rebuilding to **Settings → Diagnostics**.
-*   Expanded **Mission Control** to thirteen selectable expedition templates, adding six deep multi-session campaigns for long-range cartography, exobiology, sector mapping, regional science, Outer Rim discovery and galactic circumnavigation; larger templates extend matching goals without losing verified progress.
-*   Refined the **Station Link overlay** into a docked dossier with clearer station identity, arrival/pad/support instruments, separated core and explorer services, data-sale readiness and a quieter local profile, with a matching Layout Studio footprint.
-*   Corrected Station Link lifecycle recovery after batched Docked or login Location events, including startup catch-up and Carrier-jump refreshes, without reopening an auto-hidden card or restarting its timer for unrelated journal activity.
-*   Added a themed keyboard **hotkey recorder** to Settings with per-action Record and Clear controls, live canonical chord capture, conflict feedback and retained manual editing and profile-aware persistence; existing Void Compass shortcuts pause while the recorder is listening and resume safely when it closes.
-*   Refined the Navigation HUD centre-state display into a single theme-aware data row: balanced route and known-system-survey tracers now combine with distinct restrained signatures for flight, supercruise, jumps, docking, landing, on-foot travel, SRV/Nomad driving, scanners, maps and combat in both normal and compact layouts, with seamless independent animation cycles plus reduced-motion and hidden-overlay safeguards; retired the unrelated far-right title pip so the new instrument can use the full remaining header width.
+*   Upgraded the header to **Navigation HUD v2** as one full-width tapered navigation instrument: route progress, a readable state glyph, survey knowledge, ambient activity and journal reactions now share the same data spine without a redundant title. State changes contract and reform through the centre while landed, on-foot and surface-vehicle states place a real gravity-dependent load on the lower chassis. Live sequences cover routes, jumps and arrivals, docking and surface transitions, vehicles, honks/FSS/DSS, biological and Codex discoveries, data sales, fuel, mining and safety events; rapid scan bursts coalesce, higher-priority events win within a batch, startup catch-up stays silent and every sequence remains theme-aware and reduced-motion safe.
 
 ## Earlier releases
 
+*   **v5.3.7** — Rebuilt the exploration Dashboard and unified route model, expanded Mission Control with long-range expedition templates, refined Station Link lifecycle and presentation, added safe hotkey recording and evolved the Navigation HUD into a readable theme-aware route/state/survey instrument.
 *   **v5.3.6** — Refocused Void Compass around exploration and mining, consolidated the application shell and Expedition workspace, retired cockpit speech and unrelated career surfaces, added Deep Survey field intelligence and refined the System Intelligence overlay.
 *   **v5.3.5.6** — Refined both Navigation HUD layouts with clearer cockpit hierarchy, live fuel integrity, larger telemetry, a segmented survey track and a quiet context footer that appears only for meaningful information.
 *   **v5.3.5.5** — Refocused Void Compass by retiring Trade Assist and its market database while retaining independent visited-market EDDN uploads, exploration Analytics, belt-cluster EDSM uploads, fleet synchronisation and the first live-fuel Navigation HUD readout.
