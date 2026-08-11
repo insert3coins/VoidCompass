@@ -4376,12 +4376,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             or hyperdrive
             or phase == "charging"
         )
+        high_wake = bool(
+            phase in {"charging", "hyperspace"}
+            or getattr(self, "_navigation_jump_charge_seen", False)
+            or hyperdrive
+        )
         cooldown = bool(getattr(self, "current_fsd_cooldown", False))
         mass_locked = bool(getattr(self, "current_fsd_mass_locked", False))
         if phase == "arrival":
             state, label, tone = "arrival", "ARRIVAL", "green"
-        elif jumping or phase == "hyperspace":
+        elif phase == "hyperspace" or (jumping and high_wake):
             state, label, tone = "hyperspace", "HYPERSPACE", "orange"
+        elif jumping:
+            # The same Status flag is raised for an in-system low wake. Keep
+            # its identity and animation distinct from witch-space.
+            state, label, tone = "supercruise_entry", "SUPERCRUISE", "orange"
         elif charging:
             state = "hyper_charge" if hyperdrive else "charge"
             if phase == "charging":
@@ -4405,6 +4414,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "hyperdrive": hyperdrive,
             "cooldown": cooldown,
             "jumping": jumping,
+            "high_wake": high_wake,
             "phase": phase,
             "target": str(getattr(self, "_navigation_jump_target", "") or ""),
         }
