@@ -730,6 +730,7 @@ class JournalWatcher:
                     ),
                     "mass_em": data.get("MassEM"),
                     "stellar_mass": data.get("StellarMass"),
+                    "distance_from_arrival_ls": data.get("DistanceFromArrivalLS"),
                     "is_body_scan": bool(star_type or planet_class),
                     "bio_signals_count": bio_signals_count,
                     # Body conditions for bio prediction (planets only)
