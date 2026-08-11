@@ -476,7 +476,7 @@ class OverlayLayoutStudio:
         interaction_card, interaction = self._option_card(columns, "DISPLAY & INTERACTION")
         interaction_card.grid(row=0, column=0, sticky="nsew", padx=(0, 4), pady=(0, 8))
         self._option_toggle(interaction, "Mouse passthrough", "overlay_mouse_passthrough")
-        self._option_toggle(interaction, "Compact Navigation HUD", "hud_compact_mode")
+        self._option_toggle(interaction, "Navigation HUD layout", "hud_compact_mode")
         self.overlay_scale_var = tk.StringVar(
             value=str(self.config.get("overlay_text_scale_percent", 100))
         )
@@ -623,7 +623,13 @@ class OverlayLayoutStudio:
             label = OVERLAY_CARD_LABELS.get(attr, attr.replace("_", " ").upper())
             self._refresh_toggle_button(widget, enabled, f"{label}  ON", f"{label}  OFF")
         for key, widget in self._option_buttons.items():
-            self._refresh_toggle_button(widget, bool(self.config.get(key, False)))
+            if key == "hud_compact_mode":
+                self._refresh_toggle_button(
+                    widget, bool(self.config.get(key, True)),
+                    on_text="STANDARD", off_text="EXPANDED",
+                )
+            else:
+                self._refresh_toggle_button(widget, bool(self.config.get(key, False)))
         self.overlay_scale_var.set(str(self.config.get("overlay_text_scale_percent", 100)))
         self.prospector_timeout_var.set(str(self.config.get("prospector_hud_timeout_s", 45)))
         self.system_timeout_var.set(str(self.config.get("system_info_timeout_s", 30)))
@@ -654,6 +660,9 @@ class OverlayLayoutStudio:
         if key == "station_info_auto_hide_enabled":
             state = "enabled" if self.config.get(key, False) else "disabled; visible while docked"
             self.options_status_var.set(f"Station Link auto-hide {state} for this commander.")
+        elif key == "hud_compact_mode":
+            mode = "Standard" if self.config.get(key, True) else "Expanded"
+            self.options_status_var.set(f"Navigation HUD switched to {mode} for this commander.")
         else:
             self.options_status_var.set(f"Saved {key.replace('_', ' ')} for this commander.")
 

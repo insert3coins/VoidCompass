@@ -224,7 +224,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         "current_in_fighter", "current_in_srv", "current_on_foot",
         "current_vehicle_id", "current_vehicle_name", "current_legal_state",
         "current_fuel_main", "current_fuel_reservoir", "fuel_capacity_main",
-        "current_destination", "cargo_capacity", "current_cargo_tons",
+        "current_destination", "current_destination_details",
+        "neutron_boost_armed", "neutron_boost_value",
+        "cargo_capacity", "current_cargo_tons",
         "current_cargo_inventory", "dest_coords", "dest_name", "route_list",
         "nav_route_entries", "current_latitude", "current_longitude",
         "current_heading", "current_planet_radius", "on_planet",
@@ -724,6 +726,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.root.after_cancel(hud_job)
             except Exception:
                 pass
+        transition_job = getattr(self, "_navigation_transition_job", None)
+        if transition_job is not None:
+            try:
+                self.root.after_cancel(transition_job)
+            except Exception:
+                pass
+        self._navigation_transition_job = None
         self._hud_refresh_job = None
         self._hud_refresh_requested = False
         self._last_hud_refresh_ts = 0.0
@@ -826,6 +835,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._toast_shields_up = None
         self.current_legal_state = None
         self.current_destination = None
+        self.current_destination_details = {}
+        self.current_status_flags = 0
+        self.current_status_flags2 = 0
+        self.current_fsd_mass_locked = False
+        self.current_fsd_charging = False
+        self.current_fsd_hyperdrive_charging = False
+        self.current_fsd_cooldown = False
+        self.current_fsd_jumping = False
+        self._navigation_jump_phase = ""
+        self._navigation_jump_target = ""
+        self._navigation_jump_charge_seen = False
+        self._navigation_jump_phase_started = 0.0
+        self.neutron_boost_armed = False
+        self.neutron_boost_value = None
 
         self.cargo_capacity = 0
         self.current_cargo_tons = 0
@@ -1566,6 +1589,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._toast_shields_up = None
         self.current_legal_state = None
         self.current_destination = None
+        self.current_destination_details = {}
+        self.current_status_flags = 0
+        self.current_status_flags2 = 0
+        self.current_fsd_mass_locked = False
+        self.current_fsd_charging = False
+        self.current_fsd_hyperdrive_charging = False
+        self.current_fsd_cooldown = False
+        self.current_fsd_jumping = False
+        self._navigation_jump_phase = ""
+        self._navigation_jump_target = ""
+        self._navigation_jump_charge_seen = False
+        self._navigation_jump_phase_started = 0.0
+        self._navigation_transition_job = None
+        self.neutron_boost_armed = False
+        self.neutron_boost_value = None
         self.cargo_capacity = 0
         self.current_cargo_tons = 0
         self.current_cargo_inventory = []
@@ -2159,6 +2197,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if getattr(self, "is_running", True):
             self._configure_overlay_hotkeys(announce=False)
 
+    def _toggle_navigation_hud_layout(self, *, announce=True):
+        """Switch the active commander's HUD between Standard and Expanded."""
+        standard = not bool(self.config.get("hud_compact_mode", True))
+        self.config["hud_compact_mode"] = standard
+        save_config(self.config)
+        self.update_hud()
+        studio = getattr(self, "overlay_layout_studio", None)
+        if studio and studio.is_open():
+            studio.refresh()
+        mode = "Standard" if standard else "Expanded"
+        if announce:
+            self.add_event_feed_entry(
+                "SYSTEM", f"Navigation HUD layout: {mode}", severity="INFO",
+            )
+        return mode
+
     def _handle_overlay_hotkey(self, action):
         if not self.is_running:
             return
@@ -2176,6 +2230,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.open_overlay_layout_studio()
                 message = "Overlay Layout Studio opened"
             self.add_event_feed_entry("SYSTEM", message, severity="INFO")
+            return
+        if action == "navigation_layout":
+            self._toggle_navigation_hud_layout()
             return
         if action == "field_bookmark":
             self._field_bookmark()
@@ -3849,6 +3906,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             badges.append((f"BIO {self.organic_count}/{self.system_bio_signals}", "alert"))
         route_safety = self._route_safety_snapshot()
         fuel_percent = self._current_fuel_percent()
+        fsd_readiness = self._navigation_fsd_readiness_context()
+        local_target = self._navigation_local_target_context(next_name)
+        neutron_boost = {
+            "armed": bool(getattr(self, "neutron_boost_armed", False)),
+            "value": getattr(self, "neutron_boost_value", None),
+        }
 
         sampling = self._sampling_snapshot() if getattr(self, "bio_sampling", None) else None
         gravity_g = None
@@ -3902,6 +3965,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "longitude": getattr(self, "current_longitude", None),
             "fuel_percent": fuel_percent,
             "route_safety": route_safety,
+            "fsd_readiness": fsd_readiness,
+            "local_target": local_target,
+            "neutron_boost": neutron_boost,
             "region": self._navigation_region_context(),
             "journal_event": self._navigation_hud_event_context(),
             "badges": badges[:6],
@@ -3970,6 +4036,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         mode, label, visible, severity = self._classify_music_track(track)
         if not track:
             return
+        self._observe_navigation_music_transition(
+            track, startup_replay=startup_replay,
+        )
         previous_track = getattr(self, "current_music_track", "")
         if track == previous_track:
             return
@@ -4075,6 +4144,254 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if age < 0 or age > duration + 0.5:
             return None
         return dict(pulse)
+
+    def _cancel_navigation_transition_job(self):
+        job = getattr(self, "_navigation_transition_job", None)
+        self._navigation_transition_job = None
+        if job is None:
+            return
+        try:
+            self.root.after_cancel(job)
+        except Exception:
+            pass
+
+    def _expire_navigation_jump_phase(self, expected_phase):
+        self._navigation_transition_job = None
+        if str(getattr(self, "_navigation_jump_phase", "") or "") != expected_phase:
+            return
+        self._clear_navigation_jump_phase(refresh=True)
+
+    def _schedule_navigation_jump_phase_expiry(self, phase):
+        self._cancel_navigation_transition_job()
+        root = getattr(self, "root", None)
+        after = getattr(root, "after", None)
+        if not callable(after):
+            return
+        delay_ms = {
+            "charging": 30000,
+            "hyperspace": 90000,
+            "arrival": 1800,
+        }.get(phase)
+        if delay_ms is None:
+            return
+        try:
+            self._navigation_transition_job = after(
+                delay_ms,
+                lambda expected=phase: self._expire_navigation_jump_phase(expected),
+            )
+        except Exception:
+            self._navigation_transition_job = None
+
+    def _set_navigation_jump_phase(
+        self, phase, *, target=None, refresh=True, schedule=True,
+    ):
+        """Set one bounded high-wake phase without inventing journal events."""
+        phase = str(phase or "").strip().casefold()
+        if phase not in {"charging", "hyperspace", "arrival"}:
+            phase = ""
+        previous = str(getattr(self, "_navigation_jump_phase", "") or "")
+        previous_target = str(getattr(self, "_navigation_jump_target", "") or "")
+        next_target = previous_target if target is None else str(target or "").strip()
+        changed = phase != previous or next_target != previous_target
+        self._navigation_jump_phase = phase
+        self._navigation_jump_target = next_target
+        self._navigation_jump_phase_started = time.monotonic() if phase else 0.0
+        if phase == "charging":
+            self._navigation_jump_charge_seen = bool(
+                getattr(self, "current_fsd_charging", False)
+                and getattr(self, "current_fsd_hyperdrive_charging", False)
+            )
+        elif phase != "hyperspace":
+            self._navigation_jump_charge_seen = False
+        if schedule:
+            if phase:
+                self._schedule_navigation_jump_phase_expiry(phase)
+            else:
+                self._cancel_navigation_transition_job()
+        if changed and refresh and not getattr(self, "batch_mode", False):
+            self.update_hud()
+        return changed
+
+    def _clear_navigation_jump_phase(self, *, refresh=True):
+        return self._set_navigation_jump_phase(
+            "", target="", refresh=refresh, schedule=True,
+        )
+
+    def _observe_navigation_jump_event(self, event, raw, data, startup_replay=False):
+        """Track countdown, witch-space and arrival as distinct phases."""
+        event = str(event or "")
+        raw = raw if isinstance(raw, dict) else {}
+        data = data if isinstance(data, dict) else {}
+        if event == "StartJump":
+            jump_type = str(
+                raw.get("JumpType") or data.get("jump_type") or ""
+            ).strip().casefold()
+            if jump_type == "hyperspace":
+                target = raw.get("StarSystem") or data.get("star_system")
+                return self._set_navigation_jump_phase(
+                    "charging", target=target,
+                    refresh=not startup_replay,
+                )
+            if jump_type == "supercruise":
+                return self._clear_navigation_jump_phase(refresh=not startup_replay)
+        elif event == "FSDJump":
+            self.current_fsd_jumping = False
+            self.current_fsd_charging = False
+            self.current_fsd_hyperdrive_charging = False
+            if startup_replay:
+                return self._clear_navigation_jump_phase(refresh=False)
+            target = raw.get("StarSystem") or data.get("star_system")
+            return self._set_navigation_jump_phase("arrival", target=target)
+        elif event in {
+            "LoadGame", "Shutdown", "Died", "Resurrect",
+            "ShipyardBuy", "ShipyardNew", "ShipyardSwap",
+        }:
+            self.current_fsd_jumping = False
+            return self._clear_navigation_jump_phase(refresh=not startup_replay)
+        return False
+
+    def _observe_navigation_music_transition(self, track, startup_replay=False):
+        """Use music moods only as scoped corroboration for live travel state."""
+        key = str(track or "").replace(" ", "").replace("_", "").casefold()
+        phase = str(getattr(self, "_navigation_jump_phase", "") or "")
+        changed = False
+        if key == "notrack" and phase == "charging" and (
+                getattr(self, "_navigation_jump_charge_seen", False)
+                or getattr(self, "current_fsd_hyperdrive_charging", False)):
+            # Your live journal changes to NoTrack as the tunnel opens. The
+            # official Status fsdJump bit remains primary; this covers a poll
+            # that happens to miss that short-lived flag.
+            changed = self._set_navigation_jump_phase(
+                "hyperspace", refresh=not startup_replay,
+            )
+        if key in {
+            "supercruise", "destinationfromhyperspace",
+            "destinationfromsupercruise",
+        } and not any(getattr(self, attr, False) for attr in (
+            "current_docked", "current_landed", "current_in_srv",
+            "current_in_fighter", "current_on_foot",
+        )):
+            if getattr(self, "hud_flight_state", "") != "SUPERCRUISE":
+                self.hud_flight_state = "SUPERCRUISE"
+                changed = True
+                if not startup_replay and not getattr(self, "batch_mode", False):
+                    self.update_hud()
+        return changed
+
+    def _observe_navigation_readiness_event(self, event, raw, data, startup_replay=False):
+        """Maintain profile-safe neutron boost readiness from journal truth."""
+        event = str(event or "")
+        raw = raw if isinstance(raw, dict) else {}
+        data = data if isinstance(data, dict) else {}
+        was_armed = bool(getattr(self, "neutron_boost_armed", False))
+        was_value = getattr(self, "neutron_boost_value", None)
+
+        if event == "JetConeBoost":
+            self.neutron_boost_armed = True
+            value = raw.get("BoostValue", data.get("boost_value"))
+            try:
+                self.neutron_boost_value = float(value) if value is not None else None
+            except (TypeError, ValueError):
+                self.neutron_boost_value = None
+        elif event in {
+            "FSDJump", "Died", "Shutdown", "LoadGame",
+            "ShipyardBuy", "ShipyardNew", "ShipyardSwap",
+        }:
+            self.neutron_boost_armed = False
+            self.neutron_boost_value = None
+        else:
+            return False
+
+        changed = (
+            was_armed != bool(self.neutron_boost_armed)
+            or was_value != self.neutron_boost_value
+        )
+        if changed and not startup_replay and not getattr(self, "batch_mode", False):
+            self.update_hud()
+        return changed
+
+    @staticmethod
+    def _navigation_destination_label(value):
+        """Turn the Status destination token into a restrained HUD label."""
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        if text.startswith("$"):
+            text = text.strip("$;")
+            text = text.split(":", 1)[0]
+            for suffix in ("_Name_Localised", "_Name", "_Localised"):
+                if text.casefold().endswith(suffix.casefold()):
+                    text = text[:-len(suffix)]
+                    break
+            text = text.replace("_", " ")
+        return " ".join(text.split())
+
+    def _navigation_fsd_readiness_context(self):
+        phase = str(getattr(self, "_navigation_jump_phase", "") or "")
+        jumping = bool(getattr(self, "current_fsd_jumping", False))
+        hyperdrive = bool(getattr(self, "current_fsd_hyperdrive_charging", False))
+        charging = bool(
+            getattr(self, "current_fsd_charging", False)
+            or hyperdrive
+            or phase == "charging"
+        )
+        cooldown = bool(getattr(self, "current_fsd_cooldown", False))
+        mass_locked = bool(getattr(self, "current_fsd_mass_locked", False))
+        if phase == "arrival":
+            state, label, tone = "arrival", "ARRIVAL", "green"
+        elif jumping or phase == "hyperspace":
+            state, label, tone = "hyperspace", "HYPERSPACE", "orange"
+        elif charging:
+            state = "hyper_charge" if hyperdrive else "charge"
+            if phase == "charging":
+                state = "hyper_charge"
+            label = "HYPER CHARGE" if hyperdrive else "FSD CHARGE"
+            if state == "hyper_charge":
+                label = "HYPER CHARGE"
+            tone = "orange"
+        elif cooldown:
+            state, label, tone = "cooldown", "FSD COOLDOWN", "accent"
+        elif mass_locked:
+            state, label, tone = "mass_lock", "MASS LOCK", "yellow"
+        else:
+            state, label, tone = "ready", "FSD READY", "green"
+        return {
+            "state": state,
+            "label": label,
+            "tone": tone,
+            "mass_locked": mass_locked,
+            "charging": charging,
+            "hyperdrive": hyperdrive,
+            "cooldown": cooldown,
+            "jumping": jumping,
+            "phase": phase,
+            "target": str(getattr(self, "_navigation_jump_target", "") or ""),
+        }
+
+    def _navigation_local_target_context(self, next_system=None):
+        details = getattr(self, "current_destination_details", None) or {}
+        if not isinstance(details, dict):
+            return None
+        name = self._navigation_destination_label(details.get("Name"))
+        if not name:
+            return None
+        duplicates = {
+            str(value or "").strip().casefold()
+            for value in (next_system, getattr(self, "dest_name", None))
+            if str(value or "").strip()
+        }
+        if name.casefold() in duplicates:
+            return None
+        station = str(getattr(self, "current_station_name", "") or "").strip()
+        if getattr(self, "current_docked", False) and station and name.casefold() == station.casefold():
+            return None
+        current_body = str(getattr(self, "current_body_name", "") or "").strip()
+        return {
+            "name": name,
+            "system": details.get("System"),
+            "body": details.get("Body"),
+            "is_current_body": bool(current_body and name.casefold() == current_body.casefold()),
+        }
 
     @staticmethod
     def _source_state_for_age(age_seconds, ok_age, warn_age, unknown_state="FAIL"):
@@ -5786,6 +6103,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             fid = d.get("fid")
             if commander:
                 self._switch_commander_profile(commander, fid)
+        self._observe_navigation_jump_event(
+            ev,
+            raw if isinstance(raw, dict) else d,
+            d,
+            startup_replay=startup_replay,
+        )
+        self._observe_navigation_readiness_event(
+            ev,
+            raw if isinstance(raw, dict) else d,
+            d,
+            startup_replay=startup_replay,
+        )
         self._observe_navigation_hud_event(
             ev,
             raw if isinstance(raw, dict) else d,
@@ -6208,7 +6537,19 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self._hide_survey_status_for_jump()
                 self.in_fss = False
                 self.fss_summary_active = False
-                self.hud_flight_state = "SUPERCRUISE" if jump_type == "supercruise" else "HYPERSPACE"
+                if jump_type == "supercruise":
+                    self.hud_flight_state = "SUPERCRUISE"
+                else:
+                    # Frontier writes StartJump at the start of the countdown,
+                    # not on entry to witch-space. Preserve the physical state
+                    # underneath the HYPER CHARGE annunciation until Status's
+                    # exact fsdJump bit (or the scoped music fallback) fires.
+                    self._sync_navigation_hud_flight_state(
+                        supercruise=bool(
+                            int(getattr(self, "current_status_flags", 0) or 0)
+                            & 0x00000010
+                        ),
+                    )
                 self.update_hud()
                 return
 
@@ -6239,7 +6580,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 else:
                     self.current_docked = False
                     self.current_on_foot = False
-                    self.hud_flight_state = "FLIGHT"
+                    # A completed inter-system FSD jump arrives in
+                    # supercruise. Status and Music will subsequently confirm
+                    # that base state while ARRIVAL and cooldown play over it.
+                    self.hud_flight_state = "SUPERCRUISE"
 
             prev_coords = self.current_coords if isinstance(self.current_coords, list) else None
 
