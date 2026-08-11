@@ -15,6 +15,9 @@ SIGNAL_FONT = ("Courier", 10, "bold")
 BIO_DETAIL_FONT = ("Courier", 9, "bold")
 BIO_SYMBOL_FONT = ("Courier", 10, "bold")
 BIO_DETAIL_H = 18
+BELT_DETAIL_FONT = ("Courier", 7, "bold")
+BELT_SYMBOL_FONT = ("Courier", 8, "bold")
+BELT_DETAIL_H = 16
 
 
 def _safe_int(value, default=0):
@@ -762,7 +765,7 @@ class SurveyStatusHUD:
             )
         ) if completed_rows else 0
         notable_h = (20 + len(notable_rows) * 34) if notable_rows else 0
-        belt_h = (24 + len(belt_rows) * 18) if belt_rows else 0
+        belt_h = (24 + len(belt_rows) * BELT_DETAIL_H) if belt_rows else 0
         h = 89 + sample_h + content_h + belt_h + notable_h + completed_h + 29
         self._resize(h)
         self.canvas.delete("all")
@@ -914,17 +917,17 @@ class SurveyStatusHUD:
         if belt_rows:
             self._text(
                 18, y + 8, f"ASTEROID BELT CLUSTERS ({len(belt_rows)})",
-                palette["accent"], ("Courier", 7, "bold"),
+                palette["dim"], ("Courier", 7, "bold"),
             )
             self._text(WIDTH - 18, y + 8, "FSS CONTACTS", palette["dim"], ("Courier", 7, "bold"), "e")
             y += 24
             for row in belt_rows:
-                color = palette["orange"] if row.get("new_discovery") else palette["text"]
-                self._text(20, y, "◆", color, BIO_SYMBOL_FONT)
-                self._text(38, y, _truncate(row.get("display_name"), 54), color, BIO_DETAIL_FONT)
+                color = palette["muted"] if row.get("new_discovery") else palette["dim"]
+                self._text(20, y, "◆", color, BELT_SYMBOL_FONT)
+                self._text(36, y, _truncate(row.get("display_name"), 64), color, BELT_DETAIL_FONT)
                 distance = row.get("distance") or ("NEW" if row.get("new_discovery") else "FOUND")
-                self._text(WIDTH - 18, y, distance, palette["muted"], BIO_DETAIL_FONT, "e")
-                y += 18
+                self._text(WIDTH - 18, y, distance, palette["dim"], BELT_DETAIL_FONT, "e")
+                y += BELT_DETAIL_H
 
         if notable_rows:
             self._text(18, y + 8, f"VALUABLE / NOTABLE ({len(notable_rows)})", palette["dim"], ("Courier", 7, "bold"))

@@ -269,6 +269,7 @@ GLOBAL_ONLY_KEYS = (
     "screenshot_max_convert_per_cycle",
     "overlay_topmost_refresh_ms",
     "hud_anim_interval_ms",
+    "hud_animation_cadence_version",
     "runtime_trace_enabled",
     "runtime_trace_path",
     "crash_reporting_enabled",
@@ -656,7 +657,8 @@ def load_config():
         'db_commit_interval_ms': 250,
         'screenshot_max_convert_per_cycle': 2,
         'overlay_topmost_refresh_ms': 12000,
-        'hud_anim_interval_ms': 100,
+        'hud_anim_interval_ms': 40,
+        'hud_animation_cadence_version': 1,
         'runtime_trace_enabled': True,
         'runtime_trace_path': 'logs/runtime_trace.log',
         'crash_reporting_enabled': True,
@@ -733,6 +735,21 @@ def load_config():
                 for key in DEPRECATED_CONFIG_KEYS:
                     data.pop(key, None)
                 defaults.update(data)
+                # Navigation animation originally shipped at 100 ms (about
+                # 10 FPS). Migrate only that exact legacy default; deliberate
+                # custom cadence values remain untouched.
+                try:
+                    cadence_version = int(data.get("hud_animation_cadence_version") or 0)
+                except (TypeError, ValueError):
+                    cadence_version = 0
+                if cadence_version < 1:
+                    try:
+                        legacy_interval = int(float(data.get("hud_anim_interval_ms", 100)))
+                    except (TypeError, ValueError):
+                        legacy_interval = 100
+                    if legacy_interval == 100:
+                        defaults["hud_anim_interval_ms"] = 40
+                    defaults["hud_animation_cadence_version"] = 1
         except Exception:
             pass
     if not defaults['journal_path']:

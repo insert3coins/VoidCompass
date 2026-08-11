@@ -191,7 +191,15 @@ class DashboardScanMixin:
             # stale snapshot rewind ARRIVAL back into HYPERSPACE.
             self.current_fsd_jumping = False
         elif getattr(self, "current_fsd_jumping", False):
-            if callable(set_jump_phase) and jump_phase != "hyperspace":
+            # Status' FsdJump bit covers the low-wake transition into
+            # supercruise as well as a true high-wake. Only promote the HUD to
+            # HYPERSPACE when StartJump/Flags2 supplied high-wake evidence.
+            high_wake = bool(
+                jump_phase in {"charging", "hyperspace"}
+                or getattr(self, "_navigation_jump_charge_seen", False)
+                or getattr(self, "current_fsd_hyperdrive_charging", False)
+            )
+            if high_wake and callable(set_jump_phase) and jump_phase != "hyperspace":
                 set_jump_phase("hyperspace", refresh=False)
         elif jump_phase == "charging":
             if (getattr(self, "current_fsd_charging", False)

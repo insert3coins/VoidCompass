@@ -53,14 +53,15 @@ class TacticalHUD:
         self._nav_event_sequence = -1
         self._nav_event_motion = None
         self._crt_phase = 0
+        self._nav_phase_last_ts = time.monotonic()
+        self._next_crt_frame_ts = 0.0
         self._mouse_down = None
         self._mouse_dragging = False
         self._save_job = None
         self._last_render_fingerprint = None
         self._last_update_args = None
-        self._anim_interval_ms = int(self.config.get("hud_anim_interval_ms", 100) or 100)
-        if self._anim_interval_ms < 80:
-            self._anim_interval_ms = 80
+        self._anim_interval_ms = int(self.config.get("hud_anim_interval_ms", 40) or 40)
+        self._anim_interval_ms = max(30, min(500, self._anim_interval_ms))
         self.animate_ui()
 
     def _apply_initial_position(self):
@@ -108,18 +109,28 @@ class TacticalHUD:
         self.win.after(refresh_ms, self.force_topmost)
 
     def animate_ui(self):
+        now = time.monotonic()
+        elapsed = max(0.0, min(0.5, now - self._nav_phase_last_ts))
+        self._nav_phase_last_ts = now
+        # One phase unit remains the old 100 ms animation step. More frequent
+        # paints interpolate between those points while delayed Tk callbacks
+        # catch up to real time instead of slowing the instrument down.
+        self._nav_marker_phase += elapsed / 0.1
         try:
             self._draw_navigation_marker_animation()
-            self._draw_crt_animation()
-            # Each motion profile owns its own cadence. Keeping one monotonic
-            # phase avoids a second artificial reset when unlike periods (for
-            # example the 42-frame survey tracer) meet an outer 48-frame wrap.
-            self._nav_marker_phase += 1
+            if now >= self._next_crt_frame_ts:
+                self._draw_crt_animation()
+                self._next_crt_frame_ts = now + 0.1
         except Exception:
             pass
         finally:
             try:
-                self.win.after(self._anim_interval_ms, self.animate_ui)
+                delay = self._anim_interval_ms
+                if self.config.get("reduced_motion_enabled", False):
+                    delay = max(delay, 250)
+                elif not self.win.winfo_viewable():
+                    delay = max(delay, 120)
+                self.win.after(delay, self.animate_ui)
             except Exception:
                 pass
 
@@ -441,6 +452,8 @@ class TacticalHUD:
             return "ARRIVAL"
         if fsd_state == "hyperspace":
             return "HYPERSPACE"
+        if fsd_state == "supercruise_entry":
+            return "SUPERCRUISE"
         if fsd_state in {"charge", "hyper_charge"}:
             return str(fsd.get("label") or "FSD CHARGE").upper()
         if fsd_state == "cooldown":
@@ -971,6 +984,37 @@ class TacticalHUD:
             "muted": COLOR_MUTED,
         }.get(str(tone or "accent").lower(), COLOR_ACCENT)
 
+    @staticmethod
+    def _cycle_progress(phase, period):
+        """Return continuous animation progress without endpoint overshoot."""
+        period = max(1.0, float(period))
+        return (float(phase) % period) / period
+
+    def _draw_contrast_motion_dot(self, x, y, color, radius=1,
+                                  tags="nav_state_motion"):
+        """Cut moving lights free from same-colour rails and scanlines."""
+        radius = max(1.0, float(radius or 1))
+        halo = radius + 1.25
+        self.canvas.create_oval(
+            x - halo, y - halo, x + halo, y + halo,
+            fill="#010101", outline="#010101", width=1, tags=tags,
+        )
+        self.canvas.create_oval(
+            x - radius, y - radius, x + radius, y + radius,
+            fill=color, outline="", tags=tags,
+        )
+
+    def _draw_contrast_motion_tail(self, x1, x2, y, color, width=2,
+                                   tags="nav_state_motion"):
+        """Give a tracer tail a narrow dark underlay over illuminated rails."""
+        width = max(1, int(width or 1))
+        self.canvas.create_line(
+            x1, y, x2, y, fill="#010101", width=width + 2, tags=tags,
+        )
+        self.canvas.create_line(
+            x1, y, x2, y, fill=color, width=width, tags=tags,
+        )
+
     def _draw_navigation_marker_animation(self):
         """Animate only the data-bearing lights in the centre-state row."""
         self.canvas.delete("nav_state_motion")
@@ -989,19 +1033,15 @@ class TacticalHUD:
         travel_profiles = {"flight", "fighter", "supercruise", "surface_vehicle"}
         if (model["route_active"] and profile in travel_profiles
                 and model["route_x2"] > model["route_x1"]):
-            travel = (self._nav_marker_phase % 36) / 35.0
+            travel = self._cycle_progress(self._nav_marker_phase, 36)
             x = model["route_x1"] + ((model["route_x2"] - model["route_x1"]) * travel)
             tail_x = max(model["route_x1"], x - 6)
-            self.canvas.create_line(
-                tail_x, y, x, y,
-                fill=self._glow_color(model["route_color"], 0.72),
-                width=2, tags="nav_state_motion",
+            self._draw_contrast_motion_tail(
+                tail_x, x, y,
+                self._glow_color(model["route_color"], 0.72),
+                width=2,
             )
-            self.canvas.create_oval(
-                x - 1, y - 1, x + 1, y + 1,
-                fill=model["route_color"], outline="",
-                tags="nav_state_motion",
-            )
+            self._draw_contrast_motion_dot(x, y, model["route_color"], radius=1)
 
         # A restrained data light travels over only the known portion of the
         # survey channel. It remains visible at 100%, unlike the old endpoint
@@ -1009,25 +1049,17 @@ class TacticalHUD:
         if model["survey_known"] and profile not in {"map", "jump"}:
             x1, x2 = model["survey_x1"], model["survey_front"]
             if x2 - x1 >= 3:
-                travel = (self._nav_marker_phase % 42) / 41.0
+                travel = self._cycle_progress(self._nav_marker_phase, 42)
                 x = x1 + ((x2 - x1) * travel)
                 tail_x = max(x1, x - 6)
-                self.canvas.create_line(
-                    tail_x, y, x, y,
-                    fill=self._glow_color(model["survey_color"], 0.62),
-                    width=2, tags="nav_state_motion",
+                self._draw_contrast_motion_tail(
+                    tail_x, x, y,
+                    self._glow_color(model["survey_color"], 0.62),
+                    width=2,
                 )
-                self.canvas.create_oval(
-                    x - 1, y - 1, x + 1, y + 1,
-                    fill=model["survey_color"], outline="",
-                    tags="nav_state_motion",
-                )
+                self._draw_contrast_motion_dot(x, y, model["survey_color"], radius=1)
             elif model["survey_progress"] <= 0 and (self._nav_marker_phase % 20) < 4:
-                self.canvas.create_oval(
-                    x1 - 1, y - 1, x1 + 1, y + 1,
-                    fill=model["survey_color"], outline="",
-                    tags="nav_state_motion",
-                )
+                self._draw_contrast_motion_dot(x1, y, model["survey_color"], radius=1)
 
         self._draw_navigation_state_motion(model)
         self._draw_navigation_state_transition_motion(model)
@@ -1147,11 +1179,8 @@ class TacticalHUD:
                 tail = min(start, tail)
             else:
                 tail = max(start, tail)
-            self.canvas.create_line(tail, y, x, y, fill=glow, width=3, tags=tags)
-            self.canvas.create_oval(
-                x - radius, y - radius, x + radius, y + radius,
-                fill=visible, outline="", tags=tags,
-            )
+            self._draw_contrast_motion_tail(tail, x, y, glow, width=3, tags=tags)
+            self._draw_contrast_motion_dot(x, y, visible, radius=radius, tags=tags)
             return x
 
         def diamond(x, size, outline=visible):
@@ -1255,11 +1284,15 @@ class TacticalHUD:
                     x = rx1 + ((rx2 - rx1) * fraction)
                     active = index <= step
                     radius = 3 if index == step and progress < 0.7 else 2
-                    self.canvas.create_oval(
-                        x - radius, y - radius, x + radius, y + radius,
-                        fill=visible if active else "#010101",
-                        outline=visible if active else glow, width=1, tags=tags,
-                    )
+                    if active:
+                        self._draw_contrast_motion_dot(
+                            x, y, visible, radius=radius, tags=tags,
+                        )
+                    else:
+                        self.canvas.create_oval(
+                            x - radius, y - radius, x + radius, y + radius,
+                            fill="#010101", outline=glow, width=1, tags=tags,
+                        )
                 return
 
             if kind == "data_sale":
@@ -1342,7 +1375,7 @@ class TacticalHUD:
             shell_x2 = model.get("shell_x2", model["survey_x2"]) - 7
             center_x = (shell_x1 + shell_x2) / 2
             max_span = (shell_x2 - shell_x1) * (0.18 + (gravity_load * 0.34))
-            wave = abs(((phase % 54) / 53.0) * 2.0 - 1.0)
+            wave = abs((self._cycle_progress(phase, 54) * 2.0) - 1.0)
             span = max_span * (0.82 + (wave * 0.18))
             gravity_color = model.get("gravity_color", color)
             pulse_color = gravity_color if wave < 0.55 else self._glow_color(gravity_color, 0.72)
@@ -1357,7 +1390,7 @@ class TacticalHUD:
             # that the next hyperspace jump has neutron boost available.
             shell_x1 = model.get("shell_x1", model["route_x1"]) + 7
             shell_x2 = model.get("shell_x2", model["survey_x2"]) - 7
-            travel = (phase % 64) / 63.0
+            travel = self._cycle_progress(phase, 64)
             top_x = shell_x1 + ((shell_x2 - shell_x1) * travel)
             bottom_x = shell_x2 - ((shell_x2 - shell_x1) * travel)
             boost_dim = self._glow_color(COLOR_ACCENT, 0.68)
@@ -1372,7 +1405,7 @@ class TacticalHUD:
 
         if model.get("local_target"):
             target_x = model["survey_x2"]
-            wave = abs(((phase % 40) / 39.0) * 2.0 - 1.0)
+            wave = abs((self._cycle_progress(phase, 40) * 2.0) - 1.0)
             radius = 2 + (wave * 2)
             target_color = COLOR_YELLOW if wave < 0.66 else self._glow_color(COLOR_YELLOW, 0.7)
             self.canvas.create_oval(
@@ -1382,7 +1415,7 @@ class TacticalHUD:
             )
 
         if profile == "fsd_lock":
-            wave = abs(((phase % 26) / 25.0) * 2.0 - 1.0)
+            wave = abs((self._cycle_progress(phase, 26) * 2.0) - 1.0)
             offset = 4 + (wave * 4)
             for x, side in ((model["group_left"] - offset, -1),
                             (model["group_right"] + offset, 1)):
@@ -1402,7 +1435,11 @@ class TacticalHUD:
             return
 
         if profile == "fsd_charge":
-            travel = (phase % 16) / 15.0
+            # Pull energy into the FSD aperture on the centre rail while two
+            # quieter packets chase it along the upper/lower chassis. The
+            # stagger keeps a five-second high-wake countdown visibly alive
+            # instead of showing one chevron crawl followed by dead space.
+            travel = self._cycle_progress(phase, 12)
             left_x = model["route_x1"] + ((model["route_x2"] - model["route_x1"]) * travel)
             right_x = model["survey_x2"] - ((model["survey_x2"] - model["survey_x1"]) * travel)
             self.canvas.create_line(
@@ -1413,10 +1450,37 @@ class TacticalHUD:
                 right_x + 4, y - 3, right_x, y, right_x + 4, y + 3,
                 fill=color, width=2, tags=tags,
             )
+            charge_dim = self._glow_color(color, 0.68)
+            for index, rail_y in enumerate((y - 3, y + 3)):
+                local = (travel + (index * 0.5)) % 1.0
+                packet_left = model["route_x1"] + (
+                    (model["route_x2"] - model["route_x1"]) * local
+                )
+                packet_right = model["survey_x2"] - (
+                    (model["survey_x2"] - model["survey_x1"]) * local
+                )
+                self._draw_contrast_motion_tail(
+                    max(model["route_x1"], packet_left - 7),
+                    packet_left, rail_y, charge_dim, width=1, tags=tags,
+                )
+                self._draw_contrast_motion_tail(
+                    packet_right,
+                    min(model["survey_x2"], packet_right + 7),
+                    rail_y, charge_dim, width=1, tags=tags,
+                )
+            compression = abs((self._cycle_progress(phase, 12) * 2.0) - 1.0)
+            ring = 4 + ((1.0 - compression) * 3)
+            self.canvas.create_polygon(
+                marker_x, y - ring,
+                marker_x + ring, y,
+                marker_x, y + ring,
+                marker_x - ring, y,
+                fill="", outline=charge_dim, width=1, tags=tags,
+            )
             return
 
         if profile == "fsd_cooldown":
-            travel = (phase % 30) / 29.0
+            travel = self._cycle_progress(phase, 30)
             offset = 3 + (travel * 17)
             fade = color if travel < 0.55 else dim
             for x in (model["group_left"] - offset, model["group_right"] + offset):
@@ -1427,7 +1491,7 @@ class TacticalHUD:
             return
 
         if profile == "arrival":
-            travel = (phase % 18) / 17.0
+            travel = self._cycle_progress(phase, 18)
             radius = 3 + (travel * 14)
             fade = color if travel < 0.5 else dim
             self.canvas.create_oval(
@@ -1439,7 +1503,7 @@ class TacticalHUD:
 
         if profile == "docked":
             # Two clamps hold the whole annunciator: visibly powered, but locked.
-            wave = abs(((phase % 32) / 31.0) * 2.0 - 1.0)
+            wave = abs((self._cycle_progress(phase, 32) * 2.0) - 1.0)
             offset = 3 + (wave * 2)
             for x, side in ((model["group_left"] - offset, -1),
                             (model["group_right"] + offset, 1)):
@@ -1451,7 +1515,7 @@ class TacticalHUD:
 
         if profile == "landed":
             # Ground-contact points spread and settle outside the annunciator.
-            wave = abs(((phase % 30) / 29.0) * 2.0 - 1.0)
+            wave = abs((self._cycle_progress(phase, 30) * 2.0) - 1.0)
             spread = 3 + (wave * 4)
             for x in (model["group_left"] - spread, model["group_right"] + spread):
                 self.canvas.create_oval(x - 1, y + 2, x + 1, y + 4,
@@ -1460,7 +1524,7 @@ class TacticalHUD:
 
         if profile == "on_foot":
             # Alternating points evoke steps without adding a literal foot icon.
-            active = (phase // 6) % 2
+            active = int(phase // 6) % 2
             for index, (dx, dy) in enumerate(((-4, -1), (4, 1))):
                 radius = 2 if index == active else 1
                 fill = color if index == active else dim
@@ -1473,7 +1537,7 @@ class TacticalHUD:
 
         if profile == "surface_vehicle":
             # A three-cell tread crawls along the short approach to the marker.
-            active = (phase // 4) % 3
+            active = int(phase // 4) % 3
             start_x = model["group_left"] - 18
             for index in range(3):
                 x = start_x + (index * 5)
@@ -1484,7 +1548,7 @@ class TacticalHUD:
 
         if profile == "scanner":
             # Paired scan gates expand away from the state group.
-            travel = (phase % 24) / 23.0
+            travel = self._cycle_progress(phase, 24)
             offset = 2 + (travel * 12)
             left_x = model["group_left"] - offset
             right_x = model["group_right"] + offset
@@ -1498,26 +1562,49 @@ class TacticalHUD:
             # A single cursor sweeps the right-hand data channel and reverses.
             x1, x2 = model["survey_x1"], model["survey_x2"]
             if x2 > x1:
-                travel = abs(((phase % 48) / 47.0) * 2.0 - 1.0)
+                travel = abs((self._cycle_progress(phase, 48) * 2.0) - 1.0)
                 x = x1 + ((x2 - x1) * travel)
                 self.canvas.create_line(x, y - 3, x, y + 3,
                                         fill=color, width=1, tags=tags)
             return
 
         if profile == "jump":
-            # Fast paired chevrons converge on the central state during a jump.
-            travel = (phase % 14) / 13.0
-            left_x = model["route_x1"] + ((model["route_x2"] - model["route_x1"]) * travel)
-            right_x = model["survey_x2"] - ((model["survey_x2"] - model["survey_x1"]) * travel)
-            self.canvas.create_line(left_x - 3, y - 2, left_x, y, left_x - 3, y + 2,
-                                    fill=color, width=1, tags=tags)
-            self.canvas.create_line(right_x + 3, y - 2, right_x, y, right_x + 3, y + 2,
-                                    fill=color, width=1, tags=tags)
+            # Witch-space reverses the charge language: three high-speed
+            # packets burst out from the aperture on opposing rails, forming
+            # a compact tunnel effect without covering the state label.
+            travel = self._cycle_progress(phase, 9)
+            jump_dim = self._glow_color(color, 0.68)
+            left_origin = model["route_x2"]
+            right_origin = model["survey_x1"]
+            for index in range(3):
+                local = (travel + (index / 3.0)) % 1.0
+                left_x = left_origin - ((left_origin - model["route_x1"]) * local)
+                right_x = right_origin + ((model["survey_x2"] - right_origin) * local)
+                rail_y = y - 3 if index % 2 == 0 else y + 3
+                packet_color = color if index == 0 else jump_dim
+                self._draw_contrast_motion_tail(
+                    left_x,
+                    min(left_origin, left_x + 9),
+                    rail_y, packet_color, width=2, tags=tags,
+                )
+                self._draw_contrast_motion_tail(
+                    max(right_origin, right_x - 9),
+                    right_x,
+                    (y + 3) if rail_y == y - 3 else (y - 3),
+                    packet_color, width=2, tags=tags,
+                )
+            tunnel_wave = abs((self._cycle_progress(phase, 18) * 2.0) - 1.0)
+            tunnel_radius = 4 + (tunnel_wave * 3)
+            self.canvas.create_oval(
+                marker_x - tunnel_radius, y - min(5, tunnel_radius),
+                marker_x + tunnel_radius, y + min(5, tunnel_radius),
+                fill="", outline=jump_dim, width=1, tags=tags,
+            )
             return
 
         if profile == "combat":
             # Alternating alert brackets remain deliberately quieter than a flash.
-            bright_left = ((phase // 5) % 2) == 0
+            bright_left = (int(phase // 5) % 2) == 0
             for x, bright in ((model["group_left"] - 5, bright_left),
                               (model["group_right"] + 5, not bright_left)):
                 self.canvas.create_line(x, y - 4, x, y + 4,
@@ -1530,7 +1617,7 @@ class TacticalHUD:
         period = {"supercruise": 18, "fighter": 22, "exploration": 36}.get(profile, 28)
         pulse = phase % period
         if pulse < 7:
-            travel = pulse / 6.0
+            travel = pulse / 7.0
             left_start = model.get("shell_x1", model["route_x1"]) + 6
             right_end = model.get("shell_x2", model["survey_x2"]) - 6
             left_x = left_start + ((model["group_left"] - left_start) * travel)
