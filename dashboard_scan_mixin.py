@@ -813,10 +813,14 @@ class DashboardScanMixin:
         is_first_mapped = not was_mapped
         reward = self._get_body_value(planet_class, star_type, terraformable, mass, is_first_discoverer, False, is_first_mapped, True)
         dss_reward = self._get_body_value(planet_class, star_type, terraformable, mass, is_first_discoverer, True, is_first_mapped, True)
-        dss_complete = was_mapped or (body_id in self.body_dss_complete)
+        signal_state = self.body_signals.get(body_id, {}) if body_id is not None else {}
+        dss_complete = (
+            was_mapped
+            or (body_id in self.body_dss_complete)
+            or bool(signal_state.get("dss_complete"))
+        )
 
         bio_count = 0
-        signal_state = self.body_signals.get(body_id, {}) if body_id is not None else {}
         if "BioSignals" in data:
             for signal in data.get("BioSignals", []):
                 if signal.get("Type_Localised") == "Biological":

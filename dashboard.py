@@ -208,7 +208,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         "scanned", "total", "scan_total_confirmed", "navigation_scan_progress",
         "navigation_scan_progress_source", "organic_count", "system_bio_signals",
         "system_traffic", "last_traffic_system", "valuable_system",
-        "valuable_bodies", "body_signals", "system_undiscovered",
+        "valuable_bodies", "body_signals", "belt_clusters", "system_undiscovered",
         "fss_all_bodies", "current_body_id", "current_body_name",
         "last_bio_scan", "bio_sampling", "bio_sample_points",
         "cmdr_balance", "cmdr_loan", "cmdr_ranks", "cmdr_rank_progress",
@@ -233,6 +233,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     )
     _COCKPIT_STATE_LIMITS = {
         "valuable_bodies": 64,
+        "belt_clusters": 128,
         "current_station_economies": 16,
         "current_station_services": 128,
         "current_cargo_inventory": 256,
@@ -451,6 +452,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             )
         self._cached_scan_total_confirmed = bool(self.scan_total_confirmed)
         self.body_signals = self._restore_int_key_dict(self.body_signals)
+        if not isinstance(getattr(self, "belt_clusters", None), list):
+            self.belt_clusters = []
         if not isinstance(self.current_coords, list) or len(self.current_coords) != 3:
             self.current_coords = [0, 0, 0]
         if self.previous_coords is not None and (
@@ -503,6 +506,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 focused_body_id=self.current_body_id,
                 focused_body_name=self.current_body_name,
                 total_known=self.scan_total_confirmed,
+                belt_clusters=list(self.belt_clusters),
             )
         if self.station_info_hud and self.current_docked and self.current_station_name:
             self.station_info_hud.on_docked(self)
@@ -761,6 +765,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.scanned_bodies = set()
         self.scan_items = []
         self.scan_items_by_id = {}
+        self.belt_clusters = []
         self.in_fss = False
         self.fss_summary_active = False
         self.body_signals = {}
@@ -1105,6 +1110,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         focused_body_id=self.current_body_id,
                         focused_body_name=self.current_body_name,
                         total_known=self.scan_total_confirmed,
+                        belt_clusters=list(self.belt_clusters),
                     )
         try:
             self._system_info_refresh_job = self.root.after(150, _run)
@@ -1512,6 +1518,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.scanned_bodies = set()
         self.scan_items = []
         self.scan_items_by_id = {}
+        self.belt_clusters = []
         self.in_fss = False
         self.fss_summary_active = False
         self.body_signals = {}
@@ -3290,7 +3297,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         current_address = self._normalize_system_address(self.current_system_address)
         return event_address is None or current_address is None or event_address == current_address
 
-    def _set_body_signals(self, body_id, bio_count=0, geo_count=0, genuses=None):
+    def _set_body_signals(self, body_id, bio_count=0, geo_count=0, genuses=None,
+                          body_name=None, dss_complete=None):
         body_id = self._normalize_body_id(body_id)
         if body_id is None:
             return
@@ -3299,11 +3307,44 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "bio": int(bio_count or 0),
             "geo": int(geo_count or 0),
             "genuses": list(genuses) if genuses else list(previous.get("genuses") or []),
+            "body_name": body_name or previous.get("body_name") or "",
+            "dss_complete": (
+                bool(dss_complete) if dss_complete is not None
+                else bool(previous.get("dss_complete"))
+            ),
         }
         self.system_bio_signals = sum(
             int(signals.get("bio", 0) or 0)
             for signals in self.body_signals.values()
         )
+
+    def _record_belt_cluster(self, body_id, body_name, distance_ls=None,
+                             was_discovered=None):
+        """Retain a belt contact without adding it to the FSS body count."""
+        name = str(body_name or "").strip()
+        if not name:
+            return False
+        cluster = {
+            "body_id": body_id,
+            "name": name,
+            "distance_ls": distance_ls,
+            "was_discovered": was_discovered,
+        }
+        key = str(body_id) if body_id is not None else name.casefold()
+        for index, existing in enumerate(self.belt_clusters):
+            existing_key = (
+                str(existing.get("body_id"))
+                if existing.get("body_id") is not None
+                else str(existing.get("name") or "").casefold()
+            )
+            if existing_key != key:
+                continue
+            if existing == cluster:
+                return False
+            self.belt_clusters[index] = cluster
+            return True
+        self.belt_clusters.append(cluster)
+        return True
 
     def _mark_system_scan_complete(self, total=None):
         try:
@@ -6655,6 +6696,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
             self.organic_count = 0 # Reset bio count for new system
             self.system_bio_signals = 0
+            self.belt_clusters = []
             self.last_scan_event = None
             self.last_bio_scan = {}
             self._stale_bio_warned = set()
@@ -6784,7 +6826,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                             self.body_signals, sampling=self._sampling_snapshot(),
                             focused_body_id=self.current_body_id,
                             focused_body_name=self.current_body_name,
-                            total_known=self.scan_total_confirmed),
+                            total_known=self.scan_total_confirmed,
+                            belt_clusters=list(self.belt_clusters)),
                         key="survey-status",
                     )
             self._refresh_exploration_window()
@@ -7042,7 +7085,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     if geo_count:
                         parts.append(f"{geo_count} geological")
                     self._push_live_toast("SURFACE SIGNALS", f"{body}: {', '.join(parts)}", "success", 12)
-                self._set_body_signals(body_id, bio_count, geo_count)
+                self._set_body_signals(
+                    body_id, bio_count, geo_count,
+                    body_name=d.get("body_name"),
+                )
                 item = self.scan_items_by_id.get(body_id)
                 if item:
                     item["bio_count"] = bio_count
@@ -7076,6 +7122,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if bio_count or geo_count:
                     self._set_body_signals(
                         body_id, bio_count, geo_count, genuses=d.get("genuses") or [],
+                        body_name=d.get("body_name"), dss_complete=True,
                     )
                 item = self.scan_items_by_id.get(body_id)
                 if item:
@@ -7143,7 +7190,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 and isinstance(body_name, str)
                 and "belt cluster" in body_name.casefold()
             ):
+                belt_changed = self._record_belt_cluster(
+                    body_id, body_name,
+                    distance_ls=d.get("distance_from_arrival_ls"),
+                    was_discovered=d.get("was_discovered"),
+                )
                 self._queue_edsm_upload(raw, startup_replay=startup_replay)
+                if belt_changed and not self.batch_mode:
+                    self._refresh_system_info_progress()
 
             # Store planet conditions for bio prediction when we have a planet scan
             if d.get("planet_class") and body_id is not None:
@@ -7204,7 +7258,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
                     # Check for biological signals and update the system total
                     if d.get("bio_signals_count", 0):
-                        self._set_body_signals(body_id, d.get("bio_signals_count", 0), self.body_signals.get(body_id, {}).get("geo", 0))
+                        self._set_body_signals(
+                            body_id, d.get("bio_signals_count", 0),
+                            self.body_signals.get(body_id, {}).get("geo", 0),
+                            body_name=body_name,
+                        )
 
                     # Check for valuable bodies
                     p_class = d.get("planet_class", "")
@@ -7997,6 +8055,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 focused_body_id=self.current_body_id,
                 focused_body_name=self.current_body_name,
                 total_known=self.scan_total_confirmed,
+                belt_clusters=list(self.belt_clusters),
             ), key="survey-status")
         if getattr(self, "exploration_window", None) and self.exploration_window.is_open():
             self._ui_post(self.exploration_window._render_sampling, key="exploration-sampling")

@@ -1,5 +1,6 @@
 """Native system/body survey strip inspired by SrvSurvey's bio plotter."""
 
+import textwrap
 import tkinter as tk
 
 import bio_values
@@ -53,10 +54,82 @@ def _body_display_name(name, system_name, planet_class=None, terraformable=False
     return label
 
 
+def _distance_ls(value):
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if value < 10:
+        return f"{value:.2f} LS"
+    if value < 1_000:
+        return f"{value:.1f} LS"
+    return f"{value:,.0f} LS"
+
+
 def _body_matches(item, body_id, body_name):
     if body_id is not None and str(item.get("body_id")) == str(body_id):
         return True
     return bool(body_name and str(item.get("name") or "").casefold() == str(body_name).casefold())
+
+
+def _signal_record(body_signals, body_id):
+    """Find a body's latest signal record across restored int/string keys."""
+    if body_id is None or not isinstance(body_signals, dict):
+        return None
+    for key in (body_id, str(body_id)):
+        value = body_signals.get(key)
+        if isinstance(value, dict):
+            return value
+    try:
+        value = body_signals.get(int(body_id))
+    except (TypeError, ValueError):
+        value = None
+    return value if isinstance(value, dict) else None
+
+
+def _survey_bodies(scan_items, body_signals):
+    """Merge journal scan rows with the newer surface-signal cache.
+
+    FSS/SAASignalsFound can arrive before the matching detailed ``Scan`` row,
+    and restored profiles may briefly hydrate the two caches in separate UI
+    passes.  Work on copies so the overlay never mutates dashboard state.
+    """
+    bodies = [dict(row) for row in (scan_items or []) if not row.get("is_star")]
+    represented = set()
+    for body in bodies:
+        body_id = body.get("body_id")
+        if body_id is not None:
+            represented.add(str(body_id))
+        signals = _signal_record(body_signals, body_id)
+        if not signals:
+            continue
+        body["bio_count"] = _safe_int(signals.get("bio"), _safe_int(body.get("bio_count")))
+        body["geo_count"] = _safe_int(signals.get("geo"), _safe_int(body.get("geo_count")))
+        body["dss_complete"] = bool(
+            body.get("dss_complete") or signals.get("dss_complete")
+        )
+        if signals.get("genuses"):
+            body["genuses"] = list(signals["genuses"])
+
+    # Keep a signal-only body visible until its detailed Scan catches up.
+    for body_id, signals in (body_signals or {}).items():
+        if not isinstance(signals, dict) or str(body_id) in represented:
+            continue
+        bio_count = _safe_int(signals.get("bio"))
+        geo_count = _safe_int(signals.get("geo"))
+        if not bio_count and not geo_count:
+            continue
+        bodies.append({
+            "body_id": body_id,
+            "name": signals.get("body_name") or f"Body {body_id}",
+            "bio_count": bio_count,
+            "geo_count": geo_count,
+            "genuses": list(signals.get("genuses") or []),
+            "organic_scans": {},
+            "organic_complete_count": 0,
+            "dss_complete": bool(signals.get("dss_complete")),
+        })
+    return bodies
 
 
 def _genus_name(value):
@@ -223,22 +296,95 @@ def _body_detail_rows(item):
     return rows
 
 
+def _joined_lines(values, max_chars=62):
+    """Pack every supplied label into compact lines without a hidden +more."""
+    lines = []
+    current = ""
+    for raw in values:
+        value = str(raw or "").strip()
+        if not value:
+            continue
+        segments = textwrap.wrap(
+            value, width=max_chars, break_long_words=False,
+            break_on_hyphens=False,
+        ) or [value]
+        for segment in segments:
+            candidate = f"{current} · {segment}" if current else segment
+            if current and len(candidate) > max_chars:
+                lines.append(current)
+                current = segment
+            else:
+                current = candidate
+    if current:
+        lines.append(current)
+    return lines
+
+
+def _belt_cluster_rows(system_name, belt_clusters):
+    """Normalise journal belt contacts without treating them as FSS bodies."""
+    rows = []
+    seen = set()
+    for raw in belt_clusters or ():
+        if not isinstance(raw, dict):
+            continue
+        name = str(raw.get("name") or raw.get("body_name") or "").strip()
+        body_id = raw.get("body_id")
+        key = str(body_id) if body_id is not None else name.casefold()
+        if not name or key in seen:
+            continue
+        seen.add(key)
+        rows.append({
+            "body_id": body_id,
+            "name": name,
+            "display_name": _short_body_name(name, system_name),
+            "distance": _distance_ls(raw.get("distance_ls")),
+            "new_discovery": raw.get("was_discovered") is False,
+        })
+    rows.sort(key=lambda row: (
+        _safe_int(row.get("body_id"), 999_999), row.get("display_name", ""),
+    ))
+    return rows
+
+
 def build_survey_model(system_name, scan_items, focused_body_id=None,
                        focused_body_name=None, sampling=None, scanned=0, total=0,
-                       min_notable_value=50_000, palette=None, total_known=True):
+                       min_notable_value=50_000, palette=None, total_known=True,
+                       body_signals=None, belt_clusters=None):
     """Build a renderer-neutral survey model for the overlay and tests."""
-    bodies = [row for row in (scan_items or []) if not row.get("is_star")]
+    bodies = _survey_bodies(scan_items, body_signals)
     notable_rows = build_notable_body_rows(scan_items, min_notable_value, palette)
+    belt_rows = _belt_cluster_rows(system_name, belt_clusters)
     for row in notable_rows:
         row["display_name"] = _body_display_name(
             row.get("name"), system_name, row.get("planet_class"), row.get("terraformable")
         )
+    notable_by_id = {
+        str(row.get("body_id")): row for row in notable_rows if row.get("body_id") is not None
+    }
+    notable_by_name = {str(row.get("name") or "").casefold(): row for row in notable_rows}
     focused = next((row for row in bodies if _body_matches(
         row, focused_body_id, focused_body_name)), None)
-    if focused and (_safe_int(focused.get("bio_count")) > 0 or sampling):
+    if focused and (
+        _safe_int(focused.get("bio_count")) > 0
+        or _safe_int(focused.get("geo_count")) > 0
+        or sampling
+    ):
         incomplete = _safe_int(focused.get("organic_complete_count")) < _safe_int(focused.get("bio_count"))
-        if incomplete or sampling:
+        if incomplete or _safe_int(focused.get("geo_count")) > 0 or sampling:
             lo, hi = _body_value_range(focused)
+            focused_notable = (
+                notable_by_id.get(str(focused.get("body_id")))
+                if focused.get("body_id") is not None else None
+            )
+            focused_notable = focused_notable or notable_by_name.get(
+                str(focused.get("name") or "").casefold()
+            )
+            focused_notable_key = None
+            if focused_notable:
+                focused_notable_key = (
+                    str(focused_notable.get("body_id")),
+                    str(focused_notable.get("name") or "").casefold(),
+                )
             return {
                 "mode": "body", "system": system_name or "", "body": focused,
                 "body_display": _body_display_name(
@@ -247,23 +393,37 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
                 ),
                 "rows": _body_detail_rows(focused), "sampling": sampling,
                 "min_value": lo, "max_value": hi,
-                "notable_rows": notable_rows,
+                "notable": focused_notable,
+                "notable_rows": [
+                    row for row in notable_rows
+                    if (
+                        str(row.get("body_id")),
+                        str(row.get("name") or "").casefold(),
+                    ) != focused_notable_key
+                ],
+                "belt_clusters": belt_rows,
                 "scanned": _safe_int(scanned), "total": _safe_int(total),
                 "total_known": bool(total_known),
             }
 
     rows = []
+    represented_notable = set()
     for body in bodies:
         bio_count = _safe_int(body.get("bio_count"))
         geo_count = _safe_int(body.get("geo_count"))
         complete = _safe_int(body.get("organic_complete_count"))
         needs_dss = not bool(body.get("dss_complete"))
-        # Keep mapped biological bodies visible through completion. Survey
-        # Status is the persistent system record until StartJump, so removing
-        # the row after the final analysis would also remove the identification
-        # the commander just earned.
+        # Bodies resolved by FSS remain actionable until DSS assessment. This
+        # keeps Survey Operations alive while the commander is actively tuning
+        # bodies without duplicating Navigation's system percentage.
         if not needs_dss and not bio_count and not geo_count:
             continue
+        notable = notable_by_id.get(str(body.get("body_id"))) if body.get("body_id") is not None else None
+        notable = notable or notable_by_name.get(str(body.get("name") or "").casefold())
+        if notable:
+            represented_notable.add((
+                str(notable.get("body_id")), str(notable.get("name") or "").casefold(),
+            ))
         lo, hi = _body_value_range(body)
         rows.append({
             "name": body.get("name") or "Unknown body",
@@ -280,6 +440,9 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
             "min_value": lo,
             "max_value": hi,
             "first_footfall": bool(body.get("first_footfall")),
+            "landable": bool(body.get("landable")),
+            "gravity_g": body.get("gravity_g"),
+            "notable": notable,
             # System mode used to stop at BIO 0/N. Include only journal-
             # identified genera/species here; predictions remain exclusive to
             # the focused-body view so they cannot be mistaken for DSS facts.
@@ -293,24 +456,14 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
         not bool(row["bio_count"] or row["geo_count"]),
         not bool(row["bio_count"]), row["name"],
     ))
-    notable_by_id = {
-        str(row.get("body_id")): row for row in notable_rows if row.get("body_id") is not None
-    }
-    notable_by_name = {str(row.get("name") or "").casefold(): row for row in notable_rows}
-    represented = set()
-    for row in rows:
-        body = next((item for item in bodies if str(item.get("name") or "").casefold()
-                     == str(row["name"]).casefold()), {})
-        notable = notable_by_id.get(str(body.get("body_id"))) if body.get("body_id") is not None else None
-        notable = notable or notable_by_name.get(str(row["name"]).casefold())
-        if notable:
-            row["notable"] = notable
-            represented.add((str(notable.get("body_id")), str(notable.get("name") or "").casefold()))
     remaining_notable = [
         row for row in notable_rows
-        if (str(row.get("body_id")), str(row.get("name") or "").casefold()) not in represented
+        if (str(row.get("body_id")), str(row.get("name") or "").casefold()) not in represented_notable
     ]
-    if not rows and not remaining_notable and not sampling:
+    scan_in_progress = bool(
+        total_known and _safe_int(total) > 0 and _safe_int(scanned) < _safe_int(total)
+    )
+    if not rows and not remaining_notable and not belt_rows and not sampling and not scan_in_progress:
         return None
     return {
         "mode": "system", "system": system_name or "", "rows": rows,
@@ -318,6 +471,8 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
         "scanned": _safe_int(scanned), "total": _safe_int(total),
         "total_known": bool(total_known),
         "notable_count": len(notable_rows),
+        "scan_in_progress": scan_in_progress,
+        "belt_clusters": belt_rows,
     }
 
 
@@ -364,6 +519,9 @@ def _survey_render_key(model):
             _safe_int(body.get("bio_count")),
             _safe_int(body.get("organic_complete_count")),
             _safe_int(body.get("geo_count")), bool(body.get("dss_complete")),
+            bool(body.get("first_footfall")), bool(body.get("landable")),
+            body.get("gravity_g"),
+            notable_key(model.get("notable")) if model.get("notable") else None,
             tuple(detail_key(row) for row in model.get("rows") or ()),
             model.get("min_value"), model.get("max_value"),
         )
@@ -378,7 +536,17 @@ def _survey_render_key(model):
             notable_key(row.get("notable")) if row.get("notable") else None,
             tuple(detail_key(detail) for detail in row.get("bio_details") or ()),
         ))
-    return common + (tuple(row_keys), _safe_int(model.get("notable_count")))
+    belt_keys = tuple(
+        (
+            row.get("body_id"), row.get("display_name"), row.get("distance"),
+            bool(row.get("new_discovery")),
+        )
+        for row in model.get("belt_clusters") or ()
+    )
+    return common + (
+        tuple(row_keys), _safe_int(model.get("notable_count")),
+        bool(model.get("scan_in_progress")), belt_keys,
+    )
 
 
 class SurveyStatusHUD:
@@ -388,6 +556,7 @@ class SurveyStatusHUD:
         self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
         self._last_update = None
         self._last_render_key = None
+        self._last_height = None
         self._suppressed = False
         self.win = tk.Toplevel(root)
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
@@ -452,17 +621,20 @@ class SurveyStatusHUD:
 
     def update(self, system_name, scanned, total, scan_items, body_signals,
                sampling=None, focused_body_id=None, focused_body_name=None,
-               total_known=True):
+               total_known=True, belt_clusters=None):
         self._last_update = (
             system_name, scanned, total, scan_items, body_signals,
             sampling, focused_body_id, focused_body_name, total_known,
+            belt_clusters,
         )
         if self._suppressed:
             return
         model = build_survey_model(system_name, scan_items, focused_body_id,
                                    focused_body_name, sampling, scanned, total,
                                    _safe_int(self.config.get("system_info_min_value"), 50_000),
-                                   self._palette, total_known)
+                                   self._palette, total_known,
+                                   body_signals=body_signals,
+                                   belt_clusters=belt_clusters)
         if not model:
             self._last_render_key = None
             self.hide()
@@ -509,17 +681,23 @@ class SurveyStatusHUD:
     def _sample_row(self, sampling, y):
         if not sampling:
             return y
-        progress = _safe_int(sampling.get("progress"), 1)
+        progress = max(1, min(3, _safe_int(sampling.get("progress"), 1)))
         colony = sampling.get("colony_m")
         minimum = sampling.get("min_distance_m")
         clear = sampling.get("clear")
-        status = "CLEAR" if clear else (f"{_safe_int(minimum):,}/{_safe_int(colony):,} M" if minimum is not None and colony else "MOVE TO NEXT SAMPLE")
+        status = (
+            "CLEAR FOR NEXT" if clear
+            else f"SPACE {_safe_int(minimum):,}/{_safe_int(colony):,} M"
+            if minimum is not None and colony
+            else "SEEK NEXT COLONY"
+        )
+        pips = "".join("●" if index <= progress else "○" for index in range(1, 4))
         palette = self._palette
         self.canvas.create_rectangle(
             16, y - 11, WIDTH - 16, y + 12,
             fill=palette["panel_alt"], outline=palette["border_soft"],
         )
-        self._text(24, y, f"SAMPLE {progress}/3 · {_truncate(sampling.get('species'), 31)}", palette["orange"], ("Courier", 8, "bold"))
+        self._text(24, y, f"{pips} {progress}/3 · {_truncate(sampling.get('species'), 31)}", palette["orange"], ("Courier", 8, "bold"))
         self._text(WIDTH - 24, y, status, palette["green"] if clear else palette["text"], ("Courier", 8, "bold"), "e")
         return y + 28
 
@@ -531,6 +709,21 @@ class SurveyStatusHUD:
         self._text(WIDTH - 18, y + 15, row["value_line"], row["value_color"], ("Courier", 7, "bold"), "e")
         return y + 34
 
+    @staticmethod
+    def _range_text(low, high):
+        if not high:
+            return ""
+        return _credits(low) if low == high else f"{_credits(low)}–{_credits(high)}"
+
+    def _resize(self, height):
+        """Keep geometry stable when only survey text or progress changes."""
+        if height == self._last_height:
+            return
+        self._last_height = height
+        self.canvas.config(width=WIDTH, height=height)
+        x, y_pos = self._desired_pos
+        self.win.geometry(overlay_chrome.position_geometry(x, y_pos, WIDTH, height))
+
     def _redraw(self, model):
         palette = self._palette
         is_body = model["mode"] == "body"
@@ -538,9 +731,16 @@ class SurveyStatusHUD:
         active_rows = rows if is_body else [row for row in rows if not row.get("bio_complete")]
         completed_rows = [] if is_body else [row for row in rows if row.get("bio_complete")]
         notable_rows = model.get("notable_rows") or []
+        belt_rows = [] if is_body else (model.get("belt_clusters") or [])
         sample_h = 28 if model.get("sampling") else 0
+
         if is_body:
-            content_h = 20 + max(1, len(rows)) * 19
+            body = model["body"]
+            bio_count = _safe_int(body.get("bio_count"))
+            geo_count = _safe_int(body.get("geo_count"))
+            bio_h = (20 + max(1, len(rows)) * 19) if bio_count or rows else 0
+            geo_h = 19 if geo_count else 0
+            content_h = 52 + bio_h + geo_h
         else:
             content_h = (
                 20 + sum(
@@ -552,24 +752,28 @@ class SurveyStatusHUD:
             ) if active_rows else 0
         completed_h = (
             24 + sum(
-                19 + (15 if row.get("bio_details") else 0)
+                19 + 15 * len(_joined_lines(
+                    [
+                        detail.get("display_name") or detail.get("name") or "Organic"
+                        for detail in (row.get("bio_details") or [])
+                    ]
+                ))
                 for row in completed_rows
             )
         ) if completed_rows else 0
         notable_h = (20 + len(notable_rows) * 34) if notable_rows else 0
-        h = 97 + sample_h + content_h + notable_h + completed_h + 27
-        self.canvas.config(width=WIDTH, height=h)
-        x, y_pos = self._desired_pos
-        self.win.geometry(overlay_chrome.position_geometry(x, y_pos, WIDTH, h))
+        belt_h = (24 + len(belt_rows) * 18) if belt_rows else 0
+        h = 89 + sample_h + content_h + belt_h + notable_h + completed_h + 29
+        self._resize(h)
         self.canvas.delete("all")
         overlay_chrome.draw_chrome(
             self.canvas, WIDTH, h, accent=palette["accent"], bracket_len=10,
             scanlines=False,
         )
         title = "SURVEY OPERATIONS"
-        mode_badge = "BODY FOCUS" if is_body else "SYSTEM SURVEY"
         self._text(18, 18, title, palette["accent"], ("Courier", 10, "bold"))
-        self._text(WIDTH - 18, 18, mode_badge, palette["orange"] if is_body else palette["muted"], ("Courier", 8, "bold"), "e")
+        if is_body:
+            self._text(WIDTH - 18, 18, "FIELD FOCUS", palette["orange"], ("Courier", 8, "bold"), "e")
         self._text(18, 48, _truncate(model["system"].upper(), 58), palette["text"], ("Courier", 10, "bold"))
         if is_body:
             body = model["body"]
@@ -577,13 +781,16 @@ class SurveyStatusHUD:
             bio_done = _safe_int(body.get("organic_complete_count"))
             geo_count = _safe_int(body.get("geo_count"))
             dss_state = "DSS MAPPED" if body.get("dss_complete") else "DSS PENDING"
-            header_summary = f"BIO {bio_done}/{bio_count} · GEO {geo_count} · {dss_state}"
+            header_summary = f"FOCUSED SURFACE · BIO {bio_done}/{bio_count} · GEO {geo_count}"
         else:
             bio_total = sum(_safe_int(row.get("bio_count")) for row in rows)
             geo_total = sum(_safe_int(row.get("geo_count")) for row in rows)
-            header_summary = f"{len(active_rows)} ACTIVE · {len(completed_rows)} COMPLETE · BIO {bio_total} · GEO {geo_total}"
+            if not rows and model.get("scan_in_progress"):
+                header_summary = "FSS INTAKE ACTIVE · SURVEY TARGETS PENDING"
+            else:
+                header_summary = f"{len(active_rows)} OPEN · {len(completed_rows)} BIO COMPLETE · BIO {bio_total} · GEO {geo_total}"
         self._text(18, 66, header_summary, palette["muted"], ("Courier", 8, "bold"))
-        y = self._sample_row(model.get("sampling"), 93)
+        y = 93
 
         if is_body:
             body = model["body"]
@@ -594,36 +801,75 @@ class SurveyStatusHUD:
                 count, done, geo, needs_dss=not bool(body.get("dss_complete")),
                 palette=palette,
             )
-            self._text(18, y, _truncate(model.get("body_display") or body.get("name"), 38), palette["orange"], ("Courier", 8, "bold"))
-            self._text(WIDTH - 18, y, signal_state, signal_color, SIGNAL_FONT, "e")
-            y += 20
-            for row in rows:
-                # '?' is a prediction whose every published requirement was
-                # tested; '·' rests on something this scan could not check.
-                symbol = {
-                    "complete": "✓", "sample": "●", "detected": "○",
-                    "predicted": "?", "possible": "·",
-                }.get(row["kind"], "·")
-                color = palette["green"] if row["kind"] == "complete" else (palette["orange"] if row["kind"] == "sample" else palette["text"] if row["kind"] == "detected" else palette["dim"])
-                label = row.get("display_name") or row["name"]
-                value = row.get("value")
-                if value:
-                    value_text = _credits(value)
-                else:
-                    lo, hi = row.get("min_value"), row.get("max_value")
-                    value_text = _credits(lo) if lo == hi else f"{_credits(lo)}–{_credits(hi)}"
-                if row["kind"] in PREDICTED_KINDS:
-                    # A punctuation-only distinction made a dim possible
-                    # organism look like a confirmed grey scan result.
-                    value_text = f"{row.get('status')} · {value_text}"
-                self._text(20, y, symbol, color, ("Courier", 9, "bold"))
-                self._text(38, y, _truncate(label, 34), color, ("Courier", 8, "bold"))
-                self._text(WIDTH - 18, y, value_text, color, ("Courier", 8, "bold"), "e")
+            notable = model.get("notable")
+            tags = []
+            if notable:
+                tags.append("NOTABLE")
+            if body.get("first_footfall"):
+                tags.append("FIRST FOOTFALL")
+            elif body.get("landable"):
+                tags.append("LANDABLE")
+            gravity = body.get("gravity_g")
+            try:
+                if gravity is not None:
+                    tags.append(f"{float(gravity):.2f} G")
+            except (TypeError, ValueError):
+                pass
+            tag_text = " · ".join(tags) or "SURFACE TARGET"
+            body_label = model.get("body_display") or body.get("name")
+            if notable and notable.get("icons"):
+                body_label = f"{notable['icons']} {body_label}"
+            self.canvas.create_rectangle(
+                14, y - 11, WIDTH - 14, y + 35,
+                fill=palette["panel_alt"], outline=palette["border_soft"],
+            )
+            self._text(24, y, _truncate(body_label, 35), palette["orange"], ("Courier", 8, "bold"))
+            self._text(WIDTH - 24, y, tag_text, palette["muted"], ("Courier", 7, "bold"), "e")
+            self._text(24, y + 20, signal_state, signal_color, SIGNAL_FONT)
+            self._text(WIDTH - 24, y + 20, dss_state, palette["green"] if body.get("dss_complete") else palette["dim"], ("Courier", 8, "bold"), "e")
+            y += 52
+            y = self._sample_row(model.get("sampling"), y)
+
+            if count or rows:
+                self._text(18, y, "BIOLOGICAL EVIDENCE", palette["dim"], ("Courier", 7, "bold"))
+                self._text(WIDTH - 18, y, "STATE / BASE VALUE", palette["dim"], ("Courier", 7, "bold"), "e")
+                y += 20
+                if not rows:
+                    self._text(30, y, "○", palette["dim"], BIO_SYMBOL_FONT)
+                    self._text(46, y, "Awaiting DSS identification", palette["dim"], BIO_DETAIL_FONT)
+                    y += 19
+                for row in rows:
+                    symbol = {
+                        "complete": "✓", "sample": "●", "detected": "○",
+                        "predicted": "?", "possible": "·",
+                    }.get(row["kind"], "·")
+                    color = (
+                        palette["green"] if row["kind"] == "complete"
+                        else palette["orange"] if row["kind"] == "sample"
+                        else palette["text"] if row["kind"] == "detected"
+                        else palette["dim"]
+                    )
+                    label = row.get("display_name") or row["name"]
+                    value = row.get("value")
+                    if value:
+                        value_text = _credits(value)
+                    else:
+                        value_text = self._range_text(row.get("min_value"), row.get("max_value")) or "-"
+                    state_value = f"{row.get('status') or 'LOGGED'} · {value_text}"
+                    self._text(20, y, symbol, color, ("Courier", 9, "bold"))
+                    self._text(38, y, _truncate(label, 34), color, ("Courier", 8, "bold"))
+                    self._text(WIDTH - 18, y, state_value, color, ("Courier", 8, "bold"), "e")
+                    y += 19
+
+            if geo:
+                self._text(20, y, "◇", palette["accent"], BIO_SYMBOL_FONT)
+                self._text(38, y, "GEOLOGICAL SIGNALS", palette["text"], BIO_DETAIL_FONT)
+                self._text(WIDTH - 18, y, f"{geo} CONFIRMED", palette["accent"], BIO_DETAIL_FONT, "e")
                 y += 19
         else:
             if active_rows:
-                self._text(18, y, "ACTIVE SURVEY TARGETS", palette["dim"], ("Courier", 7, "bold"))
-                self._text(WIDTH - 18, y, "STATUS / EST. VALUE", palette["dim"], ("Courier", 7, "bold"), "e")
+                self._text(18, y, "OPEN SURVEY WORK", palette["dim"], ("Courier", 7, "bold"))
+                self._text(WIDTH - 18, y, "STATUS / BASE VALUE", palette["dim"], ("Courier", 7, "bold"), "e")
                 y += 20
             for row in active_rows:
                 bio = row["bio_count"]
@@ -633,7 +879,8 @@ class SurveyStatusHUD:
                     palette=palette,
                 )
                 lo, hi = row["min_value"], row["max_value"]
-                estimate = "" if not hi else (f" · {_credits(lo)}" if lo == hi else f" · {_credits(lo)}–{_credits(hi)}")
+                value_text = self._range_text(lo, hi)
+                estimate = f" · {value_text}" if value_text else ""
                 notable = row.get("notable")
                 label = row.get("display_name") or row["name"]
                 name = f"{notable['icons']} {label}" if notable and notable.get("icons") else label
@@ -664,15 +911,30 @@ class SurveyStatusHUD:
                     self._text(WIDTH - 18, y, notable["value_line"], notable["value_color"], ("Courier", 7, "bold"), "e")
                     y += 15
 
+        if belt_rows:
+            self._text(
+                18, y + 8, f"ASTEROID BELT CLUSTERS ({len(belt_rows)})",
+                palette["accent"], ("Courier", 7, "bold"),
+            )
+            self._text(WIDTH - 18, y + 8, "FSS CONTACTS", palette["dim"], ("Courier", 7, "bold"), "e")
+            y += 24
+            for row in belt_rows:
+                color = palette["orange"] if row.get("new_discovery") else palette["text"]
+                self._text(20, y, "◆", color, BIO_SYMBOL_FONT)
+                self._text(38, y, _truncate(row.get("display_name"), 54), color, BIO_DETAIL_FONT)
+                distance = row.get("distance") or ("NEW" if row.get("new_discovery") else "FOUND")
+                self._text(WIDTH - 18, y, distance, palette["muted"], BIO_DETAIL_FONT, "e")
+                y += 18
+
         if notable_rows:
-            self._text(18, y + 8, f"NOTABLE BODIES ({len(notable_rows)})", palette["dim"], ("Courier", 7, "bold"))
+            self._text(18, y + 8, f"VALUABLE / NOTABLE ({len(notable_rows)})", palette["dim"], ("Courier", 7, "bold"))
             y += 24
             for row in notable_rows:
                 y = self._notable_row(row, y)
 
         if completed_rows:
             self._text(
-                18, y + 8, f"COMPLETED BIO ({len(completed_rows)})",
+                18, y + 8, f"SURVEYED BIOLOGY ({len(completed_rows)})",
                 palette["green"], ("Courier", 7, "bold"),
             )
             y += 24
@@ -682,10 +944,8 @@ class SurveyStatusHUD:
                     needs_dss=row["needs_dss"], palette=palette,
                 )
                 lo, hi = row["min_value"], row["max_value"]
-                estimate = "" if not hi else (
-                    f" · {_credits(lo)}" if lo == hi
-                    else f" · {_credits(lo)}–{_credits(hi)}"
-                )
+                value_text = self._range_text(lo, hi)
+                estimate = f" · {value_text}" if value_text else ""
                 notable = row.get("notable")
                 label = row.get("display_name") or row["name"]
                 name = f"{notable['icons']} {label}" if notable and notable.get("icons") else label
@@ -695,24 +955,32 @@ class SurveyStatusHUD:
                     palette["green"], BIO_DETAIL_FONT, "e",
                 )
                 y += 19
-                details = row.get("bio_details") or []
-                if details:
-                    species = " · ".join(
+                species_lines = _joined_lines(
+                    [
                         detail.get("display_name") or detail.get("name") or "Organic"
-                        for detail in details
-                    )
+                        for detail in (row.get("bio_details") or [])
+                    ]
+                )
+                for species in species_lines:
                     self._text(
-                        30, y, _truncate(species, 62),
+                        30, y, species,
                         palette["text"], ("Courier", 7, "bold"),
                     )
                     y += 15
 
         if is_body:
             lo, hi = model["min_value"], model["max_value"]
-            total = _credits(lo) if lo == hi else f"{_credits(lo)}–{_credits(hi)}"
-            self._text(18, h - 15, "ESTIMATED BASE", palette["dim"], ("Courier", 7, "bold"))
-            self._text(WIDTH - 18, h - 15, total, palette["orange"], ("Courier", 8, "bold"), "e")
+            if _safe_int(model.get("body", {}).get("bio_count")) or rows:
+                total = _credits(lo) if lo == hi else f"{_credits(lo)}–{_credits(hi)}"
+                footer_label = "ESTIMATED BIO BASE"
+                footer_value = total
+            else:
+                footer_label = "GEOLOGICAL EVIDENCE"
+                footer_value = f"{_safe_int(model.get('body', {}).get('geo_count'))} SIGNALS"
+            self._text(18, h - 15, footer_label, palette["dim"], ("Courier", 7, "bold"))
+            self._text(WIDTH - 18, h - 15, footer_value, palette["orange"], ("Courier", 8, "bold"), "e")
         else:
-            footer = f"ACTIVE {len(active_rows)} · COMPLETE {len(completed_rows)}"
+            footer = f"OPEN {len(active_rows)} · BIO COMPLETE {len(completed_rows)}"
             self._text(18, h - 15, footer, palette["dim"], ("Courier", 7, "bold"))
-            self._text(WIDTH - 18, h - 15, f"NOTABLE {model.get('notable_count', 0)}", palette["orange"], ("Courier", 7, "bold"), "e")
+            right_footer = f"BELTS {len(belt_rows)} · NOTABLE {model.get('notable_count', 0)}"
+            self._text(WIDTH - 18, h - 15, right_footer, palette["orange"], ("Courier", 7, "bold"), "e")
