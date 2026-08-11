@@ -9,6 +9,12 @@ from stellar_types import star_type_label
 
 
 class DashboardScanMixin:
+    _STATUS_FSD_MASS_LOCKED = 0x00010000
+    _STATUS_FSD_CHARGING = 0x00020000
+    _STATUS_FSD_COOLDOWN = 0x00040000
+    _STATUS_FSD_JUMPING = 0x40000000
+    _STATUS2_FSD_HYPERDRIVE_CHARGING = 0x00080000
+
     def _sync_navigation_hud_flight_state(self, *, supercruise=False):
         """Resolve the navigation HUD state from the latest verified vehicle flags."""
         if getattr(self, "current_on_foot", False):
@@ -90,6 +96,15 @@ class DashboardScanMixin:
         was_on_foot = bool(getattr(self, "current_on_foot", False))
         was_gui_focus = getattr(self, "current_gui_focus", -1)
         was_fuel_percent = self._current_fuel_percent()
+        was_navigation_readiness = (
+            bool(getattr(self, "current_fsd_mass_locked", False)),
+            bool(getattr(self, "current_fsd_charging", False)),
+            bool(getattr(self, "current_fsd_hyperdrive_charging", False)),
+            bool(getattr(self, "current_fsd_cooldown", False)),
+            bool(getattr(self, "current_fsd_jumping", False)),
+            str(getattr(self, "_navigation_jump_phase", "") or ""),
+            dict(getattr(self, "current_destination_details", None) or {}),
+        )
         fuel = data.get("Fuel") or {}
         # Status.json is the live source while scooping and during ordinary
         # supercruise consumption. Some vehicle/on-foot snapshots omit Fuel,
@@ -109,7 +124,15 @@ class DashboardScanMixin:
                 pass
         self.current_legal_state = data.get("LegalState")
         dest = data.get("Destination") or {}
-        self.current_destination = dest.get("Name") or None
+        if isinstance(dest, dict):
+            self.current_destination_details = {
+                key: dest.get(key)
+                for key in ("System", "Body", "Name")
+                if dest.get(key) is not None
+            }
+        else:
+            self.current_destination_details = {}
+        self.current_destination = self.current_destination_details.get("Name") or None
         if data.get("Cargo") is not None:
             try:
                 self.current_cargo_tons = int(data.get("Cargo") or 0)
@@ -138,16 +161,48 @@ class DashboardScanMixin:
         flags = data.get("Flags")
         in_supercruise = False
         if isinstance(flags, int):
+            self.current_status_flags = flags
             self.current_landed = bool(flags & 0x00000002)
             self.current_in_fighter = bool(flags & 0x02000000)
             self.current_in_srv = bool(flags & 0x04000000)
             in_supercruise = bool(flags & 0x00000010)
+            self.current_fsd_mass_locked = bool(flags & self._STATUS_FSD_MASS_LOCKED)
+            self.current_fsd_charging = bool(flags & self._STATUS_FSD_CHARGING)
+            self.current_fsd_cooldown = bool(flags & self._STATUS_FSD_COOLDOWN)
+            self.current_fsd_jumping = bool(flags & self._STATUS_FSD_JUMPING)
             combat_tracker = getattr(self, "combat_awareness", None)
             if combat_tracker:
                 combat_tracker.update_status(flags)
         flags2 = data.get("Flags2")
         if isinstance(flags2, int):
+            self.current_status_flags2 = flags2
             self.current_on_foot = bool(flags2 & 0x0001)
+            self.current_fsd_hyperdrive_charging = bool(
+                flags2 & self._STATUS2_FSD_HYPERDRIVE_CHARGING
+            )
+        elif not getattr(self, "current_fsd_charging", False):
+            self.current_fsd_hyperdrive_charging = False
+        jump_phase = str(getattr(self, "_navigation_jump_phase", "") or "")
+        set_jump_phase = getattr(self, "_set_navigation_jump_phase", None)
+        if jump_phase == "arrival":
+            # FSDJump is the definitive completed-arrival event. A Status
+            # snapshot carrying the short-lived fsdJump bit can be delivered
+            # just afterwards by the independent file watcher; never let that
+            # stale snapshot rewind ARRIVAL back into HYPERSPACE.
+            self.current_fsd_jumping = False
+        elif getattr(self, "current_fsd_jumping", False):
+            if callable(set_jump_phase) and jump_phase != "hyperspace":
+                set_jump_phase("hyperspace", refresh=False)
+        elif jump_phase == "charging":
+            if (getattr(self, "current_fsd_charging", False)
+                    and getattr(self, "current_fsd_hyperdrive_charging", False)):
+                self._navigation_jump_charge_seen = True
+            elif getattr(self, "_navigation_jump_charge_seen", False):
+                # A charging flag that falls without the exact fsdJump flag is
+                # a cancelled high-wake. Do not leave the HUD stuck charging.
+                clear_jump_phase = getattr(self, "_clear_navigation_jump_phase", None)
+                if callable(clear_jump_phase):
+                    clear_jump_phase(refresh=False)
         if isinstance(flags, int):
             reported_docked = bool(flags & 0x00000001)
             # The ship remains docked while its commander is walking inside a
@@ -229,9 +284,19 @@ class DashboardScanMixin:
             or was_on_foot != bool(getattr(self, "current_on_foot", False))
         )
         fuel_percent_changed = self._current_fuel_percent() != was_fuel_percent
+        navigation_readiness_changed = was_navigation_readiness != (
+            bool(getattr(self, "current_fsd_mass_locked", False)),
+            bool(getattr(self, "current_fsd_charging", False)),
+            bool(getattr(self, "current_fsd_hyperdrive_charging", False)),
+            bool(getattr(self, "current_fsd_cooldown", False)),
+            bool(getattr(self, "current_fsd_jumping", False)),
+            str(getattr(self, "_navigation_jump_phase", "") or ""),
+            dict(getattr(self, "current_destination_details", None) or {}),
+        )
         if fuel_percent_changed:
             self._invalidate_exploration_intelligence()
-        if (vehicle_state_changed or hud_state_changed or fuel_percent_changed) and not self.batch_mode:
+        if (vehicle_state_changed or hud_state_changed or fuel_percent_changed
+                or navigation_readiness_changed) and not self.batch_mode:
             self.update_hud()
         if not self.batch_mode:
             self._check_low_fuel()

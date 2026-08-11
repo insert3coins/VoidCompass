@@ -141,6 +141,7 @@ PROFILE_TEXT_SETTINGS = (
     "overlay_hotkey_layout_studio",
     "overlay_hotkey_toggle_all",
     "overlay_hotkey_navigation",
+    "overlay_hotkey_navigation_layout",
     "overlay_hotkey_survey",
     "overlay_hotkey_system_info",
     "overlay_hotkey_station_info",
@@ -328,7 +329,8 @@ def apply_profile_config(config, profile_key=None):
     profiles = config.setdefault("commander_profiles", {})
     profile = profiles.setdefault(key, {})
     profile_config_file = get_profile_config_file(key)
-    if os.path.exists(profile_config_file):
+    profile_config_exists = os.path.exists(profile_config_file)
+    if profile_config_exists:
         try:
             with open(profile_config_file, "r") as f:
                 profile.update(json.load(f))
@@ -434,6 +436,7 @@ def apply_profile_config(config, profile_key=None):
         "overlay_hotkey_layout_studio": "Ctrl+Alt+Shift+F10",
         "overlay_hotkey_toggle_all": "Ctrl+Alt+Shift+F11",
         "overlay_hotkey_navigation": "",
+        "overlay_hotkey_navigation_layout": "",
         "overlay_hotkey_survey": "",
         "overlay_hotkey_system_info": "",
         "overlay_hotkey_station_info": "",
@@ -450,7 +453,10 @@ def apply_profile_config(config, profile_key=None):
         "overlay_enabled": True,
         "overlay_mouse_passthrough": os.name == "nt",
         "overlay_hotkeys_enabled": os.name == "nt",
-        "hud_compact_mode": False,
+        # Existing profile files without the old boolean retain Expanded;
+        # genuinely new commander profiles begin with the everyday Standard
+        # layout. Stored True/False choices remain authoritative either way.
+        "hud_compact_mode": not profile_config_exists,
         "cargo_overlay_enabled": False,
         "carrier_overlay_enabled": False,
         "colony_overlay_enabled": False,
@@ -584,6 +590,7 @@ def load_config():
         'overlay_hotkey_layout_studio': 'Ctrl+Alt+Shift+F10',
         'overlay_hotkey_toggle_all': 'Ctrl+Alt+Shift+F11',
         'overlay_hotkey_navigation': '',
+        'overlay_hotkey_navigation_layout': '',
         'overlay_hotkey_survey': '',
         'overlay_hotkey_system_info': '',
         'overlay_hotkey_station_info': '',
@@ -592,7 +599,9 @@ def load_config():
         'overlay_hotkey_prospector': '',
         'overlay_hotkey_colony': '',
         'overlay_hotkey_field_bookmark': 'Ctrl+Alt+Shift+F12',
-        'hud_compact_mode': False,
+        # New installs start with Standard. An older root config that somehow
+        # lacks the setting keeps the historical Expanded default.
+        'hud_compact_mode': not config_existed,
         'cargo_overlay_enabled': False,
         'carrier_overlay_enabled': False,
         'colony_overlay_enabled': False,

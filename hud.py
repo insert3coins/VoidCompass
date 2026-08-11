@@ -78,7 +78,9 @@ class TacticalHUD:
             return int(default)
 
     def _is_compact(self):
-        return bool(self.config.get("hud_compact_mode", False))
+        # The compact geometry is the everyday Standard layout. Expanded is
+        # retained for commanders who want the additional planning detail.
+        return bool(self.config.get("hud_compact_mode", True))
 
     def _target_dimensions(self):
         if self._is_compact():
@@ -430,10 +432,19 @@ class TacticalHUD:
         vehicle_name = str(nav_context.get("vehicle_name") or "").upper()
         music_mode = str(nav_context.get("music_mode") or "").upper()
         music_track = str(nav_context.get("music_track") or "")
+        fsd = nav_context.get("fsd_readiness") or {}
+        fsd_state = str(fsd.get("state") or "ready")
 
-        # A jump is the only physical state that outranks a focused cockpit
-        # screen. Maps and scanners otherwise describe what the commander is
-        # actively using, even while the ship remains in supercruise.
+        # StartJump is only the countdown. The exact Status fsdJump flag owns
+        # HYPERSPACE, and FSDJump supplies the bounded ARRIVAL phase.
+        if fsd_state == "arrival":
+            return "ARRIVAL"
+        if fsd_state == "hyperspace":
+            return "HYPERSPACE"
+        if fsd_state in {"charge", "hyper_charge"}:
+            return str(fsd.get("label") or "FSD CHARGE").upper()
+        if fsd_state == "cooldown":
+            return "FSD COOLDOWN"
         if flight_state in ("HYPERSPACE", "JUMPING"):
             return flight_state
 
@@ -468,6 +479,11 @@ class TacticalHUD:
             return "MAP"
         if nav_context.get("in_fss"):
             return "FSS"
+        if (fsd_state == "mass_lock" and flight_state in {"", "FLIGHT"}
+                and not any(nav_context.get(key) for key in (
+                    "docked", "landed", "in_fighter", "in_srv", "on_foot",
+                ))):
+            return "MASS LOCK"
         if flight_state == "ONFOOT" or nav_context.get("on_foot") or music_mode == "ONFOOT":
             return "ONFOOT"
         if nav_context.get("docked"):
@@ -487,13 +503,20 @@ class TacticalHUD:
         return "FLIGHT"
 
     def _state_color(self, state_text):
+        if state_text == "ARRIVAL":
+            return COLOR_GREEN
         if state_text in (
             "DOCKED", "LANDED", "FSS", "DSS", "FIGHTER", "SRV", "NOMAD",
             "ONFOOT", "MAP", "GALAXY MAP", "SYSTEM MAP", "POWER MAP", "ORRERY",
-            "CODEX", "EXPLORATION", "STATION",
+            "CODEX", "EXPLORATION", "STATION", "FSD COOLDOWN",
         ):
             return COLOR_ACCENT
-        if state_text in ("HYPERSPACE", "SUPERCRUISE", "JUMPING", "COMBAT"):
+        if state_text == "MASS LOCK":
+            return COLOR_YELLOW
+        if state_text in (
+            "HYPERSPACE", "SUPERCRUISE", "JUMPING", "COMBAT",
+            "FSD CHARGE", "HYPER CHARGE",
+        ):
             return COLOR_ORANGE
         return "#7d8891"
 
@@ -501,6 +524,14 @@ class TacticalHUD:
     def _navigation_motion_profile(state_text):
         """Map journal/UI states to small, visually distinct motion families."""
         state = str(state_text or "FLIGHT").upper()
+        if state == "MASS LOCK":
+            return "fsd_lock"
+        if state in {"FSD CHARGE", "HYPER CHARGE"}:
+            return "fsd_charge"
+        if state == "FSD COOLDOWN":
+            return "fsd_cooldown"
+        if state == "ARRIVAL":
+            return "arrival"
         if state in {"DOCKED", "STATION"}:
             return "docked"
         if state == "LANDED":
@@ -536,6 +567,46 @@ class TacticalHUD:
         def flat(*points):
             return tuple(value for dx, dy in points for value in point(dx, dy))
 
+        if profile == "fsd_lock":
+            self.canvas.create_polygon(
+                *flat((0, -4), (4, 0), (0, 4), (-4, 0)),
+                fill="#010101", outline=color, width=1, tags=tags,
+            )
+            for offset in (-6, 6):
+                self.canvas.create_line(
+                    *flat((offset, -3), (offset, 3)),
+                    fill=dim, width=1, tags=tags,
+                )
+            return
+        if profile == "fsd_charge":
+            self.canvas.create_line(
+                *flat((-5, -4), (-1, 0), (-5, 4)),
+                fill=dim, width=1, tags=tags,
+            )
+            self.canvas.create_line(
+                *flat((-1, -4), (4, 0), (-1, 4)),
+                fill=color, width=1, tags=tags,
+            )
+            return
+        if profile == "fsd_cooldown":
+            self.canvas.create_oval(
+                *flat((-4, -4), (4, 4)),
+                fill="#010101", outline=dim, width=1, tags=tags,
+            )
+            self.canvas.create_line(
+                *flat((0, 0), (3, -2)), fill=color, width=1, tags=tags,
+            )
+            return
+        if profile == "arrival":
+            self.canvas.create_oval(
+                *flat((-4, -4), (4, 4)),
+                fill="#010101", outline=dim, width=1, tags=tags,
+            )
+            self.canvas.create_oval(
+                *flat((-1.5, -1.5), (1.5, 1.5)),
+                fill=color, outline="", tags=tags,
+            )
+            return
         if profile == "docked":
             self.canvas.create_rectangle(
                 *flat((-3, -3), (3, 3)),
@@ -642,10 +713,17 @@ class TacticalHUD:
         journal_event=None,
         gravity_g=None,
         surface_active=False,
+        fsd_readiness=None,
+        local_target=None,
+        neutron_boost=None,
     ):
         """Draw one connected route, state and survey navigation instrument."""
         label = str(text or "FLIGHT").upper()
         route = route or {}
+        fsd_readiness = fsd_readiness if isinstance(fsd_readiness, dict) else {}
+        local_target = local_target if isinstance(local_target, dict) else None
+        neutron_boost = neutron_boost if isinstance(neutron_boost, dict) else {}
+        boost_armed = bool(neutron_boost.get("armed"))
         survey_color = survey_color or COLOR_ACCENT
         try:
             survey_progress = max(0.0, min(1.0, float(survey_progress or 0.0)))
@@ -714,6 +792,13 @@ class TacticalHUD:
                 fill=gravity_color, width=2 if gravity_value >= 1.5 else 1,
                 tags="nav_state_static",
             )
+        if boost_armed:
+            boost_dim = self._glow_color(COLOR_ACCENT, 0.62)
+            for rail_y in (center_y - 3, center_y + 3):
+                self.canvas.create_line(
+                    inner_left, rail_y, inner_right, rail_y,
+                    fill=boost_dim, width=1, tags="nav_state_static",
+                )
         self.canvas.create_line(
             inner_left, center_y, inner_right, center_y,
             fill=dim, width=1, tags="nav_state_static",
@@ -771,6 +856,22 @@ class TacticalHUD:
         self.draw_text(label_x, center_y, text=label, fill=color,
                        font=("Courier", 10, "bold"), anchor="w",
                        tags="nav_state_static")
+        if local_target:
+            target_x = inner_right
+            target_color = COLOR_YELLOW
+            self.canvas.create_oval(
+                target_x - 2, center_y - 2, target_x + 2, center_y + 2,
+                fill="#010101", outline=target_color, width=1,
+                tags="nav_state_static",
+            )
+            for y1, y2 in ((shell_top + 1, shell_top + 4),
+                           (shell_bottom - 4, shell_bottom - 1)):
+                self.canvas.create_line(
+                    target_x - 5, y1, target_x - 5, y2,
+                    target_x - 5, y1, target_x - 2, y1,
+                    fill=self._glow_color(target_color, 0.72), width=1,
+                    tags="nav_state_static",
+                )
 
         self._nav_marker_model = {
             "y": center_y,
@@ -787,6 +888,10 @@ class TacticalHUD:
             "gravity_g": gravity_value,
             "gravity_load": gravity_load,
             "gravity_color": gravity_color,
+            "fsd_readiness": dict(fsd_readiness),
+            "local_target": dict(local_target) if local_target else None,
+            "boost_armed": boost_armed,
+            "boost_value": neutron_boost.get("value"),
             "route_active": route_active,
             "route_x1": inner_left,
             "route_x2": route_end,
@@ -1247,6 +1352,91 @@ class TacticalHUD:
                 fill=pulse_color, width=1, tags=tags,
             )
 
+        if model.get("boost_armed"):
+            # A retained paired flow is the persistent, text-free signature
+            # that the next hyperspace jump has neutron boost available.
+            shell_x1 = model.get("shell_x1", model["route_x1"]) + 7
+            shell_x2 = model.get("shell_x2", model["survey_x2"]) - 7
+            travel = (phase % 64) / 63.0
+            top_x = shell_x1 + ((shell_x2 - shell_x1) * travel)
+            bottom_x = shell_x2 - ((shell_x2 - shell_x1) * travel)
+            boost_dim = self._glow_color(COLOR_ACCENT, 0.68)
+            self.canvas.create_line(
+                max(shell_x1, top_x - 10), y - 3, top_x, y - 3,
+                fill=boost_dim, width=2, tags=tags,
+            )
+            self.canvas.create_line(
+                bottom_x, y + 3, min(shell_x2, bottom_x + 10), y + 3,
+                fill=boost_dim, width=2, tags=tags,
+            )
+
+        if model.get("local_target"):
+            target_x = model["survey_x2"]
+            wave = abs(((phase % 40) / 39.0) * 2.0 - 1.0)
+            radius = 2 + (wave * 2)
+            target_color = COLOR_YELLOW if wave < 0.66 else self._glow_color(COLOR_YELLOW, 0.7)
+            self.canvas.create_oval(
+                target_x - radius, y - radius,
+                target_x + radius, y + radius,
+                fill="", outline=target_color, width=1, tags=tags,
+            )
+
+        if profile == "fsd_lock":
+            wave = abs(((phase % 26) / 25.0) * 2.0 - 1.0)
+            offset = 4 + (wave * 4)
+            for x, side in ((model["group_left"] - offset, -1),
+                            (model["group_right"] + offset, 1)):
+                inward = x - (side * 5)
+                self.canvas.create_line(
+                    x, y - 4, x, y + 4,
+                    fill=color, width=2, tags=tags,
+                )
+                self.canvas.create_line(
+                    x, y - 4, inward, y - 4,
+                    fill=dim, width=1, tags=tags,
+                )
+                self.canvas.create_line(
+                    x, y + 4, inward, y + 4,
+                    fill=dim, width=1, tags=tags,
+                )
+            return
+
+        if profile == "fsd_charge":
+            travel = (phase % 16) / 15.0
+            left_x = model["route_x1"] + ((model["route_x2"] - model["route_x1"]) * travel)
+            right_x = model["survey_x2"] - ((model["survey_x2"] - model["survey_x1"]) * travel)
+            self.canvas.create_line(
+                left_x - 4, y - 3, left_x, y, left_x - 4, y + 3,
+                fill=color, width=2, tags=tags,
+            )
+            self.canvas.create_line(
+                right_x + 4, y - 3, right_x, y, right_x + 4, y + 3,
+                fill=color, width=2, tags=tags,
+            )
+            return
+
+        if profile == "fsd_cooldown":
+            travel = (phase % 30) / 29.0
+            offset = 3 + (travel * 17)
+            fade = color if travel < 0.55 else dim
+            for x in (model["group_left"] - offset, model["group_right"] + offset):
+                self.canvas.create_line(
+                    x, y - 3, x, y + 3,
+                    fill=fade, width=1, tags=tags,
+                )
+            return
+
+        if profile == "arrival":
+            travel = (phase % 18) / 17.0
+            radius = 3 + (travel * 14)
+            fade = color if travel < 0.5 else dim
+            self.canvas.create_oval(
+                marker_x - radius, y - min(5, radius / 2),
+                marker_x + radius, y + min(5, radius / 2),
+                fill="", outline=fade, width=1, tags=tags,
+            )
+            return
+
         if profile == "docked":
             # Two clamps hold the whole annunciator: visibly powered, but locked.
             wave = abs(((phase % 32) / 31.0) * 2.0 - 1.0)
@@ -1437,6 +1627,25 @@ class TacticalHUD:
     def _context_presentation(nav_context, attention_text="", attention_state="muted"):
         """Choose the single most useful contextual line for the current state."""
         context = nav_context or {}
+        local_target = context.get("local_target") or {}
+        target_name = str(local_target.get("name") or "").strip()
+        if target_name:
+            gravity_text = ""
+            if local_target.get("is_current_body"):
+                try:
+                    gravity = context.get("gravity_g")
+                    gravity_text = f" · {float(gravity):.2f} G" if gravity is not None else ""
+                except (TypeError, ValueError):
+                    gravity_text = ""
+            return f"TARGET LOCK · {target_name}{gravity_text}", COLOR_YELLOW
+        neutron_boost = context.get("neutron_boost") or {}
+        if neutron_boost.get("armed"):
+            try:
+                boost_value = float(neutron_boost.get("value"))
+                boost_text = f" · {boost_value:.1f}X"
+            except (TypeError, ValueError):
+                boost_text = ""
+            return f"NEUTRON BOOST ARMED{boost_text}", COLOR_ACCENT
         if context.get("docked") and context.get("station"):
             return f"STATION · {context['station']}", COLOR_ACCENT
         body = str(context.get("body") or "").strip()
@@ -1662,6 +1871,9 @@ class TacticalHUD:
                 or nav_context.get("on_foot")
                 or state_text in {"LANDED", "SRV", "NOMAD", "ONFOOT"}
             ),
+            fsd_readiness=nav_context.get("fsd_readiness"),
+            local_target=nav_context.get("local_target"),
+            neutron_boost=nav_context.get("neutron_boost"),
         )
         self._draw_section_rule(16, w - 16, 34)
 
@@ -1794,6 +2006,9 @@ class TacticalHUD:
                 or nav_context.get("on_foot")
                 or state_text in {"LANDED", "SRV", "NOMAD", "ONFOOT"}
             ),
+            fsd_readiness=nav_context.get("fsd_readiness"),
+            local_target=nav_context.get("local_target"),
+            neutron_boost=nav_context.get("neutron_boost"),
         )
         self._draw_section_rule(20, w - 20, 37)
 
