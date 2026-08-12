@@ -467,6 +467,9 @@ class TacticalHUD:
             return "FSD COOLDOWN"
         if flight_state in ("HYPERSPACE", "JUMPING"):
             return flight_state
+        if (nav_context.get("supercruise_overcharge")
+                and flight_state == "SUPERCRUISE"):
+            return "SCO OVERCHARGE"
 
         focus_key = (
             str(nav_context.get("gui_focus", ""))
@@ -535,7 +538,7 @@ class TacticalHUD:
             return COLOR_YELLOW
         if state_text in (
             "HYPERSPACE", "SUPERCRUISE", "JUMPING", "COMBAT",
-            "FSD CHARGE", "HYPER CHARGE",
+            "FSD CHARGE", "HYPER CHARGE", "SCO OVERCHARGE",
         ):
             return COLOR_ORANGE
         return "#7d8891"
@@ -548,6 +551,8 @@ class TacticalHUD:
             return "fsd_lock"
         if state in {"FSD CHARGE", "HYPER CHARGE"}:
             return "fsd_charge"
+        if state == "SCO OVERCHARGE":
+            return "supercruise_overcharge"
         if state == "FSD COOLDOWN":
             return "fsd_cooldown"
         if state == "ARRIVAL":
@@ -607,6 +612,15 @@ class TacticalHUD:
                 *flat((-1, -4), (4, 0), (-1, 4)),
                 fill=color, width=1, tags=tags,
             )
+            return
+        if profile == "supercruise_overcharge":
+            # Three compressed forward gates distinguish sustained SCO from
+            # ordinary supercruise without adding a second status label.
+            for offset, tone in ((-4, dim), (0, color), (4, dim)):
+                self.canvas.create_line(
+                    *flat((offset - 4, -4), (offset, 0), (offset - 4, 4)),
+                    fill=tone, width=1, tags=tags,
+                )
             return
         if profile == "fsd_cooldown":
             self.canvas.create_oval(
@@ -1594,6 +1608,50 @@ class TacticalHUD:
                     width=1, tags=tags,
                 )
 
+        if profile == "supercruise_overcharge":
+            # SCO is a sustained live Status state, so its motion continues
+            # for exactly as long as Flags2 bit 20 remains set. Four staggered
+            # packets tear forward across alternating chassis rails while the
+            # centre aperture compresses under the overcharge load.
+            shell_x1 = model.get("shell_x1", model["route_x1"]) + 7
+            shell_x2 = model.get("shell_x2", model["survey_x2"]) - 7
+            shell_top = model.get("shell_top", y - 6)
+            shell_bottom = model.get("shell_bottom", y + 6)
+            travel = self._cycle_progress(phase, 7)
+            overcharge_dim = self._glow_color(color, 0.68)
+            for index in range(4):
+                local = (travel + (index / 4.0)) % 1.0
+                x = shell_x1 + ((shell_x2 - shell_x1) * local)
+                rail_y = shell_top if index % 2 == 0 else shell_bottom
+                packet_color = color if index in {0, 2} else overcharge_dim
+                self._draw_contrast_motion_tail(
+                    max(shell_x1, x - 13), x, rail_y,
+                    packet_color, width=2, tags=tags,
+                )
+                self._draw_contrast_motion_dot(
+                    x, rail_y, packet_color, radius=1, tags=tags,
+                )
+            compression = abs((self._cycle_progress(phase, 10) * 2.0) - 1.0)
+            aperture = 3 + ((1.0 - compression) * 4)
+            for side in (-1, 1):
+                x = marker_x + (side * aperture)
+                self.canvas.create_line(
+                    x - (side * 4), y - 4,
+                    x, y,
+                    x - (side * 4), y + 4,
+                    fill=color if compression < 0.55 else overcharge_dim,
+                    width=2, tags=tags,
+                )
+            # A small alternating turbulence shear makes SCO unmistakable
+            # without shaking or moving the readable state label itself.
+            shear = 2 if int(phase // 2) % 2 == 0 else -2
+            for x in (model["group_left"] - 7, model["group_right"] + 7):
+                self.canvas.create_line(
+                    x - 3, y + shear, x + 3, y - shear,
+                    fill=overcharge_dim, width=1, tags=tags,
+                )
+            return
+
         if profile == "fsd_lock":
             wave = abs((self._cycle_progress(phase, 26) * 2.0) - 1.0)
             offset = 4 + (wave * 4)
@@ -2526,8 +2584,7 @@ class TacticalHUD:
             "x1": 24.0, "x2": 156.0, "y": 212.0,
         }
 
-        context_display = f"◆  {context_text}" if context_text else ""
-        self.draw_fitted_text(16, 222, context_display, context_color,
+        self.draw_fitted_text(16, 222, context_text, context_color,
                               size=10, min_size=9, max_width=w - 32 - 142, anchor="w")
         self.draw_fitted_text(w - 16, 222, traffic_text, "#7d8891",
                               size=10, min_size=9, max_width=136, anchor="e")
@@ -2693,8 +2750,7 @@ class TacticalHUD:
             secondary_text = ""
             secondary_color = "#7d8891"
         context_width = 390 if secondary_text else w - 40
-        context_display = f"◆  {context_text}" if context_text else ""
-        self.draw_fitted_text(20, 261, context_display, context_color,
+        self.draw_fitted_text(20, 261, context_text, context_color,
                               size=11, min_size=10, max_width=context_width, anchor="w")
         self.draw_fitted_text(w - 20, 261, secondary_text, secondary_color,
                               size=10, min_size=9, max_width=205, anchor="e")
