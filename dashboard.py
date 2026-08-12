@@ -76,7 +76,10 @@ from captains_log import CaptainsLog
 from deep_survey import DeepSurveyTracker
 from exploration_intelligence import build_intelligence, checkpoint_payload
 from galactic_regions import find_region
-from explorer_fieldcraft import revisit_candidate, route_safety_forecast, surface_trail_snapshot
+from explorer_fieldcraft import (
+    HIGH_VALUE_WORLDS, WHITE_DWARF_CLASSES, revisit_candidate,
+    route_safety_forecast, surface_trail_snapshot,
+)
 from expedition_manager import ExpeditionManager
 from diagnostic_logs import application_base_dir, resolve_log_path
 from adaptive_command import (
@@ -147,7 +150,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         "FSDTarget": ("route_target", "left", "orange", 1.0, 45),
         "StartJump": ("jump_charge", "all", "orange", 1.7, 90),
         "FSDJump": ("arrival", "all", "accent", 1.8, 95),
-        "CarrierJump": ("arrival", "all", "accent", 1.8, 95),
+        "CarrierJump": ("carrier_arrival", "all", "accent", 1.8, 95),
         "SupercruiseEntry": ("supercruise_enter", "center", "orange", 1.2, 62),
         "SupercruiseExit": ("supercruise_exit", "center", "accent", 1.2, 62),
         "SupercruiseDestinationDrop": ("supercruise_exit", "center", "accent", 1.2, 62),
@@ -224,6 +227,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         "current_in_fighter", "current_in_srv", "current_on_foot",
         "current_vehicle_id", "current_vehicle_name", "current_legal_state",
         "current_fuel_main", "current_fuel_reservoir", "fuel_capacity_main",
+        "current_altitude_m", "current_landing_gear_down",
+        "current_cargo_scoop_deployed", "current_analysis_mode",
+        "current_scooping_fuel",
         "current_destination", "current_destination_details",
         "neutron_boost_armed", "neutron_boost_value",
         "cargo_capacity", "current_cargo_tons",
@@ -843,6 +849,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_destination_details = {}
         self.current_status_flags = 0
         self.current_status_flags2 = 0
+        self.current_altitude_m = None
+        self.current_landing_gear_down = False
+        self.current_cargo_scoop_deployed = False
+        self.current_analysis_mode = False
+        self.current_scooping_fuel = False
+        self._status_altitude_observed_monotonic = None
+        self._surface_descent_mps = 0.0
         self.current_fsd_mass_locked = False
         self.current_fsd_charging = False
         self.current_fsd_hyperdrive_charging = False
@@ -852,6 +865,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._navigation_jump_target = ""
         self._navigation_jump_charge_seen = False
         self._navigation_jump_phase_started = 0.0
+        self._navigation_selected_star = None
         self.neutron_boost_armed = False
         self.neutron_boost_value = None
 
@@ -1599,6 +1613,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_destination_details = {}
         self.current_status_flags = 0
         self.current_status_flags2 = 0
+        self.current_altitude_m = None
+        self.current_landing_gear_down = False
+        self.current_cargo_scoop_deployed = False
+        self.current_analysis_mode = False
+        self.current_scooping_fuel = False
+        self._status_altitude_observed_monotonic = None
+        self._surface_descent_mps = 0.0
         self.current_fsd_mass_locked = False
         self.current_fsd_charging = False
         self.current_fsd_hyperdrive_charging = False
@@ -1608,6 +1629,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._navigation_jump_target = ""
         self._navigation_jump_charge_seen = False
         self._navigation_jump_phase_started = 0.0
+        self._navigation_selected_star = None
         self._navigation_transition_job = None
         self.neutron_boost_armed = False
         self.neutron_boost_value = None
@@ -3867,6 +3889,38 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return self.cmdr_balance
         return self._hud_balance_cache.get("balance")
 
+    def _navigation_next_star_intelligence(self, next_name, hops, route_safety):
+        """Describe only route facts Frontier supplies for the immediate leg."""
+        first = next((hop for hop in (hops or ()) if hop.get("name") == next_name), None)
+        if first is None and hops:
+            first = hops[0]
+        first = first or {}
+        raw_star_class = str(first.get("star_class") or "").strip()
+        star_class = raw_star_class.upper()
+        scoopable = first.get("scoopable") if star_class else None
+        dry_run = 0
+        for hop in hops or ():
+            if hop.get("scoopable") is False:
+                dry_run += 1
+            else:
+                break
+        safety = route_safety if isinstance(route_safety, dict) else {}
+        endurance = safety.get("fuel_endurance_jumps")
+        try:
+            fuel_risk = "alert" if endurance is not None and float(endurance) <= 1.0 else (
+                "warn" if endurance is not None and float(endurance) <= 2.0 else "ok"
+            )
+        except (TypeError, ValueError):
+            fuel_risk = "alert" if safety.get("level") == "alert" else "ok"
+        return {
+            "name": next_name or "",
+            "star_class": star_class,
+            "star_label": star_type_label(raw_star_class) if star_class else "",
+            "scoopable": scoopable,
+            "consecutive_unscoopable": dry_run,
+            "fuel_risk": fuel_risk,
+        }
+
     def _build_navigation_hud_context(self):
         current = self.current_sys if self.current_sys and self.current_sys != "---" else "---"
         previous = getattr(self, "previous_sys", None) or "---"
@@ -3901,9 +3955,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if entries:
                     next_coords = entries[0].get("StarPos")
 
+        selected_star = getattr(self, "_navigation_selected_star", None) or {}
+        selected_name = str(selected_star.get("name") or "").strip()
         if not next_name and getattr(self, "target_waypoint", None):
             next_name = self.target_waypoint.get("name")
             next_coords = self.target_waypoint.get("coords")
+        if (not next_name and selected_name
+                and selected_name.casefold() != current.casefold()):
+            next_name = selected_name
         if not next_name:
             next_name = self.dest_name
         if next_name and not next_coords:
@@ -3920,11 +3979,24 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_coords, route, entries, current,
             waypoint_manager=waypoint_manager,
         )
+        if not hops and selected_name and selected_name == next_name:
+            selected_class = str(selected_star.get("star_class") or "").strip()
+            hops = [{
+                "name": selected_name,
+                "dist": None,
+                "star_class": selected_class,
+                "scoopable": (
+                    selected_class.upper() in route_strip.SCOOPABLE_CLASSES
+                    if selected_class else None
+                ),
+            }]
 
         if waypoint_manager and waypoint_manager.waypoints:
             route_mode = "WAYPOINT ROUTE"
         elif route:
             route_mode = "GAME ROUTE"
+        elif selected_name:
+            route_mode = "FSD TARGET"
         elif self.dest_name:
             route_mode = "VOID ROUTE"
         else:
@@ -3950,12 +4022,32 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.system_bio_signals > self.organic_count:
             badges.append((f"BIO {self.organic_count}/{self.system_bio_signals}", "alert"))
         route_safety = self._route_safety_snapshot()
+        next_star = self._navigation_next_star_intelligence(
+            next_name, hops, route_safety,
+        )
         fuel_percent = self._current_fuel_percent()
         fsd_readiness = self._navigation_fsd_readiness_context()
         local_target = self._navigation_local_target_context(next_name)
         neutron_boost = {
             "armed": bool(getattr(self, "neutron_boost_armed", False)),
             "value": getattr(self, "neutron_boost_value", None),
+        }
+        altitude = getattr(self, "current_altitude_m", None)
+        surface_approach = {
+            "active": bool(
+                getattr(self, "on_planet", False)
+                and not getattr(self, "current_landed", False)
+                and not getattr(self, "current_docked", False)
+                and not getattr(self, "current_on_foot", False)
+                and altitude is not None
+            ),
+            "altitude_m": altitude,
+            "descent_mps": getattr(self, "_surface_descent_mps", 0.0),
+        }
+        ship_config = {
+            "landing_gear": bool(getattr(self, "current_landing_gear_down", False)),
+            "cargo_scoop": bool(getattr(self, "current_cargo_scoop_deployed", False)),
+            "analysis_mode": bool(getattr(self, "current_analysis_mode", False)),
         }
 
         sampling = self._sampling_snapshot() if getattr(self, "bio_sampling", None) else None
@@ -4010,7 +4102,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "latitude": getattr(self, "current_latitude", None),
             "longitude": getattr(self, "current_longitude", None),
             "fuel_percent": fuel_percent,
+            "fuel_scooping": bool(getattr(self, "current_scooping_fuel", False)),
             "route_safety": route_safety,
+            "next_star": next_star,
+            "surface_approach": surface_approach,
+            "ship_config": ship_config,
             "fsd_readiness": fsd_readiness,
             "local_target": local_target,
             "neutron_boost": neutron_boost,
@@ -4120,6 +4216,75 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return False
 
         kind, lane, tone, duration_s, priority = spec
+        payload = raw if isinstance(raw, dict) else {}
+        normalised = data if isinstance(data, dict) else {}
+
+        # Enrich the generic event families with verified journal detail. The
+        # HUD still receives a compact pulse, but it can now distinguish a
+        # routine arrival/scan from a genuinely important exploration moment.
+        if event == "FSDJump":
+            star_class = str(
+                payload.get("StarClass") or normalised.get("star_class") or ""
+            ).strip().upper()
+            if not star_class:
+                arrived = str(
+                    payload.get("StarSystem") or normalised.get("star_system") or ""
+                ).strip().casefold()
+                matching_entry = next(
+                    (entry for entry in (getattr(self, "nav_route_entries", None) or ())
+                     if str((entry or {}).get("StarSystem") or "").strip().casefold() == arrived),
+                    {},
+                )
+                star_class = str(matching_entry.get("StarClass") or "").strip().upper()
+            if star_class in {"N", "NS"}:
+                kind, tone, duration_s = "arrival_neutron", "accent", 2.1
+            elif star_class in WHITE_DWARF_CLASSES:
+                kind, tone, duration_s = "arrival_white_dwarf", "yellow", 2.1
+        elif event == "FSDTarget":
+            selected = str(
+                payload.get("Name") or payload.get("StarSystem")
+                or normalised.get("name") or normalised.get("star_system") or ""
+            ).strip()
+            selected_class = str(
+                payload.get("StarClass") or normalised.get("star_class") or ""
+            ).strip()
+            self._navigation_selected_star = {
+                "name": selected,
+                "star_class": selected_class,
+                "remaining": payload.get("RemainingJumpsInRoute"),
+            } if selected else None
+            route = list(getattr(self, "route_list", None) or ())
+            plotted = {str(name or "").strip().casefold() for name in route}
+            # FSDTarget may name the final route destination rather than the
+            # immediate hop. Only call it a diversion when it leaves the
+            # plotted systems entirely.
+            if selected and plotted and selected.casefold() not in plotted:
+                kind, tone, duration_s, priority = "route_divert", "yellow", 1.5, 72
+        elif event == "Scan":
+            body_name = str(
+                payload.get("BodyName") or normalised.get("body_name") or ""
+            ).strip()
+            planet_class = str(
+                payload.get("PlanetClass") or normalised.get("planet_class") or ""
+            ).strip()
+            terraformable = str(
+                payload.get("TerraformState") or normalised.get("terraform_state") or ""
+            ).casefold() == "terraformable"
+            first_discovery = (
+                payload.get("WasDiscovered") is False
+                or normalised.get("was_discovered") is False
+            )
+            first_footfall = bool(
+                (payload.get("Landable") or normalised.get("landable"))
+                and (payload.get("WasFootfalled") is False
+                     or normalised.get("was_footfalled") is False)
+            )
+            if planet_class in HIGH_VALUE_WORLDS or terraformable:
+                kind, tone, duration_s, priority = "valuable_discovery", "yellow", 2.0, 86
+            elif first_discovery:
+                kind, tone, duration_s, priority = "first_discovery", "green", 1.8, 78
+            elif first_footfall:
+                kind, tone, duration_s, priority = "footfall_candidate", "green", 1.7, 74
         now = time.monotonic()
         previous = getattr(self, "_hud_event_pulse", None)
         recent = bool(previous and now - float(previous.get("observed", 0.0) or 0.0) < 0.55)
@@ -4138,8 +4303,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if recent and previous.get("kind") == kind:
             count = min(3, int(previous.get("count", 1) or 1) + 1)
 
-        payload = raw if isinstance(raw, dict) else {}
-        normalised = data if isinstance(data, dict) else {}
         detail = {}
         if kind == "bio_sample":
             scan_type = str(
@@ -4158,6 +4321,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 detail["body_count"] = max(0, int(body_count or 0))
             except (TypeError, ValueError):
                 pass
+        elif kind in {"valuable_discovery", "first_discovery", "footfall_candidate"}:
+            detail["body_name"] = body_name
 
         self._hud_event_sequence = int(getattr(self, "_hud_event_sequence", 0) or 0) + 1
         self._hud_event_pulse = {
@@ -4172,10 +4337,32 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "observed": now,
             **detail,
         }
+        if event in {"FSDJump", "CarrierJump", "NavRouteClear"}:
+            self._navigation_selected_star = None
         if getattr(self, "batch_mode", False):
             self._hud_event_batch_priority = priority
         else:
             self.update_hud()
+        return True
+
+    def _promote_navigation_arrival_personality(self, event, startup_replay=False):
+        """Promote an ordinary arrival after cached survey value is restored."""
+        if startup_replay or event != "FSDJump" or not self.valuable_system:
+            return False
+        pulse = getattr(self, "_hud_event_pulse", None)
+        if not isinstance(pulse, dict) or pulse.get("kind") != "arrival":
+            # Compact-star and carrier signatures retain safety priority.
+            return False
+        self._hud_event_sequence = int(getattr(self, "_hud_event_sequence", 0) or 0) + 1
+        promoted = dict(pulse)
+        promoted.update({
+            "seq": self._hud_event_sequence,
+            "kind": "arrival_valuable",
+            "tone": "yellow",
+            "duration": 2.1,
+            "priority": 96,
+        })
+        self._hud_event_pulse = promoted
         return True
 
     def _navigation_hud_event_context(self):
@@ -6737,6 +6924,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._rebuild_scan_index()
             self._rebuild_system_state_from_scan_items()
             self._seed_navigation_scan_progress()
+            self._promote_navigation_arrival_personality(
+                ev, startup_replay=startup_replay,
+            )
 
             if ev == "CarrierJump":
                 log_msg = f"CARRIER JUMP: {self.current_sys}"

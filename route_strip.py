@@ -24,7 +24,8 @@ def build_route_hops(current_coords, route_list, nav_route_entries, current_sys=
                       waypoint_manager=None, max_hops=12):
     """Returns (hops, truncated_count) for the upcoming route ahead of current position.
 
-    Each hop is {"name": str, "dist": float|None, "scoopable": bool}, where
+    Each hop is {"name": str, "dist": float|None, "scoopable": bool|None,
+    "star_class": str}, where
     "dist" is the LY distance from the previous point (current position for
     the first hop). Prefers the game's NavRoute.json data; falls back to
     unvisited custom waypoints when no in-game route is active.
@@ -50,11 +51,12 @@ def build_route_hops(current_coords, route_list, nav_route_entries, current_sys=
     total_upcoming = len(upcoming_names)
     for name, entry in zip(upcoming_names, upcoming_entries):
         coords = (entry or {}).get("StarPos")
-        star_class = str((entry or {}).get("StarClass") or "").upper()
+        star_class = str((entry or {}).get("StarClass") or "").strip()
         hops.append({
             "name": name,
             "dist": _distance(prev_coords, coords),
-            "scoopable": star_class in SCOOPABLE_CLASSES,
+            "scoopable": star_class.upper() in SCOOPABLE_CLASSES,
+            "star_class": star_class,
         })
         if coords:
             prev_coords = coords
@@ -68,7 +70,10 @@ def build_route_hops(current_coords, route_list, nav_route_entries, current_sys=
         for wp in pending:
             coords = wp.get("coords")
             dist = waypoint_manager.get_distance(prev_coords, coords) if prev_coords and coords else None
-            hops.append({"name": wp.get("name"), "dist": dist, "scoopable": False})
+            hops.append({
+                "name": wp.get("name"), "dist": dist,
+                "scoopable": None, "star_class": "",
+            })
             if coords:
                 prev_coords = coords
             if len(hops) >= max_hops:
@@ -113,11 +118,12 @@ def build_route_track(current_coords, route_list, nav_route_entries, current_sys
             entry = entries[route_index] if route_index < len(entries) else {}
             entry = entry if isinstance(entry, dict) else {}
             coords = entry.get("StarPos")
-            star_class = str(entry.get("StarClass") or "").upper()
+            star_class = str(entry.get("StarClass") or "").strip()
             hops.append({
                 "name": route[route_index],
                 "dist": _distance(previous_coords, coords),
-                "scoopable": star_class in SCOOPABLE_CLASSES,
+                "scoopable": star_class.upper() in SCOOPABLE_CLASSES,
+                "star_class": star_class,
                 "completed": route_idx >= 0 and route_index <= route_idx,
                 "current": route_idx >= 0 and route_index == route_idx,
                 "next": (
@@ -167,6 +173,7 @@ def build_route_track(current_coords, route_list, nav_route_entries, current_sys
             "name": waypoint.get("name"),
             "dist": distance,
             "scoopable": False,
+            "star_class": "",
             "completed": bool(waypoint.get("visited")),
             "current": index == current_index,
             "next": index == next_index,
@@ -236,7 +243,7 @@ def draw_pip_line(canvas, x1, x2, y, hops, theme, *, dot_radius=5, bg="#010101",
         elif is_completed:
             color = theme.get("completed", theme["accent"])
         elif is_next:
-            color = theme["orange"] if stateful else theme["accent"]
+            color = theme.get("next", theme["orange"]) if stateful else theme["accent"]
         else:
             color = theme.get("pending", theme["orange"])
         return is_current, is_completed, is_next, color

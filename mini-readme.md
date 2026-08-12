@@ -1,5 +1,12 @@
 # VoidCompass // UPDATE LOG
 
+## v5.3.7.4 // Navigation Awareness
+**Release Date:** 2026-Aug-13
+
+*   Deepened the Navigation HUD without adding another information panel. The next plotted star now carries its journal-supplied class and scoopability into both layouts, consecutive unscoopable legs are identified, learned fuel endurance can warn when the immediate leg leaves too little reserve, and short-route next pips adopt the same risk-aware colour. While scooping, restrained green flow now feeds the live fuel instrument and the shared navigation spine; ordinary flight, supercruise, exploration, scanning and surface approach each retain distinct ambient cadence.
+*   Added live Status-driven surface and ship awareness. Planetary approach shows altitude plus descent, climb or hold state and animates converging approach vectors; gravity continues to load the chassis; and landing gear, cargo scoop and Analysis Mode gain compact symbol-only cues rather than extra labels. Selected local targets now sweep outward into a bounded acquisition lock, and every addition honours the active commander profile, theme, Standard/Expanded layout and reduced-motion setting.
+*   Expanded journal reactions with route-diversion detection, distinct Fleet Carrier, neutron-star, white-dwarf and previously surveyed valuable-system arrival signatures, and unique first-discovery, first-footfall-candidate and valuable-world responses. The existing persistent route remains calm between events and performs its one-leg arrival handoff for every verified arrival family; startup journal recovery still does not replay old effects. Arrival star type safely falls back to the matching live NavRoute entry because Frontier's FSDJump event may omit `StarClass`, while a live FSD target supplies next-star intelligence even before or without a complete NavRoute snapshot.
+
 ## v5.3.7.3 // Persistent Route Progress
 **Release Date:** 2026-Aug-12
 
