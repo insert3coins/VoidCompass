@@ -1,7 +1,8 @@
-"""Native system/body survey strip inspired by SrvSurvey's bio plotter."""
+"""Compact native Void Compass system/body survey instrument."""
 
 import textwrap
 import tkinter as tk
+import tkinter.font as tkfont
 
 import bio_values
 import themes
@@ -10,7 +11,7 @@ import overlay_chrome
 from notable_bodies import build_notable_body_rows
 
 _CHROMA = "#ff00ff"
-WIDTH = 520
+WIDTH = 420
 SIGNAL_FONT = ("Courier", 10, "bold")
 BIO_DETAIL_FONT = ("Courier", 9, "bold")
 BIO_SYMBOL_FONT = ("Courier", 10, "bold")
@@ -18,6 +19,7 @@ BIO_DETAIL_H = 18
 BELT_DETAIL_FONT = ("Courier", 7, "bold")
 BELT_SYMBOL_FONT = ("Courier", 8, "bold")
 BELT_DETAIL_H = 16
+SAMPLE_CARD_H = 52
 
 
 def _safe_int(value, default=0):
@@ -260,6 +262,7 @@ def _body_detail_rows(item):
             "display_name": _bio_display_name(species, scan.get("variant")),
             "value": bio_values.species_value(species) or _safe_int(scan.get("species_value")),
             "kind": "complete" if complete else "sample",
+            "progress": 3 if complete else sample,
         })
 
     for source, kind in ((item.get("genuses") or [], "detected"),
@@ -295,6 +298,7 @@ def _body_detail_rows(item):
                 "min_value": low,
                 "max_value": high,
                 "kind": row_kind,
+                "progress": 0,
             })
     return rows
 
@@ -416,11 +420,9 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
         geo_count = _safe_int(body.get("geo_count"))
         complete = _safe_int(body.get("organic_complete_count"))
         needs_dss = not bool(body.get("dss_complete"))
-        # Bodies resolved by FSS remain actionable until DSS assessment. This
-        # keeps Survey Operations alive while the commander is actively tuning
-        # bodies without duplicating Navigation's system percentage.
-        if not needs_dss and not bio_count and not geo_count:
-            continue
+        # Keep every known non-stellar body in the compact system strip. A
+        # quiet NO SIGNALS row is still useful survey context and makes the
+        # system inventory complete rather than silently filtering planets.
         notable = notable_by_id.get(str(body.get("body_id"))) if body.get("body_id") is not None else None
         notable = notable or notable_by_name.get(str(body.get("name") or "").casefold())
         if notable:
@@ -509,6 +511,7 @@ def _survey_render_key(model):
             row.get("kind"), row.get("status"),
             row.get("display_name") or row.get("name"),
             row.get("value"), row.get("min_value"), row.get("max_value"),
+            _safe_int(row.get("progress")),
         )
 
     common = (
@@ -550,6 +553,30 @@ def _survey_render_key(model):
         tuple(row_keys), _safe_int(model.get("notable_count")),
         bool(model.get("scan_in_progress")), belt_keys,
     )
+
+
+def _signal_node_states(signal_count, details=None, complete_count=0):
+    """Return one truthful visual state for each biological signal slot.
+
+    Compact biological nodes keep the signal count readable at a glance and
+    deliberately use only journal-backed
+    states: analysed, currently sampled, DSS-detected, or unresolved.
+    """
+    signal_count = max(0, _safe_int(signal_count))
+    details = list(details or ())
+    complete = max(
+        _safe_int(complete_count),
+        sum(1 for row in details if row.get("kind") == "complete"),
+    )
+    sampled = sum(1 for row in details if row.get("kind") == "sample")
+    detected = sum(1 for row in details if row.get("kind") == "detected")
+    states = (
+        ["complete"] * complete
+        + ["sample"] * sampled
+        + ["detected"] * detected
+    )[:signal_count]
+    states.extend(["unresolved"] * (signal_count - len(states)))
+    return states
 
 
 class SurveyStatusHUD:
@@ -681,28 +708,59 @@ class SurveyStatusHUD:
         self.canvas.create_text(x + 1, y + 1, text=text, fill="black", font=font, anchor=anchor)
         self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor)
 
-    def _sample_row(self, sampling, y):
-        if not sampling:
-            return y
-        progress = max(1, min(3, _safe_int(sampling.get("progress"), 1)))
-        colony = sampling.get("colony_m")
-        minimum = sampling.get("min_distance_m")
-        clear = sampling.get("clear")
-        status = (
-            "CLEAR FOR NEXT" if clear
-            else f"SPACE {_safe_int(minimum):,}/{_safe_int(colony):,} M"
-            if minimum is not None and colony
-            else "SEEK NEXT COLONY"
-        )
-        pips = "".join("●" if index <= progress else "○" for index in range(1, 4))
+
+    def _draw_completion_rail(self, x1, x2, y, complete, total, color):
+        """Draw a quiet segmented bio-completion rail below the system line."""
+        total = max(0, _safe_int(total))
+        complete = max(0, min(total, _safe_int(complete)))
+        if not total:
+            return
         palette = self._palette
-        self.canvas.create_rectangle(
-            16, y - 11, WIDTH - 16, y + 12,
-            fill=palette["panel_alt"], outline=palette["border_soft"],
+        self.canvas.create_line(x1, y, x2, y, fill=palette["border_soft"], width=3)
+        if complete:
+            finish = x1 + ((x2 - x1) * complete / total)
+            self.canvas.create_line(x1, y, finish, y, fill=color, width=3)
+        if total <= 12:
+            for index in range(1, total):
+                x = x1 + ((x2 - x1) * index / total)
+                self.canvas.create_line(x, y - 2, x, y + 2, fill=palette["panel"], width=1)
+
+    def _draw_signal_nodes(self, x, y, signal_count, details=None, complete_count=0):
+        """Draw Void Compass biological nodes and return their right edge."""
+        palette = self._palette
+        states = _signal_node_states(signal_count, details, complete_count)
+        if not states:
+            return x
+        spacing = 13
+        self.canvas.create_line(
+            x, y, x + ((len(states) - 1) * spacing), y,
+            fill=palette["border_soft"], width=1,
         )
-        self._text(24, y, f"{pips} {progress}/3 · {_truncate(sampling.get('species'), 31)}", palette["orange"], ("Courier", 8, "bold"))
-        self._text(WIDTH - 24, y, status, palette["green"] if clear else palette["text"], ("Courier", 8, "bold"), "e")
-        return y + 28
+        for index, state in enumerate(states):
+            cx = x + index * spacing
+            colors = {
+                "complete": (palette["green"], palette["green"]),
+                "sample": (palette["orange"], palette["orange"]),
+                "detected": (palette["panel"], palette["accent"]),
+                "unresolved": (palette["panel"], palette["dim"]),
+            }
+            fill, outline = colors[state]
+            self.canvas.create_oval(
+                cx - 4, y - 4, cx + 4, y + 4,
+                fill=fill, outline=outline,
+                width=2 if state in {"complete", "sample"} else 1,
+            )
+            if state == "detected":
+                self.canvas.create_oval(
+                    cx - 1, y - 1, cx + 1, y + 1,
+                    fill=palette["accent"], outline="",
+                )
+            elif state == "sample":
+                self.canvas.create_oval(
+                    cx - 1, y - 1, cx + 1, y + 1,
+                    fill=palette["panel"], outline="",
+                )
+        return x + ((len(states) - 1) * spacing) + 5
 
     def _notable_row(self, row, y):
         label = row.get("display_name") or row["name"]
@@ -727,263 +785,316 @@ class SurveyStatusHUD:
         x, y_pos = self._desired_pos
         self.win.geometry(overlay_chrome.position_geometry(x, y_pos, WIDTH, height))
 
+    @staticmethod
+    def _compact_detail_text(detail):
+        """Build the short evidence token used by the compact survey strip."""
+        kind = str((detail or {}).get("kind") or "")
+        symbol = {
+            "complete": "✓", "sample": "●", "detected": "○",
+            "predicted": "?", "possible": "·",
+        }.get(kind, "·")
+        label = _truncate(
+            (detail or {}).get("display_name") or (detail or {}).get("name") or "Organic",
+            31,
+        )
+        progress = max(0, min(3, _safe_int((detail or {}).get("progress"))))
+        suffix = f" {progress}/3" if kind == "sample" and progress else ""
+        return f"{symbol} {label}{suffix}"
+
+    def _compact_detail_groups(self, details):
+        """Flow organism names horizontally instead of building a table."""
+        font = tkfont.Font(font=overlay_chrome.scaled_font(
+            ("Courier", 8, "bold"), self.config,
+        ))
+        max_width = WIDTH - 48
+        groups = []
+        current = []
+        used = 0.0
+        for detail in details or ():
+            token = self._compact_detail_text(detail)
+            added = float(font.measure(token)) + (14 if current else 0)
+            if current and used + added > max_width:
+                groups.append(current)
+                current = []
+                used = 0.0
+                added = float(font.measure(token))
+            current.append(detail)
+            used += added
+        if current:
+            groups.append(current)
+        return groups
+
+    def _compact_detail_color(self, detail):
+        kind = str((detail or {}).get("kind") or "")
+        if kind == "complete":
+            return self._palette["green"]
+        if kind == "sample":
+            return self._palette["orange"]
+        if kind == "detected":
+            return self._palette["text"]
+        return self._palette["dim"]
+
+    def _draw_compact_detail_group(self, group, y):
+        """Draw one individually coloured, horizontally flowing evidence row."""
+        font_spec = ("Courier", 8, "bold")
+        font = tkfont.Font(font=overlay_chrome.scaled_font(font_spec, self.config))
+        x = 24.0
+        for detail in group:
+            token = self._compact_detail_text(detail)
+            self._text(
+                x, y, token, self._compact_detail_color(detail),
+                font_spec,
+            )
+            x += font.measure(token) + 14
+
+    def _draw_sample_sequence(self, sampling, y):
+        """Render active sampling as a Void Compass genetic flightpath."""
+        palette = self._palette
+        progress = max(1, min(3, _safe_int((sampling or {}).get("progress"), 1)))
+        colony = (sampling or {}).get("colony_m")
+        minimum = (sampling or {}).get("min_distance_m")
+        clear = bool((sampling or {}).get("clear"))
+        centre_y = y + 16
+        self.canvas.create_line(
+            28, centre_y, 84, centre_y,
+            fill=palette["border_soft"], width=2,
+        )
+        if progress > 1:
+            self.canvas.create_line(
+                28, centre_y, 28 + ((progress - 1) * 28), centre_y,
+                fill=palette["orange"], width=2,
+            )
+        for index in range(3):
+            x = 28 + index * 28
+            done = index < progress
+            self.canvas.create_oval(
+                x - 9, centre_y - 9, x + 9, centre_y + 9,
+                fill=palette["panel"] if not done else palette["panel_raised"],
+                outline=palette["orange"] if done else palette["dim"],
+                width=2 if done else 1,
+            )
+            if done:
+                self.canvas.create_oval(
+                    x - 2, centre_y - 2, x + 2, centre_y + 2,
+                    fill=palette["orange"], outline="",
+                )
+        self._text(
+            104, y + 6, _truncate((sampling or {}).get("species"), 42),
+            palette["accent"], ("Courier", 10, "bold"),
+        )
+        status = (
+            "CLEAR FOR NEXT" if clear
+            else f"{_safe_int(minimum):,}/{_safe_int(colony):,} M"
+            if minimum is not None and colony
+            else "SEEK NEXT COLONY"
+        )
+        self._text(104, y + 31, f"SAMPLE {progress}/3", palette["muted"], ("Courier", 8, "bold"))
+        self._text(
+            WIDTH - 18, y + 31, status,
+            palette["green"] if clear else palette["text"],
+            ("Courier", 8, "bold"), "e",
+        )
+        if minimum is not None and colony:
+            x1, x2, rail_y = 236, WIDTH - 18, y + 41
+            ratio = max(0.0, min(1.0, float(minimum) / max(1.0, float(colony))))
+            self.canvas.create_line(x1, rail_y, x2, rail_y, fill=palette["border_soft"], width=2)
+            self.canvas.create_line(
+                x1, rail_y, x1 + ((x2 - x1) * ratio), rail_y,
+                fill=palette["green"] if clear else palette["accent"], width=2,
+            )
+        return y + SAMPLE_CARD_H
+
+    @staticmethod
+    def _sampling_matches_detail(sampling, detail):
+        if not sampling or not detail:
+            return False
+        sample = str(sampling.get("species") or "").casefold()
+        names = {
+            str(detail.get(key) or "").casefold()
+            for key in ("name", "display_name")
+        }
+        return bool(sample and any(name and (name in sample or sample in name) for name in names))
+
     def _redraw(self, model):
+        """Draw the compact Void Compass biological instrument."""
         palette = self._palette
         is_body = model["mode"] == "body"
-        rows = model["rows"]
-        active_rows = rows if is_body else [row for row in rows if not row.get("bio_complete")]
-        completed_rows = [] if is_body else [row for row in rows if row.get("bio_complete")]
-        notable_rows = model.get("notable_rows") or []
-        belt_rows = [] if is_body else (model.get("belt_clusters") or [])
-        sample_h = 28 if model.get("sampling") else 0
+        rows = list(model.get("rows") or [])
+        sampling = model.get("sampling")
+        belt_rows = [] if is_body else list(model.get("belt_clusters") or [])
+        notable_rows = list(model.get("notable_rows") or [])
 
         if is_body:
-            body = model["body"]
-            bio_count = _safe_int(body.get("bio_count"))
+            detail_rows = [
+                row for row in rows
+                if not self._sampling_matches_detail(sampling, row)
+            ]
+            detail_groups = self._compact_detail_groups(detail_rows)
+            body = model.get("body") or {}
             geo_count = _safe_int(body.get("geo_count"))
-            bio_h = (20 + max(1, len(rows)) * 19) if bio_count or rows else 0
-            geo_h = 19 if geo_count else 0
-            content_h = 52 + bio_h + geo_h
-        else:
+            body_notable = model.get("notable")
             content_h = (
-                20 + sum(
-                    (21 if row.get("bio_count") or row.get("geo_count") else 19)
-                    + len(row.get("bio_details") or []) * BIO_DETAIL_H
-                    + (15 if row.get("notable") else 0)
-                    for row in active_rows
-                )
-            ) if active_rows else 0
-        completed_h = (
-            24 + sum(
-                19 + 15 * len(_joined_lines(
-                    [
-                        detail.get("display_name") or detail.get("name") or "Organic"
-                        for detail in (row.get("bio_details") or [])
-                    ]
-                ))
-                for row in completed_rows
+                (SAMPLE_CARD_H if sampling else 0)
+                + len(detail_groups) * 18
+                + (17 if geo_count else 0)
+                + (16 if body_notable else 0)
             )
-        ) if completed_rows else 0
-        notable_h = (20 + len(notable_rows) * 34) if notable_rows else 0
-        belt_h = (24 + len(belt_rows) * BELT_DETAIL_H) if belt_rows else 0
-        h = 89 + sample_h + content_h + belt_h + notable_h + completed_h + 29
-        self._resize(h)
+            height = max(96, 68 + content_h + 25)
+        else:
+            active_rows = [
+                row for row in rows
+                if _safe_int(row.get("bio_count")) and not row.get("bio_complete")
+            ]
+            completed_rows = [row for row in rows if row.get("bio_complete")]
+            neutral_rows = [
+                row for row in rows
+                if row not in active_rows and row not in completed_rows
+            ]
+            ordered_rows = active_rows + neutral_rows + completed_rows
+            row_layout = []
+            content_h = 0
+            for row in ordered_rows:
+                groups = self._compact_detail_groups(row.get("bio_details") or [])
+                row_h = 20 + len(groups) * 17
+                if _safe_int(row.get("geo_count")):
+                    row_h += 15
+                if row.get("notable"):
+                    row_h += 14
+                row_layout.append((row, groups, row_h))
+                content_h += row_h
+            belt_h = (18 + len(belt_rows) * 15) if belt_rows else 0
+            notable_h = (18 + len(notable_rows) * 30) if notable_rows else 0
+            height = max(92, 68 + content_h + belt_h + notable_h + 25)
+
+        self._resize(height)
         self.canvas.delete("all")
         overlay_chrome.draw_chrome(
-            self.canvas, WIDTH, h, accent=palette["accent"], bracket_len=10,
-            scanlines=False,
+            self.canvas, WIDTH, height, accent=palette["accent"],
+            bracket_len=9, scanlines=False,
         )
-        title = "SURVEY OPERATIONS"
-        self._text(18, 18, title, palette["accent"], ("Courier", 10, "bold"))
+
+        self._text(16, 18, "SURVEY OPERATIONS", palette["accent"], ("Courier", 9, "bold"))
+        self._text(
+            WIDTH - 16, 18, _truncate(model.get("system", "").upper(), 30),
+            palette["muted"], ("Courier", 8, "bold"), "e",
+        )
+
         if is_body:
-            self._text(WIDTH - 18, 18, "FIELD FOCUS", palette["orange"], ("Courier", 8, "bold"), "e")
-        self._text(18, 48, _truncate(model["system"].upper(), 58), palette["text"], ("Courier", 10, "bold"))
-        if is_body:
-            body = model["body"]
+            body = model.get("body") or {}
             bio_count = _safe_int(body.get("bio_count"))
             bio_done = _safe_int(body.get("organic_complete_count"))
             geo_count = _safe_int(body.get("geo_count"))
-            dss_state = "DSS MAPPED" if body.get("dss_complete") else "DSS PENDING"
-            header_summary = f"FOCUSED SURFACE · BIO {bio_done}/{bio_count} · GEO {geo_count}"
-        else:
-            bio_total = sum(_safe_int(row.get("bio_count")) for row in rows)
-            geo_total = sum(_safe_int(row.get("geo_count")) for row in rows)
-            if not rows and model.get("scan_in_progress"):
-                header_summary = "FSS INTAKE ACTIVE · SURVEY TARGETS PENDING"
-            else:
-                header_summary = f"{len(active_rows)} OPEN · {len(completed_rows)} BIO COMPLETE · BIO {bio_total} · GEO {geo_total}"
-        self._text(18, 66, header_summary, palette["muted"], ("Courier", 8, "bold"))
-        y = 93
+            body_label = model.get("body_display") or body.get("name") or "SURFACE"
+            self._text(16, 42, _truncate(body_label, 22), palette["orange"], ("Courier", 8, "bold"))
+            summary = f"BIO {bio_done}/{bio_count}"
+            if geo_count:
+                summary += f" · GEO {geo_count}"
+            self._text(WIDTH - 16, 42, summary, palette["text"], ("Courier", 8, "bold"), "e")
+            self._draw_completion_rail(16, WIDTH - 16, 56, bio_done, bio_count, palette["orange"])
+            y = 72
+            if sampling:
+                y = self._draw_sample_sequence(sampling, y)
+            for group in detail_groups:
+                self._draw_compact_detail_group(group, y)
+                y += 18
+            if geo_count:
+                self._text(24, y, f"◇ GEOLOGICAL SIGNALS ×{geo_count}", palette["accent"], ("Courier", 8, "bold"))
+                y += 17
+            if model.get("notable"):
+                notable = model["notable"]
+                label = f"{notable.get('icons', '')} NOTABLE BODY".strip()
+                self._text(24, y, label, notable["name_color"], ("Courier", 7, "bold"))
+                self._text(WIDTH - 16, y, notable["value_line"], notable["value_color"], ("Courier", 7, "bold"), "e")
+            low, high = model.get("min_value"), model.get("max_value")
+            value = self._range_text(low, high) or "-"
+            self._text(16, height - 14, "ESTIMATED BIO BASE", palette["dim"], ("Courier", 7, "bold"))
+            self._text(WIDTH - 16, height - 14, value, palette["orange"], ("Courier", 8, "bold"), "e")
+            return
 
-        if is_body:
-            body = model["body"]
-            count = _safe_int(body.get("bio_count"))
-            geo = _safe_int(body.get("geo_count"))
-            done = _safe_int(body.get("organic_complete_count"))
-            signal_state, signal_color = _surface_signal_state(
-                count, done, geo, needs_dss=not bool(body.get("dss_complete")),
-                palette=palette,
+        active_rows = [
+            row for row in rows
+            if _safe_int(row.get("bio_count")) and not row.get("bio_complete")
+        ]
+        completed_rows = [row for row in rows if row.get("bio_complete")]
+        neutral_rows = [
+            row for row in rows
+            if row not in active_rows and row not in completed_rows
+        ]
+        ordered_rows = active_rows + neutral_rows + completed_rows
+        bio_total = sum(_safe_int(row.get("bio_count")) for row in rows)
+        bio_done = sum(_safe_int(row.get("complete")) for row in rows)
+        geo_total = sum(_safe_int(row.get("geo_count")) for row in rows)
+        left_summary = f"BIO SIGNALS {bio_total} | ANALYSED {bio_done} | GEO {geo_total}"
+        if not rows and model.get("scan_in_progress"):
+            left_summary = "FSS INTAKE ACTIVE | TARGETS PENDING"
+        self._text(16, 42, left_summary, palette["orange"], ("Courier", 8, "bold"))
+        self._draw_completion_rail(16, WIDTH - 16, 56, bio_done, bio_total, palette["green"])
+        y = 72
+        short_names = [
+            _truncate(_short_body_name(row.get("name"), model.get("system")), 14)
+            for row in ordered_rows
+        ]
+        widest_name = max((len(name) for name in short_names), default=3)
+        node_label_x = min(140, 24 + widest_name * 8)
+        for row_index, (row, groups, _row_h) in enumerate(row_layout):
+            bio_count = _safe_int(row.get("bio_count"))
+            geo_count = _safe_int(row.get("geo_count"))
+            complete = _safe_int(row.get("complete"))
+            completed = bool(row.get("bio_complete"))
+            has_signals = bool(bio_count or geo_count)
+            row_color = palette["muted"] if completed or not has_signals else palette["orange"]
+            prefix = "✓ " if completed else ""
+            self._text(
+                16, y, prefix + short_names[row_index],
+                row_color, ("Courier", 8, "bold"),
             )
-            notable = model.get("notable")
-            tags = []
-            if notable:
-                tags.append("NOTABLE")
-            if body.get("first_footfall"):
-                tags.append("FIRST FOOTFALL")
-            elif body.get("landable"):
-                tags.append("LANDABLE")
-            gravity = body.get("gravity_g")
-            try:
-                if gravity is not None:
-                    tags.append(f"{float(gravity):.2f} G")
-            except (TypeError, ValueError):
-                pass
-            tag_text = " · ".join(tags) or "SURFACE TARGET"
-            body_label = model.get("body_display") or body.get("name")
-            if notable and notable.get("icons"):
-                body_label = f"{notable['icons']} {body_label}"
-            self.canvas.create_rectangle(
-                14, y - 11, WIDTH - 14, y + 35,
-                fill=palette["panel_alt"], outline=palette["border_soft"],
-            )
-            self._text(24, y, _truncate(body_label, 35), palette["orange"], ("Courier", 8, "bold"))
-            self._text(WIDTH - 24, y, tag_text, palette["muted"], ("Courier", 7, "bold"), "e")
-            self._text(24, y + 20, signal_state, signal_color, SIGNAL_FONT)
-            self._text(WIDTH - 24, y + 20, dss_state, palette["green"] if body.get("dss_complete") else palette["dim"], ("Courier", 8, "bold"), "e")
-            y += 52
-            y = self._sample_row(model.get("sampling"), y)
-
-            if count or rows:
-                self._text(18, y, "BIOLOGICAL EVIDENCE", palette["dim"], ("Courier", 7, "bold"))
-                self._text(WIDTH - 18, y, "STATE / BASE VALUE", palette["dim"], ("Courier", 7, "bold"), "e")
-                y += 20
-                if not rows:
-                    self._text(30, y, "○", palette["dim"], BIO_SYMBOL_FONT)
-                    self._text(46, y, "Awaiting DSS identification", palette["dim"], BIO_DETAIL_FONT)
-                    y += 19
-                for row in rows:
-                    symbol = {
-                        "complete": "✓", "sample": "●", "detected": "○",
-                        "predicted": "?", "possible": "·",
-                    }.get(row["kind"], "·")
-                    color = (
-                        palette["green"] if row["kind"] == "complete"
-                        else palette["orange"] if row["kind"] == "sample"
-                        else palette["text"] if row["kind"] == "detected"
-                        else palette["dim"]
-                    )
-                    label = row.get("display_name") or row["name"]
-                    value = row.get("value")
-                    if value:
-                        value_text = _credits(value)
-                    else:
-                        value_text = self._range_text(row.get("min_value"), row.get("max_value")) or "-"
-                    state_value = f"{row.get('status') or 'LOGGED'} · {value_text}"
-                    self._text(20, y, symbol, color, ("Courier", 9, "bold"))
-                    self._text(38, y, _truncate(label, 34), color, ("Courier", 8, "bold"))
-                    self._text(WIDTH - 18, y, state_value, color, ("Courier", 8, "bold"), "e")
-                    y += 19
-
-            if geo:
-                self._text(20, y, "◇", palette["accent"], BIO_SYMBOL_FONT)
-                self._text(38, y, "GEOLOGICAL SIGNALS", palette["text"], BIO_DETAIL_FONT)
-                self._text(WIDTH - 18, y, f"{geo} CONFIRMED", palette["accent"], BIO_DETAIL_FONT, "e")
-                y += 19
-        else:
-            if active_rows:
-                self._text(18, y, "OPEN SURVEY WORK", palette["dim"], ("Courier", 7, "bold"))
-                self._text(WIDTH - 18, y, "STATUS / BASE VALUE", palette["dim"], ("Courier", 7, "bold"), "e")
-                y += 20
-            for row in active_rows:
-                bio = row["bio_count"]
-                geo = row["geo_count"]
-                state, color = _surface_signal_state(
-                    bio, row["complete"], geo, needs_dss=row["needs_dss"],
-                    palette=palette,
+            if bio_count:
+                self._text(node_label_x, y, "BIO", palette["dim"], ("Courier", 7, "bold"))
+                self._draw_signal_nodes(
+                    node_label_x + 28, y, bio_count,
+                    row.get("bio_details"), complete,
                 )
-                lo, hi = row["min_value"], row["max_value"]
-                value_text = self._range_text(lo, hi)
-                estimate = f" · {value_text}" if value_text else ""
-                notable = row.get("notable")
-                label = row.get("display_name") or row["name"]
-                name = f"{notable['icons']} {label}" if notable and notable.get("icons") else label
-                self._text(20, y, _truncate(name, 34), color, ("Courier", 8, "bold"))
-                status_font = SIGNAL_FONT if bio or geo else ("Courier", 8, "bold")
-                self._text(WIDTH - 18, y, state + estimate, color, status_font, "e")
-                y += 21 if bio or geo else 19
-                for detail in row.get("bio_details") or []:
-                    kind = detail.get("kind")
-                    symbol = {"complete": "✓", "sample": "●", "detected": "○"}.get(kind, "·")
-                    detail_color = (
-                        palette["green"] if kind == "complete"
-                        else palette["orange"] if kind == "sample"
-                        else palette["text"]
-                    )
-                    self._text(30, y, symbol, detail_color, BIO_SYMBOL_FONT)
-                    self._text(
-                        46, y, _truncate(detail.get("display_name") or detail.get("name"), 38),
-                        detail_color, BIO_DETAIL_FONT,
-                    )
-                    self._text(
-                        WIDTH - 18, y, detail.get("status") or "DETECTED",
-                        detail_color, BIO_DETAIL_FONT, "e",
-                    )
-                    y += BIO_DETAIL_H
-                if notable:
-                    self._text(28, y, "NOTABLE BODY", palette["dim"], ("Courier", 7, "bold"))
-                    self._text(WIDTH - 18, y, notable["value_line"], notable["value_color"], ("Courier", 7, "bold"), "e")
-                    y += 15
+            value = self._range_text(row.get("min_value"), row.get("max_value"))
+            if not value and row.get("needs_dss"):
+                value = "DSS REQUIRED"
+            elif not value and not has_signals:
+                value = "NO SIGNALS"
+            self._text(
+                WIDTH - 16, y, value,
+                palette["green"] if completed else palette["orange"] if has_signals else palette["dim"],
+                ("Courier", 7, "bold"), "e",
+            )
+            y += 20
+            for group in groups:
+                self._draw_compact_detail_group(group, y)
+                y += 17
+            if geo_count:
+                self._text(24, y, f"◇ GEO ×{geo_count}", palette["accent"], ("Courier", 7, "bold"))
+                y += 15
+            if row.get("notable"):
+                notable = row["notable"]
+                self._text(24, y, "NOTABLE BODY", palette["dim"], ("Courier", 7, "bold"))
+                self._text(WIDTH - 16, y, notable["value_line"], notable["value_color"], ("Courier", 7, "bold"), "e")
+                y += 14
 
         if belt_rows:
-            self._text(
-                18, y + 8, f"ASTEROID BELT CLUSTERS ({len(belt_rows)})",
-                palette["dim"], ("Courier", 7, "bold"),
-            )
-            self._text(WIDTH - 18, y + 8, "FSS CONTACTS", palette["dim"], ("Courier", 7, "bold"), "e")
-            y += 24
-            for row in belt_rows:
-                color = palette["muted"] if row.get("new_discovery") else palette["dim"]
-                self._text(20, y, "◆", color, BELT_SYMBOL_FONT)
-                self._text(36, y, _truncate(row.get("display_name"), 64), color, BELT_DETAIL_FONT)
-                distance = row.get("distance") or ("NEW" if row.get("new_discovery") else "FOUND")
-                self._text(WIDTH - 18, y, distance, palette["dim"], BELT_DETAIL_FONT, "e")
-                y += BELT_DETAIL_H
+            self._text(16, y + 5, f"BELT CLUSTERS {len(belt_rows)}", palette["dim"], ("Courier", 7, "bold"))
+            y += 18
+            for belt in belt_rows:
+                self._text(22, y, "◆", palette["dim"], BELT_SYMBOL_FONT)
+                self._text(36, y, _truncate(belt.get("display_name"), 43), palette["muted"], BELT_DETAIL_FONT)
+                self._text(WIDTH - 16, y, belt.get("distance") or "FOUND", palette["dim"], BELT_DETAIL_FONT, "e")
+                y += 15
 
         if notable_rows:
-            self._text(18, y + 8, f"VALUABLE / NOTABLE ({len(notable_rows)})", palette["dim"], ("Courier", 7, "bold"))
-            y += 24
-            for row in notable_rows:
-                y = self._notable_row(row, y)
+            self._text(16, y + 5, f"VALUABLE / NOTABLE {len(notable_rows)}", palette["dim"], ("Courier", 7, "bold"))
+            y += 18
+            for notable in notable_rows:
+                y = self._notable_row(notable, y)
 
-        if completed_rows:
-            self._text(
-                18, y + 8, f"SURVEYED BIOLOGY ({len(completed_rows)})",
-                palette["green"], ("Courier", 7, "bold"),
-            )
-            y += 24
-            for row in completed_rows:
-                state, _color = _surface_signal_state(
-                    row["bio_count"], row["complete"], row["geo_count"],
-                    needs_dss=row["needs_dss"], palette=palette,
-                )
-                lo, hi = row["min_value"], row["max_value"]
-                value_text = self._range_text(lo, hi)
-                estimate = f" · {value_text}" if value_text else ""
-                notable = row.get("notable")
-                label = row.get("display_name") or row["name"]
-                name = f"{notable['icons']} {label}" if notable and notable.get("icons") else label
-                self._text(20, y, f"✓ {_truncate(name, 34)}", palette["green"], ("Courier", 8, "bold"))
-                self._text(
-                    WIDTH - 18, y, state + estimate,
-                    palette["green"], BIO_DETAIL_FONT, "e",
-                )
-                y += 19
-                species_lines = _joined_lines(
-                    [
-                        detail.get("display_name") or detail.get("name") or "Organic"
-                        for detail in (row.get("bio_details") or [])
-                    ]
-                )
-                for species in species_lines:
-                    self._text(
-                        30, y, species,
-                        palette["text"], ("Courier", 7, "bold"),
-                    )
-                    y += 15
-
-        if is_body:
-            lo, hi = model["min_value"], model["max_value"]
-            if _safe_int(model.get("body", {}).get("bio_count")) or rows:
-                total = _credits(lo) if lo == hi else f"{_credits(lo)}–{_credits(hi)}"
-                footer_label = "ESTIMATED BIO BASE"
-                footer_value = total
-            else:
-                footer_label = "GEOLOGICAL EVIDENCE"
-                footer_value = f"{_safe_int(model.get('body', {}).get('geo_count'))} SIGNALS"
-            self._text(18, h - 15, footer_label, palette["dim"], ("Courier", 7, "bold"))
-            self._text(WIDTH - 18, h - 15, footer_value, palette["orange"], ("Courier", 8, "bold"), "e")
-        else:
-            footer = f"OPEN {len(active_rows)} · BIO COMPLETE {len(completed_rows)}"
-            self._text(18, h - 15, footer, palette["dim"], ("Courier", 7, "bold"))
-            right_footer = f"BELTS {len(belt_rows)} · NOTABLE {model.get('notable_count', 0)}"
-            self._text(WIDTH - 18, h - 15, right_footer, palette["orange"], ("Courier", 7, "bold"), "e")
+        total_low = sum(_safe_int(row.get("min_value")) for row in rows)
+        total_high = sum(_safe_int(row.get("max_value")) for row in rows)
+        footer = f"BODIES {len(rows)} · OPEN {len(active_rows)} · COMPLETE {len(completed_rows)}"
+        value = self._range_text(total_low, total_high)
+        self._text(16, height - 14, footer, palette["dim"], ("Courier", 7, "bold"))
+        self._text(WIDTH - 16, height - 14, f"BIO BASE {value}" if value else "", palette["orange"], ("Courier", 7, "bold"), "e")

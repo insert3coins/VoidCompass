@@ -13,6 +13,7 @@ from tkinter import messagebox
 import webbrowser
 import shutil
 from collections import deque
+from datetime import datetime, timezone
 
 from config import (
     load_config, CONFIG_FILE,
@@ -150,7 +151,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         "FSDTarget": ("route_target", "left", "orange", 1.0, 45),
         "StartJump": ("jump_charge", "all", "orange", 1.7, 90),
         "FSDJump": ("arrival", "all", "accent", 1.8, 95),
-        "CarrierJump": ("carrier_arrival", "all", "accent", 1.8, 95),
+        "CarrierJump": ("carrier_arrival", "all", "accent", 2.8, 95),
         "SupercruiseEntry": ("supercruise_enter", "center", "orange", 1.2, 62),
         "SupercruiseExit": ("supercruise_exit", "center", "accent", 1.2, 62),
         "SupercruiseDestinationDrop": ("supercruise_exit", "center", "accent", 1.2, 62),
@@ -855,6 +856,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_analysis_mode = False
         self.current_scooping_fuel = False
         self.current_supercruise_overcharge = False
+        self.current_glide_mode = False
         self._status_altitude_observed_monotonic = None
         self._surface_descent_mps = 0.0
         self.current_fsd_mass_locked = False
@@ -1620,6 +1622,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_analysis_mode = False
         self.current_scooping_fuel = False
         self.current_supercruise_overcharge = False
+        self.current_glide_mode = False
         self._status_altitude_observed_monotonic = None
         self._surface_descent_mps = 0.0
         self.current_fsd_mass_locked = False
@@ -3213,7 +3216,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 dep_txt = ""
                 if dep:
                     try:
-                        from datetime import datetime, timezone
                         dt = datetime.fromisoformat(dep.replace("Z", "+00:00"))
                         if dt.tzinfo is None:
                             dt = dt.replace(tzinfo=timezone.utc)
@@ -3253,6 +3255,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._ui_post(self._refresh_command_dashboard, key="carrier-dashboard")
             if self.carrier_hud:
                 self._ui_post(lambda d=dict(carrier_data): self.carrier_hud.update(d), key="carrier-hud")
+            self._ui_post(
+                lambda d=dict(carrier_data): self._sync_navigation_carrier_transit(d),
+                key="carrier-navigation-transit",
+            )
             if carrier_data.get("status") == "jumping":
                 self._ui_post(self._ensure_carrier_panel_ticker, key="carrier-ticker")
         except Exception:
@@ -3274,9 +3280,73 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.update_carrier_panel()
             if self.carrier_hud:
                 self.carrier_hud.update()
+            self._sync_navigation_carrier_transit(self.carrier_tracker.carrier_data)
             self._carrier_panel_tick_job = self.root.after(1000, self._tick_carrier_panel)
+        elif str(getattr(self, "_navigation_jump_phase", "") or "") == "carrier_transit":
+            self._clear_navigation_jump_phase(refresh=True)
         # Ticker stops naturally when status is no longer jumping;
         # _on_carrier_panel_updated will have already refreshed the panel.
+
+    def _commander_aboard_carrier(self, carrier_data):
+        """Return True only when the active commander is aboard this carrier."""
+        if not (
+            getattr(self, "current_docked", False)
+            or getattr(self, "current_on_foot", False)
+        ):
+            return False
+        carrier_data = carrier_data if isinstance(carrier_data, dict) else {}
+        carrier_id = carrier_data.get("carrier_id")
+        station_id = getattr(self, "current_station_market_id", None)
+        if carrier_id is not None and station_id is not None:
+            return str(carrier_id) == str(station_id)
+        station_type = (
+            str(getattr(self, "current_station_type", "") or "")
+            .replace(" ", "").replace("_", "").casefold()
+        )
+        if station_type != "fleetcarrier":
+            return False
+        station_name = str(getattr(self, "current_station_name", "") or "").strip().casefold()
+        carrier_names = {
+            str(carrier_data.get(key) or "").strip().casefold()
+            for key in ("callsign", "name")
+            if str(carrier_data.get(key) or "").strip()
+        }
+        return bool(station_name and station_name in carrier_names)
+
+    def _sync_navigation_carrier_transit(self, carrier_data):
+        """Start carrier transit at its scheduled departure while aboard.
+
+        Frontier emits CarrierJump at arrival, but an owned/squadron carrier's
+        CarrierJumpRequest supplies the departure time. The existing one-second
+        carrier ticker bridges that gap without polling or guessing movement.
+        """
+        carrier_data = carrier_data if isinstance(carrier_data, dict) else {}
+        current_phase = str(getattr(self, "_navigation_jump_phase", "") or "")
+        active = (
+            carrier_data.get("status") == "jumping"
+            and self._commander_aboard_carrier(carrier_data)
+        )
+        departure_text = str(carrier_data.get("jump_departure_time") or "").strip()
+        departed = False
+        if active and departure_text:
+            try:
+                departure = datetime.fromisoformat(departure_text.replace("Z", "+00:00"))
+                if departure.tzinfo is None:
+                    departure = departure.replace(tzinfo=timezone.utc)
+                departed = datetime.now(timezone.utc) >= departure.astimezone(timezone.utc)
+            except (TypeError, ValueError):
+                departed = False
+        if active and departed:
+            if current_phase != "carrier_transit":
+                self._set_navigation_jump_phase(
+                    "carrier_transit",
+                    target=carrier_data.get("jump_destination"),
+                    refresh=True,
+                )
+            return True
+        if current_phase == "carrier_transit":
+            self._clear_navigation_jump_phase(refresh=True)
+        return False
 
     def _on_route_event(self, tag, message, severity="INFO", copy_text=None, system_name=None):
         if not message:
@@ -4035,14 +4105,24 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "value": getattr(self, "neutron_boost_value", None),
         }
         altitude = getattr(self, "current_altitude_m", None)
+        approach_body_known = getattr(self, "current_body_id", None) is not None
+        glide_active = bool(getattr(self, "current_glide_mode", False))
+        if glide_active:
+            approach_phase = "glide"
+        elif str(getattr(self, "hud_flight_state", "") or "").upper() == "SUPERCRUISE":
+            approach_phase = "orbital"
+        else:
+            approach_phase = "surface"
         surface_approach = {
             "active": bool(
-                getattr(self, "on_planet", False)
+                (approach_body_known or getattr(self, "on_planet", False))
                 and not getattr(self, "current_landed", False)
                 and not getattr(self, "current_docked", False)
                 and not getattr(self, "current_on_foot", False)
-                and altitude is not None
+                and not getattr(self, "current_in_srv", False)
             ),
+            "phase": approach_phase,
+            "body": getattr(self, "current_body_name", "") or "",
             "altitude_m": altitude,
             "descent_mps": getattr(self, "_surface_descent_mps", 0.0),
         }
@@ -4223,6 +4303,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         kind, lane, tone, duration_s, priority = spec
         payload = raw if isinstance(raw, dict) else {}
         normalised = data if isinstance(data, dict) else {}
+        if event == "CarrierJump" and not self._carrier_jump_presence(
+            event, payload, normalised,
+        )[0]:
+            # An owner's remote carrier movement is operational data, not a
+            # cockpit transition. Animate only when the commander moved too.
+            return False
 
         # Enrich the generic event families with verified journal detail. The
         # HUD still receives a compact pulse, but it can now distinguish a
@@ -4409,6 +4495,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "charging": 30000,
             "hyperspace": 90000,
             "arrival": 1800,
+            "carrier_transit": 180000,
+            "carrier_arrival": 3200,
         }.get(phase)
         if delay_ms is None:
             return
@@ -4423,9 +4511,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def _set_navigation_jump_phase(
         self, phase, *, target=None, refresh=True, schedule=True,
     ):
-        """Set one bounded high-wake phase without inventing journal events."""
+        """Set one bounded ship/carrier transition without inventing events."""
         phase = str(phase or "").strip().casefold()
-        if phase not in {"charging", "hyperspace", "arrival"}:
+        if phase not in {
+            "charging", "hyperspace", "arrival",
+            "carrier_transit", "carrier_arrival",
+        }:
             phase = ""
         previous = str(getattr(self, "_navigation_jump_phase", "") or "")
         previous_target = str(getattr(self, "_navigation_jump_target", "") or "")
@@ -4456,7 +4547,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
 
     def _observe_navigation_jump_event(self, event, raw, data, startup_replay=False):
-        """Track countdown, witch-space and arrival as distinct phases."""
+        """Track ship and onboard carrier travel as distinct phases."""
         event = str(event or "")
         raw = raw if isinstance(raw, dict) else {}
         data = data if isinstance(data, dict) else {}
@@ -4480,6 +4571,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 return self._clear_navigation_jump_phase(refresh=False)
             target = raw.get("StarSystem") or data.get("star_system")
             return self._set_navigation_jump_phase("arrival", target=target)
+        elif event == "CarrierJump":
+            self.current_fsd_jumping = False
+            self.current_fsd_charging = False
+            self.current_fsd_hyperdrive_charging = False
+            if startup_replay:
+                return self._clear_navigation_jump_phase(refresh=False)
+            player_location, _docked, _on_foot = self._carrier_jump_presence(
+                event, raw, data,
+            )
+            if player_location:
+                target = raw.get("StarSystem") or data.get("star_system")
+                return self._set_navigation_jump_phase(
+                    "carrier_arrival", target=target,
+                )
+            if str(getattr(self, "_navigation_jump_phase", "") or "") == "carrier_transit":
+                return self._clear_navigation_jump_phase()
         elif event in {
             "LoadGame", "Shutdown", "Died", "Resurrect",
             "ShipyardBuy", "ShipyardNew", "ShipyardSwap",
@@ -4580,7 +4687,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         cooldown = bool(getattr(self, "current_fsd_cooldown", False))
         mass_locked = bool(getattr(self, "current_fsd_mass_locked", False))
-        if phase == "arrival":
+        if phase == "carrier_transit":
+            state, label, tone = "carrier_transit", "CARRIER TRANSIT", "orange"
+        elif phase == "carrier_arrival":
+            state, label, tone = "carrier_arrival", "CARRIER ARRIVAL", "green"
+        elif phase == "arrival":
             state, label, tone = "arrival", "ARRIVAL", "green"
         elif phase == "hyperspace" or (jumping and high_wake):
             state, label, tone = "hyperspace", "HYPERSPACE", "orange"
@@ -6911,6 +7022,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.body_scan_data.clear()
             self.current_body_id   = None
             self.current_body_name = ""
+            self.current_glide_mode = False
             self.valuable_system = False
             self.valuable_bodies.clear()
             self.system_traffic = (
@@ -7577,18 +7689,24 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.colony_overlay.update()
 
         # ── ApproachBody / LeaveBody ──────────────────────────────────────────────
-        if ev == "ApproachBody" and not self.batch_mode:
+        if ev == "ApproachBody":
             self.current_body_id   = self._normalize_body_id(d.get("body_id"))
             self.current_body_name = d.get("body_name") or ""
-            self._refresh_gravity_warning(self.current_body_id, self.current_body_name)
-            self._refresh_system_info_progress()
-        elif ev == "LeaveBody" and not self.batch_mode:
-            self._check_stale_bio_scans(self.current_body_id)
+            if not self.batch_mode:
+                self._refresh_gravity_warning(self.current_body_id, self.current_body_name)
+                self._refresh_system_info_progress()
+                self.update_hud()
+        elif ev == "LeaveBody":
+            if not self.batch_mode:
+                self._check_stale_bio_scans(self.current_body_id)
             self.current_body_id   = None
             self.current_body_name = ""
-            if self.gravity_warning_hud:
-                self.gravity_warning_hud.clear()
-            self._refresh_system_info_progress()
+            self.current_glide_mode = False
+            if not self.batch_mode:
+                if self.gravity_warning_hud:
+                    self.gravity_warning_hud.clear()
+                self._refresh_system_info_progress()
+                self.update_hud()
 
         # ── Prospector overlay — live events only, skip journal replay on startup ──
         # Use startup_replay (not batch_mode) so rapid-fire limpets that land in
