@@ -87,6 +87,27 @@ def total_distance_text(hops, truncated=0):
     return f"{total:,.1f}{suffix} LY"
 
 
+def pip_layout(x1, x2, hops, *, min_seg_px=9):
+    """Return the same distance-proportional geometry used by the renderer."""
+    n = len(hops)
+    if n == 0 or x2 <= x1:
+        return [], False
+    width = x2 - x1
+    raw_dists = [hop.get("dist") for hop in hops]
+    total = sum(distance for distance in raw_dists if distance)
+    if not total:
+        fractions = [(index + 1) / n for index in range(n)]
+    else:
+        filled = [distance if distance else (total / n) for distance in raw_dists]
+        cumulative = 0.0
+        fractions = []
+        for distance in filled:
+            cumulative += distance
+            fractions.append(min(1.0, cumulative / total))
+    positions = [x1 + (fraction * width) for fraction in fractions]
+    return positions, (width / n) < min_seg_px
+
+
 def draw_pip_line(canvas, x1, x2, y, hops, theme, *, dot_radius=5, bg="#010101", min_seg_px=9):
     """Draws the proportional pip line for `hops` across [x1, x2] at height y.
 
@@ -97,23 +118,9 @@ def draw_pip_line(canvas, x1, x2, y, hops, theme, *, dot_radius=5, bg="#010101",
     n = len(hops)
     if n == 0 or x2 <= x1:
         return
-    width = x2 - x1
-    raw_dists = [h.get("dist") for h in hops]
-    total = sum(d for d in raw_dists if d)
-    if not total:
-        fracs = [(i + 1) / n for i in range(n)]
-    else:
-        filled = [d if d else (total / n) for d in raw_dists]
-        cum = 0.0
-        fracs = []
-        for d in filled:
-            cum += d
-            fracs.append(min(1.0, cum / total))
-
-    dense = (width / n) < min_seg_px
+    positions, dense = pip_layout(x1, x2, hops, min_seg_px=min_seg_px)
     prev_x = x1
-    for i, (hop, frac) in enumerate(zip(hops, fracs)):
-        nx = x1 + frac * width
+    for i, (hop, nx) in enumerate(zip(hops, positions)):
         is_next = (i == 0)
         color = theme["accent"] if is_next else theme["orange"]
         dash = None if is_next else (4, 3)
