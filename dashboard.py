@@ -3916,6 +3916,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         hops, hops_truncated = route_strip.build_route_hops(
             self.current_coords, route, entries, current, waypoint_manager=waypoint_manager
         )
+        route_track = route_strip.build_route_track(
+            self.current_coords, route, entries, current,
+            waypoint_manager=waypoint_manager,
+        )
 
         if waypoint_manager and waypoint_manager.waypoints:
             route_mode = "WAYPOINT ROUTE"
@@ -3976,6 +3980,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "route_remaining": route_remaining,
             "hops": hops,
             "hops_truncated": hops_truncated,
+            "route_track": route_track,
             "total_distance_text": route_strip.total_distance_text(hops, hops_truncated),
             "cargo": f"{cargo_tons}/{cargo_cap}T" if cargo_cap else f"{cargo_tons}T",
             "credits": self._format_hud_credits(self._latest_hud_balance()),

@@ -1833,7 +1833,14 @@ class TacticalHUD:
         target = str(route_waypoint or context.get("next") or "---").upper()
         remaining = context.get("route_remaining")
         hops = list(context.get("hops") or [])
+        track = context.get("route_track") or {}
+        track_hops = list(track.get("hops") or []) if isinstance(track, dict) else []
         active = source != "NO ROUTE" and target not in ("", "---")
+        complete = bool(
+            track_hops
+            and not any(hop.get("next") for hop in track_hops)
+            and any(hop.get("completed") or hop.get("current") for hop in track_hops)
+        )
         progress = 0.0
         progress_text = ""
 
@@ -1845,6 +1852,7 @@ class TacticalHUD:
             current_pos, total = max(1, int(game_r_pos[0])), max(1, int(game_r_pos[1]))
             denominator = max(1, total - 1)
             progress = max(0.0, min(1.0, (current_pos - 1) / denominator))
+            progress_text = f"{current_pos}/{total} STOPS"
 
         if isinstance(remaining, int):
             jump_text = "ROUTE COMPLETE" if remaining <= 0 else f"{remaining} JUMP{'S' if remaining != 1 else ''}"
@@ -1862,7 +1870,10 @@ class TacticalHUD:
             distance = ""
 
         meta_parts = [part for part in (jump_text, distance, progress_text) if part]
-        if not active:
+        if complete:
+            target = str(track_hops[-1].get("name") or target or "ROUTE END").upper()
+            meta_parts = ["ROUTE COMPLETE"]
+        elif not active:
             source = "NO ACTIVE ROUTE"
             target = "NO DESTINATION PLOTTED"
             meta_parts = []
@@ -1875,7 +1886,11 @@ class TacticalHUD:
             "progress_text": progress_text,
             "progress": progress,
             "active": active,
+            "complete": complete,
             "hops": hops,
+            "track_hops": track_hops,
+            "track_origin_current": bool(track.get("origin_current", True))
+            if isinstance(track, dict) else True,
         }
 
     @staticmethod
@@ -1886,7 +1901,10 @@ class TacticalHUD:
         if route_waypoint:
             left_parts = (route.get("target"), route.get("progress_text"))
         else:
-            left_parts = (route.get("source"), route.get("jump_text"))
+            left_parts = (
+                route.get("progress_text") or route.get("source"),
+                route.get("jump_text"),
+            )
         left = " · ".join(str(part) for part in left_parts if part)
         center = str((nav_context or {}).get("next_distance") or "")
         if center == "--":
@@ -1929,12 +1947,17 @@ class TacticalHUD:
             self.canvas.create_line(x1, y, x2, y, fill=glow, width=5)
         self.canvas.create_line(x1, y, x2, y, fill="#1a2530", width=2)
 
-        hops = list(route.get("hops") or [])
+        hops = list(route.get("track_hops") or route.get("hops") or [])
         if hops:
             pip_positions, dense = route_strip.pip_layout(x1, x2, hops)
             route_strip.draw_pip_line(
                 self.canvas, x1, x2, y, hops,
-                {"accent": COLOR_ACCENT, "orange": COLOR_ORANGE},
+                {
+                    "accent": COLOR_ACCENT,
+                    "orange": COLOR_ORANGE,
+                    "completed": self._glow_color(COLOR_ACCENT, 0.52),
+                    "pending": self._glow_color(COLOR_ORANGE, 0.68),
+                },
                 dot_radius=dot_radius, bg="#010101",
             )
         elif active:
@@ -1945,13 +1968,41 @@ class TacticalHUD:
                 fill="#010101", outline=COLOR_ORANGE, width=2,
             )
 
-        # The commander remains the cyan origin, just as in the original HUD.
+        current_index = next(
+            (index for index, hop in enumerate(hops) if hop.get("current")),
+            -1,
+        )
+        next_index = next(
+            (index for index, hop in enumerate(hops) if hop.get("next")),
+            -1,
+        )
+        origin_current = bool(route.get("track_origin_current", True))
+        current_x = (
+            pip_positions[current_index]
+            if current_index >= 0 and current_index < len(pip_positions)
+            else x1
+        )
+        next_x = (
+            pip_positions[next_index]
+            if next_index >= 0 and next_index < len(pip_positions)
+            else None
+        )
+
+        # The origin remains visible after departure, while the cyan current
+        # marker advances through the fixed route geometry.
+        origin_color = COLOR_ACCENT if origin_current else self._glow_color(COLOR_ACCENT, 0.52)
         self.canvas.create_oval(
             x1 - dot_radius - 1, y - dot_radius - 1,
             x1 + dot_radius + 1, y + dot_radius + 1,
-            outline=COLOR_ACCENT if active else "#7d8891", width=2, fill="#010101",
+            outline=origin_color if hops or active else "#7d8891",
+            width=2, fill="#010101",
         )
-        if active:
+        if origin_current and (hops or active):
+            self.canvas.create_oval(
+                x1 - 1.5, y - 1.5, x1 + 1.5, y + 1.5,
+                fill=COLOR_ACCENT, outline="",
+            )
+        if hops or active:
             self._route_track_model = {
                 "x1": float(x1),
                 "x2": float(x2),
@@ -1960,6 +2011,9 @@ class TacticalHUD:
                 "dense": bool(dense),
                 "dot_radius": max(2, int(dot_radius)),
                 "hop_count": max(1, len(hops)),
+                "origin_current": origin_current,
+                "current_x": float(current_x),
+                "next_x": float(next_x) if next_x is not None else None,
             }
 
     @staticmethod
@@ -2005,12 +2059,12 @@ class TacticalHUD:
             return
 
         x1, x2, y = model["x1"], model["x2"], model["y"]
-        pip_positions = model["pip_positions"]
-        if x2 <= x1 or not pip_positions:
+        current_x = model.get("current_x", x1)
+        next_x = model.get("next_x")
+        if x2 <= x1 or next_x is None or next_x <= current_x:
             return
         dense = model["dense"]
         base_radius = model["dot_radius"]
-        next_x = pip_positions[0]
 
         # Stage one: acknowledge that the former target is now CURRENT.
         if progress < 0.38:
@@ -2018,8 +2072,8 @@ class TacticalHUD:
             wave = math.sin(local * math.pi)
             radius = base_radius + 2 + (wave * 4)
             self.canvas.create_oval(
-                x1 - radius, y - radius,
-                x1 + radius, y + radius,
+                current_x - radius, y - radius,
+                current_x + radius, y + radius,
                 fill="", outline=self._glow_color(
                     COLOR_ACCENT, 0.62 + (wave * 0.38),
                 ), width=2 if wave > 0.55 else 1,
@@ -2032,10 +2086,10 @@ class TacticalHUD:
         if flow_start <= progress <= flow_end:
             local = (progress - flow_start) / (flow_end - flow_start)
             eased = local * local * (3.0 - (2.0 * local))
-            x = x1 + ((next_x - x1) * eased)
+            x = current_x + ((next_x - current_x) * eased)
             packet_color = self._mix_color(COLOR_ACCENT, COLOR_ORANGE, eased)
             self._draw_contrast_motion_tail(
-                max(x1, x - 12), x, y,
+                max(current_x, x - 12), x, y,
                 packet_color, width=2, tags="nav_route_motion",
             )
             self._draw_contrast_motion_dot(
@@ -2049,10 +2103,13 @@ class TacticalHUD:
             wave = math.sin(local * math.pi)
             next_color = self._mix_color(COLOR_ACCENT, COLOR_ORANGE, local)
             if dense:
-                height = 5 + (wave * 5)
-                self.canvas.create_line(
-                    next_x, y - height, next_x, y + height,
-                    fill=next_color, width=2, tags="nav_route_motion",
+                radius = 3 + (wave * 4)
+                self.canvas.create_oval(
+                    next_x - radius, y - radius,
+                    next_x + radius, y + radius,
+                    fill="", outline=next_color,
+                    width=2 if wave > 0.55 else 1,
+                    tags="nav_route_motion",
                 )
             else:
                 radius = base_radius + 2 + (wave * 4)
@@ -2165,7 +2222,9 @@ class TacticalHUD:
 
         # Original split route header: target/status, next leg, total distance.
         left_x, right_x = 16, w - 16
-        route_color = COLOR_ORANGE if route["active"] else "#7d8891"
+        route_color = COLOR_ACCENT if route.get("complete") else (
+            COLOR_ORANGE if route["active"] else "#7d8891"
+        )
         self.draw_fitted_text(left_x, 95, route_header, route_color,
                               size=10, min_size=9, max_width=215, anchor="w")
         self.draw_fitted_text(w / 2, 95, next_distance, route_color,
@@ -2173,9 +2232,14 @@ class TacticalHUD:
         self.draw_fitted_text(right_x, 95, route_distance, COLOR_ORANGE,
                               size=10, min_size=9, max_width=175, anchor="e")
         self._draw_route_track(left_x, right_x, 113, route, dot_radius=4)
-        self.draw_text(left_x, 130, text="CURRENT", fill=COLOR_ACCENT,
+        route_model = self._route_track_model or {}
+        origin_current = bool(route_model.get("origin_current", True))
+        self.draw_text(left_x, 130, text="CURRENT" if origin_current else "START",
+                       fill=COLOR_ACCENT if origin_current else self._glow_color(COLOR_ACCENT, 0.52),
                        font=("Courier", 10, "bold"), anchor="w")
-        self.draw_text(right_x, 130, text="DEST" if route["active"] else "NEXT", fill=route_color,
+        self.draw_text(right_x, 130,
+                       text="DEST" if route["active"] or route.get("track_hops") else "NEXT",
+                       fill=route_color,
                        font=("Courier", 10, "bold"), anchor="e")
         self._draw_section_rule(16, w - 16, 141)
 
@@ -2310,7 +2374,9 @@ class TacticalHUD:
 
         # Original left/centre/right route header and real upcoming-hop pip strip.
         left_x, right_x = 20, w - 20
-        route_color = COLOR_ORANGE if route["active"] else "#7d8891"
+        route_color = COLOR_ACCENT if route.get("complete") else (
+            COLOR_ORANGE if route["active"] else "#7d8891"
+        )
         self.draw_fitted_text(left_x, 147, route_header, route_color,
                               size=10, min_size=9, max_width=250, anchor="w")
         self.draw_fitted_text(w / 2, 147, next_distance, route_color,
@@ -2318,9 +2384,14 @@ class TacticalHUD:
         self.draw_fitted_text(right_x, 147, route_distance, COLOR_ORANGE,
                               size=10, min_size=9, max_width=240, anchor="e")
         self._draw_route_track(left_x, right_x, 165, route, dot_radius=5)
-        self.draw_text(left_x, 183, text="CURRENT", fill=COLOR_ACCENT,
+        route_model = self._route_track_model or {}
+        origin_current = bool(route_model.get("origin_current", True))
+        self.draw_text(left_x, 183, text="CURRENT" if origin_current else "START",
+                       fill=COLOR_ACCENT if origin_current else self._glow_color(COLOR_ACCENT, 0.52),
                        font=("Courier", 10, "bold"), anchor="w")
-        self.draw_text(right_x, 183, text="DEST" if route["active"] else "NEXT", fill=route_color,
+        self.draw_text(right_x, 183,
+                       text="DEST" if route["active"] or route.get("track_hops") else "NEXT",
+                       fill=route_color,
                        font=("Courier", 10, "bold"), anchor="e")
         self._draw_section_rule(20, w - 20, 195)
 
