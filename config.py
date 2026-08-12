@@ -657,8 +657,8 @@ def load_config():
         'db_commit_interval_ms': 250,
         'screenshot_max_convert_per_cycle': 2,
         'overlay_topmost_refresh_ms': 12000,
-        'hud_anim_interval_ms': 40,
-        'hud_animation_cadence_version': 1,
+        'hud_anim_interval_ms': 33,
+        'hud_animation_cadence_version': 2,
         'runtime_trace_enabled': True,
         'runtime_trace_path': 'logs/runtime_trace.log',
         'crash_reporting_enabled': True,
@@ -735,9 +735,9 @@ def load_config():
                 for key in DEPRECATED_CONFIG_KEYS:
                     data.pop(key, None)
                 defaults.update(data)
-                # Navigation animation originally shipped at 100 ms (about
-                # 10 FPS). Migrate only that exact legacy default; deliberate
-                # custom cadence values remain untouched.
+                # Navigation animation originally shipped at 100 ms, then
+                # 40 ms. Advance only exact shipped defaults through each
+                # cadence generation; deliberate custom values stay intact.
                 try:
                     cadence_version = int(data.get("hud_animation_cadence_version") or 0)
                 except (TypeError, ValueError):
@@ -749,7 +749,16 @@ def load_config():
                         legacy_interval = 100
                     if legacy_interval == 100:
                         defaults["hud_anim_interval_ms"] = 40
-                    defaults["hud_animation_cadence_version"] = 1
+                    cadence_version = 1
+                if cadence_version < 2:
+                    try:
+                        previous_interval = int(float(defaults.get("hud_anim_interval_ms", 40)))
+                    except (TypeError, ValueError):
+                        previous_interval = 40
+                    if previous_interval == 40:
+                        defaults["hud_anim_interval_ms"] = 33
+                    cadence_version = 2
+                defaults["hud_animation_cadence_version"] = cadence_version
         except Exception:
             pass
     if not defaults['journal_path']:
