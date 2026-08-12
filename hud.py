@@ -455,6 +455,10 @@ class TacticalHUD:
 
         # StartJump is only the countdown. The exact Status fsdJump flag owns
         # HYPERSPACE, and FSDJump supplies the bounded ARRIVAL phase.
+        if fsd_state == "carrier_transit":
+            return "CARRIER TRANSIT"
+        if fsd_state == "carrier_arrival":
+            return "CARRIER ARRIVAL"
         if fsd_state == "arrival":
             return "ARRIVAL"
         if fsd_state == "hyperspace":
@@ -502,6 +506,14 @@ class TacticalHUD:
             return "MAP"
         if nav_context.get("in_fss"):
             return "FSS"
+        approach = nav_context.get("surface_approach") or {}
+        if approach.get("active"):
+            phase = str(approach.get("phase") or "surface").casefold()
+            if phase == "glide":
+                return "GLIDE"
+            if phase == "orbital":
+                return "ORBITAL APPROACH"
+            return "SURFACE APPROACH"
         if (fsd_state == "mass_lock" and flight_state in {"", "FLIGHT"}
                 and not any(nav_context.get(key) for key in (
                     "docked", "landed", "in_fighter", "in_srv", "on_foot",
@@ -526,19 +538,19 @@ class TacticalHUD:
         return "FLIGHT"
 
     def _state_color(self, state_text):
-        if state_text == "ARRIVAL":
+        if state_text in {"ARRIVAL", "CARRIER ARRIVAL"}:
             return COLOR_GREEN
         if state_text in (
             "DOCKED", "LANDED", "FSS", "DSS", "FIGHTER", "SRV", "NOMAD",
             "ONFOOT", "MAP", "GALAXY MAP", "SYSTEM MAP", "POWER MAP", "ORRERY",
-            "CODEX", "EXPLORATION", "STATION", "FSD COOLDOWN",
+            "CODEX", "EXPLORATION", "STATION", "FSD COOLDOWN", "ORBITAL APPROACH",
         ):
             return COLOR_ACCENT
-        if state_text == "MASS LOCK":
+        if state_text in {"MASS LOCK", "GLIDE", "SURFACE APPROACH"}:
             return COLOR_YELLOW
         if state_text in (
             "HYPERSPACE", "SUPERCRUISE", "JUMPING", "COMBAT",
-            "FSD CHARGE", "HYPER CHARGE", "SCO OVERCHARGE",
+            "FSD CHARGE", "HYPER CHARGE", "SCO OVERCHARGE", "CARRIER TRANSIT",
         ):
             return COLOR_ORANGE
         return "#7d8891"
@@ -553,6 +565,16 @@ class TacticalHUD:
             return "fsd_charge"
         if state == "SCO OVERCHARGE":
             return "supercruise_overcharge"
+        if state == "CARRIER TRANSIT":
+            return "carrier_transit"
+        if state == "CARRIER ARRIVAL":
+            return "carrier_arrival"
+        if state == "ORBITAL APPROACH":
+            return "orbital_approach"
+        if state == "GLIDE":
+            return "glide"
+        if state == "SURFACE APPROACH":
+            return "surface_approach"
         if state == "FSD COOLDOWN":
             return "fsd_cooldown"
         if state == "ARRIVAL":
@@ -640,6 +662,48 @@ class TacticalHUD:
                 *flat((-1.5, -1.5), (1.5, 1.5)),
                 fill=color, outline="", tags=tags,
             )
+            return
+        if profile in {"carrier_transit", "carrier_arrival"}:
+            # Broad parallel decks distinguish a carrier translation from the
+            # compact forward vector used by the commander's own ship.
+            self.canvas.create_rectangle(
+                *flat((-5, -2), (5, 2)),
+                fill="#010101", outline=color, width=1, tags=tags,
+            )
+            self.canvas.create_line(
+                *flat((-7, -4), (3, -4)), fill=dim, width=1, tags=tags,
+            )
+            self.canvas.create_line(
+                *flat((-3, 4), (7, 4)), fill=dim, width=1, tags=tags,
+            )
+            if profile == "carrier_arrival":
+                for offset in (-7, 7):
+                    self.canvas.create_line(
+                        *flat((offset, -3), (offset, 3)),
+                        fill=color, width=1, tags=tags,
+                    )
+            return
+        if profile in {"orbital_approach", "glide", "surface_approach"}:
+            # A horizon, descending ship reference and approach gates give the
+            # three planetary phases one coherent static silhouette.
+            self.canvas.create_arc(
+                *flat((-5, -1), (5, 7)), start=18, extent=144,
+                style="arc", outline=dim, width=1, tags=tags,
+            )
+            self.canvas.create_polygon(
+                *flat((0, -4), (3, 0), (0, -1), (-3, 0)),
+                fill="#010101", outline=color, width=1, tags=tags,
+            )
+            if profile == "glide":
+                for offset in (-6, 6):
+                    self.canvas.create_line(
+                        *flat((offset, -4), (offset / 2, -1)),
+                        fill=color, width=1, tags=tags,
+                    )
+            elif profile == "surface_approach":
+                self.canvas.create_line(
+                    *flat((-4, 4), (4, 4)), fill=color, width=1, tags=tags,
+                )
             return
         if profile == "docked":
             self.canvas.create_rectangle(
@@ -1546,25 +1610,6 @@ class TacticalHUD:
                     width=1, tags=tags,
                 )
 
-        approach = model.get("surface_approach") or {}
-        if approach.get("active"):
-            try:
-                descent = float(approach.get("descent_mps") or 0.0)
-            except (TypeError, ValueError):
-                descent = 0.0
-            approach_color = COLOR_YELLOW if descent > 40 else color
-            local = self._cycle_progress(phase, 28)
-            direction = 1.0 if descent >= -1.0 else -1.0
-            offset = 2 + (local * 8)
-            for x in (model["group_left"] - 9, model["group_right"] + 9):
-                y1 = y - (direction * offset)
-                y2 = y1 + (direction * 5)
-                self.canvas.create_line(
-                    x - 3, y1, x, y2, x + 3, y1,
-                    fill=self._glow_color(approach_color, 0.72),
-                    width=1, tags=tags,
-                )
-
         ship_config = model.get("ship_config") or {}
         if ship_config.get("analysis_mode"):
             scan = self._cycle_progress(phase, 34)
@@ -1607,6 +1652,157 @@ class TacticalHUD:
                     fill=self._glow_color(target_color, 0.68),
                     width=1, tags=tags,
                 )
+
+        if profile in {"carrier_transit", "carrier_arrival"}:
+            shell_x1 = model.get("shell_x1", model["route_x1"]) + 7
+            shell_x2 = model.get("shell_x2", model["survey_x2"]) - 7
+            shell_top = model.get("shell_top", y - 6)
+            shell_bottom = model.get("shell_bottom", y + 6)
+            span = max(1.0, shell_x2 - shell_x1)
+            if profile == "carrier_transit":
+                # A carrier translates as a much larger mass: four opposing
+                # packets load both hull rails while the centre aperture
+                # compresses and releases like the visible jump tunnel.
+                travel = self._cycle_progress(phase, 16)
+                transit_dim = self._glow_color(COLOR_ORANGE, 0.68)
+                for index in range(4):
+                    local = (travel + (index / 4.0)) % 1.0
+                    x = shell_x1 + (span * local)
+                    reverse_x = shell_x2 - (span * local)
+                    rail_y = shell_top if index % 2 == 0 else shell_bottom
+                    self._draw_contrast_motion_tail(
+                        max(shell_x1, x - 10), x, rail_y,
+                        transit_dim, width=2, tags=tags,
+                    )
+                    self._draw_contrast_motion_tail(
+                        reverse_x, min(shell_x2, reverse_x + 10), rail_y,
+                        transit_dim, width=2, tags=tags,
+                    )
+                compression = abs((self._cycle_progress(phase, 28) * 2.0) - 1.0)
+                gate = 5 + (compression * 8)
+                for side in (-1, 1):
+                    gate_x = marker_x + (side * gate)
+                    self.canvas.create_line(
+                        gate_x, y - 5, gate_x, y + 5,
+                        fill=color, width=2 if compression < 0.35 else 1,
+                        tags=tags,
+                    )
+                return
+
+            # Arrival releases the compressed carrier aperture as a restrained
+            # paired shock front. It is bounded by the CarrierJump phase, so
+            # the ordinary docked indicator resumes automatically afterwards.
+            wave = abs((self._cycle_progress(phase, 34) * 2.0) - 1.0)
+            arrival_dim = self._glow_color(COLOR_GREEN, 0.66)
+            spread = 7 + (wave * min(30.0, span * 0.12))
+            for side in (-1, 1):
+                x = marker_x + (side * spread)
+                self.canvas.create_line(
+                    x, shell_top, x, shell_bottom,
+                    fill=COLOR_GREEN if wave < 0.45 else arrival_dim,
+                    width=2 if wave < 0.3 else 1, tags=tags,
+                )
+            radius = 5 + (wave * 7)
+            self.canvas.create_oval(
+                marker_x - radius, y - min(5, radius / 2),
+                marker_x + radius, y + min(5, radius / 2),
+                fill="", outline=arrival_dim, width=1, tags=tags,
+            )
+            return
+
+        if profile in {"orbital_approach", "glide", "surface_approach"}:
+            # ApproachBody owns the orbital phase; Status' glide bit and live
+            # altitude then deepen the same visual language. Motion stays on
+            # the chassis rails so the state and altitude text remain stable.
+            approach = model.get("surface_approach") or {}
+            shell_x1 = model.get("shell_x1", model["route_x1"]) + 7
+            shell_x2 = model.get("shell_x2", model["survey_x2"]) - 7
+            shell_top = model.get("shell_top", y - 6)
+            shell_bottom = model.get("shell_bottom", y + 6)
+            try:
+                descent = float(approach.get("descent_mps") or 0.0)
+            except (TypeError, ValueError):
+                descent = 0.0
+            alert_color = COLOR_YELLOW if descent > 40 else color
+            approach_dim = self._glow_color(alert_color, 0.68)
+
+            if profile == "orbital_approach":
+                # Paired packets repeatedly converge from orbital space toward
+                # the planet aperture, with a slow horizon sweep beneath it.
+                travel = self._cycle_progress(phase, 24)
+                for index in range(2):
+                    local = (travel + (index * 0.5)) % 1.0
+                    left_x = shell_x1 + ((model["group_left"] - shell_x1) * local)
+                    right_x = shell_x2 - ((shell_x2 - model["group_right"]) * local)
+                    rail_y = shell_top if index == 0 else shell_bottom
+                    self._draw_contrast_motion_tail(
+                        max(shell_x1, left_x - 8), left_x, rail_y,
+                        approach_dim, width=1, tags=tags,
+                    )
+                    self._draw_contrast_motion_tail(
+                        right_x, min(shell_x2, right_x + 8), rail_y,
+                        approach_dim, width=1, tags=tags,
+                    )
+                horizon = abs((self._cycle_progress(phase, 42) * 2.0) - 1.0)
+                radius = 5 + (horizon * 4)
+                self.canvas.create_arc(
+                    marker_x - radius, y - 1,
+                    marker_x + radius, y + 7,
+                    start=18, extent=144, style="arc",
+                    outline=approach_dim, width=1, tags=tags,
+                )
+                return
+
+            if profile == "glide":
+                # Glide is deliberately faster and sharper: staggered streaks
+                # collapse from both rails while vertical gates fall through
+                # the centre, making this phase unmistakable at a glance.
+                travel = self._cycle_progress(phase, 9)
+                span = max(1.0, shell_x2 - shell_x1)
+                for index in range(4):
+                    local = (travel + (index / 4.0)) % 1.0
+                    x = shell_x1 + (span * local)
+                    rail_y = shell_top if index % 2 == 0 else shell_bottom
+                    slope = 3 if index % 2 == 0 else -3
+                    self.canvas.create_line(
+                        x - 8, rail_y - slope, x, rail_y,
+                        fill=alert_color if index in {0, 2} else approach_dim,
+                        width=2 if index in {0, 2} else 1, tags=tags,
+                    )
+                fall = self._cycle_progress(phase, 12)
+                gate_y = (y - 8) + (fall * 16)
+                for x in (model["group_left"] - 6, model["group_right"] + 6):
+                    self.canvas.create_line(
+                        x - 3, gate_y - 2, x, gate_y + 2, x + 3, gate_y - 2,
+                        fill=alert_color, width=1, tags=tags,
+                    )
+                return
+
+            # Below glide, a descending altitude ladder moves toward the lower
+            # horizon. It reverses when climbing and accelerates modestly with
+            # descent rate without turning the indicator into a warning flash.
+            period = max(10.0, 26.0 - min(14.0, abs(descent) / 6.0))
+            travel = self._cycle_progress(phase, period)
+            if descent < -1.0:
+                travel = 1.0 - travel
+            for side in (-1, 1):
+                x = marker_x + (side * 11)
+                for index in range(3):
+                    local = (travel + (index / 3.0)) % 1.0
+                    tick_y = (y - 7) + (local * 14)
+                    self.canvas.create_line(
+                        x - 3, tick_y, x + 3, tick_y,
+                        fill=alert_color if index == 0 else approach_dim,
+                        width=1, tags=tags,
+                    )
+            horizon_wave = abs((self._cycle_progress(phase, 30) * 2.0) - 1.0)
+            horizon_span = 7 + (horizon_wave * 5)
+            self.canvas.create_line(
+                marker_x - horizon_span, y + 5,
+                marker_x + horizon_span, y + 5,
+                fill=approach_dim, width=2, tags=tags,
+            )
+            return
 
         if profile == "supercruise_overcharge":
             # SCO is a sustained live Status state, so its motion continues
@@ -2027,6 +2223,14 @@ class TacticalHUD:
     def _context_presentation(nav_context, attention_text="", attention_state="muted"):
         """Choose the single most useful contextual line for the current state."""
         context = nav_context or {}
+        travel = context.get("fsd_readiness") or {}
+        travel_state = str(travel.get("state") or "").casefold()
+        if travel_state in {"carrier_transit", "carrier_arrival"}:
+            target = str(travel.get("target") or "").strip()
+            detail = f" · {target}" if target else ""
+            if travel_state == "carrier_transit":
+                return f"CARRIER TRANSIT{detail}", COLOR_ORANGE
+            return f"CARRIER ARRIVAL{detail}", COLOR_GREEN
         local_target = context.get("local_target") or {}
         target_name = str(local_target.get("name") or "").strip()
         if target_name:
@@ -2064,6 +2268,11 @@ class TacticalHUD:
             return f"STATION · {context['station']}", COLOR_ACCENT
         approach = context.get("surface_approach") or {}
         if approach.get("active"):
+            phase = str(approach.get("phase") or "surface").casefold()
+            body_name = str(approach.get("body") or "").strip()
+            if phase == "orbital":
+                detail = f" · {body_name}" if body_name else ""
+                return f"ORBITAL APPROACH{detail}", COLOR_ACCENT
             try:
                 altitude = float(approach.get("altitude_m"))
                 altitude_text = (
@@ -2076,7 +2285,8 @@ class TacticalHUD:
             except (TypeError, ValueError):
                 descent = 0.0
             motion = "DESCENT" if descent > 1 else "CLIMB" if descent < -1 else "HOLD"
-            return f"SURFACE APPROACH · {altitude_text} · {motion}", COLOR_YELLOW
+            label = "GLIDE" if phase == "glide" else "SURFACE APPROACH"
+            return f"{label} · {altitude_text} · {motion}", COLOR_YELLOW
         body = str(context.get("body") or "").strip()
         if body:
             gravity = context.get("gravity_g")

@@ -19,6 +19,7 @@ class DashboardScanMixin:
     _STATUS_FSD_JUMPING = 0x40000000
     _STATUS2_FSD_HYPERDRIVE_CHARGING = 0x00080000
     _STATUS2_SUPERCRUISE_OVERCHARGE = 0x00100000
+    _STATUS2_GLIDE_MODE = 0x00001000
 
     def _sync_navigation_hud_flight_state(self, *, supercruise=False):
         """Resolve the navigation HUD state from the latest verified vehicle flags."""
@@ -108,6 +109,7 @@ class DashboardScanMixin:
             bool(getattr(self, "current_analysis_mode", False)),
             bool(getattr(self, "current_scooping_fuel", False)),
             bool(getattr(self, "current_supercruise_overcharge", False)),
+            bool(getattr(self, "current_glide_mode", False)),
         )
         was_navigation_readiness = (
             bool(getattr(self, "current_fsd_mass_locked", False)),
@@ -217,11 +219,13 @@ class DashboardScanMixin:
             self.current_supercruise_overcharge = bool(
                 flags2 & self._STATUS2_SUPERCRUISE_OVERCHARGE
             )
+            self.current_glide_mode = bool(flags2 & self._STATUS2_GLIDE_MODE)
         else:
             # Status.json normally supplies Flags2 on every snapshot. If a
             # partial or older snapshot omits it, never leave transient SCO
             # latched on after the game has stopped reporting the state.
             self.current_supercruise_overcharge = False
+            self.current_glide_mode = False
             if not getattr(self, "current_fsd_charging", False):
                 self.current_fsd_hyperdrive_charging = False
         jump_phase = str(getattr(self, "_navigation_jump_phase", "") or "")
@@ -350,6 +354,7 @@ class DashboardScanMixin:
             bool(getattr(self, "current_analysis_mode", False)),
             bool(getattr(self, "current_scooping_fuel", False)),
             bool(getattr(self, "current_supercruise_overcharge", False)),
+            bool(getattr(self, "current_glide_mode", False)),
         )
         if fuel_percent_changed:
             self._invalidate_exploration_intelligence()
