@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.3.7.2**
+**Current version: 5.3.7.3**
 
 Void Compass is an exploration-first companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a persistent command dashboard, deep survey intelligence, expedition planning and native in-game overlays.
 
@@ -88,7 +88,7 @@ Each mode can apply a focused overlay scene while gravity, toast and heartbeat s
 
 Every overlay can be enabled independently, dragged to a saved position and styled with the active theme:
 
-- Journal-aware Navigation HUD with a focused **Standard** everyday layout and an optional **Expanded** planning layout, unified route/state/survey instrumentation, a large current-system readout, distance-proportional route pips with an arrival-driven next-leg handoff, permanent FSS progress, live fuel, traffic and contextual body/surface/docking information, smooth layered state-aware tracer motion, a 9-point readability floor and optional CRT effects.
+- Journal-aware Navigation HUD with a focused **Standard** everyday layout and an optional **Expanded** planning layout, unified route/state/survey instrumentation, a large current-system readout, persistent distance-proportional route history with an advancing current marker and arrival-driven next-leg handoff, permanent FSS progress, live fuel, traffic and contextual body/surface/docking information, smooth layered state-aware tracer motion, a 9-point readability floor and optional CRT effects.
 - Survey Operations as a persistent system-survey display that appears during FSS intake, retains resolved bodies through DSS assessment and records asteroid belt-cluster contacts without adding them to star/planet completion totals. Its focused-body card adds three-stage biological sampling, explicit predicted/detected/completed evidence, geology-only targets, compact completed-species manifests and notable-world value evidence. Live signal-cache fallback keeps the display current while detailed body scans catch up; Navigation remains the single owner of system scan percentage.
 - A dynamic Cargo Manifest with hold utilisation plus mission/stolen distinctions; Fleet/Squadron Carrier Command with jump, expedition, Tritium and capacity status; and Prospector Analysis with themed material composition, core and refinery evidence.
 - System Intelligence and Station Link overlays for contextual system, service and data-sale information without duplicating the Navigation HUD.

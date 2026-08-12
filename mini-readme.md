@@ -1,5 +1,11 @@
 # VoidCompass // UPDATE LOG
 
+## v5.3.7.3 // Persistent Route Progress
+**Release Date:** 2026-Aug-12
+
+*   Rebuilt the Navigation HUD route strip around the complete plotted route rather than an upcoming-only slice. Completed game-route systems and custom waypoints now remain subdued in their original distance-proportional positions, the cyan current marker advances through the fixed geometry, pending pips no longer rescale toward the start after every arrival, and completed custom routes remain visible as history. Short routes retain their classic individual pips; long routes become a readable segmented overview with completed-distance cells, a compact cyan current locator ring, a destination diamond and an explicit current/total stop count instead of compressing hundreds of marks into a noisy rail. The current locator no longer needs pointers above or below the rail: the orange pending section and bounded arrival handoff communicate the next leg without crowding the START caption.
+*   Refined the arrival sequence around that persistent track: CURRENT confirms at its newly advanced position, a single cyan-to-orange handoff energises only the first pending leg, and the next waypoint pulses once while all later stops remain static. The original endpoint changes to START after departure so it no longer falsely identifies every new system as the route origin.
+
 ## v5.3.7.2 // Journal-Aware Navigation
 **Release Date:** 2026-Aug-11
 
