@@ -51,9 +51,12 @@ class TacticalHUD:
         self._nav_state_identity = None
         self._nav_state_color = None
         self._nav_state_transition = None
+        self._nav_target_identity = None
+        self._nav_target_transition = None
         self._nav_event_sequence = -1
         self._nav_event_motion = None
         self._route_track_model = None
+        self._nav_fuel_model = None
         self._crt_phase = 0
         self._nav_phase_last_ts = time.monotonic()
         self._next_crt_frame_ts = 0.0
@@ -121,6 +124,7 @@ class TacticalHUD:
         try:
             self._draw_navigation_marker_animation()
             self._draw_route_track_animation()
+            self._draw_fuel_scoop_animation()
             if now >= self._next_crt_frame_ts:
                 self._draw_crt_animation()
                 self._next_crt_frame_ts = now + 0.1
@@ -732,6 +736,9 @@ class TacticalHUD:
         fsd_readiness=None,
         local_target=None,
         neutron_boost=None,
+        fuel_scooping=False,
+        surface_approach=None,
+        ship_config=None,
     ):
         """Draw one connected route, state and survey navigation instrument."""
         label = str(text or "FLIGHT").upper()
@@ -739,6 +746,8 @@ class TacticalHUD:
         fsd_readiness = fsd_readiness if isinstance(fsd_readiness, dict) else {}
         local_target = local_target if isinstance(local_target, dict) else None
         neutron_boost = neutron_boost if isinstance(neutron_boost, dict) else {}
+        surface_approach = surface_approach if isinstance(surface_approach, dict) else {}
+        ship_config = ship_config if isinstance(ship_config, dict) else {}
         boost_armed = bool(neutron_boost.get("armed"))
         survey_color = survey_color or COLOR_ACCENT
         try:
@@ -872,7 +881,8 @@ class TacticalHUD:
         self.draw_text(label_x, center_y, text=label, fill=color,
                        font=("Courier", 10, "bold"), anchor="w",
                        tags="nav_state_static")
-        if local_target:
+        self._accept_navigation_target(local_target)
+        if local_target and self.config.get("reduced_motion_enabled", False):
             target_x = inner_right
             target_color = COLOR_YELLOW
             self.canvas.create_oval(
@@ -888,6 +898,32 @@ class TacticalHUD:
                     fill=self._glow_color(target_color, 0.72), width=1,
                     tags="nav_state_static",
                 )
+
+        # Configuration cues are real state, not decoration, so their quiet
+        # baseline remains visible even when reduced motion is enabled.
+        if ship_config.get("landing_gear"):
+            for x in (group_left - 3, group_right + 3):
+                self.canvas.create_line(
+                    x, shell_bottom, x, shell_bottom + 3,
+                    fill=color, width=1, tags="nav_state_static",
+                )
+                self.canvas.create_line(
+                    x - 2, shell_bottom + 3, x + 2, shell_bottom + 3,
+                    fill=color, width=1, tags="nav_state_static",
+                )
+        if ship_config.get("cargo_scoop"):
+            x = group_left - 10
+            self.canvas.create_line(
+                x - 3, center_y + 2, x, center_y + 5, x + 3, center_y + 2,
+                fill=COLOR_ORANGE, width=1, tags="nav_state_static",
+            )
+        if ship_config.get("analysis_mode"):
+            x = group_right + 8
+            self.canvas.create_line(
+                x, center_y - 3, x, center_y + 3,
+                fill=self._glow_color(COLOR_ACCENT, 0.72),
+                width=1, tags="nav_state_static",
+            )
 
         self._nav_marker_model = {
             "y": center_y,
@@ -908,6 +944,9 @@ class TacticalHUD:
             "local_target": dict(local_target) if local_target else None,
             "boost_armed": boost_armed,
             "boost_value": neutron_boost.get("value"),
+            "fuel_scooping": bool(fuel_scooping),
+            "surface_approach": dict(surface_approach),
+            "ship_config": dict(ship_config),
             "route_active": route_active,
             "route_x1": inner_left,
             "route_x2": route_end,
@@ -921,6 +960,22 @@ class TacticalHUD:
         }
         self._accept_navigation_journal_event(journal_event)
         return right_edge - left_edge
+
+    def _accept_navigation_target(self, local_target):
+        """Start a short acquisition sweep when the selected local target changes."""
+        identity = str((local_target or {}).get("name") or "").strip().casefold()
+        previous = self._nav_target_identity
+        self._nav_target_identity = identity
+        if not identity or identity == previous:
+            if not identity:
+                self._nav_target_transition = None
+            return
+        if self.config.get("reduced_motion_enabled", False):
+            self._nav_target_transition = None
+            return
+        self._nav_target_transition = {
+            "started": time.monotonic(), "duration": 0.78,
+        }
 
     def _accept_navigation_state_transition(self, label, profile, color):
         """Start one compact morph only when the displayed state changes."""
@@ -1239,11 +1294,41 @@ class TacticalHUD:
             diamond(marker_x, max(5, 11 - (eased * 6)))
             return
 
-        if kind == "arrival":
+        if kind in {"arrival", "arrival_neutron", "arrival_white_dwarf", "arrival_valuable", "carrier_arrival"}:
             tracer(lx1, lx2, eased, reverse=True, radius=2)
             tracer(rx1, rx2, eased, radius=2)
             if progress < 0.55:
                 diamond(marker_x, 5 + (progress * 10), glow)
+            if kind == "arrival_neutron":
+                for radius in (7 + (progress * 8), 11 + (progress * 12)):
+                    self.canvas.create_oval(
+                        marker_x - radius, y - min(5, radius / 3),
+                        marker_x + radius, y + min(5, radius / 3),
+                        fill="", outline=glow, width=1, tags=tags,
+                    )
+            elif kind == "arrival_white_dwarf":
+                for x in (gx1 - 5, gx2 + 5):
+                    self.canvas.create_line(
+                        x, y - 5, x, y + 5,
+                        fill=visible, width=2, tags=tags,
+                    )
+            elif kind == "arrival_valuable":
+                wave = math.sin(progress * math.pi)
+                for radius in (5 + (wave * 3), 10 + (wave * 5)):
+                    self.canvas.create_polygon(
+                        marker_x, y - radius / 2,
+                        marker_x + radius, y,
+                        marker_x, y + radius / 2,
+                        marker_x - radius, y,
+                        fill="", outline=visible, width=1, tags=tags,
+                    )
+            elif kind == "carrier_arrival":
+                spread = 4 + (progress * 15)
+                for x, side in ((gx1 - spread, -1), (gx2 + spread, 1)):
+                    self.canvas.create_line(
+                        x, y - 4, x, y + 4,
+                        fill=visible, width=2, tags=tags,
+                    )
             return
 
         if kind == "wake":
@@ -1260,6 +1345,15 @@ class TacticalHUD:
             return
 
         if lane == "left":
+            if kind == "route_divert":
+                split = lx1 + ((lx2 - lx1) * 0.55)
+                tracer(lx1, split - 4, min(1.0, progress * 1.35), radius=1)
+                branch_y = y - (5 * math.sin(progress * math.pi))
+                self.canvas.create_line(
+                    split, y, lx2, branch_y,
+                    fill=visible, width=2, dash=(3, 2), tags=tags,
+                )
+                return
             reverse = kind == "route_clear"
             pulses = 2 if kind == "boost" else 1
             for index in range(pulses):
@@ -1273,6 +1367,21 @@ class TacticalHUD:
             return
 
         if lane == "right":
+            if kind in {"valuable_discovery", "first_discovery", "footfall_candidate"}:
+                x = tracer(rx1, rx2, eased, radius=2)
+                if kind == "valuable_discovery":
+                    diamond(x, 4 + (2 * math.sin(progress * math.pi)), visible)
+                elif kind == "first_discovery":
+                    self.canvas.create_oval(
+                        x - 5, y - 3, x + 5, y + 3,
+                        fill="", outline=visible, width=1, tags=tags,
+                    )
+                else:
+                    self.canvas.create_line(
+                        x - 4, y + 3, x, y - 3, x + 4, y + 3,
+                        fill=visible, width=1, tags=tags,
+                    )
+                return
             if kind in {"survey_complete", "mapping_complete"}:
                 x = rx1 + ((rx2 - rx1) * eased)
                 self.canvas.create_line(rx1, y, x, y,
@@ -1409,16 +1518,81 @@ class TacticalHUD:
                 fill=boost_dim, width=2, tags=tags,
             )
 
+        if model.get("fuel_scooping"):
+            # The main FUEL cell owns the prominent flow; this quieter intake
+            # keeps the centre instrument physically connected to it.
+            travel = self._cycle_progress(phase, 22)
+            x1, x2 = model["route_x1"], model["route_x2"]
+            for index in range(2):
+                local = (travel + (index * 0.5)) % 1.0
+                x = x1 + ((x2 - x1) * local)
+                self._draw_contrast_motion_tail(
+                    max(x1, x - 7), x, y + (2 if index else -2),
+                    self._glow_color(COLOR_GREEN, 0.66),
+                    width=1, tags=tags,
+                )
+
+        approach = model.get("surface_approach") or {}
+        if approach.get("active"):
+            try:
+                descent = float(approach.get("descent_mps") or 0.0)
+            except (TypeError, ValueError):
+                descent = 0.0
+            approach_color = COLOR_YELLOW if descent > 40 else color
+            local = self._cycle_progress(phase, 28)
+            direction = 1.0 if descent >= -1.0 else -1.0
+            offset = 2 + (local * 8)
+            for x in (model["group_left"] - 9, model["group_right"] + 9):
+                y1 = y - (direction * offset)
+                y2 = y1 + (direction * 5)
+                self.canvas.create_line(
+                    x - 3, y1, x, y2, x + 3, y1,
+                    fill=self._glow_color(approach_color, 0.72),
+                    width=1, tags=tags,
+                )
+
+        ship_config = model.get("ship_config") or {}
+        if ship_config.get("analysis_mode"):
+            scan = self._cycle_progress(phase, 34)
+            x = model["group_right"] + 8 + (scan * 4)
+            self.canvas.create_line(
+                x, y - 3, x, y + 3,
+                fill=self._glow_color(COLOR_ACCENT, 0.76), width=1, tags=tags,
+            )
+
         if model.get("local_target"):
             target_x = model["survey_x2"]
+            transition = getattr(self, "_nav_target_transition", None)
+            acquisition = 1.0
+            if isinstance(transition, dict):
+                try:
+                    acquisition = (time.monotonic() - transition["started"]) / transition["duration"]
+                except (KeyError, TypeError, ValueError, ZeroDivisionError):
+                    acquisition = 1.0
+                if acquisition >= 1.0:
+                    acquisition = 1.0
+                    self._nav_target_transition = None
+            acquisition = max(0.0, min(1.0, acquisition))
+            eased = acquisition * acquisition * (3.0 - (2.0 * acquisition))
+            acquire_x = model["group_right"] + (
+                (target_x - model["group_right"]) * eased
+            )
             wave = abs((self._cycle_progress(phase, 40) * 2.0) - 1.0)
-            radius = 2 + (wave * 2)
+            radius = 2 + (wave * 2) + ((1.0 - eased) * 3)
             target_color = COLOR_YELLOW if wave < 0.66 else self._glow_color(COLOR_YELLOW, 0.7)
             self.canvas.create_oval(
-                target_x - radius, y - radius,
-                target_x + radius, y + radius,
+                acquire_x - radius, y - radius,
+                acquire_x + radius, y + radius,
                 fill="", outline=target_color, width=1, tags=tags,
             )
+            bracket = 5 - (eased * 2)
+            for side in (-1, 1):
+                bx = acquire_x + (side * (radius + 2))
+                self.canvas.create_line(
+                    bx, y - bracket, bx, y + bracket,
+                    fill=self._glow_color(target_color, 0.68),
+                    width=1, tags=tags,
+                )
 
         if profile == "fsd_lock":
             wave = abs((self._cycle_progress(phase, 26) * 2.0) - 1.0)
@@ -1656,6 +1830,10 @@ class TacticalHUD:
         }
         orbit_period = orbit_periods.get(profile)
         if orbit_period:
+            if model.get("fuel_scooping"):
+                orbit_period *= 0.76
+            elif (model.get("surface_approach") or {}).get("active"):
+                orbit_period *= 1.18
             orbit = self._cycle_progress(phase, orbit_period)
             direction = -1.0 if profile in {"map", "exploration"} else 1.0
             angle = direction * orbit * math.tau
@@ -1678,6 +1856,10 @@ class TacticalHUD:
         period = travel_periods.get(profile)
         if not period:
             return
+        if model.get("fuel_scooping"):
+            period *= 0.72
+        elif (model.get("surface_approach") or {}).get("active"):
+            period *= 1.16
         x1 = model.get("shell_x1", model["route_x1"]) + 7
         x2 = model.get("shell_x2", model["survey_x2"]) - 7
         if x2 <= x1:
@@ -1806,8 +1988,37 @@ class TacticalHUD:
             except (TypeError, ValueError):
                 boost_text = ""
             return f"NEUTRON BOOST ARMED{boost_text}", COLOR_ACCENT
+        if context.get("fuel_scooping"):
+            try:
+                fuel_text = f" · {float(context.get('fuel_percent')):.0f}%"
+            except (TypeError, ValueError):
+                fuel_text = ""
+            return f"FUEL SCOOP ACTIVE{fuel_text}", COLOR_GREEN
+        next_star = context.get("next_star") or {}
+        star_class = str(next_star.get("star_class") or "").upper()
+        star_label = str(next_star.get("star_label") or star_class or "STAR").upper()
+        if next_star.get("fuel_risk") in {"warn", "alert"}:
+            return (
+                f"RANGE WARNING · NEXT {star_label}",
+                COLOR_ORANGE if next_star.get("fuel_risk") == "alert" else COLOR_YELLOW,
+            )
         if context.get("docked") and context.get("station"):
             return f"STATION · {context['station']}", COLOR_ACCENT
+        approach = context.get("surface_approach") or {}
+        if approach.get("active"):
+            try:
+                altitude = float(approach.get("altitude_m"))
+                altitude_text = (
+                    f"{altitude / 1000:.1f} KM" if altitude >= 1000 else f"{altitude:.0f} M"
+                )
+            except (TypeError, ValueError):
+                altitude_text = "ALT --"
+            try:
+                descent = float(approach.get("descent_mps") or 0.0)
+            except (TypeError, ValueError):
+                descent = 0.0
+            motion = "DESCENT" if descent > 1 else "CLIMB" if descent < -1 else "HOLD"
+            return f"SURFACE APPROACH · {altitude_text} · {motion}", COLOR_YELLOW
         body = str(context.get("body") or "").strip()
         if body:
             gravity = context.get("gravity_g")
@@ -1822,6 +2033,14 @@ class TacticalHUD:
                 return f"SURFACE · {float(lat):.3f}, {float(lon):.3f}", COLOR_ACCENT
             except (TypeError, ValueError):
                 return "SURFACE OPERATIONS", COLOR_ACCENT
+        if next_star.get("name") and star_class:
+            scoop = next_star.get("scoopable")
+            scoop_text = "SCOOPABLE" if scoop is True else "UNSCOOPABLE" if scoop is False else "CLASS UNKNOWN"
+            dry = int(next_star.get("consecutive_unscoopable") or 0)
+            dry_text = f" · DRY {dry}" if dry >= 2 else ""
+            return f"NEXT STAR · {star_label} · {scoop_text}{dry_text}", (
+                COLOR_YELLOW if scoop is False else COLOR_ACCENT
+            )
         if attention_text:
             return attention_text, COLOR_ORANGE if attention_state == "alert" else COLOR_YELLOW
         return "", "#7d8891"
@@ -1835,6 +2054,7 @@ class TacticalHUD:
         hops = list(context.get("hops") or [])
         track = context.get("route_track") or {}
         track_hops = list(track.get("hops") or []) if isinstance(track, dict) else []
+        next_star = context.get("next_star") or {}
         active = source != "NO ROUTE" and target not in ("", "---")
         complete = bool(
             track_hops
@@ -1889,6 +2109,7 @@ class TacticalHUD:
             "complete": complete,
             "hops": hops,
             "track_hops": track_hops,
+            "next_star": dict(next_star) if isinstance(next_star, dict) else {},
             "track_origin_current": bool(track.get("origin_current", True))
             if isinstance(track, dict) else True,
         }
@@ -1909,6 +2130,10 @@ class TacticalHUD:
         center = str((nav_context or {}).get("next_distance") or "")
         if center == "--":
             center = ""
+        next_star = route.get("next_star") or {}
+        star_class = str(next_star.get("star_class") or "").upper()
+        if star_class and len(star_class) <= 4 and "_" not in star_class:
+            center = f"{center} · {star_class}" if center else star_class
         right = str(route.get("distance") or (nav_context or {}).get("total_distance_text") or "")
         if right == center:
             right = ""
@@ -1957,6 +2182,11 @@ class TacticalHUD:
                     "orange": COLOR_ORANGE,
                     "completed": self._glow_color(COLOR_ACCENT, 0.52),
                     "pending": self._glow_color(COLOR_ORANGE, 0.68),
+                    "next": (
+                        COLOR_ORANGE if (route.get("next_star") or {}).get("fuel_risk") == "alert"
+                        else COLOR_YELLOW if (route.get("next_star") or {}).get("scoopable") is False
+                        else COLOR_ORANGE
+                    ),
                 },
                 dot_radius=dot_radius, bg="#010101",
             )
@@ -2048,7 +2278,11 @@ class TacticalHUD:
             return
 
         event = self._nav_event_motion
-        if not isinstance(event, dict) or event.get("kind") != "arrival":
+        arrival_kinds = {
+            "arrival", "arrival_neutron", "arrival_white_dwarf",
+            "arrival_valuable", "carrier_arrival",
+        }
+        if not isinstance(event, dict) or event.get("kind") not in arrival_kinds:
             return
         try:
             duration = max(0.4, float(event.get("duration", 1.8)))
@@ -2120,6 +2354,38 @@ class TacticalHUD:
                     width=2 if wave > 0.55 else 1,
                     tags="nav_route_motion",
                 )
+
+    def _draw_fuel_scoop_animation(self):
+        """Flow energy into the live fuel readout only while Status says scooping."""
+        self.canvas.delete("nav_fuel_motion")
+        model = self._nav_fuel_model
+        if (not model or not model.get("active")
+                or self.config.get("reduced_motion_enabled", False)):
+            return
+        try:
+            if not self.win.winfo_viewable():
+                return
+        except Exception:
+            return
+        x1, x2, y = model["x1"], model["x2"], model["y"]
+        span = max(1.0, x2 - x1)
+        base = self._cycle_progress(self._nav_marker_phase, 24)
+        dim = self._glow_color(COLOR_GREEN, 0.58)
+        self.canvas.create_line(
+            x1, y, x2, y, fill=self._glow_color(COLOR_GREEN, 0.34),
+            width=1, tags="nav_fuel_motion",
+        )
+        for index in range(3):
+            local = (base + (index / 3.0)) % 1.0
+            # Scoop flow converges on the displayed tank value at the right.
+            x = x1 + (span * local)
+            self._draw_contrast_motion_tail(
+                max(x1, x - 8), x, y,
+                dim, width=1, tags="nav_fuel_motion",
+            )
+            self._draw_contrast_motion_dot(
+                x, y, COLOR_GREEN, radius=1, tags="nav_fuel_motion",
+            )
 
     @staticmethod
     def _attention_summary(nav_context):
@@ -2206,6 +2472,9 @@ class TacticalHUD:
             fsd_readiness=nav_context.get("fsd_readiness"),
             local_target=nav_context.get("local_target"),
             neutron_boost=nav_context.get("neutron_boost"),
+            fuel_scooping=nav_context.get("fuel_scooping"),
+            surface_approach=nav_context.get("surface_approach"),
+            ship_config=nav_context.get("ship_config"),
         )
         self._draw_section_rule(16, w - 16, 34)
 
@@ -2252,6 +2521,10 @@ class TacticalHUD:
         self._draw_section_rule(16, w - 16, 184)
 
         self._draw_inline_metrics(16, w - 16, 199, survey_metrics, value_size=12)
+        self._nav_fuel_model = {
+            "active": bool(nav_context.get("fuel_scooping")),
+            "x1": 24.0, "x2": 156.0, "y": 212.0,
+        }
 
         context_display = f"◆  {context_text}" if context_text else ""
         self.draw_fitted_text(16, 222, context_display, context_color,
@@ -2348,6 +2621,9 @@ class TacticalHUD:
             fsd_readiness=nav_context.get("fsd_readiness"),
             local_target=nav_context.get("local_target"),
             neutron_boost=nav_context.get("neutron_boost"),
+            fuel_scooping=nav_context.get("fuel_scooping"),
+            surface_approach=nav_context.get("surface_approach"),
+            ship_config=nav_context.get("ship_config"),
         )
         self._draw_section_rule(20, w - 20, 37)
 
@@ -2370,6 +2646,10 @@ class TacticalHUD:
             (470, w - 20, "TRAFFIC D/W/T", compact_traffic, "#7d8891"),
         )
         self._draw_metric_cells(metric_cells, 99, 116)
+        self._nav_fuel_model = {
+            "active": bool(nav_context.get("fuel_scooping")),
+            "x1": 28.0, "x2": 157.0, "y": 126.0,
+        }
         self._draw_section_rule(20, w - 20, 130)
 
         # Original left/centre/right route header and real upcoming-hop pip strip.

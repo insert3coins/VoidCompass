@@ -9,6 +9,10 @@ from stellar_types import star_type_label
 
 
 class DashboardScanMixin:
+    _STATUS_LANDING_GEAR_DOWN = 0x00000004
+    _STATUS_CARGO_SCOOP_DEPLOYED = 0x00000200
+    _STATUS_SCOOPING_FUEL = 0x00000800
+    _STATUS_ANALYSIS_MODE = 0x08000000
     _STATUS_FSD_MASS_LOCKED = 0x00010000
     _STATUS_FSD_CHARGING = 0x00020000
     _STATUS_FSD_COOLDOWN = 0x00040000
@@ -96,6 +100,13 @@ class DashboardScanMixin:
         was_on_foot = bool(getattr(self, "current_on_foot", False))
         was_gui_focus = getattr(self, "current_gui_focus", -1)
         was_fuel_percent = self._current_fuel_percent()
+        was_navigation_awareness = (
+            getattr(self, "current_altitude_m", None),
+            bool(getattr(self, "current_landing_gear_down", False)),
+            bool(getattr(self, "current_cargo_scoop_deployed", False)),
+            bool(getattr(self, "current_analysis_mode", False)),
+            bool(getattr(self, "current_scooping_fuel", False)),
+        )
         was_navigation_readiness = (
             bool(getattr(self, "current_fsd_mass_locked", False)),
             bool(getattr(self, "current_fsd_charging", False)),
@@ -148,6 +159,23 @@ class DashboardScanMixin:
             and self.current_planet_radius is not None
             and self.current_planet_radius > 0
         )
+        altitude = self._to_float(data.get("Altitude"))
+        altitude_now = time.monotonic()
+        previous_altitude = getattr(self, "current_altitude_m", None)
+        previous_altitude_ts = getattr(self, "_status_altitude_observed_monotonic", None)
+        if altitude is not None:
+            if previous_altitude is not None and previous_altitude_ts is not None:
+                elapsed = altitude_now - previous_altitude_ts
+                if 0.05 <= elapsed <= 10.0:
+                    instantaneous = (float(previous_altitude) - altitude) / elapsed
+                    previous_rate = float(getattr(self, "_surface_descent_mps", 0.0) or 0.0)
+                    self._surface_descent_mps = (previous_rate * 0.65) + (instantaneous * 0.35)
+            self.current_altitude_m = altitude
+            self._status_altitude_observed_monotonic = altitude_now
+        elif not self.on_planet:
+            self.current_altitude_m = None
+            self._status_altitude_observed_monotonic = None
+            self._surface_descent_mps = 0.0
         specialist_engine = getattr(self, "specialist_engine", None)
         if specialist_engine:
             specialist_engine.update_position({
@@ -170,6 +198,10 @@ class DashboardScanMixin:
             self.current_fsd_charging = bool(flags & self._STATUS_FSD_CHARGING)
             self.current_fsd_cooldown = bool(flags & self._STATUS_FSD_COOLDOWN)
             self.current_fsd_jumping = bool(flags & self._STATUS_FSD_JUMPING)
+            self.current_landing_gear_down = bool(flags & self._STATUS_LANDING_GEAR_DOWN)
+            self.current_cargo_scoop_deployed = bool(flags & self._STATUS_CARGO_SCOOP_DEPLOYED)
+            self.current_analysis_mode = bool(flags & self._STATUS_ANALYSIS_MODE)
+            self.current_scooping_fuel = bool(flags & self._STATUS_SCOOPING_FUEL)
             combat_tracker = getattr(self, "combat_awareness", None)
             if combat_tracker:
                 combat_tracker.update_status(flags)
@@ -301,10 +333,17 @@ class DashboardScanMixin:
             str(getattr(self, "_navigation_jump_phase", "") or ""),
             dict(getattr(self, "current_destination_details", None) or {}),
         )
+        navigation_awareness_changed = was_navigation_awareness != (
+            getattr(self, "current_altitude_m", None),
+            bool(getattr(self, "current_landing_gear_down", False)),
+            bool(getattr(self, "current_cargo_scoop_deployed", False)),
+            bool(getattr(self, "current_analysis_mode", False)),
+            bool(getattr(self, "current_scooping_fuel", False)),
+        )
         if fuel_percent_changed:
             self._invalidate_exploration_intelligence()
         if (vehicle_state_changed or hud_state_changed or fuel_percent_changed
-                or navigation_readiness_changed) and not self.batch_mode:
+                or navigation_readiness_changed or navigation_awareness_changed) and not self.batch_mode:
             self.update_hud()
         if not self.batch_mode:
             self._check_low_fuel()
