@@ -854,6 +854,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_cargo_scoop_deployed = False
         self.current_analysis_mode = False
         self.current_scooping_fuel = False
+        self.current_supercruise_overcharge = False
         self._status_altitude_observed_monotonic = None
         self._surface_descent_mps = 0.0
         self.current_fsd_mass_locked = False
@@ -1618,6 +1619,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_cargo_scoop_deployed = False
         self.current_analysis_mode = False
         self.current_scooping_fuel = False
+        self.current_supercruise_overcharge = False
         self._status_altitude_observed_monotonic = None
         self._surface_descent_mps = 0.0
         self.current_fsd_mass_locked = False
@@ -4103,6 +4105,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "longitude": getattr(self, "current_longitude", None),
             "fuel_percent": fuel_percent,
             "fuel_scooping": bool(getattr(self, "current_scooping_fuel", False)),
+            "supercruise_overcharge": bool(
+                getattr(self, "current_supercruise_overcharge", False)
+            ),
             "route_safety": route_safety,
             "next_star": next_star,
             "surface_approach": surface_approach,
