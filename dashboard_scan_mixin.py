@@ -64,6 +64,10 @@ class DashboardScanMixin:
             self.current_in_srv = False
             self.current_vehicle_id = None
             self.current_vehicle_name = ""
+        if destination in {"fighter", "srv", "mothership"}:
+            # A vehicle hand-off is not evidence that the mothership is
+            # approaching or departing the tracked planet.
+            self._surface_departure_active = False
         self._sync_navigation_hud_flight_state(
             supercruise=self.hud_flight_state == "SUPERCRUISE"
         )
@@ -100,6 +104,9 @@ class DashboardScanMixin:
         was_in_fighter = bool(getattr(self, "current_in_fighter", False))
         was_in_srv = bool(getattr(self, "current_in_srv", False))
         was_on_foot = bool(getattr(self, "current_on_foot", False))
+        was_hud_flight_state = str(
+            getattr(self, "hud_flight_state", "") or ""
+        ).upper()
         was_gui_focus = getattr(self, "current_gui_focus", -1)
         was_fuel_percent = self._current_fuel_percent()
         was_navigation_awareness = (
@@ -110,6 +117,7 @@ class DashboardScanMixin:
             bool(getattr(self, "current_scooping_fuel", False)),
             bool(getattr(self, "current_supercruise_overcharge", False)),
             bool(getattr(self, "current_glide_mode", False)),
+            bool(getattr(self, "_surface_departure_active", False)),
         )
         was_navigation_readiness = (
             bool(getattr(self, "current_fsd_mass_locked", False)),
@@ -275,6 +283,34 @@ class DashboardScanMixin:
             hud_state_changed = self._sync_navigation_hud_flight_state(
                 supercruise=in_supercruise,
             )
+        # Liftoff is authoritative, but Status can reach us first or the
+        # journal watcher can briefly lag. Preserve an outbound direction when
+        # the landed flag clears, when a decisive climb reverses an approach,
+        # or when Status confirms a transition into supercruise around the
+        # currently tracked body. Without this latch, the shared planetary
+        # context falls back to its default APPROACH phase on the next frame.
+        approach_body_known = getattr(self, "current_body_id", None) is not None
+        try:
+            climb_rate = -float(
+                getattr(self, "_surface_descent_mps", 0.0) or 0.0
+            )
+        except (TypeError, ValueError):
+            climb_rate = 0.0
+        entered_supercruise = bool(
+            not getattr(self, "is_first_load", False)
+            and not getattr(self, "_startup_restore_active", False)
+            and was_hud_flight_state
+            and was_hud_flight_state != "SUPERCRUISE"
+            and str(getattr(self, "hud_flight_state", "") or "").upper()
+            == "SUPERCRUISE"
+        )
+        if (approach_body_known
+                and not getattr(self, "current_landed", False)
+                and not getattr(self, "current_in_srv", False)
+                and not getattr(self, "current_in_fighter", False)
+                and not getattr(self, "current_on_foot", False)
+                and (was_landed or climb_rate >= 15.0 or entered_supercruise)):
+            self._surface_departure_active = True
         if was_docked != bool(getattr(self, "current_docked", False)):
             survey = getattr(self, "survey_status_hud", None)
             if survey:
@@ -355,6 +391,7 @@ class DashboardScanMixin:
             bool(getattr(self, "current_scooping_fuel", False)),
             bool(getattr(self, "current_supercruise_overcharge", False)),
             bool(getattr(self, "current_glide_mode", False)),
+            bool(getattr(self, "_surface_departure_active", False)),
         )
         if fuel_percent_changed:
             self._invalidate_exploration_intelligence()

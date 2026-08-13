@@ -1292,6 +1292,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         # Close and persist the outgoing commander's session while every live
         # fact and UI position still belongs to that profile.
         self._save_exploration_checkpoint("profile-change", immediate=True)
+        self._capture_dashboard_window_geometry()
         outgoing_engineer_path = self.config.get("engineer_materials_file")
         self._close_profile_surfaces()
         if outgoing_engineer_path:
@@ -1346,6 +1347,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._refresh_profile_paths()
         self._reset_profile_runtime_state(commander_name, self.config.get("active_commander_fid"))
         self._apply_active_profile_theme()
+        self._apply_dashboard_window_geometry()
         # These long-lived workers retain the same config object today, but
         # rebinding them makes the profile boundary explicit and future-proof.
         self.screenshots.config = self.config
@@ -1508,8 +1510,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         self.compass_cognition = None
         self.root.title(f"VOID COMPASS // v{APP_VERSION}")
-        self.root.geometry(self.config.get("main_geometry", "1320x820"))
-        self.root.minsize(1080, 700)
+        self._apply_dashboard_window_geometry()
         self.root.configure(bg=COLOR_BG)
         
         self.is_running = True
@@ -2707,6 +2708,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.config["colony_overlay_w"], self.config["colony_overlay_h"] = w, h
             except Exception:
                 pass
+        self._capture_dashboard_window_geometry()
         self.config["main_geometry"] = self.root.geometry()
         self._persist_config()
         if hasattr(self, 'conn'):
@@ -4139,6 +4141,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 and not getattr(self, "current_docked", False)
                 and not getattr(self, "current_on_foot", False)
                 and not getattr(self, "current_in_srv", False)
+                and not getattr(self, "current_in_fighter", False)
             ),
             "phase": approach_phase,
             "body": getattr(self, "current_body_name", "") or "",
@@ -4311,10 +4314,59 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         while self._event_rate_ts and self._event_rate_ts[0] < cutoff:
             self._event_rate_ts.popleft()
 
+    def _navigation_vehicle_transition_label(self, event, raw, data):
+        """Name a live vehicle hand-off without borrowing a ship-flight state."""
+        event = str(event or "")
+        raw = raw if isinstance(raw, dict) else {}
+        data = data if isinstance(data, dict) else {}
+        if event in {"LaunchSRV", "DockSRV"}:
+            vehicle = self._srv_toast_vehicle_name(raw, data)
+        elif event in {"LaunchFighter", "DockFighter"}:
+            loadout = data.get("Loadout") or raw.get("Loadout")
+            vehicle = "NOMAD" if str(loadout or "").casefold() == "galactic" else "FIGHTER"
+        elif event in {"Embark", "Disembark"}:
+            in_srv = bool(data.get("SRV") or raw.get("SRV"))
+            taxi = bool(data.get("Taxi") or raw.get("Taxi"))
+            vehicle = (
+                self._srv_toast_vehicle_name(raw, data) if in_srv
+                else "TAXI" if taxi else "SHIP"
+            )
+        elif event == "VehicleSwitch":
+            destination = str(data.get("To") or raw.get("To") or "").strip().casefold()
+            if destination == "srv":
+                vehicle = self._srv_toast_vehicle_name(raw, data)
+            elif destination == "fighter":
+                vehicle = "FIGHTER"
+            elif destination == "mothership":
+                vehicle = "MOTHERSHIP"
+            else:
+                vehicle = str(destination or "VEHICLE").upper()
+        else:
+            return ""
+
+        if event.startswith("Launch"):
+            return f"{vehicle} DEPLOY"
+        if event.startswith("Dock"):
+            return f"{vehicle} RECOVERY"
+        if event == "Embark":
+            return f"BOARDING {vehicle}"
+        if event == "Disembark":
+            return f"{vehicle} EGRESS"
+        return f"{vehicle} CONTROL"
+
     def _observe_navigation_hud_event(self, event, raw, data, startup_replay=False):
         """Publish one compact, live-only event pulse to the Navigation HUD."""
         if (startup_replay or getattr(self, "_startup_restore_active", False)
                 or not event):
+            return False
+        if event in {"Liftoff", "Touchdown"} and any((
+                getattr(self, "current_in_srv", False),
+                getattr(self, "current_in_fighter", False),
+                getattr(self, "current_on_foot", False),
+        )):
+            # This is the recalled mothership moving while the commander is
+            # outside it. Preserve the active vehicle indicator and do not
+            # overlay the ship's ascent/descent motion on top of it.
             return False
         spec = self._NAV_HUD_EVENT_SPECS.get(str(event))
         if not spec:
@@ -4415,6 +4467,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             count = min(3, int(previous.get("count", 1) or 1) + 1)
 
         detail = {}
+        if kind in {"vehicle_deploy", "vehicle_board", "vehicle_switch"}:
+            state_label = self._navigation_vehicle_transition_label(
+                event, payload, normalised,
+            )
+            if state_label:
+                detail["state_label"] = state_label
         if kind == "bio_sample":
             scan_type = str(
                 normalised.get("scan_type") or payload.get("ScanType") or ""
@@ -6263,6 +6321,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             or raw.get("SRVType_Localised") or raw.get("SRVType")
             or data.get("VehicleType") or raw.get("VehicleType")
         )
+        explicit_key = str(explicit or "").strip().casefold()
+        if explicit_key:
+            if "nomad" in explicit_key or explicit_key == "lander01":
+                return "NOMAD"
+            # A concrete Scarab/Scorpion identity beats an older remembered
+            # Nomad, particularly when commanders swap bays between sorties.
+            if any(token in explicit_key for token in (
+                    "scarab", "scorpion", "testbuggy", "combat")):
+                return "SRV"
         loadout = data.get("Loadout") or raw.get("Loadout")
         remembered = (
             (getattr(self, "_vehicle_name_by_id", {}) or {}).get(vehicle_id)
@@ -7240,6 +7307,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.hud_flight_state = "SUPERCRUISE"
             self.current_docked = False
             self.current_on_foot = False
+            # When a body is still tracked, entering supercruise is an
+            # outbound orbital transition. Keep the Liftoff direction latched
+            # until LeaveBody clears it instead of reverting to APPROACH.
+            if getattr(self, "current_body_id", None) is not None:
+                self._surface_departure_active = True
             self.update_hud()
 
         elif ev == "SupercruiseExit":
@@ -7262,6 +7334,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_in_srv = False
             self.current_in_fighter = False
             self.hud_flight_state = "ONFOOT"
+            self._surface_departure_active = False
             self.update_hud()
 
         elif ev == "Embark":
@@ -7287,41 +7360,68 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.current_vehicle_id = None
                 self.current_vehicle_name = ""
                 self.hud_flight_state = "FLIGHT"
+            self._surface_departure_active = False
             self.update_hud()
 
         elif ev == "LaunchFighter":
-            self.current_in_fighter = True
+            player_controlled = d.get("PlayerControlled")
+            if player_controlled is None and isinstance(raw, dict):
+                player_controlled = raw.get("PlayerControlled")
+            if player_controlled is not False:
+                self.current_in_fighter = True
+                self.current_in_srv = False
+                self.current_on_foot = False
+                vehicle_id = d.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
+                loadout = d.get("Loadout") or (raw.get("Loadout") if isinstance(raw, dict) else "")
+                loadout = str(loadout or "").lower()
+                self.current_vehicle_name = "NOMAD" if loadout == "galactic" else "FIGHTER"
+                self.current_vehicle_id = vehicle_id
+                if vehicle_id is not None:
+                    self._vehicle_name_by_id[vehicle_id] = self.current_vehicle_name
+                self._last_surface_vehicle_name = self.current_vehicle_name
+                self.hud_flight_state = self.current_vehicle_name
+                # Elite exposes the Nomad as LaunchFighter/Loadout=galactic.
+                # Both it and a commander-controlled SLF launch are vehicle
+                # hand-offs, not evidence of mothership approach/departure.
+                self._surface_departure_active = False
+            self.update_hud()
+
+        elif ev == "LaunchSRV":
+            self.current_in_fighter = False
+            self.current_in_srv = True
             self.current_on_foot = False
             vehicle_id = d.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
-            loadout = d.get("Loadout") or (raw.get("Loadout") if isinstance(raw, dict) else "")
-            loadout = str(loadout or "").lower()
-            self.current_vehicle_name = "NOMAD" if loadout == "galactic" else "FIGHTER"
+            vehicle_name = self._srv_toast_vehicle_name(raw, d)
             self.current_vehicle_id = vehicle_id
+            self.current_vehicle_name = vehicle_name
             if vehicle_id is not None:
-                self._vehicle_name_by_id[vehicle_id] = self.current_vehicle_name
-            self._last_surface_vehicle_name = self.current_vehicle_name
-            self.hud_flight_state = self.current_vehicle_name
+                self._vehicle_name_by_id[vehicle_id] = vehicle_name
+            self._last_surface_vehicle_name = vehicle_name
+            self.hud_flight_state = vehicle_name
+            self._surface_departure_active = False
             self.update_hud()
 
         elif ev in ("DockFighter", "FighterDestroyed"):
             self.current_in_fighter = False
+            self.current_in_srv = False
             self.current_vehicle_id = None
             self.current_vehicle_name = ""
             self.hud_flight_state = "LANDED" if self.current_landed else "FLIGHT"
+            self._surface_departure_active = False
             self.update_hud()
 
         elif ev == "DockSRV":
             vehicle_id = d.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
-            vehicle_name = d.get("SRVType_Localised") or d.get("SRVType") or (raw.get("SRVType_Localised") if isinstance(raw, dict) else "")
-            is_nomad = str(vehicle_name).lower() == "nomad"
+            vehicle_name = self._srv_toast_vehicle_name(raw, d)
             if vehicle_id is not None:
-                self._vehicle_name_by_id[vehicle_id] = "NOMAD" if is_nomad else "SRV"
-            if is_nomad:
-                self.current_vehicle_name = ""
-                self.current_in_fighter = False
+                self._vehicle_name_by_id[vehicle_id] = vehicle_name
+            self.current_vehicle_name = ""
+            self.current_in_fighter = False
+            self.current_in_srv = False
             self.current_on_foot = False
             self.current_vehicle_id = None
             self.hud_flight_state = "LANDED" if self.current_landed else "FLIGHT"
+            self._surface_departure_active = False
             self.update_hud()
 
         elif ev == "FSSDiscoveryScan":
@@ -7741,8 +7841,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if body_name:
                 self.current_body_name = body_name
             self.current_landed = False
-            self.hud_flight_state = "FLIGHT"
-            self._surface_departure_active = True
+            vehicle_active = bool(
+                getattr(self, "current_in_srv", False)
+                or getattr(self, "current_in_fighter", False)
+                or getattr(self, "current_on_foot", False)
+            )
+            if vehicle_active:
+                # The mothership may launch/recall while its commander remains
+                # in an SRV, Nomad, fighter or on foot. Keep that vehicle as
+                # the indicator owner instead of inventing a ship departure.
+                self._surface_departure_active = False
+                self._sync_navigation_hud_flight_state(supercruise=False)
+            else:
+                self.hud_flight_state = "FLIGHT"
+                self._surface_departure_active = True
             if not self.batch_mode:
                 self.update_hud()
         elif ev == "Touchdown":
@@ -7756,8 +7868,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if body_name:
                 self.current_body_name = body_name
             self.current_landed = True
-            self.hud_flight_state = "LANDED"
             self._surface_departure_active = False
+            # Touchdown can describe the recalled mothership while the
+            # commander remains outside it, so vehicle state retains priority.
+            self._sync_navigation_hud_flight_state(supercruise=False)
             if not self.batch_mode:
                 self.update_hud()
 

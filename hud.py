@@ -474,6 +474,12 @@ class TacticalHUD:
         if (nav_context.get("supercruise_overcharge")
                 and flight_state == "SUPERCRUISE"):
             return "SCO OVERCHARGE"
+        journal_event = nav_context.get("journal_event") or {}
+        if str(journal_event.get("kind") or "") in {
+                "vehicle_deploy", "vehicle_board", "vehicle_switch"}:
+            transition_label = str(journal_event.get("state_label") or "").strip()
+            if transition_label:
+                return transition_label.upper()
 
         focus_key = (
             str(nav_context.get("gui_focus", ""))
@@ -542,6 +548,10 @@ class TacticalHUD:
         return "FLIGHT"
 
     def _state_color(self, state_text):
+        state_text = str(state_text or "").upper()
+        if (state_text.endswith((" DEPLOY", " RECOVERY", " EGRESS", " CONTROL"))
+                or state_text.startswith("BOARDING ")):
+            return COLOR_ACCENT
         if state_text in {"ARRIVAL", "CARRIER ARRIVAL"}:
             return COLOR_GREEN
         if state_text in (
@@ -564,6 +574,12 @@ class TacticalHUD:
     def _navigation_motion_profile(state_text):
         """Map journal/UI states to small, visually distinct motion families."""
         state = str(state_text or "FLIGHT").upper()
+        if state.endswith(" DEPLOY") or state.endswith(" EGRESS"):
+            return "vehicle_deploy"
+        if state.endswith(" RECOVERY") or state.startswith("BOARDING "):
+            return "vehicle_board"
+        if state.endswith(" CONTROL"):
+            return "vehicle_switch"
         if state == "MASS LOCK":
             return "fsd_lock"
         if state in {"FSD CHARGE", "HYPER CHARGE"}:
@@ -769,6 +785,22 @@ class TacticalHUD:
                 self.canvas.create_oval(
                     *flat((offset - 1, 1), (offset + 1, 3)),
                     fill=dim, outline="", tags=tags,
+                )
+            return
+        if profile in {"vehicle_deploy", "vehicle_board", "vehicle_switch"}:
+            # Three transfer cells mirror the bounded journal pulse. Their
+            # emphasis distinguishes leaving, returning and changing control.
+            reverse = profile == "vehicle_board"
+            for index in range(3):
+                offset = (index - 1) * 4
+                tone = color if index == (0 if reverse else 2) else dim
+                self.canvas.create_rectangle(
+                    *flat((offset - 1.5, -2), (offset + 1.5, 2)),
+                    fill=tone, outline="", tags=tags,
+                )
+            if profile == "vehicle_switch":
+                self.canvas.create_line(
+                    *flat((-5, -4), (5, -4)), fill=color, width=1, tags=tags,
                 )
             return
         if profile == "scanner":
