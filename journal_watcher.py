@@ -285,7 +285,21 @@ class JournalWatcher:
         except Exception:
             return
 
-        if not files: return
+        if not files:
+            if not self._startup_catchup_done:
+                completion = {
+                    "type": "StartupCatchupComplete",
+                    "raw": {},
+                    "data": {},
+                    "startup_catchup": True,
+                    "startup_catchup_final": True,
+                }
+                if self.batch_event_callback:
+                    self.batch_event_callback([completion])
+                elif self.event_callback:
+                    self.event_callback(completion)
+                self._startup_catchup_done = True
+            return
         
         latest = files[-1]
         

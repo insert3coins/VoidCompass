@@ -1,14 +1,15 @@
 # VoidCompass // UPDATE LOG
 
-## v5.3.7.6 // Compact Flight Log
+## v5.3.7.7 // Flight Computer Bootloader
 **Release Date:** 2026-Aug-14
 
-*   Added a genuinely compact **Flight Log** mode inside the main Void Compass window. It removes the navigation rail and command strip, keeps a concise live system, ship, fuel, survey, route and field-value briefing, and gives the curated Exploration Log the remaining space. One **Restore Dashboard** control returns to the complete command deck; this is a focused live view rather than a resized or duplicated Dashboard.
-*   Flight Log uses the same cached exploration intelligence and curated event model as the full Dashboard; its event view redraws only when relevant entries change. It follows live themes and remembers its own window size and position per commander. The selected full/compact surface also follows each profile across app restarts and profile switches, while the compact Navigation HUD overlay remains independent.
-*   Smoothed interactive resizing of the full Dashboard. Its large widget tree now holds the last settled internal layout while the native window follows the drag, then performs one accurate responsive reflow at the final size instead of cascading geometry work for every resize pixel. Live Dashboard refresh requests are retained and applied afterward instead of repainting mid-drag; unchanged headline telemetry and the route strip also skip redundant drawing. Workspace geometry is cached, the fixed navigation rail skips unchanged bounds, and the raw journal canvas coalesces repeated redraws; unrelated surface-trail projection also waits until the drag settles, then applies the latest state once.
+*   Added a polished, code-native **Flight Computer Bootloader** to every launch, with a layered galactic backdrop, flight-system verification deck, animated FSS scope, route solution, survey contacts and segmented readiness telemetry. It follows the active theme and reduced-motion preference, centres over the profile's saved Dashboard or Flight Log position, and adds no asset or runtime dependency.
+*   Made the bootloader an authoritative, non-skippable loading boundary rather than a decorative delay. It remains visible through real profile and database construction, historical indexing and recent-journal catch-up, reports each live phase, and reveals the Dashboard and enabled overlays only after the journal tail and final cached state are ready. Closing the bootloader exits Void Compass normally.
+*   Genuine first launch now runs the same presentation as a dedicated **First Commissioning** sequence before Commander Setup and the final readiness handoff.
 
 ## Earlier releases
 
+*   **v5.3.7.6** — Added the genuinely compact profile-aware Flight Log, retained the curated exploration model and independent Compact Navigation HUD, and smoothed full-Dashboard resizing by coalescing responsive layout, telemetry and projection redraws until the drag settles.
 *   **v5.3.7.5** — Retired the duplicate first-generation Compact Dashboard, consolidated each profile onto one authoritative Dashboard footprint, completed the Navigation HUD's journal/status lifecycle and vehicle-awareness audit, replaced duplicate top-instrument metrics with state-driven motion, and removed belt clusters from Survey Operations while retaining their data tracking and uploads.
 *   **v5.3.7.4** — Deepened Navigation HUD awareness with scoopability and fuel-risk intelligence, surface approach/departure, gravity and ship configuration, local-target acquisition, SCO, Fleet Carrier transit, valuable arrival signatures and the narrower signal-focused Survey Operations presentation.
 *   **v5.3.7.3** — Made complete game and custom routes persist in fixed geometry on the Navigation HUD, with readable short/long-route treatments, completed history, an advancing current locator and a bounded one-leg arrival handoff.
