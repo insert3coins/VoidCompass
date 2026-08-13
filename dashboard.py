@@ -1562,6 +1562,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._startup_presentation_ready = False
         self._startup_journal_events_loaded = 0
         self._startup_overlay_restore = set()
+        self._startup_presentation_held = bool(
+            getattr(self.root, "_voidcompass_startup_presentation_held", False)
+        )
         self._startup_boot_handoff_job = None
         self._startup_boot_journal_timeout_job = None
         
@@ -1942,6 +1945,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         else:
             self.colony_overlay = None
 
+        # Capture each overlay's intended initial visibility and withdraw it
+        # before database construction or any Tk idle processing can map a
+        # transparent startup Toplevel. Journal catch-up may update these
+        # hidden windows, but cannot expose them ahead of the final handoff.
+        if self._startup_presentation_held:
+            self._hold_startup_presentation()
+
         self._apply_overlay_mouse_passthrough()
         if not self._startup_recovery_mode:
             self._apply_adaptive_overlay_scene()
@@ -2100,6 +2110,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         splash = getattr(self.root, "_voidcompass_startup_splash", None)
         if splash is None:
             return
+        self._startup_presentation_held = True
+        self.root._voidcompass_startup_presentation_held = True
         for name, window in self._overlay_hotkey_window_items():
             try:
                 if self._overlay_window_is_shown(window):
@@ -2113,6 +2125,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             splash.lift()
         except tk.TclError:
             pass
+
+    def _release_startup_overlay_curtain(self):
+        """Make fully prepared overlays drawable without mapping them yet."""
+        self._reapply_overlay_positions()
+        for _name, window in self._overlay_hotkey_window_items():
+            try:
+                if not window.winfo_exists():
+                    continue
+                window.attributes("-alpha", 1.0)
+                window._voidcompass_startup_held = False
+            except (AttributeError, tk.TclError):
+                continue
+        self._startup_presentation_held = False
+        self.root._voidcompass_startup_presentation_held = False
 
     def _run_startup_history_phase(self, phase, target, args):
         try:
@@ -2194,6 +2220,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _finish_startup_presentation(self):
         self._startup_boot_handoff_job = None
+        # One last curtain pass catches overlays whose final journal
+        # reconciliation deliberately called show(). Restore their saved
+        # coordinates while invisible, then permit mapping exactly once.
+        self._hold_startup_presentation()
+        restore = set(self._startup_overlay_restore)
+        self._startup_overlay_restore.clear()
+        self._release_startup_overlay_curtain()
         splash = getattr(self.root, "_voidcompass_startup_splash", None)
         boot = self._startup_boot()
         if boot is not None:
@@ -2209,8 +2242,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.root.lift()
         except tk.TclError:
             return
-        restore = set(self._startup_overlay_restore)
-        self._startup_overlay_restore.clear()
         self._restore_overlay_hotkey_windows(restore)
         self._apply_adaptive_overlay_scene()
         try:
@@ -2382,6 +2413,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     window.deiconify()
                     window.attributes("-topmost", True)
                     window.lift()
+                    if attr == "ground_popup":
+                        self._ground_popup_visible = True
             except (AttributeError, tk.TclError):
                 continue
 

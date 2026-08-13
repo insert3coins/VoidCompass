@@ -4866,7 +4866,14 @@ class DashboardUIMixin(ThemedWindowMixin):
             self._config_label_if_changed(self.ground_popup_line1, text=f"{direction} | {distance_txt}")
             self._config_label_if_changed(self.ground_popup_line2, text=f"Bearing {bearing:03.0f} deg | Turn {turn_txt}")
             self._draw_ground_popup_compass(solution)
-        if not getattr(self, "_ground_popup_visible", False):
+        if bool(getattr(self, "_startup_presentation_held", False)):
+            # The surface target can be restored from cached cockpit state
+            # before journal catch-up finishes. Prepare it, but keep the popup
+            # behind the same bootloader curtain as the canvas overlays.
+            getattr(self, "_startup_overlay_restore", set()).add("ground_popup")
+            self.ground_popup.withdraw()
+            self._ground_popup_visible = False
+        elif not getattr(self, "_ground_popup_visible", False):
             self.ground_popup.deiconify()
             self._ground_popup_visible = True
         self._perf_spike("_update_ground_popup", t0, threshold_ms=22.0)

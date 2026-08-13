@@ -54,6 +54,20 @@ def configure_overlay_window(window, chroma="#ff00ff"):
     failing construction or displaying a magenta rectangle.
     """
     background = chroma if os.name == "nt" else _BG
+    # Every overlay is constructed while the startup bootloader owns the
+    # presentation. Make new Toplevels fully transparent before Tk gets an
+    # idle opportunity to map them; Dashboard releases the curtain only after
+    # journal/history recovery and saved-position restoration are complete.
+    master = getattr(window, "master", None)
+    startup_held = bool(
+        getattr(master, "_voidcompass_startup_presentation_held", False)
+    )
+    if startup_held:
+        try:
+            window.attributes("-alpha", 0.0)
+            window._voidcompass_startup_held = True
+        except Exception:
+            pass
     try:
         if os.name == "nt":
             window.attributes(

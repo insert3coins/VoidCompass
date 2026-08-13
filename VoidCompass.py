@@ -83,6 +83,9 @@ def main():
         # window, mapping it early can make child HUDs report transient window
         # manager coordinates before their saved positions are reapplied.
         root.withdraw()
+        # Shared overlay chrome reads this before any HUD Toplevel can map.
+        # The Dashboard clears it only at the authoritative live handoff.
+        root._voidcompass_startup_presentation_held = True
         if crash_reporting_enabled:
             crash_reporter.install_tk(root)
             root.bind_all("<Control-Alt-d>", lambda _event: crash_reporter.dump_stacks("manual Ctrl+Alt+D"))
@@ -115,9 +118,10 @@ def main():
                 # Retain an explicit reference for the callback-driven startup
                 # path; Tk callbacks alone should not own the application.
                 root._voidcompass_app = app
-                root.update_idletasks()
                 active_splash = getattr(root, "_voidcompass_startup_splash", None)
                 if active_splash is not None:
+                    # Withdraw and remember intended overlay visibility before
+                    # update_idletasks is allowed to process any pending maps.
                     app._hold_startup_presentation()
                     app._startup_boot_update(
                         "RESTORING JOURNAL HISTORY",
@@ -125,8 +129,10 @@ def main():
                         0.46,
                     )
                 else:
+                    root._voidcompass_startup_presentation_held = False
                     root.deiconify()
                     root.lift()
+                root.update_idletasks()
                 return True
             except StartupCancelled:
                 if splash is not None:
