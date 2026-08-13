@@ -4411,6 +4411,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if (startup_replay or getattr(self, "_startup_restore_active", False)
                 or not event):
             return False
+        if event in {"FSSAllBodiesFound", "SAAScanComplete", "ScanOrganic"}:
+            # Completion/sample state already has authoritative, persistent
+            # presentation below the top instrument and in Survey Operations.
+            # Do not resurrect the retired green survey channel as a short
+            # journal pulse after the state-owned animation takes over.
+            return False
         if event in {"Liftoff", "Touchdown"}:
             normalised = data if isinstance(data, dict) else {}
             payload = raw if isinstance(raw, dict) else {}
