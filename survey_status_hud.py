@@ -16,9 +16,6 @@ SIGNAL_FONT = ("Courier", 10, "bold")
 BIO_DETAIL_FONT = ("Courier", 9, "bold")
 BIO_SYMBOL_FONT = ("Courier", 10, "bold")
 BIO_DETAIL_H = 18
-BELT_DETAIL_FONT = ("Courier", 7, "bold")
-BELT_SYMBOL_FONT = ("Courier", 8, "bold")
-BELT_DETAIL_H = 16
 SAMPLE_CARD_H = 52
 
 
@@ -57,18 +54,6 @@ def _body_display_name(name, system_name, planet_class=None, terraformable=False
     if terraformable:
         label += " · TF"
     return label
-
-
-def _distance_ls(value):
-    try:
-        value = float(value)
-    except (TypeError, ValueError):
-        return ""
-    if value < 10:
-        return f"{value:.2f} LS"
-    if value < 1_000:
-        return f"{value:.1f} LS"
-    return f"{value:,.0f} LS"
 
 
 def _body_matches(item, body_id, body_name):
@@ -327,32 +312,6 @@ def _joined_lines(values, max_chars=62):
     return lines
 
 
-def _belt_cluster_rows(system_name, belt_clusters):
-    """Normalise journal belt contacts without treating them as FSS bodies."""
-    rows = []
-    seen = set()
-    for raw in belt_clusters or ():
-        if not isinstance(raw, dict):
-            continue
-        name = str(raw.get("name") or raw.get("body_name") or "").strip()
-        body_id = raw.get("body_id")
-        key = str(body_id) if body_id is not None else name.casefold()
-        if not name or key in seen:
-            continue
-        seen.add(key)
-        rows.append({
-            "body_id": body_id,
-            "name": name,
-            "display_name": _short_body_name(name, system_name),
-            "distance": _distance_ls(raw.get("distance_ls")),
-            "new_discovery": raw.get("was_discovered") is False,
-        })
-    rows.sort(key=lambda row: (
-        _safe_int(row.get("body_id"), 999_999), row.get("display_name", ""),
-    ))
-    return rows
-
-
 def build_survey_model(system_name, scan_items, focused_body_id=None,
                        focused_body_name=None, sampling=None, scanned=0, total=0,
                        min_notable_value=50_000, palette=None, total_known=True,
@@ -360,7 +319,6 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
     """Build a renderer-neutral survey model for the overlay and tests."""
     bodies = _survey_bodies(scan_items, body_signals)
     notable_rows = build_notable_body_rows(scan_items, min_notable_value, palette)
-    belt_rows = _belt_cluster_rows(system_name, belt_clusters)
     for row in notable_rows:
         row["display_name"] = _body_display_name(
             row.get("name"), system_name, row.get("planet_class"), row.get("terraformable")
@@ -408,7 +366,6 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
                         str(row.get("name") or "").casefold(),
                     ) != focused_notable_key
                 ],
-                "belt_clusters": belt_rows,
                 "scanned": _safe_int(scanned), "total": _safe_int(total),
                 "total_known": bool(total_known),
             }
@@ -468,7 +425,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
     scan_in_progress = bool(
         total_known and _safe_int(total) > 0 and _safe_int(scanned) < _safe_int(total)
     )
-    if not rows and not remaining_notable and not belt_rows and not sampling and not scan_in_progress:
+    if not rows and not remaining_notable and not sampling and not scan_in_progress:
         return None
     return {
         "mode": "system", "system": system_name or "", "rows": rows,
@@ -477,7 +434,6 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
         "total_known": bool(total_known),
         "notable_count": len(notable_rows),
         "scan_in_progress": scan_in_progress,
-        "belt_clusters": belt_rows,
     }
 
 
@@ -542,16 +498,9 @@ def _survey_render_key(model):
             notable_key(row.get("notable")) if row.get("notable") else None,
             tuple(detail_key(detail) for detail in row.get("bio_details") or ()),
         ))
-    belt_keys = tuple(
-        (
-            row.get("body_id"), row.get("display_name"), row.get("distance"),
-            bool(row.get("new_discovery")),
-        )
-        for row in model.get("belt_clusters") or ()
-    )
     return common + (
         tuple(row_keys), _safe_int(model.get("notable_count")),
-        bool(model.get("scan_in_progress")), belt_keys,
+        bool(model.get("scan_in_progress")),
     )
 
 
@@ -921,7 +870,6 @@ class SurveyStatusHUD:
         is_body = model["mode"] == "body"
         rows = list(model.get("rows") or [])
         sampling = model.get("sampling")
-        belt_rows = [] if is_body else list(model.get("belt_clusters") or [])
         notable_rows = list(model.get("notable_rows") or [])
 
         if is_body:
@@ -962,9 +910,8 @@ class SurveyStatusHUD:
                     row_h += 14
                 row_layout.append((row, groups, row_h))
                 content_h += row_h
-            belt_h = (18 + len(belt_rows) * 15) if belt_rows else 0
             notable_h = (18 + len(notable_rows) * 30) if notable_rows else 0
-            height = max(92, 68 + content_h + belt_h + notable_h + 25)
+            height = max(92, 68 + content_h + notable_h + 25)
 
         self._resize(height)
         self.canvas.delete("all")
@@ -1076,15 +1023,6 @@ class SurveyStatusHUD:
                 self._text(24, y, "NOTABLE BODY", palette["dim"], ("Courier", 7, "bold"))
                 self._text(WIDTH - 16, y, notable["value_line"], notable["value_color"], ("Courier", 7, "bold"), "e")
                 y += 14
-
-        if belt_rows:
-            self._text(16, y + 5, f"BELT CLUSTERS {len(belt_rows)}", palette["dim"], ("Courier", 7, "bold"))
-            y += 18
-            for belt in belt_rows:
-                self._text(22, y, "◆", palette["dim"], BELT_SYMBOL_FONT)
-                self._text(36, y, _truncate(belt.get("display_name"), 43), palette["muted"], BELT_DETAIL_FONT)
-                self._text(WIDTH - 16, y, belt.get("distance") or "FOUND", palette["dim"], BELT_DETAIL_FONT, "e")
-                y += 15
 
         if notable_rows:
             self._text(16, y + 5, f"VALUABLE / NOTABLE {len(notable_rows)}", palette["dim"], ("Courier", 7, "bold"))
