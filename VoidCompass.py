@@ -7,7 +7,7 @@ import atexit
 import tempfile
 import crash_reporter
 from config import load_config
-from dashboard import MainDashboard
+from dashboard import MainDashboard, StartupCancelled
 from onboarding import should_show as should_show_onboarding
 from onboarding_splash import show_startup_boot
 
@@ -127,6 +127,18 @@ def main():
                 else:
                     root.deiconify()
                     root.lift()
+                return True
+            except StartupCancelled:
+                if splash is not None:
+                    try:
+                        splash.destroy()
+                    except tk.TclError:
+                        pass
+                try:
+                    root.destroy()
+                except tk.TclError:
+                    pass
+                return False
             except BaseException:
                 if splash is not None:
                     try:
@@ -144,7 +156,8 @@ def main():
         if should_show_onboarding(startup_config):
             # Genuine first launch owns its commissioning boot and setup inside
             # MainDashboard's existing blocking bootstrap boundary.
-            launch_dashboard()
+            if not launch_dashboard():
+                return
         else:
             # Returning launches enter mainloop immediately so the lightweight
             # boot scene animates before synchronous Dashboard construction.

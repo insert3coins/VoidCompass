@@ -126,11 +126,8 @@ def show_first_run(root, config, on_complete, *, standalone=False):
             pass
         try:
             win.destroy()
-        finally:
-            try:
-                root.destroy()
-            except tk.TclError:
-                pass
+        except tk.TclError:
+            pass
 
     def show_setup():
         boot = state.get("boot")
