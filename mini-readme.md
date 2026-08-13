@@ -1,5 +1,14 @@
 # VoidCompass // UPDATE LOG
 
+## v5.3.7.5 // Compact Exploration Deck
+**Release Date:** 2026-Aug-13
+
+*   Added a purpose-built **Compact Dashboard** as the everyday exploration view. It keeps the live survey state, scan completion, next route leg, highest-priority action and discovery summary in a much smaller flight deck while the existing full briefing and Exploration Log remain available through **Expanded View**.
+*   Added a one-click quick-access row for Survey, Route, Galactic Atlas, Mission Control, Discoveries, Analytics, Profile and Field Tools. The compact deck mirrors the same journal-backed adaptive state as the expanded dashboard rather than maintaining a second cache, and its Compact/Expanded preference is saved independently for each commander profile with full live-theme support.
+*   Compact and Expanded are now true window modes rather than page-only layouts. Switching views resizes the native application immediately, remembers a separate size and screen position for each layout and commander, restores the previous Expanded footprint on return, and retains the existing resize-and-scroll safeguards in both modes. The first Expanded footprint is now 1720×1120 so its natural three-column briefing and lower Exploration Log/footer no longer wrap inside the old 1320px window; existing smaller saved footprints migrate once while later commander resizing remains authoritative.
+*   Corrected planetary departure direction on the Navigation HUD. `Liftoff` now remains authoritative through the climb, the landed-to-flight and decisive-climb Status transitions can recover a delayed journal event, and entering supercruise while the body is still tracked explicitly advances to **ORBITAL DEPARTURE** until `LeaveBody` completes the sequence instead of falling back to an approach label.
+*   Made the Navigation HUD vehicle-aware during surface and fighter hand-offs. SRV, Nomad and ship-launched fighter deployment/recovery now receive explicit bounded indicator states, `LaunchSRV` updates immediately instead of waiting for Status.json, Nomad's `LaunchFighter`/`galactic` journal shape is recognised, and vehicle transitions can no longer masquerade as planetary approach or mothership departure. A recalled ship's `Liftoff`/`Touchdown` also preserves the active SRV, Nomad, fighter or on-foot indicator until the commander actually boards, while crew-controlled fighter launches no longer transfer the commander's persistent HUD state.
+
 ## v5.3.7.4 // Navigation Awareness
 **Release Date:** 2026-Aug-13
 

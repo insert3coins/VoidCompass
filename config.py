@@ -159,6 +159,7 @@ PROFILE_BOOL_SETTINGS = (
     "overlay_enabled",
     "overlay_mouse_passthrough",
     "overlay_hotkeys_enabled",
+    "dashboard_compact_mode",
     "hud_compact_mode",
     "cargo_overlay_enabled",
     "carrier_overlay_enabled",
@@ -251,6 +252,9 @@ PROFILE_VALUE_SETTINGS = (
     "overlay_text_scale_percent",
     "overlay_layout_presets",
     "overlay_layout_studio_geometry",
+    "dashboard_compact_geometry",
+    "dashboard_expanded_geometry",
+    "dashboard_window_geometry_version",
     "explore_map_view_state",
     "explore_map_annotations",
     "explore_map_annotation_geometry",
@@ -415,6 +419,47 @@ def apply_profile_config(config, profile_key=None):
         profile["exploration_focus_enabled"] = True
         profile["exploration_focus_migrated"] = True
     is_initial_profile = len(profiles) <= 1
+    # v5.3.7.5 gives Compact and Expanded independent window sizes. Preserve
+    # the existing main-window geometry as this commander's first Expanded
+    # size, while Compact starts smaller at the same screen position.
+    base_geometry = str(
+        config.get("main_geometry") or "1320x820"
+    )
+    position_match = re.search(r"([+-]-?\d+)([+-]-?\d+)$", base_geometry)
+    position_suffix = position_match.group(0) if position_match else ""
+    if "dashboard_expanded_geometry" not in profile:
+        profile["dashboard_expanded_geometry"] = (
+            base_geometry if is_initial_profile else f"1320x820{position_suffix}"
+        )
+    if "dashboard_compact_geometry" not in profile:
+        profile["dashboard_compact_geometry"] = f"1120x680{position_suffix}"
+    # The original Expanded target was only 1320px wide. Its three-column
+    # briefing then wrapped heavily beneath the persistent 232px rail, making
+    # the lower log/footer feel clipped even in a tall window. Grow that one
+    # shipped footprint once; any size the commander chooses afterwards wins.
+    try:
+        dashboard_geometry_version = int(
+            profile.get("dashboard_window_geometry_version") or 0
+        )
+    except (TypeError, ValueError):
+        dashboard_geometry_version = 0
+    if dashboard_geometry_version < 2:
+        expanded = str(
+            profile.get("dashboard_expanded_geometry") or "1720x1120"
+        )
+        expanded_match = re.fullmatch(
+            r"(\d+)x(\d+)((?:[+-]-?\d+){2})?", expanded,
+        )
+        if expanded_match:
+            expanded_width = max(1720, int(expanded_match.group(1)))
+            expanded_height = max(1120, int(expanded_match.group(2)))
+            expanded_position = expanded_match.group(3) or ""
+            profile["dashboard_expanded_geometry"] = (
+                f"{expanded_width}x{expanded_height}{expanded_position}"
+            )
+        else:
+            profile["dashboard_expanded_geometry"] = "1720x1120"
+        profile["dashboard_window_geometry_version"] = 2
     config["active_commander_profile"] = key
     config["active_commander_name"] = profile.get("commander_name", config.get("active_commander_name", "Unknown Commander"))
     config["active_commander_fid"] = profile.get("fid", config.get("active_commander_fid", ""))
@@ -454,6 +499,9 @@ def apply_profile_config(config, profile_key=None):
         "overlay_enabled": True,
         "overlay_mouse_passthrough": os.name == "nt",
         "overlay_hotkeys_enabled": os.name == "nt",
+        # The compact exploration deck is the everyday dashboard. The full
+        # briefing remains one click away and the choice is commander-local.
+        "dashboard_compact_mode": True,
         # Existing profile files without the old boolean retain Expanded;
         # genuinely new commander profiles begin with the everyday Standard
         # layout. Stored True/False choices remain authoritative either way.
@@ -505,6 +553,9 @@ def apply_profile_config(config, profile_key=None):
                 "overlay_text_scale_percent": 100,
                 "overlay_layout_presets": {},
                 "overlay_layout_studio_geometry": "1080x720",
+                "dashboard_compact_geometry": "1120x680",
+                "dashboard_expanded_geometry": "1720x1120",
+                "dashboard_window_geometry_version": 2,
                 "explore_map_view_state": {},
                 "explore_map_annotations": [],
                 "explore_map_annotation_geometry": "470x360",
@@ -588,6 +639,7 @@ def load_config():
         'overlay_enabled': True,
         'overlay_mouse_passthrough': os.name == 'nt',
         'overlay_hotkeys_enabled': os.name == 'nt',
+        'dashboard_compact_mode': True,
         'overlay_hotkey_layout_studio': 'Ctrl+Alt+Shift+F10',
         'overlay_hotkey_toggle_all': 'Ctrl+Alt+Shift+F11',
         'overlay_hotkey_navigation': '',
@@ -643,6 +695,9 @@ def load_config():
         'survey_status_hud_y': 520,
         'low_fuel_threshold_pct': 0.25,
         'main_geometry': '1000x700',
+        'dashboard_compact_geometry': '1120x680',
+        'dashboard_expanded_geometry': '1720x1120',
+        'dashboard_window_geometry_version': 2,
         'settings_geometry': '980x800',
         'ground_target_window_geometry': '430x230+1220+260',
         'ground_popup_geometry': '340x140+1320+160',
