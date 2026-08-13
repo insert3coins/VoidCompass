@@ -88,6 +88,7 @@ from adaptive_command import (
 )
 from diagnostic_bundle import create_support_bundle
 from onboarding import should_show as should_show_onboarding, show_first_run
+from onboarding_splash import show_startup_boot
 from persistence_queue import flush_persistence, persistence_queue
 from session_recovery import ProfileSessionGuard
 from ui_dispatcher import TkDispatcher
@@ -874,6 +875,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_glide_mode = False
         self.current_interdicted = False
         self._surface_departure_active = False
+        self._surface_glide_guard_until = 0.0
+        self._surface_climb_samples = 0
         self._status_altitude_observed_monotonic = None
         self._surface_descent_mps = 0.0
         self.current_fsd_mass_locked = False
@@ -1550,6 +1553,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         
         self.is_running = True
         self.is_first_load = True
+        self._startup_history_pending = set()
+        self._startup_live_tail_ready = False
+        self._startup_presentation_ready = False
+        self._startup_journal_events_loaded = 0
+        self._startup_overlay_restore = set()
+        self._startup_boot_handoff_job = None
+        self._startup_boot_journal_timeout_job = None
         
         self.current_sys = "---"
         self.previous_sys = None
@@ -1664,6 +1674,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_glide_mode = False
         self.current_interdicted = False
         self._surface_departure_active = False
+        self._surface_glide_guard_until = 0.0
+        self._surface_climb_samples = 0
         self._status_altitude_observed_monotonic = None
         self._surface_descent_mps = 0.0
         self.current_fsd_mass_locked = False
@@ -1986,20 +1998,35 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.watcher.force_check_status()
 
         journal_path = self.config.get("journal_path") or getattr(self.watcher, "journal_path", None)
+        self._startup_history_pending = {"carrier", "exploration"}
         threading.Thread(
-            target=self.carrier_tracker.scan_journal_history,
-            args=(journal_path, 10, self.cmdr_name, self.cmdr_fid),
+            target=self._run_startup_history_phase,
+            args=(
+                "carrier", self.carrier_tracker.scan_journal_history,
+                (journal_path, 10, self.cmdr_name, self.cmdr_fid),
+            ),
+            name="carrier-history",
             daemon=True,
         ).start()
         threading.Thread(
-            target=self._import_exploration_history,
+            target=self._run_startup_history_phase,
             args=(
-                journal_path, self.captains_log, self.deep_survey,
-                self.cmdr_name, self.cmdr_fid, self.db_path,
-                get_active_profile(self.config),
+                "exploration", self._import_exploration_history,
+                (
+                    journal_path, self.captains_log, self.deep_survey,
+                    self.cmdr_name, self.cmdr_fid, self.db_path,
+                    get_active_profile(self.config),
+                ),
             ),
             name="exploration-history", daemon=True,
         ).start()
+
+        if getattr(self.root, "_voidcompass_startup_splash", None) is not None:
+            has_journal_path = bool(journal_path and os.path.isdir(journal_path))
+            timeout_ms = 90_000 if has_journal_path else 3_000
+            self._startup_boot_journal_timeout_job = self.root.after(
+                timeout_ms, self._startup_journal_timeout,
+            )
 
         threading.Thread(target=self.check_updates, daemon=True).start()
 
@@ -2038,6 +2065,146 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.root, self.config, complete, standalone=True,
         )
         self.root.wait_window(window)
+        # Continue to cover real cache/index restoration after commander setup;
+        # the outer launcher will keep the Dashboard withdrawn until live.
+        splash = show_startup_boot(
+            self.root, self.config,
+            lambda _window: self._maybe_complete_startup_presentation(),
+        )
+        self.root._voidcompass_startup_splash = splash
+        splash.update_idletasks()
+
+    def _startup_boot(self):
+        splash = getattr(self.root, "_voidcompass_startup_splash", None)
+        return getattr(splash, "_voidcompass_boot", None) if splash is not None else None
+
+    def _startup_boot_update(self, status, detail="", progress=None):
+        boot = self._startup_boot()
+        if boot is not None:
+            boot.set_runtime_status(status, detail, progress)
+
+    def _hold_startup_presentation(self):
+        """Keep Dashboard and enabled overlays behind the boot handoff."""
+        splash = getattr(self.root, "_voidcompass_startup_splash", None)
+        if splash is None:
+            return
+        for name, window in self._overlay_hotkey_window_items():
+            try:
+                if self._overlay_window_is_shown(window):
+                    self._startup_overlay_restore.add(name)
+                window.withdraw()
+            except (AttributeError, tk.TclError):
+                continue
+        try:
+            splash.deiconify()
+            splash.attributes("-topmost", True)
+            splash.lift()
+        except tk.TclError:
+            pass
+
+    def _run_startup_history_phase(self, phase, target, args):
+        try:
+            target(*args)
+        except Exception as exc:
+            logging.warning("Startup %s history phase failed: %s", phase, exc)
+        finally:
+            self._ui_post(
+                self._startup_history_phase_complete, phase,
+                key=f"startup-history:{phase}",
+            )
+
+    def _startup_history_phase_complete(self, phase):
+        self._startup_history_pending.discard(str(phase))
+        if self._startup_history_pending:
+            remaining = " and ".join(sorted(self._startup_history_pending))
+            self._startup_boot_update(
+                "INDEXING PAST JOURNALS",
+                f"Waiting for {remaining} history",
+                0.64,
+            )
+        else:
+            self._startup_boot_update(
+                "HISTORICAL INDEX READY",
+                "Waiting for the active journal to reach its live tail",
+                0.76,
+            )
+        self._maybe_complete_startup_presentation()
+
+    def _startup_journal_timeout(self):
+        self._startup_boot_journal_timeout_job = None
+        if self._startup_live_tail_ready:
+            return
+        self._startup_live_tail_ready = True
+        self._startup_presentation_ready = True
+        self._startup_boot_update(
+            "JOURNAL LINK OFFLINE",
+            "No live tail was available; cached flight state is ready",
+            0.90,
+        )
+        self._maybe_complete_startup_presentation()
+
+    def _mark_startup_journal_live(self):
+        self._startup_live_tail_ready = True
+        timeout_job = getattr(self, "_startup_boot_journal_timeout_job", None)
+        self._startup_boot_journal_timeout_job = None
+        if timeout_job is not None:
+            try:
+                self.root.after_cancel(timeout_job)
+            except tk.TclError:
+                pass
+        self._startup_boot_update(
+            "LIVE JOURNAL TAIL REACHED",
+            f"{self._startup_journal_events_loaded:,} recent events restored",
+            0.88,
+        )
+
+    def _maybe_complete_startup_presentation(self):
+        splash = getattr(self.root, "_voidcompass_startup_splash", None)
+        if splash is None or getattr(self, "_startup_boot_handoff_job", None) is not None:
+            return
+        boot = self._startup_boot()
+        if boot is not None and not getattr(boot, "_ready_emitted", False):
+            return
+        if not getattr(self, "_startup_live_tail_ready", False) or not getattr(
+            self, "_startup_presentation_ready", False,
+        ):
+            return
+        if getattr(self, "_startup_history_pending", set()):
+            return
+        self._startup_boot_update(
+            "VOID COMPASS LIVE",
+            "Journal, survey history and overlays are synchronized",
+            1.0,
+        )
+        self._startup_boot_handoff_job = self.root.after(
+            240, self._finish_startup_presentation,
+        )
+
+    def _finish_startup_presentation(self):
+        self._startup_boot_handoff_job = None
+        splash = getattr(self.root, "_voidcompass_startup_splash", None)
+        boot = self._startup_boot()
+        if boot is not None:
+            boot.stop()
+        if splash is not None:
+            try:
+                splash.destroy()
+            except tk.TclError:
+                pass
+        self.root._voidcompass_startup_splash = None
+        try:
+            self.root.deiconify()
+            self.root.lift()
+        except tk.TclError:
+            return
+        restore = set(self._startup_overlay_restore)
+        self._startup_overlay_restore.clear()
+        self._restore_overlay_hotkey_windows(restore)
+        self._apply_adaptive_overlay_scene()
+        try:
+            self.root.after(80, self._reapply_overlay_positions)
+        except tk.TclError:
+            pass
 
     def _show_first_run_onboarding(self):
         if not self.is_running:
@@ -2665,7 +2832,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.is_running = False
         for resize_job_attr in (
             "_workspace_scroll_job", "_main_resize_settle_job",
-            "_journal_history_resize_job",
+            "_journal_history_resize_job", "_startup_boot_handoff_job",
+            "_startup_boot_journal_timeout_job",
         ):
             resize_job = getattr(self, resize_job_attr, None)
             if resize_job is not None:
@@ -4161,25 +4329,19 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         altitude = getattr(self, "current_altitude_m", None)
         approach_body_known = getattr(self, "current_body_id", None) is not None
         glide_active = bool(getattr(self, "current_glide_mode", False))
-        try:
-            climb_rate = -float(getattr(self, "_surface_descent_mps", 0.0) or 0.0)
-        except (TypeError, ValueError):
-            climb_rate = 0.0
         departure_active = bool(
             approach_body_known
-            and (
-                getattr(self, "_surface_departure_active", False)
-                or climb_rate >= 15.0
-            )
+            and not glide_active
+            and getattr(self, "_surface_departure_active", False)
         )
-        if departure_active:
+        if glide_active:
+            approach_phase = "glide"
+        elif departure_active:
             approach_phase = (
                 "orbital_departure"
                 if str(getattr(self, "hud_flight_state", "") or "").upper() == "SUPERCRUISE"
                 else "surface_departure"
             )
-        elif glide_active:
-            approach_phase = "glide"
         elif str(getattr(self, "hud_flight_state", "") or "").upper() == "SUPERCRUISE":
             approach_phase = "orbital"
         else:
@@ -7268,6 +7430,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_body_name = ""
             self.current_glide_mode = False
             self._surface_departure_active = False
+            self._surface_glide_guard_until = 0.0
+            self._surface_climb_samples = 0
             self.valuable_system = False
             self.valuable_bodies.clear()
             self.system_traffic = (
@@ -8045,6 +8209,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_body_id   = self._normalize_body_id(d.get("body_id"))
             self.current_body_name = d.get("body_name") or ""
             self._surface_departure_active = False
+            self._surface_glide_guard_until = 0.0
+            self._surface_climb_samples = 0
             if not self.batch_mode:
                 self._refresh_gravity_warning(self.current_body_id, self.current_body_name)
                 self._refresh_system_info_progress()
@@ -8056,6 +8222,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_body_name = ""
             self.current_glide_mode = False
             self._surface_departure_active = False
+            self._surface_glide_guard_until = 0.0
+            self._surface_climb_samples = 0
             if not self.batch_mode:
                 if self.gravity_warning_hud:
                     self.gravity_warning_hud.clear()
@@ -8114,6 +8282,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.current_body_name = body_name
             self.current_landed = True
             self._surface_departure_active = False
+            self._surface_glide_guard_until = 0.0
+            self._surface_climb_samples = 0
             player_controlled = d.get("player_controlled")
             if player_controlled is None and isinstance(raw, dict):
                 player_controlled = raw.get("PlayerControlled")
@@ -9044,6 +9214,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if startup_batch:
             self._startup_restore_active = True
             self._startup_restore_ui_pending = True
+            self._startup_journal_events_loaded = int(
+                getattr(self, "_startup_journal_events_loaded", 0) or 0
+            ) + len(events)
+            self._startup_boot_update(
+                "RESTORING RECENT JOURNAL",
+                f"Reduced {self._startup_journal_events_loaded:,} events toward the live tail",
+                min(0.84, 0.72 + self._startup_journal_events_loaded / 10_000.0),
+            )
         self._hud_event_batch_priority = None
         self.batch_mode = True
         try:
@@ -9073,6 +9251,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if startup_batch and not startup_final:
             return
 
+        if startup_final:
+            self._mark_startup_journal_live()
+
         # Docked/Location rendering is deliberately suppressed while a batch
         # is being reduced.  Reconcile once from the final state so Station
         # Link cannot remain withdrawn until its setting is toggled.  A carrier
@@ -9099,6 +9280,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._freeze_startup_heap()
             self._apply_adaptive_overlay_scene()
             self._adaptive_startup_mode()
+            self._hold_startup_presentation()
             self._publish_expedition_resume_briefing()
             try:
                 self._update_main_window_title()
@@ -9123,6 +9305,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if self.current_sys and self.current_sys != "---":
                     self.last_traffic_system = self.current_sys
                     self.fetch_system_traffic(self.current_sys)
+                self._startup_presentation_ready = True
+                self._hold_startup_presentation()
+                self._maybe_complete_startup_presentation()
             self._ui_post(_startup_sync, key="startup-ui-sync")
             if self.config.get("auto_copy_waypoint", False):
                 next_wp = self.waypoint_manager.get_next_waypoint(self.current_sys)

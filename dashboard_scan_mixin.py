@@ -28,6 +28,8 @@ class DashboardScanMixin:
     _STATUS2_IN_MULTICREW = 0x00000004
     _STATUS2_TELEPRESENCE_MULTICREW = 0x00020000
     _STATUS2_PHYSICAL_MULTICREW = 0x00040000
+    _SURFACE_GLIDE_DEPARTURE_GUARD_SECONDS = 8.0
+    _SURFACE_DEPARTURE_CLIMB_SAMPLES = 2
 
     def _sync_navigation_hud_flight_state(self, *, supercruise=False):
         """Resolve the navigation HUD state from the latest verified vehicle flags."""
@@ -121,6 +123,7 @@ class DashboardScanMixin:
         was_on_foot = bool(getattr(self, "current_on_foot", False))
         was_in_taxi = bool(getattr(self, "current_in_taxi", False))
         was_in_multicrew = bool(getattr(self, "current_in_multicrew", False))
+        was_glide_mode = bool(getattr(self, "current_glide_mode", False))
         was_hud_flight_state = str(
             getattr(self, "hud_flight_state", "") or ""
         ).upper()
@@ -320,10 +323,12 @@ class DashboardScanMixin:
             )
         # Liftoff is authoritative, but Status can reach us first or the
         # journal watcher can briefly lag. Preserve an outbound direction when
-        # the landed flag clears, when a decisive climb reverses an approach,
-        # or when Status confirms a transition into supercruise around the
-        # currently tracked body. Without this latch, the shared planetary
-        # context falls back to its default APPROACH phase on the next frame.
+        # the landed flag clears, a sustained low-altitude climb reverses an
+        # approach, or Status confirms entry into supercruise. Glide is
+        # authoritative inbound evidence: Elite can change the altitude datum
+        # at its boundaries, producing a single enormous false "climb". Guard
+        # that discontinuity so it cannot latch SURFACE DEPARTURE throughout a
+        # completed approach.
         approach_body_known = getattr(self, "current_body_id", None) is not None
         try:
             climb_rate = -float(
@@ -339,14 +344,54 @@ class DashboardScanMixin:
             and str(getattr(self, "hud_flight_state", "") or "").upper()
             == "SUPERCRUISE"
         )
-        if (approach_body_known
-                and not getattr(self, "current_landed", False)
-                and not getattr(self, "current_in_srv", False)
-                and not getattr(self, "current_in_fighter", False)
-                and not getattr(self, "current_on_foot", False)
-                and not getattr(self, "current_in_taxi", False)
-                and not getattr(self, "current_in_multicrew", False)
-                and (was_landed or climb_rate >= 15.0 or entered_supercruise)):
+        glide_active = bool(getattr(self, "current_glide_mode", False))
+        surface_now = time.monotonic()
+        if glide_active:
+            self._surface_departure_active = False
+            self._surface_glide_guard_until = (
+                surface_now + self._SURFACE_GLIDE_DEPARTURE_GUARD_SECONDS
+            )
+        elif was_glide_mode:
+            self._surface_glide_guard_until = max(
+                float(getattr(self, "_surface_glide_guard_until", 0.0) or 0.0),
+                surface_now + self._SURFACE_GLIDE_DEPARTURE_GUARD_SECONDS,
+            )
+            # The altitude value can change reference frame at glide exit.
+            # Do not let that discontinuity leak into later stationary Status
+            # samples through the smoothed vertical-rate accumulator.
+            self._surface_descent_mps = 0.0
+            climb_rate = 0.0
+        glide_guard_active = surface_now < float(
+            getattr(self, "_surface_glide_guard_until", 0.0) or 0.0
+        )
+        valid_ship_context = bool(
+            approach_body_known
+            and not getattr(self, "current_landed", False)
+            and not getattr(self, "current_in_srv", False)
+            and not getattr(self, "current_in_fighter", False)
+            and not getattr(self, "current_on_foot", False)
+            and not getattr(self, "current_in_taxi", False)
+            and not getattr(self, "current_in_multicrew", False)
+        )
+        climb_candidate = bool(
+            valid_ship_context
+            and not glide_active
+            and not glide_guard_active
+            and bool(getattr(self, "on_planet", False))
+            and str(getattr(self, "hud_flight_state", "") or "").upper() == "FLIGHT"
+            and climb_rate >= 15.0
+        )
+        if climb_candidate:
+            self._surface_climb_samples = min(
+                self._SURFACE_DEPARTURE_CLIMB_SAMPLES,
+                int(getattr(self, "_surface_climb_samples", 0) or 0) + 1,
+            )
+        else:
+            self._surface_climb_samples = 0
+        if (valid_ship_context and not glide_active
+                and (was_landed or entered_supercruise
+                     or self._surface_climb_samples
+                     >= self._SURFACE_DEPARTURE_CLIMB_SAMPLES)):
             self._surface_departure_active = True
         if was_docked != bool(getattr(self, "current_docked", False)):
             survey = getattr(self, "survey_status_hud", None)

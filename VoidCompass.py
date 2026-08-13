@@ -8,6 +8,8 @@ import tempfile
 import crash_reporter
 from config import load_config
 from dashboard import MainDashboard
+from onboarding import should_show as should_show_onboarding
+from onboarding_splash import show_startup_boot
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -97,10 +99,56 @@ def main():
         except Exception:
             pass # Icon file likely missing or invalid
 
-        app = MainDashboard(root)
-        root.update_idletasks()
-        root.deiconify()
-        root.lift()
+        def launch_dashboard(splash=None):
+            try:
+                if splash is not None:
+                    root._voidcompass_startup_splash = splash
+                    boot = getattr(splash, "_voidcompass_boot", None)
+                    if boot is not None:
+                        boot.set_runtime_status(
+                            "BUILDING DASHBOARD CORE",
+                            "Loading profile, databases and flight systems",
+                            0.18,
+                        )
+                    splash.update_idletasks()
+                app = MainDashboard(root)
+                # Retain an explicit reference for the callback-driven startup
+                # path; Tk callbacks alone should not own the application.
+                root._voidcompass_app = app
+                root.update_idletasks()
+                active_splash = getattr(root, "_voidcompass_startup_splash", None)
+                if active_splash is not None:
+                    app._hold_startup_presentation()
+                    app._startup_boot_update(
+                        "RESTORING JOURNAL HISTORY",
+                        "Catching cached exploration records up to the live tail",
+                        0.46,
+                    )
+                else:
+                    root.deiconify()
+                    root.lift()
+            except BaseException:
+                if splash is not None:
+                    try:
+                        splash.destroy()
+                    except tk.TclError:
+                        pass
+                if crash_reporting_enabled:
+                    crash_reporter.log_exception(*sys.exc_info(), source="startup")
+                try:
+                    root.destroy()
+                except tk.TclError:
+                    pass
+                raise
+
+        if should_show_onboarding(startup_config):
+            # Genuine first launch owns its commissioning boot and setup inside
+            # MainDashboard's existing blocking bootstrap boundary.
+            launch_dashboard()
+        else:
+            # Returning launches enter mainloop immediately so the lightweight
+            # boot scene animates before synchronous Dashboard construction.
+            show_startup_boot(root, startup_config, launch_dashboard)
         root.mainloop()
     except BaseException:
         if crash_reporting_enabled:
