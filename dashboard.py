@@ -134,6 +134,10 @@ def _preserve_unconfirmed_scan_total(startup_replay, event_data, incoming_system
     return seed_repeats_unconfirmed_arrival or cached_state_was_unconfirmed
 
 
+class StartupCancelled(Exception):
+    """Internal clean-exit signal for an abandoned first commissioning."""
+
+
 class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     _SURVEY_REFRESH_EVENTS = frozenset({
         "Location", "FSDJump", "CarrierJump", "StartJump",
@@ -2058,13 +2062,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _show_bootstrap_onboarding(self):
         """Block construction so first-run setup is the only visible window."""
+        completed = {"value": False}
+
         def complete():
+            completed["value"] = True
             save_config(self.config)
 
         window = show_first_run(
             self.root, self.config, complete, standalone=True,
         )
         self.root.wait_window(window)
+        if not completed["value"]:
+            # Closing the mandatory commissioning window means Exit, not
+            # implicit acceptance of its defaults. Stop construction before
+            # any second Toplevel or partially initialized Dashboard exists.
+            raise StartupCancelled()
         # Continue to cover real cache/index restoration after commander setup;
         # the outer launcher will keep the Dashboard withdrawn until live.
         splash = show_startup_boot(
