@@ -89,8 +89,7 @@ def _version_key(value):
 
 class DashboardUIMixin(ThemedWindowMixin):
     JOURNAL_HISTORY_LIMIT = 100
-    DASHBOARD_COMPACT_MIN_SIZE = (1020, 640)
-    DASHBOARD_EXPANDED_MIN_SIZE = (1080, 700)
+    DASHBOARD_MIN_SIZE = (1080, 700)
     def _config_label_if_changed(self, widget, text=None, fg=None):
         try:
             current_text = widget.cget("text")
@@ -425,13 +424,9 @@ class DashboardUIMixin(ThemedWindowMixin):
         self._active_page = "DASHBOARD"
 
         self._build_command_dashboard_body()
-        self._build_compact_dashboard_body()
         self._build_workspace_hubs()
         self._build_about_page()
-        # The expanded page is built first because its established widgets
-        # remain the single source of dashboard truth. Compact mirrors that
-        # already-computed state without maintaining a second data model.
-        self._show_embedded_page("DASHBOARD", self._selected_dashboard_page())
+        self._show_embedded_page("DASHBOARD", self.dashboard_page)
         self._schedule_workspace_scrollregion()
         return
 
@@ -697,7 +692,6 @@ class DashboardUIMixin(ThemedWindowMixin):
         """Build the exploration-first command dashboard."""
         body = tk.Frame(self.dashboard_host, bg=self.UI_BG)
         self.dashboard_page = body
-        self.dashboard_expanded_page = body
         body.pack(fill=tk.BOTH, expand=True, padx=14, pady=10)
 
         mode_bar = self._panel(body, border=COLOR_ACCENT)
@@ -722,10 +716,6 @@ class DashboardUIMixin(ThemedWindowMixin):
             font=("Segoe UI", 7, "bold"), padx=7, pady=2,
         )
         self.dashboard_health_badge.pack(side=tk.RIGHT, padx=(5, 12))
-        self.dashboard_layout_toggle_btn = self._action_button(
-            mode_bar, "COMPACT VIEW", self._toggle_dashboard_layout, muted=True,
-        )
-        self.dashboard_layout_toggle_btn.pack(side=tk.RIGHT, padx=(5, 0), pady=5)
         self.dashboard_mode_lock_btn = self._action_button(
             mode_bar, "MODE · AUTO", self._show_adaptive_mode_menu, muted=True,
         )
@@ -1139,307 +1129,8 @@ class DashboardUIMixin(ThemedWindowMixin):
         )
         self.log_box.pack(fill=tk.X, padx=10, pady=10)
 
-    def _build_compact_dashboard_body(self):
-        """Build the small exploration deck used for everyday flight."""
-        body = tk.Frame(self.dashboard_host, bg=self.UI_BG)
-        self.dashboard_compact_page = body
-
-        header = self._panel(body, border=COLOR_ACCENT)
-        header.pack(fill=tk.X, padx=14, pady=(10, 7))
-        self.compact_dashboard_heading = tk.Label(
-            header, text="EXPLORATION QUICK DECK", fg=self.UI_DIM,
-            bg=self.UI_PANEL, font=("Segoe UI", 8, "bold"),
-        )
-        self.compact_dashboard_heading.pack(side=tk.LEFT, padx=(12, 8), pady=7)
-        self.compact_dashboard_mode_badge = tk.Button(
-            header, text="GENERAL FLIGHT", fg="black", bg=COLOR_ACCENT,
-            font=("Segoe UI", 8, "bold"), padx=8, pady=3,
-            command=self._show_adaptive_mode_menu,
-            activebackground=COLOR_ACCENT, activeforeground="black",
-            relief=tk.FLAT, bd=0, highlightthickness=0, cursor="hand2",
-        )
-        self.compact_dashboard_mode_badge.pack(side=tk.LEFT, pady=7)
-        self.compact_dashboard_mode_detail = tk.Label(
-            header, text="Live exploration snapshot", fg=COLOR_TEXT,
-            bg=self.UI_PANEL, font=self.UI_MONO, anchor="w",
-        )
-        self.compact_dashboard_mode_detail.pack(
-            side=tk.LEFT, fill=tk.X, expand=True, padx=10,
-        )
-        self.compact_dashboard_health_badge = tk.Label(
-            header, text="NOMINAL", fg="black", bg=self.UI_OK,
-            font=("Segoe UI", 7, "bold"), padx=7, pady=2,
-        )
-        self.compact_dashboard_health_badge.pack(side=tk.RIGHT, padx=(5, 12))
-        self.compact_dashboard_expand_btn = self._action_button(
-            header, "EXPANDED VIEW", self._toggle_dashboard_layout, muted=True,
-        )
-        self.compact_dashboard_expand_btn.pack(side=tk.RIGHT, padx=(5, 0), pady=5)
-        self.compact_dashboard_mode_open_btn = self._action_button(
-            header, "OPEN MODE", self._adaptive_open_mode_workspace,
-        )
-        self.compact_dashboard_mode_open_btn.pack(side=tk.RIGHT, padx=(5, 0), pady=5)
-
-        tabs = self._panel(body)
-        tabs.pack(fill=tk.X, padx=14, pady=(0, 7))
-        tabs_head = tk.Frame(tabs, bg=self.UI_PANEL)
-        tabs_head.pack(fill=tk.X, padx=10, pady=(7, 5))
-        self._section_label(tabs_head, "QUICK ACCESS").pack(side=tk.LEFT)
-        tk.Label(
-            tabs_head, text="Open the full workspace without leaving the flight deck",
-            fg=self.UI_DIM, bg=self.UI_PANEL, font=("Segoe UI", 8),
-        ).pack(side=tk.RIGHT)
-        tab_row = tk.Frame(tabs, bg=self.UI_PANEL)
-        tab_row.pack(fill=tk.X, padx=10, pady=(0, 9))
-        compact_tabs = (
-            ("SURVEY", lambda: self.open_exploration_window(section="survey")),
-            ("ROUTE", lambda: self.open_exploration_window(section="route")),
-            ("MAP", self.open_galaxy_map_page),
-            ("MISSION", lambda: self.open_exploration_window(section="mission")),
-            ("DISCOVERIES", lambda: self.open_exploration_window(section="discoveries")),
-            ("ANALYTICS", self.open_analytics_window),
-            ("PROFILE", self.open_commander_profile_window),
-            ("FIELD TOOLS", self.show_operations_page),
-        )
-        self.compact_dashboard_tab_buttons = []
-        for column, (label, command) in enumerate(compact_tabs):
-            tab_row.grid_columnconfigure(column, weight=1, uniform="compact_tabs")
-            widget = self._action_button(tab_row, label, command, muted=True)
-            widget.grid(
-                row=0, column=column, sticky="ew",
-                padx=(0 if column == 0 else 2, 0 if column == len(compact_tabs) - 1 else 2),
-            )
-            self.compact_dashboard_tab_buttons.append(widget)
-
-        primary = tk.Frame(body, bg=self.UI_BG)
-        primary.pack(fill=tk.X, padx=14, pady=(0, 7))
-        primary.grid_columnconfigure(0, weight=7, uniform="compact_primary")
-        primary.grid_columnconfigure(1, weight=5, uniform="compact_primary")
-        primary.grid_rowconfigure(0, weight=1)
-
-        survey = self._panel(primary, border=COLOR_ACCENT)
-        survey.grid(row=0, column=0, sticky="nsew", padx=(0, 7))
-        survey_head = tk.Frame(survey, bg=self.UI_PANEL)
-        survey_head.pack(fill=tk.X, padx=12, pady=(9, 0))
-        self.compact_dashboard_context_heading = self._section_label(
-            survey_head, "CURRENT SURVEY",
-        )
-        self.compact_dashboard_context_heading.pack(side=tk.LEFT)
-        self.compact_dashboard_survey_badge = tk.Label(
-            survey_head, text="AWAITING", fg="black", bg=self.UI_DIM,
-            font=("Segoe UI", 7, "bold"), padx=7, pady=2,
-        )
-        self.compact_dashboard_survey_badge.pack(side=tk.RIGHT)
-        self.compact_dashboard_survey_name = tk.Label(
-            survey, text="NO SYSTEM DATA", fg=COLOR_ACCENT, bg=self.UI_PANEL,
-            font=("Bahnschrift SemiCondensed", 15, "bold"), anchor="w",
-        )
-        self.compact_dashboard_survey_name.pack(fill=tk.X, padx=12, pady=(4, 0))
-        self.compact_dashboard_survey_detail = tk.Label(
-            survey, text="Scan telemetry will appear here.", fg=COLOR_TEXT,
-            bg=self.UI_PANEL, font=("Consolas", 8), anchor="w", justify=tk.LEFT,
-        )
-        self.compact_dashboard_survey_detail.pack(fill=tk.X, padx=12, pady=(1, 4))
-        progress_bg = tk.Frame(survey, bg=self.UI_PANEL_2, height=5)
-        progress_bg.pack(fill=tk.X, padx=12, pady=(0, 7))
-        self.compact_dashboard_survey_progress_fill = tk.Frame(
-            progress_bg, bg=COLOR_ACCENT, height=5,
-        )
-        self.compact_dashboard_survey_progress_fill.place(
-            x=0, y=0, relheight=1.0, relwidth=0.0,
-        )
-        survey_metrics = tk.Frame(survey, bg=self.UI_PANEL)
-        survey_metrics.pack(fill=tk.X, padx=8, pady=(0, 5))
-        self.compact_dashboard_stat_labels = []
-        self.compact_dashboard_stat_values = []
-        for index, (label, value) in enumerate(zip(
-                ("FSS", "DSS", "BIOLOGY", "GEOLOGY"),
-                ("0 / 0", "0 / 0", "0 / 0", "NONE"))):
-            survey_metrics.grid_columnconfigure(index, weight=1, uniform="compact_survey")
-            cell = tk.Frame(survey_metrics, bg=self.UI_PANEL)
-            cell.grid(row=0, column=index, sticky="ew", padx=4)
-            label_widget = tk.Label(
-                cell, text=label, fg=self.UI_DIM, bg=self.UI_PANEL,
-                font=("Segoe UI", 7, "bold"), anchor="w",
-            )
-            label_widget.pack(fill=tk.X)
-            value_widget = tk.Label(
-                cell, text=value, fg=COLOR_TEXT, bg=self.UI_PANEL,
-                font=self.UI_MONO_BOLD, anchor="w",
-            )
-            value_widget.pack(fill=tk.X)
-            self.compact_dashboard_stat_labels.append(label_widget)
-            self.compact_dashboard_stat_values.append(value_widget)
-        self.compact_dashboard_survey_value = tk.Label(
-            survey, text="", fg=COLOR_ORANGE, bg=self.UI_PANEL,
-            font=("Segoe UI", 8, "bold"), anchor="w",
-        )
-        self.compact_dashboard_survey_value.pack(fill=tk.X, padx=12, pady=(2, 9))
-
-        route = self._panel(primary, border=COLOR_ACCENT)
-        route.grid(row=0, column=1, sticky="nsew")
-        route_head = tk.Frame(route, bg=self.UI_PANEL)
-        route_head.pack(fill=tk.X, padx=12, pady=(9, 0))
-        self.compact_dashboard_destination_heading = self._section_label(
-            route_head, "NEXT LEG",
-        )
-        self.compact_dashboard_destination_heading.pack(side=tk.LEFT)
-        self.compact_dashboard_route_distance = tk.Label(
-            route_head, text="", fg=COLOR_ACCENT, bg=self.UI_PANEL,
-            font=self.UI_MONO_BOLD,
-        )
-        self.compact_dashboard_route_distance.pack(side=tk.RIGHT)
-        self.compact_dashboard_route_name = tk.Label(
-            route, text="NO ACTIVE ROUTE", fg=COLOR_TEXT, bg=self.UI_PANEL,
-            font=("Bahnschrift SemiCondensed", 14, "bold"), anchor="w",
-        )
-        self.compact_dashboard_route_name.pack(fill=tk.X, padx=12, pady=(5, 0))
-        self.compact_dashboard_route_detail = tk.Label(
-            route, text="Plot a route or add expedition waypoints.",
-            fg=self.UI_MUTED, bg=self.UI_PANEL, font=self.UI_MONO,
-            anchor="nw", justify=tk.LEFT, wraplength=390,
-        )
-        self.compact_dashboard_route_detail.pack(
-            fill=tk.BOTH, expand=True, padx=12, pady=(3, 6),
-        )
-        route_actions = tk.Frame(route, bg=self.UI_PANEL)
-        route_actions.pack(fill=tk.X, padx=12, pady=(0, 9))
-        self.compact_dashboard_route_copy_btn = self._action_button(
-            route_actions, "COPY NEXT", self._dashboard_copy_next, accent=True,
-        )
-        self.compact_dashboard_route_copy_btn.pack(side=tk.LEFT)
-        self._action_button(
-            route_actions, "OPEN ROUTE",
-            lambda: self.open_exploration_window(section="route"),
-        ).pack(side=tk.LEFT, padx=(6, 0))
-
-        secondary = tk.Frame(body, bg=self.UI_BG)
-        secondary.pack(fill=tk.X, padx=14, pady=(0, 7))
-        secondary.grid_columnconfigure(0, weight=7, uniform="compact_secondary")
-        secondary.grid_columnconfigure(1, weight=5, uniform="compact_secondary")
-        secondary.grid_rowconfigure(0, weight=1)
-
-        action = self._panel(secondary)
-        action.grid(row=0, column=0, sticky="nsew", padx=(0, 7))
-        action_head = tk.Frame(action, bg=self.UI_PANEL)
-        action_head.pack(fill=tk.X, padx=12, pady=(9, 0))
-        self.compact_dashboard_action_heading = self._section_label(
-            action_head, "NEXT ACTION",
-        )
-        self.compact_dashboard_action_heading.pack(side=tk.LEFT)
-        self.compact_dashboard_action_badge = tk.Label(
-            action_head, text="01", fg="black", bg=COLOR_ACCENT,
-            font=("Cascadia Mono", 7, "bold"), padx=6, pady=2,
-        )
-        self.compact_dashboard_action_badge.pack(side=tk.RIGHT)
-        self.compact_dashboard_action_title = tk.Label(
-            action, text="No urgent objective", fg=COLOR_TEXT, bg=self.UI_PANEL,
-            font=("Segoe UI", 10, "bold"), anchor="w",
-        )
-        self.compact_dashboard_action_title.pack(fill=tk.X, padx=12, pady=(5, 0))
-        self.compact_dashboard_action_detail = tk.Label(
-            action, text="Continue surveying or follow the current route.",
-            fg=self.UI_MUTED, bg=self.UI_PANEL, font=("Consolas", 8),
-            anchor="nw", justify=tk.LEFT, wraplength=560,
-        )
-        self.compact_dashboard_action_detail.pack(
-            fill=tk.BOTH, expand=True, padx=12, pady=(2, 6),
-        )
-        action_buttons = tk.Frame(action, bg=self.UI_PANEL)
-        action_buttons.pack(fill=tk.X, padx=12, pady=(0, 9))
-        self.compact_dashboard_primary_action_btn = self._action_button(
-            action_buttons, "OPEN EXPLORE",
-            lambda: self.dashboard_primary_action_btn.invoke(), accent=True,
-        )
-        self.compact_dashboard_primary_action_btn.pack(side=tk.LEFT)
-        self.compact_dashboard_copy_action_btn = self._action_button(
-            action_buttons, "COPY NEXT", self._dashboard_copy_next,
-        )
-        self.compact_dashboard_copy_action_btn.pack(side=tk.LEFT, padx=(6, 0))
-
-        discovery = self._panel(secondary)
-        discovery.grid(row=0, column=1, sticky="nsew")
-        discovery_head = tk.Frame(discovery, bg=self.UI_PANEL)
-        discovery_head.pack(fill=tk.X, padx=12, pady=(9, 0))
-        self._section_label(discovery_head, "DISCOVERY SUMMARY").pack(side=tk.LEFT)
-        self.compact_dashboard_discovery_badge = tk.Label(
-            discovery_head, text="QUIET", fg="black", bg=self.UI_DIM,
-            font=("Segoe UI", 7, "bold"), padx=6, pady=2,
-        )
-        self.compact_dashboard_discovery_badge.pack(side=tk.RIGHT)
-        self.compact_dashboard_discovery_value = tk.Label(
-            discovery, text="SYSTEM VALUE AWAITING SCANS", fg=COLOR_ORANGE,
-            bg=self.UI_PANEL, font=("Segoe UI", 9, "bold"), anchor="w",
-        )
-        self.compact_dashboard_discovery_value.pack(fill=tk.X, padx=12, pady=(5, 2))
-        self.compact_dashboard_discovery_metrics = tk.Label(
-            discovery, text="VALUABLE 0  ·  FIRSTS 0  ·  BIO 0  ·  SIGNALS 0",
-            fg=COLOR_TEXT, bg=self.UI_PANEL, font=self.UI_MONO_BOLD,
-            anchor="w", justify=tk.LEFT,
-        )
-        self.compact_dashboard_discovery_metrics.pack(fill=tk.X, padx=12, pady=(2, 0))
-        self.compact_dashboard_discovery_notable = tk.Label(
-            discovery, text="No notable bodies recorded yet.", fg=self.UI_MUTED,
-            bg=self.UI_PANEL, font=("Consolas", 8), anchor="nw",
-            justify=tk.LEFT, wraplength=390,
-        )
-        self.compact_dashboard_discovery_notable.pack(
-            fill=tk.BOTH, expand=True, padx=12, pady=(3, 4),
-        )
-        self._action_button(
-            discovery, "OPEN DISCOVERIES",
-            lambda: self.open_exploration_window(section="discoveries"), muted=True,
-        ).pack(anchor="w", padx=12, pady=(0, 9))
-
-        footer = tk.Frame(body, bg=self.UI_BG)
-        footer.pack(fill=tk.X, padx=14, pady=(0, 10))
-        tk.Label(
-            footer,
-            text="Compact keeps the live essentials here; Expanded restores the full briefing and Exploration Log.",
-            fg=self.UI_DIM, bg=self.UI_BG, font=("Segoe UI", 8), anchor="w",
-        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-    def _selected_dashboard_page(self):
-        if self.config.get("dashboard_compact_mode", True):
-            return getattr(self, "dashboard_compact_page", self.dashboard_page)
-        return getattr(self, "dashboard_expanded_page", self.dashboard_page)
-
-    def _toggle_dashboard_layout(self):
-        self._set_dashboard_layout(
-            not bool(self.config.get("dashboard_compact_mode", True)),
-        )
-
-    def _set_dashboard_layout(self, compact, persist=True):
-        """Switch Dashboard density without rebuilding either live page."""
-        compact = bool(compact)
-        outgoing_compact = bool(
-            self.config.get("dashboard_compact_mode", True)
-        )
-        self._capture_dashboard_window_geometry(compact=outgoing_compact)
-        self.config["dashboard_compact_mode"] = compact
-        if getattr(self, "_active_page", None) == "DASHBOARD":
-            self._show_embedded_page("DASHBOARD", self._selected_dashboard_page())
-            self._refresh_command_dashboard()
-        self._apply_dashboard_window_geometry(compact=compact)
-        if persist:
-            try:
-                self._persist_config()
-            except Exception:
-                pass
-
-    @staticmethod
-    def _dashboard_geometry_key(compact):
-        return (
-            "dashboard_compact_geometry"
-            if compact else "dashboard_expanded_geometry"
-        )
-
-    def _capture_dashboard_window_geometry(self, compact=None):
-        """Remember the live geometry for one commander-local dashboard mode."""
-        compact = (
-            bool(self.config.get("dashboard_compact_mode", True))
-            if compact is None else bool(compact)
-        )
+    def _capture_dashboard_window_geometry(self):
+        """Remember the commander's single Dashboard window footprint."""
         try:
             self.root.update_idletasks()
             geometry = str(self.root.geometry() or "")
@@ -1447,30 +1138,21 @@ class DashboardUIMixin(ThemedWindowMixin):
             return ""
         if not re.fullmatch(r"\d+x\d+(?:[+-]-?\d+[+-]-?\d+)?", geometry):
             return ""
-        self.config[self._dashboard_geometry_key(compact)] = geometry
+        self.config["dashboard_window_geometry"] = geometry
         self.config["main_geometry"] = geometry
         return geometry
 
-    def _apply_dashboard_window_geometry(self, compact=None):
-        """Resize the native window to the active dashboard's saved footprint."""
-        compact = (
-            bool(self.config.get("dashboard_compact_mode", True))
-            if compact is None else bool(compact)
-        )
-        key = self._dashboard_geometry_key(compact)
-        fallback = "1120x680" if compact else "1720x1120"
-        geometry = str(self.config.get(key) or fallback)
+    def _apply_dashboard_window_geometry(self):
+        """Restore the commander's single Dashboard window footprint."""
+        fallback = "1720x1120"
+        geometry = str(self.config.get("dashboard_window_geometry") or fallback)
         if not re.fullmatch(r"\d+x\d+(?:[+-]-?\d+[+-]-?\d+)?", geometry):
             geometry = fallback
-            self.config[key] = geometry
-        minimum = (
-            self.DASHBOARD_COMPACT_MIN_SIZE
-            if compact else self.DASHBOARD_EXPANDED_MIN_SIZE
-        )
+            self.config["dashboard_window_geometry"] = geometry
         try:
             if str(self.root.state()).casefold() == "zoomed":
                 self.root.state("normal")
-            self.root.minsize(*minimum)
+            self.root.minsize(*self.DASHBOARD_MIN_SIZE)
             self.root.geometry(geometry)
             self.config["main_geometry"] = geometry
             if getattr(self, "workspace_canvas", None) is not None:
@@ -1478,166 +1160,6 @@ class DashboardUIMixin(ThemedWindowMixin):
             return True
         except (AttributeError, tk.TclError):
             return False
-
-    @staticmethod
-    def _dashboard_widget_option(widget, option, fallback=""):
-        try:
-            return widget.cget(option)
-        except (AttributeError, tk.TclError):
-            return fallback
-
-    def _refresh_compact_dashboard(self, route_progress=None):
-        """Mirror the computed briefing into the compact, low-cost view."""
-        if not hasattr(self, "compact_dashboard_survey_name"):
-            return
-
-        def copy_label(target, source, *, text=True, fg=False, bg=False):
-            values = {}
-            if text:
-                values["text"] = self._dashboard_widget_option(source, "text", "")
-            if fg:
-                values["fg"] = self._dashboard_widget_option(source, "fg", COLOR_TEXT)
-            if bg:
-                values["bg"] = self._dashboard_widget_option(source, "bg", self.UI_PANEL)
-            try:
-                target.config(**values)
-            except (AttributeError, tk.TclError):
-                pass
-
-        copy_label(
-            self.compact_dashboard_mode_badge, self.dashboard_mode_badge,
-            fg=True, bg=True,
-        )
-        copy_label(
-            self.compact_dashboard_health_badge, self.dashboard_health_badge,
-            fg=True, bg=True,
-        )
-        copy_label(
-            self.compact_dashboard_mode_detail, self.dashboard_mode_detail,
-            fg=True,
-        )
-        self.compact_dashboard_mode_open_btn.config(
-            text=self._dashboard_widget_option(
-                self.dashboard_mode_open_btn, "text", "OPEN MODE",
-            ),
-            state=self._dashboard_widget_option(
-                self.dashboard_mode_open_btn, "state", tk.NORMAL,
-            ),
-        )
-
-        copy_label(
-            self.compact_dashboard_context_heading, self.dashboard_context_heading,
-            fg=True,
-        )
-        copy_label(
-            self.compact_dashboard_survey_badge, self.dashboard_survey_badge,
-            fg=True, bg=True,
-        )
-        copy_label(
-            self.compact_dashboard_survey_name, self.dashboard_survey_name,
-            fg=True,
-        )
-        survey_detail = str(
-            self._dashboard_widget_option(self.dashboard_survey_detail, "text", "")
-        )
-        self.compact_dashboard_survey_detail.config(
-            text="\n".join(survey_detail.splitlines()[:2]),
-            fg=self._dashboard_widget_option(
-                self.dashboard_survey_detail, "fg", COLOR_TEXT,
-            ),
-        )
-        copy_label(
-            self.compact_dashboard_survey_value, self.dashboard_survey_value,
-            fg=True,
-        )
-        for target, source in zip(
-                self.compact_dashboard_stat_labels, self.dashboard_stat_labels):
-            copy_label(target, source, fg=True)
-        for target, source in zip(
-                self.compact_dashboard_stat_values, self.dashboard_stat_values):
-            copy_label(target, source, fg=True)
-        try:
-            progress = float(
-                self.dashboard_survey_progress_fill.place_info().get("relwidth", 0.0)
-                or 0.0
-            )
-        except (AttributeError, TypeError, ValueError, tk.TclError):
-            progress = 0.0
-        self.compact_dashboard_survey_progress_fill.config(
-            bg=self._dashboard_widget_option(
-                self.dashboard_survey_progress_fill, "bg", COLOR_ACCENT,
-            ),
-        )
-        self.compact_dashboard_survey_progress_fill.place_configure(
-            relwidth=max(0.0, min(1.0, progress)),
-        )
-
-        copy_label(
-            self.compact_dashboard_destination_heading,
-            self.dashboard_destination_heading, fg=True,
-        )
-        copy_label(
-            self.compact_dashboard_route_name, self.wp_name_lbl, fg=True,
-        )
-        copy_label(
-            self.compact_dashboard_route_distance, self.wp_dist_lbl, fg=True,
-        )
-        try:
-            route_detail = self.wp_info_text.get("1.0", "end-1c")
-        except (AttributeError, tk.TclError):
-            route_detail = ""
-        self.compact_dashboard_route_detail.config(
-            text="\n".join(str(route_detail).splitlines()[:3]),
-        )
-        route_button_state = self._dashboard_widget_option(
-            self.dashboard_destination_copy_btn, "state", tk.NORMAL,
-        )
-        self.compact_dashboard_route_copy_btn.config(state=route_button_state)
-        self.compact_dashboard_copy_action_btn.config(state=route_button_state)
-
-        copy_label(
-            self.compact_dashboard_action_heading, self.dashboard_objective_heading,
-            fg=True,
-        )
-        copy_label(
-            self.compact_dashboard_action_title, self.dashboard_objective_primary,
-            fg=True,
-        )
-        copy_label(
-            self.compact_dashboard_action_detail, self.dashboard_objective_detail,
-            fg=True,
-        )
-        self.compact_dashboard_primary_action_btn.config(
-            text=self._dashboard_widget_option(
-                self.dashboard_primary_action_btn, "text", "OPEN EXPLORE",
-            ),
-            state=self._dashboard_widget_option(
-                self.dashboard_primary_action_btn, "state", tk.NORMAL,
-            ),
-        )
-
-        copy_label(
-            self.compact_dashboard_discovery_badge,
-            self.dashboard_discovery_badge, fg=True, bg=True,
-        )
-        copy_label(
-            self.compact_dashboard_discovery_value,
-            self.dashboard_discovery_value, fg=True,
-        )
-        discovery_bits = []
-        for label, value in zip(
-                self.dashboard_discovery_labels, self.dashboard_discovery_values):
-            discovery_bits.append(
-                f"{self._dashboard_widget_option(label, 'text', '')} "
-                f"{self._dashboard_widget_option(value, 'text', '0')}"
-            )
-        self.compact_dashboard_discovery_metrics.config(
-            text="  ·  ".join(discovery_bits),
-        )
-        copy_label(
-            self.compact_dashboard_discovery_notable,
-            self.dashboard_discovery_notable, fg=True,
-        )
 
     def _build_companion_dashboard_body(self):
         body = tk.Frame(self.dashboard_host, bg=self.UI_BG)
@@ -2548,11 +2070,7 @@ class DashboardUIMixin(ThemedWindowMixin):
     def _show_adaptive_mode_menu(self):
         """Show the themed manual/automatic Dashboard mode selector."""
         deck = getattr(self, "adaptive_command", None)
-        if (getattr(self, "_active_page", None) == "DASHBOARD"
-                and self.config.get("dashboard_compact_mode", True)):
-            button_widget = getattr(self, "compact_dashboard_mode_badge", None)
-        else:
-            button_widget = getattr(self, "dashboard_mode_lock_btn", None)
+        button_widget = getattr(self, "dashboard_mode_lock_btn", None)
         if not deck or not self._widget_alive(button_widget):
             return
         selected = deck.locked_mode if not deck.automatic else "auto"
@@ -2804,7 +2322,6 @@ class DashboardUIMixin(ThemedWindowMixin):
                 )
         else:
             self._apply_dashboard_activity_context("exploration")
-        self._refresh_compact_dashboard(route_progress)
 
     def _run_nav_command(self, label, command):
         """Run a page action and add its full open/switch cost to runtime tracing."""
@@ -3231,7 +2748,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         self._show_embedded_page("ABOUT", self.about_page)
 
     def show_dashboard_page(self):
-        self._show_embedded_page("DASHBOARD", self._selected_dashboard_page())
+        self._show_embedded_page("DASHBOARD", self.dashboard_page)
         if hasattr(self, "summary_session"):
             self.summary_session.config(text=self._get_session_elapsed_text())
         # Hidden pages already mark these views dirty as new events arrive.
