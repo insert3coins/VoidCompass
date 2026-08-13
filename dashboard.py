@@ -154,11 +154,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         "CarrierJump": ("carrier_arrival", "all", "accent", 2.8, 95),
         "SupercruiseEntry": ("supercruise_enter", "center", "orange", 1.2, 62),
         "SupercruiseExit": ("supercruise_exit", "center", "accent", 1.2, 62),
-        "SupercruiseDestinationDrop": ("supercruise_exit", "center", "accent", 1.2, 62),
+        "SupercruiseDestinationDrop": ("supercruise_drop", "center", "orange", 1.0, 61),
+        "USSDrop": ("signal_drop", "center", "yellow", 1.4, 72),
+        "Interdicted": ("interdiction", "all", "orange", 1.8, 99),
+        "EscapeInterdiction": ("interdiction_clear", "all", "green", 1.5, 96),
         "DockingRequested": ("dock_request", "center", "green", 1.2, 60),
         "DockingGranted": ("dock_request", "center", "green", 1.2, 60),
         "DockingCancelled": ("dock_denied", "center", "yellow", 1.1, 65),
         "DockingDenied": ("dock_denied", "center", "orange", 1.3, 75),
+        "DockingTimeout": ("dock_denied", "center", "yellow", 1.2, 70),
         "Docked": ("dock", "center", "accent", 1.5, 78),
         "Undocked": ("undock", "center", "accent", 1.3, 78),
         "Touchdown": ("touchdown", "center", "accent", 1.3, 68),
@@ -170,9 +174,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         "LaunchFighter": ("vehicle_deploy", "center", "accent", 1.4, 68),
         "DockFighter": ("vehicle_board", "center", "accent", 1.4, 68),
         "FighterDestroyed": ("warning", "all", "orange", 1.6, 98),
+        "SRVDestroyed": ("warning", "all", "orange", 1.6, 98),
         "VehicleSwitch": ("vehicle_switch", "center", "accent", 1.2, 64),
         "Embark": ("vehicle_board", "center", "accent", 1.3, 66),
         "Disembark": ("vehicle_deploy", "center", "accent", 1.3, 66),
+        "JoinACrew": ("vehicle_board", "center", "accent", 1.3, 66),
+        "QuitACrew": ("vehicle_switch", "center", "accent", 1.2, 64),
+        "EndCrewSession": ("vehicle_switch", "center", "accent", 1.2, 64),
         "DiscoveryScan": ("honk", "right", "accent", 1.5, 52),
         "NavBeaconScan": ("honk", "right", "accent", 1.5, 52),
         "FSSDiscoveryScan": ("fss_progress", "right", "accent", 1.1, 54),
@@ -198,9 +206,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         "ProspectedAsteroid": ("mining", "right", "yellow", 1.3, 58),
         "MiningRefined": ("mining", "right", "yellow", 1.2, 58),
         "HeatWarning": ("warning", "all", "orange", 1.6, 100),
+        "HeatDamage": ("warning", "all", "orange", 1.8, 100),
         "HullDamage": ("warning", "all", "orange", 1.6, 100),
+        "CockpitBreached": ("warning", "all", "orange", 2.0, 100),
         "UnderAttack": ("warning", "all", "orange", 1.6, 100),
         "JetConeDamage": ("warning", "all", "orange", 1.6, 100),
+        "SystemsShutdown": ("warning", "all", "orange", 2.0, 100),
+        "SelfDestruct": ("warning", "all", "orange", 2.0, 100),
         "Died": ("warning", "all", "orange", 1.9, 100),
     }
 
@@ -226,6 +238,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         "current_station_dist_ls", "current_station_landing_pads",
         "current_docked", "hud_flight_state", "current_landed",
         "current_in_fighter", "current_in_srv", "current_on_foot",
+        "current_in_taxi", "current_in_multicrew",
         "current_vehicle_id", "current_vehicle_name", "current_legal_state",
         "current_fuel_main", "current_fuel_reservoir", "fuel_capacity_main",
         "current_altitude_m", "current_landing_gear_down",
@@ -824,6 +837,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_in_fighter = False
         self.current_in_srv = False
         self.current_on_foot = False
+        self.current_in_taxi = False
+        self.current_in_multicrew = False
         self.current_vehicle_id = None
         self.current_vehicle_name = ""
         self._vehicle_name_by_id = {}
@@ -857,6 +872,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_scooping_fuel = False
         self.current_supercruise_overcharge = False
         self.current_glide_mode = False
+        self.current_interdicted = False
         self._surface_departure_active = False
         self._status_altitude_observed_monotonic = None
         self._surface_descent_mps = 0.0
@@ -868,6 +884,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._navigation_jump_phase = ""
         self._navigation_jump_target = ""
         self._navigation_jump_charge_seen = False
+        self._navigation_charge_resolution_pending = False
         self._navigation_jump_phase_started = 0.0
         self._navigation_selected_star = None
         self.neutron_boost_armed = False
@@ -1164,10 +1181,27 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             on_foot_value = location.get("OnFoot")
         if on_foot_value is not None:
             self.current_on_foot = bool(on_foot_value)
+        taxi_value = data.get("in_taxi")
+        if taxi_value is None:
+            taxi_value = location.get("Taxi")
+        multicrew_value = data.get("in_multicrew")
+        if multicrew_value is None:
+            multicrew_value = location.get("Multicrew")
+        in_srv_value = data.get("in_srv")
+        if in_srv_value is None:
+            in_srv_value = location.get("InSRV")
+        self.current_in_taxi = bool(taxi_value)
+        self.current_in_multicrew = bool(multicrew_value)
+        self.current_in_srv = bool(in_srv_value)
+        if self.current_in_taxi or self.current_in_multicrew or self.current_in_srv:
+            self.current_on_foot = False
         self.current_in_fighter = False
-        self.current_in_srv = False
         self.current_vehicle_id = None
-        self.current_vehicle_name = ""
+        if self.current_in_srv:
+            remembered = str(getattr(self, "_last_surface_vehicle_name", "") or "").upper()
+            self.current_vehicle_name = remembered if remembered in {"NOMAD", "SRV"} else "SRV"
+        else:
+            self.current_vehicle_name = ""
         if docked_value is not None or (self.current_on_foot and station_name):
             self.current_docked = bool(docked_value or (self.current_on_foot and station_name))
         if station_name:
@@ -1593,6 +1627,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_in_fighter = False
         self.current_in_srv = False
         self.current_on_foot = False
+        self.current_in_taxi = False
+        self.current_in_multicrew = False
         self.current_vehicle_id = None
         self.current_vehicle_name = ""
         self._vehicle_name_by_id = {}
@@ -1625,6 +1661,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_scooping_fuel = False
         self.current_supercruise_overcharge = False
         self.current_glide_mode = False
+        self.current_interdicted = False
         self._surface_departure_active = False
         self._status_altitude_observed_monotonic = None
         self._surface_descent_mps = 0.0
@@ -1636,6 +1673,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._navigation_jump_phase = ""
         self._navigation_jump_target = ""
         self._navigation_jump_charge_seen = False
+        self._navigation_charge_resolution_pending = False
         self._navigation_jump_phase_started = 0.0
         self._navigation_selected_star = None
         self._navigation_transition_job = None
@@ -4142,6 +4180,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 and not getattr(self, "current_on_foot", False)
                 and not getattr(self, "current_in_srv", False)
                 and not getattr(self, "current_in_fighter", False)
+                and not getattr(self, "current_in_taxi", False)
+                and not getattr(self, "current_in_multicrew", False)
             ),
             "phase": approach_phase,
             "body": getattr(self, "current_body_name", "") or "",
@@ -4187,6 +4227,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "in_fighter": bool(getattr(self, "current_in_fighter", False)),
             "in_srv": bool(getattr(self, "current_in_srv", False)),
             "on_foot": bool(getattr(self, "current_on_foot", False)),
+            "in_taxi": bool(getattr(self, "current_in_taxi", False)),
+            "in_multicrew": bool(getattr(self, "current_in_multicrew", False)),
             "vehicle_name": getattr(self, "current_vehicle_name", ""),
             "in_fss": bool(getattr(self, "in_fss", False)),
             "flight_state": getattr(self, "hud_flight_state", "FLIGHT"),
@@ -4211,6 +4253,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "supercruise_overcharge": bool(
                 getattr(self, "current_supercruise_overcharge", False)
             ),
+            "interdicted": bool(getattr(self, "current_interdicted", False)),
             "route_safety": route_safety,
             "next_star": next_star,
             "surface_approach": surface_approach,
@@ -4260,8 +4303,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return "ONFOOT", "On Foot", True, "INFO"
         if key in ("galaxymap", "systemmap", "galacticpowers"):
             return "MAP", label, True, "INFO"
-        if key in ("supercruise", "destinationfromsupercruise", "destinationfromhyperspace"):
+        if key in ("supercruise", "destinationfromhyperspace"):
             return "SUPERCRUISE", label, False, "INFO"
+        if key == "destinationfromsupercruise":
+            return "MUSIC", label, False, "INFO"
         if key in ("starport", "dockingcomputer"):
             return "STATION", label, True, "INFO"
         if key in ("exploration", "unknown_exploration"):
@@ -4327,10 +4372,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif event in {"Embark", "Disembark"}:
             in_srv = bool(data.get("SRV") or raw.get("SRV"))
             taxi = bool(data.get("Taxi") or raw.get("Taxi"))
+            multicrew = bool(data.get("Multicrew") or raw.get("Multicrew"))
             vehicle = (
                 self._srv_toast_vehicle_name(raw, data) if in_srv
-                else "TAXI" if taxi else "SHIP"
+                else "TAXI" if taxi
+                else "CREW SHIP" if multicrew
+                else "SHIP"
             )
+        elif event in {"JoinACrew", "QuitACrew", "EndCrewSession"}:
+            if event == "JoinACrew":
+                return "MULTICREW LINK"
+            return "CREW RETURN"
         elif event == "VehicleSwitch":
             destination = str(data.get("To") or raw.get("To") or "").strip().casefold()
             if destination == "srv":
@@ -4359,14 +4411,25 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if (startup_replay or getattr(self, "_startup_restore_active", False)
                 or not event):
             return False
-        if event in {"Liftoff", "Touchdown"} and any((
+        if event in {"Liftoff", "Touchdown"}:
+            normalised = data if isinstance(data, dict) else {}
+            payload = raw if isinstance(raw, dict) else {}
+            player_controlled = normalised.get("player_controlled")
+            if player_controlled is None:
+                player_controlled = payload.get("PlayerControlled")
+            remote_ship = player_controlled is False or any((
                 getattr(self, "current_in_srv", False),
                 getattr(self, "current_in_fighter", False),
                 getattr(self, "current_on_foot", False),
-        )):
-            # This is the recalled mothership moving while the commander is
-            # outside it. Preserve the active vehicle indicator and do not
-            # overlay the ship's ascent/descent motion on top of it.
+                getattr(self, "current_in_taxi", False),
+                getattr(self, "current_in_multicrew", False),
+            ))
+        else:
+            remote_ship = False
+        if remote_ship:
+            # Empty or separately represented craft movement must not replace
+            # the commander's active vehicle/passenger indicator with the
+            # mothership's ascent or descent motion.
             return False
         spec = self._NAV_HUD_EVENT_SPECS.get(str(event))
         if not spec:
@@ -4448,6 +4511,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 kind, tone, duration_s, priority = "first_discovery", "green", 1.8, 78
             elif first_footfall:
                 kind, tone, duration_s, priority = "footfall_candidate", "green", 1.7, 74
+        uss_threat = 0
+        if event == "USSDrop":
+            try:
+                uss_threat = int(payload.get("USSThreat") or 0)
+            except (TypeError, ValueError):
+                uss_threat = 0
+            if uss_threat >= 3:
+                tone = "orange"
+                priority = max(priority, 86 if uss_threat < 5 else 98)
         now = time.monotonic()
         previous = getattr(self, "_hud_event_pulse", None)
         recent = bool(previous and now - float(previous.get("observed", 0.0) or 0.0) < 0.55)
@@ -4492,6 +4564,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 pass
         elif kind in {"valuable_discovery", "first_discovery", "footfall_candidate"}:
             detail["body_name"] = body_name
+        elif event == "Interdicted":
+            detail["state_label"] = "INTERDICTED"
+        elif event == "EscapeInterdiction":
+            detail["state_label"] = "INTERDICTION EVADED"
+        elif event == "USSDrop":
+            detail["state_label"] = "SIGNAL DROP"
+            if uss_threat >= 3:
+                detail["state_label"] = f"SIGNAL THREAT {uss_threat}"
 
         self._hud_event_sequence = int(getattr(self, "_hud_event_sequence", 0) or 0) + 1
         self._hud_event_pulse = {
@@ -4570,7 +4650,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if not callable(after):
             return
         delay_ms = {
-            "charging": 30000,
+            "charging": 12000,
             "hyperspace": 90000,
             "arrival": 1800,
             "carrier_transit": 180000,
@@ -4585,6 +4665,29 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             )
         except Exception:
             self._navigation_transition_job = None
+
+    def _schedule_navigation_charge_resolution(self):
+        """Resolve a possible cancelled charge without hiding a real jump."""
+        if getattr(self, "_navigation_charge_resolution_pending", False):
+            return
+        self._navigation_charge_resolution_pending = True
+        self._cancel_navigation_transition_job()
+        root = getattr(self, "root", None)
+        after = getattr(root, "after", None)
+        if not callable(after):
+            self._navigation_charge_resolution_pending = False
+            return
+        try:
+            def resolve():
+                self._navigation_charge_resolution_pending = False
+                self._expire_navigation_jump_phase("charging")
+
+            self._navigation_transition_job = after(
+                1500, resolve,
+            )
+        except Exception:
+            self._navigation_transition_job = None
+            self._navigation_charge_resolution_pending = False
 
     def _set_navigation_jump_phase(
         self, phase, *, target=None, refresh=True, schedule=True,
@@ -4603,6 +4706,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._navigation_jump_phase = phase
         self._navigation_jump_target = next_target
         self._navigation_jump_phase_started = time.monotonic() if phase else 0.0
+        if phase != "charging" or previous != "charging":
+            self._navigation_charge_resolution_pending = False
         if phase == "charging":
             self._navigation_jump_charge_seen = bool(
                 getattr(self, "current_fsd_charging", False)
@@ -4678,27 +4783,42 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         key = str(track or "").replace(" ", "").replace("_", "").casefold()
         phase = str(getattr(self, "_navigation_jump_phase", "") or "")
         changed = False
+        try:
+            phase_age = time.monotonic() - float(
+                getattr(self, "_navigation_jump_phase_started", 0.0) or 0.0
+            )
+        except (TypeError, ValueError):
+            phase_age = 0.0
         if key == "notrack" and phase == "charging" and (
                 getattr(self, "_navigation_jump_charge_seen", False)
-                or getattr(self, "current_fsd_hyperdrive_charging", False)):
+                or getattr(self, "current_fsd_hyperdrive_charging", False)
+                or phase_age >= 3.0):
             # Your live journal changes to NoTrack as the tunnel opens. The
             # official Status fsdJump bit remains primary; this covers a poll
-            # that happens to miss that short-lived flag.
+            # that happens to miss that short-lived flag. The elapsed-countdown
+            # guard prevents an unrelated immediate music stop becoming a jump.
             changed = self._set_navigation_jump_phase(
                 "hyperspace", refresh=not startup_replay,
             )
-        if key in {
-            "supercruise", "destinationfromhyperspace",
-            "destinationfromsupercruise",
-        } and not any(getattr(self, attr, False) for attr in (
+        protected_state = any(getattr(self, attr, False) for attr in (
             "current_docked", "current_landed", "current_in_srv",
-            "current_in_fighter", "current_on_foot",
-        )):
+            "current_in_fighter", "current_on_foot", "current_in_taxi",
+            "current_in_multicrew",
+        ))
+        if key in {"supercruise", "destinationfromhyperspace"} and not protected_state:
             if getattr(self, "hud_flight_state", "") != "SUPERCRUISE":
                 self.hud_flight_state = "SUPERCRUISE"
                 changed = True
                 if not startup_replay and not getattr(self, "batch_mode", False):
                     self.update_hud()
+        elif (key == "destinationfromsupercruise" and not protected_state
+                and getattr(self, "hud_flight_state", "") == "SUPERCRUISE"):
+            # This track is emitted after SupercruiseExit in the live journal.
+            # It is an exit corroboration, never evidence that SC is active.
+            self.hud_flight_state = "FLIGHT"
+            changed = True
+            if not startup_replay and not getattr(self, "batch_mode", False):
+                self.update_hud()
         return changed
 
     def _observe_navigation_readiness_event(self, event, raw, data, startup_replay=False):
@@ -6428,7 +6548,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 ), voice_key="cockpit-breached",
             )
         elif ev in ("Interdicted", "EscapeInterdiction"):
-            escaped = ev == "EscapeInterdiction" or bool(raw.get("Submitted") is False)
+            escaped = ev == "EscapeInterdiction"
             actor = raw.get("Interdictor") or raw.get("Interdictor_Localised") or raw.get("InterdictorName") or "Unknown contact"
             self._push_live_toast(
                 "INTERDICTION ESCAPED" if escaped else "INTERDICTED", actor,
@@ -6526,6 +6646,23 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         on_foot = bool(data.get("on_foot") or raw.get("OnFoot"))
         player_location = bool(data.get("player_location") or docked or on_foot)
         return player_location, docked, on_foot
+
+    @staticmethod
+    def _navigation_passenger_flags(raw, data):
+        """Return journal-backed Apex/dropship and multicrew ownership flags."""
+        raw = raw if isinstance(raw, dict) else {}
+        data = data if isinstance(data, dict) else {}
+        taxi = data.get("in_taxi")
+        if taxi is None:
+            taxi = data.get("Taxi")
+        if taxi is None:
+            taxi = raw.get("Taxi")
+        multicrew = data.get("in_multicrew")
+        if multicrew is None:
+            multicrew = data.get("Multicrew")
+        if multicrew is None:
+            multicrew = raw.get("Multicrew")
+        return bool(taxi), bool(multicrew)
 
     def process_event(self, data):
         ev = data.get("type") or data.get("event")
@@ -6983,19 +7120,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self._hide_survey_status_for_jump()
                 self.in_fss = False
                 self.fss_summary_active = False
-                if jump_type == "supercruise":
-                    self.hud_flight_state = "SUPERCRUISE"
-                else:
-                    # Frontier writes StartJump at the start of the countdown,
-                    # not on entry to witch-space. Preserve the physical state
-                    # underneath the HYPER CHARGE annunciation until Status's
-                    # exact fsdJump bit (or the scoped music fallback) fires.
-                    self._sync_navigation_hud_flight_state(
-                        supercruise=bool(
-                            int(getattr(self, "current_status_flags", 0) or 0)
-                            & 0x00000010
-                        ),
-                    )
+                # StartJump is the countdown for both low and high wake. Keep
+                # the verified physical state underneath the charge cue until
+                # Status' fsdJump bit or SupercruiseEntry confirms movement.
+                self._sync_navigation_hud_flight_state(
+                    supercruise=bool(
+                        int(getattr(self, "current_status_flags", 0) or 0)
+                        & self._STATUS_SUPERCRUISE
+                    ),
+                )
                 self.update_hud()
                 return
 
@@ -7018,18 +7151,24 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if ev == "CarrierJump":
                     self.current_docked = carrier_jump_docked
                     self.current_on_foot = carrier_jump_on_foot
-                    self.hud_flight_state = (
-                        "ONFOOT" if carrier_jump_on_foot
-                        else "DOCKED" if carrier_jump_docked
-                        else "FLIGHT"
-                    )
+                    self.current_in_taxi = False
+                    self.current_in_multicrew = False
+                    self.current_in_fighter = False
+                    self.current_in_srv = False
+                    self._sync_navigation_hud_flight_state(supercruise=False)
                 else:
+                    in_taxi, in_multicrew = self._navigation_passenger_flags(raw, d)
                     self.current_docked = False
                     self.current_on_foot = False
+                    self.current_landed = False
+                    self.current_in_taxi = in_taxi
+                    self.current_in_multicrew = in_multicrew
+                    self.current_in_fighter = False
+                    self.current_in_srv = False
                     # A completed inter-system FSD jump arrives in
-                    # supercruise. Status and Music will subsequently confirm
-                    # that base state while ARRIVAL and cooldown play over it.
-                    self.hud_flight_state = "SUPERCRUISE"
+                    # supercruise. Taxi/multicrew ownership remains more
+                    # specific than that transport's flight regime.
+                    self._sync_navigation_hud_flight_state(supercruise=True)
 
             prev_coords = self.current_coords if isinstance(self.current_coords, list) else None
 
@@ -7247,6 +7386,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             stype = d.get("StationType") or d.get("station_type", "")
             self.current_docked = True
             self.current_on_foot = False
+            self.current_in_taxi = False
+            self.current_in_multicrew = False
+            self.current_in_fighter = False
+            self.current_in_srv = False
             self.hud_flight_state = "DOCKED"
             self.current_station_name = station
             self.current_station_type = stype or None
@@ -7280,6 +7423,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             station = d.get("StationName") or d.get("station_name", "")
             self.current_docked = False
             self.current_on_foot = False
+            self.current_in_taxi = False
+            self.current_in_multicrew = False
+            self.current_in_fighter = False
+            self.current_in_srv = False
             self.hud_flight_state = "FLIGHT"
             self.current_station_name = None
             self.current_station_type = None
@@ -7304,9 +7451,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.add_event_feed_entry("DOCK", f"Undocked: {station}", severity="INFO", copy_text=station)
 
         elif ev == "SupercruiseEntry":
-            self.hud_flight_state = "SUPERCRUISE"
+            in_taxi, in_multicrew = self._navigation_passenger_flags(raw, d)
             self.current_docked = False
             self.current_on_foot = False
+            self.current_landed = False
+            self.current_in_taxi = in_taxi
+            self.current_in_multicrew = in_multicrew
+            self.current_in_fighter = False
+            self.current_in_srv = False
+            self._sync_navigation_hud_flight_state(supercruise=True)
             # When a body is still tracked, entering supercruise is an
             # outbound orbital transition. Keep the Liftoff direction latched
             # until LeaveBody clears it instead of reverting to APPROACH.
@@ -7315,11 +7468,38 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.update_hud()
 
         elif ev == "SupercruiseExit":
-            self.hud_flight_state = "FLIGHT"
+            in_taxi, in_multicrew = self._navigation_passenger_flags(raw, d)
+            self.current_in_taxi = in_taxi
+            self.current_in_multicrew = in_multicrew
+            self.current_in_fighter = False
+            self.current_in_srv = False
+            self.current_on_foot = False
+            self._sync_navigation_hud_flight_state(supercruise=False)
             self.update_hud()
 
         elif ev == "VehicleSwitch":
             self._apply_vehicle_switch(raw.get("To") or d.get("To"))
+
+        elif ev == "JoinACrew":
+            self.current_in_multicrew = True
+            self.current_in_taxi = False
+            self.current_on_foot = False
+            self.current_in_fighter = False
+            self.current_in_srv = False
+            self.current_vehicle_id = None
+            self.current_vehicle_name = ""
+            self._sync_navigation_hud_flight_state(supercruise=False)
+            self.update_hud()
+
+        elif ev in ("QuitACrew", "EndCrewSession"):
+            self.current_in_multicrew = False
+            self.current_in_taxi = False
+            self.current_in_fighter = False
+            self.current_in_srv = False
+            self.current_vehicle_id = None
+            self.current_vehicle_name = ""
+            self._sync_navigation_hud_flight_state(supercruise=False)
+            self.update_hud()
 
         elif ev == "Music":
             self._handle_music_event(raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
@@ -7333,6 +7513,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_on_foot = True
             self.current_in_srv = False
             self.current_in_fighter = False
+            self.current_in_taxi = False
+            self.current_in_multicrew = False
             self.hud_flight_state = "ONFOOT"
             self._surface_departure_active = False
             self.update_hud()
@@ -7340,25 +7522,42 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         elif ev == "Embark":
             vehicle_id = d.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
             from_srv = bool(d.get("SRV") or (raw.get("SRV") if isinstance(raw, dict) else False))
+            in_taxi, in_multicrew = self._navigation_passenger_flags(raw, d)
             self.current_on_foot = False
+            self.current_in_taxi = in_taxi
+            self.current_in_multicrew = in_multicrew
             if from_srv:
+                self.current_in_taxi = False
+                self.current_in_multicrew = False
                 remembered_vehicle = self._vehicle_name_by_id.get(vehicle_id) if vehicle_id is not None else ""
                 self.current_vehicle_id = vehicle_id
                 self.current_vehicle_name = remembered_vehicle or self.current_vehicle_name or self._last_surface_vehicle_name or "SRV"
                 self.current_in_srv = True
                 self.current_in_fighter = False
                 self.hud_flight_state = "NOMAD" if self.current_vehicle_name == "NOMAD" else "SRV"
+            elif in_taxi or in_multicrew:
+                self.current_vehicle_id = None
+                self.current_vehicle_name = ""
+                self.current_in_srv = False
+                self.current_in_fighter = False
+                self._sync_navigation_hud_flight_state(supercruise=False)
             elif self.current_docked:
                 self.current_vehicle_id = None
                 self.current_vehicle_name = ""
+                self.current_in_srv = False
+                self.current_in_fighter = False
                 self.hud_flight_state = "DOCKED"
             elif self.current_landed:
                 self.current_vehicle_id = None
                 self.current_vehicle_name = ""
+                self.current_in_srv = False
+                self.current_in_fighter = False
                 self.hud_flight_state = "LANDED"
             else:
                 self.current_vehicle_id = None
                 self.current_vehicle_name = ""
+                self.current_in_srv = False
+                self.current_in_fighter = False
                 self.hud_flight_state = "FLIGHT"
             self._surface_departure_active = False
             self.update_hud()
@@ -7371,6 +7570,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.current_in_fighter = True
                 self.current_in_srv = False
                 self.current_on_foot = False
+                self.current_in_taxi = False
                 vehicle_id = d.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
                 loadout = d.get("Loadout") or (raw.get("Loadout") if isinstance(raw, dict) else "")
                 loadout = str(loadout or "").lower()
@@ -7390,6 +7590,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_in_fighter = False
             self.current_in_srv = True
             self.current_on_foot = False
+            self.current_in_taxi = False
+            self.current_in_multicrew = False
             vehicle_id = d.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
             vehicle_name = self._srv_toast_vehicle_name(raw, d)
             self.current_vehicle_id = vehicle_id
@@ -7406,11 +7608,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_in_srv = False
             self.current_vehicle_id = None
             self.current_vehicle_name = ""
-            self.hud_flight_state = "LANDED" if self.current_landed else "FLIGHT"
+            self.current_in_taxi = False
+            self._sync_navigation_hud_flight_state(supercruise=False)
             self._surface_departure_active = False
             self.update_hud()
 
         elif ev == "DockSRV":
+            departure_active = bool(getattr(self, "_surface_departure_active", False))
             vehicle_id = d.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
             vehicle_name = self._srv_toast_vehicle_name(raw, d)
             if vehicle_id is not None:
@@ -7419,9 +7623,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_in_fighter = False
             self.current_in_srv = False
             self.current_on_foot = False
+            self.current_in_taxi = False
+            self.current_in_multicrew = False
             self.current_vehicle_id = None
             self.hud_flight_state = "LANDED" if self.current_landed else "FLIGHT"
-            self._surface_departure_active = False
+            # The Nomad reports its own Liftoff before docking back into the
+            # mothership. Preserve that verified ascent until LeaveBody rather
+            # than reverting to SURFACE APPROACH during the boarding gap.
+            self._surface_departure_active = bool(
+                departure_active
+                and getattr(self, "current_body_id", None) is not None
+                and not self.current_landed
+            )
             self.update_hud()
 
         elif ev == "FSSDiscoveryScan":
@@ -7841,17 +8054,31 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if body_name:
                 self.current_body_name = body_name
             self.current_landed = False
+            player_controlled = d.get("player_controlled")
+            if player_controlled is None and isinstance(raw, dict):
+                player_controlled = raw.get("PlayerControlled")
             vehicle_active = bool(
                 getattr(self, "current_in_srv", False)
                 or getattr(self, "current_in_fighter", False)
                 or getattr(self, "current_on_foot", False)
+                or getattr(self, "current_in_taxi", False)
+                or getattr(self, "current_in_multicrew", False)
             )
             if vehicle_active:
                 # The mothership may launch/recall while its commander remains
                 # in an SRV, Nomad, fighter or on foot. Keep that vehicle as
-                # the indicator owner instead of inventing a ship departure.
-                self._surface_departure_active = False
+                # the indicator owner. A player-controlled Nomad Liftoff is a
+                # genuine commander ascent, however, so retain its direction
+                # for the later DockSRV hand-off into the mothership.
+                self._surface_departure_active = bool(
+                    player_controlled is True
+                    and getattr(self, "current_body_id", None) is not None
+                )
                 self._sync_navigation_hud_flight_state(supercruise=False)
+            elif player_controlled is False:
+                # An empty recalled/dismissed ship must not take ownership of
+                # the commander's active indicator when Status is late.
+                self._surface_departure_active = False
             else:
                 self.hud_flight_state = "FLIGHT"
                 self._surface_departure_active = True
@@ -7869,9 +8096,19 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.current_body_name = body_name
             self.current_landed = True
             self._surface_departure_active = False
+            player_controlled = d.get("player_controlled")
+            if player_controlled is None and isinstance(raw, dict):
+                player_controlled = raw.get("PlayerControlled")
             # Touchdown can describe the recalled mothership while the
             # commander remains outside it, so vehicle state retains priority.
-            self._sync_navigation_hud_flight_state(supercruise=False)
+            if player_controlled is not False or any((
+                    getattr(self, "current_in_srv", False),
+                    getattr(self, "current_in_fighter", False),
+                    getattr(self, "current_on_foot", False),
+                    getattr(self, "current_in_taxi", False),
+                    getattr(self, "current_in_multicrew", False),
+            )):
+                self._sync_navigation_hud_flight_state(supercruise=False)
             if not self.batch_mode:
                 self.update_hud()
 
