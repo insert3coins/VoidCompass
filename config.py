@@ -194,6 +194,7 @@ PROFILE_BOOL_SETTINGS = (
     "exploration_focus_enabled",
     "exploration_focus_migrated",
     "reduced_motion_enabled",
+    "flight_log_mode_enabled",
 )
 
 PROFILE_VALUE_SETTINGS = (
@@ -256,6 +257,7 @@ PROFILE_VALUE_SETTINGS = (
     "overlay_layout_presets",
     "overlay_layout_studio_geometry",
     "dashboard_window_geometry",
+    "flight_log_geometry",
     "explore_map_view_state",
     "explore_map_annotations",
     "explore_map_annotation_geometry",
@@ -426,8 +428,11 @@ def apply_profile_config(config, profile_key=None):
     if "dashboard_window_geometry" not in profile:
         profile["dashboard_window_geometry"] = str(
             profile.get("dashboard_expanded_geometry")
-            or config.get("dashboard_expanded_geometry")
-            or config.get("main_geometry")
+            or (
+                config.get("dashboard_expanded_geometry")
+                or config.get("main_geometry")
+                if is_initial_profile else None
+            )
             or "1720x1120"
         )
     for retired_dashboard_key in (
@@ -438,6 +443,14 @@ def apply_profile_config(config, profile_key=None):
     ):
         profile.pop(retired_dashboard_key, None)
         config.pop(retired_dashboard_key, None)
+    if "flight_log_geometry" not in profile:
+        dashboard_geometry = str(
+            profile.get("dashboard_window_geometry")
+            or config.get("dashboard_window_geometry")
+            or "1720x1120"
+        )
+        position = re.search(r"([+-]\d+[+-]\d+)$", dashboard_geometry)
+        profile["flight_log_geometry"] = "820x650" + (position.group(1) if position else "")
     config["active_commander_profile"] = key
     config["active_commander_name"] = profile.get("commander_name", config.get("active_commander_name", "Unknown Commander"))
     config["active_commander_fid"] = profile.get("fid", config.get("active_commander_fid", ""))
@@ -511,6 +524,7 @@ def apply_profile_config(config, profile_key=None):
         "exploration_focus_enabled": True,
         "exploration_focus_migrated": False,
         "reduced_motion_enabled": False,
+        "flight_log_mode_enabled": False,
     }
     for setting in PROFILE_TEXT_SETTINGS:
         if setting not in profile:
@@ -529,6 +543,7 @@ def apply_profile_config(config, profile_key=None):
                 "overlay_layout_presets": {},
                 "overlay_layout_studio_geometry": "1080x720",
                 "dashboard_window_geometry": "1720x1120",
+                "flight_log_geometry": "820x650",
                 "explore_map_view_state": {},
                 "explore_map_annotations": [],
                 "explore_map_annotation_geometry": "470x360",
@@ -668,6 +683,8 @@ def load_config():
         'low_fuel_threshold_pct': 0.25,
         'main_geometry': '1000x700',
         'dashboard_window_geometry': '1720x1120',
+        'flight_log_geometry': '820x650',
+        'flight_log_mode_enabled': False,
         'settings_geometry': '980x800',
         'ground_target_window_geometry': '430x230+1220+260',
         'ground_popup_geometry': '340x140+1320+160',

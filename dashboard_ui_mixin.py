@@ -90,6 +90,9 @@ def _version_key(value):
 class DashboardUIMixin(ThemedWindowMixin):
     JOURNAL_HISTORY_LIMIT = 100
     DASHBOARD_MIN_SIZE = (1080, 700)
+    FLIGHT_LOG_MIN_SIZE = (700, 500)
+    RESIZE_LAYOUT_INTERVAL_MS = 32
+    RESIZE_SETTLE_MS = 140
     def _config_label_if_changed(self, widget, text=None, fg=None):
         try:
             current_text = widget.cget("text")
@@ -191,7 +194,9 @@ class DashboardUIMixin(ThemedWindowMixin):
         # Match the web console's defining composition: persistent navigation
         # rail at left, command strip above the working area, content at right.
         shell = tk.Frame(self.root, bg=self.UI_BG)
-        shell.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+        self.app_shell = shell
+        if not self.config.get("flight_log_mode_enabled", False):
+            shell.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
         self.nav = tk.Frame(
             shell, bg=THEME.header, width=232,
@@ -253,10 +258,29 @@ class DashboardUIMixin(ThemedWindowMixin):
         nav_list = tk.Frame(self.nav_canvas, bg=THEME.header)
         nav_window = self.nav_canvas.create_window((0, 0), window=nav_list, anchor="nw")
 
-        def fit_nav(_event=None):
+        self._nav_layout_signature = None
+
+        def fit_nav(event=None):
             try:
-                self.nav_canvas.itemconfigure(nav_window, width=max(1, self.nav_canvas.winfo_width()))
-                self.nav_canvas.configure(scrollregion=self.nav_canvas.bbox("all"))
+                width = max(1, self.nav_canvas.winfo_width())
+                previous = getattr(self, "_nav_layout_signature", None)
+                # A root-height change also configures this fixed-width canvas.
+                # Its content bounds are unchanged, so avoid an item/bbox pass
+                # for every vertical pixel of an interactive window resize.
+                if (
+                    event is not None
+                    and event.widget is self.nav_canvas
+                    and previous is not None
+                    and previous[0] == width
+                ):
+                    return
+                bounds = self.nav_canvas.bbox("all")
+                signature = (width, bounds)
+                if signature == previous:
+                    return
+                self._nav_layout_signature = signature
+                self.nav_canvas.itemconfigure(nav_window, width=width)
+                self.nav_canvas.configure(scrollregion=bounds)
             except tk.TclError:
                 pass
 
@@ -418,15 +442,21 @@ class DashboardUIMixin(ThemedWindowMixin):
             (0, 0), window=self.dashboard_host, anchor="nw",
         )
         self._workspace_scroll_job = None
-        self.workspace_canvas.bind("<Configure>", self._schedule_workspace_scrollregion, add="+")
-        self.dashboard_host.bind("<Configure>", self._schedule_workspace_scrollregion, add="+")
+        self._workspace_scroll_signature = None
+        self._main_resize_settle_job = None
+        self._main_resize_active_until = 0.0
+        self._dashboard_resize_refresh_pending = False
+        self.workspace_canvas.bind("<Configure>", self._on_workspace_canvas_configure, add="+")
+        self.root.bind("<Configure>", self._on_main_window_configure, add="+")
         self.root.bind("<MouseWheel>", self._on_workspace_mousewheel, add="+")
         self._active_page = "DASHBOARD"
 
         self._build_command_dashboard_body()
         self._build_workspace_hubs()
         self._build_about_page()
+        self._build_flight_log_shell()
         self._show_embedded_page("DASHBOARD", self.dashboard_page)
+        self._sync_flight_log_shell_visibility()
         self._schedule_workspace_scrollregion()
         return
 
@@ -724,6 +754,10 @@ class DashboardUIMixin(ThemedWindowMixin):
             mode_bar, "OPEN MODE", self._adaptive_open_mode_workspace,
         )
         self.dashboard_mode_open_btn.pack(side=tk.RIGHT, padx=(5, 0), pady=5)
+        self.dashboard_flight_log_btn = self._action_button(
+            mode_bar, "FLIGHT LOG", lambda: self._set_flight_log_mode(True), muted=True,
+        )
+        self.dashboard_flight_log_btn.pack(side=tk.RIGHT, padx=(5, 0), pady=5)
 
         # Hero row: the current system and route own the dashboard's strongest
         # visual weight. Everything below supports these two exploration jobs.
@@ -1101,7 +1135,11 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.journal_history_canvas.configure(yscrollcommand=self.journal_history_scroll.set)
         self.journal_history_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.journal_history_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        self.journal_history_canvas.bind("<Configure>", lambda _event: self._render_journal_history_canvas())
+        self._journal_history_resize_job = None
+        self._journal_history_resize_size = None
+        self.journal_history_canvas.bind(
+            "<Configure>", self._schedule_journal_history_resize,
+        )
         self.journal_history_canvas.bind("<MouseWheel>", self._on_journal_history_wheel)
         self.journal_history_entries = []
         self._journal_icon_cache = {}
@@ -1130,7 +1168,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.log_box.pack(fill=tk.X, padx=10, pady=10)
 
     def _capture_dashboard_window_geometry(self):
-        """Remember the commander's single Dashboard window footprint."""
+        """Remember the active commander's current main-window footprint."""
         try:
             self.root.update_idletasks()
             geometry = str(self.root.geometry() or "")
@@ -1138,21 +1176,29 @@ class DashboardUIMixin(ThemedWindowMixin):
             return ""
         if not re.fullmatch(r"\d+x\d+(?:[+-]-?\d+[+-]-?\d+)?", geometry):
             return ""
-        self.config["dashboard_window_geometry"] = geometry
+        geometry_key = (
+            "flight_log_geometry"
+            if self.config.get("flight_log_mode_enabled", False)
+            else "dashboard_window_geometry"
+        )
+        self.config[geometry_key] = geometry
         self.config["main_geometry"] = geometry
         return geometry
 
     def _apply_dashboard_window_geometry(self):
-        """Restore the commander's single Dashboard window footprint."""
-        fallback = "1720x1120"
-        geometry = str(self.config.get("dashboard_window_geometry") or fallback)
+        """Restore the active commander's Dashboard or Flight Log footprint."""
+        flight_log_mode = bool(self.config.get("flight_log_mode_enabled", False))
+        geometry_key = "flight_log_geometry" if flight_log_mode else "dashboard_window_geometry"
+        fallback = "820x650" if flight_log_mode else "1720x1120"
+        geometry = str(self.config.get(geometry_key) or fallback)
         if not re.fullmatch(r"\d+x\d+(?:[+-]-?\d+[+-]-?\d+)?", geometry):
             geometry = fallback
-            self.config["dashboard_window_geometry"] = geometry
+            self.config[geometry_key] = geometry
         try:
             if str(self.root.state()).casefold() == "zoomed":
                 self.root.state("normal")
-            self.root.minsize(*self.DASHBOARD_MIN_SIZE)
+            minimum = self.FLIGHT_LOG_MIN_SIZE if flight_log_mode else self.DASHBOARD_MIN_SIZE
+            self.root.minsize(*minimum)
             self.root.geometry(geometry)
             self.config["main_geometry"] = geometry
             if getattr(self, "workspace_canvas", None) is not None:
@@ -1160,6 +1206,281 @@ class DashboardUIMixin(ThemedWindowMixin):
             return True
         except (AttributeError, tk.TclError):
             return False
+
+    def _build_flight_log_shell(self):
+        """Build the menu-free, live exploration log surface."""
+        shell = tk.Frame(self.root, bg=self.UI_BG)
+        self.flight_log_shell = shell
+
+        header = tk.Frame(shell, bg=THEME.header, height=54)
+        header.pack(fill=tk.X)
+        header.pack_propagate(False)
+        title_zone = tk.Frame(header, bg=THEME.header)
+        title_zone.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=14)
+        tk.Label(
+            title_zone, text="FLIGHT LOG", fg=COLOR_ACCENT, bg=THEME.header,
+            font=("Bahnschrift SemiCondensed", 14, "bold"), anchor="w",
+        ).pack(anchor="w", pady=(7, 0))
+        self.flight_log_identity = tk.Label(
+            title_zone, text="LIVE EXPLORATION RECORD", fg=self.UI_DIM, bg=THEME.header,
+            font=("Cascadia Mono", 7, "bold"), anchor="w",
+        )
+        self.flight_log_identity.pack(anchor="w")
+        self._action_button(
+            header, "RESTORE DASHBOARD", lambda: self._set_flight_log_mode(False), accent=True,
+        ).pack(side=tk.RIGHT, padx=12, pady=10)
+
+        body = tk.Frame(shell, bg=self.UI_BG)
+        body.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        hero = self._panel(body, border=COLOR_ACCENT)
+        hero.pack(fill=tk.X, pady=(0, 8))
+        hero_top = tk.Frame(hero, bg=self.UI_PANEL)
+        hero_top.pack(fill=tk.X, padx=14, pady=(10, 0))
+        self.flight_log_system = tk.Label(
+            hero_top, text="NO SYSTEM DATA", fg=COLOR_ACCENT, bg=self.UI_PANEL,
+            font=("Bahnschrift SemiCondensed", 17, "bold"), anchor="w",
+        )
+        self.flight_log_system.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.flight_log_survey_badge = tk.Label(
+            hero_top, text="AWAITING", fg="black", bg=self.UI_DIM,
+            font=("Segoe UI", 7, "bold"), padx=7, pady=2,
+        )
+        self.flight_log_survey_badge.pack(side=tk.RIGHT)
+        self.flight_log_state = tk.Label(
+            hero, text="SHIP TELEMETRY AWAITING JOURNAL STATE", fg=COLOR_TEXT,
+            bg=self.UI_PANEL, font=("Consolas", 9), anchor="w",
+        )
+        self.flight_log_state.pack(fill=tk.X, padx=14, pady=(2, 7))
+        progress_bg = tk.Frame(hero, bg=self.UI_PANEL_2, height=4)
+        progress_bg.pack(fill=tk.X, padx=14, pady=(0, 10))
+        self.flight_log_progress_fill = tk.Frame(progress_bg, bg=COLOR_ACCENT, height=4)
+        self.flight_log_progress_fill.place(x=0, y=0, relheight=1.0, relwidth=0.0)
+
+        metrics = tk.Frame(body, bg=self.UI_BG)
+        metrics.pack(fill=tk.X, pady=(0, 8))
+        for column in range(3):
+            metrics.grid_columnconfigure(column, weight=1, uniform="flight-log")
+
+        def metric_card(column, heading):
+            card = self._panel(metrics)
+            card.grid(
+                row=0, column=column, sticky="nsew",
+                padx=(0 if column == 0 else 4, 0 if column == 2 else 4),
+            )
+            tk.Label(
+                card, text=heading, fg=self.UI_DIM, bg=self.UI_PANEL,
+                font=("Segoe UI", 7, "bold"), anchor="w",
+            ).pack(fill=tk.X, padx=11, pady=(8, 0))
+            value = tk.Label(
+                card, text="—", fg=COLOR_TEXT, bg=self.UI_PANEL,
+                font=self.UI_MONO_BOLD, anchor="w",
+            )
+            value.pack(fill=tk.X, padx=11, pady=(2, 0))
+            detail = tk.Label(
+                card, text="", fg=self.UI_MUTED, bg=self.UI_PANEL,
+                font=("Consolas", 8), anchor="w", justify=tk.LEFT,
+            )
+            detail.pack(fill=tk.X, padx=11, pady=(1, 8))
+            return value, detail
+
+        self.flight_log_survey_value, self.flight_log_survey_detail = metric_card(0, "SYSTEM SURVEY")
+        self.flight_log_route_value, self.flight_log_route_detail = metric_card(1, "NEXT LEG")
+        self.flight_log_value_value, self.flight_log_value_detail = metric_card(2, "FIELD VALUE")
+
+        log_panel = self._panel(body, border=self.UI_BORDER)
+        log_panel.pack(fill=tk.BOTH, expand=True)
+        log_head = tk.Frame(log_panel, bg=self.UI_PANEL)
+        log_head.pack(fill=tk.X, padx=12, pady=(9, 5))
+        self._section_label(log_head, "EXPLORATION LOG").pack(side=tk.LEFT)
+        self.flight_log_event_count = tk.Label(
+            log_head, text="0 EVENTS", fg=self.UI_DIM, bg=self.UI_PANEL,
+            font=("Cascadia Mono", 7, "bold"),
+        )
+        self.flight_log_event_count.pack(side=tk.RIGHT)
+        log_wrap = tk.Frame(log_panel, bg=self.UI_PANEL)
+        log_wrap.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 12))
+        self.flight_log_events = tk.Text(
+            log_wrap, bg=self.UI_PANEL, fg=COLOR_TEXT, font=("Consolas", 9),
+            relief=tk.FLAT, borderwidth=0, highlightthickness=0, wrap=tk.WORD,
+            padx=2, pady=2, height=12,
+        )
+        flight_log_scroll = scrollbar(
+            log_wrap, orient=tk.VERTICAL, command=self.flight_log_events.yview,
+        )
+        self.flight_log_events.configure(yscrollcommand=flight_log_scroll.set)
+        self.flight_log_events.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        flight_log_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.flight_log_events.configure(state=tk.DISABLED)
+        self._flight_log_render_fingerprint = None
+
+    def _sync_flight_log_shell_visibility(self):
+        """Show the profile-selected main surface without creating a second window."""
+        flight_log_mode = bool(self.config.get("flight_log_mode_enabled", False))
+        app_shell = getattr(self, "app_shell", None)
+        flight_shell = getattr(self, "flight_log_shell", None)
+        if app_shell is None or flight_shell is None:
+            return
+        if flight_log_mode:
+            app_shell.pack_forget()
+            if not flight_shell.winfo_manager():
+                flight_shell.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+            self._refresh_flight_log_summary()
+            self._refresh_flight_log_events(force=True)
+        else:
+            flight_shell.pack_forget()
+            if not app_shell.winfo_manager():
+                app_shell.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+            self._flush_dashboard_stream_views(force=True)
+            self._schedule_workspace_scrollregion()
+        self._update_main_window_title()
+
+    def _set_flight_log_mode(self, enabled, persist=True):
+        """Switch between the full command deck and the focused Flight Log."""
+        enabled = bool(enabled)
+        if enabled == bool(self.config.get("flight_log_mode_enabled", False)):
+            self._sync_flight_log_shell_visibility()
+            return
+        self._capture_dashboard_window_geometry()
+        self.config["flight_log_mode_enabled"] = enabled
+        self._sync_flight_log_shell_visibility()
+        self._apply_dashboard_window_geometry()
+        if persist:
+            self._persist_config()
+
+    def _update_main_window_title(self):
+        suffix = " // FLIGHT LOG" if self.config.get("flight_log_mode_enabled", False) else ""
+        try:
+            self.root.title(f"VOID COMPASS // v{APP_VERSION}{suffix}")
+        except (AttributeError, tk.TclError):
+            pass
+
+    def _refresh_flight_log_summary(self, route_progress=None):
+        """Render the compact briefing from the same cached exploration facts."""
+        if not self._widget_alive(getattr(self, "flight_log_system", None)):
+            return
+        route_progress = route_progress or self._current_route_progress()
+        intelligence = self._exploration_intelligence_snapshot(compact=True)
+        completion = intelligence.get("completion") or {}
+        scanned = max(0, int(completion.get("scanned") or getattr(self, "scanned", 0) or 0))
+        total = max(0, int(completion.get("total") or getattr(self, "total", 0) or 0))
+        percent = max(0, min(100, int(completion.get("percent") or 0)))
+        state = str(completion.get("state") or "AWAITING").upper()
+        state_colour = (
+            self.UI_OK if completion.get("complete")
+            else COLOR_ACCENT if state == "PARTIAL"
+            else self.UI_DIM
+        )
+        if getattr(self, "system_undiscovered", False):
+            state, state_colour = "FIRST DISCOVERY", self.UI_WARN
+
+        system = str(getattr(self, "current_sys", None) or "NO SYSTEM DATA")
+        commander = str(
+            getattr(self, "cmdr_name", None)
+            or self.config.get("active_commander_name")
+            or "UNKNOWN"
+        )
+        ship_state = getattr(self, "cmdr_ship", {}) or {}
+        ship = ship_state.get("ship_name") or ship_state.get("ship") or "SHIP"
+        flight_state = str(getattr(self, "hud_flight_state", "FLIGHT") or "FLIGHT")
+        fuel_text = ""
+        try:
+            fuel = float(getattr(self, "current_fuel_main", 0) or 0)
+            capacity = float(getattr(self, "fuel_capacity_main", 0) or 0)
+            if capacity > 0:
+                fuel_text = f" · FUEL {round(fuel * 100 / capacity)}%"
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
+        self.flight_log_system.config(text=system.upper())
+        self.flight_log_identity.config(
+            text=f"CMDR {commander.upper()} · LIVE EXPLORATION RECORD",
+        )
+        self.flight_log_state.config(text=f"{str(ship).upper()} · {flight_state.upper()}{fuel_text}")
+        self.flight_log_survey_badge.config(text=state, bg=state_colour)
+        self.flight_log_progress_fill.config(
+            bg=self.UI_OK if completion.get("complete") else COLOR_ACCENT,
+        )
+        self.flight_log_progress_fill.place_configure(relwidth=percent / 100.0)
+
+        dss_complete = int(completion.get("dss_complete") or 0)
+        dss_targets = int(completion.get("dss_targets") or 0)
+        bio_complete = int(completion.get("bio_complete") or 0)
+        bio_total = int(completion.get("bio_total") or 0)
+        geo = int(completion.get("geo_detected") or 0)
+        fss_total = str(total) if total or getattr(self, "scan_total_confirmed", True) else "?"
+        self.flight_log_survey_value.config(
+            text=f"FSS {scanned}/{fss_total} · DSS {dss_complete}/{dss_targets}",
+        )
+        survey_bits = [f"BIO {bio_complete}/{bio_total}", f"GEO {geo}" if geo else "GEO NONE"]
+        self.flight_log_survey_detail.config(text=" · ".join(survey_bits))
+
+        destination = self._dashboard_next_destination()
+        self.flight_log_route_value.config(text=str(destination or "NO ACTIVE ROUTE").upper())
+        self.flight_log_route_detail.config(
+            text=str(route_progress.get("text") or "NO ACTIVE ROUTE"),
+        )
+
+        survey_summary = None
+        try:
+            survey_summary = self._get_fss_summary()
+        except Exception:
+            pass
+        system_value = str((survey_summary or {}).get("total") or "AWAITING SCANS")
+        companion = getattr(self, "companion_state", {}) or {}
+        unsold = int(companion.get("unsold_exploration_cr") or 0) + int(companion.get("unsold_bio_cr") or 0)
+        bonus = int(companion.get("unsold_bio_bonus_potential_cr") or 0)
+        self.flight_log_value_value.config(text=f"SYSTEM {system_value}")
+        if unsold:
+            value_text = self._dashboard_credits(unsold)
+            if bonus:
+                value_text = f"{value_text}–{self._dashboard_credits(unsold + bonus)} EST."
+            self.flight_log_value_detail.config(text=f"UNSOLD DATA {value_text}")
+        else:
+            self.flight_log_value_detail.config(text="NO UNSOLD VALUE RECORDED")
+
+    def _flight_log_visible(self):
+        shell = getattr(self, "flight_log_shell", None)
+        try:
+            managed = bool(shell is not None and shell.winfo_manager())
+        except tk.TclError:
+            managed = False
+        return bool(self.config.get("flight_log_mode_enabled", False) and managed)
+
+    def _refresh_flight_log_events(self, force=False):
+        """Render only flight and discovery events from the shared curated feed."""
+        widget = getattr(self, "flight_log_events", None)
+        if not self._widget_alive(widget):
+            return
+        exploration_tags = {
+            "JUMP", "SCAN", "DSS", "BIO", "SYSTEM", "ROUTE", "CARRIER",
+            "EXPEDITION", "MILESTONE", "VALUABLE", "ALERT", "DOCK",
+        }
+        rows = [
+            row for row in getattr(self, "event_feed_entries", [])
+            if row.get("tag") in exploration_tags
+        ][:60]
+        fingerprint = tuple(
+            (row.get("ts"), row.get("tag"), row.get("severity"), row.get("message"))
+            for row in rows
+        )
+        if not force and fingerprint == getattr(self, "_flight_log_render_fingerprint", None):
+            return
+        lines = [self._event_feed_row_text(row) for row in rows]
+        if not lines:
+            lines = ["Waiting for live exploration activity from Elite Dangerous..."]
+        widget.configure(state=tk.NORMAL)
+        widget.delete("1.0", tk.END)
+        for index, line in enumerate(lines):
+            tag_name = f"flight_log_row_{index}"
+            widget.insert(tk.END, line + "\n", tag_name)
+            if index < len(rows):
+                widget.tag_config(tag_name, foreground=self._event_feed_row_color(rows[index]))
+        widget.configure(state=tk.DISABLED)
+        self._flight_log_render_fingerprint = fingerprint
+        if self._widget_alive(getattr(self, "flight_log_event_count", None)):
+            self.flight_log_event_count.config(
+                text=f"{len(rows)} EVENT{'S' if len(rows) != 1 else ''}",
+            )
 
     def _build_companion_dashboard_body(self):
         body = tk.Frame(self.dashboard_host, bg=self.UI_BG)
@@ -1283,7 +1604,11 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.journal_history_canvas.configure(yscrollcommand=self.journal_history_scroll.set)
         self.journal_history_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.journal_history_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        self.journal_history_canvas.bind("<Configure>", lambda _event: self._render_journal_history_canvas())
+        self._journal_history_resize_job = None
+        self._journal_history_resize_size = None
+        self.journal_history_canvas.bind(
+            "<Configure>", self._schedule_journal_history_resize,
+        )
         self.journal_history_canvas.bind("<MouseWheel>", self._on_journal_history_wheel)
         self.journal_history_entries = []
         self._journal_icon_cache = {}
@@ -1418,7 +1743,28 @@ class DashboardUIMixin(ThemedWindowMixin):
 
     def _layout_dashboard_briefing(self, event=None):
         """Reflow briefing cards once at each width breakpoint."""
-        width = int(getattr(event, "width", 0) or 0)
+        if self._main_window_resize_active():
+            return
+        # The body can briefly report its own requested width while its grid is
+        # changing. Using that value created a feedback loop at the responsive
+        # breakpoint (compact -> requested-wide -> expanded -> compact). The
+        # outer canvas is the stable, authoritative viewport during a drag.
+        width = 0
+        canvas = getattr(self, "workspace_canvas", None)
+        if canvas is not None:
+            try:
+                viewport_width = int(canvas.winfo_width() or 0)
+                if viewport_width > 1:
+                    width = max(1, viewport_width - 28)
+            except tk.TclError:
+                pass
+            if width <= 1:
+                # Before the canvas is mapped, the body alternates between its
+                # compact and natural requested widths. Wait for the stable
+                # viewport Configure event instead of choosing from either.
+                return
+        else:
+            width = int(getattr(event, "width", 0) or 0)
         if width <= 1:
             return
         stacked_hero = width < 900
@@ -2322,6 +2668,8 @@ class DashboardUIMixin(ThemedWindowMixin):
                 )
         else:
             self._apply_dashboard_activity_context("exploration")
+        if self._flight_log_visible():
+            self._refresh_flight_log_summary(route_progress)
 
     def _run_nav_command(self, label, command):
         """Run a page action and add its full open/switch cost to runtime tracing."""
@@ -2482,18 +2830,91 @@ class DashboardUIMixin(ThemedWindowMixin):
     def show_operations_page(self):
         self._show_embedded_page("OPERATIONS", self.operations_page)
 
-    def _schedule_workspace_scrollregion(self, _event=None):
+    def _on_main_window_configure(self, event=None):
+        """Mark a bounded interactive-resize window and settle once afterward."""
+        if event is not None and getattr(event, "widget", None) is not self.root:
+            return
+        self._main_resize_active_until = time.monotonic() + (self.RESIZE_SETTLE_MS / 1000.0)
+        if getattr(self, "_main_resize_settle_job", None) is not None:
+            return
+        try:
+            self._main_resize_settle_job = self.root.after(
+                self.RESIZE_SETTLE_MS, self._finish_main_window_resize,
+            )
+        except (AttributeError, tk.TclError):
+            self._main_resize_settle_job = None
+
+    def _on_workspace_canvas_configure(self, event=None):
+        # Keep the large Dashboard widget tree at its last settled dimensions
+        # while Windows is delivering the rapid stream of drag-resize events.
+        # The canvas itself still follows the native window smoothly; one
+        # authoritative child-layout pass runs from _finish_main_window_resize.
+        if self._main_window_resize_active():
+            return
+        self._schedule_workspace_scrollregion(event)
+        if (
+            getattr(self, "_active_page", "DASHBOARD") == "DASHBOARD"
+            and not self.config.get("flight_log_mode_enabled", False)
+        ):
+            self._layout_dashboard_briefing()
+
+    def _main_window_resize_active(self):
+        return time.monotonic() < float(
+            getattr(self, "_main_resize_active_until", 0.0) or 0.0
+        )
+
+    def _finish_main_window_resize(self):
+        self._main_resize_settle_job = None
+        remaining = float(getattr(self, "_main_resize_active_until", 0.0) or 0.0) - time.monotonic()
+        if remaining > 0:
+            try:
+                self._main_resize_settle_job = self.root.after(
+                    max(1, int(math.ceil(remaining * 1000))),
+                    self._finish_main_window_resize,
+                )
+            except (AttributeError, tk.TclError):
+                self._main_resize_settle_job = None
+            return
+        self._main_resize_active_until = 0.0
+        if (
+            getattr(self, "_active_page", "DASHBOARD") == "DASHBOARD"
+            and not self.config.get("flight_log_mode_enabled", False)
+        ):
+            self._layout_dashboard_briefing()
+        self._schedule_workspace_scrollregion(immediate=True)
+        if getattr(self, "_dashboard_resize_refresh_pending", False):
+            self._dashboard_resize_refresh_pending = False
+            self.schedule_dashboard_refresh(
+                full=bool(getattr(self, "dashboard_refresh_full_pending", False)),
+            )
+        if getattr(self, "_ground_ui_needs_update", False):
+            self._ground_ui_needs_update = False
+            try:
+                self.update_ground_target_ui()
+            except (AttributeError, tk.TclError):
+                pass
+
+    def _schedule_workspace_scrollregion(self, _event=None, immediate=False):
+        """Throttle the outer canvas geometry work during interactive resizing."""
+        if not immediate and self._main_window_resize_active():
+            return
         if getattr(self, "_workspace_scroll_job", None) is not None:
             return
         try:
-            self._workspace_scroll_job = self.root.after_idle(
-                self._refresh_workspace_scrollregion
+            self._workspace_scroll_job = self.root.after(
+                0 if immediate else self.RESIZE_LAYOUT_INTERVAL_MS,
+                self._refresh_workspace_scrollregion,
             )
-        except Exception:
+        except (AttributeError, tk.TclError):
             self._workspace_scroll_job = None
 
     def _refresh_workspace_scrollregion(self):
         self._workspace_scroll_job = None
+        # A job queued immediately before the resize started must not trigger
+        # a full descendant geometry cascade midway through the drag. The
+        # settle callback always schedules a fresh immediate pass.
+        if self._main_window_resize_active():
+            return
         canvas = getattr(self, "workspace_canvas", None)
         host = getattr(self, "dashboard_host", None)
         item = getattr(self, "_workspace_window_id", None)
@@ -2512,6 +2933,13 @@ class DashboardUIMixin(ThemedWindowMixin):
             # outer viewport existed; only vertical overflow is scrollable.
             width = max(1, canvas.winfo_width())
             height = max(1, canvas.winfo_height(), requested_h)
+            signature = (
+                str(getattr(self, "_active_page", "")), width, height, requested_h,
+                tuple(str(child) for child in active_children),
+            )
+            if signature == getattr(self, "_workspace_scroll_signature", None):
+                return
+            self._workspace_scroll_signature = signature
             canvas.itemconfigure(item, width=width, height=height)
             canvas.configure(scrollregion=(0, 0, width, height))
         except tk.TclError:
@@ -2966,10 +3394,16 @@ class DashboardUIMixin(ThemedWindowMixin):
         if len(self.event_feed_entries) > self.event_feed_max_entries:
             self.event_feed_entries = self.event_feed_entries[:self.event_feed_max_entries]
         self._event_feed_dirty = True
-        if (self._dashboard_stream_visible("live")
-                and not getattr(self, "_defer_dashboard_stream_render", False)):
-            self._refresh_event_feed()
-            self._event_feed_dirty = False
+        if not getattr(self, "_defer_dashboard_stream_render", False):
+            rendered = False
+            if self._dashboard_stream_visible("live"):
+                self._refresh_event_feed()
+                rendered = True
+            if self._flight_log_visible():
+                self._refresh_flight_log_events()
+                rendered = True
+            if rendered:
+                self._event_feed_dirty = False
 
         toast_hud = getattr(self, "toast_hud", None)
         if toast_hud and sev in ("WARN", "FAIL"):
@@ -3017,7 +3451,10 @@ class DashboardUIMixin(ThemedWindowMixin):
             pass
 
     def _dashboard_streams_visible(self):
-        return getattr(self, "_active_page", "DASHBOARD") == "DASHBOARD"
+        return (
+            not self.config.get("flight_log_mode_enabled", False)
+            and getattr(self, "_active_page", "DASHBOARD") == "DASHBOARD"
+        )
 
     def _dashboard_stream_visible(self, name):
         return (
@@ -3031,16 +3468,21 @@ class DashboardUIMixin(ThemedWindowMixin):
             self.journal_history_count_lbl.config(text=f"{len(self.journal_history_entries)} EVENTS")
 
     def _flush_dashboard_stream_views(self, force=False):
-        if not force and not self._dashboard_streams_visible():
+        dashboard_visible = self._dashboard_streams_visible()
+        flight_log_visible = self._flight_log_visible()
+        if not force and not dashboard_visible and not flight_log_visible:
             return
         show_live = force or self._dashboard_stream_visible("live")
         show_raw = force or self._dashboard_stream_visible("raw")
         if show_live and (force or getattr(self, "_event_feed_dirty", False)):
             self._refresh_event_feed()
-            self._event_feed_dirty = False
         if show_raw and (force or getattr(self, "_journal_history_dirty", False)):
             self._refresh_journal_history_view()
             self._journal_history_dirty = False
+        if flight_log_visible and (force or getattr(self, "_event_feed_dirty", False)):
+            self._refresh_flight_log_events(force=force)
+        if (show_live or flight_log_visible) and (force or getattr(self, "_event_feed_dirty", False)):
+            self._event_feed_dirty = False
 
     def _resource_file(self, *parts):
         base = getattr(sys, "_MEIPASS", os.path.abspath("."))
@@ -3230,6 +3672,30 @@ class DashboardUIMixin(ThemedWindowMixin):
             return "break"
         except Exception:
             return None
+
+    def _schedule_journal_history_resize(self, event=None):
+        """Bound raw-journal canvas redraws while its viewport is resizing."""
+        if event is not None:
+            self._journal_history_resize_size = (
+                max(1, int(getattr(event, "width", 1) or 1)),
+                max(1, int(getattr(event, "height", 1) or 1)),
+            )
+        if getattr(self, "_journal_history_resize_job", None) is not None:
+            return
+        try:
+            self._journal_history_resize_job = self.root.after(
+                50, self._run_journal_history_resize,
+            )
+        except (AttributeError, tk.TclError):
+            self._journal_history_resize_job = None
+
+    def _run_journal_history_resize(self):
+        self._journal_history_resize_job = None
+        size = getattr(self, "_journal_history_resize_size", None)
+        if size == getattr(self, "_journal_history_render_size", None):
+            return
+        self._journal_history_render_size = size
+        self._render_journal_history_canvas()
 
     def _event_feed_matches_filter(self, entry):
         mode = getattr(self, "event_feed_filter", "ALL")
@@ -3509,6 +3975,11 @@ class DashboardUIMixin(ThemedWindowMixin):
     def _run_scheduled_dashboard_refresh(self):
         t0 = self._perf_start()
         self.dashboard_refresh_job = None
+        if self._main_window_resize_active():
+            # Preserve the latest requested refresh, but do not repaint the
+            # complete Dashboard widget tree in the middle of a native drag.
+            self._dashboard_resize_refresh_pending = True
+            return
         if getattr(self, "_startup_restore_active", False):
             self._startup_restore_ui_pending = True
             return
@@ -3551,7 +4022,7 @@ class DashboardUIMixin(ThemedWindowMixin):
                 achievement_engine.tick_playtime(active=self._game_is_active())
             except Exception:
                 pass
-        if self._dashboard_streams_visible():
+        if self._dashboard_streams_visible() and not self._main_window_resize_active():
             if hasattr(self, "summary_session"):
                 self.summary_session.config(text=self._get_session_elapsed_text())
             newest_until = max(
@@ -3961,9 +4432,16 @@ class DashboardUIMixin(ThemedWindowMixin):
         try:
             w = max(canvas.winfo_width(), 260)
             h = max(canvas.winfo_height(), 72)
+            ctx = self._flight_strip_context()
+            signature = (
+                w, h, repr(ctx), COLOR_ACCENT, COLOR_ORANGE,
+                self.UI_BORDER, self.UI_DIM, self.UI_MUTED,
+            )
+            if signature == getattr(self, "_flight_strip_render_signature", None):
+                return
+            self._flight_strip_render_signature = signature
             canvas.delete("all")
 
-            ctx = self._flight_strip_context()
             spine_y = 34
             left_x = 34
             right_x = max(w - 34, left_x + 34)
@@ -4423,6 +4901,13 @@ class DashboardUIMixin(ThemedWindowMixin):
 
     def update_ground_target_ui(self):
         t0 = self._perf_start()
+        # Surface-trail projection can be relatively expensive with a long
+        # trail. It is unrelated to the main Dashboard's geometry, so let one
+        # settled update handle any Status changes received while the commander
+        # is actively dragging the application window.
+        if self._main_window_resize_active():
+            self._ground_ui_needs_update = True
+            return
         has_status = self._widget_alive(getattr(self, "ground_status_lbl", None))
         has_detail = self._widget_alive(getattr(self, "ground_detail_lbl", None))
         if self._widget_alive(getattr(self, "ground_popup_toggle_btn", None)):
@@ -4472,6 +4957,9 @@ class DashboardUIMixin(ThemedWindowMixin):
     def update_dashboard_panels(self):
         t0 = self._perf_start()
         """Refresh dashboard cards/summary without waypoint recompute."""
+        if self._main_window_resize_active():
+            self._dashboard_resize_refresh_pending = True
+            return
         if getattr(self, "_startup_restore_active", False):
             self._startup_restore_ui_pending = True
             return
@@ -4479,8 +4967,8 @@ class DashboardUIMixin(ThemedWindowMixin):
         flight_state = str(getattr(self, "hud_flight_state", "FLIGHT") or "FLIGHT")
         sys_text = f"{ship or 'SHIP'} · {flight_state}".upper()
         
-        self.sys_stat.config(text=sys_text)
-        self.scan_stat.config(text=self._scan_progress_count_text())
+        self._config_label_if_changed(self.sys_stat, text=sys_text)
+        self._config_label_if_changed(self.scan_stat, text=self._scan_progress_count_text())
         self.update_nav_label()
 
         route_progress = self._refresh_route_progress_labels()
@@ -4489,20 +4977,24 @@ class DashboardUIMixin(ThemedWindowMixin):
         traffic_week = self.system_traffic.get("week", 0)
         traffic_total = self.system_traffic.get("total", 0)
 
-        self.summary_sys.config(text=self.current_sys or "---")
-        self.summary_scan.config(text=f"{self.scanned}/{self.total}")
-        self.summary_traffic.config(text=f"{traffic_day}/{traffic_week}/{traffic_total}")
-        self.summary_session.config(text=self._get_session_elapsed_text())
+        self._config_label_if_changed(self.summary_sys, text=self.current_sys or "---")
+        self._config_label_if_changed(self.summary_scan, text=f"{self.scanned}/{self.total}")
+        self._config_label_if_changed(
+            self.summary_traffic, text=f"{traffic_day}/{traffic_week}/{traffic_total}",
+        )
+        self._config_label_if_changed(self.summary_session, text=self._get_session_elapsed_text())
         cmdr_text = (
             getattr(self, "cmdr_name", None)
             or self.config.get("active_commander_name")
             or "UNKNOWN"
         )
-        self.summary_cmdr.config(text=str(cmdr_text).upper())
+        self._config_label_if_changed(self.summary_cmdr, text=str(cmdr_text).upper())
 
         hud_on = "ON" if self.hud else "OFF"
         shots_on = "ON" if self.config.get("screenshots_enabled", False) else "OFF"
-        self.integration_lbl.config(text=f"HUD: {hud_on} | SHOTS: {shots_on}")
+        self._config_label_if_changed(
+            self.integration_lbl, text=f"HUD: {hud_on} | SHOTS: {shots_on}",
+        )
 
         alerts = []
         if self.system_undiscovered:
@@ -4517,10 +5009,11 @@ class DashboardUIMixin(ThemedWindowMixin):
         alert_fg = COLOR_ORANGE if alerts else self.UI_MUTED
         if self.system_undiscovered or self.valuable_bodies:
             alert_fg = self.UI_WARN
-        self.alert_lbl.config(text=alert_text, fg=alert_fg)
+        self._config_label_if_changed(self.alert_lbl, text=alert_text, fg=alert_fg)
 
         self._draw_flight_strip()
-        self._refresh_event_feed()
+        if self._dashboard_stream_visible("live"):
+            self._refresh_event_feed()
         self._refresh_command_dashboard(route_progress)
         self._perf_spike("update_dashboard_panels", t0, threshold_ms=28.0)
 
@@ -4528,6 +5021,10 @@ class DashboardUIMixin(ThemedWindowMixin):
         """Force update full dashboard, including waypoint panel."""
         if threading.current_thread() is not threading.main_thread():
             self._ui_post(self.update_dashboard_ui, key="dashboard-full-refresh")
+            return
+        if self._main_window_resize_active():
+            self._dashboard_resize_refresh_pending = True
+            self.dashboard_refresh_full_pending = True
             return
         if getattr(self, "_startup_restore_active", False):
             self._startup_restore_ui_pending = True
