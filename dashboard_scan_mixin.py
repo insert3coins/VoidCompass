@@ -9,6 +9,9 @@ from stellar_types import star_type_label
 
 
 class DashboardScanMixin:
+    _STATUS_SUPERCRUISE = 0x00000010
+    _STATUS_IN_FIGHTER = 0x02000000
+    _STATUS_IN_SRV = 0x04000000
     _STATUS_LANDING_GEAR_DOWN = 0x00000004
     _STATUS_CARGO_SCOOP_DEPLOYED = 0x00000200
     _STATUS_SCOOPING_FUEL = 0x00000800
@@ -16,19 +19,28 @@ class DashboardScanMixin:
     _STATUS_FSD_MASS_LOCKED = 0x00010000
     _STATUS_FSD_CHARGING = 0x00020000
     _STATUS_FSD_COOLDOWN = 0x00040000
+    _STATUS_INTERDICTED = 0x00800000
     _STATUS_FSD_JUMPING = 0x40000000
     _STATUS2_FSD_HYPERDRIVE_CHARGING = 0x00080000
     _STATUS2_SUPERCRUISE_OVERCHARGE = 0x00100000
     _STATUS2_GLIDE_MODE = 0x00001000
+    _STATUS2_IN_TAXI = 0x00000002
+    _STATUS2_IN_MULTICREW = 0x00000004
+    _STATUS2_TELEPRESENCE_MULTICREW = 0x00020000
+    _STATUS2_PHYSICAL_MULTICREW = 0x00040000
 
     def _sync_navigation_hud_flight_state(self, *, supercruise=False):
         """Resolve the navigation HUD state from the latest verified vehicle flags."""
-        if getattr(self, "current_on_foot", False):
+        if getattr(self, "current_in_taxi", False):
+            state = "TAXI"
+        elif getattr(self, "current_on_foot", False):
             state = "ONFOOT"
         elif getattr(self, "current_in_fighter", False):
             state = getattr(self, "current_vehicle_name", None) or "FIGHTER"
         elif getattr(self, "current_in_srv", False):
             state = "NOMAD" if getattr(self, "current_vehicle_name", "") == "NOMAD" else "SRV"
+        elif getattr(self, "current_in_multicrew", False):
+            state = "MULTICREW"
         elif getattr(self, "current_docked", False):
             state = "DOCKED"
         elif getattr(self, "current_landed", False):
@@ -45,6 +57,9 @@ class DashboardScanMixin:
         """Apply the journal VehicleSwitch event before Status.json catches up."""
         destination = str(destination or "").strip().casefold()
         self.current_on_foot = False
+        self.current_in_taxi = False
+        if destination in {"fighter", "srv", "mothership"}:
+            self.current_in_multicrew = False
         if destination == "fighter":
             self.current_in_fighter = True
             self.current_in_srv = False
@@ -104,6 +119,8 @@ class DashboardScanMixin:
         was_in_fighter = bool(getattr(self, "current_in_fighter", False))
         was_in_srv = bool(getattr(self, "current_in_srv", False))
         was_on_foot = bool(getattr(self, "current_on_foot", False))
+        was_in_taxi = bool(getattr(self, "current_in_taxi", False))
+        was_in_multicrew = bool(getattr(self, "current_in_multicrew", False))
         was_hud_flight_state = str(
             getattr(self, "hud_flight_state", "") or ""
         ).upper()
@@ -117,6 +134,7 @@ class DashboardScanMixin:
             bool(getattr(self, "current_scooping_fuel", False)),
             bool(getattr(self, "current_supercruise_overcharge", False)),
             bool(getattr(self, "current_glide_mode", False)),
+            bool(getattr(self, "current_interdicted", False)),
             bool(getattr(self, "_surface_departure_active", False)),
         )
         was_navigation_readiness = (
@@ -203,12 +221,13 @@ class DashboardScanMixin:
         if isinstance(flags, int):
             self.current_status_flags = flags
             self.current_landed = bool(flags & 0x00000002)
-            self.current_in_fighter = bool(flags & 0x02000000)
-            self.current_in_srv = bool(flags & 0x04000000)
-            in_supercruise = bool(flags & 0x00000010)
+            self.current_in_fighter = bool(flags & self._STATUS_IN_FIGHTER)
+            self.current_in_srv = bool(flags & self._STATUS_IN_SRV)
+            in_supercruise = bool(flags & self._STATUS_SUPERCRUISE)
             self.current_fsd_mass_locked = bool(flags & self._STATUS_FSD_MASS_LOCKED)
             self.current_fsd_charging = bool(flags & self._STATUS_FSD_CHARGING)
             self.current_fsd_cooldown = bool(flags & self._STATUS_FSD_COOLDOWN)
+            self.current_interdicted = bool(flags & self._STATUS_INTERDICTED)
             self.current_fsd_jumping = bool(flags & self._STATUS_FSD_JUMPING)
             self.current_landing_gear_down = bool(flags & self._STATUS_LANDING_GEAR_DOWN)
             self.current_cargo_scoop_deployed = bool(flags & self._STATUS_CARGO_SCOOP_DEPLOYED)
@@ -221,6 +240,12 @@ class DashboardScanMixin:
         if isinstance(flags2, int):
             self.current_status_flags2 = flags2
             self.current_on_foot = bool(flags2 & 0x0001)
+            self.current_in_taxi = bool(flags2 & self._STATUS2_IN_TAXI)
+            self.current_in_multicrew = bool(flags2 & (
+                self._STATUS2_IN_MULTICREW
+                | self._STATUS2_TELEPRESENCE_MULTICREW
+                | self._STATUS2_PHYSICAL_MULTICREW
+            ))
             self.current_fsd_hyperdrive_charging = bool(
                 flags2 & self._STATUS2_FSD_HYPERDRIVE_CHARGING
             )
@@ -259,12 +284,22 @@ class DashboardScanMixin:
             if (getattr(self, "current_fsd_charging", False)
                     and getattr(self, "current_fsd_hyperdrive_charging", False)):
                 self._navigation_jump_charge_seen = True
+                if getattr(self, "_navigation_charge_resolution_pending", False):
+                    self._navigation_charge_resolution_pending = False
+                    schedule_expiry = getattr(
+                        self, "_schedule_navigation_jump_phase_expiry", None,
+                    )
+                    if callable(schedule_expiry):
+                        schedule_expiry("charging")
             elif getattr(self, "_navigation_jump_charge_seen", False):
-                # A charging flag that falls without the exact fsdJump flag is
-                # a cancelled high-wake. Do not leave the HUD stuck charging.
-                clear_jump_phase = getattr(self, "_clear_navigation_jump_phase", None)
-                if callable(clear_jump_phase):
-                    clear_jump_phase(refresh=False)
+                # Charging flags also fall at the normal tunnel boundary. Give
+                # the journal's NoTrack/FSDJump evidence a short chance to
+                # arrive before treating this as a cancelled high wake.
+                resolve_charge = getattr(
+                    self, "_schedule_navigation_charge_resolution", None,
+                )
+                if callable(resolve_charge):
+                    resolve_charge()
         if isinstance(flags, int):
             reported_docked = bool(flags & 0x00000001)
             # The ship remains docked while its commander is walking inside a
@@ -309,6 +344,8 @@ class DashboardScanMixin:
                 and not getattr(self, "current_in_srv", False)
                 and not getattr(self, "current_in_fighter", False)
                 and not getattr(self, "current_on_foot", False)
+                and not getattr(self, "current_in_taxi", False)
+                and not getattr(self, "current_in_multicrew", False)
                 and (was_landed or climb_rate >= 15.0 or entered_supercruise)):
             self._surface_departure_active = True
         if was_docked != bool(getattr(self, "current_docked", False)):
@@ -372,6 +409,8 @@ class DashboardScanMixin:
             or was_in_fighter != bool(getattr(self, "current_in_fighter", False))
             or was_in_srv != bool(getattr(self, "current_in_srv", False))
             or was_on_foot != bool(getattr(self, "current_on_foot", False))
+            or was_in_taxi != bool(getattr(self, "current_in_taxi", False))
+            or was_in_multicrew != bool(getattr(self, "current_in_multicrew", False))
         )
         fuel_percent_changed = self._current_fuel_percent() != was_fuel_percent
         navigation_readiness_changed = was_navigation_readiness != (
@@ -391,6 +430,7 @@ class DashboardScanMixin:
             bool(getattr(self, "current_scooping_fuel", False)),
             bool(getattr(self, "current_supercruise_overcharge", False)),
             bool(getattr(self, "current_glide_mode", False)),
+            bool(getattr(self, "current_interdicted", False)),
             bool(getattr(self, "_surface_departure_active", False)),
         )
         if fuel_percent_changed:
@@ -410,7 +450,7 @@ class DashboardScanMixin:
         active = getattr(self, "_toast_status_alerts", set())
 
         overheat = isinstance(flags, int) and bool(flags & 0x00100000)
-        interdicted = isinstance(flags, int) and bool(flags & 0x00800000)
+        interdicted = isinstance(flags, int) and bool(flags & self._STATUS_INTERDICTED)
         generic_danger = isinstance(flags, int) and bool(flags & 0x00400000)
         # InDanger is a broad, frequently flapping game flag.  It is useful as
         # a last-resort warning in normal ship flight, but not while a specific
@@ -422,6 +462,8 @@ class DashboardScanMixin:
             and not getattr(self, "current_on_foot", False)
             and not getattr(self, "current_in_srv", False)
             and not getattr(self, "current_in_fighter", False)
+            and not getattr(self, "current_in_taxi", False)
+            and not getattr(self, "current_in_multicrew", False)
         )
         checks = (
             ("overheat", overheat, "OVERHEATING", "Ship temperature above 100%", "warn"),
@@ -498,7 +540,9 @@ class DashboardScanMixin:
         main = getattr(self, "current_fuel_main", None)
         if not cap or cap <= 0 or main is None:
             return
-        if self.current_docked or self.current_on_foot or self.current_in_srv or self.current_in_fighter:
+        if (self.current_docked or self.current_on_foot or self.current_in_srv
+                or self.current_in_fighter or getattr(self, "current_in_taxi", False)
+                or getattr(self, "current_in_multicrew", False)):
             return
         toast_hud = getattr(self, "toast_hud", None)
         if not toast_hud:

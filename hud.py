@@ -450,6 +450,7 @@ class TacticalHUD:
         vehicle_name = str(nav_context.get("vehicle_name") or "").upper()
         music_mode = str(nav_context.get("music_mode") or "").upper()
         music_track = str(nav_context.get("music_track") or "")
+        track_key = music_track.replace(" ", "").replace("_", "").upper()
         fsd = nav_context.get("fsd_readiness") or {}
         fsd_state = str(fsd.get("state") or "ready")
 
@@ -476,16 +477,18 @@ class TacticalHUD:
             return "SCO OVERCHARGE"
         journal_event = nav_context.get("journal_event") or {}
         if str(journal_event.get("kind") or "") in {
-                "vehicle_deploy", "vehicle_board", "vehicle_switch"}:
+                "vehicle_deploy", "vehicle_board", "vehicle_switch",
+                "interdiction", "interdiction_clear", "signal_drop"}:
             transition_label = str(journal_event.get("state_label") or "").strip()
             if transition_label:
                 return transition_label.upper()
+        if nav_context.get("interdicted") or track_key == "INTERDICTION":
+            return "INTERDICTION"
 
         focus_key = (
             str(nav_context.get("gui_focus", ""))
             .replace(" ", "").replace("_", "").upper()
         )
-        track_key = music_track.replace(" ", "").replace("_", "").upper()
         focus_labels = {
             "6": "GALAXY MAP",
             "GALAXYMAP": "GALAXY MAP",
@@ -495,6 +498,7 @@ class TacticalHUD:
             "ORRERY": "ORRERY",
             "9": "FSS",
             "FSS": "FSS",
+            "SYSTEMANDSURFACESCANNER": "FSS",
             "10": "DSS",
             "SAA": "DSS",
             "SURFACEANALYSIS": "DSS",
@@ -527,8 +531,11 @@ class TacticalHUD:
         if (fsd_state == "mass_lock" and flight_state in {"", "FLIGHT"}
                 and not any(nav_context.get(key) for key in (
                     "docked", "landed", "in_fighter", "in_srv", "on_foot",
+                    "in_taxi", "in_multicrew",
                 ))):
             return "MASS LOCK"
+        if flight_state == "TAXI" or nav_context.get("in_taxi"):
+            return "TAXI"
         if flight_state == "ONFOOT" or nav_context.get("on_foot") or music_mode == "ONFOOT":
             return "ONFOOT"
         if nav_context.get("docked"):
@@ -539,6 +546,8 @@ class TacticalHUD:
             return "FIGHTER"
         if flight_state == "SRV" or nav_context.get("in_srv"):
             return "SRV"
+        if flight_state == "MULTICREW" or nav_context.get("in_multicrew"):
+            return "MULTICREW"
         if flight_state == "LANDED" or nav_context.get("landed"):
             return "LANDED"
         if flight_state == "SUPERCRUISE":
@@ -550,12 +559,14 @@ class TacticalHUD:
     def _state_color(self, state_text):
         state_text = str(state_text or "").upper()
         if (state_text.endswith((" DEPLOY", " RECOVERY", " EGRESS", " CONTROL"))
-                or state_text.startswith("BOARDING ")):
+                or state_text.startswith("BOARDING ")
+                or state_text in {"MULTICREW LINK", "CREW RETURN"}):
             return COLOR_ACCENT
         if state_text in {"ARRIVAL", "CARRIER ARRIVAL"}:
             return COLOR_GREEN
         if state_text in (
             "DOCKED", "LANDED", "FSS", "DSS", "FIGHTER", "SRV", "NOMAD",
+            "TAXI", "MULTICREW",
             "ONFOOT", "MAP", "GALAXY MAP", "SYSTEM MAP", "POWER MAP", "ORRERY",
             "CODEX", "EXPLORATION", "STATION", "FSD COOLDOWN", "ORBITAL APPROACH",
             "ORBITAL DEPARTURE",
@@ -566,8 +577,15 @@ class TacticalHUD:
         if state_text in (
             "HYPERSPACE", "SUPERCRUISE", "JUMPING", "COMBAT",
             "FSD CHARGE", "HYPER CHARGE", "SCO OVERCHARGE", "CARRIER TRANSIT",
+            "INTERDICTION", "INTERDICTED",
         ):
             return COLOR_ORANGE
+        if state_text == "INTERDICTION EVADED":
+            return COLOR_GREEN
+        if state_text.startswith("SIGNAL THREAT"):
+            return COLOR_ORANGE
+        if state_text == "SIGNAL DROP":
+            return COLOR_YELLOW
         return "#7d8891"
 
     @staticmethod
@@ -580,6 +598,14 @@ class TacticalHUD:
             return "vehicle_board"
         if state.endswith(" CONTROL"):
             return "vehicle_switch"
+        if state in {"MULTICREW LINK", "CREW RETURN"}:
+            return "vehicle_switch"
+        if state in {"INTERDICTION", "INTERDICTED"}:
+            return "combat"
+        if state == "INTERDICTION EVADED":
+            return "arrival"
+        if state.startswith("SIGNAL "):
+            return "fsd_lock"
         if state == "MASS LOCK":
             return "fsd_lock"
         if state in {"FSD CHARGE", "HYPER CHARGE"}:
@@ -620,6 +646,10 @@ class TacticalHUD:
             return "jump"
         if state == "SUPERCRUISE":
             return "supercruise"
+        if state == "TAXI":
+            return "supercruise"
+        if state == "MULTICREW":
+            return "flight"
         if state == "FIGHTER":
             return "fighter"
         if state == "COMBAT":
@@ -1623,8 +1653,12 @@ class TacticalHUD:
                 )
             return
 
-        if kind in {"supercruise_enter", "supercruise_exit"}:
-            size = 5 + ((eased if kind == "supercruise_exit" else 1.0 - eased) * 8)
+        if kind in {"supercruise_enter", "supercruise_drop", "supercruise_exit"}:
+            # DestinationDrop is the committed targeted drop, not the actual
+            # transition to normal space. Contract once here; SupercruiseExit
+            # supplies the later authoritative expansion.
+            expanding = kind == "supercruise_exit"
+            size = 5 + ((eased if expanding else 1.0 - eased) * 8)
             diamond(marker_x, size, visible)
             return
 

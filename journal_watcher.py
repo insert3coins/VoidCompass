@@ -521,6 +521,7 @@ class JournalWatcher:
                     "on_foot": data.get("OnFoot"),
                     "in_taxi": data.get("Taxi"),
                     "in_multicrew": data.get("Multicrew"),
+                    "in_srv": data.get("InSRV"),
                     "station_name": data.get("StationName"),
                     "station_type": data.get("StationType"),
                     "market_id": data.get("MarketID"),
