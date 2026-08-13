@@ -509,6 +509,10 @@ class TacticalHUD:
         approach = nav_context.get("surface_approach") or {}
         if approach.get("active"):
             phase = str(approach.get("phase") or "surface").casefold()
+            if phase == "orbital_departure":
+                return "ORBITAL DEPARTURE"
+            if phase == "surface_departure":
+                return "SURFACE DEPARTURE"
             if phase == "glide":
                 return "GLIDE"
             if phase == "orbital":
@@ -544,9 +548,10 @@ class TacticalHUD:
             "DOCKED", "LANDED", "FSS", "DSS", "FIGHTER", "SRV", "NOMAD",
             "ONFOOT", "MAP", "GALAXY MAP", "SYSTEM MAP", "POWER MAP", "ORRERY",
             "CODEX", "EXPLORATION", "STATION", "FSD COOLDOWN", "ORBITAL APPROACH",
+            "ORBITAL DEPARTURE",
         ):
             return COLOR_ACCENT
-        if state_text in {"MASS LOCK", "GLIDE", "SURFACE APPROACH"}:
+        if state_text in {"MASS LOCK", "GLIDE", "SURFACE APPROACH", "SURFACE DEPARTURE"}:
             return COLOR_YELLOW
         if state_text in (
             "HYPERSPACE", "SUPERCRUISE", "JUMPING", "COMBAT",
@@ -575,6 +580,10 @@ class TacticalHUD:
             return "glide"
         if state == "SURFACE APPROACH":
             return "surface_approach"
+        if state == "SURFACE DEPARTURE":
+            return "surface_departure"
+        if state == "ORBITAL DEPARTURE":
+            return "orbital_departure"
         if state == "FSD COOLDOWN":
             return "fsd_cooldown"
         if state == "ARRIVAL":
@@ -704,6 +713,24 @@ class TacticalHUD:
                 self.canvas.create_line(
                     *flat((-4, 4), (4, 4)), fill=color, width=1, tags=tags,
                 )
+            return
+        if profile in {"surface_departure", "orbital_departure"}:
+            # The same planet/ship language used on approach is inverted for
+            # ascent: the ship points away from a receding horizon.
+            self.canvas.create_arc(
+                *flat((-5, 0), (5, 8)), start=18, extent=144,
+                style="arc", outline=dim, width=1, tags=tags,
+            )
+            self.canvas.create_polygon(
+                *flat((0, -5), (3, 1), (0, -1), (-3, 1)),
+                fill="#010101", outline=color, width=1, tags=tags,
+            )
+            if profile == "orbital_departure":
+                for offset in (-6, 6):
+                    self.canvas.create_line(
+                        *flat((offset / 2, -1), (offset, -4)),
+                        fill=color, width=1, tags=tags,
+                    )
             return
         if profile == "docked":
             self.canvas.create_rectangle(
@@ -1409,6 +1436,30 @@ class TacticalHUD:
                     )
             return
 
+        if kind == "planet_clear":
+            # LeaveBody is the authoritative orbital boundary. Release two
+            # packets away from the centre and collapse the last horizon ring
+            # so the departure has a visible conclusion before supercruise
+            # resumes its ordinary flow.
+            left_x = gx1 - ((gx1 - shell_x1) * eased)
+            right_x = gx2 + ((shell_x2 - gx2) * eased)
+            self._draw_contrast_motion_tail(
+                left_x, min(gx1, left_x + 12), shell_top,
+                glow, width=2, tags=tags,
+            )
+            self._draw_contrast_motion_tail(
+                max(gx2, right_x - 12), right_x, shell_bottom,
+                glow, width=2, tags=tags,
+            )
+            radius = max(2.0, 11.0 * (1.0 - eased))
+            self.canvas.create_arc(
+                marker_x - radius, y - 1,
+                marker_x + radius, y + 7,
+                start=18, extent=144, style="arc",
+                outline=visible, width=1, tags=tags,
+            )
+            return
+
         if kind == "wake":
             tracer(lx1, lx2, eased, reverse=True, radius=1)
             tracer(rx1, rx2, eased, radius=1)
@@ -1519,8 +1570,8 @@ class TacticalHUD:
                                         fill=glow, width=1, tags=tags)
             return
 
-        if kind in {"touchdown", "liftoff", "body_approach", "body_leave"}:
-            reverse = kind in {"liftoff", "body_leave"}
+        if kind in {"touchdown", "liftoff", "body_approach"}:
+            reverse = kind == "liftoff"
             travel = 1.0 - eased if reverse else eased
             spread = 4 + (travel * 12)
             dy = (travel * 3) * (-1 if reverse else 1)
@@ -1707,6 +1758,72 @@ class TacticalHUD:
                 marker_x - radius, y - min(5, radius / 2),
                 marker_x + radius, y + min(5, radius / 2),
                 fill="", outline=arrival_dim, width=1, tags=tags,
+            )
+            return
+
+        if profile in {"surface_departure", "orbital_departure"}:
+            shell_x1 = model.get("shell_x1", model["route_x1"]) + 7
+            shell_x2 = model.get("shell_x2", model["survey_x2"]) - 7
+            shell_top = model.get("shell_top", y - 6)
+            shell_bottom = model.get("shell_bottom", y + 6)
+            departure = model.get("surface_approach") or {}
+            try:
+                climb = max(0.0, -float(departure.get("descent_mps") or 0.0))
+            except (TypeError, ValueError):
+                climb = 0.0
+            departure_dim = self._glow_color(color, 0.68)
+
+            if profile == "surface_departure":
+                # Rising ladder ticks pull away from a contracting horizon.
+                # Their pace responds modestly to actual Status altitude gain.
+                period = max(10.0, 27.0 - min(14.0, climb / 6.0))
+                travel = 1.0 - self._cycle_progress(phase, period)
+                for side in (-1, 1):
+                    x = marker_x + (side * 11)
+                    for index in range(3):
+                        local = (travel + (index / 3.0)) % 1.0
+                        tick_y = (y - 7) + (local * 14)
+                        self.canvas.create_line(
+                            x - 3, tick_y, x + 3, tick_y,
+                            fill=color if index == 0 else departure_dim,
+                            width=1, tags=tags,
+                        )
+                recede = abs((self._cycle_progress(phase, 34) * 2.0) - 1.0)
+                horizon_span = 12 - (recede * 5)
+                self.canvas.create_line(
+                    marker_x - horizon_span, y + 5,
+                    marker_x + horizon_span, y + 5,
+                    fill=departure_dim, width=2, tags=tags,
+                )
+                return
+
+            # Once supercruise engages, paired packets radiate away from the
+            # planet aperture toward both ends of the navigation chassis.
+            travel = self._cycle_progress(phase, 20)
+            for index in range(2):
+                local = (travel + (index * 0.5)) % 1.0
+                left_x = model["group_left"] - (
+                    (model["group_left"] - shell_x1) * local
+                )
+                right_x = model["group_right"] + (
+                    (shell_x2 - model["group_right"]) * local
+                )
+                rail_y = shell_top if index == 0 else shell_bottom
+                self._draw_contrast_motion_tail(
+                    left_x, min(model["group_left"], left_x + 9), rail_y,
+                    departure_dim, width=2, tags=tags,
+                )
+                self._draw_contrast_motion_tail(
+                    max(model["group_right"], right_x - 9), right_x, rail_y,
+                    departure_dim, width=2, tags=tags,
+                )
+            recede = self._cycle_progress(phase, 40)
+            radius = 9 - (recede * 4)
+            self.canvas.create_arc(
+                marker_x - radius, y,
+                marker_x + radius, y + 7,
+                start=18, extent=144, style="arc",
+                outline=departure_dim, width=1, tags=tags,
             )
             return
 
@@ -2273,6 +2390,9 @@ class TacticalHUD:
             if phase == "orbital":
                 detail = f" · {body_name}" if body_name else ""
                 return f"ORBITAL APPROACH{detail}", COLOR_ACCENT
+            if phase == "orbital_departure":
+                detail = f" · {body_name}" if body_name else ""
+                return f"ORBITAL DEPARTURE{detail}", COLOR_ACCENT
             try:
                 altitude = float(approach.get("altitude_m"))
                 altitude_text = (
@@ -2285,7 +2405,10 @@ class TacticalHUD:
             except (TypeError, ValueError):
                 descent = 0.0
             motion = "DESCENT" if descent > 1 else "CLIMB" if descent < -1 else "HOLD"
-            label = "GLIDE" if phase == "glide" else "SURFACE APPROACH"
+            if phase == "surface_departure":
+                label = "SURFACE DEPARTURE"
+            else:
+                label = "GLIDE" if phase == "glide" else "SURFACE APPROACH"
             return f"{label} · {altitude_text} · {motion}", COLOR_YELLOW
         body = str(context.get("body") or "").strip()
         if body:
