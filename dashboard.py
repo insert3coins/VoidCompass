@@ -1382,6 +1382,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._reset_profile_runtime_state(commander_name, self.config.get("active_commander_fid"))
         self._apply_active_profile_theme()
         self._apply_dashboard_window_geometry()
+        self._sync_flight_log_shell_visibility()
         # These long-lived workers retain the same config object today, but
         # rebinding them makes the profile boundary explicit and future-proof.
         self.screenshots.config = self.config
@@ -2662,6 +2663,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return
         self._closing = True
         self.is_running = False
+        for resize_job_attr in (
+            "_workspace_scroll_job", "_main_resize_settle_job",
+            "_journal_history_resize_job",
+        ):
+            resize_job = getattr(self, resize_job_attr, None)
+            if resize_job is not None:
+                try:
+                    self.root.after_cancel(resize_job)
+                except Exception:
+                    pass
+                setattr(self, resize_job_attr, None)
         studio = getattr(self, "overlay_layout_studio", None)
         try:
             if studio and studio.is_open():
@@ -9089,7 +9101,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._adaptive_startup_mode()
             self._publish_expedition_resume_briefing()
             try:
-                self.root.title(f"VOID COMPASS // v{APP_VERSION}")
+                self._update_main_window_title()
             except Exception:
                 pass
             # After startup batch: re-read DB so scan_stat always reflects the
