@@ -164,7 +164,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         "Touchdown": ("touchdown", "center", "accent", 1.3, 68),
         "Liftoff": ("liftoff", "center", "orange", 1.3, 68),
         "ApproachBody": ("body_approach", "center", "accent", 1.1, 42),
-        "LeaveBody": ("body_leave", "center", "accent", 1.1, 42),
+        "LeaveBody": ("planet_clear", "all", "green", 2.0, 74),
         "LaunchSRV": ("vehicle_deploy", "center", "accent", 1.4, 68),
         "DockSRV": ("vehicle_board", "center", "accent", 1.4, 68),
         "LaunchFighter": ("vehicle_deploy", "center", "accent", 1.4, 68),
@@ -857,6 +857,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_scooping_fuel = False
         self.current_supercruise_overcharge = False
         self.current_glide_mode = False
+        self._surface_departure_active = False
         self._status_altitude_observed_monotonic = None
         self._surface_descent_mps = 0.0
         self.current_fsd_mass_locked = False
@@ -1623,6 +1624,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_scooping_fuel = False
         self.current_supercruise_overcharge = False
         self.current_glide_mode = False
+        self._surface_departure_active = False
         self._status_altitude_observed_monotonic = None
         self._surface_descent_mps = 0.0
         self.current_fsd_mass_locked = False
@@ -4107,7 +4109,24 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         altitude = getattr(self, "current_altitude_m", None)
         approach_body_known = getattr(self, "current_body_id", None) is not None
         glide_active = bool(getattr(self, "current_glide_mode", False))
-        if glide_active:
+        try:
+            climb_rate = -float(getattr(self, "_surface_descent_mps", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            climb_rate = 0.0
+        departure_active = bool(
+            approach_body_known
+            and (
+                getattr(self, "_surface_departure_active", False)
+                or climb_rate >= 15.0
+            )
+        )
+        if departure_active:
+            approach_phase = (
+                "orbital_departure"
+                if str(getattr(self, "hud_flight_state", "") or "").upper() == "SUPERCRUISE"
+                else "surface_departure"
+            )
+        elif glide_active:
             approach_phase = "glide"
         elif str(getattr(self, "hud_flight_state", "") or "").upper() == "SUPERCRUISE":
             approach_phase = "orbital"
@@ -4125,6 +4144,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "body": getattr(self, "current_body_name", "") or "",
             "altitude_m": altitude,
             "descent_mps": getattr(self, "_surface_descent_mps", 0.0),
+            "departing": departure_active,
         }
         ship_config = {
             "landing_gear": bool(getattr(self, "current_landing_gear_down", False)),
@@ -7023,6 +7043,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_body_id   = None
             self.current_body_name = ""
             self.current_glide_mode = False
+            self._surface_departure_active = False
             self.valuable_system = False
             self.valuable_bodies.clear()
             self.system_traffic = (
@@ -7692,6 +7713,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if ev == "ApproachBody":
             self.current_body_id   = self._normalize_body_id(d.get("body_id"))
             self.current_body_name = d.get("body_name") or ""
+            self._surface_departure_active = False
             if not self.batch_mode:
                 self._refresh_gravity_warning(self.current_body_id, self.current_body_name)
                 self._refresh_system_info_progress()
@@ -7702,10 +7724,41 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_body_id   = None
             self.current_body_name = ""
             self.current_glide_mode = False
+            self._surface_departure_active = False
             if not self.batch_mode:
                 if self.gravity_warning_hud:
                     self.gravity_warning_hud.clear()
                 self._refresh_system_info_progress()
+                self.update_hud()
+        elif ev == "Liftoff":
+            body_id = self._normalize_body_id(d.get("body_id"))
+            body_name = (
+                d.get("body_name") or d.get("body")
+                or (raw.get("Body") if isinstance(raw, dict) else "") or ""
+            )
+            if body_id is not None:
+                self.current_body_id = body_id
+            if body_name:
+                self.current_body_name = body_name
+            self.current_landed = False
+            self.hud_flight_state = "FLIGHT"
+            self._surface_departure_active = True
+            if not self.batch_mode:
+                self.update_hud()
+        elif ev == "Touchdown":
+            body_id = self._normalize_body_id(d.get("body_id"))
+            body_name = (
+                d.get("body_name") or d.get("body")
+                or (raw.get("Body") if isinstance(raw, dict) else "") or ""
+            )
+            if body_id is not None:
+                self.current_body_id = body_id
+            if body_name:
+                self.current_body_name = body_name
+            self.current_landed = True
+            self.hud_flight_state = "LANDED"
+            self._surface_departure_active = False
+            if not self.batch_mode:
                 self.update_hud()
 
         # ── Prospector overlay — live events only, skip journal replay on startup ──
