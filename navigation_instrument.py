@@ -69,6 +69,7 @@ STATE_SCENES = {
     "orbital_approach": StateScene("dedicated", 24.0, packets=0),
     "glide": StateScene("dedicated", 9.0, packets=0, intensity=0.88),
     "surface_approach": StateScene("dedicated", 24.0, packets=0),
+    "surface_hold": StateScene("dedicated", 76.0, packets=0, intensity=0.55),
     "surface_departure": StateScene("dedicated", 24.0, packets=0),
     "orbital_departure": StateScene("dedicated", 20.0, packets=0),
 }
@@ -277,6 +278,8 @@ class NavigationInstrumentRenderer:
             self._draw_carrier(model, phase, colour, tags, arriving=profile == "carrier_arrival")
         elif profile in {"orbital_approach", "glide", "surface_approach"}:
             self._draw_approach(model, phase, colour, tags, profile)
+        elif profile == "surface_hold":
+            self._draw_surface_hold(model, phase, colour, tags)
         elif profile in {"surface_departure", "orbital_departure"}:
             self._draw_departure(model, phase, colour, tags, profile)
         elif scene.family == "scope":
@@ -762,6 +765,33 @@ class NavigationInstrumentRenderer:
                            colour=colour if index == 0 else dim, tags=tags)
                 self._line(center + spread - 9, y, center + spread, y,
                            colour=colour if index == 0 else dim, tags=tags)
+        self._ship(center, y - 1, colour, tags, scale=0.75)
+
+    def _draw_surface_hold(self, model, phase, colour, tags):
+        """Quiet hover scene with no false approach/departure direction."""
+        x1, x2, y, _top, bottom = self._bounds(model)
+        center = (x1 + x2) / 2
+        dim = self.mix_colour(colour, 0.48)
+        pulse = abs((self._cycle(phase, 76) * 2.0) - 1.0)
+        horizon_span = min((x2 - x1) * 0.18, 48)
+        self.canvas.create_arc(
+            center - horizon_span, y,
+            center + horizon_span, bottom + 5,
+            start=12, extent=156, style="arc",
+            outline=dim, width=1, tags=tags,
+        )
+        bracket = 17 + (pulse * 2)
+        for side in (-1, 1):
+            x = center + (side * bracket)
+            self._line(x, y - 4, x, y + 4, colour=dim, tags=tags)
+            self._line(
+                x, y - 4, x - (side * 4), y - 4,
+                colour=colour, tags=tags,
+            )
+            self._line(
+                x, y + 4, x - (side * 4), y + 4,
+                colour=colour, tags=tags,
+            )
         self._ship(center, y - 1, colour, tags, scale=0.75)
 
     def _draw_modifiers(self, model, phase, palette, tags):
