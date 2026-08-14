@@ -1832,7 +1832,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._surface_descent_samples = 0
         self._status_altitude_observed_monotonic = None
         self._surface_descent_mps = 0.0
-        self._cancel_surface_hold_check()
+        self._cancel_surface_hold_inference()
         self._surface_hold_active = False
         self._surface_last_position = None
         self._surface_last_motion_monotonic = None
@@ -4526,7 +4526,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         approach_body_known = getattr(self, "current_body_id", None) is not None
         glide_active = bool(getattr(self, "current_glide_mode", False))
         departure_active = bool(
-            approach_body_known
+            (approach_body_known or getattr(self, "on_planet", False))
             and not glide_active
             and getattr(self, "_surface_departure_active", False)
         )
