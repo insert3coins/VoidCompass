@@ -246,10 +246,19 @@ class FirstRunBoot:
             )
             chip_right = chip_left - 7
 
-    def _draw_boot_log(self, canvas, width, height, bg):
-        left, top = 30, 124
-        right = min(478, width * 0.54)
+    @staticmethod
+    def _main_panel_geometry(width, height):
+        """Return shared boot-log and exploration-panel boundaries."""
+        top = 124
         bottom = height - 91
+        log_left = 30
+        log_right = min(478, width * 0.54)
+        instrument_left = max(log_right + 24, width * 0.57)
+        instrument_right = width - 30
+        return log_left, log_right, instrument_left, instrument_right, top, bottom
+
+    def _draw_boot_log(self, canvas, width, height, bg):
+        left, right, _, _, top, bottom = self._main_panel_geometry(width, height)
         panel_fill = _mix_colour(bg, THEME.panel, 0.68)
         canvas.create_polygon(
             left, top + 12, left + 12, top, right, top,
@@ -296,20 +305,31 @@ class FirstRunBoot:
             )
 
     def _draw_scope(self, canvas, width, height, elapsed, pulse, bg):
-        radar_x = width * 0.77
-        radar_y = height * 0.38
-        radar_r = min(width, height) * 0.155
-        frame_colour = _mix_colour(bg, THEME.accent, 0.45)
-        self._corner_frame(
-            canvas, radar_x - radar_r - 28, radar_y - radar_r - 35,
-            radar_x + radar_r + 28, radar_y + radar_r + 32,
-            THEME.border_soft, 15,
+        _, _, left, right, top, bottom = self._main_panel_geometry(width, height)
+        panel_fill = _mix_colour(bg, THEME.panel, 0.68)
+        canvas.create_polygon(
+            left, top + 12, left + 12, top, right, top,
+            right, bottom - 12, right - 12, bottom, left, bottom,
+            fill=panel_fill, outline=THEME.border_soft,
+        )
+        self._corner_frame(canvas, left, top, right, bottom, THEME.border)
+        canvas.create_text(
+            left + 15, top + 14, anchor="nw", text="EXPLORATION ARRAY",
+            fill=THEME.text, font=("Segoe UI", 9, "bold"),
         )
         canvas.create_text(
-            radar_x - radar_r - 20, radar_y - radar_r - 26,
-            anchor="nw", text="FSS ARRAY  //  PASSIVE SWEEP",
+            right - 15, top + 17, anchor="ne", text="FSS  //  PASSIVE",
             fill=THEME.dim, font=("Cascadia Mono", 7, "bold"),
         )
+        canvas.create_line(
+            left + 15, top + 42, right - 15, top + 42,
+            fill=THEME.border_soft,
+        )
+
+        radar_x = (left + right) / 2
+        radar_y = top + 132
+        radar_r = min(64, (right - left) * 0.19, (bottom - top) * 0.20)
+        frame_colour = _mix_colour(bg, THEME.accent, 0.45)
         for factor in (1.0, 0.66, 0.33):
             radius = radar_r * factor
             canvas.create_oval(
@@ -372,19 +392,24 @@ class FirstRunBoot:
         )
 
     def _draw_route(self, canvas, width, height, elapsed, progress, pulse, bg):
-        left, right = width * 0.57, width - 42
-        route_y = height * 0.72
+        _, _, panel_left, panel_right, _, bottom = self._main_panel_geometry(
+            width, height,
+        )
+        # Keep the animated ship halo inside the shared right-hand panel.
+        left, right = panel_left + 42, panel_right - 42
+        route_y = bottom - 47
+        label_y = bottom - 110
         offsets = (7, -2, 5, -7, 1, -4, 4)
         points = [
             (left + (right - left) * index / 6, route_y + offsets[index])
             for index in range(7)
         ]
         canvas.create_text(
-            left, route_y - 34, anchor="nw", text="NAVIGATION SOLUTION",
+            panel_left + 15, label_y, anchor="nw", text="NAVIGATION SOLUTION",
             fill=THEME.dim, font=("Cascadia Mono", 7, "bold"),
         )
         canvas.create_text(
-            right, route_y - 34, anchor="ne", text="DEEP SPACE VECTOR",
+            panel_right - 15, label_y, anchor="ne", text="DEEP SPACE VECTOR",
             fill=THEME.orange, font=("Cascadia Mono", 7, "bold"),
         )
         canvas.create_line(

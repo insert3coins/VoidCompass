@@ -208,8 +208,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         "RefuelPartial": ("fuel", "left", "green", 1.3, 56),
         "ReservoirReplenished": ("fuel", "left", "green", 1.3, 56),
         "JetConeBoost": ("boost", "left", "accent", 1.5, 65),
-        "ProspectedAsteroid": ("mining", "right", "yellow", 1.3, 58),
-        "MiningRefined": ("mining", "right", "yellow", 1.2, 58),
+        "ProspectedAsteroid": ("prospector_scan", "right", "yellow", 1.7, 62),
+        "MiningRefined": ("mining_refined", "right", "green", 1.4, 60),
         "HeatWarning": ("warning", "all", "orange", 1.6, 100),
         "HeatDamage": ("warning", "all", "orange", 1.8, 100),
         "HullDamage": ("warning", "all", "orange", 1.6, 100),
@@ -232,6 +232,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         "valuable_bodies", "body_signals", "belt_clusters", "system_undiscovered",
         "fss_all_bodies", "current_body_id", "current_body_name",
         "last_bio_scan", "bio_sampling", "bio_sample_points",
+        "_survey_body_focus_suppressed",
         "cmdr_balance", "cmdr_loan", "cmdr_ranks", "cmdr_rank_progress",
         "cmdr_reputation", "cmdr_ship", "game_version", "game_build",
         "game_horizons", "game_odyssey", "current_station_name",
@@ -368,6 +369,136 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             if genus_info.get("colony_m") is not None:
                 data["colony_m"] = genus_info["colony_m"]
         return data
+
+    def _scan_item_for_bio_body(self, body_id, body_name=""):
+        """Return the persistent body row used by organic sample events.
+
+        Startup hydration and older cache rows can leave the body index with a
+        different key type even though the body is present in ``scan_items``.
+        Resolve both forms, repair the index, and retain a minimal row as a
+        final fallback so a valid ScanOrganic event is never presentation-only.
+        """
+        body_id = self._normalize_body_id(body_id)
+        if body_id is None:
+            return None
+
+        item = self.scan_items_by_id.get(body_id)
+        if item is None:
+            item = self.scan_items_by_id.get(str(body_id))
+        if item is None:
+            item = next((
+                candidate for candidate in self.scan_items
+                if self._normalize_body_id(candidate.get("body_id")) == body_id
+            ), None)
+        if item is not None:
+            self.scan_items_by_id[body_id] = item
+            return item
+
+        signals = (self.body_signals or {}).get(body_id, {})
+        scan_data = (self.body_scan_data or {}).get(body_id, {})
+        name = (
+            body_name or signals.get("body_name")
+            or scan_data.get("body_name") or f"Body {body_id}"
+        )
+        item = {
+            "body_id": body_id,
+            "name": name,
+            "full_name": name,
+            "planet_class": scan_data.get("planet_class") or "Unknown",
+            "landable": bool(scan_data.get("landable", True)),
+            "bio_count": int(signals.get("bio", 0) or 0),
+            "geo_count": int(signals.get("geo", 0) or 0),
+            "genuses": list(signals.get("genuses") or []),
+            "dss_complete": bool(signals.get("dss_complete")),
+            "organic_scans": {},
+            "organic_complete_count": 0,
+            "_ts": int(time.time()),
+        }
+        self._normalize_scan_item(item)
+        self.scan_items.insert(0, item)
+        self.scan_items = self.scan_items[:60]
+        self.scan_items_by_id[body_id] = item
+        return item
+
+    def _persist_bio_scan_record(self, body_id, body_name, species_key, record):
+        """Attach one organic step to its body and persist it atomically."""
+        item = self._scan_item_for_bio_body(body_id, body_name)
+        if item is None:
+            return None
+        organic_scans = item.setdefault("organic_scans", {})
+        organic_scans[str(species_key)] = dict(record or {})
+        item["organic_complete_count"] = sum(
+            1 for scan in organic_scans.values()
+            if isinstance(scan, dict) and scan.get("is_complete")
+        )
+        if item.get("_ts") is None:
+            item["_ts"] = int(time.time())
+        self.save_scan_item_to_db(self.current_sys, item)
+        return item
+
+    def _restore_current_system_bio_completions(self):
+        """Repair completed biology omitted from the bounded startup replay."""
+        watcher = getattr(self, "watcher", None)
+        getter = getattr(watcher, "get_completed_organic_scans", None)
+        if (not callable(getter) or not self.current_sys or self.current_sys == "---"
+                or self.current_system_address is None):
+            return 0
+        try:
+            raw_records = getter(self.current_system_address)
+        except Exception as exc:
+            logging.warning("Startup biology recovery failed: %s", exc)
+            return 0
+
+        restored = 0
+        for raw in raw_records or ():
+            try:
+                normalized = watcher._normalize_event(raw)
+                data = self._enrich_bio_event_context(normalized.get("data") or {})
+                if not self._matches_current_system_address(data):
+                    continue
+                body_id = self._normalize_body_id(data.get("body_id"))
+                if body_id is None:
+                    continue
+                item = self._scan_item_for_bio_body(body_id, data.get("body_name") or "")
+                body_label = (
+                    data.get("body_name") or (item or {}).get("name")
+                    or f"Body {body_id}"
+                )
+                species = data.get("species") or data.get("genus") or "Organic"
+                species_key = f"{body_id}|{species}"
+                existing = self.last_bio_scan.get(species_key, {})
+                max_samples = int(data.get("max_samples") or 3)
+                record = {
+                    "body_id": body_id,
+                    "body_name": body_label,
+                    "species": species,
+                    "genus": data.get("genus"),
+                    "variant": data.get("variant"),
+                    "species_value": bio_values.species_value(species),
+                    "genus_value": bio_values.genus_info(data.get("genus") or species),
+                    "colony_m": bio_values.GENUS_COLONY_M.get(data.get("genus") or species),
+                    "sample_idx": max_samples,
+                    "max_samples": max_samples,
+                    "scan_type": "Analyse",
+                    "is_new_entry": bool(data.get("is_new_entry")),
+                    "is_new_sample": False,
+                    "is_complete": True,
+                    "system_address": self.current_system_address,
+                }
+                self.last_bio_scan[species_key] = record
+                body_records = (item or {}).get("organic_scans") or {}
+                cached = body_records.get(species_key, {})
+                if not (existing.get("is_complete") and cached.get("is_complete")):
+                    self._persist_bio_scan_record(
+                        body_id, body_label, species_key, record,
+                    )
+                    restored += 1
+            except Exception as exc:
+                logging.warning("Startup organic record recovery failed: %s", exc)
+
+        if raw_records:
+            self._rebuild_system_state_from_scan_items()
+        return restored
 
     def _profile_path(self, filename):
         return get_profile_file(get_active_profile(self.config), filename)
@@ -528,8 +659,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.survey_status_hud.update(
                 self.current_sys, self.scanned, self.total, self.scan_items,
                 self.body_signals, sampling=self._sampling_snapshot(),
-                focused_body_id=self.current_body_id,
-                focused_body_name=self.current_body_name,
+                focused_body_id=(None if self._survey_body_focus_suppressed
+                                 and not self.bio_sampling else self.current_body_id),
+                focused_body_name=(None if self._survey_body_focus_suppressed
+                                   and not self.bio_sampling else self.current_body_name),
                 total_known=self.scan_total_confirmed,
                 belt_clusters=list(self.belt_clusters),
             )
@@ -805,6 +938,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.last_bio_scan = {}
         self.bio_sampling = None
         self.bio_sample_points = []
+        self._survey_body_focus_suppressed = False
+        self._startup_bio_sampling_replay = None
+        self._startup_bio_sampling_replay_seen = False
         self._sample_clear_announced = False
         self._stale_bio_warned = set()
 
@@ -1149,8 +1285,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.survey_status_hud.update(
                         self.current_sys, self.scanned, self.total, self.scan_items,
                         self.body_signals, sampling=self._sampling_snapshot(),
-                        focused_body_id=self.current_body_id,
-                        focused_body_name=self.current_body_name,
+                        focused_body_id=(None if self._survey_body_focus_suppressed
+                                         and not self.bio_sampling else self.current_body_id),
+                        focused_body_name=(None if self._survey_body_focus_suppressed
+                                           and not self.bio_sampling else self.current_body_name),
                         total_known=self.scan_total_confirmed,
                         belt_clusters=list(self.belt_clusters),
                     )
@@ -1612,6 +1750,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.last_bio_scan = {}
         self.bio_sampling = None
         self.bio_sample_points = []
+        self._survey_body_focus_suppressed = False
+        self._startup_bio_sampling_replay = None
+        self._startup_bio_sampling_replay_seen = False
         self._sample_clear_announced = False
         self._rebuy_warning_level = 0
         self._data_risk_level = 0
@@ -4736,6 +4877,29 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 kind, tone, duration_s, priority = "first_discovery", "green", 1.8, 78
             elif first_footfall:
                 kind, tone, duration_s, priority = "footfall_candidate", "green", 1.7, 74
+        elif event == "ProspectedAsteroid":
+            materials = payload.get("Materials") or normalised.get("materials") or ()
+            material_rows = [item for item in materials if isinstance(item, dict)]
+            proportions = []
+            for item in material_rows:
+                try:
+                    proportions.append(max(0.0, float(item.get("Proportion") or 0.0)))
+                except (TypeError, ValueError):
+                    continue
+            best_proportion = max(proportions, default=0.0)
+            content = str(
+                payload.get("Content_Localised") or payload.get("Content")
+                or normalised.get("content") or ""
+            ).strip().casefold()
+            motherlode = str(
+                payload.get("MotherlodeMaterial_Localised")
+                or payload.get("MotherlodeMaterial")
+                or normalised.get("motherlode_material") or ""
+            ).strip()
+            if motherlode:
+                kind, tone, duration_s, priority = "prospector_core", "green", 2.0, 82
+            elif "high" in content or best_proportion >= 45.0:
+                kind, tone, duration_s, priority = "prospector_rich", "yellow", 1.9, 72
         uss_threat = 0
         if event == "USSDrop":
             try:
@@ -4789,6 +4953,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 pass
         elif kind in {"valuable_discovery", "first_discovery", "footfall_candidate"}:
             detail["body_name"] = body_name
+        elif kind in {"prospector_scan", "prospector_rich", "prospector_core"}:
+            detail["material_count"] = min(3, len(material_rows))
+            detail["max_proportion"] = best_proportion
+            if motherlode:
+                detail["motherlode_material"] = motherlode
+        elif kind == "mining_refined":
+            detail["material_name"] = str(
+                payload.get("Type_Localised") or payload.get("Type")
+                or normalised.get("type") or ""
+            ).strip()
         elif event == "Interdicted":
             detail["state_label"] = "INTERDICTED"
         elif event == "EscapeInterdiction":
@@ -7065,8 +7239,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if ev == "LoadGame":
             if not startup_replay:
                 self._publish_expedition_resume_briefing()
-        self._process_companion_event(ev, raw if isinstance(raw, dict) else {}, d,
-                                      startup_replay=startup_replay)
+        # ScanOrganic owns a strict presentation order: persist the body result
+        # in the main reducer first, then advance/clear the sampler card.  Doing
+        # this here used to clear Analyse before Survey Operations could see the
+        # completed body, leaving body focus open without its three sample nodes.
+        if ev != "ScanOrganic":
+            self._process_companion_event(
+                ev, raw if isinstance(raw, dict) else {}, d,
+                startup_replay=startup_replay,
+            )
         if ev != "LoadGame" and self.edsm.is_credit_event(ev):
             self._queue_edsm_upload(raw, flush=True, startup_replay=startup_replay)
         current_journal = getattr(self.watcher, "last_journal", None)
@@ -7266,7 +7447,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.update_hud()
 
         elif ev == "ScanOrganic":
-            if not self._matches_current_system_address(d):
+            # A live ScanOrganic event can only come from the commander's
+            # present location and therefore repairs a stale cached address.
+            # Startup history still needs the address guard because its bounded
+            # replay may contain organisms from the previous system.
+            if startup_replay and not self._matches_current_system_address(d):
                 return
             body_id = self._normalize_body_id(d.get("body_id"))
             # ScanOrganic doesn't include BodyName — look it up from the Scan
@@ -7287,10 +7472,25 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             is_complete = bool(d.get("is_complete")) or scan_type_norm == "analyse"
             was_complete = bool(existing.get("is_complete"))
             is_new_sample = scan_type_norm in ("log", "sample")
+            if scan_type_norm == "analyse":
+                self._survey_body_focus_suppressed = True
+            elif is_new_sample:
+                self._survey_body_focus_suppressed = False
             if is_new_sample:
                 sample_idx = int(existing.get("sample_idx") or 0) + 1
             else:
                 sample_idx = existing.get("sample_idx") or max_samples
+
+            # Cached organic records are the final state of journal events we
+            # may now be replaying.  Never let an earlier Log/Sample downgrade
+            # a completed record, otherwise its later Analyse would count the
+            # same organism a second time during startup catch-up.
+            if startup_replay and was_complete:
+                is_complete = True
+                sample_idx = max(
+                    int(existing.get("sample_idx") or 0),
+                    int(max_samples or 3),
+                )
 
             self.last_bio_scan[species_key] = {
                 "body_id":        body_id,
@@ -7318,14 +7518,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.add_event_feed_entry("BIO", f"Organic sample {sample_idx}: {species} ({body_label})", severity="INFO", copy_text=species)
 
             if body_id is not None:
-                item = self.scan_items_by_id.get(body_id)
-                if item:
-                    organic_scans = item.setdefault("organic_scans", {})
-                    organic_scans[species_key] = dict(self.last_bio_scan[species_key])
-                    item["organic_complete_count"] = sum(1 for scan in organic_scans.values() if scan.get("is_complete"))
-                    if item.get("_ts") is None:
-                        item["_ts"] = int(time.time())
-                    self.save_scan_item_to_db(self.current_sys, item)
+                self._persist_bio_scan_record(
+                    body_id, body_label, species_key,
+                    self.last_bio_scan[species_key],
+                )
+
+            # Persist first, then publish sampler progress.  Log/Sample keeps
+            # the three-node flightpath visible; Analyse clears it only after
+            # organic_complete_count can move the overlay back to system mode.
+            self._process_companion_event(
+                ev, raw if isinstance(raw, dict) else {}, d,
+                startup_replay=startup_replay,
+            )
 
             if not self.batch_mode:
                 self.update_hud()
@@ -7473,6 +7677,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.body_scan_data.clear()
             self.current_body_id   = None
             self.current_body_name = ""
+            self._survey_body_focus_suppressed = False
             self.current_glide_mode = False
             self._surface_departure_active = False
             self._surface_glide_guard_until = 0.0
@@ -7600,8 +7805,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         lambda: self.survey_status_hud.update(
                             self.current_sys, self.scanned, self.total, self.scan_items,
                             self.body_signals, sampling=self._sampling_snapshot(),
-                            focused_body_id=self.current_body_id,
-                            focused_body_name=self.current_body_name,
+                            focused_body_id=(None if self._survey_body_focus_suppressed
+                                             and not self.bio_sampling else self.current_body_id),
+                            focused_body_name=(None if self._survey_body_focus_suppressed
+                                               and not self.bio_sampling else self.current_body_name),
                             total_known=self.scan_total_confirmed,
                             belt_clusters=list(self.belt_clusters)),
                         key="survey-status",
@@ -8253,6 +8460,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if ev == "ApproachBody":
             self.current_body_id   = self._normalize_body_id(d.get("body_id"))
             self.current_body_name = d.get("body_name") or ""
+            self._survey_body_focus_suppressed = False
             self._surface_departure_active = False
             self._surface_glide_guard_until = 0.0
             self._surface_climb_samples = 0
@@ -8748,11 +8956,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 "%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             state["galaxy_source"] = ev
 
-        if not startup_replay:
+        if startup_replay:
+            self._reduce_startup_sampling_event(ev, raw, d)
+        else:
             if ev == "Scan":
                 changed = self._record_unsold_scan(raw) or changed
             elif ev == "ScanOrganic":
-                changed = self._process_sampling_event(raw, data) or changed
+                changed = self._process_sampling_event(raw, d) or changed
                 if getattr(self, "cockpit_memory", None):
                     self.cockpit_memory.check_bio_sell_anticipation(state.get("unsold_bio_samples"))
             elif ev in ("SellExplorationData", "MultiSellExplorationData"):
@@ -8933,6 +9143,124 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.companion_state["unsold_exploration_cr"] = int(self.companion_state.get("unsold_exploration_cr") or 0) + int(value or 0)
         return True
 
+    def _reduce_startup_sampling_event(self, event, raw, data):
+        """Recover the active genetic-sampler step from journal catch-up.
+
+        Startup replay must rebuild presentation state without replaying sale
+        value, unsold-data counters, notifications or sample-clearance toasts.
+        Elite records the complete Log → Sample → Sample → Analyse sequence,
+        so the most recent unfinished sequence is authoritative after a crash.
+        """
+        event = str(event or "")
+        raw = raw if isinstance(raw, dict) else {}
+        data = data if isinstance(data, dict) else {}
+        jump_type = str(data.get("jump_type") or raw.get("JumpType") or "").casefold()
+        clears_sampling = (
+            event in {"FSDJump", "CarrierJump", "LeaveBody", "Died"}
+            or (event == "StartJump" and jump_type == "hyperspace")
+        )
+        if clears_sampling:
+            self._startup_bio_sampling_replay = None
+            self._startup_bio_sampling_replay_seen = True
+            return
+        if event != "ScanOrganic":
+            return
+
+        self._startup_bio_sampling_replay_seen = True
+        scan_type = str(
+            raw.get("ScanType") or data.get("scan_type") or ""
+        ).strip().casefold()
+        if scan_type == "analyse" or data.get("is_complete"):
+            self._startup_bio_sampling_replay = None
+            return
+        if scan_type not in {"log", "sample"}:
+            return
+
+        species = (
+            data.get("species") or raw.get("Species_Localised")
+            or raw.get("Species") or "Organic"
+        )
+        genus = (
+            data.get("genus") or raw.get("Genus_Localised")
+            or raw.get("Genus") or str(species).split(" ")[0]
+        )
+        body = data.get("body_id")
+        if body is None:
+            body = raw.get("Body")
+        body = self._normalize_body_id(body)
+        system_address = data.get("system_address")
+        if system_address is None:
+            system_address = raw.get("SystemAddress")
+
+        previous = self._startup_bio_sampling_replay or {}
+        same_sequence = bool(
+            previous
+            and previous.get("species") == species
+            and self._normalize_body_id(previous.get("body")) == body
+            and str(previous.get("system_address") or "") == str(system_address or "")
+        )
+        if scan_type == "log":
+            progress = 1
+        elif same_sequence:
+            progress = int(previous.get("progress") or 1) + 1
+        else:
+            # A replay window beginning on Sample has necessarily omitted Log;
+            # Sample can never be the first genetic-sampler step.
+            progress = 2
+        progress = max(1, min(3, progress))
+        self._startup_bio_sampling_replay = {
+            "species": species,
+            "genus": genus,
+            "body": body,
+            "progress": progress,
+            "colony_m": bio_values.GENUS_COLONY_M.get(genus),
+            "system_address": system_address,
+            "timestamp": raw.get("timestamp"),
+        }
+
+    def _finalize_startup_sampling_replay(self):
+        """Publish replayed sampling only when it still matches our location."""
+        if not getattr(self, "_startup_bio_sampling_replay_seen", False):
+            return False
+        candidate = getattr(self, "_startup_bio_sampling_replay", None)
+        existing = self.bio_sampling if isinstance(self.bio_sampling, dict) else None
+        preserved_points = list(self.bio_sample_points or [])
+
+        if candidate:
+            candidate = dict(candidate)
+            body = self._normalize_body_id(candidate.get("body"))
+            current_body = self._normalize_body_id(self.current_body_id)
+            address = candidate.get("system_address")
+            current_address = self.current_system_address
+            if current_body is not None and body is not None and body != current_body:
+                candidate = None
+            elif (address is not None and current_address is not None
+                  and str(address) != str(current_address)):
+                candidate = None
+
+        if candidate and existing:
+            same_sample = bool(
+                existing.get("species") == candidate.get("species")
+                and self._normalize_body_id(existing.get("body"))
+                == self._normalize_body_id(candidate.get("body"))
+            )
+            if same_sample:
+                candidate["progress"] = max(
+                    int(candidate.get("progress") or 1),
+                    int(existing.get("progress") or 1),
+                )
+            else:
+                preserved_points = []
+        elif not candidate:
+            preserved_points = []
+
+        self.bio_sampling = candidate
+        self.bio_sample_points = preserved_points
+        self._sample_clear_announced = False
+        self._startup_bio_sampling_replay = None
+        self._startup_bio_sampling_replay_seen = False
+        return bool(candidate)
+
     def _process_sampling_event(self, raw, data):
         scan_type = str(raw.get("ScanType") or data.get("scan_type") or "").lower()
         species = data.get("species") or raw.get("Species_Localised") or raw.get("Species") or "Organic"
@@ -8958,7 +9286,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 body_key = self._normalize_body_id(body)
                 species_key = f"{body_key}|{species}" if body_key is not None else species
                 prior = self.last_bio_scan.get(species_key, {})
-                progress = max(progress, int(prior.get("sample_idx") or 0) + 1)
+                # ``last_bio_scan`` has already reduced this same live event,
+                # so its sample index is the current step—not the previous one.
+                progress = max(progress, int(prior.get("sample_idx") or 0))
                 progress = max(1, min(3, progress))
             self.bio_sampling = {
                 "species": species, "genus": genus, "body": body,
@@ -9017,8 +9347,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.survey_status_hud:
             self._ui_post(lambda s=sample: self.survey_status_hud.update(
                 self.current_sys, self.scanned, self.total, self.scan_items, self.body_signals, sampling=s,
-                focused_body_id=self.current_body_id,
-                focused_body_name=self.current_body_name,
+                focused_body_id=(None if self._survey_body_focus_suppressed
+                                 and not s else self.current_body_id),
+                focused_body_name=(None if self._survey_body_focus_suppressed
+                                   and not s else self.current_body_name),
                 total_known=self.scan_total_confirmed,
                 belt_clusters=list(self.belt_clusters),
             ), key="survey-status")
@@ -9297,6 +9629,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return
 
         if startup_final:
+            self._finalize_startup_sampling_replay()
+            if self._restore_current_system_bio_completions():
+                self._request_db_commit(reason="startup_biology_recovery")
             self._mark_startup_journal_live()
 
         # Docked/Location rendering is deliberately suppressed while a batch
