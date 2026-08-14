@@ -202,6 +202,68 @@ class JournalWatcher:
             return 0.0
         return 0.0
 
+    def get_completed_organic_scans(self, system_address=None):
+        """Return completed organic analyses from the active journal.
+
+        The ordinary startup replay deliberately reads only a small recent
+        tail.  A large Loadout or ShipLocker event can push an otherwise recent
+        ``ScanOrganic/Analyse`` beyond that presentation window, so completed
+        biology also gets a cheap, event-filtered pass over the active journal.
+        This is recovery evidence only; live events remain the primary writer.
+        """
+        path = self.last_journal
+        if not path:
+            try:
+                files = sorted(
+                    os.path.join(self.journal_path, filename)
+                    for filename in os.listdir(self.journal_path)
+                    if filename.startswith("Journal.") and filename.endswith(".log")
+                )
+            except (OSError, TypeError):
+                files = []
+            path = files[-1] if files else None
+        if not path or not os.path.exists(path):
+            return []
+
+        try:
+            wanted_address = int(system_address) if system_address is not None else None
+        except (TypeError, ValueError):
+            wanted_address = system_address
+
+        completed = {}
+        try:
+            with open(path, "r", encoding="utf-8", errors="ignore") as handle:
+                for line in handle:
+                    if "ScanOrganic" not in line or "Analyse" not in line:
+                        continue
+                    try:
+                        raw = json.loads(line)
+                    except (TypeError, ValueError):
+                        continue
+                    if raw.get("event") != "ScanOrganic":
+                        continue
+                    if str(raw.get("ScanType") or "").strip().casefold() != "analyse":
+                        continue
+                    address = raw.get("SystemAddress")
+                    try:
+                        address = int(address) if address is not None else None
+                    except (TypeError, ValueError):
+                        pass
+                    if wanted_address is not None and address != wanted_address:
+                        continue
+                    body = raw.get("BodyID")
+                    if body is None:
+                        body = raw.get("Body")
+                    species = (
+                        raw.get("Species_Localised") or raw.get("Species")
+                        or raw.get("Genus_Localised") or raw.get("Genus")
+                        or "Organic"
+                    )
+                    completed[f"{body}|{species}"] = raw
+        except OSError:
+            return []
+        return list(completed.values())
+
     @staticmethod
     def detect_latest_commander(journal_path, tail_bytes=2 * 1024 * 1024):
         """Best-effort commander/FID detection from the newest journal file."""

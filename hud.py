@@ -13,6 +13,11 @@ from config import (
 )
 import overlay_chrome
 import route_strip
+from navigation_instrument import (
+    NavigationInstrumentRenderer,
+    event_scene,
+    state_scene,
+)
 
 class TacticalHUD:
     MIN_READABLE_FONT = 9
@@ -27,10 +32,13 @@ class TacticalHUD:
         self.full_width = 620
         self.full_height = 286
         self.compact_width = 500
-        self.compact_height = 238
+        self.compact_height = 246
         self.width, self.base_height = self._target_dimensions()
         self.canvas = tk.Canvas(self.win, width=self.width, height=self.base_height, bg=overlay_bg, highlightthickness=0)
         self.canvas.pack()
+        self._nav_instrument = NavigationInstrumentRenderer(
+            self.canvas, self._glow_color,
+        )
 
         self.canvas.bind("<Button-1>", self._on_mouse_down)
         self.canvas.bind("<B1-Motion>", self._on_mouse_drag)
@@ -883,7 +891,129 @@ class TacticalHUD:
             fill="#010101", outline=color, width=1, tags=tags,
         )
 
-    def _draw_navigation_state_marker(
+    @staticmethod
+    def _navigation_instrument_palette():
+        return {
+            "accent": COLOR_ACCENT,
+            "orange": COLOR_ORANGE,
+            "green": COLOR_GREEN,
+            "yellow": COLOR_YELLOW,
+            "muted": COLOR_MUTED,
+        }
+
+    def _draw_navigation_instrument_v3(
+        self,
+        center_x,
+        center_y,
+        text,
+        color,
+        *,
+        compact=False,
+        track_left=None,
+        track_right=None,
+        journal_event=None,
+        gravity_g=None,
+        surface_active=False,
+        fsd_readiness=None,
+        local_target=None,
+        neutron_boost=None,
+        fuel_scooping=False,
+        surface_approach=None,
+        ship_config=None,
+    ):
+        """Build the open, bootloader-derived Navigation Instrument V3."""
+        label = str(text or "FLIGHT").upper()
+        fsd_readiness = fsd_readiness if isinstance(fsd_readiness, dict) else {}
+        local_target = local_target if isinstance(local_target, dict) else None
+        neutron_boost = neutron_boost if isinstance(neutron_boost, dict) else {}
+        surface_approach = surface_approach if isinstance(surface_approach, dict) else {}
+        ship_config = ship_config if isinstance(ship_config, dict) else {}
+
+        rendered = self._readable_font(("Courier", 10, "bold"))
+        font = tkfont.Font(family=rendered[0], size=rendered[1], weight="bold")
+        label_width = font.measure(label)
+        left_edge = float(track_left) if track_left is not None else center_x - (220 if compact else 270)
+        right_edge = float(track_right) if track_right is not None else center_x + (220 if compact else 270)
+        label_y = center_y - 7
+        scene_y = center_y + 7
+        scene_top = scene_y - 5
+        scene_bottom = scene_y + 5
+        group_left = center_x - (label_width / 2)
+        group_right = center_x + (label_width / 2)
+        profile = self._navigation_motion_profile(label)
+
+        gravity_value = None
+        if surface_active:
+            try:
+                gravity_value = max(0.0, float(gravity_g))
+            except (TypeError, ValueError):
+                gravity_value = None
+        gravity_load = min(1.0, gravity_value / 3.0) if gravity_value is not None else 0.0
+        if gravity_value is not None and gravity_value >= 3.0:
+            gravity_color = COLOR_ORANGE
+        elif gravity_value is not None and gravity_value >= 1.5:
+            gravity_color = COLOR_YELLOW
+        else:
+            gravity_color = self._glow_color(color, 0.72)
+
+        self._accept_navigation_state_transition(label, profile, color)
+        model = {
+            "state": label,
+            "state_color": color,
+            "motion_profile": profile,
+            "label_y": label_y,
+            "scene_y": scene_y,
+            "scene_top": scene_top,
+            "scene_bottom": scene_bottom,
+            "scene_x1": left_edge,
+            "scene_x2": right_edge,
+            "group_left": group_left,
+            "group_right": group_right,
+            "marker_x": center_x,
+            "y": scene_y,
+            "shell_x1": left_edge,
+            "shell_x2": right_edge,
+            "shell_top": scene_top,
+            "shell_bottom": scene_bottom,
+            "gravity_g": gravity_value,
+            "gravity_load": gravity_load,
+            "gravity_color": gravity_color,
+            "fsd_readiness": dict(fsd_readiness),
+            # Target presentation belongs to the separate target pulse overlay.
+            "local_target": None,
+            "boost_armed": bool(neutron_boost.get("armed")),
+            "boost_value": neutron_boost.get("value"),
+            "fuel_scooping": bool(fuel_scooping),
+            "surface_approach": dict(surface_approach),
+            "ship_config": dict(ship_config),
+            # Compatibility geometry for the independent route/fuel event
+            # animations elsewhere in the Navigation HUD.
+            "left_x1": left_edge + 8,
+            "left_x2": group_left - 10,
+            "right_x1": group_right + 10,
+            "right_x2": right_edge - 8,
+            "route_x1": left_edge + 8,
+            "route_x2": group_left - 10,
+            "survey_x1": group_right + 10,
+            "survey_x2": right_edge - 8,
+        }
+        self._nav_marker_model = model
+
+        self._nav_instrument.draw_static(model)
+        self.draw_text(
+            center_x, label_y, text=label, fill=color,
+            font=("Courier", 10, "bold"), anchor="center",
+            tags="nav_state_static",
+        )
+        self._accept_navigation_journal_event(journal_event)
+        if self.config.get("reduced_motion_enabled", False):
+            self._nav_instrument.draw_state(
+                model, 0.0, self._navigation_instrument_palette(),
+                tags="nav_state_static", motion=False,
+            )
+        return right_edge - left_edge
+
+    def _draw_navigation_state_marker_legacy(
         self,
         center_x,
         center_y,
@@ -907,7 +1037,7 @@ class TacticalHUD:
         surface_approach=None,
         ship_config=None,
     ):
-        """Draw one connected, state-driven navigation instrument.
+        """Retained tapered-rail renderer for visual rollback diagnostics.
 
         Route and survey progress have dedicated, more legible instruments
         below this row. The retained compatibility arguments deliberately do
@@ -1093,6 +1223,47 @@ class TacticalHUD:
         self._accept_navigation_journal_event(journal_event)
         return right_edge - left_edge
 
+    def _draw_navigation_state_marker(
+        self,
+        center_x,
+        center_y,
+        text,
+        color,
+        *,
+        route=None,
+        survey_progress=0.0,
+        survey_known=False,
+        survey_color=None,
+        compact=False,
+        track_left=None,
+        track_right=None,
+        journal_event=None,
+        gravity_g=None,
+        surface_active=False,
+        fsd_readiness=None,
+        local_target=None,
+        neutron_boost=None,
+        fuel_scooping=False,
+        surface_approach=None,
+        ship_config=None,
+    ):
+        """Draw the open, bootloader-derived Navigation Instrument V3."""
+        return self._draw_navigation_instrument_v3(
+            center_x, center_y, text, color,
+            compact=compact,
+            track_left=track_left,
+            track_right=track_right,
+            journal_event=journal_event,
+            gravity_g=gravity_g,
+            surface_active=surface_active,
+            fsd_readiness=fsd_readiness,
+            local_target=local_target,
+            neutron_boost=neutron_boost,
+            fuel_scooping=fuel_scooping,
+            surface_approach=surface_approach,
+            ship_config=ship_config,
+        )
+
     def _accept_navigation_target(self, local_target):
         """Start a short acquisition sweep when the selected local target changes."""
         identity = str((local_target or {}).get("name") or "").strip().casefold()
@@ -1205,8 +1376,281 @@ class TacticalHUD:
             x1, y, x2, y, fill=color, width=width, tags=tags,
         )
 
+    def _draw_navigation_boot_aperture(
+        self, model, scene, phase, color, dim, tags,
+    ):
+        """Adapt the bootloader's scope/readiness language to the HUD core."""
+        family = scene.family
+        if family == "dedicated":
+            return
+        marker_x = model["marker_x"]
+        y = model["y"]
+        shell_top = model.get("shell_top", y - 6)
+        shell_bottom = model.get("shell_bottom", y + 6)
+        travel = self._cycle_progress(phase, scene.period)
+        glow = self._glow_color(color, min(0.82, scene.intensity))
+
+        if family == "scope":
+            # A compressed FSS scope: two range arcs, a rotating sweep and
+            # deterministic contacts.  It surrounds only the glyph aperture,
+            # keeping the state label completely readable.
+            self.canvas.create_arc(
+                marker_x - 7, y - 5, marker_x + 7, y + 5,
+                start=24, extent=132, style="arc", outline=dim,
+                width=1, tags=tags,
+            )
+            self.canvas.create_arc(
+                marker_x - 7, y - 5, marker_x + 7, y + 5,
+                start=204, extent=132, style="arc", outline=dim,
+                width=1, tags=tags,
+            )
+            angle = (-0.72 * math.pi) + (travel * 1.44 * math.pi)
+            sweep_x = marker_x + (math.cos(angle) * 6)
+            sweep_y = y + (math.sin(angle) * 4)
+            self.canvas.create_line(
+                marker_x, y, sweep_x, sweep_y,
+                fill=glow, width=1, tags=tags,
+            )
+            contact = 1 if int(phase // 8) % 2 else -1
+            self._draw_contrast_motion_dot(
+                marker_x + (contact * 4), y - 2,
+                color, radius=1, tags=tags,
+            )
+            return
+
+        if family == "plot":
+            # The map state resolves a tiny route solution through the core,
+            # echoing the startup route plot without duplicating real hops.
+            points = (
+                (marker_x - 7, y + 2),
+                (marker_x - 2, y - 3),
+                (marker_x + 5, y + 1),
+            )
+            self.canvas.create_line(
+                *[value for point in points for value in point],
+                fill=dim, width=1, smooth=True, tags=tags,
+            )
+            active = min(2, int(travel * 3))
+            for index, (x, py) in enumerate(points):
+                radius = 1.5 if index == active else 1
+                self.canvas.create_oval(
+                    x - radius, py - radius, x + radius, py + radius,
+                    fill=color if index == active else dim,
+                    outline="", tags=tags,
+                )
+            return
+
+        if family == "horizon":
+            wave = abs((travel * 2.0) - 1.0)
+            radius = 6 + (wave * 2)
+            self.canvas.create_arc(
+                marker_x - radius, y - 1,
+                marker_x + radius, y + 6,
+                start=18, extent=144, style="arc",
+                outline=glow, width=1, tags=tags,
+            )
+            self.canvas.create_line(
+                marker_x - 5, shell_bottom - 1,
+                marker_x + 5, shell_bottom - 1,
+                fill=dim, width=1, tags=tags,
+            )
+            return
+
+        if family == "terrain":
+            step = int(travel * 4) % 4
+            for index, dx in enumerate((-6, -2, 2, 6)):
+                height = 2 + ((index + step) % 3)
+                self.canvas.create_line(
+                    marker_x + dx, shell_bottom - height,
+                    marker_x + dx, shell_bottom,
+                    fill=color if index == step else dim,
+                    width=1, tags=tags,
+                )
+            return
+
+        if family == "alert":
+            bright_left = int(phase // 4) % 2 == 0
+            for side, bright in ((-1, bright_left), (1, not bright_left)):
+                x = marker_x + (side * 7)
+                self.canvas.create_line(
+                    x, shell_top + 1, x, shell_bottom - 1,
+                    fill=color if bright else dim,
+                    width=2 if bright else 1, tags=tags,
+                )
+            return
+
+        # Vector, route, readiness and hand-off scenes share the bootloader's
+        # restrained central readiness pulse.  The distinct wing motion below
+        # still makes each family immediately recognisable.
+        pulse = abs((travel * 2.0) - 1.0)
+        radius_x = 4 + (pulse * (2 if family == "route" else 1))
+        self.canvas.create_oval(
+            marker_x - radius_x, y - 4,
+            marker_x + radius_x, y + 4,
+            fill="", outline=glow if pulse < 0.55 else dim,
+            width=1, tags=tags,
+        )
+
+    def _draw_navigation_readiness_cells(
+        self, model, scene, phase, color, dim, tags,
+    ):
+        """Flow a few boot-style readiness cells along the chassis rails."""
+        if scene.family == "dedicated" or scene.segments <= 0:
+            return
+        left_x1 = model.get("left_x1", model["route_x1"])
+        left_x2 = model.get("left_x2", model["route_x2"])
+        right_x1 = model.get("right_x1", model["survey_x1"])
+        right_x2 = model.get("right_x2", model["survey_x2"])
+        shell_top = model.get("shell_top", model["y"] - 6)
+        shell_bottom = model.get("shell_bottom", model["y"] + 6)
+        count = max(2, min(6, int(scene.segments)))
+        travel = self._cycle_progress(phase, scene.period)
+        active = min((count * 2) - 1, int(travel * count * 2))
+        if scene.family in {"readiness", "handoff"}:
+            active = int(abs((travel * 2.0) - 1.0) * ((count * 2) - 1))
+
+        cells = []
+        for index in range(count):
+            amount = (index + 0.5) / count
+            cells.append((
+                left_x1 + ((left_x2 - left_x1) * amount), shell_top,
+            ))
+        for index in range(count):
+            amount = (index + 0.5) / count
+            cells.append((
+                right_x1 + ((right_x2 - right_x1) * amount), shell_bottom,
+            ))
+        for index, (x, py) in enumerate(cells):
+            distance = min(
+                (index - active) % len(cells),
+                (active - index) % len(cells),
+            )
+            cell_color = color if distance == 0 else (
+                self._glow_color(color, 0.66) if distance == 1 else dim
+            )
+            width = 6 if distance == 0 else 4
+            self.canvas.create_line(
+                x - (width / 2), py, x + (width / 2), py,
+                fill=cell_color, width=1, tags=tags,
+            )
+
+    def _draw_navigation_boot_event_scene(
+        self, model, kind, progress, color, glow, tags,
+    ):
+        """Layer a boot-style scope or readiness response under an event."""
+        scene = event_scene(kind)
+        family = scene.family
+        y = model["y"]
+        marker_x = model["marker_x"]
+        shell_x1 = model.get("shell_x1", model["route_x1"]) + 7
+        shell_x2 = model.get("shell_x2", model["survey_x2"]) - 7
+        shell_top = model.get("shell_top", y - 6)
+        shell_bottom = model.get("shell_bottom", y + 6)
+        group_left = model["group_left"]
+        group_right = model["group_right"]
+        eased = progress * progress * (3.0 - (2.0 * progress))
+
+        if family == "scope":
+            # Survey events briefly turn the right wing into a compressed FSS
+            # array, matching the startup scope while leaving survey totals in
+            # their existing dedicated instrument below.
+            cx = group_right + ((shell_x2 - group_right) * 0.55)
+            radius_x = max(7.0, min(15.0, (shell_x2 - group_right) * 0.19))
+            radius_y = 5.0
+            self.canvas.create_oval(
+                cx - radius_x, y - radius_y,
+                cx + radius_x, y + radius_y,
+                fill="", outline=glow, width=1, tags=tags,
+            )
+            self.canvas.create_oval(
+                cx - (radius_x * 0.48), y - (radius_y * 0.48),
+                cx + (radius_x * 0.48), y + (radius_y * 0.48),
+                fill="", outline=self._glow_color(color, 0.42),
+                width=1, tags=tags,
+            )
+            angle = (-0.8 * math.pi) + (eased * 1.6 * math.pi)
+            self.canvas.create_line(
+                cx, y,
+                cx + (math.cos(angle) * radius_x),
+                y + (math.sin(angle) * radius_y),
+                fill=color, width=1, tags=tags,
+            )
+            for index in range(min(3, scene.pulses)):
+                local = (eased + (index / max(1, scene.pulses))) % 1.0
+                contact_x = cx - radius_x + (radius_x * 2 * local)
+                contact_y = y + (-2 if index % 2 == 0 else 2)
+                self._draw_contrast_motion_dot(
+                    contact_x, contact_y, color,
+                    radius=1, tags=tags,
+                )
+            return
+
+        if family == "route":
+            # A short route solution grows across the left wing, then hands
+            # back to the persistent state animation.
+            start = shell_x1
+            end = max(start + 1, group_left - 3)
+            points = []
+            offsets = (1, -2, 2)
+            for index in range(3):
+                x = start + ((end - start) * index / 2)
+                points.append((x, y + offsets[index]))
+            self.canvas.create_line(
+                *[value for point in points for value in point],
+                fill=glow, width=1, smooth=True, tags=tags,
+            )
+            limit_x = start + ((end - start) * eased)
+            reached = [point for point in points if point[0] <= limit_x]
+            if reached:
+                reached.append((limit_x, y))
+                self.canvas.create_line(
+                    *[value for point in reached for value in point],
+                    fill=color, width=2, smooth=True, tags=tags,
+                )
+            for x, py in points:
+                self.canvas.create_oval(
+                    x - 1, py - 1, x + 1, py + 1,
+                    fill=color if x <= limit_x else glow,
+                    outline="", tags=tags,
+                )
+            return
+
+        if family in {"boot", "charge", "fuel", "hazard", "recovery"}:
+            # Readiness cells converge for charge/fuel, expand for recovery,
+            # and alternate for hazards.  This is the clearest visual bridge
+            # to the bootloader's final readiness panel.
+            count = min(6, max(3, scene.pulses + 1))
+            for index in range(count):
+                amount = (index + 0.5) / count
+                left_x = shell_x1 + ((group_left - shell_x1) * amount)
+                right_x = group_right + ((shell_x2 - group_right) * amount)
+                threshold = eased if scene.direction != "inward" else 1.0 - eased
+                active = amount <= threshold if scene.direction != "inward" else amount >= threshold
+                if family == "hazard":
+                    active = (index + int(progress * 10)) % 2 == 0
+                cell_color = color if active else glow
+                self.canvas.create_line(
+                    left_x - 3, shell_top, left_x + 3, shell_top,
+                    fill=cell_color, width=2 if active else 1, tags=tags,
+                )
+                self.canvas.create_line(
+                    right_x - 3, shell_bottom, right_x + 3, shell_bottom,
+                    fill=cell_color, width=2 if active else 1, tags=tags,
+                )
+            return
+
+        if family == "resource":
+            cx = group_right + ((shell_x2 - group_right) * 0.55)
+            pulse = math.sin(progress * math.pi)
+            radius = 3 + (pulse * 4)
+            self.canvas.create_polygon(
+                cx, y - radius, cx + radius, y,
+                cx, y + radius, cx - radius, y,
+                fill="", outline=color, width=1, tags=tags,
+            )
+
     def _draw_navigation_marker_animation(self):
-        """Animate the centre state and its two state-owned wings."""
+        """Animate the bootloader-derived Navigation Instrument V3."""
         self.canvas.delete("nav_state_motion")
         model = self._nav_marker_model
         if not model or self.config.get("reduced_motion_enabled", False):
@@ -1218,9 +1662,44 @@ class TacticalHUD:
         except Exception:
             return
 
-        self._draw_navigation_state_motion(model)
-        self._draw_navigation_state_transition_motion(model)
-        self._draw_navigation_journal_event_motion(model)
+        palette = self._navigation_instrument_palette()
+        self._nav_instrument.draw_state(
+            model, self._nav_marker_phase, palette,
+        )
+
+        transition = getattr(self, "_nav_state_transition", None)
+        if isinstance(transition, dict):
+            try:
+                duration = max(0.3, float(transition.get("duration", 0.68)))
+                progress = (
+                    time.monotonic() - float(transition.get("started"))
+                ) / duration
+            except (TypeError, ValueError, ZeroDivisionError):
+                self._nav_state_transition = None
+            else:
+                if progress >= 1.0:
+                    self._nav_state_transition = None
+                elif progress >= 0.0:
+                    self._nav_instrument.draw_transition(
+                        model, transition, progress,
+                    )
+
+        event = getattr(self, "_nav_event_motion", None)
+        if isinstance(event, dict):
+            try:
+                duration = max(0.4, float(event.get("duration", 1.3)))
+                progress = (
+                    time.monotonic() - float(event.get("started"))
+                ) / duration
+            except (TypeError, ValueError, ZeroDivisionError):
+                self._nav_event_motion = None
+            else:
+                if progress >= 1.0:
+                    self._nav_event_motion = None
+                elif progress >= 0.0:
+                    self._nav_instrument.draw_event(
+                        model, event, progress, palette,
+                    )
 
     def _draw_navigation_state_transition_motion(self, model):
         """Contract the old glyph and expand the new state through one chassis."""
@@ -1332,6 +1811,10 @@ class TacticalHUD:
         shell_x2 = model.get("shell_x2", rx2)
         shell_top = model.get("shell_top", y - 6)
         shell_bottom = model.get("shell_bottom", y + 6)
+
+        self._draw_navigation_boot_event_scene(
+            model, kind, progress, visible, glow, tags,
+        )
 
         def tracer(x1, x2, amount, reverse=False, radius=2):
             amount = max(0.0, min(1.0, amount))
@@ -2138,7 +2621,7 @@ class TacticalHUD:
             return
 
     def _draw_navigation_activity_depth(self, model, profile, phase, color, dim, tags):
-        """Flow persistent-state activity through both wings and the centre."""
+        """Render a boot-inspired persistent scene through the full chassis."""
         marker_x = model["marker_x"]
         y = model["y"]
         left_x1 = model.get("left_x1", model["route_x1"])
@@ -2151,28 +2634,12 @@ class TacticalHUD:
         if left_x2 - left_x1 < 4 or right_x2 - right_x1 < 4 or full_span < 20:
             return
 
-        # These are ambient persistent states. High-energy transitions such as
-        # FSD charge, hyperspace, glide and carrier transit keep their stronger
-        # dedicated animation below rather than receiving a second overlay.
-        flow_periods = {
-            "flight": 58,
-            "supercruise": 34,
-            "fighter": 42,
-            "exploration": 76,
-            "docked": 92,
-            "landed": 86,
-            "surface_vehicle": 48,
-            "on_foot": 68,
-            "scanner": 46,
-            "map": 72,
-            "combat": 28,
-            "vehicle_deploy": 40,
-            "vehicle_board": 46,
-            "vehicle_switch": 42,
-        }
-        period = flow_periods.get(profile)
-        if not period:
+        scene = state_scene(profile)
+        # High-energy transitions such as FSD charge, hyperspace, glide and
+        # carrier transit keep their stronger dedicated renderer below.
+        if scene.family == "dedicated":
             return
+        period = scene.period
         if model.get("fuel_scooping"):
             period *= 0.78
         elif (model.get("surface_approach") or {}).get("active"):
@@ -2180,19 +2647,18 @@ class TacticalHUD:
 
         shell_top = model.get("shell_top", y - 6)
         shell_bottom = model.get("shell_bottom", y + 6)
-        packet_counts = {
-            "supercruise": 3,
-            "fighter": 3,
-            "scanner": 2,
-            "surface_vehicle": 2,
-            "combat": 2,
-        }
-        packet_count = packet_counts.get(profile, 1 if profile in {
-            "exploration", "docked", "landed", "map", "on_foot"
-        } else 2)
-        packet_width = 2 if profile in {"supercruise", "fighter", "combat"} else 1
+        self._draw_navigation_boot_aperture(
+            model, scene, phase, color, dim, tags,
+        )
+        self._draw_navigation_readiness_cells(
+            model, scene, phase, color, dim, tags,
+        )
+        packet_count = max(0, int(scene.packets))
+        packet_width = 2 if scene.intensity >= 0.76 else 1
         head_color = color
-        trail_color = color if profile == "supercruise" else self._glow_color(color, 0.70)
+        trail_color = color if scene.family == "route" else self._glow_color(
+            color, min(0.78, scene.intensity),
+        )
 
         def path_point(progress, rail_y):
             """Follow the centre rail, rising around rather than over its label."""
@@ -2235,17 +2701,17 @@ class TacticalHUD:
                 # Input geometry identifies the activity before it reaches
                 # the state core; mobile, chart and stationary states do not
                 # all masquerade as the same travelling light.
-                if profile == "docked":
+                if scene.family == "readiness":
                     self.canvas.create_rectangle(
                         x - 5, py - 2, x, py + 2,
                         fill="", outline=head_color, width=1, tags=tags,
                     )
-                elif profile == "landed":
+                elif scene.family == "horizon":
                     self.canvas.create_line(
                         x - 5, py + 2, x, py + 2, x, py - 2,
                         fill=head_color, width=1, tags=tags,
                     )
-                elif profile == "map":
+                elif scene.family == "plot":
                     self.canvas.create_line(
                         x - 4, py - 3, x - 4, py + 3,
                         x, py + 3, x, py - 3,
@@ -2271,7 +2737,7 @@ class TacticalHUD:
                         x - 7, py - 2, x - 4, py, x - 7, py + 2,
                         fill=packet_color, width=1, tags=tags,
                     )
-                elif profile == "scanner":
+                elif scene.family == "scope":
                     self.canvas.create_line(
                         x - 6, py - 4, x - 3, py - 1,
                         x - 6, py + 4, x - 3, py + 1,
@@ -2281,13 +2747,13 @@ class TacticalHUD:
                 # Processing through the state core: energy becomes a rail
                 # slash, leaving the readable centre label completely clear.
                 tilt = -1 if (index % 2) else 1
-                if profile == "scanner":
+                if scene.family == "scope":
                     self.canvas.create_line(
                         x - 3, py - 3, x + 3, py + 3,
                         x - 3, py + 3, x + 3, py - 3,
                         fill=head_color, width=1, tags=tags,
                     )
-                elif profile == "map":
+                elif scene.family == "plot":
                     self.canvas.create_rectangle(
                         x - 3, py - 3, x + 3, py + 3,
                         fill="", outline=head_color, width=1, tags=tags,
@@ -2305,7 +2771,7 @@ class TacticalHUD:
             else:
                 # Output energy resolves as a gate rather than repeating the
                 # input chevron, so the flow visibly transforms left-to-right.
-                gate_half = 4 if profile in {"scanner", "map", "docked"} else 3
+                gate_half = 4 if scene.family in {"scope", "plot", "readiness"} else 3
                 self.canvas.create_line(
                     x, py - gate_half, x, py + gate_half,
                     fill=head_color, width=packet_width, tags=tags,
@@ -2417,17 +2883,6 @@ class TacticalHUD:
             if travel_state == "carrier_transit":
                 return f"CARRIER TRANSIT{detail}", COLOR_ORANGE
             return f"CARRIER ARRIVAL{detail}", COLOR_GREEN
-        local_target = context.get("local_target") or {}
-        target_name = str(local_target.get("name") or "").strip()
-        if target_name:
-            gravity_text = ""
-            if local_target.get("is_current_body"):
-                try:
-                    gravity = context.get("gravity_g")
-                    gravity_text = f" · {float(gravity):.2f} G" if gravity is not None else ""
-                except (TypeError, ValueError):
-                    gravity_text = ""
-            return f"TARGET LOCK · {target_name}{gravity_text}", COLOR_YELLOW
         neutron_boost = context.get("neutron_boost") or {}
         if neutron_boost.get("armed"):
             try:
@@ -2914,7 +3369,7 @@ class TacticalHUD:
         marker_left, marker_right = 16, w - 16
         marker_center = (marker_left + marker_right) / 2
         self._draw_navigation_state_marker(
-            marker_center, 17, state_text, state_color,
+            marker_center, 21, state_text, state_color,
             route=route,
             survey_progress=pct,
             survey_known=total > 0 and nav_context.get("scan_progress_source") != "unknown",
@@ -2936,59 +3391,59 @@ class TacticalHUD:
             surface_approach=nav_context.get("surface_approach"),
             ship_config=nav_context.get("ship_config"),
         )
-        self._draw_section_rule(16, w - 16, 34)
+        self._draw_section_rule(16, w - 16, 42)
 
         # The current system is the primary landmark, held by a lit locator rail.
-        self._draw_locator_rail(17, 47, 70)
-        self.draw_text(27, 47, text="CURRENT SYSTEM", fill="#85939d",
+        self._draw_locator_rail(17, 55, 78)
+        self.draw_text(27, 55, text="CURRENT SYSTEM", fill="#85939d",
                        font=("Courier", 10, "bold"), anchor="w")
-        self._draw_region_label(nav_context, 325, 47, max_width=270)
+        self._draw_region_label(nav_context, 325, 55, max_width=270)
         self.draw_fitted_text(
-            27, 66, str(current_display).upper(), COLOR_TEXT,
+            27, 74, str(current_display).upper(), COLOR_TEXT,
             size=14, min_size=11, max_width=w - 43, anchor="w",
         )
-        self._draw_section_rule(16, w - 16, 79)
+        self._draw_section_rule(16, w - 16, 87)
 
         # Original split route header: target/status, next leg, total distance.
         left_x, right_x = 16, w - 16
         route_color = COLOR_ACCENT if route.get("complete") else (
             COLOR_ORANGE if route["active"] else "#7d8891"
         )
-        self.draw_fitted_text(left_x, 95, route_header, route_color,
+        self.draw_fitted_text(left_x, 103, route_header, route_color,
                               size=10, min_size=9, max_width=215, anchor="w")
-        self.draw_fitted_text(w / 2, 95, next_distance, route_color,
+        self.draw_fitted_text(w / 2, 103, next_distance, route_color,
                               size=10, min_size=9, max_width=90, anchor="center")
-        self.draw_fitted_text(right_x, 95, route_distance, COLOR_ORANGE,
+        self.draw_fitted_text(right_x, 103, route_distance, COLOR_ORANGE,
                               size=10, min_size=9, max_width=175, anchor="e")
-        self._draw_route_track(left_x, right_x, 113, route, dot_radius=4)
+        self._draw_route_track(left_x, right_x, 121, route, dot_radius=4)
         route_model = self._route_track_model or {}
         origin_current = bool(route_model.get("origin_current", True))
-        self.draw_text(left_x, 130, text="CURRENT" if origin_current else "START",
+        self.draw_text(left_x, 138, text="CURRENT" if origin_current else "START",
                        fill=COLOR_ACCENT if origin_current else self._glow_color(COLOR_ACCENT, 0.52),
                        font=("Courier", 10, "bold"), anchor="w")
-        self.draw_text(right_x, 130,
+        self.draw_text(right_x, 138,
                        text="DEST" if route["active"] or route.get("track_hops") else "NEXT",
                        fill=route_color,
                        font=("Courier", 10, "bold"), anchor="e")
-        self._draw_section_rule(16, w - 16, 141)
+        self._draw_section_rule(16, w - 16, 149)
 
         # Original scan block, retaining the newer accurate survey state.
-        self.draw_text(16, 157, text="SYSTEM SURVEY", fill="#85939d",
+        self.draw_text(16, 165, text="SYSTEM SURVEY", fill="#85939d",
                        font=("Courier", 10, "bold"), anchor="w")
-        self.draw_text(w - 16, 157, text=scan_progress_text, fill=scan_color,
+        self.draw_text(w - 16, 165, text=scan_progress_text, fill=scan_color,
                        font=("Courier", 12, "bold"), anchor="e")
-        self._draw_progress_track(16, w - 16, 169, pct, scan_color)
-        self._draw_section_rule(16, w - 16, 184)
+        self._draw_progress_track(16, w - 16, 177, pct, scan_color)
+        self._draw_section_rule(16, w - 16, 192)
 
-        self._draw_inline_metrics(16, w - 16, 199, survey_metrics, value_size=12)
+        self._draw_inline_metrics(16, w - 16, 207, survey_metrics, value_size=12)
         self._nav_fuel_model = {
             "active": bool(nav_context.get("fuel_scooping")),
-            "x1": 24.0, "x2": 156.0, "y": 212.0,
+            "x1": 24.0, "x2": 156.0, "y": 220.0,
         }
 
-        self.draw_fitted_text(16, 222, context_text, context_color,
+        self.draw_fitted_text(16, 230, context_text, context_color,
                               size=10, min_size=9, max_width=w - 32 - 142, anchor="w")
-        self.draw_fitted_text(w - 16, 222, traffic_text, "#7d8891",
+        self.draw_fitted_text(w - 16, 230, traffic_text, "#7d8891",
                               size=10, min_size=9, max_width=136, anchor="e")
 
     def update(

@@ -616,14 +616,82 @@ class DashboardScanMixin:
         self._reconcile_scan_progress_from_cache()
 
     def _rebuild_system_state_from_scan_items(self):
-        """Rebuild valuable_bodies, system_bio_signals, and star_class from
-        scan_items loaded from the DB. Needed when the journal tail doesn't
-        cover the Scan/FSSBodySignals events that originally populated these
-        fields (e.g. the system was entered in an older journal file)."""
-        bio_total = 0
+        """Rebuild persistent system facts from cached body records.
+
+        The aggregate BIO total is not enough on its own: later signal events
+        recompute it from ``body_signals``.  Rebuild that table as well as the
+        completed organic rows so a restart cannot combine a restored
+        numerator with only the newest body's denominator (for example 2/1).
+        """
+        def _integer(value):
+            try:
+                return max(0, int(value or 0))
+            except (TypeError, ValueError):
+                return 0
+
+        def _body_id(value):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return value
+
+        restored_signals = {}
+        for raw_id, raw_signals in (
+                getattr(self, "body_signals", None) or {}).items():
+            if isinstance(raw_signals, dict):
+                restored_signals[_body_id(raw_id)] = dict(raw_signals)
+
+        restored_scans = dict(getattr(self, "last_bio_scan", None) or {})
+        completed_fallback = 0
         primary_star = None
         for item in self.scan_items:
-            bio_total += int(item.get("bio_count") or 0)
+            body_id = _body_id(item.get("body_id"))
+            bio_count = _integer(item.get("bio_count"))
+            geo_count = _integer(item.get("geo_count"))
+            previous_signals = restored_signals.get(body_id, {})
+            if body_id is not None and (
+                    bio_count or geo_count or previous_signals
+                    or item.get("genuses") or item.get("dss_complete")):
+                restored_signals[body_id] = {
+                    "bio": max(bio_count, _integer(previous_signals.get("bio"))),
+                    "geo": max(geo_count, _integer(previous_signals.get("geo"))),
+                    "genuses": list(
+                        item.get("genuses")
+                        or previous_signals.get("genuses")
+                        or []
+                    ),
+                    "body_name": (
+                        item.get("name")
+                        or previous_signals.get("body_name")
+                        or ""
+                    ),
+                    "dss_complete": bool(
+                        item.get("dss_complete")
+                        or previous_signals.get("dss_complete")
+                    ),
+                }
+
+            item_complete = 0
+            organic_scans = item.get("organic_scans") or {}
+            if isinstance(organic_scans, dict):
+                for stored_key, stored_scan in organic_scans.items():
+                    if not isinstance(stored_scan, dict):
+                        continue
+                    scan = dict(stored_scan)
+                    scan.setdefault("body_id", body_id)
+                    scan.setdefault("body_name", item.get("name") or "")
+                    species = scan.get("species") or scan.get("genus") or "Organic"
+                    key = str(stored_key or (
+                        f"{body_id}|{species}" if body_id is not None else species
+                    ))
+                    restored_scans[key] = scan
+                    if scan.get("is_complete"):
+                        item_complete += 1
+            completed_fallback += max(
+                item_complete,
+                _integer(item.get("organic_complete_count")),
+            )
+
             p_class = item.get("planet_class", "")
             terraformable = item.get("terraformable", False)
             if p_class in ("Earthlike body", "Water world", "Ammonia world") or terraformable:
@@ -638,7 +706,18 @@ class DashboardScanMixin:
                 bid = item.get("body_id", 9999)
                 if primary_star is None or bid < primary_star.get("body_id", 9999):
                     primary_star = item
-        self.system_bio_signals = bio_total
+
+        self.body_signals = restored_signals
+        self.system_bio_signals = sum(
+            _integer(signals.get("bio"))
+            for signals in restored_signals.values()
+        )
+        self.last_bio_scan = restored_scans
+        completed_rows = sum(
+            1 for scan in restored_scans.values()
+            if isinstance(scan, dict) and scan.get("is_complete")
+        )
+        self.organic_count = max(completed_rows, completed_fallback)
         if not self.star_class and primary_star:
             self.star_class = primary_star.get("star_type")
 
