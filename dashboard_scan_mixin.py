@@ -31,7 +31,9 @@ class DashboardScanMixin:
     _SURFACE_GLIDE_DEPARTURE_GUARD_SECONDS = 8.0
     _SURFACE_DIRECTION_RATE_MPS = 1.0
     _SURFACE_DIRECTION_SAMPLES = 2
+    _SURFACE_DIRECTION_MAX_SAMPLE_SECONDS = 30.0
     _SURFACE_HOLD_DWELL_SECONDS = 2.25
+    _SURFACE_HOLD_INFER_SECONDS = 10.0
     _SURFACE_HOLD_POSITION_EPSILON_M = 1.25
 
     def _sync_navigation_hud_flight_state(self, *, supercruise=False):
@@ -153,7 +155,8 @@ class DashboardScanMixin:
         )
 
     def _update_surface_vertical_direction(
-            self, descent_rate, *, eligible=False, force_departure=False):
+            self, descent_rate, *, eligible=False, force_departure=False,
+            evidence_samples=1):
         """Select approach/departure from sustained Status altitude motion."""
         if force_departure:
             self._surface_climb_samples = 0
@@ -170,16 +173,22 @@ class DashboardScanMixin:
             descent_rate = 0.0
         threshold = self._SURFACE_DIRECTION_RATE_MPS
         sample_limit = self._SURFACE_DIRECTION_SAMPLES
+        try:
+            evidence_samples = max(1, min(sample_limit, int(evidence_samples)))
+        except (TypeError, ValueError):
+            evidence_samples = 1
         if descent_rate >= threshold:
             self._surface_descent_samples = min(
                 sample_limit,
-                int(getattr(self, "_surface_descent_samples", 0) or 0) + 1,
+                int(getattr(self, "_surface_descent_samples", 0) or 0)
+                + evidence_samples,
             )
             self._surface_climb_samples = 0
         elif descent_rate <= -threshold:
             self._surface_climb_samples = min(
                 sample_limit,
-                int(getattr(self, "_surface_climb_samples", 0) or 0) + 1,
+                int(getattr(self, "_surface_climb_samples", 0) or 0)
+                + evidence_samples,
             )
             self._surface_descent_samples = 0
         else:
@@ -191,7 +200,7 @@ class DashboardScanMixin:
         elif self._surface_climb_samples >= sample_limit:
             self._surface_departure_active = True
 
-    def _cancel_surface_hold_check(self):
+    def _cancel_surface_hold_inference(self):
         job = getattr(self, "_surface_hold_job", None)
         self._surface_hold_job = None
         if job is None:
@@ -201,9 +210,8 @@ class DashboardScanMixin:
         except Exception:
             pass
 
-    def _schedule_surface_hold_check(self, now=None):
-        """Refresh the HUD once a quiet surface fix has remained still."""
-        self._cancel_surface_hold_check()
+    def _schedule_surface_hold_inference(self, now=None):
+        self._cancel_surface_hold_inference()
         if not self._surface_hold_context_valid():
             return
         now = time.monotonic() if now is None else float(now)
@@ -213,17 +221,17 @@ class DashboardScanMixin:
             self._surface_last_motion_monotonic = now
         remaining = max(
             0.01,
-            self._SURFACE_HOLD_DWELL_SECONDS - (now - float(last_motion)),
+            self._SURFACE_HOLD_INFER_SECONDS - (now - float(last_motion)),
         )
         try:
             self._surface_hold_job = self.root.after(
                 max(10, int(remaining * 1000)),
-                self._activate_surface_hold_if_quiet,
+                self._infer_surface_hold_after_silence,
             )
         except Exception:
             self._surface_hold_job = None
 
-    def _activate_surface_hold_if_quiet(self):
+    def _infer_surface_hold_after_silence(self):
         self._surface_hold_job = None
         if not self._surface_hold_context_valid():
             return
@@ -231,10 +239,10 @@ class DashboardScanMixin:
         last_motion = getattr(self, "_surface_last_motion_monotonic", None)
         if last_motion is None:
             self._surface_last_motion_monotonic = now
-            self._schedule_surface_hold_check(now)
+            self._schedule_surface_hold_inference(now)
             return
-        if now - float(last_motion) < self._SURFACE_HOLD_DWELL_SECONDS:
-            self._schedule_surface_hold_check(now)
+        if now - float(last_motion) < self._SURFACE_HOLD_INFER_SECONDS:
+            self._schedule_surface_hold_inference(now)
             return
         if not getattr(self, "_surface_hold_active", False):
             self._surface_hold_active = True
@@ -242,10 +250,10 @@ class DashboardScanMixin:
                 self.update_hud()
 
     def _observe_surface_motion(self, now=None):
-        """Resolve approach motion versus a stationary above-surface hold."""
+        """Resolve motion versus a hold confirmed by an unchanged Status fix."""
         now = time.monotonic() if now is None else float(now)
         if not self._surface_hold_context_valid():
-            self._cancel_surface_hold_check()
+            self._cancel_surface_hold_inference()
             self._surface_hold_active = False
             self._surface_last_position = None
             self._surface_last_motion_monotonic = None
@@ -280,9 +288,22 @@ class DashboardScanMixin:
             self._surface_last_position = current
             self._surface_last_motion_monotonic = now
             self._surface_hold_active = False
+            self._schedule_surface_hold_inference(now)
         elif getattr(self, "_surface_last_motion_monotonic", None) is None:
             self._surface_last_motion_monotonic = now
-        self._schedule_surface_hold_check(now)
+            self._schedule_surface_hold_inference(now)
+        else:
+            # An observed unchanged fix remains the strongest confirmation and
+            # enters HOLD immediately. The ten-second inference is the local
+            # compromise for Elite's roughly twenty-second stationary cadence.
+            quiet_for = now - float(self._surface_last_motion_monotonic)
+            self._surface_hold_active = bool(
+                quiet_for >= self._SURFACE_HOLD_DWELL_SECONDS
+            )
+            if self._surface_hold_active:
+                self._cancel_surface_hold_inference()
+            else:
+                self._schedule_surface_hold_inference(now)
 
     def _apply_status_update(self, data):
         t0 = self._perf_start()
@@ -370,12 +391,14 @@ class DashboardScanMixin:
         altitude = self._to_float(data.get("Altitude"))
         altitude_now = time.monotonic()
         instantaneous_descent_rate = 0.0
+        altitude_sample_elapsed = 0.0
         previous_altitude = getattr(self, "current_altitude_m", None)
         previous_altitude_ts = getattr(self, "_status_altitude_observed_monotonic", None)
         if altitude is not None:
             if previous_altitude is not None and previous_altitude_ts is not None:
                 elapsed = altitude_now - previous_altitude_ts
-                if 0.05 <= elapsed <= 10.0:
+                if 0.05 <= elapsed <= self._SURFACE_DIRECTION_MAX_SAMPLE_SECONDS:
+                    altitude_sample_elapsed = elapsed
                     instantaneous = (float(previous_altitude) - altitude) / elapsed
                     instantaneous_descent_rate = instantaneous
                     previous_rate = float(getattr(self, "_surface_descent_mps", 0.0) or 0.0)
@@ -535,7 +558,7 @@ class DashboardScanMixin:
             getattr(self, "_surface_glide_guard_until", 0.0) or 0.0
         )
         valid_ship_context = bool(
-            approach_body_known
+            (approach_body_known or getattr(self, "on_planet", False))
             and not getattr(self, "current_landed", False)
             and not getattr(self, "current_in_srv", False)
             and not getattr(self, "current_in_fighter", False)
@@ -556,6 +579,11 @@ class DashboardScanMixin:
             force_departure=bool(
                 valid_ship_context and not glide_active
                 and (was_landed or entered_supercruise)
+            ),
+            evidence_samples=(
+                self._SURFACE_DIRECTION_SAMPLES
+                if altitude_sample_elapsed >= self._SURFACE_DIRECTION_SAMPLES
+                else 1
             ),
         )
         self._observe_surface_motion(surface_now)
