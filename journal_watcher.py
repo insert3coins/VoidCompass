@@ -264,6 +264,109 @@ class JournalWatcher:
             return []
         return list(completed.values())
 
+    def get_active_organic_sampling(self, system_address=None, body_id=None):
+        """Return the active unfinished genetic-sampler sequence, if any.
+
+        Cached body records and the active sampler card are intentionally
+        separate state.  A clean app restart can therefore retain ``1/3`` in
+        SQLite while an older cockpit snapshot omits the sampler card.  Scan
+        the active journal as recovery evidence and honour the events that
+        genuinely clear a sequence instead of reviving any historical partial.
+        """
+        path = self.last_journal
+        if not path:
+            try:
+                files = sorted(
+                    os.path.join(self.journal_path, filename)
+                    for filename in os.listdir(self.journal_path)
+                    if filename.startswith("Journal.") and filename.endswith(".log")
+                )
+            except (OSError, TypeError):
+                files = []
+            path = files[-1] if files else None
+        if not path or not os.path.exists(path):
+            return None
+
+        def normalise_number(value):
+            try:
+                return int(value) if value is not None else None
+            except (TypeError, ValueError):
+                return value
+
+        wanted_address = normalise_number(system_address)
+        wanted_body = normalise_number(body_id)
+        active = None
+        clear_events = {"FSDJump", "CarrierJump", "LeaveBody", "Died"}
+        try:
+            with open(path, "r", encoding="utf-8", errors="ignore") as handle:
+                for line in handle:
+                    if "ScanOrganic" not in line and not any(
+                            marker in line for marker in clear_events | {"StartJump"}):
+                        continue
+                    try:
+                        raw = json.loads(line)
+                    except (TypeError, ValueError):
+                        continue
+                    event = raw.get("event")
+                    jump_type = str(raw.get("JumpType") or "").strip().casefold()
+                    if event in clear_events or (
+                            event == "StartJump" and jump_type == "hyperspace"):
+                        active = None
+                        continue
+                    if event != "ScanOrganic":
+                        continue
+
+                    address = normalise_number(raw.get("SystemAddress"))
+                    body = raw.get("BodyID")
+                    if body is None:
+                        body = raw.get("Body")
+                    body = normalise_number(body)
+                    if wanted_address is not None and address != wanted_address:
+                        continue
+                    if wanted_body is not None and body != wanted_body:
+                        continue
+
+                    species = (
+                        raw.get("Species_Localised") or raw.get("Species")
+                        or raw.get("Genus_Localised") or raw.get("Genus")
+                        or "Organic"
+                    )
+                    scan_type = str(raw.get("ScanType") or "").strip().casefold()
+                    same_sequence = bool(
+                        active
+                        and active.get("system_address") == address
+                        and active.get("body") == body
+                        and active.get("species") == species
+                    )
+                    if scan_type == "analyse":
+                        # Elite permits only one active genetic-sampler
+                        # sequence. Any analysis in the requested context is
+                        # therefore authoritative completion of the card.
+                        active = None
+                    elif scan_type == "log":
+                        active = {
+                            "raw": raw,
+                            "system_address": address,
+                            "body": body,
+                            "species": species,
+                            "progress": 1,
+                        }
+                    elif scan_type == "sample":
+                        progress = (
+                            int(active.get("progress") or 1) + 1
+                            if same_sequence else 2
+                        )
+                        active = {
+                            "raw": raw,
+                            "system_address": address,
+                            "body": body,
+                            "species": species,
+                            "progress": max(2, min(3, progress)),
+                        }
+        except OSError:
+            return None
+        return active
+
     @staticmethod
     def detect_latest_commander(journal_path, tail_bytes=2 * 1024 * 1024):
         """Best-effort commander/FID detection from the newest journal file."""

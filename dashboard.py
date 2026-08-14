@@ -6991,10 +6991,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             species_key = f"{body_id}|{species}" if body_id is not None else species
             existing = self.last_bio_scan.get(species_key, {})
             max_samples = d.get("max_samples") or 3
-            if scan_type in ("log", "sample"):
-                sample = int(existing.get("sample_idx") or 0) + 1
-            else:
-                sample = existing.get("sample_idx") or max_samples
+            # ScanOrganic reaches this toast only after the main reducer has
+            # stored the event. Display that exact index; adding one here made
+            # a first Log toast claim 2/3 while the database correctly held 1.
+            sample = existing.get("sample_idx") or (
+                max_samples if complete else 1
+            )
             detail = "Analysis complete" if complete else f"Sample {sample}/{max_samples}"
             self._push_live_toast(
                 "BIO COMPLETE" if complete else "BIO SAMPLE", f"{species}: {detail}",
@@ -7211,7 +7213,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.captains_log.add_manual_highlight(
                     "OBJECTIVE", f"Expedition objective complete: {summary}",
                 )
-        self._handle_live_journal_toast(ev, raw, d, startup_replay=startup_replay)
+        # Biological toast text depends on the authoritative sample index that
+        # is written in the main reducer below. Publish every other toast here,
+        # then emit ScanOrganic only after that state has settled.
+        if ev != "ScanOrganic":
+            self._handle_live_journal_toast(
+                ev, raw, d, startup_replay=startup_replay,
+            )
         self._observe_ai_economy_event(
             ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay,
         )
@@ -7464,6 +7472,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             species_key = f"{body_id}|{species}" if body_id is not None else f"{body_label}|{species}"
 
             existing = self.last_bio_scan.get(species_key, {})
+            # Startup replay owns no immediate presentation, so reduce its
+            # journal sequence first. This supplies an exact 1/3, 2/3 or 3/3
+            # index even when the replay tail begins on Sample and the cached
+            # body record already contains the final pre-restart step.
+            if startup_replay:
+                self._process_companion_event(
+                    ev, raw if isinstance(raw, dict) else {}, d,
+                    startup_replay=True,
+                )
             # Live ScanOrganic events carry no Sample/IsNewSample field, so sample
             # progress has to be tracked locally from ScanType position (Log=1,
             # Sample=2, Sample=3, then Analyse completes without adding a sample).
@@ -7476,7 +7493,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self._survey_body_focus_suppressed = True
             elif is_new_sample:
                 self._survey_body_focus_suppressed = False
-            if is_new_sample:
+            if scan_type_norm == "log":
+                # Log is always the first sample. Incrementing an existing
+                # cached Log made a single journal event appear as 2/3.
+                sample_idx = 1
+            elif scan_type_norm == "sample" and startup_replay:
+                replay_sample = getattr(self, "_startup_bio_sampling_replay", None) or {}
+                same_replay = bool(
+                    replay_sample.get("species") == species
+                    and self._normalize_body_id(replay_sample.get("body")) == body_id
+                )
+                sample_idx = (
+                    int(replay_sample.get("progress") or 2)
+                    if same_replay else 2
+                )
+            elif is_new_sample:
                 sample_idx = int(existing.get("sample_idx") or 0) + 1
             else:
                 sample_idx = existing.get("sample_idx") or max_samples
@@ -7526,10 +7557,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             # Persist first, then publish sampler progress.  Log/Sample keeps
             # the three-node flightpath visible; Analyse clears it only after
             # organic_complete_count can move the overlay back to system mode.
-            self._process_companion_event(
-                ev, raw if isinstance(raw, dict) else {}, d,
-                startup_replay=startup_replay,
-            )
+            if not startup_replay:
+                self._process_companion_event(
+                    ev, raw if isinstance(raw, dict) else {}, d,
+                    startup_replay=False,
+                )
+                self._handle_live_journal_toast(
+                    ev, raw if isinstance(raw, dict) else {}, d,
+                    startup_replay=False,
+                )
 
             if not self.batch_mode:
                 self.update_hud()
@@ -8957,12 +8993,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             state["galaxy_source"] = ev
 
         if startup_replay:
-            self._reduce_startup_sampling_event(ev, raw, d)
+            self._reduce_startup_sampling_event(ev, raw, data)
         else:
             if ev == "Scan":
                 changed = self._record_unsold_scan(raw) or changed
             elif ev == "ScanOrganic":
-                changed = self._process_sampling_event(raw, d) or changed
+                changed = self._process_sampling_event(raw, data) or changed
                 if getattr(self, "cockpit_memory", None):
                     self.cockpit_memory.check_bio_sell_anticipation(state.get("unsold_bio_samples"))
             elif ev in ("SellExplorationData", "MultiSellExplorationData"):
@@ -9218,13 +9254,66 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "timestamp": raw.get("timestamp"),
         }
 
+    def _recover_active_sampling_from_journal(self):
+        """Rebuild the sampler card when the cockpit snapshot omitted it."""
+        watcher = getattr(self, "watcher", None)
+        getter = getattr(watcher, "get_active_organic_sampling", None)
+        if not callable(getter):
+            return None
+        try:
+            recovered = getter(self.current_system_address, self.current_body_id)
+        except Exception as exc:
+            logging.warning("Startup active biology recovery failed: %s", exc)
+            return None
+        if not isinstance(recovered, dict):
+            return None
+        raw = recovered.get("raw")
+        if not isinstance(raw, dict):
+            return None
+        try:
+            normalized = watcher._normalize_event(raw)
+            data = self._enrich_bio_event_context(normalized.get("data") or {})
+        except Exception as exc:
+            logging.warning("Startup active biology normalization failed: %s", exc)
+            return None
+        body = self._normalize_body_id(data.get("body_id"))
+        address = data.get("system_address")
+        if body is None or not self._matches_current_system_address(data):
+            return None
+        species = (
+            data.get("species") or raw.get("Species_Localised")
+            or raw.get("Species") or "Organic"
+        )
+        genus = (
+            data.get("genus") or raw.get("Genus_Localised")
+            or raw.get("Genus") or str(species).split(" ")[0]
+        )
+        return {
+            "species": species,
+            "genus": genus,
+            "body": body,
+            "progress": max(1, min(3, int(recovered.get("progress") or 1))),
+            "colony_m": bio_values.GENUS_COLONY_M.get(genus),
+            "system_address": address,
+            "timestamp": raw.get("timestamp"),
+        }
+
     def _finalize_startup_sampling_replay(self):
         """Publish replayed sampling only when it still matches our location."""
-        if not getattr(self, "_startup_bio_sampling_replay_seen", False):
-            return False
+        replay_seen = bool(getattr(self, "_startup_bio_sampling_replay_seen", False))
         candidate = getattr(self, "_startup_bio_sampling_replay", None)
-        existing = self.bio_sampling if isinstance(self.bio_sampling, dict) else None
-        preserved_points = list(self.bio_sample_points or [])
+        active_sampling = getattr(self, "bio_sampling", None)
+        existing = active_sampling if isinstance(active_sampling, dict) else None
+        preserved_points = list(getattr(self, "bio_sample_points", None) or [])
+
+        if not replay_seen:
+            # A clean shutdown marker can start catch-up after the original Log
+            # even though its body record was persisted. Recover the unfinished
+            # sequence from the active journal so the three-node card does not
+            # silently disappear on relaunch.
+            candidate = self._recover_active_sampling_from_journal()
+            if not candidate:
+                return bool(existing)
 
         if candidate:
             candidate = dict(candidate)
