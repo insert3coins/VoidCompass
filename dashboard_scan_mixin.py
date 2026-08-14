@@ -29,7 +29,10 @@ class DashboardScanMixin:
     _STATUS2_TELEPRESENCE_MULTICREW = 0x00020000
     _STATUS2_PHYSICAL_MULTICREW = 0x00040000
     _SURFACE_GLIDE_DEPARTURE_GUARD_SECONDS = 8.0
-    _SURFACE_DEPARTURE_CLIMB_SAMPLES = 2
+    _SURFACE_DIRECTION_RATE_MPS = 1.0
+    _SURFACE_DIRECTION_SAMPLES = 2
+    _SURFACE_HOLD_DWELL_SECONDS = 2.25
+    _SURFACE_HOLD_POSITION_EPSILON_M = 1.25
 
     def _sync_navigation_hud_flight_state(self, *, supercruise=False):
         """Resolve the navigation HUD state from the latest verified vehicle flags."""
@@ -85,6 +88,8 @@ class DashboardScanMixin:
             # A vehicle hand-off is not evidence that the mothership is
             # approaching or departing the tracked planet.
             self._surface_departure_active = False
+            self._surface_climb_samples = 0
+            self._surface_descent_samples = 0
         self._sync_navigation_hud_flight_state(
             supercruise=self.hud_flight_state == "SUPERCRUISE"
         )
@@ -109,6 +114,175 @@ class DashboardScanMixin:
         except (TypeError, ValueError, ZeroDivisionError):
             pass
         return None
+
+    @staticmethod
+    def _surface_position_distance_m(previous, current):
+        """Return great-circle distance between two Status surface fixes."""
+        try:
+            lat1, lon1, radius1 = previous
+            lat2, lon2, radius2 = current
+            lat1 = math.radians(float(lat1))
+            lat2 = math.radians(float(lat2))
+            dlat = lat2 - lat1
+            dlon = math.radians(float(lon2) - float(lon1))
+            dlon = (dlon + math.pi) % (2.0 * math.pi) - math.pi
+            hav = (
+                math.sin(dlat / 2.0) ** 2
+                + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2.0) ** 2
+            )
+            central_angle = 2.0 * math.asin(min(1.0, math.sqrt(max(0.0, hav))))
+            radius = (float(radius1) + float(radius2)) / 2.0
+            return max(0.0, radius * central_angle)
+        except (TypeError, ValueError, OverflowError):
+            return 0.0
+
+    def _surface_hold_context_valid(self):
+        """Whether live Status describes the mothership flying over a body."""
+        return bool(
+            getattr(self, "on_planet", False)
+            and getattr(self, "current_altitude_m", None) is not None
+            and str(getattr(self, "hud_flight_state", "") or "").upper() == "FLIGHT"
+            and not getattr(self, "current_docked", False)
+            and not getattr(self, "current_landed", False)
+            and not getattr(self, "current_glide_mode", False)
+            and not getattr(self, "current_in_srv", False)
+            and not getattr(self, "current_in_fighter", False)
+            and not getattr(self, "current_on_foot", False)
+            and not getattr(self, "current_in_taxi", False)
+            and not getattr(self, "current_in_multicrew", False)
+        )
+
+    def _update_surface_vertical_direction(
+            self, descent_rate, *, eligible=False, force_departure=False):
+        """Select approach/departure from sustained Status altitude motion."""
+        if force_departure:
+            self._surface_climb_samples = 0
+            self._surface_descent_samples = 0
+            self._surface_departure_active = True
+            return
+        if not eligible:
+            self._surface_climb_samples = 0
+            self._surface_descent_samples = 0
+            return
+        try:
+            descent_rate = float(descent_rate or 0.0)
+        except (TypeError, ValueError):
+            descent_rate = 0.0
+        threshold = self._SURFACE_DIRECTION_RATE_MPS
+        sample_limit = self._SURFACE_DIRECTION_SAMPLES
+        if descent_rate >= threshold:
+            self._surface_descent_samples = min(
+                sample_limit,
+                int(getattr(self, "_surface_descent_samples", 0) or 0) + 1,
+            )
+            self._surface_climb_samples = 0
+        elif descent_rate <= -threshold:
+            self._surface_climb_samples = min(
+                sample_limit,
+                int(getattr(self, "_surface_climb_samples", 0) or 0) + 1,
+            )
+            self._surface_descent_samples = 0
+        else:
+            self._surface_climb_samples = 0
+            self._surface_descent_samples = 0
+
+        if self._surface_descent_samples >= sample_limit:
+            self._surface_departure_active = False
+        elif self._surface_climb_samples >= sample_limit:
+            self._surface_departure_active = True
+
+    def _cancel_surface_hold_check(self):
+        job = getattr(self, "_surface_hold_job", None)
+        self._surface_hold_job = None
+        if job is None:
+            return
+        try:
+            self.root.after_cancel(job)
+        except Exception:
+            pass
+
+    def _schedule_surface_hold_check(self, now=None):
+        """Refresh the HUD once a quiet surface fix has remained still."""
+        self._cancel_surface_hold_check()
+        if not self._surface_hold_context_valid():
+            return
+        now = time.monotonic() if now is None else float(now)
+        last_motion = getattr(self, "_surface_last_motion_monotonic", None)
+        if last_motion is None:
+            last_motion = now
+            self._surface_last_motion_monotonic = now
+        remaining = max(
+            0.01,
+            self._SURFACE_HOLD_DWELL_SECONDS - (now - float(last_motion)),
+        )
+        try:
+            self._surface_hold_job = self.root.after(
+                max(10, int(remaining * 1000)),
+                self._activate_surface_hold_if_quiet,
+            )
+        except Exception:
+            self._surface_hold_job = None
+
+    def _activate_surface_hold_if_quiet(self):
+        self._surface_hold_job = None
+        if not self._surface_hold_context_valid():
+            return
+        now = time.monotonic()
+        last_motion = getattr(self, "_surface_last_motion_monotonic", None)
+        if last_motion is None:
+            self._surface_last_motion_monotonic = now
+            self._schedule_surface_hold_check(now)
+            return
+        if now - float(last_motion) < self._SURFACE_HOLD_DWELL_SECONDS:
+            self._schedule_surface_hold_check(now)
+            return
+        if not getattr(self, "_surface_hold_active", False):
+            self._surface_hold_active = True
+            if not getattr(self, "batch_mode", False):
+                self.update_hud()
+
+    def _observe_surface_motion(self, now=None):
+        """Resolve approach motion versus a stationary above-surface hold."""
+        now = time.monotonic() if now is None else float(now)
+        if not self._surface_hold_context_valid():
+            self._cancel_surface_hold_check()
+            self._surface_hold_active = False
+            self._surface_last_position = None
+            self._surface_last_motion_monotonic = None
+            return
+
+        body_key = (
+            getattr(self, "current_body_id", None),
+            str(getattr(self, "current_body_name", "") or "").casefold(),
+        )
+        current = (
+            body_key,
+            float(self.current_latitude),
+            float(self.current_longitude),
+            float(self.current_altitude_m),
+            float(self.current_planet_radius),
+        )
+        previous = getattr(self, "_surface_last_position", None)
+        moved = previous is None or previous[0] != body_key
+        if previous is not None and previous[0] == body_key:
+            surface_delta = self._surface_position_distance_m(
+                (previous[1], previous[2], previous[4]),
+                (current[1], current[2], current[4]),
+            )
+            altitude_delta = abs(current[3] - previous[3])
+            moved = bool(
+                surface_delta >= self._SURFACE_HOLD_POSITION_EPSILON_M
+                or altitude_delta >= self._SURFACE_HOLD_POSITION_EPSILON_M
+            )
+        if moved:
+            # Keep the last meaningful fix as the anchor so many small Status
+            # steps accumulate into real motion instead of being discarded.
+            self._surface_last_position = current
+            self._surface_last_motion_monotonic = now
+            self._surface_hold_active = False
+        elif getattr(self, "_surface_last_motion_monotonic", None) is None:
+            self._surface_last_motion_monotonic = now
+        self._schedule_surface_hold_check(now)
 
     def _apply_status_update(self, data):
         t0 = self._perf_start()
@@ -139,6 +313,7 @@ class DashboardScanMixin:
             bool(getattr(self, "current_glide_mode", False)),
             bool(getattr(self, "current_interdicted", False)),
             bool(getattr(self, "_surface_departure_active", False)),
+            bool(getattr(self, "_surface_hold_active", False)),
         )
         was_navigation_readiness = (
             bool(getattr(self, "current_fsd_mass_locked", False)),
@@ -194,6 +369,7 @@ class DashboardScanMixin:
         )
         altitude = self._to_float(data.get("Altitude"))
         altitude_now = time.monotonic()
+        instantaneous_descent_rate = 0.0
         previous_altitude = getattr(self, "current_altitude_m", None)
         previous_altitude_ts = getattr(self, "_status_altitude_observed_monotonic", None)
         if altitude is not None:
@@ -201,6 +377,7 @@ class DashboardScanMixin:
                 elapsed = altitude_now - previous_altitude_ts
                 if 0.05 <= elapsed <= 10.0:
                     instantaneous = (float(previous_altitude) - altitude) / elapsed
+                    instantaneous_descent_rate = instantaneous
                     previous_rate = float(getattr(self, "_surface_descent_mps", 0.0) or 0.0)
                     self._surface_descent_mps = (previous_rate * 0.65) + (instantaneous * 0.35)
             self.current_altitude_m = altitude
@@ -322,20 +499,13 @@ class DashboardScanMixin:
                 supercruise=in_supercruise,
             )
         # Liftoff is authoritative, but Status can reach us first or the
-        # journal watcher can briefly lag. Preserve an outbound direction when
-        # the landed flag clears, a sustained low-altitude climb reverses an
-        # approach, or Status confirms entry into supercruise. Glide is
-        # authoritative inbound evidence: Elite can change the altitude datum
-        # at its boundaries, producing a single enormous false "climb". Guard
-        # that discontinuity so it cannot latch SURFACE DEPARTURE throughout a
-        # completed approach.
+        # journal watcher can briefly lag. Outside those events, sustained
+        # altitude gain selects departure and sustained altitude loss selects
+        # approach. Glide is authoritative inbound evidence: Elite can change
+        # the altitude datum at its boundaries, so guard that discontinuity
+        # from reversing the direction on a single bad sample.
         approach_body_known = getattr(self, "current_body_id", None) is not None
-        try:
-            climb_rate = -float(
-                getattr(self, "_surface_descent_mps", 0.0) or 0.0
-            )
-        except (TypeError, ValueError):
-            climb_rate = 0.0
+        descent_rate = instantaneous_descent_rate
         entered_supercruise = bool(
             not getattr(self, "is_first_load", False)
             and not getattr(self, "_startup_restore_active", False)
@@ -360,7 +530,7 @@ class DashboardScanMixin:
             # Do not let that discontinuity leak into later stationary Status
             # samples through the smoothed vertical-rate accumulator.
             self._surface_descent_mps = 0.0
-            climb_rate = 0.0
+            descent_rate = 0.0
         glide_guard_active = surface_now < float(
             getattr(self, "_surface_glide_guard_until", 0.0) or 0.0
         )
@@ -373,26 +543,22 @@ class DashboardScanMixin:
             and not getattr(self, "current_in_taxi", False)
             and not getattr(self, "current_in_multicrew", False)
         )
-        climb_candidate = bool(
+        direction_eligible = bool(
             valid_ship_context
             and not glide_active
             and not glide_guard_active
             and bool(getattr(self, "on_planet", False))
             and str(getattr(self, "hud_flight_state", "") or "").upper() == "FLIGHT"
-            and climb_rate >= 15.0
         )
-        if climb_candidate:
-            self._surface_climb_samples = min(
-                self._SURFACE_DEPARTURE_CLIMB_SAMPLES,
-                int(getattr(self, "_surface_climb_samples", 0) or 0) + 1,
-            )
-        else:
-            self._surface_climb_samples = 0
-        if (valid_ship_context and not glide_active
-                and (was_landed or entered_supercruise
-                     or self._surface_climb_samples
-                     >= self._SURFACE_DEPARTURE_CLIMB_SAMPLES)):
-            self._surface_departure_active = True
+        self._update_surface_vertical_direction(
+            descent_rate,
+            eligible=direction_eligible,
+            force_departure=bool(
+                valid_ship_context and not glide_active
+                and (was_landed or entered_supercruise)
+            ),
+        )
+        self._observe_surface_motion(surface_now)
         if was_docked != bool(getattr(self, "current_docked", False)):
             survey = getattr(self, "survey_status_hud", None)
             if survey:
@@ -477,6 +643,7 @@ class DashboardScanMixin:
             bool(getattr(self, "current_glide_mode", False)),
             bool(getattr(self, "current_interdicted", False)),
             bool(getattr(self, "_surface_departure_active", False)),
+            bool(getattr(self, "_surface_hold_active", False)),
         )
         if fuel_percent_changed:
             self._invalidate_exploration_intelligence()

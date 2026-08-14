@@ -535,6 +535,8 @@ class TacticalHUD:
                 return "GLIDE"
             if phase == "orbital":
                 return "ORBITAL APPROACH"
+            if phase == "hold":
+                return "SURFACE HOLD"
             return "SURFACE APPROACH"
         if (fsd_state == "mass_lock" and flight_state in {"", "FLIGHT"}
                 and not any(nav_context.get(key) for key in (
@@ -577,7 +579,7 @@ class TacticalHUD:
             "TAXI", "MULTICREW",
             "ONFOOT", "MAP", "GALAXY MAP", "SYSTEM MAP", "POWER MAP", "ORRERY",
             "CODEX", "EXPLORATION", "STATION", "FSD COOLDOWN", "ORBITAL APPROACH",
-            "ORBITAL DEPARTURE",
+            "ORBITAL DEPARTURE", "SURFACE HOLD",
         ):
             return COLOR_ACCENT
         if state_text in {"MASS LOCK", "GLIDE", "SURFACE APPROACH", "SURFACE DEPARTURE"}:
@@ -630,6 +632,8 @@ class TacticalHUD:
             return "glide"
         if state == "SURFACE APPROACH":
             return "surface_approach"
+        if state == "SURFACE HOLD":
+            return "surface_hold"
         if state == "SURFACE DEPARTURE":
             return "surface_departure"
         if state == "ORBITAL DEPARTURE":
@@ -746,7 +750,7 @@ class TacticalHUD:
                         fill=color, width=1, tags=tags,
                     )
             return
-        if profile in {"orbital_approach", "glide", "surface_approach"}:
+        if profile in {"orbital_approach", "glide", "surface_approach", "surface_hold"}:
             # A horizon, descending ship reference and approach gates give the
             # three planetary phases one coherent static silhouette.
             self.canvas.create_arc(
@@ -763,7 +767,7 @@ class TacticalHUD:
                         *flat((offset, -4), (offset / 2, -1)),
                         fill=color, width=1, tags=tags,
                     )
-            elif profile == "surface_approach":
+            elif profile in {"surface_approach", "surface_hold"}:
                 self.canvas.create_line(
                     *flat((-4, 4), (4, 4)), fill=color, width=1, tags=tags,
                 )
@@ -2289,7 +2293,7 @@ class TacticalHUD:
             )
             return
 
-        if profile in {"orbital_approach", "glide", "surface_approach"}:
+        if profile in {"orbital_approach", "glide", "surface_approach", "surface_hold"}:
             # ApproachBody owns the orbital phase; Status' glide bit and live
             # altitude then deepen the same visual language. Motion stays on
             # the chassis rails so the state and altitude text remain stable.
@@ -2304,6 +2308,32 @@ class TacticalHUD:
                 descent = 0.0
             alert_color = COLOR_YELLOW if descent > 40 else color
             approach_dim = self._glow_color(alert_color, 0.68)
+
+            if profile == "surface_hold":
+                # No directional ladder while hovering: a slow, symmetric
+                # altitude bracket keeps the instrument alive without implying
+                # descent or departure.
+                breathe = abs((self._cycle_progress(phase, 76) * 2.0) - 1.0)
+                bracket = 10 + (breathe * 2)
+                for side in (-1, 1):
+                    x = marker_x + (side * bracket)
+                    self.canvas.create_line(
+                        x, y - 4, x, y + 4,
+                        fill=approach_dim, width=1, tags=tags,
+                    )
+                    self.canvas.create_line(
+                        x, y - 4, x - (side * 3), y - 4,
+                        fill=color, width=1, tags=tags,
+                    )
+                    self.canvas.create_line(
+                        x, y + 4, x - (side * 3), y + 4,
+                        fill=color, width=1, tags=tags,
+                    )
+                self.canvas.create_line(
+                    marker_x - 9, y + 5, marker_x + 9, y + 5,
+                    fill=approach_dim, width=2, tags=tags,
+                )
+                return
 
             if profile == "orbital_approach":
                 # Paired packets repeatedly converge from orbital space toward
@@ -2931,6 +2961,8 @@ class TacticalHUD:
             motion = "DESCENT" if descent > 1 else "CLIMB" if descent < -1 else "HOLD"
             if phase == "surface_departure":
                 label = "SURFACE DEPARTURE"
+            elif phase == "hold":
+                return f"SURFACE HOLD · {altitude_text}", COLOR_ACCENT
             else:
                 label = "GLIDE" if phase == "glide" else "SURFACE APPROACH"
             return f"{label} · {altitude_text} · {motion}", COLOR_YELLOW

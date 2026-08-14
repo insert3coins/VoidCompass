@@ -1017,8 +1017,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._surface_departure_active = False
         self._surface_glide_guard_until = 0.0
         self._surface_climb_samples = 0
+        self._surface_descent_samples = 0
         self._status_altitude_observed_monotonic = None
         self._surface_descent_mps = 0.0
+        self._surface_hold_active = False
+        self._surface_last_position = None
+        self._surface_last_motion_monotonic = None
+        self._surface_hold_job = None
         self.current_fsd_mass_locked = False
         self.current_fsd_charging = False
         self.current_fsd_hyperdrive_charging = False
@@ -1824,8 +1829,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._surface_departure_active = False
         self._surface_glide_guard_until = 0.0
         self._surface_climb_samples = 0
+        self._surface_descent_samples = 0
         self._status_altitude_observed_monotonic = None
         self._surface_descent_mps = 0.0
+        self._cancel_surface_hold_check()
+        self._surface_hold_active = False
+        self._surface_last_position = None
+        self._surface_last_motion_monotonic = None
         self.current_fsd_mass_locked = False
         self.current_fsd_charging = False
         self.current_fsd_hyperdrive_charging = False
@@ -4520,8 +4530,16 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             and not glide_active
             and getattr(self, "_surface_departure_active", False)
         )
+        hold_active = bool(
+            getattr(self, "on_planet", False)
+            and not glide_active
+            and getattr(self, "_surface_hold_active", False)
+            and str(getattr(self, "hud_flight_state", "") or "").upper() == "FLIGHT"
+        )
         if glide_active:
             approach_phase = "glide"
+        elif hold_active:
+            approach_phase = "hold"
         elif departure_active:
             approach_phase = (
                 "orbital_departure"
@@ -4546,8 +4564,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "phase": approach_phase,
             "body": getattr(self, "current_body_name", "") or "",
             "altitude_m": altitude,
-            "descent_mps": getattr(self, "_surface_descent_mps", 0.0),
+            "descent_mps": (
+                0.0 if hold_active else getattr(self, "_surface_descent_mps", 0.0)
+            ),
             "departing": departure_active,
+            "holding": hold_active,
         }
         ship_config = {
             "landing_gear": bool(getattr(self, "current_landing_gear_down", False)),
@@ -7718,6 +7739,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._surface_departure_active = False
             self._surface_glide_guard_until = 0.0
             self._surface_climb_samples = 0
+            self._surface_descent_samples = 0
             self.valuable_system = False
             self.valuable_bodies.clear()
             self.system_traffic = (
@@ -8500,6 +8522,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._surface_departure_active = False
             self._surface_glide_guard_until = 0.0
             self._surface_climb_samples = 0
+            self._surface_descent_samples = 0
             if not self.batch_mode:
                 self._refresh_gravity_warning(self.current_body_id, self.current_body_name)
                 self._refresh_system_info_progress()
@@ -8513,6 +8536,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._surface_departure_active = False
             self._surface_glide_guard_until = 0.0
             self._surface_climb_samples = 0
+            self._surface_descent_samples = 0
             if not self.batch_mode:
                 if self.gravity_warning_hud:
                     self.gravity_warning_hud.clear()
@@ -8573,6 +8597,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self._surface_departure_active = False
             self._surface_glide_guard_until = 0.0
             self._surface_climb_samples = 0
+            self._surface_descent_samples = 0
             player_controlled = d.get("player_controlled")
             if player_controlled is None and isinstance(raw, dict):
                 player_controlled = raw.get("PlayerControlled")
