@@ -59,6 +59,7 @@ STATE_SCENES = {
     # These states own stronger bespoke motion in the HUD renderer.  Listing
     # them here prevents the ordinary flight stream being painted underneath.
     "fsd_lock": StateScene("dedicated", 26.0, packets=0),
+    "asteroid_field": StateScene("dedicated", 54.0, packets=0, intensity=0.72),
     "fsd_charge": StateScene("dedicated", 12.0, packets=0, segments=5, intensity=0.9),
     "fsd_cooldown": StateScene("dedicated", 24.0, packets=0),
     "jump": StateScene("dedicated", 9.0, packets=0, intensity=0.9),
@@ -264,6 +265,8 @@ class NavigationInstrumentRenderer:
 
         if profile == "fsd_lock":
             self._draw_lock(model, phase, colour, tags)
+        elif profile == "asteroid_field":
+            self._draw_asteroid_field(model, phase, colour, tags)
         elif profile == "fsd_charge":
             self._draw_charge(model, phase, colour, tags)
         elif profile == "fsd_cooldown":
@@ -580,6 +583,56 @@ class NavigationInstrumentRenderer:
             center, y + 4, center - 4, y,
             fill="", outline=colour, width=1, tags=tags,
         )
+
+    def _draw_asteroid_field(self, model, phase, colour, tags):
+        """Render a sparse, deterministic ring field around the commander's ship."""
+        x1, x2, y, top, bottom = self._bounds(model)
+        span = x2 - x1
+        travel = self._cycle(phase, 54)
+        dim = self.mix_colour(colour, 0.46)
+        ship_x = x1 + (span * 0.46)
+
+        # Two parallax lanes make the rocks read as a field rather than a
+        # generic lock warning. Fixed offsets avoid random redraw shimmer.
+        rocks = (
+            (0.03, -2.4, 1.7, 0.72),
+            (0.17, 2.2, 2.4, 0.48),
+            (0.33, -1.4, 1.4, 0.61),
+            (0.49, 2.5, 1.8, 0.78),
+            (0.64, -2.3, 2.2, 0.52),
+            (0.79, 1.2, 1.3, 0.68),
+            (0.92, 2.6, 1.7, 0.56),
+        )
+        for index, (offset, lane, radius, speed) in enumerate(rocks):
+            # Give each depth lane its own full cycle. Multiplying one shared
+            # cycle by a fractional speed would visibly jump when it wrapped.
+            local = (offset - self._cycle(phase, 54.0 / speed)) % 1.0
+            x = x1 + (span * local)
+            rock_y = y + lane
+            rock_colour = colour if index in {1, 4} else dim
+            points = (
+                x - radius, rock_y,
+                x - (radius * 0.35), rock_y - radius,
+                x + (radius * 0.72), rock_y - (radius * 0.48),
+                x + radius, rock_y + (radius * 0.52),
+                x - (radius * 0.18), rock_y + radius,
+            )
+            self.canvas.create_polygon(
+                *points, fill="#010101", outline=rock_colour,
+                width=1, tags=tags,
+            )
+
+        # A gently breathing clearance gate gives the ship an avoidance cue
+        # without reusing the mass-lock brackets.
+        clearance = 7 + (self._smooth(abs((travel * 2) - 1)) * 3)
+        gate_x = ship_x + 17
+        self._line(
+            gate_x - 4, y - clearance / 2,
+            gate_x, y,
+            gate_x - 4, y + clearance / 2,
+            colour=dim, tags=tags,
+        )
+        self._ship(ship_x, y, colour, tags, scale=0.86)
 
     def _draw_charge(self, model, phase, colour, tags):
         x1, x2, y, top, bottom = self._bounds(model)

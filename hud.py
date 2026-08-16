@@ -524,6 +524,12 @@ class TacticalHUD:
             return "MAP"
         if nav_context.get("in_fss"):
             return "FSS"
+        if (fsd_state == "asteroid_field" and flight_state in {"", "FLIGHT"}
+                and not any(nav_context.get(key) for key in (
+                    "docked", "landed", "in_fighter", "in_srv", "on_foot",
+                    "in_taxi", "in_multicrew",
+                ))):
+            return "ASTEROID FIELD"
         approach = nav_context.get("surface_approach") or {}
         if approach.get("active"):
             phase = str(approach.get("phase") or "surface").casefold()
@@ -582,7 +588,9 @@ class TacticalHUD:
             "ORBITAL DEPARTURE", "SURFACE HOLD",
         ):
             return COLOR_ACCENT
-        if state_text in {"MASS LOCK", "GLIDE", "SURFACE APPROACH", "SURFACE DEPARTURE"}:
+        if state_text in {
+                "MASS LOCK", "ASTEROID FIELD", "GLIDE",
+                "SURFACE APPROACH", "SURFACE DEPARTURE"}:
             return COLOR_YELLOW
         if state_text in (
             "HYPERSPACE", "SUPERCRUISE", "JUMPING", "COMBAT",
@@ -618,6 +626,8 @@ class TacticalHUD:
             return "fsd_lock"
         if state == "MASS LOCK":
             return "fsd_lock"
+        if state == "ASTEROID FIELD":
+            return "asteroid_field"
         if state in {"FSD CHARGE", "HYPER CHARGE"}:
             return "fsd_charge"
         if state == "SCO OVERCHARGE":
@@ -690,6 +700,19 @@ class TacticalHUD:
                 self.canvas.create_line(
                     *flat((offset, -3), (offset, 3)),
                     fill=dim, width=1, tags=tags,
+                )
+            return
+        if profile == "asteroid_field":
+            for dx, dy, radius in ((-6, -2, 2), (0, 2, 2.5), (6, -1, 1.7)):
+                self.canvas.create_polygon(
+                    *flat(
+                        (dx - radius, dy),
+                        (dx - (radius * 0.35), dy - radius),
+                        (dx + (radius * 0.75), dy - (radius * 0.45)),
+                        (dx + radius, dy + (radius * 0.55)),
+                        (dx - (radius * 0.2), dy + radius),
+                    ),
+                    fill="#010101", outline=color, width=1, tags=tags,
                 )
             return
         if profile == "fsd_charge":

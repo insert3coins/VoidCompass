@@ -251,6 +251,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         "current_cargo_scoop_deployed", "current_analysis_mode",
         "current_scooping_fuel",
         "current_destination", "current_destination_details",
+        "current_local_space_body_type", "current_local_space_name",
+        "current_asteroid_field_kind",
         "neutron_boost_armed", "neutron_boost_value",
         "cargo_capacity", "current_cargo_tons",
         "current_cargo_inventory", "dest_coords", "dest_name", "route_list",
@@ -1004,6 +1006,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_legal_state = None
         self.current_destination = None
         self.current_destination_details = {}
+        self.current_local_space_body_type = ""
+        self.current_local_space_name = ""
+        self.current_asteroid_field_kind = ""
         self.current_status_flags = 0
         self.current_status_flags2 = 0
         self.current_altitude_m = None
@@ -1816,6 +1821,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.current_legal_state = None
         self.current_destination = None
         self.current_destination_details = {}
+        self.current_local_space_body_type = ""
+        self.current_local_space_name = ""
+        self.current_asteroid_field_kind = ""
         self.current_status_flags = 0
         self.current_status_flags2 = 0
         self.current_altitude_m = None
@@ -5289,6 +5297,42 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             text = text.replace("_", " ")
         return " ".join(text.split())
 
+    @staticmethod
+    def _navigation_asteroid_field_kind(body_type):
+        """Classify the normal-space destinations Frontier uses for rock fields."""
+        key = "".join(
+            char for char in str(body_type or "").casefold()
+            if char.isalnum()
+        )
+        return {
+            "planetaryring": "ring",
+            "stellarring": "belt",
+            "asteroidcluster": "cluster",
+        }.get(key, "")
+
+    def _capture_navigation_local_space(self, raw, data=None):
+        """Remember the authoritative destination of a normal-space drop."""
+        raw = raw if isinstance(raw, dict) else {}
+        data = data if isinstance(data, dict) else {}
+        body_type = (
+            raw.get("BodyType") or data.get("BodyType")
+            or data.get("body_type") or ""
+        )
+        body_name = (
+            raw.get("Body") or data.get("Body")
+            or data.get("body") or data.get("body_name") or ""
+        )
+        self.current_local_space_body_type = str(body_type or "").strip()
+        self.current_local_space_name = str(body_name or "").strip()
+        self.current_asteroid_field_kind = self._navigation_asteroid_field_kind(
+            self.current_local_space_body_type
+        )
+
+    def _clear_navigation_local_space(self):
+        self.current_local_space_body_type = ""
+        self.current_local_space_name = ""
+        self.current_asteroid_field_kind = ""
+
     def _navigation_fsd_readiness_context(self):
         phase = str(getattr(self, "_navigation_jump_phase", "") or "")
         jumping = bool(getattr(self, "current_fsd_jumping", False))
@@ -5305,6 +5349,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         cooldown = bool(getattr(self, "current_fsd_cooldown", False))
         mass_locked = bool(getattr(self, "current_fsd_mass_locked", False))
+        asteroid_kind = str(
+            getattr(self, "current_asteroid_field_kind", "") or ""
+        )
         if phase == "carrier_transit":
             state, label, tone = "carrier_transit", "CARRIER TRANSIT", "orange"
         elif phase == "carrier_arrival":
@@ -5327,6 +5374,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             tone = "orange"
         elif cooldown:
             state, label, tone = "cooldown", "FSD COOLDOWN", "accent"
+        elif asteroid_kind:
+            # The Status mass-lock bit remains useful FSD information, but a
+            # PlanetaryRing/StellarRing/AsteroidCluster drop is the more meaningful live
+            # navigation state for the centre instrument.
+            state, label, tone = "asteroid_field", "ASTEROID FIELD", "yellow"
         elif mass_locked:
             state, label, tone = "mass_lock", "MASS LOCK", "yellow"
         else:
@@ -5343,6 +5395,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "high_wake": high_wake,
             "phase": phase,
             "target": str(getattr(self, "_navigation_jump_target", "") or ""),
+            "asteroid_kind": asteroid_kind,
+            "local_space_type": str(
+                getattr(self, "current_local_space_body_type", "") or ""
+            ),
+            "local_space_name": str(
+                getattr(self, "current_local_space_name", "") or ""
+            ),
         }
 
     def _navigation_local_target_context(self, next_system=None):
@@ -7627,11 +7686,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             # cannot retain the outgoing commander's HUD label or station.
             if ev == "Location":
                 self._apply_location_navigation_state(raw, d)
+                self._capture_navigation_local_space(raw, d)
                 if self.station_info_hud and not self.batch_mode and not startup_replay:
                     self.station_info_hud.reconcile(self, present=True)
 
             # Reset FSS state on jump completion
             if is_jump:
+                self._clear_navigation_local_space()
                 self.in_fss = False
                 self.fss_summary_active = False
                 if ev == "CarrierJump":
@@ -7882,6 +7943,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_in_multicrew = False
             self.current_in_fighter = False
             self.current_in_srv = False
+            self._clear_navigation_local_space()
             self.hud_flight_state = "DOCKED"
             self.current_station_name = station
             self.current_station_type = stype or None
@@ -7951,6 +8013,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_in_multicrew = in_multicrew
             self.current_in_fighter = False
             self.current_in_srv = False
+            self._clear_navigation_local_space()
             self._sync_navigation_hud_flight_state(supercruise=True)
             # When a body is still tracked, entering supercruise is an
             # outbound orbital transition. Keep the Liftoff direction latched
@@ -7966,6 +8029,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.current_in_fighter = False
             self.current_in_srv = False
             self.current_on_foot = False
+            self._capture_navigation_local_space(raw, d)
             self._sync_navigation_hud_flight_state(supercruise=False)
             self.update_hud()
 
