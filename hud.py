@@ -2944,12 +2944,6 @@ class TacticalHUD:
             except (TypeError, ValueError):
                 boost_text = ""
             return f"NEUTRON BOOST ARMED{boost_text}", COLOR_ACCENT
-        if context.get("fuel_scooping"):
-            try:
-                fuel_text = f" · {float(context.get('fuel_percent')):.0f}%"
-            except (TypeError, ValueError):
-                fuel_text = ""
-            return f"FUEL SCOOP ACTIVE{fuel_text}", COLOR_GREEN
         next_star = context.get("next_star") or {}
         star_class = str(next_star.get("star_class") or "").upper()
         star_label = str(next_star.get("star_label") or star_class or "STAR").upper()
