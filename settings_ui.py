@@ -251,6 +251,12 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
     # Variables
     overlay_hotkeys_var = tk.BooleanVar(value=config.get("overlay_hotkeys_enabled", True))
     reduced_motion_var = tk.BooleanVar(value=config.get("reduced_motion_enabled", False))
+    motion_intensity_value = str(
+        config.get("hud_animation_intensity", "Standard") or "Standard"
+    ).title()
+    if motion_intensity_value not in {"Calm", "Standard", "Energetic"}:
+        motion_intensity_value = "Standard"
+    motion_intensity_var = tk.StringVar(value=motion_intensity_value)
     ui_scale_var = tk.StringVar(value=str(config.get("ui_scale_percent", 100)))
     ss_var = tk.BooleanVar(value=config.get("screenshots_enabled", False))
     edsm_upload_var = tk.BooleanVar(value=config.get("edsm_upload_enabled", False))
@@ -309,6 +315,10 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
 
     core_accessibility = section(core_page, "Accessibility")
     option_row(core_accessibility, "Application scale", ui_scale_var, ("90", "100", "110", "125", "140"))
+    option_row(
+        core_accessibility, "Navigation animation", motion_intensity_var,
+        ("Calm", "Standard", "Energetic"),
+    )
     toggle_row(core_accessibility, "Reduced motion and gentler activity pulses", reduced_motion_var)
 
     if callable(overlay_layout_callback):
@@ -1003,6 +1013,7 @@ def open_settings(root, config, on_save_callback, carrier_tracker=None, embedded
             "journal_path": j_e.get().strip(),
             "overlay_hotkeys_enabled": overlay_hotkeys_var.get(),
             "reduced_motion_enabled": reduced_motion_var.get(),
+            "hud_animation_intensity": motion_intensity_var.get(),
             "ui_scale_percent": int(ui_scale_var.get()),
             "ui_theme_name": theme_var.get(),
             "ui_custom_themes": dict(custom_themes),
