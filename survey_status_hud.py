@@ -873,12 +873,24 @@ class SurveyStatusHUD:
         notable_rows = list(model.get("notable_rows") or [])
 
         if is_body:
+            body = model.get("body") or {}
+            body_bio_count = _safe_int(body.get("bio_count"))
+            body_bio_done = _safe_int(body.get("organic_complete_count"))
+            body_bio_complete = bool(
+                body_bio_count and body_bio_done >= body_bio_count and not sampling
+            )
             detail_rows = [
                 row for row in rows
                 if not self._sampling_matches_detail(sampling, row)
             ]
-            detail_groups = self._compact_detail_groups(detail_rows)
-            body = model.get("body") or {}
+            # Once this surface's biology is finished, its BIO N/N header and
+            # base-value footer are the useful cockpit receipt. The full
+            # species manifest remains in Explore & Survey rather than keeping
+            # this persistent overlay tall.
+            detail_groups = (
+                [] if body_bio_complete
+                else self._compact_detail_groups(detail_rows)
+            )
             geo_count = _safe_int(body.get("geo_count"))
             body_notable = model.get("notable")
             content_h = (
@@ -902,7 +914,10 @@ class SurveyStatusHUD:
             row_layout = []
             content_h = 0
             for row in ordered_rows:
-                groups = self._compact_detail_groups(row.get("bio_details") or [])
+                groups = (
+                    [] if row.get("bio_complete")
+                    else self._compact_detail_groups(row.get("bio_details") or [])
+                )
                 row_h = 20 + len(groups) * 17
                 if _safe_int(row.get("geo_count")):
                     row_h += 15
@@ -910,6 +925,8 @@ class SurveyStatusHUD:
                     row_h += 14
                 row_layout.append((row, groups, row_h))
                 content_h += row_h
+            if completed_rows:
+                content_h += 16
             notable_h = (18 + len(notable_rows) * 30) if notable_rows else 0
             height = max(92, 68 + content_h + notable_h + 25)
 
@@ -933,7 +950,11 @@ class SurveyStatusHUD:
             geo_count = _safe_int(body.get("geo_count"))
             body_label = model.get("body_display") or body.get("name") or "SURFACE"
             self._text(16, 42, _truncate(body_label, 22), palette["orange"], ("Courier", 8, "bold"))
-            summary = f"BIO {bio_done}/{bio_count}"
+            bio_complete = bool(bio_count and bio_done >= bio_count and not sampling)
+            summary = (
+                f"BIO {bio_done}/{bio_count} ✓"
+                if bio_complete else f"BIO {bio_done}/{bio_count}"
+            )
             if geo_count:
                 summary += f" · GEO {geo_count}"
             self._text(WIDTH - 16, 42, summary, palette["text"], ("Courier", 8, "bold"), "e")
@@ -954,8 +975,14 @@ class SurveyStatusHUD:
                 self._text(WIDTH - 16, y, notable["value_line"], notable["value_color"], ("Courier", 7, "bold"), "e")
             low, high = model.get("min_value"), model.get("max_value")
             value = self._range_text(low, high) or "-"
-            self._text(16, height - 14, "ESTIMATED BIO BASE", palette["dim"], ("Courier", 7, "bold"))
-            self._text(WIDTH - 16, height - 14, value, palette["orange"], ("Courier", 8, "bold"), "e")
+            exact_complete = bool(bio_complete and high and low == high)
+            value_label = "BIO BASE" if exact_complete else "ESTIMATED BIO BASE"
+            self._text(16, height - 14, value_label, palette["dim"], ("Courier", 7, "bold"))
+            self._text(
+                WIDTH - 16, height - 14, value,
+                palette["green"] if exact_complete else palette["orange"],
+                ("Courier", 8, "bold"), "e",
+            )
             return
 
         active_rows = [
@@ -983,13 +1010,27 @@ class SurveyStatusHUD:
         ]
         widest_name = max((len(name) for name in short_names), default=3)
         node_label_x = min(140, 24 + widest_name * 8)
+        completed_start = len(active_rows) + len(neutral_rows)
         for row_index, (row, groups, _row_h) in enumerate(row_layout):
+            if completed_rows and row_index == completed_start:
+                self._text(
+                    16, y, "COMPLETED BIOLOGY",
+                    palette["dim"], ("Courier", 7, "bold"),
+                )
+                self._text(
+                    WIDTH - 16, y,
+                    f"{len(completed_rows)} SURFACE{'S' if len(completed_rows) != 1 else ''}",
+                    palette["green"], ("Courier", 7, "bold"), "e",
+                )
+                y += 16
             bio_count = _safe_int(row.get("bio_count"))
             geo_count = _safe_int(row.get("geo_count"))
             complete = _safe_int(row.get("complete"))
             completed = bool(row.get("bio_complete"))
             has_signals = bool(bio_count or geo_count)
-            row_color = palette["muted"] if completed or not has_signals else palette["orange"]
+            row_color = palette["green"] if completed else (
+                palette["muted"] if not has_signals else palette["orange"]
+            )
             prefix = "✓ " if completed else ""
             self._text(
                 16, y, prefix + short_names[row_index],
@@ -1002,6 +1043,8 @@ class SurveyStatusHUD:
                     row.get("bio_details"), complete,
                 )
             value = self._range_text(row.get("min_value"), row.get("max_value"))
+            if completed and value:
+                value = f"BASE {value}"
             if not value and row.get("needs_dss"):
                 value = "DSS REQUIRED"
             elif not value and not has_signals:
