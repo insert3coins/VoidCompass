@@ -57,12 +57,19 @@ class TacticalHUD:
         self.force_topmost()
 
         self._nav_marker_phase = 0
+        self._nav_visual_time = 0.0
+        self._nav_frame_elapsed_s = 0.0
+        self._nav_state_phase_origin = 0.0
         self._nav_marker_model = None
         self._nav_state_identity = None
         self._nav_state_color = None
         self._nav_state_transition = None
         self._nav_event_sequence = -1
         self._nav_event_motion = None
+        self._nav_dwell_model = None
+        self._nav_dwell_last_text = None
+        self._survey_rail_model = None
+        self._survey_rail_state = None
         self._route_track_model = None
         self._nav_fuel_model = None
         self._crt_phase = 0
@@ -123,16 +130,27 @@ class TacticalHUD:
 
     def animate_ui(self):
         now = time.monotonic()
-        elapsed = max(0.0, min(0.5, now - self._nav_phase_last_ts))
+        elapsed = max(0.0, now - self._nav_phase_last_ts)
         self._nav_phase_last_ts = now
-        # One phase unit remains the old 100 ms animation step. More frequent
-        # paints interpolate between those points while delayed Tk callbacks
-        # catch up to real time instead of slowing the instrument down.
-        self._nav_marker_phase += elapsed / 0.1
+        # Tk can occasionally be held for hundreds of milliseconds by a busy
+        # desktop/game frame or another UI redraw. Discard that visual backlog
+        # instead of teleporting every animation forward to catch up. Normal
+        # 30 FPS callbacks retain their measured delta; a delayed callback gets
+        # one bounded motion step and resumes smoothly on the following frame.
+        max_visual_step = max(
+            0.040, min(0.066, (self._anim_interval_ms / 1000.0) * 1.5),
+        )
+        visual_elapsed = min(elapsed, max_visual_step)
+        self._nav_frame_elapsed_s = visual_elapsed
+        self._nav_visual_time += visual_elapsed
+        # One phase unit remains the original 100 ms animation step.
+        self._nav_marker_phase += visual_elapsed / 0.1
         try:
             self._draw_navigation_marker_animation()
             self._draw_route_track_animation()
             self._draw_fuel_scoop_animation()
+            self._draw_survey_rail_animation()
+            self._draw_navigation_dwell_clock()
             if now >= self._next_crt_frame_ts:
                 self._draw_crt_animation()
                 self._next_crt_frame_ts = now + 0.1
@@ -333,7 +351,7 @@ class TacticalHUD:
             overlay_chrome.draw_crt_noise(self.canvas, self.width, self.base_height, intensity)
 
     def _draw_region_label(self, nav_context, x, y, max_width):
-        """Draw the Codex region between the CURRENT SYSTEM and STATE labels.
+        """Draw the Codex region between CURRENT SYSTEM and the dwell clock.
 
         Shown in the label row's own dim styling so it reads as context, and
         lifted to the accent colour for a short spell after crossing into a new
@@ -352,6 +370,51 @@ class TacticalHUD:
             x, y, text,
             COLOR_ACCENT if crossed else "#7d8891",
             size=9, min_size=9, max_width=max(60, max_width), anchor="center",
+        )
+
+    @staticmethod
+    def _format_system_dwell(seconds):
+        try:
+            seconds = max(0, int(float(seconds)))
+        except (TypeError, ValueError):
+            return "--:--"
+        hours, remainder = divmod(seconds, 3600)
+        minutes, secs = divmod(remainder, 60)
+        if hours:
+            return f"{hours}:{minutes:02d}:{secs:02d}"
+        return f"{minutes:02d}:{secs:02d}"
+
+    def _set_navigation_dwell_clock(self, x, y, nav_context):
+        epoch = (nav_context or {}).get("system_arrival_epoch")
+        try:
+            epoch = float(epoch)
+        except (TypeError, ValueError):
+            epoch = None
+        self._nav_dwell_model = {
+            "x": float(x), "y": float(y), "epoch": epoch,
+        } if epoch is not None else None
+        # A full HUD redraw removed the previous Canvas item even if its text
+        # has not ticked over yet.
+        self._nav_dwell_last_text = None
+        self._draw_navigation_dwell_clock()
+
+    def _draw_navigation_dwell_clock(self):
+        """Update the system-residence clock once per second, without a HUD redraw."""
+        model = self._nav_dwell_model
+        if not isinstance(model, dict):
+            return
+        try:
+            elapsed = max(0.0, time.time() - float(model["epoch"]))
+        except (KeyError, TypeError, ValueError):
+            return
+        text = f"SYSTEM TIME {self._format_system_dwell(elapsed)}"
+        if text == self._nav_dwell_last_text:
+            return
+        self._nav_dwell_last_text = text
+        self.canvas.delete("nav_dwell_text")
+        self.draw_text(
+            model["x"], model["y"], text=text, fill="#7d8891",
+            font=("Courier", 9, "bold"), anchor="e", tags="nav_dwell_text",
         )
 
     def _draw_section_rule(self, x1, x2, y, accent=None):
@@ -722,8 +785,15 @@ class TacticalHUD:
         # Seat the native label on the instrument centreline so the state sigil
         # and live motion response visually lead into it from either side.
         label_y = scene_y
-        group_left = center_x - (label_width / 2)
-        group_right = center_x + (label_width / 2)
+        # Keep one stable centre aperture across normal state labels. Without
+        # this floor, changing from a short label such as FSS to a longer one
+        # physically snapped both animated wings sideways between frames.
+        aperture_width = max(
+            label_width,
+            font.measure("INTERDICTION EVADED") + 4,
+        )
+        group_left = center_x - (aperture_width / 2)
+        group_right = center_x + (aperture_width / 2)
         profile = self._navigation_motion_profile(label)
 
         gravity_value = None
@@ -766,8 +836,12 @@ class TacticalHUD:
         self._nav_marker_model = model
 
         reduced_motion = self.config.get("reduced_motion_enabled", False)
+        state_phase = max(
+            0.0,
+            self._nav_marker_phase - self._nav_state_phase_origin,
+        )
         self._nav_state_indicator.draw_state(
-            model, 0.0 if reduced_motion else self._nav_marker_phase,
+            model, 0.0 if reduced_motion else state_phase,
             tags="nav_state_static" if reduced_motion else "nav_state_core",
             motion=not reduced_motion,
         )
@@ -790,8 +864,14 @@ class TacticalHUD:
         previous_color = getattr(self, "_nav_state_color", None) or color
         self._nav_state_identity = identity
         self._nav_state_color = color
-        if previous is None or previous == identity:
+        if previous is None:
+            self._nav_state_phase_origin = self._nav_marker_phase
             return
+        if previous == identity:
+            return
+        # Every state begins at its deliberate animation seam rather than at
+        # an arbitrary point inherited from the previous global phase.
+        self._nav_state_phase_origin = self._nav_marker_phase
         if self.config.get("reduced_motion_enabled", False):
             self._nav_state_transition = None
             return
@@ -801,6 +881,7 @@ class TacticalHUD:
             "to_profile": identity[1],
             "to_color": color,
             "started": time.monotonic(),
+            "visual_started": self._nav_visual_time,
             "duration": 0.68,
         }
 
@@ -842,6 +923,16 @@ class TacticalHUD:
         motion["duration"] = duration
         motion["received"] = now
         motion["started"] = current["started"] if same_burst else observed
+        if same_burst:
+            motion["visual_started"] = current.get(
+                "visual_started", self._nav_visual_time,
+            )
+        else:
+            # If this journal pulse also changed the sustained state, let the
+            # morph establish itself before the event response joins it.
+            transition = getattr(self, "_nav_state_transition", None)
+            delay = 0.16 if isinstance(transition, dict) else 0.0
+            motion["visual_started"] = self._nav_visual_time + delay
         self._nav_event_motion = motion
 
     @staticmethod
@@ -893,14 +984,18 @@ class TacticalHUD:
         except Exception:
             return
 
-        now = time.monotonic()
+        visual_now = self._nav_visual_time
         transition_progress = None
         transition = getattr(self, "_nav_state_transition", None)
         if isinstance(transition, dict):
             try:
                 duration = max(0.3, float(transition.get("duration", 0.68)))
+                visual_started = transition.get("visual_started")
+                if visual_started is None:
+                    visual_started = visual_now
+                    transition["visual_started"] = visual_started
                 transition_progress = (
-                    now - float(transition.get("started"))
+                    visual_now - float(visual_started)
                 ) / duration
             except (TypeError, ValueError, ZeroDivisionError):
                 self._nav_state_transition = None
@@ -918,8 +1013,12 @@ class TacticalHUD:
         if isinstance(event, dict):
             try:
                 duration = max(0.4, float(event.get("duration", 1.3)))
+                visual_started = event.get("visual_started")
+                if visual_started is None:
+                    visual_started = visual_now
+                    event["visual_started"] = visual_started
                 event_progress = (
-                    now - float(event.get("started"))
+                    visual_now - float(visual_started)
                 ) / duration
             except (TypeError, ValueError, ZeroDivisionError):
                 self._nav_event_motion = None
@@ -958,8 +1057,12 @@ class TacticalHUD:
         # Sustained state, transitions, and event responses have separate
         # owners so an old fallback scene cannot leak into the live indicator.
         palette = self._navigation_event_palette()
+        state_phase = max(
+            0.0,
+            self._nav_marker_phase - self._nav_state_phase_origin,
+        )
         self._nav_state_indicator.draw_state(
-            model, self._nav_marker_phase, tags="nav_state_core",
+            model, state_phase, tags="nav_state_core",
         )
         try:
             self.canvas.tag_lower("nav_state_core", "nav_state_static")
@@ -1113,6 +1216,17 @@ class TacticalHUD:
             else:
                 label = "GLIDE" if phase == "glide" else "SURFACE APPROACH"
             return f"{label} · {altitude_text} · {motion}", COLOR_YELLOW
+        local_target = context.get("local_target") or {}
+        target_name = str(local_target.get("name") or "").strip()
+        if target_name:
+            target_detail = ""
+            if local_target.get("is_current_body"):
+                try:
+                    gravity = context.get("gravity_g")
+                    target_detail = f" · {float(gravity):.2f} G" if gravity is not None else ""
+                except (TypeError, ValueError):
+                    target_detail = ""
+            return f"LOCAL TARGET · {target_name}{target_detail}", COLOR_ACCENT
         body = str(context.get("body") or "").strip()
         if body:
             gravity = context.get("gravity_g")
@@ -1132,9 +1246,20 @@ class TacticalHUD:
             scoop_text = "SCOOPABLE" if scoop is True else "UNSCOOPABLE" if scoop is False else "CLASS UNKNOWN"
             dry = int(next_star.get("consecutive_unscoopable") or 0)
             dry_text = f" · DRY {dry}" if dry >= 2 else ""
-            return f"NEXT STAR · {star_label} · {scoop_text}{dry_text}", (
+            vector = context.get("galactic_vector") or {}
+            vector_parts = [
+                str(vector.get("direction") or "").strip(),
+                str(vector.get("plane") or "").strip(),
+            ]
+            vector_text = " · ".join(part for part in vector_parts if part)
+            prefix = f"{vector_text} · " if vector_text else ""
+            return f"{prefix}NEXT {star_label} · {scoop_text}{dry_text}", (
                 COLOR_YELLOW if scoop is False else COLOR_ACCENT
             )
+        vector = context.get("galactic_vector") or {}
+        vector_label = str(vector.get("label") or "").strip()
+        if vector_label:
+            return f"GALACTIC VECTOR · {vector_label}", COLOR_ACCENT
         if attention_text:
             return attention_text, COLOR_ORANGE if attention_state == "alert" else COLOR_YELLOW
         return "", "#7d8891"
@@ -1233,28 +1358,164 @@ class TacticalHUD:
             right = ""
         return left, center, right
 
-    def _draw_progress_track(self, x1, x2, top_y, pct, fill):
+    @staticmethod
+    def _survey_rail_presentation(scanned, total, pct, nav_context):
+        context = nav_context or {}
+        source = str(context.get("scan_progress_source") or "bodies").casefold()
+        try:
+            scanned = max(0, int(scanned or 0))
+            total = max(0, int(total or 0))
+        except (TypeError, ValueError):
+            scanned, total = 0, 0
         pct = max(0.0, min(1.0, float(pct or 0.0)))
-        bottom_y = top_y + 8
-        self.canvas.create_rectangle(
-            x1, top_y, x2, bottom_y,
-            fill="#061016", outline="#26313a", width=1,
-        )
-        for fraction in (0.25, 0.5, 0.75):
-            tick_x = x1 + ((x2 - x1) * fraction)
-            self.canvas.create_line(tick_x, top_y + 2, tick_x, bottom_y - 1,
-                                    fill="#17242d", width=1)
-        if pct > 0:
-            end_x = x1 + ((x2 - x1) * pct)
-            glow = self._glow_color(fill, 0.34)
-            self.canvas.create_rectangle(
-                x1 + 1, top_y + 1, end_x, bottom_y - 1,
-                fill=glow, outline="",
+        complete = bool(source != "unknown" and pct >= 0.999 and total > 0)
+        # ``scan_progress_source == fss`` may remain authoritative after the
+        # commander closes the scanner. Only the live UI state should keep the
+        # moving scanner and LIVE FSS label active.
+        live = bool(context.get("in_fss")) and not complete
+        try:
+            dss = max(0, int(context.get("dss_complete", 0) or 0))
+        except (TypeError, ValueError):
+            dss = 0
+        remaining = max(0, total - scanned) if total > 0 and not complete else 0
+
+        if source == "unknown":
+            label, tone, state = "COUNT UNKNOWN", "#7d8891", "unknown"
+        elif complete:
+            label, tone, state = "COMPLETE", COLOR_GREEN, "complete"
+        elif live:
+            label, tone, state = "LIVE FSS", COLOR_ORANGE, "live"
+        else:
+            label, tone, state = "LOCAL RECORD", COLOR_ACCENT, "local"
+        if remaining:
+            label += f" · {remaining} REMAINS"
+        elif dss:
+            label += f" · DSS {dss}"
+        return {
+            "label": label,
+            "tone": tone,
+            "state": state,
+            "complete": complete,
+            "live": live,
+            "scanned": scanned,
+            "total": total,
+            "pct": pct,
+        }
+
+    def _draw_discovery_rail(self, x1, x2, y, presentation, system_name):
+        """Draw a segmented, evidence-aware FSS discovery instrument."""
+        pct = float(presentation.get("pct", 0.0) or 0.0)
+        tone = presentation.get("tone") or COLOR_ACCENT
+        state = str(presentation.get("state") or "local")
+        dim = self._glow_color(tone, 0.28 if state != "unknown" else 0.20)
+        span = max(1.0, x2 - x1)
+        segment_count = 12
+        gap = 3.0
+        segment_width = max(2.0, (span - gap * (segment_count - 1)) / segment_count)
+        completion = pct * segment_count
+
+        self.canvas.create_line(x1, y, x2, y, fill="#17242d", width=1)
+        for index in range(segment_count):
+            start = x1 + index * (segment_width + gap)
+            end = min(x2, start + segment_width)
+            self.canvas.create_line(start, y, end, y, fill=dim, width=3)
+            lit = max(0.0, min(1.0, completion - index))
+            if lit > 0.0:
+                self.canvas.create_line(
+                    start, y, start + (end - start) * lit, y,
+                    fill=tone, width=3,
+                )
+
+        marker_x = x1 + span * pct
+        if 0.0 < pct < 1.0 and state != "unknown":
+            self.canvas.create_line(
+                marker_x, y - 5, marker_x, y + 5,
+                fill=tone, width=1,
             )
-            self.canvas.create_line(x1 + 1, top_y + 3, end_x, top_y + 3,
-                                    fill=fill, width=2)
-            self.canvas.create_line(end_x, top_y - 1, end_x, bottom_y + 1,
-                                    fill=fill, width=2)
+
+        previous = self._survey_rail_state or {}
+        old_model = self._survey_rail_model or {}
+        same_system = bool(
+            system_name and previous.get("system") == system_name
+        )
+        discovery_started = old_model.get("discovery_started") if same_system else None
+        completion_started = old_model.get("completion_started") if same_system else None
+        if same_system and presentation["scanned"] > int(previous.get("scanned", 0) or 0):
+            discovery_started = self._nav_visual_time
+        if (same_system and presentation.get("complete")
+                and not previous.get("complete")):
+            completion_started = self._nav_visual_time
+        self._survey_rail_state = {
+            "system": system_name,
+            "scanned": presentation["scanned"],
+            "total": presentation["total"],
+            "complete": bool(presentation.get("complete")),
+        }
+        self._survey_rail_model = {
+            "x1": float(x1), "x2": float(x2), "y": float(y),
+            "marker_x": marker_x, "tone": tone,
+            "live": bool(presentation.get("live")),
+            "complete": bool(presentation.get("complete")),
+            "discovery_started": discovery_started,
+            "completion_started": completion_started,
+        }
+
+    def _draw_survey_rail_animation(self):
+        self.canvas.delete("nav_survey_motion")
+        model = self._survey_rail_model
+        if (not isinstance(model, dict)
+                or self.config.get("reduced_motion_enabled", False)):
+            return
+        try:
+            if not self.win.winfo_viewable():
+                return
+        except Exception:
+            return
+        x1, x2, y = model["x1"], model["x2"], model["y"]
+        marker_x = model.get("marker_x", x1)
+        tone = model.get("tone") or COLOR_ACCENT
+
+        # The active scanner travels only through the unresolved portion.
+        if model.get("live") and x2 - marker_x > 5:
+            local = self._cycle_progress(self._nav_marker_phase, 18)
+            x = marker_x + 2 + (x2 - marker_x - 2) * local
+            self._draw_contrast_motion_tail(
+                max(marker_x + 1, x - 8), x, y,
+                self._glow_color(tone, 0.78), width=1,
+                tags="nav_survey_motion",
+            )
+            self._draw_contrast_motion_dot(
+                x, y, tone, radius=1, tags="nav_survey_motion",
+            )
+
+        discovery_started = model.get("discovery_started")
+        if discovery_started is not None:
+            elapsed = self._nav_visual_time - float(discovery_started)
+            if 0.0 <= elapsed < 0.72:
+                wave = math.sin((elapsed / 0.72) * math.pi)
+                radius = 3 + wave * 5
+                self.canvas.create_oval(
+                    marker_x - radius, y - radius,
+                    marker_x + radius, y + radius,
+                    fill="", outline=tone, width=2 if wave > 0.55 else 1,
+                    tags="nav_survey_motion",
+                )
+            elif elapsed >= 0.72:
+                model["discovery_started"] = None
+
+        completion_started = model.get("completion_started")
+        if completion_started is not None:
+            elapsed = self._nav_visual_time - float(completion_started)
+            if 0.0 <= elapsed < 0.82:
+                local = min(1.0, elapsed / 0.82)
+                eased = local * local * (3.0 - 2.0 * local)
+                x = x1 + (x2 - x1) * eased
+                self._draw_contrast_motion_tail(
+                    max(x1, x - 18), x, y, COLOR_GREEN,
+                    width=2, tags="nav_survey_motion",
+                )
+            elif elapsed >= 0.82:
+                model["completion_started"] = None
 
     def _draw_route_track(self, x1, x2, y, route, dot_radius=4):
         """Draw the original distance-proportional upcoming-hop pip strip."""
@@ -1380,7 +1641,13 @@ class TacticalHUD:
             return
         try:
             duration = max(0.4, float(event.get("duration", 1.8)))
-            progress = (time.monotonic() - float(event.get("started"))) / duration
+            visual_started = event.get("visual_started")
+            if visual_started is None:
+                visual_started = self._nav_visual_time
+                event["visual_started"] = visual_started
+            progress = (
+                self._nav_visual_time - float(visual_started)
+            ) / duration
         except (TypeError, ValueError, ZeroDivisionError):
             return
         if progress < 0.0 or progress >= 1.0:
@@ -1532,7 +1799,10 @@ class TacticalHUD:
         state_text = self._state_text(nav_context)
         state_color = self._state_color(state_text)
         pct, scan_progress_text = self._scan_progress_state(scanned, total, nav_context)
-        scan_color = COLOR_GREEN if pct >= 1.0 and total > 0 else COLOR_ACCENT
+        survey_rail = self._survey_rail_presentation(
+            scanned, total, pct, nav_context,
+        )
+        scan_color = survey_rail["tone"]
         route = self._route_presentation(nav_context, route_waypoint, route_counts, game_r_pos, r_pos)
         route_header, next_distance, route_distance = self._classic_route_header_parts(
             route, nav_context, route_waypoint=bool(route_waypoint),
@@ -1566,7 +1836,8 @@ class TacticalHUD:
         self._draw_locator_rail(17, 55, 78)
         self.draw_text(27, 55, text="CURRENT SYSTEM", fill="#85939d",
                        font=("Courier", 10, "bold"), anchor="w")
-        self._draw_region_label(nav_context, 325, 55, max_width=270)
+        self._draw_region_label(nav_context, 241, 55, max_width=217)
+        self._set_navigation_dwell_clock(w - 27, 55, nav_context)
         self.draw_fitted_text(
             27, 74, str(current_display).upper(), COLOR_TEXT,
             size=14, min_size=11, max_width=w - 43, anchor="w",
@@ -1599,9 +1870,17 @@ class TacticalHUD:
         # Original scan block, retaining the newer accurate survey state.
         self.draw_text(16, 165, text="SYSTEM SURVEY", fill="#85939d",
                        font=("Courier", 10, "bold"), anchor="w")
-        self.draw_text(w - 16, 165, text=scan_progress_text, fill=scan_color,
-                       font=("Courier", 12, "bold"), anchor="e")
-        self._draw_progress_track(16, w - 16, 177, pct, scan_color)
+        self.draw_fitted_text(
+            135, 165, survey_rail["label"], survey_rail["tone"],
+            size=9, min_size=9, max_width=max(80, w - 290), anchor="w",
+        )
+        self.draw_fitted_text(
+            w - 16, 165, scan_progress_text, scan_color,
+            size=11, min_size=9, max_width=132, anchor="e",
+        )
+        self._draw_discovery_rail(
+            16, w - 16, 179, survey_rail, current_display,
+        )
         self._draw_section_rule(16, w - 16, 192)
 
         self._draw_inline_metrics(16, w - 16, 207, survey_metrics, value_size=12)
@@ -1675,7 +1954,10 @@ class TacticalHUD:
             route, nav_context, route_waypoint=bool(route_waypoint),
         )
         pct, scan_progress_text = self._scan_progress_state(scanned, total, nav_context)
-        scan_color = COLOR_GREEN if pct >= 1.0 and total > 0 else COLOR_ACCENT
+        survey_rail = self._survey_rail_presentation(
+            scanned, total, pct, nav_context,
+        )
+        scan_color = survey_rail["tone"]
         survey_metrics = self._survey_metrics(nav_context)
         traffic_text = self._traffic_summary(system_traffic)
         attention_text, attention_state = self._attention_summary(nav_context)
@@ -1705,7 +1987,8 @@ class TacticalHUD:
         self._draw_locator_rail(21, 52, 76)
         self.draw_text(32, 52, text="CURRENT SYSTEM", fill="#85939d",
                        font=("Courier", 10, "bold"), anchor="w")
-        self._draw_region_label(nav_context, 445, 52, max_width=270)
+        self._draw_region_label(nav_context, 350, 52, max_width=230)
+        self._set_navigation_dwell_clock(w - 32, 52, nav_context)
         self.draw_fitted_text(32, 71, str(current_display).upper(), COLOR_TEXT,
                               size=16, min_size=12, max_width=w - 54, anchor="w")
         self._draw_section_rule(20, w - 20, 84)
@@ -1752,9 +2035,17 @@ class TacticalHUD:
         # Original scan-progress block, backed by the newer authoritative state.
         self.draw_text(20, 212, text="SYSTEM SURVEY", fill="#85939d",
                        font=("Courier", 10, "bold"), anchor="w")
-        self.draw_text(w - 20, 212, text=scan_progress_text, fill=scan_color,
-                       font=("Courier", 12, "bold"), anchor="e")
-        self._draw_progress_track(20, w - 20, 224, pct, scan_color)
+        self.draw_fitted_text(
+            148, 212, survey_rail["label"], survey_rail["tone"],
+            size=9, min_size=9, max_width=max(110, w - 322), anchor="w",
+        )
+        self.draw_fitted_text(
+            w - 20, 212, scan_progress_text, scan_color,
+            size=11, min_size=9, max_width=145, anchor="e",
+        )
+        self._draw_discovery_rail(
+            20, w - 20, 226, survey_rail, current_display,
+        )
         self._draw_section_rule(20, w - 20, 241)
 
         # Context reads as a quiet live status rail rather than another boxed widget.
