@@ -823,6 +823,9 @@ class TacticalHUD:
             "scene_x2": right_edge,
             "group_left": group_left,
             "group_right": group_right,
+            "label_x": float(center_x),
+            "label_y": float(label_y),
+            "label_width": float(label_width),
             "gravity_load": gravity_load,
             "gravity_color": gravity_color,
             "boost_armed": bool(neutron_boost.get("armed")),
@@ -846,6 +849,11 @@ class TacticalHUD:
             motion=not reduced_motion,
         )
         self._nav_state_indicator.draw_static(model)
+        self._nav_state_indicator.draw_center_core(
+            model, 0.0 if reduced_motion else state_phase,
+            motion=not reduced_motion,
+            tags="nav_state_static" if reduced_motion else "nav_state_core",
+        )
         self.draw_text(
             center_x, label_y, text=label, fill=color,
             font=("Courier", 10, "bold"), anchor="center",
@@ -1053,6 +1061,7 @@ class TacticalHUD:
         )
         model["activity_progress"] = event_progress or 0.0
         model["activity_energy"] = max(event_energy, transition_energy)
+        model["transition_progress"] = transition_progress
 
         # Sustained state, transitions, and event responses have separate
         # owners so an old fallback scene cannot leak into the live indicator.
@@ -1062,6 +1071,9 @@ class TacticalHUD:
             self._nav_marker_phase - self._nav_state_phase_origin,
         )
         self._nav_state_indicator.draw_state(
+            model, state_phase, tags="nav_state_core",
+        )
+        self._nav_state_indicator.draw_center_core(
             model, state_phase, tags="nav_state_core",
         )
         try:

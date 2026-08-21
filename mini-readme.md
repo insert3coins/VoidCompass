@@ -4,6 +4,7 @@
 **Release Date:** 2026-Aug-21
 
 *   Smoothed the complete Navigation HUD motion lifecycle against real Tk stalls. Sustained states now begin at a deliberate animation seam, transitions and journal reactions share a bounded visual clock, route-arrival handoffs no longer jump ahead after a delayed frame, and the centre aperture remains stable when state-label lengths change.
+*   Gave the fixed centre state label one restrained, theme-aware pulse beneath the text. Its small state-specific movement and transition glint add life without competing with the richer left/right instruments; reduced motion retains a quiet static mark.
 *   Rebuilt **System Survey** as a compact Discovery Rail in both HUD layouts. It distinguishes unknown body counts, retained local evidence, active FSS work and verified completion; reports remaining bodies or completed DSS work; and adds restrained live-scanner, newly discovered body and completion-sweep responses without duplicating Survey Operations.
 *   Refocused **Survey Operations** as a priority cockpit work list: confirmed biological and geological targets, valuable/notable bodies and active sampling remain visible, while routine no-signal planets stay in the full Explore & Survey inventory instead of making the overlay unnecessarily tall.
 *   Added quiet navigation context from data Void Compass already receives: the current local body/station target, galactic route direction (coreward, rimward, spinward or trailing) and the next system's height above or below the galactic plane.
