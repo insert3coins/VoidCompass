@@ -140,6 +140,14 @@ def main():
                     )
                 else:
                     root._voidcompass_startup_presentation_held = False
+                    html_runtime = getattr(
+                        root, "_voidcompass_html_overlay_runtime", None,
+                    )
+                    release_html = getattr(
+                        html_runtime, "release_startup_hold", None,
+                    )
+                    if callable(release_html):
+                        release_html()
                 # Flush final geometry while the root is still hidden. This
                 # prevents the default Tk size from flashing before the
                 # dashboard receives its saved dimensions.

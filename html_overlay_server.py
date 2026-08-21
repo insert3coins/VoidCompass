@@ -39,12 +39,13 @@ class _OverlayState:
 class HtmlOverlayServer:
     """Serve bundled assets and independent SSE streams from one port."""
 
-    def __init__(self, static_root):
+    def __init__(self, static_root, presentation_held=False):
         self.static_root = Path(static_root).resolve()
         self.token = secrets.token_urlsafe(32)
         self._condition = threading.Condition()
         self._overlays = {}
         self._window_revision = 0
+        self._presentation_held = bool(presentation_held)
         self._host_shutdown = False
         self._stopping = threading.Event()
         self._server = _OverlayHTTPServer(("127.0.0.1", 0), self._handler_type())
@@ -166,6 +167,17 @@ class HtmlOverlayServer:
                     "shutdown": state.shutdown,
                 }
             return result
+
+    def set_presentation_held(self, held):
+        """Atomically curtain every native browser window in the host."""
+        held = bool(held)
+        with self._condition:
+            if held == self._presentation_held:
+                return self._window_revision
+            self._presentation_held = held
+            self._window_revision += 1
+            self._condition.notify_all()
+            return self._window_revision
 
     def request_host_shutdown(self):
         """Wake the browser host and ask it to close every WebView window."""
@@ -298,10 +310,12 @@ class HtmlOverlayServer:
                         )
                     revision = self._window_revision
                     overlays = self.window_manifest()
+                    presentation_held = self._presentation_held
                     closing = self._host_shutdown or self._stopping.is_set()
                 self._send_json(handler, {
                     "revision": revision,
                     "overlays": overlays,
+                    "presentation_held": presentation_held,
                     "closing": closing,
                 })
                 return

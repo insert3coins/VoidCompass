@@ -11,7 +11,8 @@
 *   Reimagined the HTML Navigation state instrument as a 30 FPS additive Canvas display with distinct flight, supercruise, FSD, scanner, surface, vehicle, hazard, mining and Carrier animation dialects, smooth state dissolves, journal-event reactions and a restrained reduced-motion mode.
 *   Kept the Navigation HUD's angular inset while covering the complete WebView surface, preventing transparent corner cut-outs from appearing as white blocks in-game or in OBS.
 *   Increased the HTML Navigation HUD's supporting route, survey, metric, metadata and context type for better in-game readability while retaining the established state-indicator and current-system scales.
-*   Deferred the shared WebView2 process itself until the bootloader's final live handoff, preventing HTML overlay windows from appearing while journal and history recovery are still running.
+*   Pre-warmed the shared WebView2 cockpit behind a host-enforced native-window curtain during journal recovery, then revealed its rendered overlays at the final live handoff without the former post-boot loading pause or any early overlay flash.
+*   Kept the on-screen HTML cockpit surfaces out of the Windows taskbar by enforcing tool-window semantics and removing WebView2's conflicting application-window style.
 *   Made the shared WebView2 cockpit close cooperatively and in parallel with the final profile-state flush, removing its former serial shutdown wait while retaining forced cleanup as a bounded fallback.
 
 ## Earlier releases

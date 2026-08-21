@@ -14,6 +14,7 @@ from urllib.request import build_opener, ProxyHandler, Request
 GWL_EXSTYLE = -20
 WS_EX_TRANSPARENT = 0x00000020
 WS_EX_TOOLWINDOW = 0x00000080
+WS_EX_APPWINDOW = 0x00040000
 WS_EX_LAYERED = 0x00080000
 WS_EX_NOACTIVATE = 0x08000000
 HWND_TOPMOST = -1
@@ -41,6 +42,17 @@ def _native_handle(window):
         return 0
 
 
+def _overlay_window_style(style, click_through=True):
+    """Return taskbar-free extended styles for an on-screen overlay."""
+    style = int(style) & ~WS_EX_APPWINDOW
+    style |= WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
+    if click_through:
+        style |= WS_EX_TRANSPARENT
+    else:
+        style &= ~WS_EX_TRANSPARENT
+    return style
+
+
 def _apply_windows_style(window, click_through=True):
     hwnd = _native_handle(window)
     if not hwnd:
@@ -53,17 +65,29 @@ def _apply_windows_style(window, click_through=True):
         get_style.restype = ctypes.c_ssize_t
         set_style.argtypes = (ctypes.c_void_p, ctypes.c_int, ctypes.c_ssize_t)
         set_style.restype = ctypes.c_ssize_t
-        style = int(get_style(hwnd, GWL_EXSTYLE))
-        style |= WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
-        style = style | WS_EX_TRANSPARENT if click_through else style & ~WS_EX_TRANSPARENT
+        old_style = int(get_style(hwnd, GWL_EXSTYLE))
+        style = _overlay_window_style(old_style, click_through)
+        # APPWINDOW explicitly asks Explorer to create a taskbar button and
+        # takes precedence over the tool-window intent on some WebView2/
+        # WinForms combinations. If it was present on an already visible
+        # surface, briefly hide it while changing styles so the shell drops
+        # its cached taskbar entry. New overlay windows begin hidden anyway.
+        was_appwindow = bool(old_style & WS_EX_APPWINDOW)
+        was_visible = bool(user32.IsWindowVisible(ctypes.c_void_p(hwnd)))
+        if was_appwindow and was_visible:
+            user32.ShowWindow(ctypes.c_void_p(hwnd), SW_HIDE)
         ctypes.set_last_error(0)
         previous = set_style(hwnd, GWL_EXSTYLE, style)
         if previous == 0 and ctypes.get_last_error():
+            if was_appwindow and was_visible:
+                user32.ShowWindow(ctypes.c_void_p(hwnd), SW_SHOWNOACTIVATE)
             return False
         user32.SetWindowPos(
             ctypes.c_void_p(hwnd), ctypes.c_void_p(HWND_TOPMOST), 0, 0, 0, 0,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED,
         )
+        if was_appwindow and was_visible:
+            user32.ShowWindow(ctypes.c_void_p(hwnd), SW_SHOWNOACTIVATE)
         return True
     except Exception:
         return False
@@ -120,7 +144,7 @@ class _WindowController:
         self.last_topmost_refresh = 0.0
         self.ready_sent = False
 
-    def apply(self, payload):
+    def apply(self, payload, presentation_held=False):
         payload = payload if isinstance(payload, dict) else {}
         try:
             width = max(24, int(payload.get("width") or 360))
@@ -139,7 +163,11 @@ class _WindowController:
             if click_through != self.last_click_through:
                 _apply_windows_style(self.window, click_through)
                 self.last_click_through = click_through
-            visible = bool(payload.get("visible", True)) and not bool(payload.get("shutdown"))
+            visible = bool(
+                payload.get("visible", True)
+                and not payload.get("shutdown")
+                and not presentation_held
+            )
             if visible != self.last_visible:
                 if visible:
                     _apply_windows_style(self.window, click_through)
@@ -169,6 +197,7 @@ class _OverlayHost:
         self.closing = False
         self.last_contact = time.monotonic()
         self.window_revision = -1
+        self.presentation_held = True
 
     def _url(self, path, overlay_id=None):
         suffix = f"token={quote(self.token)}"
@@ -188,6 +217,7 @@ class _OverlayHost:
             self.window_revision = int(response.get("revision", self.window_revision))
         except (TypeError, ValueError):
             pass
+        self.presentation_held = bool(response.get("presentation_held", False))
         if response.get("closing"):
             self.close()
             return {}
@@ -232,7 +262,10 @@ class _OverlayHost:
                     if spec.get("shutdown"):
                         controller.hide()
                         continue
-                    result = controller.apply(spec.get("window"))
+                    result = controller.apply(
+                        spec.get("window"),
+                        presentation_held=self.presentation_held,
+                    )
                     if result != last_status.get(overlay_id):
                         last_status[overlay_id] = result
                         try:
