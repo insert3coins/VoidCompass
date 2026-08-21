@@ -83,13 +83,13 @@ body {
 .system-block { top: 46px; height: 44px; padding-left: 11px; }
 .locator-rail { position: absolute; left: 0; top: 5px; bottom: 6px; width: 4px; background: color-mix(in srgb, var(--accent) 35%, transparent); }
 .locator-rail i { position: absolute; inset: 8px 0; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
-.system-meta { height: 15px; display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; color: var(--muted); font-size: calc(9px * var(--text-scale)); font-weight: 700; letter-spacing: .55px; }
+.system-meta { height: 15px; display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; color: var(--muted); font-size: calc(11px * var(--text-scale)); font-weight: 700; letter-spacing: .4px; }
 #region-label { text-align: right; color: var(--accent); opacity: .74; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 #system-clock { color: var(--dim); min-width: 40px; text-align: right; }
 .current-system { color: var(--text); font: 700 calc(14px * var(--text-scale)) "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .8px; line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 1px 1px #000; }
 
 .route-block { top: 94px; height: 62px; }
-.route-header { height: 17px; display: grid; grid-template-columns: 1fr 100px 145px; gap: 8px; align-items: center; font-size: calc(10px * var(--text-scale)); color: var(--orange); }
+.route-header { height: 17px; display: grid; grid-template-columns: 1fr 100px 145px; gap: 8px; align-items: center; font-size: calc(12px * var(--text-scale)); font-weight: 700; color: var(--orange); }
 .route-header strong, .route-header span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 #route-next { text-align: center; } #route-distance { text-align: right; }
 .route-track { position: relative; height: 25px; }
@@ -106,13 +106,13 @@ body {
 .route-pips.dense .route-cell { height: 5px; border: 1px solid color-mix(in srgb, var(--orange) 55%, #1a2530); background: rgba(0,0,0,.55); }
 .route-pips.dense .route-cell.done { background: color-mix(in srgb, var(--accent) 45%, transparent); border-color: var(--accent); }
 .route-pips.dense .route-cell.here { height: 11px; border-color: var(--accent); box-shadow: 0 0 6px var(--accent); }
-.route-captions { display: flex; justify-content: space-between; color: var(--dim); font-size: calc(9px * var(--text-scale)); font-weight: 700; }
+.route-captions { display: flex; justify-content: space-between; color: var(--dim); font-size: calc(11px * var(--text-scale)); font-weight: 700; }
 #route-origin { color: var(--accent); } #route-destination { color: var(--orange); }
 
 .survey-block { top: 160px; height: 40px; }
-.survey-header { display: grid; grid-template-columns: 120px 1fr 116px; align-items: center; gap: 6px; height: 18px; font-size: calc(10px * var(--text-scale)); }
+.survey-header { display: grid; grid-template-columns: 120px 1fr 116px; align-items: center; gap: 6px; height: 18px; font-size: calc(12px * var(--text-scale)); }
 .survey-header strong { color: var(--muted); }.survey-header span { color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#survey-count { text-align: right; font-size: calc(10px * var(--text-scale)); }
+#survey-count { text-align: right; font-size: calc(12px * var(--text-scale)); }
 .survey-rail { position: relative; display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; height: 7px; align-items: center; }
 .survey-segment { height: 3px; background: color-mix(in srgb, var(--accent) 19%, #111921); position: relative; overflow: hidden; }
 .survey-segment i { position: absolute; inset: 0; transform-origin: left; transform: scaleX(var(--fill)); background: var(--survey-tone, var(--accent)); box-shadow: 0 0 4px var(--survey-tone, var(--accent)); transition: transform .55s ease-out; }
@@ -120,10 +120,10 @@ body {
 
 .standard-metrics { top: 202px; height: 19px; display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 0; }
 .standard-metrics > div, .expanded-metrics > div { display: flex; align-items: center; justify-content: space-between; padding: 0 9px; border-left: 3px solid color-mix(in srgb, var(--metric-color, var(--accent)) 40%, transparent); }
-.standard-metrics span, .expanded-metrics span { color: var(--muted); font-size: calc(9px * var(--text-scale)); font-weight: 700; }
-.standard-metrics strong, .expanded-metrics strong { color: var(--metric-color, var(--accent)); font-size: calc(11px * var(--text-scale)); }
+.standard-metrics span, .expanded-metrics span { color: var(--muted); font-size: calc(11px * var(--text-scale)); font-weight: 700; }
+.standard-metrics strong, .expanded-metrics strong { color: var(--metric-color, var(--accent)); font-size: calc(13px * var(--text-scale)); }
 .expanded-metrics { display: none; }
-.context-rail { position: absolute; left: 16px; right: 16px; bottom: 8px; height: 17px; display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; color: var(--accent); font-size: calc(9px * var(--text-scale)); font-weight: 700; white-space: nowrap; overflow: hidden; }
+.context-rail { position: absolute; left: 16px; right: 16px; bottom: 8px; height: 17px; display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; color: var(--accent); font-size: calc(11.5px * var(--text-scale)); font-weight: 700; white-space: nowrap; overflow: hidden; }
 .context-rail span { overflow: hidden; text-overflow: ellipsis; }
 #secondary-label { color: var(--yellow); } #traffic-label { color: var(--dim); }
 .link-state { position: absolute; right: 9px; bottom: 4px; color: var(--dim); font-size: 6px; opacity: 0; }
@@ -134,7 +134,7 @@ body {
 .hud.expanded .route-block { top: 130px; height: 65px; left: 20px; right: 20px; }
 .hud.expanded .survey-block { top: 199px; height: 43px; left: 20px; right: 20px; }
 .hud.expanded .standard-metrics { display: none; }
-.hud.expanded .context-rail { left: 20px; right: 20px; bottom: 8px; font-size: calc(10px * var(--text-scale)); }
+.hud.expanded .context-rail { left: 20px; right: 20px; bottom: 8px; font-size: calc(12px * var(--text-scale)); }
 .hud.expanded .route-header { grid-template-columns: 1fr 115px 220px; }
 
 /* The WebView canvas owns state-specific geometry; CSS keeps the native label crisp. */
