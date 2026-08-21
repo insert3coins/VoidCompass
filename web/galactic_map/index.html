@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Void Compass // Galactic Atlas</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main id="app">
+    <div id="viewport" aria-label="Interactive three-dimensional Galactic Atlas"></div>
+    <svg id="route-overlay" class="route-overlay" aria-hidden="true">
+      <path id="travel-overlay-halo" class="travel-overlay-halo"></path>
+      <path id="travel-overlay-path" class="travel-overlay-path"></path>
+      <path id="return-overlay-path" class="return-overlay-path"></path>
+      <path id="nav-overlay-halo" class="nav-overlay-halo"></path>
+      <path id="nav-overlay-path" class="nav-overlay-path"></path>
+    </svg>
+    <div id="region-labels" class="map-label-layer" aria-hidden="true"></div>
+    <div id="cluster-labels" class="map-label-layer" aria-hidden="true"></div>
+
+    <header class="topbar glass angular">
+      <div class="brand-block">
+        <span class="eyebrow">VOID COMPASS // UNIVERSAL CARTOGRAPHICS</span>
+        <h1>GALACTIC ATLAS</h1>
+      </div>
+      <div class="location-block">
+        <span id="current-system">POSITION UNKNOWN</span>
+        <small id="current-region">AWAITING JOURNAL COORDINATES</small>
+      </div>
+      <div class="link-state">
+        <span id="live-dot" class="live-dot"></span>
+        <div><strong id="connection-state">CONNECTING</strong><small id="commander-name">LOCAL SESSION</small></div>
+      </div>
+    </header>
+
+    <aside class="control-deck glass angular">
+      <section class="control-section search-section">
+        <label for="search">SYSTEM / REGION / ANNOTATION</label>
+        <div class="search-row">
+          <input id="search" type="search" autocomplete="off" spellcheck="false" placeholder="Search retained map data">
+          <button id="search-button" class="icon-button" title="Search">⌖</button>
+        </div>
+        <div id="search-results" class="search-results" hidden></div>
+      </section>
+
+      <section class="control-section split-controls">
+        <label>VIEW</label>
+        <select id="view-mode">
+          <option>Galactic Atlas</option>
+          <option>Route Focus</option>
+          <option>Current Vicinity</option>
+        </select>
+        <label>SCOPE</label>
+        <select id="scope-mode">
+          <option>All History</option>
+          <option>Current Session</option>
+          <option>Active Expedition</option>
+        </select>
+      </section>
+
+      <section class="control-section button-grid">
+        <button id="current-button">CURRENT</button>
+        <button id="route-button">ROUTE</button>
+        <button id="atlas-button">ATLAS</button>
+        <button id="top-button">TOP VIEW</button>
+        <button id="mark-button">ADD MARK</button>
+        <button id="reset-button">RESET</button>
+      </section>
+
+      <section class="control-section depth-control">
+        <div class="section-heading"><span>VERTICAL STRUCTURE</span><output id="depth-value">4×</output></div>
+        <input id="depth-scale" type="range" min="1" max="20" step="1" value="4">
+      </section>
+
+      <section class="control-section layers-section">
+        <div class="section-heading"><span>INTELLIGENCE LAYERS</span><button id="layers-toggle" class="text-button">ALL</button></div>
+        <div id="layer-grid" class="layer-grid"></div>
+      </section>
+
+      <section class="control-section atlas-reference">
+        <div class="section-heading"><span>LIVE GALACTIC FIX</span><span>XYZ // LY</span></div>
+        <div class="coordinate-readout">
+          <span><small>X // EAST</small><strong id="coord-x">—</strong></span>
+          <span><small>Y // HEIGHT</small><strong id="coord-y">—</strong></span>
+          <span><small>Z // NORTH</small><strong id="coord-z">—</strong></span>
+        </div>
+        <div class="gesture-guide">
+          <span>LEFT DRAG <strong>ORBIT</strong></span>
+          <span>RIGHT DRAG <strong>PAN</strong></span>
+          <span>WHEEL <strong>RANGE</strong></span>
+        </div>
+      </section>
+    </aside>
+
+    <aside id="inspector" class="inspector glass angular" aria-live="polite">
+      <button id="close-inspector" class="close-button" aria-label="Close inspector">×</button>
+      <span id="inspect-kind" class="eyebrow">MAP INTELLIGENCE</span>
+      <h2 id="inspect-title">Select a system, marker or region</h2>
+      <p id="inspect-system" class="inspect-system"></p>
+      <p id="inspect-detail" class="inspect-detail">Click a plotted item to inspect retained commander evidence.</p>
+      <dl id="inspect-coordinates" class="coordinate-grid"></dl>
+      <div id="inspect-actions" class="inspect-actions"></div>
+    </aside>
+
+    <div class="map-reticle" aria-hidden="true"><i></i><i></i></div>
+    <aside class="atlas-instruments glass angular" aria-label="Galactic map orientation and scale">
+      <div class="scale-instrument">
+        <span class="eyebrow">FIELD SCALE</span>
+        <div><i id="scale-line"></i><strong id="scale-label">— LY</strong></div>
+      </div>
+      <svg id="axis-compass" class="axis-compass" viewBox="0 0 92 92" aria-label="Dynamic galactic axes">
+        <circle cx="46" cy="46" r="31"></circle>
+        <circle cx="46" cy="46" r="3" class="axis-core"></circle>
+        <line id="axis-east-line" x1="46" y1="46" x2="73" y2="46" class="axis-east"></line>
+        <line id="axis-north-line" x1="46" y1="46" x2="46" y2="19" class="axis-north"></line>
+        <text id="axis-east-label" x="79" y="49" class="axis-east-label">+X</text>
+        <text id="axis-north-label" x="46" y="12" class="axis-north-label">+Z</text>
+      </svg>
+      <div class="axis-caption"><strong>GALACTIC AXES</strong><span>+X EAST // +Z NORTH</span></div>
+    </aside>
+
+    <footer class="statusbar glass angular">
+      <div class="stat"><span>SYSTEMS</span><strong id="stat-systems">0</strong></div>
+      <div class="stat"><span>JOURNALLED</span><strong id="stat-distance">0 LY</strong></div>
+      <div class="stat"><span>INTELLIGENCE</span><strong id="stat-markers">0</strong></div>
+      <div class="stat"><span>MAP MARKS</span><strong id="stat-annotations">0</strong></div>
+      <div class="route-state"><span id="route-state">NO ACTIVE ROUTE</span><small id="camera-state">GALACTIC ATLAS · GPU READY</small></div>
+    </footer>
+
+    <div id="tooltip" class="tooltip" hidden></div>
+    <div id="context-menu" class="context-menu glass" hidden></div>
+
+    <dialog id="annotation-dialog" class="annotation-dialog angular">
+      <form id="annotation-form" method="dialog">
+        <header><span class="eyebrow">COMMANDER-OWNED INTELLIGENCE</span><h2>GALACTIC MAP ANNOTATION</h2></header>
+        <p id="annotation-location" class="annotation-location"></p>
+        <input id="annotation-id" type="hidden">
+        <input id="annotation-position" type="hidden">
+        <input id="annotation-system" type="hidden">
+        <label>TYPE<select id="annotation-category">
+          <option>Note</option><option>Danger</option><option>Region of Interest</option>
+          <option>Survey Target</option><option>Waypoint</option>
+        </select></label>
+        <label>TITLE<input id="annotation-title" maxlength="120" required></label>
+        <label>NOTES<textarea id="annotation-note" maxlength="2000" rows="6"></textarea></label>
+        <div class="dialog-actions">
+          <button id="annotation-delete" type="button" class="danger-button" hidden>DELETE</button>
+          <span></span>
+          <button id="annotation-cancel" type="button">CANCEL</button>
+          <button type="submit" class="primary-button">SAVE MARK</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="loading" class="loading-screen">
+      <div class="loading-core"><div class="orbit orbit-a"></div><div class="orbit orbit-b"></div><div class="core-dot"></div></div>
+      <span class="eyebrow">VOID COMPASS // LOCAL MAP SERVICE</span>
+      <h2>ASSEMBLING GALACTIC ATLAS</h2>
+      <p id="loading-status">Connecting to live commander state…</p>
+    </div>
+  </main>
+  <script src="/boot.js" defer></script>
+</body>
+</html>

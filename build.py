@@ -92,6 +92,7 @@ VSVersionInfo(
         f'--add-data=icon.ico{data_sep}.',
         f'--add-data=icon-source.png{data_sep}.',
         f'--add-data=Images{data_sep}Images',
+        f'--add-data=web{data_sep}web',
         f'--add-data=mining_data.db{data_sep}.',
         f'--add-data=codexRef.json{data_sep}.',
         f'--add-data=data/achievements.json{data_sep}data',

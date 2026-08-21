@@ -830,6 +830,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     "Could not apply profile theme %s to %s: %s",
                     theme_name, attr, exc,
                 )
+        # The HTML Galactic Atlas consumes the same live palette as native
+        # panels. Publishing a fresh immutable snapshot updates its CSS and
+        # WebGL materials without reloading the browser page.
+        map_view = getattr(
+            getattr(self, "exploration_window", None),
+            "expedition_map_view", None,
+        )
+        if map_view is not None:
+            try:
+                map_view.refresh()
+            except Exception as exc:
+                success = False
+                logging.warning(
+                    "Could not publish theme %s to Galactic Atlas: %s",
+                    theme_name, exc,
+                )
         return success
 
     @staticmethod
