@@ -1,6 +1,8 @@
 import tkinter as tk
 import tkinter.font as tkfont
+import logging
 import math
+import os
 import time
 from config import (
     COLOR_ACCENT,
@@ -13,6 +15,8 @@ from config import (
 )
 import overlay_chrome
 import route_strip
+import ui_theme
+from html_navigation_hud import HtmlNavigationHudBridge
 from navigation_instrument import (
     NavigationEventRenderer,
 )
@@ -80,8 +84,18 @@ class TacticalHUD:
         self._save_job = None
         self._last_render_fingerprint = None
         self._last_update_args = None
+        self._html_bridge = None
+        self._html_ready = False
+        self._html_last_window_fingerprint = None
+        self._html_last_model = None
+        self._html_sync_job = None
         self._anim_interval_ms = int(self.config.get("hud_anim_interval_ms", 33) or 33)
         self._anim_interval_ms = max(30, min(500, self._anim_interval_ms))
+        self.win.bind("<Destroy>", self._on_window_destroyed, add="+")
+        # load_config/apply_profile_config always supplies the platform-aware
+        # default. Treat deliberately minimal/test configs as native-only.
+        self.set_html_renderer(bool(self.config.get("hud_html_renderer", False)))
+        self._schedule_html_sync()
         self.animate_ui()
 
     def _apply_initial_position(self):
@@ -117,6 +131,170 @@ class TacticalHUD:
             y = self.win.winfo_y()
             self.win.geometry(overlay_chrome.position_geometry(x, y, width, height))
 
+    def _html_window_payload(self):
+        width, height = self._target_dimensions()
+        try:
+            state = str(self.win.state())
+            shown = state not in {"withdrawn", "iconic"}
+        except Exception:
+            shown = False
+        startup_held = bool(
+            getattr(self.win.master, "_voidcompass_startup_presentation_held", False)
+        )
+        return {
+            "x": self._safe_int(self.config.get("hud_x"), 100),
+            "y": self._safe_int(self.config.get("hud_y"), 100),
+            "width": int(width),
+            "height": int(height),
+            "visible": bool(
+                shown and not startup_held
+                and self.config.get("overlay_enabled", True)
+            ),
+            # The WebView is only a visual surface. Input always falls through
+            # to the authoritative Tk proxy: that proxy either passes input to
+            # Elite or handles the existing drag bindings according to the
+            # commander's overlay passthrough setting.
+            "click_through": True,
+        }
+
+    def _html_base_model(self):
+        theme = ui_theme.THEME
+        return {
+            "schema": 1,
+            "layout": "standard" if self._is_compact() else "expanded",
+            "theme": {
+                "accent": str(theme.accent), "orange": str(theme.orange),
+                "green": str(theme.green), "yellow": str(theme.yellow),
+                "red": str(theme.red), "text": str(theme.text),
+                "muted": str(theme.muted), "dim": str(theme.dim),
+                "bg": str(theme.bg), "panel": str(theme.panel),
+                "border": str(theme.border), "inset": str(theme.inset),
+                "text_scale": self._text_scale_percent() / 100.0,
+            },
+            "effects": {
+                "crt": self._crt_enabled(),
+                "reduced_motion": bool(self.config.get("reduced_motion_enabled", False)),
+                "energy": {
+                    "Calm": 0.72, "Standard": 1.0, "Energetic": 1.28,
+                }.get(str(self.config.get("hud_animation_intensity") or "Standard").title(), 1.0),
+            },
+            "state": {
+                "label": "FLIGHT", "color": str(theme.dim), "motion": "flight",
+            },
+            "system": {"name": "---", "region": "REGION UNKNOWN", "arrival_epoch": 0},
+            "route": {"header": "NO ACTIVE ROUTE", "hops": []},
+            "survey": {"label": "COUNT UNKNOWN", "count": "0/? · --%", "percent": 0},
+            "metrics": {
+                "fuel": {"value": "--", "color": str(theme.dim)},
+                "bio": {"value": "0/0", "color": str(theme.dim)},
+                "geo": {"value": "0", "color": str(theme.yellow)},
+                "traffic": {"value": "0 / 0 / 0", "color": str(theme.dim)},
+            },
+            "context": {"primary": "", "secondary": "", "traffic": ""},
+            "window": self._html_window_payload(),
+        }
+
+    def set_html_renderer(self, enabled):
+        """Enable the isolated WebView2 HUD, retaining Tk as live fallback."""
+        enabled = bool(enabled and os.name == "nt")
+        if not enabled:
+            bridge, self._html_bridge = self._html_bridge, None
+            self._html_ready = False
+            if bridge is not None:
+                bridge.dispose()
+            try:
+                held = bool(getattr(
+                    self.win.master, "_voidcompass_startup_presentation_held", False,
+                ))
+                self.win.attributes("-alpha", 0.0 if held else 1.0)
+            except Exception:
+                pass
+            self._last_render_fingerprint = None
+            if self._last_update_args is not None:
+                self.update(*self._last_update_args)
+            return False
+        if self._html_bridge is not None:
+            return True
+        try:
+            self._html_bridge = HtmlNavigationHudBridge(self.win.master, self.config)
+            model = self._html_last_model or self._html_base_model()
+            model = dict(model)
+            model["window"] = self._html_window_payload()
+            self._html_bridge.publish(model)
+            return True
+        except Exception as exc:
+            self._html_bridge = None
+            self._html_ready = False
+            logging.warning("HTML Navigation HUD unavailable; using Tk renderer: %s", exc)
+            return False
+
+    def _schedule_html_sync(self):
+        try:
+            self._html_sync_job = self.win.after(180, self._sync_html_renderer)
+        except Exception:
+            self._html_sync_job = None
+
+    def sync_html_window(self, x=None, y=None):
+        """Move the WebView2 surface immediately during Layout Studio drags."""
+        bridge = self._html_bridge
+        if bridge is None:
+            return False
+        window = self._html_window_payload()
+        if x is not None:
+            window["x"] = int(round(float(x)))
+        if y is not None:
+            window["y"] = int(round(float(y)))
+        bridge.update_window(window)
+        self._html_last_window_fingerprint = repr(window)
+        return True
+
+    def _sync_html_renderer(self):
+        self._html_sync_job = None
+        bridge = self._html_bridge
+        if bridge is not None:
+            if bridge.startup_failed:
+                logging.warning(
+                    "HTML Navigation HUD unavailable; returning to Tk renderer (%s)",
+                    bridge.host_status or "host exited or renderer did not connect",
+                )
+                self.set_html_renderer(False)
+            else:
+                was_ready = self._html_ready
+                ready = bridge.ready
+                self._html_ready = ready
+                if ready:
+                    try:
+                        # Keep the native Tk window as the authoritative
+                        # position/visibility proxy used by hotkeys and Layout
+                        # Studio, but make its renderer completely invisible.
+                        self.win.attributes("-alpha", 0.0)
+                    except Exception:
+                        pass
+                    if not was_ready:
+                        logging.info("HTML Navigation HUD renderer is live")
+                window = self._html_window_payload()
+                fingerprint = repr(window)
+                if fingerprint != self._html_last_window_fingerprint:
+                    self._html_last_window_fingerprint = fingerprint
+                    model = dict(self._html_last_model or self._html_base_model())
+                    model["window"] = window
+                    self._html_last_model = model
+                    bridge.publish(model)
+        self._schedule_html_sync()
+
+    def _on_window_destroyed(self, event):
+        if event.widget is not self.win:
+            return
+        if self._html_sync_job is not None:
+            try:
+                self.win.after_cancel(self._html_sync_job)
+            except Exception:
+                pass
+            self._html_sync_job = None
+        bridge, self._html_bridge = self._html_bridge, None
+        if bridge is not None:
+            bridge.dispose()
+
     def force_topmost(self):
         """Keeps the window on top of the game."""
         try:
@@ -146,20 +324,23 @@ class TacticalHUD:
         # One phase unit remains the original 100 ms animation step.
         self._nav_marker_phase += visual_elapsed / 0.1
         try:
-            self._draw_navigation_marker_animation()
-            self._draw_route_track_animation()
-            self._draw_fuel_scoop_animation()
-            self._draw_survey_rail_animation()
-            self._draw_navigation_dwell_clock()
-            if now >= self._next_crt_frame_ts:
-                self._draw_crt_animation()
-                self._next_crt_frame_ts = now + 0.1
+            if not self._html_ready:
+                self._draw_navigation_marker_animation()
+                self._draw_route_track_animation()
+                self._draw_fuel_scoop_animation()
+                self._draw_survey_rail_animation()
+                self._draw_navigation_dwell_clock()
+                if now >= self._next_crt_frame_ts:
+                    self._draw_crt_animation()
+                    self._next_crt_frame_ts = now + 0.1
         except Exception:
             pass
         finally:
             try:
                 delay = self._anim_interval_ms
-                if self.config.get("reduced_motion_enabled", False):
+                if self._html_ready:
+                    delay = max(delay, 120)
+                elif self.config.get("reduced_motion_enabled", False):
                     delay = max(delay, 250)
                 elif not self.win.winfo_viewable():
                     delay = max(delay, 120)
@@ -1906,6 +2087,138 @@ class TacticalHUD:
         self.draw_fitted_text(w - 16, 230, traffic_text, "#7d8891",
                               size=10, min_size=9, max_width=136, anchor="e")
 
+    def _build_html_model(
+        self,
+        current_sys,
+        scanned,
+        total,
+        r_pos,
+        system_traffic,
+        game_r_pos=None,
+        route_waypoint=None,
+        route_counts=None,
+        nav_context=None,
+    ):
+        """Build the renderer-neutral model consumed by the WebView HUD."""
+        nav_context = nav_context or {}
+        model = self._html_base_model()
+        current_display = str(nav_context.get("current") or current_sys or "---").upper()
+        state_text = self._state_text(nav_context)
+        state_color = self._state_color(state_text)
+        journal_event = nav_context.get("journal_event") or {}
+        model["state"] = {
+            "label": state_text,
+            "color": state_color,
+            "motion": self._navigation_motion_profile(state_text),
+            "event_sequence": journal_event.get("seq"),
+            "event_kind": str(journal_event.get("kind") or ""),
+        }
+
+        region = nav_context.get("region") or {}
+        region_text = "REGION UNKNOWN"
+        if region.get("name"):
+            try:
+                region_text = f"REGION {int(region.get('id') or 0):02d} // {str(region['name']).upper()}"
+            except (TypeError, ValueError):
+                region_text = f"REGION // {str(region['name']).upper()}"
+            if region.get("crossed"):
+                region_text += " // NEW"
+        model["system"] = {
+            "name": current_display,
+            "region": region_text,
+            "arrival_epoch": float(nav_context.get("system_arrival_epoch") or 0.0),
+        }
+
+        route = self._route_presentation(
+            nav_context, route_waypoint, route_counts, game_r_pos, r_pos,
+        )
+        route_header, next_distance, route_distance = self._classic_route_header_parts(
+            route, nav_context, route_waypoint=bool(route_waypoint),
+        )
+        source_hops = list(route.get("track_hops") or route.get("hops") or [])
+        track_width = max(260, self._target_dimensions()[0] - 32)
+        positions, dense = route_strip.pip_layout(0, track_width, source_hops)
+        html_hops = []
+        for index, hop in enumerate(source_hops):
+            html_hops.append({
+                "name": str(hop.get("name") or "")[:120],
+                "position": round((positions[index] / track_width) * 100.0, 3)
+                if index < len(positions) else 0.0,
+                "completed": bool(hop.get("completed")),
+                "current": bool(hop.get("current")),
+                "next": bool(hop.get("next")),
+                "scoopable": hop.get("scoopable"),
+            })
+        progress_percent = 100.0 if route.get("complete") else 0.0
+        if html_hops and not route.get("complete"):
+            progress_index = next(
+                (index for index, hop in enumerate(html_hops) if hop["current"]),
+                -1,
+            )
+            if progress_index < 0:
+                progress_index = max(
+                    (index for index, hop in enumerate(html_hops) if hop["completed"]),
+                    default=-1,
+                )
+            if progress_index >= 0:
+                progress_percent = float(html_hops[progress_index]["position"])
+        model["route"] = {
+            "header": route_header,
+            "next_distance": next_distance,
+            "distance": route_distance,
+            "active": bool(route.get("active")),
+            "complete": bool(route.get("complete")),
+            "origin_current": bool(route.get("track_origin_current", True)),
+            "progress_percent": round(progress_percent, 2),
+            "dense": bool(dense),
+            "cells": max(10, min(18, int(round(track_width / 28.0)))),
+            "hops": html_hops,
+        }
+
+        pct, scan_progress_text = self._scan_progress_state(scanned, total, nav_context)
+        survey = self._survey_rail_presentation(scanned, total, pct, nav_context)
+        model["survey"] = {
+            "label": survey["label"],
+            "tone": survey["tone"],
+            "count": scan_progress_text,
+            "percent": round(float(survey["pct"]) * 100.0, 2),
+            "live": bool(survey["live"]),
+            "complete": bool(survey["complete"]),
+        }
+
+        survey_metrics = self._survey_metrics(nav_context)
+        metric_values = {
+            label.casefold(): {"value": value, "color": color}
+            for label, value, color in survey_metrics
+        }
+        traffic = system_traffic or {}
+        traffic_value = " / ".join(
+            str(int(traffic.get(key, 0) or 0)) for key in ("day", "week", "total")
+        )
+        model["metrics"] = {
+            "fuel": metric_values.get("fuel"),
+            "bio": metric_values.get("bio"),
+            "geo": metric_values.get("geo"),
+            "traffic": {"value": traffic_value, "color": "#7d8891"},
+        }
+
+        attention_text, attention_state = self._attention_summary(nav_context)
+        context_text, context_color = self._context_presentation(
+            nav_context, attention_text, attention_state,
+        )
+        secondary_text = (
+            attention_text if attention_text and context_text != attention_text else ""
+        )
+        model["context"] = {
+            "primary": context_text,
+            "primary_color": context_color,
+            "secondary": secondary_text,
+            "secondary_color": self._badge_color(attention_state),
+            "traffic": self._traffic_summary(system_traffic, compact=True),
+        }
+        model["window"] = self._html_window_payload()
+        return model
+
     def update(
         self,
         current_sys,
@@ -1929,6 +2242,23 @@ class TacticalHUD:
             hud_status, hud_health, nav_context,
         )
         target_w, target_h = self._target_dimensions()
+        if self._html_bridge is not None:
+            try:
+                html_model = self._build_html_model(
+                    current_sys,
+                    scanned,
+                    total,
+                    r_pos,
+                    system_traffic,
+                    game_r_pos=game_r_pos,
+                    route_waypoint=route_waypoint,
+                    route_counts=route_counts,
+                    nav_context=nav_context,
+                )
+                self._html_last_model = html_model
+                self._html_bridge.publish(html_model)
+            except Exception as exc:
+                logging.warning("HTML Navigation HUD state publish failed: %s", exc)
         presentation = (
             self._text_scale_percent(), self._crt_enabled(), self._crt_intensity(),
             bool(self.config.get("hud_crt_motion_enabled", True)),
@@ -1942,6 +2272,9 @@ class TacticalHUD:
             return
         self._ensure_dimensions(target_w, target_h)
         self.canvas.delete("all")
+        if self._html_ready:
+            self._last_render_fingerprint = render_fingerprint
+            return
         if self._is_compact():
             self._draw_compact(
                 current_sys,

@@ -1,13 +1,19 @@
 # VoidCompass // UPDATE LOG
 
-## v5.3.8.2 // Live Galactic Atlas
+## v5.3.8.3 // Unified HTML Cockpit
 **Release Date:** 2026-Aug-21
 
-*   Kept an open browser atlas subscribed after leaving the native GALACTIC page. `FSDJump`, `CarrierJump`, scans, route changes and other exploration updates now continue to publish live instead of waiting for the commander to revisit the map workspace.
-*   Added connection-aware publication with a short browser-reconnection grace period, retaining live background-tab updates without rebuilding the WebGL atlas when no map is open.
+*   Expanded the Windows HTML/WebView2 renderer from Navigation to the complete cockpit overlay suite: Cargo, Carrier, Prospector, System Intelligence, Gravity, Station Link, Survey Operations, Toasts, Journal Heartbeat and Colony Logistics now share the same private offline browser runtime.
+*   Added a renderer-neutral Canvas scene bridge so existing journal logic, theme changes, dynamic sizing and visual details remain authoritative while the browser handles transparent compositing. One process owns all overlay windows instead of launching one browser per HUD.
+*   Preserved profile-aware positions, enabled state, hotkeys, mouse passthrough, startup curtain and Overlay Layout Studio control through hidden native proxy windows. Studio drags now publish geometry immediately through a revision-driven host channel with frame-coalesced preview drawing; automatic per-overlay Tk fallback remains available and Linux stays fully native.
+*   Made every HTML overlay revision-aware through lightweight local checks that avoid WebView2 connection-pool starvation, transfer full scenes only after a change and detect in-place Canvas text/geometry updates even when item IDs remain stable.
+*   Rebuilt Survey Operations as a dedicated semantic HTML workboard with live FSS progress, biological sample nodes, compact completed surfaces, GEO/DSS status and valuable-body intelligence instead of mirroring its former Tk pixels.
+*   Reimagined the HTML Navigation state instrument as a 30 FPS additive Canvas display with distinct flight, supercruise, FSD, scanner, surface, vehicle, hazard, mining and Carrier animation dialects, smooth state dissolves, journal-event reactions and a restrained reduced-motion mode.
+*   Made the shared WebView2 cockpit close cooperatively and in parallel with the final profile-state flush, removing its former serial shutdown wait while retaining forced cleanup as a bounded fallback.
 
 ## Earlier releases
 
+*   **v5.3.8.2** — Kept an open Galactic Atlas subscribed to live journal, scan, route and position updates with connection-aware background publication and browser-reconnection grace.
 *   **v5.3.8.1** — Replaced the Tk/Pillow map with the private offline HTML/Three.js Galactic Atlas, preserving profile history, routes, intelligence and annotations while adding corrected north-up/east-right orientation, GPU clustering and a polished browser command deck.
 *   **v5.3.8** — Smoothed the Navigation HUD lifecycle, rebuilt its Discovery Rail, focused Survey Operations on priority targets, added route-direction and vertical context, and retained profile-safe system-arrival time.
 *   **v5.3.7.9** — Rebuilt all 29 Navigation HUD states as one code-native state instrument with distinct cockpit motion, family-specific transitions, bounded journal reactions, profile-aware animation intensity and detailed reduced-motion sigils.

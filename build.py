@@ -1,5 +1,6 @@
 import PyInstaller.__main__
 import PyInstaller
+import importlib.util
 import os
 import platform
 import shutil
@@ -26,6 +27,11 @@ if __name__ == '__main__':
             "PyInstaller 6.21.0 or newer is required. Older Windows one-file "
             "bootloaders can leak VCRUNTIME DLLs and leave _MEI directories behind. "
             "Run: python -m pip install -U 'pyinstaller>=6.21.0'"
+        )
+    if is_windows and importlib.util.find_spec("webview") is None:
+        raise SystemExit(
+            "pywebview is required for the Windows HTML cockpit overlays. "
+            "Run: python -m pip install -r requirements.txt"
         )
     print(f"Building with PyInstaller {PyInstaller.__version__}")
 

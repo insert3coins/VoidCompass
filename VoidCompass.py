@@ -1,6 +1,16 @@
 import os
 import sys
 
+# HTML cockpit overlays share a separate WinForms/WebView2 message loop.
+# Dispatch it before importing Tk/dashboard modules or acquiring the primary
+# Void Compass instance lock. PyInstaller retains this direct import for the
+# one-file helper invocation used by the frozen executable.
+if __name__ == "__main__" and "--html-overlay-host" in sys.argv:
+    from html_overlay_host import main as _run_html_overlay_host
+
+    _flag_index = sys.argv.index("--html-overlay-host")
+    raise SystemExit(_run_html_overlay_host(sys.argv[_flag_index + 1:]))
+
 import tkinter as tk
 import logging
 import atexit
@@ -130,9 +140,13 @@ def main():
                     )
                 else:
                     root._voidcompass_startup_presentation_held = False
+                # Flush final geometry while the root is still hidden. This
+                # prevents the default Tk size from flashing before the
+                # dashboard receives its saved dimensions.
+                root.update_idletasks()
+                if active_splash is None:
                     root.deiconify()
                     root.lift()
-                root.update_idletasks()
                 return True
             except StartupCancelled:
                 if splash is not None:

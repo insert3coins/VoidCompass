@@ -98,6 +98,7 @@ class OverlayLayoutStudio:
         self._preview_transform = None
         self._preview_fingerprint = None
         self._preview_resize_job = None
+        self._preview_drag_redraw_job = None
         self._refresh_job = None
         self._closing = False
         self.win = tk.Toplevel(root)
@@ -516,6 +517,7 @@ class OverlayLayoutStudio:
 
         crt_card, crt = self._option_card(columns, "NAVIGATION HUD EFFECTS")
         crt_card.grid(row=1, column=1, sticky="nsew", padx=(4, 0))
+        self._option_toggle(crt, "HTML / WebView2 overlays", "hud_html_renderer")
         self._option_toggle(crt, "CRT effects", "hud_crt_enabled")
         self._option_toggle(crt, "Subtle phosphor shimmer", "hud_crt_motion_enabled")
         intensity_row = tk.Frame(crt, bg=THEME.panel)
@@ -652,6 +654,10 @@ class OverlayLayoutStudio:
         save_config(self.config)
         if key == "overlay_mouse_passthrough":
             self.app._apply_overlay_mouse_passthrough()
+        elif key == "hud_html_renderer":
+            self.app._attach_html_overlay_renderers()
+            self.app._apply_html_overlay_renderer()
+            self.app.update_hud()
         elif key in ("hud_compact_mode", "hud_crt_enabled", "hud_crt_motion_enabled"):
             self.app.update_hud()
         elif key == "station_info_auto_hide_enabled":
@@ -663,6 +669,11 @@ class OverlayLayoutStudio:
         elif key == "hud_compact_mode":
             mode = "Standard" if self.config.get(key, True) else "Expanded"
             self.options_status_var.set(f"Navigation HUD switched to {mode} for this commander.")
+        elif key == "hud_html_renderer":
+            renderer = "HTML / WebView2" if self.config.get(key, False) else "native Tk"
+            self.options_status_var.set(
+                f"Cockpit overlays switched to the {renderer} renderer for this commander."
+            )
         else:
             self.options_status_var.set(f"Saved {key.replace('_', ' ')} for this commander.")
 
@@ -879,7 +890,13 @@ class OverlayLayoutStudio:
         except tk.TclError:
             return
         self._preview_fingerprint = None
-        self._draw_desktop_preview(force=True)
+        if self._preview_drag_redraw_job is None:
+            self._preview_drag_redraw_job = self.win.after(16, self._finish_preview_drag_redraw)
+
+    def _finish_preview_drag_redraw(self):
+        self._preview_drag_redraw_job = None
+        if not self._closing and self.is_open():
+            self._draw_desktop_preview(force=True)
 
     def _preview_release(self, _event):
         state = self._drag_state
@@ -896,6 +913,14 @@ class OverlayLayoutStudio:
         except Exception:
             pass
         x, y, _width, _height, _shown = self._overlay_metrics(row)
+        if self._preview_drag_redraw_job is not None:
+            try:
+                self.win.after_cancel(self._preview_drag_redraw_job)
+            except tk.TclError:
+                pass
+            self._preview_drag_redraw_job = None
+        self._preview_fingerprint = None
+        self._draw_desktop_preview(force=True)
         self.refresh(quiet=True)
         self._set_status(
             f"Saved {OVERLAY_LABELS.get(state['attr'], state['attr'])} at {x:+d}, {y:+d}."
@@ -1169,6 +1194,12 @@ class OverlayLayoutStudio:
             except tk.TclError:
                 pass
             self._preview_resize_job = None
+        if self._preview_drag_redraw_job is not None:
+            try:
+                self.win.after_cancel(self._preview_drag_redraw_job)
+            except tk.TclError:
+                pass
+            self._preview_drag_redraw_job = None
         try:
             self.config["overlay_layout_studio_geometry"] = self.win.geometry()
             self.win.update_idletasks()

@@ -476,6 +476,8 @@ def _survey_render_key(model):
 
     common = (
         model.get("mode"), model.get("system"), sampling_key,
+        _safe_int(model.get("scanned")), _safe_int(model.get("total")),
+        bool(model.get("total_known")),
         tuple(notable_key(row) for row in model.get("notable_rows") or ()),
     )
     if model.get("mode") == "body":
@@ -539,6 +541,7 @@ class SurveyStatusHUD:
         self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
         self._last_update = None
         self._last_render_key = None
+        self._html_render_model = None
         self._last_height = None
         self._suppressed = False
         self.win = tk.Toplevel(root)
@@ -620,11 +623,13 @@ class SurveyStatusHUD:
                                    belt_clusters=belt_clusters)
         if not model:
             self._last_render_key = None
+            self._html_render_model = None
             self.hide()
             return
         render_key = _survey_render_key(model)
         if render_key != self._last_render_key:
             self._last_render_key = render_key
+            self._html_render_model = model
             self._redraw(model)
         self.show()
 
