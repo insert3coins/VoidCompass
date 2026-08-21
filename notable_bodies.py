@@ -8,8 +8,9 @@ DEFAULT_MIN_VALUE = 50_000
 def _is_interesting_body(item, min_value):
     if item.get("is_star"):
         return False
-    if (item.get("bio_count") or 0) > 0:
-        return True
+    # Biology is already a first-class Survey Operations target. Keep the
+    # notable classification for an independent mapping/value reason so a bio
+    # row is not redundantly labelled NOTABLE BODY merely for having signals.
     if item.get("terraformable"):
         return True
     if (item.get("planet_class") or "").lower() in _NOTABLE_PLANET_CLASSES:

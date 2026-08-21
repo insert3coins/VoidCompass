@@ -105,6 +105,73 @@ from profile_backups import automatic_backup
 EXPLORATION_INTELLIGENCE_TTL_S = 0.5
 # How long the Navigation HUD marks a freshly entered Codex region.
 HUD_REGION_CROSSED_S = 45.0
+# Sagittarius A* in Elite's Sol-centred X/Y/Z journal coordinate frame.  The
+# X/Z plane is the galactic disc and Y is height above/below it.
+GALACTIC_CENTRE_XZ = (25.21875, 25899.96875)
+
+
+def _journal_epoch(value, default=None):
+    """Return one journal ISO timestamp as Unix time without local-time drift."""
+    try:
+        return datetime.fromisoformat(
+            str(value or "").replace("Z", "+00:00")
+        ).timestamp()
+    except (TypeError, ValueError):
+        return default
+
+
+def _galactic_vector_context(current_coords, next_coords):
+    """Describe a route leg in galactocentric exploration language."""
+    try:
+        current = tuple(float(value) for value in current_coords[:3])
+        target = tuple(float(value) for value in next_coords[:3])
+    except (TypeError, ValueError, IndexError):
+        return {}
+    if len(current) < 3 or len(target) < 3:
+        return {}
+    dx, dy, dz = (
+        target[0] - current[0],
+        target[1] - current[1],
+        target[2] - current[2],
+    )
+    distance = math.sqrt(dx * dx + dy * dy + dz * dz)
+    planar = math.hypot(dx, dz)
+    if distance < 0.01 or planar < 0.01:
+        return {}
+
+    # The radial vector points from Sagittarius A* to the current system.
+    # Clockwise travel viewed from galactic north is spinward; at Sol this is
+    # approximately -X, matching the established explorer-map convention.
+    radial_x = current[0] - GALACTIC_CENTRE_XZ[0]
+    radial_z = current[2] - GALACTIC_CENTRE_XZ[1]
+    radial_length = math.hypot(radial_x, radial_z)
+    if radial_length < 1.0:
+        radial_x, radial_z, radial_length = 0.0, -1.0, 1.0
+    unit_x, unit_z = radial_x / radial_length, radial_z / radial_length
+    coreward = -(dx * unit_x + dz * unit_z)
+    spinward = dx * unit_z - dz * unit_x
+    if abs(coreward) >= abs(spinward):
+        direction = "COREWARD" if coreward >= 0 else "RIMWARD"
+    else:
+        direction = "SPINWARD" if spinward >= 0 else "TRAILING"
+
+    target_height = target[1]
+    if target_height >= 50.0:
+        plane = f"ABOVE {abs(target_height):,.0f} LY"
+    elif target_height <= -50.0:
+        plane = f"BELOW {abs(target_height):,.0f} LY"
+    else:
+        plane = "GALACTIC PLANE"
+    vertical = "ASCENDING" if dy > max(10.0, planar * 0.45) else (
+        "DESCENDING" if dy < -max(10.0, planar * 0.45) else ""
+    )
+    return {
+        "direction": direction,
+        "plane": plane,
+        "vertical": vertical,
+        "distance_ly": distance,
+        "label": " · ".join(part for part in (direction, plane) if part),
+    }
 
 
 def _preserve_unconfirmed_scan_total(startup_replay, event_data, incoming_system,
@@ -219,7 +286,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     _COCKPIT_STATE_FILE = "last_cockpit_state.json"
     _COCKPIT_STATE_SCHEMA = 1
     _COCKPIT_STATE_FIELDS = (
-        "current_sys", "previous_sys", "previous_coords",
+        "current_sys", "_navigation_system_arrival_epoch",
+        "previous_sys", "previous_coords",
         "current_system_address", "current_coords", "star_class",
         "scanned", "total", "scan_total_confirmed", "navigation_scan_progress",
         "navigation_scan_progress_source", "organic_count", "system_bio_signals",
@@ -899,6 +967,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._latest_exploration_intelligence = None
         self._invalidate_exploration_intelligence()
         self.current_sys = "---"
+        self._navigation_system_arrival_epoch = None
         self.previous_sys = None
         self.previous_coords = None
         self.current_system_address = None
@@ -1712,6 +1781,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._startup_boot_journal_timeout_job = None
         
         self.current_sys = "---"
+        self._navigation_system_arrival_epoch = None
         self.previous_sys = None
         self.previous_coords = None
         self.current_system_address = None
@@ -4521,6 +4591,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         fuel_percent = self._current_fuel_percent()
         fsd_readiness = self._navigation_fsd_readiness_context()
         local_target = self._navigation_local_target_context(next_name)
+        galactic_vector = _galactic_vector_context(
+            self.current_coords, next_coords,
+        ) if next_name and next_coords else {}
+        arrival_epoch = getattr(self, "_navigation_system_arrival_epoch", None)
         neutron_boost = {
             "armed": bool(getattr(self, "neutron_boost_armed", False)),
             "value": getattr(self, "neutron_boost_value", None),
@@ -4644,6 +4718,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             "ship_config": ship_config,
             "fsd_readiness": fsd_readiness,
             "local_target": local_target,
+            "galactic_vector": galactic_vector,
+            "system_arrival_epoch": arrival_epoch,
             "neutron_boost": neutron_boost,
             "region": self._navigation_region_context(),
             "journal_event": self._navigation_hud_event_context(),
@@ -7716,6 +7792,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
             # State reset for new system
             incoming_sys = d.get("star_system", "Unknown")
+            previous_current_sys = self.current_sys
             preserve_unconfirmed_total = _preserve_unconfirmed_scan_total(
                 startup_replay, data, incoming_sys, self.current_sys,
                 getattr(self, "scan_total_confirmed", False),
@@ -7731,6 +7808,14 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 and traffic_before_reset
             )
             self.current_sys = incoming_sys
+            if (is_jump
+                    or self._navigation_system_arrival_epoch is None
+                    or previous_current_sys in (None, "", "---", "Unknown")
+                    or incoming_sys != previous_current_sys):
+                event_timestamp = raw.get("timestamp") if isinstance(raw, dict) else None
+                self._navigation_system_arrival_epoch = _journal_epoch(
+                    event_timestamp, time.time(),
+                )
             if outgoing_sys:
                 self.previous_sys = outgoing_sys
                 self.previous_coords = prev_coords

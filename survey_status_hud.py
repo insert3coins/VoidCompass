@@ -377,11 +377,15 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
         geo_count = _safe_int(body.get("geo_count"))
         complete = _safe_int(body.get("organic_complete_count"))
         needs_dss = not bool(body.get("dss_complete"))
-        # Keep every known non-stellar body in the compact system strip. A
-        # quiet NO SIGNALS row is still useful survey context and makes the
-        # system inventory complete rather than silently filtering planets.
         notable = notable_by_id.get(str(body.get("body_id"))) if body.get("body_id") is not None else None
         notable = notable or notable_by_name.get(str(body.get("name") or "").casefold())
+        # Survey Operations is the cockpit work list, not the full system
+        # inventory. Routine stars/planets remain available in Explore &
+        # Survey; this overlay retains only confirmed surface signals and
+        # valuable/notable mapping targets (including terraformables and the
+        # valuable world classes classified by notable_bodies.py).
+        if not (bio_count or geo_count or notable):
+            continue
         if notable:
             represented_notable.add((
                 str(notable.get("body_id")), str(notable.get("name") or "").casefold(),
@@ -1075,7 +1079,7 @@ class SurveyStatusHUD:
 
         total_low = sum(_safe_int(row.get("min_value")) for row in rows)
         total_high = sum(_safe_int(row.get("max_value")) for row in rows)
-        footer = f"BODIES {len(rows)} · OPEN {len(active_rows)} · COMPLETE {len(completed_rows)}"
+        footer = f"TARGETS {len(rows)} · OPEN {len(active_rows)} · COMPLETE {len(completed_rows)}"
         value = self._range_text(total_low, total_high)
         self._text(16, height - 14, footer, palette["dim"], ("Courier", 7, "bold"))
         self._text(WIDTH - 16, height - 14, f"BIO BASE {value}" if value else "", palette["orange"], ("Courier", 7, "bold"), "e")
