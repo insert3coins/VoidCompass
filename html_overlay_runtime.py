@@ -24,7 +24,12 @@ class HtmlOverlayRuntime:
 
     def __init__(self, root):
         self.root = root
-        self.server = HtmlOverlayServer(_resource_path("web"))
+        self.server = HtmlOverlayServer(
+            _resource_path("web"),
+            presentation_held=bool(getattr(
+                root, "_voidcompass_startup_presentation_held", False,
+            )),
+        )
         self.process = None
         self._closing_process = None
         self.surfaces = {}
@@ -74,14 +79,10 @@ class HtmlOverlayRuntime:
     def register(self, surface):
         self.surfaces[surface.overlay_id] = surface
         self.server.register(surface.overlay_id, surface.template, surface.title)
-        # Register models during journal recovery, but do not create any
-        # browser windows while the bootloader owns the presentation.  A
-        # hidden WebView is still a native top-level window and some WebView2
-        # versions briefly map it while their controller is initialising.
-        if not bool(getattr(
-            self.root, "_voidcompass_startup_presentation_held", False,
-        )):
-            self._ensure_process()
+        # Pre-warm WebView2 and let each hidden page render while the bootloader
+        # owns the presentation. HtmlOverlayServer supplies an independent,
+        # host-enforced curtain so no model can accidentally map its window.
+        self._ensure_process()
 
     def release_startup_hold(self):
         """Start the shared browser host only after the live UI handoff."""
@@ -91,13 +92,14 @@ class HtmlOverlayRuntime:
             self.root, "_voidcompass_startup_presentation_held", False,
         )):
             return False
-        # Surface objects may have existed throughout a long journal replay.
-        # Their renderer timeout begins now—not when their hidden models were
-        # first registered behind the bootloader.
+        # Reveal the already-warmed native surfaces atomically. Any surface
+        # that did not finish warming receives a fresh fallback timeout now.
+        self.server.set_presentation_held(False)
         started_at = time.monotonic()
         for surface in self.surfaces.values():
-            surface._started_at = started_at
-            surface._renderer_lost_at = None
+            if not surface.ready:
+                surface._started_at = started_at
+                surface._renderer_lost_at = None
         self._ensure_process()
         return True
 

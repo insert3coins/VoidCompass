@@ -2517,11 +2517,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return
         self._restore_overlay_hotkey_windows(restore)
         self._apply_adaptive_overlay_scene()
-        # HTML surfaces have collected their final models while the bootloader
-        # was visible, but their shared WebView2 process remained dormant so
-        # no native browser window could flash over journal recovery.  Launch
-        # it only now, after the splash has gone and the live UI owns the
-        # presentation.
+        # HTML surfaces and their shared WebView2 process have pre-warmed
+        # behind a host-enforced native window curtain. Drop that final curtain
+        # only now, after the splash has gone and the live UI owns the
+        # presentation, so rendered overlays appear without a second startup.
         html_runtime = getattr(
             self.root, "_voidcompass_html_overlay_runtime", None,
         )
@@ -2530,7 +2529,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             try:
                 release_html()
             except Exception as exc:
-                logging.warning("Deferred HTML overlay launch failed: %s", exc)
+                logging.warning("HTML overlay handoff failed: %s", exc)
         try:
             self.root.after(80, self._reapply_overlay_positions)
         except tk.TclError:
