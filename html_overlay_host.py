@@ -24,6 +24,8 @@ SWP_NOSIZE = 0x0001
 SWP_NOMOVE = 0x0002
 SWP_NOACTIVATE = 0x0010
 SWP_FRAMECHANGED = 0x0020
+HIDDEN_WINDOW_X = -32000
+HIDDEN_WINDOW_Y = -32000
 _LOOPBACK_OPENER = build_opener(ProxyHandler({}))
 
 
@@ -151,7 +153,16 @@ class _WindowController:
             height = max(24, int(payload.get("height") or 180))
             x = int(payload.get("x") or 0)
             y = int(payload.get("y") or 0)
-            geometry = (x, y, width, height)
+            requested_geometry = (x, y, width, height)
+            # WebView2/WinForms can map a dynamically created window despite
+            # pywebview's hidden=True request. While startup owns the screen,
+            # quarantine every native surface outside the virtual desktop as
+            # well as issuing SW_HIDE. Release moves it to the saved position
+            # before the first visible frame.
+            geometry = (
+                (HIDDEN_WINDOW_X, HIDDEN_WINDOW_Y, width, height)
+                if presentation_held else requested_geometry
+            )
             handle = _native_handle(self.window)
             if not handle:
                 return {"ok": False, "reason": "native handle pending"}
@@ -178,7 +189,12 @@ class _WindowController:
             if visible and now - self.last_topmost_refresh >= 12.0:
                 _apply_windows_style(self.window, click_through)
                 self.last_topmost_refresh = now
-            return {"ok": True, "handle": handle}
+            return {
+                "ok": True,
+                "handle": handle,
+                "visible": visible,
+                "curtained": bool(presentation_held),
+            }
         except Exception as exc:
             return {"ok": False, "reason": f"{type(exc).__name__}: {exc}"}
 
@@ -237,10 +253,15 @@ class _OverlayHost:
         window_state = spec.get("window") if isinstance(spec, dict) else {}
         width = max(24, int((window_state or {}).get("width") or 360))
         height = max(24, int((window_state or {}).get("height") or 180))
+        # Always create hidden surfaces in quarantine. The controller moves a
+        # released window to its authoritative profile coordinates before it
+        # calls ShowWindow, eliminating WebView2's dynamic-window startup flash.
+        start_x = HIDDEN_WINDOW_X if hidden else int((window_state or {}).get("x") or 0)
+        start_y = HIDDEN_WINDOW_Y if hidden else int((window_state or {}).get("y") or 0)
         window = self.webview.create_window(
             str(spec.get("title") or f"Void Compass {overlay_id}"),
             url=self.page_url(overlay_id, spec.get("template")),
-            width=width, height=height, x=0, y=0,
+            width=width, height=height, x=start_x, y=start_y,
             min_size=(24, 24), resizable=False, hidden=hidden,
             frameless=True, easy_drag=False, shadow=False, focus=False,
             on_top=True, transparent=True, background_color="#000000",
