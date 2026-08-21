@@ -670,6 +670,23 @@ class ExpeditionMapView:
         if not self._opened_once or (not self.server.client_count and stale):
             self.open_browser()
 
+    def has_live_browser(self, grace_seconds=20.0):
+        """Return whether an opened browser atlas still consumes snapshots.
+
+        The HTML atlas is independent of the native GALACTIC workspace after
+        launch.  Keep publishing while its event stream is connected, with a
+        short grace period for Chromium reconnects and background-tab stalls.
+        """
+        if self._disposed or not self._opened_once or not hasattr(self, "server"):
+            return False
+        clients, seen = self._server_status_hint
+        if clients > 0:
+            return True
+        return bool(
+            seen
+            and time.monotonic() - float(seen) <= max(0.0, float(grace_seconds))
+        )
+
     def _queue_browser_command(self, payload):
         if self._disposed or not isinstance(payload, dict):
             return False
