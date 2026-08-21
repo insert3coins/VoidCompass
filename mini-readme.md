@@ -9,6 +9,7 @@
 *   Made every HTML overlay revision-aware through lightweight local checks that avoid WebView2 connection-pool starvation, transfer full scenes only after a change and detect in-place Canvas text/geometry updates even when item IDs remain stable.
 *   Rebuilt Survey Operations as a dedicated semantic HTML workboard with live FSS progress, biological sample nodes, compact completed surfaces, GEO/DSS status and valuable-body intelligence instead of mirroring its former Tk pixels.
 *   Reimagined the HTML Navigation state instrument as a 30 FPS additive Canvas display with distinct flight, supercruise, FSD, scanner, surface, vehicle, hazard, mining and Carrier animation dialects, smooth state dissolves, journal-event reactions and a restrained reduced-motion mode.
+*   Kept the Navigation HUD's angular inset while covering the complete WebView surface, preventing transparent corner cut-outs from appearing as white blocks in-game or in OBS.
 *   Made the shared WebView2 cockpit close cooperatively and in parallel with the final profile-state flush, removing its former serial shutdown wait while retaining forced cleanup as a bounded fallback.
 
 ## Earlier releases
