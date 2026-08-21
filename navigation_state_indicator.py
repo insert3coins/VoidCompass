@@ -158,6 +158,82 @@ class NavigationStateIndicator:
             self._line(x, y - 4, x + side * 5, y,
                        colour=dim, tags=tags)
 
+    def draw_center_core(self, model, phase, *, tags="nav_state_core", motion=True):
+        """Add one restrained state pulse beneath the fixed centre label."""
+        profile = str(model.get("motion_profile") or "flight")
+        design = DESIGNS.get(profile, DESIGNS["flight"])
+        variant = self._resolve_variant(
+            profile, model.get("state"), design.variant,
+        )
+        scene = state_scene(profile)
+        level = str(model.get("animation_intensity") or "Standard").title()
+        speed, depth = {
+            "Calm": (0.78, 0.72),
+            "Energetic": (1.18, 1.28),
+        }.get(level, (1.0, 1.0))
+        progress = self._cycle(phase * speed, scene.period) if motion else 0.18
+        wave = self._wave(progress) if motion else 0.35
+        colour = model["state_color"]
+        activity = max(0.0, min(
+            1.0, float(model.get("activity_energy", 0.0) or 0.0),
+        ))
+        dim = self.mix_colour(colour, min(0.38, 0.22 + depth * 0.06))
+        glow = self.mix_colour(
+            colour, min(0.88, 0.58 + activity * 0.22),
+        )
+        y = float(model.get("label_y", model.get("scene_y", 0.0)))
+        cx = float(model.get("label_x", 0.0))
+        label_half = max(13.0, float(model.get("label_width", 0.0)) / 2.0)
+        rail_left = cx - label_half - 3.0
+        rail_right = cx + label_half + 3.0
+        rail_y = min(float(model.get("scene_bottom", y + 15.0)) - 3.0, y + 9.0)
+        rail_span = max(1.0, rail_right - rail_left)
+        self._line(rail_left, rail_y, rail_right, rail_y,
+                   colour=self.mix_colour(colour, 0.18), tags=tags)
+
+        if not motion:
+            self._line(cx - 3, rail_y, cx + 3, rail_y,
+                       colour=dim, width=2, tags=tags)
+            return
+
+        dialect = design.dialect
+        travelling = (
+            profile == "supercruise" or variant == "jump"
+            or dialect in {"planetary", "handoff"}
+        )
+        if travelling:
+            local = self._cycle(progress * 8.0, 1.0)
+            if variant in {"surface_departure", "orbital_departure", "board"}:
+                local = 1.0 - local
+            x = rail_left + rail_span * local
+            self._line(max(rail_left, x - 5), rail_y, x, rail_y,
+                       colour=glow, width=2, tags=tags)
+        elif dialect == "survey":
+            x = rail_left + rail_span * wave
+            self._line(max(rail_left, x - 4), rail_y, x, rail_y,
+                       colour=glow, tags=tags)
+        elif dialect in {"station", "surface"} and variant in {"docked", "landed"}:
+            for offset in (-5, 0, 5):
+                self._line(cx + offset, rail_y - 1, cx + offset, rail_y + 1,
+                           colour=colour if offset == 0 else dim, tags=tags)
+        elif dialect == "carrier":
+            offset = (-6, 0, 6)[int(self._cycle(progress * 4.0, 1.0) * 3)]
+            self._line(cx + offset - 2, rail_y, cx + offset + 2, rail_y,
+                       colour=glow, width=2, tags=tags)
+        else:
+            half = 2.0 + wave * (6.0 if dialect in {"fsd", "hazard"} else 3.0)
+            self._line(cx - half, rail_y, cx + half, rail_y,
+                       colour=glow, width=2 if wave > 0.72 else 1, tags=tags)
+
+        # A state change gets one quiet resolving glint; live events only lift
+        # its brightness through activity_energy and do not add another packet.
+        transition = model.get("transition_progress")
+        if transition is not None:
+            transition = max(0.0, min(1.0, float(transition)))
+            x = rail_left + rail_span * self._ease(transition)
+            self._line(max(rail_left, x - 5), rail_y, x, rail_y,
+                       colour=colour, width=2, tags=tags)
+
     def draw_state(self, model, phase, *, tags="nav_state_core", motion=True):
         profile = str(model.get("motion_profile") or "flight")
         design = DESIGNS.get(profile, DESIGNS["flight"])
