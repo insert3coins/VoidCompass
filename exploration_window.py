@@ -402,8 +402,19 @@ class ExplorationWindow(ThemedWindowMixin):
         )
 
     def _refresh_visible_map(self):
-        if self.expedition_map_view and self._map_workspace_is_visible():
-            self.expedition_map_view.refresh(self.system_history_rows, self.ledger_rows)
+        """Publish atlas state to either the native page or an open browser.
+
+        The browser map remains a live journal consumer after the commander
+        leaves the native GALACTIC rail page.  Restricting publication to the
+        native workspace made FSDJump, CarrierJump, scans and route changes
+        appear frozen until that page was revisited.
+        """
+        view = self.expedition_map_view
+        if not view:
+            return
+        browser_live = getattr(view, "has_live_browser", lambda: False)()
+        if self._map_workspace_is_visible() or browser_live:
+            view.refresh(self.system_history_rows, self.ledger_rows)
 
     def _restore_view_state(self):
         self._restoring_view_state = True
