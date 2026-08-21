@@ -10,6 +10,8 @@
 *   Rebuilt Survey Operations as a dedicated semantic HTML workboard with live FSS progress, biological sample nodes, compact completed surfaces, GEO/DSS status and valuable-body intelligence instead of mirroring its former Tk pixels.
 *   Reimagined the HTML Navigation state instrument as a 30 FPS additive Canvas display with distinct flight, supercruise, FSD, scanner, surface, vehicle, hazard, mining and Carrier animation dialects, smooth state dissolves, journal-event reactions and a restrained reduced-motion mode.
 *   Kept the Navigation HUD's angular inset while covering the complete WebView surface, preventing transparent corner cut-outs from appearing as white blocks in-game or in OBS.
+*   Increased the HTML Navigation HUD's supporting route, survey, metric, metadata and context type for better in-game readability while retaining the established state-indicator and current-system scales.
+*   Deferred the shared WebView2 process itself until the bootloader's final live handoff, preventing HTML overlay windows from appearing while journal and history recovery are still running.
 *   Made the shared WebView2 cockpit close cooperatively and in parallel with the final profile-state flush, removing its former serial shutdown wait while retaining forced cleanup as a bounded fallback.
 
 ## Earlier releases

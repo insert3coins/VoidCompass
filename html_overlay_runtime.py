@@ -74,7 +74,32 @@ class HtmlOverlayRuntime:
     def register(self, surface):
         self.surfaces[surface.overlay_id] = surface
         self.server.register(surface.overlay_id, surface.template, surface.title)
+        # Register models during journal recovery, but do not create any
+        # browser windows while the bootloader owns the presentation.  A
+        # hidden WebView is still a native top-level window and some WebView2
+        # versions briefly map it while their controller is initialising.
+        if not bool(getattr(
+            self.root, "_voidcompass_startup_presentation_held", False,
+        )):
+            self._ensure_process()
+
+    def release_startup_hold(self):
+        """Start the shared browser host only after the live UI handoff."""
+        if self._disposed or not self.surfaces:
+            return False
+        if bool(getattr(
+            self.root, "_voidcompass_startup_presentation_held", False,
+        )):
+            return False
+        # Surface objects may have existed throughout a long journal replay.
+        # Their renderer timeout begins now—not when their hidden models were
+        # first registered behind the bootloader.
+        started_at = time.monotonic()
+        for surface in self.surfaces.values():
+            surface._started_at = started_at
+            surface._renderer_lost_at = None
         self._ensure_process()
+        return True
 
     def unregister(self, surface):
         if self.surfaces.get(surface.overlay_id) is surface:
@@ -197,6 +222,13 @@ class HtmlOverlaySurface:
     def startup_failed(self):
         if self._disposed:
             return True
+        # The browser process is deliberately dormant behind the startup
+        # curtain.  Do not interpret that intentional delay as renderer
+        # failure and fall back to Tk before the boot handoff occurs.
+        if bool(getattr(
+            self.root, "_voidcompass_startup_presentation_held", False,
+        )):
+            return False
         elapsed = time.monotonic() - self._started_at
         if self.ready:
             return False

@@ -2390,8 +2390,23 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if not window.winfo_exists():
                     continue
                 attr = "hud" if name == "navigation" else name
-                html_ready = bool(getattr(getattr(self, attr, None), "_html_ready", False))
-                window.attributes("-alpha", 0.0 if html_ready else 1.0)
+                overlay = getattr(self, attr, None)
+                html_ready = bool(getattr(overlay, "_html_ready", False))
+                # With the WebView host deferred until handoff, readiness is
+                # intentionally false here. Keep an active HTML proxy clear
+                # while its browser surface starts; its bridge restores the
+                # native renderer automatically if startup genuinely fails.
+                html_pending = bool(getattr(overlay, "_html_bridge", None))
+                canvas_bridge = getattr(overlay, "_html_canvas_bridge", None)
+                survey_bridge = getattr(overlay, "_html_survey_bridge", None)
+                html_pending = bool(
+                    html_pending
+                    or getattr(canvas_bridge, "surface", None) is not None
+                    or getattr(survey_bridge, "surface", None) is not None
+                )
+                window.attributes(
+                    "-alpha", 0.0 if html_ready or html_pending else 1.0,
+                )
                 window._voidcompass_startup_held = False
             except (AttributeError, tk.TclError):
                 continue
@@ -2502,6 +2517,20 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return
         self._restore_overlay_hotkey_windows(restore)
         self._apply_adaptive_overlay_scene()
+        # HTML surfaces have collected their final models while the bootloader
+        # was visible, but their shared WebView2 process remained dormant so
+        # no native browser window could flash over journal recovery.  Launch
+        # it only now, after the splash has gone and the live UI owns the
+        # presentation.
+        html_runtime = getattr(
+            self.root, "_voidcompass_html_overlay_runtime", None,
+        )
+        release_html = getattr(html_runtime, "release_startup_hold", None)
+        if callable(release_html):
+            try:
+                release_html()
+            except Exception as exc:
+                logging.warning("Deferred HTML overlay launch failed: %s", exc)
         try:
             self.root.after(80, self._reapply_overlay_positions)
         except tk.TclError:
