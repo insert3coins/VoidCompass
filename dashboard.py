@@ -2370,7 +2370,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.root._voidcompass_startup_presentation_held = True
         for name, window in self._overlay_hotkey_window_items():
             try:
-                if self._overlay_window_is_shown(window):
+                attr = "hud" if name == "navigation" else name
+                overlay = getattr(self, attr, None)
+                pending = bool(getattr(
+                    overlay, "_startup_pending_visible", False,
+                ))
+                if self._overlay_window_is_shown(window) or pending:
                     self._startup_overlay_restore.add(name)
                 window.withdraw()
             except (AttributeError, tk.TclError):
@@ -2702,7 +2707,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 continue
             try:
                 if window.winfo_exists():
-                    window.deiconify()
+                    overlay_attr = "hud" if attr == "navigation" else attr
+                    overlay = getattr(self, overlay_attr, None)
+                    release_pending = getattr(
+                        overlay, "release_startup_visibility", None,
+                    )
+                    if bool(getattr(
+                        overlay, "_startup_pending_visible", False,
+                    )) and callable(release_pending):
+                        if not release_pending():
+                            continue
+                    else:
+                        window.deiconify()
                     window.attributes("-topmost", True)
                     window.lift()
                     if attr == "ground_popup":

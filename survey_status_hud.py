@@ -544,6 +544,7 @@ class SurveyStatusHUD:
         self._html_render_model = None
         self._last_height = None
         self._suppressed = False
+        self._startup_pending_visible = False
         self.win = tk.Toplevel(root)
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
         self.canvas = tk.Canvas(self.win, width=WIDTH, height=90, bg=overlay_bg, highlightthickness=0)
@@ -569,6 +570,20 @@ class SurveyStatusHUD:
     def show(self):
         if self._visible or self._suppressed:
             return False
+        if bool(getattr(
+            self.root, "_voidcompass_startup_presentation_held", False,
+        )):
+            # Cached survey state is intentionally rendered during startup so
+            # the HTML surface can pre-warm, but this native proxy must remain
+            # genuinely withdrawn. Alpha alone is not reliable across a Tk
+            # withdraw/deiconify cycle on every Windows build.
+            self._startup_pending_visible = True
+            try:
+                self.win.withdraw()
+                self.win.attributes("-alpha", 0.0)
+            except Exception:
+                pass
+            return False
         try:
             x = _safe_int(self.config.get("survey_status_hud_x"), 30)
             y = _safe_int(self.config.get("survey_status_hud_y"), 520)
@@ -577,20 +592,32 @@ class SurveyStatusHUD:
             self.win.deiconify()
             self.win.attributes("-topmost", True)
             self.win.lift()
+            self._startup_pending_visible = False
             self._visible = True
             return True
         except Exception:
             return False
 
     def hide(self):
+        pending = self._startup_pending_visible
+        self._startup_pending_visible = False
         if not self._visible:
-            return False
+            return bool(pending)
         try:
             self.win.withdraw()
         except Exception:
             return False
         self._visible = False
         return True
+
+    def release_startup_visibility(self):
+        """Present a survey that was prepared behind the startup curtain."""
+        if not self._startup_pending_visible:
+            return False
+        if self._suppressed:
+            self._startup_pending_visible = False
+            return False
+        return self.show()
 
     def suppress(self):
         """Hide while retaining the current survey for a later undock."""
