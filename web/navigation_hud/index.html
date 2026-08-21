@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Void Compass Navigation HUD</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="hud" class="hud standard" data-motion="flight" data-state="FLIGHT">
+    <div class="chrome chrome-top"></div>
+    <div class="chrome chrome-bottom"></div>
+    <div class="scanlines"></div><div class="vignette"></div>
+
+    <header class="state-instrument" aria-label="Current navigation state">
+      <canvas id="state-canvas" aria-hidden="true"></canvas>
+      <div class="state-field state-left"><i></i><i></i><i></i><i></i></div>
+      <div class="state-core">
+        <span class="core-bracket left"></span>
+        <strong id="state-label">FLIGHT</strong>
+        <span class="core-bracket right"></span>
+        <b class="core-pulse"></b>
+      </div>
+      <div class="state-field state-right"><i></i><i></i><i></i><i></i></div>
+      <div class="state-packet"></div>
+    </header>
+
+    <section class="system-block section">
+      <div class="locator-rail"><i></i></div>
+      <div class="system-meta">
+        <span>CURRENT SYSTEM</span>
+        <span id="region-label">REGION UNKNOWN</span>
+        <span id="system-clock">00:00</span>
+      </div>
+      <div id="current-system" class="current-system">---</div>
+    </section>
+
+    <section class="expanded-metrics section" aria-label="Navigation metrics">
+      <div><span>FUEL</span><strong id="expanded-fuel">--</strong></div>
+      <div><span>BIO</span><strong id="expanded-bio">0/0</strong></div>
+      <div><span>GEO</span><strong id="expanded-geo">0</strong></div>
+      <div><span>TRAFFIC</span><strong id="expanded-traffic">0 / 0 / 0</strong></div>
+    </section>
+
+    <section class="route-block section">
+      <div class="route-header">
+        <strong id="route-title">NO ACTIVE ROUTE</strong>
+        <span id="route-next"></span>
+        <span id="route-distance"></span>
+      </div>
+      <div id="route-track" class="route-track">
+        <div class="route-line"><i id="route-progress"></i><b id="route-packet"></b></div>
+        <div id="route-pips" class="route-pips"></div>
+      </div>
+      <div class="route-captions"><span id="route-origin">CURRENT</span><span id="route-destination">NEXT</span></div>
+    </section>
+
+    <section class="survey-block section">
+      <div class="survey-header">
+        <strong>SYSTEM SURVEY</strong>
+        <span id="survey-state">COUNT UNKNOWN</span>
+        <span id="survey-count">0/? · --%</span>
+      </div>
+      <div id="survey-rail" class="survey-rail"></div>
+    </section>
+
+    <section class="standard-metrics section" aria-label="Exploration metrics">
+      <div><span>FUEL</span><strong id="metric-fuel">--</strong></div>
+      <div><span>BIO</span><strong id="metric-bio">0/0</strong></div>
+      <div><span>GEO</span><strong id="metric-geo">0</strong></div>
+    </section>
+
+    <footer class="context-rail">
+      <span id="context-label"></span>
+      <span id="secondary-label"></span>
+      <span id="traffic-label">TRAFFIC 0/0/0</span>
+    </footer>
+
+    <div id="link-state" class="link-state">HTML NAV // CONNECTING</div>
+  </main>
+  <script src="indicator.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

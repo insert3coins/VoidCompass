@@ -46,6 +46,8 @@ from station_info_hud import StationInfoHUD
 from survey_status_hud import SurveyStatusHUD
 from toast_hud import ToastHUD
 from heartbeat_hud import HeartbeatHUD
+from html_canvas_overlay import attach_html_canvas_overlay
+from html_survey_overlay import attach_html_survey_overlay
 from overlay_input import set_mouse_passthrough
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
@@ -345,6 +347,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         ("heartbeat_hud", "heartbeat_hud_x", "heartbeat_hud_y"),
         ("colony_overlay", "colony_overlay_x", "colony_overlay_y"),
     )
+    _HTML_CANVAS_OVERLAY_SPECS = {
+        "cargo_hud": ("cargo", "Void Compass Cargo", "cargo_overlay_enabled"),
+        "carrier_hud": ("carrier", "Void Compass Carrier", "carrier_overlay_enabled"),
+        "prospector_hud": ("prospector", "Void Compass Prospector", "prospector_overlay_enabled"),
+        "system_info_hud": ("system-info", "Void Compass System Intelligence", "system_info_enabled"),
+        "gravity_warning_hud": ("gravity", "Void Compass Gravity Warning", "gravity_warning_overlay_enabled"),
+        "station_info_hud": ("station", "Void Compass Station Link", "station_info_overlay_enabled"),
+        "survey_status_hud": ("survey", "Void Compass Survey Operations", "survey_status_overlay_enabled"),
+        "toast_hud": ("toast", "Void Compass Event Toast", "toast_overlay_enabled"),
+        "heartbeat_hud": ("heartbeat", "Void Compass Journal Heartbeat", "heartbeat_overlay_enabled"),
+        "colony_overlay": ("colony", "Void Compass Colony Logistics", "colony_overlay_enabled"),
+    }
 
     _COCKPIT_BRAIN_MILESTONES = {
         "systems": (10, 25, 50, 100, 250, 500, 1000, 2500, 5000),
@@ -2185,6 +2199,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         else:
             self.colony_overlay = None
 
+        self._attach_html_overlay_renderers()
+
         # Capture each overlay's intended initial visibility and withdraw it
         # before database construction or any Tk idle processing can map a
         # transparent startup Toplevel. Journal catch-up may update these
@@ -2369,11 +2385,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     def _release_startup_overlay_curtain(self):
         """Make fully prepared overlays drawable without mapping them yet."""
         self._reapply_overlay_positions()
-        for _name, window in self._overlay_hotkey_window_items():
+        for name, window in self._overlay_hotkey_window_items():
             try:
                 if not window.winfo_exists():
                     continue
-                window.attributes("-alpha", 1.0)
+                attr = "hud" if name == "navigation" else name
+                html_ready = bool(getattr(getattr(self, attr, None), "_html_ready", False))
+                window.attributes("-alpha", 0.0 if html_ready else 1.0)
                 window._voidcompass_startup_held = False
             except (AttributeError, tk.TclError):
                 continue
@@ -2557,6 +2575,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 if window.winfo_exists():
                     window.geometry(overlay_chrome.position_geometry(x, y))
             except (AttributeError, tk.TclError):
+                pass
+        sync_html_window = getattr(overlay, "sync_html_window", None)
+        if callable(sync_html_window):
+            try:
+                sync_html_window(x, y)
+            except Exception:
                 pass
         self._overlay_pos_last_saved[attr] = (x, y)
         if authority_s and authority_s > 0:
@@ -3145,6 +3169,15 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             try:
                 if window is not None:
                     window.withdraw()
+            except Exception:
+                pass
+        # The HTML/WebView2 cockpit is a separate process. Begin its graceful
+        # teardown now so it closes in parallel with the state durability work
+        # below instead of adding a serial wait after Tk is destroyed.
+        html_runtime = getattr(self.root, "_voidcompass_html_overlay_runtime", None)
+        if html_runtime is not None:
+            try:
+                html_runtime.dispose()
             except Exception:
                 pass
         if getattr(self, "watcher", None):
@@ -4130,9 +4163,40 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 self.colony_overlay.win.destroy()
             self.colony_overlay = None
 
+        self._attach_html_overlay_renderers()
+        self._apply_html_overlay_renderer()
+
         self._sync_cache_rebuild_edsm_option()
         self._apply_overlay_mouse_passthrough()
         self._apply_adaptive_overlay_scene()
+
+    def _attach_html_overlay_renderers(self):
+        """Give every managed Canvas overlay a surface in the shared host."""
+        positions = {
+            attr: (x_key, y_key) for attr, x_key, y_key in self._OVERLAY_POSITION_SPECS
+        }
+        for attr, (overlay_id, title, enabled_key) in self._HTML_CANVAS_OVERLAY_SPECS.items():
+            overlay = getattr(self, attr, None)
+            if overlay is None or not hasattr(overlay, "canvas"):
+                continue
+            x_key, y_key = positions[attr]
+            if attr == "survey_status_hud":
+                attach_html_survey_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            else:
+                attach_html_canvas_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+
+    def _apply_html_overlay_renderer(self):
+        """Switch all overlay surfaces together; each retains native fallback."""
+        enabled = bool(self.config.get("hud_html_renderer", False))
+        for attr in ("hud", *self._HTML_CANVAS_OVERLAY_SPECS):
+            overlay = getattr(self, attr, None)
+            setter = getattr(overlay, "set_html_renderer", None)
+            if callable(setter):
+                setter(enabled)
 
     def open_settings(self):
         def on_save():
