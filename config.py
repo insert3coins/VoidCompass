@@ -5,9 +5,9 @@ from platform_support import application_dir, default_screenshot_path, detect_el
 
 
 def _get_config_file():
-    # Packaged Windows and Linux builds are portable and keep writable state
-    # beside the executable. Source runs retain the existing working-directory
-    # behaviour used by development and tests.
+    # Packaged Windows builds are portable and keep writable state beside the
+    # executable. Source runs retain the existing working-directory behaviour
+    # used by development and tests.
     return str(application_dir() / "config.json")
 
 

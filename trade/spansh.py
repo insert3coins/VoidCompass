@@ -310,7 +310,7 @@ def riches_route(
     return systems
 
 
-def neutron_route(from_system, to_system, jump_range, efficiency=60):
+def neutron_route(from_system, to_system, jump_range, efficiency=60, supercharge_multiplier=4):
     if not from_system:
         raise SpanshError("No starting system known yet.")
     if not to_system:
@@ -320,6 +320,7 @@ def neutron_route(from_system, to_system, jump_range, efficiency=60):
         "to": to_system,
         "range": float(jump_range),
         "efficiency": int(efficiency),
+        "supercharge_multiplier": 6 if int(supercharge_multiplier) == 6 else 4,
     }
     result = submit_and_poll("route", payload)
     jumps = result.get("system_jumps") if isinstance(result, dict) else None
@@ -334,6 +335,7 @@ def neutron_route(from_system, to_system, jump_range, efficiency=60):
                 "distance_left": j.get("distance_left"),
                 "neutron": bool(j.get("neutron_star")),
                 "jumps": j.get("jumps"),
+                "supercharge_multiplier": 6 if int(supercharge_multiplier) == 6 else 4,
             }
             for j in jumps
         ],

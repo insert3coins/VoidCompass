@@ -1574,6 +1574,9 @@ async function start() {
       setConnection('connected', 'LOCAL CAPTURE');
     }
     dom.loading.classList.add('done');
+    if (window.parent !== window) {
+      window.parent.postMessage({type: 'voidcompass-atlas-ready'}, '*');
+    }
     if (captureMode) animate(performance.now());
     else requestAnimationFrame(animate);
   } catch (error) {

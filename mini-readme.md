@@ -1,22 +1,34 @@
 # VoidCompass // UPDATE LOG
 
-## v5.3.8.3 // Unified HTML Cockpit
-**Release Date:** 2026-Aug-21
+## v5.3.9 // HTML Exploration Command Deck
+**Release Date:** 2026-Aug-22
 
-*   Expanded the Windows HTML/WebView2 renderer from Navigation to the complete cockpit overlay suite: Cargo, Carrier, Prospector, System Intelligence, Gravity, Station Link, Survey Operations, Toasts, Journal Heartbeat and Colony Logistics now share the same private offline browser runtime.
-*   Added a renderer-neutral Canvas scene bridge so existing journal logic, theme changes, dynamic sizing and visual details remain authoritative while the browser handles transparent compositing. One process owns all overlay windows instead of launching one browser per HUD.
-*   Preserved profile-aware positions, enabled state, hotkeys, mouse passthrough, startup curtain and Overlay Layout Studio control through hidden native proxy windows. Studio drags now publish geometry immediately through a revision-driven host channel with frame-coalesced preview drawing; automatic per-overlay Tk fallback remains available and Linux stays fully native.
-*   Made every HTML overlay revision-aware through lightweight local checks that avoid WebView2 connection-pool starvation, transfer full scenes only after a change and detect in-place Canvas text/geometry updates even when item IDs remain stable.
-*   Rebuilt Survey Operations as a dedicated semantic HTML workboard with live FSS progress, biological sample nodes, compact completed surfaces, GEO/DSS status and valuable-body intelligence instead of mirroring its former Tk pixels.
-*   Reimagined the HTML Navigation state instrument as a 30 FPS additive Canvas display with distinct flight, supercruise, FSD, scanner, surface, vehicle, hazard, mining and Carrier animation dialects, smooth state dissolves, journal-event reactions and a restrained reduced-motion mode.
-*   Kept the Navigation HUD's angular inset while covering the complete WebView surface, preventing transparent corner cut-outs from appearing as white blocks in-game or in OBS.
-*   Increased the HTML Navigation HUD's supporting route, survey, metric, metadata and context type for better in-game readability while retaining the established state-indicator and current-system scales.
-*   Pre-warmed the shared WebView2 cockpit behind a host-enforced native-window curtain during journal recovery, then revealed its rendered overlays at the final live handoff without the former post-boot loading pause or any early overlay flash.
-*   Kept the on-screen HTML cockpit surfaces out of the Windows taskbar by enforcing tool-window semantics and removing WebView2's conflicting application-window style.
-*   Made the shared WebView2 cockpit close cooperatively and in parallel with the final profile-state flush, removing its former serial shutdown wait while retaining forced cleanup as a bounded fallback.
+*   Replaced the visible returning-user Tk Dashboard with a private native WebView2 command deck while retaining Python as the sole owner of journals, databases, profiles and game-state reduction.
+*   Built a fresh exploration-first interface with a live Current Survey, unified route/waypoint Next Leg, session and data telemetry, ranked field priorities, curated exploration feed, system workboard, expedition pulse, flight records and focused field-tool launchers.
+*   Moved every presented startup stage into the same HTML window: a rebuilt galactic flight-computer sequence now follows profile, survey-history, live-journal and cockpit readiness before cross-fading into the synchronized command deck without revealing the hidden migration host or overlays early.
+*   Hardened the boot-to-live handoff with bounded journal/history waits, background continuation for unusually slow historical indexes, a retry-tolerant WebView2 host monitor and dedicated HTML-host/renderer diagnostics; boot-only rendering, deferred Studio hydration, a compositor-safe paint boundary, a settling multi-pass native release guard and a strictly minimal JavaScript bridge prevent late snapshots or native accessibility recursion from blocking the live command deck.
+*   Replaced the Tk first-run window with a responsive HTML First Commissioning deck, including local journal-folder selection, flight-deck options, validation and safe exit; rerunning setup from Settings now returns to the same WebView2 surface.
+*   Added a token-protected loopback state and command boundary with revisioned long polling, strict command validation, safe same-origin assets and no cloud or external dashboard dependency.
+*   Made command-deck state, active page, theme and window geometry profile-aware; theme changes immediately republish the shared palette to the Dashboard, Galactic Atlas and cockpit surfaces.
+*   Docked the complete live Three.js Galactic Atlas inside the same command-deck window at full workspace size, with a distraction-free full-window focus mode, persistent camera/layer state and live journal updates; opening it no longer reveals the retired native MAP workspace or launches a browser fallback.
+*   Completed the visible Tk-to-HTML workspace migration: Commander Profile, Analytics, Captain's Log, Mission Control, Ground/Exobiology, Mining, Engineering/Synthesis, Fleet Carrier Command, Colonisation Recon, Achievements, the Value Ledger and complete Settings now live inside the command deck; legacy callbacks redirect there and can no longer reveal the internal Tk state host.
+*   Added every migrated workspace to the grouped HTML sidebar so Mission Control, Analytics, Captain's Log, Value Ledger, Achievements and each field system are directly reachable without first opening an intermediate hub.
+*   Expanded Explore & Survey with its real profile-aware route workspace: live Elite NavRoute inspection, editable saved waypoints, completion/copy controls and asynchronous Spansh neutron plotting/import remain in the same HTML window.
+*   Restored full Carrier expedition tooling in HTML, including editable/manual routes, asynchronous Spansh plotting and result import, per-jump fuel evidence, route progression, cargo/services/history and the Tritium hotspot finder.
+*   Brought the remaining specialist controls across with journal-backed profile/fleet records, engineering and Odyssey goals, FSD injection synthesis, material inventory, integration tests and a complete custom-theme workshop.
+*   Restored the profile-aware Adaptive Command Deck controls and rebuilt the focused Flight Log as a responsive HTML surface with its own saved footprint, live survey progress, route leg, data value and curated exploration record.
+*   Completed the choreographed HTML Navigation state dialects and Supercruise redesign from v5.3.8.4, and raised HTML Survey Operations typography to the Navigation HUD's readability standard.
+*   Rebuilt the profile-aware Overlay Layout Studio as a three-pane cockpit workstation: searchable surface roster, larger live virtual desktop, detailed selected-surface inspector, 10-pixel precision nudging, layout telemetry, named presets and a separate Display Rules console.
+*   Prevented Survey Operations from mapping an empty FSS-intake window; it now appears only when a bio, geo or notable body is actually listed, or while an active biological sample needs cockpit guidance.
+*   Made the HTML Survey Operations window resize from its measured rendered body stack rather than the older Tk row estimate, preventing its footer and final target from being clipped as discoveries expand the workboard.
+*   Restored Survey Operations' surface-focus lifecycle: approaching a planet isolates that body's useful survey work (or hides an irrelevant surface), completed biology remains focused on that planet, and only leaving it restores the complete system workboard.
+*   Restored Carrier Discord Operations to the HTML command deck with profile-aware connection state, automatic personal/Squadron event coverage, post notes and destination details, optional local departure time and manual status publishing.
+*   Increased small command-deck labels, telemetry, journal rows and supporting copy for better at-a-glance readability without enlarging the primary system readout.
 
 ## Earlier releases
 
+*   **v5.3.8.4** — Split HTML Navigation into distinct state-identity and live-response fields, added staged family-specific animations and journal reactions, rebuilt Supercruise from scratch and improved Survey Operations readability.
+*   **v5.3.8.3** — Unified the Windows cockpit overlays under one private WebView2 runtime, rebuilt Survey Operations and Navigation as semantic HTML/Canvas displays, retained native overlay/profile controls, and polished startup, shutdown, taskbar behaviour and in-game readability.
 *   **v5.3.8.2** — Kept an open Galactic Atlas subscribed to live journal, scan, route and position updates with connection-aware background publication and browser-reconnection grace.
 *   **v5.3.8.1** — Replaced the Tk/Pillow map with the private offline HTML/Three.js Galactic Atlas, preserving profile history, routes, intelligence and annotations while adding corrected north-up/east-right orientation, GPU clustering and a polished browser command deck.
 *   **v5.3.8** — Smoothed the Navigation HUD lifecycle, rebuilt its Discovery Rail, focused Survey Operations on priority targets, added route-direction and vertical context, and retained profile-safe system-arrival time.

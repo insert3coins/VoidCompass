@@ -249,15 +249,31 @@
     }
   }
 
+  function renderedContentHeight() {
+    const children = [...dom.content.children];
+    const gap = Number.parseFloat(getComputedStyle(dom.content).rowGap) || 0;
+    const contentHeight = children.reduce(
+      (total, child) => total + child.getBoundingClientRect().height,
+      0,
+    ) + Math.max(0, children.length - 1) * gap;
+    // Content begins at 67px. Reserve the footer's 24px lower band plus an
+    // eight-pixel compositor-safe margin. Measure children directly rather
+    // than content.scrollHeight: the content viewport itself expands with the
+    // window and would otherwise create a positive resize feedback loop.
+    return Math.max(90, Math.ceil(67 + contentHeight + 32));
+  }
+
   async function refresh(revision) {
     const response = await fetch(`/api/snapshot?${suffix}`, {cache: "no-store"});
     if (!response.ok) return;
     render(await response.json());
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const contentHeight = renderedContentHeight();
     lastRevision = revision;
     try {
       await fetch(`/api/rendered?${suffix}`, {
         method: "POST", headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({revision}),
+        body: JSON.stringify({revision, content_height: contentHeight}),
       });
       if (!readySent) {
         readySent = true;

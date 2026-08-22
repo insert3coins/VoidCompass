@@ -2,7 +2,6 @@ import PyInstaller.__main__
 import PyInstaller
 import importlib.util
 import os
-import platform
 import shutil
 import sys
 from version import APP_VERSION
@@ -12,13 +11,13 @@ from release_packager import create_release
 # This script automates the build process for SurveyAnalysis
 
 if __name__ == '__main__':
-    if sys.platform not in {'win32', 'linux'}:
-        raise SystemExit("Void Compass builds currently support Windows and Linux only.")
-    is_windows = sys.platform == 'win32'
-    machine = platform.machine().casefold()
-    if not is_windows and machine not in {'x86_64', 'amd64'}:
-        raise SystemExit("The native Linux release currently supports x86-64 only.")
-    target_name = f"{'Windows' if is_windows else 'Linux'}-x64"
+    if sys.platform != 'win32':
+        raise SystemExit(
+            "Void Compass 5.3.9 and newer require Windows x64/WebView2. "
+            "The experimental Linux build has been retired."
+        )
+    is_windows = True
+    target_name = "Windows-x64"
     pyinstaller_version = tuple(
         int(part) for part in PyInstaller.__version__.split('.')[:3]
     )
@@ -28,9 +27,9 @@ if __name__ == '__main__':
             "bootloaders can leak VCRUNTIME DLLs and leave _MEI directories behind. "
             "Run: python -m pip install -U 'pyinstaller>=6.21.0'"
         )
-    if is_windows and importlib.util.find_spec("webview") is None:
+    if importlib.util.find_spec("webview") is None:
         raise SystemExit(
-            "pywebview is required for the Windows HTML cockpit overlays. "
+            "pywebview is required for the HTML command deck and cockpit overlays. "
             "Run: python -m pip install -r requirements.txt"
         )
     print(f"Building with PyInstaller {PyInstaller.__version__}")

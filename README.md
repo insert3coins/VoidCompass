@@ -1,24 +1,24 @@
 # Void Compass
 
-**Current version: 5.3.8.3**
+**Current version: 5.3.9**
 
 Void Compass is an exploration-first companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a persistent command dashboard, deep survey intelligence, expedition planning and native in-game overlays.
 
 [Download releases](https://github.com/insert3coins/VoidCompass/releases) · [Read the wiki](https://github.com/insert3coins/VoidCompass/wiki) · [Report an issue](https://github.com/insert3coins/VoidCompass/issues/new/choose)
 
-Windows is the primary native release. A native Linux x86-64 build is also available for testing; neither build requires Python to be installed.
+Void Compass is distributed as a native Windows x64 application and does not require Python to be installed. Its command deck, Galactic Atlas and cockpit presentation use the bundled local HTML/WebView2 runtime; game processing remains local Python inside the packaged executable.
 
 ## At a glance
 
-- **Exploration command deck** — live flight, route, traffic, survey, discovery value, expedition and next-action intelligence in one view.
+- **HTML exploration command deck** — a fresh GPU-composited WebView2 interface for live flight, route, traffic, survey, discovery value, expedition and next-action intelligence in one view.
 - **Exploration-focused navigation** — seven clear destinations keep survey, map and commander records prominent while a small Field Tools page supports surface work and mining.
 - **Deep Survey** — explainable FSS, DSS, biological and geological progress; a Bio Field Assistant; discovery-significance ratings; valuable bodies; system architecture; revisit targets; Colonisation Recon and a searchable discovery archive.
-- **Galactic Atlas** — a fully offline, GPU-accelerated HTML/Three.js Milky Way map with genuine Elite XYZ structure, all 42 Universal Cartographics regions, routes, travel history, smart clusters, intelligence layers and commander annotations.
-- **Cockpit overlays** — themed, profile-aware HUDs with mouse passthrough, global hotkeys and a visual Overlay Layout Studio; on Windows one shared offline HTML/WebView2 runtime now renders the complete overlay suite with automatic native fallback.
+- **Galactic Atlas** — a fully offline, GPU-accelerated HTML/Three.js Milky Way map docked directly into the command deck, with genuine Elite XYZ structure, all 42 Universal Cartographics regions, routes, travel history, smart clusters, intelligence layers and commander annotations.
+- **Cockpit overlays** — themed, profile-aware HTML HUDs with mouse passthrough, global hotkeys and a visual Overlay Layout Studio, rendered by one shared offline WebView2 runtime.
 - **Quiet by design** — native overlays, toasts and a curated flight log provide useful feedback without cockpit chatter, speech synthesis or an AI service.
 - **Explorer field tools** — a touchdown-anchored Surface Survey Trail, Ground/Exobiology, Mining, exploration Engineering/Synthesis, Colonisation Recon and focused Achievements remain available without turning the app into a general career suite.
 
-The Dashboard is a single live exploration briefing: Current Survey, one unified game-route/waypoint Next Leg, three ranked Next Actions, Expedition Pulse, Discovery Summary and the curated Flight Log. It reflows on narrower windows and adapts only for Mining, Surface Survey, Carrier Expeditions and Station/Data Sale activity. Automatic mode can be manually locked, while raw Frontier journal events remain secondary diagnostics.
+The HTML Command Deck is the visible application shell for every launch. Its animated galactic flight-computer sequence covers profile, survey-history, live-journal and cockpit readiness, while first launch and later setup reruns use a matching HTML First Commissioning deck with native journal-folder selection. The live exploration briefing combines Current Survey, one unified game-route/waypoint Next Leg, ranked field priorities, Expedition Pulse, system intelligence and the curated Flight Log. Profile and theme changes update it from the same Python-owned journal state used by the overlays and map. Every presented application workspace now remains inside this command deck; the withdrawn Tk root is an internal journal/state host only and is never exposed as a second UI.
 
 ![Void Compass exploration dashboard](DashBoard.PNG)
 
@@ -28,14 +28,14 @@ The Dashboard is a single live exploration briefing: Current Survey, one unified
 
 | Group | Direct workspaces |
 | --- | --- |
-| **Exploration** | Dashboard, Explore & Survey and Galactic Atlas. Explore uses four clear pages—System Survey, Expedition, Discoveries and Logbook—with its Expedition page providing the live command centre, routes, objectives, field readiness and detailed mission tools. |
-| **Records** | Analytics and Profile. |
-| **Field Tools** | Ground/Exobiology, Mining, Engineering/Synthesis, Colonisation Recon and Explorer Achievements. |
-| **System** | About and Settings. |
+| **Exploration** | Dashboard, Explore & Survey, Mission Control and Galactic Atlas. Explore includes the live body workboard, editable profile waypoints, Elite NavRoute inspection and manual Spansh neutron plotting/import. |
+| **Records** | Flight Records, Analytics, Commander Profile, Captain's Log and the System Value Ledger. |
+| **Field Tools** | Ground/Exobiology, Mining, Engineering/Synthesis, Fleet Carrier Command, Colonisation Recon and Explorer Achievements. |
+| **System** | Overlay Layout Studio, complete profile-aware Settings and About. |
 
-Every group starts expanded, can be collapsed deliberately, remembers that choice per commander and remains reachable through a themed scrolling rail on smaller windows. Full secondary workspaces are still created only when first opened.
+Specialist state is hydrated only when its HTML page is opened, keeping routine journal publications and startup light while preserving live profile and theme changes.
 
-Settings is focused on the application itself: profiles and themes, journal paths, integrations, Adaptive Command, overlays and hotkeys, diagnostics, journal cache maintenance and first-run setup. Voice packs, personas, learned cockpit memory and speech controls are no longer part of the active application.
+Settings is focused on the application itself: profile themes and the custom palette workshop, journal paths, EDSM/EDDN/Discord integrations and tests, Adaptive Command, overlays and hotkeys, diagnostics, journal cache maintenance and first-run setup. Voice packs, personas, learned cockpit memory and speech controls are no longer part of the active application.
 
 ### Deep Survey Intelligence
 
@@ -56,7 +56,7 @@ Expedition Overview acts as a live command centre, combining current-leg navigat
 
 *Expedition Command brings the current leg, route safety, return plan, ship readiness, objectives and recent field activity into one live overview.*
 
-Named expeditions persist across sessions with journal-verified goals, multi-session statistics, prioritised bookmarks and revisit targets. Thirteen ready-made templates range from focused region, value, biology, sector, Codex, photography and mixed-survey goals to long-range cartography, exobiology field seasons, sector mapping, regional science, Outer Rim discovery and full galactic-circumnavigation campaigns. Applying a larger campaign extends matching objectives in place, preserving their verified progress instead of creating duplicate counters. Departing a system can add worthwhile unfinished mapping, biology or FSS evidence to the Missed Discoveries queue, which links directly to its Revisit map layer and expedition bookmarks. Their active strip remains visible across Explore, while verified progress appears through the native feed, toasts and expedition panels. The Galactic Atlas is now a fully HTML-driven Three.js command map served privately from Void Compass on `127.0.0.1`. It uses the GPU for a genuine three-dimensional Elite XYZ scene, consistent galactic-north-up/east-right tilted and top-down cameras, vertical-structure control, zoom-aware clustering and responsive labels while retaining the original Milky Way artwork and complete 42-region Universal Cartographics layout. Live coordinates, a camera-aware compass, dynamic field scale and restrained navigation reticle keep the map readable without crowding it. Profile-local travel history, live game and waypoint routes, the return trail, current ship and next-waypoint animation remain alongside Valuable, Biology, Codex, Photo, Recon, Revisit, Bookmark, Annotation and bounded Expedition Sector layers. Search, inspection and commander notes/danger warnings/regions of interest/survey targets/waypoints are handled directly in the browser; journal, route, profile and theme updates stream into the open map without a reload. Three.js and every map asset are bundled locally—there is no CDN, internet dependency or retired Tk map fallback. Expedition plans can still be exchanged as VoidCompass JSON or newline waypoint lists, while locally generated Markdown reports retain the named route, objectives, evidence and bookmarks.
+Named expeditions persist across sessions with journal-verified goals, multi-session statistics, prioritised bookmarks and revisit targets. Thirteen ready-made templates range from focused region, value, biology, sector, Codex, photography and mixed-survey goals to long-range cartography, exobiology field seasons, sector mapping, regional science, Outer Rim discovery and full galactic-circumnavigation campaigns. Applying a larger campaign extends matching objectives in place, preserving their verified progress instead of creating duplicate counters. Departing a system can add worthwhile unfinished mapping, biology or FSS evidence to the Missed Discoveries queue, which links directly to its Revisit map layer and expedition bookmarks. Their active strip remains visible across Explore, while verified progress appears through the native feed, toasts and expedition panels. The Galactic Atlas is now a fully HTML-driven Three.js command map served privately from Void Compass on `127.0.0.1` and embedded as a persistent command-deck page. Its focus control temporarily gives the map the complete window without opening a duplicate view, while returning to the Dashboard leaves its camera, filters and layers alive. It uses the GPU for a genuine three-dimensional Elite XYZ scene, consistent galactic-north-up/east-right tilted and top-down cameras, vertical-structure control, zoom-aware clustering and responsive labels while retaining the original Milky Way artwork and complete 42-region Universal Cartographics layout. Live coordinates, a camera-aware compass, dynamic field scale and restrained navigation reticle keep the map readable without crowding it. Profile-local travel history, live game and waypoint routes, the return trail, current ship and next-waypoint animation remain alongside Valuable, Biology, Codex, Photo, Recon, Revisit, Bookmark, Annotation and bounded Expedition Sector layers. Search, inspection and commander notes/danger warnings/regions of interest/survey targets/waypoints are handled directly in the embedded atlas; journal, route, profile and theme updates stream into the open map without a reload. Three.js and every map asset are bundled locally—there is no CDN, internet dependency or retired Tk map fallback. Expedition plans can still be exchanged as VoidCompass JSON or newline waypoint lists, while locally generated Markdown reports retain the named route, objectives, evidence and bookmarks.
 
 ![Void Compass Galactic Atlas](GalaxyAtlas.PNG)
 
@@ -84,20 +84,20 @@ Void Compass keeps the Dashboard centred on exploration: Current Survey exposes 
 
 Each mode can apply a focused overlay scene while gravity, toast and heartbeat safety feedback remains available. Automatic detection can be locked to a chosen mode per commander, and overlay scenes can be disabled independently in **Settings → Command Deck**.
 
-## Native overlays
+## HTML cockpit overlays
 
-Every overlay can be enabled independently, dragged to a saved position and styled with the active theme. On Windows, a single isolated WebView2 process renders Navigation plus Cargo, Carrier, Prospector, System Intelligence, Gravity, Station Link, Survey Operations, Toast, Heartbeat and Colony surfaces; their existing Tk windows remain hidden profile-aware controllers and immediate native fallbacks. Linux continues to use the complete native renderer.
+Every overlay can be enabled independently, dragged to a saved position and styled with the active theme. A single isolated WebView2 process renders Navigation plus Cargo, Carrier, Prospector, System Intelligence, Gravity, Station Link, Survey Operations, Toast, Heartbeat and Colony surfaces. The command deck now owns the complete visual Overlay Studio; temporary hidden native controllers retain only journal-driven drawing state, profile geometry and hotkey integration during the remaining migration.
 
-- Journal-aware Navigation HUD with a focused **Standard** everyday layout and an optional **Expanded** planning layout, unified route/state/survey instrumentation, a large current-system readout and journal-restored system-time clock, persistent distance-proportional route history with an advancing current marker and arrival-driven next-leg handoff, next-star scoop and fuel-range intelligence, live fuel-scoop flow, local-target context, galactic travel direction and plane position, surface approach and ship-configuration cues, traffic and a Discovery Rail that distinguishes unknown, locally retained, live FSS and completed survey evidence. On Windows its bundled offline HTML/CSS renderer runs in an isolated transparent Edge WebView2 surface for fluid state-specific motion while a hidden native proxy preserves hotkeys, profile-aware positions and Layout Studio control. If that host is unavailable or disabled, the complete native Tk renderer takes over automatically; Linux always uses the native renderer.
+- Journal-aware Navigation HUD with a focused **Standard** everyday layout and an optional **Expanded** planning layout, unified route/state/survey instrumentation, a large current-system readout and journal-restored system-time clock, persistent distance-proportional route history with an advancing current marker and arrival-driven next-leg handoff, next-star scoop and fuel-range intelligence, live fuel-scoop flow, local-target context, galactic travel direction and plane position, surface approach and ship-configuration cues, traffic and a Discovery Rail that distinguishes unknown, locally retained, live FSS and completed survey evidence. Its bundled offline HTML/CSS renderer runs in an isolated transparent Edge WebView2 surface for fluid state-specific motion while a hidden migration proxy preserves journal drawing state, hotkeys and profile-aware positions.
 - Survey Operations as a persistent, priority-filtered cockpit work list that appears during FSS intake and retains bodies with confirmed biological or geological signals plus valuable/notable mapping targets such as terraformables, Earth-like worlds, water worlds and ammonia worlds. Its focused-body card adds three-stage biological sampling, explicit predicted/detected/completed evidence, geology-only targets, compact completed-species manifests and notable-world value evidence. Routine bodies remain in Explore & Survey instead of filling the overlay; live signal-cache fallback keeps priority targets current while detailed body scans catch up, and Navigation remains the single owner of system scan percentage.
 - A dynamic Cargo Manifest with hold utilisation plus mission/stolen distinctions; Fleet/Squadron Carrier Command with jump, expedition, Tritium and capacity status; and Prospector Analysis with themed material composition, core and refinery evidence.
 - System Intelligence and Station Link overlays for contextual system, service and data-sale information without duplicating the Navigation HUD.
 - Gravity, touchdown/liftoff, on-foot and other low-noise safety notifications.
 - Toast notifications and the journal activity heartbeat pulse.
 
-**Settings → Core → Open Overlay Layout Studio** opens the single overlay-control workspace. Its Layout view enables or disables every module and provides a scaled desktop preview: drag overlay cards to position the real HUD windows without disabling mouse passthrough. Saved positions remain authoritative through dynamic redraws, and activity modes never hide an enabled overlay. Its Overlay Settings view owns passthrough, the per-commander HTML/native cockpit renderer switch, Standard/Expanded Navigation HUD layout, overlay text scale, alert policy, auto-hide timing, gravity threshold and Navigation HUD CRT controls. Layout snapping, resets and named commander-specific presets remain available alongside those controls; application scale, Calm/Standard/Energetic Navigation animation and reduced motion remain under **Settings → Core → Accessibility**.
+The HTML command deck's **Overlay Studio** is the single profile-aware overlay-control workspace. Its Layout view enables or disables every module and provides a scaled virtual-desktop preview: drag overlay cards to position the real HUD windows without disabling mouse passthrough. Saved positions remain authoritative through dynamic redraws, and activity modes never hide an enabled overlay. Its Overlay Settings view owns passthrough, Standard/Expanded Navigation HUD layout, overlay text scale, alert policy, auto-hide timing, gravity threshold and Navigation HUD CRT controls. Layout snapping, resets and named commander-specific presets remain available alongside those controls; application scale, Calm/Standard/Energetic Navigation animation and reduced motion remain under **Settings → Core → Accessibility**.
 
-On Windows, profile-aware global shortcuts can open or close the Layout Studio, switch the Navigation HUD between Standard and Expanded, and temporarily hide or restore all overlays while Elite has focus, with optional individual shortcuts for the main exploration and field overlays. The low-conflict defaults are **Ctrl+Alt+Shift+F10** for Layout Studio, **Ctrl+Alt+Shift+F11** for all overlays and **Ctrl+Alt+Shift+F12** for a field bookmark at the current system/body; the layout switch is intentionally unbound so each commander can avoid game or GPU conflicts. Assignments can be recorded directly from the keyboard, typed manually or cleared on the dedicated **Settings → Hotkeys** page without changing which modules are enabled. Linux X11/XWayland builds retain borderless topmost overlays with opaque themed backgrounds; chroma transparency, mouse passthrough and system-wide shortcuts remain Windows-only.
+Profile-aware global shortcuts can open or close the Layout Studio, switch the Navigation HUD between Standard and Expanded, and temporarily hide or restore all overlays while Elite has focus, with optional individual shortcuts for the main exploration and field overlays. The low-conflict defaults are **Ctrl+Alt+Shift+F10** for Layout Studio, **Ctrl+Alt+Shift+F11** for all overlays and **Ctrl+Alt+Shift+F12** for a field bookmark at the current system/body; the layout switch is intentionally unbound so each commander can avoid game or GPU conflicts. Assignments can be recorded directly from the keyboard, typed manually or cleared on the dedicated **Settings → Hotkeys** page without changing which modules are enabled.
 
 | Navigation HUD | Fleet Carrier HUD |
 | :---: | :---: |
@@ -115,7 +115,7 @@ Commander Record can create SQLite-safe manual profile backups and schedule a re
 
 *Explorer Achievements keeps the active packs centred on exploration, travel, exobiology, expeditions, carriers, colonisation and mining.*
 
-## Native feedback
+## Visual feedback
 
 Void Compass deliberately keeps feedback visual and deterministic. Survey changes, significant discoveries, route progress and safety events appear through the appropriate overlay, toast or curated Flight Log entry without spoken callouts, personas, learned cockpit behaviour or background speech generation. Existing profile-local memory and voice-cache files from older releases are left untouched for safe rollback, but are no longer loaded or used.
 
@@ -143,13 +143,7 @@ Packaged releases create `config.json`, commander profiles and logs beside the e
 C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous
 ```
 
-The native Linux x86-64 build is currently a **testing release**. It detects Elite running through Steam/Proton in standard Steam, Flatpak Steam and custom Steam-library prefixes. A typical journal path is:
-
-```text
-~/.local/share/Steam/steamapps/compatdata/359320/pfx/drive_c/users/steamuser/Saved Games/Frontier Developments/Elite Dangerous
-```
-
-Windows and Linux are packaged as separate native builds; the Linux application does not run inside Proton. Extract its `.tar.gz` into a writable folder, make `VoidCompass` executable if necessary, and run it alongside Elite. On Windows, `build_linux.cmd` launches the default WSL distribution, installs missing Ubuntu/Debian Tk and venv prerequisites, and creates the native Linux testing archive and checksum; it may request the Linux sudo password on its first run. Native Linux maintainers can run `bash build_linux.sh` directly. The manual GitHub Actions workflow provides the same checksummed artifact because PyInstaller builds must be created separately on each operating system. Linux testers are encouraged to report distribution, desktop session and overlay details with any issue.
+The 5.3.9 interface is Windows x64 only. The former experimental Linux build has been retired as the application moves to one WebView2 presentation architecture.
 
 ## Contributing and support
 

@@ -13,10 +13,8 @@ import math
 from pathlib import Path
 import queue
 import sys
-import threading
 import time
 import tkinter as tk
-import webbrowser
 
 from explorer_fieldcraft import sector_grid
 from exploration_intelligence import route_context
@@ -115,7 +113,7 @@ def galactic_region_payload():
 
 
 class ExpeditionMapView:
-    """Native launch surface and live bridge for the browser Galactic Atlas."""
+    """Native status surface and live bridge for the embedded Galactic Atlas."""
 
     def __init__(self, parent, app, open_record_callback=None):
         self.parent = parent
@@ -132,7 +130,7 @@ class ExpeditionMapView:
         self._focus_request = None
         self._focus_sequence = 0
         self._disposed = False
-        self._opened_once = False
+        self._embedded_parent_origin = ""
         self._status_job = None
         self._browser_commands = queue.SimpleQueue()
         self._server_status_hint = (0, 0.0)
@@ -186,9 +184,9 @@ class ExpeditionMapView:
         tk.Label(
             content,
             text=(
-                "Void Compass remains the private journal and profile backend. The complete atlas opens "
-                "in your browser from a loopback-only address; no map data is uploaded and no internet "
-                "connection is required."
+                "Void Compass remains the private journal and profile backend. The complete atlas is "
+                "docked inside the HTML command deck through a loopback-only address; no map data is "
+                "uploaded and no internet connection is required."
             ),
             fg=THEME.muted, bg=THEME.panel, justify=tk.LEFT, wraplength=820,
             font=("Segoe UI", 10), anchor="w",
@@ -233,10 +231,7 @@ class ExpeditionMapView:
         self.status_label.pack(fill=tk.X)
         actions = tk.Frame(content, bg=THEME.panel)
         actions.pack(fill=tk.X, pady=(16, 0))
-        button(
-            actions, "OPEN / REOPEN ATLAS", self.open_browser, accent=True,
-        ).pack(side=tk.LEFT)
-        button(actions, "FOCUS CURRENT", self._focus_current).pack(side=tk.LEFT, padx=(7, 0))
+        button(actions, "FOCUS CURRENT", self._focus_current, accent=True).pack(side=tk.LEFT)
         button(actions, "PUBLISH LIVE DATA", self.refresh).pack(side=tk.LEFT, padx=(7, 0))
 
     def _draw_launch_visual(self, canvas, width, height):
@@ -648,27 +643,29 @@ class ExpeditionMapView:
             "position": list(position),
         }
         self.refresh()
-        self.open_browser()
 
-    def open_browser(self):
-        if self._disposed:
-            return
-        self._opened_once = True
+    def prepare_embedded(self, parent_origin):
+        """Authorise and expose the atlas inside the HTML command deck."""
+        if self._disposed or not self.server.allow_frame_ancestor(parent_origin):
+            return ""
+        self._embedded_parent_origin = str(parent_origin or "")
         self.status_label.config(
-            text="Opening the live Galactic Atlas in your browser…", fg=THEME.accent,
+            text="Galactic Atlas linked to the HTML command deck.",
+            fg=THEME.green,
         )
-        threading.Thread(
-            target=lambda: webbrowser.open_new_tab(self.server.url),
-            name="galactic-atlas-launch", daemon=True,
-        ).start()
+        self.refresh()
+        return self.server.url
+
+    @property
+    def embedded_url(self):
+        if self._disposed or not self._embedded_parent_origin:
+            return ""
+        return self.server.url
 
     def on_shown(self):
         if self._disposed:
             return
         self.refresh()
-        stale = time.monotonic() - float(self.server.last_client_seen or 0.0) > 10.0
-        if not self._opened_once or (not self.server.client_count and stale):
-            self.open_browser()
 
     def has_live_browser(self, grace_seconds=20.0):
         """Return whether an opened browser atlas still consumes snapshots.
@@ -677,8 +674,10 @@ class ExpeditionMapView:
         launch.  Keep publishing while its event stream is connected, with a
         short grace period for Chromium reconnects and background-tab stalls.
         """
-        if self._disposed or not self._opened_once or not hasattr(self, "server"):
+        if self._disposed or not hasattr(self, "server"):
             return False
+        if self._embedded_parent_origin:
+            return True
         clients, seen = self._server_status_hint
         if clients > 0:
             return True

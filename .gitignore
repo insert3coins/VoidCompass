@@ -3,6 +3,7 @@ config.json
 profiles/
 
 # Application Cache
+webview/
 edsm_cache
 edsm_cache.json
 scan_history.json

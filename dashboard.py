@@ -53,6 +53,7 @@ from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
 from dashboard_scan_mixin import DashboardScanMixin
+from html_dashboard import HtmlDashboardMixin
 from colonization_window import ColonizationWindow, save_colonisation_data, load_colonisation_data
 from engineer_window import (
     EngineerWindow, load_engineer_materials,
@@ -89,14 +90,11 @@ from adaptive_command import (
     AdaptiveCommandDeck, AUTOMATIC_MODE_IDLE_S, FOCUSED_MODES, MODE_LABELS,
 )
 from diagnostic_bundle import create_support_bundle
-from onboarding import should_show as should_show_onboarding, show_first_run
-from onboarding_splash import show_startup_boot
 from persistence_queue import flush_persistence, persistence_queue
 from session_recovery import ProfileSessionGuard
 from ui_dispatcher import TkDispatcher
 from global_hotkeys import GlobalHotkeyManager, OVERLAY_HOTKEY_SPECS
 from platform_support import default_screenshot_path, open_path
-from overlay_layout import OverlayLayoutStudio
 from ui_theme import apply_ui_scale
 from profile_backups import automatic_backup
 
@@ -203,11 +201,7 @@ def _preserve_unconfirmed_scan_total(startup_replay, event_data, incoming_system
     return seed_repeats_unconfirmed_arrival or cached_state_was_unconfirmed
 
 
-class StartupCancelled(Exception):
-    """Internal clean-exit signal for an abandoned first commissioning."""
-
-
-class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
+class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     _SURVEY_REFRESH_EVENTS = frozenset({
         "Location", "FSDJump", "CarrierJump", "StartJump",
         "Docked", "Undocked", "ApproachBody", "LeaveBody",
@@ -297,7 +291,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         "valuable_bodies", "body_signals", "belt_clusters", "system_undiscovered",
         "fss_all_bodies", "current_body_id", "current_body_name",
         "last_bio_scan", "bio_sampling", "bio_sample_points",
-        "_survey_body_focus_suppressed",
         "cmdr_balance", "cmdr_loan", "cmdr_ranks", "cmdr_rank_progress",
         "cmdr_reputation", "cmdr_ship", "game_version", "game_build",
         "game_horizons", "game_odyssey", "current_station_name",
@@ -738,10 +731,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.survey_status_hud.update(
                 self.current_sys, self.scanned, self.total, self.scan_items,
                 self.body_signals, sampling=self._sampling_snapshot(),
-                focused_body_id=(None if self._survey_body_focus_suppressed
-                                 and not self.bio_sampling else self.current_body_id),
-                focused_body_name=(None if self._survey_body_focus_suppressed
-                                   and not self.bio_sampling else self.current_body_name),
+                focused_body_id=self.current_body_id,
+                focused_body_name=self.current_body_name,
                 total_known=self.scan_total_confirmed,
                 belt_clusters=list(self.belt_clusters),
             )
@@ -860,6 +851,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     "Could not publish theme %s to Galactic Atlas: %s",
                     theme_name, exc,
                 )
+        try:
+            self._schedule_html_dashboard_publish(immediate=True)
+        except Exception:
+            pass
         return success
 
     @staticmethod
@@ -880,22 +875,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _close_profile_surfaces(self):
         """Close every UI surface holding references to the outgoing profile."""
-        # The Studio temporarily exposes hidden overlays and keeps references to
-        # their windows. Close it while they still belong to the outgoing
-        # commander, so positions/geometry are saved to the correct profile and
-        # the new commander's visibility cannot inherit the old edit session.
-        studio = getattr(self, "overlay_layout_studio", None)
-        try:
-            if studio and studio.is_open():
-                studio.close()
-        except Exception:
-            try:
-                win = getattr(studio, "win", None)
-                if win and win.winfo_exists():
-                    win.destroy()
-            except Exception:
-                pass
-        self.overlay_layout_studio = None
         try:
             self._capture_overlay_positions()
         except Exception:
@@ -1034,7 +1013,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.last_bio_scan = {}
         self.bio_sampling = None
         self.bio_sample_points = []
-        self._survey_body_focus_suppressed = False
         self._startup_bio_sampling_replay = None
         self._startup_bio_sampling_replay_seen = False
         self._sample_clear_announced = False
@@ -1389,10 +1367,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.survey_status_hud.update(
                         self.current_sys, self.scanned, self.total, self.scan_items,
                         self.body_signals, sampling=self._sampling_snapshot(),
-                        focused_body_id=(None if self._survey_body_focus_suppressed
-                                         and not self.bio_sampling else self.current_body_id),
-                        focused_body_name=(None if self._survey_body_focus_suppressed
-                                           and not self.bio_sampling else self.current_body_name),
+                        focused_body_id=self.current_body_id,
+                        focused_body_name=self.current_body_name,
                         total_known=self.scan_total_confirmed,
                         belt_clusters=list(self.belt_clusters),
                     )
@@ -1732,15 +1708,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         apply_ui_scale(self.root, self.config.get("ui_scale_percent", 100))
         self._prepare_commander_profile_from_journal()
         self._apply_active_profile_theme()
-        first_run = should_show_onboarding(self.config)
-        if first_run:
-            self._show_bootstrap_onboarding()
-            # The selected journal folder may identify a different commander
-            # than the pre-wizard defaults. Establish that profile before any
-            # profile-local state, overlay or journal watcher.
-            self._prepare_commander_profile_from_journal()
-            self._apply_active_profile_theme()
-            save_config(self.config)
+        # First commissioning now completes in the HTML host before Dashboard
+        # construction. Retain the flag only for the pre-upgrade backup rule.
+        first_run = bool(getattr(self.root, "_voidcompass_first_commissioning", False))
         previous_version = str(self.config.get("last_app_version") or "")
         if not first_run and previous_version != APP_VERSION:
             try:
@@ -1809,6 +1779,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         )
         self._startup_boot_handoff_job = None
         self._startup_boot_journal_timeout_job = None
+        self._startup_boot_history_timeout_job = None
+        self._startup_history_handoff_bypassed = False
         
         self.current_sys = "---"
         self._navigation_system_arrival_epoch = None
@@ -1855,7 +1827,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.last_bio_scan = {}
         self.bio_sampling = None
         self.bio_sample_points = []
-        self._survey_body_focus_suppressed = False
         self._startup_bio_sampling_replay = None
         self._startup_bio_sampling_replay_seen = False
         self._sample_clear_announced = False
@@ -2103,7 +2074,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.analytics_window = None
         self.achievement_window = None
         self.specialists_window = None
-        self.overlay_layout_studio = None
         self._carrier_panel_tick_job = None
         self._specialist_flush_job = None
         self.carrier_tracker = CarrierTracker()
@@ -2293,9 +2263,30 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
         if getattr(self.root, "_voidcompass_startup_splash", None) is not None:
             has_journal_path = bool(journal_path and os.path.isdir(journal_path))
-            timeout_ms = 90_000 if has_journal_path else 3_000
+            try:
+                configured_timeout = int(
+                    self.config.get("startup_journal_handoff_timeout_ms", 30_000)
+                    or 30_000
+                )
+            except (TypeError, ValueError):
+                configured_timeout = 30_000
+            timeout_ms = (
+                max(5_000, min(90_000, configured_timeout))
+                if has_journal_path else 3_000
+            )
             self._startup_boot_journal_timeout_job = self.root.after(
                 timeout_ms, self._startup_journal_timeout,
+            )
+            try:
+                history_timeout_ms = int(
+                    self.config.get("startup_history_handoff_timeout_ms", 20_000)
+                    or 20_000
+                )
+            except (TypeError, ValueError):
+                history_timeout_ms = 20_000
+            self._startup_boot_history_timeout_job = self.root.after(
+                max(5_000, min(60_000, history_timeout_ms)),
+                self._startup_history_timeout,
             )
 
         threading.Thread(target=self.check_updates, daemon=True).start()
@@ -2325,32 +2316,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._tick_runtime_trace()
         self._tick_overlay_position_sync()
         self._tick_overlay_hotkey_guard()
-
-    def _show_bootstrap_onboarding(self):
-        """Block construction so first-run setup is the only visible window."""
-        completed = {"value": False}
-
-        def complete():
-            completed["value"] = True
-            save_config(self.config)
-
-        window = show_first_run(
-            self.root, self.config, complete, standalone=True,
-        )
-        self.root.wait_window(window)
-        if not completed["value"]:
-            # Closing the mandatory commissioning window means Exit, not
-            # implicit acceptance of its defaults. Stop construction before
-            # any second Toplevel or partially initialized Dashboard exists.
-            raise StartupCancelled()
-        # Continue to cover real cache/index restoration after commander setup;
-        # the outer launcher will keep the Dashboard withdrawn until live.
-        splash = show_startup_boot(
-            self.root, self.config,
-            lambda _window: self._maybe_complete_startup_presentation(),
-        )
-        self.root._voidcompass_startup_splash = splash
-        splash.update_idletasks()
 
     def _startup_boot(self):
         splash = getattr(self.root, "_voidcompass_startup_splash", None)
@@ -2431,6 +2396,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _startup_history_phase_complete(self, phase):
         self._startup_history_pending.discard(str(phase))
+        self._trace_bump(f"startup_history_ready:{phase}")
         if self._startup_history_pending:
             remaining = " and ".join(sorted(self._startup_history_pending))
             self._startup_boot_update(
@@ -2439,11 +2405,39 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 0.64,
             )
         else:
+            timeout_job = getattr(
+                self, "_startup_boot_history_timeout_job", None,
+            )
+            self._startup_boot_history_timeout_job = None
+            if timeout_job is not None:
+                try:
+                    self.root.after_cancel(timeout_job)
+                except tk.TclError:
+                    pass
             self._startup_boot_update(
                 "HISTORICAL INDEX READY",
                 "Waiting for the active journal to reach its live tail",
                 0.76,
             )
+        self._maybe_complete_startup_presentation()
+
+    def _startup_history_timeout(self):
+        """Let slow full-history imports finish after the live UI handoff."""
+        self._startup_boot_history_timeout_job = None
+        pending = sorted(getattr(self, "_startup_history_pending", set()))
+        if not pending:
+            return
+        self._startup_history_handoff_bypassed = True
+        self._trace_bump("startup_history_handoff_timeout")
+        logging.warning(
+            "Startup history handoff timed out; continuing %s indexing in the background",
+            " and ".join(pending),
+        )
+        self._startup_boot_update(
+            "LIVE STATE READY",
+            "Historical indexes will continue updating in the background",
+            0.91,
+        )
         self._maybe_complete_startup_presentation()
 
     def _startup_journal_timeout(self):
@@ -2452,6 +2446,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return
         self._startup_live_tail_ready = True
         self._startup_presentation_ready = True
+        self._trace_bump("startup_journal_handoff_timeout")
         self._startup_boot_update(
             "JOURNAL LINK OFFLINE",
             "No live tail was available; cached flight state is ready",
@@ -2461,6 +2456,7 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
 
     def _mark_startup_journal_live(self):
         self._startup_live_tail_ready = True
+        self._trace_bump("startup_journal_live")
         timeout_job = getattr(self, "_startup_boot_journal_timeout_job", None)
         self._startup_boot_journal_timeout_job = None
         if timeout_job is not None:
@@ -2485,7 +2481,10 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self, "_startup_presentation_ready", False,
         ):
             return
-        if getattr(self, "_startup_history_pending", set()):
+        if (
+            getattr(self, "_startup_history_pending", set())
+            and not getattr(self, "_startup_history_handoff_bypassed", False)
+        ):
             return
         self._startup_boot_update(
             "VOID COMPASS LIVE",
@@ -2495,9 +2494,22 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._startup_boot_handoff_job = self.root.after(
             240, self._finish_startup_presentation,
         )
+        self._trace_bump("startup_handoff_scheduled")
 
     def _finish_startup_presentation(self):
         self._startup_boot_handoff_job = None
+        self._trace_bump("startup_handoff_finished")
+        for job_attr in (
+            "_startup_boot_journal_timeout_job",
+            "_startup_boot_history_timeout_job",
+        ):
+            job = getattr(self, job_attr, None)
+            if job is not None:
+                try:
+                    self.root.after_cancel(job)
+                except tk.TclError:
+                    pass
+                setattr(self, job_attr, None)
         # One last curtain pass catches overlays whose final journal
         # reconciliation deliberately called show(). Restore their saved
         # coordinates while invisible, then permit mapping exactly once.
@@ -2515,11 +2527,17 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             except tk.TclError:
                 pass
         self.root._voidcompass_startup_splash = None
-        try:
-            self.root.deiconify()
-            self.root.lift()
-        except tk.TclError:
-            return
+        if not bool(getattr(self.root, "_voidcompass_html_dashboard_enabled", False)):
+            try:
+                self.root.deiconify()
+                self.root.lift()
+            except tk.TclError:
+                return
+        else:
+            try:
+                self.root.withdraw()
+            except tk.TclError:
+                pass
         self._restore_overlay_hotkey_windows(restore)
         self._apply_adaptive_overlay_scene()
         # HTML surfaces and their shared WebView2 process have pre-warmed
@@ -2544,7 +2562,21 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if not self.is_running:
             return
 
-        def complete():
+        runtime = getattr(
+            self.root, "_voidcompass_html_dashboard_runtime", None,
+        )
+        if runtime is None:
+            self.add_event_feed_entry(
+                "SYSTEM", "HTML commissioning host unavailable", severity="WARN",
+            )
+            return
+        try:
+            self.root.withdraw()
+        except tk.TclError:
+            pass
+
+        def complete(values):
+            self.config.update(values)
             self._persist_config()
             if getattr(self, "watcher", None):
                 self.watcher.journal_path = self.config.get("journal_path")
@@ -2556,11 +2588,11 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.add_event_feed_entry(
                 "SYSTEM", "First-run setup complete", severity="INFO",
             )
+            runtime.stop()
 
-        show_first_run(self.root, self.config, complete)
+        runtime.begin_commissioning(self.config, complete)
 
     def _rerun_first_run_onboarding(self):
-        self.config["onboarding_complete"] = False
         self._show_first_run_onboarding()
 
     def _create_support_bundle(self):
@@ -2799,9 +2831,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.config["hud_compact_mode"] = standard
         save_config(self.config)
         self.update_hud()
-        studio = getattr(self, "overlay_layout_studio", None)
-        if studio and studio.is_open():
-            studio.refresh()
         mode = "Standard" if standard else "Expanded"
         if announce:
             self.add_event_feed_entry(
@@ -2817,10 +2846,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return
         _action, _key, label, attr = spec
         if action == "layout_studio":
-            studio = getattr(self, "overlay_layout_studio", None)
-            if studio and studio.is_open():
-                studio.close()
-                self.overlay_layout_studio = None
+            if getattr(self, "_html_dashboard_active_page", "") == "overlay-studio":
+                self._request_html_dashboard_page("overview")
                 message = "Overlay Layout Studio closed"
             else:
                 self.open_overlay_layout_studio()
@@ -3183,10 +3210,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             return
         self._closing = True
         self.is_running = False
+        html_dashboard_job = getattr(self, "_html_dashboard_publish_job", None)
+        if html_dashboard_job is not None:
+            try:
+                self.root.after_cancel(html_dashboard_job)
+            except Exception:
+                pass
+            self._html_dashboard_publish_job = None
         for resize_job_attr in (
             "_workspace_scroll_job", "_main_resize_settle_job",
             "_journal_history_resize_job", "_startup_boot_handoff_job",
             "_startup_boot_journal_timeout_job",
+            "_startup_boot_history_timeout_job",
         ):
             resize_job = getattr(self, resize_job_attr, None)
             if resize_job is not None:
@@ -3195,13 +3230,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 except Exception:
                     pass
                 setattr(self, resize_job_attr, None)
-        studio = getattr(self, "overlay_layout_studio", None)
-        try:
-            if studio and studio.is_open():
-                studio.close()
-        except Exception:
-            pass
-        self.overlay_layout_studio = None
         try:
             self.root.withdraw()
         except Exception:
@@ -3222,6 +3250,18 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if html_runtime is not None:
             try:
                 html_runtime.dispose()
+            except Exception:
+                pass
+        html_dashboard_runtime = getattr(
+            self.root, "_voidcompass_html_dashboard_runtime", None,
+        )
+        if html_dashboard_runtime is not None:
+            geometry = html_dashboard_runtime.geometry_string()
+            if geometry:
+                self.config["dashboard_window_geometry"] = geometry
+                self.config["main_geometry"] = geometry
+            try:
+                html_dashboard_runtime.dispose()
             except Exception:
                 pass
         if getattr(self, "watcher", None):
@@ -3288,8 +3328,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         self.config["colony_overlay_w"], self.config["colony_overlay_h"] = w, h
             except Exception:
                 pass
-        self._capture_dashboard_window_geometry()
-        self.config["main_geometry"] = self.root.geometry()
+        if not bool(getattr(self.root, "_voidcompass_html_dashboard_enabled", False)):
+            self._capture_dashboard_window_geometry()
+            self.config["main_geometry"] = self.root.geometry()
         self._persist_config()
         if hasattr(self, 'conn'):
             self._stop_db_commit_worker(close=True, timeout=0.35)
@@ -3563,6 +3604,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.open_specialists_window(section="mining")
 
     def open_analytics_window(self):
+        if self._route_to_html_workspace("analytics"):
+            return
         if self.analytics_window and self.analytics_window.is_open():
             self._show_embedded_page("ANALYTICS", self.analytics_window.win)
             self.analytics_window.on_shown()
@@ -3572,6 +3615,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.analytics_window.on_shown()
 
     def open_carrier_window(self):
+        if self._route_to_html_workspace("carrier"):
+            return
         if self.carrier_window and self.carrier_window.is_open():
             self._show_embedded_page("CARRIER", self.carrier_window.win)
             return
@@ -3583,6 +3628,12 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._show_embedded_page("CARRIER", self.carrier_window.win)
 
     def open_specialists_window(self, section=None):
+        html_page = {
+            "mining": "mining", "biology": "explore", "carrier": "carrier",
+            "ground": "ground", "engineering": "engineering",
+        }.get(str(section or "").casefold(), "operations")
+        if self._route_to_html_workspace(html_page):
+            return
         if self.specialists_window and self.specialists_window.is_open():
             self._show_embedded_page("SPECIALISTS", self.specialists_window.win)
             if section:
@@ -3598,6 +3649,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.specialists_window.on_shown()
 
     def open_colonization_window(self):
+        if self._route_to_html_workspace("operations"):
+            return
         if self.colonization_window and self.colonization_window.is_open():
             self._show_embedded_page("COLONY", self.colonization_window.win)
             return
@@ -3636,6 +3689,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._save_config_file()
 
     def open_engineer_window(self):
+        if self._route_to_html_workspace("engineering"):
+            return
         if self.engineer_window and self.engineer_window.is_open():
             self._show_embedded_page("ENGINEER", self.engineer_window.win)
             self.engineer_window.on_shown()
@@ -3673,6 +3728,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             pass
 
     def open_bgs_window(self, section=None):
+        if self._route_to_html_workspace("operations"):
+            return
         if self.bgs_window and self.bgs_window.is_open():
             self._show_embedded_page("GALAXY", self.bgs_window.win)
             self.bgs_window.select_section(section)
@@ -3695,6 +3752,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self.bgs_window.select_section(section)
 
     def open_commander_profile_window(self):
+        if self._route_to_html_workspace("profile"):
+            return
         if self.commander_profile_window and self.commander_profile_window.is_open():
             self.commander_profile_window.refresh()
             self.commander_profile_window._refresh_pending = False
@@ -3704,6 +3763,13 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._show_embedded_page("PROFILE", self.commander_profile_window.win)
 
     def open_exploration_window(self, section=None):
+        html_page = {
+            "mission": "mission", "recon": "recon", "ledger": "ledger",
+            "discoveries": "explore", "biology": "explore", "route": "explore",
+            "survey": "explore",
+        }.get(str(section or "").casefold(), "explore")
+        if self._route_to_html_workspace(html_page):
+            return
         if self.exploration_window and self.exploration_window.is_open():
             self._show_embedded_page("EXPLORE", self.exploration_window.win)
             self.exploration_window.on_shown(section=section)
@@ -3712,22 +3778,34 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._show_embedded_page("EXPLORE", self.exploration_window.win)
         self.exploration_window.on_shown(section=section)
 
-    def open_galaxy_map_page(self):
-        """Show the galaxy map as its own rail workspace.
+    def open_galaxy_map_page(self, embedded_origin=None):
+        """Prepare the Atlas bridge without presenting a native fallback.
 
         Explore owns the survey, ledger and route intelligence the map draws,
         so it is built first if the commander opens the map before Explore.
         """
+        if embedded_origin is None and self._route_to_html_workspace("map"):
+            return
         if not (self.exploration_window and self.exploration_window.is_open()):
             self.exploration_window = ExplorationWindow(self.dashboard_host, self, embedded=True)
         workspace = getattr(self.exploration_window, "map_workspace", None)
         if workspace is None:
             self.log("Galaxy map workspace unavailable")
             return
-        self._show_embedded_page("MAP", workspace)
-        self.exploration_window.on_map_shown()
+        view = getattr(self.exploration_window, "expedition_map_view", None)
+        if not embedded_origin:
+            self.log("Galactic Atlas is available inside the HTML command deck")
+            return None
+        if view is None or not view.prepare_embedded(embedded_origin):
+            self.log("Galaxy map could not be linked to the HTML command deck")
+            return None
+        # The dashboard owns the presented Atlas. Do not switch or reveal
+        # Tk's migration workspace merely to initialise its state bridge.
+        return view
 
     def open_achievement_window(self):
+        if self._route_to_html_workspace("achievements"):
+            return
         if self.achievement_window and self.achievement_window.is_open():
             self.achievement_window.refresh()
             self._show_embedded_page("ACHIEVE", self.achievement_window.win)
@@ -3769,6 +3847,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             pass
 
     def open_value_ledger_window(self):
+        if self._route_to_html_workspace("ledger"):
+            return
         if self.value_ledger_window and self.value_ledger_window.is_open():
             self.value_ledger_window.lift()
             return
@@ -4243,6 +4323,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                 setter(enabled)
 
     def open_settings(self):
+        if self._route_to_html_workspace("settings"):
+            return
         def on_save():
             self.log("Configuration saved successfully.")
             self._apply_active_profile_theme()
@@ -4274,12 +4356,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         self._show_embedded_page("SETTINGS", self.settings_page)
 
     def open_overlay_layout_studio(self):
-        studio = getattr(self, "overlay_layout_studio", None)
-        if studio and studio.is_open():
-            studio.lift()
-            studio.refresh()
-            return
-        self.overlay_layout_studio = OverlayLayoutStudio(self.root, self)
+        """Open the profile-aware Studio inside the HTML command deck."""
+        self._request_html_dashboard_page("overlay-studio")
+        self.hide_native_dashboard_tool()
 
     def fetch_system_traffic(self, system_name):
         self.last_edsm_request_ts = time.time()
@@ -7764,10 +7843,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             is_complete = bool(d.get("is_complete")) or scan_type_norm == "analyse"
             was_complete = bool(existing.get("is_complete"))
             is_new_sample = scan_type_norm in ("log", "sample")
-            if scan_type_norm == "analyse":
-                self._survey_body_focus_suppressed = True
-            elif is_new_sample:
-                self._survey_body_focus_suppressed = False
             if scan_type_norm == "log":
                 # Log is always the first sample. Incrementing an existing
                 # cached Log made a single journal event appear as 2/3.
@@ -7829,9 +7904,9 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                     self.last_bio_scan[species_key],
                 )
 
-            # Persist first, then publish sampler progress.  Log/Sample keeps
-            # the three-node flightpath visible; Analyse clears it only after
-            # organic_complete_count can move the overlay back to system mode.
+            # Persist first, then publish sampler progress. Log/Sample keeps
+            # the three-node flightpath visible; Analyse replaces it with the
+            # completed receipt while this body remains the active surface.
             if not startup_replay:
                 self._process_companion_event(
                     ev, raw if isinstance(raw, dict) else {}, d,
@@ -7999,7 +8074,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
             self.body_scan_data.clear()
             self.current_body_id   = None
             self.current_body_name = ""
-            self._survey_body_focus_suppressed = False
             self.current_glide_mode = False
             self._surface_departure_active = False
             self._surface_glide_guard_until = 0.0
@@ -8128,10 +8202,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
                         lambda: self.survey_status_hud.update(
                             self.current_sys, self.scanned, self.total, self.scan_items,
                             self.body_signals, sampling=self._sampling_snapshot(),
-                            focused_body_id=(None if self._survey_body_focus_suppressed
-                                             and not self.bio_sampling else self.current_body_id),
-                            focused_body_name=(None if self._survey_body_focus_suppressed
-                                               and not self.bio_sampling else self.current_body_name),
+                            focused_body_id=self.current_body_id,
+                            focused_body_name=self.current_body_name,
                             total_known=self.scan_total_confirmed,
                             belt_clusters=list(self.belt_clusters)),
                         key="survey-status",
@@ -8786,7 +8858,6 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if ev == "ApproachBody":
             self.current_body_id   = self._normalize_body_id(d.get("body_id"))
             self.current_body_name = d.get("body_name") or ""
-            self._survey_body_focus_suppressed = False
             self._surface_departure_active = False
             self._surface_glide_guard_until = 0.0
             self._surface_climb_samples = 0
@@ -9729,10 +9800,8 @@ class MainDashboard(DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
         if self.survey_status_hud:
             self._ui_post(lambda s=sample: self.survey_status_hud.update(
                 self.current_sys, self.scanned, self.total, self.scan_items, self.body_signals, sampling=s,
-                focused_body_id=(None if self._survey_body_focus_suppressed
-                                 and not s else self.current_body_id),
-                focused_body_name=(None if self._survey_body_focus_suppressed
-                                   and not s else self.current_body_name),
+                focused_body_id=self.current_body_id,
+                focused_body_name=self.current_body_name,
                 total_known=self.scan_total_confirmed,
                 belt_clusters=list(self.belt_clusters),
             ), key="survey-status")

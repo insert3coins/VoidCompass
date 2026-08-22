@@ -141,6 +141,7 @@ body {
 .hud[data-motion="fsd_charge"] .state-core,
 .hud[data-motion="supercruise_overcharge"] .state-core { animation: charge-core calc(.72s * var(--motion-scale)) ease-in-out infinite; }
 .hud[data-motion="combat"] .state-core { animation: threat calc(1s * var(--motion-scale)) steps(2,end) infinite; }
+.hud.state-changing .state-core strong { animation: state-label-resolve .58s cubic-bezier(.2,.75,.2,1) 1; }
 .hud[data-motion="arrival"] .core-pulse,
 .hud[data-motion="carrier_arrival"] .core-pulse { background: color-mix(in srgb, var(--green) 35%, transparent); }
 .hud[data-event="true"] .state-core::after { content: ""; position: absolute; inset: 3px -8px; border-top: 1px solid var(--state); border-bottom: 1px solid var(--state); animation: event-flash calc(.85s * var(--motion-scale)) ease-out 1; }
@@ -153,3 +154,8 @@ body {
 @keyframes charge-core { 50% { transform: scaleX(.92); filter: brightness(1.5); } }
 @keyframes threat { 50% { filter: brightness(1.7); transform: translateX(1px); } }
 @keyframes event-flash { from { opacity: 1; transform: scaleX(.6); } to { opacity: 0; transform: scaleX(1.15); } }
+@keyframes state-label-resolve {
+  0% { opacity: .42; letter-spacing: 2.8px; filter: blur(1px); }
+  42% { opacity: 1; filter: blur(0); }
+  100% { opacity: 1; letter-spacing: 1.1px; filter: none; }
+}

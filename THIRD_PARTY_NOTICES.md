@@ -30,8 +30,8 @@ SOFTWARE.
 
 ## pywebview
 
-The Windows HTML cockpit overlay suite uses [pywebview](https://pywebview.flowrl.com/)
-to host its bundled, offline HTML/CSS/JavaScript UI in the installed Microsoft
+The Windows HTML command deck and cockpit overlay suite use [pywebview](https://pywebview.flowrl.com/)
+to host their bundled, offline HTML/CSS/JavaScript UI in the installed Microsoft
 Edge WebView2 runtime. No remote page or CDN is loaded by the overlays.
 
 BSD 3-Clause License

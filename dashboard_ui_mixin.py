@@ -1169,6 +1169,20 @@ class DashboardUIMixin(ThemedWindowMixin):
 
     def _capture_dashboard_window_geometry(self):
         """Remember the active commander's current main-window footprint."""
+        if bool(getattr(self.root, "_voidcompass_html_dashboard_enabled", False)):
+            runtime = getattr(
+                self.root, "_voidcompass_html_dashboard_runtime", None,
+            )
+            geometry = runtime.geometry_string() if runtime is not None else ""
+            if geometry:
+                geometry_key = (
+                    "flight_log_geometry"
+                    if self.config.get("flight_log_mode_enabled", False)
+                    else "dashboard_window_geometry"
+                )
+                self.config[geometry_key] = geometry
+                self.config["main_geometry"] = geometry
+                return geometry
         try:
             self.root.update_idletasks()
             geometry = str(self.root.geometry() or "")
@@ -1194,6 +1208,14 @@ class DashboardUIMixin(ThemedWindowMixin):
         if not re.fullmatch(r"\d+x\d+(?:[+-]-?\d+[+-]-?\d+)?", geometry):
             geometry = fallback
             self.config[geometry_key] = geometry
+        runtime = getattr(
+            self.root, "_voidcompass_html_dashboard_runtime", None,
+        )
+        if runtime is not None:
+            try:
+                runtime.apply_profile_geometry(geometry)
+            except Exception:
+                pass
         try:
             if str(self.root.state()).casefold() == "zoomed":
                 self.root.state("normal")
@@ -4074,6 +4096,8 @@ class DashboardUIMixin(ThemedWindowMixin):
             return False
 
     def open_ground_target_window(self):
+        if self._route_to_html_workspace("ground"):
+            return
         if self._widget_alive(getattr(self, "ground_target_window", None)):
             self.ground_target_window.lift()
             self.ground_target_window.focus_force()
