@@ -9,7 +9,7 @@ from pathlib import Path
 import secrets
 import threading
 import time
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 
 class _OverlayHTTPServer(ThreadingHTTPServer):
@@ -42,6 +42,11 @@ class HtmlOverlayServer:
 
     def __init__(self, static_root, presentation_held=False):
         self.static_root = Path(static_root).resolve()
+        # Ship portraits live with the rest of Void Compass' bundled artwork,
+        # outside the HTML document root.  Expose that one directory through a
+        # narrow, traversal-safe route so the navigation HUD can select from a
+        # complete journal-ID catalog without duplicating every image in web/.
+        self.ship_art_root = (self.static_root.parent / "Images" / "ships").resolve()
         self.token = secrets.token_urlsafe(32)
         self._condition = threading.Condition()
         self._overlays = {}
@@ -289,6 +294,18 @@ class HtmlOverlayServer:
             return None
         return candidate
 
+    def _ship_art_path(self, request_path):
+        prefix = "/ship-art/"
+        if not request_path.startswith(prefix):
+            return None
+        relative = unquote(request_path[len(prefix):]).lstrip("/")
+        candidate = (self.ship_art_root / relative).resolve()
+        try:
+            candidate.relative_to(self.ship_art_root)
+        except ValueError:
+            return None
+        return candidate
+
     def _handle_get(self, handler):
         parsed = urlparse(handler.path)
         if parsed.path.startswith("/api/"):
@@ -347,7 +364,9 @@ class HtmlOverlayServer:
             else:
                 self._send_json(handler, {"error": "not found"}, 404)
             return
-        candidate = self._static_path(parsed.path)
+        candidate = self._ship_art_path(parsed.path)
+        if candidate is None:
+            candidate = self._static_path(parsed.path)
         if candidate is None or not candidate.is_file():
             self._send_json(handler, {"error": "not found"}, 404)
             return

@@ -2120,6 +2120,12 @@ class TacticalHUD:
             "label": state_text,
             "color": state_color,
             "motion": self._navigation_motion_profile(state_text),
+            "vehicle": {
+                "ship_symbol": str(nav_context.get("ship_symbol") or "").casefold(),
+                "ship_type": str(nav_context.get("ship_type") or ""),
+                "ship_name": str(nav_context.get("ship_name") or ""),
+                "surface": str(nav_context.get("vehicle_name") or "").upper(),
+            },
             "event_sequence": journal_event.get("seq"),
             "event_kind": str(journal_event.get("kind") or ""),
             "dynamics": {

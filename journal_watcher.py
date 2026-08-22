@@ -701,6 +701,11 @@ class JournalWatcher:
                     "in_taxi": data.get("Taxi"),
                     "in_multicrew": data.get("Multicrew"),
                     "in_srv": data.get("InSRV"),
+                    # Location is the authoritative login context when Elite
+                    # starts while the commander is already surface-side.
+                    "body": data.get("Body"),
+                    "body_id": data.get("BodyID"),
+                    "body_type": data.get("BodyType"),
                     "station_name": data.get("StationName"),
                     "station_type": data.get("StationType"),
                     "market_id": data.get("MarketID"),

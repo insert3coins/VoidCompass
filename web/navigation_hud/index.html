@@ -14,15 +14,17 @@
 
     <header class="state-instrument" aria-label="Current navigation state">
       <canvas id="state-canvas" aria-hidden="true"></canvas>
-      <div class="state-field state-left"><i></i><i></i><i></i><i></i></div>
+      <div id="vehicle-display" class="state-vehicle" aria-hidden="true">
+        <span class="vehicle-frame"></span>
+        <img id="vehicle-image" alt="">
+        <i class="vehicle-scan"></i>
+      </div>
       <div class="state-core">
         <span class="core-bracket left"></span>
         <strong id="state-label">FLIGHT</strong>
         <span class="core-bracket right"></span>
         <b class="core-pulse"></b>
       </div>
-      <div class="state-field state-right"><i></i><i></i><i></i><i></i></div>
-      <div class="state-packet"></div>
     </header>
 
     <section class="system-block section">
@@ -78,6 +80,7 @@
 
     <div id="link-state" class="link-state">HTML NAV // CONNECTING</div>
   </main>
+  <script src="ship_catalog.js"></script>
   <script src="indicator.js"></script>
   <script src="app.js"></script>
 </body>

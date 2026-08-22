@@ -5,7 +5,8 @@ const api = (path) => `${path}?token=${encodeURIComponent(token)}&overlay=${enco
 const $ = (id) => document.getElementById(id);
 
 const dom = Object.fromEntries([
-  'hud', 'state-canvas', 'state-label', 'region-label', 'system-clock', 'current-system',
+  'hud', 'state-canvas', 'state-label', 'vehicle-display', 'vehicle-image',
+  'region-label', 'system-clock', 'current-system',
   'route-title', 'route-next', 'route-distance', 'route-progress', 'route-packet',
   'route-pips', 'route-origin', 'route-destination', 'survey-state', 'survey-count',
   'survey-rail', 'metric-fuel', 'metric-bio', 'metric-geo', 'expanded-fuel',
@@ -16,7 +17,6 @@ const stateIndicator = new window.NavigationIndicator(dom['state-canvas']);
 
 let snapshot = null;
 let arrivalTimer = null;
-let lastEventSequence = null;
 let lastIndicatorSignature = '';
 let stateChangeTimer = null;
 let lastServerContact = Date.now();
@@ -39,6 +39,62 @@ function setTheme(theme = {}) {
   };
   for (const [key, value] of Object.entries(values)) root.setProperty(`--${key}`, value);
   root.setProperty('--text-scale', String(Math.max(.75, Math.min(2, Number(theme.text_scale || 1)))));
+  return values;
+}
+
+function themedStateColour(value, theme) {
+  const original = colour(value, theme.dim);
+  return ({
+    '#00d1ff': theme.accent,
+    '#ff7a18': theme.orange,
+    '#4ee59b': theme.green,
+    '#ffd166': theme.yellow,
+    '#7d8891': theme.dim,
+  })[original.toLowerCase()] || original;
+}
+
+function vehiclePresentation(state = {}) {
+  const motion = String(state.motion || 'flight');
+  const label = String(state.label || 'FLIGHT').toUpperCase();
+  const vehicle = state.vehicle || {};
+  const catalog = window.VoidCompassShipCatalog;
+  if (motion === 'carrier_transit' || motion === 'carrier_arrival') {
+    return catalog.carrier();
+  }
+  if (motion === 'on_foot' || label === 'ONFOOT' || label === 'ON FOOT') {
+    return catalog.onFoot();
+  }
+  if (motion === 'surface_vehicle' || motion.startsWith('vehicle_')) {
+    if (label.includes('NOMAD') || String(vehicle.surface || '').toUpperCase() === 'NOMAD') {
+      return catalog.resolveSurface('NOMAD');
+    }
+    if (label.includes('FIGHTER')) {
+      return catalog.fighter();
+    }
+    if (label.includes('SRV') || vehicle.surface) {
+      return catalog.resolveSurface(vehicle.surface);
+    }
+  }
+  if (motion === 'fighter' || label === 'FIGHTER') {
+    return catalog.fighter();
+  }
+  return catalog.resolveShip(vehicle);
+}
+
+function renderVehicle(state = {}) {
+  const presentation = vehiclePresentation(state);
+  const host = dom['vehicle-display'];
+  const image = dom['vehicle-image'];
+  if (!presentation) {
+    host.hidden = true;
+    image.removeAttribute('src');
+    image.alt = '';
+    return;
+  }
+  host.hidden = false;
+  host.dataset.vehicle = presentation.key;
+  image.alt = presentation.alt;
+  if (image.getAttribute('src') !== presentation.src) image.src = presentation.src;
 }
 
 function setMetric(id, metric) {
@@ -122,7 +178,7 @@ function updateClock() {
 function render(data) {
   if (!data || data.schema !== 1) return;
   snapshot = data;
-  setTheme(data.theme);
+  const theme = setTheme(data.theme);
   const hud = dom.hud;
   hud.classList.toggle('standard', data.layout !== 'expanded');
   hud.classList.toggle('expanded', data.layout === 'expanded');
@@ -130,7 +186,9 @@ function render(data) {
   hud.classList.toggle('reduced-motion', Boolean(data.effects?.reduced_motion));
   hud.dataset.motion = data.state?.motion || 'flight';
   hud.dataset.state = data.state?.label || 'FLIGHT';
-  hud.style.setProperty('--state', data.state?.color || 'var(--dim)');
+  renderVehicle(data.state);
+  const stateColour = themedStateColour(data.state?.color, theme);
+  hud.style.setProperty('--state', stateColour);
   const energy = Math.max(.55, Math.min(1.6, Number(data.effects?.energy || 1)));
   hud.style.setProperty('--motion-energy', String(energy));
   hud.style.setProperty('--motion-scale', String(1 / energy));
@@ -151,21 +209,13 @@ function render(data) {
   stateIndicator.update({
     motion: data.state?.motion || 'flight',
     label: data.state?.label || 'FLIGHT',
-    color: data.state?.color || '#607584',
+    color: stateColour,
     energy,
     dynamics: data.state?.dynamics || {},
     reduced: Boolean(data.effects?.reduced_motion),
     eventSequence: data.state?.event_sequence,
     eventKind: data.state?.event_kind,
   });
-  const eventSequence = data.state?.event_sequence;
-  if (eventSequence != null && eventSequence !== lastEventSequence) {
-    lastEventSequence = eventSequence;
-    hud.dataset.event = 'false';
-    void hud.offsetWidth;
-    hud.dataset.event = 'true';
-    setTimeout(() => { hud.dataset.event = 'false'; }, 900);
-  }
   const system = data.system || {};
   dom['current-system'].textContent = system.name || '---';
   dom['region-label'].textContent = system.region || 'REGION UNKNOWN';

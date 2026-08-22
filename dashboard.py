@@ -201,6 +201,27 @@ def _preserve_unconfirmed_scan_total(startup_replay, event_data, incoming_system
     return seed_repeats_unconfirmed_arrival or cached_state_was_unconfirmed
 
 
+def _location_surface_focus(event, raw, data):
+    """Recover the active planet from a surface-side Location login event."""
+    if event != "Location":
+        return None, ""
+    raw = raw if isinstance(raw, dict) else {}
+    data = data if isinstance(data, dict) else {}
+    body_id = data.get("body_id")
+    if body_id is None:
+        body_id = raw.get("BodyID")
+    body_name = str(data.get("body") or raw.get("Body") or "").strip()
+    body_type = str(
+        data.get("body_type") or raw.get("BodyType") or ""
+    ).strip().casefold()
+    docked = data.get("docked")
+    if docked is None:
+        docked = raw.get("Docked")
+    if body_id is None or body_type != "planet" or bool(docked):
+        return None, ""
+    return body_id, body_name
+
+
 class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
     _SURVEY_REFRESH_EVENTS = frozenset({
         "Location", "FSDJump", "CarrierJump", "StartJump",
@@ -1424,7 +1445,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.current_vehicle_id = None
         if self.current_in_srv:
             remembered = str(getattr(self, "_last_surface_vehicle_name", "") or "").upper()
-            self.current_vehicle_name = remembered if remembered in {"NOMAD", "SRV"} else "SRV"
+            self.current_vehicle_name = (
+                remembered if remembered in {"NOMAD", "SCARAB", "SCORPION", "RHINO", "SRV"}
+                else "SRV"
+            )
         else:
             self.current_vehicle_name = ""
         if docked_value is not None or (self.current_on_foot and station_name):
@@ -4891,6 +4915,16 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "in_taxi": bool(getattr(self, "current_in_taxi", False)),
             "in_multicrew": bool(getattr(self, "current_in_multicrew", False)),
             "vehicle_name": getattr(self, "current_vehicle_name", ""),
+            "ship_symbol": str(
+                (getattr(self, "cmdr_ship", {}) or {}).get("ship") or ""
+            ),
+            "ship_type": str(
+                (getattr(self, "cmdr_ship", {}) or {}).get("ship_localised")
+                or (getattr(self, "cmdr_ship", {}) or {}).get("ship") or ""
+            ),
+            "ship_name": str(
+                (getattr(self, "cmdr_ship", {}) or {}).get("ship_name") or ""
+            ),
             "in_fss": bool(getattr(self, "in_fss", False)),
             "flight_state": getattr(self, "hud_flight_state", "FLIGHT"),
             "music_mode": getattr(self, "current_music_mode", ""),
@@ -7185,7 +7219,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             toast.push(title, message, severity=severity, duration_s=duration_s)
 
     def _srv_toast_vehicle_name(self, raw=None, data=None):
-        """Return NOMAD when Elite's SRV-shaped events belong to the Nomad."""
+        """Resolve Elite's surface-vehicle identity without losing its model."""
         raw = raw if isinstance(raw, dict) else {}
         data = data if isinstance(data, dict) else {}
         vehicle_id = data.get("ID") or raw.get("ID")
@@ -7198,11 +7232,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         if explicit_key:
             if "nomad" in explicit_key or explicit_key == "lander01":
                 return "NOMAD"
-            # A concrete Scarab/Scorpion identity beats an older remembered
-            # Nomad, particularly when commanders swap bays between sorties.
-            if any(token in explicit_key for token in (
-                    "scarab", "scorpion", "testbuggy", "combat")):
-                return "SRV"
+            if "scorpion" in explicit_key or "combat_multicrew_srv_01" in explicit_key:
+                return "SCORPION"
+            if "scarab" in explicit_key or explicit_key == "testbuggy":
+                return "SCARAB"
+            if "rhino" in explicit_key:
+                return "RHINO"
         loadout = data.get("Loadout") or raw.get("Loadout")
         remembered = (
             (getattr(self, "_vehicle_name_by_id", {}) or {}).get(vehicle_id)
@@ -7215,10 +7250,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             getattr(self, "current_vehicle_name", ""),
             getattr(self, "_last_surface_vehicle_name", ""),
         )
-        return "NOMAD" if any(
-            str(value or "").strip().casefold() == "nomad"
-            for value in candidates
-        ) else "SRV"
+        for value in candidates:
+            candidate = str(value or "").strip().upper()
+            if candidate in {"NOMAD", "SCARAB", "SCORPION", "RHINO"}:
+                return candidate
+        return "SRV"
 
     def _handle_live_journal_toast(self, ev, raw, d, startup_replay=False):
         """Surface selected, actionable journal events without replay noise."""
@@ -7653,13 +7689,15 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             except (TypeError, ValueError):
                 pass
             self._low_fuel_warned = False
-            self.cmdr_ship, _ = companion_features.update_active_ship(
+            self.cmdr_ship, ship_changed = companion_features.update_active_ship(
                 self.cmdr_ship, ev, raw
             )
             self.watcher.force_check_cargo()
             self._refresh_cargo_consumers()
             self._queue_edsm_upload(raw, allow_startup=True)
             self._refresh_commander_profile_window()
+            if ship_changed:
+                self.update_hud()
 
         elif ev in ("ShipyardBuy", "ShipyardNew", "ShipyardSwap", "SetUserShipName"):
             self.cmdr_ship, ship_changed = companion_features.update_active_ship(
@@ -7673,6 +7711,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self._refresh_cargo_consumers()
             if ship_changed:
                 self._refresh_commander_profile_window()
+                self.update_hud()
             # Buy is already queued by the shared credit-event path and New is
             # discarded by EDSM. Swap and naming events are accepted fleet
             # updates and must not be silently lost.
@@ -8072,8 +8111,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._stale_bio_warned = set()
             self.system_stars.clear()
             self.body_scan_data.clear()
-            self.current_body_id   = None
-            self.current_body_name = ""
+            location_body_id, location_body_name = _location_surface_focus(
+                ev, raw, d,
+            )
+            self.current_body_id = self._normalize_body_id(location_body_id)
+            self.current_body_name = location_body_name
             self.current_glide_mode = False
             self._surface_departure_active = False
             self._surface_glide_guard_until = 0.0

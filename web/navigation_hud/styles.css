@@ -66,19 +66,104 @@ body {
 
 .section { position: absolute; left: 16px; right: 16px; border-bottom: 1px solid rgba(92, 123, 140, .22); }
 .state-instrument {
-  position: absolute; left: 16px; right: 16px; top: 8px; height: 34px;
-  display: grid; grid-template-columns: 1fr minmax(126px, 43%) 1fr; align-items: center;
+  position: absolute; left: 16px; right: 16px; top: 7px; height: 37px;
+  display: grid; grid-template-columns: 1fr minmax(142px, 38%) 1fr; align-items: center;
   overflow: hidden; border-bottom: 1px solid rgba(92, 123, 140, .2);
+  background: linear-gradient(90deg,
+    transparent,
+    color-mix(in srgb, var(--state) 3%, transparent) 22%,
+    color-mix(in srgb, var(--state) 6%, transparent) 50%,
+    color-mix(in srgb, var(--state) 3%, transparent) 78%,
+    transparent);
 }
 #state-canvas { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: screen; }
-.state-field { position: relative; height: 24px; visibility: hidden; }
-.state-core { position: relative; z-index: 2; height: 28px; display: flex; align-items: center; justify-content: center; gap: 9px; }
-.state-core strong { position: relative; z-index: 4; color: var(--state); font: 700 calc(12px * var(--text-scale)) "Cascadia Mono", monospace; letter-spacing: 1.1px; text-shadow: 0 0 7px color-mix(in srgb, var(--state) 46%, transparent), 1px 1px #000; white-space: nowrap; }
-.core-bracket { width: 13px; height: 12px; border-top: 1px solid var(--state); border-bottom: 1px solid var(--state); opacity: .72; }
-.core-bracket.left { border-left: 2px solid var(--state); transform: skewX(-14deg); }
-.core-bracket.right { border-right: 2px solid var(--state); transform: skewX(14deg); }
-.core-pulse { position: absolute; width: 52px; height: 9px; border-radius: 50%; background: color-mix(in srgb, var(--state) 28%, transparent); filter: blur(5px); opacity: .42; animation: core-breathe calc(1.8s * var(--motion-scale)) ease-in-out infinite; }
-.state-packet { display: none; }
+.state-vehicle {
+  position: relative; z-index: 2; grid-column: 1; align-self: stretch; width: min(118px, 92%);
+  overflow: hidden; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--inset) 92%, transparent) 0 66%, transparent 100%);
+  opacity: .9;
+}
+.state-vehicle[hidden] { display: none; }
+.state-vehicle img {
+  position: relative; z-index: 2; display: block; width: 100px; height: 45px;
+  object-fit: contain; transform-origin: 48% 54%;
+  filter: saturate(.86) brightness(1.28) contrast(1.16)
+    drop-shadow(0 0 4px color-mix(in srgb, var(--state) 68%, transparent));
+  opacity: .96; animation: vehicle-idle calc(3.2s * var(--motion-scale)) ease-in-out infinite;
+}
+.state-vehicle[data-vehicle="onfoot"] img {
+  width: 112px; height: 88px; top: 16px;
+}
+.vehicle-frame {
+  position: absolute; z-index: 1; left: 3px; right: 5px; top: 6px; bottom: 6px;
+  border-left: 1px solid color-mix(in srgb, var(--state) 62%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--state) 24%, transparent);
+  clip-path: polygon(0 0, 84% 0, 100% 35%, 100% 100%, 16% 100%, 0 65%);
+}
+.vehicle-frame::before, .vehicle-frame::after {
+  content: ""; position: absolute; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, var(--state), color-mix(in srgb, var(--state) 18%, transparent));
+}
+.vehicle-frame::before { top: 0; } .vehicle-frame::after { bottom: 0; }
+.vehicle-scan {
+  position: absolute; z-index: 3; top: 6px; bottom: 6px; left: 7px; width: 1px;
+  background: var(--state); box-shadow: 0 0 5px var(--state); opacity: 0;
+}
+.state-core {
+  position: relative; z-index: 2; grid-column: 2; align-self: center; justify-self: stretch; height: 29px;
+  display: flex; align-items: center; justify-content: center; gap: 9px; min-width: 0;
+  background: linear-gradient(90deg,
+    transparent,
+    color-mix(in srgb, var(--inset) 96%, transparent) 12%,
+    color-mix(in srgb, var(--panel) 98%, transparent) 50%,
+    color-mix(in srgb, var(--inset) 96%, transparent) 88%,
+    transparent);
+}
+.state-core::before, .state-core::after {
+  content: ""; position: absolute; top: 5px; bottom: 5px; width: 8px;
+  border-color: color-mix(in srgb, var(--state) 72%, transparent); border-style: solid;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--state) 34%, transparent));
+}
+.state-core::before { left: 0; border-width: 1px 0 1px 2px; transform: skewX(-13deg); }
+.state-core::after { right: 0; border-width: 1px 2px 1px 0; transform: skewX(13deg); }
+.state-core strong {
+  position: relative; z-index: 4; color: var(--state);
+  font: 700 calc(12.5px * var(--text-scale)) "Cascadia Mono", "Consolas", monospace;
+  letter-spacing: 1.15px; line-height: 1; text-align: center;
+  text-shadow: 0 0 7px color-mix(in srgb, var(--state) 48%, transparent), 1px 1px #000;
+  white-space: nowrap;
+}
+.core-bracket { width: 10px; height: 8px; opacity: .8; }
+.core-bracket.left { border-top: 1px solid var(--state); transform: skewX(-18deg); }
+.core-bracket.right { border-bottom: 1px solid var(--state); transform: skewX(-18deg); }
+.core-pulse {
+  position: absolute; z-index: 1; width: 62%; height: 7px; border-radius: 50%;
+  background: color-mix(in srgb, var(--state) 20%, transparent); filter: blur(5px);
+  opacity: .38; animation: core-breathe calc(2.15s * var(--motion-scale)) ease-in-out infinite;
+}
+
+.hud[data-motion="supercruise"] .state-vehicle img {
+  animation: vehicle-cruise calc(1.55s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="supercruise_overcharge"] .state-vehicle img,
+.hud[data-motion="fsd_charge"] .state-vehicle img {
+  animation: vehicle-charge calc(.78s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="jump"] .state-vehicle img,
+.hud[data-motion="carrier_transit"] .state-vehicle img {
+  animation: vehicle-jump calc(.68s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="scanner"] .vehicle-scan,
+.hud[data-motion="map"] .vehicle-scan {
+  opacity: .7; animation: vehicle-scan calc(1.8s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="surface_vehicle"] .state-vehicle img,
+.hud[data-motion="on_foot"] .state-vehicle img {
+  animation: vehicle-surface calc(1.2s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="docked"] .state-vehicle img,
+.hud[data-motion="landed"] .state-vehicle img { animation: none; opacity: .72; }
 
 .system-block { top: 46px; height: 44px; padding-left: 11px; }
 .locator-rail { position: absolute; left: 0; top: 5px; bottom: 6px; width: 4px; background: color-mix(in srgb, var(--accent) 35%, transparent); }
@@ -137,23 +222,26 @@ body {
 .hud.expanded .context-rail { left: 20px; right: 20px; bottom: 8px; font-size: calc(12px * var(--text-scale)); }
 .hud.expanded .route-header { grid-template-columns: 1fr 115px 220px; }
 
-/* The WebView canvas owns state-specific geometry; CSS keeps the native label crisp. */
-.hud[data-motion="fsd_charge"] .state-core,
-.hud[data-motion="supercruise_overcharge"] .state-core { animation: charge-core calc(.72s * var(--motion-scale)) ease-in-out infinite; }
-.hud[data-motion="combat"] .state-core { animation: threat calc(1s * var(--motion-scale)) steps(2,end) infinite; }
+/* Canvas owns the state language; CSS keeps only the live label crisp. */
+.hud[data-motion="fsd_charge"] .core-pulse,
+.hud[data-motion="supercruise_overcharge"] .core-pulse { animation-duration: calc(.74s * var(--motion-scale)); opacity: .58; }
+.hud[data-motion="combat"] .state-core strong { animation: threat calc(1s * var(--motion-scale)) steps(2,end) infinite; }
 .hud.state-changing .state-core strong { animation: state-label-resolve .58s cubic-bezier(.2,.75,.2,1) 1; }
 .hud[data-motion="arrival"] .core-pulse,
 .hud[data-motion="carrier_arrival"] .core-pulse { background: color-mix(in srgb, var(--green) 35%, transparent); }
-.hud[data-event="true"] .state-core::after { content: ""; position: absolute; inset: 3px -8px; border-top: 1px solid var(--state); border-bottom: 1px solid var(--state); animation: event-flash calc(.85s * var(--motion-scale)) ease-out 1; }
 .hud.reduced-motion *, .hud.reduced-motion *::before, .hud.reduced-motion *::after { animation: none !important; transition-duration: 0s !important; }
 
 @keyframes route-flow { 0% { left: 0; opacity: 0; } 16% { opacity: 1; } 84% { opacity: 1; } 100% { left: calc(100% - 12px); opacity: 0; } }
 @keyframes next-beacon { 50% { transform: translateX(-50%) scale(1.28); box-shadow: 0 0 10px currentColor; } }
 @keyframes survey-scan { 0% { left: 0; opacity: 0; } 20% { opacity: 1; } 100% { left: calc(100% - 12px); opacity: 0; } }
 @keyframes core-breathe { 50% { opacity: .72; transform: scaleX(1.28); } }
-@keyframes charge-core { 50% { transform: scaleX(.92); filter: brightness(1.5); } }
+@keyframes vehicle-idle { 50% { transform: translateY(-.7px); filter: saturate(.9) brightness(1.4) contrast(1.18) drop-shadow(0 0 5px color-mix(in srgb, var(--state) 72%, transparent)); } }
+@keyframes vehicle-cruise { 50% { transform: translateX(1.8px) scale(1.015); filter: saturate(.94) brightness(1.45) contrast(1.2) drop-shadow(-3px 0 6px color-mix(in srgb, var(--state) 68%, transparent)); } }
+@keyframes vehicle-charge { 50% { transform: scale(.975); filter: saturate(1) brightness(1.55) contrast(1.2) drop-shadow(-4px 0 7px color-mix(in srgb, var(--state) 78%, transparent)); } }
+@keyframes vehicle-jump { 50% { transform: translateX(2.2px) scaleX(1.025); filter: saturate(.95) brightness(1.5) contrast(1.2) blur(.2px) drop-shadow(-4px 0 7px color-mix(in srgb, var(--state) 72%, transparent)); } }
+@keyframes vehicle-scan { 0%, 8% { transform: translateX(0); opacity: 0; } 22% { opacity: .72; } 82% { opacity: .72; } 100% { transform: translateX(96px); opacity: 0; } }
+@keyframes vehicle-surface { 25% { transform: translateY(-.6px) rotate(-.25deg); } 75% { transform: translateY(.6px) rotate(.25deg); } }
 @keyframes threat { 50% { filter: brightness(1.7); transform: translateX(1px); } }
-@keyframes event-flash { from { opacity: 1; transform: scaleX(.6); } to { opacity: 0; transform: scaleX(1.15); } }
 @keyframes state-label-resolve {
   0% { opacity: .42; letter-spacing: 2.8px; filter: blur(1px); }
   42% { opacity: 1; filter: blur(0); }
