@@ -11,7 +11,7 @@
 *   Reflowed the planet-side Biological Surface Workboard into one prioritised species per line with its sample state and estimated or confirmed value kept together.
 *   Extended the readable biological rows to the full-system Survey Operations workboard and retained the active planet across surface-side restarts using Location's body context.
 *   Made Navigation HUD portraits switch immediately on Loadout and shipyard changes while preventing Odyssey's on-foot suit identity from replacing the active mothership.
-*   Added a dedicated transparent on-foot explorer portrait so the Navigation identity bay now follows commander, mothership, Nomad/SRV, fighter and Carrier contexts without borrowing the wrong vehicle art.
+*   Added a dedicated transparent on-foot explorer portrait so the Navigation identity bay now follows commander, mothership, Nomad/SRV, fighter and Carrier contexts without borrowing the wrong vehicle art; tightly bounded runtime artwork and a larger, brighter identity bay keep every portrait readable in both HUD layouts.
 *   Kept the ship-art attribution README inside public packages while preserving the release builder's strict rejection of every other unexpected non-image asset.
 
 ## Earlier releases
