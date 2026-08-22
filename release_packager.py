@@ -37,6 +37,11 @@ PUBLIC_FILENAMES = {
 OPTIONAL_LICENSE_PATTERNS = ("LICENSE", "LICENSE.*", "COPYING", "COPYING.*")
 README_IMAGE_PATTERN = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
 PUBLIC_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+PUBLIC_RUNTIME_IMAGE_DOCUMENTS = {
+    # Attribution and provenance for the bundled ship-art catalogue. Keep the
+    # runtime image tree strict: this is the only intentional non-image file.
+    "Images/ships/README.md",
+}
 REQUIRED_RUNTIME_IMAGES = {
     "Images/Galaxy/voidcompass-galactic-atlas.png",
 }
@@ -156,13 +161,17 @@ def _copy_runtime_images(project: Path, package_dir: Path) -> set[str]:
             raise RuntimeError(f"Release image tree contains a symlink: {source}")
         if not source.is_file():
             continue
-        if source.suffix.casefold() not in PUBLIC_IMAGE_EXTENSIONS:
-            raise RuntimeError(f"Release image tree contains a non-image file: {source}")
         resolved = source.resolve()
         try:
             safe_relative = resolved.relative_to(project)
         except ValueError as exc:
             raise RuntimeError(f"Release image escapes the project folder: {source}") from exc
+        relative_name = safe_relative.as_posix()
+        if (
+            source.suffix.casefold() not in PUBLIC_IMAGE_EXTENSIONS
+            and relative_name not in PUBLIC_RUNTIME_IMAGE_DOCUMENTS
+        ):
+            raise RuntimeError(f"Release image tree contains a non-image file: {source}")
         destination = package_dir / safe_relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(resolved, destination)
@@ -281,7 +290,10 @@ def create_release(
         "sha256": archive_digest,
         "platform": target["platform"],
         "license_included": bool(optional_names),
-        "runtime_image_count": len(runtime_images),
+        "runtime_image_count": sum(
+            Path(name).suffix.casefold() in PUBLIC_IMAGE_EXTENSIONS
+            for name in runtime_images
+        ),
     }
 
 

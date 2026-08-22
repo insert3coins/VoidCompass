@@ -398,6 +398,15 @@ def update_active_ship(current, event, raw):
     if event not in ("Loadout", "LoadGame") and event not in SHIP_CHANGE_EVENTS:
         return ship, False
 
+    # Odyssey reports the active suit through LoadGame's Ship fields when the
+    # commander logs in on foot. It is an avatar, not a mothership change.
+    # Retain the last journal-confirmed ship until a real Loadout/shipyard
+    # event arrives.
+    if event == "LoadGame":
+        load_game_symbol = str(raw.get("Ship") or "").strip().casefold()
+        if "suit" in load_game_symbol:
+            return ship, False
+
     if event in ("ShipyardBuy", "ShipyardSwap"):
         incoming_type = raw.get("ShipType")
         incoming_localised = raw.get("ShipType_Localised")

@@ -28,6 +28,26 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+## Elite Cartoon Ship Vectors
+
+`Images/ships` includes the 2025 **Elite Cartoon Ship Vectors** collection by
+[CMDR Qohen Leth](https://www.reddit.com/user/CMDR_Qohen_Leth/), made from
+blueprints by CMDR Arithon and the creator's own tracing. The upstream bundle
+contains 45 human spacecraft through the Type-11 Prospector and a Cyclops
+illustration in PNG, SVG and PDF forms; Void Compass includes its PNG artwork.
+
+Source and attribution:
+[Elite Cartoon Ship Vectors — updated 2025](https://www.reddit.com/r/EliteDangerous/comments/1mnmolv/elite_cartoon_ship_vectors_elite_ships_colouring/)
+
+Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International:
+<https://creativecommons.org/licenses/by-nc-sa/4.0/>
+
+This artwork is separately licensed, is not covered by Void Compass' GPL-3.0
+software licence, and retains its non-commercial and share-alike restrictions.
+The post-2025 and auxiliary-vehicle illustrations identified in
+`Images/ships/README.md` are Void Compass additions and are not represented as
+part of CMDR Qohen Leth's original bundle.
+
 ## pywebview
 
 The Windows HTML command deck and cockpit overlay suite use [pywebview](https://pywebview.flowrl.com/)

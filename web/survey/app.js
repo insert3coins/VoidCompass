@@ -82,20 +82,43 @@
     parent.appendChild(rail);
   }
 
-  function appendDetails(parent, details, limit = 3) {
-    for (const detail of (details || []).slice(0, limit)) {
-      const kind = String(detail.kind || "");
-      const symbol = {complete: "✓", sample: "●", detected: "○"}[kind] || "·";
-      const progress = kind === "sample" && safeNumber(detail.progress)
-        ? ` ${Math.min(3, safeNumber(detail.progress))}/3` : "";
-      parent.appendChild(node(
-        "span", `detail-token ${kind}`,
-        `${symbol} ${detail.display_name || detail.name || "Organic"}${progress}`,
-      ));
-    }
+  function biologicalRow(detail) {
+    const kind = String(detail.kind || "detected");
+    const row = node("div", `biological-row ${kind}`);
+    const identity = node("span", "biological-identity");
+    const symbol = {complete: "✓", sample: "●", detected: "○", predicted: "?", possible: "·"}[kind] || "·";
+    identity.appendChild(node("i", "biological-symbol", symbol));
+    identity.appendChild(node(
+      "strong", "biological-name",
+      detail.display_name || detail.name || "Organic",
+    ));
+    row.appendChild(identity);
+
+    const facts = node("span", "biological-facts");
+    const progress = Math.max(0, Math.min(3, Math.round(safeNumber(detail.progress))));
+    const status = kind === "sample" && progress
+      ? `${progress}/3`
+      : String(detail.status || kind).toUpperCase();
+    facts.appendChild(node("span", "biological-status", status));
+    const value = safeNumber(detail.value)
+      ? credits(detail.value)
+      : valueRange(detail.min_value, detail.max_value);
+    if (value) facts.appendChild(node("b", "biological-value", value));
+    row.appendChild(facts);
+    return row;
   }
 
-  function targetCard(row, bodyMode = false) {
+  function orderedBiologicalDetails(details) {
+    const priority = {sample: 0, detected: 1, predicted: 2, possible: 3, complete: 4};
+    return [...(details || [])].sort((left, right) => {
+      const leftRank = priority[String(left.kind || "detected")] ?? 2;
+      const rightRank = priority[String(right.kind || "detected")] ?? 2;
+      return leftRank - rightRank || String(left.display_name || left.name || "")
+        .localeCompare(String(right.display_name || right.name || ""));
+    });
+  }
+
+  function targetCard(row) {
     const bio = Math.max(0, Math.round(safeNumber(row.bio_count)));
     const done = Math.max(0, Math.round(safeNumber(row.complete)));
     const geo = Math.max(0, Math.round(safeNumber(row.geo_count)));
@@ -111,10 +134,16 @@
     if (complete && value) badges.appendChild(node("b", "badge", `BASE ${value}`));
     head.appendChild(badges); card.appendChild(head);
 
-    const detail = node("div", "target-detail");
+    const biological = orderedBiologicalDetails(row.bio_details || row.rows || []);
+    const detail = node("div", `target-detail${biological.length ? " biological-list" : ""}`);
     if (!complete) {
-      appendNodes(detail, row);
-      appendDetails(detail, row.bio_details || row.rows || [], bodyMode ? 3 : 2);
+      if (biological.length) {
+        for (const entry of biological) {
+          detail.appendChild(biologicalRow(entry));
+        }
+      } else {
+        appendNodes(detail, row);
+      }
     }
     if (row.notable) detail.appendChild(node("span", "notable", "◆ NOTABLE"));
     if (value && !complete) detail.appendChild(node("span", "value", `EST ${value}`));
@@ -221,7 +250,7 @@
         notable: model.notable,
       };
       if (rows.length || safeNumber(body.geo_count) || model.notable) {
-        dom.content.appendChild(targetCard(projected, true));
+        dom.content.appendChild(targetCard(projected));
       }
     } else {
       const active = rows.filter((row) => !row.bio_complete);
