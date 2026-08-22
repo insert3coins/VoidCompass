@@ -2106,12 +2106,32 @@ class TacticalHUD:
         state_text = self._state_text(nav_context)
         state_color = self._state_color(state_text)
         journal_event = nav_context.get("journal_event") or {}
+        approach = nav_context.get("surface_approach") or {}
+        ship_config = nav_context.get("ship_config") or {}
+
+        def finite_number(value, default=None):
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                return default
+            return number if math.isfinite(number) else default
+
         model["state"] = {
             "label": state_text,
             "color": state_color,
             "motion": self._navigation_motion_profile(state_text),
             "event_sequence": journal_event.get("seq"),
             "event_kind": str(journal_event.get("kind") or ""),
+            "dynamics": {
+                "gravity_g": finite_number(nav_context.get("gravity_g"), 0.0),
+                "altitude_m": finite_number(approach.get("altitude_m")),
+                "vertical_mps": finite_number(approach.get("descent_mps"), 0.0),
+                "scan_percent": finite_number(nav_context.get("scan_progress"), 0.0),
+                "landing_gear": bool(ship_config.get("landing_gear")),
+                "analysis_mode": bool(ship_config.get("analysis_mode")),
+                "neutron_boost": bool((nav_context.get("neutron_boost") or {}).get("armed")),
+                "route_active": str(nav_context.get("route_mode") or "NO ROUTE") != "NO ROUTE",
+            },
         }
 
         region = nav_context.get("region") or {}
@@ -2174,6 +2194,9 @@ class TacticalHUD:
             "cells": max(10, min(18, int(round(track_width / 28.0)))),
             "hops": html_hops,
         }
+        model["state"]["dynamics"]["route_progress"] = round(
+            max(0.0, min(1.0, progress_percent / 100.0)), 4,
+        )
 
         pct, scan_progress_text = self._scan_progress_state(scanned, total, nav_context)
         survey = self._survey_rail_presentation(scanned, total, pct, nav_context)

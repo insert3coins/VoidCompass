@@ -17,6 +17,8 @@ const stateIndicator = new window.NavigationIndicator(dom['state-canvas']);
 let snapshot = null;
 let arrivalTimer = null;
 let lastEventSequence = null;
+let lastIndicatorSignature = '';
+let stateChangeTimer = null;
 let lastServerContact = Date.now();
 let lastRevision = -1;
 let healthPollActive = false;
@@ -132,12 +134,26 @@ function render(data) {
   const energy = Math.max(.55, Math.min(1.6, Number(data.effects?.energy || 1)));
   hud.style.setProperty('--motion-energy', String(energy));
   hud.style.setProperty('--motion-scale', String(1 / energy));
+  const indicatorSignature = `${data.state?.motion || 'flight'}|${data.state?.label || 'FLIGHT'}`;
   dom['state-label'].textContent = data.state?.label || 'FLIGHT';
+  if (lastIndicatorSignature && indicatorSignature !== lastIndicatorSignature
+      && !data.effects?.reduced_motion) {
+    hud.classList.remove('state-changing');
+    void dom['state-label'].offsetWidth;
+    hud.classList.add('state-changing');
+    if (stateChangeTimer) clearTimeout(stateChangeTimer);
+    stateChangeTimer = setTimeout(() => {
+      hud.classList.remove('state-changing');
+      stateChangeTimer = null;
+    }, 620);
+  }
+  lastIndicatorSignature = indicatorSignature;
   stateIndicator.update({
     motion: data.state?.motion || 'flight',
     label: data.state?.label || 'FLIGHT',
     color: data.state?.color || '#607584',
     energy,
+    dynamics: data.state?.dynamics || {},
     reduced: Boolean(data.effects?.reduced_motion),
     eventSequence: data.state?.event_sequence,
     eventKind: data.state?.event_kind,

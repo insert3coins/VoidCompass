@@ -39,6 +39,7 @@ class HtmlSurveyOverlayBridge:
         self._disposed = False
         self._sync_job = None
         self._last_fingerprint = None
+        self._browser_content_height = 0
         try:
             self.win.bind("<Destroy>", self._on_destroy, add="+")
         except Exception:
@@ -56,7 +57,7 @@ class HtmlSurveyOverlayBridge:
             height = max(_safe_int(self.canvas.cget("height"), 90), self.canvas.winfo_height())
         except Exception:
             width, height = 420, 90
-        return width, height
+        return width, max(height, _safe_int(self._browser_content_height))
 
     def _window_payload(self):
         width, height = self._dimensions()
@@ -145,6 +146,7 @@ class HtmlSurveyOverlayBridge:
             except Exception:
                 pass
             self._last_fingerprint = None
+            self._browser_content_height = 0
             return False
         if self.surface is not None:
             return True
@@ -181,6 +183,15 @@ class HtmlSurveyOverlayBridge:
                 was_ready = self._ready
                 self._ready = surface.ready
                 self.overlay._html_ready = self._ready
+                measured_height = surface.server.rendered_content_height(
+                    self.overlay_id,
+                )
+                if measured_height != self._browser_content_height:
+                    self._browser_content_height = measured_height
+                    # Window geometry is part of the quick fingerprint. Force
+                    # one immediate publication so the shared host resizes
+                    # before the next journal model arrives.
+                    self._last_quick_fingerprint = None
                 if self._ready:
                     try:
                         self.win.attributes("-alpha", 0.0)

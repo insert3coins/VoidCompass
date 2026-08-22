@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Void Compass</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="boot" class="boot" aria-live="polite">
+    <div class="boot-stars" aria-hidden="true"></div>
+    <div class="boot-nebula" aria-hidden="true"></div>
+    <div class="boot-scanline" aria-hidden="true"></div>
+    <span class="boot-corner corner-nw">VC // LOCAL FLIGHT COMPUTER</span>
+    <span class="boot-corner corner-ne" id="boot-version">SECURE LOOPBACK // WEBVIEW2</span>
+    <span class="boot-corner corner-sw">FRONTIER JOURNAL // READ ONLY</span>
+    <span class="boot-corner corner-se">EXPLORATION SYSTEMS // STANDBY</span>
+
+    <section id="boot-loader" class="boot-loader">
+      <div class="boot-instrument" aria-hidden="true">
+        <div class="galactic-plane"></div>
+        <div class="instrument-ring ring-outer"></div>
+        <div class="instrument-ring ring-bearing"></div>
+        <div class="instrument-ring ring-inner"></div>
+        <div class="instrument-sweep"></div>
+        <div class="instrument-axis axis-x"></div>
+        <div class="instrument-axis axis-y"></div>
+        <div class="instrument-ship"><i></i><b></b></div>
+        <div class="instrument-pulse pulse-a"></div>
+        <div class="instrument-pulse pulse-b"></div>
+        <span class="instrument-label label-n">GALACTIC N</span>
+        <span class="instrument-label label-e">+X</span>
+        <span class="instrument-label label-s">SOL DATUM</span>
+        <span class="instrument-label label-w">−X</span>
+        <small class="instrument-coordinate coord-a">X +00000.00</small>
+        <small class="instrument-coordinate coord-b">Y +00000.00</small>
+        <small class="instrument-coordinate coord-c">Z +00000.00</small>
+      </div>
+
+      <section class="boot-copy">
+        <p class="eyebrow">EXPLORATION FLIGHT COMPUTER</p>
+        <h1>VOID <span>COMPASS</span></h1>
+        <div class="boot-status-line"><i></i><p id="boot-status" class="boot-status">INITIALISING FLIGHT COMPUTER</p></div>
+        <p id="boot-detail" class="boot-detail">Starting the private command deck</p>
+        <div class="boot-track"><i id="boot-progress"></i><em></em></div>
+        <div class="boot-readouts">
+          <span>PROFILE VAULT</span><b id="boot-profile">WAIT</b>
+          <span>SURVEY INDEX</span><b id="boot-survey">WAIT</b>
+          <span>LIVE JOURNAL</span><b id="boot-journal">WAIT</b>
+          <span>COCKPIT BUS</span><b id="boot-cockpit">WAIT</b>
+        </div>
+      </section>
+
+      <aside class="boot-sequence" aria-hidden="true">
+        <div data-boot-stage="profile"><i></i><span>01</span><p>PROFILE CORE</p><b>LOCAL</b></div>
+        <div data-boot-stage="survey"><i></i><span>02</span><p>SURVEY HISTORY</p><b>INDEX</b></div>
+        <div data-boot-stage="journal"><i></i><span>03</span><p>JOURNAL TAIL</p><b>SYNC</b></div>
+        <div data-boot-stage="cockpit"><i></i><span>04</span><p>COCKPIT LINK</p><b>ARM</b></div>
+        <div class="sequence-vector"><i></i></div>
+      </aside>
+    </section>
+
+    <section id="commissioning" class="commissioning" hidden>
+      <header class="commission-header">
+        <div><p>VOID COMPASS // FIRST COMMISSIONING</p><h1>Bring the flight deck <span>online.</span></h1></div>
+        <b>01 / LOCAL SETUP</b>
+      </header>
+      <div class="commission-grid">
+        <aside class="commission-manifest">
+          <div class="manifest-instrument" aria-hidden="true"><i></i><b></b><span>VC</span></div>
+          <p>EXPLORATION SYSTEM</p>
+          <h2>Your journals.<br>Your profiles.<br>Your machine.</h2>
+          <span>Void Compass reads Frontier's local journal files and builds commander-aware exploration intelligence without requiring an account or cloud database.</span>
+          <ol>
+            <li><b>01</b><div><strong>JOURNAL LINK</strong><small>Read-only live telemetry</small></div></li>
+            <li><b>02</b><div><strong>SURVEY CORE</strong><small>FSS, DSS and exobiology</small></div></li>
+            <li><b>03</b><div><strong>COCKPIT LAYER</strong><small>Profile-aware HTML overlays</small></div></li>
+          </ol>
+          <footer><i></i> LOCAL-FIRST // PRIVATE BY DEFAULT</footer>
+        </aside>
+
+        <form id="onboarding-form" class="commission-form">
+          <div class="form-heading"><small>COMMANDER ENVIRONMENT</small><h2>Connect Elite Dangerous</h2><p>Everything here remains editable later from Settings.</p></div>
+          <label class="field-label" for="onboarding-journal">ELITE DANGEROUS JOURNAL FOLDER</label>
+          <p class="field-help">Select the folder containing Frontier's <code>Journal.*.log</code> files.</p>
+          <div class="path-field">
+            <input id="onboarding-journal" type="text" spellcheck="false" autocomplete="off" placeholder="Auto-detected journal folder">
+            <button id="onboarding-browse" type="button">BROWSE</button>
+          </div>
+          <div class="privacy-note"><i>✓</i><span><b>READ-ONLY SOURCE</b>Void Compass never modifies game journals.</span></div>
+
+          <fieldset>
+            <legend>INITIAL FLIGHT DECK</legend>
+            <label class="switch-row"><input id="onboarding-adaptive" type="checkbox"><i></i><span><b>Adaptive command deck</b><small>Keep the dashboard responsive to current exploration activity.</small></span></label>
+            <label class="switch-row"><input id="onboarding-overlays" type="checkbox"><i></i><span><b>HTML cockpit overlays</b><small>Enable Navigation, Survey Operations and field HUD surfaces.</small></span></label>
+            <label class="switch-row"><input id="onboarding-passthrough" type="checkbox"><i></i><span><b>In-game mouse passthrough</b><small>Let game input pass through enabled overlays.</small></span></label>
+          </fieldset>
+
+          <p id="onboarding-error" class="commission-error" role="alert"></p>
+          <footer class="commission-actions">
+            <button id="onboarding-exit" type="button" class="quiet-action">EXIT</button>
+            <div><small>READY FOR FIRST FLIGHT</small><button id="onboarding-submit" type="submit" class="commission-action">COMMISSION VOID COMPASS</button></div>
+          </footer>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <div id="app" class="app" aria-hidden="true">
+    <section id="flight-log-shell" class="flight-log-shell" aria-hidden="true">
+      <header><div><small>VOID COMPASS // FOCUSED SURFACE</small><h1>Flight Log</h1><span id="flightlog-identity">LIVE EXPLORATION RECORD</span></div><button data-command="set_flight_log_mode" data-enabled="false">RESTORE DASHBOARD</button></header>
+      <main>
+        <section class="flightlog-hero"><div><small>CURRENT SYSTEM</small><h2 id="flightlog-system">NO SYSTEM DATA</h2><span id="flightlog-state">WAITING FOR LIVE JOURNAL</span></div><b id="flightlog-survey-badge">AWAITING</b><i><em id="flightlog-progress"></em></i></section>
+        <section class="flightlog-metrics"><article><small>SYSTEM SURVEY</small><strong id="flightlog-survey">0 / ?</strong><span id="flightlog-survey-detail">AWAITING SCAN TOTAL</span></article><article><small>NEXT LEG</small><strong id="flightlog-route">NO ACTIVE ROUTE</strong><span id="flightlog-route-detail">PLOT IN ELITE OR WAYPOINTS</span></article><article><small>FIELD VALUE</small><strong id="flightlog-value">0 CR</strong><span id="flightlog-value-detail">NO UNSOLD DATA</span></article></section>
+        <section class="flightlog-events"><header><span>CURATED EXPLORATION LOG</span><b id="flightlog-event-count">0 EVENTS</b></header><div id="flightlog-event-list"></div></section>
+      </main>
+    </section>
+
+    <aside class="rail">
+      <header class="brand">
+        <div class="brand-glyph"><span></span></div>
+        <div><strong>VOID COMPASS</strong><small>EXPLORATION CONSOLE</small></div>
+      </header>
+
+      <nav class="nav" aria-label="Command deck">
+        <p>EXPLORATION</p>
+        <button class="nav-item active" data-page="overview"><i>⌖</i><span>Dashboard</span><b>01</b></button>
+        <button class="nav-item" data-page="explore"><i>✦</i><span>Explore & Survey</span><b>02</b></button>
+        <button class="nav-item" data-page="mission"><i>⌁</i><span>Mission Control</span><b>03</b></button>
+        <button class="nav-item" data-page="map"><i>◉</i><span>Galactic Atlas</span><b>04</b></button>
+        <p>RECORDS</p>
+        <button class="nav-item" data-page="records"><i>∿</i><span>Flight Records</span><b>05</b></button>
+        <button class="nav-item" data-page="analytics"><i>▥</i><span>Analytics</span><b>06</b></button>
+        <button class="nav-item" data-page="chronicle"><i>☷</i><span>Captain's Log</span><b>07</b></button>
+        <button class="nav-item" data-page="profile"><i>◎</i><span>Commander Profile</span><b>08</b></button>
+        <button class="nav-item" data-page="ledger"><i>◇</i><span>Value Ledger</span><b>09</b></button>
+        <button class="nav-item" data-page="achievements"><i>★</i><span>Achievements</span><b>10</b></button>
+        <p>FIELD SYSTEMS</p>
+        <button class="nav-item" data-page="operations"><i>▦</i><span>Field Tools</span><b>11</b></button>
+        <button class="nav-item" data-page="ground"><i>⌖</i><span>Ground & Exobio</span><b>12</b></button>
+        <button class="nav-item" data-page="mining"><i>◆</i><span>Mining Command</span><b>13</b></button>
+        <button class="nav-item" data-page="engineering"><i>⚙</i><span>Engineering</span><b>14</b></button>
+        <button class="nav-item" data-page="carrier"><i>◈</i><span>Fleet Carrier</span><b>15</b></button>
+        <button class="nav-item" data-page="recon"><i>✧</i><span>System Recon</span><b>16</b></button>
+        <button class="nav-item" data-page="overlay-studio"><i>⌗</i><span>Overlay Studio</span><b>17</b></button>
+        <p>APPLICATION</p>
+        <button class="nav-item" data-page="settings"><i>≡</i><span>Settings</span><b>18</b></button>
+        <button class="nav-item" data-page="about"><i>ⓘ</i><span>About</span><b>19</b></button>
+      </nav>
+
+      <footer class="rail-footer">
+        <div class="connection"><i id="connection-light"></i><span>LOCAL LINK</span><b id="connection-state">CONNECTING</b></div>
+        <button data-command="open_screenshots">OPEN SCREENSHOTS</button>
+        <small id="rail-version">v5.3.9 // WEBVIEW2</small>
+      </footer>
+    </aside>
+
+    <section class="deck">
+      <header class="topbar">
+        <div class="system-identity">
+          <small>CURRENT SYSTEM</small>
+          <strong id="header-system">---</strong>
+          <span id="header-context">WAITING FOR LIVE JOURNAL</span>
+        </div>
+        <div class="top-metrics">
+          <div><small>SURVEY</small><strong id="header-survey">0 / ?</strong></div>
+          <div><small>ROUTE</small><strong id="header-route">INACTIVE</strong></div>
+          <div><small>SESSION</small><strong id="header-session">00:00:00</strong></div>
+          <div><small>TRAFFIC</small><strong id="header-traffic">0 / 0 / 0</strong></div>
+        </div>
+        <div class="commander">
+          <small>COMMANDER</small><strong id="header-commander">UNKNOWN</strong>
+          <span id="header-ship">SHIP // FLIGHT</span>
+        </div>
+      </header>
+
+      <main class="pages">
+        <section class="page active" data-page-name="overview">
+          <header class="page-title">
+            <div><p>LIVE COMMAND DECK</p><h2>Exploration briefing</h2><span id="overview-subtitle">Journal-backed field intelligence</span></div>
+            <div class="title-actions">
+              <button class="ghost" data-command="set_flight_log_mode" data-enabled="true">FOCUSED LOG</button>
+              <button class="ghost" data-command="open" data-target="explore">FULL SURVEY</button>
+              <button class="primary" data-page="map">OPEN GALACTIC ATLAS</button>
+            </div>
+          </header>
+
+          <section class="adaptive-strip">
+            <div><small>ADAPTIVE COMMAND DECK</small><b id="adaptive-label">GENERAL FLIGHT</b><span id="adaptive-detail">AUTO · following live journal activity</span></div>
+            <div><label for="adaptive-mode">MODE</label><select id="adaptive-mode"><option value="auto">AUTO</option><option value="general">GENERAL FLIGHT</option><option value="exploration">EXPLORATION</option><option value="mining">MINING</option><option value="ground">GROUND OPS</option><option value="carrier">CARRIER OPS</option><option value="station">STATION OPS</option></select><button data-command="open_adaptive_mode">OPEN MODE</button></div>
+          </section>
+
+          <section class="hero-grid">
+            <article class="card survey-card accent-card">
+              <header><span>CURRENT SYSTEM SURVEY</span><b id="survey-badge">AWAITING</b></header>
+              <div class="survey-title"><h3 id="survey-system">NO SYSTEM DATA</h3><span id="survey-star">STAR CLASS —</span></div>
+              <div class="survey-progress"><i id="survey-progress"></i><em id="survey-percent">0%</em></div>
+              <div class="survey-stats">
+                <div><small>DISCOVERED</small><strong id="survey-count">0 / ?</strong></div>
+                <div><small>BIOLOGICAL</small><strong id="survey-bio">0 SIGNALS</strong></div>
+                <div><small>VALUABLE</small><strong id="survey-valuable">0 BODIES</strong></div>
+                <div><small>REGION</small><strong id="survey-region">UNKNOWN</strong></div>
+              </div>
+              <div id="survey-notables" class="notable-list empty">Awaiting scan telemetry.</div>
+            </article>
+
+            <article class="card route-card">
+              <header><span>NEXT LEG</span><b id="route-badge">NO ROUTE</b></header>
+              <div class="route-target">
+                <span class="target-reticle" aria-hidden="true"></span>
+                <div><small id="route-source">NAVIGATION</small><h3 id="route-next">NO ACTIVE ROUTE</h3><p id="route-final">Plot a route in Elite or Mission Control.</p></div>
+              </div>
+              <div class="route-track"><i id="route-progress"></i><span id="route-progress-label">INACTIVE</span></div>
+              <div class="route-meta"><span id="route-distance">— LY</span><span id="route-remaining">0 JUMPS LEFT</span></div>
+              <button id="copy-next" class="wide-button" data-command="copy_next">COPY NEXT DESTINATION</button>
+            </article>
+          </section>
+
+          <section class="telemetry-strip">
+            <article><i class="fuel-icon"></i><div><small>FUEL INTEGRITY</small><strong id="metric-fuel">—</strong><span id="metric-fuel-detail">AWAITING LOADOUT</span></div></article>
+            <article><i class="data-icon"></i><div><small>DATA ABOARD</small><strong id="metric-data">0 CR</strong><span id="metric-data-detail">NO UNSOLD RECORDS</span></div></article>
+            <article><i class="jump-icon"></i><div><small>SESSION TRAVEL</small><strong id="metric-distance">0.0 LY</strong><span id="metric-jumps">0 JUMPS</span></div></article>
+            <article><i class="signal-icon"></i><div><small>SOURCE HEALTH</small><strong id="metric-health">CACHED</strong><span id="metric-health-detail">WAITING FOR GAME</span></div></article>
+          </section>
+
+          <section class="lower-grid">
+            <article class="card priority-card">
+              <header><span>FIELD PRIORITIES</span><b id="priority-badge">NOMINAL</b></header>
+              <div id="priority-list" class="priority-list">
+                <div><b>01</b><p><strong>No urgent objective</strong><span>Continue surveying or follow the current route.</span></p></div>
+              </div>
+            </article>
+            <article class="card feed-card">
+              <header><span>LIVE EXPLORATION FEED</span><b class="live-badge">● LIVE</b></header>
+              <div class="feed-filters">
+                <button class="active" data-feed-filter="ALL">ALL</button>
+                <button data-feed-filter="DISCOVERY">DISCOVERY</button>
+                <button data-feed-filter="NAVIGATION">NAV</button>
+                <button data-feed-filter="ALERTS">ALERTS</button>
+                <button data-feed-filter="OPERATIONS">OPS</button>
+              </div>
+              <div id="event-feed" class="event-feed"></div>
+            </article>
+          </section>
+        </section>
+
+        <section class="page" data-page-name="explore">
+          <header class="page-title">
+            <div><p>DISCOVERY OPERATIONS</p><h2>Explore & survey</h2><span>Live system workboard and expedition intelligence</span></div>
+            <div class="title-actions"><button class="primary" id="explore-complete">ROUTE & WAYPOINTS</button></div>
+          </header>
+          <section class="intel-grid">
+            <article class="card tall-card"><header><span>SYSTEM WORKBOARD</span><b id="workboard-badge">LIVE</b></header><div id="body-workboard" class="workboard"></div></article>
+            <article class="card"><header><span>DISCOVERY INTELLIGENCE</span></header><div class="big-stat"><strong id="intel-value">0 CR</strong><span>ESTIMATED DATA ABOARD</span></div><div id="intel-facts" class="fact-list"></div></article>
+            <article class="card"><header><span>EXPEDITION PULSE</span><b id="expedition-badge">NO MISSION</b></header><h3 id="expedition-name">NO ACTIVE EXPEDITION</h3><p id="expedition-detail">Create or resume a named expedition in Mission Control.</p><div class="route-track"><i id="expedition-progress"></i><span id="expedition-progress-label">0 / 0</span></div><button class="wide-button" data-command="open" data-target="mission">OPEN MISSION CONTROL</button></article>
+            <article class="card"><header><span>QUICK FIELD ACTIONS</span></header><div class="action-grid compact-actions"><button data-command="open" data-target="ground">GROUND NAV</button><button data-command="open" data-target="ledger">VALUE LEDGER</button><button data-command="open" data-target="achievements">ACHIEVEMENTS</button><button data-page="map">GALACTIC ATLAS</button></div></article>
+          </section>
+          <section id="explore-workspace" class="workspace-shell loading-panel">Linking route and waypoint records…</section>
+        </section>
+
+        <section class="page atlas-page" data-page-name="map">
+          <header class="atlas-dockbar">
+            <div>
+              <p>UNIVERSAL CARTOGRAPHICS // LIVE PROFILE LINK</p>
+              <h2>Galactic Atlas</h2>
+              <span id="atlas-status">Preparing the private three-dimensional map</span>
+            </div>
+            <div class="title-actions">
+              <button class="ghost" data-page="overview">RETURN TO DASHBOARD</button>
+              <button id="atlas-focus-toggle" class="primary" type="button">FOCUS MAP</button>
+            </div>
+          </header>
+          <div id="atlas-frame-shell" class="atlas-frame-shell">
+            <div id="atlas-placeholder" class="atlas-placeholder" role="status">
+              <i aria-hidden="true"></i>
+              <strong>INITIALISING GALACTIC ATLAS</strong>
+              <span>Linking retained systems, route intelligence and commander annotations…</span>
+            </div>
+            <iframe id="atlas-frame" class="atlas-frame" title="Void Compass Galactic Atlas" referrerpolicy="no-referrer"></iframe>
+          </div>
+        </section>
+
+        <section class="page" data-page-name="records">
+          <header class="page-title">
+            <div><p>COMMANDER ARCHIVE</p><h2>Flight records</h2><span>Session totals, discoveries and the recent journal chronicle</span></div>
+            <div class="title-actions"><button class="ghost" data-command="open" data-target="profile">PROFILE</button><button class="primary" data-command="open" data-target="analytics">FULL ANALYTICS</button></div>
+          </header>
+          <section class="record-metrics">
+            <article><small>SESSION JUMPS</small><strong id="record-jumps">0</strong><span>JOURNAL CONFIRMED</span></article>
+            <article><small>DISTANCE</small><strong id="record-distance">0.0 LY</strong><span>CURRENT SESSION</span></article>
+            <article><small>SYSTEMS</small><strong id="record-systems">0</strong><span>UNIQUE THIS SESSION</span></article>
+            <article><small>BIO ANALYSES</small><strong id="record-bio">0</strong><span>CURRENT SYSTEM</span></article>
+          </section>
+          <section class="records-grid">
+            <article class="card"><header><span>RECENT CHRONICLE</span></header><div id="record-feed" class="event-feed record-feed"></div></article>
+            <article class="card"><header><span>DISCOVERY SUMMARY</span></header><div id="record-facts" class="fact-list spacious"></div><div class="action-grid"><button data-command="open" data-target="analytics">ANALYTICS</button><button data-command="open" data-target="profile">COMMANDER PROFILE</button><button data-command="open" data-target="captains_log">CAPTAIN'S LOG</button><button data-command="open_screenshots">SCREENSHOTS</button></div></article>
+          </section>
+        </section>
+
+        <section class="page" data-page-name="operations">
+          <header class="page-title"><div><p>EXPLORER SUPPORT</p><h2>Field systems</h2><span>Focused tools retained for long-range exploration and mining</span></div></header>
+          <section class="tool-grid">
+            <article class="tool-card"><i>⌖</i><div><small>SURFACE OPERATIONS</small><h3>Ground & Exobiology</h3><p>Coordinate targets, bearing, distance guidance and biological field work.</p></div><button data-command="open" data-target="ground">OPEN GROUND TOOL</button></article>
+            <article class="tool-card"><i>◆</i><div><small>RESOURCE OPERATIONS</small><h3>Mining</h3><p>Prospector analysis, refinery yield, cargo economics and session history.</p></div><button data-command="open" data-target="mining">OPEN MINING</button></article>
+            <article class="tool-card"><i>⚙</i><div><small>SHIP READINESS</small><h3>Engineering & Synthesis</h3><p>FSD injections, synthesis inventory and pinned exploration upgrades.</p></div><button data-command="open" data-target="engineering">OPEN ENGINEERING</button></article>
+            <article class="tool-card"><i>◈</i><div><small>LONG-RANGE SUPPORT</small><h3>Fleet Carrier</h3><p>Carrier inventory, expedition routes, Tritium planning and jump operations.</p></div><button data-command="open" data-target="carrier">OPEN CARRIER</button></article>
+            <article class="tool-card"><i>✦</i><div><small>FIELD RECON</small><h3>Colonisation Recon</h3><p>Assess surveyed systems as possible expansion candidates.</p></div><button data-command="open" data-target="recon">OPEN RECON</button></article>
+            <article class="tool-card"><i>★</i><div><small>COMMANDER MILESTONES</small><h3>Explorer Achievements</h3><p>Journal-driven milestones for travel, biology, mining and expeditions.</p></div><button data-command="open" data-target="achievements">OPEN ACHIEVEMENTS</button></article>
+          </section>
+        </section>
+
+        <section class="page specialist-page" data-page-name="profile">
+          <header class="page-title"><div><p>COMMANDER RECORD</p><h2>Profile & fleet</h2><span>Career progression, vessels, responsibilities and profile custody</span></div><div class="title-actions"><button data-page="records">FLIGHT RECORDS</button><button class="primary" data-page="analytics">ANALYTICS</button></div></header>
+          <div id="profile-workspace" class="workspace-shell loading-panel">Synchronising commander record…</div>
+        </section>
+
+        <section class="page specialist-page" data-page-name="analytics">
+          <header class="page-title"><div><p>EXPLORATION TELEMETRY</p><h2>Analytics</h2><span>Profile-local flight history and survey trends</span></div><div class="title-actions"><button data-page="records">RETURN TO RECORDS</button><button class="primary" data-page="chronicle">CAPTAIN'S LOG</button></div></header>
+          <div id="analytics-workspace" class="workspace-shell loading-panel">Building flight analytics…</div>
+        </section>
+
+        <section class="page specialist-page" data-page-name="chronicle">
+          <header class="page-title"><div><p>EXPEDITION CHRONICLE</p><h2>Captain's Log</h2><span>Journal-backed sessions and retained highlights</span></div><div class="title-actions"><button data-page="records">RETURN TO RECORDS</button></div></header>
+          <div id="chronicle-workspace" class="workspace-shell loading-panel">Opening the commander chronicle…</div>
+        </section>
+
+        <section class="page specialist-page" data-page-name="mission">
+          <header class="page-title"><div><p>EXPEDITION ARCHITECT</p><h2>Mission Control</h2><span>Create, resume and progress long-range exploration campaigns</span></div><div class="title-actions"><button data-page="explore">RETURN TO SURVEY</button><button class="primary" id="mission-new">NEW EXPEDITION</button></div></header>
+          <div id="mission-workspace" class="workspace-shell loading-panel">Loading expedition command…</div>
+        </section>
+
+        <section class="page specialist-page" data-page-name="ground">
+          <header class="page-title"><div><p>SURFACE OPERATIONS</p><h2>Ground & exobiology</h2><span>Latitude guidance, return-to-ship bearing and survey trail</span></div><div class="title-actions"><button data-page="operations">FIELD TOOLS</button></div></header>
+          <div id="ground-workspace" class="workspace-shell loading-panel">Waiting for surface telemetry…</div>
+        </section>
+
+        <section class="page specialist-page" data-page-name="mining">
+          <header class="page-title"><div><p>RESOURCE OPERATIONS</p><h2>Mining command</h2><span>Prospector quality, refinery yield and retained run history</span></div><div class="title-actions"><button data-page="operations">FIELD TOOLS</button></div></header>
+          <div id="mining-workspace" class="workspace-shell loading-panel">Loading mining telemetry…</div>
+        </section>
+
+        <section class="page specialist-page" data-page-name="engineering">
+          <header class="page-title"><div><p>SHIP READINESS</p><h2>Engineering & synthesis</h2><span>Material inventory, pinned upgrades and Odyssey goals</span></div><div class="title-actions"><button data-page="operations">FIELD TOOLS</button></div></header>
+          <div id="engineering-workspace" class="workspace-shell loading-panel">Calculating engineering readiness…</div>
+        </section>
+
+        <section class="page specialist-page" data-page-name="carrier">
+          <header class="page-title"><div><p>LONG-RANGE SUPPORT</p><h2>Fleet Carrier command</h2><span>Fuel, capacity, cargo evidence and expedition route control</span></div><div class="title-actions"><button data-page="operations">FIELD TOOLS</button><button class="primary" data-ws-page="carrier" data-ws-op="copy_next">COPY NEXT STOP</button></div></header>
+          <div id="carrier-workspace" class="workspace-shell loading-panel">Synchronising Carrier operations…</div>
+        </section>
+
+        <section class="page specialist-page" data-page-name="recon">
+          <header class="page-title"><div><p>COLONISATION RECON</p><h2>System assessment</h2><span>Survey completeness, value, traffic and retained candidates</span></div><div class="title-actions"><button data-page="operations">FIELD TOOLS</button><button class="primary" data-ws-page="recon" data-ws-op="save">SAVE CURRENT</button></div></header>
+          <div id="recon-workspace" class="workspace-shell loading-panel">Assessing the current system…</div>
+        </section>
+
+        <section class="page specialist-page" data-page-name="achievements">
+          <header class="page-title"><div><p>COMMANDER MILESTONES</p><h2>Explorer achievements</h2><span>Journal-driven progression across exploration, biology and mining</span></div><div class="title-actions"><button data-page="operations">FIELD TOOLS</button></div></header>
+          <div id="achievements-workspace" class="workspace-shell loading-panel">Loading milestone catalogue…</div>
+        </section>
+
+        <section class="page specialist-page" data-page-name="ledger">
+          <header class="page-title"><div><p>UNIVERSAL CARTOGRAPHICS</p><h2>System Value Ledger</h2><span>Valuable worlds retained across the active commander profile</span></div><div class="title-actions"><button data-page="explore">RETURN TO SURVEY</button></div></header>
+          <div id="ledger-workspace" class="workspace-shell loading-panel">Reading the profile value index…</div>
+        </section>
+
+        <section class="page" data-page-name="settings">
+          <header class="page-title"><div><p>APPLICATION CONTROL</p><h2>Settings & presentation</h2><span>Theme-aware controls shared by the command deck and cockpit overlays</span></div></header>
+          <section class="settings-grid">
+            <article class="card theme-card"><header><span>ACTIVE PROFILE THEME</span></header><label for="theme-select">COMMAND DECK PALETTE</label><select id="theme-select"></select><div id="theme-swatches" class="theme-swatches"></div><p>The selected palette belongs to the active commander and updates the dashboard, Galactic Atlas and cockpit displays.</p></article>
+            <article class="card"><header><span>COCKPIT LAYOUT</span></header><h3>Overlay Layout Studio</h3><p>Enable, disable, position and preview every cockpit overlay without disabling mouse passthrough.</p><button class="wide-button" data-page="overlay-studio">OPEN LAYOUT STUDIO</button></article>
+            <article class="card"><header><span>INTEGRATIONS & HOTKEYS</span></header><h3>Complete HTML controls</h3><p>EDSM, EDDN, Discord, screenshots, hotkeys, caching and diagnostics now remain inside this command deck.</p><button class="wide-button" data-settings-focus="integrations">JUMP TO CONTROLS</button></article>
+            <article class="card danger-zone"><header><span>MAINTENANCE</span></header><div class="maintenance-actions"><button data-command="rebuild_cache">REBUILD JOURNAL CACHE</button><button data-command="open_logs">OPEN LOGS</button><button data-command="open_screenshots">SCREENSHOTS</button></div><p>Cache rebuild progress is reported through the live exploration feed.</p></article>
+          </section>
+          <div id="settings-workspace" class="workspace-shell loading-panel">Loading commander settings…</div>
+        </section>
+
+        <section class="page overlay-studio-page" data-page-name="overlay-studio">
+          <header class="page-title studio-title">
+            <div><p>COCKPIT PRESENTATION</p><h2>Overlay Layout Studio</h2><span>Arrange, inspect and tune every commander-specific cockpit surface</span></div>
+            <div class="studio-view-tabs" role="tablist" aria-label="Overlay Studio view">
+              <button class="active" type="button" data-studio-view="layout">LAYOUT BOARD</button>
+              <button type="button" data-studio-view="options">DISPLAY RULES</button>
+            </div>
+          </header>
+
+          <section id="studio-layout-view" class="studio-view active">
+            <section class="studio-status-strip" aria-label="Overlay Studio status">
+              <article><small>SURFACES</small><strong id="studio-total-count">0</strong><span>PROFILE MODULES</span></article>
+              <article><small>ENABLED</small><strong id="studio-enabled-total">0</strong><span>ACTIVE POLICY</span></article>
+              <article><small>ON SCREEN</small><strong id="studio-live-count">0</strong><span>VISIBLE NOW</span></article>
+              <article><small>HTML LINK</small><strong id="studio-html-count">0</strong><span>WEBVIEW READY</span></article>
+            </section>
+
+            <div class="studio-console-grid">
+              <aside class="studio-roster-column">
+                <article class="card studio-index-card">
+                  <header><span>SURFACE ROSTER</span><b id="studio-enabled-count">0 ENABLED</b></header>
+                  <div class="studio-roster-tools">
+                    <input id="studio-search" type="search" placeholder="FILTER SURFACES" autocomplete="off">
+                    <select id="studio-filter" aria-label="Filter overlay surfaces"><option value="all">ALL</option><option value="enabled">ENABLED</option><option value="disabled">DISABLED</option><option value="visible">ON SCREEN</option></select>
+                  </div>
+                  <div id="studio-overlay-index" class="studio-overlay-index"></div>
+                </article>
+
+                <article class="card studio-preset-card">
+                  <header><span>PROFILE LAYOUTS</span><b>PRESETS</b></header>
+                  <div><select id="studio-preset-select" aria-label="Saved overlay layout"></select><button id="studio-apply-preset" type="button">APPLY</button></div>
+                  <div><button id="studio-save-preset" type="button">SAVE CURRENT</button><button id="studio-delete-preset" type="button" class="danger-action">DELETE</button></div>
+                </article>
+              </aside>
+
+              <article class="card studio-desktop-card">
+                <header><span>LIVE VIRTUAL DESKTOP</span><b id="studio-desktop-label">PRIMARY DISPLAY</b></header>
+                <div id="studio-desktop-viewport" class="studio-desktop-viewport">
+                  <div id="studio-desktop" class="studio-desktop" aria-label="Draggable overlay desktop preview">
+                    <div id="studio-primary-monitor" class="studio-primary-monitor"><span>PRIMARY</span></div>
+                    <div id="studio-overlay-cards"></div>
+                  </div>
+                </div>
+                <footer class="studio-desktop-footer"><span><i></i> DRAG A SURFACE · CHANGES APPLY LIVE</span><b id="studio-pointer-position">SCREEN COORDINATES</b></footer>
+              </article>
+
+              <aside class="studio-inspector-column">
+                <article class="card studio-selection-card">
+                  <header><span>SELECTED SURFACE</span><b id="studio-selected-state">READY</b></header>
+                  <div class="studio-selection-copy"><i><span></span></i><div><small id="studio-selected-short">NO SELECTION</small><h3 id="studio-selected-name">Select an overlay</h3><p>Live commander-profile placement</p></div></div>
+                  <div class="studio-selection-facts">
+                    <div><small>POSITION</small><b id="studio-selected-position">—</b></div>
+                    <div><small>FOOTPRINT</small><b id="studio-selected-size">—</b></div>
+                    <div><small>RENDERER</small><b id="studio-selected-renderer">—</b></div>
+                    <div><small>VISIBILITY</small><b id="studio-selected-visibility">—</b></div>
+                  </div>
+                  <p id="studio-selected-metrics" class="studio-selection-detail">Choose a surface on the desktop or in the roster.</p>
+                  <div class="studio-actions"><button id="studio-toggle-selected" type="button">ENABLE</button><button id="studio-snap-selected" type="button">SMART SNAP</button><button id="studio-reset-selected" type="button" class="danger-action">RESET</button></div>
+                  <div class="studio-nudge-panel"><span>PRECISION NUDGE · 10 PX</span><div><button type="button" data-studio-nudge="0,-10" aria-label="Move up">↑</button><button type="button" data-studio-nudge="-10,0" aria-label="Move left">←</button><i></i><button type="button" data-studio-nudge="10,0" aria-label="Move right">→</button><button type="button" data-studio-nudge="0,10" aria-label="Move down">↓</button></div></div>
+                </article>
+
+                <article class="card studio-legend-card">
+                  <header><span>LAYOUT SIGNALS</span><b>LIVE</b></header>
+                  <div><p><i class="enabled"></i><span><b>Enabled</b><small>Surface is part of this profile.</small></span></p><p><i class="shown"></i><span><b>On screen</b><small>Currently mapped over Elite.</small></span></p><p><i class="selected"></i><span><b>Selected</b><small>Drag or nudge this surface.</small></span></p></div>
+                </article>
+              </aside>
+            </div>
+          </section>
+
+          <section id="studio-options-view" class="studio-view">
+            <article class="card studio-module-card">
+              <header><span>PROFILE SURFACE POLICY</span><b>LIVE CONTROL</b></header>
+              <p>Choose which cockpit surfaces belong to this commander. Disabled modules retain their prepared position and can still be arranged on the Layout Board.</p>
+              <div id="studio-module-grid" class="studio-module-grid"></div>
+            </article>
+
+            <div class="studio-options-grid">
+              <article class="card studio-option-card">
+                <header><span>DISPLAY & INTERACTION</span></header>
+                <label class="studio-switch"><span><b>Mouse passthrough</b><small>Let Elite receive input through cockpit overlays.</small></span><input type="checkbox" data-overlay-option="overlay_mouse_passthrough"><i></i></label>
+                <label class="studio-switch"><span><b>Compact Navigation HUD</b><small>Use the compact-first navigation surface.</small></span><input type="checkbox" data-overlay-option="hud_compact_mode"><i></i></label>
+                <label class="studio-field"><span>Overlay text scale</span><div><input id="studio-text-scale" type="number" min="75" max="200" step="5"><b>%</b></div></label>
+              </article>
+
+              <article class="card studio-option-card">
+                <header><span>ACTIONABLE ALERTS</span></header>
+                <label class="studio-switch"><span><b>Clear-to-sample notifications</b><small>Show exobiology sample-spacing guidance.</small></span><input type="checkbox" data-overlay-option="sample_clear_notifications_enabled"><i></i></label>
+                <label class="studio-switch"><span><b>Rebuy coverage warnings</b><small>Warn when current funds do not cover rebuy.</small></span><input type="checkbox" data-overlay-option="rebuy_warnings_enabled"><i></i></label>
+                <label class="studio-switch"><span><b>Unsold data-risk warnings</b><small>Surface genuinely at-risk exploration data.</small></span><input type="checkbox" data-overlay-option="data_risk_warnings_enabled"><i></i></label>
+              </article>
+
+              <article class="card studio-option-card">
+                <header><span>TIMING & THRESHOLDS</span></header>
+                <label class="studio-field"><span>Prospector auto-hide</span><div><input id="studio-prospector-timeout" type="number" min="5" max="3600"><b>SEC</b></div></label>
+                <label class="studio-field"><span>System Intelligence auto-hide</span><div><input id="studio-system-timeout" type="number" min="5" max="3600"><b>SEC</b></div></label>
+                <label class="studio-field"><span>Gravity warning auto-hide</span><div><input id="studio-gravity-timeout" type="number" min="5" max="3600"><b>SEC</b></div></label>
+                <label class="studio-switch compact"><span><b>Auto-hide Station Link</b></span><input type="checkbox" data-overlay-option="station_info_auto_hide_enabled"><i></i></label>
+                <label class="studio-field"><span>Station Link hide delay</span><div><input id="studio-station-timeout" type="number" min="5" max="3600"><b>SEC</b></div></label>
+                <label class="studio-field"><span>Gravity warning threshold</span><div><input id="studio-gravity-threshold" type="number" min="0.5" max="20" step="0.1"><b>G</b></div></label>
+              </article>
+
+              <article class="card studio-option-card">
+                <header><span>HTML COCKPIT RENDERER</span></header>
+                <label class="studio-switch"><span><b>HTML / WebView2 overlays</b><small>Use the shared browser-based cockpit renderer.</small></span><input type="checkbox" data-overlay-option="hud_html_renderer"><i></i></label>
+                <label class="studio-switch"><span><b>CRT effects</b><small>Apply the theme-aware cockpit treatment.</small></span><input type="checkbox" data-overlay-option="hud_crt_enabled"><i></i></label>
+                <label class="studio-switch"><span><b>Subtle phosphor shimmer</b><small>Keep restrained motion on active displays.</small></span><input type="checkbox" data-overlay-option="hud_crt_motion_enabled"><i></i></label>
+                <label class="studio-field"><span>CRT intensity</span><select id="studio-crt-intensity"><option>Subtle</option><option>Standard</option><option>Strong</option></select></label>
+              </article>
+            </div>
+            <footer class="studio-options-footer"><span>Presentation rules and positions belong to the active commander profile.</span><button id="studio-save-settings" type="button">APPLY DISPLAY RULES</button></footer>
+          </section>
+        </section>
+
+        <section class="page" data-page-name="about">
+          <header class="about-hero"><div class="about-glyph"><span></span></div><div><p>ELITE DANGEROUS EXPLORATION COMPANION</p><h2>Void Compass</h2><span id="about-version">Version 5.3.9 // HTML Command Deck</span></div></header>
+          <section class="about-grid">
+            <article class="card"><header><span>LOCAL FIRST</span></header><p>Void Compass reads Elite's journal and companion files and stores commander profiles locally. The dashboard server is private to this computer and binds only to loopback.</p></article>
+            <article class="card"><header><span>GPL-3.0</span></header><p>Void Compass is free software. You may use, study, modify and redistribute it under GNU GPL version 3.</p></article>
+            <article class="card wide"><header><span>FRONTIER DISCLAIMER</span></header><p>Void Compass is an independent community project and is not affiliated with or endorsed by Frontier Developments. Elite Dangerous and related marks belong to their respective owners.</p></article>
+            <article class="card wide"><header><span>SUPPORT & DIAGNOSTICS</span></header><div class="action-grid about-actions"><button data-command="open" data-target="github">GITHUB</button><button data-command="open" data-target="releases">RELEASES</button><button data-command="open" data-target="issues">REPORT AN ISSUE</button><button data-command="open_logs">OPEN LOGS</button></div></article>
+          </section>
+        </section>
+      </main>
+
+      <footer class="statusbar">
+        <span><i id="journal-light"></i> JOURNAL <b id="journal-state">CACHED</b></span>
+        <span>STATUS <b id="status-state">CACHED</b></span>
+        <span>NAV <b id="nav-state">CACHED</b></span>
+        <span class="status-spacer"></span>
+        <span id="footer-region">REGION UNKNOWN</span>
+        <span id="footer-clock">--:--:--</span>
+      </footer>
+    </section>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

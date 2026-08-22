@@ -327,48 +327,47 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
         str(row.get("body_id")): row for row in notable_rows if row.get("body_id") is not None
     }
     notable_by_name = {str(row.get("name") or "").casefold(): row for row in notable_rows}
+    focus_requested = focused_body_id is not None or bool(focused_body_name)
     focused = next((row for row in bodies if _body_matches(
         row, focused_body_id, focused_body_name)), None)
-    if focused and (
-        _safe_int(focused.get("bio_count")) > 0
-        or _safe_int(focused.get("geo_count")) > 0
-        or sampling
-    ):
-        incomplete = _safe_int(focused.get("organic_complete_count")) < _safe_int(focused.get("bio_count"))
-        if incomplete or _safe_int(focused.get("geo_count")) > 0 or sampling:
-            lo, hi = _body_value_range(focused)
-            focused_notable = (
-                notable_by_id.get(str(focused.get("body_id")))
-                if focused.get("body_id") is not None else None
-            )
-            focused_notable = focused_notable or notable_by_name.get(
-                str(focused.get("name") or "").casefold()
-            )
-            focused_notable_key = None
-            if focused_notable:
-                focused_notable_key = (
-                    str(focused_notable.get("body_id")),
-                    str(focused_notable.get("name") or "").casefold(),
-                )
-            return {
-                "mode": "body", "system": system_name or "", "body": focused,
-                "body_display": _body_display_name(
-                    focused.get("name"), system_name, focused.get("planet_class"),
-                    focused.get("terraformable"),
-                ),
-                "rows": _body_detail_rows(focused), "sampling": sampling,
-                "min_value": lo, "max_value": hi,
-                "notable": focused_notable,
-                "notable_rows": [
-                    row for row in notable_rows
-                    if (
-                        str(row.get("body_id")),
-                        str(row.get("name") or "").casefold(),
-                    ) != focused_notable_key
-                ],
-                "scanned": _safe_int(scanned), "total": _safe_int(total),
-                "total_known": bool(total_known),
-            }
+    if focus_requested:
+        # ApproachBody is an authoritative presentation boundary.  Never fall
+        # through to the system workboard and show unrelated planets while the
+        # commander is operating at one surface.
+        if focused is None:
+            return None
+        focused_notable = (
+            notable_by_id.get(str(focused.get("body_id")))
+            if focused.get("body_id") is not None else None
+        )
+        focused_notable = focused_notable or notable_by_name.get(
+            str(focused.get("name") or "").casefold()
+        )
+        has_surface_work = bool(
+            _safe_int(focused.get("bio_count"))
+            or _safe_int(focused.get("geo_count"))
+            or focused_notable
+            or sampling
+        )
+        if not has_surface_work:
+            return None
+        lo, hi = _body_value_range(focused)
+        return {
+            "mode": "body", "system": system_name or "", "body": focused,
+            "body_display": _body_display_name(
+                focused.get("name"), system_name, focused.get("planet_class"),
+                focused.get("terraformable"),
+            ),
+            "rows": _body_detail_rows(focused), "sampling": sampling,
+            "min_value": lo, "max_value": hi,
+            "notable": focused_notable,
+            # System-level notable rows return after LeaveBody clears focus.
+            # Keeping them here made HTML body mode look like the full system
+            # workboard even though its primary target was correct.
+            "notable_rows": [],
+            "scanned": _safe_int(scanned), "total": _safe_int(total),
+            "total_known": bool(total_known),
+        }
 
     rows = []
     represented_notable = set()
@@ -429,7 +428,12 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
     scan_in_progress = bool(
         total_known and _safe_int(total) > 0 and _safe_int(scanned) < _safe_int(total)
     )
-    if not rows and not remaining_notable and not sampling and not scan_in_progress:
+    # FSS progress alone belongs on Navigation and the Dashboard. Survey
+    # Operations is a body workboard, so do not map an otherwise empty window
+    # while we are merely waiting to discover a bio/geo/notable target. An
+    # active biological sample remains actionable even during a brief body-
+    # detail reconciliation and is therefore allowed to keep the workboard up.
+    if not rows and not remaining_notable and not sampling:
         return None
     return {
         "mode": "system", "system": system_name or "", "rows": rows,

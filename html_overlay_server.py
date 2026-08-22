@@ -31,6 +31,7 @@ class _OverlayState:
         self.clients = 0
         self.last_client_seen = 0.0
         self.rendered_revision = -1
+        self.content_height = 0
         self.last_rendered_at = 0.0
         self.ready = threading.Event()
         self.host_status = {}
@@ -150,6 +151,12 @@ class HtmlOverlayServer:
         with self._condition:
             state = self._overlays.get(str(overlay_id))
             return int(state.rendered_revision if state else -1)
+
+    def rendered_content_height(self, overlay_id):
+        """Return the browser's latest intrinsic content-height request."""
+        with self._condition:
+            state = self._overlays.get(str(overlay_id))
+            return int(state.content_height if state else 0)
 
     def host_status(self, overlay_id):
         with self._condition:
@@ -406,11 +413,13 @@ class HtmlOverlayServer:
                 length = min(1024, max(0, int(handler.headers.get("Content-Length", "0"))))
                 payload = json.loads(handler.rfile.read(length) or b"{}")
                 revision = int(payload.get("revision"))
+                content_height = max(0, min(4096, int(payload.get("content_height") or 0)))
             except (TypeError, ValueError, json.JSONDecodeError, OSError):
                 self._send_json(handler, {"error": "invalid revision"}, 400)
                 return
             with self._condition:
                 state.rendered_revision = max(state.rendered_revision, revision)
+                state.content_height = content_height
                 state.last_rendered_at = time.monotonic()
                 state.last_client_seen = state.last_rendered_at
             self._send_json(handler, {"accepted": True, "revision": revision}, 202)
