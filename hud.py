@@ -33,9 +33,9 @@ class TacticalHUD:
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, "#ff00ff")
 
         self.full_width = 620
-        self.full_height = 286
+        self.full_height = 294
         self.compact_width = 500
-        self.compact_height = 246
+        self.compact_height = 254
         self.width, self.base_height = self._target_dimensions()
         self.canvas = tk.Canvas(self.win, width=self.width, height=self.base_height, bg=overlay_bg, highlightthickness=0)
         self.canvas.pack()

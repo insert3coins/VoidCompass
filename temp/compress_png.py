@@ -5,10 +5,11 @@ Optimise PNG artwork for runtime use while preserving transparency.
 
 Strategy (in order):
   1. (Optional) Remove the background only when --remove-bg is explicitly set
-  2. Resize oversized artwork to the maximum dimension (default: 512px)
-  3. Pillow lossless optimisation (level 9)
-  4. Optionally quantize when --quantize is explicitly set
-  5. Scale down further only when still above the requested file-size limit
+  2. (Optional) Trim unused transparent canvas while retaining safe padding
+  3. Resize oversized artwork to the maximum dimension (default: 512px)
+  4. Pillow lossless optimisation (level 9)
+  5. Optionally quantize when --quantize is explicitly set
+  6. Scale down further only when still above the requested file-size limit
 
 Usage:
     python compress_png.py                        # all PNGs in current folder
@@ -25,6 +26,8 @@ Options:
     --backup-dir         Preserve originals here before overwriting
     --max-size           Maximum pixel dimension (default: 512)
     --remove-bg          Explicitly remove the background
+    --trim-alpha         Trim unused transparent canvas around the artwork
+    --trim-padding       Transparent padding retained by --trim-alpha (default: 10px)
     --quantize           Permit 256-colour reduction if lossless output is too large
 
 Requirements:
@@ -99,8 +102,26 @@ def _fit_within(img: Image.Image, max_dim: int) -> tuple[Image.Image, bool]:
     return img.resize(size, Image.Resampling.LANCZOS), True
 
 
+def _trim_alpha(img: Image.Image, padding: int) -> tuple[Image.Image, bool]:
+    """Crop unused transparent canvas without clipping anti-aliased artwork."""
+    alpha = img.getchannel("A")
+    bbox = alpha.getbbox()
+    if not bbox:
+        return img, False
+    pad = max(0, int(padding or 0))
+    left = max(0, bbox[0] - pad)
+    top = max(0, bbox[1] - pad)
+    right = min(img.width, bbox[2] + pad)
+    bottom = min(img.height, bbox[3] + pad)
+    crop = (left, top, right, bottom)
+    if crop == (0, 0, img.width, img.height):
+        return img, False
+    return img.crop(crop), True
+
+
 def compress_to_limit(src: Path, dst: Path, limit_bytes: int, max_dim: int,
-                      do_remove_bg: bool, allow_quantize: bool = False) -> dict:
+                      do_remove_bg: bool, allow_quantize: bool = False,
+                      trim_alpha: bool = False, trim_padding: int = 10) -> dict:
     with Image.open(src) as img:
         img.load()
         original_size = src.stat().st_size
@@ -113,16 +134,21 @@ def compress_to_limit(src: Path, dst: Path, limit_bytes: int, max_dim: int,
             bg_removed = True
         img = img.convert("RGBA")
 
+        trimmed = False
+        if trim_alpha:
+            img, trimmed = _trim_alpha(img, trim_padding)
+
         # Resize before checking the encoded byte count. Runtime art should not
         # retain a 1500px transparent canvas simply because its PNG is already
         # below an arbitrary upload limit.
         img, resized = _fit_within(img, max_dim)
+        trim_note = "trimmed canvas + " if trimmed else ""
         resize_note = f"resized to {img.width}x{img.height} + " if resized else ""
 
         # ── Step 1: lossless ──────────────────────────────────────────────────
         data = png_bytes(img, compress_level=9)
         method = (("bg removed + " if bg_removed else "")
-                  + resize_note + "lossless")
+                  + trim_note + resize_note + "lossless")
 
         if len(data) <= limit_bytes:
             _write(dst, data)
@@ -133,7 +159,7 @@ def compress_to_limit(src: Path, dst: Path, limit_bytes: int, max_dim: int,
             quantized = quantize_with_alpha(img, colors=256)
             data = png_bytes(quantized)
             method = (("bg removed + " if bg_removed else "")
-                      + resize_note + "quantized (256 colours)")
+                      + trim_note + resize_note + "quantized (256 colours)")
 
             if len(data) <= limit_bytes:
                 _write(dst, data)
@@ -154,7 +180,7 @@ def compress_to_limit(src: Path, dst: Path, limit_bytes: int, max_dim: int,
                 break
 
             work = work.resize((new_w, new_h), Image.Resampling.LANCZOS)
-            pfx = ("bg removed + " if bg_removed else "")
+            pfx = (("bg removed + " if bg_removed else "") + trim_note)
 
             data = png_bytes(work, compress_level=9)
             method = pfx + f"scaled to {new_w}x{new_h}"
@@ -228,6 +254,10 @@ def main():
                         help="Maximum pixel dimension (default: 512)")
     parser.add_argument("--remove-bg", action="store_true",
                         help="Force background removal on all images")
+    parser.add_argument("--trim-alpha", action="store_true",
+                        help="Trim unused transparent canvas around artwork")
+    parser.add_argument("--trim-padding", type=int, default=10,
+                        help="Transparent padding retained by --trim-alpha (default: 10px)")
     parser.add_argument("--no-remove-bg", action="store_true",
                         help=argparse.SUPPRESS)
     parser.add_argument("--quantize", action="store_true",
@@ -270,6 +300,7 @@ def main():
         print(f"  Processing: {src.name}")
         r = compress_to_limit(
             src, dst, limit_bytes, args.max_size, do_remove_bg, args.quantize,
+            args.trim_alpha, args.trim_padding,
         )
         total_orig += r["original"]
         total_comp += r["compressed"]
