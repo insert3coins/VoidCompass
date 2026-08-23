@@ -264,7 +264,7 @@ class AchievementWindow(ThemedWindowMixin):
         self.enabled_var = tk.BooleanVar(value=self.config.get("achievements_enabled", True))
         self.notifications_var = tk.BooleanVar(value=self.config.get("achievement_notifications_enabled", True))
         self._check_row(general, "Track achievement progress", self.enabled_var)
-        self._check_row(general, "Show live unlocks in the Toast HUD", self.notifications_var)
+        self._check_row(general, "Show live HTML milestone notifications", self.notifications_var)
         tk.Label(
             general,
             text="Progress and category choices are stored separately for each commander profile.",
@@ -291,7 +291,7 @@ class AchievementWindow(ThemedWindowMixin):
         pack_canvas.bind("<Configure>", lambda e: pack_canvas.itemconfigure(pack_window, width=e.width))
 
         tools = self._section(right, "Profile Tools")
-        self._button(tools, "Test Unlock Toast", self._test_unlock_toast, accent=True).pack(fill=tk.X, padx=12, pady=(4, 6))
+        self._button(tools, "Test Unlock Notification", self._test_unlock_toast, accent=True).pack(fill=tk.X, padx=12, pady=(4, 6))
         self._button(tools, "Import Old State", self._import_legacy_state).pack(fill=tk.X, padx=12, pady=(4, 6))
         self._button(tools, "Rebuild from Journals", self._rebuild_history).pack(fill=tk.X, padx=12, pady=6)
         self._button(tools, "Reset All Progress", self._reset_all).pack(fill=tk.X, padx=12, pady=(6, 12))
@@ -666,15 +666,15 @@ class AchievementWindow(ThemedWindowMixin):
     def _test_unlock_toast(self):
         if not self.config.get("achievement_notifications_enabled", True) or not getattr(self.app, "toast_hud", None):
             messagebox.showwarning(
-                "Achievement toast",
-                "Enable both achievement notifications here and Toast Notifications under Settings > Overlays first.",
+                "Achievement notification",
+                "Enable both milestone notifications here and Cockpit Notifications in Overlay Layout Studio first.",
                 parent=self.win,
             )
             return
         unlocked = self.engine.process_event({"event": "_meta", "action": "test_toast"}, notify=True)
         if not unlocked:
             messagebox.showinfo(
-                "Achievement toast",
+                "Achievement notification",
                 "The test achievement is already unlocked. Reset 'Signal Test' in the catalogue to fire it again.",
                 parent=self.win,
             )

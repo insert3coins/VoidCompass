@@ -245,6 +245,8 @@ class _OverlayHost:
             path = "/navigation_hud/index.html"
         elif template == "survey":
             path = "/survey/index.html"
+        elif template == "toast":
+            path = "/toast/index.html"
         else:
             path = "/overlays/index.html"
         return self._url(path, overlay_id)

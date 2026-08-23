@@ -12,6 +12,8 @@
 *   Extended the readable biological rows to the full-system Survey Operations workboard and retained the active planet across surface-side restarts using Location's body context.
 *   Made Navigation HUD portraits switch immediately on Loadout and shipyard changes while preventing Odyssey's on-foot suit identity from replacing the active mothership.
 *   Added a dedicated transparent on-foot explorer portrait so the Navigation identity bay now follows commander, mothership, Nomad/SRV, fighter and Carrier contexts without borrowing the wrong vehicle art; tightly bounded runtime artwork and a larger, brighter identity bay keep every portrait readable in both HUD layouts.
+*   Rebuilt Toasts as a semantic HTML Cockpit Notification deck with clearer severity signals, animated lifetimes and profile-theme parity; achievement unlocks now receive a distinct milestone presentation with icon, category and points rather than sharing an ordinary alert card.
+*   Prevented the HTML Survey Operations surface from mapping during startup unless its restored model contains actionable bio, geo, notable-body or active-sample work.
 *   Kept the ship-art attribution README inside public packages while preserving the release builder's strict rejection of every other unexpected non-image asset.
 
 ## Earlier releases
