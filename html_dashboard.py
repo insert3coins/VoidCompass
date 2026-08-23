@@ -1188,6 +1188,9 @@ class HtmlDashboardMixin:
             })
         return {
             "enabled": bool(snapshot.get("enabled", True)),
+            "notifications_enabled": bool(
+                self.config.get("achievement_notifications_enabled", True)
+            ),
             "unlocked": _integer(snapshot.get("unlocked")),
             "total": _integer(snapshot.get("total")),
             "points": _integer(snapshot.get("totalPoints")),
@@ -1386,8 +1389,13 @@ class HtmlDashboardMixin:
             if live and window is not None:
                 try:
                     if window.winfo_exists():
-                        width = max(24, int(window.winfo_width()), int(window.winfo_reqwidth()))
-                        height = max(20, int(window.winfo_height()), int(window.winfo_reqheight()))
+                        if attr == "toast_hud" and not getattr(overlay, "_toasts", None):
+                            # Keep a useful draggable footprint in Studio even
+                            # while the transient notification queue is empty.
+                            width, height = default_width, default_height
+                        else:
+                            width = max(24, int(window.winfo_width()), int(window.winfo_reqwidth()))
+                            height = max(20, int(window.winfo_height()), int(window.winfo_reqheight()))
                 except Exception:
                     pass
             enabled = bool(self.config.get(OVERLAY_ENABLE_KEYS.get(attr, ""), False))
@@ -2392,6 +2400,12 @@ class HtmlDashboardMixin:
                 changed = bool(payload.get("confirmed") and engine.reset_achievement(achievement_id))
             elif operation == "set_enabled":
                 engine.set_options(enabled=bool(payload.get("enabled")))
+                changed = True
+            elif operation == "set_notifications":
+                self.config["achievement_notifications_enabled"] = bool(
+                    payload.get("enabled")
+                )
+                self._persist_config()
                 changed = True
 
         elif page == "settings":

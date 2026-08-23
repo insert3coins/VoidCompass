@@ -572,6 +572,10 @@ class SurveyStatusHUD:
             pass
 
     def show(self):
+        if not self._html_render_model:
+            self._startup_pending_visible = False
+            self.hide()
+            return False
         if self._visible or self._suppressed:
             return False
         if bool(getattr(
@@ -618,7 +622,7 @@ class SurveyStatusHUD:
         """Present a survey that was prepared behind the startup curtain."""
         if not self._startup_pending_visible:
             return False
-        if self._suppressed:
+        if self._suppressed or not self._html_render_model:
             self._startup_pending_visible = False
             return False
         return self.show()

@@ -77,9 +77,9 @@ def _matches_value(value: Any, expected: Any, compare: str | None = None) -> boo
 class AchievementEngine:
     """Synchronous, thread-safe Elite journal achievement engine.
 
-    SurveyAnalysis already owns journal tailing, commander profiles, and its
-    native toast HUD. This class deliberately owns only catalogue matching and
-    per-commander progress so it can share those existing app services.
+    Void Compass already owns journal tailing, commander profiles and cockpit
+    notification rendering. This class deliberately owns only catalogue
+    matching and per-commander progress so it can share those app services.
     """
 
     GLOBAL_TRIGGER_TYPES = {

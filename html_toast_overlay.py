@@ -1,8 +1,7 @@
-"""Purpose-built HTML renderer bridge for Survey Operations."""
+"""Purpose-built HTML renderer bridge for cockpit notifications."""
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 
@@ -16,18 +15,12 @@ def _safe_int(value, default=0):
         return int(default)
 
 
-def _json_safe(value):
-    """Detach journal-owned containers and tolerate uncommon restored values."""
-    return json.loads(json.dumps(value or {}, ensure_ascii=False, default=str))
-
-
-class HtmlSurveyOverlayBridge:
-    """Publish SurveyStatusHUD's semantic model to its dedicated web page."""
+class HtmlToastOverlayBridge:
+    """Publish ToastHUD's semantic queue to a dedicated HTML surface."""
 
     def __init__(self, overlay, overlay_id, title, enabled_key, x_key, y_key):
         self.overlay = overlay
         self.win = overlay.win
-        self.canvas = overlay.canvas
         self.config = overlay.config
         self.overlay_id = str(overlay_id)
         self.title = str(title)
@@ -39,7 +32,7 @@ class HtmlSurveyOverlayBridge:
         self._disposed = False
         self._sync_job = None
         self._last_fingerprint = None
-        self._browser_content_height = 0
+        self._last_quick_fingerprint = None
         try:
             self.win.bind("<Destroy>", self._on_destroy, add="+")
         except Exception:
@@ -51,54 +44,56 @@ class HtmlSurveyOverlayBridge:
     def ready(self):
         return self._ready
 
-    def _has_actionable_model(self):
-        """Only map the browser surface when Survey has real work to show."""
-        model = getattr(self.overlay, "_html_render_model", None)
-        if not isinstance(model, dict) or model.get("mode") not in {"system", "body"}:
-            return False
-        if model.get("sampling"):
-            return True
-        if model.get("mode") == "body":
-            body = model.get("body") or {}
-            return bool(
-                model.get("rows")
-                or model.get("notable")
-                or body.get("bio_count")
-                or body.get("geo_count")
-            )
-        return bool(model.get("rows") or model.get("notable_rows"))
+    def _notifications(self):
+        result = []
+        for item in list(getattr(self.overlay, "_toasts", ())):
+            result.append({
+                "id": _safe_int(item.get("id")),
+                "title": str(item.get("title") or ""),
+                "message": str(item.get("message") or ""),
+                "icon": str(item.get("icon") or ""),
+                "severity": str(item.get("severity") or "info"),
+                "kind": str(item.get("kind") or "notice"),
+                "created_at": float(item.get("created_at") or 0.0),
+                "expire_at": float(item.get("expire_at") or 0.0),
+                "meta": dict(item.get("meta") or {}),
+            })
+        return result
 
-    def _dimensions(self):
-        try:
-            width = max(_safe_int(self.canvas.cget("width"), 420), self.canvas.winfo_width())
-            height = max(_safe_int(self.canvas.cget("height"), 90), self.canvas.winfo_height())
-        except Exception:
-            width, height = 420, 90
-        return width, max(height, _safe_int(self._browser_content_height))
+    def _dimensions(self, notifications=None):
+        notifications = notifications if notifications is not None else self._notifications()
+        width = _safe_int(getattr(self.overlay, "WIDTH", 400), 400)
+        height_for = getattr(self.overlay, "toast_height", None)
+        heights = [
+            _safe_int(height_for(item) if callable(height_for) else 68, 68)
+            for item in notifications
+        ]
+        gap = _safe_int(getattr(self.overlay, "GAP", 7), 7)
+        return width, max(24, sum(heights) + max(0, len(heights) - 1) * gap)
 
-    def _window_payload(self):
-        width, height = self._dimensions()
+    def _window_payload(self, notifications=None):
+        notifications = notifications if notifications is not None else self._notifications()
+        width, height = self._dimensions(notifications)
         try:
-            state = str(self.win.state())
-            shown = state not in {"withdrawn", "iconic"}
+            shown = str(self.win.state()) not in {"withdrawn", "iconic"}
             fallback_x, fallback_y = self.win.winfo_x(), self.win.winfo_y()
         except Exception:
             shown = False
             fallback_x = fallback_y = 0
-        startup_held = bool(getattr(
-            self.win.master, "_voidcompass_startup_presentation_held", False,
-        ))
         config_x = _safe_int(self.config.get(self.x_key), fallback_x)
         config_y = _safe_int(self.config.get(self.y_key), fallback_y)
         use_live = (fallback_x, fallback_y) != (0, 0) or (config_x, config_y) == (0, 0)
+        startup_held = bool(getattr(
+            self.win.master, "_voidcompass_startup_presentation_held", False,
+        ))
         return {
             "x": fallback_x if use_live else config_x,
             "y": fallback_y if use_live else config_y,
             "width": width,
             "height": height,
             "visible": bool(
-                shown
-                and self._has_actionable_model()
+                notifications
+                and shown
                 and not startup_held
                 and self.config.get(self.enabled_key, False)
             ),
@@ -106,6 +101,7 @@ class HtmlSurveyOverlayBridge:
         }
 
     def _snapshot(self):
+        notifications = self._notifications()
         try:
             text_scale = max(75, min(200, _safe_int(
                 self.config.get("overlay_text_scale_percent"), 100,
@@ -114,26 +110,31 @@ class HtmlSurveyOverlayBridge:
             text_scale = 1.0
         return {
             "schema": 1,
-            "kind": "survey",
+            "kind": "notifications",
             "name": self.overlay_id,
-            "survey": _json_safe(getattr(self.overlay, "_html_render_model", None)),
+            "notifications": notifications,
             "theme": dict(getattr(self.overlay, "_palette", {}) or {}),
             "effects": {
                 "crt": bool(self.config.get("hud_crt_enabled", True)),
                 "reduced_motion": bool(self.config.get("reduced_motion_enabled", False)),
                 "text_scale": text_scale,
             },
-            "window": self._window_payload(),
+            "window": self._window_payload(notifications),
         }
 
     def _quick_fingerprint(self):
-        window = self._window_payload()
-        palette = tuple(sorted((getattr(self.overlay, "_palette", {}) or {}).items()))
+        try:
+            state = str(self.win.state())
+            live_position = (int(self.win.winfo_x()), int(self.win.winfo_y()))
+        except Exception:
+            state, live_position = "gone", ()
         return (
-            getattr(self.overlay, "_last_render_key", None),
-            self._has_actionable_model(),
-            palette,
-            tuple(sorted(window.items())),
+            _safe_int(getattr(self.overlay, "_html_revision", 0)),
+            state, live_position,
+            self.config.get(self.x_key), self.config.get(self.y_key),
+            bool(self.config.get(self.enabled_key, False)),
+            bool(getattr(self.win.master, "_voidcompass_startup_presentation_held", False)),
+            tuple(sorted((getattr(self.overlay, "_palette", {}) or {}).items())),
             self.config.get("overlay_text_scale_percent"),
             bool(self.config.get("hud_crt_enabled", True)),
             bool(self.config.get("reduced_motion_enabled", False)),
@@ -166,21 +167,22 @@ class HtmlSurveyOverlayBridge:
             except Exception:
                 pass
             self._last_fingerprint = None
-            self._browser_content_height = 0
+            self._last_quick_fingerprint = None
             return False
         if self.surface is not None:
             return True
         try:
             self.surface = HtmlOverlaySurface(
-                self.win.master, self.overlay_id, template="survey", title=self.title,
+                self.win.master, self.overlay_id, template="toast", title=self.title,
             )
             snapshot = self._snapshot()
             self._last_fingerprint = repr(snapshot)
+            self._last_quick_fingerprint = self._quick_fingerprint()
             self.surface.publish(snapshot)
             return True
         except Exception as exc:
             self.surface = None
-            logging.warning("HTML Survey Operations unavailable; using Tk renderer: %s", exc)
+            logging.warning("HTML notifications unavailable; using Tk renderer: %s", exc)
             return False
 
     def _schedule(self):
@@ -195,7 +197,7 @@ class HtmlSurveyOverlayBridge:
         if surface is not None:
             if surface.startup_failed:
                 logging.warning(
-                    "HTML Survey Operations unavailable; returning to Tk renderer (%s)",
+                    "HTML notifications unavailable; returning to Tk renderer (%s)",
                     surface.host_status or "renderer did not connect",
                 )
                 self.set_enabled(False)
@@ -203,24 +205,15 @@ class HtmlSurveyOverlayBridge:
                 was_ready = self._ready
                 self._ready = surface.ready
                 self.overlay._html_ready = self._ready
-                measured_height = surface.server.rendered_content_height(
-                    self.overlay_id,
-                )
-                if measured_height != self._browser_content_height:
-                    self._browser_content_height = measured_height
-                    # Window geometry is part of the quick fingerprint. Force
-                    # one immediate publication so the shared host resizes
-                    # before the next journal model arrives.
-                    self._last_quick_fingerprint = None
                 if self._ready:
                     try:
                         self.win.attributes("-alpha", 0.0)
                     except Exception:
                         pass
                     if not was_ready:
-                        logging.info("HTML Survey Operations renderer is live")
+                        logging.info("HTML cockpit notification renderer is live")
                 quick = self._quick_fingerprint()
-                if quick != getattr(self, "_last_quick_fingerprint", None):
+                if quick != self._last_quick_fingerprint:
                     self._last_quick_fingerprint = quick
                     snapshot = self._snapshot()
                     fingerprint = repr(snapshot)
@@ -248,14 +241,14 @@ class HtmlSurveyOverlayBridge:
             surface.dispose()
 
 
-def attach_html_survey_overlay(overlay, overlay_id, title, enabled_key, x_key, y_key):
-    """Attach the dedicated Survey Operations browser renderer once."""
-    if overlay is None or getattr(overlay, "_html_survey_bridge", None) is not None:
+def attach_html_toast_overlay(overlay, overlay_id, title, enabled_key, x_key, y_key):
+    """Attach the semantic notification renderer once."""
+    if overlay is None or getattr(overlay, "_html_toast_bridge", None) is not None:
         return overlay
-    bridge = HtmlSurveyOverlayBridge(
+    bridge = HtmlToastOverlayBridge(
         overlay, overlay_id, title, enabled_key, x_key, y_key,
     )
-    overlay._html_survey_bridge = bridge
+    overlay._html_toast_bridge = bridge
     overlay._html_ready = False
 
     def set_html_renderer(enabled):

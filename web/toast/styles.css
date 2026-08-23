@@ -1,0 +1,70 @@
+:root {
+  color-scheme: dark;
+  --bg: #070b10; --panel: #0d141c; --raised: #16222d;
+  --border: #243746; --soft: #192a36; --accent: #00d1ff;
+  --orange: #ff8a3d; --text: #dcebf3; --muted: #91a8b7;
+  --dim: #607584; --green: #54e39a; --yellow: #f5c76d;
+  --red: #ff6b70; --scale: 1;
+}
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
+body { pointer-events: none; user-select: none; font-family: "Cascadia Mono", "Consolas", monospace; }
+#notifications { width: 100%; height: 100%; display: flex; flex-direction: column; gap: 7px; }
+.notification {
+  --tone: var(--accent);
+  position: relative; flex: 0 0 auto; width: 100%; overflow: hidden;
+  color: var(--text); border: 1px solid color-mix(in srgb, var(--tone) 48%, var(--border));
+  background:
+    radial-gradient(ellipse at 12% 0%, color-mix(in srgb, var(--tone) 12%, transparent), transparent 50%),
+    linear-gradient(104deg, color-mix(in srgb, var(--bg) 98%, transparent), color-mix(in srgb, var(--panel) 97%, transparent));
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+  filter: drop-shadow(0 3px 7px rgba(0, 0, 0, .72));
+}
+.notification::before, .notification::after { content: ""; position: absolute; pointer-events: none; }
+.notification::before { left: 8px; right: 8px; top: 3px; height: 1px; background: linear-gradient(90deg, var(--tone), transparent 78%); opacity: .76; }
+.notification::after { inset: 0; box-shadow: inset 0 0 17px rgba(0, 0, 0, .72); }
+.notice { height: 66px; display: grid; grid-template-columns: 6px 42px minmax(0, 1fr) 45px; align-items: center; animation: notice-enter .36s cubic-bezier(.16,.86,.28,1) both; }
+.notice.info { --tone: var(--accent); }.notice.warn { --tone: var(--orange); }
+.notice.fail { --tone: var(--red); }.notice.success { --tone: var(--green); }
+.signal-rail { align-self: stretch; position: relative; overflow: hidden; background: color-mix(in srgb, var(--tone) 22%, transparent); }
+.signal-rail i { position: absolute; inset: 0; background: linear-gradient(180deg, transparent, var(--tone), transparent); animation: signal-run 1.6s ease-in-out infinite; }
+.notice-icon { width: 29px; height: 29px; margin-left: 8px; display: grid; place-items: center; color: var(--tone); border: 1px solid color-mix(in srgb, var(--tone) 54%, transparent); font: 700 calc(17px * var(--scale)) "Segoe UI Symbol", sans-serif; transform: rotate(45deg); box-shadow: inset 0 0 9px color-mix(in srgb, var(--tone) 9%, transparent), 0 0 6px color-mix(in srgb, var(--tone) 23%, transparent); }
+.notice-icon span { transform: rotate(-45deg); }
+.notice-copy { min-width: 0; display: grid; align-content: center; gap: 2px; padding-left: 7px; }
+.notice-channel { color: var(--dim); font-size: calc(8px * var(--scale)); font-weight: 700; letter-spacing: 1px; }
+.notice-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tone); font: 700 calc(12px * var(--scale)) "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .55px; text-transform: uppercase; }
+.notice-message { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: calc(9.5px * var(--scale)); }
+.notice-code { justify-self: center; color: color-mix(in srgb, var(--tone) 78%, var(--muted)); font-size: calc(8px * var(--scale)); letter-spacing: .6px; writing-mode: vertical-rl; transform: rotate(180deg); opacity: .8; }
+.life-rail { position: absolute; left: 5px; right: 0; bottom: 0; height: 2px; background: color-mix(in srgb, var(--tone) 13%, transparent); overflow: hidden; }
+.life-rail::after { content: ""; display: block; width: 100%; height: 100%; background: var(--tone); box-shadow: 0 0 5px var(--tone); transform-origin: left; animation: life-drain var(--life, 6s) linear forwards; }
+
+.achievement {
+  --tone: var(--yellow); height: 94px; display: grid;
+  grid-template-columns: 63px minmax(0, 1fr) 59px;
+  grid-template-rows: 1fr 19px; align-items: center;
+  background:
+    radial-gradient(circle at 9% 48%, color-mix(in srgb, var(--yellow) 18%, transparent), transparent 25%),
+    linear-gradient(104deg, color-mix(in srgb, var(--bg) 98%, transparent), color-mix(in srgb, var(--panel) 95%, transparent));
+  animation: achievement-enter .54s cubic-bezier(.14,.82,.25,1) both;
+}
+.achievement-sigil { position: relative; grid-row: 1 / 3; justify-self: center; width: 38px; height: 38px; display: grid; place-items: center; color: var(--yellow); border: 1px solid var(--yellow); border-radius: 50%; font: 700 calc(20px * var(--scale)) "Segoe UI Symbol", sans-serif; box-shadow: 0 0 12px color-mix(in srgb, var(--yellow) 30%, transparent), inset 0 0 9px color-mix(in srgb, var(--yellow) 12%, transparent); animation: sigil-lock .72s cubic-bezier(.2,.8,.2,1) both; }
+.achievement-sigil i { position: absolute; inset: -7px; border: 1px dashed color-mix(in srgb, var(--yellow) 54%, transparent); border-radius: 50%; animation: sigil-orbit 9s linear infinite; }
+.achievement-copy { min-width: 0; align-self: end; display: grid; gap: 2px; padding: 9px 6px 4px 0; }
+.achievement-kicker { color: var(--yellow); font-size: calc(8px * var(--scale)); font-weight: 700; letter-spacing: 1.2px; }
+.achievement-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font: 700 calc(15px * var(--scale)) "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .55px; text-transform: uppercase; text-shadow: 0 0 7px color-mix(in srgb, var(--yellow) 18%, transparent); }
+.achievement-message { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: calc(9px * var(--scale)); }
+.achievement-score { align-self: center; justify-self: stretch; display: grid; place-items: center; gap: 1px; height: 47px; margin-right: 8px; border-left: 1px solid color-mix(in srgb, var(--yellow) 34%, var(--soft)); color: var(--yellow); }
+.achievement-score b { font: 700 calc(14px * var(--scale)) "Bahnschrift SemiCondensed", sans-serif; }.achievement-score small { color: var(--dim); font-size: calc(8px * var(--scale)); font-weight: 700; }
+.achievement-category { grid-column: 2 / 4; align-self: start; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-top: 2px; border-top: 1px solid color-mix(in srgb, var(--yellow) 16%, var(--soft)); color: var(--dim); font-size: calc(8px * var(--scale)); font-weight: 700; letter-spacing: .65px; }
+.achievement-sweep { position: absolute; z-index: 0; top: 0; bottom: 0; width: 70px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--yellow) 17%, transparent), transparent); transform: skewX(-16deg); animation: achievement-sweep 1.25s .12s ease-out both; }
+.scanlines { position: absolute; inset: 0; z-index: 5; pointer-events: none; opacity: .12; background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(40,70,82,.14) 3px); }
+.no-crt .scanlines { display: none; }
+.reduced-motion .notification, .reduced-motion .notification * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
+
+@keyframes notice-enter { from { opacity: 0; transform: translateX(34px) scale(.985); filter: blur(1px); } to { opacity: 1; transform: none; filter: drop-shadow(0 3px 7px rgba(0,0,0,.72)); } }
+@keyframes signal-run { 0%,100% { transform: translateY(-82%); opacity: .2; } 50% { transform: translateY(82%); opacity: 1; } }
+@keyframes life-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes achievement-enter { 0% { opacity: 0; transform: translateX(46px) scale(.97); } 62% { opacity: 1; transform: translateX(-3px) scale(1.006); } 100% { opacity: 1; transform: none; } }
+@keyframes achievement-sweep { from { left: -90px; opacity: 0; } 18% { opacity: 1; } to { left: calc(100% + 30px); opacity: 0; } }
+@keyframes sigil-lock { 0% { opacity: 0; transform: scale(.45) rotate(-50deg); } 70% { opacity: 1; transform: scale(1.08) rotate(4deg); } 100% { transform: none; } }
+@keyframes sigil-orbit { to { transform: rotate(360deg); } }

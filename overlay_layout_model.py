@@ -14,7 +14,7 @@ DEFAULT_SIZES = {
     "carrier_hud": (430, 270),
     "prospector_hud": (380, 220), "system_info_hud": (560, 386),
     "gravity_warning_hud": (280, 90), "station_info_hud": (520, 442),
-    "survey_status_hud": (520, 340), "toast_hud": (340, 110),
+    "survey_status_hud": (520, 340), "toast_hud": (400, 94),
     "heartbeat_hud": (42, 42), "colony_overlay": (380, 220),
 }
 
@@ -27,7 +27,7 @@ OVERLAY_LABELS = {
     "gravity_warning_hud": "Gravity Warning",
     "station_info_hud": "Station Information",
     "survey_status_hud": "Survey Operations",
-    "toast_hud": "Event Toast",
+    "toast_hud": "Cockpit Notifications",
     "heartbeat_hud": "Journal Heartbeat",
     "colony_overlay": "Colony Logistics",
 }
@@ -41,7 +41,7 @@ OVERLAY_CARD_LABELS = {
     "gravity_warning_hud": "GRAVITY",
     "station_info_hud": "STATION",
     "survey_status_hud": "SURVEY",
-    "toast_hud": "TOASTS",
+    "toast_hud": "NOTIFY",
     "heartbeat_hud": "HEARTBEAT",
     "colony_overlay": "COLONY",
 }
@@ -62,4 +62,3 @@ OVERLAY_ENABLE_KEYS = {
 
 # Kept readable for old profiles without exposing the retired feature.
 HIDDEN_LEGACY_OVERLAYS = {"colony_overlay"}
-

@@ -48,6 +48,7 @@ from toast_hud import ToastHUD
 from heartbeat_hud import HeartbeatHUD
 from html_canvas_overlay import attach_html_canvas_overlay
 from html_survey_overlay import attach_html_survey_overlay
+from html_toast_overlay import attach_html_toast_overlay
 from overlay_input import set_mouse_passthrough
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
@@ -369,7 +370,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         "gravity_warning_hud": ("gravity", "Void Compass Gravity Warning", "gravity_warning_overlay_enabled"),
         "station_info_hud": ("station", "Void Compass Station Link", "station_info_overlay_enabled"),
         "survey_status_hud": ("survey", "Void Compass Survey Operations", "survey_status_overlay_enabled"),
-        "toast_hud": ("toast", "Void Compass Event Toast", "toast_overlay_enabled"),
+        "toast_hud": ("toast", "Void Compass Cockpit Notifications", "toast_overlay_enabled"),
         "heartbeat_hud": ("heartbeat", "Void Compass Journal Heartbeat", "heartbeat_overlay_enabled"),
         "colony_overlay": ("colony", "Void Compass Colony Logistics", "colony_overlay_enabled"),
     }
@@ -2393,10 +2394,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 html_pending = bool(getattr(overlay, "_html_bridge", None))
                 canvas_bridge = getattr(overlay, "_html_canvas_bridge", None)
                 survey_bridge = getattr(overlay, "_html_survey_bridge", None)
+                toast_bridge = getattr(overlay, "_html_toast_bridge", None)
                 html_pending = bool(
                     html_pending
                     or getattr(canvas_bridge, "surface", None) is not None
                     or getattr(survey_bridge, "surface", None) is not None
+                    or getattr(toast_bridge, "surface", None) is not None
                 )
                 window.attributes(
                     "-alpha", 0.0 if html_ready or html_pending else 1.0,
@@ -2562,7 +2565,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.root.withdraw()
             except tk.TclError:
                 pass
-        self._restore_overlay_hotkey_windows(restore)
+        self._restore_overlay_hotkey_windows(restore, force_show=False)
         self._apply_adaptive_overlay_scene()
         # HTML surfaces and their shared WebView2 process have pre-warmed
         # behind a host-enforced native window curtain. Drop that final curtain
@@ -2751,7 +2754,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         except (AttributeError, tk.TclError):
             return False
 
-    def _restore_overlay_hotkey_windows(self, names):
+    def _restore_overlay_hotkey_windows(self, names, force_show=True):
+        """Restore overlays, allowing startup-aware surfaces to cancel stale shows."""
         adaptive_hidden = set(getattr(self, "_adaptive_hidden_overlays", set()))
         individually_hidden = set(getattr(self, "_overlay_hotkey_hidden", set()))
         lookup = dict(self._overlay_hotkey_window_items())
@@ -2768,11 +2772,17 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     release_pending = getattr(
                         overlay, "release_startup_visibility", None,
                     )
-                    if bool(getattr(
+                    pending = bool(getattr(
                         overlay, "_startup_pending_visible", False,
-                    )) and callable(release_pending):
-                        if not release_pending():
+                    ))
+                    if callable(release_pending):
+                        if pending:
+                            if not release_pending():
+                                continue
+                        elif not force_show:
                             continue
+                        else:
+                            window.deiconify()
                     else:
                         window.deiconify()
                     window.attributes("-topmost", True)
@@ -3847,6 +3857,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             title = achievement.get("title") or achievement.get("id") or "Achievement"
             icon = achievement.get("icon") or "★"
             points = int(achievement.get("points") or 0)
+            description = (
+                achievement.get("desc")
+                or achievement.get("description")
+                or "Journal milestone verified"
+            )
             self.add_event_feed_entry(
                 "ACHIEVEMENT",
                 f"Unlocked: {title} (+{points:,} pts)",
@@ -3854,11 +3869,17 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             )
             if self.config.get("achievement_notifications_enabled", True) and self.toast_hud:
                 self.toast_hud.push(
-                    "ACHIEVEMENT UNLOCKED",
-                    f"{title}  //  +{points:,} pts",
+                    title,
+                    description,
                     severity="success",
                     duration_s=15,
                     icon=icon,
+                    kind="achievement",
+                    meta={
+                        "points": points,
+                        "category": achievement.get("category") or "Exploration",
+                        "description": description,
+                    },
                 )
             window = getattr(self, "achievement_window", None)
             if window and window.is_open() and getattr(self, "_active_page", None) == "ACHIEVE":
@@ -4330,6 +4351,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             x_key, y_key = positions[attr]
             if attr == "survey_status_hud":
                 attach_html_survey_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "toast_hud":
+                attach_html_toast_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             else:
