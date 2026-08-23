@@ -224,9 +224,11 @@
     dom.system.textContent = String(model.system || "SYSTEM").toUpperCase();
     dom.content.replaceChildren(); dom.footer.replaceChildren();
     if (!model.mode) {
-      dom.overview.replaceChildren(node("div", "overview-primary", "AWAITING SURVEY DATA"));
+      dom.root.classList.add("empty");
+      dom.overview.replaceChildren();
       return;
     }
+    dom.root.classList.remove("empty");
     overview(model);
     if (model.sampling) dom.content.appendChild(sampleCard(model.sampling));
     const rows = Array.isArray(model.rows) ? model.rows : [];
