@@ -2918,7 +2918,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                         if self._overlay_window_is_shown(window):
                             if name not in self._overlay_hotkey_hidden:
                                 self._overlay_hotkey_restore.add(name)
-                            window.withdraw()
+                            overlay_obj = getattr(self, "hud" if name == "navigation" else name, None)
+                            if hasattr(overlay_obj, "hide") and callable(overlay_obj.hide):
+                                overlay_obj.hide()
+                            else:
+                                window.withdraw()
                     except (AttributeError, tk.TclError):
                         continue
                 message = "Overlays hidden"
@@ -2946,7 +2950,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self._overlay_hotkey_hidden.add(attr)
                 self._overlay_hotkey_restore.add(attr)
                 try:
-                    window.withdraw()
+                    overlay_obj = getattr(self, "hud" if attr == "navigation" else attr, None)
+                    if hasattr(overlay_obj, "hide") and callable(overlay_obj.hide):
+                        overlay_obj.hide()
+                    else:
+                        window.withdraw()
                 except (AttributeError, tk.TclError):
                     pass
                 message = f"{label} hidden"
