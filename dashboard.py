@@ -750,14 +750,17 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._perform_hud_update()
         self._show_system_info_for_current_system()
         if self.survey_status_hud:
-            self.survey_status_hud.update(
-                self.current_sys, self.scanned, self.total, self.scan_items,
-                self.body_signals, sampling=self._sampling_snapshot(),
-                focused_body_id=self.current_body_id,
-                focused_body_name=self.current_body_name,
-                total_known=self.scan_total_confirmed,
-                belt_clusters=list(self.belt_clusters),
-            )
+            if self.current_docked:
+                self.survey_status_hud.suppress()
+            else:
+                self.survey_status_hud.update(
+                    self.current_sys, self.scanned, self.total, self.scan_items,
+                    self.body_signals, sampling=self._sampling_snapshot(),
+                    focused_body_id=self.current_body_id,
+                    focused_body_name=self.current_body_name,
+                    total_known=self.scan_total_confirmed,
+                    belt_clusters=list(self.belt_clusters),
+                )
         if self.station_info_hud and self.current_docked and self.current_station_name:
             self.station_info_hud.on_docked(self)
         if self.cargo_hud:
@@ -2781,8 +2784,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                                 continue
                         elif not force_show:
                             continue
+                        elif hasattr(overlay, "show") and callable(overlay.show):
+                            if not overlay.show():
+                                continue
                         else:
                             window.deiconify()
+                    elif hasattr(overlay, "show") and callable(overlay.show):
+                        if not overlay.show():
+                            continue
                     else:
                         window.deiconify()
                     window.attributes("-topmost", True)
@@ -6730,7 +6739,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             if window is None:
                 continue
             try:
-                if attr == "carrier_hud" and hasattr(instance, "show"):
+                if hasattr(instance, "show") and callable(instance.show):
                     instance.show()
                 else:
                     window.deiconify()

@@ -22,6 +22,7 @@ body { font-family: "Cascadia Mono", "Consolas", monospace; pointer-events: none
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
   font-size: var(--type-support);
 }
+.survey.empty { opacity: 0; pointer-events: none; }
 .edge { position: absolute; z-index: 10; left: 8px; right: 8px; height: 2px; background: linear-gradient(90deg, transparent, var(--accent) 9%, var(--accent) 91%, transparent); opacity: .86; }
 .edge-top { top: 3px; }.edge-bottom { bottom: 3px; opacity: .55; }
 header { position: absolute; left: 13px; right: 13px; top: 7px; height: 27px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid color-mix(in srgb, var(--accent) 22%, var(--soft)); }

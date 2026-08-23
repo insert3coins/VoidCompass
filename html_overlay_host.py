@@ -175,7 +175,7 @@ class _WindowController:
                 _apply_windows_style(self.window, click_through)
                 self.last_click_through = click_through
             visible = bool(
-                payload.get("visible", True)
+                payload.get("visible", False)
                 and not payload.get("shutdown")
                 and not presentation_held
             )
