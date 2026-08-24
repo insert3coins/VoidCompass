@@ -744,6 +744,16 @@ class TacticalHUD:
             .replace(" ", "").replace("_", "").upper()
         )
         focus_labels = {
+            "1": "RIGHT PANEL",
+            "INTERNALPANEL": "RIGHT PANEL",
+            "2": "LEFT PANEL",
+            "EXTERNALPANEL": "LEFT PANEL",
+            "3": "COMMS",
+            "COMMSPANEL": "COMMS",
+            "4": "ROLE PANEL",
+            "ROLEPANEL": "ROLE PANEL",
+            "5": "SERVICES",
+            "STATIONSERVICES": "SERVICES",
             "6": "GALAXY MAP",
             "GALAXYMAP": "GALAXY MAP",
             "7": "SYSTEM MAP",
@@ -772,6 +782,24 @@ class TacticalHUD:
             return "MAP"
         if nav_context.get("in_fss"):
             return "FSS"
+        music_states = {
+            "LIFEFORMFOGCLOUD": "PHENOMENA",
+            "COMBATSRV": "SRV THREAT",
+            "CAPITALSHIP": "CAPITAL SHIP",
+            "UNKNOWNENCOUNTER": "UNIDENTIFIED",
+            "COMBATLARGEDOGFIGHT": "HEAVY COMBAT",
+            "DOCKINGCOMPUTER": "DOCK ASSIST",
+            "UNKNOWNSETTLEMENT": "SETTLEMENT",
+            "DESTINATIONFROMSUPERCRUISE": "LOCAL ARRIVAL",
+        }
+        music_state = None if nav_context.get("docked") else music_states.get(track_key)
+        # Threat, docking and the brief post-drop acquisition window need to
+        # surface before ordinary environmental states such as mass lock. FSD,
+        # map and scanner evidence above still retains absolute precedence.
+        if music_state in {
+                "SRV THREAT", "CAPITAL SHIP", "UNIDENTIFIED",
+                "HEAVY COMBAT", "DOCK ASSIST", "LOCAL ARRIVAL"}:
+            return music_state
         if (fsd_state == "asteroid_field" and flight_state in {"", "FLIGHT"}
                 and not any(nav_context.get(key) for key in (
                     "docked", "landed", "in_fighter", "in_srv", "on_foot",
@@ -792,6 +820,11 @@ class TacticalHUD:
             if phase == "hold":
                 return "SURFACE HOLD"
             return "SURFACE APPROACH"
+        # Phenomena and settlement music provides context only after exact
+        # surface motion has had first refusal, but is still more informative
+        # than a generic mass-lock state while the mood remains current.
+        if music_state:
+            return music_state
         if (fsd_state == "mass_lock" and flight_state in {"", "FLIGHT"}
                 and not any(nav_context.get(key) for key in (
                     "docked", "landed", "in_fighter", "in_srv", "on_foot",
@@ -828,22 +861,27 @@ class TacticalHUD:
             return COLOR_ACCENT
         if state_text in {"ARRIVAL", "CARRIER ARRIVAL"}:
             return COLOR_GREEN
+        if state_text in {"PHENOMENA", "LOCAL ARRIVAL"}:
+            return COLOR_GREEN
         if state_text in (
             "DOCKED", "LANDED", "FSS", "DSS", "FIGHTER", "SRV", "SCARAB", "SCORPION", "NOMAD",
             "TAXI", "MULTICREW",
             "ONFOOT", "MAP", "GALAXY MAP", "SYSTEM MAP", "POWER MAP", "ORRERY",
             "CODEX", "EXPLORATION", "STATION", "FSD COOLDOWN", "ORBITAL APPROACH",
-            "ORBITAL DEPARTURE", "SURFACE HOLD",
+            "ORBITAL DEPARTURE", "SURFACE HOLD", "DOCK ASSIST", "RIGHT PANEL",
+            "LEFT PANEL", "COMMS", "ROLE PANEL", "SERVICES",
         ):
             return COLOR_ACCENT
         if state_text in {
                 "MASS LOCK", "ASTEROID FIELD", "GLIDE",
-                "SURFACE APPROACH", "SURFACE DEPARTURE"}:
+                "SURFACE APPROACH", "SURFACE DEPARTURE", "UNIDENTIFIED",
+                "SETTLEMENT"}:
             return COLOR_YELLOW
         if state_text in (
             "HYPERSPACE", "SUPERCRUISE", "JUMPING", "COMBAT",
             "FSD CHARGE", "HYPER CHARGE", "SCO OVERCHARGE", "CARRIER TRANSIT",
-            "INTERDICTION", "INTERDICTED",
+            "INTERDICTION", "INTERDICTED", "SRV THREAT", "CAPITAL SHIP",
+            "HEAVY COMBAT",
         ):
             return COLOR_ORANGE
         if state_text == "INTERDICTION EVADED":
@@ -898,6 +936,32 @@ class TacticalHUD:
             return "orbital_departure"
         if state == "FSD COOLDOWN":
             return "fsd_cooldown"
+        if state == "RIGHT PANEL":
+            return "right_panel"
+        if state == "LEFT PANEL":
+            return "left_panel"
+        if state == "COMMS":
+            return "comms_panel"
+        if state == "ROLE PANEL":
+            return "role_panel"
+        if state == "SERVICES":
+            return "station_services"
+        if state == "PHENOMENA":
+            return "phenomena"
+        if state == "SRV THREAT":
+            return "srv_threat"
+        if state == "CAPITAL SHIP":
+            return "capital_contact"
+        if state == "UNIDENTIFIED":
+            return "unknown_contact"
+        if state == "HEAVY COMBAT":
+            return "heavy_combat"
+        if state == "DOCK ASSIST":
+            return "docking_assist"
+        if state == "SETTLEMENT":
+            return "settlement_area"
+        if state == "LOCAL ARRIVAL":
+            return "local_arrival"
         if state == "ARRIVAL":
             return "arrival"
         if state in {"DOCKED", "STATION"}:
