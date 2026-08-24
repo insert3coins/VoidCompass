@@ -185,15 +185,20 @@
     family(state) {
       const key = this.key(state);
       if (["fsd_charge", "hyper_charge", "hyperspace", "jumping", "arrival",
-        "interdiction_evaded", "fsd_cooldown", "supercruise_overcharge"].includes(key)) return "fsd";
+        "interdiction_evaded", "fsd_cooldown", "supercruise_overcharge",
+        "local_arrival"].includes(key)) return "fsd";
       if (PLANETARY.has(key) || ["landed", "srv", "scorpion", "nomad", "on_foot"].includes(key)) return "surface";
       if (["fss", "dss", "map", "galaxy_map", "system_map", "power_map",
-        "orrery", "codex", "exploration"].includes(key)) return "scope";
+        "orrery", "codex", "exploration", "phenomena"].includes(key)) return "scope";
       if (["mass_lock", "signal_lock", "signal_drop", "signal_threat", "combat",
-        "interdiction", "interdicted", "asteroid_field"].includes(key)) return "hazard";
+        "interdiction", "interdicted", "asteroid_field", "srv_threat",
+        "capital_contact", "unknown_contact", "heavy_combat"].includes(key)) return "hazard";
       if (key.startsWith("vehicle_") || ["fighter", "multicrew"].includes(key)) return "vehicle";
       if (key.startsWith("carrier_")) return "carrier";
-      if (["docked", "station"].includes(key)) return "station";
+      if (["docked", "station", "docking_assist"].includes(key)) return "station";
+      if (key === "settlement_area") return "surface";
+      if (["left_panel", "right_panel", "comms_panel", "role_panel",
+        "station_services"].includes(key)) return "interface";
       return "flight";
     }
 
@@ -213,9 +218,15 @@
         supercruise: .94, supercruise_overcharge: .48,
         fsd_charge: .86, hyper_charge: .64, hyperspace: .58, jumping: .72,
         arrival: 1.15, interdiction_evaded: 1.05, fsd_cooldown: 1.55,
+        local_arrival: 1.42,
         carrier_transit: 1.08, carrier_arrival: 1.34,
         fss: 1.52, dss: 1.82, map: 2.1, galaxy_map: 2.35,
         system_map: 1.86, power_map: 1.7, orrery: 2.5, codex: 1.9,
+        phenomena: 2.6, docking_assist: 1.34, settlement_area: 1.95,
+        srv_threat: .72, capital_contact: 1.48, unknown_contact: 1.72,
+        heavy_combat: .56,
+        left_panel: 1.62, right_panel: 1.62, comms_panel: 1.34,
+        role_panel: 1.78, station_services: 2.05,
         orbital_approach: 1.68, glide: .82, surface_approach: 1.38,
         surface_hold: 2.25, surface_departure: 1.28, orbital_departure: 1.55,
         landed: 2.4, on_foot: 1.32, srv: 1.18, scorpion: .9, nomad: 1.05,
@@ -422,6 +433,27 @@
         this.path([[lockX + 7, y + 9], [lockX + 10, y + 9], [lockX + 10, y + 4]],
           c, alpha * lockPulse, 1.2);
         this.glowDot(lockX, y, 1 + .7 * wave(p * 2), c, alpha * .86);
+      } else if (key === "fsd_cooldown") {
+        // Post-jump thermal buses bleed away from the ship in alternating
+        // banks.  This is deliberately the inverse of charge compression.
+        const cx = start + span * .55;
+        for (let bank = 0; bank < 5; bank += 1) {
+          const progress = (p + bank / 5) % 1;
+          const fade = Math.sin(progress * Math.PI);
+          const distance = 4 + smooth(progress) * span * .42;
+          const height = 2.5 + (1 - progress) * 5;
+          for (const side of [-1, 1]) {
+            const x = cx + side * distance;
+            this.line(x, y - height, x, y + height, c,
+              alpha * fade * (.34 + (1 - progress) * .35), 1.15);
+            this.line(x, y + height, x + side * 4, y + height + 2, c,
+              alpha * fade * .34, 1);
+          }
+        }
+        const reset = 5 + wave(p) * 2;
+        this.angularRing(cx, y, reset, reset * .58, 6, c,
+          alpha * (.38 + .26 * wave(p * 2)), 1.1, Math.PI / 6);
+        this.dot(cx, y, 1, c, alpha * .72);
       } else if (family === "fsd") {
         const speed = key === "supercruise_overcharge" || key === "hyperspace" ? 1.7 : 1;
         for (let i = 0; i < 4; i += 1) {
@@ -432,6 +464,83 @@
         }
         const gate = 3 + wave(p) * 7;
         this.line(end - gate, y - 9, end - gate, y + 9, c, alpha * .62, 1.3);
+      } else if (key === "phenomena") {
+        const cx = start + span * .52;
+        for (let strand = 0; strand < 3; strand += 1) {
+          const points = [];
+          for (let step = 0; step <= 18; step += 1) {
+            const travel = step / 18;
+            const x = start + travel * span;
+            const envelope = Math.sin(travel * Math.PI);
+            const py = y + Math.sin((travel * 1.5 + p + strand / 3) * TAU)
+              * (2 + strand) * envelope;
+            points.push([x, py]);
+          }
+          this.path(points, c, alpha * (.18 + strand * .09), 1);
+        }
+        for (let contact = 0; contact < 4; contact += 1) {
+          const angle = p * TAU * (contact % 2 ? -1 : 1) + contact * 1.47;
+          const radius = 5 + contact * 4;
+          const x = cx + Math.cos(angle) * radius;
+          const py = y + Math.sin(angle) * radius * .38;
+          this.arc(x, py, 1.8 + contact * .35, 1 + contact * .2,
+            0, TAU, c, alpha * (.35 + .4 * wave(p + contact * .19)), 1);
+        }
+      } else if (family === "interface") {
+        if (key === "left_panel" || key === "right_panel") {
+          const fromLeft = key === "left_panel";
+          const anchor = fromLeft ? start : end;
+          const direction = fromLeft ? 1 : -1;
+          for (let row = 0; row < 4; row += 1) {
+            const rowY = y - 8 + row * 5;
+            const width = span * (.36 + hash(row + 811) * .35);
+            this.line(anchor, rowY, anchor + direction * width, rowY,
+              c, alpha * (.24 + row * .08), row === 1 ? 1.35 : 1);
+            const packet = (p + row / 4) % 1;
+            const x = anchor + direction * width * packet;
+            this.dot(x, rowY, .8, c,
+              alpha * Math.sin(packet * Math.PI) * .76);
+          }
+          const gate = anchor + direction * span * (.18 + .68 * wave(p * .5));
+          this.line(gate, y - 10, gate, y + 10, c, alpha * .58, 1.2);
+          this.chevron(gate - direction * 3, y, direction, c, alpha * .68, 2.4);
+        } else if (key === "comms_panel") {
+          const points = [];
+          for (let step = 0; step <= 28; step += 1) {
+            const travel = step / 28;
+            const x = start + travel * span;
+            const py = y + Math.sin((travel * 3 - p * 2) * TAU)
+              * (1.2 + 3.8 * Math.sin(travel * Math.PI));
+            points.push([x, py]);
+          }
+          this.path(points, c, alpha * .5, 1.1);
+          for (let packet = 0; packet < 3; packet += 1) {
+            const progress = (p + packet / 3) % 1;
+            const x = start + progress * span;
+            this.rect(x - 2.5, y - 9 + packet * 7, 5, 2.5,
+              c, alpha * Math.sin(progress * Math.PI) * .55, true);
+          }
+        } else if (key === "role_panel") {
+          const reveal = wave(p * .5);
+          for (let slot = 0; slot < 4; slot += 1) {
+            const x = start + span * (slot + .5) / 4;
+            const height = 5 + (slot % 2) * 3;
+            this.rect(x - 4, y + 9 - height * reveal, 8, height * reveal,
+              c, alpha * (.28 + slot * .09));
+            this.dot(x, y + 6 - height * reveal, .8, c,
+              alpha * (.4 + .35 * wave(p + slot / 4)));
+          }
+          this.line(start + 3, y + 10, end - 3, y + 10, c, alpha * .5, 1.2);
+        } else {
+          for (let cell = 0; cell < 6; cell += 1) {
+            const column = cell % 3, row = Math.floor(cell / 3);
+            const x = start + span * (.18 + column * .31);
+            const py = y - 7 + row * 10;
+            const active = cell === Math.floor(p * 6) % 6;
+            this.rect(x - 5, py - 3, 10, 6, c,
+              alpha * (active ? .72 : .25), active);
+          }
+        }
       } else if (key === "galaxy_map") {
         // Galactic navigation resolves as a sparse star lattice behind the
         // ship identity.  The travelling fix follows a plotted vector rather
@@ -893,18 +1002,8 @@
       }
     }
 
-    drawArrival(g, state, p, alpha, cooldown = false) {
+    drawArrival(g, state, p, alpha) {
       const c = state.color, y = g.y;
-      if (cooldown) {
-        for (let i = 0; i < 9; i += 1) {
-          const progress = (i + .5) / 9;
-          const point = this.trackPoint(progress, g);
-          const heat = (1 - progress) * (.35 + .5 * wave(p + i * .08));
-          this.line(point.x, y - heat * 9, point.x, y + heat * 9, c, alpha * (.25 + heat * .55));
-        }
-        this.trackStroke(p * .42, .04, g, y, c, alpha * .45);
-        return;
-      }
       const cx = (g.left + g.right) / 2;
       const half = Math.max(16, (g.right - g.left) / 2);
 
@@ -935,6 +1034,47 @@
         c, alpha * .68, 1.25);
       this.line(cx - 6, y, cx + 6, y, c, alpha * (.45 + .35 * wave(p)), 1.3);
       this.glowDot(cx, y, 1.3 + .9 * wave(p * 2), c, alpha * .92);
+    }
+
+    drawCooldown(g, state, p, alpha) {
+      const c = state.color, y = g.y;
+      const cx = g.center;
+      const span = Math.max(24, g.right - g.left);
+
+      // Cooling is the mechanical inverse of FSD charge: hot packets travel
+      // away from the drive core through paired radiator buses, fading before
+      // they wrap.  A slowly resolving hexagonal lock represents drive reset.
+      this.line(g.left + 4, y, cx - 7, y, c, alpha * .28, 1.1);
+      this.line(cx + 7, y, g.right - 4, y, c, alpha * .28, 1.1);
+      for (let fin = 0; fin < 6; fin += 1) {
+        const progress = (p + fin / 6) % 1;
+        const fade = Math.sin(progress * Math.PI);
+        const distance = 7 + smooth(progress) * span * .43;
+        const heat = 1 - progress;
+        const height = 2.5 + heat * 8;
+        for (const side of [-1, 1]) {
+          const x = cx + side * distance;
+          this.line(x, y - height, x, y + height, c,
+            alpha * fade * (.38 + heat * .42), 1 + heat * .45);
+          this.line(x, y - height, x + side * (3 + heat * 4), y - height - 2,
+            c, alpha * fade * .34, 1);
+          this.line(x, y + height, x + side * (3 + heat * 4), y + height + 2,
+            c, alpha * fade * .34, 1);
+        }
+      }
+      for (let ring = 0; ring < 3; ring += 1) {
+        const phase = (p + ring / 3) % 1;
+        const contraction = 1 - smooth(phase);
+        const fade = Math.sin(phase * Math.PI);
+        this.angularRing(cx, y, 5 + contraction * 14, 2.8 + contraction * 6,
+          6, c, alpha * fade * .4, 1.1, Math.PI / 6);
+      }
+      const ready = .4 + .45 * wave(p * 2);
+      this.path([[cx - 8, y - 6], [cx - 4, y - 9], [cx + 4, y - 9],
+        [cx + 8, y - 6]], c, alpha * ready, 1.15);
+      this.path([[cx - 8, y + 6], [cx - 4, y + 9], [cx + 4, y + 9],
+        [cx + 8, y + 6]], c, alpha * ready, 1.15);
+      this.glowDot(cx, y, 1.2, c, alpha * (.45 + .35 * wave(p)));
     }
 
     splitPath(points, color, alpha = 1, width = 1) {
@@ -1449,6 +1589,316 @@
       this.splitPath(points, c, alpha * .58, danger ? 1.5 : 1);
     }
 
+    drawMusicState(g, state, p, alpha, key) {
+      const c = state.color, y = g.y;
+      const cx = g.center;
+      const span = Math.max(24, g.right - g.left);
+
+      if (key === "phenomena") {
+        // Organic structures and fog-cloud life use slow, phase-locked sensor
+        // tendrils with cellular contacts instead of an ordinary FSS sweep.
+        for (let strand = 0; strand < 4; strand += 1) {
+          const points = [];
+          for (let step = 0; step <= 36; step += 1) {
+            const travel = step / 36;
+            const x = g.left + travel * span;
+            const envelope = Math.sin(travel * Math.PI);
+            const py = y + Math.sin((travel * (1.25 + strand * .25)
+              + p * (strand % 2 ? -1 : 1) + strand / 4) * TAU)
+              * (2.2 + strand * .8) * envelope;
+            points.push([x, py]);
+          }
+          this.path(points, c, alpha * (.15 + strand * .075), 1);
+        }
+        for (let cell = 0; cell < 6; cell += 1) {
+          const orbit = 8 + cell * span * .045;
+          const angle = p * TAU * (cell % 2 ? -1 : 1) + hash(cell + 631) * TAU;
+          const x = cx + Math.cos(angle) * orbit;
+          const py = y + Math.sin(angle) * orbit * .23;
+          const pulse = .3 + .6 * wave(p + cell * .13);
+          this.arc(x, py, 2 + hash(cell + 653) * 2.5,
+            1.2 + hash(cell + 677) * 1.5, 0, TAU, c, alpha * pulse, 1);
+          if (cell % 2 === 0) this.dot(x, py, .65, c, alpha * pulse);
+        }
+        this.arc(cx, y, 11 + 2 * wave(p), 5 + wave(p), 0, TAU,
+          c, alpha * .34, 1.15);
+        return;
+      }
+
+      if (key === "srv_threat") {
+        const horizon = y + 8;
+        this.line(g.left + 2, horizon, g.right - 2, horizon, c, alpha * .42, 1.2);
+        for (let ridge = 0; ridge <= 24; ridge += 1) {
+          if (!ridge) continue;
+          const previous = (ridge - 1) / 24;
+          const travel = ridge / 24;
+          this.line(g.left + previous * span,
+            horizon + Math.sin((previous * 3 + p) * TAU) * 1.2,
+            g.left + travel * span,
+            horizon + Math.sin((travel * 3 + p) * TAU) * 1.2,
+            c, alpha * .26, 1);
+        }
+        const targetX = cx + Math.sin(p * TAU) * span * .27;
+        const targetY = y - 1 + Math.cos(p * TAU * 2) * 2.5;
+        const lock = 7 + wave(p * 2) * 3;
+        this.arc(targetX, targetY, lock, lock * .58, -.72, .72,
+          c, alpha * .78, 1.5);
+        this.arc(targetX, targetY, lock, lock * .58, Math.PI - .72,
+          Math.PI + .72, c, alpha * .78, 1.5);
+        this.dot(targetX, targetY, 1.1, c, alpha * .88);
+        for (let packet = 0; packet < 4; packet += 1) {
+          const progress = (p * 1.5 + packet / 4) % 1;
+          const x = g.left + progress * span;
+          this.chevron(x, y - 9 + packet * 5, packet % 2 ? -1 : 1,
+            c, alpha * Math.sin(progress * Math.PI) * .62, 2.6);
+        }
+        return;
+      }
+
+      if (key === "capital_contact") {
+        // A broad, slow contact that occupies the sensor field rather than
+        // borrowing the twitchier dogfight waveform.
+        const half = Math.min(span * .38, 47);
+        this.path([
+          [cx - half, y], [cx - half * .72, y - 6], [cx + half * .54, y - 8],
+          [cx + half, y - 2], [cx + half * .82, y + 5],
+          [cx - half * .6, y + 7], [cx - half, y],
+        ], c, alpha * .62, 1.35, true, .035);
+        for (let segment = 0; segment < 6; segment += 1) {
+          const x = cx - half * .55 + segment * half * .22;
+          this.line(x, y - 5, x + 5, y + 5, c,
+            alpha * (.2 + .35 * wave(p + segment / 6)), 1);
+        }
+        const sweep = cx - half + (half * 2) * wave(p * .5);
+        this.line(sweep, y - 11, sweep, y + 11, c, alpha * .58, 1.25);
+        const bracket = half + 4 + wave(p) * 3;
+        this.path([[cx - bracket, y - 11], [cx - bracket + 7, y - 11],
+          [cx - bracket + 7, y - 7]], c, alpha * .7, 1.4);
+        this.path([[cx + bracket, y + 11], [cx + bracket - 7, y + 11],
+          [cx + bracket - 7, y + 7]], c, alpha * .7, 1.4);
+        return;
+      }
+
+      if (key === "unknown_contact") {
+        for (let echo = 0; echo < 4; echo += 1) {
+          const phase = (p + echo / 4) % 1;
+          const fade = Math.sin(phase * Math.PI);
+          const radius = 5 + smooth(phase) * span * .38;
+          this.angularRing(cx, y, radius, 2.5 + radius * .18,
+            5 + echo % 3, c, alpha * fade * .48, 1.1,
+            p * TAU * (echo % 2 ? -.5 : .5));
+        }
+        for (let contact = 0; contact < 5; contact += 1) {
+          const x = g.left + 8 + hash(contact + 709) * (span - 16);
+          const py = y + (hash(contact + 733) - .5) * 17;
+          const pulse = Math.pow(wave(p + hash(contact + 761)), 2);
+          this.path([[x, py - 2.8], [x + 2.5, py + 2], [x - 2.5, py + 2]],
+            c, alpha * pulse * .7, 1, true);
+        }
+        this.line(cx - 5, y, cx + 5, y, c, alpha * (.28 + .48 * wave(p * 2)), 1.2);
+        return;
+      }
+
+      if (key === "heavy_combat") {
+        for (let lane = 0; lane < 4; lane += 1) {
+          const direction = lane % 2 ? -1 : 1;
+          const progress = (p * 1.75 + lane / 4) % 1;
+          const x = direction > 0
+            ? g.left + progress * span : g.right - progress * span;
+          const py = y - 8 + lane * 5.2;
+          this.line(x - direction * (5 + progress * 8), py, x, py,
+            c, alpha * Math.sin(progress * Math.PI) * .8, 1.5);
+          this.chevron(x, py, direction, c,
+            alpha * Math.sin(progress * Math.PI) * .72, 2.8);
+        }
+        for (const side of [-1, 1]) {
+          const contactX = cx + side * span * (.19 + .04 * Math.sin(p * TAU));
+          const contactY = y + side * Math.cos(p * TAU * 2) * 3;
+          this.arc(contactX, contactY, 8, 5, -.7, .7, c, alpha * .68, 1.4);
+          this.arc(contactX, contactY, 8, 5, Math.PI - .7, Math.PI + .7,
+            c, alpha * .68, 1.4);
+        }
+        this.path([[cx - 4, y - 10], [cx, y - 5], [cx + 4, y - 10]],
+          c, alpha * (.48 + .42 * wave(p * 3)), 1.5);
+        this.path([[cx - 4, y + 10], [cx, y + 5], [cx + 4, y + 10]],
+          c, alpha * (.48 + .42 * wave(p * 3)), 1.5);
+        return;
+      }
+
+      if (key === "docking_assist") {
+        for (let gate = 0; gate < 5; gate += 1) {
+          const progress = (p + gate / 5) % 1;
+          const fade = Math.sin(progress * Math.PI);
+          const x = g.left + 5 + progress * (span - 10);
+          const halfHeight = 10 - progress * 6;
+          this.path([[x - 3, y - halfHeight], [x, y - halfHeight - 2],
+            [x + 3, y - halfHeight]], c, alpha * fade * .5, 1.1);
+          this.path([[x - 3, y + halfHeight], [x, y + halfHeight + 2],
+            [x + 3, y + halfHeight]], c, alpha * fade * .5, 1.1);
+        }
+        const padWidth = 13 + wave(p) * 2;
+        this.path([[cx - padWidth, y + 7], [cx - padWidth + 4, y + 2],
+          [cx + padWidth - 4, y + 2], [cx + padWidth, y + 7]],
+        c, alpha * .72, 1.4);
+        this.line(cx - 5, y + 5, cx + 5, y + 5, c, alpha * .7, 1.3);
+        this.glowDot(cx, y + 5, 1.1, c, alpha * (.55 + .35 * wave(p * 2)));
+        return;
+      }
+
+      if (key === "settlement_area") {
+        const horizon = y + 6;
+        this.line(g.left + 2, horizon, g.right - 2, horizon, c, alpha * .44, 1.2);
+        const buildings = [
+          [-.34, 8, 7], [-.18, 13, 10], [.02, 9, 6], [.2, 16, 11], [.37, 7, 5],
+        ];
+        buildings.forEach(([offset, width, height], index) => {
+          const x = cx + offset * span - width / 2;
+          this.rect(x, horizon - height, width, height, c,
+            alpha * (.28 + .18 * wave(p + index * .14)));
+          this.dot(x + width * .5, horizon - height - 2, .7, c,
+            alpha * (.32 + .45 * wave(p + index * .19)));
+        });
+        for (let lane = 0; lane < 4; lane += 1) {
+          const progress = (p + lane / 4) % 1;
+          const x = g.left + 4 + progress * (span - 8);
+          this.line(x, horizon + 1, cx, y + 1, c,
+            alpha * Math.sin(progress * Math.PI) * .22, 1);
+        }
+        const scanX = cx + Math.sin(p * TAU) * span * .43;
+        this.line(scanX, y - 11, scanX, horizon + 2, c, alpha * .52, 1.15);
+        return;
+      }
+
+      if (key === "local_arrival") {
+        for (let bracket = 0; bracket < 4; bracket += 1) {
+          const progress = (p + bracket / 4) % 1;
+          const fade = Math.sin(progress * Math.PI);
+          const distance = span * .44 * (1 - smooth(progress));
+          const height = 3 + (1 - progress) * 7;
+          for (const side of [-1, 1]) {
+            const x = cx + side * distance;
+            this.line(x, y - height, x, y + height, c,
+              alpha * fade * .62, 1.25);
+          }
+        }
+        const destination = cx + span * .18;
+        this.angularRing(destination, y, 7 + wave(p) * 2, 5 + wave(p),
+          6, c, alpha * .66, 1.3, Math.PI / 6);
+        this.glowDot(destination, y, 1.3, c, alpha * .88);
+        for (let packet = 0; packet < 3; packet += 1) {
+          const progress = (p + packet / 3) % 1;
+          const x = g.left + 5 + progress * (destination - g.left - 7);
+          this.line(x - 6, y - 6 + packet * 6, x, y - 6 + packet * 6,
+            c, alpha * Math.sin(progress * Math.PI) * .62, 1.3);
+        }
+      }
+    }
+
+    drawPanelState(g, state, p, alpha, key) {
+      const c = state.color, y = g.y;
+      const cx = g.center;
+      const span = Math.max(24, g.right - g.left);
+
+      if (key === "left_panel" || key === "right_panel") {
+        const fromLeft = key === "left_panel";
+        const edge = fromLeft ? g.left + 3 : g.right - 3;
+        const inner = fromLeft ? g.right - 5 : g.left + 5;
+        const direction = fromLeft ? 1 : -1;
+        const panelEdge = edge + direction * span * (.22 + .06 * wave(p));
+
+        // Direction is literal: External/left focus resolves from port, while
+        // Internal/right focus resolves from starboard.
+        this.path(fromLeft
+          ? [[edge, y - 11], [panelEdge, y - 8], [panelEdge, y + 8], [edge, y + 11]]
+          : [[edge, y - 11], [panelEdge, y - 8], [panelEdge, y + 8], [edge, y + 11]],
+        c, alpha * .62, 1.35);
+        for (let row = 0; row < 5; row += 1) {
+          const rowY = y - 9 + row * 4.5;
+          const width = span * (.31 + hash(row + (fromLeft ? 853 : 877)) * .42);
+          this.line(edge, rowY, edge + direction * width, rowY,
+            c, alpha * (.2 + row * .07), row === 2 ? 1.4 : 1);
+          const progress = (p + row / 5) % 1;
+          const x = edge + direction * width * progress;
+          this.line(x - direction * 4, rowY, x, rowY, c,
+            alpha * Math.sin(progress * Math.PI) * .76, 1.5);
+        }
+        const cursor = edge + direction * span * (.12 + .75 * wave(p * .5));
+        this.line(cursor, y - 11, cursor, y + 11, c, alpha * .54, 1.15);
+        this.chevron(cursor - direction * 3, y, direction, c, alpha * .78, 2.7);
+        this.line(panelEdge, y, inner, y, c, alpha * .18, 1);
+        return;
+      }
+
+      if (key === "comms_panel") {
+        const channels = [-6, 0, 6];
+        channels.forEach((channelY, channel) => {
+          const points = [];
+          for (let step = 0; step <= 38; step += 1) {
+            const travel = step / 38;
+            const envelope = Math.sin(travel * Math.PI);
+            const x = g.left + travel * span;
+            const py = y + channelY
+              + Math.sin((travel * (2 + channel) - p * (1 + channel * .25)) * TAU)
+              * envelope * (1.2 + channel * .5);
+            points.push([x, py]);
+          }
+          this.path(points, c, alpha * (.2 + channel * .12), channel === 1 ? 1.35 : 1);
+        });
+        for (let message = 0; message < 4; message += 1) {
+          const progress = (p + message / 4) % 1;
+          const fade = Math.sin(progress * Math.PI);
+          const x = g.left + 5 + progress * (span - 10);
+          const py = y - 9 + message * 6;
+          this.rect(x - 3, py - 1.5, 6, 3, c, alpha * fade * .58, true);
+          this.line(x - 7, py, x - 3, py, c, alpha * fade * .42, 1);
+        }
+        this.path([[cx - 7, y - 10], [cx, y - 7], [cx + 7, y - 10]],
+          c, alpha * (.32 + .32 * wave(p * 2)), 1.15);
+        return;
+      }
+
+      if (key === "role_panel") {
+        const floor = y + 10;
+        this.line(g.left + 3, floor, g.right - 3, floor, c, alpha * .5, 1.25);
+        for (let slot = 0; slot < 5; slot += 1) {
+          const x = g.left + span * (slot + .5) / 5;
+          const reveal = .25 + .75 * wave(p * .5 + slot * .08);
+          const height = (6 + (slot % 2) * 4) * reveal;
+          this.path([[x - 6, floor], [x - 5, floor - height],
+            [x + 5, floor - height], [x + 6, floor]],
+          c, alpha * (.28 + slot * .075), 1.1, false,
+          slot === Math.floor(p * 5) % 5 ? .08 : 0);
+          const active = slot === Math.floor(p * 5) % 5;
+          this.dot(x, floor - height - 2, active ? 1.45 : .7, c,
+            alpha * (active ? .82 : .35));
+        }
+        const selector = g.left + span * ((Math.floor(p * 5) + .5) / 5);
+        this.path([[selector - 4, y - 10], [selector, y - 6],
+          [selector + 4, y - 10]], c, alpha * .72, 1.35);
+        return;
+      }
+
+      // Station Services uses an orderly menu matrix with a single moving
+      // focus cell. It stays visually separate from Docking Assist's corridor.
+      const columns = 4, rows = 2;
+      const cellWidth = Math.min(18, span / columns - 4);
+      const activeFloat = p * columns * rows;
+      const active = Math.floor(activeFloat) % (columns * rows);
+      for (let cell = 0; cell < columns * rows; cell += 1) {
+        const column = cell % columns, row = Math.floor(cell / columns);
+        const x = g.left + span * (column + .5) / columns;
+        const py = y - 6 + row * 12;
+        const selected = cell === active;
+        this.rect(x - cellWidth / 2, py - 4, cellWidth, 8, c,
+          alpha * (selected ? .8 : .28), selected);
+        this.line(x - cellWidth * .3, py, x + cellWidth * .3, py,
+          c, alpha * (selected ? .72 : .2), 1);
+      }
+      const sweep = g.left + (activeFloat % 1) * span;
+      this.line(sweep, y - 11, sweep, y + 11, c,
+        alpha * Math.sin((activeFloat % 1) * Math.PI) * .36, 1);
+    }
+
     drawCarrier(g, state, p, alpha, arrival = false) {
       const c = state.color, y = g.y;
       if (arrival) {
@@ -1488,7 +1938,7 @@
       if (key === "arrival" || key === "interdiction_evaded") {
         this.drawArrival(g, state, p, alpha); return;
       }
-      if (key === "fsd_cooldown") { this.drawArrival(g, state, p, alpha, true); return; }
+      if (key === "fsd_cooldown") { this.drawCooldown(g, state, p, alpha); return; }
       if (key === "fss" || key === "dss") {
         this.drawScanner(g, state, p, alpha, key === "dss"); return;
       }
@@ -1505,6 +1955,15 @@
       if (key === "on_foot") { this.drawOnFoot(g, state, p, alpha); return; }
       if (key === "docked" || key === "station") {
         this.drawDocked(g, state, p, alpha, key === "station"); return;
+      }
+      if (["phenomena", "srv_threat", "capital_contact", "unknown_contact",
+        "heavy_combat", "docking_assist", "settlement_area",
+        "local_arrival"].includes(key)) {
+        this.drawMusicState(g, state, p, alpha, key); return;
+      }
+      if (["left_panel", "right_panel", "comms_panel", "role_panel",
+        "station_services"].includes(key)) {
+        this.drawPanelState(g, state, p, alpha, key); return;
       }
       if (key.startsWith("vehicle_")) { this.drawHandoff(g, state, p, alpha, key); return; }
       if (["mass_lock", "signal_lock", "signal_drop", "signal_threat", "combat",

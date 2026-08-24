@@ -4675,14 +4675,27 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         if key in ("supercruise", "destinationfromhyperspace"):
             return "SUPERCRUISE", label, False, "INFO"
         if key == "destinationfromsupercruise":
-            return "MUSIC", label, False, "INFO"
-        if key in ("starport", "dockingcomputer"):
+            return "ARRIVAL", "Local Arrival", False, "INFO"
+        if key == "lifeform_fogcloud":
+            return "PHENOMENA", "Notable Phenomena", True, "INFO"
+        if key == "unknown_settlement":
+            return "SETTLEMENT", "Settlement Area", False, "INFO"
+        if key == "dockingcomputer":
+            return "STATION", "Docking Assist", False, "INFO"
+        if key == "starport":
             return "STATION", label, True, "INFO"
         if key in ("exploration", "unknown_exploration"):
             return "EXPLORATION", label, True, "INFO"
+        combat_labels = {
+            "combat_srv": "SRV Threat",
+            "combatlargedogfight": "Heavy Combat",
+            "combat_largedogfight": "Heavy Combat",
+            "capitalship": "Capital Contact",
+            "unknown_encounter": "Unknown Contact",
+        }
         if "combat" in key or key in ("capitalship", "unknown_encounter"):
-            severity = "WARN" if key in ("capitalship", "unknown_encounter") else "INFO"
-            return "COMBAT", label, True, severity
+            severity = "WARN" if key in combat_labels else "INFO"
+            return "COMBAT", combat_labels.get(key, label), True, severity
         return "MUSIC", label, False, "INFO"
 
     def _is_redundant_music_event(self, event_name, payload):

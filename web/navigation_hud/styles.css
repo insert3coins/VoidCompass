@@ -160,6 +160,42 @@ body {
 .hud[data-motion="carrier_arrival"] .state-vehicle img {
   animation: vehicle-arrival calc(1.05s * var(--motion-scale)) ease-in-out infinite;
 }
+.hud[data-motion="fsd_cooldown"] .state-vehicle img {
+  animation: vehicle-cooldown calc(1.55s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="local_arrival"] .state-vehicle img {
+  animation: vehicle-arrival calc(1.42s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="phenomena"] .state-vehicle img {
+  animation: vehicle-phenomena calc(2.6s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="srv_threat"] .state-vehicle img,
+.hud[data-motion="capital_contact"] .state-vehicle img,
+.hud[data-motion="unknown_contact"] .state-vehicle img,
+.hud[data-motion="heavy_combat"] .state-vehicle img {
+  animation: vehicle-threat calc(.78s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="docking_assist"] .state-vehicle img {
+  animation: vehicle-approach calc(1.34s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="settlement_area"] .state-vehicle img {
+  animation: vehicle-hold calc(1.95s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="left_panel"] .state-vehicle img {
+  animation: vehicle-panel-left calc(1.62s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="right_panel"] .state-vehicle img {
+  animation: vehicle-panel-right calc(1.62s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="comms_panel"] .state-vehicle img {
+  animation: vehicle-comms calc(1.34s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="role_panel"] .state-vehicle img {
+  animation: vehicle-role-panel calc(1.78s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="station_services"] .state-vehicle img {
+  animation: vehicle-services calc(2.05s * var(--motion-scale)) ease-in-out infinite;
+}
 .hud[data-motion="orbital_approach"] .state-vehicle img,
 .hud[data-motion="surface_approach"] .state-vehicle img {
   animation: vehicle-approach calc(1.28s * var(--motion-scale)) ease-in-out infinite;
@@ -291,10 +327,18 @@ body {
 /* Canvas owns the state language; CSS keeps only the live label crisp. */
 .hud[data-motion="fsd_charge"] .core-pulse,
 .hud[data-motion="supercruise_overcharge"] .core-pulse { animation-duration: calc(.74s * var(--motion-scale)); opacity: .58; }
-.hud[data-motion="combat"] .state-core strong { animation: threat calc(1s * var(--motion-scale)) steps(2,end) infinite; }
+.hud[data-motion="combat"] .state-core strong,
+.hud[data-motion="srv_threat"] .state-core strong,
+.hud[data-motion="capital_contact"] .state-core strong,
+.hud[data-motion="unknown_contact"] .state-core strong,
+.hud[data-motion="heavy_combat"] .state-core strong {
+  animation: threat calc(1s * var(--motion-scale)) steps(2,end) infinite;
+}
 .hud.state-changing .state-core strong { animation: state-label-resolve .58s cubic-bezier(.2,.75,.2,1) 1; }
 .hud[data-motion="arrival"] .core-pulse,
-.hud[data-motion="carrier_arrival"] .core-pulse { background: color-mix(in srgb, var(--green) 35%, transparent); }
+.hud[data-motion="carrier_arrival"] .core-pulse,
+.hud[data-motion="local_arrival"] .core-pulse,
+.hud[data-motion="phenomena"] .core-pulse { background: color-mix(in srgb, var(--green) 35%, transparent); }
 .hud.reduced-motion *, .hud.reduced-motion *::before, .hud.reduced-motion *::after { animation: none !important; transition-duration: 0s !important; }
 
 @keyframes route-flow { 0% { left: 0; opacity: 0; } 16% { opacity: 1; } 84% { opacity: 1; } 100% { left: calc(100% - 12px); opacity: 0; } }
@@ -308,6 +352,38 @@ body {
 @keyframes vehicle-arrival {
   0%, 100% { transform: translateX(1.2px) scaleX(1.012); }
   50% { transform: translateX(0) scaleX(1); filter: saturate(1.08) brightness(1.52) contrast(1.22) drop-shadow(0 0 7px color-mix(in srgb, var(--state) 78%, transparent)); }
+}
+@keyframes vehicle-cooldown {
+  0%, 100% { transform: scale(.995); filter: saturate(.88) brightness(1.34) contrast(1.2) drop-shadow(0 0 3px color-mix(in srgb, var(--state) 44%, transparent)); }
+  50% { transform: scale(1.004); filter: saturate(1) brightness(1.48) contrast(1.22) drop-shadow(0 0 7px color-mix(in srgb, var(--state) 70%, transparent)); }
+}
+@keyframes vehicle-phenomena {
+  0%, 100% { transform: translateY(.4px) scale(.99); filter: saturate(.96) brightness(1.4) contrast(1.2) drop-shadow(-2px 0 5px color-mix(in srgb, var(--state) 56%, transparent)); }
+  50% { transform: translateY(-.4px) scale(1.008); filter: saturate(1.1) brightness(1.52) contrast(1.23) drop-shadow(2px 0 8px color-mix(in srgb, var(--state) 78%, transparent)); }
+}
+@keyframes vehicle-threat {
+  0%, 100% { transform: translateX(-.6px); filter: saturate(1.02) brightness(1.4) contrast(1.25) drop-shadow(-2px 0 5px color-mix(in srgb, var(--state) 58%, transparent)); }
+  50% { transform: translateX(.8px) scale(1.006); filter: saturate(1.12) brightness(1.56) contrast(1.28) drop-shadow(2px 0 8px color-mix(in srgb, var(--state) 82%, transparent)); }
+}
+@keyframes vehicle-panel-left {
+  0%, 100% { transform: translateX(-1.2px); filter: saturate(.96) brightness(1.4) contrast(1.2) drop-shadow(-3px 0 6px color-mix(in srgb, var(--state) 62%, transparent)); }
+  50% { transform: translateX(.4px); filter: saturate(1.04) brightness(1.5) contrast(1.23) drop-shadow(1px 0 7px color-mix(in srgb, var(--state) 76%, transparent)); }
+}
+@keyframes vehicle-panel-right {
+  0%, 100% { transform: translateX(1.2px); filter: saturate(.96) brightness(1.4) contrast(1.2) drop-shadow(3px 0 6px color-mix(in srgb, var(--state) 62%, transparent)); }
+  50% { transform: translateX(-.4px); filter: saturate(1.04) brightness(1.5) contrast(1.23) drop-shadow(-1px 0 7px color-mix(in srgb, var(--state) 76%, transparent)); }
+}
+@keyframes vehicle-comms {
+  0%, 100% { transform: scale(.995); filter: saturate(.94) brightness(1.38) contrast(1.2) drop-shadow(0 0 4px color-mix(in srgb, var(--state) 52%, transparent)); }
+  50% { transform: scale(1.006); filter: saturate(1.06) brightness(1.52) contrast(1.24) drop-shadow(0 0 8px color-mix(in srgb, var(--state) 78%, transparent)); }
+}
+@keyframes vehicle-role-panel {
+  0%, 100% { transform: translateY(1px); filter: saturate(.96) brightness(1.4) contrast(1.2) drop-shadow(0 3px 5px color-mix(in srgb, var(--state) 55%, transparent)); }
+  50% { transform: translateY(-.4px); filter: saturate(1.04) brightness(1.5) contrast(1.23) drop-shadow(0 -1px 7px color-mix(in srgb, var(--state) 74%, transparent)); }
+}
+@keyframes vehicle-services {
+  0%, 100% { transform: scale(.99); filter: saturate(.9) brightness(1.38) contrast(1.2) drop-shadow(0 0 4px color-mix(in srgb, var(--state) 48%, transparent)); }
+  50% { transform: scale(1.004); filter: saturate(1.02) brightness(1.5) contrast(1.22) drop-shadow(0 0 7px color-mix(in srgb, var(--state) 72%, transparent)); }
 }
 @keyframes vehicle-approach { 50% { transform: translateY(1px) scale(1.012); filter: saturate(1.04) brightness(1.46) contrast(1.22) drop-shadow(0 -2px 6px color-mix(in srgb, var(--state) 65%, transparent)); } }
 @keyframes vehicle-glide { 50% { transform: translateY(1.3px) rotate(.25deg) scaleX(1.015); filter: saturate(1.04) brightness(1.5) contrast(1.24) drop-shadow(0 -3px 7px color-mix(in srgb, var(--state) 72%, transparent)); } }
