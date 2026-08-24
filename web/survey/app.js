@@ -130,6 +130,18 @@
     const badges = node("span", "badges");
     if (bio) badges.appendChild(node("b", "badge bio", `BIO ${done}/${bio}`));
     if (geo) badges.appendChild(node("b", "badge geo", `GEO ${geo}`));
+    const landableKnown = Object.prototype.hasOwnProperty.call(row, "landable_known")
+      ? row.landable_known === true
+      : Object.prototype.hasOwnProperty.call(row, "landable") && row.landable !== null;
+    if (landableKnown) {
+      const landable = Boolean(row.landable);
+      const badge = node(
+        "b", `badge ${landable ? "landable" : "non-landable"}`,
+        landable ? "LAND" : "NO LAND",
+      );
+      badge.title = landable ? "Landable surface" : "Not landable";
+      badges.appendChild(badge);
+    }
     if (row.needs_dss) badges.appendChild(node("b", "badge dss", "DSS"));
     if (complete && value) badges.appendChild(node("b", "badge", `BASE ${value}`));
     head.appendChild(badges); card.appendChild(head);
@@ -250,6 +262,8 @@
         min_value: model.min_value,
         max_value: model.max_value,
         notable: model.notable,
+        landable_known: Object.prototype.hasOwnProperty.call(body, "landable")
+          && body.landable !== null,
       };
       if (rows.length || safeNumber(body.geo_count) || model.notable) {
         dom.content.appendChild(targetCard(projected));

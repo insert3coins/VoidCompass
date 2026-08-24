@@ -41,6 +41,7 @@ let renderer;
 let scene;
 let camera;
 let controls;
+let viewportResizeObserver;
 let regions;
 let snapshot;
 let activeProfile = null;
@@ -233,6 +234,10 @@ function initialiseThree() {
   renderer.domElement.addEventListener('pointerleave', hideTooltip);
   renderer.domElement.addEventListener('contextmenu', onContextMenu);
   window.addEventListener('resize', onResize);
+  if (typeof ResizeObserver === 'function') {
+    viewportResizeObserver = new ResizeObserver(() => onResize());
+    viewportResizeObserver.observe(dom.viewport);
+  }
 }
 
 function seededRandom(seed) {
@@ -1521,10 +1526,12 @@ function bindInterface() {
 
 function onResize() {
   if (!renderer || !camera) return;
-  camera.aspect = innerWidth / innerHeight;
+  const width = Math.max(1, dom.viewport?.clientWidth || innerWidth);
+  const height = Math.max(1, dom.viewport?.clientHeight || innerHeight);
+  camera.aspect = width / height;
   camera.updateProjectionMatrix();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
-  renderer.setSize(innerWidth, innerHeight);
+  renderer.setSize(width, height, false);
   updateRouteOverlay(performance.now(), true);
 }
 

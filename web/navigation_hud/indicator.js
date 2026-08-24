@@ -555,14 +555,66 @@
     }
 
     drawExploration(g, state, p, alpha) {
-      this.drawFlight(g, state, p * .64, alpha * .72, "flight");
       const c = state.color, y = g.y;
-      for (let i = 0; i < 8; i += 1) {
-        const point = this.trackPoint((i + .45) / 8, g, y + (hash(i) - .5) * 14);
-        const blink = .32 + .56 * wave(p + hash(i + 12));
-        this.dot(point.x, point.y, i % 3 === 0 ? 1.25 : .75, c, alpha * blink);
+      const span = Math.max(24, g.right - g.left);
+      const cx = (g.left + g.right) / 2;
+
+      // Long-range discovery scope. Every moving contact fades fully at its
+      // wrap point, and every oscillator completes an integer cycle, making
+      // frame 1 meet frame 0 without the old visible snap-back.
+      this.line(g.left + 2, y, g.right - 2, y, c, alpha * .2, 1);
+      this.line(g.left + 4, y - 10, cx, y - 2, c, alpha * .22, 1);
+      this.line(g.left + 4, y + 10, cx, y + 2, c, alpha * .22, 1);
+      this.line(g.right - 4, y - 10, cx, y - 2, c, alpha * .22, 1);
+      this.line(g.right - 4, y + 10, cx, y + 2, c, alpha * .22, 1);
+
+      // Four expanding range gates provide forward depth. A sine envelope
+      // hides each gate exactly as it returns from the far edge.
+      for (let gate = 0; gate < 4; gate += 1) {
+        const progress = (p + gate / 4) % 1;
+        const fade = Math.sin(progress * Math.PI);
+        const x = g.left + 4 + (span - 8) * progress;
+        const halfHeight = 2.5 + progress * 8;
+        this.path([
+          [x - 2.5, y - halfHeight], [x, y - halfHeight - 1.5],
+          [x + 2.5, y - halfHeight],
+        ], c, alpha * fade * .42, 1);
+        this.path([
+          [x - 2.5, y + halfHeight], [x, y + halfHeight + 1.5],
+          [x + 2.5, y + halfHeight],
+        ], c, alpha * fade * .42, 1);
       }
-      this.trackStroke((p * .5 + .1) % 1, .08, g, y, c, alpha * .7, 1);
+
+      // Deterministic stellar contacts sit in the scope instead of sparkling
+      // randomly. Their phase-offset pulses and constellation traces make the
+      // field resolve progressively through the full discovery cycle.
+      const contacts = [];
+      for (let index = 0; index < 9; index += 1) {
+        const x = g.left + 8 + hash(index + 41) * (span - 16);
+        const py = y + (hash(index + 79) - .5) * 16;
+        const signal = .2 + .72 * wave(p + hash(index + 113));
+        contacts.push([x, py, signal]);
+        this.dot(x, py, index % 4 === 0 ? 1.35 : .78, c, alpha * signal);
+        if (index % 4 === 0) {
+          this.arc(x, py, 3.2, 2.2, 0, TAU, c, alpha * signal * .36, 1);
+        }
+      }
+      for (const [from, to, phase] of [[0, 3, .03], [3, 6, .31], [6, 8, .58], [2, 5, .79]]) {
+        const resolve = Math.pow(wave(p + phase), 2);
+        this.line(contacts[from][0], contacts[from][1], contacts[to][0], contacts[to][1],
+          c, alpha * resolve * .2, 1);
+      }
+
+      // The central discovery reticle makes one complete revolution while a
+      // smooth sinusoidal sensor beam searches the field and returns without
+      // changing direction abruptly at the loop boundary.
+      this.angularRing(cx, y, 10.5, 7, 6, c,
+        alpha * (.34 + .28 * wave(p)), 1.1, p * TAU);
+      this.dot(cx, y, 1.1, c, alpha * (.58 + .34 * wave(p * 2)));
+      const sweepX = cx + Math.sin(p * TAU) * span * .39;
+      const sweepFade = .3 + .55 * Math.abs(Math.cos(p * TAU));
+      this.line(sweepX, y - 10, sweepX, y + 10, c, alpha * sweepFade, 1.15);
+      this.line(sweepX - 5, y, sweepX + 5, y, c, alpha * sweepFade * .65, 1);
     }
 
     drawSupercruise(g, state, p, alpha, overcharge = false) {
