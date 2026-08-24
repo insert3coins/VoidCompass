@@ -37,6 +37,7 @@
     document.documentElement.style.setProperty(
       "--scale", String(Math.max(.75, Math.min(2, number(effects.text_scale, 1)))),
     );
+    document.body.style.opacity = String(Math.max(.4, Math.min(1, number(effects.opacity, 1))));
     root.classList.toggle("no-crt", !effects.crt);
     root.classList.toggle("reduced-motion", Boolean(effects.reduced_motion));
   }

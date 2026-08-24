@@ -6,7 +6,7 @@ import json
 import logging
 import os
 
-from html_overlay_runtime import HtmlOverlaySurface
+from html_overlay_runtime import HtmlOverlaySurface, overlay_opacity_ratio
 
 
 def _safe_int(value, default=0):
@@ -122,6 +122,7 @@ class HtmlSurveyOverlayBridge:
                 "crt": bool(self.config.get("hud_crt_enabled", True)),
                 "reduced_motion": bool(self.config.get("reduced_motion_enabled", False)),
                 "text_scale": text_scale,
+                "opacity": overlay_opacity_ratio(self.config),
             },
             "window": self._window_payload(),
         }
@@ -135,6 +136,7 @@ class HtmlSurveyOverlayBridge:
             palette,
             tuple(sorted(window.items())),
             self.config.get("overlay_text_scale_percent"),
+            self.config.get("overlay_opacity_percent", 100),
             bool(self.config.get("hud_crt_enabled", True)),
             bool(self.config.get("reduced_motion_enabled", False)),
         )

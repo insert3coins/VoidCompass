@@ -461,6 +461,9 @@ body.atlas-focus .atlas-frame { pointer-events: auto; }
 .studio-field input { width: 88px; text-align: right; }
 .studio-field select { width: 125px; }
 .studio-field div > b { min-width: 38px; height: 35px; display: grid; place-items: center; border: 1px solid var(--border); border-left: 0; color: var(--dim); background: var(--panel-raised); font: 9px Consolas,monospace; }
+.studio-opacity-field > div { min-width: 195px; }
+.studio-opacity-field input[type="range"] { width: 150px; padding: 0 7px; accent-color: var(--accent); cursor: ew-resize; }
+.studio-opacity-field div > b { min-width: 47px; }
 .studio-field input:disabled { opacity: .42; }
 .studio-options-footer { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 13px; padding: 0 16px; border: 1px solid var(--border-soft); background: var(--panel); }
 .studio-options-footer span { color: var(--muted); font: 10px Consolas,monospace; }

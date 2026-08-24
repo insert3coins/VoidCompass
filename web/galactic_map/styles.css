@@ -391,7 +391,16 @@ input[type="range"] { accent-color: var(--accent); height: 18px; padding: 0; bor
 .route-state span { display: block; color: var(--orange); font: 700 10px var(--mono); }
 .route-state small { color: var(--dim); font: 700 8px var(--mono); }
 
-.map-label-layer { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+.map-label-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  pointer-events: none;
+  overflow: hidden;
+  contain: layout paint;
+}
 .region-label {
   position: absolute;
   transform: translate(-50%, -50%);

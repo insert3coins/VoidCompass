@@ -1,22 +1,14 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.0 // Stellar Cartography
+## v5.4.1 // Overlay & Atlas Stability
 **Release Date:** 2026-Aug-24
 
-*   Added a live, theme-aware System Orrery to Explore & Survey. It reconstructs parent relationships, stars, planets, moons, rings and measured orbit shapes from current journal scans while remaining explicitly schematic when Elite does not report a live astronomical position; an in-system body selected in Elite now gains a live reticle, automatic detail focus and a Ground handoff.
-*   Added the profile-aware Exploration Survey Queue with explainable value, biology, geology, landability and distance priorities plus commander Pin, Skip, Complete and Reset controls retained independently for each system; Elite's current body target is promoted and clearly marked without confusing station or next-system destinations for planets.
-*   Expanded Ground & Exobiology into a Planetary Field Map for touchdown, ship return, biological samples, species colony-distance rings, Codex evidence and removable commander field markers; it uses the existing live tangent-plane solution and never invents terrain.
-*   Added Expedition Replay to Captain's Log with a time scrubber, animated current position, discovery and screenshot markers, per-session selection and dependency-free standalone interactive HTML export.
-*   Added the Explorer Science Lab to Analytics, correlating retained body, stellar, atmosphere, gravity and journal-confirmed organic evidence without an online account or remote science database.
-*   Added a complete 42-region Galactic Passport with profile-local visits, systems, distance, FSS, DSS, biology, Codex and latest-system evidence linked back to the Galactic Atlas.
-*   Kept the new cartography models bounded and on-demand: heavyweight science/passport queries are cached only while Analytics is visible, replay history is capped, live system views remain small, and profile changes reset every presentation selection safely.
-*   Rebuilt the Navigation HUD's auxiliary-vehicle states instead of reusing generic road and ship motion: Scarab now has survey suspension, terrain and analysis sweeps; Scorpion has armoured suspension and turret telemetry; Nomad has low-altitude hover and thrust-vector symbology; fighters use a fast intercept corridor and target lock. Persistent labels and deploy/recovery transitions retain the actual vehicle identity, while vehicle portraits now resolve through a synchronized crossfade/slide handoff instead of swapping instantly.
-*   Rebuilt the Navigation HUD's Exploration state as a seamless long-range discovery scope with fading depth gates, deterministic stellar contacts, resolving constellation traces and a full-cycle sensor reticle, removing the visible animation reset from the earlier fractional loop.
-*   Added compact journal-confirmed `LAND` and `NO LAND` markers to Survey Operations body rows and the focused surface workboard, while leaving signal-only bodies unlabelled until their detailed Scan record establishes landability.
-*   Repaired Galactic Atlas Focus Map mode so its iframe owns the complete dashboard viewport instead of collapsing into the removed header row; the embedded renderer now observes its actual viewport, refreshes its camera projection and preserves the full interactive drag surface while focusing or docking.
+*   Stabilised HTML overlay transparency across hide/show cycles by preserving the existing native frame when its style is unchanged and restoring WebView2's transparent composition surface before and after each reveal; Overlay Studio now adds a profile-aware 40–100% opacity control shared by every cockpit surface.
+*   Corrected the remaining Galactic Atlas Focus Map area mismatch by making WebGL, region and cluster labels, route paths, picking and scale instruments share one measured viewport; a settled-layout focus/dock handshake now keeps every map layer clipped and aligned after either size change.
 
 ## Earlier releases
 
+*   **v5.4.0** — Added Stellar Cartography with the live System Orrery, Exploration Survey Queue, Planetary Field Map, Expedition Replay, Explorer Science Lab and 42-region Galactic Passport; refined Navigation's vehicle and exploration states, added Survey Operations landability markers and repaired the initial Focus Map layout.
 *   **v5.3.9.3** — Completed the visible HTML overlay conversion, rebuilt Overlay Studio dragging, refined Navigation flight effects, retired obsolete speech/career/Tk code, restored Planet Waypoint lifecycle and repaired HTML hotkey recording.
 *   **v5.3.9.2** — Converted cockpit notifications and achievement unlocks to semantic HTML, prevented empty Survey Operations startup flashes and restored its planet-side focus lifecycle.
 *   **v5.3.9.1** — Rebuilt the Navigation State Spine with a complete ship/vehicle identity catalogue, state-specific 30 FPS motion, readable biological workboards and restart-safe surface context.

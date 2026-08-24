@@ -42,6 +42,9 @@ let scene;
 let camera;
 let controls;
 let viewportResizeObserver;
+let viewportResizeFrame = 0;
+let viewportWidth = 1;
+let viewportHeight = 1;
 let regions;
 let snapshot;
 let activeProfile = null;
@@ -89,6 +92,28 @@ function setLoading(message, failed = false) {
 function number(value, digits = 0) {
   return Number(value || 0).toLocaleString(undefined, {
     maximumFractionDigits: digits, minimumFractionDigits: digits,
+  });
+}
+
+function measureViewport() {
+  const rect = dom.viewport?.getBoundingClientRect();
+  viewportWidth = Math.max(1, Math.round(rect?.width || dom.viewport?.clientWidth || window.innerWidth || 1));
+  viewportHeight = Math.max(1, Math.round(rect?.height || dom.viewport?.clientHeight || window.innerHeight || 1));
+  return {width: viewportWidth, height: viewportHeight};
+}
+
+function viewportMetrics() {
+  return {
+    width: viewportWidth,
+    height: viewportHeight,
+  };
+}
+
+function scheduleViewportResize() {
+  if (viewportResizeFrame) cancelAnimationFrame(viewportResizeFrame);
+  viewportResizeFrame = requestAnimationFrame(() => {
+    viewportResizeFrame = 0;
+    onResize();
   });
 }
 
@@ -177,9 +202,10 @@ function clearGroup(group) {
 }
 
 function initialiseThree() {
+  const viewport = measureViewport();
   scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2('#070b10', 0.0000075);
-  camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 2, 600000);
+  camera = new THREE.PerspectiveCamera(46, viewport.width / viewport.height, 2, 600000);
   camera.position.copy(GALACTIC_CENTRE).add(
     DEFAULT_TILT_DIRECTION.clone().multiplyScalar(132000),
   );
@@ -188,7 +214,7 @@ function initialiseThree() {
     preserveDrawingBuffer: captureMode,
   });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
-  renderer.setSize(innerWidth, innerHeight);
+  renderer.setSize(viewport.width, viewport.height, false);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setClearColor('#070b10', 1);
   renderer.domElement.tabIndex = 0;
@@ -233,9 +259,14 @@ function initialiseThree() {
   renderer.domElement.addEventListener('pointermove', onPointerMove);
   renderer.domElement.addEventListener('pointerleave', hideTooltip);
   renderer.domElement.addEventListener('contextmenu', onContextMenu);
-  window.addEventListener('resize', onResize);
+  window.addEventListener('resize', scheduleViewportResize);
+  window.addEventListener('message', (event) => {
+    if (event.source === window.parent && event.data?.type === 'voidcompass-atlas-viewport') {
+      scheduleViewportResize();
+    }
+  });
   if (typeof ResizeObserver === 'function') {
-    viewportResizeObserver = new ResizeObserver(() => onResize());
+    viewportResizeObserver = new ResizeObserver(() => scheduleViewportResize());
     viewportResizeObserver.observe(dom.viewport);
   }
 }
@@ -802,8 +833,7 @@ function pointOnPath(path, fraction) {
 
 function updateLabels() {
   if (!camera) return;
-  const width = innerWidth;
-  const height = innerHeight;
+  const {width, height} = viewportMetrics();
   const currentRegionId = snapshot?.current?.region?.id;
   const occupied = [];
   const labels = [...dom['region-labels'].children].sort((a, b) => {
@@ -846,6 +876,7 @@ function updateLabels() {
 
 function svgPathForVectors(vectors, maximumPoints = 750) {
   if (!camera || vectors.length < 2) return '';
+  const {width, height} = viewportMetrics();
   const step = Math.max(1, Math.ceil(vectors.length / maximumPoints));
   const selected = [];
   for (let index = 0; index < vectors.length; index += step) selected.push(vectors[index]);
@@ -858,8 +889,8 @@ function svgPathForVectors(vectors, maximumPoints = 750) {
       drawing = false;
       continue;
     }
-    const x = (projected.x * .5 + .5) * innerWidth;
-    const y = (-projected.y * .5 + .5) * innerHeight;
+    const x = (projected.x * .5 + .5) * width;
+    const y = (-projected.y * .5 + .5) * height;
     output += `${drawing ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`;
     drawing = true;
   }
@@ -869,7 +900,8 @@ function svgPathForVectors(vectors, maximumPoints = 750) {
 function updateRouteOverlay(now, force = false) {
   if (!camera || (!force && now - lastRouteOverlayFrame < 66)) return;
   lastRouteOverlayFrame = now;
-  dom['route-overlay'].setAttribute('viewBox', `0 0 ${innerWidth} ${innerHeight}`);
+  const {width, height} = viewportMetrics();
+  dom['route-overlay'].setAttribute('viewBox', `0 0 ${width} ${height}`);
   const travelPath = viewState.layers.Travel === false
     ? '' : svgPathForVectors(routeVectors);
   dom['travel-overlay-halo'].setAttribute('d', travelPath);
@@ -894,9 +926,10 @@ function niceScaleDistance(value) {
 
 function updateAtlasInstruments() {
   if (!camera || !controls) return;
+  const {height} = viewportMetrics();
   const distance = camera.position.distanceTo(controls.target);
   const verticalField = 2 * distance * Math.tan(THREE.MathUtils.degToRad(camera.fov * .5));
-  const worldPerPixel = verticalField / Math.max(1, innerHeight);
+  const worldPerPixel = verticalField / height;
   const scaleDistance = niceScaleDistance(worldPerPixel * 105);
   const scalePixels = Math.max(42, Math.min(118, scaleDistance / worldPerPixel));
   dom['scale-line'].style.width = `${scalePixels.toFixed(1)}px`;
@@ -1220,11 +1253,14 @@ function focusRecord(record) {
 }
 
 function screenPoint(vector) {
+  const {width, height} = viewportMetrics();
   const projected = vector.clone().project(camera);
   return {
-    x: (projected.x * .5 + .5) * innerWidth,
-    y: (-projected.y * .5 + .5) * innerHeight,
-    visible: projected.z > -1 && projected.z < 1,
+    x: (projected.x * .5 + .5) * width,
+    y: (-projected.y * .5 + .5) * height,
+    visible: projected.z > -1 && projected.z < 1
+      && projected.x > -1 && projected.x < 1
+      && projected.y > -1 && projected.y < 1,
   };
 }
 
@@ -1247,7 +1283,8 @@ function pickAt(clientX, clientY, maxDistance = 14) {
 }
 
 function planePositionAt(clientX, clientY) {
-  const ndc = new THREE.Vector2(clientX / innerWidth * 2 - 1, -(clientY / innerHeight) * 2 + 1);
+  const {width, height} = viewportMetrics();
+  const ndc = new THREE.Vector2(clientX / width * 2 - 1, -(clientY / height) * 2 + 1);
   const ray = new THREE.Raycaster();
   ray.setFromCamera(ndc, camera);
   const result = new THREE.Vector3();
@@ -1299,9 +1336,10 @@ function onPointerMove(event) {
     hoverFrame = null;
     const record = pickAt(event.clientX, event.clientY, 10);
     if (!record) return hideTooltip();
+    const {width, height} = viewportMetrics();
     dom.tooltip.textContent = [record.subject || record.kind, record.system].filter(Boolean).join(' // ');
-    dom.tooltip.style.left = `${Math.min(innerWidth - 290, event.clientX + 13)}px`;
-    dom.tooltip.style.top = `${Math.min(innerHeight - 45, event.clientY + 13)}px`;
+    dom.tooltip.style.left = `${Math.max(4, Math.min(width - 290, event.clientX + 13))}px`;
+    dom.tooltip.style.top = `${Math.max(4, Math.min(height - 45, event.clientY + 13))}px`;
     dom.tooltip.hidden = false;
   });
 }
@@ -1338,8 +1376,9 @@ function onContextMenu(event) {
   }
   if (position) addAction('ADD ANNOTATION HERE', () => openAnnotation(position, null, record?.system));
   if (record) addAction('INSPECT MAP RECORD', () => inspect(record));
-  dom['context-menu'].style.left = `${Math.min(innerWidth - 205, event.clientX)}px`;
-  dom['context-menu'].style.top = `${Math.min(innerHeight - 130, event.clientY)}px`;
+  const {width, height} = viewportMetrics();
+  dom['context-menu'].style.left = `${Math.max(4, Math.min(width - 205, event.clientX))}px`;
+  dom['context-menu'].style.top = `${Math.max(4, Math.min(height - 130, event.clientY))}px`;
   dom['context-menu'].hidden = false;
 }
 
@@ -1526,12 +1565,13 @@ function bindInterface() {
 
 function onResize() {
   if (!renderer || !camera) return;
-  const width = Math.max(1, dom.viewport?.clientWidth || innerWidth);
-  const height = Math.max(1, dom.viewport?.clientHeight || innerHeight);
+  const {width, height} = measureViewport();
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
   renderer.setSize(width, height, false);
+  dom['route-overlay'].setAttribute('viewBox', `0 0 ${width} ${height}`);
+  updateLabels();
   updateRouteOverlay(performance.now(), true);
 }
 
