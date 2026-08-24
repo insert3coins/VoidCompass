@@ -1,13 +1,14 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.1 // Overlay & Atlas Stability
+## v5.4.1.1 // Navigation State Refinement
 **Release Date:** 2026-Aug-24
 
-*   Stabilised HTML overlay transparency across hide/show cycles by preserving the existing native frame when its style is unchanged and restoring WebView2's transparent composition surface before and after each reveal; Overlay Studio now adds a profile-aware 40–100% opacity control shared by every cockpit surface.
-*   Corrected the remaining Galactic Atlas Focus Map area mismatch by making WebGL, region and cluster labels, route paths, picking and scale instruments share one measured viewport; a settled-layout focus/dock handshake now keeps every map layer clipped and aligned after either size change.
+*   Rebuilt the Navigation HUD's arrival and planetary-flight states with distinct witch-space acquisition, orbital approach/departure, glide, low-altitude, hold and landed instruments driven by live altitude, vertical-speed and gravity context.
+*   Added immediate landing-gear deploy/retract pulses from Elite's live `Status.json` flag, plus dedicated Galaxy Map galactic-route resolution and System Map orbital-body acquisition animations with smooth state handoffs.
 
 ## Earlier releases
 
+*   **v5.4.1** — Stabilised HTML overlay transparency and profile-aware opacity across hide/show cycles, and corrected the Galactic Atlas Focus Map viewport so every WebGL and overlay layer stays clipped and aligned.
 *   **v5.4.0** — Added Stellar Cartography with the live System Orrery, Exploration Survey Queue, Planetary Field Map, Expedition Replay, Explorer Science Lab and 42-region Galactic Passport; refined Navigation's vehicle and exploration states, added Survey Operations landability markers and repaired the initial Focus Map layout.
 *   **v5.3.9.3** — Completed the visible HTML overlay conversion, rebuilt Overlay Studio dragging, refined Navigation flight effects, retired obsolete speech/career/Tk code, restored Planet Waypoint lifecycle and repaired HTML hotkey recording.
 *   **v5.3.9.2** — Converted cockpit notifications and achievement unlocks to semantic HTML, prevented empty Survey Operations startup flashes and restored its planet-side focus lifecycle.
