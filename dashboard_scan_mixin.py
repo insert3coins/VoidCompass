@@ -76,9 +76,10 @@ class DashboardScanMixin:
             self.current_in_srv = True
             vehicle = str(self.current_vehicle_name or "").upper()
             previous = str(self._last_surface_vehicle_name or "").upper()
+            surface_vehicles = {"NOMAD", "SCARAB", "SCORPION", "RHINO", "SRV"}
             self.current_vehicle_name = (
-                vehicle if vehicle in ("NOMAD", "SRV")
-                else previous if previous in ("NOMAD", "SRV")
+                vehicle if vehicle in surface_vehicles
+                else previous if previous in surface_vehicles
                 else "SRV"
             )
         elif destination == "mothership":

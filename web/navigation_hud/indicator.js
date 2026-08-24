@@ -68,6 +68,7 @@
       return {
         motion: String(next.motion || "flight"),
         label: String(next.label || "FLIGHT").toUpperCase(),
+        vehicleKey: String(next.vehicleKey || "").toLowerCase(),
         color: /^#[0-9a-f]{6}$/i.test(String(next.color || ""))
           ? String(next.color) : "#607584",
         energy: clamp(Number(next.energy || 1), .55, 1.6),
@@ -113,7 +114,8 @@
         this.state = incoming;
         this.stateStarted = now;
         this.receivedModel = true;
-      } else if (incoming.motion !== this.state.motion || incoming.label !== this.state.label) {
+      } else if (incoming.motion !== this.state.motion || incoming.label !== this.state.label
+          || incoming.vehicleKey !== this.state.vehicleKey) {
         this.previous = {...this.state};
         this.state = incoming;
         this.stateStarted = now;
@@ -140,7 +142,11 @@
         "GALAXY MAP": "galaxy_map", "SYSTEM MAP": "system_map",
         "POWER MAP": "power_map", ORRERY: "orrery", CODEX: "codex",
       })[label] || "map";
-      if (motion === "surface_vehicle") return label === "NOMAD" ? "nomad" : "srv";
+      if (motion === "surface_vehicle") {
+        if (label === "NOMAD" || state?.vehicleKey === "nomad") return "nomad";
+        if (state?.vehicleKey === "scorpion") return "scorpion";
+        return "srv";
+      }
       if (motion === "fsd_charge") return label === "HYPER CHARGE" ? "hyper_charge" : "fsd_charge";
       if (motion === "jump") return label === "JUMPING" ? "jumping" : "hyperspace";
       if (motion === "arrival" && label === "INTERDICTION EVADED") return "interdiction_evaded";
@@ -155,9 +161,10 @@
         return "combat";
       }
       if (motion.startsWith("vehicle_")) {
-        const vehicle = label.includes("NOMAD") ? "nomad"
-          : label.includes("FIGHTER") ? "fighter"
-            : label.includes("SRV") ? "srv"
+        const vehicle = label.includes("NOMAD") || state?.vehicleKey === "nomad" ? "nomad"
+          : label.includes("FIGHTER") || state?.vehicleKey === "fighter" ? "fighter"
+            : label.includes("SCORPION") || state?.vehicleKey === "scorpion" ? "scorpion"
+              : label.includes("SRV") || label.includes("SCARAB") || state?.vehicleKey === "scarab" ? "srv"
               : label.includes("CREW") ? "crew" : "ship";
         return `${motion}_${vehicle}`;
       }
@@ -171,7 +178,7 @@
       const key = this.key(state);
       if (["fsd_charge", "hyper_charge", "hyperspace", "jumping", "arrival",
         "interdiction_evaded", "fsd_cooldown", "supercruise_overcharge"].includes(key)) return "fsd";
-      if (PLANETARY.has(key) || ["landed", "srv", "nomad", "on_foot"].includes(key)) return "surface";
+      if (PLANETARY.has(key) || ["landed", "srv", "scorpion", "nomad", "on_foot"].includes(key)) return "surface";
       if (["fss", "dss", "map", "galaxy_map", "system_map", "power_map",
         "orrery", "codex", "exploration"].includes(key)) return "scope";
       if (["mass_lock", "signal_lock", "signal_drop", "signal_threat", "combat",
@@ -203,7 +210,7 @@
         system_map: 1.86, power_map: 1.7, orrery: 2.5, codex: 1.9,
         orbital_approach: 1.68, glide: .82, surface_approach: 1.38,
         surface_hold: 2.25, surface_departure: 1.28, orbital_departure: 1.55,
-        landed: 2.4, on_foot: 1.32, srv: .9, nomad: .76,
+        landed: 2.4, on_foot: 1.32, srv: 1.18, scorpion: .9, nomad: 1.05,
         asteroid_field: 2.2, mass_lock: 1.12, signal_lock: 1.55,
         signal_drop: .92, signal_threat: .76, combat: .64,
         interdiction: .5, interdicted: .43, docked: 2.3, station: 2.1,
@@ -406,6 +413,49 @@
           const cy = y + (hash(i + 211) - .5) * 12;
           this.dot(cx, cy, i === Math.floor(p * 4) ? 1.5 : .75, c,
             alpha * (i === Math.floor(p * 4) ? .82 : .34));
+        }
+      } else if (key === "srv" || key === "scorpion") {
+        const armoured = key === "scorpion";
+        const terrain = [];
+        for (let i = 0; i <= 14; i += 1) {
+          const progress = i / 14;
+          terrain.push([
+            start + span * progress,
+            y + 7 + Math.sin((progress * 2 + p) * TAU) * (armoured ? 1.4 : 2.1),
+          ]);
+        }
+        this.path(terrain, c, alpha * .48, 1.1);
+        for (const progress of [.26, .5, .74]) {
+          const x = start + span * progress;
+          const angle = (p + progress) * TAU * (armoured ? 1.3 : 1.8);
+          this.arc(x, y + 3, 2.7, 2.7, 0, TAU, c, alpha * .56, 1.1);
+          this.dot(x + Math.cos(angle) * 1.7, y + 3 + Math.sin(angle) * 1.7,
+            .65, c, alpha * .8);
+        }
+        const sweepX = start + span * p;
+        this.line(sweepX, y - 8, sweepX, y + 8, c,
+          alpha * (armoured ? .22 : .48) * Math.sin(p * Math.PI), 1.2);
+      } else if (key === "nomad") {
+        const hover = wave(p) * 1.5;
+        this.line(start, y + 8, end, y + 8, c, alpha * .34, 1);
+        this.path([[start + span * .28, y + 1 - hover], [start + span * .43, y - 4 - hover],
+          [start + span * .68, y - 3 - hover], [start + span * .79, y + 1 - hover]],
+        c, alpha * .7, 1.2);
+        for (const progress of [.38, .63]) {
+          const x = start + span * progress;
+          const length = 3 + 5 * wave(p + progress);
+          this.line(x, y + 1 - hover, x, y + length, c, alpha * .5, 1.2);
+        }
+        this.chevron(point((p * .72 + .1) % 1), y - 7, 1, c, alpha * .58, 2.4);
+      } else if (key === "fighter") {
+        const lockX = start + span * (.58 + Math.sin(p * TAU) * .08);
+        const lockY = y + Math.cos(p * TAU) * 2.5;
+        this.arc(lockX, lockY, 7, 5, -.7, .7, c, alpha * .55, 1.1);
+        this.arc(lockX, lockY, 7, 5, Math.PI - .7, Math.PI + .7, c, alpha * .55, 1.1);
+        for (let i = 0; i < 3; i += 1) {
+          const x = point((p * 1.8 + i / 3) % 1);
+          this.line(Math.max(start, x - 8), y - 6 + i * 5, x, y - 6 + i * 5,
+            c, alpha * (.38 + i * .13), 1.2);
         }
       } else if (family === "surface") {
         const departure = key.includes("departure");
@@ -813,18 +863,139 @@
       }
     }
 
-    drawSurfaceVehicle(g, state, p, alpha, key) {
-      const c = state.color, y = g.y;
-      const fast = key === "nomad";
-      for (const [start, end] of [[g.left + 4, g.centerLeft - 5], [g.centerRight + 5, g.right - 4]]) {
+    drawSRV(g, state, p, alpha, armoured = false) {
+      const c = state.color, y = g.y, d = state.dynamics;
+      const gravityLoad = clamp(d.gravity / 4);
+      const analysis = d.analysisMode && !armoured;
+      for (const [start, end, direction] of [
+        [g.left + 4, g.centerLeft - 5, 1], [g.centerRight + 5, g.right - 4, -1],
+      ]) {
         const width = end - start;
-        this.line(start, y + 6, end, y + 6, c, alpha * .42);
-        for (let i = 0; i < 7; i += 1) {
-          const x = start + ((i / 7 + p * (fast ? 1.6 : 1)) % 1) * width;
-          this.line(x - 3, y + 9, x + 3, y + 3, c, alpha * .62, 1.2);
+        const terrain = [];
+        for (let i = 0; i <= 28; i += 1) {
+          const progress = i / 28;
+          const ripple = Math.sin((progress * 2 + p) * TAU) * 1.4
+            + Math.sin((progress * 5 - p * 1.4) * TAU) * .65;
+          terrain.push([start + width * progress, y + 8 + ripple]);
         }
+        this.path(terrain, c, alpha * .46, 1.1);
+
         const cx = (start + end) / 2;
-        this.path([[cx - 9, y + 3], [cx - 5, y - 4], [cx + 6, y - 4], [cx + 10, y + 3]], c, alpha * .74, 1.2);
+        const suspension = Math.sin(p * TAU * 2) * (armoured ? .35 : .65) + gravityLoad;
+        const chassisY = y + 1 + suspension;
+        const half = armoured ? 13 : 11;
+        this.path([
+          [cx - half, chassisY + 2], [cx - half + 3, chassisY - 4],
+          [cx + half - 4, chassisY - 4], [cx + half, chassisY + 2],
+        ], c, alpha * .82, armoured ? 1.6 : 1.3);
+        this.line(cx - half + 3, chassisY + 3, cx + half - 3, chassisY + 3,
+          c, alpha * .55, 1.1);
+
+        const wheelAngle = p * TAU * (armoured ? 1.45 : 2.1) * direction;
+        for (const offset of [-half + 3, 0, half - 3]) {
+          const wx = cx + offset;
+          const wy = chassisY + 6;
+          this.arc(wx, wy, armoured ? 3.1 : 2.7, armoured ? 3.1 : 2.7,
+            0, TAU, c, alpha * .7, 1.15);
+          this.line(wx, wy, wx + Math.cos(wheelAngle + offset) * 2,
+            wy + Math.sin(wheelAngle + offset) * 2, c, alpha * .64, 1);
+        }
+
+        if (armoured) {
+          const turretDirection = direction * (4 + wave(p) * 4);
+          this.rect(cx - 4, chassisY - 8, 8, 3.5, c, alpha * .7);
+          this.line(cx, chassisY - 7, cx + turretDirection, chassisY - 9,
+            c, alpha * .8, 1.5);
+          for (let i = 0; i < 3; i += 1) {
+            const packet = (p * 1.25 + i / 3) % 1;
+            const x = direction > 0 ? start + width * packet : end - width * packet;
+            this.chevron(x, y - 10, direction, c,
+              alpha * Math.sin(packet * Math.PI) * .48, 2.2);
+          }
+        } else {
+          this.line(cx, chassisY - 4, cx, chassisY - 10, c, alpha * .72, 1.2);
+          this.dot(cx, chassisY - 11, 1.2, c, alpha * (.58 + .3 * wave(p * 1.5)));
+          if (analysis) {
+            const sweep = (p + (direction < 0 ? .5 : 0)) % 1;
+            const x = start + width * sweep;
+            this.line(x, y - 11, x, y + 9, c,
+              alpha * Math.sin(sweep * Math.PI) * .72, 1.25);
+          }
+        }
+      }
+    }
+
+    drawNomad(g, state, p, alpha) {
+      const c = state.color, y = g.y, d = state.dynamics;
+      const vertical = clamp(Math.abs(d.vertical) / 80);
+      for (const [start, end, direction] of [
+        [g.left + 3, g.centerLeft - 5, 1], [g.centerRight + 5, g.right - 3, -1],
+      ]) {
+        const width = end - start;
+        const cx = (start + end) / 2;
+        const hover = 1.2 + wave(p) * (1.3 + vertical * 1.8);
+        this.line(start + 2, y + 10, end - 2, y + 10, c, alpha * .3, 1);
+        for (let i = 0; i < 5; i += 1) {
+          const progress = (p * .72 + i / 5) % 1;
+          const x = start + width * progress;
+          const height = 1 + Math.sin(progress * Math.PI) * 4;
+          this.line(x, y + 10, x + direction * height, y + 8 - height,
+            c, alpha * Math.sin(progress * Math.PI) * .38, 1);
+        }
+
+        const craftY = y - hover;
+        this.path([
+          [cx - 14, craftY + 2], [cx - 9, craftY - 4], [cx - 2, craftY - 6],
+          [cx + 10, craftY - 3], [cx + 15, craftY + 2], [cx + 7, craftY + 4],
+          [cx - 8, craftY + 4], [cx - 14, craftY + 2],
+        ], c, alpha * .86, 1.35, true, .04);
+        for (const offset of [-8, 0, 8]) {
+          const plume = 3 + wave(p + offset * .07) * (4 + vertical * 4);
+          this.line(cx + offset, craftY + 4, cx + offset - direction * .8,
+            craftY + 4 + plume, c, alpha * .5, 1.3);
+        }
+
+        this.path([[start + 3, y - 10], [cx, y - 4], [end - 3, y - 10]],
+          c, alpha * .28, 1);
+        const nav = (p * .58 + .12) % 1;
+        const navX = direction > 0 ? start + width * nav : end - width * nav;
+        this.chevron(navX, y - 9, direction, c,
+          alpha * (.35 + .45 * wave(nav)), 2.6);
+      }
+    }
+
+    drawFighter(g, state, p, alpha) {
+      const c = state.color, y = g.y;
+      for (const [start, end, direction] of [
+        [g.left + 3, g.centerLeft - 5, 1], [g.centerRight + 5, g.right - 3, -1],
+      ]) {
+        const width = end - start;
+        const cx = (start + end) / 2;
+        const lockX = cx + Math.sin(p * TAU) * width * .07;
+        const lockY = y + Math.cos(p * TAU * 2) * 2.5;
+
+        this.line(start, y - 11, cx, lockY - 3, c, alpha * .3, 1);
+        this.line(start, y + 11, cx, lockY + 3, c, alpha * .3, 1);
+        this.line(end, y - 11, cx, lockY - 3, c, alpha * .3, 1);
+        this.line(end, y + 11, cx, lockY + 3, c, alpha * .3, 1);
+        this.arc(lockX, lockY, 8, 6, -.72, .72, c, alpha * .66, 1.2);
+        this.arc(lockX, lockY, 8, 6, Math.PI - .72, Math.PI + .72,
+          c, alpha * .66, 1.2);
+        this.dot(lockX, lockY, .9, c, alpha * (.55 + .35 * wave(p * 2)));
+
+        const bank = Math.sin(p * TAU) * 3.2;
+        this.path([
+          [cx + direction * 9, y + bank], [cx - direction * 6, y - 4 - bank * .25],
+          [cx - direction * 2, y + bank], [cx - direction * 6, y + 4 - bank * .25],
+          [cx + direction * 9, y + bank],
+        ], c, alpha * .9, 1.4);
+        for (let i = 0; i < 4; i += 1) {
+          const progress = (p * 1.75 + i / 4) % 1;
+          const x = direction > 0 ? start + width * progress : end - width * progress;
+          const fade = Math.sin(progress * Math.PI);
+          this.line(x - direction * (3 + progress * 7), y - 8 + i * 5, x,
+            y - 8 + i * 5, c, alpha * fade * .62, 1 + progress * .5);
+        }
       }
     }
 
@@ -858,12 +1029,36 @@
       const deploy = key.startsWith("vehicle_deploy");
       const board = key.startsWith("vehicle_board");
       const travel = board ? 1 - p : p;
-      const vehicle = key.endsWith("fighter") ? "fighter" : key.endsWith("crew") ? "crew" : "ground";
+      const vehicle = key.endsWith("fighter") ? "fighter"
+        : key.endsWith("nomad") ? "nomad"
+          : key.endsWith("scorpion") ? "scorpion"
+          : key.endsWith("crew") ? "crew"
+            : "ground";
       for (const edge of [g.centerLeft, g.centerRight]) {
         this.line(edge, y - 10, edge, y + 10, c, alpha * .58);
       }
       const point = this.trackPoint(travel, g);
       if (vehicle === "fighter") this.ship(point.x, y, c, alpha, .72, deploy ? 1 : -1);
+      else if (vehicle === "nomad") {
+        const direction = deploy ? 1 : -1;
+        this.path([
+          [point.x + 7 * direction, y], [point.x - 4 * direction, y - 4],
+          [point.x - 7 * direction, y + 1], [point.x - 3 * direction, y + 4],
+          [point.x + 7 * direction, y],
+        ], c, alpha, 1.25);
+        this.line(point.x - 2, y + 4, point.x - 2, y + 9,
+          c, alpha * .55, 1.2);
+        this.line(point.x + 2, y + 3, point.x + 2, y + 8,
+          c, alpha * .55, 1.2);
+      }
+      else if (vehicle === "scorpion") {
+        this.rect(point.x - 5, y - 3, 10, 6, c, alpha);
+        this.rect(point.x - 3, y - 6, 6, 2.5, c, alpha * .78);
+        this.line(point.x, y - 5, point.x + (deploy ? 6 : -6), y - 7,
+          c, alpha * .82, 1.3);
+        this.dot(point.x - 3, y + 5, 1.4, c, alpha);
+        this.dot(point.x + 3, y + 5, 1.4, c, alpha);
+      }
       else if (vehicle === "crew") {
         this.dot(point.x - 3, y, 1.4, c, alpha);
         this.dot(point.x + 3, y, 1.4, c, alpha);
@@ -939,9 +1134,10 @@
     drawState(g, state, p, alpha) {
       if (alpha <= .002) return;
       const key = this.key(state);
-      if (key === "flight" || key === "fighter" || key === "multicrew") {
+      if (key === "flight" || key === "multicrew") {
         this.drawFlight(g, state, p, alpha, key); return;
       }
+      if (key === "fighter") { this.drawFighter(g, state, p, alpha); return; }
       if (key === "exploration") { this.drawExploration(g, state, p, alpha); return; }
       if (key === "supercruise") { this.drawSupercruise(g, state, p, alpha); return; }
       if (key === "supercruise_overcharge") { this.drawSupercruise(g, state, p, alpha, true); return; }
@@ -964,9 +1160,10 @@
       if (PLANETARY.has(key) || key === "landed") {
         this.drawPlanet(g, state, p, alpha, key); return;
       }
-      if (key === "srv" || key === "nomad") {
-        this.drawSurfaceVehicle(g, state, p, alpha, key); return;
+      if (key === "srv" || key === "scorpion") {
+        this.drawSRV(g, state, p, alpha, key === "scorpion"); return;
       }
+      if (key === "nomad") { this.drawNomad(g, state, p, alpha); return; }
       if (key === "on_foot") { this.drawOnFoot(g, state, p, alpha); return; }
       if (key === "docked" || key === "station") {
         this.drawDocked(g, state, p, alpha, key === "station"); return;

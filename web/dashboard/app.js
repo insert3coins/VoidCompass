@@ -28,6 +28,11 @@ let studioSearch = "";
 let workspaceFingerprints = {};
 let missionSelectedId = "";
 let hotkeyCaptureAction = "";
+let orrerySelectedBodyId = "";
+let orreryLiveTargetBodyId = "";
+let analyticsView = "trends";
+let replaySelectedSessionIndex = 0;
+let replayTimer = 0;
 
 const HOTKEY_MODIFIER_KEYS = new Set([
   "Alt", "AltGraph", "Control", "Meta", "OS", "Shift",
@@ -735,6 +740,100 @@ function workspaceTable(columns, rows, empty = "No records available.") {
   return `<div class="workspace-table-wrap"><table class="workspace-table"><thead><tr>${columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${columns.map((column) => `<td>${column.render ? column.render(row) : escapeHtml(row[column.key] ?? "—")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 
+function orreryLayout(bodies = []) {
+  if (!bodies.length) return {nodes: [], orbits: []};
+  const nodes = [];
+  const orbits = [];
+  const byId = new Map(bodies.map((row) => [String(row.id), row]));
+  const positions = new Map();
+  const stars = bodies.filter((row) => row.kind === "star");
+  const primaryStars = stars.length ? stars : bodies.slice(0, 1);
+  primaryStars.forEach((row, index) => {
+    const angle = primaryStars.length === 1 ? 0 : index * Math.PI * 2 / primaryStars.length;
+    const radius = primaryStars.length === 1 ? 0 : 36;
+    positions.set(String(row.id), {x: 360 + Math.cos(angle) * radius, y: 250 + Math.sin(angle) * radius});
+  });
+  const rootPlanets = bodies.filter((row) => row.kind !== "star" && (!row.parent_id || byId.get(String(row.parent_id))?.kind === "star"));
+  rootPlanets.sort((a, b) => number(a.semi_major_axis, number(a.distance_ls)) - number(b.semi_major_axis, number(b.distance_ls)) || number(a.body_id) - number(b.body_id));
+  const radialStep = Math.min(33, 184 / Math.max(1, rootPlanets.length));
+  rootPlanets.forEach((row, index) => {
+    const radius = 54 + radialStep * index;
+    const eccentricity = clamp(number(row.eccentricity), 0, .82);
+    const rx = radius * (1 + eccentricity * .22);
+    const ry = radius * (.62 - eccentricity * .12);
+    const angle = ((number(row.body_id, index + 1) * 137.508) % 360) * Math.PI / 180;
+    const x = 360 + Math.cos(angle) * rx;
+    const y = 250 + Math.sin(angle) * ry;
+    positions.set(String(row.id), {x, y});
+    orbits.push({cx: 360, cy: 250, rx, ry, id: row.id});
+  });
+  const pending = bodies.filter((row) => !positions.has(String(row.id)));
+  for (let pass = 0; pass < 4 && pending.length; pass += 1) {
+    for (let index = pending.length - 1; index >= 0; index -= 1) {
+      const row = pending[index];
+      const parent = positions.get(String(row.parent_id));
+      if (!parent) continue;
+      const siblings = bodies.filter((item) => String(item.parent_id) === String(row.parent_id));
+      const siblingIndex = Math.max(0, siblings.findIndex((item) => String(item.id) === String(row.id)));
+      const radius = 14 + siblingIndex * 6;
+      const angle = ((number(row.body_id, siblingIndex + 1) * 111.25) % 360) * Math.PI / 180;
+      positions.set(String(row.id), {x: parent.x + Math.cos(angle) * radius, y: parent.y + Math.sin(angle) * radius});
+      orbits.push({cx: parent.x, cy: parent.y, rx: radius, ry: radius * .7, id: row.id, moon: true});
+      pending.splice(index, 1);
+    }
+  }
+  for (const row of bodies) {
+    const point = positions.get(String(row.id)) || {x: 360, y: 250};
+    nodes.push({...row, ...point});
+  }
+  return {nodes, orbits};
+}
+
+function orrerySvg(orrery = {}) {
+  const bodies = orrery.bodies || [];
+  if (!bodies.length) return `<div class="orrery-empty"><i></i><b>AWAITING SYSTEM SCANS</b><span>Honk or begin FSS to assemble the live architecture.</span></div>`;
+  const layout = orreryLayout(bodies);
+  const orbits = layout.orbits.map((row) => `<ellipse cx="${row.cx}" cy="${row.cy}" rx="${row.rx}" ry="${row.ry}" class="${row.moon ? "moon-orbit" : "planet-orbit"}"/>`).join("");
+  const nodes = layout.nodes.map((row) => {
+    const classes = [row.kind, row.bio ? "bio" : "", row.geo ? "geo" : "", row.terraformable ? "terraformable" : "", row.mapped ? "mapped" : "", row.targeted ? "targeted" : ""].filter(Boolean).join(" ");
+    const radius = row.kind === "star" ? 10 : row.rings ? 6 : 4.5;
+    const targetReticle = row.targeted ? `<g class="orrery-target-reticle" transform="translate(${row.x} ${row.y})"><circle r="${radius + 12}"/><path d="M-${radius + 19} 0H-${radius + 9}M${radius + 9} 0H${radius + 19}M0 -${radius + 19}V-${radius + 9}M0 ${radius + 9}V${radius + 19}"/></g>` : "";
+    return `<g class="orrery-node ${classes}" data-orrery-body="${escapeHtml(row.id)}" tabindex="0" role="button">${targetReticle}<circle cx="${row.x}" cy="${row.y}" r="${radius}"/>${row.rings ? `<ellipse cx="${row.x}" cy="${row.y}" rx="${radius + 5}" ry="${radius + 1.5}"/>` : ""}<title>${escapeHtml(row.name)} · ${escapeHtml(row.class)}${row.targeted ? " · ELITE TARGET" : ""}</title></g>`;
+  }).join("");
+  return `<svg class="orrery-chart" viewBox="0 0 720 500" role="img" aria-label="Schematic system architecture"><defs><radialGradient id="orrery-star"><stop offset="0" stop-color="#fff"/><stop offset=".3" stop-color="var(--orange)"/><stop offset="1" stop-color="transparent"/></radialGradient></defs><path class="orrery-axis" d="M360 18V482M18 250H702"/>${orbits}<g class="orrery-sweep"><path d="M360 250L688 250"/></g>${nodes}<text x="20" y="28">${escapeHtml(orrery.mode || "JOURNAL ARCHITECTURE")}</text></svg>`;
+}
+
+function orreryDetail(body) {
+  if (!body) return `<p class="workspace-empty">Select a body in the system architecture.</p>`;
+  const period = body.orbital_period ? `${numeric(body.orbital_period / 86400, 2)} DAYS` : "UNREPORTED";
+  return `<div class="orrery-body-title"><i class="${escapeHtml(body.kind)}"></i><div><small>BODY ${escapeHtml(body.body_id ?? "—")}</small><h3>${escapeHtml(body.name)}</h3><span>${escapeHtml(body.class)}</span></div><b>${credits(body.value)}</b></div><div class="orrery-facts"><span>ORBIT <b>${period}</b></span><span>DISTANCE <b>${body.distance_ls === null ? "—" : `${numeric(body.distance_ls, 1)} LS`}</b></span><span>GRAVITY <b>${body.gravity_g === null ? "—" : `${numeric(body.gravity_g, 2)} G`}</b></span><span>ATMOSPHERE <b>${escapeHtml(body.atmosphere || "AIRLESS")}</b></span><span>BIOLOGY <b>${numeric(body.bio_complete)} / ${numeric(body.bio)}</b></span><span>GEOLOGY <b>${numeric(body.geo)}</b></span></div><div class="orrery-flags">${(body.flags || []).map((flag) => `<em>${escapeHtml(flag)}</em>`).join("") || "<em>STANDARD SURVEY RECORD</em>"}</div>`;
+}
+
+function stellarCartographyMarkup(cartography = {}) {
+  const orrery = cartography.orrery || {};
+  const queue = cartography.queue || {};
+  const bodies = orrery.bodies || [];
+  const liveTarget = orrery.target || cartography.target || {};
+  const targetId = liveTarget.resolved && liveTarget.id !== null && liveTarget.id !== undefined ? String(liveTarget.id) : "";
+  if (targetId && targetId !== orreryLiveTargetBodyId) {
+    orreryLiveTargetBodyId = targetId;
+    orrerySelectedBodyId = targetId;
+  } else if (!targetId) {
+    orreryLiveTargetBodyId = "";
+  }
+  if (!orrerySelectedBodyId || !bodies.some((row) => String(row.id) === String(orrerySelectedBodyId))) orrerySelectedBodyId = String(bodies[0]?.id || "");
+  const selected = bodies.find((row) => String(row.id) === String(orrerySelectedBodyId));
+  const queueRows = (queue.rows || []).map((row) => `<div class="survey-queue-row ${escapeHtml(row.status)}${row.targeted ? " targeted" : ""}"><i>${row.targeted ? "⌖" : row.status === "complete" ? "✓" : row.status === "skipped" ? "–" : row.pinned ? "◆" : String(number(row.score)).padStart(2, "0")}</i><span><b>${escapeHtml(row.body)}${row.targeted ? " <strong>ELITE TARGET</strong>" : ""}</b><small>${escapeHtml(row.action)} · ${escapeHtml(row.reason)}</small><em>${row.distance_ls ? `${numeric(row.distance_ls, 0)} LS · ` : ""}${credits(row.value)}</em></span><div><button data-ws-page="explore" data-ws-op="survey_pin" data-body-key="${escapeHtml(row.key)}" data-system="${escapeHtml(cartography.system || "")}">${row.pinned ? "UNPIN" : "PIN"}</button><button data-ws-page="explore" data-ws-op="survey_complete" data-body-key="${escapeHtml(row.key)}" data-system="${escapeHtml(cartography.system || "")}">${row.status === "complete" && row.manual_complete ? "REOPEN" : "DONE"}</button><button data-ws-page="explore" data-ws-op="survey_skip" data-body-key="${escapeHtml(row.key)}" data-system="${escapeHtml(cartography.system || "")}">${row.status === "skipped" ? "RESTORE" : "SKIP"}</button></div></div>`);
+  return `<section class="stellar-cartography">
+    <header><div><small>STELLAR CARTOGRAPHY // LIVE SYSTEM MODEL</small><h3>${escapeHtml(cartography.system || "AWAITING SYSTEM")}</h3><span>${numeric(orrery.stars)} STARS · ${numeric(orrery.planets)} PLANETS · ${numeric(orrery.mapped)} MAPPED</span></div><div><b>${numeric(queue.pending)} ACTIVE</b><span>${numeric(queue.complete)} COMPLETE · ${numeric(queue.skipped)} SKIPPED</span></div></header>
+    ${liveTarget.resolved ? `<div class="cartography-target-lock"><i>⌖</i><span><small>ELITE NAVIGATION TARGET</small><b>${escapeHtml(liveTarget.name || "TARGETED BODY")}</b></span><em>BODY ${escapeHtml(liveTarget.body_id ?? "—")} · LOCKED IN ORRERY & SURVEY QUEUE</em></div>` : ""}
+    <div class="stellar-grid">
+      ${workspaceCard("LIVE SYSTEM ORRERY", `${orrerySvg(orrery)}<div id="orrery-detail" class="orrery-detail">${orreryDetail(selected)}</div>`, `${numeric((orrery.bodies || []).length)} BODIES`, "orrery-card")}
+      ${workspaceCard("EXPLORATION SURVEY QUEUE", `${queue.next ? `<div class="survey-next"><small>NEXT RECOMMENDATION</small><b>${escapeHtml(queue.next.body)}</b><span>${escapeHtml(queue.next.action)} · ${escapeHtml(queue.next.reason)}</span></div>` : ""}${workspaceRows(queueRows, "FSS body records will create a prioritised survey queue.")}<div class="workspace-actions"><button data-ws-page="explore" data-ws-op="survey_reset" data-system="${escapeHtml(cartography.system || "")}">RESET COMMANDER CHOICES</button></div>`, `${numeric(queue.pending)} PENDING`, "survey-queue-card")}
+    </div>
+  </section>`;
+}
+
 function renderExploreWorkspace(data) {
   const root = byId("explore-workspace");
   const navRows = (data.nav_route || []).map((row) => `<div class="route-system${row.current ? " current" : row.passed ? " passed" : ""}"><i>${row.passed ? "✓" : row.current ? "◆" : "·"}</i><span><b>${escapeHtml(row.system)}</b><small>${escapeHtml(row.star_class || "STAR CLASS UNKNOWN")} · ${row.distance === null ? "LEG UNKNOWN" : `${numeric(row.distance, 1)} LY`}</small></span></div>`);
@@ -756,8 +855,8 @@ function renderExploreWorkspace(data) {
     {label: "Current system", value: data.current || "—", detail: data.destination ? `NAV TARGET · ${data.destination}` : "NO LOCAL NAV TARGET"},
     {label: "Elite route", value: `${numeric((data.nav_route || []).length)} STOPS`, detail: (data.nav_route || []).length ? "LIVE NAVROUTE.JSON" : "NO ROUTE PLOTTED IN GAME"},
     {label: "Saved waypoints", value: numeric((data.waypoints || []).length), detail: data.next_waypoint ? `NEXT · ${data.next_waypoint}` : "ROUTE COMPLETE / EMPTY"},
-    {label: "Auto copy", value: data.auto_copy ? "ENABLED" : "OFF", detail: "PROFILE SETTING"},
-  ])}<section class="workspace-grid route-workspace-grid">
+    {label: "Survey queue", value: `${numeric(data.cartography?.queue?.pending)} ACTIVE`, detail: data.cartography?.queue?.next ? `NEXT · ${data.cartography.queue.next.body}` : "SYSTEM WORK COMPLETE"},
+  ])}${stellarCartographyMarkup(data.cartography || {})}<section class="workspace-grid route-workspace-grid">
     ${workspaceCard("ELITE NAV ROUTE", workspaceRows(navRows, "Plot a route in Elite to populate the live NavRoute."), `${(data.nav_route || []).length} STOPS`)}
     ${workspaceCard("PROFILE WAYPOINT ROUTE", `${workspaceRows(waypointRows, "No saved waypoints. Add a destination below or import a plotted route.")}<div class="route-add-form"><input id="waypoint-name" placeholder="SYSTEM NAME"><input id="waypoint-note" placeholder="OPTIONAL NOTE"><button data-ws-page="explore" data-ws-op="add_waypoint">ADD</button></div><div class="workspace-actions wrap"><button data-ws-page="explore" data-ws-op="copy_next">COPY NEXT</button><button data-ws-page="explore" data-ws-op="set_auto_copy" data-enabled="${!data.auto_copy}">AUTO COPY ${data.auto_copy ? "ON" : "OFF"}</button><button class="danger-action" data-ws-page="explore" data-ws-op="clear_waypoints">CLEAR ROUTE</button></div>`, `${(data.waypoints || []).filter((row) => row.visited).length}/${(data.waypoints || []).length} COMPLETE`)}
     ${workspaceCard("SPANSH NEUTRON PLOTTER", `<div class="neutron-form"><label>FROM<input id="neutron-from" value="${escapeHtml(data.plotter?.from || data.current || "")}"></label><label>DESTINATION<input id="neutron-to" value="${escapeHtml(data.plotter?.to || "")}"></label><label>SHIP RANGE<input id="neutron-range" type="number" min="1" step="0.1" value="${number(data.plotter?.range, 30)}"></label><label>EFFICIENCY<input id="neutron-efficiency" type="number" min="1" max="100" value="${number(data.plotter?.efficiency, 60)}"></label><label>BOOST<select id="neutron-multiplier"><option value="4" ${number(data.plotter?.multiplier, 4) === 4 ? "selected" : ""}>NEUTRON 4×</option><option value="6" ${number(data.plotter?.multiplier, 4) === 6 ? "selected" : ""}>OVERCHARGE 6×</option></select></label><button class="primary" data-ws-page="explore" data-ws-op="neutron_plot" ${data.plotter?.status === "working" ? "disabled" : ""}>${data.plotter?.status === "working" ? "PLOTTING…" : "PLOT ROUTE"}</button></div><p class="workspace-status ${escapeHtml(data.plotter?.status || "ready")}">${escapeHtml(data.plotter?.detail || "Ready.")}</p>${plottedRows}<div class="workspace-actions wrap"><button data-ws-page="explore" data-ws-op="neutron_copy" ${plotted.waypoints?.length ? "" : "disabled"}>COPY LIST</button><button data-ws-page="explore" data-ws-op="neutron_import" ${plotted.waypoints?.length ? "" : "disabled"}>IMPORT TO WAYPOINTS</button><button data-ws-page="explore" data-ws-op="neutron_clear" ${plotted.waypoints?.length ? "" : "disabled"}>CLEAR RESULT</button></div>`, plotted.total_jumps ? `${numeric(plotted.total_jumps)} JUMPS` : "MANUAL ROUTE")}
@@ -815,8 +914,21 @@ function renderAnalyticsWorkspace(data) {
   const root = byId("analytics-workspace");
   const rows = data.sessions || [];
   const totals = rows.reduce((sum, row) => ({jumps: sum.jumps + number(row.jumps), distance: sum.distance + number(row.distance), fss: sum.fss + number(row.fss), dss: sum.dss + number(row.dss), bio: sum.bio + number(row.bio)}), {jumps: 0, distance: 0, fss: 0, dss: 0, bio: 0});
+  const science = data.science || {};
+  const passport = data.passport || {};
+  const distribution = (items, colour = "accent") => {
+    const maximum = Math.max(1, ...(items || []).map((row) => number(row.count)));
+    return `<div class="science-distribution">${(items || []).map((row) => `<div><span>${escapeHtml(row.label)}</span><i><em class="${colour}" style="width:${number(row.count) * 100 / maximum}%"></em></i><b>${numeric(row.count)}</b></div>`).join("") || `<p class="workspace-empty">More retained scan evidence is required.</p>`}</div>`;
+  };
+  const species = workspaceTable([
+    {label: "Species", render: (row) => `<b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.genus)}</small>`},
+    {label: "Analyses", key: "analyses"}, {label: "Worlds", key: "worlds"}, {label: "Systems", key: "systems"},
+    {label: "Base value", render: (row) => credits(row.value)},
+  ], science.species || [], "Analysed organic species will form the ecology index.");
+  const regionCards = (passport.rows || []).map((row) => `<article class="region-passport-card${row.visited ? " visited" : ""}"><header><i>${String(row.id).padStart(2, "0")}</i><b>${row.visited ? "VISITED" : "UNSTAMPED"}</b></header><h4>${escapeHtml(row.name)}</h4><p>${row.visited ? `${numeric(row.systems)} systems · ${numeric(row.distance, 1)} LY` : "No commander visit retained"}</p><div><span>FSS <b>${numeric(row.fss)}</b></span><span>DSS <b>${numeric(row.dss)}</b></span><span>BIO <b>${numeric(row.biology)}</b></span><span>CODEX <b>${numeric(row.codex)}</b></span></div><footer>${escapeHtml(row.last_system || "REGION AWAITS EXPLORATION")}</footer></article>`).join("");
   root.classList.remove("loading-panel");
-  root.innerHTML = `${workspaceMetrics([
+  root.innerHTML = `<nav class="workspace-tabs analytics-tabs"><button data-analytics-view="trends">FLIGHT TRENDS</button><button data-analytics-view="science">EXPLORER SCIENCE LAB</button><button data-analytics-view="passport">GALACTIC REGION PASSPORT</button></nav>
+  <section data-analytics-panel="trends">${workspaceMetrics([
     {label: "Current duration", value: data.current?.elapsed || "00:00:00", detail: `${numeric(data.current?.systems)} SYSTEMS`},
     {label: "Current travel", value: `${numeric(data.current?.distance, 1)} LY`, detail: `${numeric(data.current?.jumps)} JUMPS`},
     {label: "Retained sessions", value: numeric(rows.length), detail: `${numeric(totals.distance, 1)} LY TOTAL`},
@@ -830,12 +942,73 @@ function renderAnalyticsWorkspace(data) {
       {label: "Jumps", key: "jumps"}, {label: "Distance", render: (row) => `${numeric(row.distance, 1)} LY`},
       {label: "FSS", key: "fss"}, {label: "DSS", key: "dss"}, {label: "Bio", key: "bio"},
     ], rows, "No Captain's Log sessions have been retained yet."), `${rows.length} SESSIONS`)}
-  </section>`;
+  </section></section>
+  <section data-analytics-panel="science">${workspaceMetrics([
+    {label: "Indexed systems", value: numeric(science.systems), detail: `${numeric(science.bodies)} PLANETARY BODIES`},
+    {label: "Biological worlds", value: numeric(science.biological_bodies), detail: `${numeric(science.species_total)} SPECIES`},
+    {label: "Organic analyses", value: numeric(science.analyses), detail: "JOURNAL-CONFIRMED RECORDS"},
+    {label: "Notable worlds", value: numeric(science.valuable), detail: `${numeric(science.terraformable)} TERRAFORMABLE`},
+  ])}<section class="workspace-grid two science-grid">${workspaceCard("ORGANIC ECOLOGY INDEX", species, `${numeric(science.species_total)} SPECIES`)}${workspaceCard("BIOLOGY BY ATMOSPHERE", distribution(science.atmospheres), `${numeric(science.biological_bodies)} WORLDS`)}${workspaceCard("BIOLOGY BY GRAVITY", distribution(science.gravity, "orange"))}${workspaceCard("WORLD CLASS MIX", distribution(science.body_classes))}${workspaceCard("STELLAR CLASS MIX", distribution(science.star_classes, "orange"))}</section></section>
+  <section data-analytics-panel="passport">${workspaceMetrics([
+    {label: "Regions stamped", value: `${numeric(passport.visited)} / ${numeric(passport.total)}`, detail: `${numeric(passport.percent, 1)}% OF GALACTIC REGIONS`},
+    {label: "Systems indexed", value: numeric(passport.systems), detail: "REGION-ASSIGNED VISITS"},
+    {label: "Regional travel", value: `${numeric(passport.distance, 1)} LY`, detail: "RETAINED JUMP DISTANCE"},
+    {label: "Biology", value: numeric(passport.biology), detail: "ANALYSES BY REGION"},
+  ])}<div class="passport-actions"><span>Each stamp is profile-local and derived from retained journal coordinates.</span><button data-page="map">OPEN GALACTIC ATLAS</button></div><section class="region-passport-grid">${regionCards}</section></section>`;
+  document.querySelectorAll("[data-analytics-view]").forEach((button) => button.classList.toggle("active", button.dataset.analyticsView === analyticsView));
+  document.querySelectorAll("[data-analytics-panel]").forEach((panel) => { panel.hidden = panel.dataset.analyticsPanel !== analyticsView; });
+}
+
+function replayGeometry(replay = {}, sessionIndex = 0) {
+  const points = replay.points || [];
+  const session = (replay.sessions || [])[sessionIndex] || {};
+  let start = Number.isInteger(session.point_start) ? session.point_start : 0;
+  let end = Number.isInteger(session.point_end) ? session.point_end : Math.max(0, points.length - 1);
+  start = Math.max(0, Math.min(start, Math.max(0, points.length - 1)));
+  end = Math.max(start, Math.min(end, Math.max(0, points.length - 1)));
+  const scoped = points.slice(start, end + 1);
+  if (!scoped.length) return {start: 0, end: 0, points: [], projected: [], path: ""};
+  const xs = scoped.map((row) => number(row.pos?.[0]));
+  const zs = scoped.map((row) => number(row.pos?.[2]));
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minZ = Math.min(...zs), maxZ = Math.max(...zs);
+  const span = Math.max(1, maxX - minX, maxZ - minZ);
+  const projected = scoped.map((row, index) => ({
+    ...row, globalIndex: start + index,
+    x: 54 + (number(row.pos?.[0]) - minX) * 792 / span,
+    y: 382 - (number(row.pos?.[2]) - minZ) * 330 / span,
+  }));
+  return {start, end, points: scoped, projected, path: projected.map((row, index) => `${index ? "L" : "M"}${row.x.toFixed(1)} ${row.y.toFixed(1)}`).join(" ")};
+}
+
+function replayMarkup(replay = {}) {
+  const sessions = replay.sessions || [];
+  if (replaySelectedSessionIndex >= sessions.length) replaySelectedSessionIndex = 0;
+  const geometry = replayGeometry(replay, replaySelectedSessionIndex);
+  const first = geometry.projected[0];
+  const photos = (replay.photos || []).map((photo) => {
+    const match = [...geometry.projected].reverse().find((row) => row.system === photo.system && row.epoch <= photo.epoch) || geometry.projected.find((row) => row.system === photo.system);
+    return match ? `<circle class="replay-photo" cx="${match.x}" cy="${match.y}" r="4"><title>${escapeHtml(photo.body || photo.system)} · ${escapeHtml(String(photo.timestamp || "").replace("T", " ").slice(0, 16))}</title></circle>` : "";
+  }).join("");
+  const discoveries = geometry.projected.filter((row) => row.discoveries || row.codex || row.fss_complete).map((row) => `<circle class="replay-discovery" cx="${row.x}" cy="${row.y}" r="3"><title>${escapeHtml(row.system)} · ${row.discoveries ? `${row.discoveries} discoveries` : row.codex ? `${row.codex} Codex` : "FSS complete"}</title></circle>`).join("");
+  const options = sessions.map((row, index) => `<option value="${index}" ${index === replaySelectedSessionIndex ? "selected" : ""}>${escapeHtml(String(row.started || "UNKNOWN FLIGHT").replace("T", " ").slice(0, 16))} · ${escapeHtml(row.start_system || "—")} → ${escapeHtml(row.end_system || "—")}</option>`).join("");
+  return `<div class="replay-toolbar"><label>FLIGHT<select id="replay-session">${options}</select></label><div><button id="replay-play" ${geometry.points.length > 1 ? "" : "disabled"}>PLAY REPLAY</button><button data-ws-page="chronicle" data-ws-op="export_replay" data-session-index="${replaySelectedSessionIndex}" ${geometry.points.length ? "" : "disabled"}>EXPORT INTERACTIVE HTML</button></div></div><svg class="replay-chart" viewBox="0 0 900 430" role="img" aria-label="Expedition journey replay"><path class="replay-grid" d="M450 22V408M22 215H878M225 22V408M675 22V408M22 108H878M22 322H878"/><path class="replay-route" d="${geometry.path}"/>${discoveries}${photos}${first ? `<g id="replay-ship" transform="translate(${first.x} ${first.y})"><path d="M0 -9L7 8L0 5L-7 8Z"/></g>` : ""}<text x="24" y="32">${geometry.points.length ? `${geometry.points.length} RETAINED SYSTEMS` : "NO COORDINATED ROUTE IN THIS SESSION"}</text></svg><div class="replay-controls"><input id="replay-slider" type="range" min="${geometry.start}" max="${geometry.end}" value="${geometry.start}" ${geometry.points.length ? "" : "disabled"}><span id="replay-readout">${first ? `01 / ${String(geometry.points.length).padStart(2, "0")} · ${escapeHtml(first.system)}` : "AWAITING ROUTE EVIDENCE"}</span><div><i class="discovery"></i> DISCOVERY <i class="photo"></i> PHOTO</div></div>`;
+}
+
+function updateReplayCursor(globalIndex) {
+  const replay = model.workspace?.page === "chronicle" ? model.workspace.data?.replay || {} : {};
+  const geometry = replayGeometry(replay, replaySelectedSessionIndex);
+  const localIndex = Math.max(0, Math.min(geometry.projected.length - 1, number(globalIndex) - geometry.start));
+  const row = geometry.projected[localIndex];
+  const ship = byId("replay-ship");
+  if (!row || !ship) return;
+  ship.setAttribute("transform", `translate(${row.x} ${row.y})`);
+  text("replay-readout", `${String(localIndex + 1).padStart(2, "0")} / ${String(geometry.projected.length).padStart(2, "0")} · ${row.system} · ${numeric(row.jump_dist, 1)} LY`);
 }
 
 function renderChronicleWorkspace(data) {
   const root = byId("chronicle-workspace");
   const sessions = data.sessions || [];
+  if (replayTimer) { clearInterval(replayTimer); replayTimer = 0; }
   const cards = sessions.map((session) => {
     const highlights = (session.highlights || []).map((row) => `<div class="chronicle-event"><b>${escapeHtml(row.kind)}</b><p><strong>${escapeHtml(row.title)}</strong><span>${escapeHtml(row.detail)}</span></p><time>${escapeHtml(String(row.timestamp || "").replace("T", " ").slice(0, 16))}</time></div>`);
     return workspaceCard(`${String(session.started || "UNKNOWN SESSION").replace("T", " ").slice(0, 16)}`, `<div class="chronicle-summary"><strong>${escapeHtml(session.start_system)} → ${escapeHtml(session.end_system)}</strong><span>${numeric(session.jumps)} jumps · ${numeric(session.distance, 1)} ly · ${numeric(session.fss)} FSS · ${numeric(session.dss)} DSS · ${numeric(session.bio)} bio</span></div>${workspaceRows(highlights, "No notable highlights were retained for this flight.")}`, session.ended ? "COMPLETE" : "ACTIVE");
@@ -846,7 +1019,7 @@ function renderChronicleWorkspace(data) {
     {label: "Distance", value: `${numeric(sessions.reduce((sum, row) => sum + number(row.distance), 0), 1)} LY`, detail: "RETAINED TRAVEL"},
     {label: "FSS surveys", value: numeric(sessions.reduce((sum, row) => sum + number(row.fss), 0)), detail: "SYSTEM COMPLETIONS"},
     {label: "Bio analyses", value: numeric(sessions.reduce((sum, row) => sum + number(row.bio), 0)), detail: "GENETIC SAMPLES"},
-  ])}<section class="chronicle-list">${cards.join("") || `<p class="workspace-empty">Captain's Log will populate as journal sessions are completed.</p>`}</section>`;
+  ])}${workspaceCard("EXPEDITION REPLAY", replayMarkup(data.replay || {}), `${numeric(data.replay?.points?.length)} ROUTE POINTS`, "replay-card")}<section class="chronicle-list">${cards.join("") || `<p class="workspace-empty">Captain's Log will populate as journal sessions are completed.</p>`}</section>`;
 }
 
 function renderMissionWorkspace(data) {
@@ -877,19 +1050,43 @@ function trailSvg(points = []) {
   return `<svg class="trail-chart" viewBox="0 0 300 300" role="img"><path class="trail-grid" d="M150 5V295M5 150H295M75 5V295M225 5V295M5 75H295M5 225H295"/><polyline points="${points.map(project).join(" ")}"/>${circles}<circle cx="${project(points.at(-1)).split(",")[0]}" cy="${project(points.at(-1)).split(",")[1]}" r="4" class="current"/></svg>`;
 }
 
+function fieldMapSvg(field = {}, trail = {}) {
+  const pins = field.pins || [];
+  if (!pins.length) return trailSvg(trail.points || []);
+  const colony = Math.max(0, number(field.sampling?.colony_m));
+  const extent = Math.max(100, colony * 1.1, ...pins.flatMap((row) => [Math.abs(number(row.east)), Math.abs(number(row.north))])) * 1.15;
+  const project = (row) => ({x: 180 + number(row.east) * 158 / extent, y: 180 - number(row.north) * 158 / extent});
+  const activeGroup = field.sampling?.sample_group || "";
+  const rings = colony ? pins.filter((row) => row.kind === "organic_sample" && (!activeGroup || row.metadata?.sample_group === activeGroup)).map((row) => {
+    const point = project(row);
+    return `<circle class="sample-clearance" cx="${point.x}" cy="${point.y}" r="${colony * 158 / extent}"><title>${numeric(colony)} m colony distance</title></circle>`;
+  }).join("") : "";
+  const markers = pins.map((row) => {
+    const point = project(row);
+    const kind = row.kind === "organic_sample" ? "sample" : row.kind === "landing" ? "ship" : row.kind === "codex" ? "codex" : "waypoint";
+    return `<g class="field-pin ${kind}${row.manual ? " manual" : ""}" transform="translate(${point.x} ${point.y})"><circle r="${kind === "ship" ? 6 : kind === "waypoint" ? 5 : 4}"/><title>${escapeHtml(row.label || kind)}${row.distance === null ? "" : ` · ${numeric(row.distance)} m @ ${numeric(row.bearing)}°`}</title></g>`;
+  }).join("");
+  return `<svg class="trail-chart field-map-chart" viewBox="0 0 360 360" role="img" aria-label="Planetary field map"><path class="trail-grid" d="M180 5V355M5 180H355M90 5V355M270 5V355M5 90H355M5 270H355"/><circle class="field-range" cx="180" cy="180" r="158"/>${rings}${markers}<g class="field-current" transform="translate(180 180) rotate(${number(field.heading)})"><path d="M0 -9L6 7L0 4L-6 7Z"/></g><text x="12" y="20">LOCAL TANGENT PLANE · ±${numeric(extent)} M</text></svg>`;
+}
+
 function renderGroundWorkspace(data) {
   const root = byId("ground-workspace");
   const target = data.target || {};
   const trail = data.trail || {};
+  const field = data.field_map || {};
+  const eliteTarget = data.elite_target || {};
+  const pins = (field.pins || []).map((row) => `<div class="field-pin-row"><i class="${escapeHtml(row.kind)}"></i><span><b>${escapeHtml(row.label || row.kind)}</b><small>${row.distance === null ? escapeHtml(row.source || "FIELD RECORD") : `${numeric(row.distance)} M · ${numeric(row.bearing)}°`}</small></span>${row.manual ? `<button data-ws-page="ground" data-ws-op="remove_pin" data-pin-id="${escapeHtml(row.id)}">×</button>` : ""}</div>`);
+  const completed = (field.completed || []).map((row) => `<em>${escapeHtml(row.variant || row.species || row.genus)}${row.count > 1 ? ` ×${numeric(row.count)}` : ""}</em>`).join("");
   root.classList.remove("loading-panel");
+  const eliteTargetStrip = eliteTarget.name ? `<div class="ground-elite-target${eliteTarget.is_current_body ? " current" : ""}"><i>⌖</i><span><small>ELITE NAVIGATION TARGET</small><b>${escapeHtml(eliteTarget.name)}</b></span><em>${eliteTarget.is_current_body ? "TARGET BODY REACHED · FIELD TELEMETRY LINKED" : "BODY SELECTED · APPROACH OR LAND FOR SURFACE TELEMETRY"}</em></div>` : "";
   root.innerHTML = `${workspaceMetrics([
     {label: "Surface state", value: data.on_planet ? "ON SURFACE" : "ORBITAL", detail: data.body || data.system || "NO BODY"},
     {label: "Current position", value: data.position?.lat === null ? "AWAITING STATUS" : `${numeric(data.position.lat, 5)}, ${numeric(data.position.lon, 5)}`, detail: data.position?.heading === null ? "HEADING UNKNOWN" : `HEADING ${numeric(data.position.heading)}°`},
     {label: "Target bearing", value: target.bearing === null ? "—" : `${numeric(target.bearing)}°`, detail: target.direction || target.state || "TARGET OFF"},
     {label: "Target distance", value: target.distance === null ? "—" : `${numeric(target.distance)} M`, detail: target.active ? "LIVE GUIDANCE" : "NO ACTIVE TARGET"},
-  ])}<section class="workspace-grid ground-grid">
+  ])}${eliteTargetStrip}<section class="workspace-grid ground-grid">
     ${workspaceCard("SURFACE TARGET", `<div class="coordinate-form"><label>LATITUDE<input id="ground-lat" type="number" min="-90" max="90" step="0.000001" value="${target.lat ?? ""}"></label><label>LONGITUDE<input id="ground-lon" type="number" min="-180" max="180" step="0.000001" value="${target.lon ?? ""}"></label></div><div class="workspace-actions wrap"><button data-ws-page="ground" data-ws-op="set">SET TARGET</button><button data-ws-page="ground" data-ws-op="set_current">USE CURRENT</button><button data-ws-page="ground" data-ws-op="return_ship">RETURN TO SHIP</button><button data-ws-page="ground" data-ws-op="clear">CLEAR</button><button data-ws-page="ground" data-ws-op="toggle_popup">POPUP ${target.popup ? "ON" : "OFF"}</button></div>`)}
-    ${workspaceCard("LOCAL SURVEY TRAIL", `${trailSvg(trail.points || [])}<div class="trail-readout"><span>TRAVELLED <b>${numeric(trail.travelled)} M</b></span><span>SHIP <b>${trail.return_distance === null ? "—" : `${numeric(trail.return_distance)} M @ ${numeric(trail.return_bearing)}°`}</b></span><button data-ws-page="ground" data-ws-op="clear_trail">CLEAR TRAIL</button></div>`, `${(trail.points || []).length} POINTS`)}
+    ${workspaceCard("PLANETARY FIELD MAP", `${fieldMapSvg(field, trail)}<div class="field-map-summary"><div><small>${escapeHtml(field.body || data.body || "NO ACTIVE BODY")}</small><b>${numeric(field.signals)} BIO SIGNALS</b><span>${escapeHtml((field.genuses || []).join(" · ") || "GENUS IDENTIFICATION AWAITING DSS")}</span></div><div class="field-completed">${completed || "<em>NO COMPLETED ANALYSES ON THIS MAP</em>"}</div></div><div class="field-marker-form"><input id="field-marker-label" placeholder="FIELD MARKER NOTE"><button data-ws-page="ground" data-ws-op="add_pin">ADD AT CURRENT POSITION</button></div>${workspaceRows(pins, "Landings, samples, Codex entries and field markers will appear here.")}<div class="trail-readout"><span>TRAVELLED <b>${numeric(trail.travelled)} M</b></span><span>SHIP <b>${trail.return_distance === null ? "—" : `${numeric(trail.return_distance)} M @ ${numeric(trail.return_bearing)}°`}</b></span><span>SAMPLE <b>${field.sampling?.progress ? `${numeric(field.sampling.progress)} / 3 · ${numeric(field.sampling.colony_m)} M` : "INACTIVE"}</b></span><button data-ws-page="ground" data-ws-op="clear_trail">CLEAR TRAIL</button></div>`, `${(field.pins || []).length} FIELD RECORDS`)}
   </section>`;
 }
 
@@ -1035,7 +1232,10 @@ function renderWorkspace(state) {
   const workspace = state.workspace || {};
   const page = workspace.page || "";
   if (page !== currentPage || !workspace.ready) return;
-  const fingerprint = JSON.stringify(workspace.data || {});
+  const fingerprintData = page === "analytics"
+    ? {...(workspace.data || {}), current: {...(workspace.data?.current || {}), elapsed: ""}}
+    : (workspace.data || {});
+  const fingerprint = JSON.stringify(fingerprintData);
   if (page === "settings" && workspaceFingerprints[page]) {
     const status = byId("settings-test-status");
     if (status) {
@@ -1067,6 +1267,11 @@ function renderDashboard(state) {
     profileKey = nextProfileKey;
     workspaceFingerprints = {};
     missionSelectedId = "";
+    orrerySelectedBodyId = "";
+    orreryLiveTargetBodyId = "";
+    analyticsView = "trends";
+    replaySelectedSessionIndex = 0;
+    if (replayTimer) { clearInterval(replayTimer); replayTimer = 0; }
     atlasRequested = false;
     const atlasFrame = byId("atlas-frame");
     if (atlasFrame) {
@@ -1099,9 +1304,9 @@ function renderDashboard(state) {
     showPage(requestedPage.page);
   }
   renderAtlas(model);
-  text("rail-version", `v${model.app?.version || "5.3.9.3"} // WEBVIEW2`);
-  text("boot-version", `v${model.app?.version || "5.3.9.3"} // SECURE LOOPBACK // WEBVIEW2`);
-  text("about-version", `Version ${model.app?.version || "5.3.9.3"} // HTML Command Deck`);
+  text("rail-version", `v${model.app?.version || "5.4.0"} // WEBVIEW2`);
+  text("boot-version", `v${model.app?.version || "5.4.0"} // SECURE LOOPBACK // WEBVIEW2`);
+  text("about-version", `Version ${model.app?.version || "5.4.0"} // HTML Command Deck`);
   text("overview-subtitle", model.profile?.profile_label || "Journal-backed field intelligence");
   if (currentPage === "map" && !model.boot?.active) ensureAtlas();
 }
@@ -1279,6 +1484,37 @@ async function nudgeStudioOverlay(vector) {
 }
 
 document.addEventListener("click", async (event) => {
+  const analyticsTab = event.target.closest("[data-analytics-view]");
+  if (analyticsTab) {
+    analyticsView = analyticsTab.dataset.analyticsView || "trends";
+    document.querySelectorAll("[data-analytics-view]").forEach((button) => button.classList.toggle("active", button === analyticsTab));
+    document.querySelectorAll("[data-analytics-panel]").forEach((panel) => { panel.hidden = panel.dataset.analyticsPanel !== analyticsView; });
+    return;
+  }
+  const orreryNode = event.target.closest("[data-orrery-body]");
+  if (orreryNode) {
+    orrerySelectedBodyId = orreryNode.dataset.orreryBody;
+    const bodies = model.workspace?.page === "explore" ? model.workspace.data?.cartography?.orrery?.bodies || [] : [];
+    byId("orrery-detail").innerHTML = orreryDetail(bodies.find((row) => String(row.id) === String(orrerySelectedBodyId)));
+    document.querySelectorAll("[data-orrery-body]").forEach((node) => node.classList.toggle("selected", node === orreryNode));
+    return;
+  }
+  if (event.target.closest("#replay-play")) {
+    const slider = byId("replay-slider");
+    if (!slider || slider.disabled) return;
+    if (replayTimer) {
+      clearInterval(replayTimer); replayTimer = 0;
+      event.target.textContent = "PLAY REPLAY";
+    } else {
+      event.target.textContent = "PAUSE";
+      replayTimer = window.setInterval(() => {
+        const maximum = number(slider.max);
+        slider.value = number(slider.value) >= maximum ? number(slider.min) : number(slider.value) + 1;
+        updateReplayCursor(slider.value);
+      }, 360);
+    }
+    return;
+  }
   const studioTab = event.target.closest("[data-studio-view]");
   if (studioTab) {
     setStudioView(studioTab.dataset.studioView);
@@ -1388,7 +1624,7 @@ document.addEventListener("click", async (event) => {
     const page = workspaceButton.dataset.wsPage;
     const operation = workspaceButton.dataset.wsOp;
     const payload = {page, operation};
-    for (const [datasetKey, payloadKey] of [["expeditionId", "expedition_id"], ["objectiveId", "objective_id"], ["achievementId", "achievement_id"], ["system", "system"], ["name", "name"]]) {
+    for (const [datasetKey, payloadKey] of [["expeditionId", "expedition_id"], ["objectiveId", "objective_id"], ["achievementId", "achievement_id"], ["bodyKey", "body_key"], ["pinId", "pin_id"], ["sessionIndex", "session_index"], ["system", "system"], ["name", "name"]]) {
       if (workspaceButton.dataset[datasetKey] !== undefined) payload[payloadKey] = workspaceButton.dataset[datasetKey];
     }
     if (workspaceButton.dataset.status !== undefined) payload.status = workspaceButton.dataset.status;
@@ -1443,6 +1679,8 @@ document.addEventListener("click", async (event) => {
       const prefix = workspaceButton.dataset.groundSource === "studio" ? "studio-ground" : "ground";
       payload.lat = byId(`${prefix}-lat`)?.value;
       payload.lon = byId(`${prefix}-lon`)?.value;
+    } else if (page === "ground" && operation === "add_pin") {
+      payload.label = byId("field-marker-label")?.value.trim() || "Field marker";
     } else if (page === "engineering" && operation === "pin") {
       payload.name = byId("engineering-blueprint")?.value || "";
       payload.grade = byId("engineering-grade")?.value;
@@ -1517,7 +1755,9 @@ document.addEventListener("click", async (event) => {
 });
 
 document.addEventListener("input", (event) => {
-  if (event.target.id === "achievement-filter") {
+  if (event.target.id === "replay-slider") {
+    updateReplayCursor(event.target.value);
+  } else if (event.target.id === "achievement-filter") {
     const query = event.target.value.trim().toLocaleLowerCase();
     document.querySelectorAll("#achievement-grid .achievement-tile").forEach((tile) => {
       tile.hidden = Boolean(query && !tile.textContent.toLocaleLowerCase().includes(query));
@@ -1536,7 +1776,10 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", async (event) => {
-  if (event.target.id === "adaptive-mode") {
+  if (event.target.id === "replay-session") {
+    replaySelectedSessionIndex = Math.max(0, number(event.target.value));
+    renderChronicleWorkspace(model.workspace?.data || {});
+  } else if (event.target.id === "adaptive-mode") {
     const accepted = await command("set_adaptive_mode", {mode: event.target.value});
     showToast(accepted ? "Command Deck mode updated" : "That activity mode is unavailable");
   }

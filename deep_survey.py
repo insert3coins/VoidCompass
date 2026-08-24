@@ -531,6 +531,24 @@ class DeepSurveyTracker:
                 "revisit_queue": copy.deepcopy((self.data.get("revisit_queue") or [])[-8:]),
             }
 
+    def region_passport_state(self):
+        """Return the complete 42-region ledger without copying route history."""
+        with self.lock:
+            return copy.deepcopy(self.data.get("region_stats") or {})
+
+    def replay_state(self, max_points=1200, max_screenshots=240):
+        """Return bounded timeline evidence for the interactive chronicle."""
+        try:
+            point_limit = max(100, min(LIMITS["route_points"], int(max_points)))
+            screenshot_limit = max(20, min(LIMITS["screenshots"], int(max_screenshots)))
+        except (TypeError, ValueError):
+            point_limit, screenshot_limit = 1200, 240
+        with self.lock:
+            return {
+                "route_points": copy.deepcopy((self.data.get("route_points") or [])[-point_limit:]),
+                "screenshots": copy.deepcopy((self.data.get("screenshots") or [])[-screenshot_limit:]),
+            }
+
     def save(self, immediate=False):
         if not self.path:
             return
