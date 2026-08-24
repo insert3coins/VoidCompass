@@ -741,7 +741,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.station_info_hud.on_docked(self)
         if self.cargo_hud:
             self.cargo_hud.update(self.current_cargo_inventory, self.cargo_capacity)
-        self._refresh_gravity_warning(self.current_body_id, self.current_body_name)
+        # This warning is a transient response to a live ApproachBody. Cached
+        # recovery previously raised PLANETARY FLIGHT ENVELOPE on every launch,
+        # making it look like the coordinate compass was the wrong overlay.
+        if self.gravity_warning_hud:
+            self.gravity_warning_hud.clear()
         self.update_ground_target_ui()
         self.root.title(f"VOID COMPASS // v{APP_VERSION} // RESTORING JOURNAL")
         self._startup_restore_active = True
