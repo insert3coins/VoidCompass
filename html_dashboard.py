@@ -20,6 +20,12 @@ import webbrowser
 
 import companion_features
 import engineering_data
+from explorer_decision_deck import (
+    DOCTRINES,
+    explorer_decision,
+    personal_codex_hunt,
+    route_horizon,
+)
 import themes
 from config import get_active_profile, get_profile_dir
 from deep_survey import recon_report
@@ -274,6 +280,11 @@ class HtmlDashboardMixin:
                 distance_text = f"{manager.get_distance(self.current_coords, target_coords):,.1f} LY"
             except (TypeError, ValueError):
                 pass
+        horizon = route_horizon(
+            getattr(self, "nav_route_entries", None) or (),
+            current_system=current,
+            current_position=getattr(self, "current_coords", None),
+        )
         return {
             **progress,
             "source": source,
@@ -281,6 +292,7 @@ class HtmlDashboardMixin:
             "final": final,
             "percent": round(max(0.0, min(100.0, percent)), 1),
             "distance_text": distance_text,
+            "horizon": horizon,
         }
 
     @staticmethod
@@ -371,6 +383,14 @@ class HtmlDashboardMixin:
             "notables": notables[:8],
             "bodies": bodies[:28],
             "summary": _text(completion.get("summary"), 180),
+            "completion": {
+                "unknown_bodies": max(0, _integer(completion.get("unknown_bodies"))),
+                "dss_complete": max(0, _integer(completion.get("dss_complete"))),
+                "dss_targets": max(0, _integer(completion.get("dss_targets"))),
+                "bio_complete": max(0, _integer(completion.get("bio_complete"))),
+                "bio_total": max(0, _integer(completion.get("bio_total"))),
+                "geo_detected": max(0, _integer(completion.get("geo_detected"))),
+            },
         }
 
     def _html_dashboard_intelligence(self, intelligence):
@@ -460,6 +480,83 @@ class HtmlDashboardMixin:
                 240,
             ),
         }
+
+    def _html_dashboard_session_pulse(self):
+        """Return the current Captain's Log session without replay history."""
+        fallback = {
+            "elapsed": self._get_session_elapsed_text(),
+            "jumps": _integer(getattr(self, "session_jump_count", 0)),
+            "distance_ly": round(_number(getattr(self, "session_ly", 0), 0) or 0, 1),
+            "systems": len(getattr(self, "session_systems", None) or set()),
+            "codex": 0, "bio_analyses": 0, "fss_surveys": 0,
+            "dss_maps": 0, "valuable_worlds": 0, "first_discoveries": 0,
+            "highlights": [],
+        }
+        log = getattr(self, "captains_log", None)
+        if log is None:
+            return fallback
+        try:
+            sessions = log.sessions()
+        except Exception:
+            return fallback
+        active = next((row for row in sessions if isinstance(row, dict) and not row.get("ended")), None)
+        if active is None:
+            return fallback
+        result = dict(fallback)
+        for key in (
+            "jumps", "codex", "bio_analyses", "fss_surveys", "dss_maps",
+            "valuable_worlds", "first_discoveries", "screenshots",
+        ):
+            result[key] = max(0, _integer(active.get(key)))
+        result["distance_ly"] = round(max(0.0, _number(active.get("distance_ly"), 0) or 0), 1)
+        result["start_system"] = _text(active.get("start_system"), 140)
+        result["end_system"] = _text(active.get("end_system"), 140)
+        result["highlights"] = [
+            {
+                "kind": _text(row.get("kind"), 30),
+                "title": _text(row.get("title"), 140),
+                "detail": _text(row.get("detail"), 220),
+            }
+            for row in reversed(active.get("highlights") or [])
+            if isinstance(row, dict)
+        ][:4]
+        result["summary"] = _text(
+            f"{result['jumps']} jumps · {result['distance_ly']:,.1f} ly · "
+            f"{result['fss_surveys']} FSS · {result['dss_maps']} DSS · "
+            f"{result['bio_analyses']} biology",
+            220,
+        )
+        return result
+
+    def _html_dashboard_codex_hunt(self, region_name):
+        """Build a cached, profile-aware personal regional Codex comparison."""
+        profile = get_active_profile(self.config)
+        region_name = _text(region_name or "Unknown region", 90)
+        now = time.monotonic()
+        cached = getattr(self, "_html_codex_hunt_cache", None)
+        if (
+            isinstance(cached, dict)
+            and cached.get("profile") == profile
+            and cached.get("region") == region_name
+            and now < float(cached.get("expires") or 0)
+        ):
+            return cached.get("value") or {}
+        tracker = getattr(self, "deep_survey", None)
+        try:
+            rows = tracker.codex_state() if tracker and hasattr(tracker, "codex_state") else []
+        except Exception:
+            rows = []
+        manager = getattr(self, "expedition_manager", None)
+        try:
+            active = manager.active() if manager else None
+        except Exception:
+            active = None
+        value = personal_codex_hunt(rows, region_name, active_expedition=active)
+        self._html_codex_hunt_cache = {
+            "profile": profile, "region": region_name,
+            "expires": now + 5.0, "value": value,
+        }
+        return value
 
     def _html_profile_transient(self, attribute, defaults):
         """Return profile-scoped, non-persistent HTML worker state."""
@@ -1474,6 +1571,7 @@ class HtmlDashboardMixin:
             "eddn_market_upload_enabled", "carrier_discord_webhook_url",
             "runtime_trace_enabled", "crash_reporting_enabled",
             "recovery_safe_mode_enabled", "edsm_backfill_on_cache_rebuild",
+            "automatic_profile_backups_enabled",
         ):
             value = self.config.get(key)
             values[key] = value if isinstance(value, (str, int, float, bool)) or value is None else str(value)
@@ -1930,7 +2028,6 @@ class HtmlDashboardMixin:
             or self.config.get("active_commander_name")
             or "UNKNOWN"
         )
-        session_systems = getattr(self, "session_systems", None) or set()
         sources = self._html_dashboard_sources()
         map_view = getattr(
             getattr(self, "exploration_window", None),
@@ -1953,6 +2050,44 @@ class HtmlDashboardMixin:
             adaptive = deck.status() if deck is not None else {}
         except Exception:
             adaptive = {}
+        flight = {
+            "system": _text(getattr(self, "current_sys", None) or "---", 160),
+            "state": flight_state,
+            "context": _text(context, 180),
+            "ship": _text(ship_name, 120),
+            "fuel_percent": round(fuel_percent, 1) if fuel_percent is not None else None,
+            "fuel_detail": (
+                f"{fuel_main:.1f} / {fuel_capacity:.1f} T"
+                if fuel_main is not None and fuel_capacity else "AWAITING LOADOUT"
+            ),
+            "docked": bool(getattr(self, "current_docked", False)),
+            "landed": bool(getattr(self, "current_landed", False)),
+            "on_foot": bool(getattr(self, "current_on_foot", False)),
+        }
+        data = {
+            "unsold_exploration": unsold_exploration,
+            "unsold_bio": unsold_bio,
+            "unsold_total": unsold_exploration + unsold_bio,
+        }
+        session = self._html_dashboard_session_pulse()
+        intelligence_summary = self._html_dashboard_intelligence(intelligence)
+        codex_hunt = self._html_dashboard_codex_hunt(intelligence_summary.get("region"))
+        doctrine = _text(self.config.get("exploration_doctrine") or "balanced", 30).casefold()
+        decision = explorer_decision(
+            doctrine, survey, route, (intelligence or {}).get("actions") or (),
+            flight, data, codex_hunt, adaptive,
+        )
+        configurable_modules = ("route", "session", "priorities", "codex", "feed")
+        configured_order = self.config.get("dashboard_module_order") or configurable_modules
+        module_order = [
+            str(name) for name in configured_order
+            if str(name) in configurable_modules
+        ]
+        module_order.extend(name for name in configurable_modules if name not in module_order)
+        hidden_modules = [
+            str(name) for name in (self.config.get("dashboard_hidden_modules") or [])
+            if str(name) in configurable_modules
+        ]
         return {
             "app": {"renderer": "html-command-deck", "platform": "windows"},
             "profile": {
@@ -1969,35 +2104,33 @@ class HtmlDashboardMixin:
                 "workspace": _text(adaptive.get("workspace") or "DASHBOARD", 40),
                 "session": adaptive.get("session") or {},
             },
-            "flight": {
-                "system": _text(getattr(self, "current_sys", None) or "---", 160),
-                "state": flight_state,
-                "context": _text(context, 180),
-                "ship": _text(ship_name, 120),
-                "fuel_percent": round(fuel_percent, 1) if fuel_percent is not None else None,
-                "fuel_detail": (
-                    f"{fuel_main:.1f} / {fuel_capacity:.1f} T"
-                    if fuel_main is not None and fuel_capacity else "AWAITING LOADOUT"
-                ),
-            },
+            "flight": flight,
             "survey": survey,
             "route": route,
             "traffic": {
                 key: _integer((getattr(self, "system_traffic", None) or {}).get(key))
                 for key in ("day", "week", "total")
             },
-            "session": {
-                "elapsed": self._get_session_elapsed_text(),
-                "jumps": _integer(getattr(self, "session_jump_count", 0)),
-                "distance_ly": round(_number(getattr(self, "session_ly", 0), 0) or 0, 1),
-                "systems": len(session_systems),
+            "session": session,
+            "data": data,
+            "intelligence": intelligence_summary,
+            "decision": decision,
+            "codex_hunt": codex_hunt,
+            "dashboard_layout": {
+                "module_order": module_order,
+                "hidden_modules": hidden_modules,
+                "available_modules": [
+                    {"id": "route", "label": "Route Horizon"},
+                    {"id": "session", "label": "Session Pulse"},
+                    {"id": "priorities", "label": "Field Priorities"},
+                    {"id": "codex", "label": "Regional Codex Hunt"},
+                    {"id": "feed", "label": "Live Exploration Feed"},
+                ],
+                "doctrine": decision.get("doctrine"),
+                "doctrines": [
+                    {"id": key, "label": label} for key, label in DOCTRINES.items()
+                ],
             },
-            "data": {
-                "unsold_exploration": unsold_exploration,
-                "unsold_bio": unsold_bio,
-                "unsold_total": unsold_exploration + unsold_bio,
-            },
-            "intelligence": self._html_dashboard_intelligence(intelligence),
             "priorities": self._html_dashboard_priorities(intelligence, route, survey),
             "expedition": self._html_dashboard_expedition(),
             "atlas": {
@@ -2850,6 +2983,7 @@ class HtmlDashboardMixin:
                     "runtime_trace_enabled": bool, "crash_reporting_enabled": bool,
                     "recovery_safe_mode_enabled": bool,
                     "edsm_backfill_on_cache_rebuild": bool,
+                    "automatic_profile_backups_enabled": bool,
                 }
                 for key, cast in allowed.items():
                     if key not in values:
@@ -2929,6 +3063,51 @@ class HtmlDashboardMixin:
         if action == "copy_next":
             self._dashboard_copy_next()
             return True
+        if action == "set_exploration_doctrine":
+            doctrine = _text(payload.get("doctrine") or "balanced", 30).casefold()
+            if doctrine not in DOCTRINES:
+                return False
+            self.config["exploration_doctrine"] = doctrine
+            self._persist_config()
+            self._schedule_html_dashboard_publish(immediate=True)
+            return True
+        if action == "save_dashboard_layout":
+            available = ("route", "session", "priorities", "codex", "feed")
+            raw_order = payload.get("module_order")
+            raw_hidden = payload.get("hidden_modules")
+            if not isinstance(raw_order, list) or not isinstance(raw_hidden, list):
+                return False
+            order = [str(name) for name in raw_order if str(name) in available]
+            order.extend(name for name in available if name not in order)
+            hidden = [str(name) for name in raw_hidden if str(name) in available]
+            self.config["dashboard_module_order"] = order
+            self.config["dashboard_hidden_modules"] = list(dict.fromkeys(hidden))
+            self._persist_config()
+            self._schedule_html_dashboard_publish(immediate=True)
+            return True
+        if action == "add_codex_objective":
+            target = _text(payload.get("target"), 200)
+            manager = getattr(self, "expedition_manager", None)
+            try:
+                active = manager.active() if manager else None
+            except Exception:
+                active = None
+            if not target or not active:
+                return False
+            objective = manager.add_objective(
+                active.get("id"), "codex_category", target=target,
+                notes="Added from the Explorer Decision Deck personal regional Codex comparison.",
+            )
+            if not objective:
+                return False
+            self.add_event_feed_entry(
+                "EXPEDITION", f"Codex objective added: {target}", severity="INFO",
+            )
+            self._schedule_html_dashboard_publish(immediate=True)
+            return True
+        if action == "open_codex_atlas":
+            self._open_html_dashboard_map()
+            return self._request_html_dashboard_page("map")
         if action == "set_theme":
             name = _text(payload.get("name"), 120)
             custom = self.config.get("ui_custom_themes") or {}

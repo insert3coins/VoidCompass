@@ -728,16 +728,21 @@ class DashboardDBMixin:
         edsm_requested = edsm_enabled and bool(upload_history_to_edsm)
         edsm_mode = "EDSM history enabled" if edsm_requested else "local cache only"
         self._cache_rebuild_feed(f"Cache rebuild started · {edsm_mode}.")
-        try:
-            profile_key = get_active_profile(self.config)
-            backup = automatic_backup(
-                profile_key, get_profile_dir(profile_key), reason="before_cache_rebuild", keep=5,
-            )
-            if backup:
-                self._cache_rebuild_feed("Profile safety snapshot ready; scanning journals.")
-        except Exception as exc:
+        if bool(self.config.get("automatic_profile_backups_enabled", True)):
+            try:
+                profile_key = get_active_profile(self.config)
+                backup = automatic_backup(
+                    profile_key, get_profile_dir(profile_key), reason="before_cache_rebuild", keep=5,
+                )
+                if backup:
+                    self._cache_rebuild_feed("Profile safety snapshot ready; scanning journals.")
+            except Exception as exc:
+                self._cache_rebuild_feed(
+                    f"Profile safety snapshot skipped: {exc}", severity="WARN",
+                )
+        else:
             self._cache_rebuild_feed(
-                f"Profile safety snapshot skipped: {exc}", severity="WARN",
+                "Automatic profile safety snapshot disabled; scanning journals.",
             )
 
         last_progress_milestone = -10

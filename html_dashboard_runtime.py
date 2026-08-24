@@ -304,6 +304,8 @@ class HtmlDashboardRuntime:
             "page_changed", "overlay_studio", "workspace",
             "set_adaptive_mode", "open_adaptive_mode",
             "set_flight_log_mode",
+            "set_exploration_doctrine", "save_dashboard_layout",
+            "add_codex_objective", "open_codex_atlas",
             "onboarding_submit", "onboarding_cancel",
         }:
             return False
