@@ -19,6 +19,7 @@ let snapshot = null;
 let arrivalTimer = null;
 let lastIndicatorSignature = '';
 let stateChangeTimer = null;
+let vehicleImageTransition = null;
 let lastServerContact = Date.now();
 let lastRevision = -1;
 let healthPollActive = false;
@@ -71,8 +72,10 @@ function vehiclePresentation(state = {}) {
     if (label.includes('FIGHTER')) {
       return catalog.fighter();
     }
-    if (label.includes('SRV') || vehicle.surface) {
-      return catalog.resolveSurface(vehicle.surface);
+    if (label.includes('SRV') || label.includes('SCARAB') || label.includes('SCORPION') || vehicle.surface) {
+      const surface = label.includes('SCORPION') ? 'SCORPION'
+        : label.includes('SCARAB') ? 'SCARAB' : vehicle.surface;
+      return catalog.resolveSurface(surface);
     }
   }
   if (motion === 'fighter' || label === 'FIGHTER') {
@@ -81,20 +84,81 @@ function vehiclePresentation(state = {}) {
   return catalog.resolveShip(vehicle);
 }
 
-function renderVehicle(state = {}) {
+function clearVehicleTransition(host, image) {
+  if (vehicleImageTransition) {
+    vehicleImageTransition.cancel();
+    vehicleImageTransition = null;
+  }
+  host.classList.remove('vehicle-swapping');
+  host.querySelectorAll('.vehicle-outgoing').forEach((ghost) => ghost.remove());
+  image.style.removeProperty('opacity');
+  image.style.removeProperty('transform');
+  image.style.removeProperty('filter');
+}
+
+function animateVehicleSwap(host, image, presentation) {
+  const hostRect = host.getBoundingClientRect();
+  const imageRect = image.getBoundingClientRect();
+  const computed = getComputedStyle(image);
+  const ghost = image.cloneNode(false);
+  ghost.removeAttribute('id');
+  ghost.className = 'vehicle-outgoing';
+  ghost.alt = '';
+  ghost.setAttribute('aria-hidden', 'true');
+  ghost.style.left = `${imageRect.left - hostRect.left}px`;
+  ghost.style.top = `${imageRect.top - hostRect.top}px`;
+  ghost.style.width = `${imageRect.width}px`;
+  ghost.style.height = `${imageRect.height}px`;
+  ghost.style.opacity = computed.opacity;
+  ghost.style.filter = computed.filter;
+  host.appendChild(ghost);
+
+  host.classList.add('vehicle-swapping');
+  host.dataset.vehicle = presentation.key;
+  image.alt = presentation.alt;
+  image.src = presentation.src;
+
+  const outgoing = ghost.animate([
+    {opacity: Number(computed.opacity) || 1, transform: 'translateX(0) scale(1)'},
+    {opacity: .42, transform: 'translateX(-3px) scale(.985)', offset: .45},
+    {opacity: 0, transform: 'translateX(-9px) scale(.95)'},
+  ], {duration: 430, easing: 'cubic-bezier(.3,.05,.35,1)', fill: 'forwards'});
+  vehicleImageTransition = image.animate([
+    {opacity: 0, transform: 'translateX(9px) scale(.95)', filter: 'brightness(1.7) blur(.8px)'},
+    {opacity: .55, transform: 'translateX(3px) scale(.985)', filter: 'brightness(1.5) blur(0)', offset: .48},
+    {opacity: 1, transform: 'translateX(0) scale(1)', filter: computed.filter},
+  ], {duration: 520, easing: 'cubic-bezier(.2,.75,.2,1)'});
+  outgoing.onfinish = () => ghost.remove();
+  vehicleImageTransition.onfinish = () => {
+    vehicleImageTransition = null;
+    host.classList.remove('vehicle-swapping');
+  };
+}
+
+function renderVehicle(state = {}, reducedMotion = false) {
   const presentation = vehiclePresentation(state);
   const host = dom['vehicle-display'];
   const image = dom['vehicle-image'];
+  if (reducedMotion) clearVehicleTransition(host, image);
   if (!presentation) {
+    clearVehicleTransition(host, image);
     host.hidden = true;
     image.removeAttribute('src');
     image.alt = '';
-    return;
+    return null;
   }
   host.hidden = false;
-  host.dataset.vehicle = presentation.key;
-  image.alt = presentation.alt;
-  if (image.getAttribute('src') !== presentation.src) image.src = presentation.src;
+  const previousSrc = image.getAttribute('src') || '';
+  if (previousSrc && previousSrc !== presentation.src && !reducedMotion
+      && typeof image.animate === 'function') {
+    clearVehicleTransition(host, image);
+    animateVehicleSwap(host, image, presentation);
+  } else {
+    host.dataset.vehicle = presentation.key;
+    image.alt = presentation.alt;
+    if (previousSrc !== presentation.src) image.src = presentation.src;
+  }
+  return presentation;
 }
 
 function setMetric(id, metric) {
@@ -183,16 +247,17 @@ function render(data) {
   hud.classList.toggle('standard', data.layout !== 'expanded');
   hud.classList.toggle('expanded', data.layout === 'expanded');
   hud.classList.toggle('no-crt', !data.effects?.crt);
-  hud.classList.toggle('reduced-motion', Boolean(data.effects?.reduced_motion));
+  const reducedMotion = Boolean(data.effects?.reduced_motion);
+  hud.classList.toggle('reduced-motion', reducedMotion);
   hud.dataset.motion = data.state?.motion || 'flight';
   hud.dataset.state = data.state?.label || 'FLIGHT';
-  renderVehicle(data.state);
+  const vehicle = renderVehicle(data.state, reducedMotion);
   const stateColour = themedStateColour(data.state?.color, theme);
   hud.style.setProperty('--state', stateColour);
   const energy = Math.max(.55, Math.min(1.6, Number(data.effects?.energy || 1)));
   hud.style.setProperty('--motion-energy', String(energy));
   hud.style.setProperty('--motion-scale', String(1 / energy));
-  const indicatorSignature = `${data.state?.motion || 'flight'}|${data.state?.label || 'FLIGHT'}`;
+  const indicatorSignature = `${data.state?.motion || 'flight'}|${data.state?.label || 'FLIGHT'}|${vehicle?.key || 'none'}`;
   dom['state-label'].textContent = data.state?.label || 'FLIGHT';
   if (lastIndicatorSignature && indicatorSignature !== lastIndicatorSignature
       && !data.effects?.reduced_motion) {
@@ -209,6 +274,7 @@ function render(data) {
   stateIndicator.update({
     motion: data.state?.motion || 'flight',
     label: data.state?.label || 'FLIGHT',
+    vehicleKey: vehicle?.key || '',
     color: stateColour,
     energy,
     dynamics: data.state?.dynamics || {},

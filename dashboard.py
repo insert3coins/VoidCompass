@@ -7409,7 +7409,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.current_vehicle_id = vehicle_id
                 if vehicle_id is not None:
                     self._vehicle_name_by_id[vehicle_id] = self.current_vehicle_name
-                self._last_surface_vehicle_name = self.current_vehicle_name
+                if self.current_vehicle_name == "NOMAD":
+                    self._last_surface_vehicle_name = self.current_vehicle_name
                 self.hud_flight_state = self.current_vehicle_name
                 # Elite exposes the Nomad as LaunchFighter/Loadout=galactic.
                 # Both it and a commander-controlled SLF launch are vehicle

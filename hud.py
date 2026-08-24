@@ -805,7 +805,7 @@ class TacticalHUD:
         if flight_state == "FIGHTER" or nav_context.get("in_fighter"):
             return "FIGHTER"
         if flight_state == "SRV" or nav_context.get("in_srv"):
-            return "SRV"
+            return vehicle_name if vehicle_name in {"SCARAB", "SCORPION"} else "SRV"
         if flight_state == "MULTICREW" or nav_context.get("in_multicrew"):
             return "MULTICREW"
         if flight_state == "LANDED" or nav_context.get("landed"):
@@ -825,7 +825,7 @@ class TacticalHUD:
         if state_text in {"ARRIVAL", "CARRIER ARRIVAL"}:
             return COLOR_GREEN
         if state_text in (
-            "DOCKED", "LANDED", "FSS", "DSS", "FIGHTER", "SRV", "NOMAD",
+            "DOCKED", "LANDED", "FSS", "DSS", "FIGHTER", "SRV", "SCARAB", "SCORPION", "NOMAD",
             "TAXI", "MULTICREW",
             "ONFOOT", "MAP", "GALAXY MAP", "SYSTEM MAP", "POWER MAP", "ORRERY",
             "CODEX", "EXPLORATION", "STATION", "FSD COOLDOWN", "ORBITAL APPROACH",
@@ -902,7 +902,7 @@ class TacticalHUD:
             return "landed"
         if state == "ONFOOT":
             return "on_foot"
-        if state in {"SRV", "NOMAD"}:
+        if state in {"SRV", "SCARAB", "SCORPION", "NOMAD"}:
             return "surface_vehicle"
         if state in {"FSS", "DSS"}:
             return "scanner"

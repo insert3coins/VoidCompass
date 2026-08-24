@@ -8,6 +8,7 @@ that the local dashboard is allowed to invoke.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 import logging
 import math
 import os
@@ -44,6 +45,14 @@ from services.spansh import (
     fleet_carrier_route,
     import_fleet_carrier_route,
     neutron_route,
+)
+from stellar_cartography import (
+    build_orrery,
+    build_region_passport,
+    build_replay,
+    build_science_lab,
+    build_survey_queue,
+    replay_export_html,
 )
 from ui_theme import apply_ui_scale
 
@@ -461,6 +470,70 @@ class HtmlDashboardMixin:
             setattr(self, attribute, state)
         return state
 
+    def _html_local_body_target(self):
+        """Return Elite's selected body only when it resolves in this system."""
+        details = getattr(self, "current_destination_details", None) or {}
+        if not isinstance(details, dict) or not details:
+            return None
+        current_address = getattr(self, "current_system_address", None)
+        target_address = details.get("System")
+        if current_address is not None and target_address is not None:
+            try:
+                same_system = int(current_address) == int(target_address)
+            except (TypeError, ValueError):
+                same_system = str(current_address).strip() == str(target_address).strip()
+            if not same_system:
+                return None
+        formatter = getattr(self, "_navigation_destination_label", None)
+        name = formatter(details.get("Name")) if callable(formatter) else details.get("Name")
+        name = _text(name, 180)
+        if not name:
+            return None
+        body_id = details.get("Body")
+        matched = None
+        for row in (getattr(self, "scan_items", None) or []):
+            if not isinstance(row, dict):
+                continue
+            names = {
+                _text(row.get("name"), 180).casefold(),
+                _text(row.get("full_name"), 180).casefold(),
+            }
+            if name.casefold() not in names:
+                continue
+            row_body_id = row.get("body_id")
+            if body_id is not None and row_body_id is not None:
+                try:
+                    if int(body_id) != int(row_body_id):
+                        continue
+                except (TypeError, ValueError):
+                    if str(body_id).strip() != str(row_body_id).strip():
+                        continue
+            matched = row
+            break
+        if matched is None:
+            return None
+        current_body_id = getattr(self, "current_body_id", None)
+        is_current_body = False
+        if current_body_id is not None and body_id is not None:
+            try:
+                is_current_body = int(current_body_id) == int(body_id)
+            except (TypeError, ValueError):
+                is_current_body = str(current_body_id).strip() == str(body_id).strip()
+        if not is_current_body:
+            current_body = _text(getattr(self, "current_body_name", None), 180).casefold()
+            is_current_body = bool(current_body and current_body in {
+                name.casefold(),
+                _text(matched.get("name"), 180).casefold(),
+                _text(matched.get("full_name"), 180).casefold(),
+            })
+        return {
+            "name": name,
+            "system": target_address,
+            "body": body_id,
+            "is_current_body": is_current_body,
+            "source": "ELITE STATUS",
+        }
+
     def _html_explore_workspace(self):
         manager = getattr(self, "waypoint_manager", None)
         waypoints = list(getattr(manager, "waypoints", None) or [])
@@ -524,6 +597,13 @@ class HtmlDashboardMixin:
             {"status": "ready", "detail": "Ready to plot a manual neutron route.", "route": None},
         )
         saved_form = self.config.get("system_plotter_form") or {}
+        survey_states = self.config.get("stellar_survey_queue_state") or {}
+        survey_state = survey_states.get(current.casefold()) or {}
+        scan_items = [
+            row for row in (getattr(self, "scan_items", None) or [])
+            if isinstance(row, dict)
+        ]
+        body_target = self._html_local_body_target()
         return {
             "current": current,
             "destination": _text(getattr(self, "dest_name", None), 140),
@@ -533,6 +613,12 @@ class HtmlDashboardMixin:
                 manager.get_next_waypoint(current) if manager is not None else "", 140,
             ),
             "auto_copy": bool(self.config.get("auto_copy_waypoint", False)),
+            "cartography": {
+                "system": current,
+                "target": body_target,
+                "orrery": build_orrery(scan_items, body_target),
+                "queue": build_survey_queue(scan_items, survey_state, body_target),
+            },
             "plotter": {
                 "from": _text(saved_form.get("from") or current, 140),
                 "to": _text(saved_form.get("to"), 140),
@@ -712,7 +798,7 @@ class HtmlDashboardMixin:
             },
         }
 
-    def _html_analytics_workspace(self):
+    def _html_analytics_workspace(self, include_science=True):
         sessions = []
         logbook = getattr(self, "captains_log", None)
         if logbook is not None:
@@ -720,9 +806,9 @@ class HtmlDashboardMixin:
                 sessions = logbook.sessions()
             except Exception:
                 sessions = []
-        rows = []
+        session_rows = []
         for session in sessions[:120]:
-            rows.append({
+            session_rows.append({
                 "started": _text(session.get("started"), 40),
                 "ended": _text(session.get("ended"), 40),
                 "start_system": _text(session.get("start_system") or "—", 140),
@@ -735,18 +821,65 @@ class HtmlDashboardMixin:
                 "codex": _integer(session.get("codex")),
             })
         elapsed_provider = getattr(self, "_get_session_elapsed_text", None)
-        return {
+        base = {
             "current": {
                 "elapsed": elapsed_provider() if callable(elapsed_provider) else "00:00:00",
                 "jumps": _integer(getattr(self, "session_jump_count", 0)),
                 "distance": round(_number(getattr(self, "session_ly", 0), 0) or 0, 1),
                 "systems": len(getattr(self, "session_systems", None) or ()),
             },
-            "sessions": rows,
+            "sessions": session_rows,
+        }
+        if not include_science:
+            return base
+        profile = get_active_profile(self.config)
+        now = time.monotonic()
+        cache = getattr(self, "_html_science_lab_cache", None)
+        if not isinstance(cache, dict) or cache.get("profile") != profile or now - _number(cache.get("time"), 0) > 6.0:
+            scan_rows = []
+            lock = getattr(self, "db_lock", None)
+            acquired = bool(lock and lock.acquire(blocking=False))
+            if acquired:
+                try:
+                    for system, payload in self.conn.execute(
+                        "SELECT system_name, data_json FROM scan_hud_items"
+                    ).fetchall():
+                        try:
+                            item = json.loads(payload)
+                        except (TypeError, json.JSONDecodeError):
+                            continue
+                        if isinstance(item, dict):
+                            scan_rows.append((system, item))
+                except Exception:
+                    scan_rows = []
+                finally:
+                    lock.release()
+            elif isinstance(cache, dict):
+                scan_rows = None
+            deep = getattr(self, "deep_survey", None)
+            try:
+                region_state = deep.region_passport_state() if deep is not None else {}
+            except Exception:
+                region_state = {}
+            if scan_rows is not None:
+                cache = {
+                    "profile": profile, "time": now,
+                    "science": build_science_lab(scan_rows),
+                    "passport": build_region_passport(region_state),
+                }
+                self._html_science_lab_cache = cache
+        cache = cache if isinstance(cache, dict) else {
+            "science": build_science_lab([]), "passport": build_region_passport({}),
+        }
+        return {
+            **base,
+            "science": cache.get("science") or build_science_lab([]),
+            "passport": cache.get("passport") or build_region_passport({}),
         }
 
     def _html_chronicle_workspace(self):
-        analytics = self._html_analytics_workspace()
+        analytics = self._html_analytics_workspace(include_science=False)
+        analytics.pop("current", None)
         logbook = getattr(self, "captains_log", None)
         sessions = []
         if logbook is not None:
@@ -769,6 +902,12 @@ class HtmlDashboardMixin:
             }
             for index, session in enumerate(sessions[:120])
         ]
+        deep = getattr(self, "deep_survey", None)
+        try:
+            replay_state = deep.replay_state() if deep is not None else {}
+        except Exception:
+            replay_state = {}
+        analytics["replay"] = build_replay(sessions[:120], replay_state)
         return analytics
 
     def _html_mission_workspace(self):
@@ -846,9 +985,27 @@ class HtmlDashboardMixin:
             trail = self._surface_trail_snapshot() or {}
         except Exception:
             trail = {}
+        specialist = getattr(self, "specialist_engine", None)
+        try:
+            exobiology = specialist.exobiology_snapshot() if specialist is not None else {}
+        except Exception:
+            exobiology = {}
+        field_map = exobiology.get("current_map") or {}
+        sampling = self._sampling_snapshot() if getattr(self, "bio_sampling", None) else None
+        completed = []
+        for row in (field_map.get("completed") or {}).values():
+            if not isinstance(row, dict):
+                continue
+            completed.append({
+                "genus": _text(row.get("genus"), 100),
+                "species": _text(row.get("species"), 140),
+                "variant": _text(row.get("variant"), 180),
+                "count": _integer(row.get("count"), 1),
+            })
         return {
             "system": _text(getattr(self, "current_sys", None), 140),
             "body": _text(getattr(self, "current_body_name", None), 140),
+            "elite_target": self._html_local_body_target(),
             "on_planet": bool(getattr(self, "on_planet", False)),
             "position": {
                 "lat": _number(getattr(self, "current_latitude", None)),
@@ -879,6 +1036,42 @@ class HtmlDashboardMixin:
                         "label": _text(row.get("label"), 100),
                     }
                     for row in (trail.get("plot") or [])[-400:] if isinstance(row, dict)
+                ],
+            },
+            "field_map": {
+                "system": _text(field_map.get("system"), 140),
+                "body": _text(field_map.get("body"), 180),
+                "radius_m": _number(field_map.get("radius_m")),
+                "heading": _number(getattr(self, "current_heading", None)),
+                "signals": _integer(field_map.get("signal_count")),
+                "genuses": [
+                    _text(row.get("name") or row.get("symbol"), 120)
+                    for row in (field_map.get("genuses") or []) if isinstance(row, dict)
+                ],
+                "completed": completed,
+                "sampling": {
+                    **dict(exobiology.get("sampling") or {}),
+                    **dict(sampling or {}),
+                },
+                "pins": [
+                    {
+                        "id": _text(row.get("id"), 60),
+                        "kind": _text(row.get("kind"), 40),
+                        "label": _text(row.get("label"), 160),
+                        "east": _number(row.get("east_m"), 0),
+                        "north": _number(row.get("north_m"), 0),
+                        "distance": _number(row.get("distance_m")),
+                        "bearing": _number(row.get("bearing_deg")),
+                        "source": _text(row.get("source"), 40),
+                        "manual": str(row.get("source") or "").casefold() == "manual",
+                        "metadata": {
+                            "scan_type": _text((row.get("metadata") or {}).get("scan_type"), 30),
+                            "progress": _integer((row.get("metadata") or {}).get("progress")),
+                            "species": _text((row.get("metadata") or {}).get("species"), 140),
+                            "sample_group": _text((row.get("metadata") or {}).get("sample_group"), 60),
+                        },
+                    }
+                    for row in (field_map.get("pins") or [])[-300:] if isinstance(row, dict)
                 ],
             },
         }
@@ -1872,6 +2065,40 @@ class HtmlDashboardMixin:
             return self._html_copy_text(_text(payload.get("text"), 20000))
 
         if page == "explore":
+            if operation in {"survey_pin", "survey_skip", "survey_complete", "survey_reset"}:
+                system = _text(payload.get("system") or getattr(self, "current_sys", ""), 140)
+                if not system:
+                    return False
+                states = dict(self.config.get("stellar_survey_queue_state") or {})
+                system_key = system.casefold()
+                state = dict(states.get(system_key) or {})
+                if operation == "survey_reset":
+                    states.pop(system_key, None)
+                else:
+                    body_key = _text(payload.get("body_key"), 220)
+                    if not body_key:
+                        return False
+                    buckets = {
+                        name: {str(value) for value in state.get(name) or ()}
+                        for name in ("pinned", "skipped", "completed")
+                    }
+                    target = {
+                        "survey_pin": "pinned",
+                        "survey_skip": "skipped",
+                        "survey_complete": "completed",
+                    }[operation]
+                    enabled = body_key not in buckets[target]
+                    for values in buckets.values():
+                        values.discard(body_key)
+                    if enabled:
+                        buckets[target].add(body_key)
+                    states[system_key] = {
+                        name: sorted(values) for name, values in buckets.items()
+                    }
+                self.config["stellar_survey_queue_state"] = dict(list(states.items())[-50:])
+                self._persist_config()
+                self._schedule_html_dashboard_publish(immediate=True)
+                return True
             manager = getattr(self, "waypoint_manager", None)
             if manager is None:
                 return False
@@ -2034,6 +2261,49 @@ class HtmlDashboardMixin:
                 self.add_event_feed_entry("PROFILE", "Profile restore scheduled for next start", severity="WARN")
                 return True
 
+        elif page == "chronicle":
+            if operation != "export_replay":
+                return False
+            workspace = self._html_chronicle_workspace()
+            sessions = workspace.get("sessions") or []
+            replay = workspace.get("replay") or {}
+            index = _integer(payload.get("session_index"), 0)
+            if not 0 <= index < len(sessions):
+                return False
+            session = sessions[index]
+            replay_session = (replay.get("sessions") or [{}])[index]
+            title = _text(
+                f"{session.get('start_system') or 'Expedition'} to "
+                f"{session.get('end_system') or session.get('start_system') or 'Unknown'}",
+                180,
+            )
+            try:
+                from tkinter import filedialog
+                default_day = str(session.get("started") or "expedition")[:10].replace("-", "")
+                path = filedialog.asksaveasfilename(
+                    parent=self.root,
+                    title="Export Interactive Expedition Replay",
+                    defaultextension=".html",
+                    filetypes=[("Interactive HTML", "*.html")],
+                    initialfile=f"VoidCompass-Replay-{default_day}.html",
+                )
+                if not path:
+                    return True
+                document = replay_export_html(
+                    title,
+                    getattr(self, "cmdr_name", None) or self.config.get("active_commander_name"),
+                    replay,
+                    replay_session,
+                )
+                Path(path).write_text(document, encoding="utf-8")
+            except Exception as exc:
+                logging.warning("Expedition replay export failed: %s", exc)
+                return False
+            self.add_event_feed_entry(
+                "EXPEDITION", f"Interactive replay exported: {Path(path).name}", severity="INFO",
+            )
+            return True
+
         elif page == "mission":
             manager = getattr(self, "expedition_manager", None)
             if manager is None:
@@ -2127,6 +2397,22 @@ class HtmlDashboardMixin:
             elif operation == "toggle_popup":
                 self.toggle_ground_popup()
                 changed = True
+            elif operation == "add_pin":
+                specialist = getattr(self, "specialist_engine", None)
+                if specialist is None:
+                    return False
+                try:
+                    changed = bool(specialist.add_pin(
+                        _text(payload.get("label") or "Field marker", 160), "waypoint",
+                    ))
+                except ValueError:
+                    return False
+            elif operation == "remove_pin":
+                specialist = getattr(self, "specialist_engine", None)
+                changed = bool(
+                    specialist is not None
+                    and specialist.remove_pin(_text(payload.get("pin_id"), 80))
+                )
             if changed:
                 self.update_ground_target_ui()
 
