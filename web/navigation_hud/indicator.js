@@ -38,6 +38,7 @@
     "prospector_scan", "prospector_rich", "prospector_core", "mining_refined",
   ]);
   const DOCK_EVENTS = new Set(["dock", "dock_request", "dock_denied", "undock"]);
+  const SURFACE_EVENTS = new Set(["body_approach", "planet_clear", "touchdown", "liftoff"]);
   const WARNING_EVENTS = new Set([
     "warning", "interdiction", "signal_drop", "fighter_destroyed", "srv_destroyed",
   ]);
@@ -55,6 +56,8 @@
       this.eventStarted = 0;
       this.eventSequence = null;
       this.eventKind = "";
+      this.gearPulseStarted = 0;
+      this.gearPulseDown = false;
       this.reduced = false;
       this.lastFrame = 0;
       this.running = true;
@@ -110,6 +113,11 @@
     update(next = {}) {
       const now = performance.now();
       const incoming = this.makeState(next);
+      if (this.receivedModel
+          && incoming.dynamics.landingGear !== this.state.dynamics.landingGear) {
+        this.gearPulseStarted = now;
+        this.gearPulseDown = incoming.dynamics.landingGear;
+      }
       if (!this.receivedModel) {
         this.state = incoming;
         this.stateStarted = now;
@@ -395,7 +403,26 @@
       this.line(start, y + 10, end, y + 10, c, quiet, 1);
       this.line(start, y - 10, start + 10, y - 10, c, quiet * .7, 1);
 
-      if (family === "fsd") {
+      if (key === "arrival" || key === "interdiction_evaded") {
+        // The identity bay resolves the ship after witch-space: speed bars
+        // collapse into a steady acquisition bracket instead of continuing
+        // the generic FSD wake used by charge and hyperspace.
+        const lockX = end - 12;
+        for (let band = 0; band < 4; band += 1) {
+          const progress = (p + band / 4) % 1;
+          const fade = Math.sin(progress * Math.PI);
+          const x = start + Math.max(4, lockX - 2 - start) * smooth(progress);
+          const length = 3 + (1 - progress) * 8;
+          this.line(x, y - 7 + band * 4, Math.min(lockX - 2, x + length), y - 7 + band * 4,
+            c, alpha * fade * (.34 + band * .09), band === 2 ? 1.5 : 1);
+        }
+        const lockPulse = .42 + .5 * wave(p);
+        this.path([[lockX - 7, y - 9], [lockX - 10, y - 9], [lockX - 10, y - 4]],
+          c, alpha * lockPulse, 1.2);
+        this.path([[lockX + 7, y + 9], [lockX + 10, y + 9], [lockX + 10, y + 4]],
+          c, alpha * lockPulse, 1.2);
+        this.glowDot(lockX, y, 1 + .7 * wave(p * 2), c, alpha * .86);
+      } else if (family === "fsd") {
         const speed = key === "supercruise_overcharge" || key === "hyperspace" ? 1.7 : 1;
         for (let i = 0; i < 4; i += 1) {
           const x = point(1 - (p * speed + i * .23));
@@ -405,6 +432,60 @@
         }
         const gate = 3 + wave(p) * 7;
         this.line(end - gate, y - 9, end - gate, y + 9, c, alpha * .62, 1.3);
+      } else if (key === "galaxy_map") {
+        // Galactic navigation resolves as a sparse star lattice behind the
+        // ship identity.  The travelling fix follows a plotted vector rather
+        // than reusing the scanner sweep shared by FSS/DSS.
+        const cx = start + span * .52;
+        const contacts = [];
+        for (let index = 0; index < 8; index += 1) {
+          const x = start + 3 + hash(index + 307) * (span - 6);
+          const py = y + (hash(index + 349) - .5) * 16;
+          contacts.push([x, py]);
+          const signal = .2 + .62 * wave(p + hash(index + 383));
+          this.dot(x, py, index % 3 === 0 ? 1.15 : .65, c, alpha * signal);
+        }
+        for (const [from, to] of [[0, 3], [3, 6], [1, 5], [5, 7]]) {
+          this.line(contacts[from][0], contacts[from][1], contacts[to][0], contacts[to][1],
+            c, alpha * .18, 1);
+        }
+        this.arc(cx, y, span * .31, 7.5, 0, TAU, c, alpha * .24, 1);
+        const fixAngle = p * TAU;
+        const fixX = cx + Math.cos(fixAngle) * span * .31;
+        const fixY = y + Math.sin(fixAngle) * 7.5;
+        this.line(cx, y, fixX, fixY, c, alpha * .34, 1);
+        this.glowDot(fixX, fixY, 1.25, c, alpha * .84);
+        const routeY = y + 8;
+        this.line(start + 4, routeY, end - 4, routeY, c, alpha * .3, 1.1);
+        const routeProgress = (p + .08) % 1;
+        const routeFade = Math.sin(routeProgress * Math.PI);
+        const routeX = start + 4 + (span - 8) * routeProgress;
+        this.chevron(routeX, routeY, 1, c, alpha * routeFade * .76, 2.3);
+      } else if (key === "system_map") {
+        // System Map keeps the identity bay body-relative: a central stellar
+        // fix, three orbital tracks and a resolved body bracket.
+        const cx = start + span * .47;
+        this.glowDot(cx, y, 1.5 + .55 * wave(p * 2), c, alpha * .86);
+        const radii = [span * .14, span * .25, span * .37];
+        radii.forEach((radius, index) => {
+          this.arc(cx, y, radius, 3.2 + index * 1.9, 0, TAU, c,
+            alpha * (.18 + index * .06), 1);
+          const direction = index % 2 ? -1 : 1;
+          const angle = p * TAU * direction + index * 1.71;
+          const bodyX = cx + Math.cos(angle) * radius;
+          const bodyY = y + Math.sin(angle) * (3.2 + index * 1.9);
+          this.dot(bodyX, bodyY, index === 2 ? 1.2 : .75, c, alpha * .72);
+          if (index === 2) {
+            const lock = 3.2 + wave(p) * 1.2;
+            this.path([[bodyX - lock, bodyY - 2], [bodyX - lock, bodyY - lock],
+              [bodyX - 1, bodyY - lock]], c, alpha * .62, 1);
+            this.path([[bodyX + lock, bodyY + 2], [bodyX + lock, bodyY + lock],
+              [bodyX + 1, bodyY + lock]], c, alpha * .62, 1);
+          }
+        });
+        const bearing = p * TAU;
+        this.line(cx, y, cx + Math.cos(bearing) * span * .42,
+          y + Math.sin(bearing) * 9, c, alpha * .28, 1);
       } else if (family === "scope") {
         const x = point(p);
         this.line(x, y - 10, x, y + 10, c, alpha * .68, 1.2);
@@ -458,16 +539,50 @@
             c, alpha * (.38 + i * .13), 1.2);
         }
       } else if (family === "surface") {
-        const departure = key.includes("departure");
-        const motion = key === "surface_hold" || key === "landed" ? 0 : (departure ? -1 : 1);
-        this.path([[start, y + 6], [start + span * .28, y + 3],
-          [start + span * .62, y + 7], [end, y + 4]], c, alpha * .48, 1.2);
-        if (motion) {
-          const x = point(motion > 0 ? p : 1 - p);
-          this.chevron(x, y + 5, motion, c, alpha * .68, 2.5);
+        const departing = key.includes("departure");
+        const orbital = key.startsWith("orbital_");
+        const glide = key === "glide";
+        const hold = key === "surface_hold" || key === "landed";
+        const direction = departing ? -1 : 1;
+        const horizon = y + 6;
+        this.arc(start + span * .52, horizon + 7, span * .55, 9,
+          Math.PI * 1.08, Math.PI * 1.92, c, alpha * .48, 1.15);
+        if (orbital) {
+          this.arc(start + span * .52, y + 1, span * .38, 8, 0, TAU,
+            c, alpha * .28, 1);
+          const angle = (departing ? p : 1 - p) * TAU;
+          const contactX = start + span * .52 + Math.cos(angle) * span * .38;
+          const contactY = y + 1 + Math.sin(angle) * 8;
+          this.glowDot(contactX, contactY, 1.2, c, alpha * .82);
+        } else if (glide) {
+          this.line(start + 4, y - 9, end - 7, horizon, c, alpha * .42, 1.2);
+          this.line(start + 17, y - 9, end - 1, horizon - 2, c, alpha * .3, 1);
+          for (let gate = 0; gate < 3; gate += 1) {
+            const progress = (p * 1.7 + gate / 3) % 1;
+            const x = start + span * progress;
+            const py = y - 8 + progress * 14;
+            this.path([[x - 3, py - 2], [x, py], [x + 3, py - 2]],
+              c, alpha * Math.sin(progress * Math.PI) * .68, 1.2);
+          }
+        } else if (hold) {
+          const lock = 5 + wave(p) * 2;
+          this.line(start + span * .28, horizon - 1, end - span * .28, horizon - 1,
+            c, alpha * .64, 1.3);
+          this.path([[start + span * .52 - lock, y - 4], [start + span * .52 - lock, y + 2],
+            [start + span * .52 - 2, y + 2]], c, alpha * .55, 1.1);
+          this.path([[start + span * .52 + lock, y - 4], [start + span * .52 + lock, y + 2],
+            [start + span * .52 + 2, y + 2]], c, alpha * .55, 1.1);
         } else {
-          this.line(start + span * .36, y + 1, start + span * .64, y + 1, c,
-            alpha * (.35 + .25 * wave(p)));
+          for (let rung = 0; rung < 4; rung += 1) {
+            const progress = (p + rung / 4) % 1;
+            const travel = departing ? 1 - progress : progress;
+            const py = y - 8 + travel * 14;
+            const half = 2 + travel * 5;
+            this.line(start + span * .52 - half, py, start + span * .52 + half, py,
+              c, alpha * Math.sin(progress * Math.PI) * .58, 1);
+          }
+          const markerX = point(direction > 0 ? p : 1 - p);
+          this.chevron(markerX, horizon - 2, direction, c, alpha * .68, 2.5);
         }
       } else if (family === "hazard") {
         const pulse = .38 + .62 * wave(p * (key === "interdiction" ? 2 : 1));
@@ -790,14 +905,36 @@
         this.trackStroke(p * .42, .04, g, y, c, alpha * .45);
         return;
       }
-      const expansion = smooth(p);
-      const leftX = g.centerLeft - expansion * (g.centerLeft - g.left);
-      const rightX = g.centerRight + expansion * (g.right - g.centerRight);
-      const fade = 1 - expansion;
-      this.line(leftX, y - 9 * fade, leftX, y + 9 * fade, c, alpha * (.3 + fade * .7), 1.7);
-      this.line(rightX, y - 9 * fade, rightX, y + 9 * fade, c, alpha * (.3 + fade * .7), 1.7);
-      this.path([[g.left, y + 5], [leftX, y], [g.centerLeft, y - 5]], c, alpha * .38);
-      this.path([[g.centerRight, y - 5], [rightX, y], [g.right, y + 5]], c, alpha * .38);
+      const cx = (g.left + g.right) / 2;
+      const half = Math.max(16, (g.right - g.left) / 2);
+
+      // Arrival reverses the witch-space tunnel. Angular apertures contract
+      // into the navigation lock while deceleration packets bleed away at the
+      // centre, so the loop remains seamless during the bounded arrival state.
+      for (let ring = 0; ring < 4; ring += 1) {
+        const progress = (p + ring / 4) % 1;
+        const contraction = 1 - smooth(progress);
+        const fade = Math.sin(progress * Math.PI);
+        this.angularRing(cx, y, 5 + half * .86 * contraction, 2.5 + 8.5 * contraction,
+          6, c, alpha * fade * (.42 + ring * .05), ring === 0 ? 1.5 : 1,
+          Math.PI / 6);
+      }
+      for (let packet = 0; packet < 4; packet += 1) {
+        const progress = (p + packet / 4) % 1;
+        const inward = smooth(progress);
+        const fade = Math.sin(progress * Math.PI);
+        const side = packet % 2 ? -1 : 1;
+        const x = cx + side * half * (1 - inward);
+        this.line(x + side * (4 + 5 * (1 - inward)), y - 6 + packet * 4,
+          x, y - 6 + packet * 4, c, alpha * fade * .72, 1.3);
+      }
+      const lock = 9 + wave(p) * 2.5;
+      this.path([[cx - lock - 5, y - 8], [cx - lock, y - 8], [cx - lock, y - 3]],
+        c, alpha * .68, 1.25);
+      this.path([[cx + lock + 5, y + 8], [cx + lock, y + 8], [cx + lock, y + 3]],
+        c, alpha * .68, 1.25);
+      this.line(cx - 6, y, cx + 6, y, c, alpha * (.45 + .35 * wave(p)), 1.3);
+      this.glowDot(cx, y, 1.3 + .9 * wave(p * 2), c, alpha * .92);
     }
 
     splitPath(points, color, alpha = 1, width = 1) {
@@ -838,6 +975,103 @@
     drawMap(g, state, p, alpha, key) {
       const c = state.color, y = g.y;
       const centers = [(g.left + g.centerLeft) / 2, (g.centerRight + g.right) / 2];
+      if (key === "galaxy_map" || key === "map") {
+        const cx = g.center;
+        const span = Math.max(24, g.right - g.left);
+
+        // A flattened galactic projection with a plotted navigation solution.
+        // Seeded contacts keep it quiet and deterministic; every moving phase
+        // completes an integer revolution so the animation has no wrap jerk.
+        for (let ring = 0; ring < 3; ring += 1) {
+          this.arc(cx, y, span * (.15 + ring * .13), 3.5 + ring * 3.2,
+            0, TAU, c, alpha * (.16 + ring * .055), 1,
+          );
+        }
+        for (let arm = 0; arm < 3; arm += 1) {
+          const points = [];
+          for (let step = 0; step <= 18; step += 1) {
+            const travel = step / 18;
+            const radius = 2 + travel * span * .43;
+            const angle = travel * 4.6 + p * TAU + arm * TAU / 3;
+            points.push([
+              cx + Math.cos(angle) * radius,
+              y + Math.sin(angle) * radius * .2,
+            ]);
+          }
+          this.path(points, c, alpha * .32, 1);
+        }
+        for (let index = 0; index < 11; index += 1) {
+          const starX = g.left + 5 + hash(index + 421) * (span - 10);
+          const starY = y + (hash(index + 463) - .5) * 19;
+          const signal = .18 + .55 * wave(p + hash(index + 491));
+          this.dot(starX, starY, index % 4 === 0 ? 1.05 : .58, c, alpha * signal);
+        }
+
+        const route = [
+          [g.left + 7, y + 7], [g.left + span * .29, y + 2],
+          [g.left + span * .54, y - 6], [g.left + span * .78, y - 1],
+          [g.right - 7, y - 8],
+        ];
+        this.path(route, c, alpha * .42, 1.15);
+        route.forEach(([x, py], index) => {
+          this.angularRing(x, py, index === route.length - 1 ? 3.4 : 2.2,
+            index === route.length - 1 ? 2.4 : 1.55, 4, c,
+            alpha * (index === route.length - 1 ? .76 : .4), 1, Math.PI / 4);
+        });
+        const legFloat = p * (route.length - 1);
+        const leg = Math.min(route.length - 2, Math.floor(legFloat));
+        const local = legFloat - leg;
+        const packetX = route[leg][0] + (route[leg + 1][0] - route[leg][0]) * local;
+        const packetY = route[leg][1] + (route[leg + 1][1] - route[leg][1]) * local;
+        const packetFade = Math.sin(p * Math.PI);
+        this.glowDot(packetX, packetY, 1.35, c,
+          alpha * (.38 + .5 * packetFade));
+        const aperture = 7 + wave(p) * 2;
+        this.path([[cx - aperture - 4, y - 10], [cx - aperture, y - 10],
+          [cx - aperture, y - 6]], c, alpha * .5, 1.1);
+        this.path([[cx + aperture + 4, y + 10], [cx + aperture, y + 10],
+          [cx + aperture, y + 6]], c, alpha * .5, 1.1);
+        return;
+      }
+      if (key === "system_map") {
+        const cx = g.center;
+        const span = Math.max(24, g.right - g.left);
+        const orbitRadii = [span * .105, span * .2, span * .31, span * .42];
+
+        // One navigable star system: the primary remains fixed, orbiting
+        // contacts move at distinct integer periods, and the outer target is
+        // acquired by a restrained body-selection bracket.
+        this.glowDot(cx, y, 2.1 + .65 * wave(p * 2), c, alpha * .92);
+        this.arc(cx, y, 4.5, 3, 0, TAU, c, alpha * .45, 1.2);
+        orbitRadii.forEach((radius, index) => {
+          const ry = 3.1 + index * 2.25;
+          this.arc(cx, y, radius, ry, 0, TAU, c,
+            alpha * (.2 + index * .045), 1);
+          const direction = index % 2 ? -1 : 1;
+          const revolutions = index < 2 ? 2 : 1;
+          const angle = p * TAU * revolutions * direction + index * 1.37;
+          const bodyX = cx + Math.cos(angle) * radius;
+          const bodyY = y + Math.sin(angle) * ry;
+          this.dot(bodyX, bodyY, index === 3 ? 1.45 : .8 + index * .08,
+            c, alpha * (.58 + .2 * wave(p + index * .17)));
+          if (index === 3) {
+            const lock = 4 + wave(p) * 1.5;
+            this.path([[bodyX - lock - 2, bodyY - lock], [bodyX - lock, bodyY - lock],
+              [bodyX - lock, bodyY - 2]], c, alpha * .72, 1.2);
+            this.path([[bodyX + lock + 2, bodyY + lock], [bodyX + lock, bodyY + lock],
+              [bodyX + lock, bodyY + 2]], c, alpha * .72, 1.2);
+          }
+        });
+        const scanAngle = p * TAU;
+        this.line(cx, y, cx + Math.cos(scanAngle) * span * .45,
+          y + Math.sin(scanAngle) * 10.5, c, alpha * .27, 1);
+        for (const side of [-1, 1]) {
+          const edgeX = cx + side * span * .47;
+          this.line(edgeX, y - 8, edgeX, y + 8, c,
+            alpha * (.28 + .25 * wave(p + (side > 0 ? .5 : 0))), 1.15);
+        }
+        return;
+      }
       if (key === "codex") {
         centers.forEach((cx, side) => {
           for (let row = -1; row <= 1; row += 1) {
@@ -850,18 +1084,7 @@
         return;
       }
       centers.forEach((cx, side) => {
-        if (key === "galaxy_map" || key === "map") {
-          for (let arm = 0; arm < 3; arm += 1) {
-            const points = [];
-            for (let i = 0; i < 12; i += 1) {
-              const radius = 1.5 + i * 2.2;
-              const angle = i * .48 + p * TAU * (side ? -1 : 1) + arm * TAU / 3;
-              points.push([cx + Math.cos(angle) * radius, y + Math.sin(angle) * radius * .38]);
-            }
-            this.path(points, c, alpha * .35);
-          }
-          this.glowDot(cx, y, 1.6, c, alpha * .85);
-        } else if (key === "power_map") {
+        if (key === "power_map") {
           const nodes = [[-26, 5], [-12, -7], [5, 1], [22, -8], [29, 7]];
           this.path(nodes.map(([x, py]) => [cx + x, y + py]), c, alpha * .42);
           nodes.forEach(([x, py], i) => this.dot(cx + x, y + py, i === Math.floor(p * nodes.length) ? 2 : 1.2, c, alpha * .72));
@@ -882,15 +1105,21 @@
       const departing = key.includes("departure");
       const hold = key === "surface_hold";
       const landed = key === "landed";
-      const direction = departing ? -1 : 1;
+      const orbital = key.startsWith("orbital_");
+      const glide = key === "glide";
       const vertical = clamp(Math.abs(d.vertical) / 160);
       const gravity = clamp(d.gravity / 4);
-      const horizonY = y + (departing ? 4 : hold || landed ? 5 : 2) + gravity * 2;
+      const knownAltitude = d.altitude >= 0;
+      const altitude = knownAltitude ? clamp(Math.log10(d.altitude + 1) / 6) : .45;
+      const proximity = 1 - altitude;
+      const horizonY = y + (departing ? 5 : hold || landed ? 6 : 3) + gravity * 1.4;
       const leftMid = (g.left + g.centerLeft) / 2;
       const rightMid = (g.centerRight + g.right) / 2;
       [leftMid, rightMid].forEach((cx) => {
-        this.arc(cx, horizonY + 10, Math.min(62, (g.centerLeft - g.left) * .46), 12,
-          Math.PI * 1.08, Math.PI * 1.92, c, alpha * .58, 1.2);
+        const bayWidth = Math.max(15, g.centerLeft - g.left);
+        const planetWidth = Math.min(62, bayWidth * (.34 + proximity * .2));
+        this.arc(cx, horizonY + 10, planetWidth, 10 + gravity * 2,
+          Math.PI * 1.08, Math.PI * 1.92, c, alpha * .56, 1.2);
       });
       if (hold || landed) {
         this.line(g.left + 7, horizonY, g.centerLeft - 7, horizonY, c, alpha * .55, 1.3);
@@ -899,15 +1128,72 @@
           this.line(cx - 8, horizonY, cx - 4, horizonY - 5, c, alpha * .62);
           this.line(cx + 8, horizonY, cx + 4, horizonY - 5, c, alpha * .62);
         }
-      } else {
-        const speed = key === "glide" ? 1.9 : .78 + vertical;
-        for (let i = 0; i < 5; i += 1) {
-          const progress = (p * speed + i / 5) % 1;
-          const travel = direction > 0 ? progress : 1 - progress;
-          const point = this.trackPoint(travel, g);
-          const size = 2 + (direction > 0 ? progress : 1 - progress) * 5;
-          this.chevron(point.x, y - 1, direction, c, alpha * (.25 + .55 * wave(progress)), size);
+        for (const cx of [leftMid, rightMid]) {
+          const pulse = 4 + wave(p) * 2;
+          this.path([[cx - pulse, y - 6], [cx - pulse, y], [cx - 2, y]],
+            c, alpha * .5, 1.1);
+          this.path([[cx + pulse, y - 6], [cx + pulse, y], [cx + 2, y]],
+            c, alpha * .5, 1.1);
+          if (landed) this.rect(cx - 5, horizonY - 2, 10, 2, c, alpha * .65, true);
         }
+      } else if (orbital) {
+        // Orbital phases use a curved flight solution and a body-relative
+        // contact. Approach converges toward the forward tangent; departure
+        // carries the contact away while the planet arc recedes.
+        [leftMid, rightMid].forEach((cx, side) => {
+          const bayWidth = Math.max(16, g.centerLeft - g.left);
+          this.arc(cx, y + 1, bayWidth * .34, 8, 0, TAU, c, alpha * .3, 1);
+          const travel = departing ? p : 1 - p;
+          const angle = (side ? Math.PI : 0) + travel * TAU;
+          const contactX = cx + Math.cos(angle) * bayWidth * .34;
+          const contactY = y + 1 + Math.sin(angle) * 8;
+          this.glowDot(contactX, contactY, 1.25, c,
+            alpha * (.5 + .42 * wave(p + side * .17)));
+          this.line(cx - 6, horizonY - 1, cx + 6, horizonY - 1,
+            c, alpha * (.28 + .25 * proximity), 1.1);
+        });
+      } else if (glide) {
+        // Glide is a steep, high-energy descent corridor rather than the
+        // horizontal travel packets used by supercruise and normal flight.
+        [leftMid, rightMid].forEach((cx) => {
+          const bayHalf = Math.max(10, (g.centerLeft - g.left) * .42);
+          this.line(cx - bayHalf, y - 10, cx - 5, horizonY, c, alpha * .5, 1.2);
+          this.line(cx + bayHalf, y - 10, cx + 5, horizonY, c, alpha * .5, 1.2);
+          for (let gate = 0; gate < 4; gate += 1) {
+            const progress = (p * (1.65 + vertical) + gate / 4) % 1;
+            const py = y - 9 + progress * 15;
+            const halfWidth = bayHalf * (1 - progress * .68);
+            const fade = Math.sin(progress * Math.PI);
+            this.line(cx - halfWidth, py, cx - 3, py, c, alpha * fade * .58, 1);
+            this.line(cx + 3, py, cx + halfWidth, py, c, alpha * fade * .58, 1);
+          }
+          const markerY = y - 5 + wave(p) * 6;
+          this.path([[cx - 4, markerY - 2], [cx, markerY + 2], [cx + 4, markerY - 2]],
+            c, alpha * .8, 1.4);
+        });
+      } else {
+        // Low-altitude approach/departure gets an animated radar altimeter.
+        // Direction is vertical and journal-derived velocity changes its rate.
+        [leftMid, rightMid].forEach((cx) => {
+          const bayHalf = Math.max(10, (g.centerLeft - g.left) * .4);
+          this.line(cx - bayHalf, y - 9, cx - 5, horizonY, c, alpha * .36, 1);
+          this.line(cx + bayHalf, y - 9, cx + 5, horizonY, c, alpha * .36, 1);
+          for (let rung = 0; rung < 5; rung += 1) {
+            const progress = (p * (.78 + vertical) + rung / 5) % 1;
+            const travel = departing ? 1 - progress : progress;
+            const py = y - 9 + travel * 15;
+            const halfWidth = 2.5 + travel * (bayHalf - 4);
+            this.line(cx - halfWidth, py, cx - 1.5, py, c,
+              alpha * Math.sin(progress * Math.PI) * .52, 1);
+            this.line(cx + 1.5, py, cx + halfWidth, py, c,
+              alpha * Math.sin(progress * Math.PI) * .52, 1);
+          }
+          const markerY = departing ? y - 5 - wave(p) * 3 : y - 5 + wave(p) * 5;
+          this.path(departing
+            ? [[cx - 4, markerY + 2], [cx, markerY - 2], [cx + 4, markerY + 2]]
+            : [[cx - 4, markerY - 2], [cx, markerY + 2], [cx + 4, markerY - 2]],
+          c, alpha * .78, 1.35);
+        });
       }
       if (d.landingGear) {
         this.line(g.centerLeft - 10, y + 10, g.centerLeft - 4, y + 5, c, alpha * .75, 1.4);
@@ -1233,10 +1519,46 @@
 
     eventColor(kind, fallback) {
       if (WARNING_EVENTS.has(kind) || kind === "dock_denied") return this.themeColor("orange", "#ff7a18");
-      if (["survey_complete", "mapping_complete", "bio_sample", "data_sale",
+      if (["survey_complete", "mapping_complete", "bio_sample", "data_sale", "touchdown",
         "mining_refined", "interdiction_clear"].includes(kind)) return this.themeColor("green", "#4ee59b");
       if (RESOURCE_EVENTS.has(kind) || kind === "signals" || kind === "codex") return this.themeColor("yellow", "#ffd166");
       return fallback;
+    }
+
+    drawGearPulse(g, now) {
+      if (!this.gearPulseStarted) return;
+      const elapsed = (now - this.gearPulseStarted) / 1000;
+      if (elapsed < 0 || elapsed > 1.08) {
+        this.gearPulseStarted = 0;
+        return;
+      }
+      const travel = smooth(clamp(elapsed / .58));
+      const deployment = this.gearPulseDown ? travel : 1 - travel;
+      const fadeIn = smooth(clamp(elapsed / .14));
+      const fadeOut = 1 - smooth(clamp((elapsed - .64) / .44));
+      const alpha = fadeIn * fadeOut;
+      const c = this.gearPulseDown
+        ? this.themeColor("green", "#4ee59b")
+        : this.themeColor("accent", "#00d1ff");
+      const cx = g.center, y = g.y;
+      const spread = 4 + deployment * Math.min(15, (g.right - g.left) * .17);
+      const footY = y - 1 + deployment * 9;
+
+      // Two mechanical struts deploy/retract around a restrained acquisition
+      // pulse. It is intentionally short: useful confirmation without
+      // becoming another persistent flight-state animation.
+      for (const side of [-1, 1]) {
+        const rootX = cx + side * 4;
+        const footX = cx + side * spread;
+        this.line(rootX, y - 6, footX, footY, c, alpha * .9, 1.5);
+        this.line(footX - side * 3.5, footY, footX + side * 2, footY,
+          c, alpha * (.42 + deployment * .48), 1.35);
+        this.dot(footX, footY, 1, c, alpha * .82);
+      }
+      const pulse = clamp(elapsed / .78);
+      this.angularRing(cx, y, 6 + pulse * Math.min(27, (g.right - g.left) * .28),
+        2.5 + pulse * 7, 6, c, alpha * (1 - pulse) * .72, 1.2, Math.PI / 6);
+      this.line(cx - 5, y, cx + 5, y, c, alpha * .6, 1.2);
     }
 
     themeColor(name, fallback) {
@@ -1278,6 +1600,21 @@
         const spread = 7 + opening * 27;
         this.line(g.center - spread, y - 10, g.center - spread, y + 10, c, fade, 1.5);
         this.line(g.center + spread, y - 10, g.center + spread, y + 10, c, fade, 1.5);
+      } else if (SURFACE_EVENTS.has(this.eventKind)) {
+        const outbound = this.eventKind === "liftoff" || this.eventKind === "planet_clear";
+        const travel = outbound ? p : 1 - p;
+        const spread = 5 + travel * Math.max(10, (g.right - g.left) * .34);
+        this.arc(g.center, y + 10, Math.max(15, (g.right - g.left) * .38), 10,
+          Math.PI * 1.08, Math.PI * 1.92, c, fade * .58, 1.2);
+        this.path([[g.center - spread - 5, y - 8], [g.center - spread, y - 8],
+          [g.center - spread, y - 2]], c, fade * .88, 1.5);
+        this.path([[g.center + spread + 5, y + 8], [g.center + spread, y + 8],
+          [g.center + spread, y + 2]], c, fade * .88, 1.5);
+        const markerY = outbound ? y + 5 - p * 12 : y - 7 + p * 12;
+        this.path(outbound
+          ? [[g.center - 4, markerY + 2], [g.center, markerY - 2], [g.center + 4, markerY + 2]]
+          : [[g.center - 4, markerY - 2], [g.center, markerY + 2], [g.center + 4, markerY - 2]],
+        c, fade, 1.5);
       } else if (WARNING_EVENTS.has(this.eventKind)) {
         const flash = .35 + .65 * wave(elapsed * 3.2);
         this.line(g.left, g.top, g.centerLeft, g.top, c, fade * flash, 2);
@@ -1323,7 +1660,10 @@
         this.drawIdentity(g, this.state, phase, 1);
         this.drawState(response, this.state, phase, 1);
       }
-      if (!this.reduced) this.drawEvent(response, now);
+      if (!this.reduced) {
+        this.drawEvent(response, now);
+        this.drawGearPulse(response, now);
+      }
     }
 
     frame(now) {
