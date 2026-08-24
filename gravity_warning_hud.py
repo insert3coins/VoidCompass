@@ -70,7 +70,16 @@ class GravityWarningHUD:
         refresh_ms = max(2000, int(self.config.get("overlay_topmost_refresh_ms", 12000) or 12000))
         self.win.after(refresh_ms, self._force_topmost)
 
+    def _startup_held(self):
+        """Return whether the bootloader still owns the visible cockpit."""
+        return bool(getattr(
+            self.root, "_voidcompass_startup_presentation_held", False,
+        ))
+
     def show(self):
+        if self._startup_held():
+            self.hide()
+            return False
         try:
             x = self._safe_int(self.config.get("gravity_warning_hud_x"), 30)
             y = self._safe_int(self.config.get("gravity_warning_hud_y"), 30)
@@ -78,8 +87,9 @@ class GravityWarningHUD:
             self.win.deiconify()
             self.win.attributes("-topmost", True)
             self.win.lift()
+            return True
         except Exception:
-            pass
+            return False
 
     def hide(self):
         if self._hide_job:
@@ -121,6 +131,11 @@ class GravityWarningHUD:
         this session) — this overlay can only warn about bodies we already
         have data for, same limitation as the local-data-only game state.
         """
+        if self._startup_held():
+            # Recovery may revisit an old ApproachBody without its matching
+            # LeaveBody. Cached history must not manufacture a fresh alert.
+            self.clear()
+            return
         if not body_name or gravity_g is None:
             return
         if gravity_g < self._threshold():
@@ -128,14 +143,14 @@ class GravityWarningHUD:
                 self.clear()
             return
         if body_name == self._last_body and gravity_g == self._last_gravity:
-            self.show()
-            self._schedule_hide()
+            if self.show():
+                self._schedule_hide()
             return
         self._last_body = body_name
         self._last_gravity = gravity_g
         self._redraw(body_name, gravity_g)
-        self.show()
-        self._schedule_hide()
+        if self.show():
+            self._schedule_hide()
 
     def clear(self):
         """Called on LeaveBody — drop tracked state and hide immediately."""
