@@ -123,6 +123,24 @@ def _set_windows_visibility(window, visible):
         return False
 
 
+def _windows_visibility(window):
+    """Read the real native visibility, independent of host bookkeeping.
+
+    WebView2 can map a window after its initial ``hidden=True`` creation and
+    after an early SW_HIDE has already succeeded. The requested state is not
+    therefore enough to decide whether a later hide can be skipped.
+    """
+    hwnd = _native_handle(window)
+    if not hwnd:
+        return None
+    try:
+        return bool(ctypes.WinDLL("user32", use_last_error=True).IsWindowVisible(
+            ctypes.c_void_p(hwnd),
+        ))
+    except Exception:
+        return None
+
+
 def _request_json(url, payload=None, timeout=1.5):
     body = None
     headers = {}
@@ -179,12 +197,22 @@ class _WindowController:
                 and not payload.get("shutdown")
                 and not presentation_held
             )
-            if visible != self.last_visible:
+            # WebView2 occasionally maps an asynchronously-created window
+            # after our first SW_HIDE. Compare with the actual HWND instead of
+            # trusting only last_visible, otherwise inactive transient HUDs
+            # can remain on screen indefinitely with a false manifest state.
+            native_visible = _windows_visibility(self.window)
+            visibility_drifted = (
+                native_visible is not None and native_visible != visible
+            )
+            if visible != self.last_visible or visibility_drifted:
                 if visible:
                     _apply_windows_style(self.window, click_through)
                     _apply_windows_geometry(self.window, *geometry)
-                _set_windows_visibility(self.window, visible)
-                self.last_visible = visible
+                if _set_windows_visibility(self.window, visible):
+                    self.last_visible = visible
+                else:
+                    self.last_visible = None
             now = time.monotonic()
             if visible and now - self.last_topmost_refresh >= 12.0:
                 _apply_windows_style(self.window, click_through)
