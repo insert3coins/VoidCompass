@@ -29,6 +29,43 @@ let workspaceFingerprints = {};
 let missionSelectedId = "";
 let hotkeyCaptureAction = "";
 
+const HOTKEY_MODIFIER_KEYS = new Set([
+  "Alt", "AltGraph", "Control", "Meta", "OS", "Shift",
+]);
+const HOTKEY_CODE_NAMES = {
+  Space: "Space", ArrowLeft: "Left", ArrowRight: "Right",
+  ArrowUp: "Up", ArrowDown: "Down", PageUp: "PageUp",
+  PageDown: "PageDown", Enter: "Enter", NumpadEnter: "Enter",
+  Delete: "Delete", Insert: "Insert", Home: "Home", End: "End",
+  Backspace: "Backspace", Tab: "Tab", Escape: "Escape",
+};
+
+function hotkeyFinalKey(event) {
+  const code = String(event.code || "");
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+  if (/^F(?:[1-9]|1[0-9]|2[0-4])$/.test(code)) return code;
+  if (HOTKEY_CODE_NAMES[code]) return HOTKEY_CODE_NAMES[code];
+  const names = {
+    " ": "Space", ArrowLeft: "Left", ArrowRight: "Right",
+    ArrowUp: "Up", ArrowDown: "Down", PageUp: "PageUp",
+    PageDown: "PageDown", Escape: "Escape", Enter: "Enter",
+    Delete: "Delete", Insert: "Insert", Home: "Home", End: "End",
+    Backspace: "Backspace", Tab: "Tab",
+  };
+  const key = names[event.key] || String(event.key || "");
+  if (/^[A-Za-z0-9]$/.test(key)) return key.toUpperCase();
+  if (/^F(?:[1-9]|1[0-9]|2[0-4])$/.test(key)) return key.toUpperCase();
+  return "";
+}
+
+async function finishHotkeyCapture(message) {
+  hotkeyCaptureAction = "";
+  document.querySelectorAll(".hotkey-row.recording").forEach((row) => row.classList.remove("recording"));
+  text("hotkey-status", message);
+  await command("workspace", {page: "settings", operation: "capture_end"});
+}
+
 const byId = (id) => document.getElementById(id);
 const text = (id, value, fallback = "—") => {
   const node = byId(id);
@@ -1280,10 +1317,17 @@ document.addEventListener("click", async (event) => {
   }
   const recordHotkey = event.target.closest("[data-hotkey-record]");
   if (recordHotkey) {
+    if (hotkeyCaptureAction) await finishHotkeyCapture("Starting a new capture…");
     hotkeyCaptureAction = recordHotkey.dataset.hotkeyRecord;
-    await command("workspace", {page: "settings", operation: "capture_begin"});
+    const accepted = await command("workspace", {page: "settings", operation: "capture_begin"});
+    if (!accepted) {
+      hotkeyCaptureAction = "";
+      text("hotkey-status", "Recorder could not suspend the active shortcuts.");
+      return;
+    }
     text("hotkey-status", "PRESS THE COMPLETE SHORTCUT · ESC CANCELS");
     recordHotkey.closest(".hotkey-row")?.classList.add("recording");
+    recordHotkey.focus({preventScroll: true});
     return;
   }
   const clearHotkey = event.target.closest("[data-hotkey-clear]");
@@ -1642,18 +1686,17 @@ byId("atlas-focus-toggle").addEventListener("click", () => {
   text("atlas-focus-toggle", focused ? "DOCK MAP" : "FOCUS MAP");
 });
 
-document.addEventListener("keydown", async (event) => {
+window.addEventListener("keydown", async (event) => {
   if (hotkeyCaptureAction) {
     event.preventDefault();
     event.stopPropagation();
+    event.stopImmediatePropagation();
+    if (event.repeat) return;
     if (event.key === "Escape" && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey) {
-      hotkeyCaptureAction = "";
-      document.querySelectorAll(".hotkey-row.recording").forEach((row) => row.classList.remove("recording"));
-      text("hotkey-status", "Capture cancelled.");
-      await command("workspace", {page: "settings", operation: "capture_end"});
+      await finishHotkeyCapture("Capture cancelled.");
       return;
     }
-    if (["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
+    if (HOTKEY_MODIFIER_KEYS.has(event.key) || /^(?:Control|Alt|Shift|Meta)(?:Left|Right)$/.test(event.code || "")) {
       text("hotkey-status", "KEEP HOLDING THE MODIFIER · PRESS THE FINAL KEY");
       return;
     }
@@ -1662,27 +1705,22 @@ document.addEventListener("keydown", async (event) => {
     if (event.altKey) modifiers.push("Alt");
     if (event.shiftKey) modifiers.push("Shift");
     if (event.metaKey) modifiers.push("Win");
-    const names = {" ": "Space", "ArrowLeft": "Left", "ArrowRight": "Right", "ArrowUp": "Up", "ArrowDown": "Down", "PageUp": "PageUp", "PageDown": "PageDown", "Escape": "Escape", "Enter": "Enter", "Delete": "Delete", "Insert": "Insert", "Home": "Home", "End": "End", "Backspace": "Backspace", "Tab": "Tab"};
-    let key = names[event.key] || event.key;
-    if (key.length === 1) key = key.toUpperCase();
-    if (!modifiers.length || !/^(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4])|Space|Left|Right|Up|Down|PageUp|PageDown|Enter|Delete|Insert|Home|End|Backspace|Tab)$/.test(key)) {
+    const key = hotkeyFinalKey(event);
+    if (!modifiers.length || !key) {
       text("hotkey-status", "Use Ctrl, Alt, Shift or Win plus a letter, number, F-key or navigation key.");
       return;
     }
     const chord = [...modifiers, key].join("+");
     const input = document.querySelector(`[data-hotkey-action="${CSS.escape(hotkeyCaptureAction)}"]`);
     if (input) input.value = chord;
-    hotkeyCaptureAction = "";
-    document.querySelectorAll(".hotkey-row.recording").forEach((row) => row.classList.remove("recording"));
-    text("hotkey-status", `Captured ${chord}. Save Settings to activate it.`);
-    await command("workspace", {page: "settings", operation: "capture_end"});
+    await finishHotkeyCapture(`Captured ${chord}. Save Settings to activate it.`);
     return;
   }
   if (event.key === "Escape" && document.body.classList.contains("atlas-focus")) {
     document.body.classList.remove("atlas-focus");
     text("atlas-focus-toggle", "FOCUS MAP");
   }
-});
+}, true);
 
 window.addEventListener("error", (event) => {
   reportClientError(event.error || event.message, "window-error");
