@@ -123,6 +123,8 @@
 
   async function render(model) {
     const scene = model && model.scene ? model.scene : { width: 1, height: 1, items: [] };
+    const opacity = Number(model?.effects?.opacity);
+    document.body.style.opacity = String(Number.isFinite(opacity) ? Math.max(.4, Math.min(1, opacity)) : 1);
     const width = Math.max(1, Number(scene.width || 1));
     const height = Math.max(1, Number(scene.height || 1));
     const ratio = Math.max(1, window.devicePixelRatio || 1);

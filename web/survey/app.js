@@ -53,6 +53,8 @@
       }
     }
     document.documentElement.style.setProperty("--scale", String(safeNumber(effects.text_scale) || 1));
+    const opacity = Number(effects.opacity);
+    document.body.style.opacity = String(Number.isFinite(opacity) ? Math.max(.4, Math.min(1, opacity)) : 1);
     dom.root.classList.toggle("no-crt", !effects.crt);
     dom.root.classList.toggle("reduced-motion", Boolean(effects.reduced_motion));
   }

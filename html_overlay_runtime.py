@@ -19,6 +19,15 @@ def _resource_path(relative_path):
     return base / relative_path
 
 
+def overlay_opacity_ratio(config):
+    """Return the profile's bounded HTML overlay opacity ratio."""
+    try:
+        percent = float((config or {}).get("overlay_opacity_percent", 100))
+    except (TypeError, ValueError):
+        percent = 100.0
+    return max(0.4, min(1.0, percent / 100.0))
+
+
 class HtmlOverlayRuntime:
     """Own one HTTP transport and one WebView2 process per application."""
 

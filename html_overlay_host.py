@@ -69,6 +69,7 @@ def _apply_windows_style(window, click_through=True):
         set_style.restype = ctypes.c_ssize_t
         old_style = int(get_style(hwnd, GWL_EXSTYLE))
         style = _overlay_window_style(old_style, click_through)
+        style_changed = style != old_style
         # APPWINDOW explicitly asks Explorer to create a taskbar button and
         # takes precedence over the tool-window intent on some WebView2/
         # WinForms combinations. If it was present on an already visible
@@ -76,22 +77,69 @@ def _apply_windows_style(window, click_through=True):
         # its cached taskbar entry. New overlay windows begin hidden anyway.
         was_appwindow = bool(old_style & WS_EX_APPWINDOW)
         was_visible = bool(user32.IsWindowVisible(ctypes.c_void_p(hwnd)))
-        if was_appwindow and was_visible:
+        if style_changed and was_appwindow and was_visible:
             user32.ShowWindow(ctypes.c_void_p(hwnd), SW_HIDE)
-        ctypes.set_last_error(0)
-        previous = set_style(hwnd, GWL_EXSTYLE, style)
-        if previous == 0 and ctypes.get_last_error():
-            if was_appwindow and was_visible:
-                user32.ShowWindow(ctypes.c_void_p(hwnd), SW_SHOWNOACTIVATE)
-            return False
+        if style_changed:
+            ctypes.set_last_error(0)
+            previous = set_style(hwnd, GWL_EXSTYLE, style)
+            if previous == 0 and ctypes.get_last_error():
+                if was_appwindow and was_visible:
+                    user32.ShowWindow(ctypes.c_void_p(hwnd), SW_SHOWNOACTIVATE)
+                return False
+        position_flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+        if style_changed:
+            position_flags |= SWP_FRAMECHANGED
         user32.SetWindowPos(
             ctypes.c_void_p(hwnd), ctypes.c_void_p(HWND_TOPMOST), 0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+            position_flags,
         )
-        if was_appwindow and was_visible:
+        if style_changed and was_appwindow and was_visible:
             user32.ShowWindow(ctypes.c_void_p(hwnd), SW_SHOWNOACTIVATE)
         return True
     except Exception:
+        return False
+
+
+def _apply_webview_transparency(window):
+    """Restore WebView2's per-pixel transparent composition surface.
+
+    A hidden WinForms/WebView2 window can occasionally return from ShowWindow
+    with its controller's default background in the opaque fallback state.
+    CSS transparency cannot repair that native surface, so reassert the same
+    transparent-black controller colour pywebview applies at construction.
+    The work is marshalled to the WinForms UI thread because the overlay host
+    control loop runs on pywebview's background thread.
+    """
+    native = getattr(window, "native", None)
+    if native is None:
+        return False
+    browser = getattr(native, "browser", None)
+    control = getattr(browser, "webview", None) if browser is not None else None
+    if control is None:
+        control = getattr(native, "webview", None)
+    if control is None:
+        return False
+    try:
+        from System import Func, Type
+        from System.Drawing import Color
+
+        def restore():
+            if bool(getattr(native, "IsDisposed", False)):
+                return None
+            if bool(getattr(control, "IsDisposed", False)):
+                return None
+            control.DefaultBackgroundColor = Color.FromArgb(0, 0, 0, 0)
+            control.Invalidate()
+            return None
+
+        if bool(getattr(native, "InvokeRequired", False)):
+            native.Invoke(Func[Type](restore))
+        else:
+            restore()
+        return True
+    except Exception:
+        # Transparency recovery is defensive. A controller that is still
+        # initializing will be retried on the next visible host pass.
         return False
 
 
@@ -104,7 +152,10 @@ def _apply_windows_geometry(window, x, y, width, height):
         return bool(user32.SetWindowPos(
             ctypes.c_void_p(hwnd), ctypes.c_void_p(HWND_TOPMOST),
             int(x), int(y), int(width), int(height),
-            SWP_NOACTIVATE | SWP_FRAMECHANGED,
+            # This is only a bounds update. Forcing a non-client frame rebuild
+            # on every Studio drag, content resize or restored position can
+            # also make WebView2 recreate its opaque fallback surface.
+            SWP_NOACTIVATE,
         ))
     except Exception:
         return False
@@ -191,6 +242,7 @@ class _WindowController:
             click_through = bool(payload.get("click_through", True))
             if click_through != self.last_click_through:
                 _apply_windows_style(self.window, click_through)
+                _apply_webview_transparency(self.window)
                 self.last_click_through = click_through
             visible = bool(
                 payload.get("visible", False)
@@ -209,8 +261,13 @@ class _WindowController:
                 if visible:
                     _apply_windows_style(self.window, click_through)
                     _apply_windows_geometry(self.window, *geometry)
+                    _apply_webview_transparency(self.window)
                 if _set_windows_visibility(self.window, visible):
                     self.last_visible = visible
+                    if visible:
+                        # Showing the native form is the operation that can
+                        # make WebView2 restore its opaque fallback brush.
+                        _apply_webview_transparency(self.window)
                 else:
                     self.last_visible = None
             now = time.monotonic()

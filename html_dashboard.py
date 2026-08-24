@@ -1652,6 +1652,7 @@ class HtmlDashboardMixin:
                 "overlay_mouse_passthrough": bool(self.config.get("overlay_mouse_passthrough", True)),
                 "hud_compact_mode": bool(self.config.get("hud_compact_mode", True)),
                 "overlay_text_scale_percent": _integer(self.config.get("overlay_text_scale_percent"), 100),
+                "overlay_opacity_percent": _integer(self.config.get("overlay_opacity_percent"), 100),
                 "sample_clear_notifications_enabled": bool(self.config.get("sample_clear_notifications_enabled", True)),
                 "rebuy_warnings_enabled": bool(self.config.get("rebuy_warnings_enabled", True)),
                 "data_risk_warnings_enabled": bool(self.config.get("data_risk_warnings_enabled", True)),
@@ -1805,6 +1806,7 @@ class HtmlDashboardMixin:
     def _html_overlay_settings_save(self, payload):
         numeric = {
             "overlay_text_scale_percent": (75.0, 200.0, 100.0, True),
+            "overlay_opacity_percent": (40.0, 100.0, 100.0, True),
             "prospector_hud_timeout_s": (5.0, 3600.0, 45.0, True),
             "system_info_timeout_s": (5.0, 3600.0, 30.0, True),
             "gravity_warning_hud_timeout_s": (5.0, 3600.0, 20.0, True),

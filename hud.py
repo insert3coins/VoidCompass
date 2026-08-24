@@ -17,6 +17,7 @@ import overlay_chrome
 import route_strip
 import ui_theme
 from html_navigation_hud import HtmlNavigationHudBridge
+from html_overlay_runtime import overlay_opacity_ratio
 from navigation_instrument import (
     NavigationEventRenderer,
 )
@@ -174,6 +175,7 @@ class TacticalHUD:
             "effects": {
                 "crt": self._crt_enabled(),
                 "reduced_motion": bool(self.config.get("reduced_motion_enabled", False)),
+                "opacity": overlay_opacity_ratio(self.config),
                 "energy": {
                     "Calm": 0.72, "Standard": 1.0, "Energetic": 1.28,
                 }.get(str(self.config.get("hud_animation_intensity") or "Standard").title(), 1.0),
@@ -2291,6 +2293,7 @@ class TacticalHUD:
         presentation = (
             self._text_scale_percent(), self._crt_enabled(), self._crt_intensity(),
             bool(self.config.get("hud_crt_motion_enabled", True)),
+            self.config.get("overlay_opacity_percent", 100),
         )
         render_fingerprint = repr((
             target_w, target_h, current_sys, dest_name, dist_ly, scanned, total,

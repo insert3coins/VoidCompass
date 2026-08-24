@@ -511,6 +511,24 @@ function renderAtlas(state) {
   }
 }
 
+function syncAtlasViewport() {
+  const frame = byId("atlas-frame");
+  if (!frame?.contentWindow) return;
+  let targetOrigin = "*";
+  try {
+    const origin = new URL(model.atlas?.url || frame.dataset.url).origin;
+    if (origin && origin !== "null") targetOrigin = origin;
+  } catch (_error) {}
+  const notify = () => {
+    try { frame.contentWindow?.postMessage({type: "voidcompass-atlas-viewport"}, targetOrigin); } catch (_error) {}
+  };
+  // Focus mode changes several grid rows and columns at once. Two animation
+  // frames let Chromium commit that layout before the atlas measures itself;
+  // the short follow-up also covers slower WebView2 window resizes.
+  requestAnimationFrame(() => requestAnimationFrame(notify));
+  window.setTimeout(notify, 120);
+}
+
 function studioData() {
   return model.overlay_studio || {desktop: {}, overlays: [], presets: [], options: {}};
 }
@@ -568,6 +586,7 @@ function updateStudioOptionControls(options, groundTarget = {}) {
   });
   const fields = {
     "studio-text-scale": options.overlay_text_scale_percent,
+    "studio-overlay-opacity": options.overlay_opacity_percent,
     "studio-prospector-timeout": options.prospector_hud_timeout_s,
     "studio-system-timeout": options.system_info_timeout_s,
     "studio-gravity-timeout": options.gravity_warning_hud_timeout_s,
@@ -579,6 +598,10 @@ function updateStudioOptionControls(options, groundTarget = {}) {
     const field = byId(id);
     if (field && document.activeElement !== field) field.value = value ?? "";
   }
+  const opacityField = byId("studio-overlay-opacity");
+  const opacityValue = document.activeElement === opacityField
+    ? opacityField.value : options.overlay_opacity_percent;
+  text("studio-overlay-opacity-value", `${Math.max(40, Math.min(100, Math.round(number(opacityValue, 100))))}%`);
   const stationTimeout = byId("studio-station-timeout");
   if (stationTimeout) stationTimeout.disabled = !Boolean(options.station_info_auto_hide_enabled);
   const targetFields = {
@@ -1304,9 +1327,9 @@ function renderDashboard(state) {
     showPage(requestedPage.page);
   }
   renderAtlas(model);
-  text("rail-version", `v${model.app?.version || "5.4.0"} // WEBVIEW2`);
-  text("boot-version", `v${model.app?.version || "5.4.0"} // SECURE LOOPBACK // WEBVIEW2`);
-  text("about-version", `Version ${model.app?.version || "5.4.0"} // HTML Command Deck`);
+  text("rail-version", `v${model.app?.version || "5.4.1"} // WEBVIEW2`);
+  text("boot-version", `v${model.app?.version || "5.4.1"} // SECURE LOOPBACK // WEBVIEW2`);
+  text("about-version", `Version ${model.app?.version || "5.4.1"} // HTML Command Deck`);
   text("overview-subtitle", model.profile?.profile_label || "Journal-backed field intelligence");
   if (currentPage === "map" && !model.boot?.active) ensureAtlas();
 }
@@ -1385,6 +1408,7 @@ function showPage(name) {
   document.querySelector(".pages").scrollTo({top: 0, behavior: "instant"});
   command("page_changed", {page: name});
   if (name === "map" && !model.boot?.active) ensureAtlas();
+  if (name === "map") syncAtlasViewport();
   if (name === "overlay-studio") renderOverlayStudio(model);
 }
 
@@ -1841,6 +1865,7 @@ byId("studio-save-settings").addEventListener("click", async () => {
   const accepted = await command("overlay_studio", {
     operation: "save_settings",
     overlay_text_scale_percent: byId("studio-text-scale").value,
+    overlay_opacity_percent: byId("studio-overlay-opacity").value,
     prospector_hud_timeout_s: byId("studio-prospector-timeout").value,
     system_info_timeout_s: byId("studio-system-timeout").value,
     gravity_warning_hud_timeout_s: byId("studio-gravity-timeout").value,
@@ -1849,6 +1874,10 @@ byId("studio-save-settings").addEventListener("click", async () => {
     hud_crt_intensity: byId("studio-crt-intensity").value,
   });
   if (accepted) showToast("Overlay settings saved for this commander");
+});
+
+byId("studio-overlay-opacity").addEventListener("input", (event) => {
+  text("studio-overlay-opacity-value", `${Math.max(40, Math.min(100, Math.round(number(event.target.value, 100))))}%`);
 });
 
 byId("studio-save-preset").addEventListener("click", async () => {
@@ -1927,6 +1956,7 @@ window.addEventListener("message", (event) => {
 byId("atlas-focus-toggle").addEventListener("click", () => {
   const focused = document.body.classList.toggle("atlas-focus");
   text("atlas-focus-toggle", focused ? "DOCK MAP" : "FOCUS MAP");
+  syncAtlasViewport();
 });
 
 window.addEventListener("keydown", async (event) => {
@@ -1962,6 +1992,7 @@ window.addEventListener("keydown", async (event) => {
   if (event.key === "Escape" && document.body.classList.contains("atlas-focus")) {
     document.body.classList.remove("atlas-focus");
     text("atlas-focus-toggle", "FOCUS MAP");
+    syncAtlasViewport();
   }
 }, true);
 

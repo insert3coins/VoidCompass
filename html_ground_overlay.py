@@ -6,7 +6,7 @@ import logging
 import os
 
 import themes
-from html_overlay_runtime import HtmlOverlaySurface
+from html_overlay_runtime import HtmlOverlaySurface, overlay_opacity_ratio
 
 
 def _integer(value, default=0):
@@ -123,6 +123,7 @@ class HtmlGroundOverlayBridge:
                 "text_scale": max(75, min(200, _integer(
                     self.config.get("overlay_text_scale_percent"), 100,
                 ))) / 100.0,
+                "opacity": overlay_opacity_ratio(self.config),
             },
             "window": self._window_payload(solution),
         }

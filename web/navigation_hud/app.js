@@ -242,6 +242,9 @@ function updateClock() {
 function render(data) {
   if (!data || data.schema !== 1) return;
   snapshot = data;
+  const overlayOpacity = Number(data.effects?.opacity);
+  document.body.style.opacity = String(Number.isFinite(overlayOpacity)
+    ? Math.max(.4, Math.min(1, overlayOpacity)) : 1);
   const theme = setTheme(data.theme);
   const hud = dom.hud;
   hud.classList.toggle('standard', data.layout !== 'expanded');

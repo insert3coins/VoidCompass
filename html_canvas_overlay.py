@@ -6,7 +6,7 @@ import logging
 import os
 import tkinter.font as tkfont
 
-from html_overlay_runtime import HtmlOverlaySurface
+from html_overlay_runtime import HtmlOverlaySurface, overlay_opacity_ratio
 
 
 _ITEM_OPTIONS = {
@@ -204,6 +204,7 @@ class HtmlCanvasOverlayBridge:
             "effects": {
                 "crt": bool(self.config.get("hud_crt_enabled", True)),
                 "reduced_motion": bool(self.config.get("reduced_motion_enabled", False)),
+                "opacity": overlay_opacity_ratio(self.config),
             },
         }
 
@@ -277,6 +278,7 @@ class HtmlCanvasOverlayBridge:
             self._canvas_revision, items, width, height,
             bool(self.config.get("hud_crt_enabled", True)),
             bool(self.config.get("reduced_motion_enabled", False)),
+            self.config.get("overlay_opacity_percent", 100),
         )
 
     def _window_fingerprint(self):
