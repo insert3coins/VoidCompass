@@ -1386,7 +1386,12 @@ class HtmlDashboardMixin:
             overlay = getattr(self, attr, None)
             window = getattr(overlay, "win", overlay)
             shown = self._html_overlay_window_shown(window) if live else False
-            if live and window is not None:
+            html_size = getattr(overlay, "_html_window_size", None)
+            if html_ready := bool(getattr(overlay, "_html_ready", False)):
+                if isinstance(html_size, (tuple, list)) and len(html_size) == 2:
+                    width = max(24, _integer(html_size[0], default_width))
+                    height = max(20, _integer(html_size[1], default_height))
+            elif live and window is not None:
                 try:
                     if window.winfo_exists():
                         if attr == "toast_hud" and not getattr(overlay, "_toasts", None):
@@ -1474,7 +1479,7 @@ class HtmlDashboardMixin:
             return None
         return spec
 
-    def _html_overlay_position(self, overlay_id, x, y, *, persist=False):
+    def _html_overlay_position(self, overlay_id, x, y, *, persist=False, preview=False):
         spec = self._html_overlay_row(overlay_id)
         if spec is None:
             return False
@@ -1488,10 +1493,14 @@ class HtmlDashboardMixin:
         right, bottom = left + desktop["width"], top + desktop["height"]
         x = max(left, min(_integer(x, left), right - width))
         y = max(top, min(_integer(y, top), bottom - height))
+        # Geometry and the lightweight HTML-host window channel stay live
+        # during the drag, but the expensive full Dashboard model and config
+        # write are deferred until pointer-up.
         self._set_overlay_position(attr, x, y, authority_s=3.0)
         if persist:
             self._persist_config()
-        self._schedule_html_dashboard_publish(immediate=True)
+        if not preview or persist:
+            self._schedule_html_dashboard_publish(immediate=True)
         return True
 
     def _html_overlay_snap(self, overlay_id):
@@ -1615,6 +1624,7 @@ class HtmlDashboardMixin:
             return self._html_overlay_position(
                 overlay_id, payload.get("x"), payload.get("y"),
                 persist=bool(payload.get("commit")),
+                preview=not bool(payload.get("commit")),
             )
         if operation == "toggle":
             return self._html_overlay_toggle(overlay_id)

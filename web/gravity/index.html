@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Void Compass Gravity Warning</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="gravity" class="gravity warning" aria-live="assertive">
+    <div class="warning-field" aria-hidden="true"><i></i><i></i><i></i></div>
+    <header><span>PLANETARY FLIGHT ENVELOPE</span><b id="severity">WARNING</b></header>
+    <section>
+      <div class="gravity-sigil" aria-hidden="true"><i></i><b>G</b></div>
+      <div class="gravity-copy"><small>HIGH GRAVITY WORLD</small><strong id="body">UNKNOWN BODY</strong><span id="detail">AWAITING GRAVITY FIX</span></div>
+      <div class="gravity-value"><strong id="value">—</strong><small>LOCAL G</small></div>
+    </section>
+    <div class="load"><i id="load-fill"></i></div>
+    <div class="scanlines"></div>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

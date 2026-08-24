@@ -49,6 +49,8 @@ from heartbeat_hud import HeartbeatHUD
 from html_canvas_overlay import attach_html_canvas_overlay
 from html_survey_overlay import attach_html_survey_overlay
 from html_toast_overlay import attach_html_toast_overlay
+from html_gravity_overlay import attach_html_gravity_overlay
+from html_ground_overlay import attach_html_ground_overlay
 from overlay_input import set_mouse_passthrough
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
@@ -360,6 +362,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         ("survey_status_hud", "survey_status_hud_x", "survey_status_hud_y"),
         ("toast_hud", "toast_hud_x", "toast_hud_y"),
         ("heartbeat_hud", "heartbeat_hud_x", "heartbeat_hud_y"),
+        ("ground_popup", "ground_popup_x", "ground_popup_y"),
         ("colony_overlay", "colony_overlay_x", "colony_overlay_y"),
     )
     _HTML_CANVAS_OVERLAY_SPECS = {
@@ -372,6 +375,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         "survey_status_hud": ("survey", "Void Compass Survey Operations", "survey_status_overlay_enabled"),
         "toast_hud": ("toast", "Void Compass Cockpit Notifications", "toast_overlay_enabled"),
         "heartbeat_hud": ("heartbeat", "Void Compass Journal Heartbeat", "heartbeat_overlay_enabled"),
+        "ground_popup": ("ground-target", "Void Compass Planet Waypoint Navigation", "ground_popup_enabled"),
         "colony_overlay": ("colony", "Void Compass Colony Logistics", "colony_overlay_enabled"),
     }
 
@@ -4363,15 +4367,25 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         }
         for attr, (overlay_id, title, enabled_key) in self._HTML_CANVAS_OVERLAY_SPECS.items():
             overlay = getattr(self, attr, None)
-            if overlay is None or not hasattr(overlay, "canvas"):
+            if overlay is None:
                 continue
             x_key, y_key = positions[attr]
-            if attr == "survey_status_hud":
+            if attr == "ground_popup":
+                attach_html_ground_overlay(
+                    self, overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif not hasattr(overlay, "canvas"):
+                continue
+            elif attr == "survey_status_hud":
                 attach_html_survey_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             elif attr == "toast_hud":
                 attach_html_toast_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "gravity_warning_hud":
+                attach_html_gravity_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             else:

@@ -1,0 +1,36 @@
+:root { color-scheme:dark; --bg:#070b10; --panel:#0d141c; --raised:#16222d; --border:#243746; --soft:#192a36; --accent:#00d1ff; --orange:#ff7a18; --text:#dce8ef; --muted:#85939d; --dim:#52616c; --yellow:#ffd166; --red:#ff6075; --scale:1; }
+* { box-sizing:border-box; }
+html,body { width:100%; height:100%; margin:0; overflow:hidden; background:transparent; }
+body { pointer-events:none; user-select:none; font-family:"Cascadia Mono","Consolas",monospace; }
+.gravity { position:relative; width:100%; height:100%; overflow:hidden; color:var(--text); border:1px solid color-mix(in srgb,var(--red) 58%,var(--border)); background:linear-gradient(105deg,color-mix(in srgb,var(--bg) 98%,transparent),color-mix(in srgb,var(--panel) 96%,transparent)); box-shadow:inset 0 0 28px rgba(0,0,0,.8); font-size:calc(10px * var(--scale)); }
+.gravity::before,.gravity::after { content:""; position:absolute; width:38px; height:11px; border-color:var(--red); opacity:.85; }
+.gravity::before { left:0; top:0; border-left:2px solid; border-top:2px solid; }
+.gravity::after { right:0; bottom:0; border-right:2px solid; border-bottom:2px solid; }
+header { height:24px; display:flex; align-items:center; justify-content:space-between; padding:0 10px 0 13px; color:var(--dim); border-bottom:1px solid var(--soft); font-size:calc(8px * var(--scale)); font-weight:700; letter-spacing:.1em; }
+header b { color:var(--red); font-size:calc(8px * var(--scale)); }
+section { height:68px; display:grid; grid-template-columns:52px minmax(0,1fr) 68px; align-items:center; gap:10px; padding:4px 12px; }
+.gravity-sigil { position:relative; width:43px; height:43px; display:grid; place-items:center; color:var(--red); border:1px solid color-mix(in srgb,var(--red) 65%,transparent); transform:rotate(45deg); box-shadow:0 0 14px color-mix(in srgb,var(--red) 15%,transparent); }
+.gravity-sigil::before,.gravity-sigil::after { content:""; position:absolute; inset:7px; border:1px solid color-mix(in srgb,var(--red) 42%,transparent); animation:gravity-lock 1.4s ease-in-out infinite; }
+.gravity-sigil::after { inset:14px; background:color-mix(in srgb,var(--red) 35%,transparent); }
+.gravity-sigil b { position:relative; z-index:2; transform:rotate(-45deg); font-size:14px; }
+.gravity-copy { min-width:0; }
+.gravity-copy small,.gravity-copy strong,.gravity-copy span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gravity-copy small { color:var(--red); font-size:calc(8px * var(--scale)); font-weight:700; letter-spacing:.09em; }
+.gravity-copy strong { margin:4px 0 2px; color:var(--text); font:700 calc(13px * var(--scale)) "Bahnschrift SemiCondensed","Arial Narrow",sans-serif; letter-spacing:.04em; }
+.gravity-copy span { color:var(--orange); font-size:calc(9px * var(--scale)); font-weight:700; }
+.gravity-value { text-align:right; border-left:1px solid var(--soft); padding-left:9px; }
+.gravity-value strong { display:block; color:var(--red); font:700 calc(21px * var(--scale)) "Bahnschrift SemiCondensed",sans-serif; text-shadow:0 0 8px color-mix(in srgb,var(--red) 42%,transparent); }
+.gravity-value small { color:var(--dim); font-size:calc(7px * var(--scale)); }
+.load { position:absolute; left:13px; right:13px; bottom:7px; height:2px; background:var(--soft); overflow:hidden; }
+.load i { display:block; height:100%; width:var(--load,0%); background:linear-gradient(90deg,var(--yellow),var(--red)); box-shadow:0 0 7px var(--red); transition:width .35s ease; }
+.warning-field { position:absolute; inset:24px 0 0; opacity:.16; overflow:hidden; }
+.warning-field i { position:absolute; top:-20px; width:1px; height:130px; background:var(--red); transform:rotate(25deg); animation:warning-sweep 1.8s linear infinite; }
+.warning-field i:nth-child(1){left:8%;}.warning-field i:nth-child(2){left:45%;animation-delay:-.7s}.warning-field i:nth-child(3){left:82%;animation-delay:-1.3s}
+.scanlines { position:absolute; inset:0; pointer-events:none; opacity:.18; background:repeating-linear-gradient(to bottom,transparent 0 2px,rgba(20,40,52,.18) 3px); }
+.gravity.high { border-color:color-mix(in srgb,var(--orange) 60%,var(--red)); }
+.gravity.critical { animation:critical-frame .7s steps(2,end) infinite; }
+.no-crt .scanlines { display:none; }
+.reduced-motion * { animation:none!important; transition:none!important; }
+@keyframes gravity-lock { 50%{inset:10px;opacity:.38} }
+@keyframes warning-sweep { from{transform:translateX(-60px) rotate(25deg)} to{transform:translateX(100px) rotate(25deg)} }
+@keyframes critical-frame { 50%{border-color:var(--yellow)} }

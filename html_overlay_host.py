@@ -247,6 +247,10 @@ class _OverlayHost:
             path = "/survey/index.html"
         elif template == "toast":
             path = "/toast/index.html"
+        elif template == "gravity":
+            path = "/gravity/index.html"
+        elif template == "ground":
+            path = "/ground/index.html"
         else:
             path = "/overlays/index.html"
         return self._url(path, overlay_id)
