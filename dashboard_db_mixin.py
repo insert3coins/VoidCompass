@@ -425,45 +425,11 @@ class DashboardDBMixin:
                 " resources_json TEXT, last_updated INTEGER)"
             )
             self.conn.execute(
-                "CREATE TABLE IF NOT EXISTS bgs_snapshots ("
-                " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-                " system_name TEXT NOT NULL,"
-                " system_address INTEGER,"
-                " faction_name TEXT NOT NULL,"
-                " influence REAL NOT NULL,"
-                " government TEXT,"
-                " allegiance TEXT,"
-                " happiness TEXT,"
-                " active_states TEXT,"
-                " pending_states TEXT,"
-                " recovering_states TEXT,"
-                " event_timestamp TEXT,"
-                " recorded_at REAL NOT NULL,"
-                " UNIQUE(system_name, faction_name, event_timestamp)"
-                ")"
-            )
-            self.conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_bgs_sys_ts "
-                "ON bgs_snapshots(system_name, recorded_at DESC)"
-            )
-            self.conn.execute(
                 "CREATE TABLE IF NOT EXISTS visited_systems ("
                 " system_name TEXT PRIMARY KEY,"
                 " system_address INTEGER,"
                 " last_visited_at REAL NOT NULL"
                 ")"
-            )
-            self.conn.execute(
-                "CREATE TABLE IF NOT EXISTS bgs_hidden_systems ("
-                " system_name TEXT PRIMARY KEY,"
-                " hidden_at REAL NOT NULL"
-                ")"
-            )
-            # Seed visited_systems from existing bgs_snapshots so previously
-            # tracked inhabited systems aren't lost after the migration.
-            self.conn.execute(
-                "INSERT OR IGNORE INTO visited_systems (system_name, last_visited_at) "
-                "SELECT system_name, MAX(recorded_at) FROM bgs_snapshots GROUP BY system_name"
             )
             self.conn.commit()
 
@@ -995,62 +961,6 @@ class DashboardDBMixin:
             except sqlite3.Error as e:
                 self.log(f"❌ DB ERROR (Colonisation): {e}")
 
-    # ── BGS ───────────────────────────────────────────────────────────────────
-
-    def db_save_bgs_snapshot(
-        self,
-        system_name: str,
-        system_address,
-        factions: list,
-        event_timestamp: str | None = None,
-    ):
-        """Persist a BGS faction snapshot.  Duplicate (system, faction, timestamp) rows
-        are silently ignored so startup journal replay never inflates the history."""
-        now = time.time()
-        with self.db_lock:
-            try:
-                if self.batch_mode:
-                    hidden = self.conn.execute(
-                        "SELECT 1 FROM bgs_hidden_systems WHERE system_name=?",
-                        (system_name,),
-                    ).fetchone()
-                    if hidden:
-                        return
-                for f in factions:
-                    fname = f.get("Name") or f.get("faction_name")
-                    if not fname:
-                        continue
-                    inf = float(f.get("Influence") or f.get("influence") or 0)
-                    gov = f.get("Government") or f.get("government") or ""
-                    ally = f.get("Allegiance") or f.get("allegiance") or ""
-                    hap = f.get("Happiness_Localised") or f.get("happiness") or ""
-                    active = json.dumps([
-                        {"State": (s.get("State") or s) if isinstance(s, dict) else s}
-                        for s in (f.get("ActiveStates") or [])
-                    ])
-                    pending = json.dumps([
-                        {"State": (s.get("State") or s) if isinstance(s, dict) else s}
-                        for s in (f.get("PendingStates") or [])
-                    ])
-                    recovering = json.dumps([
-                        {"State": (s.get("State") or s) if isinstance(s, dict) else s}
-                        for s in (f.get("RecoveringStates") or [])
-                    ])
-                    self.conn.execute(
-                        "INSERT OR IGNORE INTO bgs_snapshots "
-                        "(system_name, system_address, faction_name, influence, "
-                        " government, allegiance, happiness, active_states, "
-                        " pending_states, recovering_states, event_timestamp, recorded_at) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        (system_name, system_address, fname, inf, gov, ally, hap,
-                         active, pending, recovering, event_timestamp, now),
-                    )
-                self._db_maybe_commit(reason="bgs")
-                if hasattr(self, "_refresh_bgs_window"):
-                    self._refresh_bgs_window()
-            except sqlite3.Error as e:
-                self.log(f"❌ DB ERROR (BGS): {e}")
-
     def db_record_visit(self, system_name: str, system_address, ts: float = None):
         """Record that the commander visited system_name. Called on every jump."""
         if not system_name or system_name in ("---", "Unknown"):
@@ -1058,13 +968,6 @@ class DashboardDBMixin:
         now = ts or time.time()
         with self.db_lock:
             try:
-                if not self.batch_mode:
-                    # A real revisit restores a system that was explicitly
-                    # removed from BGS. Startup journal replay leaves it hidden.
-                    self.conn.execute(
-                        "DELETE FROM bgs_hidden_systems WHERE system_name=?",
-                        (system_name,),
-                    )
                 self.conn.execute(
                     "INSERT INTO visited_systems (system_name, system_address, last_visited_at) "
                     "VALUES (?, ?, ?) "
@@ -1074,162 +977,10 @@ class DashboardDBMixin:
                     (system_name, system_address, now),
                 )
                 self._db_maybe_commit(reason="visit")
-                if hasattr(self, "_refresh_bgs_window"):
-                    self._refresh_bgs_window()
                 if hasattr(self, "_refresh_exploration_window"):
                     self._refresh_exploration_window()
             except sqlite3.Error as e:
                 self.log(f"❌ DB ERROR (visit): {e}")
-
-    def db_load_bgs_systems(self) -> list:
-        """Return [(system_name, last_visited_at, has_factions)] for all visited systems."""
-        cached = list(getattr(self, "_bgs_systems_cache", []))
-        if not self.db_lock.acquire(blocking=False):
-            return cached
-        results = []
-        try:
-            cur = self.conn.cursor()
-            cur.execute(
-                "SELECT v.system_name, v.last_visited_at, "
-                "       EXISTS(SELECT 1 FROM bgs_snapshots b "
-                "              WHERE b.system_name = v.system_name) "
-                "FROM visited_systems v "
-                "WHERE NOT EXISTS(SELECT 1 FROM bgs_hidden_systems h "
-                "                 WHERE h.system_name = v.system_name) "
-                "ORDER BY v.last_visited_at DESC"
-            )
-            results = [(row[0], row[1], bool(row[2])) for row in cur.fetchall()]
-            self._bgs_systems_cache = list(results)
-        except sqlite3.Error:
-            return cached
-        finally:
-            self.db_lock.release()
-        return results
-
-    def db_delete_bgs_system(self, system_name: str) -> bool:
-        """Remove one system from BGS without deleting shared exploration history."""
-        if not system_name or not self.db_lock.acquire(blocking=False):
-            return False
-        try:
-            self.conn.execute(
-                "INSERT OR REPLACE INTO bgs_hidden_systems (system_name, hidden_at) VALUES (?, ?)",
-                (system_name, time.time()),
-            )
-            self.conn.execute("DELETE FROM bgs_snapshots WHERE system_name=?", (system_name,))
-            self._request_db_commit(reason="bgs_delete")
-            self._bgs_systems_cache = [
-                row for row in getattr(self, "_bgs_systems_cache", [])
-                if row[0] != system_name
-            ]
-            cache = dict(getattr(self, "_bgs_factions_cache", {}))
-            cache.pop(system_name, None)
-            self._bgs_factions_cache = cache
-            return True
-        except sqlite3.Error as exc:
-            try:
-                self.conn.rollback()
-            except sqlite3.Error:
-                pass
-            self.log(f"❌ DB ERROR (BGS delete): {exc}")
-            return False
-        finally:
-            self.db_lock.release()
-
-    def db_purge_bgs(self) -> bool:
-        """Clear the BGS list and snapshots while retaining exploration visits."""
-        if not self.db_lock.acquire(blocking=False):
-            return False
-        try:
-            now = time.time()
-            self.conn.execute(
-                "INSERT OR REPLACE INTO bgs_hidden_systems (system_name, hidden_at) "
-                "SELECT system_name, ? FROM visited_systems",
-                (now,),
-            )
-            self.conn.execute("DELETE FROM bgs_snapshots")
-            self._request_db_commit(reason="bgs_purge")
-            self._bgs_systems_cache = []
-            self._bgs_factions_cache = {}
-            return True
-        except sqlite3.Error as exc:
-            try:
-                self.conn.rollback()
-            except sqlite3.Error:
-                pass
-            self.log(f"❌ DB ERROR (BGS purge): {exc}")
-            return False
-        finally:
-            self.db_lock.release()
-
-    def db_purge_empty_bgs_systems(self) -> int | None:
-        """Hide visible BGS systems with no faction snapshots; return the count."""
-        if not self.db_lock.acquire(blocking=False):
-            return None
-        try:
-            cursor = self.conn.execute(
-                "INSERT OR REPLACE INTO bgs_hidden_systems (system_name, hidden_at) "
-                "SELECT v.system_name, ? FROM visited_systems v "
-                "WHERE NOT EXISTS(SELECT 1 FROM bgs_snapshots b "
-                "                 WHERE b.system_name = v.system_name) "
-                "  AND NOT EXISTS(SELECT 1 FROM bgs_hidden_systems h "
-                "                 WHERE h.system_name = v.system_name)",
-                (time.time(),),
-            )
-            removed = max(0, int(cursor.rowcount or 0))
-            self._request_db_commit(reason="bgs_purge_empty")
-            self._bgs_systems_cache = [
-                row for row in getattr(self, "_bgs_systems_cache", [])
-                if len(row) > 2 and row[2]
-            ]
-            return removed
-        except sqlite3.Error as exc:
-            try:
-                self.conn.rollback()
-            except sqlite3.Error:
-                pass
-            self.log(f"❌ DB ERROR (BGS purge empty): {exc}")
-            return None
-        finally:
-            self.db_lock.release()
-
-    def db_load_bgs_factions(self, system_name: str) -> list:
-        """Return all snapshots for system_name, newest first (up to 500 rows)."""
-        cache = getattr(self, "_bgs_factions_cache", {})
-        cached = list(cache.get(system_name, []))
-        if not self.db_lock.acquire(blocking=False):
-            return cached
-        results = []
-        try:
-            cur = self.conn.cursor()
-            cur.execute(
-                "SELECT faction_name, influence, government, allegiance, happiness, "
-                "active_states, pending_states, recovering_states, recorded_at "
-                "FROM bgs_snapshots "
-                "WHERE system_name=? "
-                "ORDER BY recorded_at DESC "
-                "LIMIT 500",
-                (system_name,),
-            )
-            for row in cur.fetchall():
-                results.append({
-                    "faction_name":      row[0],
-                    "influence":         row[1],
-                    "government":        row[2],
-                    "allegiance":        row[3],
-                    "happiness":         row[4],
-                    "active_states":     row[5],
-                    "pending_states":    row[6],
-                    "recovering_states": row[7],
-                    "recorded_at":       row[8],
-                })
-            cache = dict(cache)
-            cache[system_name] = list(results)
-            self._bgs_factions_cache = cache
-        except sqlite3.Error:
-            return cached
-        finally:
-            self.db_lock.release()
-        return results
 
     def db_load_colonisation_projects(self) -> dict:
         projects = {}

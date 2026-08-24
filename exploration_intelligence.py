@@ -358,7 +358,7 @@ def action_queue(app, completion=None, route=None, snapshot=None):
     manager = getattr(app, "expedition_manager", None)
     if manager:
         try:
-            expedition = manager.compass_snapshot(
+            expedition = manager.status_snapshot(
                 next_waypoint=route.get("next_system"),
             )
         except Exception:
@@ -621,7 +621,7 @@ def checkpoint_payload(app, reason="app-close", intelligence=None):
         intelligence = build_intelligence(app)
     state = getattr(app, "companion_state", None) or {}
     manager = getattr(app, "expedition_manager", None)
-    expedition = manager.compass_snapshot(
+    expedition = manager.status_snapshot(
         next_waypoint=intelligence["route"].get("next_system"),
     ) if manager else {}
     sample = None

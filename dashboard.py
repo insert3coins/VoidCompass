@@ -31,16 +31,13 @@ from cargo_hud import CargoHUD
 from carrier_hud import CarrierHUD
 from edsm_handler import EDSMHandler
 from screenshot_handler import ScreenshotHandler
-from settings_ui import open_settings
 from waypoint_manager import WaypointManager
 import route_strip
 from journal_watcher import JournalWatcher
 from mining_data import MINING_MATERIALS
 from carrier_tracker import CarrierTracker
-from carrier_window import CarrierWindow
 from prospector_hud import ProspectorHUD
 from system_info_hud import SystemInfoHUD
-from colony_overlay import ColonyOverlay
 from gravity_warning_hud import GravityWarningHUD
 from station_info_hud import StationInfoHUD
 from survey_status_hud import SurveyStatusHUD
@@ -57,28 +54,19 @@ from dashboard_db_mixin import DashboardDBMixin
 from dashboard_ui_mixin import DashboardUIMixin
 from dashboard_scan_mixin import DashboardScanMixin
 from html_dashboard import HtmlDashboardMixin
-from colonization_window import ColonizationWindow, save_colonisation_data, load_colonisation_data
-from engineer_window import (
-    EngineerWindow, load_engineer_materials,
-    get_material_category,
+from field_state import (
+    get_material_category, load_colonisation_data, load_engineer_materials,
+    save_colonisation_data,
 )
 from engineering_data import ready_blueprints
 import companion_features
-import compass_operations
+import operational_state
 from credit_events import authoritative_balance, credit_delta
-from bgs_window import BGSWindow
-from commander_profile_window import CommanderProfileWindow
-from system_value_ledger import SystemValueLedger
 from stellar_types import star_type_label
-from colonisation_planner import ColonisationPlanner
 from exploration_window import ExplorationWindow
-from analytics_window import AnalyticsWindow
-from trade.eddn_upload import UPLOADER as eddn_market_uploader
+from services.eddn_upload import UPLOADER as eddn_market_uploader
 from achievement_engine import AchievementEngine
-from achievement_window import AchievementWindow
-from combat_awareness import CombatAwareness
 from specialist_engine import SpecialistEngine
-from specialists_window import SpecialistsWindow
 from captains_log import CaptainsLog
 from deep_survey import DeepSurveyTracker
 from exploration_intelligence import build_intelligence, checkpoint_payload
@@ -363,7 +351,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         ("toast_hud", "toast_hud_x", "toast_hud_y"),
         ("heartbeat_hud", "heartbeat_hud_x", "heartbeat_hud_y"),
         ("ground_popup", "ground_popup_x", "ground_popup_y"),
-        ("colony_overlay", "colony_overlay_x", "colony_overlay_y"),
     )
     _HTML_CANVAS_OVERLAY_SPECS = {
         "cargo_hud": ("cargo", "Void Compass Cargo", "cargo_overlay_enabled"),
@@ -376,22 +363,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         "toast_hud": ("toast", "Void Compass Cockpit Notifications", "toast_overlay_enabled"),
         "heartbeat_hud": ("heartbeat", "Void Compass Journal Heartbeat", "heartbeat_overlay_enabled"),
         "ground_popup": ("ground-target", "Void Compass Planet Waypoint Navigation", "ground_popup_enabled"),
-        "colony_overlay": ("colony", "Void Compass Colony Logistics", "colony_overlay_enabled"),
     }
-
-    _COCKPIT_BRAIN_MILESTONES = {
-        "systems": (10, 25, 50, 100, 250, 500, 1000, 2500, 5000),
-        "species": (10, 25, 50, 100, 250, 500, 1000, 2000),
-        "memories": (10, 25, 50, 80, 100, 250, 500, 1000),
-    }
-
-    def _cockpit_memory_limits(self):
-        return {
-            "systems": self.config.get("cockpit_memory_system_limit", 300),
-            "species": self.config.get("cockpit_memory_species_limit", 200),
-            "ships": self.config.get("cockpit_memory_ship_limit", 30),
-            "memories": self.config.get("cockpit_memory_episode_limit", 80),
-        }
 
     @staticmethod
     def _to_float(value, default=None):
@@ -850,7 +822,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "survey_status_hud",
             "toast_hud",
             "heartbeat_hud",
-            "colony_overlay",
         ):
             overlay = getattr(self, attr, None)
             apply_overlay_theme = getattr(overlay, "apply_theme", None)
@@ -886,22 +857,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             pass
         return success
 
-    @staticmethod
-    def _new_trade_session():
-        return {
-            "bought_units": 0,
-            "sold_units": 0,
-            "spent": 0,
-            "earned": 0,
-            "profit": 0,
-            "transactions": 0,
-            "commodities_bought": {},
-            "commodities_sold": {},
-            "best_sale": None,
-            "worst_sale": None,
-            "events": deque(maxlen=100),
-        }
-
     def _close_profile_surfaces(self):
         """Close every UI surface holding references to the outgoing profile."""
         try:
@@ -910,19 +865,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             pass
         self._overlay_position_authority.clear()
 
-        close_methods = {
-            "carrier_window": "_on_close",
-            "colonization_window": "_on_close",
-            "engineer_window": "_on_close",
-            "bgs_window": "_on_close",
-            "commander_profile_window": "_on_close",
-            "value_ledger_window": "_on_close",
-            "colonisation_planner_window": "_on_close",
-            "exploration_window": "_on_close",
-            "analytics_window": "_on_close",
-            "achievement_window": "_on_close",
-            "specialists_window": "_on_close",
-        }
+        close_methods = {"exploration_window": "_on_close"}
         for attr, close_name in close_methods.items():
             surface = getattr(self, attr, None)
             try:
@@ -945,14 +888,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             pass
         self.route_plotter = None
 
-        settings_page = getattr(self, "settings_page", None)
-        try:
-            if settings_page is not None and settings_page.winfo_exists():
-                settings_page.destroy()
-        except Exception:
-            pass
-        self.settings_page = None
-
         ground_window = getattr(self, "ground_target_window", None)
         try:
             if ground_window and ground_window.winfo_exists():
@@ -969,7 +904,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         for attr in (
             "hud", "cargo_hud", "carrier_hud", "prospector_hud",
             "system_info_hud", "gravity_warning_hud", "station_info_hud",
-            "survey_status_hud", "toast_hud", "heartbeat_hud", "colony_overlay",
+            "survey_status_hud", "toast_hud", "heartbeat_hud",
         ):
             overlay = getattr(self, attr, None)
             try:
@@ -1097,7 +1032,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.fuel_capacity_main = None
         self.current_hull_percent = None
         self._fuel_used_samples = deque(maxlen=8)
-        self._fuel_advisory_signature = None
         self._low_fuel_warned = False
         self._toast_hull_thresholds_seen = set()
         self._toast_status_alerts = set()
@@ -1147,16 +1081,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.cargo_capacity = 0
         self.current_cargo_tons = 0
         self.current_cargo_inventory = []
-        self.trade_session = self._new_trade_session()
-        self.mining_ai_session = self._new_mining_ai_session()
-        self.ai_operational_state = compass_operations.fresh_runtime_state()
+        self.mining_session = self._new_mining_session()
+        self.operational_state = operational_state.fresh_runtime_state()
         self.colonisation_projects = {}
         self.engineer_materials = {}
         self.companion_state = companion_features.fresh_state()
-        if getattr(self, "combat_awareness", None):
-            self.combat_awareness.reset()
-        else:
-            self.combat_awareness = CombatAwareness()
 
         self.dest_coords = None
         self.dest_name = None
@@ -1170,9 +1099,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.session_systems = set()
         self._expedition_resume_brief_key = None
 
-        self.target_lat = self._to_float(self.config.get("ground_target_lat"), 0.0)
-        self.target_lon = self._to_float(self.config.get("ground_target_lon"), 0.0)
+        self.target_lat = self._to_float(self.config.get("ground_target_lat"))
+        self.target_lon = self._to_float(self.config.get("ground_target_lon"))
         self.target_latlon_active = bool(self.config.get("ground_target_active", False))
+        if not self.target_latlon_active:
+            self.target_lat = None
+            self.target_lon = None
+            self.config["ground_target_lat"] = None
+            self.config["ground_target_lon"] = None
         self.current_latitude = None
         self.current_longitude = None
         self.current_heading = None
@@ -1190,9 +1124,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
 
         self._rebuy_warning_level = 0
         self._data_risk_level = 0
-        self._compass_advisor_last = {}
-        self._compass_advisor_last_any = 0.0
-        self._cockpit_docking_quiet_until = 0.0
         self._hud_balance_cache = {"ts": 0.0, "balance": None}
         self._hud_event_pulse = None
         self._hud_event_batch_priority = None
@@ -1237,32 +1168,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         except Exception:
             pass
 
-    def _refresh_commander_profile_window(self):
-        if threading.current_thread() is not threading.main_thread():
-            self._ui_post(
-                self._refresh_commander_profile_window,
-                key="commander-profile-refresh",
-            )
-            return
+    def _refresh_html_workspace(self):
+        """Coalesce a fresh snapshot for whichever HTML workspace is visible."""
         if getattr(self, "_startup_restore_active", False):
             self._startup_restore_ui_pending = True
             return
-        window = getattr(self, "commander_profile_window", None)
-        try:
-            if not window or not window.is_open():
-                return
-            if getattr(self, "_active_page", None) == "PROFILE":
-                window.refresh()
-            else:
-                window._refresh_pending = True
-        except Exception:
-            pass
-
-    def _refresh_value_ledger_window(self):
-        self._refresh_tool_window("value_ledger_window")
-
-    def _refresh_colonisation_planner_window(self):
-        self._refresh_tool_window("colonisation_planner_window")
+        self._schedule_html_dashboard_publish()
 
     def _refresh_exploration_window(self):
         if threading.current_thread() is not threading.main_thread():
@@ -1339,9 +1250,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.update_hud()
         self._refresh_system_info_progress()
         self._refresh_exploration_window()
-
-    def _refresh_bgs_window(self):
-        self._refresh_tool_window("bgs_window", "refresh_current")
 
     def _schedule_specialist_flush(self):
         """Coalesce live specialist writes so rapid journal bursts stay cheap."""
@@ -1576,7 +1484,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     self.summary_cmdr.config(text=str(commander_name).upper())
             except Exception:
                 pass
-            self._refresh_commander_profile_window()
+            self._refresh_html_workspace()
             self._refresh_exploration_window()
             return
 
@@ -1644,10 +1552,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         # rebinding them makes the profile boundary explicit and future-proof.
         self.screenshots.config = self.config
         self.watcher.config = self.config
-        self.voice_callouts = None
-        self.cockpit_memory = None
-        self.cockpit_brain = None
-        self.compass_cognition = None
         self.captains_log = CaptainsLog(
             get_profile_file(new_key, "captains_log.json")
         )
@@ -1678,14 +1582,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.achievement_engine.switch_profile(
                 self._profile_path("achievements_state.json"),
                 enabled=self.config.get("achievements_enabled", True),
-                disabled_categories=self.config.get("achievements_disabled_categories", []),
             )
         self.init_db()
         self.edsm.switch_profile(self.config, self.conn, self.db_lock)
         self.carrier_tracker.set_config(self.config)
-        carrier_window = getattr(self, "carrier_window", None)
-        if carrier_window and carrier_window.is_open():
-            carrier_window.on_profile_switched()
         self.colonisation_projects = self.db_load_colonisation_projects()
         for mid, jp in load_colonisation_data(self.config.get("colonisation_data_file")).items():
             if mid in self.colonisation_projects:
@@ -1770,9 +1670,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 key=f"overlay-hotkey:{action}",
             )
         )
-        self.voice_callouts = None
-        self.cockpit_memory = None
-        self.cockpit_brain = None
         self.captains_log = CaptainsLog(
             get_profile_file(get_active_profile(self.config), "captains_log.json")
         )
@@ -1794,7 +1691,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.session_guard.unclean
             and self.config.get("recovery_safe_mode_enabled", True)
         )
-        self.compass_cognition = None
         self.root.title(f"VOID COMPASS // v{APP_VERSION}")
         self._apply_dashboard_window_geometry()
         self.root.configure(bg=COLOR_BG)
@@ -1864,9 +1760,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._sample_clear_announced = False
         self._rebuy_warning_level = 0
         self._data_risk_level = 0
-        self._compass_advisor_last = {}
-        self._compass_advisor_last_any = 0.0
-        self._cockpit_docking_quiet_until = 0.0
         self._stale_bio_warned = set()
         # Bio tracking: star/body scan conditions for prediction
         self.system_stars: dict  = {}   # body_id → star_type str
@@ -1909,7 +1802,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.current_fuel_reservoir = None
         self.fuel_capacity_main = None
         self._fuel_used_samples = deque(maxlen=8)
-        self._fuel_advisory_signature = None
         self._low_fuel_warned = False
         self._toast_hull_thresholds_seen = set()
         self._toast_status_alerts = set()
@@ -1959,10 +1851,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.cargo_capacity = 0
         self.current_cargo_tons = 0
         self.current_cargo_inventory = []
-        self.trade_session = self._new_trade_session()
-        self.mining_ai_session = self._new_mining_ai_session()
-        self.ai_operational_state = compass_operations.fresh_runtime_state()
-        self.combat_awareness = CombatAwareness()
+        self.mining_session = self._new_mining_session()
+        self.operational_state = operational_state.fresh_runtime_state()
         self._hud_balance_cache = {"ts": 0.0, "balance": None}
         self.last_journal_event_ts = 0.0
         self._hud_event_sequence = 0
@@ -1994,9 +1884,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.session_ly = 0.0
         self.session_systems = set()
         self._expedition_resume_brief_key = None
-        self.target_lat = self._to_float(self.config.get("ground_target_lat"), 0.0)
-        self.target_lon = self._to_float(self.config.get("ground_target_lon"), 0.0)
+        self.target_lat = self._to_float(self.config.get("ground_target_lat"))
+        self.target_lon = self._to_float(self.config.get("ground_target_lon"))
         self.target_latlon_active = bool(self.config.get("ground_target_active", False))
+        if not self.target_latlon_active:
+            self.target_lat = None
+            self.target_lon = None
+            self.config["ground_target_lat"] = None
+            self.config["ground_target_lon"] = None
         self.current_latitude = None
         self.current_longitude = None
         self.current_heading = None
@@ -2095,17 +1990,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.log,
             trace_callback=self._trace_record_ms,
         )
-        self.carrier_window = None
-        self.colonization_window = None
-        self.engineer_window = None
-        self.bgs_window = None
-        self.commander_profile_window = None
-        self.value_ledger_window = None
-        self.colonisation_planner_window = None
         self.exploration_window = None
-        self.analytics_window = None
-        self.achievement_window = None
-        self.specialists_window = None
         self._carrier_panel_tick_job = None
         self._specialist_flush_job = None
         self.carrier_tracker = CarrierTracker()
@@ -2116,7 +2001,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.achievement_engine = AchievementEngine(
             self._profile_path("achievements_state.json"),
             enabled=self.config.get("achievements_enabled", True),
-            disabled_categories=self.config.get("achievements_disabled_categories", []),
             on_unlock=self._on_achievement_unlocked,
         )
 
@@ -2189,18 +2073,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         else:
             self.heartbeat_hud = None
 
-        if self.config.get("colony_overlay_enabled", False):
-            self.colony_overlay = ColonyOverlay(
-                self.root,
-                self.config,
-                lambda: self.colonisation_projects,
-                lambda: self.current_cargo_inventory,
-                lambda: self.cargo_capacity,
-                lambda: self.current_colonisation_market,
-            )
-        else:
-            self.colony_overlay = None
-
         self._attach_html_overlay_renderers()
 
         # Capture each overlay's intended initial visibility and withdraw it
@@ -2212,7 +2084,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
 
         self._apply_overlay_mouse_passthrough()
         if not self._startup_recovery_mode:
-            self._apply_adaptive_overlay_scene()
+            self._enforce_overlay_hotkey_visibility()
 
         self.db_lock = threading.RLock()
         self.batch_mode = False
@@ -2573,7 +2445,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             except tk.TclError:
                 pass
         self._restore_overlay_hotkey_windows(restore, force_show=False)
-        self._apply_adaptive_overlay_scene()
+        self._enforce_overlay_hotkey_visibility()
         # HTML surfaces and their shared WebView2 process have pre-warmed
         # behind a host-enforced native window curtain. Drop that final curtain
         # only now, after the splash has gone and the live UI owns the
@@ -2617,7 +2489,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.watcher.last_journal = None
                 self.watcher.file_pos = 0
             self._apply_runtime_feature_toggles()
-            self._apply_adaptive_overlay_scene()
+            self._enforce_overlay_hotkey_visibility()
             self.schedule_dashboard_refresh(full=True)
             self.add_event_feed_entry(
                 "SYSTEM", "First-run setup complete", severity="INFO",
@@ -2763,17 +2635,25 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
 
     def _restore_overlay_hotkey_windows(self, names, force_show=True):
         """Restore overlays, allowing startup-aware surfaces to cancel stale shows."""
-        adaptive_hidden = set(getattr(self, "_adaptive_hidden_overlays", set()))
         individually_hidden = set(getattr(self, "_overlay_hotkey_hidden", set()))
         lookup = dict(self._overlay_hotkey_window_items())
         for attr in set(names or ()):
-            if attr in adaptive_hidden or attr in individually_hidden:
+            if attr in individually_hidden:
                 continue
             window = lookup.get(attr)
             if window is None:
                 continue
             try:
                 if window.winfo_exists():
+                    if attr == "ground_popup":
+                        try:
+                            solution = self._ground_target_solution()
+                        except Exception:
+                            solution = None
+                        if not self._ground_target_should_show(solution):
+                            window.withdraw()
+                            self._ground_popup_visible = False
+                            continue
                     overlay_attr = "hud" if attr == "navigation" else attr
                     overlay = getattr(self, overlay_attr, None)
                     release_pending = getattr(
@@ -2913,7 +2793,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 restore = set(self._overlay_hotkey_restore)
                 self._overlay_hotkey_restore.clear()
                 self._restore_overlay_hotkey_windows(restore)
-                self._apply_adaptive_overlay_scene()
+                self._enforce_overlay_hotkey_visibility()
                 message = "Overlays restored"
             else:
                 self._overlay_hotkey_global_hidden = True
@@ -2947,7 +2827,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             if attr in self._overlay_hotkey_hidden:
                 self._overlay_hotkey_hidden.discard(attr)
                 self._overlay_hotkey_restore.discard(attr)
-                getattr(self, "_adaptive_hidden_overlays", set()).discard(attr)
                 self._restore_overlay_hotkey_windows({attr})
                 message = f"{label} shown"
             elif self._overlay_window_is_shown(window):
@@ -2963,7 +2842,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     pass
                 message = f"{label} hidden"
             else:
-                getattr(self, "_adaptive_hidden_overlays", set()).discard(attr)
                 self._restore_overlay_hotkey_windows({attr})
                 message = f"{label} shown"
         self.add_event_feed_entry("SYSTEM", message, severity="INFO")
@@ -3126,25 +3004,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.runtime_trace.flush(extra=extra)
         self.root.after(1000, self._tick_runtime_trace)
 
-    def _tick_cockpit_ambient(self):
-        if not self.is_running:
-            return
-        self._maybe_speak_ambient_chatter()
-        self.root.after(60000, self._tick_cockpit_ambient)
-
-    def _maybe_speak_ambient_chatter(self):
-        if (not self.config.get("cockpit_memory_enabled", True)
-                or not self.config.get("cockpit_ambient_chatter_enabled", True)
-                or not getattr(self, "cockpit_memory", None)):
-            return
-        if getattr(self, "hud_flight_state", None) not in ("FLIGHT", "SUPERCRUISE"):
-            return
-        last_event = getattr(self, "last_journal_event_ts", None)
-        if not last_event or (time.time() - last_event) < 480:
-            return
-        if self.cockpit_memory.queue_ambient_remark():
-            self._speak_pending_cockpit_remark()
-
     def _tick_overlay_position_sync(self):
         if not self.is_running:
             return
@@ -3260,7 +3119,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.root.after(self._ui_watchdog_interval_ms, self._tick_ui_stall_watchdog)
 
     def on_close(self):
-        """Cancel live work, queue the final state and exit without waiting on speech."""
+        """Cancel live work, queue the final state and stop background services."""
         if getattr(self, "_closing", False):
             return
         self._closing = True
@@ -3333,29 +3192,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
 
         if self.route_plotter and self.route_plotter.win.winfo_exists():
             self.route_plotter.on_close()
-        if self.colonization_window and self.colonization_window.is_open():
-            self.colonization_window._on_close()
-        if self.engineer_window and self.engineer_window.is_open():
-            self.engineer_window._on_close()
-        if self.bgs_window and self.bgs_window.is_open():
-            self.bgs_window._on_close()
         if self.exploration_window and self.exploration_window.is_open():
             self.exploration_window._on_close()
-        if self.analytics_window and self.analytics_window.is_open():
-            self.analytics_window._on_close()
-        if self.specialists_window and self.specialists_window.is_open():
-            self.specialists_window._on_close()
         try:
             self.specialist_engine.flush(wait=False)
         except Exception:
             pass
         if self.achievement_engine:
             self.achievement_engine.flush(wait=False)
-        if getattr(self, "cockpit_memory", None):
-            try:
-                self.cockpit_memory.flush(wait=False)
-            except Exception:
-                pass
         if getattr(self, "adaptive_command", None):
             try:
                 self.adaptive_command.flush(wait=False)
@@ -3375,14 +3219,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.screenshots.stop()
         if time.time() >= self._overlay_sync_grace_until:
             self._capture_overlay_positions()
-            try:
-                if self.colony_overlay and self.colony_overlay.win and self.colony_overlay.win.winfo_exists():
-                    w = int(self.colony_overlay.win.winfo_width())
-                    h = int(self.colony_overlay.win.winfo_height())
-                    if w > 0 and h > 0:
-                        self.config["colony_overlay_w"], self.config["colony_overlay_h"] = w, h
-            except Exception:
-                pass
         if not bool(getattr(self.root, "_voidcompass_html_dashboard_enabled", False)):
             self._capture_dashboard_window_geometry()
             self.config["main_geometry"] = self.root.geometry()
@@ -3654,168 +3490,28 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._refresh_exploration_window()
         return bookmark
 
-    def open_mining_window(self):
+    def open_mining_workspace(self):
         """Open the focused Mining Operations workspace."""
-        self.open_specialists_window(section="mining")
+        self.open_field_tools_workspace(section="mining")
 
-    def open_analytics_window(self):
-        if self._route_to_html_workspace("analytics"):
-            return
-        if self.analytics_window and self.analytics_window.is_open():
-            self._show_embedded_page("ANALYTICS", self.analytics_window.win)
-            self.analytics_window.on_shown()
-            return
-        self.analytics_window = AnalyticsWindow(self.dashboard_host, self, embedded=True)
-        self._show_embedded_page("ANALYTICS", self.analytics_window.win)
-        self.analytics_window.on_shown()
+    def open_analytics_workspace(self):
+        self._route_to_html_workspace("analytics")
 
-    def open_carrier_window(self):
-        if self._route_to_html_workspace("carrier"):
-            return
-        if self.carrier_window and self.carrier_window.is_open():
-            self._show_embedded_page("CARRIER", self.carrier_window.win)
-            return
-        self.carrier_window = CarrierWindow(
-            self.dashboard_host, self.config, self.carrier_tracker,
-            embedded=True, specialist_engine=self.specialist_engine,
-            ui_post=self._ui_post,
-        )
-        self._show_embedded_page("CARRIER", self.carrier_window.win)
+    def open_carrier_workspace(self):
+        self._route_to_html_workspace("carrier")
 
-    def open_specialists_window(self, section=None):
+    def open_field_tools_workspace(self, section=None):
         html_page = {
             "mining": "mining", "biology": "explore", "carrier": "carrier",
             "ground": "ground", "engineering": "engineering",
         }.get(str(section or "").casefold(), "operations")
-        if self._route_to_html_workspace(html_page):
-            return
-        if self.specialists_window and self.specialists_window.is_open():
-            self._show_embedded_page("SPECIALISTS", self.specialists_window.win)
-            if section:
-                self.specialists_window.select_section(section)
-            self.specialists_window.on_shown()
-            return
-        self.specialists_window = SpecialistsWindow(
-            self.dashboard_host, self, self.specialist_engine, embedded=True,
-        )
-        self._show_embedded_page("SPECIALISTS", self.specialists_window.win)
-        if section:
-            self.specialists_window.select_section(section)
-        self.specialists_window.on_shown()
+        self._route_to_html_workspace(html_page)
 
-    def open_colonization_window(self):
-        if self._route_to_html_workspace("operations"):
-            return
-        if self.colonization_window and self.colonization_window.is_open():
-            self._show_embedded_page("COLONY", self.colonization_window.win)
-            return
-        self.colonization_window = ColonizationWindow(
-            self.dashboard_host,
-            self.config,
-            self.colonisation_projects,
-            self._save_colonisation_data,
-            overlay_callback=self.toggle_colony_overlay,
-            cargo_capacity_provider=lambda: self.cargo_capacity,
-            embedded=True,
-            ui_post_callback=self._ui_post,
-        )
-        self._show_embedded_page("COLONY", self.colonization_window.win)
+    def open_engineering_workspace(self):
+        self._route_to_html_workspace("engineering")
 
-    def toggle_colony_overlay(self):
-        try:
-            if self.colony_overlay and self.colony_overlay.is_open():
-                self.colony_overlay.win.destroy()
-                self.colony_overlay = None
-                self.config["colony_overlay_enabled"] = False
-                self._save_config_file()
-                return
-        except Exception:
-            self.colony_overlay = None
-        self.colony_overlay = ColonyOverlay(
-            self.root,
-            self.config,
-            lambda: self.colonisation_projects,
-            lambda: self.current_cargo_inventory,
-            lambda: self.cargo_capacity,
-            lambda: self.current_colonisation_market,
-        )
-        self._apply_overlay_mouse_passthrough()
-        self.config["colony_overlay_enabled"] = True
-        self._save_config_file()
-
-    def open_engineer_window(self):
-        if self._route_to_html_workspace("engineering"):
-            return
-        if self.engineer_window and self.engineer_window.is_open():
-            self._show_embedded_page("ENGINEER", self.engineer_window.win)
-            self.engineer_window.on_shown()
-            return
-        self.engineer_window = EngineerWindow(
-            self.dashboard_host,
-            self.config,
-            self.engineer_materials,
-            self._save_engineer_materials,
-            get_current_system=lambda: self.current_sys if self.current_sys != "---" else "",
-            get_current_coords=lambda: self.current_coords,
-            plot_system_callback=self._route_engineering_system,
-            is_active_callback=lambda: getattr(self, "_active_page", None) == "ENGINEER",
-            embedded=True,
-            ui_post_callback=self._ui_post,
-        )
-        self._show_embedded_page("ENGINEER", self.engineer_window.win)
-        self.engineer_window.on_shown()
-
-    def _route_engineering_system(self, system, source="Engineering"):
-        """Hand an external workspace destination to the existing route page."""
-        if not system:
-            return
-        self.open_route_planner()
-        try:
-            self.route_plotter.tabs.select(2)
-            entry = self.route_plotter.neutron_to_entry
-            entry.delete(0, tk.END)
-            entry.insert(0, system)
-            entry.focus_set()
-            self.route_plotter.neutron_status_lbl.config(
-                text=f"Destination loaded from {source}: {system}. Check jump range, then PLOT."
-            )
-        except Exception:
-            pass
-
-    def open_bgs_window(self, section=None):
-        if self._route_to_html_workspace("operations"):
-            return
-        if self.bgs_window and self.bgs_window.is_open():
-            self._show_embedded_page("GALAXY", self.bgs_window.win)
-            self.bgs_window.select_section(section)
-            return
-        self.bgs_window = BGSWindow(
-            self.dashboard_host,
-            self.config,
-            self.db_load_bgs_systems,
-            self.db_load_bgs_factions,
-            self.db_delete_bgs_system,
-            self.db_purge_bgs,
-            self.db_purge_empty_bgs_systems,
-            get_galaxy_state_cb=lambda: self.companion_state,
-            toggle_faction_watch_cb=self._toggle_galaxy_faction_watch,
-            get_carrier_state_cb=lambda: self.carrier_tracker.carrier_data if self.carrier_tracker else {},
-            open_carrier_cb=self.open_carrier_window,
-            embedded=True,
-        )
-        self._show_embedded_page("GALAXY", self.bgs_window.win)
-        self.bgs_window.select_section(section)
-
-    def open_commander_profile_window(self):
-        if self._route_to_html_workspace("profile"):
-            return
-        if self.commander_profile_window and self.commander_profile_window.is_open():
-            self.commander_profile_window.refresh()
-            self.commander_profile_window._refresh_pending = False
-            self._show_embedded_page("PROFILE", self.commander_profile_window.win)
-            return
-        self.commander_profile_window = CommanderProfileWindow(self.dashboard_host, self, embedded=True)
-        self._show_embedded_page("PROFILE", self.commander_profile_window.win)
+    def open_profile_workspace(self):
+        self._route_to_html_workspace("profile")
 
     def open_exploration_window(self, section=None):
         html_page = {
@@ -3823,15 +3519,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "discoveries": "explore", "biology": "explore", "route": "explore",
             "survey": "explore",
         }.get(str(section or "").casefold(), "explore")
-        if self._route_to_html_workspace(html_page):
-            return
-        if self.exploration_window and self.exploration_window.is_open():
-            self._show_embedded_page("EXPLORE", self.exploration_window.win)
-            self.exploration_window.on_shown(section=section)
-            return
-        self.exploration_window = ExplorationWindow(self.dashboard_host, self, embedded=True)
-        self._show_embedded_page("EXPLORE", self.exploration_window.win)
-        self.exploration_window.on_shown(section=section)
+        self._route_to_html_workspace(html_page)
 
     def open_galaxy_map_page(self, embedded_origin=None):
         """Prepare the Atlas bridge without presenting a native fallback.
@@ -3858,20 +3546,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         # Tk's migration workspace merely to initialise its state bridge.
         return view
 
-    def open_achievement_window(self):
-        if self._route_to_html_workspace("achievements"):
-            return
-        if self.achievement_window and self.achievement_window.is_open():
-            self.achievement_window.refresh()
-            self._show_embedded_page("ACHIEVE", self.achievement_window.win)
-            return
-        self.achievement_window = AchievementWindow(
-            self.dashboard_host,
-            self,
-            self.achievement_engine,
-            embedded=True,
-        )
-        self._show_embedded_page("ACHIEVE", self.achievement_window.win)
+    def open_achievements_workspace(self):
+        self._route_to_html_workspace("achievements")
 
     def _on_achievement_unlocked(self, achievement):
         def apply_unlock():
@@ -3902,29 +3578,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                         "description": description,
                     },
                 )
-            window = getattr(self, "achievement_window", None)
-            if window and window.is_open() and getattr(self, "_active_page", None) == "ACHIEVE":
-                window.refresh()
-            self._refresh_commander_profile_window()
+            self._schedule_html_dashboard_publish(immediate=True)
 
         try:
             self._ui_post(apply_unlock)
         except Exception:
             pass
-
-    def open_value_ledger_window(self):
-        if self._route_to_html_workspace("ledger"):
-            return
-        if self.value_ledger_window and self.value_ledger_window.is_open():
-            self.value_ledger_window.lift()
-            return
-        self.value_ledger_window = SystemValueLedger(self.root, self)
-
-    def open_colonisation_planner_window(self):
-        if self.colonisation_planner_window and self.colonisation_planner_window.is_open():
-            self.colonisation_planner_window.lift()
-            return
-        self.colonisation_planner_window = ColonisationPlanner(self.root, self)
 
     # ------------------------------------------------------------------
     # Carrier dashboard panel + event-feed callbacks
@@ -4336,29 +3995,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.heartbeat_hud.destroy()
             self.heartbeat_hud = None
 
-        if self.config.get("colony_overlay_enabled", False):
-            if self.colony_overlay is None or not self.colony_overlay.is_open():
-                self.colony_overlay = ColonyOverlay(
-                    self.root,
-                    self.config,
-                    lambda: self.colonisation_projects,
-                    lambda: self.current_cargo_inventory,
-                    lambda: self.cargo_capacity,
-                    lambda: self.current_colonisation_market,
-                )
-            else:
-                self.colony_overlay.update()
-        else:
-            if self.colony_overlay and self.colony_overlay.is_open():
-                self.colony_overlay.win.destroy()
-            self.colony_overlay = None
-
         self._attach_html_overlay_renderers()
         self._apply_html_overlay_renderer()
 
         self._sync_cache_rebuild_edsm_option()
         self._apply_overlay_mouse_passthrough()
-        self._apply_adaptive_overlay_scene()
+        self._enforce_overlay_hotkey_visibility()
 
     def _attach_html_overlay_renderers(self):
         """Give every managed Canvas overlay a surface in the shared host."""
@@ -4394,7 +4036,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 )
 
     def _apply_html_overlay_renderer(self):
-        """Switch all overlay surfaces together; each retains native fallback."""
+        """Switch every managed overlay proxy to the shared HTML renderer."""
         enabled = bool(self.config.get("hud_html_renderer", False))
         for attr in ("hud", *self._HTML_CANVAS_OVERLAY_SPECS):
             overlay = getattr(self, attr, None)
@@ -4403,37 +4045,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 setter(enabled)
 
     def open_settings(self):
-        if self._route_to_html_workspace("settings"):
-            return
-        def on_save():
-            self.log("Configuration saved successfully.")
-            self._apply_active_profile_theme()
-            self._apply_runtime_feature_toggles()
-            self._configure_overlay_hotkeys()
-            self.show_dashboard_page()
-
-        page = getattr(self, "settings_page", None)
-        if page is None or not page.winfo_exists():
-            self.settings_page = open_settings(
-                self.dashboard_host,
-                self.config,
-                on_save,
-                carrier_tracker=self.carrier_tracker,
-                embedded=True,
-                on_close_callback=self.show_dashboard_page,
-                support_bundle_callback=self._create_support_bundle,
-                rerun_setup_callback=self._rerun_first_run_onboarding,
-                health_provider=self._adaptive_health_snapshot,
-                ui_post_callback=self._ui_post,
-                overlay_layout_callback=self.open_overlay_layout_studio,
-                cache_rebuild_callback=self.scan_all_logs_threaded,
-                cache_rebuild_button_register=(
-                    lambda widget: setattr(self, "cache_rebuild_button", widget)
-                ),
-                hotkey_capture_begin_callback=self._suspend_overlay_hotkeys_for_capture,
-                hotkey_capture_end_callback=self._resume_overlay_hotkeys_after_capture,
-            )
-        self._show_embedded_page("SETTINGS", self.settings_page)
+        self._route_to_html_workspace("settings")
 
     def open_overlay_layout_studio(self):
         """Open the profile-aware Studio inside the HTML command deck."""
@@ -5386,7 +4998,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.update_hud()
         return True
 
-    def _promote_navigation_arrival_personality(self, event, startup_replay=False):
+    def _promote_navigation_arrival_emphasis(self, event, startup_replay=False):
         """Promote an ordinary arrival after cached survey value is restored."""
         if startup_replay or event != "FSDJump" or not self.valuable_system:
             return False
@@ -5940,7 +5552,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         )
         if flush:
             self.edsm.flush_upload_queue()
-        self._refresh_commander_profile_window()
+        self._refresh_html_workspace()
         return True
 
     def _set_commander_balance(self, balance, loan=None, timestamp=None, log=True):
@@ -5956,7 +5568,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         if loan is not None:
             self.cmdr_loan = loan
         if changed:
-            self._refresh_commander_profile_window()
+            self._refresh_html_workspace()
             try:
                 self.schedule_dashboard_refresh()
             except Exception:
@@ -6093,15 +5705,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             if ev != "Shutdown" and getattr(self, "captains_log", None):
                 self.captains_log.add_manual_highlight("MILESTONE", title, detail)
 
-    def _compass_gameplay_snapshot(self):
-        """Return compact verified live facts for the local Compass brain."""
+    def _operational_snapshot(self):
+        """Return compact verified facts for the adaptive command deck."""
         def number(value, digits=1):
             try:
                 return round(float(value), digits)
             except (TypeError, ValueError):
                 return None
 
-        memory = getattr(self, "cockpit_memory", None)
         state = getattr(self, "companion_state", {}) or {}
         current_system = getattr(self, "current_sys", None)
         route = list(getattr(self, "route_list", None) or [])
@@ -6149,79 +5760,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         unsold_exploration = int(state.get("unsold_exploration_cr") or 0)
         unsold_biology = int(state.get("unsold_bio_cr") or 0)
         unsold_biology_potential = int(state.get("unsold_bio_bonus_potential_cr") or 0)
-        trade = getattr(self, "trade_session", {}) or {}
-        mining = self._compass_mining_snapshot(mission_rows)
-        trade_context = self._compass_trade_snapshot()
-        statistics = state.get("statistics") or {}
-        combat_stats = statistics.get("Combat") or statistics.get("combat") or {}
-        combat_lifetime = {
-            "bounties_claimed": int(combat_stats.get("Bounties_Claimed") or 0),
-            "bounty_profit_cr": int(combat_stats.get("Bounty_Hunting_Profit") or 0),
-            "combat_bonds": int(combat_stats.get("Combat_Bonds") or 0),
-            "combat_bond_profit_cr": int(combat_stats.get("Combat_Bond_Profits") or 0),
-            "assassinations": int(combat_stats.get("Assassinations") or 0),
-            "assassination_profit_cr": int(combat_stats.get("Assassination_Profits") or 0),
-            "highest_reward_cr": int(combat_stats.get("Highest_Single_Reward") or 0),
-            "conflict_zones": int(combat_stats.get("ConflictZone_Total") or 0),
-            "conflict_zone_wins": int(combat_stats.get("ConflictZone_Total_Wins") or 0),
-            "on_foot_combat_bonds": int(combat_stats.get("OnFoot_Combat_Bonds") or 0),
-            "on_foot_combat_profit_cr": int(combat_stats.get("OnFoot_Combat_Bonds_Profits") or 0),
-        }
-        combat_tracker = getattr(self, "combat_awareness", None)
-        combat = combat_tracker.snapshot(
-            massacre_stacks=companion_features.massacre_stacks(state),
-            lifetime=combat_lifetime,
-        ) if combat_tracker else {}
-        powerplay_state = state.get("powerplay") or {}
-        powerplay_system = state.get("pp_system") or {}
-        collected = dict(powerplay_state.get("commodities_collected") or {})
-        delivered = dict(powerplay_state.get("commodities_delivered") or {})
-        outstanding = {
-            name: max(0, int(count or 0) - int(delivered.get(name) or 0))
-            for name, count in collected.items()
-            if max(0, int(count or 0) - int(delivered.get(name) or 0))
-        }
-        pledged_power = powerplay_state.get("power")
-        controlling_power = powerplay_system.get("controlling")
-        powers_present = list(powerplay_system.get("powers") or [])
-        powerplay = {
-            "pledged": bool(pledged_power),
-            "power": pledged_power,
-            "rank": powerplay_state.get("rank"),
-            "merits": int(powerplay_state.get("merits") or 0),
-            "time_pledged_s": int(powerplay_state.get("time_pledged_s") or 0),
-            "session_merits": int(powerplay_state.get("session_merits") or 0),
-            "session_collected": int(powerplay_state.get("session_collected") or 0),
-            "session_delivered": int(powerplay_state.get("session_delivered") or 0),
-            "session_fast_track_cr": int(powerplay_state.get("session_fast_track_cr") or 0),
-            "session_salary_cr": int(powerplay_state.get("session_salary_cr") or 0),
-            "commodities_collected": collected,
-            "commodities_delivered": delivered,
-            "outstanding": outstanding,
-            "outstanding_units": sum(outstanding.values()),
-            "last_action": dict(powerplay_state.get("last_action") or {}),
-            "system": {
-                "name": current_system,
-                "controlling": controlling_power,
-                "powers": powers_present,
-                "state": powerplay_system.get("state"),
-                "control_progress": powerplay_system.get("control_progress"),
-                "reinforcement": powerplay_system.get("reinforcement"),
-                "undermining": powerplay_system.get("undermining"),
-                "contested": len(powers_present) > 1,
-                "friendly_control": bool(
-                    pledged_power and controlling_power
-                    and str(pledged_power).casefold() == str(controlling_power).casefold()
-                ),
-                "pledged_power_present": bool(
-                    pledged_power and (
-                        str(pledged_power).casefold() == str(controlling_power).casefold()
-                        or any(str(power).casefold() == str(pledged_power).casefold()
-                               for power in powers_present)
-                    )
-                ),
-            } if powerplay_system else None,
-        }
+        mining = self._mining_activity_snapshot(mission_rows)
         sample = self._sampling_snapshot() if getattr(self, "bio_sampling", None) else None
         snapshot = {
             "flight": {
@@ -6264,9 +5803,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 "unsold_data_max_cr": (
                     unsold_exploration + unsold_biology + unsold_biology_potential
                 ),
-                "pinned_engineering": list(
-                    (getattr(self, "engineer_materials", {}) or {}).get("pinned_blueprints") or []
-                )[:5],
             },
             "station": {
                 "name": getattr(self, "current_station_name", None),
@@ -6278,27 +5814,18 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 "total": int((getattr(self, "system_traffic", {}) or {}).get("total") or 0),
             },
             "mining": mining,
-            "trade": trade_context,
-            "combat": combat,
-            "powerplay": powerplay,
             "session": {
                 "jumps": int(getattr(self, "session_jump_count", 0) or 0),
                 "distance_ly": number(getattr(self, "session_ly", 0)) or 0.0,
-                "trade_profit_cr": int(trade.get("profit") or 0),
                 "mined_units": int(mining.get("refined_tons") or 0),
             },
-            "learned_gameplay": memory.gameplay_awareness() if memory else {},
             "exploration_intelligence": self._exploration_intelligence_snapshot(compact=True),
         }
-        snapshot.update(compass_operations.build_snapshot(
-            getattr(self, "ai_operational_state", None),
+        snapshot.update(operational_state.build_snapshot(
+            getattr(self, "operational_state", None),
             companion_state=state,
-            cargo_inventory=getattr(self, "current_cargo_inventory", None),
-            engineer_materials=getattr(self, "engineer_materials", None),
             carrier_data=getattr(getattr(self, "carrier_tracker", None), "carrier_data", None),
-            colonisation_projects=getattr(self, "colonisation_projects", None),
             current_system=current_system,
-            legal_state=getattr(self, "current_legal_state", None),
         ))
         snapshot["objectives"]["active_missions"] = int(
             (snapshot.get("missions") or {}).get("active") or 0
@@ -6318,7 +5845,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 next_waypoint = self.waypoint_manager.get_next_waypoint(current_system)
             except Exception:
                 pass
-            snapshot["expedition"] = expedition_manager.compass_snapshot(
+            snapshot["expedition"] = expedition_manager.status_snapshot(
                 next_waypoint=next_waypoint,
             )
             if snapshot["expedition"].get("active"):
@@ -6329,53 +5856,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     "next": snapshot["expedition"].get("next_objective")
                             or snapshot["expedition"].get("next_waypoint"),
                 }
-        snapshot["fact_quality"] = self._compass_fact_quality(snapshot)
         return snapshot
 
-    def _compass_fact_quality(self, snapshot=None):
-        """Describe the age and confidence of facts used by Compass advice."""
-        now = time.time()
-        thresholds = {
-            "journal": (30.0, 180.0, "last_journal_event_ts"),
-            "status": (15.0, 60.0, "last_status_event_ts"),
-            "navigation": (120.0, 600.0, "last_nav_event_ts"),
-            "cargo": (180.0, 900.0, "last_cargo_event_ts"),
-            "edsm": (300.0, 1800.0, "last_edsm_event_ts"),
-        }
-        sources = {}
-        for name, (live_age, recent_age, attribute) in thresholds.items():
-            observed_at = float(getattr(self, attribute, 0.0) or 0.0)
-            age = max(0.0, now - observed_at) if observed_at else None
-            if age is None:
-                freshness, confidence = "unknown", 0.0
-            elif age <= live_age:
-                freshness, confidence = "live", 1.0
-            elif age <= recent_age:
-                freshness, confidence = "recent", 0.7
-            else:
-                freshness, confidence = "stale", 0.3
-            sources[name] = {
-                "freshness": freshness, "confidence": confidence,
-                "age_seconds": round(age, 1) if age is not None else None,
-                "observed_at": observed_at or None,
-            }
-        conflicts = []
-        flight_state = str(
-            ((snapshot or {}).get("flight") or {}).get("state")
-            or getattr(self, "hud_flight_state", "") or ""
-        ).upper()
-        if getattr(self, "current_docked", False) and flight_state not in {"DOCKED", "ONFOOT"}:
-            conflicts.append("docking-state")
-        known = [row["confidence"] for row in sources.values() if row["freshness"] != "unknown"]
-        return {
-            "sources": sources,
-            "overall": round(sum(known) / len(known), 2) if known else 0.0,
-            "conflicts": conflicts,
-            "updated_at": now,
-        }
-
     @staticmethod
-    def _new_mining_ai_session(previous=None):
+    def _new_mining_session(previous=None):
         return {
             "active": False,
             "started_at": None,
@@ -6402,20 +5886,20 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             text = text[:-5]
         return text.replace("_", " ").strip().title() or fallback
 
-    def _start_ai_mining_session(self):
-        previous = getattr(self, "mining_ai_session", {}) or {}
-        state = self._new_mining_ai_session(previous)
+    def _start_mining_session(self):
+        previous = getattr(self, "mining_session", {}) or {}
+        state = self._new_mining_session(previous)
         state.update({
             "active": True,
             "started_at": time.time(),
             "system": getattr(self, "current_sys", None),
             "body": previous.get("context_body") or getattr(self, "current_body_name", None),
         })
-        self.mining_ai_session = state
+        self.mining_session = state
         return state
 
-    def _finish_ai_mining_session(self, reason):
-        state = getattr(self, "mining_ai_session", {}) or {}
+    def _finish_mining_session(self, reason):
+        state = getattr(self, "mining_session", {}) or {}
         if not state.get("active"):
             return
         duration = max(0.0, time.time() - float(state.get("started_at") or time.time()))
@@ -6436,23 +5920,23 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         state["active"] = False
         state["context_body"] = None
 
-    def _observe_ai_economy_event(self, event, raw, startup_replay=False):
-        """Maintain panel-independent live mining facts for Compass."""
+    def _observe_mining_event(self, event, raw, startup_replay=False):
+        """Maintain panel-independent live mining-session facts."""
         if startup_replay or not isinstance(raw, dict):
             return
-        state = getattr(self, "mining_ai_session", None)
+        state = getattr(self, "mining_session", None)
         if not isinstance(state, dict):
-            state = self._new_mining_ai_session()
-            self.mining_ai_session = state
+            state = self._new_mining_session()
+            self.mining_session = state
 
         if event == "LoadGame":
-            self.mining_ai_session = self._new_mining_ai_session()
+            self.mining_session = self._new_mining_session()
             return
 
         if event == "SAASignalsFound" and "ring" in str(raw.get("BodyName") or "").casefold():
             state["context_body"] = raw.get("BodyName")
         if event in ("ProspectedAsteroid", "MiningRefined", "AsteroidCracked") and not state.get("active"):
-            state = self._start_ai_mining_session()
+            state = self._start_mining_session()
 
         if event == "ProspectedAsteroid":
             state["prospected"] = int(state.get("prospected") or 0) + 1
@@ -6493,10 +5977,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     and "limpet" in str(item.get("Name_Localised") or item.get("Name") or "").casefold()
                 )
         elif event in ("FSDJump", "CarrierJump", "Shutdown"):
-            self._finish_ai_mining_session(event)
+            self._finish_mining_session(event)
 
-    def _compass_mining_snapshot(self, mission_rows):
-        state = dict(getattr(self, "mining_ai_session", {}) or {})
+    def _mining_activity_snapshot(self, mission_rows):
+        state = dict(getattr(self, "mining_session", {}) or {})
         limpets = state.get("limpets")
         if limpets is None:
             inventory = list(getattr(self, "current_cargo_inventory", None) or ())
@@ -6547,169 +6031,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "last_summary": state.get("last_summary") if state.get("last_summary_pending") else None,
         }
 
-    def _compass_trade_snapshot(self):
-        """Retain journal awareness without exposing a Trade workspace."""
-        trade = getattr(self, "trade_session", {}) or {}
-        events = list(trade.get("events") or [])
-        return {
-            "transactions": int(trade.get("transactions") or len(events)),
-            "bought_units": int(trade.get("bought_units") or 0),
-            "sold_units": int(trade.get("sold_units") or 0),
-            "spent_cr": int(trade.get("spent") or 0),
-            "revenue_cr": int(trade.get("earned") or 0),
-            "profit_cr": int(trade.get("profit") or 0),
-            "commodities_bought": dict(trade.get("commodities_bought") or {}),
-            "commodities_sold": dict(trade.get("commodities_sold") or {}),
-            "best_sale": trade.get("best_sale"),
-            "worst_sale": trade.get("worst_sale"),
-            "last_transaction": dict(events[-1]) if events else None,
-            "plan": None,
-        }
-
-    def _refresh_cockpit_brain(self, purpose=None, event=None, gameplay=None):
-        """Persist and return Compass's compact verified working state."""
-        memory = getattr(self, "cockpit_memory", None)
-        brain = getattr(self, "cockpit_brain", None)
-        if not memory or not brain or not self.config.get("cockpit_memory_enabled", True):
-            return {}
-        try:
-            return brain.update(
-                memory,
-                gameplay=(
-                    gameplay if isinstance(gameplay, dict)
-                    else self._compass_gameplay_snapshot()
-                ),
-                purpose=purpose,
-                event=event,
-                personality_level=self.config.get("cockpit_personality_level", "Balanced"),
-                persona_name=self.config.get("cockpit_persona", "Compass"),
-            )
-        except Exception as exc:
-            logging.debug("Cockpit working brain refresh skipped: %s", exc)
-            return {}
-
-    def _compass_advisor_intervals(self):
-        level = str(self.config.get("cockpit_advisor_level", "Balanced")).casefold()
-        return {
-            "quiet": (900.0, 450.0),
-            "proactive": (180.0, 90.0),
-        }.get(level, (420.0, 210.0))
-
-    def _compass_advisor_available(self, topic):
-        if not self.config.get("cockpit_advisor_enabled", True):
-            return False
-        topic_gap, global_gap = self._compass_advisor_intervals()
-        now = time.monotonic()
-        last_topic = self._compass_advisor_last.get(topic)
-        last_any = self._compass_advisor_last_any
-        return (
-            (last_topic is None or now - float(last_topic) >= topic_gap)
-            and (not last_any or now - float(last_any) >= global_gap)
-        )
-
-    def _mark_compass_advisor(self, topic):
-        if not topic:
-            return
-        now = time.monotonic()
-        self._compass_advisor_last[topic] = now
-        self._compass_advisor_last_any = now
-
-    def _compass_advisory_point(self, snapshot, key):
-        """Choose one learned, persona-weighted observation for an existing callout."""
-        key_text = str(key or "")
-        # A standalone adviser line has already passed cognitive selection.
-        # Do not append a second observation or learn the same outcome twice.
-        if key_text.startswith("advisor:"):
-            return None
-        cognition = getattr(self, "compass_cognition", None)
-        memory = getattr(self, "cockpit_memory", None)
-        if not cognition or not self._compass_advisor_available("contextual"):
-            return None
-        event = "FSDJump" if key_text.startswith((
-            "system-arrival:", "route-arrival:", "route-waypoint:"
-        )) else "callout"
-        candidate = cognition.select(
-            event, {}, snapshot, memory=memory, key=key, existing=True,
-        )
-        if candidate and not self._compass_advisor_available(candidate.get("topic")):
-            return None
-        return candidate
-
-    def _speak(self, text, category="safety", cooldown_s=20, key=None):
-        """Retained call-site shim; spoken cockpit feedback was retired in v5.3.6."""
-        return False
-
-    def _speak_pending_cockpit_remark(self, force=False):
-        if (not self.config.get("cockpit_memory_enabled", True)
-                or not getattr(self, "cockpit_memory", None)):
-            return False
-        remark = self.cockpit_memory.pop_remark(
-            self.config.get("cockpit_personality_level", "Balanced"), force=force,
-        )
-        if not remark:
-            return False
-        return self._speak(
-            remark["lines"], category=remark["category"], cooldown_s=30,
-            key=f"cockpit-context:{remark['topic']}",
-        )
-
-    def _maybe_speak_compass_advice(self, event, raw, data, startup_replay=False,
-                                    snapshot=None):
-        """Speak the highest-utility learned observation, or intentionally stay quiet."""
-        cognition = getattr(self, "compass_cognition", None)
-        if (startup_replay or getattr(self, "is_first_load", False) or not cognition
-                or not self.config.get("cockpit_advisor_enabled", True)):
-            return False
-        snapshot = snapshot if isinstance(snapshot, dict) else self._compass_gameplay_snapshot()
-        candidate = cognition.select(
-            event, raw if isinstance(raw, dict) else data, snapshot,
-            memory=getattr(self, "cockpit_memory", None),
-        )
-        if not candidate or not self._compass_advisor_available(candidate.get("topic")):
-            return False
-        key = f"advisor:{candidate['topic']}"
-        spoken = self._speak(
-            candidate["line"], category=candidate.get("category", "objectives"),
-            cooldown_s=0, key=key,
-        )
-        if spoken:
-            cognition.record_spoken(candidate, line=candidate["line"])
-            self._mark_compass_advisor(candidate["topic"])
-        return bool(spoken)
-
-    def _process_compass_cognition(self, event, raw, data, startup_replay=False,
-                                   snapshot=None):
-        """Learn from the settled event state, publish sparse insights, then advise."""
-        cognition = getattr(self, "compass_cognition", None)
-        if not cognition or startup_replay:
-            return False
-        try:
-            snapshot = snapshot if isinstance(snapshot, dict) else self._compass_gameplay_snapshot()
-            notices = cognition.observe(
-                event, snapshot, memory=getattr(self, "cockpit_memory", None),
-                raw=raw, startup_replay=startup_replay,
-            )
-            self._publish_cockpit_ai_changes()
-            for notice in notices:
-                self.add_event_feed_entry("AI", notice, severity="INFO")
-            if notices:
-                self._pulse_cockpit_ai()
-            spoken = self._maybe_speak_compass_advice(
-                event, raw, data, startup_replay=startup_replay,
-                snapshot=snapshot,
-            )
-            if event in ("FSDJump", "CarrierJump", "Shutdown"):
-                mining_state = getattr(self, "mining_ai_session", {}) or {}
-                mining_state["last_summary_pending"] = False
-            if event in ("EscapeInterdiction", "StartJump", "FSDJump", "CarrierJump", "Docked", "Died", "Shutdown"):
-                combat_tracker = getattr(self, "combat_awareness", None)
-                if combat_tracker:
-                    combat_tracker.consume_summary()
-            return spoken
-        except Exception as exc:
-            logging.debug("Compass cognition event skipped [%s]: %s", event, exc)
-            return False
-
     def _adaptive_health_snapshot(self):
         dispatch = self.ui_dispatcher.stats() if getattr(self, "ui_dispatcher", None) else {}
         persistence = persistence_queue().stats()
@@ -6746,30 +6067,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             return None
         return getattr(instance, "win", instance)
 
-    def _apply_adaptive_overlay_scene(self, mode=None):
-        """Retire mode-based overlay hiding while preserving explicit controls.
-
-        Module enable switches are now the single source of truth for overlay
-        availability. Activity modes may still prioritise dashboard content,
-        but cannot withdraw an enabled overlay. Restore anything hidden by an
-        earlier adaptive scene, then reapply deliberate hotkey visibility.
-        """
-        hidden = getattr(self, "_adaptive_hidden_overlays", set())
-        for attr in tuple(hidden):
-            instance = getattr(self, attr, None)
-            window = self._overlay_window(instance)
-            if window is None:
-                continue
-            try:
-                if hasattr(instance, "show") and callable(instance.show):
-                    instance.show()
-                else:
-                    window.deiconify()
-            except (AttributeError, tk.TclError):
-                pass
-        self._adaptive_hidden_overlays = set()
-        self._enforce_overlay_hotkey_visibility()
-
     def _update_adaptive_command(self, event, raw, startup_replay=False):
         deck = getattr(self, "adaptive_command", None)
         if not deck or startup_replay:
@@ -6782,7 +6079,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         if not transition.get("changed"):
             return
         mode = transition.get("mode") or "general"
-        self._apply_adaptive_overlay_scene(mode)
+        self._enforce_overlay_hotkey_visibility()
         self.schedule_dashboard_refresh(full=True)
 
     def _adaptive_startup_mode(self):
@@ -6796,12 +6093,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         if detected:
             deck.observe("StartupReady", detected, {}, historical=False)
         mode = deck.current_mode
-        self._apply_adaptive_overlay_scene(mode)
+        self._enforce_overlay_hotkey_visibility()
 
     def _detected_adaptive_mode(self):
         """Return live activity, aging stale automatic evidence to general flight."""
         activity = (
-            (getattr(self, "ai_operational_state", {}) or {}).get("activity") or {}
+            (getattr(self, "operational_state", {}) or {}).get("activity") or {}
         )
         mode = activity.get("mode") or "general"
         if mode not in FOCUSED_MODES:
@@ -6816,7 +6113,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
 
     def _adaptive_context(self, route_progress=None):
         route_progress = route_progress or self._current_route_progress()
-        pinned = (getattr(self, "engineer_materials", {}) or {}).get("pinned_blueprints") or []
         return {
             "current_system": getattr(self, "current_sys", None),
             "survey_remaining": max(
@@ -6824,7 +6120,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             ),
             "next_destination": self._dashboard_next_destination(),
             "route_text": route_progress.get("text"),
-            "engineering_goals": list(pinned),
         }
 
     def _adaptive_toggle_lock(self):
@@ -6845,7 +6140,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             deck.observe("ManualModeAuto", detected, {}, historical=False)
             mode = deck.current_mode
         self._persist_config()
-        self._apply_adaptive_overlay_scene(mode)
+        self._enforce_overlay_hotkey_visibility()
         if deck.automatic:
             message = f"Command Deck returned to Automatic · {MODE_LABELS.get(mode, mode).title()} detected"
         else:
@@ -6868,14 +6163,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         workspace = str(workspace or "").strip().upper()
         actions = {
             "DASHBOARD": self.show_dashboard_page,
-            "PROFILE": self.open_commander_profile_window,
+            "PROFILE": self.open_profile_workspace,
             "EXPLORE": lambda: self.open_exploration_window(section=section),
-            "SPECIALISTS": lambda: self.open_specialists_window(section=section),
-            "CARRIER": self.open_carrier_window,
-            "COLONY": self.open_colonization_window,
-            "ENGINEER": self.open_engineer_window,
+            "SPECIALISTS": lambda: self.open_field_tools_workspace(section=section),
+            "CARRIER": self.open_carrier_workspace,
             "GROUND": self.open_ground_target_window,
-            "GALAXY": self.open_bgs_window,
         }
         callback = actions.get(workspace)
         if callback is None:
@@ -6901,7 +6193,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         section = {
             "exploration": "survey",
             "mining": "mining",
-            "combat": "combat",
         }.get(mode)
 
         # General and station activity deliberately live on Dashboard. When a
@@ -6926,224 +6217,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
 
         return self._adaptive_open_workspace(workspace, section=section)
 
-    def _sync_cockpit_intentions(self, snapshot=None):
-        if (not self.config.get("cockpit_memory_enabled", True)
-                or not getattr(self, "cockpit_memory", None)):
-            return
-        state = getattr(self, "companion_state", {}) or {}
-        snapshot = snapshot if isinstance(snapshot, dict) else self._compass_gameplay_snapshot()
-        intentions = {}
-        route = list(getattr(self, "route_list", None) or [])
-        if route:
-            intentions["route"] = {
-                "destination": route[-1],
-                "remaining_systems": sum(
-                    1 for name in route if str(name).casefold() != str(self.current_sys).casefold()
-                ),
-            }
-        unsold = int(state.get("unsold_exploration_cr") or 0) + int(state.get("unsold_bio_cr") or 0)
-        if unsold:
-            intentions["unsold_data_cr"] = unsold
-        sample = self._sampling_snapshot()
-        if sample and str(getattr(self, "hud_flight_state", "")).upper() != "HYPERSPACE":
-            intentions["biological_sampling"] = {
-                "species": sample.get("species"), "progress": sample.get("progress"),
-            }
-        missions = snapshot.get("missions") or {}
-        if int(missions.get("active") or 0):
-            intentions["active_missions"] = {
-                "count": int(missions.get("active") or 0),
-                "urgent": len(missions.get("urgent") or []),
-                "destinations": list(missions.get("grouped_destinations") or [])[:4],
-            }
-        pinned = (getattr(self, "engineer_materials", {}) or {}).get("pinned_blueprints") or []
-        if pinned:
-            intentions["engineering"] = [
-                {"blueprint": row.get("name"),
-                 "grade": row.get("target_grade", row.get("grade", 5)),
-                 "quantity": row.get("quantity", 1)}
-                for row in pinned[:5] if row.get("name")
-            ]
-        activity = snapshot.get("activity") or {}
-        if activity.get("mode") and activity.get("mode") != "general":
-            intentions["activity"] = {
-                "mode": activity.get("mode"),
-                "since": activity.get("since"),
-            }
-        rescue = snapshot.get("rescue_legal") or {}
-        if int(rescue.get("rescue_units") or 0):
-            intentions["rescue_cargo"] = int(rescue.get("rescue_units") or 0)
-        if int(rescue.get("stolen_units") or 0):
-            intentions["legal_cargo"] = int(rescue.get("stolen_units") or 0)
-        strategy = snapshot.get("strategy") or {}
-        carrier = strategy.get("carrier") or {}
-        if carrier.get("jump_destination"):
-            intentions["carrier_jump"] = carrier.get("jump_destination")
-        matched = list(strategy.get("colonisation_matching_cargo") or [])
-        if matched:
-            intentions["colonisation_cargo_t"] = sum(
-                int(row.get("aboard") or 0) for row in matched if isinstance(row, dict)
-            )
-        self.cockpit_memory.update_intentions(intentions)
-
-    def _cockpit_ai_feed_snapshot(self):
-        memory = getattr(self, "cockpit_memory", None)
-        if not memory:
-            return None
-        mood = memory.current_mood()
-        biology = memory.biology_awareness()
-        cognition = (
-            self.compass_cognition.status()
-            if getattr(self, "compass_cognition", None) else {}
-        )
-        active = memory.state.get("active_expedition")
-        return {
-            "mood": str(mood.get("name") or "calm"),
-            "mood_reason": str(mood.get("reason") or "systems nominal"),
-            "voice_stage": memory.voice_stage(
-                self.config.get("cockpit_personality_level", "Balanced")
-            ),
-            "persona": str(self.config.get("cockpit_persona") or "Compass"),
-            "habits": tuple(memory.habits()),
-            "systems": len(memory.state.get("systems", {})),
-            "species": len(memory.state.get("species", {})),
-            "ships": len(memory.state.get("ships", {})),
-            "memories": len(memory.state.get("memories", [])),
-            "honks": memory.count("system_honks"),
-            "fss_completed": memory.count("fss_systems_completed"),
-            "dss_maps": memory.count("dss_maps_completed"),
-            "signal_bodies": memory.count("signal_bodies_found"),
-            "bio_genera": biology["genera"],
-            "bio_samples": biology["samples"],
-            "bio_analyses": biology["analyses"],
-            "bio_codex": biology["codex_entries"],
-            "cognition_decisions": int(cognition.get("decisions") or 0),
-            "cognition_predictions": len(cognition.get("predictions") or []),
-            "cognition_goals": len(cognition.get("goals") or []),
-            "cognition_learned_topics": len(cognition.get("learned_topics") or []),
-            "awareness_domains": tuple(memory.knowledge_domains()),
-            "limits": dict(memory.limits),
-            "expedition_id": active.get("id") if isinstance(active, dict) else None,
-            "expedition_name": active.get("name") if isinstance(active, dict) else None,
-            "expedition_jumps": int(active.get("jumps") or 0) if isinstance(active, dict) else 0,
-        }
-
-    @classmethod
-    def _cockpit_ai_state_events(cls, before, after):
-        """Return sparse, meaningful feed messages for Compass state transitions."""
-        if not before or not after:
-            return []
-        messages = []
-        if after["mood"] != before["mood"]:
-            messages.append(
-                f"Mood changed: {after['mood'].title()} - {after['mood_reason']}"
-            )
-        if after["voice_stage"] != before["voice_stage"]:
-            messages.append(
-                f"Relationship evolved: {after['voice_stage'].title()} flight companion"
-            )
-        if after.get("persona") != before.get("persona"):
-            messages.append(f"Persona selected: {after.get('persona') or 'Compass'}")
-        learned = [habit for habit in after["habits"] if habit not in before["habits"]]
-        if learned:
-            messages.append(f"Learned flight habit: {', '.join(learned)}")
-        new_domains = [
-            domain for domain in after.get("awareness_domains", ())
-            if domain not in before.get("awareness_domains", ())
-        ]
-        if new_domains:
-            messages.append(f"New operational awareness: {', '.join(new_domains)}")
-
-        growth = []
-        for key, label in (("systems", "systems"), ("species", "species"), ("memories", "notable memories")):
-            old_count = int(before.get(key) or 0)
-            new_count = int(after.get(key) or 0)
-            milestones = set(cls._COCKPIT_BRAIN_MILESTONES[key])
-            limit = int((after.get("limits") or {}).get(key) or 0)
-            if limit:
-                milestones.add(limit)
-            if any(old_count < mark <= new_count for mark in milestones):
-                suffix = f"/{limit}" if limit else ""
-                growth.append(f"{new_count:,}{suffix} {label}")
-        if growth:
-            messages.append(f"Memory growth: {' | '.join(growth)}")
-
-        survey_growth = []
-        for key, label, milestones in (
-            ("honks", "system honks", (25, 100, 250, 500, 1000, 5000)),
-            ("fss_completed", "full FSS surveys", (10, 25, 50, 100, 250, 500, 1000)),
-            ("dss_maps", "DSS maps", (10, 25, 50, 100, 250, 500, 1000, 5000)),
-            ("signal_bodies", "signal-bearing bodies", (10, 25, 50, 100, 250, 500, 1000)),
-        ):
-            old_count = int(before.get(key) or 0)
-            new_count = int(after.get(key) or 0)
-            if any(old_count < mark <= new_count for mark in milestones):
-                survey_growth.append(f"{new_count:,} {label}")
-        if survey_growth:
-            messages.append(f"Survey awareness: {' | '.join(survey_growth)}")
-
-        biology_growth = []
-        for key, label, milestones in (
-            ("bio_genera", "genera", (5, 10, 15, 20, 25)),
-            ("bio_samples", "samples", (25, 100, 250, 500, 1000, 2500)),
-            ("bio_analyses", "analyses", (10, 25, 50, 100, 250, 500, 1000)),
-            ("bio_codex", "biological Codex entries", (10, 25, 50, 100, 250, 500)),
-        ):
-            old_count = int(before.get(key) or 0)
-            new_count = int(after.get(key) or 0)
-            if any(old_count < mark <= new_count for mark in milestones):
-                biology_growth.append(f"{new_count:,} {label}")
-        if biology_growth:
-            messages.append(f"Biology awareness: {' | '.join(biology_growth)}")
-
-        old_expedition = before.get("expedition_id")
-        new_expedition = after.get("expedition_id")
-        if new_expedition and new_expedition != old_expedition:
-            messages.append(f"Expedition log opened: {after['expedition_name']}")
-        elif old_expedition and not new_expedition:
-            messages.append(f"Expedition archived: {before.get('expedition_name') or 'journey complete'}")
-        elif new_expedition == old_expedition and new_expedition:
-            old_jumps = int(before.get("expedition_jumps") or 0)
-            new_jumps = int(after.get("expedition_jumps") or 0)
-            if any(old_jumps < mark <= new_jumps for mark in (50, 100, 250, 500, 1000)):
-                messages.append(
-                    f"Expedition milestone: {after['expedition_name']} reached {new_jumps:,} jumps"
-                )
-        return messages
-
-    def _publish_cockpit_ai_online(self):
-        if not self.config.get("cockpit_memory_enabled", True):
-            self._cockpit_feed_state = None
-            return
-        snapshot = self._cockpit_ai_feed_snapshot()
-        self._cockpit_feed_state = snapshot
-        if not snapshot:
-            return
-        limits = snapshot["limits"]
-        self.add_event_feed_entry(
-            "AI",
-            (
-                f"Compass online: {snapshot['voice_stage'].title()} | mood {snapshot['mood']} | "
-                f"persona {snapshot['persona']} | "
-                f"memory {snapshot['systems']:,}/{limits['systems']:,} systems, "
-                f"{snapshot['species']:,}/{limits['species']:,} species, "
-                f"{snapshot['memories']:,}/{limits['memories']:,} notable | "
-                f"survey {snapshot['fss_completed']:,} FSS, {snapshot['dss_maps']:,} DSS | "
-                f"biology {snapshot['bio_genera']:,} genera, {snapshot['bio_analyses']:,} analyses | "
-                f"{len(snapshot['awareness_domains'])} gameplay domains | "
-                f"cognition {snapshot['cognition_predictions']} predictions, "
-                f"{snapshot['cognition_goals']} priorities | working brain ready"
-            ),
-            severity="INFO",
-        )
-
-    def _publish_cockpit_ai_changes(self):
-        after = self._cockpit_ai_feed_snapshot()
-        before = getattr(self, "_cockpit_feed_state", None)
-        self._cockpit_feed_state = after
-        for message in self._cockpit_ai_state_events(before, after):
-            self.add_event_feed_entry("AI", message, severity="INFO")
-
     def _publish_expedition_resume_briefing(self):
         manager = getattr(self, "expedition_manager", None)
         if not manager:
@@ -7153,7 +6226,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             next_waypoint = self.waypoint_manager.get_next_waypoint(getattr(self, "current_sys", None))
         except Exception:
             pass
-        snapshot = manager.compass_snapshot(next_waypoint=next_waypoint)
+        snapshot = manager.status_snapshot(next_waypoint=next_waypoint)
         if not snapshot.get("active"):
             return False
         brief_key = f"{snapshot.get('id')}:{snapshot.get('sessions')}"
@@ -7166,110 +6239,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.add_event_feed_entry("EXPEDITION", line, severity="INFO")
         return True
 
-    def _handle_cockpit_load_game(self, raw, data, startup_replay=False):
-        """Use LoadGame as the preferred session start, retaining automatic fallback."""
-        memory = getattr(self, "cockpit_memory", None)
-        if not memory or not self.config.get("cockpit_memory_enabled", True):
-            return False
-        raw = raw if isinstance(raw, dict) else {}
-        data = data if isinstance(data, dict) else raw
-        was_active = bool(memory.state.get("current_session"))
-        current_system = getattr(self, "current_sys", None)
-        system = (
-            data.get("star_system") or raw.get("StarSystem")
-            or (current_system if current_system not in (None, "---", "Unknown") else None)
-        )
-        ship = (
-            data.get("ship_name") or raw.get("ShipName")
-            or data.get("ship_localised") or raw.get("Ship_Localised")
-            or data.get("ship") or raw.get("Ship")
-        )
-        previous_updated_at = memory.state.get("updated_at")
-        session = memory.start_session(system, ship)
-        if was_active or startup_replay:
-            return False
-        detail = "Flight session started"
-        if ship:
-            detail += f" aboard {ship}"
-        if system:
-            detail += f" in {system}"
-        self.add_event_feed_entry("AI", detail, severity="INFO")
-        self._pulse_cockpit_ai()
-        greeting_lines = (
-            detail + ".",
-            "Compass session initialized. I am ready.",
-            "Cockpit intelligence online. The new flight record is open.",
-            "Session telemetry synchronized. I am with you for the next leg.",
-            "Flight systems and memory are online. We can begin when you are ready.",
-            "A fresh session is active. Navigation and ship awareness are standing by.",
-        )
-        if self.config.get("cockpit_session_greetings_enabled", True):
-            context = memory.session_open_context(previous_updated_at)
-            if context == "long-absence":
-                greeting_lines = (
-                    "It has been some time since our last flight together. Systems are ready when you are.",
-                    f"{detail}. Welcome back — I was beginning to wonder about you.",
-                    "The cockpit has been quiet for a while. I am glad to have our flight record moving again.",
-                    "A longer interval than usual, but every system has come back online cleanly. Welcome back.",
-                    "Our shared log has been waiting. I have restored the last context and opened a new session.",
-                    "You have been away long enough for the silence to become noticeable. Flight systems are ready.",
-                )
-            elif context == "new-day":
-                greeting_lines = (
-                    "A new day, a fresh flight log. Good to have you back in the seat.",
-                    f"{detail}. Another day in the black together.",
-                    "New-day session initialized. I have carried our previous context forward.",
-                    "The date changed; the flight continues. Everything is ready for today's work.",
-                    "Fresh session, familiar cockpit. I have navigation and memory synchronized.",
-                    "Another day in our record begins now. Ship intelligence is standing by.",
-                )
-        self._speak(
-            greeting_lines,
-            category="navigation",
-            cooldown_s=0,
-            key=f"cockpit-loadgame-session:{session.get('id') or 'session'}",
-        )
-        return True
-
-    def _handle_cockpit_shutdown(self):
-        """Close the current session once at Elite's natural Shutdown boundary."""
-        memory = getattr(self, "cockpit_memory", None)
-        if not memory or not self.config.get("cockpit_memory_enabled", True):
-            return False
-        session = memory.state.get("current_session")
-        if not session:
-            return False
-        session_id = session.get("id") or "session"
-        insights = (
-            self.compass_cognition.observe_session_close(
-                self._compass_gameplay_snapshot(), memory,
-            )
-            if getattr(self, "compass_cognition", None) else []
-        )
-        summary = memory.session_debrief(
-            "Shutdown summary", close=True, insights=insights,
-            exploration_focus=self.config.get("cockpit_exploration_focus_enabled", False),
-        )
-        self._cockpit_feed_state = self._cockpit_ai_feed_snapshot()
-        if not summary:
-            return False
-        self.add_event_feed_entry("AI", summary, severity="INFO")
-        self._pulse_cockpit_ai()
-        self._speak(
-            summary,
-            category="navigation",
-            cooldown_s=0,
-            key=f"cockpit-shutdown-summary:{session_id}",
-        )
-        return True
-
-    def _pulse_cockpit_ai(self):
-        heartbeat = getattr(self, "heartbeat_hud", None)
-        if heartbeat:
-            heartbeat.pulse("ai")
-
-    def _push_live_toast(self, title, message="", severity="info", duration_s=10,
-                         voice_text=None, voice_category="safety", voice_key=None):
+    def _push_live_toast(self, title, message="", severity="info", duration_s=10):
         toast = getattr(self, "toast_hud", None)
         if toast:
             toast.push(title, message, severity=severity, duration_s=duration_s)
@@ -7337,23 +6307,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             )
             self._push_live_toast("EMBARKED", str(vehicle), "info")
         elif ev == "HeatWarning":
-            self._push_live_toast("OVERHEATING", "Ship temperature critical", "warn", 15,
-                                  ("Warning. Ship temperature critical.",
-                                   "Thermal telemetry has entered the critical range.",
-                                   "Thermal limits exceeded. I recommend immediate cooling."),
-                                  voice_key="ship-overheat")
+            self._push_live_toast("OVERHEATING", "Ship temperature critical", "warn", 15)
         elif ev == "HeatDamage":
-            self._push_live_toast("HEAT DAMAGE", "Modules are taking heat damage", "fail", 15,
-                                  ("Heat damage. Modules are taking damage.",
-                                   "Critical heat exposure. I am detecting module damage.",
-                                   "The ship is cooking. Internal systems are degrading."),
-                                  voice_key="heat-damage")
+            self._push_live_toast("HEAT DAMAGE", "Modules are taking heat damage", "fail", 15)
         elif ev == "UnderAttack":
             target = raw.get("Target") or raw.get("Target_Localised") or "Hostile fire detected"
-            self._push_live_toast("UNDER ATTACK", target, "fail", 15,
-                                  ("Warning. We are under attack.",
-                                   "Hostile fire incoming. Defensive telemetry is active.",
-                                   "Weapons fire detected. It appears we have company."), voice_key="under-attack")
+            self._push_live_toast("UNDER ATTACK", target, "fail", 15)
         elif ev == "ShieldState":
             shields_up = bool(raw.get("ShieldsUp"))
             if shields_up != self._toast_shields_up:
@@ -7361,11 +6320,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self._push_live_toast(
                     "SHIELDS RESTORED" if shields_up else "SHIELDS OFFLINE", "",
                     "success" if shields_up else "fail", 12,
-                    None if shields_up else (
-                        "Warning. Shields offline.",
-                        "Shields have collapsed. Hull telemetry is now primary.",
-                        "Defensive field lost. I am monitoring the exposed hull.",
-                    ), voice_key="shields-offline",
                 )
         elif ev == "HullDamage":
             health = float(raw.get("Health", 1.0) or 0.0)
@@ -7378,19 +6332,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self._push_live_toast(
                     "HULL CRITICAL" if threshold <= 25 else "HULL DAMAGE",
                     f"Integrity at {health * 100:.0f}%", "fail" if threshold <= 25 else "warn", 15,
-                    ((f"Hull critical. Integrity at {health * 100:.0f} percent.",
-                      f"Hull integrity is down to {health * 100:.0f} percent.",
-                      f"Structural failure risk. My sensors show hull at {health * 100:.0f} percent.")) if threshold <= 25 else None,
-                    voice_key=f"hull-{threshold}",
                 )
         elif ev == "CockpitBreached":
             self._push_live_toast(
                 "CANOPY BREACHED", "Emergency oxygen reserve active", "fail", 20,
-                (
-                    "Canopy breach confirmed. Life support reserve is now critical.",
-                    "Cockpit pressure lost. I am tracking emergency oxygen and the nearest safe dock.",
-                    "Canopy failure. Break contact and secure life support immediately.",
-                ), voice_key="cockpit-breached",
             )
         elif ev in ("Interdicted", "EscapeInterdiction"):
             escaped = ev == "EscapeInterdiction"
@@ -7398,21 +6343,13 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._push_live_toast(
                 "INTERDICTION ESCAPED" if escaped else "INTERDICTED", actor,
                 "success" if escaped else "warn", 15,
-                None if escaped else (
-                    "Warning. Interdiction detected.",
-                    "Interdiction tether engaged. I am tracking the vector.",
-                    "Someone wants us out of supercruise. I suggest we disappoint them.",
-                ), voice_key="interdiction",
             )
         elif ev == "JetConeBoost":
             self._push_live_toast(
                 "FSD SUPERCHARGED", "Jet-cone boost acquired", "success", 10,
             )
         elif ev == "JetConeDamage":
-            self._push_live_toast("JET CONE DAMAGE", "Exit the cone immediately", "fail", 18,
-                                  ("Jet cone damage. Exit immediately.",
-                                   "Danger. The jet cone is damaging the ship. I need us clear now.",
-                                   "Unstable cone exposure. Exit now. I cannot compensate for this."), voice_key="jet-cone-damage")
+            self._push_live_toast("JET CONE DAMAGE", "Exit the cone immediately", "fail", 18)
         elif ev in ("FighterDestroyed", "SRVDestroyed"):
             title = (
                 "FIGHTER DESTROYED" if ev == "FighterDestroyed"
@@ -7421,9 +6358,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._push_live_toast(title, "", "fail", 15)
         elif ev == "Died":
             killer = raw.get("KillerName_Localised") or raw.get("KillerName") or "Commander lost"
-            self._push_live_toast("DESTRUCTION", killer, "fail", 20,
-                                  ("Ship destroyed.", "Vessel lost. Initiating recovery protocols.",
-                                   "Catastrophic failure. I am transferring control to emergency recovery."), voice_key="ship-destroyed")
+            self._push_live_toast("DESTRUCTION", killer, "fail", 20)
         elif ev in ("MissionAccepted", "MissionCompleted", "MissionFailed", "MissionAbandoned"):
             name = raw.get("LocalisedName") or raw.get("Name_Localised") or raw.get("Name") or "Mission"
             titles = {"MissionAccepted": "MISSION ACCEPTED", "MissionCompleted": "MISSION COMPLETE", "MissionFailed": "MISSION FAILED", "MissionAbandoned": "MISSION ABANDONED"}
@@ -7451,25 +6386,13 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         elif ev == "CodexEntry":
             name = d.get("name") or raw.get("Name_Localised") or raw.get("Name") or "New Codex entry"
             category = d.get("category") or raw.get("Category_Localised") or "Discovery"
-            self._push_live_toast("CODEX DISCOVERY", f"{category}: {name}", "success", 15,
-                                  (f"Codex discovery. {name}.",
-                                   f"A new Codex entry. I have identified {name}.",
-                                   f"Discovery logged to the ship archive. {name}.",
-                                   f"Our Codex just grew a little larger. {name}."), voice_category="exploration",
-                                  voice_key=f"codex:{name}")
+            self._push_live_toast("CODEX DISCOVERY", f"{category}: {name}", "success", 15)
         elif ev in ("CommitCrime", "Bounty"):
             detail = raw.get("CrimeType_Localised") or raw.get("CrimeType") or raw.get("Victim") or raw.get("Target_Localised") or raw.get("Target") or "Legal status changed"
             self._push_live_toast("CRIME REPORTED" if ev == "CommitCrime" else "BOUNTY AWARDED", str(detail), "warn", 15)
         elif ev == "SystemsShutdown":
             self._push_live_toast(
                 "SYSTEMS SHUTDOWN", "Ship systems have been forced offline", "fail", 18,
-                (
-                    "Warning. Ship systems have been forced offline.",
-                    "Critical systems shutdown detected. Stand by for recovery.",
-                    "All ship systems are offline. Monitoring recovery sequence.",
-                    "Power loss across the ship. I am tracking the restart cycle.",
-                ),
-                voice_category="safety", voice_key="systems-shutdown",
             )
         elif ev == "USSDrop":
             threat = int(raw.get("USSThreat") or 0)
@@ -7584,12 +6507,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 logging.warning("Carrier cargo total update failed: %s", exc)
         if specialist_changed and not self.batch_mode:
             self._schedule_specialist_flush()
-            window = getattr(self, "specialists_window", None)
-            if window and window.is_open() and getattr(self, "_active_page", None) == "SPECIALISTS":
-                self._ui_post(window.refresh, key="specialists-refresh")
-            carrier_window = getattr(self, "carrier_window", None)
-            if carrier_window and carrier_window.is_open():
-                carrier_window.on_specialist_updated()
+            self._refresh_html_workspace()
         try:
             self.achievement_engine.process_event(
                 data,
@@ -7615,7 +6533,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             try:
                 if self.captains_log.process_event(raw, context=d):
                     self._refresh_exploration_window()
-                    self._refresh_commander_profile_window()
+                    self._refresh_html_workspace()
             except Exception as exc:
                 logging.debug("Captain's Log event skipped [%s]: %s", ev, exc)
         if getattr(self, "deep_survey", None):
@@ -7666,30 +6584,23 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._handle_live_journal_toast(
                 ev, raw, d, startup_replay=startup_replay,
             )
-        self._observe_ai_economy_event(
+        self._observe_mining_event(
             ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay,
         )
         try:
-            compass_operations.observe_event(
-                self.ai_operational_state,
+            operational_state.observe_event(
+                self.operational_state,
                 ev,
                 raw if isinstance(raw, dict) else d,
                 current_system=getattr(self, "current_sys", None),
                 historical=startup_replay,
             )
         except Exception as exc:
-            logging.debug("Compass operational event skipped [%s]: %s", ev, exc)
+            logging.debug("Operational event aggregation skipped [%s]: %s", ev, exc)
         self._update_adaptive_command(
             ev, raw if isinstance(raw, dict) else d,
             startup_replay=startup_replay,
         )
-        combat_tracker = getattr(self, "combat_awareness", None)
-        if combat_tracker:
-            combat_tracker.observe(
-                ev, raw if isinstance(raw, dict) else d,
-                system=getattr(self, "current_sys", None),
-                startup_replay=startup_replay,
-            )
         if ev == "LoadGame":
             if not startup_replay:
                 self._publish_expedition_resume_briefing()
@@ -7751,7 +6662,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.watcher.force_check_cargo()
             self._refresh_cargo_consumers()
             self._queue_edsm_upload(raw, allow_startup=True)
-            self._refresh_commander_profile_window()
+            self._refresh_html_workspace()
             if ship_changed:
                 self.update_hud()
 
@@ -7766,7 +6677,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.watcher.force_check_cargo()
                 self._refresh_cargo_consumers()
             if ship_changed:
-                self._refresh_commander_profile_window()
+                self._refresh_html_workspace()
                 self.update_hud()
             # Buy is already queued by the shared credit-event path and New is
             # discarded by EDSM. Swap and naming events are accepted fleet
@@ -7789,8 +6700,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._queue_edsm_upload(raw, startup_replay=startup_replay)
 
         elif ev in ("MarketBuy", "MarketSell"):
-            if not startup_replay:
-                self._record_trade_session_event(ev, raw if isinstance(raw, dict) else d)
             self._queue_edsm_upload(raw, startup_replay=startup_replay)
 
         elif ev in ("NavRoute", "NavRouteClear"):
@@ -7805,17 +6714,17 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         elif ev == "Rank":
             self.cmdr_ranks.update(d)
             self._queue_edsm_upload(raw, allow_startup=True)
-            self._refresh_commander_profile_window()
+            self._refresh_html_workspace()
 
         elif ev == "Progress":
             self.cmdr_rank_progress.update(d)
             self._queue_edsm_upload(raw, allow_startup=True)
-            self._refresh_commander_profile_window()
+            self._refresh_html_workspace()
 
         elif ev == "Reputation":
             self.cmdr_reputation.update(d)
             self._queue_edsm_upload(raw, allow_startup=True)
-            self._refresh_commander_profile_window()
+            self._refresh_html_workspace()
 
         elif ev == "Statistics":
             self._queue_edsm_upload(raw, allow_startup=True)
@@ -7875,7 +6784,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     self.fuel_capacity_main = float(fuel_capacity)
             except (TypeError, ValueError):
                 pass
-            self._refresh_commander_profile_window()
+            self._refresh_html_workspace()
 
         elif ev == "FuelScoop":
             # FuelScoop.Total is the journal-confirmed tank level after the
@@ -8195,7 +7104,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._rebuild_scan_index()
             self._rebuild_system_state_from_scan_items()
             self._seed_navigation_scan_progress()
-            self._promote_navigation_arrival_personality(
+            self._promote_navigation_arrival_emphasis(
                 ev, startup_replay=startup_replay,
             )
 
@@ -8220,20 +7129,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             elif ev == "Location":
                 self._queue_edsm_upload(raw, allow_startup=True)
 
-            # Track every visited system so the BGS window shows a full history.
+            # Retain travel history for the Galactic Atlas and profile records.
             self.db_record_visit(self.current_sys, self.current_system_address)
-
-            # BGS snapshot — uses the journal event timestamp as a dedup key so
-            # startup replay never creates duplicate rows.
-            _factions = raw.get("Factions") if isinstance(raw, dict) else None
-            if _factions and self.current_sys and self.current_sys not in ("---", "Unknown"):
-                _event_ts = raw.get("timestamp") if isinstance(raw, dict) else None
-                self.db_save_bgs_snapshot(
-                    self.current_sys, self.current_system_address,
-                    _factions, _event_ts,
-                )
-            if not self.batch_mode and self.bgs_window and self.bgs_window.is_open():
-                self.bgs_window.refresh_current()
             
             if not self.batch_mode:
                 sys_text = self.current_sys.upper()
@@ -8913,11 +7810,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.db_save_colonisation_project(self.colonisation_projects[mid])
                 if not self.batch_mode:
                     self._save_colonisation_data(self.colonisation_projects)
-                    if self.colonization_window and self.colonization_window.is_open():
-                        self.colonization_window.refresh()
-                    self._refresh_colonisation_planner_window()
-                    if self.colony_overlay:
-                        self.colony_overlay.update()
+                    self._refresh_html_workspace()
                     if not was_complete and self.colonisation_projects[mid]["complete"] and self.toast_hud:
                         site = d.get("body_name") or d.get("system_name") or "construction site"
                         self.toast_hud.push("CONSTRUCTION COMPLETE", site, severity="success", duration_s=15)
@@ -8946,11 +7839,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.db_save_colonisation_project(proj)
                 if not self.batch_mode:
                     self._save_colonisation_data(self.colonisation_projects)
-                    if self.colonization_window and self.colonization_window.is_open():
-                        self.colonization_window.refresh()
-                    self._refresh_colonisation_planner_window()
-                    if self.colony_overlay:
-                        self.colony_overlay.update()
+                    self._refresh_html_workspace()
 
         # ── ApproachBody / LeaveBody ──────────────────────────────────────────────
         if ev == "ApproachBody":
@@ -9082,12 +7971,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         def run():
             self._companion_refresh_job = None
             try:
-                self._refresh_commander_profile_window()
-            except Exception:
-                pass
-            try:
-                if self.bgs_window and self.bgs_window.is_open():
-                    self.bgs_window.refresh_current()
+                self._refresh_html_workspace()
             except Exception:
                 pass
             try:
@@ -9101,14 +7985,13 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         except Exception:
             self._companion_refresh_job = None
 
-    def _toast_on_main(self, title, message, severity="info", duration=12,
-                       voice_text=None, voice_category="safety", voice_key=None):
+    def _toast_on_main(self, title, message, severity="info", duration=12):
         if self.toast_hud:
             self._ui_post(lambda: self.toast_hud.push(
                 title, message, severity=severity, duration_s=duration,
             ))
 
-    def _clear_sold_data_warnings(self, biological=False):
+    def _clear_sold_data_warnings(self):
         """Cancel risk output that became obsolete during a data sale."""
         toast = getattr(self, "toast_hud", None)
         if toast and hasattr(toast, "dismiss"):
@@ -9120,25 +8003,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             except Exception:
                 pass
 
-    def _toggle_galaxy_faction_watch(self, faction_name):
-        enabled = companion_features.toggle_faction_watch(self.companion_state, faction_name)
-        # Establish the current system as the baseline so enabling a watch never
-        # creates an immediate false-positive alert.
-        companion_features.update_faction_watch_snapshots(
-            self.companion_state,
-            self.companion_state.get("galaxy_system"),
-            self.companion_state.get("factions") or [],
-            self.companion_state.get("controlling_faction"),
-            notify=False,
-        )
-        self._save_companion_state()
-        self._refresh_companion_surfaces()
-        return enabled
-
     def _process_companion_event(self, ev, raw, data, startup_replay=False):
         state = self.companion_state
         changed = False
-        galaxy_changed = False
 
         if ev == "Loadout":
             state["loadout"] = dict(raw)
@@ -9160,21 +8027,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             state["statistics_updated"] = raw.get("timestamp")
             changed = True
 
-        elif ev == "LoadGame":
-            if state.get("powerplay"):
-                state["powerplay"].update({
-                    "session_merits": 0,
-                    "session_collected": 0,
-                    "session_delivered": 0,
-                    "session_fast_track_cr": 0,
-                    "session_salary_cr": 0,
-                    "commodities_collected": {},
-                    "commodities_delivered": {},
-                    "activity": [],
-                    "last_action": None,
-                })
-                changed = True
-
         elif ev == "StoredShips":
             state["stored_ships"] = {
                 "station": raw.get("StationName"), "system": raw.get("StarSystem"),
@@ -9194,7 +8046,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             key = self._companion_mission_key(raw.get("MissionID"))
             if key and state.setdefault("missions", {}).pop(key, None) is not None:
                 changed = True
-                self._prune_massacre_kills()
 
         elif ev == "Missions":
             active = {self._companion_mission_key(row.get("MissionID")) for row in raw.get("Active") or []}
@@ -9203,7 +8054,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             if len(reconciled) != len(missions):
                 state["missions"] = reconciled
                 changed = True
-                self._prune_massacre_kills()
 
         elif ev == "CargoDepot":
             mission = state.setdefault("missions", {}).get(self._companion_mission_key(raw.get("MissionID")))
@@ -9225,188 +8075,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     mission["destination_settlement"] = raw["NewDestinationSettlement"]
                 changed = True
 
-        elif ev in ("Bounty", "FactionKillBond"):
-            victim = raw.get("VictimFaction")
-            active_targets = {row["faction"] for row in companion_features.massacre_stacks(state)}
-            if victim and victim in active_targets and not startup_replay:
-                before = next((row for row in companion_features.massacre_stacks(state)
-                               if row["faction"] == victim), None)
-                kills = state.setdefault("faction_kills", {})
-                kills[victim] = int(kills.get(victim, 0)) + 1
-                after = next((row for row in companion_features.massacre_stacks(state)
-                              if row["faction"] == victim), None)
-                changed = True
-                if before and after and not before["complete"] and after["complete"]:
-                    self._toast_on_main(
-                        "STACK COMPLETE", f"All massacre missions against {victim} are ready", "success", 15,
-                        (f"Massacre stack complete. All missions against {victim} are ready.",
-                         f"Objectives complete. I have marked the full {victim} mission stack ready for collection.",
-                         f"That was the last target. All missions against {victim} are complete.",
-                         f"Combat tally reconciled. Every active {victim} contract is now complete."),
-                        "objectives", f"massacre-complete:{victim}",
-                    )
-
-        elif ev in ("Powerplay", "PowerplayJoin", "PowerplayDefect", "PowerplayLeave",
-                    "PowerplayRank", "PowerplayMerits", "PowerplayCollect",
-                    "PowerplayDeliver", "PowerplayFastTrack", "PowerplaySalary",
-                    "PowerplayVote", "PowerplayVoucher"):
-            self._update_powerplay_state(ev, raw)
-            changed = True
-            galaxy_changed = True
-
-        elif ev == "CommunityGoal":
-            goals = {}
-            for goal in raw.get("CurrentGoals") or []:
-                if goal.get("CGID") is None:
-                    continue
-                goals[str(goal["CGID"])] = {
-                    "title": goal.get("Title"), "system": goal.get("SystemName"),
-                    "market": goal.get("MarketName"), "expiry": goal.get("Expiry"),
-                    "complete": bool(goal.get("IsComplete")),
-                    "current_total": goal.get("CurrentTotal"),
-                    "contribution": goal.get("PlayerContribution"),
-                    "contributors": goal.get("NumContributors"),
-                    "percentile": goal.get("PlayerPercentileBand"),
-                    "tier": (goal.get("TierReached") or "").replace("Tier ", "") or None,
-                    "top_rank": bool(goal.get("PlayerInTopRank")),
-                    "bonus": goal.get("Bonus"),
-                }
-            state["community_goals"] = goals
-            changed = True
-            galaxy_changed = True
-
-        elif ev in ("SquadronStartup", "SquadronCreated", "JoinedSquadron"):
-            previous = state.get("squadron") or {}
-            squadron_name = raw.get("SquadronName") or previous.get("name")
-            squadron_id = raw.get("SquadronID", previous.get("id"))
-            same_squadron = bool(previous and (
-                (squadron_id is not None and previous.get("id") == squadron_id)
-                or (squadron_name and previous.get("name") == squadron_name)
-            ))
-            state["squadron"] = {
-                "id": squadron_id,
-                "name": squadron_name,
-                "rank": raw.get("CurrentRank", previous.get("rank") if same_squadron else None),
-                "rank_name": raw.get("CurrentRankName", previous.get("rank_name") if same_squadron else None),
-                "joined_at": previous.get("joined_at") if same_squadron else raw.get("timestamp"),
-                "updated": raw.get("timestamp"),
-                "source": ev,
-            }
-            state["squadron_application"] = None
-            state["squadron_invitation"] = None
-            if ev != "SquadronStartup":
-                detail = "Squadron created" if ev == "SquadronCreated" else "Squadron joined"
-                companion_features.record_squadron_activity(
-                    state, ev, squadron_name, raw.get("timestamp"), detail,
-                )
-            changed = True
-            galaxy_changed = True
-
-        elif ev == "CommunityGoalDiscard":
-            goal_id = raw.get("CGID")
-            goals = state.setdefault("community_goals", {})
-            removed = goals.pop(str(goal_id), None) if goal_id is not None else None
-            if removed is not None:
-                changed = True
-                galaxy_changed = True
-        elif ev in ("SquadronPromotion", "SquadronDemotion"):
-            previous = state.get("squadron") or {}
-            state["squadron"] = {
-                "id": raw.get("SquadronID", previous.get("id")),
-                "name": raw.get("SquadronName") or previous.get("name"),
-                "rank": raw.get("NewRank", previous.get("rank")),
-                "rank_name": raw.get("NewRankName", previous.get("rank_name")),
-                "joined_at": previous.get("joined_at"),
-                "updated": raw.get("timestamp"),
-                "source": ev,
-            }
-            old_rank = raw.get("OldRankName", raw.get("OldRank"))
-            new_rank = raw.get("NewRankName", raw.get("NewRank"))
-            detail = f"{old_rank} → {new_rank}" if old_rank is not None and new_rank is not None else None
-            companion_features.record_squadron_activity(
-                state, ev, raw.get("SquadronName") or previous.get("name"), raw.get("timestamp"), detail,
-            )
-            changed = True
-            galaxy_changed = True
-        elif ev in ("LeftSquadron", "KickedFromSquadron", "DisbandedSquadron"):
-            previous = state.get("squadron") or {}
-            squadron_name = raw.get("SquadronName") or previous.get("name")
-            detail = {
-                "LeftSquadron": "Squadron left",
-                "KickedFromSquadron": "Removed from squadron",
-                "DisbandedSquadron": "Squadron disbanded",
-            }[ev]
-            companion_features.record_squadron_activity(
-                state, ev, squadron_name, raw.get("timestamp"), detail,
-            )
-            state["squadron"] = None
-            changed = True
-            galaxy_changed = True
-
-        elif ev == "AppliedToSquadron":
-            squadron_name = raw.get("SquadronName")
-            state["squadron_application"] = {
-                "id": raw.get("SquadronID"), "name": squadron_name,
-                "timestamp": raw.get("timestamp"),
-            }
-            companion_features.record_squadron_activity(
-                state, ev, squadron_name, raw.get("timestamp"), "Application submitted",
-            )
-            changed = True
-            galaxy_changed = True
-
-        elif ev in ("CancelledSquadronApplication", "SquadronApplicationApproved",
-                    "SquadronApplicationRejected"):
-            pending = state.get("squadron_application") or {}
-            squadron_name = raw.get("SquadronName") or pending.get("name")
-            detail = {
-                "CancelledSquadronApplication": "Application cancelled",
-                "SquadronApplicationApproved": "Application approved",
-                "SquadronApplicationRejected": "Application rejected",
-            }[ev]
-            state["squadron_application"] = None
-            companion_features.record_squadron_activity(
-                state, ev, squadron_name, raw.get("timestamp"), detail,
-            )
-            changed = True
-            galaxy_changed = True
-
-        elif ev == "InvitedToSquadron":
-            squadron_name = raw.get("SquadronName")
-            state["squadron_invitation"] = {
-                "id": raw.get("SquadronID"), "name": squadron_name,
-                "timestamp": raw.get("timestamp"),
-            }
-            companion_features.record_squadron_activity(
-                state, ev, squadron_name, raw.get("timestamp"), "Invitation received",
-            )
-            changed = True
-            galaxy_changed = True
-
-        elif ev == "SharedBookmarkToSquadron":
-            squadron_name = raw.get("SquadronName") or (state.get("squadron") or {}).get("name")
-            companion_features.record_squadron_item(
-                state, "squadron_bookmarks", ev, squadron_name, raw.get("timestamp"),
-                "Bookmark shared in Elite",
-            )
-            companion_features.record_squadron_activity(
-                state, ev, squadron_name, raw.get("timestamp"), "Bookmark shared",
-            )
-            changed = True
-            galaxy_changed = True
-
-        elif ev == "WonATrophyForSquadron":
-            squadron_name = raw.get("SquadronName") or (state.get("squadron") or {}).get("name")
-            companion_features.record_squadron_item(
-                state, "squadron_trophies", ev, squadron_name, raw.get("timestamp"),
-                "Trophy win reported by the journal",
-            )
-            companion_features.record_squadron_activity(
-                state, ev, squadron_name, raw.get("timestamp"), "Squadron trophy won",
-            )
-            changed = True
-            galaxy_changed = True
-
         elif ev == "LeaveBody":
             self.bio_sampling = None
             self.bio_sample_points = []
@@ -9424,36 +8092,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._data_risk_level = 0
             changed = True
 
-        if ev in ("Location", "FSDJump", "CarrierJump"):
-            state["galaxy_system"] = raw.get("StarSystem") or self.current_sys
-            state["controlling_faction"] = (raw.get("SystemFaction") or {}).get("Name")
-            state["factions"] = self._normalise_galaxy_factions(raw.get("Factions") or [])
-            state["conflicts"] = self._normalise_conflicts(raw.get("Conflicts") or [])
-            if raw.get("ControllingPower") or raw.get("Powers"):
-                state["pp_system"] = {
-                    "controlling": raw.get("ControllingPower"), "powers": raw.get("Powers") or [],
-                    "state": raw.get("PowerplayState"),
-                    "control_progress": raw.get("PowerplayStateControlProgress"),
-                    "reinforcement": raw.get("PowerplayStateReinforcement"),
-                    "undermining": raw.get("PowerplayStateUndermining"),
-                }
-            else:
-                state["pp_system"] = None
-            state["galaxy_system_updated"] = raw.get("timestamp") or time.strftime(
-                "%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-            state["galaxy_system_source"] = ev
-            for faction_name, detail in companion_features.update_faction_watch_snapshots(
-                    state, state["galaxy_system"], state["factions"],
-                    state["controlling_faction"], notify=not startup_replay):
-                self._toast_on_main("FACTION WATCH", f"{faction_name}: {detail}", "info", 14)
-            changed = True
-            galaxy_changed = True
-
-        if galaxy_changed:
-            state["galaxy_updated"] = raw.get("timestamp") or time.strftime(
-                "%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-            state["galaxy_source"] = ev
-
         if startup_replay:
             self._reduce_startup_sampling_event(ev, raw, data)
         else:
@@ -9461,8 +8099,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 changed = self._record_unsold_scan(raw) or changed
             elif ev == "ScanOrganic":
                 changed = self._process_sampling_event(raw, data) or changed
-                if getattr(self, "cockpit_memory", None):
-                    self.cockpit_memory.check_bio_sell_anticipation(state.get("unsold_bio_samples"))
             elif ev in ("SellExplorationData", "MultiSellExplorationData"):
                 state["last_exploration_sale"] = {
                     "timestamp": raw.get("timestamp"),
@@ -9476,7 +8112,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self._clear_sold_data_warnings()
                 changed = True
             elif ev == "SellOrganicData":
-                sold_count = int(state.get("unsold_bio_samples") or 0)
                 sold_value = int(raw.get("TotalEarnings") or 0)
                 if not sold_value:
                     sold_value = sum(
@@ -9488,13 +8123,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     "system": getattr(self, "current_sys", ""),
                     "station": getattr(self, "current_station_name", ""),
                 }
-                if sold_count > 0 and getattr(self, "cockpit_memory", None):
-                    self.cockpit_memory.record_bio_sale(sold_count)
                 state["unsold_bio_cr"] = 0
                 state["unsold_bio_bonus_potential_cr"] = 0
                 state["unsold_bio_samples"] = 0
                 self._data_risk_level = 0
-                self._clear_sold_data_warnings(biological=True)
+                self._clear_sold_data_warnings()
                 changed = True
 
         if changed:
@@ -9509,118 +8142,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         # silently; resetting to zero and notifying here made the sale itself
         # look like a fresh risk escalation.
         self._check_data_risk(notify=not startup_replay and not sale_event)
-
-    def _prune_massacre_kills(self):
-        active = {row["faction"] for row in companion_features.massacre_stacks(self.companion_state)}
-        self.companion_state["faction_kills"] = {
-            faction: count for faction, count in self.companion_state.get("faction_kills", {}).items()
-            if faction in active
-        }
-
-    def _update_powerplay_state(self, ev, raw):
-        if ev == "PowerplayLeave":
-            self.companion_state["powerplay"] = None
-            return
-        current = dict(self.companion_state.get("powerplay") or {})
-        defaults = {
-            "session_merits": 0, "session_collected": 0, "session_delivered": 0,
-            "session_fast_track_cr": 0, "session_salary_cr": 0,
-            "commodities_collected": {}, "commodities_delivered": {}, "activity": [],
-        }
-        for name, value in defaults.items():
-            current.setdefault(name, value.copy() if isinstance(value, (dict, list)) else value)
-
-        def display_type():
-            return self._journal_display_name(
-                raw.get("Type_Localised") or raw.get("Type"), "Powerplay commodity"
-            )
-
-        def record(detail, **extra):
-            action = {
-                "event": ev,
-                "timestamp": raw.get("timestamp"),
-                "detail": detail,
-                "power": raw.get("ToPower") or raw.get("Power") or current.get("power"),
-                "system": getattr(self, "current_sys", None),
-                **extra,
-            }
-            current["last_action"] = action
-            current["activity"] = (list(current.get("activity") or []) + [action])[-30:]
-
-        if ev == "Powerplay":
-            current.update(power=raw.get("Power"), rank=raw.get("Rank"), merits=raw.get("Merits"),
-                           time_pledged_s=raw.get("TimePledged"))
-            record(f"Pledge status refreshed for {raw.get('Power') or 'current power'}")
-        elif ev in ("PowerplayJoin", "PowerplayDefect"):
-            current = {
-                **defaults,
-                "power": raw.get("ToPower") or raw.get("Power"), "rank": 0,
-                "merits": 0, "time_pledged_s": 0,
-            }
-            transition = "Defected" if ev == "PowerplayDefect" else "Pledged"
-            record(f"{transition} to {current.get('power') or 'a power'}",
-                   from_power=raw.get("FromPower"))
-        elif ev == "PowerplayRank":
-            previous_rank = current.get("rank")
-            current.update(power=raw.get("Power"), rank=raw.get("Rank"))
-            record(f"Rank changed from {previous_rank} to {raw.get('Rank')}",
-                   previous_rank=previous_rank, rank=raw.get("Rank"))
-        elif ev == "PowerplayMerits":
-            gained = int(raw.get("MeritsGained") or 0)
-            current.update(power=raw.get("Power"), merits=raw.get("TotalMerits"),
-                           session_merits=int(current.get("session_merits") or 0) + gained)
-            record(f"Gained {gained:,} merits", count=gained,
-                   total_merits=int(raw.get("TotalMerits") or 0))
-        elif ev in ("PowerplayCollect", "PowerplayDeliver"):
-            commodity = display_type()
-            count = int(raw.get("Count") or 0)
-            verb = "collected" if ev == "PowerplayCollect" else "delivered"
-            field = "commodities_collected" if ev == "PowerplayCollect" else "commodities_delivered"
-            session_field = "session_collected" if ev == "PowerplayCollect" else "session_delivered"
-            values = dict(current.get(field) or {})
-            values[commodity] = int(values.get(commodity) or 0) + count
-            current[field] = values
-            current[session_field] = int(current.get(session_field) or 0) + count
-            record(f"{verb.title()} {count:,} {commodity}", commodity=commodity, count=count)
-        elif ev == "PowerplayFastTrack":
-            cost = int(raw.get("Cost") or 0)
-            current["session_fast_track_cr"] = int(current.get("session_fast_track_cr") or 0) + cost
-            record(f"Fast-tracked allocation for {cost:,} credits", amount_cr=cost)
-        elif ev == "PowerplaySalary":
-            amount = int(raw.get("Amount") or 0)
-            current["session_salary_cr"] = int(current.get("session_salary_cr") or 0) + amount
-            record(f"Received {amount:,} credits in Powerplay salary", amount_cr=amount)
-        elif ev == "PowerplayVote":
-            votes = int(raw.get("Votes") or 0)
-            record(f"Cast {votes:,} consolidation votes", count=votes,
-                   target_system=raw.get("System"))
-        elif ev == "PowerplayVoucher":
-            systems = list(raw.get("Systems") or [])
-            record(f"Received Powerplay vouchers for {len(systems)} system(s)", systems=systems[:20])
-        self.companion_state["powerplay"] = current
-
-    @staticmethod
-    def _normalise_galaxy_factions(factions):
-        rows = []
-        for faction in factions:
-            rows.append({
-                "name": faction.get("Name"), "state": faction.get("FactionState"),
-                "government": faction.get("Government"), "influence": faction.get("Influence"),
-                "allegiance": faction.get("Allegiance"), "my_reputation": faction.get("MyReputation"),
-                "active_states": [row.get("State") for row in faction.get("ActiveStates") or []],
-                "pending_states": [row.get("State") for row in faction.get("PendingStates") or []],
-                "recovering_states": [row.get("State") for row in faction.get("RecoveringStates") or []],
-            })
-        return sorted(rows, key=lambda row: -(row.get("influence") or 0))
-
-    @staticmethod
-    def _normalise_conflicts(conflicts):
-        def side(row):
-            row = row or {}
-            return {"name": row.get("Name"), "stake": row.get("Stake"), "won_days": row.get("WonDays")}
-        return [{"war_type": row.get("WarType"), "status": row.get("Status"),
-                 "faction1": side(row.get("Faction1")), "faction2": side(row.get("Faction2"))}
-                for row in conflicts]
 
     def _record_unsold_scan(self, raw):
         body_id = raw.get("BodyID")
@@ -9889,11 +8410,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._sample_clear_announced = True
             self._toast_on_main(
                 "CLEAR TO SAMPLE", f"{sample['species']} · {sample.get('min_distance_m', 0):,} m", "success", 10,
-                (f"Clear to sample {sample['species']}.",
-                 f"My bio sensors confirm colony spacing. You may sample {sample['species']} again.",
-                 f"We are clear of the previous colony. I have authorized the next {sample['species']} sample.",
-                 f"Sampling radius clear. The genetic sampler is ready for {sample['species']}."),
-                "exploration", "clear-to-sample",
             )
         if self.survey_status_hud:
             self._ui_post(lambda s=sample: self.survey_status_hud.update(
@@ -9920,16 +8436,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             if level == 2:
                 self._toast_on_main(
                     "REBUY NOT COVERED", "Current balance cannot cover ship insurance", "fail", 18,
-                    ("Warning. Current balance cannot cover ship insurance.",
-                     "Our credit balance cannot cover a rebuy.",
-                     "Insurance shortfall detected. I strongly recommend protecting the ship."), voice_key="rebuy-uncovered",
                 )
             else:
                 self._toast_on_main(
                     "LOW REBUY COVER", "Current balance is below two rebuys", "warn", 15,
-                    ("Warning. Current balance is below two rebuys.",
-                     "Our rebuy reserve is getting thin.",
-                     "A little financial caution from your ship computer. We have less than two rebuys available."), voice_key="rebuy-low",
                 )
         self._rebuy_warning_level = level
 
@@ -9947,11 +8457,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._toast_on_main(
                 "DATA AT RISK", f"Approximately {total / 1_000_000:.0f}M CR unsold · {ratio:.0f}× rebuy",
                 "fail" if level == 3 else "warn", 18,
-                ("Warning. Valuable exploration data is at risk.",
-                 "My ledger shows a fortune in unsold survey data.",
-                 "Our exploration data is worth far more than the ship. I recommend finding a buyer.",
-                 "I would rather not lose this archive. We should sell our survey data."),
-                voice_key=f"data-risk-{level}",
             )
         self._data_risk_level = level
 
@@ -9979,8 +8484,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         else:
             return
         self._save_engineer_materials(self.engineer_materials)
-        if self.engineer_window and self.engineer_window.is_open():
-            self._ui_post(self.engineer_window.refresh, key="engineer-refresh")
+        self._refresh_html_workspace()
 
     def update_ship_locker(self, data):
         """Marshal ShipLocker.json updates from the watcher onto the Tk thread."""
@@ -10010,8 +8514,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             ]
         self.engineer_materials["ship_locker"] = locker
         self._save_engineer_materials(self.engineer_materials)
-        if self.engineer_window and self.engineer_window.is_open():
-            self.engineer_window.refresh()
+        self._refresh_html_workspace()
 
     def _sync_materials_full(self, raw_list: list, mfg_list: list, enc_list: list):
         """Rebuild engineer_materials from a Materials journal event (complete snapshot)."""
@@ -10026,8 +8529,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     mats[cat_key][key] = {"name": name, "count": count}
         mats["last_updated"] = time.time()
         self._save_engineer_materials(mats)
-        if self.engineer_window and self.engineer_window.is_open():
-            self.engineer_window.refresh()
+        self._refresh_html_workspace()
 
     def _adjust_material(self, cat: str, key: str, name: str, delta: int):
         """Adjust a single material count by delta, persist, and refresh the window."""
@@ -10041,8 +8543,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             cat_data[key] = {"name": name or key.title(), "count": delta}
         self.engineer_materials["last_updated"] = time.time()
         self._save_engineer_materials(self.engineer_materials)
-        if self.engineer_window and self.engineer_window.is_open():
-            self.engineer_window.refresh()
+        self._refresh_html_workspace()
 
     def _process_material_change(self, ev: str, raw: dict):
         """Apply live material collection/consumption events to engineer_materials."""
@@ -10207,7 +8708,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.is_first_load = False
             self._startup_recovery_mode = False
             self._freeze_startup_heap()
-            self._apply_adaptive_overlay_scene()
+            self._enforce_overlay_hotkey_visibility()
             self._adaptive_startup_mode()
             self._hold_startup_presentation()
             self._publish_expedition_resume_briefing()
@@ -10271,14 +8772,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         )
         if survey_changed:
             self._refresh_system_info_progress()
-        self._refresh_commander_profile_window()
-        self._refresh_value_ledger_window()
-        self._refresh_colonisation_planner_window()
+        self._refresh_html_workspace()
         self._refresh_exploration_window()
-        self._refresh_bgs_window()
-        window = getattr(self, "specialists_window", None)
-        if window and window.is_open() and getattr(self, "_active_page", None) == "SPECIALISTS":
-            self._ui_post(window.refresh, key="specialists-refresh")
 
     def _refresh_cargo_consumers(self):
         """Publish inventory and hold capacity as one live ship snapshot."""
@@ -10290,10 +8785,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 lambda hud=cargo_hud, inv=inventory, cap=capacity: hud.update(inv, cap),
                 key="cargo-hud",
             )
-        if self.colony_overlay:
-            colony_overlay = self.colony_overlay
-            self._ui_post(colony_overlay.update, key="colony-overlay")
-
     def update_cargo(self, inventory, vessel="Ship"):
         self.last_cargo_event_ts = time.time()
         self.current_cargo_inventory = list(inventory or [])
@@ -10310,58 +8801,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             if isinstance(item, dict)
         )
         self._refresh_cargo_consumers()
-        self._sync_cockpit_intentions()
-        self._refresh_commander_profile_window()
-
-    def _record_trade_session_event(self, ev, data):
-        if not isinstance(data, dict):
-            return
-        commodity = data.get("Type_Localised") or data.get("Type") or data.get("commodity") or "Commodity"
-        count = int(data.get("Count") or data.get("count") or 0)
-        if count <= 0:
-            return
-        self.trade_session["transactions"] = int(self.trade_session.get("transactions") or 0) + 1
-        if ev == "MarketBuy":
-            price = int(data.get("BuyPrice") or data.get("Price") or 0)
-            total = int(data.get("TotalCost") or (price * count))
-            self.trade_session["bought_units"] += count
-            self.trade_session["spent"] += total
-            bought = self.trade_session.setdefault("commodities_bought", {})
-            bought[commodity] = int(bought.get(commodity) or 0) + count
-            event = {
-                "time": time.time(),
-                "event": "BUY",
-                "commodity": commodity,
-                "count": count,
-                "price": price,
-                "profit": -total,
-            }
-        else:
-            price = int(data.get("SellPrice") or data.get("Price") or 0)
-            total = int(data.get("TotalSale") or (price * count))
-            avg_paid = int(data.get("AvgPricePaid") or 0)
-            profit = (price - avg_paid) * count if avg_paid else total
-            self.trade_session["sold_units"] += count
-            self.trade_session["earned"] += total
-            self.trade_session["profit"] += profit
-            sold = self.trade_session.setdefault("commodities_sold", {})
-            sold[commodity] = int(sold.get(commodity) or 0) + count
-            event = {
-                "time": time.time(),
-                "event": "SELL",
-                "commodity": commodity,
-                "count": count,
-                "price": price,
-                "profit": profit,
-                "profit_per_ton": round(profit / count) if count else 0,
-            }
-            best = self.trade_session.get("best_sale")
-            if not isinstance(best, dict) or profit > int(best.get("profit") or 0):
-                self.trade_session["best_sale"] = dict(event)
-            worst = self.trade_session.get("worst_sale")
-            if not isinstance(worst, dict) or profit < int(worst.get("profit") or 0):
-                self.trade_session["worst_sale"] = dict(event)
-        self.trade_session["events"].append(event)
+        self._refresh_html_workspace()
 
     def _eddn_market_context(self, data):
         return {
@@ -10404,7 +8844,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.update_nav_label()
             self.schedule_dashboard_refresh()
             self.update_hud()
-            self._refresh_commander_profile_window()
+            self._refresh_html_workspace()
             self._refresh_exploration_window()
         else:
             self.nav_route_entries = []
@@ -10414,7 +8854,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.update_nav_label()
             self.schedule_dashboard_refresh()
             self.update_hud()
-            self._refresh_commander_profile_window()
+            self._refresh_html_workspace()
             self._refresh_exploration_window()
         if self.route_plotter and self.route_plotter.win.winfo_exists():
             self._ui_post(self.route_plotter.update_navigation_state, key="route-navigation-state")

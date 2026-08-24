@@ -459,6 +459,23 @@
                 <label class="studio-field"><span>Overlay text scale</span><div><input id="studio-text-scale" type="number" min="75" max="200" step="5"><b>%</b></div></label>
               </article>
 
+              <article class="card studio-option-card studio-ground-target-card">
+                <header><span>PLANET WAYPOINT NAVIGATION</span><b id="studio-ground-target-state">TARGET OFF</b></header>
+                <p class="studio-option-note">Enter an Elite surface latitude and longitude. The compass remains hidden through startup and ordinary flight, then appears automatically when live planetary coordinates are available.</p>
+                <div class="coordinate-form">
+                  <label>LATITUDE<input id="studio-ground-lat" type="number" min="-90" max="90" step="0.000001" placeholder="32.328000"></label>
+                  <label>LONGITUDE<input id="studio-ground-lon" type="number" min="-180" max="180" step="0.000001" placeholder="108.838000"></label>
+                </div>
+                <div class="workspace-actions wrap studio-ground-actions">
+                  <button data-ws-page="ground" data-ws-op="set" data-ground-source="studio">SET COORDINATES</button>
+                  <button id="studio-ground-current" data-ws-page="ground" data-ws-op="set_current">USE CURRENT</button>
+                  <button id="studio-ground-clear" data-ws-page="ground" data-ws-op="clear">CLEAR</button>
+                  <button id="studio-ground-overlay-toggle" type="button">OVERLAY ON</button>
+                  <button data-page="ground">OPEN GROUND &amp; EXOBIO</button>
+                </div>
+                <div class="studio-ground-readout"><span id="studio-ground-target-detail">NO COORDINATES SET</span><b id="studio-ground-visibility">HIDDEN UNTIL APPROACH</b></div>
+              </article>
+
               <article class="card studio-option-card">
                 <header><span>ACTIONABLE ALERTS</span></header>
                 <label class="studio-switch"><span><b>Clear-to-sample notifications</b><small>Show exobiology sample-spacing guidance.</small></span><input type="checkbox" data-overlay-option="sample_clear_notifications_enabled"><i></i></label>

@@ -150,7 +150,7 @@ class ExplorationWindow(ThemedWindowMixin):
         self._button(toolbar, "Copy Summary", self._copy_summary, accent=True).pack(side=tk.LEFT, padx=(8, 0))
         self._button(toolbar, "Copy Next Route", self._copy_next_route).pack(side=tk.LEFT, padx=(8, 0))
         self._button(toolbar, "Route Planner", self.show_route_planning).pack(side=tk.LEFT, padx=(8, 0))
-        open_galaxy = getattr(self.app, "open_bgs_window", None)
+        open_galaxy = getattr(self.app, "open_galaxy_map_page", None)
         if callable(open_galaxy):
             self._button(toolbar, "Galaxy", open_galaxy).pack(side=tk.LEFT, padx=(8, 0))
         self._button(toolbar, "Open EDSM", self._open_current_edsm).pack(side=tk.LEFT, padx=(8, 0))
@@ -790,7 +790,7 @@ class ExplorationWindow(ThemedWindowMixin):
         self._button(recon_actions, "Bookmark", self._bookmark_selected_body).pack(side=tk.LEFT, padx=(6, 0))
         self._button(
             recon_actions, "Architect",
-            lambda: getattr(self.app, "open_colonization_window", lambda: None)(),
+            lambda: self.app.open_exploration_window(section="recon"),
         ).pack(side=tk.LEFT, padx=(6, 0))
 
     def _build_logbook_workspace(self):

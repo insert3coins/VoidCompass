@@ -53,11 +53,13 @@ class HtmlGroundOverlayBridge:
 
     def _active(self, solution=None):
         solution = solution if solution is not None else self._solution()
-        return bool(
-            getattr(self.app, "target_latlon_active", False)
-            and getattr(self.app, "on_planet", False)
-            and solution.get("state") == "OK"
-        )
+        predicate = getattr(self.app, "_ground_target_should_show", None)
+        if callable(predicate):
+            try:
+                return bool(predicate(solution))
+            except Exception:
+                return False
+        return False
 
     def _window_payload(self, solution=None):
         held = bool(getattr(

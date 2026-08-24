@@ -31,7 +31,6 @@ from global_hotkeys import (
 from overlay_layout_model import (
     DEFAULT_POSITIONS,
     DEFAULT_SIZES,
-    HIDDEN_LEGACY_OVERLAYS,
     OVERLAY_CARD_LABELS,
     OVERLAY_ENABLE_KEYS,
     OVERLAY_LABELS,
@@ -39,7 +38,7 @@ from overlay_layout_model import (
 from platform_support import open_path
 from profile_backups import schedule_restore, snapshot_profile, validate_backup
 from mining_data import search_spansh_rings
-from trade.spansh import (
+from services.spansh import (
     SpanshError,
     fleet_carrier_job_id,
     fleet_carrier_route,
@@ -429,7 +428,7 @@ class HtmlDashboardMixin:
         if manager is None:
             return {"active": False}
         try:
-            snapshot = manager.compass_snapshot(
+            snapshot = manager.status_snapshot(
                 next_waypoint=self._dashboard_next_destination(),
             )
         except Exception:
@@ -836,6 +835,10 @@ class HtmlDashboardMixin:
 
     def _html_ground_workspace(self):
         try:
+            target_configured = bool(self._ground_target_configured())
+        except Exception:
+            target_configured = False
+        try:
             solution = self._ground_target_solution() or {}
         except Exception:
             solution = {}
@@ -854,9 +857,9 @@ class HtmlDashboardMixin:
                 "altitude": _number(getattr(self, "current_altitude", None)),
             },
             "target": {
-                "active": bool(getattr(self, "target_latlon_active", False)),
-                "lat": _number(getattr(self, "target_lat", None)),
-                "lon": _number(getattr(self, "target_lon", None)),
+                "active": target_configured,
+                "lat": _number(getattr(self, "target_lat", None)) if target_configured else None,
+                "lon": _number(getattr(self, "target_lon", None)) if target_configured else None,
                 "popup": bool(getattr(self, "ground_popup_enabled", True)),
                 "state": _text(solution.get("state"), 30),
                 "bearing": _number(solution.get("bearing")),
@@ -1195,7 +1198,6 @@ class HtmlDashboardMixin:
             "total": _integer(snapshot.get("total")),
             "points": _integer(snapshot.get("totalPoints")),
             "categories": snapshot.get("categories") or [],
-            "disabled": snapshot.get("disabledCategories") or [],
             "achievements": achievements,
         }
 
@@ -1266,7 +1268,7 @@ class HtmlDashboardMixin:
         except Exception:
             health = {}
         try:
-            from trade.eddn_upload import UPLOADER as eddn_market_uploader
+            from services.eddn_upload import UPLOADER as eddn_market_uploader
             eddn = eddn_market_uploader.stats()
         except Exception:
             eddn = {}
@@ -1376,8 +1378,6 @@ class HtmlDashboardMixin:
     def _html_overlay_records(self, *, live=True):
         records = []
         for attr, x_key, y_key in self._OVERLAY_POSITION_SPECS:
-            if attr in HIDDEN_LEGACY_OVERLAYS:
-                continue
             default_x, default_y = DEFAULT_POSITIONS.get(attr, (30, 30))
             default_width, default_height = DEFAULT_SIZES.get(attr, (320, 160))
             x = _integer(self.config.get(x_key), default_x)
@@ -1429,12 +1429,32 @@ class HtmlDashboardMixin:
             (_text(name, 50) for name in presets if str(name).strip()),
             key=str.casefold,
         )
+        try:
+            ground_solution = self._ground_target_solution() or {}
+            ground_configured = bool(self._ground_target_configured())
+            ground_ready = bool(self._ground_target_should_show(ground_solution))
+        except Exception:
+            ground_solution = {}
+            ground_configured = False
+            ground_ready = False
         return {
             "desktop": self._html_overlay_desktop(),
             "overlays": self._html_overlay_records(
                 live=getattr(self, "_html_dashboard_active_page", "") == "overlay-studio",
             ),
             "presets": preset_names,
+            "ground_target": {
+                "active": ground_configured,
+                "lat": _number(getattr(self, "target_lat", None)) if ground_configured else None,
+                "lon": _number(getattr(self, "target_lon", None)) if ground_configured else None,
+                "on_planet": bool(getattr(self, "on_planet", False)),
+                "navigation_ready": ground_ready,
+                "state": _text(ground_solution.get("state") or "OFF", 30),
+                "current_available": bool(
+                    getattr(self, "current_latitude", None) is not None
+                    and getattr(self, "current_longitude", None) is not None
+                ),
+            },
             "options": {
                 "overlay_mouse_passthrough": bool(self.config.get("overlay_mouse_passthrough", True)),
                 "hud_compact_mode": bool(self.config.get("hud_compact_mode", True)),
@@ -1475,7 +1495,7 @@ class HtmlDashboardMixin:
             (item for item in self._OVERLAY_POSITION_SPECS if item[0] == overlay_id),
             None,
         )
-        if spec is None or overlay_id in HIDDEN_LEGACY_OVERLAYS:
+        if spec is None:
             return None
         return spec
 
@@ -1537,9 +1557,14 @@ class HtmlDashboardMixin:
         previous = bool(self.config.get(key, False))
         self.config[key] = not previous
         try:
+            if overlay_id == "ground_popup":
+                self.ground_popup_enabled = not previous
+                self.update_ground_target_ui()
             self._apply_runtime_feature_toggles()
         except Exception:
             self.config[key] = previous
+            if overlay_id == "ground_popup":
+                self.ground_popup_enabled = previous
             return False
         self._persist_config()
         try:
@@ -2048,7 +2073,11 @@ class HtmlDashboardMixin:
             if operation == "set":
                 lat = _number(payload.get("lat"))
                 lon = _number(payload.get("lon"))
-                if lat is None or lon is None or not -90 <= lat <= 90:
+                if (
+                    lat is None or lon is None
+                    or not math.isfinite(lat) or not math.isfinite(lon)
+                    or not -90 <= lat <= 90
+                ):
                     return False
                 normalizer = getattr(self, "_normalize_lon", None)
                 lon = normalizer(lon) if callable(normalizer) else ((lon + 180) % 360) - 180
@@ -2098,6 +2127,8 @@ class HtmlDashboardMixin:
             elif operation == "toggle_popup":
                 self.toggle_ground_popup()
                 changed = True
+            if changed:
+                self.update_ground_target_ui()
 
         elif page == "engineering":
             materials = getattr(self, "engineer_materials", None)
@@ -2552,7 +2583,7 @@ class HtmlDashboardMixin:
                     self.config[key] = normalized.get(action, "")
                 self._persist_config()
                 try:
-                    from trade.eddn_upload import UPLOADER as eddn_market_uploader
+                    from services.eddn_upload import UPLOADER as eddn_market_uploader
                     eddn_market_uploader.set_enabled(bool(self.config.get("eddn_market_upload_enabled", True)))
                 except Exception:
                     pass

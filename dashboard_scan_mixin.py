@@ -3,7 +3,7 @@ import time
 import threading
 
 import bio_values
-import compass_operations
+import operational_state
 from config import COLOR_ACCENT, COLOR_TEXT
 from stellar_types import star_type_label
 
@@ -436,9 +436,6 @@ class DashboardScanMixin:
             self.current_cargo_scoop_deployed = bool(flags & self._STATUS_CARGO_SCOOP_DEPLOYED)
             self.current_analysis_mode = bool(flags & self._STATUS_ANALYSIS_MODE)
             self.current_scooping_fuel = bool(flags & self._STATUS_SCOOPING_FUEL)
-            combat_tracker = getattr(self, "combat_awareness", None)
-            if combat_tracker:
-                combat_tracker.update_status(flags)
         flags2 = data.get("Flags2")
         if isinstance(flags2, int):
             self.current_status_flags2 = flags2
@@ -596,7 +593,7 @@ class DashboardScanMixin:
                     survey.resume()
                     self._refresh_system_info_progress()
         try:
-            compass_operations.observe_status(self.ai_operational_state, data)
+            operational_state.observe_status(self.operational_state, data)
         except Exception:
             pass
 

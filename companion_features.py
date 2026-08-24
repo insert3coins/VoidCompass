@@ -21,26 +21,6 @@ DEFAULT_STATE = {
     "loadout": None,
     "stored_ships": None,
     "missions": {},
-    "faction_kills": {},
-    "powerplay": None,
-    "pp_system": None,
-    "galaxy_system": None,
-    "galaxy_updated": None,
-    "galaxy_system_updated": None,
-    "galaxy_source": None,
-    "galaxy_system_source": None,
-    "controlling_faction": None,
-    "factions": [],
-    "conflicts": [],
-    "watched_factions": [],
-    "faction_watch_snapshots": {},
-    "community_goals": {},
-    "squadron": None,
-    "squadron_application": None,
-    "squadron_invitation": None,
-    "squadron_activity": [],
-    "squadron_trophies": [],
-    "squadron_bookmarks": [],
     "statistics": None,
     "statistics_updated": None,
     "unsold_exploration_cr": 0,
@@ -51,9 +31,6 @@ DEFAULT_STATE = {
     "last_bio_sale": None,
     "exploration_data_lost_at": None,
 }
-
-SQUADRON_ACTIVITY_LIMIT = 60
-SQUADRON_ITEM_LIMIT = 30
 
 MISSION_KINDS = (
     ("delivery", "delivery"), ("collect", "collect"), ("salvage", "salvage"),
@@ -101,7 +78,7 @@ def load_state(path):
         with open(path, "r", encoding="utf-8") as handle:
             loaded = json.load(handle)
         if isinstance(loaded, dict):
-            state.update(loaded)
+            state.update({key: value for key, value in loaded.items() if key in state})
             # Older builds stored a single biology estimate that sometimes
             # included a presumed 5x first-footfall bonus. Its exact split
             # cannot be reconstructed, so migrate it to a conservative range.
@@ -123,110 +100,6 @@ def save_state(path, state):
         persistence_queue().submit_json(path, state, indent=2, delay_s=0.75)
     except Exception:
         pass
-
-
-def record_squadron_activity(state, event, squadron_name=None, timestamp=None,
-                              detail=None, limit=SQUADRON_ACTIVITY_LIMIT):
-    """Record one bounded, de-duplicated squadron journal action."""
-    entry = {
-        "event": str(event or "SquadronEvent"),
-        "squadron": str(squadron_name or "").strip() or None,
-        "timestamp": timestamp,
-        "detail": str(detail or "").strip() or None,
-    }
-    key = (entry["event"], entry["squadron"], entry["timestamp"], entry["detail"])
-    activity = [row for row in state.get("squadron_activity") or [] if isinstance(row, dict)]
-    if any((row.get("event"), row.get("squadron"), row.get("timestamp"), row.get("detail")) == key
-           for row in activity):
-        return False
-    activity.insert(0, entry)
-    state["squadron_activity"] = activity[:max(1, int(limit or SQUADRON_ACTIVITY_LIMIT))]
-    return True
-
-
-def record_squadron_item(state, key, event, squadron_name=None, timestamp=None,
-                         detail=None, limit=SQUADRON_ITEM_LIMIT):
-    """Record a bounded trophy/bookmark fact without inventing unavailable details."""
-    entry = {
-        "event": str(event or "SquadronEvent"),
-        "squadron": str(squadron_name or "").strip() or None,
-        "timestamp": timestamp,
-        "detail": str(detail or "").strip() or None,
-    }
-    rows = [row for row in state.get(key) or [] if isinstance(row, dict)]
-    identity = (entry["event"], entry["squadron"], entry["timestamp"])
-    if not any((row.get("event"), row.get("squadron"), row.get("timestamp")) == identity
-               for row in rows):
-        rows.insert(0, entry)
-    state[key] = rows[:max(1, int(limit or SQUADRON_ITEM_LIMIT))]
-    return entry
-
-
-def toggle_faction_watch(state, faction_name):
-    """Toggle a faction watch and return its new watched state."""
-    name = str(faction_name or "").strip()
-    if not name:
-        return False
-    watched = {str(value) for value in state.get("watched_factions") or [] if value}
-    if name in watched:
-        watched.remove(name)
-        snapshots = state.setdefault("faction_watch_snapshots", {})
-        suffix = f"\n{name}"
-        for key in [key for key in snapshots if key.endswith(suffix)]:
-            snapshots.pop(key, None)
-        enabled = False
-    else:
-        watched.add(name)
-        enabled = True
-    state["watched_factions"] = sorted(watched, key=str.casefold)
-    return enabled
-
-
-def update_faction_watch_snapshots(state, system_name, factions, controlling_faction,
-                                   min_delta=0.01, notify=True):
-    """Update persistent watched-faction baselines and return concise changes.
-
-    Each returned item is ``(faction_name, detail_text)``. A faction generates at
-    most one item per journal update so influence, state, and control changes do
-    not turn into a burst of separate alerts.
-    """
-    system = str(system_name or "").strip()
-    watched = {str(value) for value in state.get("watched_factions") or [] if value}
-    snapshots = state.setdefault("faction_watch_snapshots", {})
-    if not system or not watched:
-        return []
-    changes = []
-    for faction in factions or []:
-        name = str(faction.get("name") or "").strip()
-        if not name or name not in watched:
-            continue
-        key = f"{system}\n{name}"
-        current = {
-            "influence": float(faction.get("influence") or 0),
-            "active_states": sorted(str(value) for value in faction.get("active_states") or []),
-            "controls": name == controlling_faction,
-        }
-        previous = snapshots.get(key)
-        details = []
-        if notify and isinstance(previous, dict):
-            delta = current["influence"] - float(previous.get("influence") or 0)
-            if abs(delta) >= float(min_delta):
-                details.append(f"influence {delta * 100:+.1f}%")
-            old_states = set(previous.get("active_states") or [])
-            new_states = set(current["active_states"])
-            if old_states != new_states:
-                entered = sorted(new_states - old_states)
-                ended = sorted(old_states - new_states)
-                if entered:
-                    details.append("state " + ", ".join(entered))
-                if ended:
-                    details.append("ended " + ", ".join(ended))
-            if bool(previous.get("controls")) != current["controls"]:
-                details.append("now controls system" if current["controls"] else "lost system control")
-        snapshots[key] = current
-        if details:
-            changes.append((name, " · ".join(details)))
-    return changes
 
 
 def edsy_url(loadout):
@@ -327,32 +200,6 @@ def mission_from_event(event):
         "expiry": event.get("Expiry"),
         "accepted": event.get("timestamp"),
     }
-
-
-def massacre_stacks(state):
-    stacks = {}
-    for mission in (state.get("missions") or {}).values():
-        if (mission.get("kind") != "combat" or not mission.get("target_faction")
-                or not mission.get("kill_count")
-                or "massacre" not in (mission.get("internal_name") or "").lower()):
-            continue
-        target = mission["target_faction"]
-        row = stacks.setdefault(target, {"missions": 0, "reward": 0, "by_giver": {}})
-        row["missions"] += 1
-        row["reward"] += int(mission.get("reward") or 0)
-        giver = mission.get("faction") or "?"
-        row["by_giver"][giver] = row["by_giver"].get(giver, 0) + int(mission["kill_count"])
-    output = []
-    kills = state.get("faction_kills") or {}
-    for target, row in stacks.items():
-        needed = max(row["by_giver"].values())
-        done = int(kills.get(target, 0))
-        output.append({
-            "faction": target, "missions": row["missions"], "givers": len(row["by_giver"]),
-            "reward": row["reward"], "kills_needed": needed,
-            "kills_done": min(done, needed), "complete": done >= needed,
-        })
-    return sorted(output, key=lambda row: -row["reward"])
 
 
 def normalise_stored_ship(record):

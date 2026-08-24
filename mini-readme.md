@@ -8,6 +8,9 @@
 *   Rebuilt Overlay Studio's drag pipeline around animation-frame-local card movement, geometry-only host updates and one pointer-release persistence pass, preventing unchanged overlay canvases and the full Dashboard snapshot from being rebuilt throughout a drag.
 *   Reworked the Navigation HUD's Supercruise, FSD charge, Hypercharge and hyperspace response bay with separate Elite-style flight corridor, drive-capacitor, phase-coil and witch-space tunnel effects at the existing bounded 30 FPS cadence.
 *   Audited every managed cockpit surface: Navigation, Survey Operations, notifications, Gravity and surface navigation use semantic HTML renderers, while the remaining established HUDs already run through the shared HTML host and retain their existing journal-aware presentations.
+*   Completed a dependency-led retirement sweep: removed speech/persona/learned-memory code, unused native Tk workspace fallbacks, BGS/Powerplay/Squadron companion reducers, the hidden Colony Logistics overlay, obsolete combat/trade-session/mining/reward helpers, prototype Oracle and expedition text packs, generated specs and hundreds of unreferenced image assets; the focused operational reducer, Colonisation Recon, carrier/mining tools, commander data and rollback files remain intact.
+*   Moved the still-active Spansh and EDDN clients out of the retired `trade/` namespace into focused external services, and migrated obsolete settings/state keys without deleting commander-owned databases or profile history.
+*   Restored Planet Waypoint Navigation's coordinate-driven lifecycle after the HTML conversion: the compass now stays behind the boot curtain and hidden without a valid target or planetary position, points in the correct relative direction, and exposes profile-aware latitude/longitude controls in Overlay Studio as well as Ground & Exobio.
 
 ## Earlier releases
 

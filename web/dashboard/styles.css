@@ -429,6 +429,16 @@ body.atlas-focus .atlas-frame-shell { border: 0; }
 .studio-module-grid button.enabled { color: #021015; background: var(--accent); border-color: var(--accent); }
 .studio-options-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 13px; }
 .studio-option-card { padding-bottom: 10px; }
+.studio-option-note { margin: 12px 15px 0; color: var(--muted); font: 10px/1.55 "Segoe UI",sans-serif; }
+.studio-ground-target-card .coordinate-form { padding-bottom: 11px; }
+.studio-ground-target-card .workspace-actions { padding-top: 11px; }
+.studio-ground-target-card .workspace-actions button:first-child { border-color: color-mix(in srgb,var(--accent) 58%,var(--border)); color: var(--accent); }
+.studio-ground-readout { display: flex; justify-content: space-between; gap: 12px; margin: 0 15px 6px; padding: 9px 10px; border-left: 2px solid var(--border); background: var(--inset); color: var(--muted); font: 700 9px Consolas,monospace; }
+.studio-ground-readout b { color: var(--dim); text-align: right; }
+.studio-ground-readout.live { border-left-color: var(--green); }
+.studio-ground-readout.live b { color: var(--green); }
+.studio-ground-readout.armed { border-left-color: var(--accent); }
+.studio-ground-readout.armed b { color: var(--accent); }
 .studio-switch,.studio-field { min-height: 54px; display: flex; align-items: center; justify-content: space-between; gap: 15px; margin: 0 15px; padding: 8px 2px; border-bottom: 1px solid var(--border-soft); cursor: pointer; }
 .studio-switch.compact { min-height: 43px; }
 .studio-switch span,.studio-field > span { min-width: 0; color: var(--text); font: 11px "Segoe UI",sans-serif; }
