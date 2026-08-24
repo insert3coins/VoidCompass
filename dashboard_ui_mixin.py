@@ -2890,7 +2890,6 @@ class DashboardUIMixin(ThemedWindowMixin):
             "carrier_hud",
             "heartbeat_hud",
             "prospector_hud",
-            "system_info_hud",
             "gravity_warning_hud",
             "station_info_hud",
             "survey_status_hud",

@@ -43,6 +43,13 @@ RETIRED_COMPASS_CONFIG_KEYS = (
     "adaptive_briefings_enabled",
     "adaptive_debriefings_enabled",
 )
+RETIRED_SYSTEM_INFO_CONFIG_KEYS = (
+    "overlay_hotkey_system_info",
+    "system_info_enabled",
+    "system_info_timeout_s",
+    "system_info_hud_x",
+    "system_info_hud_y",
+)
 DEPRECATED_CONFIG_KEYS = (
     'engineer_window_geometry',
     'bgs_window_geometry',
@@ -124,7 +131,7 @@ DEPRECATED_CONFIG_KEYS = (
     'dashboard_compact_geometry',
     'dashboard_expanded_geometry',
     'dashboard_window_geometry_version',
-) + RETIRED_COMPASS_CONFIG_KEYS
+) + RETIRED_COMPASS_CONFIG_KEYS + RETIRED_SYSTEM_INFO_CONFIG_KEYS
 # Overlay/HUD colors are seeded from the active theme at startup; the live
 # theme bridge rebinds these module constants and repaints open overlays.
 import themes as _themes
@@ -160,7 +167,6 @@ PROFILE_TEXT_SETTINGS = (
     "overlay_hotkey_navigation",
     "overlay_hotkey_navigation_layout",
     "overlay_hotkey_survey",
-    "overlay_hotkey_system_info",
     "overlay_hotkey_station_info",
     "overlay_hotkey_cargo",
     "overlay_hotkey_carrier",
@@ -180,7 +186,6 @@ PROFILE_BOOL_SETTINGS = (
     "cargo_overlay_enabled",
     "carrier_overlay_enabled",
     "prospector_overlay_enabled",
-    "system_info_enabled",
     "gravity_warning_overlay_enabled",
     "station_info_overlay_enabled",
     "station_info_auto_hide_enabled",
@@ -210,9 +215,6 @@ PROFILE_VALUE_SETTINGS = (
     "prospector_hud_timeout_s",
     "prospector_hud_x",
     "prospector_hud_y",
-    "system_info_timeout_s",
-    "system_info_hud_x",
-    "system_info_hud_y",
     "hud_x",
     "hud_y",
     "cargo_hud_x",
@@ -345,6 +347,13 @@ def apply_profile_config(config, profile_key=None):
     for setting in RETIRED_COMPASS_CONFIG_KEYS:
         profile.pop(setting, None)
         config.pop(setting, None)
+    # System Intelligence was retired as a standalone overlay. Its system and
+    # survey facts remain available through the dashboard, Navigation HUD and
+    # Survey Operations, but its old switch, hotkey and geometry must not leak
+    # back into commander profiles written by earlier releases.
+    for setting in RETIRED_SYSTEM_INFO_CONFIG_KEYS:
+        profile.pop(setting, None)
+        config.pop(setting, None)
     # Trade Assist was retired, but its independent EDDN publisher remains.
     # Preserve each commander's previous upload preference under the clearer
     # integration-only setting name.
@@ -452,7 +461,6 @@ def apply_profile_config(config, profile_key=None):
         "overlay_hotkey_navigation": "",
         "overlay_hotkey_navigation_layout": "",
         "overlay_hotkey_survey": "",
-        "overlay_hotkey_system_info": "",
         "overlay_hotkey_station_info": "",
         "overlay_hotkey_cargo": "",
         "overlay_hotkey_carrier": "",
@@ -474,7 +482,6 @@ def apply_profile_config(config, profile_key=None):
         "cargo_overlay_enabled": False,
         "carrier_overlay_enabled": False,
         "prospector_overlay_enabled": True,
-        "system_info_enabled": True,
         "gravity_warning_overlay_enabled": True,
         "station_info_overlay_enabled": True,
         "station_info_auto_hide_enabled": False,
@@ -604,7 +611,6 @@ def load_config():
         'overlay_hotkey_navigation': '',
         'overlay_hotkey_navigation_layout': '',
         'overlay_hotkey_survey': '',
-        'overlay_hotkey_system_info': '',
         'overlay_hotkey_station_info': '',
         'overlay_hotkey_cargo': '',
         'overlay_hotkey_carrier': '',
@@ -619,10 +625,6 @@ def load_config():
         'prospector_hud_timeout_s': 45,
         'prospector_hud_x': 30,
         'prospector_hud_y': 600,
-        'system_info_enabled': True,
-        'system_info_timeout_s': 30,
-        'system_info_hud_x': 30,
-        'system_info_hud_y': 30,
         'hud_x': 100,
         'hud_y': 100,
         'cargo_hud_x': 800,

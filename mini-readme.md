@@ -6,6 +6,8 @@
 *   Rebuilt the Navigation HUD's arrival and planetary-flight states with distinct witch-space acquisition, orbital approach/departure, glide, low-altitude, hold and landed instruments driven by live altitude, vertical-speed and gravity context.
 *   Added immediate landing-gear deploy/retract pulses, rebuilt FSD cooldown as an outward thermal vent and drive-reset sequence, and gave Galaxy Map, System Map, FSS and DSS distinct instruments selected from authoritative live `Status.json` focus.
 *   Completed cockpit interface awareness with side-correct Left and Right Panel transitions plus dedicated Comms, Role Panel and Station Services animations; lower-priority Music moods now add phenomena, SRV/heavy/capital/unknown threats, docking assist, settlement and local-arrival context without overriding exact ship evidence.
+*   Simplified live vehicle handoff language so leaving a ship, SRV, Nomad or fighter reads `<vehicle> DEPART`, while entering one remains the explicit `BOARDING <vehicle>` transition.
+*   Retired the redundant System Intelligence overlay, its hotkey and display controls; System Survey, Navigation and Survey Operations retain the useful exploration evidence without another transient window or its extra enrichment requests.
 
 ## Earlier releases
 

@@ -37,7 +37,6 @@ from journal_watcher import JournalWatcher
 from mining_data import MINING_MATERIALS
 from carrier_tracker import CarrierTracker
 from prospector_hud import ProspectorHUD
-from system_info_hud import SystemInfoHUD
 from gravity_warning_hud import GravityWarningHUD
 from station_info_hud import StationInfoHUD
 from survey_status_hud import SurveyStatusHUD
@@ -344,7 +343,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         ("cargo_hud", "cargo_hud_x", "cargo_hud_y"),
         ("carrier_hud", "carrier_hud_x", "carrier_hud_y"),
         ("prospector_hud", "prospector_hud_x", "prospector_hud_y"),
-        ("system_info_hud", "system_info_hud_x", "system_info_hud_y"),
         ("gravity_warning_hud", "gravity_warning_hud_x", "gravity_warning_hud_y"),
         ("station_info_hud", "station_info_hud_x", "station_info_hud_y"),
         ("survey_status_hud", "survey_status_hud_x", "survey_status_hud_y"),
@@ -356,7 +354,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         "cargo_hud": ("cargo", "Void Compass Cargo", "cargo_overlay_enabled"),
         "carrier_hud": ("carrier", "Void Compass Carrier", "carrier_overlay_enabled"),
         "prospector_hud": ("prospector", "Void Compass Prospector", "prospector_overlay_enabled"),
-        "system_info_hud": ("system-info", "Void Compass System Intelligence", "system_info_enabled"),
         "gravity_warning_hud": ("gravity", "Void Compass Gravity Warning", "gravity_warning_overlay_enabled"),
         "station_info_hud": ("station", "Void Compass Station Link", "station_info_overlay_enabled"),
         "survey_status_hud": ("survey", "Void Compass Survey Operations", "survey_status_overlay_enabled"),
@@ -724,7 +721,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             return
         self.update_dashboard_ui()
         self._perform_hud_update()
-        self._show_system_info_for_current_system()
         if self.survey_status_hud:
             if self.current_docked:
                 self.survey_status_hud.suppress()
@@ -820,7 +816,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "cargo_hud",
             "carrier_hud",
             "prospector_hud",
-            "system_info_hud",
             "gravity_warning_hud",
             "station_info_hud",
             "survey_status_hud",
@@ -907,7 +902,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
 
         for attr in (
             "hud", "cargo_hud", "carrier_hud", "prospector_hud",
-            "system_info_hud", "gravity_warning_hud", "station_info_hud",
+            "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "heartbeat_hud",
         ):
             overlay = getattr(self, attr, None)
@@ -1252,7 +1247,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._seed_navigation_scan_progress()
         self.update_dashboard_ui()
         self.update_hud()
-        self._refresh_system_info_progress()
+        self._refresh_survey_status_progress()
         self._refresh_exploration_window()
 
     def _schedule_specialist_flush(self):
@@ -1271,36 +1266,30 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         except Exception:
             self._specialist_flush_job = None
 
-    def _refresh_system_info_progress(self):
+    def _refresh_survey_status_progress(self):
         if getattr(self, "_startup_restore_active", False):
             self._startup_restore_ui_pending = True
             return
-        if not getattr(self, "system_info_hud", None) and not getattr(self, "survey_status_hud", None):
+        if not getattr(self, "survey_status_hud", None):
             return
-        generation = getattr(self, "_system_info_refresh_generation", 0)
+        generation = getattr(self, "_survey_status_refresh_generation", 0)
         self._ui_post(
-            self._schedule_system_info_refresh_ui,
+            self._schedule_survey_status_refresh_ui,
             generation,
-            key="system-info-progress-schedule",
+            key="survey-status-progress-schedule",
         )
 
-    def _schedule_system_info_refresh_ui(self, generation):
-        """Debounce scan overlays on Tk's thread after journal state settles."""
-        if generation != getattr(self, "_system_info_refresh_generation", 0):
+    def _schedule_survey_status_refresh_ui(self, generation):
+        """Debounce Survey Operations after journal state settles."""
+        if generation != getattr(self, "_survey_status_refresh_generation", 0):
             return
-        if getattr(self, "_system_info_refresh_job", None) is not None:
+        if getattr(self, "_survey_status_refresh_job", None) is not None:
             return
 
         def _run():
-            self._system_info_refresh_job = None
-            if generation != getattr(self, "_system_info_refresh_generation", 0):
+            self._survey_status_refresh_job = None
+            if generation != getattr(self, "_survey_status_refresh_generation", 0):
                 return
-            if self.system_info_hud:
-                self.system_info_hud.update_scan_progress(
-                    self.scan_items, self.body_signals, self.total,
-                    star_class=self.star_class, scanned_bodies=self.scanned,
-                    total_known=self.scan_total_confirmed,
-                )
             if self.survey_status_hud:
                 if self.current_docked:
                     self.survey_status_hud.suppress()
@@ -1314,24 +1303,24 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                         belt_clusters=list(self.belt_clusters),
                     )
         try:
-            self._system_info_refresh_job = self.root.after(150, _run)
+            self._survey_status_refresh_job = self.root.after(150, _run)
         except Exception:
-            self._system_info_refresh_job = None
+            self._survey_status_refresh_job = None
 
     def _hide_survey_status_for_jump(self):
         """Hide current-system survey data and prevent a queued stale redraw."""
-        job = getattr(self, "_system_info_refresh_job", None)
+        job = getattr(self, "_survey_status_refresh_job", None)
         if job is not None:
             try:
                 self.root.after_cancel(job)
             except Exception:
                 pass
-            self._system_info_refresh_job = None
+            self._survey_status_refresh_job = None
         survey = getattr(self, "survey_status_hud", None)
         if survey:
             survey.suppress()
-        self._system_info_refresh_generation = (
-            getattr(self, "_system_info_refresh_generation", 0) + 1
+        self._survey_status_refresh_generation = (
+            getattr(self, "_survey_status_refresh_generation", 0) + 1
         )
 
     def _apply_location_navigation_state(self, raw, data):
@@ -2046,11 +2035,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.prospector_hud = ProspectorHUD(self.root, self.config)
         else:
             self.prospector_hud = None
-
-        if self.config.get("system_info_enabled", True):
-            self.system_info_hud = SystemInfoHUD(self.root, self.config)
-        else:
-            self.system_info_hud = None
 
         if self.config.get("gravity_warning_overlay_enabled", True):
             self.gravity_warning_hud = GravityWarningHUD(self.root, self.config)
@@ -3938,16 +3922,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 pass
             self.prospector_hud = None
 
-        if self.config.get("system_info_enabled", True):
-            if self.system_info_hud is None:
-                self.system_info_hud = SystemInfoHUD(self.root, self.config)
-        elif self.system_info_hud:
-            try:
-                self.system_info_hud.win.destroy()
-            except Exception:
-                pass
-            self.system_info_hud = None
-
         if self.config.get("gravity_warning_overlay_enabled", True):
             if self.gravity_warning_hud is None:
                 self.gravity_warning_hud = GravityWarningHUD(self.root, self.config)
@@ -4066,31 +4040,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self._apply_system_traffic_context(system_name, traffic_data)
                 self.update_dashboard_ui()
                 self.update_hud()
-                if self.system_info_hud and isinstance(traffic_data, dict):
-                    self.system_info_hud.update_traffic(self.system_traffic)
             self._ui_post(_apply, key="edsm-traffic")
         self.edsm.fetch_traffic(system_name, callback)
-
-        if self.config.get("system_info_enabled", True):
-            def details_callback(details):
-                def _apply():
-                    if self.current_sys != system_name:
-                        return
-                    if self.system_info_hud:
-                        self.system_info_hud.update_edsm_details(details)
-                self._ui_post(_apply, key="edsm-details")
-            self.edsm.fetch_system_details(system_name, details_callback)
-
-            sys_addr = self.current_system_address
-            if sys_addr:
-                def spansh_callback(data):
-                    def _apply():
-                        if self.current_sys != system_name:
-                            return
-                        if self.system_info_hud:
-                            self.system_info_hud.update_spansh(data)
-                    self._ui_post(_apply, key="spansh-details")
-                self.edsm.fetch_spansh_system(sys_addr, spansh_callback)
 
     @staticmethod
     def _traffic_has_visits(traffic):
@@ -4182,21 +4133,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 severity="WARN", copy_text=body_name,
             )
         return True
-
-    def _show_system_info_for_current_system(self):
-        if not self.system_info_hud:
-            return
-        if not self.current_sys or self.current_sys in ("---", "Unknown"):
-            return
-        self.system_info_hud.on_system_arrival(
-            self.current_sys,
-            self.star_class,
-            list(self.scan_items),
-            dict(self.body_signals),
-            self.total,
-            scanned_bodies=self.scanned,
-            total_known=self.scan_total_confirmed,
-        )
 
     def _copy_waypoint_to_clipboard(self, waypoint_name, log_label="NEXT WAYPOINT"):
         if not waypoint_name:
@@ -4785,7 +4721,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         if event == "Embark":
             return f"BOARDING {vehicle}"
         if event == "Disembark":
-            return f"{vehicle} EGRESS"
+            return f"{vehicle} DEPART"
         return f"{vehicle} CONTROL"
 
     def _observe_navigation_hud_event(self, event, raw, data, startup_replay=False):
@@ -6942,7 +6878,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.update_hud()
                 self.schedule_dashboard_refresh()
                 self._refresh_exploration_window()
-                self._refresh_system_info_progress()
+                self._refresh_survey_status_progress()
 
         elif ev in ("Location", "FSDJump", "StartJump") or carrier_jump_player_location:
             # Do not update HUDs during jump charge; wait for arrival.
@@ -7183,25 +7119,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.last_traffic_system = self.current_sys
                 self.fetch_system_traffic(self.current_sys)
 
-            # Show system info overlay for live arrivals and the immediate
-            # startup location seed, but not for replayed startup history.
-            # Gate on startup_replay (not batch_mode) so it still fires when
-            # FSDJump arrives in the same read cycle as FSSDiscoveryScan and
-            # the watcher promotes them into a batch with batch_mode=True.
-            if self.system_info_hud and not startup_replay:
-                _sys  = self.current_sys
-                _sc   = self.star_class
-                _si   = list(self.scan_items)
-                _bs   = dict(self.body_signals)
-                _tot  = self.total
-                _done = self.scanned
-                _known = self.scan_total_confirmed
-                self._ui_post(
-                    lambda: self.system_info_hud.on_system_arrival(
-                        _sys, _sc, _si, _bs, _tot,
-                        scanned_bodies=_done, total_known=_known),
-                    key="system-info-arrival",
-                )
             if self.survey_status_hud:
                 if self.current_docked:
                     self.survey_status_hud.suppress()
@@ -7288,7 +7205,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.station_info_hud.hide()
             if self.survey_status_hud:
                 self.survey_status_hud.resume()
-                self._refresh_system_info_progress()
+                self._refresh_survey_status_progress()
             if not self.batch_mode and not startup_replay:
                 self.add_event_feed_entry("DOCK", f"Undocked: {station}", severity="INFO", copy_text=station)
 
@@ -7523,7 +7440,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.update_hud()
                 self.schedule_dashboard_refresh()
                 self._refresh_exploration_window()
-                self._refresh_system_info_progress()
+                self._refresh_survey_status_progress()
 
         elif ev == "DiscoveryScan":
             if not self._matches_current_system_address(d):
@@ -7537,7 +7454,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     self._ui_post(lambda value=scan_text: self.scan_stat.config(text=value), key="scan-progress-label")
                     self.update_hud()
                     self.schedule_dashboard_refresh()
-                    self._refresh_system_info_progress()
+                    self._refresh_survey_status_progress()
 
         elif ev == "NavBeaconScan":
             if not self._matches_current_system_address(d):
@@ -7548,7 +7465,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 if not startup_replay:
                     self.add_event_feed_entry("SCAN", f"Nav beacon scan: {count} bodies", severity="INFO", copy_text=self.current_sys)
                 if not self.batch_mode:
-                    self._refresh_system_info_progress()
+                    self._refresh_survey_status_progress()
 
         elif ev == "FSSAllBodiesFound":
             if not self._matches_current_system_address(d):
@@ -7569,7 +7486,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 if not startup_replay:
                     self.add_event_feed_entry("ALERT", "FSS complete: all bodies found", severity="WARN", copy_text=self.current_sys)
                 if not self.batch_mode:
-                    self._refresh_system_info_progress()
+                    self._refresh_survey_status_progress()
 
         elif ev == "FSSBodySignals":
             if not self._matches_current_system_address(d):
@@ -7603,7 +7520,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                         self.schedule_dashboard_refresh()
                         self._refresh_exploration_window()
                 if not self.batch_mode:
-                    self._refresh_system_info_progress()
+                    self._refresh_survey_status_progress()
 
         elif ev == "SAASignalsFound":
             if not self._matches_current_system_address(d):
@@ -7639,7 +7556,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                         self.schedule_dashboard_refresh()
                         self._refresh_exploration_window()
                 if not self.batch_mode:
-                    self._refresh_system_info_progress()
+                    self._refresh_survey_status_progress()
 
         elif ev == "SAAScanComplete":
             if not self._matches_current_system_address(d):
@@ -7660,7 +7577,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
-                        self._refresh_system_info_progress()
+                        self._refresh_survey_status_progress()
 
         elif ev == "Scan":
             if not self._matches_current_system_address(d):
@@ -7698,7 +7615,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 )
                 self._queue_edsm_upload(raw, startup_replay=startup_replay)
                 if belt_changed and not self.batch_mode:
-                    self._refresh_system_info_progress()
+                    self._refresh_survey_status_progress()
 
             # Store planet conditions for bio prediction when we have a planet scan
             if d.get("planet_class") and body_id is not None:
@@ -7750,7 +7667,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
-                        self._refresh_system_info_progress()
+                        self._refresh_survey_status_progress()
 
                     body_label = body_name or "Unknown Body"
                     landable_marker = " 🚀" if d.get("landable") else ""
@@ -7786,7 +7703,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
-                        self._refresh_system_info_progress()
+                        self._refresh_survey_status_progress()
 
         # ── Colonization ──────────────────────────────────────────────────────────
         if ev == "ColonisationConstructionDepot":
@@ -7869,7 +7786,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._surface_descent_samples = 0
             if not self.batch_mode:
                 self._refresh_gravity_warning(self.current_body_id, self.current_body_name)
-                self._refresh_system_info_progress()
+                self._refresh_survey_status_progress()
                 self.update_hud()
         elif ev == "LeaveBody":
             if not self.batch_mode:
@@ -7884,7 +7801,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             if not self.batch_mode:
                 if self.gravity_warning_hud:
                     self.gravity_warning_hud.clear()
-                self._refresh_system_info_progress()
+                self._refresh_survey_status_progress()
                 self.update_hud()
         elif ev == "Liftoff":
             body_id = self._normalize_body_id(d.get("body_id"))
@@ -8749,7 +8666,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     )
                 self.update_dashboard_ui()
                 self.update_hud()
-                self._show_system_info_for_current_system()
                 if self.current_sys and self.current_sys != "---":
                     self.last_traffic_system = self.current_sys
                     self.fetch_system_traffic(self.current_sys)
@@ -8789,7 +8705,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             for event in events if isinstance(event, dict)
         )
         if survey_changed:
-            self._refresh_system_info_progress()
+            self._refresh_survey_status_progress()
         self._refresh_html_workspace()
         self._refresh_exploration_window()
 

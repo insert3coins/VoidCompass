@@ -658,7 +658,7 @@ class SurveyStatusHUD:
             return
         model = build_survey_model(system_name, scan_items, focused_body_id,
                                    focused_body_name, sampling, scanned, total,
-                                   _safe_int(self.config.get("system_info_min_value"), 50_000),
+                                   _safe_int(self.config.get("survey_min_body_value"), 50_000),
                                    self._palette, total_known,
                                    body_signals=body_signals,
                                    belt_clusters=belt_clusters)
