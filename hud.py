@@ -752,16 +752,18 @@ class TacticalHUD:
             "ORRERY": "ORRERY",
             "9": "FSS",
             "FSS": "FSS",
-            "SYSTEMANDSURFACESCANNER": "FSS",
             "10": "DSS",
             "SAA": "DSS",
             "SURFACEANALYSIS": "DSS",
             "11": "CODEX",
             "CODEX": "CODEX",
         }
-        # The journal gives the exact map name during a direct map-to-map
-        # transition; Status.json remains the fallback if that event is late.
-        focused_state = focus_labels.get(track_key) or focus_labels.get(focus_key)
+        # Status.json is authoritative for scanner focus: Elite uses the
+        # shared SystemAndSurfaceScanner music track for both FSS and DSS,
+        # while GuiFocus distinguishes FSS (9) from DSS/SAA (10).  Exact
+        # journal music names remain a useful fallback for map-to-map handoffs
+        # while the next Status snapshot is still arriving.
+        focused_state = focus_labels.get(focus_key) or focus_labels.get(track_key)
         if focused_state:
             return focused_state
         if track_key == "GALACTICPOWERS":
