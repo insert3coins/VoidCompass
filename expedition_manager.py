@@ -1090,7 +1090,7 @@ class ExpeditionManager:
         complete = sum(1 for row in objectives if row.get("status") == "complete")
         return complete, len(objectives)
 
-    def compass_snapshot(self, next_waypoint=None):
+    def status_snapshot(self, next_waypoint=None):
         expedition = self.active()
         if not expedition:
             return {"active": False}
@@ -1109,7 +1109,7 @@ class ExpeditionManager:
         }
 
     def resume_briefing(self, next_waypoint=None):
-        snapshot = self.compass_snapshot(next_waypoint=next_waypoint)
+        snapshot = self.status_snapshot(next_waypoint=next_waypoint)
         if not snapshot.get("active"):
             return None
         progress = f"{snapshot['objectives_complete']} of {snapshot['objectives_total']} objectives complete"

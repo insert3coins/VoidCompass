@@ -80,13 +80,13 @@ Carrier Command plots Fleet and Squadron Carrier routes through Spansh, can impo
 
 ## Adaptive Command Deck
 
-Void Compass keeps the Dashboard centred on exploration: Current Survey exposes FSS, DSS, biological and geological progress; Next Leg resolves both Elite routes and saved waypoints through one source; Next Actions ranks three verified priorities; Expedition Pulse tracks the active named campaign; and Discovery Summary retains value, first-discovery, surface-signal and notable-body evidence. Its focused activity modes are General Flight, Exploration, Mining, Surface Survey, Carrier Expedition and Station/Data Sale. Broader journal facts may still be retained for profile continuity and universal safety handling, but no longer create dashboard objectives or modes.
+Void Compass keeps the Dashboard centred on exploration: Current Survey exposes FSS, DSS, biological and geological progress; Next Leg resolves both Elite routes and saved waypoints through one source; Next Actions ranks three verified priorities; Expedition Pulse tracks the active named campaign; and Discovery Summary retains value, first-discovery, surface-signal and notable-body evidence. Its focused activity modes are General Flight, Exploration, Mining, Surface Survey, Carrier Expedition and Station/Data Sale. Unrelated career activity no longer creates dashboard objectives, modes or companion-state records.
 
-Each mode can apply a focused overlay scene while gravity, toast and heartbeat safety feedback remains available. Automatic detection can be locked to a chosen mode per commander, and overlay scenes can be disabled independently in **Settings → Command Deck**.
+Automatic activity detection can be locked to a chosen mode per commander. Overlay visibility remains an explicit commander choice in **Overlay Studio** and is never silently changed by the active Dashboard mode.
 
 ## HTML cockpit overlays
 
-Every overlay can be enabled independently, dragged to a saved position and styled with the active theme. A single isolated WebView2 process renders Navigation plus Cargo, Carrier, Prospector, System Intelligence, Gravity, Station Link, Survey Operations, Cockpit Notifications, Heartbeat, Colony and Planet Waypoint Navigation surfaces. The command deck owns the complete visual Overlay Studio; internal compatibility proxies retain journal state, cross-platform geometry and hotkey integration but no longer present an additional Tk cockpit surface on Windows.
+Every overlay can be enabled independently, dragged to a saved position and styled with the active theme. A single isolated WebView2 process renders Navigation plus Cargo, Carrier, Prospector, System Intelligence, Gravity, Station Link, Survey Operations, Cockpit Notifications, Heartbeat and Planet Waypoint Navigation surfaces. The command deck owns the complete visual Overlay Studio; internal compatibility proxies retain journal state, cross-platform geometry and hotkey integration but no longer present an additional Tk cockpit surface on Windows.
 
 - Journal-aware Navigation HUD with a focused **Standard** everyday layout and an optional **Expanded** planning layout, unified route/state/survey instrumentation, a large current-system readout and journal-restored system-time clock, persistent distance-proportional route history with an advancing current marker and arrival-driven next-leg handoff, next-star scoop and fuel-range intelligence, live fuel-scoop flow, local-target context, galactic travel direction and plane position, surface approach and ship-configuration cues, traffic and a Discovery Rail that distinguishes unknown, locally retained, live FSS and completed survey evidence. Its bundled offline HTML/CSS renderer runs in an isolated transparent Edge WebView2 surface for fluid state-specific motion while a hidden migration proxy preserves journal drawing state, hotkeys and profile-aware positions. A journal-ID catalogue selects local artwork for all 48 currently released human motherships, with matching Nomad, Scarab, Scorpion, fighter and carrier identities for vehicle hand-offs.
 - Survey Operations as a persistent, priority-filtered cockpit work list that appears during FSS intake and retains bodies with confirmed biological or geological signals plus valuable/notable mapping targets such as terraformables, Earth-like worlds, water worlds and ammonia worlds. Its focused-body card adds three-stage biological sampling, explicit predicted/detected/completed evidence, geology-only targets, compact completed-species manifests and notable-world value evidence. Routine bodies remain in Explore & Survey instead of filling the overlay; live signal-cache fallback keeps priority targets current while detailed body scans catch up, and Navigation remains the single owner of system scan percentage.
@@ -112,13 +112,13 @@ Achievement progress, exploration history, named expeditions, bookmarks, Captain
 
 Commander Record can create SQLite-safe manual profile backups and schedule a restore for the next application start. VoidCompass also retains five rotating internal safety snapshots before version changes and cache rebuilds; a restore first preserves the replaced profile as a rollback snapshot.
 
-![Native Achievement Centre](Achievements.PNG)
+![Void Compass Explorer Achievements](Achievements.PNG)
 
 *Explorer Achievements keeps the active packs centred on exploration, travel, exobiology, expeditions, carriers, colonisation and mining.*
 
 ## Visual feedback
 
-Void Compass deliberately keeps feedback visual and deterministic. Survey changes, significant discoveries, route progress and safety events appear through the appropriate overlay, cockpit notification or curated Flight Log entry without spoken callouts, personas, learned cockpit behaviour or background speech generation. Existing profile-local memory and voice-cache files from older releases are left untouched for safe rollback, but are no longer loaded or used.
+Void Compass deliberately keeps feedback visual and deterministic. Survey changes, significant discoveries, route progress and safety events appear through the appropriate overlay, cockpit notification or curated Flight Log entry without spoken callouts, personas, learned cockpit behaviour or background speech generation. The retired speech, persona and learned-memory runtime has been removed; existing profile-local memory and voice-cache files from older releases remain untouched for safe rollback and are never loaded.
 
 ## Integrations
 

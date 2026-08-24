@@ -44,6 +44,15 @@ RETIRED_COMPASS_CONFIG_KEYS = (
     "adaptive_debriefings_enabled",
 )
 DEPRECATED_CONFIG_KEYS = (
+    'engineer_window_geometry',
+    'bgs_window_geometry',
+    'carrier_window_geometry',
+    'colonisation_window_geometry',
+    'mining_geometry',
+    'profile_dashboard_geometry',
+    'value_ledger_geometry',
+    'colonisation_planner_geometry',
+    'achievement_window_geometry',
     'scan_overlay_enabled',
     'scan_hud_x',
     'scan_hud_y',
@@ -87,6 +96,7 @@ DEPRECATED_CONFIG_KEYS = (
     'cockpit_llm_advisor_level',
     'cockpit_llm_timeout_s',
     'overlay_hotkey_trade',
+    'overlay_hotkey_colony',
     'trade_overlay_enabled',
     'trade_eddn_upload_enabled',
     'trade_log_auto_prune_enabled',
@@ -96,6 +106,20 @@ DEPRECATED_CONFIG_KEYS = (
     'trade_window_geometry',
     'trade_route_form',
     'trade_log_retention_days',
+    'colony_overlay_enabled',
+    'colony_overlay_show_trips',
+    'colony_overlay_site_only',
+    'colony_overlay_sort_mode',
+    'colony_overlay_x',
+    'colony_overlay_y',
+    'colony_overlay_w',
+    'colony_overlay_h',
+    'colony_overlay_font_scale',
+    'adaptive_overlay_scenes_enabled',
+    'adaptive_overlay_scenes',
+    'achievements_disabled_categories',
+    'exploration_focus_enabled',
+    'exploration_focus_migrated',
     'dashboard_compact_mode',
     'dashboard_compact_geometry',
     'dashboard_expanded_geometry',
@@ -115,17 +139,6 @@ COLOR_MUTED = _themes.ACTIVE_PALETTE["muted"]
 COLOR_YELLOW = _themes.ACTIVE_PALETTE["yellow"]
 
 
-EXPLORATION_MINING_ACHIEVEMENT_CATEGORIES = {
-    "Exploration", "Routes", "Exobiology", "Travel", "Places", "SRV",
-    "Carrier", "Colonisation", "Mining",
-}
-NON_FOCUSED_ACHIEVEMENT_CATEGORIES = {
-    "Combat", "Trading", "General", "Session", "Engineering", "Factions",
-    "Odyssey", "Crime", "CQC", "Powerplay", "Ranks", "Passengers",
-    "Operations", "Ships", "SLV", "Streamer",
-}
-
-
 PROFILE_TEXT_SETTINGS = (
     "edsm_cmdr_name",
     "edsm_api_key",
@@ -142,7 +155,6 @@ PROFILE_TEXT_SETTINGS = (
     "explore_discovery_filter",
     "explore_expedition_section",
     "explore_map_scope",
-    "colony_overlay_sort_mode",
     "overlay_hotkey_layout_studio",
     "overlay_hotkey_toggle_all",
     "overlay_hotkey_navigation",
@@ -153,7 +165,6 @@ PROFILE_TEXT_SETTINGS = (
     "overlay_hotkey_cargo",
     "overlay_hotkey_carrier",
     "overlay_hotkey_prospector",
-    "overlay_hotkey_colony",
     "overlay_hotkey_field_bookmark",
 )
 
@@ -168,9 +179,6 @@ PROFILE_BOOL_SETTINGS = (
     "hud_compact_mode",
     "cargo_overlay_enabled",
     "carrier_overlay_enabled",
-    "colony_overlay_enabled",
-    "colony_overlay_show_trips",
-    "colony_overlay_site_only",
     "prospector_overlay_enabled",
     "system_info_enabled",
     "gravity_warning_overlay_enabled",
@@ -193,9 +201,6 @@ PROFILE_BOOL_SETTINGS = (
     "hud_crt_enabled",
     "hud_crt_motion_enabled",
     "adaptive_command_enabled",
-    "adaptive_overlay_scenes_enabled",
-    "exploration_focus_enabled",
-    "exploration_focus_migrated",
     "reduced_motion_enabled",
     "flight_log_mode_enabled",
 )
@@ -214,11 +219,6 @@ PROFILE_VALUE_SETTINGS = (
     "cargo_hud_y",
     "carrier_hud_x",
     "carrier_hud_y",
-    "colony_overlay_x",
-    "colony_overlay_y",
-    "colony_overlay_w",
-    "colony_overlay_h",
-    "colony_overlay_font_scale",
     "gravity_warning_hud_x",
     "gravity_warning_hud_y",
     "gravity_warning_hud_timeout_s",
@@ -240,23 +240,12 @@ PROFILE_VALUE_SETTINGS = (
     "ground_popup_y",
     "ground_target_lat",
     "ground_target_lon",
-    "engineer_window_geometry",
-    "bgs_window_geometry",
-    "carrier_window_geometry",
-    "colonisation_window_geometry",
-    "mining_geometry",
     "route_plotter_geometry",
     "edit_dialog_geometry",
     "import_dialog_geometry",
-    "profile_dashboard_geometry",
-    "value_ledger_geometry",
-    "colonisation_planner_geometry",
     "exploration_window_geometry",
     "system_plotter_form",
     "ui_custom_themes",
-    "achievements_disabled_categories",
-    "achievement_window_geometry",
-    "adaptive_overlay_scenes",
     "ui_scale_percent",
     "overlay_text_scale_percent",
     "overlay_layout_presets",
@@ -408,24 +397,6 @@ def apply_profile_config(config, profile_key=None):
         profile["station_info_auto_hide_enabled"] = station_timeout > 0
         if station_timeout <= 0:
             profile["station_info_timeout_s"] = 30
-    # v5.3.6 narrows the visible product to exploration plus mining. Preserve
-    # every stored achievement and legacy workspace setting, but disable broad
-    # career packs and the retired colony-logistics overlay once per profile.
-    if not profile.get("exploration_focus_migrated", False):
-        disabled = set(
-            profile.get(
-                "achievements_disabled_categories",
-                config.get("achievements_disabled_categories", []),
-            ) or []
-        )
-        disabled.update(NON_FOCUSED_ACHIEVEMENT_CATEGORIES)
-        profile["achievements_disabled_categories"] = sorted(disabled)
-        profile["colony_overlay_enabled"] = False
-        if str(profile.get("adaptive_mode_lock") or "auto") not in {
-                "auto", "general", "exploration", "mining", "ground", "carrier", "station"}:
-            profile["adaptive_mode_lock"] = "auto"
-        profile["exploration_focus_enabled"] = True
-        profile["exploration_focus_migrated"] = True
     is_initial_profile = len(profiles) <= 1
     # The short-lived Compact Dashboard has been retired. Preserve the
     # commander's Expanded footprint as the one authoritative Dashboard size,
@@ -475,7 +446,6 @@ def apply_profile_config(config, profile_key=None):
         "explore_discovery_filter": "All",
         "explore_expedition_section": "Overview",
         "explore_map_scope": "All History",
-        "colony_overlay_sort_mode": "alpha",
         "overlay_hotkey_layout_studio": "Ctrl+Alt+Shift+F10",
         "overlay_hotkey_toggle_all": "Ctrl+Alt+Shift+F11",
         "overlay_hotkey_navigation": "",
@@ -486,7 +456,6 @@ def apply_profile_config(config, profile_key=None):
         "overlay_hotkey_cargo": "",
         "overlay_hotkey_carrier": "",
         "overlay_hotkey_prospector": "",
-        "overlay_hotkey_colony": "",
         "overlay_hotkey_field_bookmark": "Ctrl+Alt+Shift+F12",
     }
     bool_defaults = {
@@ -503,9 +472,6 @@ def apply_profile_config(config, profile_key=None):
         "hud_compact_mode": not profile_config_exists,
         "cargo_overlay_enabled": False,
         "carrier_overlay_enabled": False,
-        "colony_overlay_enabled": False,
-        "colony_overlay_show_trips": True,
-        "colony_overlay_site_only": False,
         "prospector_overlay_enabled": True,
         "system_info_enabled": True,
         "gravity_warning_overlay_enabled": True,
@@ -528,9 +494,6 @@ def apply_profile_config(config, profile_key=None):
         "hud_crt_enabled": True,
         "hud_crt_motion_enabled": True,
         "adaptive_command_enabled": True,
-        "adaptive_overlay_scenes_enabled": True,
-        "exploration_focus_enabled": True,
-        "exploration_focus_migrated": False,
         "reduced_motion_enabled": False,
         "flight_log_mode_enabled": False,
     }
@@ -545,7 +508,6 @@ def apply_profile_config(config, profile_key=None):
             profile_defaults = {
                 "ui_custom_themes": {},
                 "nav_collapsed_groups": [],
-                "adaptive_overlay_scenes": {},
                 "ui_scale_percent": 100,
                 "overlay_text_scale_percent": 100,
                 "overlay_layout_presets": {},
@@ -555,7 +517,6 @@ def apply_profile_config(config, profile_key=None):
                 "explore_map_view_state": {},
                 "explore_map_annotations": [],
                 "explore_map_annotation_geometry": "470x360",
-                "colony_overlay_font_scale": 1.0,
             }
             profile[setting] = (
                 profile_defaults[setting] if not is_initial_profile and setting in profile_defaults
@@ -646,17 +607,12 @@ def load_config():
         'overlay_hotkey_cargo': '',
         'overlay_hotkey_carrier': '',
         'overlay_hotkey_prospector': '',
-        'overlay_hotkey_colony': '',
         'overlay_hotkey_field_bookmark': 'Ctrl+Alt+Shift+F12',
         # New installs start with Standard. An older root config that somehow
         # lacks the setting keeps the historical Expanded default.
         'hud_compact_mode': not config_existed,
         'cargo_overlay_enabled': False,
         'carrier_overlay_enabled': False,
-        'colony_overlay_enabled': False,
-        'colony_overlay_show_trips': True,
-        'colony_overlay_site_only': False,
-        'colony_overlay_sort_mode': 'alpha',
         'prospector_overlay_enabled': True,
         'prospector_hud_timeout_s': 45,
         'prospector_hud_x': 30,
@@ -671,11 +627,6 @@ def load_config():
         'cargo_hud_y': 400,
         'carrier_hud_x': 30,
         'carrier_hud_y': 180,
-        'colony_overlay_x': 40,
-        'colony_overlay_y': 40,
-        'colony_overlay_w': 380,
-        'colony_overlay_h': 260,
-        'colony_overlay_font_scale': 1.0,
         # gravity_warning_hud_x intentionally omitted — defaults to a
         # screen-width-relative right-edge position computed in its own
         # constructor (matches toast_hud_x/_y).
@@ -702,8 +653,8 @@ def load_config():
         'ground_popup_enabled': True,
         'ground_popup_position_migrated': False,
         'ground_target_active': False,
-        'ground_target_lat': 0.0,
-        'ground_target_lon': 0.0,
+        'ground_target_lat': None,
+        'ground_target_lon': None,
         'perf_spike_threshold_ms': 45.0,
         'ui_watchdog_spike_ms': 120.0,
         'ui_stall_sampler_enabled': True,
@@ -732,17 +683,9 @@ def load_config():
         'active_commander_name': 'Unknown Commander',
         'active_commander_fid': '',
         'commander_profiles': {},
-        'engineer_window_geometry': '740x560',
-        'bgs_window_geometry': '880x580',
-        'carrier_window_geometry': '480x560',
-        'colonisation_window_geometry': '740x560',
-        'mining_geometry': '1050x660',
         'route_plotter_geometry': '920x700',
         'edit_dialog_geometry': '420x220',
         'import_dialog_geometry': '440x540',
-        'profile_dashboard_geometry': '760x520',
-        'value_ledger_geometry': '980x620',
-        'colonisation_planner_geometry': '900x560',
         'exploration_window_geometry': '1040x680',
         'system_plotter_form': {},
         'route_auto_note_from_edsm': True,
@@ -750,16 +693,11 @@ def load_config():
         'eddn_market_upload_enabled': True,
         'achievements_enabled': True,
         'achievement_notifications_enabled': True,
-        'achievements_disabled_categories': [],
-        'achievement_window_geometry': '1080x700',
         'hud_crt_enabled': True,
         'hud_crt_motion_enabled': True,
         'hud_crt_intensity': 'Subtle',
         'hud_animation_intensity': 'Standard',
         'adaptive_command_enabled': True,
-        'adaptive_overlay_scenes_enabled': True,
-        'exploration_focus_enabled': True,
-        'exploration_focus_migrated': False,
         'adaptive_mode_lock': 'auto',
         'explore_active_page': 'System Survey',
         'explore_survey_filter': 'All bodies',
@@ -769,7 +707,6 @@ def load_config():
         'explore_map_view_state': {},
         'explore_map_annotations': [],
         'explore_map_annotation_geometry': '470x360',
-        'adaptive_overlay_scenes': {},
         'ui_scale_percent': 100,
         'overlay_text_scale_percent': 100,
         'overlay_layout_presets': {},

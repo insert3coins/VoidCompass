@@ -7,7 +7,6 @@ DEFAULT_POSITIONS = {
     "gravity_warning_hud": (1200, 530), "station_info_hud": (30, 380),
     "survey_status_hud": (30, 520), "toast_hud": (1200, 80),
     "heartbeat_hud": (24, 24), "ground_popup": (1320, 160),
-    "colony_overlay": (40, 40),
 }
 
 DEFAULT_SIZES = {
@@ -17,7 +16,6 @@ DEFAULT_SIZES = {
     "gravity_warning_hud": (320, 106), "station_info_hud": (520, 442),
     "survey_status_hud": (520, 340), "toast_hud": (400, 94),
     "heartbeat_hud": (42, 42), "ground_popup": (370, 154),
-    "colony_overlay": (380, 220),
 }
 
 OVERLAY_LABELS = {
@@ -32,7 +30,6 @@ OVERLAY_LABELS = {
     "toast_hud": "Cockpit Notifications",
     "heartbeat_hud": "Journal Heartbeat",
     "ground_popup": "Planet Waypoint Navigation",
-    "colony_overlay": "Colony Logistics",
 }
 
 OVERLAY_CARD_LABELS = {
@@ -47,7 +44,6 @@ OVERLAY_CARD_LABELS = {
     "toast_hud": "NOTIFY",
     "heartbeat_hud": "HEARTBEAT",
     "ground_popup": "SURFACE NAV",
-    "colony_overlay": "COLONY",
 }
 
 OVERLAY_ENABLE_KEYS = {
@@ -62,8 +58,4 @@ OVERLAY_ENABLE_KEYS = {
     "toast_hud": "toast_overlay_enabled",
     "heartbeat_hud": "heartbeat_overlay_enabled",
     "ground_popup": "ground_popup_enabled",
-    "colony_overlay": "colony_overlay_enabled",
 }
-
-# Kept readable for old profiles without exposing the retired feature.
-HIDDEN_LEGACY_OVERLAYS = {"colony_overlay"}

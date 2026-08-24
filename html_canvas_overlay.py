@@ -49,91 +49,12 @@ def _font_model(canvas, item_id):
         return {"family": "Courier New", "size": 9, "weight": "normal", "slant": "roman"}
 
 
-def _widget_font_model(widget):
-    try:
-        font = tkfont.Font(root=widget, font=widget.cget("font"))
-        actual = font.actual()
-        raw_size = int(actual.get("size", 9) or 9)
-        size = (max(1, abs(raw_size)) if raw_size < 0 else
-                max(1, round(raw_size * float(widget.winfo_fpixels("1p")))))
-        return {
-            "family": str(actual.get("family") or "Courier New"), "size": size,
-            "weight": str(actual.get("weight") or "normal"),
-            "slant": str(actual.get("slant") or "roman"),
-        }
-    except Exception:
-        return {"family": "Courier New", "size": 9, "weight": "normal", "slant": "roman"}
-
-
-def _widget_scene(widget, canvas):
-    """Flatten the Colony overlay's embedded Tk controls for visual parity."""
-    result = []
-    try:
-        canvas_x, canvas_y = canvas.winfo_rootx(), canvas.winfo_rooty()
-    except Exception:
-        return result
-
-    def visit(node):
-        try:
-            if not node.winfo_ismapped() and str(node.winfo_manager()) != "pack":
-                return
-            x = node.winfo_rootx() - canvas_x
-            y = node.winfo_rooty() - canvas_y
-            width, height = node.winfo_width(), node.winfo_height()
-            if width <= 1 or height <= 1:
-                return
-            bg = str(node.cget("background"))
-        except Exception:
-            bg = ""
-            x = y = width = height = 0
-        if bg and bg.casefold() not in {"#ff00ff", "magenta"}:
-            result.append({
-                "type": "rectangle", "coords": [x, y, x + width, y + height],
-                "fill": bg, "outline": "",
-            })
-        try:
-            text = str(node.cget("text"))
-        except Exception:
-            text = ""
-        if text:
-            try:
-                fg = str(node.cget("foreground"))
-            except Exception:
-                fg = "#ffffff"
-            prefix = ""
-            try:
-                variable = str(node.cget("variable"))
-                if variable:
-                    prefix = "[x] " if bool(node.getvar(variable)) else "[ ] "
-            except Exception:
-                pass
-            result.append({
-                "type": "text", "coords": [x + width / 2, y + height / 2],
-                "text": prefix + text, "fill": fg, "anchor": "center",
-                "font": _widget_font_model(node),
-            })
-        try:
-            for child in node.winfo_children():
-                visit(child)
-        except Exception:
-            pass
-
-    visit(widget)
-    return result
-
-
 def canvas_scene(canvas):
     """Serialise the primitive subset used by Void Compass overlays."""
     items = []
     for item_id in canvas.find_all():
         kind = str(canvas.type(item_id) or "")
         if kind == "window":
-            try:
-                widget_name = canvas.itemcget(item_id, "window")
-                widget = canvas.nametowidget(widget_name)
-                items.extend(_widget_scene(widget, canvas))
-            except Exception:
-                pass
             continue
         if kind not in _ITEM_OPTIONS:
             continue
@@ -396,11 +317,7 @@ class HtmlCanvasOverlayBridge:
                         logging.info("HTML %s overlay renderer is live", self.overlay_id)
                 quick = self._quick_fingerprint()
                 window_quick = self._window_fingerprint()
-                # All standard overlays replace their primitive scene when
-                # content changes. Colony embeds Tk widgets, so its labels can
-                # change without changing Canvas item IDs and needs the full
-                # comparison.
-                if self.overlay_id == "colony" or quick != self._last_quick_fingerprint:
+                if quick != self._last_quick_fingerprint:
                     self._last_quick_fingerprint = quick
                     self._last_window_fingerprint = window_quick
                     snapshot = self._snapshot()

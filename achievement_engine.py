@@ -83,17 +83,9 @@ class AchievementEngine:
     """
 
     GLOBAL_TRIGGER_TYPES = {
-        "creditcheck",
         "distance",
         "distance_traveled",
         "distance_return",
-        "playtime",
-        "multirank",
-        "sessioncounter",
-        "sessionsum",
-        "sessionunique",
-        "sessionstreak",
-        "sessionunlocks",
     }
 
     def __init__(
@@ -102,13 +94,11 @@ class AchievementEngine:
         *,
         catalogue_path: str | os.PathLike[str] | None = None,
         enabled: bool = True,
-        disabled_categories: list[str] | None = None,
         on_unlock: Callable[[dict[str, Any]], None] | None = None,
     ):
         self.catalogue_path = Path(catalogue_path) if catalogue_path else _resource_path("data", "achievements.json")
         self.state_path = Path(state_path)
         self.enabled = bool(enabled)
-        self.disabled_categories = set(disabled_categories or [])
         self.on_unlock = on_unlock
         self.lock = threading.RLock()
         self.catalogue = self._load_catalogue()
@@ -121,7 +111,6 @@ class AchievementEngine:
         self.session = self._default_session()
         self._dirty = False
         self._last_save = 0.0
-        self._last_playtime_tick = time.monotonic()
         self._rebuilding = False
         self._queued_live_events: list[tuple[dict[str, Any], bool, bool]] = []
         self._load_state()
@@ -134,8 +123,6 @@ class AchievementEngine:
             "counters": {},
             "sumcounters": {},
             "uniquesets": {},
-            "playtimeMinutes": 0,
-            "credits": 0,
             "distanceLy": 0,
             "travelledLy": 0,
             "startCoords": None,
@@ -146,24 +133,7 @@ class AchievementEngine:
 
     @staticmethod
     def _default_session() -> dict[str, Any]:
-        return {
-            "startedAt": _utc_now(),
-            "counters": {},
-            "sums": {},
-            "uniques": {},
-            "unlocks": 0,
-            "firstLiveUnlock": False,
-            "lastShip": None,
-            "lastSystem": None,
-            "routeProgress": {},
-            "sinceDock": {
-                "jumps": 0,
-                "scans": 0,
-                "marketSales": 0,
-                "miningRefined": 0,
-                "bounties": 0,
-            },
-        }
+        return {"routeProgress": {}}
 
     def _load_catalogue(self) -> list[dict[str, Any]]:
         try:
@@ -192,13 +162,26 @@ class AchievementEngine:
                     merged.update(raw)
             except Exception:
                 pass
-            merged["unlocked"] = dict(merged.get("unlocked") or {})
-            merged["counters"] = dict(merged.get("counters") or {})
-            merged["sumcounters"] = dict(merged.get("sumcounters") or {})
+            valid_ids = set(self.by_id)
+            merged["unlocked"] = {
+                key: value for key, value in (merged.get("unlocked") or {}).items()
+                if key in valid_ids
+            }
+            merged["counters"] = {
+                key: value for key, value in (merged.get("counters") or {}).items()
+                if key in valid_ids
+            }
+            merged["sumcounters"] = {
+                key: value for key, value in (merged.get("sumcounters") or {}).items()
+                if key in valid_ids
+            }
             merged["uniquesets"] = {
                 key: set(value if isinstance(value, list) else value or [])
                 for key, value in (merged.get("uniquesets") or {}).items()
+                if key in valid_ids
             }
+            if merged.get("lastAchievement") not in valid_ids:
+                merged["lastAchievement"] = None
             self.state = merged
             self._dirty = False
 
@@ -237,25 +220,19 @@ class AchievementEngine:
         state_path: str | os.PathLike[str],
         *,
         enabled: bool | None = None,
-        disabled_categories: list[str] | None = None,
     ) -> None:
         self.flush()
         with self.lock:
             self.state_path = Path(state_path)
             if enabled is not None:
                 self.enabled = bool(enabled)
-            if disabled_categories is not None:
-                self.disabled_categories = set(disabled_categories)
             self.session = self._default_session()
-            self._last_playtime_tick = time.monotonic()
             self._load_state()
 
-    def set_options(self, *, enabled: bool | None = None, disabled_categories: list[str] | None = None) -> None:
+    def set_options(self, *, enabled: bool | None = None) -> None:
         with self.lock:
             if enabled is not None:
                 self.enabled = bool(enabled)
-            if disabled_categories is not None:
-                self.disabled_categories = set(disabled_categories)
 
     @staticmethod
     def _event_name(data: dict[str, Any]) -> str:
@@ -300,9 +277,7 @@ class AchievementEngine:
         payload = self._event_payload(data)
         payload.setdefault("event", event)
 
-        if event == "LoadGame":
-            self.state["credits"] = payload.get("Credits") or self.state.get("credits", 0)
-        elif event == "FSDJump":
+        if event == "FSDJump":
             self.state["travelledLy"] = self.state.get("travelledLy", 0) + _number(payload.get("JumpDist"))
             position = payload.get("StarPos")
             if isinstance(position, list) and len(position) >= 3:
@@ -334,14 +309,8 @@ class AchievementEngine:
             events.append(("ScanOrganicGenus", payload))
 
         for event_name, event_data in events:
-            if not historical:
-                self._update_session(event_name, event_data)
             unlocks.extend(self._evaluate_event(event_name, event_data, historical=historical))
 
-        if unlocks and notify and not historical and not self.session.get("firstLiveUnlock"):
-            self.session["firstLiveUnlock"] = True
-            unlocks.extend(self._evaluate_event("_meta", {"event": "_meta", "action": "first_live_unlock"}, historical=False))
-        unlocks.extend(self._evaluate_dependencies(historical=historical))
         self._dirty = True
         return unlocks if notify and not historical else []
 
@@ -362,7 +331,6 @@ class AchievementEngine:
             if (
                 not achievement_id
                 or achievement_id in self.state["unlocked"]
-                or achievement.get("category") in self.disabled_categories
             ):
                 continue
             trigger = achievement.get("trigger") or {}
@@ -415,8 +383,6 @@ class AchievementEngine:
                                 if value:
                                     values.add(str(value))
                     fired = len(values) >= _number(trigger.get("target"))
-            elif trigger_type == "creditcheck":
-                fired = event in ("LoadGame", "Missions") and self.state.get("credits", 0) >= _number(trigger.get("target"))
             elif trigger_type == "distance":
                 fired = self.state.get("distanceLy", 0) >= _number(trigger.get("target"))
             elif trigger_type == "distance_traveled":
@@ -426,20 +392,6 @@ class AchievementEngine:
                     self.state.get("maxDistanceFromSol", 0) >= _number(trigger.get("target"))
                     and self.state.get("currentDistanceFromSol", 0) <= 500
                 )
-            elif trigger_type == "playtime":
-                fired = self.state.get("playtimeMinutes", 0) >= _number(trigger.get("target"))
-            elif trigger_type == "multirank":
-                fired = all(rank in self.state["unlocked"] for rank in trigger.get("ranks", []))
-            elif trigger_type == "sessioncounter" and not historical:
-                fired = self.session["counters"].get(trigger.get("key"), 0) >= _number(trigger.get("target"))
-            elif trigger_type == "sessionsum" and not historical:
-                fired = self.session["sums"].get(trigger.get("key"), 0) >= _number(trigger.get("target"))
-            elif trigger_type == "sessionunique" and not historical:
-                fired = len(self.session["uniques"].get(trigger.get("key"), set())) >= _number(trigger.get("target"))
-            elif trigger_type == "sessionstreak" and not historical:
-                fired = self.session["sinceDock"].get(trigger.get("key"), 0) >= _number(trigger.get("target"))
-            elif trigger_type == "sessionunlocks" and not historical:
-                fired = self.session["unlocks"] >= _number(trigger.get("target"))
             elif trigger_type == "route" and event == "FSDJump":
                 systems = trigger.get("systems") or []
                 system = data.get("StarSystem")
@@ -455,20 +407,6 @@ class AchievementEngine:
                 unlocked.append(achievement)
         return unlocked
 
-    def _evaluate_dependencies(self, *, historical: bool) -> list[dict[str, Any]]:
-        unlocked: list[dict[str, Any]] = []
-        for _ in range(3):
-            before = len(unlocked)
-            for achievement in self._global:
-                trigger_type = (achievement.get("trigger") or {}).get("type")
-                if trigger_type not in {"multirank", "sessionunlocks"}:
-                    continue
-                unlocked.extend(self._evaluate_event("_dependency", {}, historical=historical))
-                break
-            if len(unlocked) == before:
-                break
-        return unlocked
-
     def _unlock(self, achievement: dict[str, Any], *, historical: bool) -> bool:
         achievement_id = str(achievement.get("id") or "")
         if not achievement_id or achievement_id in self.state["unlocked"]:
@@ -478,8 +416,6 @@ class AchievementEngine:
             "title": achievement.get("title"),
         }
         self.state["lastAchievement"] = achievement_id
-        if not historical:
-            self.session["unlocks"] += 1
         self._dirty = True
         return True
 
@@ -513,67 +449,6 @@ class AchievementEngine:
                 return False
         return True
 
-    def _update_session(self, event: str, data: dict[str, Any]) -> None:
-        counters = self.session["counters"]
-        sums = self.session["sums"]
-        uniques = self.session["uniques"]
-        since_dock = self.session["sinceDock"]
-        counters["events"] = counters.get("events", 0) + 1
-
-        def count(key: str, amount: int = 1) -> None:
-            counters[key] = counters.get(key, 0) + amount
-
-        def add(key: str, amount: Any) -> None:
-            sums[key] = sums.get(key, 0) + _number(amount)
-
-        def unique(key: str, value: Any) -> None:
-            if value:
-                uniques.setdefault(key, set()).add(str(value))
-
-        if event == "FSDJump":
-            count("jumps")
-            since_dock["jumps"] += 1
-            add("jumpLy", data.get("JumpDist"))
-            unique("systems", data.get("StarSystem"))
-            self.session["lastSystem"] = data.get("StarSystem") or self.session.get("lastSystem")
-        elif event == "Scan":
-            count("scans")
-            since_dock["scans"] += 1
-        elif event == "FSSDiscoveryScan":
-            count("fss")
-        elif event == "SAAScanComplete":
-            count("dss")
-        elif event == "Docked":
-            count("dockings")
-            unique("stations", data.get("StationName"))
-            self.session["sinceDock"] = {key: 0 for key in since_dock}
-        elif event == "MarketSell":
-            count("marketSales")
-            since_dock["marketSales"] += 1
-            add("tradeCredits", data.get("TotalSale"))
-        elif event == "MarketBuy":
-            add("marketSpend", data.get("TotalCost"))
-        elif event == "MiningRefined":
-            count("miningRefined")
-            since_dock["miningRefined"] += 1
-        elif event == "Bounty":
-            count("bounties")
-            since_dock["bounties"] += 1
-            add("bountyCredits", data.get("TotalReward"))
-        elif event == "MissionCompleted":
-            count("missions")
-            add("missionCredits", data.get("Reward"))
-        elif event in ("Interdicted", "Interdiction"):
-            count("interdictions")
-        elif event == "HeatDamage":
-            count("heatDamage")
-        elif event == "HullDamage":
-            count("hullDamage")
-        elif event == "SupercruiseExit":
-            count("supercruiseExits")
-        elif event == "LoadGame":
-            self.session["lastShip"] = data.get("Ship") or self.session.get("lastShip")
-
     def _dispatch_unlocks(self, unlocks: list[dict[str, Any]]) -> None:
         if not callable(self.on_unlock):
             return
@@ -582,36 +457,6 @@ class AchievementEngine:
                 self.on_unlock(dict(achievement))
             except Exception:
                 pass
-
-    def tick_playtime(self, active: bool = True) -> list[dict[str, Any]]:
-        """Accrue playtime minutes.
-
-        `active` must be True only while Elite Dangerous is actually running
-        (the caller decides, from journal/Status.json freshness). The
-        played_*_hours achievements measure time in the game, not time with
-        VoidCompass open — so while the game is closed we park the baseline
-        at `now`, which both stops accrual and prevents the idle gap from
-        being banked the moment the game comes back.
-        """
-        if not self.enabled:
-            return []
-        now = time.monotonic()
-        with self.lock:
-            if self._rebuilding or not active:
-                self._last_playtime_tick = now
-                return []
-        elapsed_minutes = int((now - self._last_playtime_tick) // 60)
-        if elapsed_minutes <= 0:
-            return []
-        with self.lock:
-            self._last_playtime_tick += elapsed_minutes * 60
-            self.state["playtimeMinutes"] = self.state.get("playtimeMinutes", 0) + elapsed_minutes
-            unlocks = self._evaluate_event("_playtime", {}, historical=False)
-            unlocks.extend(self._evaluate_dependencies(historical=False))
-            self._dirty = True
-            self.save(force=bool(unlocks))
-        self._dispatch_unlocks(unlocks)
-        return unlocks
 
     def _progress_locked(self, achievement: dict[str, Any]) -> dict[str, Any] | None:
         trigger = achievement.get("trigger") or {}
@@ -623,26 +468,12 @@ class AchievementEngine:
             return {"current": self.state["sumcounters"].get(achievement_id, 0), "target": trigger.get("target")}
         if trigger_type in ("uniquecounter", "uniquefromarray"):
             return {"current": len(self.state["uniquesets"].get(achievement_id, set())), "target": trigger.get("target")}
-        if trigger_type == "playtime":
-            return {"current": self.state.get("playtimeMinutes", 0), "target": trigger.get("target")}
-        if trigger_type == "creditcheck":
-            return {"current": self.state.get("credits", 0), "target": trigger.get("target")}
         if trigger_type == "distance":
             return {"current": round(self.state.get("distanceLy", 0)), "target": trigger.get("target")}
         if trigger_type == "distance_traveled":
             return {"current": round(self.state.get("travelledLy", 0)), "target": trigger.get("target")}
         if trigger_type == "distance_return":
             return {"current": round(self.state.get("maxDistanceFromSol", 0)), "target": trigger.get("target")}
-        if trigger_type == "sessioncounter":
-            return {"current": self.session["counters"].get(trigger.get("key"), 0), "target": trigger.get("target")}
-        if trigger_type == "sessionsum":
-            return {"current": self.session["sums"].get(trigger.get("key"), 0), "target": trigger.get("target")}
-        if trigger_type == "sessionunique":
-            return {"current": len(self.session["uniques"].get(trigger.get("key"), set())), "target": trigger.get("target")}
-        if trigger_type == "sessionstreak":
-            return {"current": self.session["sinceDock"].get(trigger.get("key"), 0), "target": trigger.get("target")}
-        if trigger_type == "sessionunlocks":
-            return {"current": self.session["unlocks"], "target": trigger.get("target")}
         if trigger_type == "route":
             return {"current": self.session["routeProgress"].get(achievement_id, 0), "target": len(trigger.get("systems") or [])}
         return None
@@ -657,7 +488,6 @@ class AchievementEngine:
                 unlock = self.state["unlocked"].get(achievement_id) or {}
                 item["unlocked"] = bool(unlock)
                 item["unlockedAt"] = unlock.get("unlockedAt")
-                item["disabled"] = item.get("category") in self.disabled_categories
                 item["progress"] = self._progress_locked(item)
                 achievements.append(item)
                 if unlock:
@@ -669,7 +499,6 @@ class AchievementEngine:
                 "total": len(achievements),
                 "totalPoints": total_points,
                 "categories": list(self.categories),
-                "disabledCategories": sorted(self.disabled_categories),
                 "enabled": self.enabled,
                 "rebuilding": self._rebuilding,
             }
@@ -713,22 +542,29 @@ class AchievementEngine:
         with self.lock:
             imported_unlocked = raw.get("unlocked") or {}
             if isinstance(imported_unlocked, dict):
-                self.state["unlocked"].update(imported_unlocked)
+                self.state["unlocked"].update({
+                    key: value for key, value in imported_unlocked.items()
+                    if key in self.by_id
+                })
             for key in ("counters", "sumcounters"):
                 for achievement_id, value in (raw.get(key) or {}).items():
+                    if achievement_id not in self.by_id:
+                        continue
                     self.state[key][achievement_id] = max(_number(self.state[key].get(achievement_id)), _number(value))
             for achievement_id, values in (raw.get("uniquesets") or {}).items():
+                if achievement_id not in self.by_id:
+                    continue
                 self.state["uniquesets"].setdefault(achievement_id, set()).update(values or [])
-            for key in ("playtimeMinutes", "distanceLy", "travelledLy", "currentDistanceFromSol", "maxDistanceFromSol"):
+            for key in ("distanceLy", "travelledLy", "currentDistanceFromSol", "maxDistanceFromSol"):
                 self.state[key] = max(_number(self.state.get(key)), _number(raw.get(key)))
-            if raw.get("credits") is not None:
-                self.state["credits"] = raw.get("credits")
             if not self.state.get("startCoords") and raw.get("startCoords"):
                 self.state["startCoords"] = raw.get("startCoords")
             self._dirty = True
             self.save(force=True)
             return {
-                "unlocked": len(imported_unlocked) if isinstance(imported_unlocked, dict) else 0,
+                "unlocked": sum(
+                    1 for key in imported_unlocked if key in self.by_id
+                ) if isinstance(imported_unlocked, dict) else 0,
                 "totalUnlocked": len(self.state["unlocked"]),
             }
 
@@ -749,22 +585,28 @@ class AchievementEngine:
             return 0
         preserved = 0
         for achievement_id, record in (previous.get("unlocked") or {}).items():
+            if achievement_id not in self.by_id:
+                continue
             if achievement_id not in self.state["unlocked"]:
                 preserved += 1
             # Prior record wins either way: it carries the true unlock time.
             self.state["unlocked"][achievement_id] = record
         for key in ("counters", "sumcounters"):
             for achievement_id, value in (previous.get(key) or {}).items():
+                if achievement_id not in self.by_id:
+                    continue
                 self.state[key][achievement_id] = max(
                     _number(self.state[key].get(achievement_id)), _number(value)
                 )
         for achievement_id, values in (previous.get("uniquesets") or {}).items():
+            if achievement_id not in self.by_id:
+                continue
             self.state["uniquesets"].setdefault(achievement_id, set()).update(values or [])
         # Monotonic lifetime totals: never let a rebuild walk them backwards.
-        for key in ("playtimeMinutes", "travelledLy", "maxDistanceFromSol"):
+        for key in ("travelledLy", "maxDistanceFromSol"):
             self.state[key] = max(_number(self.state.get(key)), _number(previous.get(key)))
         # Point-in-time values: trust the rebuild, fall back to the old value.
-        for key in ("credits", "distanceLy", "currentDistanceFromSol"):
+        for key in ("distanceLy", "currentDistanceFromSol"):
             if not _number(self.state.get(key)) and previous.get(key) is not None:
                 self.state[key] = previous.get(key)
         if not self.state.get("startCoords") and previous.get("startCoords"):

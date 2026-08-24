@@ -35,7 +35,6 @@ _FEED_TAG_COLORS = {
     "EDDN":    "#38bdf8",  # blue   — EDDN market upload status
     "CACHE":   "#7dd3fc",  # sky    — history/cache maintenance
     "MUSIC":   "#22d3ee",  # cyan   — music mood / soft state
-    "AI":      "#c084fc",  # violet — retained legacy activity entries
     "EXPEDITION":"#d8b4fe", # purple — named expedition progress
     "MILESTONE":"#facc15", # gold — durable exploration milestones
     "VALUABLE":"#FF7100",  # orange — high-value worlds
@@ -68,7 +67,6 @@ def _carrier_countdown(dep_str):
 # How stale the journal/Status.json streams may get before we treat Elite as
 # closed for playtime-accrual purposes. Generous: the watcher only fires on
 # file changes, so an idle docked commander can be quiet for a while.
-GAME_ACTIVE_GRACE_S = 300.0
 
 PROJECT_URL = "https://github.com/insert3coins/VoidCompass"
 RELEASES_URL = f"{PROJECT_URL}/releases"
@@ -229,8 +227,8 @@ class DashboardUIMixin(ThemedWindowMixin):
                 ("◍", "MAP", "GALACTIC ATLAS", self.open_galaxy_map_page),
             )),
             ("RECORDS", (
-                ("∿", "ANALYTICS", "ANALYTICS", self.open_analytics_window),
-                ("◉", "PROFILE", "PROFILE", self.open_commander_profile_window),
+                ("∿", "ANALYTICS", "ANALYTICS", self.open_analytics_workspace),
+                ("◉", "PROFILE", "PROFILE", self.open_profile_workspace),
             )),
             ("FIELD TOOLS", (
                 ("▦", "OPERATIONS", "FIELD TOOLS", self.show_operations_page),
@@ -715,8 +713,10 @@ class DashboardUIMixin(ThemedWindowMixin):
 
         self.ground_lat_entry.delete(0, tk.END)
         self.ground_lon_entry.delete(0, tk.END)
-        self.ground_lat_entry.insert(0, f"{getattr(self, 'target_lat', 0.0):.6f}")
-        self.ground_lon_entry.insert(0, f"{getattr(self, 'target_lon', 0.0):.6f}")
+        if getattr(self, "target_lat", None) is not None:
+            self.ground_lat_entry.insert(0, f"{self.target_lat:.6f}")
+        if getattr(self, "target_lon", None) is not None:
+            self.ground_lon_entry.insert(0, f"{self.target_lon:.6f}")
 
     def _build_command_dashboard_body(self):
         """Build the exploration-first command dashboard."""
@@ -973,7 +973,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         )
         self.dashboard_copy_action_btn.pack(side=tk.LEFT, padx=(6, 0))
         self.dashboard_explore_action_btn = self._action_button(
-            objective_actions, "GALAXY", self.open_bgs_window, muted=True,
+            objective_actions, "GALAXY", self.open_galaxy_map_page, muted=True,
         )
         self.dashboard_explore_action_btn.pack(side=tk.LEFT, padx=(6, 0))
 
@@ -2003,10 +2003,8 @@ class DashboardUIMixin(ThemedWindowMixin):
         cargo_ratio = min(1.0, cargo / cargo_cap) if cargo_cap else 0.0
         next_system = navigation.get("next_system") or navigation.get("final_destination") or "NO DESTINATION"
         mode_labels = {
-            "mining": "MINING", "combat": "COMBAT",
-            "ground": "GROUND OPS", "engineering": "ENGINEERING",
-            "carrier": "CARRIER OPS", "colony": "ARCHITECT",
-            "station": "STATION OPS", "powerplay": "POWERPLAY",
+            "mining": "MINING", "ground": "GROUND OPS",
+            "carrier": "CARRIER OPS", "station": "STATION OPS",
         }
         label = mode_labels.get(mode, str(mode or "ACTIVITY").upper())
         context = {
@@ -2066,35 +2064,6 @@ class DashboardUIMixin(ThemedWindowMixin):
                 "support_meta": f"{self._dashboard_number(mining.get('cores_cracked')):,} cores cracked",
                 "action": "OPEN MINING",
             })
-        elif mode == "combat":
-            combat = snapshot.get("combat") or {}
-            target = combat.get("current_target") or {}
-            target_name = target.get("name") or target.get("ship") or "COMBAT SORTIE"
-            hull = combat.get("hull_percent")
-            hull_ratio = min(1.0, max(0.0, float(hull) / 100.0)) if hull is not None else 0.0
-            reward = self._dashboard_number(combat.get("unclaimed_reward_cr"))
-            context.update({
-                "heading": "COMBAT SORTIE", "badge": "DANGER" if combat.get("in_danger") else "ACTIVE",
-                "badge_colour": self.UI_FAIL if combat.get("in_danger") else COLOR_ACCENT,
-                "title": target_name, "detail": f"Combat activity in {current_system}",
-                "value": f"UNCLAIMED {self._dashboard_credits(reward)}",
-                "progress": hull_ratio, "progress_colour": self.UI_OK if hull_ratio >= 0.5 else self.UI_WARN,
-                "stats": [
-                    ("HULL", f"{float(hull):.0f}%" if hull is not None else "UNKNOWN"),
-                    ("SHIELDS", "UP" if combat.get("shields_up") else "DOWN"),
-                    ("VICTORIES", f"{self._dashboard_number(combat.get('victories')):,}"),
-                    ("CLAIMS", f"{self._dashboard_number(combat.get('bounties')) + self._dashboard_number(combat.get('combat_bonds')):,}"),
-                ],
-                "priority": "Stabilise the ship" if combat.get("in_danger") else "Continue the combat sortie",
-                "priority_detail": f"{self._dashboard_number(combat.get('attacks')):,} hostile engagements observed this sortie.",
-                "support_heading": "COMBAT READINESS", "support_badge": "DANGER" if combat.get("in_danger") else "READY",
-                "support_colour": self.UI_FAIL if combat.get("in_danger") else self.UI_OK,
-                "support_name": f"HULL {float(hull):.0f}%" if hull is not None else "Hull state unknown",
-                "support_detail": "SHIELDS UP" if combat.get("shields_up") else "SHIELDS DOWN",
-                "support_meta": f"{self._dashboard_credits(reward)} awaiting redemption",
-                "support_progress": hull_ratio, "support_progress_text": f"{float(hull):.0f}%" if hull is not None else "",
-                "action": "OPEN COMBAT",
-            })
         elif mode == "ground":
             ground = snapshot.get("ground_operations") or {}
             biology = snapshot.get("biology") or {}
@@ -2121,160 +2090,52 @@ class DashboardUIMixin(ThemedWindowMixin):
                 "support_progress": sample_ratio, "support_progress_text": f"{sample_progress}/3" if sample_progress else "",
                 "action": "OPEN GROUND",
             })
-        elif mode == "engineering":
-            pins = list((snapshot.get("objectives") or {}).get("pinned_engineering") or [])
-            first = pins[0] if pins else {}
-            name = first.get("name") if isinstance(first, dict) else str(first or "")
-            grade = self._dashboard_number(first.get("target_grade", first.get("grade", 0))) if isinstance(first, dict) else 0
-            context.update({
-                "heading": "ENGINEERING GOALS", "badge": "PINNED" if pins else "READY",
-                "title": name or "NO PINNED BLUEPRINT",
-                "detail": f"{len(pins)} pinned blueprint{'s' if len(pins) != 1 else ''} tracked from local inventory.",
-                "value": f"TARGET GRADE {grade}" if grade else "MATERIAL INVENTORY READY",
-                "progress": min(1.0, len(pins) / 5.0) if pins else 0.0,
-                "stats": [
-                    ("PINNED", str(len(pins))),
-                    ("TARGET", f"G{grade}" if grade else "NONE"),
-                    ("CARGO", f"{cargo}/{cargo_cap} T" if cargo_cap else f"{cargo} T"),
-                    ("SYSTEM", current_system),
-                ],
-                "priority": f"Advance {name}" if name else "Pin an engineering goal",
-                "priority_detail": "Engineering Command holds grade-aware material shortages and trader alternatives.",
-                "support_heading": "MATERIAL SUPPORT", "support_name": f"{len(pins)} PINNED GOALS",
-                "support_detail": name or "No blueprint selected", "support_meta": f"TARGET G{grade}" if grade else "Open Engineering Command to plan",
-                "support_progress": min(1.0, len(pins) / 5.0) if pins else 0.0,
-                "support_progress_text": f"{len(pins)} GOALS", "action": "OPEN ENGINEER",
-            })
-        elif mode == "powerplay":
-            pp = snapshot.get("powerplay") or {}
-            system = pp.get("system") or {}
-            outstanding = self._dashboard_number(pp.get("outstanding_units"))
-            context.update({
-                "heading": "POWERPLAY OPERATIONS", "title": pp.get("power") or "NO PLEDGE RECORDED",
-                "detail": f"{current_system}  ·  {system.get('state') or 'regional state unknown'}",
-                "value": f"{self._dashboard_number(pp.get('merits')):,} MERITS  ·  {outstanding:,} UNITS OUTSTANDING",
-                "progress": min(1.0, self._dashboard_number(pp.get("session_delivered")) / max(1, self._dashboard_number(pp.get("session_collected")))) if pp.get("session_collected") else 0.0,
-                "stats": [
-                    ("RANK", str(pp.get("rank") or "—")),
-                    ("MERITS", f"{self._dashboard_number(pp.get('merits')):,}"),
-                    ("COLLECTED", f"{self._dashboard_number(pp.get('session_collected')):,}"),
-                    ("DELIVERED", f"{self._dashboard_number(pp.get('session_delivered')):,}"),
-                ],
-                "priority": "Deliver Powerplay commodities" if outstanding else "Review regional Powerplay strategy",
-                "priority_detail": f"{outstanding:,} collected units remain outstanding." if outstanding else f"Current controlling power: {system.get('controlling') or 'unknown'}.",
-                "support_heading": "REGIONAL STATUS", "support_name": system.get("controlling") or current_system,
-                "support_detail": "CONTESTED" if system.get("contested") else "STABLE",
-                "support_meta": f"{len(system.get('powers') or [])} powers present", "action": "OPEN POWERPLAY",
-            })
-        elif mode in ("carrier", "colony"):
+        elif mode == "carrier":
             strategy = snapshot.get("strategy") or {}
             carrier = strategy.get("carrier") or {}
-            projects = list(strategy.get("colonisation_projects") or [])
-            if mode == "carrier":
-                fuel = self._dashboard_number(carrier.get("fuel_level"))
-                capacity = self._dashboard_number(carrier.get("fuel_capacity"))
-                fuel_ratio = min(1.0, fuel / capacity) if capacity else 0.0
-                route_done = self._dashboard_number(carrier.get("route_completed"))
-                route_total = self._dashboard_number(carrier.get("route_total"))
-                route_remaining = self._dashboard_number(carrier.get("route_remaining"))
-                route_ratio = min(1.0, route_done / route_total) if route_total else 0.0
-                next_stop = carrier.get("route_next") or {}
-                jump_destination = carrier.get("jump_destination")
-                if (jump_destination and str(jump_destination).strip().casefold()
-                        == str(carrier.get("system") or "").strip().casefold()):
-                    jump_destination = None
-                next_system = jump_destination or next_stop.get("system")
-                scheduled = bool(jump_destination)
-                next_distance = next_stop.get("distance_ly")
-                next_burn = next_stop.get("calculated_fuel_t")
-                if next_burn is None:
-                    next_burn = next_stop.get("fuel_used_t")
-                projected_fuel = next_stop.get("projected_fuel_t")
-                route_name = carrier.get("route_name") or "Carrier expedition"
-                route_progress = (
-                    f"{route_done}/{route_total} STOPS · {route_remaining} REMAINING"
-                    if route_total else "NO EXPEDITION ROUTE"
-                )
-                distance_text = (
-                    f"{float(next_distance):,.1f} LY" if next_distance is not None else ""
-                )
-                if next_burn is not None:
-                    distance_text += (" · " if distance_text else "") + f"{int(next_burn):,} T"
-                destination_info = f"{route_name}\n{route_progress}"
-                if projected_fuel is not None:
-                    destination_info += f"\nProjected depot after next jump: {int(projected_fuel):,} T"
-                used_capacity = self._dashboard_number(carrier.get("space_used"))
-                total_space = self._dashboard_number(carrier.get("space_total"))
-                status = str(carrier.get("status") or "idle").upper()
-                if route_total and not route_remaining:
-                    badge = "COMPLETE"
-                elif scheduled:
-                    badge = "JUMPING" if status == "JUMPING" else "SCHEDULED"
-                elif route_total:
-                    badge = "EN ROUTE"
-                else:
-                    badge = "READY"
-                context.update({
-                    "heading": "FLEET CARRIER OPERATIONS", "badge": badge,
-                    "title": carrier.get("name") or "NO CARRIER SYNC",
-                    "detail": f"{carrier.get('system') or current_system}  →  {next_system or 'NO EXPEDITION ROUTE'}",
-                    "value": f"TRITIUM {fuel:,}/{capacity:,} T" if capacity else "Carrier fuel awaiting sync",
-                    "progress": route_ratio if route_total else fuel_ratio,
-                    "stats": [
-                        ("STATUS", status),
-                        ("ROUTE", f"{route_done}/{route_total}" if route_total else "INACTIVE"),
-                        ("FUEL", f"{fuel}/{capacity} T" if capacity else "UNKNOWN"),
-                        ("USED SPACE", f"{used_capacity:,}/{total_space:,} T" if total_space else "UNKNOWN"),
-                    ],
-                    "priority": (
-                        f"Monitor jump to {jump_destination}" if scheduled
-                        else f"Continue expedition to {next_system}" if next_system
-                        else "Plot a new carrier expedition" if not route_total
-                        else "Carrier expedition complete"
-                    ),
-                    "priority_detail": (
-                        f"{route_progress}. Carrier Command holds route, fuel, service and inventory planning."
-                    ),
-                    "support_heading": "CARRIER EXPEDITION",
-                    "support_badge": status if status != "IDLE" else ("COMPLETE" if route_total and not route_remaining else "READY"),
-                    "support_colour": self.UI_OK if status == "IDLE" else COLOR_ACCENT,
-                    "support_name": route_name,
-                    "support_detail": route_progress,
-                    "support_meta": (
-                        f"NEXT · {next_system}" if next_system else "No pending carrier stop"
-                    ),
-                    "support_progress": route_ratio if route_total else fuel_ratio,
-                    "support_progress_text": f"{route_done}/{route_total}" if route_total else f"{fuel}/{capacity} T",
-                    "destination_heading": "SCHEDULED CARRIER JUMP" if scheduled else "NEXT CARRIER STOP" if next_system else "CARRIER EXPEDITION",
-                    "destination_name": next_system or ("ROUTE COMPLETE" if route_total else "NO EXPEDITION ROUTE"),
-                    "destination_distance": distance_text,
-                    "destination_info": destination_info,
-                    "destination_copy_text": "COPY CARRIER STOP",
-                    "action": "OPEN CARRIER",
-                })
-            else:
-                project = projects[0] if projects else {}
-                remaining = sum(self._dashboard_number(row.get("remaining_units")) for row in projects if isinstance(row, dict))
-                progress = float(project.get("progress") or 0) if isinstance(project, dict) else 0.0
-                progress = progress / 100.0 if progress > 1 else progress
-                context.update({
-                    "heading": "ARCHITECT COMMAND", "badge": "BUILDING" if projects else "READY",
-                    "title": project.get("system") or "NO ACTIVE CONSTRUCTION SITE",
-                    "detail": f"{project.get('body') or current_system}  ·  {len(projects)} active site{'s' if len(projects) != 1 else ''}",
-                    "value": f"{remaining:,} UNITS REMAINING", "progress": min(1.0, max(0.0, progress)),
-                    "stats": [
-                        ("SITES", str(len(projects))),
-                        ("REMAINING", f"{remaining:,} T"),
-                        ("MATCHED", str(len(strategy.get("colonisation_matching_cargo") or []))),
-                        ("CARGO", f"{cargo}/{cargo_cap} T" if cargo_cap else f"{cargo} T"),
-                    ],
-                    "priority": f"Supply {project.get('system')}" if project else "Select a construction project",
-                    "priority_detail": f"{remaining:,} journal-confirmed units remain across active sites.",
-                    "support_heading": "CONSTRUCTION SUPPORT", "support_name": project.get("body") or "No active site",
-                    "support_detail": f"{remaining:,} UNITS REQUIRED", "support_meta": f"{len(strategy.get('colonisation_matching_cargo') or [])} cargo matches aboard",
-                    "support_progress": min(1.0, max(0.0, progress)), "support_progress_text": f"{progress * 100:.0f}%",
-                    "action": "OPEN COLONY",
-                })
+            fuel = self._dashboard_number(carrier.get("fuel_level"))
+            capacity = self._dashboard_number(carrier.get("fuel_capacity"))
+            fuel_ratio = min(1.0, fuel / capacity) if capacity else 0.0
+            route_done = self._dashboard_number(carrier.get("route_completed"))
+            route_total = self._dashboard_number(carrier.get("route_total"))
+            route_remaining = self._dashboard_number(carrier.get("route_remaining"))
+            route_ratio = min(1.0, route_done / route_total) if route_total else 0.0
+            next_stop = carrier.get("route_next") or {}
+            jump_destination = carrier.get("jump_destination")
+            if (jump_destination and str(jump_destination).strip().casefold()
+                    == str(carrier.get("system") or "").strip().casefold()):
+                jump_destination = None
+            next_system = jump_destination or next_stop.get("system")
+            route_name = carrier.get("route_name") or "Carrier expedition"
+            route_progress = (
+                f"{route_done}/{route_total} STOPS · {route_remaining} REMAINING"
+                if route_total else "NO EXPEDITION ROUTE"
+            )
+            status = str(carrier.get("status") or "idle").upper()
+            context.update({
+                "heading": "FLEET CARRIER OPERATIONS",
+                "badge": "COMPLETE" if route_total and not route_remaining else status,
+                "title": carrier.get("name") or "NO CARRIER SYNC",
+                "detail": f"{carrier.get('system') or current_system}  →  {next_system or 'NO EXPEDITION ROUTE'}",
+                "value": f"TRITIUM {fuel:,}/{capacity:,} T" if capacity else "Carrier fuel awaiting sync",
+                "progress": route_ratio if route_total else fuel_ratio,
+                "stats": [
+                    ("STATUS", status),
+                    ("ROUTE", f"{route_done}/{route_total}" if route_total else "INACTIVE"),
+                    ("FUEL", f"{fuel}/{capacity} T" if capacity else "UNKNOWN"),
+                    ("REMAINING", f"{route_remaining} STOPS" if route_total else "NO ROUTE"),
+                ],
+                "priority": f"Continue expedition to {next_system}" if next_system else "Review Carrier Command",
+                "priority_detail": route_progress,
+                "support_heading": "CARRIER EXPEDITION", "support_name": route_name,
+                "support_detail": route_progress,
+                "support_meta": f"NEXT · {next_system}" if next_system else "No pending carrier stop",
+                "support_progress": route_ratio if route_total else fuel_ratio,
+                "support_progress_text": f"{route_done}/{route_total}" if route_total else f"{fuel}/{capacity} T",
+                "destination_heading": "NEXT CARRIER STOP",
+                "destination_name": next_system or ("ROUTE COMPLETE" if route_total else "NO EXPEDITION ROUTE"),
+                "destination_copy_text": "COPY CARRIER STOP", "action": "OPEN CARRIER",
+            })
         elif mode == "station":
             station = snapshot.get("station") or {}
             missions = snapshot.get("missions") or {}
@@ -2323,7 +2184,7 @@ class DashboardUIMixin(ThemedWindowMixin):
                 text="OPEN EXPLORE", command=self.open_exploration_window,
             )
             self.dashboard_copy_action_btn.config(text="COPY NEXT", command=self._dashboard_copy_next)
-            self.dashboard_explore_action_btn.config(text="GALAXY", command=self.open_bgs_window)
+            self.dashboard_explore_action_btn.config(text="GALAXY", command=self.open_galaxy_map_page)
             self.dashboard_destination_copy_btn.config(text="COPY NEXT", command=self._dashboard_copy_next)
             self.dashboard_destination_open_btn.config(
                 text="OPEN ROUTE", command=lambda: self.open_exploration_window(section="route"),
@@ -2417,12 +2278,8 @@ class DashboardUIMixin(ThemedWindowMixin):
         mode_actions = {
             "exploration": "OPEN EXPLORE",
             "mining": "OPEN MINING",
-            "combat": "OPEN COMBAT",
             "ground": "OPEN GROUND",
-            "engineering": "OPEN ENGINEER",
             "carrier": "OPEN CARRIER",
-            "colony": "OPEN COLONY",
-            "powerplay": "OPEN POWERPLAY",
         }
         open_text = mode_actions.get(mode)
         open_state = tk.NORMAL
@@ -2627,7 +2484,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         command_snapshot = {}
         if deck:
             try:
-                command_snapshot = self._compass_gameplay_snapshot()
+                command_snapshot = self._operational_snapshot()
                 self._operational_queue = deck.build_queue(
                     command_snapshot, self._adaptive_context(route_progress),
                 )
@@ -2667,9 +2524,7 @@ class DashboardUIMixin(ThemedWindowMixin):
                     )
             queue_ids_by_mode = {
                 "mining": {"mining"},
-                "ground": {"biology"}, "engineering": {"engineering"},
-                "carrier": {"carrier"}, "colony": {"colony"},
-                "powerplay": {"powerplay", "powerplay-delivery"},
+                "ground": {"biology"}, "carrier": {"carrier"},
             }
             expected_ids = queue_ids_by_mode.get(render_mode, set())
             mode_rows = (
@@ -2831,12 +2686,12 @@ class DashboardUIMixin(ThemedWindowMixin):
         self._workspace_hub_card(
             operations_grid, 0, 1, "MINING",
             "Mining runs, prospecting quality, refinery yield, cargo economics and history.",
-            self.open_mining_window, "OPEN MINING",
+            self.open_mining_workspace, "OPEN MINING",
         )
         self._workspace_hub_card(
             operations_grid, 1, 0, "ENGINEERING & SYNTHESIS",
             "Exploration ship materials, FSD injections, synthesis readiness and pinned upgrades.",
-            self.open_engineer_window, "OPEN ENGINEERING",
+            self.open_engineering_workspace, "OPEN ENGINEERING",
         )
         self._workspace_hub_card(
             operations_grid, 1, 1, "COLONISATION RECON",
@@ -2846,7 +2701,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         self._workspace_hub_card(
             operations_grid, 2, 0, "EXPLORER ACHIEVEMENTS",
             "Journal-driven milestones for exploration, travel, biology, mining and expeditions.",
-            self.open_achievement_window, "OPEN ACHIEVEMENTS",
+            self.open_achievements_workspace, "OPEN ACHIEVEMENTS",
         )
 
     def show_operations_page(self):
@@ -3033,7 +2888,6 @@ class DashboardUIMixin(ThemedWindowMixin):
             "hud",
             "cargo_hud",
             "carrier_hud",
-            "colony_overlay",
             "heartbeat_hud",
             "prospector_hud",
             "system_info_hud",
@@ -4019,31 +3873,9 @@ class DashboardUIMixin(ThemedWindowMixin):
         secs = elapsed % 60
         return f"{hrs:02d}:{mins:02d}:{secs:02d}"
 
-    def _game_is_active(self):
-        """True while Elite Dangerous looks like it is actually running.
-
-        Status.json and the journal are only written by the live game, so
-        recent activity on either is our "game is up" signal. The window is
-        generous because the watcher only fires on file changes, and a docked
-        or menu-idle commander can go a while without producing either.
-        """
-        newest = max(
-            float(getattr(self, "last_status_event_ts", 0) or 0),
-            float(getattr(self, "last_journal_event_ts", 0) or 0),
-        )
-        if not newest:
-            return False
-        return (time.time() - newest) <= GAME_ACTIVE_GRACE_S
-
     def _tick_session_clock(self):
         if not self.is_running:
             return
-        achievement_engine = getattr(self, "achievement_engine", None)
-        if achievement_engine:
-            try:
-                achievement_engine.tick_playtime(active=self._game_is_active())
-            except Exception:
-                pass
         if self._dashboard_streams_visible() and not self._main_window_resize_active():
             if hasattr(self, "summary_session"):
                 self.summary_session.config(text=self._get_session_elapsed_text())
@@ -4059,7 +3891,7 @@ class DashboardUIMixin(ThemedWindowMixin):
                 and getattr(self, "_dashboard_render_mode", "exploration") != "exploration"
             ):
                 activity = (
-                    (getattr(self, "ai_operational_state", {}) or {}).get("activity") or {}
+                    (getattr(self, "operational_state", {}) or {}).get("activity") or {}
                 )
                 observed_at = float(activity.get("last_event_at") or activity.get("since") or 0)
                 if observed_at and time.time() - observed_at > AUTOMATIC_MODE_IDLE_S:
@@ -4161,8 +3993,10 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.ground_lon_entry.grid(row=1, column=1, sticky="ew", padx=(10, 0), pady=(3, 0))
         input_row.grid_columnconfigure(0, weight=1)
         input_row.grid_columnconfigure(1, weight=1)
-        self.ground_lat_entry.insert(0, f"{getattr(self, 'target_lat', 0.0):.6f}")
-        self.ground_lon_entry.insert(0, f"{getattr(self, 'target_lon', 0.0):.6f}")
+        if getattr(self, "target_lat", None) is not None:
+            self.ground_lat_entry.insert(0, f"{self.target_lat:.6f}")
+        if getattr(self, "target_lon", None) is not None:
+            self.ground_lon_entry.insert(0, f"{self.target_lon:.6f}")
 
         btn_row = tk.Frame(panel, bg=self.UI_PANEL)
         btn_row.pack(fill=tk.X, padx=12, pady=(0, 10))
@@ -4516,7 +4350,7 @@ class DashboardUIMixin(ThemedWindowMixin):
                 self.ground_detail_lbl.config(text="Use numeric values, e.g. 12.3456 and -98.7654", fg="#ff7777")
             return
 
-        if lat < -90.0 or lat > 90.0:
+        if not math.isfinite(lat) or not math.isfinite(lon) or lat < -90.0 or lat > 90.0:
             if self._widget_alive(getattr(self, "ground_status_lbl", None)):
                 self.ground_status_lbl.config(text="Target: INVALID LAT", fg="#ff7777")
             if self._widget_alive(getattr(self, "ground_detail_lbl", None)):
@@ -4560,8 +4394,18 @@ class DashboardUIMixin(ThemedWindowMixin):
 
     def clear_ground_target(self):
         self.target_latlon_active = False
+        self.target_lat = None
+        self.target_lon = None
         self.config["ground_target_active"] = False
+        self.config["ground_target_lat"] = None
+        self.config["ground_target_lon"] = None
         self._save_config_file()
+        for widget in (
+            getattr(self, "ground_lat_entry", None),
+            getattr(self, "ground_lon_entry", None),
+        ):
+            if self._widget_alive(widget):
+                widget.delete(0, tk.END)
         self.update_ground_target_ui()
         self.add_event_feed_entry("SYSTEM", "Ground target cleared", severity="INFO")
 
@@ -4882,7 +4726,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             self._ground_popup_last_render_key = None
             self._perf_spike("_update_ground_popup", t0, threshold_ms=22.0)
             return
-        should_show = bool(self.target_latlon_active and self.on_planet and solution and solution.get("state") == "OK")
+        should_show = self._ground_target_should_show(solution)
         if not should_show:
             if self.ground_popup and self.ground_popup.winfo_exists():
                 if getattr(self, "_ground_popup_visible", False):
@@ -4931,8 +4775,40 @@ class DashboardUIMixin(ThemedWindowMixin):
             self._ground_popup_visible = True
         self._perf_spike("_update_ground_popup", t0, threshold_ms=22.0)
 
-    def _ground_target_solution(self):
+    def _ground_target_configured(self):
+        """Return whether this profile has one complete, valid coordinate fix."""
         if not getattr(self, "target_latlon_active", False):
+            return False
+        try:
+            lat = float(self.target_lat)
+            lon = float(self.target_lon)
+        except (AttributeError, TypeError, ValueError):
+            return False
+        return bool(
+            math.isfinite(lat) and math.isfinite(lon)
+            and -90.0 <= lat <= 90.0
+            and -180.0 <= lon <= 180.0
+        )
+
+    def _ground_target_should_show(self, solution=None):
+        """Apply the one authoritative Planet Waypoint visibility policy."""
+        if (
+            bool(getattr(self, "_startup_presentation_held", False))
+            or bool(getattr(
+                getattr(self, "root", None),
+                "_voidcompass_startup_presentation_held", False,
+            ))
+            or not bool(getattr(self, "ground_popup_enabled", True))
+            or not self._ground_target_configured()
+            or not bool(getattr(self, "on_planet", False))
+        ):
+            return False
+        if solution is None:
+            solution = self._ground_target_solution()
+        return bool(solution and solution.get("state") == "OK")
+
+    def _ground_target_solution(self):
+        if not self._ground_target_configured():
             return None
         if self.current_latitude is None or self.current_longitude is None:
             return {"state": "WAIT_POS"}
@@ -4978,7 +4854,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             )
         self._update_surface_trail_ui()
 
-        if not self.target_latlon_active:
+        if not self._ground_target_configured():
             if has_status:
                 self._config_label_if_changed(self.ground_status_lbl, text="Target: OFF", fg="#888")
             if has_detail:
@@ -5116,7 +4992,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             return
         manager = getattr(self, "expedition_manager", None)
         try:
-            snapshot = manager.compass_snapshot(
+            snapshot = manager.status_snapshot(
                 next_waypoint=self._dashboard_next_destination(),
             ) if manager else {}
         except Exception:

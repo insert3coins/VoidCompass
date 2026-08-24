@@ -102,7 +102,7 @@ def draw_chrome(canvas, width, height, accent=None, bracket_len=12, bg=_BG, tags
     corner brackets directly onto `canvas` at (0, 0, width, height).
 
     Pass `tags` (e.g. "bg") if the overlay needs to tag_lower() this behind
-    other canvas items/embedded widgets (see colony_overlay.py).
+    other canvas items.
     """
     # Resolve the active accent at draw time.  A COLOR_ACCENT default argument
     # would retain the startup theme even after live theme switching updates

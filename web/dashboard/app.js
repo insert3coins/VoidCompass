@@ -520,7 +520,7 @@ function setStudioView(name) {
   byId("studio-options-view").classList.toggle("active", studioView === "options");
 }
 
-function updateStudioOptionControls(options) {
+function updateStudioOptionControls(options, groundTarget = {}) {
   document.querySelectorAll("[data-overlay-option]").forEach((input) => {
     if (document.activeElement !== input) input.checked = Boolean(options[input.dataset.overlayOption]);
   });
@@ -539,6 +539,35 @@ function updateStudioOptionControls(options) {
   }
   const stationTimeout = byId("studio-station-timeout");
   if (stationTimeout) stationTimeout.disabled = !Boolean(options.station_info_auto_hide_enabled);
+  const targetFields = {
+    "studio-ground-lat": groundTarget.active ? groundTarget.lat : null,
+    "studio-ground-lon": groundTarget.active ? groundTarget.lon : null,
+  };
+  for (const [id, value] of Object.entries(targetFields)) {
+    const field = byId(id);
+    if (field && document.activeElement !== field) {
+      field.value = value === null || value === undefined ? "" : Number(value).toFixed(6);
+    }
+  }
+  const groundOverlay = studioOverlay("ground_popup");
+  const overlayEnabled = Boolean(groundOverlay?.enabled);
+  const state = groundTarget.navigation_ready ? "COMPASS LIVE" : groundTarget.active ? "TARGET ARMED" : "TARGET OFF";
+  text("studio-ground-target-state", state);
+  text("studio-ground-target-detail", groundTarget.active
+    ? `${Number(groundTarget.lat).toFixed(6)}, ${Number(groundTarget.lon).toFixed(6)}`
+    : "NO COORDINATES SET");
+  text("studio-ground-visibility", !overlayEnabled
+    ? "OVERLAY DISABLED"
+    : groundTarget.navigation_ready ? "LIVE PLANET GUIDANCE" : "HIDDEN UNTIL PLANET APPROACH");
+  const readout = document.querySelector(".studio-ground-readout");
+  readout?.classList.toggle("live", Boolean(groundTarget.navigation_ready && overlayEnabled));
+  readout?.classList.toggle("armed", Boolean(groundTarget.active && !groundTarget.navigation_ready && overlayEnabled));
+  const current = byId("studio-ground-current");
+  if (current) current.disabled = !Boolean(groundTarget.current_available);
+  const clear = byId("studio-ground-clear");
+  if (clear) clear.disabled = !Boolean(groundTarget.active);
+  const toggle = byId("studio-ground-overlay-toggle");
+  if (toggle) toggle.textContent = `OVERLAY ${overlayEnabled ? "ON" : "OFF"}`;
 }
 
 function renderOverlayStudio(state) {
@@ -627,7 +656,7 @@ function renderOverlayStudio(state) {
     presetSelect.dataset.presets = presetKey;
     if (presetNames.includes(previousPreset)) presetSelect.value = previousPreset;
   }
-  updateStudioOptionControls(studio.options || {});
+  updateStudioOptionControls(studio.options || {}, studio.ground_target || {});
   if (studioSelectedId) selectStudioOverlay(studioSelectedId);
   applyStudioFilters();
 }
@@ -927,7 +956,7 @@ function renderAchievementsWorkspace(data) {
     return `<article class="achievement-tile${row.unlocked ? " unlocked" : ""}" data-achievement-category="${escapeHtml(row.category)}"><header><span>${escapeHtml(row.category || "MILESTONE")}</span><b>${numeric(row.points)} PTS</b></header><h3>${escapeHtml(row.title)}</h3><p>${escapeHtml(row.description || "Journal-driven commander milestone.")}</p><div class="achievement-progress"><i style="width:${progress}%"></i><span>${row.unlocked ? "UNLOCKED" : row.target ? `${numeric(row.current)} / ${numeric(row.target)}` : "LOCKED"}</span></div><footer><button data-ws-page="achievements" data-ws-op="manual_unlock" data-achievement-id="${escapeHtml(row.id)}" ${row.unlocked ? "disabled" : ""}>UNLOCK</button><button class="danger-action" data-ws-page="achievements" data-ws-op="reset" data-achievement-id="${escapeHtml(row.id)}" ${row.unlocked || number(row.current) ? "" : "disabled"}>RESET</button></footer></article>`;
   });
   root.classList.remove("loading-panel");
-  root.innerHTML = `${workspaceMetrics([{label: "Unlocked", value: `${numeric(data.unlocked)} / ${numeric(data.total)}`, detail: `${data.total ? numeric(number(data.unlocked) * 100 / number(data.total), 1) : "0.0"}% COMPLETE`}, {label: "Achievement points", value: numeric(data.points), detail: "PROFILE TOTAL"}, {label: "Categories", value: numeric((data.categories || []).length), detail: `${numeric((data.disabled || []).length)} DISABLED`}, {label: "Tracking", value: data.enabled ? "ACTIVE" : "PAUSED", detail: data.notifications_enabled ? "UNLOCK SIGNALS ON" : "UNLOCK SIGNALS OFF"}])}<div class="workspace-actions achievement-controls"><button data-ws-page="achievements" data-ws-op="set_enabled" data-enabled="${!data.enabled}">${data.enabled ? "PAUSE TRACKING" : "ENABLE TRACKING"}</button><button data-ws-page="achievements" data-ws-op="set_notifications" data-enabled="${!data.notifications_enabled}">${data.notifications_enabled ? "MUTE UNLOCK SIGNALS" : "ENABLE UNLOCK SIGNALS"}</button><input id="achievement-filter" placeholder="FILTER MILESTONES"></div><section id="achievement-grid" class="achievement-grid">${rows.join("") || `<p class="workspace-empty">Achievement catalogue unavailable.</p>`}</section>`;
+  root.innerHTML = `${workspaceMetrics([{label: "Unlocked", value: `${numeric(data.unlocked)} / ${numeric(data.total)}`, detail: `${data.total ? numeric(number(data.unlocked) * 100 / number(data.total), 1) : "0.0"}% COMPLETE`}, {label: "Achievement points", value: numeric(data.points), detail: "PROFILE TOTAL"}, {label: "Categories", value: numeric((data.categories || []).length), detail: "EXPLORATION-FOCUSED"}, {label: "Tracking", value: data.enabled ? "ACTIVE" : "PAUSED", detail: data.notifications_enabled ? "UNLOCK SIGNALS ON" : "UNLOCK SIGNALS OFF"}])}<div class="workspace-actions achievement-controls"><button data-ws-page="achievements" data-ws-op="set_enabled" data-enabled="${!data.enabled}">${data.enabled ? "PAUSE TRACKING" : "ENABLE TRACKING"}</button><button data-ws-page="achievements" data-ws-op="set_notifications" data-enabled="${!data.notifications_enabled}">${data.notifications_enabled ? "MUTE UNLOCK SIGNALS" : "ENABLE UNLOCK SIGNALS"}</button><input id="achievement-filter" placeholder="FILTER MILESTONES"></div><section id="achievement-grid" class="achievement-grid">${rows.join("") || `<p class="workspace-empty">Achievement catalogue unavailable.</p>`}</section>`;
 }
 
 function renderLedgerWorkspace(data) {
@@ -1228,6 +1257,11 @@ document.addEventListener("click", async (event) => {
     await nudgeStudioOverlay(studioNudge.dataset.studioNudge);
     return;
   }
+  if (event.target.closest("#studio-ground-overlay-toggle")) {
+    const accepted = await command("overlay_studio", {operation: "toggle", overlay_id: "ground_popup"});
+    showToast(accepted ? "Planet Waypoint overlay updated" : "Planet Waypoint overlay could not be changed");
+    return;
+  }
   const pageButton = event.target.closest("[data-page]");
   if (pageButton) {
     showPage(pageButton.dataset.page);
@@ -1362,8 +1396,9 @@ document.addEventListener("click", async (event) => {
       if (!target.trim()) return;
       Object.assign(payload, {kind: "manual", target: target.trim(), system: model.flight?.system || "", count: 1});
     } else if (page === "ground" && operation === "set") {
-      payload.lat = byId("ground-lat")?.value;
-      payload.lon = byId("ground-lon")?.value;
+      const prefix = workspaceButton.dataset.groundSource === "studio" ? "studio-ground" : "ground";
+      payload.lat = byId(`${prefix}-lat`)?.value;
+      payload.lon = byId(`${prefix}-lon`)?.value;
     } else if (page === "engineering" && operation === "pin") {
       payload.name = byId("engineering-blueprint")?.value || "";
       payload.grade = byId("engineering-grade")?.value;

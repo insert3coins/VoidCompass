@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import math
 
-from flight_callouts import is_scoopable, route_ahead
+from route_stars import is_scoopable, route_ahead
 
 
 WHITE_DWARF_CLASSES = {
