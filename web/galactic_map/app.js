@@ -1634,4 +1634,15 @@ async function start() {
   }
 }
 
+window.addEventListener('message', (event) => {
+  if (window.parent === window || event.source !== window.parent) return;
+  if (event.data?.type !== 'voidcompass-atlas-focus-layer') return;
+  const layer = String(event.data?.layer || '');
+  if (!LAYERS.includes(layer)) return;
+  viewState.layers[layer] = true;
+  syncLayerControls();
+  applyLayerVisibility();
+  scheduleSaveView();
+});
+
 start();

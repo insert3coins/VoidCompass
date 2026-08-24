@@ -1637,7 +1637,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         # construction. Retain the flag only for the pre-upgrade backup rule.
         first_run = bool(getattr(self.root, "_voidcompass_first_commissioning", False))
         previous_version = str(self.config.get("last_app_version") or "")
-        if not first_run and previous_version != APP_VERSION:
+        if (
+            not first_run
+            and previous_version != APP_VERSION
+            and bool(self.config.get("automatic_profile_backups_enabled", True))
+        ):
             try:
                 automatic_backup(
                     get_active_profile(self.config),

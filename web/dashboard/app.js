@@ -33,6 +33,13 @@ let orreryLiveTargetBodyId = "";
 let analyticsView = "trends";
 let replaySelectedSessionIndex = 0;
 let replayTimer = 0;
+let deckLayoutDraft = null;
+let deckLayoutFingerprint = "";
+let atlasLayerRequest = "";
+let decisionTagsFingerprint = "";
+let routeHorizonFingerprint = "";
+let sessionHighlightsFingerprint = "";
+let codexCandidatesFingerprint = "";
 
 const HOTKEY_MODIFIER_KEYS = new Set([
   "Alt", "AltGraph", "Control", "Meta", "OS", "Shift",
@@ -255,6 +262,28 @@ function renderAdaptive(state) {
   text("adaptive-detail", `${adaptive.automatic ? "AUTO" : "MANUAL LOCK"} · ${numeric(session.events)} journal actions · ${numeric(session.jumps)} jumps · ${numeric(session.scans)} survey actions`);
   const select = byId("adaptive-mode");
   if (select && select !== document.activeElement) select.value = adaptive.automatic ? "auto" : adaptive.mode || "general";
+  document.body.dataset.activity = adaptive.mode || "general";
+}
+
+function renderDecision(state) {
+  const decision = state.decision || {};
+  text("decision-doctrine", decision.doctrine_label || "BALANCED");
+  text("decision-confidence", decision.confidence || "JOURNAL-BACKED");
+  text("decision-title", decision.title || "HOLD FOR EXPLORATION TELEMETRY");
+  text("decision-detail", decision.detail || "No unresolved journal-backed objective is currently known.");
+  const tags = Array.isArray(decision.tags) ? decision.tags : [];
+  const tagsFingerprint = tags.join("\u0000");
+  if (tagsFingerprint !== decisionTagsFingerprint) {
+    decisionTagsFingerprint = tagsFingerprint;
+    byId("decision-tags").replaceChildren(...tags.map((value) => {
+      const tag = document.createElement("span");
+      tag.textContent = value;
+      return tag;
+    }));
+  }
+  const primary = decision.primary || {};
+  text("decision-primary", primary.label || "OPEN SYSTEM SURVEY");
+  byId("decision-primary").disabled = !primary.command;
 }
 
 function renderFlightLog(state) {
@@ -356,6 +385,33 @@ function renderRoute(state) {
   text("route-remaining", `${number(route.remaining)} ${number(route.remaining) === 1 ? "JUMP" : "JUMPS"} LEFT`);
   percentWidth("route-progress", route.percent);
   byId("copy-next").disabled = !route.next;
+  const horizon = route.horizon || {};
+  const rows = Array.isArray(horizon.jumps) ? horizon.jumps : [];
+  const parent = byId("route-horizon");
+  const horizonFingerprint = JSON.stringify({summary: horizon.summary || "", rows});
+  if (horizonFingerprint === routeHorizonFingerprint) return;
+  routeHorizonFingerprint = horizonFingerprint;
+  if (!rows.length) {
+    const empty = document.createElement("p");
+    empty.textContent = horizon.summary || "No plotted jump horizon.";
+    parent.replaceChildren(empty);
+  } else {
+    parent.replaceChildren(...rows.map((row) => {
+      const item = document.createElement("div");
+      item.className = `${row.hazard ? "hazard" : ""} ${row.region_crossing ? "crossing" : ""}`.trim();
+      const index = document.createElement("i");
+      index.textContent = row.index || "·";
+      const system = document.createElement("span");
+      system.textContent = row.system || "UNKNOWN SYSTEM";
+      const detail = document.createElement("small");
+      detail.textContent = `${row.distance_ly === null || row.distance_ly === undefined ? "—" : `${number(row.distance_ly).toFixed(1)} LY`} · ${row.star_class || "?"}`;
+      const status = document.createElement("b");
+      status.textContent = row.hazard || (row.scoopable === true ? "SCOOP" : row.scoopable === false ? "DRY" : "UNKNOWN");
+      item.append(index, system, detail, status);
+      item.title = row.region_crossing ? `Region crossing: ${row.region || "unknown"}` : row.region || "";
+      return item;
+    }));
+  }
 }
 
 function formatCredits(value) {
@@ -383,6 +439,117 @@ function renderMetrics(state) {
   text("record-distance", `${number(session.distance_ly).toLocaleString(undefined, {maximumFractionDigits: 1})} LY`);
   text("record-systems", number(session.systems));
   text("record-bio", number(state.survey?.bio_complete));
+}
+
+function renderSessionPulse(state) {
+  const session = state.session || {};
+  text("pulse-jumps", numeric(session.jumps));
+  text("pulse-distance", `${numeric(session.distance_ly, 1)} LY`);
+  text("pulse-surveys", `${numeric(session.fss_surveys)} / ${numeric(session.dss_maps)}`);
+  text("pulse-discoveries", `${numeric(session.bio_analyses)} / ${numeric(session.codex)}`);
+  text("session-pulse-summary", session.summary || "The current exploration session is waiting for journal activity.");
+  const rows = Array.isArray(session.highlights) ? session.highlights : [];
+  const highlightsFingerprint = JSON.stringify(rows.slice(0, 3));
+  if (highlightsFingerprint !== sessionHighlightsFingerprint) {
+    sessionHighlightsFingerprint = highlightsFingerprint;
+    byId("session-highlights").replaceChildren(...rows.slice(0, 3).map((row) => {
+      const item = document.createElement("div");
+      const title = document.createElement("strong");
+      title.textContent = row.title || row.kind || "SESSION EVENT";
+      const detail = document.createElement("span");
+      detail.textContent = row.detail || row.kind || "Journal highlight";
+      item.append(title, detail);
+      return item;
+    }));
+  }
+  text("session-pulse-badge", number(session.jumps) || number(session.fss_surveys) ? "LIVE SESSION" : "STANDING BY");
+}
+
+function renderCodexHunt(state) {
+  const hunt = state.codex_hunt || {};
+  text("codex-region", hunt.region || "UNKNOWN REGION");
+  text("codex-coverage", `${Math.round(number(hunt.personal_coverage_percent))}%`);
+  text("codex-coverage-detail", `${numeric(hunt.personal_entries_here)} OF ${numeric(hunt.personal_entries_total)} PERSONAL ENTRIES`);
+  percentWidth("codex-coverage-bar", hunt.personal_coverage_percent);
+  text("codex-note", hunt.availability_note || "Personal coverage comparison; local availability is not inferred.");
+  const rows = Array.isArray(hunt.candidates) ? hunt.candidates : [];
+  const candidatesFingerprint = JSON.stringify({rows: rows.slice(0, 3), total: hunt.personal_entries_total || 0});
+  if (candidatesFingerprint !== codexCandidatesFingerprint) {
+    codexCandidatesFingerprint = candidatesFingerprint;
+    const candidateNodes = rows.slice(0, 3).map((row) => {
+    const item = document.createElement("div");
+    const name = document.createElement("strong");
+    name.textContent = row.name || "CODEX ENTRY";
+    const category = document.createElement("span");
+    category.textContent = row.category || "UNCLASSIFIED";
+    item.append(name, category);
+    return item;
+    });
+    if (!candidateNodes.length) {
+      const empty = document.createElement("p");
+      empty.className = "codex-empty";
+      empty.textContent = hunt.personal_entries_total ? "No personal cross-region gaps are visible in the retained Codex ledger." : "Codex discoveries will build this personal regional comparison.";
+      candidateNodes.push(empty);
+    }
+    byId("codex-candidates").replaceChildren(...candidateNodes);
+  }
+  byId("codex-add-objective").disabled = !hunt.active_expedition_id || !hunt.target_category;
+  byId("codex-add-objective").title = hunt.active_expedition_id ? `Add ${hunt.target_category || "Codex"} to ${hunt.active_expedition_name || "the active expedition"}` : "Start or resume an expedition first";
+}
+
+function renderDeckLayout(state) {
+  const layout = state.dashboard_layout || {};
+  const order = Array.isArray(layout.module_order) ? layout.module_order : [];
+  const hidden = new Set(Array.isArray(layout.hidden_modules) ? layout.hidden_modules : []);
+  document.querySelectorAll("[data-deck-module]").forEach((node) => {
+    const index = order.indexOf(node.dataset.deckModule);
+    node.style.order = String(2 + (index < 0 ? order.length : index) * 2);
+    node.hidden = hidden.has(node.dataset.deckModule);
+  });
+  const routeIndex = Math.max(0, order.indexOf("route"));
+  document.querySelector(".overview-modules > .decision-card").style.order = "0";
+  document.querySelector(".overview-modules > .survey-card").style.order = "1";
+  document.querySelector(".overview-modules > .telemetry-strip").style.order = String(3 + routeIndex * 2);
+
+  const panel = byId("deck-customiser");
+  if (!panel.hidden && deckLayoutDraft) return;
+  deckLayoutDraft = {order: [...order], hidden: [...hidden]};
+  const fingerprint = JSON.stringify({available: layout.available_modules || [], order, hidden: [...hidden], doctrines: layout.doctrines || [], doctrine: layout.doctrine});
+  if (fingerprint === deckLayoutFingerprint) return;
+  deckLayoutFingerprint = fingerprint;
+  const doctrine = byId("exploration-doctrine");
+  doctrine.replaceChildren(...(layout.doctrines || []).map((row) => {
+    const option = document.createElement("option");
+    option.value = row.id;
+    option.textContent = row.label;
+    return option;
+  }));
+  doctrine.value = layout.doctrine || "balanced";
+  renderDeckModuleControls(layout.available_modules || []);
+}
+
+function renderDeckModuleControls(available = []) {
+  if (!deckLayoutDraft) return;
+  const labels = Object.fromEntries(available.map((row) => [row.id, row.label]));
+  byId("deck-module-controls").replaceChildren(...deckLayoutDraft.order.map((id, index) => {
+    const row = document.createElement("div");
+    row.className = "deck-module-row";
+    row.dataset.moduleId = id;
+    const visible = document.createElement("input");
+    visible.type = "checkbox";
+    visible.checked = !deckLayoutDraft.hidden.includes(id);
+    visible.dataset.deckVisible = id;
+    const label = document.createElement("label");
+    label.textContent = labels[id] || id;
+    const controls = document.createElement("span");
+    const up = document.createElement("button");
+    up.textContent = "↑"; up.dataset.deckMove = "up"; up.dataset.moduleId = id; up.disabled = index === 0;
+    const down = document.createElement("button");
+    down.textContent = "↓"; down.dataset.deckMove = "down"; down.dataset.moduleId = id; down.disabled = index === deckLayoutDraft.order.length - 1;
+    controls.append(up, down);
+    row.append(visible, label, controls);
+    return row;
+  }));
 }
 
 function renderPriorities(state) {
@@ -527,6 +694,21 @@ function syncAtlasViewport() {
   // the short follow-up also covers slower WebView2 window resizes.
   requestAnimationFrame(() => requestAnimationFrame(notify));
   window.setTimeout(notify, 120);
+}
+
+function syncAtlasLayerRequest() {
+  if (!atlasLayerRequest) return;
+  const frame = byId("atlas-frame");
+  if (!frame?.contentWindow || !byId("atlas-frame-shell")?.classList.contains("ready")) return;
+  let targetOrigin = "*";
+  try {
+    const origin = new URL(model.atlas?.url || frame.dataset.url).origin;
+    if (origin && origin !== "null") targetOrigin = origin;
+  } catch (_error) {}
+  try {
+    frame.contentWindow.postMessage({type: "voidcompass-atlas-focus-layer", layer: atlasLayerRequest}, targetOrigin);
+    atlasLayerRequest = "";
+  } catch (_error) {}
 }
 
 function studioData() {
@@ -1246,7 +1428,7 @@ function renderSettingsWorkspace(data) {
     ${workspaceCard("THEME WORKSHOP", `<div class="theme-editor-head"><label>CUSTOM THEME NAME<input id="custom-theme-name" value="${escapeHtml((editor.custom || []).includes(editor.name) ? editor.name : `${editor.name || "Void"} Custom`)}"></label><label>EXISTING CUSTOM THEME<select id="custom-theme-existing"><option value="">SELECT TO DELETE</option>${(editor.custom || []).map((name) => `<option>${escapeHtml(name)}</option>`).join("")}</select></label></div><details><summary>EDIT COMPLETE PALETTE</summary><div class="theme-colour-grid">${themeColors}</div></details><div class="workspace-actions wrap"><button data-ws-page="settings" data-ws-op="save_theme">SAVE & APPLY CUSTOM THEME</button><button class="danger-action" data-ws-page="settings" data-ws-op="delete_theme">DELETE SELECTED CUSTOM THEME</button></div>`, `${(editor.custom || []).length} CUSTOM`)}
     ${workspaceCard("EDSM & EDDN", `${settingInput("setting-edsm-name", "EDSM commander name", value.edsm_cmdr_name)}${settingInput("setting-edsm-key", "EDSM API key", value.edsm_api_key, "password")}${settingToggle("setting-edsm-upload", "Upload exploration events to EDSM", "Uses the active commander's credentials.", value.edsm_upload_enabled)}${settingToggle("setting-eddn-upload", "Upload visited markets to EDDN", "Community market publishing remains independent from Trade UI.", value.eddn_market_upload_enabled)}<p class="settings-note">${numeric(data.eddn?.uploads)} EDDN uploads this run${data.eddn?.last_error ? ` · LAST ERROR ${escapeHtml(data.eddn.last_error)}` : ""}</p><div class="workspace-actions"><button data-ws-page="settings" data-ws-op="test_edsm">TEST EDSM CREDENTIALS</button></div>`)}
     ${workspaceCard("CARRIER INTEGRATION", `${settingInput("setting-discord", "Discord webhook URL", value.carrier_discord_webhook_url, "password")}<p class="settings-note">One webhook handles personal and Squadron Carrier status, jump and expedition updates.</p><div class="workspace-actions"><button data-ws-page="settings" data-ws-op="test_discord">SEND TEST PREVIEW</button><button data-page="carrier">OPEN CARRIER COMMAND</button></div>`)}
-    ${workspaceCard("DIAGNOSTICS & RECOVERY", `${settingToggle("setting-runtime-trace", "Runtime performance trace", "Retain startup and UI timing evidence.", value.runtime_trace_enabled)}${settingToggle("setting-crash-report", "Crash and UI-freeze reporter", "Rotate current and previous diagnostic logs.", value.crash_reporting_enabled)}${settingToggle("setting-safe-mode", "Safe unclean-shutdown recovery", "Restore the last graceful profile checkpoint first.", value.recovery_safe_mode_enabled)}${settingToggle("setting-cache-edsm", "Upload history during cache rebuild", "Optional EDSM backfill while reconstructing profile history.", value.edsm_backfill_on_cache_rebuild)}<div class="workspace-actions wrap"><button data-ws-page="settings" data-ws-op="rebuild_cache">REBUILD CACHE</button><button data-ws-page="settings" data-ws-op="support_bundle">CREATE SUPPORT BUNDLE</button><button data-command="open_logs">OPEN LOGS</button><button data-ws-page="settings" data-ws-op="run_setup">RUN SETUP</button></div>`)}
+    ${workspaceCard("DIAGNOSTICS & RECOVERY", `${settingToggle("setting-runtime-trace", "Runtime performance trace", "Retain startup and UI timing evidence.", value.runtime_trace_enabled)}${settingToggle("setting-crash-report", "Crash and UI-freeze reporter", "Rotate current and previous diagnostic logs.", value.crash_reporting_enabled)}${settingToggle("setting-safe-mode", "Safe unclean-shutdown recovery", "Restore the last graceful profile checkpoint first.", value.recovery_safe_mode_enabled)}${settingToggle("setting-auto-backups", "Automatic profile safety snapshots", "Keep up to five snapshots before upgrades and cache rebuilds. Manual backup and restore rollback remain available.", value.automatic_profile_backups_enabled)}${settingToggle("setting-cache-edsm", "Upload history during cache rebuild", "Optional EDSM backfill while reconstructing profile history.", value.edsm_backfill_on_cache_rebuild)}<div class="workspace-actions wrap"><button data-ws-page="settings" data-ws-op="rebuild_cache">REBUILD CACHE</button><button data-ws-page="settings" data-ws-op="support_bundle">CREATE SUPPORT BUNDLE</button><button data-command="open_logs">OPEN LOGS</button><button data-ws-page="settings" data-ws-op="run_setup">RUN SETUP</button></div>`)}
   </section><p id="settings-test-status" class="workspace-status ${escapeHtml(data.tools?.status || "ready")}">${escapeHtml(data.tools?.detail || "Integration tests have not run this session.")}</p><footer class="settings-savebar"><span>All settings belong to the active commander profile.</span><button id="settings-save-html">SAVE SETTINGS</button></footer>`;
 }
 
@@ -1293,6 +1475,12 @@ function renderDashboard(state) {
     orreryLiveTargetBodyId = "";
     analyticsView = "trends";
     replaySelectedSessionIndex = 0;
+    deckLayoutDraft = null;
+    deckLayoutFingerprint = "";
+    decisionTagsFingerprint = "";
+    routeHorizonFingerprint = "";
+    sessionHighlightsFingerprint = "";
+    codexCandidatesFingerprint = "";
     if (replayTimer) { clearInterval(replayTimer); replayTimer = 0; }
     atlasRequested = false;
     const atlasFrame = byId("atlas-frame");
@@ -1306,10 +1494,14 @@ function renderDashboard(state) {
   }
   renderHeader(model);
   renderAdaptive(model);
+  renderDecision(model);
   renderFlightLog(model);
   renderSurvey(model);
   renderRoute(model);
   renderMetrics(model);
+  renderSessionPulse(model);
+  renderCodexHunt(model);
+  renderDeckLayout(model);
   renderPriorities(model);
   renderEvents(model);
   renderIntelligence(model);
@@ -1326,9 +1518,9 @@ function renderDashboard(state) {
     showPage(requestedPage.page);
   }
   renderAtlas(model);
-  text("rail-version", `v${model.app?.version || "5.4.1"} // WEBVIEW2`);
-  text("boot-version", `v${model.app?.version || "5.4.1"} // SECURE LOOPBACK // WEBVIEW2`);
-  text("about-version", `Version ${model.app?.version || "5.4.1"} // HTML Command Deck`);
+  text("rail-version", `v${model.app?.version || "5.4.1.2"} // WEBVIEW2`);
+  text("boot-version", `v${model.app?.version || "5.4.1.2"} // SECURE LOOPBACK // WEBVIEW2`);
+  text("about-version", `Version ${model.app?.version || "5.4.1.2"} // HTML Command Deck`);
   text("overview-subtitle", model.profile?.profile_label || "Journal-backed field intelligence");
   if (currentPage === "map" && !model.boot?.active) ensureAtlas();
 }
@@ -1408,6 +1600,7 @@ function showPage(name) {
   command("page_changed", {page: name});
   if (name === "map" && !model.boot?.active) ensureAtlas();
   if (name === "map") syncAtlasViewport();
+  if (name === "map") window.setTimeout(syncAtlasLayerRequest, 160);
   if (name === "overlay-studio") renderOverlayStudio(model);
 }
 
@@ -1507,6 +1700,17 @@ async function nudgeStudioOverlay(vector) {
 }
 
 document.addEventListener("click", async (event) => {
+  const deckMove = event.target.closest("[data-deck-move]");
+  if (deckMove && deckLayoutDraft) {
+    const index = deckLayoutDraft.order.indexOf(deckMove.dataset.moduleId);
+    const offset = deckMove.dataset.deckMove === "up" ? -1 : 1;
+    const target = index + offset;
+    if (index >= 0 && target >= 0 && target < deckLayoutDraft.order.length) {
+      [deckLayoutDraft.order[index], deckLayoutDraft.order[target]] = [deckLayoutDraft.order[target], deckLayoutDraft.order[index]];
+      renderDeckModuleControls(model.dashboard_layout?.available_modules || []);
+    }
+    return;
+  }
   const analyticsTab = event.target.closest("[data-analytics-view]");
   if (analyticsTab) {
     analyticsView = analyticsTab.dataset.analyticsView || "trends";
@@ -1627,6 +1831,7 @@ document.addEventListener("click", async (event) => {
       runtime_trace_enabled: Boolean(byId("setting-runtime-trace")?.checked),
       crash_reporting_enabled: Boolean(byId("setting-crash-report")?.checked),
       recovery_safe_mode_enabled: Boolean(byId("setting-safe-mode")?.checked),
+      automatic_profile_backups_enabled: Boolean(byId("setting-auto-backups")?.checked),
       edsm_backfill_on_cache_rebuild: Boolean(byId("setting-cache-edsm")?.checked),
     };
     const hotkeys = Object.fromEntries([...document.querySelectorAll("[data-hotkey-action]")].map((input) => [input.dataset.hotkeyAction, input.value.trim()]));
@@ -1799,13 +2004,72 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", async (event) => {
-  if (event.target.id === "replay-session") {
+  if (event.target.dataset.deckVisible && deckLayoutDraft) {
+    const id = event.target.dataset.deckVisible;
+    const hidden = new Set(deckLayoutDraft.hidden);
+    if (event.target.checked) hidden.delete(id); else hidden.add(id);
+    deckLayoutDraft.hidden = [...hidden];
+  } else if (event.target.id === "replay-session") {
     replaySelectedSessionIndex = Math.max(0, number(event.target.value));
     renderChronicleWorkspace(model.workspace?.data || {});
   } else if (event.target.id === "adaptive-mode") {
     const accepted = await command("set_adaptive_mode", {mode: event.target.value});
     showToast(accepted ? "Command Deck mode updated" : "That activity mode is unavailable");
   }
+});
+
+byId("customise-deck").addEventListener("click", () => {
+  const layout = model.dashboard_layout || {};
+  deckLayoutDraft = {
+    order: [...(layout.module_order || [])],
+    hidden: [...(layout.hidden_modules || [])],
+  };
+  byId("exploration-doctrine").value = layout.doctrine || "balanced";
+  renderDeckModuleControls(layout.available_modules || []);
+  byId("deck-customiser").hidden = false;
+  byId("deck-customiser").scrollIntoView({block: "nearest", behavior: "smooth"});
+});
+
+byId("close-deck-customiser").addEventListener("click", () => {
+  byId("deck-customiser").hidden = true;
+  deckLayoutDraft = null;
+  renderDeckLayout(model);
+});
+
+byId("save-deck-layout").addEventListener("click", async () => {
+  if (!deckLayoutDraft) return;
+  const doctrine = byId("exploration-doctrine").value || "balanced";
+  const layoutSaved = await command("save_dashboard_layout", {module_order: deckLayoutDraft.order, hidden_modules: deckLayoutDraft.hidden});
+  const doctrineSaved = layoutSaved && await command("set_exploration_doctrine", {doctrine});
+  if (layoutSaved && doctrineSaved) {
+    byId("deck-customiser").hidden = true;
+    deckLayoutDraft = null;
+    showToast("Explorer deck saved to this commander profile");
+  }
+});
+
+byId("decision-primary").addEventListener("click", async () => {
+  const primary = model.decision?.primary || {};
+  if (!primary.command) return;
+  const payload = primary.target ? {target: primary.target} : {};
+  const accepted = await command(primary.command, payload);
+  if (accepted && primary.command === "open_codex_atlas") {
+    atlasLayerRequest = "Codex";
+    showPage("map");
+  }
+});
+
+byId("codex-open-atlas").addEventListener("click", async () => {
+  atlasLayerRequest = "Codex";
+  const accepted = await command("open_codex_atlas");
+  if (accepted) showPage("map");
+});
+
+byId("codex-add-objective").addEventListener("click", async () => {
+  const target = model.codex_hunt?.target_category || "";
+  if (!target) return;
+  const accepted = await command("add_codex_objective", {target});
+  showToast(accepted ? `${target} added to the active expedition` : "An active expedition is required");
 });
 
 byId("studio-overlay-cards").addEventListener("pointerdown", (event) => {
@@ -1949,6 +2213,7 @@ window.addEventListener("message", (event) => {
   if (event.origin !== expectedOrigin || event.data?.type !== "voidcompass-atlas-ready") return;
   byId("atlas-frame-shell").classList.add("ready");
   text("atlas-status", "Live map linked to this commander profile");
+  syncAtlasLayerRequest();
 });
 
 byId("atlas-focus-toggle").addEventListener("click", () => {

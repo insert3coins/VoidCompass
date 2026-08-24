@@ -536,6 +536,16 @@ class DeepSurveyTracker:
         with self.lock:
             return copy.deepcopy(self.data.get("region_stats") or {})
 
+    def codex_state(self):
+        """Return the bounded personal Codex ledger for regional gap analysis.
+
+        The live exploration intelligence path intentionally scopes Codex rows
+        to the current system.  The Decision Deck needs the commander's wider
+        personal history, but none of the much larger route/replay collections.
+        """
+        with self.lock:
+            return copy.deepcopy(self.data.get("codex") or [])
+
     def replay_state(self, max_points=1200, max_screenshots=240):
         """Return bounded timeline evidence for the interactive chronicle."""
         try:

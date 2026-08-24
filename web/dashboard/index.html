@@ -151,7 +151,7 @@
       <footer class="rail-footer">
         <div class="connection"><i id="connection-light"></i><span>LOCAL LINK</span><b id="connection-state">CONNECTING</b></div>
         <button data-command="open_screenshots">OPEN SCREENSHOTS</button>
-        <small id="rail-version">v5.4.1 // WEBVIEW2</small>
+        <small id="rail-version">v5.4.1.2 // WEBVIEW2</small>
       </footer>
     </aside>
 
@@ -179,6 +179,7 @@
           <header class="page-title">
             <div><p>LIVE COMMAND DECK</p><h2>Exploration briefing</h2><span id="overview-subtitle">Journal-backed field intelligence</span></div>
             <div class="title-actions">
+              <button class="ghost" id="customise-deck">CUSTOMISE DECK</button>
               <button class="ghost" data-command="set_flight_log_mode" data-enabled="true">FOCUSED LOG</button>
               <button class="ghost" data-command="open" data-target="explore">FULL SURVEY</button>
               <button class="primary" data-page="map">OPEN GALACTIC ATLAS</button>
@@ -190,8 +191,26 @@
             <div><label for="adaptive-mode">MODE</label><select id="adaptive-mode"><option value="auto">AUTO</option><option value="general">GENERAL FLIGHT</option><option value="exploration">EXPLORATION</option><option value="mining">MINING</option><option value="ground">GROUND OPS</option><option value="carrier">CARRIER OPS</option><option value="station">STATION OPS</option></select><button data-command="open_adaptive_mode">OPEN MODE</button></div>
           </section>
 
-          <section class="hero-grid">
-            <article class="card survey-card accent-card">
+          <section id="deck-customiser" class="deck-customiser" hidden>
+            <header><div><small>PROFILE-AWARE LAYOUT</small><strong>Explorer Decision Deck</strong></div><button id="close-deck-customiser" class="ghost">CLOSE</button></header>
+            <div class="deck-customiser-body">
+              <label>EXPLORATION DOCTRINE<select id="exploration-doctrine"></select></label>
+              <div><small>VISIBLE MODULES / ORDER</small><div id="deck-module-controls" class="deck-module-controls"></div></div>
+            </div>
+            <footer><span>Current System Survey and the primary decision remain pinned.</span><button id="save-deck-layout" class="primary">SAVE TO THIS PROFILE</button></footer>
+          </section>
+
+          <section id="overview-modules" class="overview-modules">
+            <article class="card decision-card accent-card core-module">
+              <header><span>EXPLORER DECISION</span><b id="decision-doctrine">BALANCED</b></header>
+              <div class="decision-body">
+                <i class="decision-glyph" aria-hidden="true"></i>
+                <div><small id="decision-confidence">JOURNAL-BACKED</small><h3 id="decision-title">HOLD FOR EXPLORATION TELEMETRY</h3><p id="decision-detail">No unresolved journal-backed objective is currently known.</p><div id="decision-tags" class="decision-tags"></div></div>
+                <button id="decision-primary" class="primary">OPEN SYSTEM SURVEY</button>
+              </div>
+            </article>
+
+            <article class="card survey-card accent-card core-module">
               <header><span>CURRENT SYSTEM SURVEY</span><b id="survey-badge">AWAITING</b></header>
               <div class="survey-title"><h3 id="survey-system">NO SYSTEM DATA</h3><span id="survey-star">STAR CLASS —</span></div>
               <div class="survey-progress"><i id="survey-progress"></i><em id="survey-percent">0%</em></div>
@@ -204,33 +223,50 @@
               <div id="survey-notables" class="notable-list empty">Awaiting scan telemetry.</div>
             </article>
 
-            <article class="card route-card">
-              <header><span>NEXT LEG</span><b id="route-badge">NO ROUTE</b></header>
+            <article class="card route-card" data-deck-module="route">
+              <header><span>ROUTE HORIZON</span><b id="route-badge">NO ROUTE</b></header>
               <div class="route-target">
                 <span class="target-reticle" aria-hidden="true"></span>
                 <div><small id="route-source">NAVIGATION</small><h3 id="route-next">NO ACTIVE ROUTE</h3><p id="route-final">Plot a route in Elite or Mission Control.</p></div>
               </div>
               <div class="route-track"><i id="route-progress"></i><span id="route-progress-label">INACTIVE</span></div>
               <div class="route-meta"><span id="route-distance">— LY</span><span id="route-remaining">0 JUMPS LEFT</span></div>
+              <div id="route-horizon" class="route-horizon"><p>No plotted jump horizon.</p></div>
               <button id="copy-next" class="wide-button" data-command="copy_next">COPY NEXT DESTINATION</button>
             </article>
-          </section>
 
-          <section class="telemetry-strip">
+            <section class="telemetry-strip core-module">
             <article><i class="fuel-icon"></i><div><small>FUEL INTEGRITY</small><strong id="metric-fuel">—</strong><span id="metric-fuel-detail">AWAITING LOADOUT</span></div></article>
             <article><i class="data-icon"></i><div><small>DATA ABOARD</small><strong id="metric-data">0 CR</strong><span id="metric-data-detail">NO UNSOLD RECORDS</span></div></article>
             <article><i class="jump-icon"></i><div><small>SESSION TRAVEL</small><strong id="metric-distance">0.0 LY</strong><span id="metric-jumps">0 JUMPS</span></div></article>
             <article><i class="signal-icon"></i><div><small>SOURCE HEALTH</small><strong id="metric-health">CACHED</strong><span id="metric-health-detail">WAITING FOR GAME</span></div></article>
-          </section>
+            </section>
 
-          <section class="lower-grid">
-            <article class="card priority-card">
+            <article class="card session-card" data-deck-module="session">
+              <header><span>SESSION PULSE</span><b id="session-pulse-badge">LIVE SESSION</b></header>
+              <div class="session-pulse-grid">
+                <div><small>JUMPS</small><strong id="pulse-jumps">0</strong></div><div><small>DISTANCE</small><strong id="pulse-distance">0.0 LY</strong></div>
+                <div><small>FSS / DSS</small><strong id="pulse-surveys">0 / 0</strong></div><div><small>BIO / CODEX</small><strong id="pulse-discoveries">0 / 0</strong></div>
+              </div>
+              <p id="session-pulse-summary">The current exploration session is waiting for journal activity.</p>
+              <div id="session-highlights" class="session-highlights"></div>
+            </article>
+
+            <article class="card priority-card" data-deck-module="priorities">
               <header><span>FIELD PRIORITIES</span><b id="priority-badge">NOMINAL</b></header>
               <div id="priority-list" class="priority-list">
                 <div><b>01</b><p><strong>No urgent objective</strong><span>Continue surveying or follow the current route.</span></p></div>
               </div>
             </article>
-            <article class="card feed-card">
+            <article class="card codex-hunt-card" data-deck-module="codex">
+              <header><span>REGIONAL CODEX HUNT</span><b id="codex-region">UNKNOWN REGION</b></header>
+              <div class="codex-coverage"><div><strong id="codex-coverage">0%</strong><span id="codex-coverage-detail">0 OF 0 PERSONAL ENTRIES</span></div><i><em id="codex-coverage-bar"></em></i></div>
+              <p id="codex-note">Personal coverage comparison; local availability is not inferred.</p>
+              <div id="codex-candidates" class="codex-candidates"></div>
+              <div class="codex-actions"><button id="codex-open-atlas">OPEN CODEX ATLAS</button><button id="codex-add-objective">ADD TO EXPEDITION</button></div>
+            </article>
+
+            <article class="card feed-card" data-deck-module="feed">
               <header><span>LIVE EXPLORATION FEED</span><b class="live-badge">● LIVE</b></header>
               <div class="feed-filters">
                 <button class="active" data-feed-filter="ALL">ALL</button>
@@ -506,7 +542,7 @@
         </section>
 
         <section class="page" data-page-name="about">
-          <header class="about-hero"><div class="about-glyph"><span></span></div><div><p>ELITE DANGEROUS EXPLORATION COMPANION</p><h2>Void Compass</h2><span id="about-version">Version 5.4.1 // HTML Command Deck</span></div></header>
+          <header class="about-hero"><div class="about-glyph"><span></span></div><div><p>ELITE DANGEROUS EXPLORATION COMPANION</p><h2>Void Compass</h2><span id="about-version">Version 5.4.1.2 // HTML Command Deck</span></div></header>
           <section class="about-grid">
             <article class="card"><header><span>LOCAL FIRST</span></header><p>Void Compass reads Elite's journal and companion files and stores commander profiles locally. The dashboard server is private to this computer and binds only to loopback.</p></article>
             <article class="card"><header><span>GPL-3.0</span></header><p>Void Compass is free software. You may use, study, modify and redistribute it under GNU GPL version 3.</p></article>
