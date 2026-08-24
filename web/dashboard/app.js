@@ -21,6 +21,8 @@ let studioDragging = null;
 let studioFingerprint = "";
 let studioMoveSentAt = 0;
 let studioMoveSequence = 0;
+let studioDragFrame = 0;
+let studioPendingPosition = null;
 let studioFilter = "all";
 let studioSearch = "";
 let workspaceFingerprints = {};
@@ -1031,9 +1033,9 @@ function renderDashboard(state) {
     showPage(requestedPage.page);
   }
   renderAtlas(model);
-  text("rail-version", `v${model.app?.version || "5.3.9.1"} // WEBVIEW2`);
-  text("boot-version", `v${model.app?.version || "5.3.9.1"} // SECURE LOOPBACK // WEBVIEW2`);
-  text("about-version", `Version ${model.app?.version || "5.3.9.1"} // HTML Command Deck`);
+  text("rail-version", `v${model.app?.version || "5.3.9.3"} // WEBVIEW2`);
+  text("boot-version", `v${model.app?.version || "5.3.9.3"} // SECURE LOOPBACK // WEBVIEW2`);
+  text("about-version", `Version ${model.app?.version || "5.3.9.3"} // HTML Command Deck`);
   text("overview-subtitle", model.profile?.profile_label || "Journal-backed field intelligence");
   if (currentPage === "map" && !model.boot?.active) ensureAtlas();
 }
@@ -1149,17 +1151,25 @@ function beginStudioDrag(event, card) {
 }
 
 function moveStudioDrag(event, card) {
-  if (!studioDragging || studioDragging.pointerId !== event.pointerId || studioDragging.id !== card.dataset.overlayId) return;
+  if (!studioDragging || studioDragging.ending || studioDragging.pointerId !== event.pointerId || studioDragging.id !== card.dataset.overlayId) return;
   const position = studioPointerPosition(event, studioDragging);
   if (!position) return;
-  card.style.left = `${(position.x - position.left) * 100 / position.width}%`;
-  card.style.top = `${(position.y - position.top) * 100 / position.height}%`;
-  text("studio-pointer-position", `X ${position.x}  //  Y ${position.y}`);
-  const row = studioOverlay(studioDragging.id);
-  text("studio-selected-metrics", `${position.x}, ${position.y}  //  ${row.width} × ${row.height} PX`);
-  text("studio-selected-position", `X ${position.x} · Y ${position.y}`);
+  studioPendingPosition = {card, position};
+  if (!studioDragFrame) studioDragFrame = requestAnimationFrame(() => {
+    studioDragFrame = 0;
+    const pending = studioPendingPosition;
+    studioPendingPosition = null;
+    if (!pending || !studioDragging) return;
+    const {card: activeCard, position: active} = pending;
+    activeCard.style.left = `${(active.x - active.left) * 100 / active.width}%`;
+    activeCard.style.top = `${(active.y - active.top) * 100 / active.height}%`;
+    text("studio-pointer-position", `X ${active.x}  //  Y ${active.y}`);
+    const row = studioOverlay(studioDragging.id);
+    text("studio-selected-metrics", `${active.x}, ${active.y}  //  ${row.width} × ${row.height} PX`);
+    text("studio-selected-position", `X ${active.x} · Y ${active.y}`);
+  });
   const now = performance.now();
-  if (now - studioMoveSentAt >= 55) {
+  if (now - studioMoveSentAt >= 50) {
     studioMoveSentAt = now;
     command("overlay_studio", {operation: "move", overlay_id: studioDragging.id, x: position.x, y: position.y, commit: false, sequence: ++studioMoveSequence});
   }
@@ -1169,10 +1179,23 @@ function endStudioDrag(event, card) {
   if (!studioDragging || studioDragging.pointerId !== event.pointerId || studioDragging.id !== card.dataset.overlayId) return;
   const drag = studioDragging;
   const position = studioPointerPosition(event, drag);
-  studioDragging = null;
+  studioDragging.ending = true;
   card.classList.remove("dragging");
   try { card.releasePointerCapture(event.pointerId); } catch (_error) { /* already released */ }
-  if (position) command("overlay_studio", {operation: "move", overlay_id: drag.id, x: position.x, y: position.y, commit: true, sequence: ++studioMoveSequence});
+  if (!position) {
+    studioDragging = null;
+    return;
+  }
+  card.style.left = `${(position.x - position.left) * 100 / position.width}%`;
+  card.style.top = `${(position.y - position.top) * 100 / position.height}%`;
+  command("overlay_studio", {operation: "move", overlay_id: drag.id, x: position.x, y: position.y, commit: true, sequence: ++studioMoveSequence})
+    .finally(() => {
+      const row = studioOverlay(drag.id);
+      if (row) { row.x = position.x; row.y = position.y; }
+      studioDragging = null;
+      studioFingerprint = "";
+      renderOverlayStudio(model);
+    });
 }
 
 async function nudgeStudioOverlay(vector) {

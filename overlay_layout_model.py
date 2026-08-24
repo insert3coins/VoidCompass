@@ -6,16 +6,18 @@ DEFAULT_POSITIONS = {
     "prospector_hud": (30, 600), "system_info_hud": (30, 30),
     "gravity_warning_hud": (1200, 530), "station_info_hud": (30, 380),
     "survey_status_hud": (30, 520), "toast_hud": (1200, 80),
-    "heartbeat_hud": (24, 24), "colony_overlay": (40, 40),
+    "heartbeat_hud": (24, 24), "ground_popup": (1320, 160),
+    "colony_overlay": (40, 40),
 }
 
 DEFAULT_SIZES = {
     "hud": (430, 230), "cargo_hud": (360, 220),
     "carrier_hud": (430, 270),
     "prospector_hud": (380, 220), "system_info_hud": (560, 386),
-    "gravity_warning_hud": (280, 90), "station_info_hud": (520, 442),
+    "gravity_warning_hud": (320, 106), "station_info_hud": (520, 442),
     "survey_status_hud": (520, 340), "toast_hud": (400, 94),
-    "heartbeat_hud": (42, 42), "colony_overlay": (380, 220),
+    "heartbeat_hud": (42, 42), "ground_popup": (370, 154),
+    "colony_overlay": (380, 220),
 }
 
 OVERLAY_LABELS = {
@@ -29,6 +31,7 @@ OVERLAY_LABELS = {
     "survey_status_hud": "Survey Operations",
     "toast_hud": "Cockpit Notifications",
     "heartbeat_hud": "Journal Heartbeat",
+    "ground_popup": "Planet Waypoint Navigation",
     "colony_overlay": "Colony Logistics",
 }
 
@@ -43,6 +46,7 @@ OVERLAY_CARD_LABELS = {
     "survey_status_hud": "SURVEY",
     "toast_hud": "NOTIFY",
     "heartbeat_hud": "HEARTBEAT",
+    "ground_popup": "SURFACE NAV",
     "colony_overlay": "COLONY",
 }
 
@@ -57,6 +61,7 @@ OVERLAY_ENABLE_KEYS = {
     "survey_status_hud": "survey_status_overlay_enabled",
     "toast_hud": "toast_overlay_enabled",
     "heartbeat_hud": "heartbeat_overlay_enabled",
+    "ground_popup": "ground_popup_enabled",
     "colony_overlay": "colony_overlay_enabled",
 }
 

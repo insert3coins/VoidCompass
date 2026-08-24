@@ -305,6 +305,15 @@
       });
     }
 
+    angularRing(x, y, rx, ry, segments, color, alpha = 1, width = 1, rotation = 0) {
+      const points = [];
+      for (let index = 0; index < segments; index += 1) {
+        const angle = rotation + index * TAU / segments;
+        points.push([x + Math.cos(angle) * rx, y + Math.sin(angle) * ry]);
+      }
+      this.path(points, color, alpha, width, true);
+    }
+
     rect(x, y, width, height, color, alpha = 1, fill = false) {
       this.withAlpha(alpha, () => {
         const ctx = this.ctx;
@@ -508,77 +517,163 @@
 
     drawSupercruise(g, state, p, alpha, overcharge = false) {
       const c = state.color, y = g.y;
-      const speed = overcharge ? 1.8 : 1;
-      for (let lane = -2; lane <= 2; lane += 1) {
-        const laneY = y + lane * 3.2;
-        for (let i = 0; i < (overcharge ? 4 : 3); i += 1) {
-          const progress = (p * speed + i / 3 + lane * .037) % 1;
-          this.trackStroke(progress, overcharge ? .12 : .07, g, laneY, c,
-            alpha * (lane === 0 ? .92 : .48), lane === 0 ? 1.6 : 1);
-        }
+      const cx = (g.left + g.right) / 2;
+      const span = Math.max(28, g.right - g.left);
+      const energy = overcharge ? 1.65 : 1;
+
+      // A forward flight corridor: stable horizon/vanishing point plus
+      // expanding angular gates. It reads as supercruise rather than a
+      // generic progress rail, and every gate fades before its loop wraps.
+      this.line(g.left + 2, y - 11, cx, y - 2, c, alpha * .32, 1);
+      this.line(g.left + 2, y + 11, cx, y + 2, c, alpha * .32, 1);
+      this.line(g.right - 2, y - 11, cx, y - 2, c, alpha * .32, 1);
+      this.line(g.right - 2, y + 11, cx, y + 2, c, alpha * .32, 1);
+      this.line(cx - 8, y, cx + 8, y, c, alpha * (.42 + .24 * wave(p)), 1.4);
+      this.glowDot(cx, y, overcharge ? 1.9 : 1.3, c, alpha * .88);
+      for (let gate = 0; gate < 4; gate += 1) {
+        const progress = (p * energy + gate / 4) % 1;
+        const scale = .13 + Math.pow(progress, 1.28) * .87;
+        const fade = Math.sin(progress * Math.PI);
+        this.angularRing(
+          cx, y, span * .46 * scale, 11.5 * scale, 6, c,
+          alpha * fade * (overcharge ? .72 : .48),
+          overcharge && gate === 0 ? 1.6 : 1,
+          Math.PI / 6,
+        );
       }
-      for (const progress of [.12, .31, .69, .88]) {
-        const point = this.trackPoint(progress, g);
-        const size = 2.5 + triangle(p + progress) * 3;
-        this.chevron(point.x, y, 1, c, alpha * .58, size);
+
+      // Sparse star streaks carry the speed. Seeded lanes are deterministic,
+      // so they remain smooth instead of sparkling randomly between frames.
+      const streaks = overcharge ? 14 : 10;
+      for (let index = 0; index < streaks; index += 1) {
+        const progress = (p * energy + hash(index + 31)) % 1;
+        const eased = Math.pow(progress, 1.7);
+        const side = hash(index + 67) < .5 ? -1 : 1;
+        const radial = (.18 + hash(index + 93) * .82) * eased;
+        const x = cx + side * span * .47 * radial;
+        const py = y + (hash(index + 121) - .5) * 20 * eased;
+        const length = (2 + eased * (overcharge ? 12 : 8)) * side;
+        const fade = Math.sin(progress * Math.PI);
+        this.line(x - length, py, x, py, c,
+          alpha * fade * (overcharge ? .78 : .52), 1 + eased * .8);
       }
+
       if (overcharge) {
-        for (let i = 0; i < 2; i += 1) {
+        // SCO gets a contained plasma shear, distinct from normal cruise.
+        for (let band = 0; band < 2; band += 1) {
           const points = [];
-          for (let j = 0; j <= 28; j += 1) {
-            const progress = j / 28;
-            const point = this.trackPoint(progress, g);
-            points.push([point.x, y + Math.sin((progress * 6 - p * 7 + i) * Math.PI) * (3.4 + i), point.wing]);
+          for (let step = 0; step <= 30; step += 1) {
+            const progress = step / 30;
+            const x = g.left + progress * span;
+            const py = y + Math.sin((progress * 3.5 - p * 4 + band * .5) * TAU)
+              * (2.1 + band * 1.6);
+            points.push([x, py]);
           }
-          this.splitPath(points, c, alpha * (i ? .34 : .58), i ? 1 : 1.4);
+          this.path(points, c, alpha * (band ? .28 : .54), band ? 1 : 1.5);
         }
       }
     }
 
     drawCharge(g, state, p, alpha, hyper = false) {
       const c = state.color, y = g.y;
-      const leftSpan = g.centerLeft - g.left;
-      const rightSpan = g.right - g.centerRight;
-      for (let i = 0; i < 6; i += 1) {
-        const inward = (p + i / 6) % 1;
-        const eased = smooth(inward);
-        const height = 3 + eased * 9;
-        const lx = g.left + leftSpan * eased;
-        const rx = g.right - rightSpan * eased;
-        this.line(lx, y - height, lx, y + height, c, alpha * (.18 + eased * .66), 1.2);
-        this.line(rx, y - height, rx, y + height, c, alpha * (.18 + eased * .66), 1.2);
-        this.line(lx - 4, y - height, lx + 2, y - height, c, alpha * .38);
-        this.line(rx - 2, y + height, rx + 4, y + height, c, alpha * .38);
-      }
-      if (hyper || state.dynamics.neutronBoost) {
-        const pointsA = [], pointsB = [];
-        for (let i = 0; i <= 38; i += 1) {
-          const progress = i / 38;
-          const point = this.trackPoint(progress, g);
-          const offset = Math.sin((progress * 4 - p * 3) * TAU) * 4.5;
-          pointsA.push([point.x, y + offset, point.wing]);
-          pointsB.push([point.x, y - offset, point.wing]);
+      const cx = (g.left + g.right) / 2;
+      const half = Math.max(18, (g.right - g.left) / 2);
+      const boosted = hyper || state.dynamics.neutronBoost;
+
+      // Drive capacitor banks step toward a single compression focus.
+      for (let bank = 0; bank < 7; bank += 1) {
+        const progress = (p + bank / 7) % 1;
+        const inward = smooth(progress);
+        const distance = half * (1 - inward) * .92;
+        const height = 3 + inward * 8.5;
+        const fade = Math.sin(progress * Math.PI);
+        for (const side of [-1, 1]) {
+          const x = cx + side * distance;
+          this.path([
+            [x - side * 4, y - height], [x, y - height],
+            [x + side * 2.5, y], [x, y + height], [x - side * 4, y + height],
+          ], c, alpha * fade * .72, inward > .72 ? 1.7 : 1.1);
         }
-        this.splitPath(pointsA, c, alpha * .62, 1.1);
-        this.splitPath(pointsB, c, alpha * .34, 1);
+      }
+
+      // Contracting drive reticles give FSD CHARGE a mechanical spool-up.
+      for (let ring = 0; ring < 3; ring += 1) {
+        const phase = (p + ring / 3) % 1;
+        const contraction = 1 - smooth(phase) * .78;
+        const fade = Math.sin(phase * Math.PI);
+        this.angularRing(cx, y, half * .62 * contraction + 4, 10 * contraction + 2,
+          boosted ? 8 : 6, c, alpha * fade * (boosted ? .62 : .42),
+          boosted ? 1.5 : 1, p * TAU * (ring % 2 ? -1 : 1));
+      }
+      this.glowDot(cx, y, 1.5 + 1.4 * wave(p), c, alpha);
+      this.line(cx - 12, y, cx + 12, y, c, alpha * (.36 + .34 * wave(p)), 1.2);
+
+      if (boosted) {
+        // Hypercharge / neutron boost adds phase-locked coils rather than
+        // merely running the normal charge animation faster.
+        for (let coil = 0; coil < 2; coil += 1) {
+          const points = [];
+          for (let step = 0; step <= 34; step += 1) {
+            const progress = step / 34;
+            const x = g.left + progress * (g.right - g.left);
+            const envelope = Math.sin(progress * Math.PI);
+            const py = y + Math.sin((progress * 2.5 - p * 2 + coil * .5) * TAU)
+              * 6.2 * envelope;
+            points.push([x, py]);
+          }
+          this.path(points, c, alpha * (coil ? .36 : .68), coil ? 1 : 1.5);
+        }
       } else {
-        this.trackStroke(p, .14, g, y, c, alpha, 2);
+        for (let packet = 0; packet < 3; packet += 1) {
+          const progress = (p + packet / 3) % 1;
+          const side = packet % 2 ? -1 : 1;
+          const x = cx + side * half * (1 - smooth(progress));
+          this.line(x - side * 7, y, x, y, c,
+            alpha * Math.sin(progress * Math.PI) * .82, 1.7);
+        }
       }
     }
 
     drawJump(g, state, p, alpha, jumping = false) {
       const c = state.color, y = g.y;
-      const count = jumping ? 10 : 14;
-      for (let i = 0; i < count; i += 1) {
-        const seed = hash(i + 41);
-        const progress = (Math.pow((p + seed) % 1, 1.55) + i * .023) % 1;
-        const laneY = y + (hash(i + 77) - .5) * 20;
-        this.trackStroke(progress, .05 + progress * .12, g, laneY, c,
-          alpha * (.25 + progress * .7), 1 + progress * 1.2);
+      const cx = (g.left + g.right) / 2;
+      const span = Math.max(28, g.right - g.left);
+      const speed = jumping ? 1.42 : 1.08;
+
+      // Witch-space is a radial tunnel, intentionally unlike the orderly
+      // supercruise corridor. Streaks accelerate away from a turbulent core.
+      const count = jumping ? 15 : 20;
+      for (let index = 0; index < count; index += 1) {
+        const progress = (p * speed + hash(index + 41)) % 1;
+        const travel = Math.pow(progress, 1.55);
+        const angle = hash(index + 79) * TAU + Math.sin(p * TAU + index) * .08;
+        const radiusX = span * .49 * travel;
+        const radiusY = 11.5 * travel;
+        const x = cx + Math.cos(angle) * radiusX;
+        const py = y + Math.sin(angle) * radiusY;
+        const prior = Math.max(0, travel - (.06 + travel * .12));
+        const tailX = cx + Math.cos(angle) * span * .49 * prior;
+        const tailY = y + Math.sin(angle) * 11.5 * prior;
+        const fade = Math.sin(progress * Math.PI);
+        this.line(tailX, tailY, x, py, c, alpha * fade * (.4 + travel * .6),
+          1 + travel * 1.2);
       }
-      const aperture = 4 + wave(p) * 8;
-      this.line(g.centerLeft, y - aperture, g.centerLeft, y + aperture, c, alpha * .86, 1.5);
-      this.line(g.centerRight, y - aperture, g.centerRight, y + aperture, c, alpha * .86, 1.5);
+      for (let ring = 0; ring < 3; ring += 1) {
+        const phase = (p * speed + ring / 3) % 1;
+        const expansion = Math.pow(phase, .72);
+        const fade = Math.sin(phase * Math.PI);
+        this.angularRing(cx, y, 4 + span * .45 * expansion, 2 + 10 * expansion,
+          8, c, alpha * fade * .55, ring === 0 ? 1.6 : 1,
+          p * TAU * (ring % 2 ? -.22 : .18));
+      }
+      const core = .45 + .55 * wave(p * 2);
+      this.glowDot(cx, y, 1.4 + core * 1.7, c, alpha * core);
+      this.line(cx - 8, y, cx + 8, y, c, alpha * .55, 1.3);
+      if (jumping) {
+        const shock = wave(p);
+        this.angularRing(cx, y, 8 + shock * span * .38, 3 + shock * 8,
+          6, c, alpha * (1 - shock) * .8, 1.8, Math.PI / 6);
+      }
     }
 
     drawArrival(g, state, p, alpha, cooldown = false) {

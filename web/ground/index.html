@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Void Compass Planet Waypoint Navigation</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="ground" class="ground">
+    <header><span>PLANET WAYPOINT NAV</span><strong id="body-name">SURFACE FIX</strong></header>
+    <section>
+      <div class="compass" aria-hidden="true"><i class="ring"></i><i class="north">N</i><i class="east">E</i><i class="south">S</i><i class="west">W</i><b id="needle"></b><em></em></div>
+      <div class="nav-copy"><small id="direction">HEADING N/A</small><strong id="distance">—</strong><span id="bearing">BEARING —</span><span id="target">TARGET —</span></div>
+      <div class="turn"><small>RELATIVE</small><strong id="turn-value">—</strong><i><b id="turn-fill"></b></i></div>
+    </section>
+    <footer><span>LIVE STATUS.JSON SURFACE FIX</span><b id="coordinates">POSITION PENDING</b></footer>
+    <div class="scanlines"></div>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,23 +1,18 @@
 # VoidCompass // UPDATE LOG
 
-## v5.3.9.1 // Navigation State Spine
-**Release Date:** 2026-Aug-22
+## v5.3.9.3 // HTML Cockpit Completion
+**Release Date:** 2026-Aug-24
 
-*   Rebuilt the HTML Navigation HUD indicator as a balanced three-part instrument: an illustrated vehicle-identity bay on the left, a restrained readable state aperture in the centre and a dedicated live state-response bay on the right.
-*   Added a journal-ID catalogue for all 48 currently released human motherships: the 45-ship 2025 vector set is joined by matching Caspian Explorer, Kestrel Mk II and Lynx Highliner artwork, while Nomad, Scarab, Scorpion, Taipan and Drake-Class Carrier states use the same illustrated language with no network dependency.
-*   Added genuinely distinct, moderately paced motion signatures for normal flight, Supercruise and SCO, FSD charge and hyperspace, arrival and cooldown, FSS/DSS, maps, every planetary phase, surface travel, docking, hazards, asteroid fields and Carrier transit.
-*   Made the identity and response bays react differently but coherently to gravity, vertical speed, landing gear, analysis mode, neutron boost and route presence, without repeating the route, fuel or survey readouts shown elsewhere.
-*   Added deterministic 30 FPS movement, clean family-aware crossfades and short journal responses for discoveries, routes, docking, mining and danger while retaining theme, intensity and reduced-motion controls.
-*   Reflowed the planet-side Biological Surface Workboard into one prioritised species per line with its sample state and estimated or confirmed value kept together.
-*   Extended the readable biological rows to the full-system Survey Operations workboard and retained the active planet across surface-side restarts using Location's body context.
-*   Made Navigation HUD portraits switch immediately on Loadout and shipyard changes while preventing Odyssey's on-foot suit identity from replacing the active mothership.
-*   Added a dedicated transparent on-foot explorer portrait so the Navigation identity bay now follows commander, mothership, Nomad/SRV, fighter and Carrier contexts without borrowing the wrong vehicle art; tightly bounded runtime artwork and a larger, brighter identity bay keep every portrait readable in both HUD layouts.
-*   Rebuilt Toasts as a semantic HTML Cockpit Notification deck with clearer severity signals, animated lifetimes and profile-theme parity; achievement unlocks now receive a distinct milestone presentation with icon, category and points rather than sharing an ordinary alert card.
-*   Prevented the HTML Survey Operations surface from mapping during startup unless its restored model contains actionable bio, geo, notable-body or active-sample work.
-*   Kept the ship-art attribution README inside public packages while preserving the release builder's strict rejection of every other unexpected non-image asset.
+*   Completed the visible Windows overlay conversion with purpose-built, theme-aware HTML Gravity Warning and Planet Waypoint Navigation surfaces; surface navigation is now profile-positioned, mouse-pass-through aware and managed directly from Overlay Studio.
+*   Removed the Galactic Atlas's duplicate commander/system masthead while it is docked in the HTML command deck, returning the reclaimed space to the live map without changing standalone capture presentation.
+*   Rebuilt Overlay Studio's drag pipeline around animation-frame-local card movement, geometry-only host updates and one pointer-release persistence pass, preventing unchanged overlay canvases and the full Dashboard snapshot from being rebuilt throughout a drag.
+*   Reworked the Navigation HUD's Supercruise, FSD charge, Hypercharge and hyperspace response bay with separate Elite-style flight corridor, drive-capacitor, phase-coil and witch-space tunnel effects at the existing bounded 30 FPS cadence.
+*   Audited every managed cockpit surface: Navigation, Survey Operations, notifications, Gravity and surface navigation use semantic HTML renderers, while the remaining established HUDs already run through the shared HTML host and retain their existing journal-aware presentations.
 
 ## Earlier releases
 
+*   **v5.3.9.2** — Converted cockpit notifications and achievement unlocks to semantic HTML, prevented empty Survey Operations startup flashes and restored its planet-side focus lifecycle.
+*   **v5.3.9.1** — Rebuilt the Navigation State Spine with a complete ship/vehicle identity catalogue, state-specific 30 FPS motion, readable biological workboards and restart-safe surface context.
 *   **v5.3.9** — Replaced the visible Tk workspace and boot sequence with the private HTML command deck, migrated the full feature set and Galactic Atlas, rebuilt Overlay Layout Studio, restored focused Survey Operations and Carrier Discord controls, and retained Python as the journal/state authority.
 *   **v5.3.8.4** — Split HTML Navigation into distinct state-identity and live-response fields, added staged family-specific animations and journal reactions, rebuilt Supercruise from scratch and improved Survey Operations readability.
 *   **v5.3.8.3** — Unified the Windows cockpit overlays under one private WebView2 runtime, rebuilt Survey Operations and Navigation as semantic HTML/Canvas displays, retained native overlay/profile controls, and polished startup, shutdown, taskbar behaviour and in-game readability.

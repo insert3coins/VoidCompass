@@ -4715,6 +4715,8 @@ class DashboardUIMixin(ThemedWindowMixin):
             x = self.ground_popup.winfo_x()
             y = self.ground_popup.winfo_y()
             self.config["ground_popup_geometry"] = f"{w}x{h}+{x}+{y}"
+            self.config["ground_popup_x"] = x
+            self.config["ground_popup_y"] = y
             self._save_config_file()
 
     def _ensure_ground_popup(self):
@@ -4726,7 +4728,30 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.ground_popup.overrideredirect(True)
         self.ground_popup.attributes("-topmost", True)
         self.ground_popup.configure(bg=self.UI_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
-        self.ground_popup.geometry(self.config.get("ground_popup_geometry", "340x140+1320+160"))
+        legacy_geometry = str(self.config.get("ground_popup_geometry", "340x140+1320+160"))
+        geometry_match = re.fullmatch(
+            r"(?P<w>\d+)x(?P<h>\d+)(?P<x>[+-]\d+)(?P<y>[+-]\d+)",
+            legacy_geometry,
+        )
+        legacy_width = int(geometry_match.group("w")) if geometry_match else 340
+        legacy_height = int(geometry_match.group("h")) if geometry_match else 140
+        legacy_x = int(geometry_match.group("x")) if geometry_match else 1320
+        legacy_y = int(geometry_match.group("y")) if geometry_match else 160
+        # v5.3.9.3 moved this legacy popup into the profile-aware Overlay
+        # Studio catalogue.  Migrate its old geometry once so commanders do
+        # not lose a carefully placed surface-navigation window merely
+        # because the new x/y defaults are now present in config.
+        if not self.config.get("ground_popup_position_migrated", False):
+            popup_x, popup_y = legacy_x, legacy_y
+            self.config["ground_popup_position_migrated"] = True
+        else:
+            popup_x = int(float(self.config.get("ground_popup_x", legacy_x)))
+            popup_y = int(float(self.config.get("ground_popup_y", legacy_y)))
+        self.config["ground_popup_x"] = popup_x
+        self.config["ground_popup_y"] = popup_y
+        self.ground_popup.geometry(
+            f"{max(300, legacy_width)}x{max(132, legacy_height)}+{popup_x}+{popup_y}"
+        )
         self.ground_popup.minsize(300, 132)
 
         title = tk.Frame(self.ground_popup, bg="#0c1014", height=24)
@@ -4759,6 +4784,10 @@ class DashboardUIMixin(ThemedWindowMixin):
             self.ground_popup,
             bool(self.config.get("overlay_mouse_passthrough", True)),
         )
+        # The Toplevel remains the cross-platform state/proxy surface. On
+        # Windows its content is replaced by the purpose-built browser HUD.
+        self._attach_html_overlay_renderers()
+        self._apply_html_overlay_renderer()
 
     def _destroy_ground_popup(self):
         if self.ground_popup and self.ground_popup.winfo_exists():

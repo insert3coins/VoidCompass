@@ -42,6 +42,12 @@ class GravityWarningHUD:
         default_x = max(30, screen_w - self.WIDTH - 30)
         x = self._safe_int(config.get("gravity_warning_hud_x"), default_x)
         y = self._safe_int(config.get("gravity_warning_hud_y"), 530)
+        # Keep the screen-relative first-run placement available to the HTML
+        # renderer and Overlay Studio.  Without this, the first show() call
+        # could fall back to the left edge even though the constructor placed
+        # the compatibility proxy on the right.
+        self.config["gravity_warning_hud_x"] = x
+        self.config["gravity_warning_hud_y"] = y
         self.win.geometry(overlay_chrome.position_geometry(x, y))
 
         self._force_topmost()

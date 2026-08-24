@@ -186,6 +186,7 @@ class HtmlCanvasOverlayBridge:
         self._sync_job = None
         self._last_fingerprint = None
         self._last_quick_fingerprint = None
+        self._last_window_fingerprint = None
         self._canvas_revision = 0
         self._install_canvas_mutation_hooks()
         try:
@@ -319,6 +320,7 @@ class HtmlCanvasOverlayBridge:
                 pass
             self._last_fingerprint = None
             self._last_quick_fingerprint = None
+            self._last_window_fingerprint = None
             return False
         if self.surface is not None:
             return True
@@ -329,6 +331,7 @@ class HtmlCanvasOverlayBridge:
             snapshot = self._snapshot()
             self._last_fingerprint = repr(snapshot)
             self._last_quick_fingerprint = self._quick_fingerprint()
+            self._last_window_fingerprint = self._window_fingerprint()
             self.surface.publish(snapshot)
             return True
         except Exception as exc:
@@ -344,18 +347,30 @@ class HtmlCanvasOverlayBridge:
 
     def _quick_fingerprint(self):
         try:
-            state = str(self.win.state())
             items = tuple(self.canvas.find_all())
             width = (str(self.canvas.cget("width")), int(self.canvas.winfo_width()))
             height = (str(self.canvas.cget("height")), int(self.canvas.winfo_height()))
+        except Exception:
+            items, width, height = (), (), ()
+        return (
+            self._canvas_revision, items, width, height,
+            bool(self.config.get("hud_crt_enabled", True)),
+            bool(self.config.get("reduced_motion_enabled", False)),
+        )
+
+    def _window_fingerprint(self):
+        try:
+            state = str(self.win.state())
             live_position = (int(self.win.winfo_x()), int(self.win.winfo_y()))
         except Exception:
-            state, items, width, height, live_position = "gone", (), (), (), ()
+            state, live_position = "gone", ()
         return (
-            self._canvas_revision, items, width, height, state, live_position,
+            state, live_position,
             self.config.get(self.x_key), self.config.get(self.y_key),
             bool(self.config.get(self.enabled_key, False)),
-            bool(getattr(self.win.master, "_voidcompass_startup_presentation_held", False)),
+            bool(getattr(
+                self.win.master, "_voidcompass_startup_presentation_held", False,
+            )),
         )
 
     def _sync(self):
@@ -380,17 +395,25 @@ class HtmlCanvasOverlayBridge:
                     if not was_ready:
                         logging.info("HTML %s overlay renderer is live", self.overlay_id)
                 quick = self._quick_fingerprint()
+                window_quick = self._window_fingerprint()
                 # All standard overlays replace their primitive scene when
                 # content changes. Colony embeds Tk widgets, so its labels can
                 # change without changing Canvas item IDs and needs the full
                 # comparison.
                 if self.overlay_id == "colony" or quick != self._last_quick_fingerprint:
                     self._last_quick_fingerprint = quick
+                    self._last_window_fingerprint = window_quick
                     snapshot = self._snapshot()
                     fingerprint = repr(snapshot)
                     if fingerprint != self._last_fingerprint:
                         self._last_fingerprint = fingerprint
                         surface.publish(snapshot)
+                elif window_quick != self._last_window_fingerprint:
+                    # Geometry-only Studio movement must never pay the cost of
+                    # serialising an unchanged Canvas scene. The shared host
+                    # has a dedicated lightweight window channel for this.
+                    self._last_window_fingerprint = window_quick
+                    self.sync_window()
         self._schedule()
 
     def _on_destroy(self, event):

@@ -4,6 +4,7 @@ import { OrbitControls } from './vendor/OrbitControls.js';
 const params = new URLSearchParams(window.location.search);
 const token = params.get('token') || '';
 const captureMode = params.get('capture') === '1';
+if (window.self !== window.top) document.documentElement.classList.add('embedded-atlas');
 const api = (path) => `${path}${path.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
 
 const LAYERS = [

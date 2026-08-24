@@ -157,6 +157,14 @@ h1 { color: var(--orange); font-size: 25px; line-height: 1; }
 .live-dot.connected { background: var(--green); box-shadow: 0 0 13px var(--green); }
 .live-dot.offline { background: var(--red); box-shadow: 0 0 13px var(--red); }
 
+/* The Command Deck already owns commander/system identity.  When Atlas is
+   docked inside it, remove the duplicate map masthead and return that vertical
+   space to the scene and controls.  The header remains available for capture
+   and any future standalone diagnostic presentation. */
+.embedded-atlas .topbar { display: none; }
+.embedded-atlas .control-deck,
+.embedded-atlas .inspector { top: 16px; }
+
 .control-deck {
   position: absolute;
   z-index: 9;
