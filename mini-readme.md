@@ -4,7 +4,7 @@
 **Release Date:** 2026-Aug-24
 
 *   Rebuilt the Navigation HUD's arrival and planetary-flight states with distinct witch-space acquisition, orbital approach/departure, glide, low-altitude, hold and landed instruments driven by live altitude, vertical-speed and gravity context.
-*   Added immediate landing-gear deploy/retract pulses from Elite's live `Status.json` flag, plus dedicated Galaxy Map galactic-route resolution and System Map orbital-body acquisition animations with smooth state handoffs.
+*   Added immediate landing-gear deploy/retract pulses from Elite's live `Status.json` flag, dedicated Galaxy Map galactic-route resolution and System Map orbital-body acquisition animations with smooth state handoffs, and authoritative FSS/DSS mode selection from live GUI focus.
 
 ## Earlier releases
 
