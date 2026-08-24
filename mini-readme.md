@@ -11,6 +11,9 @@
 *   Added a complete 42-region Galactic Passport with profile-local visits, systems, distance, FSS, DSS, biology, Codex and latest-system evidence linked back to the Galactic Atlas.
 *   Kept the new cartography models bounded and on-demand: heavyweight science/passport queries are cached only while Analytics is visible, replay history is capped, live system views remain small, and profile changes reset every presentation selection safely.
 *   Rebuilt the Navigation HUD's auxiliary-vehicle states instead of reusing generic road and ship motion: Scarab now has survey suspension, terrain and analysis sweeps; Scorpion has armoured suspension and turret telemetry; Nomad has low-altitude hover and thrust-vector symbology; fighters use a fast intercept corridor and target lock. Persistent labels and deploy/recovery transitions retain the actual vehicle identity, while vehicle portraits now resolve through a synchronized crossfade/slide handoff instead of swapping instantly.
+*   Rebuilt the Navigation HUD's Exploration state as a seamless long-range discovery scope with fading depth gates, deterministic stellar contacts, resolving constellation traces and a full-cycle sensor reticle, removing the visible animation reset from the earlier fractional loop.
+*   Added compact journal-confirmed `LAND` and `NO LAND` markers to Survey Operations body rows and the focused surface workboard, while leaving signal-only bodies unlabelled until their detailed Scan record establishes landability.
+*   Repaired Galactic Atlas Focus Map mode so its iframe owns the complete dashboard viewport instead of collapsing into the removed header row; the embedded renderer now observes its actual viewport, refreshes its camera projection and preserves the full interactive drag surface while focusing or docking.
 
 ## Earlier releases
 

@@ -45,6 +45,12 @@ header { position: absolute; left: 13px; right: 13px; top: 7px; height: 27px; di
 .badge { min-width: 0; padding: 0 3px; overflow: hidden; text-overflow: ellipsis; border: 1px solid var(--soft); white-space: nowrap; }
 .badge.bio { color: var(--orange); }.complete .badge.bio { color: var(--green); }
 .badge.geo { color: var(--accent); }.badge.dss { color: var(--dim); }
+.badge.landable {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 40%, var(--soft));
+  background: color-mix(in srgb, var(--green) 7%, transparent);
+}
+.badge.non-landable { color: var(--dim); }
 .target-detail { display: flex; align-items: center; gap: 6px; min-height: 13px; margin-top: 2px; overflow: hidden; color: var(--muted); font-size: var(--type-support); font-weight: 700; white-space: nowrap; }
 .bio-nodes { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
 .bio-node { width: 7px; height: 7px; border: 1px solid var(--dim); border-radius: 50%; background: var(--panel); }

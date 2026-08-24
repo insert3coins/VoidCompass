@@ -406,6 +406,9 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
             "max_value": hi,
             "first_footfall": bool(body.get("first_footfall")),
             "landable": bool(body.get("landable")),
+            # Signal-only rows can precede their detailed Scan record. Keep
+            # that temporary state unknown instead of calling it non-landable.
+            "landable_known": "landable" in body and body.get("landable") is not None,
             "gravity_g": body.get("gravity_g"),
             "notable": notable,
             # System mode used to stop at BIO 0/N. Include only journal-
@@ -491,7 +494,8 @@ def _survey_render_key(model):
             _safe_int(body.get("bio_count")),
             _safe_int(body.get("organic_complete_count")),
             _safe_int(body.get("geo_count")), bool(body.get("dss_complete")),
-            bool(body.get("first_footfall")), bool(body.get("landable")),
+            bool(body.get("first_footfall")),
+            body.get("landable") if "landable" in body else None,
             body.get("gravity_g"),
             notable_key(model.get("notable")) if model.get("notable") else None,
             tuple(detail_key(row) for row in model.get("rows") or ()),
@@ -504,7 +508,9 @@ def _survey_render_key(model):
             row.get("display_name") or row.get("name"),
             _safe_int(row.get("bio_count")), _safe_int(row.get("geo_count")),
             _safe_int(row.get("complete")), bool(row.get("bio_complete")),
-            bool(row.get("needs_dss")), row.get("min_value"), row.get("max_value"),
+            bool(row.get("needs_dss")), bool(row.get("landable_known")),
+            bool(row.get("landable")) if row.get("landable_known") else None,
+            row.get("min_value"), row.get("max_value"),
             notable_key(row.get("notable")) if row.get("notable") else None,
             tuple(detail_key(detail) for detail in row.get("bio_details") or ()),
         ))
