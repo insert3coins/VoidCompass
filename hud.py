@@ -855,7 +855,7 @@ class TacticalHUD:
 
     def _state_color(self, state_text):
         state_text = str(state_text or "").upper()
-        if (state_text.endswith((" DEPLOY", " RECOVERY", " EGRESS", " CONTROL"))
+        if (state_text.endswith((" DEPLOY", " RECOVERY", " DEPART", " CONTROL"))
                 or state_text.startswith("BOARDING ")
                 or state_text in {"MULTICREW LINK", "CREW RETURN"}):
             return COLOR_ACCENT
@@ -896,7 +896,7 @@ class TacticalHUD:
     def _navigation_motion_profile(state_text):
         """Map journal/UI states to small, visually distinct motion families."""
         state = str(state_text or "FLIGHT").upper()
-        if state.endswith(" DEPLOY") or state.endswith(" EGRESS"):
+        if state.endswith(" DEPLOY") or state.endswith(" DEPART"):
             return "vehicle_deploy"
         if state.endswith(" RECOVERY") or state.startswith("BOARDING "):
             return "vehicle_board"

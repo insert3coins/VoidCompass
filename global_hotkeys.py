@@ -20,7 +20,6 @@ OVERLAY_HOTKEY_SPECS = (
     ("navigation", "overlay_hotkey_navigation", "Navigation HUD", "hud"),
     ("navigation_layout", "overlay_hotkey_navigation_layout", "Navigation HUD layout", None),
     ("survey", "overlay_hotkey_survey", "Survey Operations", "survey_status_hud"),
-    ("system_info", "overlay_hotkey_system_info", "System Intelligence", "system_info_hud"),
     ("station_info", "overlay_hotkey_station_info", "Station Info", "station_info_hud"),
     ("cargo", "overlay_hotkey_cargo", "Cargo Manifest", "cargo_hud"),
     ("carrier", "overlay_hotkey_carrier", "Fleet Carrier", "carrier_hud"),

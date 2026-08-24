@@ -592,7 +592,7 @@ class DashboardScanMixin:
                     survey.suppress()
                 else:
                     survey.resume()
-                    self._refresh_system_info_progress()
+                    self._refresh_survey_status_progress()
         try:
             operational_state.observe_status(self.operational_state, data)
         except Exception:
