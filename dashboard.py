@@ -68,6 +68,7 @@ from credit_events import authoritative_balance, credit_delta
 from stellar_types import star_type_label
 from exploration_window import ExplorationWindow
 from services.eddn_upload import UPLOADER as eddn_market_uploader
+from services.galnet import GalnetFeedService
 from achievement_engine import AchievementEngine
 from specialist_engine import SpecialistEngine
 from captains_log import CaptainsLog
@@ -1685,6 +1686,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.adaptive_command = AdaptiveCommandDeck(
             self.config.get("adaptive_command_file"), self.config,
         )
+        self.galnet_feed = GalnetFeedService(
+            application_base_dir() / "cache" / "galnet.json", APP_VERSION,
+        )
+        self._galnet_refresh_job = None
         self._adaptive_startup_synced = False
         self.session_guard = ProfileSessionGuard(
             self._profile_path("session.active"), APP_VERSION,
@@ -2192,6 +2197,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             )
 
         threading.Thread(target=self.check_updates, daemon=True).start()
+        self._galnet_refresh_job = self.root.after(900, self._tick_galnet_feed)
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self._configure_overlay_hotkeys(announce=False)
@@ -2986,6 +2992,37 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         except Exception:
             return False
 
+    def _galnet_refresh_complete(self):
+        if not self.is_running:
+            return
+        self._schedule_html_dashboard_publish(immediate=True)
+
+    def refresh_galnet(self, force=False):
+        service = getattr(self, "galnet_feed", None)
+        if service is None or not self.is_running:
+            return False
+        started = service.refresh_async(
+            lambda: self._ui_post(
+                self._galnet_refresh_complete, key="galnet:refresh-complete",
+            ),
+            force=force,
+        )
+        if started:
+            self._schedule_html_dashboard_publish(immediate=True)
+        return started
+
+    def _tick_galnet_feed(self):
+        self._galnet_refresh_job = None
+        if not self.is_running:
+            return
+        self.refresh_galnet(force=False)
+        try:
+            self._galnet_refresh_job = self.root.after(
+                30 * 60 * 1000, self._tick_galnet_feed,
+            )
+        except Exception:
+            self._galnet_refresh_job = None
+
     def _tick_runtime_trace(self):
         if not self.is_running:
             return
@@ -3134,6 +3171,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "_journal_history_resize_job", "_startup_boot_handoff_job",
             "_startup_boot_journal_timeout_job",
             "_startup_boot_history_timeout_job",
+            "_galnet_refresh_job",
         ):
             resize_job = getattr(self, resize_job_attr, None)
             if resize_job is not None:
@@ -3142,6 +3180,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 except Exception:
                     pass
                 setattr(self, resize_job_attr, None)
+        galnet_feed = getattr(self, "galnet_feed", None)
+        if galnet_feed is not None:
+            galnet_feed.request_stop()
         try:
             self.root.withdraw()
         except Exception:

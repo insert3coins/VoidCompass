@@ -1,20 +1,15 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.1.3 // Command Deck Personalisation
+## v5.4.1.4 // Galnet Relay
 **Release Date:** 2026-Aug-26
 
-*   Unified dashboard actions under live theme-aware HTML cockpit controls and added profile-aware panel arranging throughout the Dashboard and specialist workspaces.
-*   Rebuilt Navigation's waypoint display as one distance-proportional route rail for short and long plans, with immediate profile-waypoint refresh and deliberate precedence over a retained game route.
-*   Smoothed completed on-foot-to-SRV, Nomad, taxi and ship boarding across late Status updates, and retired the obsolete manual Dashboard mode selector while preserving automatic journal context.
-*   Promoted Station Link from a mirrored Tk canvas to a dedicated semantic HTML overlay with clearer port identity, service readiness, unsold-data sale status and local specialist intelligence.
-*   Rebuilt Cargo Manifest as a dedicated semantic HTML surface with live capacity segments, readable commodity cards, mission and stolen-cargo distinctions, compact overflow handling and content-aware sizing.
-*   Completed the semantic cockpit conversion with purpose-built Carrier Command, Prospector Analysis and CSS-driven Journal Heartbeat surfaces, then retired the generic Tk-canvas scene bridge.
-*   Stabilised profile panel arranging with drop markers and single-step reordering, reduced oversized command controls and rebuilt Explore & Survey's System Workboard as a live Elite-style body schematic.
-*   Added a profile-aware Survey Operations scope switch for priority targets or every surveyed body, and gave journal-backed neutron boost values their own tiered Supercruise field animation.
-*   Reworked the Heartbeat into a compact journal/Status/state telemetry instrument and added live Journal, Status, Navigation and UI-health pulses to the Dashboard footer.
+*   Added a theme-aware Galnet Relay to the Dashboard's lower-right briefing row, with an unobtrusive rotating headline ticker, manual navigation and a full in-app archive reader.
+*   Fetches Frontier's official RSS feed on a bounded background worker, keeps the command deck responsive and restores a small local cache immediately when the network is unavailable.
+*   Preserves Frontier's editorial ordering and the current headline across refreshes, sanitises article markup into readable local text and keeps the optional Galnet panel inside each commander's arrange/hide layout.
 
 ## Earlier releases
 
+*   **v5.4.1.3** — Unified theme-aware Dashboard controls and profile panel arranging, rebuilt the System Workboard and waypoint rail, completed semantic Station, Cargo, Carrier, Prospector and Heartbeat overlays, refined vehicle handoffs and added neutron-tier flight animation.
 *   **v5.4.1.2** — Added the Explorer Decision Deck, six exploration doctrines, five-jump Route Horizon, Session Pulse, Regional Codex Hunt, profile-aware briefing-card layouts and optional automatic profile safety snapshots.
 *   **v5.4.1.1** — Refined Navigation arrival, planetary flight, landing gear, FSD cooldown, map/scanner and side-panel states; simplified vehicle departures and retired the redundant System Intelligence overlay.
 *   **v5.4.1** — Stabilised HTML overlay transparency and profile-aware opacity across hide/show cycles, and corrected the Galactic Atlas Focus Map viewport so every WebGL and overlay layer stays clipped and aligned.

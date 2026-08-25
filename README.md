@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.4.1.3**
+**Current version: 5.4.1.4**
 
 Void Compass is an exploration-first companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a persistent command dashboard, deep survey intelligence, expedition planning and native in-game overlays.
 
@@ -11,6 +11,7 @@ Void Compass is distributed as a native Windows x64 application and does not req
 ## At a glance
 
 - **HTML Explorer Decision Deck** — a GPU-composited WebView2 briefing with one explainable next action, selectable exploration doctrine, five-jump Route Horizon, Session Pulse, Regional Codex Hunt and commander-specific panel layouts throughout its workspaces.
+- **Galnet Relay** — Frontier's official news feed in a quiet lower-right ticker with an in-app article reader, non-blocking refresh and a small offline cache.
 - **Exploration-focused navigation** — seven clear destinations keep survey, map and commander records prominent while a small Field Tools page supports surface work and mining.
 - **Stellar Cartography** — a live schematic System Orrery with Elite body-target lock, commander-controlled Survey Queue, planetary field mapping, expedition replay, science correlations and a complete 42-region passport built from retained journal evidence.
 - **Deep Survey** — explainable FSS, DSS, biological and geological progress; a Bio Field Assistant; discovery-significance ratings; valuable bodies; revisit targets; Colonisation Recon and a searchable discovery archive.
@@ -19,7 +20,7 @@ Void Compass is distributed as a native Windows x64 application and does not req
 - **Quiet by design** — themed cockpit overlays, HTML notifications and a curated flight log provide useful feedback without cockpit chatter, speech synthesis or an AI service.
 - **Explorer field tools** — a touchdown-anchored Surface Survey Trail, Ground/Exobiology, Mining, exploration Engineering/Synthesis, Colonisation Recon and focused Achievements remain available without turning the app into a general career suite.
 
-The HTML Command Deck is the visible application shell for every launch. Its animated galactic flight-computer sequence covers profile, survey-history, live-journal and cockpit readiness, while first launch and later setup reruns use a matching HTML First Commissioning deck with native journal-folder selection. The live exploration briefing combines Current Survey, one explainable primary decision, a factual five-jump Route Horizon, Session Pulse, ranked field priorities, personal regional Codex coverage and the curated Flight Log. Balanced, Completionist, Exobiology, Codex Hunter, Value Hunter and Fast Transit doctrines tune the advice without inventing journal facts; optional cards can be hidden and reordered independently for each commander. Profile and theme changes update it from the same Python-owned journal state used by the overlays and map. Every presented application workspace now remains inside this command deck; the withdrawn Tk root is an internal journal/state host only and is never exposed as a second UI.
+The HTML Command Deck is the visible application shell for every launch. Its animated galactic flight-computer sequence covers profile, survey-history, live-journal and cockpit readiness, while first launch and later setup reruns use a matching HTML First Commissioning deck with native journal-folder selection. The live exploration briefing combines Current Survey, one explainable primary decision, a factual five-jump Route Horizon, Session Pulse, ranked field priorities, personal regional Codex coverage, the curated Flight Log and a cached Galnet Relay. Balanced, Completionist, Exobiology, Codex Hunter, Value Hunter and Fast Transit doctrines tune the advice without inventing journal facts; optional cards—including Galnet—can be hidden and reordered independently for each commander. Profile and theme changes update it from the same Python-owned journal state used by the overlays and map. Every presented application workspace now remains inside this command deck; the withdrawn Tk root is an internal journal/state host only and is never exposed as a second UI.
 
 ![Void Compass exploration dashboard](DashBoard.PNG)
 
@@ -147,7 +148,7 @@ Packaged releases create `config.json`, commander profiles and logs beside the e
 C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous
 ```
 
-The 5.4.1.3 interface is Windows x64 only. The former experimental Linux build has been retired as the application moves to one WebView2 presentation architecture.
+The 5.4.1.4 interface is Windows x64 only. The former experimental Linux build has been retired as the application moves to one WebView2 presentation architecture.
 
 ## Contributing and support
 

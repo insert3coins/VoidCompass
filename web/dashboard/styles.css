@@ -172,7 +172,9 @@ body.atlas-focus .atlas-frame-shell {
 body.atlas-focus .atlas-frame { pointer-events: auto; }
 
 .overview-modules { display: grid; grid-template-columns: repeat(12,minmax(0,1fr)); grid-auto-flow: row dense; gap: 13px; align-items: stretch; }
-.overview-modules > .decision-card, .overview-modules > .telemetry-strip, .overview-modules > .feed-card { grid-column: span 12; }
+.overview-modules > .decision-card, .overview-modules > .telemetry-strip { grid-column: span 12; }
+.overview-modules > .feed-card { grid-column: span 8; }
+.overview-modules > .galnet-card { grid-column: span 4; }
 .overview-modules > .survey-card { grid-column: span 7; }
 .overview-modules > .route-card { grid-column: span 5; }
 .overview-modules > .session-card, .overview-modules > .priority-card, .overview-modules > .codex-hunt-card { grid-column: span 4; }
@@ -290,6 +292,35 @@ body.atlas-focus .atlas-frame { pointer-events: auto; }
 .event-row.warn b, .event-row.fail b { color: var(--yellow); }
 .event-row.fail p { color: var(--red); }
 .event-row.discovery b { color: var(--orange); }
+.galnet-card { min-height: 287px; overflow: hidden; background: radial-gradient(circle at 92% 0,color-mix(in srgb,var(--orange) 11%,transparent),transparent 34%),var(--panel); }
+.galnet-status { color: var(--dim) !important; background: transparent !important; }
+.galnet-status.live { color: var(--green) !important; }
+.galnet-status.cached { color: var(--yellow) !important; }
+.galnet-status.error { color: var(--red) !important; }
+.galnet-ticker { width: 100%; height: 201px; display: block; position: relative; overflow: hidden; border: 0; border-bottom: 1px solid var(--border-soft); background: linear-gradient(120deg,color-mix(in srgb,var(--accent) 5%,var(--inset)),var(--inset)); color: var(--text); padding: 21px 18px 15px 62px; text-align: left; cursor: pointer; }
+.galnet-ticker::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; opacity: .55; background: linear-gradient(90deg,transparent,var(--orange),transparent); animation: galnet-scan 5.8s ease-in-out infinite; }
+@keyframes galnet-scan { 0%,100% { transform: translateX(-70%); opacity: .12; } 50% { transform: translateX(70%); opacity: .72; } }
+.galnet-ticker small { display: block; color: var(--orange); font: 700 9px Consolas,monospace; letter-spacing: .08em; }
+.galnet-ticker strong { display: -webkit-box; margin: 9px 0 7px; overflow: hidden; color: var(--text); font: 700 18px/1.12 "Bahnschrift SemiCondensed","Arial Narrow",sans-serif; letter-spacing: .025em; text-transform: uppercase; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.galnet-ticker .galnet-teaser { display: -webkit-box; margin: 0; overflow: hidden; color: var(--muted); font: 9px/1.45 Consolas,monospace; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.galnet-signal { position: absolute; left: 17px; top: 22px; width: 28px; height: 28px; border: 1px solid color-mix(in srgb,var(--orange) 55%,var(--border)); transform: rotate(45deg); }
+.galnet-signal i { position: absolute; width: 3px; bottom: 6px; background: var(--orange); box-shadow: 0 0 7px color-mix(in srgb,var(--orange) 60%,transparent); animation: galnet-bars 1.5s ease-in-out infinite; }
+.galnet-signal i:nth-child(1) { left: 6px; height: 6px; }.galnet-signal i:nth-child(2) { left: 12px; height: 12px; animation-delay: -.5s; }.galnet-signal i:nth-child(3) { left: 18px; height: 17px; animation-delay: -1s; }
+@keyframes galnet-bars { 50% { transform: scaleY(.45); opacity: .45; } }
+.galnet-controls { min-height: 45px; display: flex; align-items: center; justify-content: space-between; gap: 9px; padding: 6px 10px 6px 14px; }
+.galnet-controls > span { color: var(--dim); font: 8px Consolas,monospace; }
+.galnet-controls > div { display: flex; gap: 4px; }.galnet-controls button { min-width: 27px; min-height: 28px; padding: 0 7px; font-size: 8px; }
+.galnet-reader { position: fixed; z-index: 120; inset: 0; padding: clamp(20px,4vw,70px); background: rgba(1,6,10,.86); backdrop-filter: blur(7px); }
+.galnet-reader-shell { width: min(1280px,100%); height: min(820px,100%); margin: auto; display: grid; grid-template-rows: auto 1fr; border: 1px solid var(--border); border-top: 2px solid var(--orange); background: var(--panel); box-shadow: 0 25px 90px #000c,0 0 40px color-mix(in srgb,var(--orange) 8%,transparent); }
+.galnet-reader-shell > header { min-height: 69px; display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 10px 15px 10px 20px; border-bottom: 1px solid var(--border); background: var(--header); }
+.galnet-reader-shell > header small,.galnet-reader-shell > header strong,.galnet-reader-shell > header span { display: block; }.galnet-reader-shell > header small { color: var(--orange); font: 700 8px Consolas,monospace; }.galnet-reader-shell > header strong { margin: 2px 0; color: var(--text); font: 700 20px "Bahnschrift SemiCondensed",sans-serif; }.galnet-reader-shell > header span { color: var(--dim); font: 8px Consolas,monospace; }.galnet-reader-shell > header > div:last-child { display: flex; gap: 7px; }
+.galnet-reader-shell > main { min-height: 0; display: grid; grid-template-columns: 340px minmax(0,1fr); }
+#galnet-headlines { overflow-y: auto; border-right: 1px solid var(--border); background: var(--inset); }
+.galnet-headline-row { width: 100%; display: block; border: 0; border-bottom: 1px solid var(--border-soft); background: transparent; padding: 13px 15px; text-align: left; cursor: pointer; }
+.galnet-headline-row:hover,.galnet-headline-row.active { background: var(--selection); }.galnet-headline-row.active { box-shadow: inset 2px 0 var(--orange); }
+.galnet-headline-row small { display: block; margin-bottom: 4px; color: var(--orange); font: 8px Consolas,monospace; }.galnet-headline-row strong { display: block; color: var(--text); font: 700 12px/1.3 "Segoe UI",sans-serif; }
+.galnet-article { min-width: 0; overflow-y: auto; padding: clamp(25px,4vw,56px); background: radial-gradient(circle at 100% 0,color-mix(in srgb,var(--accent) 7%,transparent),transparent 32%),var(--panel); }
+.galnet-article > small { color: var(--orange); font: 700 9px Consolas,monospace; letter-spacing: .08em; }.galnet-article h2 { max-width: 900px; margin: 10px 0 24px; color: var(--text); font: 700 clamp(25px,3vw,39px)/1.06 "Bahnschrift SemiCondensed","Arial Narrow",sans-serif; text-transform: uppercase; }.galnet-article > div { max-width: 840px; color: var(--muted); white-space: pre-line; font: 14px/1.72 "Segoe UI",sans-serif; }
 .codex-coverage { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 13px; padding: 16px 14px 9px; }
 .codex-coverage strong { display: block; color: var(--accent); font: 700 23px Consolas, monospace; }
 .codex-coverage span { display: block; color: var(--dim); font: 8px Consolas, monospace; }
@@ -896,6 +927,8 @@ button.cockpit-button.busy::after { opacity: .5; animation: cockpit-button-scan 
   .overview-modules > .survey-card, .overview-modules > .route-card { grid-column: span 6; }
   .overview-modules > .session-card, .overview-modules > .priority-card { grid-column: span 6; }
   .overview-modules > .codex-hunt-card { grid-column: span 12; }
+  .overview-modules > .feed-card { grid-column: span 7; }
+  .overview-modules > .galnet-card { grid-column: span 5; }
   .deck-module-controls { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .telemetry-strip { grid-template-columns: repeat(2,1fr); }
   .tool-grid { grid-template-columns: repeat(2,1fr); }
@@ -918,6 +951,8 @@ button.cockpit-button.busy::after { opacity: .5; animation: cockpit-button-scan 
   .overview-modules > .survey-card, .overview-modules > .route-card,
   .overview-modules > .session-card, .overview-modules > .priority-card,
   .overview-modules > .codex-hunt-card { grid-column: span 12; }
+  .overview-modules > .feed-card, .overview-modules > .galnet-card { grid-column: span 12; }
+  .galnet-reader { padding: 16px; }.galnet-reader-shell > main { grid-template-columns: 250px minmax(0,1fr); }
   .decision-body { grid-template-columns: 46px minmax(0,1fr); }
   .decision-body > button { grid-column: 1/-1; width: 100%; }
   .deck-customiser-body { grid-template-columns: 1fr; }
