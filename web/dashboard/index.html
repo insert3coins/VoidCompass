@@ -151,7 +151,7 @@
       <footer class="rail-footer">
         <div class="connection"><i id="connection-light"></i><span>LOCAL LINK</span><b id="connection-state">CONNECTING</b></div>
         <button data-command="open_screenshots">OPEN SCREENSHOTS</button>
-        <small id="rail-version">v5.4.1.3 // WEBVIEW2</small>
+        <small id="rail-version">v5.4.1.4 // WEBVIEW2</small>
       </footer>
     </aside>
 
@@ -271,6 +271,20 @@
                 <button data-feed-filter="OPERATIONS">OPS</button>
               </div>
               <div id="event-feed" class="event-feed"></div>
+            </article>
+
+            <article class="card galnet-card" data-deck-module="galnet">
+              <header><span>GALNET RELAY</span><b id="galnet-status" class="galnet-status">STANDBY</b></header>
+              <button id="galnet-ticker" class="galnet-ticker" type="button" aria-label="Read current Galnet dispatch">
+                <span class="galnet-signal" aria-hidden="true"><i></i><i></i><i></i></span>
+                <small id="galnet-stamp">FRONTIER NEWS SERVICE</small>
+                <strong id="galnet-title">AWAITING GALNET DISPATCHES</strong>
+                <span id="galnet-teaser" class="galnet-teaser">The relay will update quietly in the background.</span>
+              </button>
+              <footer class="galnet-controls">
+                <span id="galnet-position">0 / 0</span>
+                <div><button type="button" data-galnet-step="-1" aria-label="Previous Galnet dispatch">‹</button><button id="galnet-open" type="button">OPEN READER</button><button type="button" data-galnet-step="1" aria-label="Next Galnet dispatch">›</button><button id="galnet-refresh" type="button">REFRESH</button></div>
+              </footer>
             </article>
           </section>
         </section>
@@ -548,7 +562,7 @@
         </section>
 
         <section class="page" data-page-name="about">
-          <header class="about-hero"><div class="about-glyph"><span></span></div><div><p>ELITE DANGEROUS EXPLORATION COMPANION</p><h2>Void Compass</h2><span id="about-version">Version 5.4.1.3 // HTML Command Deck</span></div></header>
+          <header class="about-hero"><div class="about-glyph"><span></span></div><div><p>ELITE DANGEROUS EXPLORATION COMPANION</p><h2>Void Compass</h2><span id="about-version">Version 5.4.1.4 // HTML Command Deck</span></div></header>
           <section class="about-grid">
             <article class="card"><header><span>LOCAL FIRST</span></header><p>Void Compass reads Elite's journal and companion files and stores commander profiles locally. The dashboard server is private to this computer and binds only to loopback.</p></article>
             <article class="card"><header><span>GPL-3.0</span></header><p>Void Compass is free software. You may use, study, modify and redistribute it under GNU GPL version 3.</p></article>
@@ -569,6 +583,16 @@
       </footer>
     </section>
   </div>
+
+  <section id="galnet-reader" class="galnet-reader" hidden aria-modal="true" role="dialog" aria-labelledby="galnet-reader-title">
+    <div class="galnet-reader-shell">
+      <header><div><small>FRONTIER NEWS SERVICE</small><strong id="galnet-reader-title">GALNET ARCHIVE</strong><span id="galnet-reader-status">LOCAL CACHED RELAY</span></div><div><button id="galnet-reader-refresh" type="button">REFRESH</button><button id="galnet-close" type="button">CLOSE</button></div></header>
+      <main>
+        <aside id="galnet-headlines" aria-label="Galnet headlines"></aside>
+        <article class="galnet-article"><small id="galnet-article-stamp">NO DISPATCH SELECTED</small><h2 id="galnet-article-title">GALNET RELAY</h2><div id="galnet-article-body">Select a headline to read the full dispatch.</div></article>
+      </main>
+    </div>
+  </section>
 
   <div id="toast" class="toast" role="status"></div>
   <script type="module" src="app.js"></script>

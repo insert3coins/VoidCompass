@@ -2016,6 +2016,42 @@ class HtmlDashboardMixin:
             return True
         return False
 
+    def _html_dashboard_galnet(self):
+        service = getattr(self, "galnet_feed", None)
+        if service is None:
+            return {
+                "status": "waiting", "detail": "Awaiting Galnet relay",
+                "busy": False, "source": "Frontier Galnet",
+                "updated_at": "", "articles": [],
+            }
+        try:
+            snapshot = service.snapshot()
+        except Exception:
+            return {
+                "status": "error", "detail": "Galnet relay unavailable",
+                "busy": False, "source": "Frontier Galnet",
+                "updated_at": "", "articles": [],
+            }
+        articles = []
+        for row in (snapshot.get("articles") or [])[:16]:
+            if not isinstance(row, dict):
+                continue
+            articles.append({
+                "id": _text(row.get("id"), 300),
+                "title": _text(row.get("title"), 300),
+                "body": _text(row.get("body"), 20_000),
+                "published": _text(row.get("published"), 80),
+                "stamp": _text(row.get("stamp"), 40),
+            })
+        return {
+            "status": _text(snapshot.get("status") or "waiting", 30).casefold(),
+            "detail": _text(snapshot.get("detail") or "Awaiting Galnet relay", 180),
+            "busy": bool(snapshot.get("busy")),
+            "source": "Frontier Galnet",
+            "updated_at": _text(snapshot.get("updated_at"), 80),
+            "articles": articles,
+        }
+
     def html_dashboard_snapshot(self):
         """Return one JSON-safe immutable dashboard state."""
         # Relevant journal reducers already invalidate and rebuild this packet.
@@ -2102,7 +2138,7 @@ class HtmlDashboardMixin:
             doctrine, survey, route, (intelligence or {}).get("actions") or (),
             flight, data, codex_hunt, adaptive,
         )
-        configurable_modules = ("route", "session", "priorities", "codex", "feed")
+        configurable_modules = ("route", "session", "priorities", "codex", "feed", "galnet")
         configured_order = self.config.get("dashboard_module_order") or configurable_modules
         module_order = [
             str(name) for name in configured_order
@@ -2157,6 +2193,7 @@ class HtmlDashboardMixin:
             "intelligence": intelligence_summary,
             "decision": decision,
             "codex_hunt": codex_hunt,
+            "galnet": self._html_dashboard_galnet(),
             "dashboard_layout": {
                 "module_order": module_order,
                 "hidden_modules": hidden_modules,
@@ -2166,6 +2203,7 @@ class HtmlDashboardMixin:
                     {"id": "priorities", "label": "Field Priorities"},
                     {"id": "codex", "label": "Regional Codex Hunt"},
                     {"id": "feed", "label": "Live Exploration Feed"},
+                    {"id": "galnet", "label": "Galnet Relay"},
                 ],
                 "doctrine": decision.get("doctrine"),
                 "doctrines": [
@@ -3110,6 +3148,9 @@ class HtmlDashboardMixin:
         if action == "copy_next":
             self._dashboard_copy_next()
             return True
+        if action == "refresh_galnet":
+            self.refresh_galnet(force=True)
+            return True
         if action == "set_exploration_doctrine":
             doctrine = _text(payload.get("doctrine") or "balanced", 30).casefold()
             if doctrine not in DOCTRINES:
@@ -3119,7 +3160,7 @@ class HtmlDashboardMixin:
             self._schedule_html_dashboard_publish(immediate=True)
             return True
         if action == "save_dashboard_layout":
-            available = ("route", "session", "priorities", "codex", "feed")
+            available = ("route", "session", "priorities", "codex", "feed", "galnet")
             raw_order = payload.get("module_order")
             raw_hidden = payload.get("hidden_modules")
             if not isinstance(raw_order, list) or not isinstance(raw_hidden, list):

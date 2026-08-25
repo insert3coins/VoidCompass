@@ -7,6 +7,11 @@ let profileKey = "default";
 let feedFilter = "ALL";
 let toastTimer = 0;
 let feedFingerprint = "";
+let galnetFingerprint = "";
+let galnetRenderKey = "";
+let galnetTickerIndex = 0;
+let galnetTickerId = "";
+let galnetSelectedId = "";
 let onboardingSession = -1;
 let atlasRequested = false;
 let lastClientError = "";
@@ -62,6 +67,7 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".nav-item", "[data-feed-filter]", ".studio-overlay-card",
   ".studio-index-row", ".mission-row", ".workspace-tabs button",
   "[data-analytics-view]", "[data-studio-view]",
+  ".galnet-headline-row", "#galnet-ticker",
 ].join(",");
 
 function decorateCockpitButtons(root = document) {
@@ -887,6 +893,63 @@ function renderEvents(state) {
     byId("event-feed").replaceChildren(...filtered.slice(0, 45).map(createEventRow));
   }
   byId("record-feed").replaceChildren(...all.slice(0, 80).map(createEventRow));
+}
+
+function galnetArticles(state = model) {
+  return Array.isArray(state.galnet?.articles) ? state.galnet.articles : [];
+}
+
+function galnetTeaser(body) {
+  return String(body || "").replace(/\s+/g, " ").trim().slice(0, 220);
+}
+
+function renderGalnetReader(state = model) {
+  const articles = galnetArticles(state);
+  if (!articles.some((row) => row.id === galnetSelectedId)) {
+    galnetSelectedId = articles[Math.min(galnetTickerIndex, Math.max(0, articles.length - 1))]?.id || "";
+  }
+  const selected = articles.find((row) => row.id === galnetSelectedId) || articles[0];
+  byId("galnet-headlines").replaceChildren(...articles.map((row) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `galnet-headline-row${row.id === selected?.id ? " active" : ""}`;
+    button.dataset.galnetSelect = row.id || "";
+    const stamp = document.createElement("small"); stamp.textContent = row.stamp || "GALNET";
+    const title = document.createElement("strong"); title.textContent = row.title || "UNTITLED DISPATCH";
+    button.append(stamp, title);
+    return button;
+  }));
+  text("galnet-reader-status", state.galnet?.detail || "Galnet relay");
+  text("galnet-article-stamp", selected?.stamp || "NO DISPATCH SELECTED");
+  text("galnet-article-title", selected?.title || "GALNET RELAY");
+  text("galnet-article-body", selected?.body || "No Galnet dispatch is available yet.");
+}
+
+function renderGalnet(state, force = false) {
+  const feed = state.galnet || {};
+  const articles = galnetArticles(state);
+  const fingerprint = JSON.stringify({status: feed.status, busy: feed.busy, articles: articles.map((row) => [row.id, row.title, row.stamp])});
+  if (fingerprint !== galnetFingerprint) {
+    galnetFingerprint = fingerprint;
+    const retainedIndex = articles.findIndex((row) => row.id === galnetTickerId);
+    galnetTickerIndex = retainedIndex >= 0 ? retainedIndex : 0;
+  }
+  if (galnetTickerIndex >= articles.length) galnetTickerIndex = 0;
+  const row = articles[galnetTickerIndex];
+  galnetTickerId = row?.id || "";
+  const status = feed.busy ? "refreshing" : (feed.status || "waiting");
+  const renderKey = `${fingerprint}:${galnetTickerIndex}`;
+  if (force || renderKey !== galnetRenderKey) {
+    galnetRenderKey = renderKey;
+    text("galnet-stamp", row?.stamp || "FRONTIER NEWS SERVICE");
+    text("galnet-title", row?.title || "AWAITING GALNET DISPATCHES");
+    text("galnet-teaser", row ? galnetTeaser(row.body) : (feed.detail || "The relay will update quietly in the background."));
+    text("galnet-position", `${articles.length ? galnetTickerIndex + 1 : 0} / ${articles.length}`);
+  }
+  const badge = byId("galnet-status");
+  badge.className = `galnet-status ${status}`;
+  badge.textContent = status === "refreshing" ? "RECEIVING" : status.toUpperCase();
+  if (!byId("galnet-reader").hidden) renderGalnetReader(state);
 }
 
 function setFactList(id, rows) {
@@ -1785,6 +1848,11 @@ function renderDashboard(state) {
     routeHorizonFingerprint = "";
     sessionHighlightsFingerprint = "";
     codexCandidatesFingerprint = "";
+    galnetRenderKey = "";
+    galnetTickerIndex = 0;
+    galnetTickerId = "";
+    galnetSelectedId = "";
+    byId("galnet-reader").hidden = true;
     if (replayTimer) { clearInterval(replayTimer); replayTimer = 0; }
     atlasRequested = false;
     const atlasFrame = byId("atlas-frame");
@@ -1808,6 +1876,7 @@ function renderDashboard(state) {
   renderDeckLayout(model);
   renderPriorities(model);
   renderEvents(model);
+  renderGalnet(model);
   renderIntelligence(model);
   renderExpedition(model);
   renderSources(model);
@@ -1823,9 +1892,9 @@ function renderDashboard(state) {
     showPage(requestedPage.page);
   }
   renderAtlas(model);
-  text("rail-version", `v${model.app?.version || "5.4.1.3"} // WEBVIEW2`);
-  text("boot-version", `v${model.app?.version || "5.4.1.3"} // SECURE LOOPBACK // WEBVIEW2`);
-  text("about-version", `Version ${model.app?.version || "5.4.1.3"} // HTML Command Deck`);
+  text("rail-version", `v${model.app?.version || "5.4.1.4"} // WEBVIEW2`);
+  text("boot-version", `v${model.app?.version || "5.4.1.4"} // SECURE LOOPBACK // WEBVIEW2`);
+  text("about-version", `Version ${model.app?.version || "5.4.1.4"} // HTML Command Deck`);
   text("overview-subtitle", model.profile?.profile_label || "Journal-backed field intelligence");
   if (currentPage === "map" && !model.boot?.active) ensureAtlas();
 }
@@ -2372,6 +2441,52 @@ byId("save-deck-layout").addEventListener("click", async () => {
   }
 });
 
+function openGalnetReader() {
+  const articles = galnetArticles();
+  if (!articles.length) return showToast(model.galnet?.detail || "No Galnet dispatches are available");
+  galnetSelectedId = articles[galnetTickerIndex]?.id || articles[0].id;
+  renderGalnetReader();
+  byId("galnet-reader").hidden = false;
+  byId("galnet-close").focus();
+}
+
+document.querySelectorAll("[data-galnet-step]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const articles = galnetArticles();
+    if (!articles.length) return;
+    galnetTickerIndex = (galnetTickerIndex + number(button.dataset.galnetStep) + articles.length) % articles.length;
+    renderGalnet(model, true);
+  });
+});
+
+byId("galnet-ticker").addEventListener("click", openGalnetReader);
+byId("galnet-open").addEventListener("click", openGalnetReader);
+byId("galnet-close").addEventListener("click", () => { byId("galnet-reader").hidden = true; });
+byId("galnet-reader").addEventListener("click", (event) => {
+  if (event.target === byId("galnet-reader")) byId("galnet-reader").hidden = true;
+  const headline = event.target.closest?.("[data-galnet-select]");
+  if (!headline) return;
+  galnetSelectedId = headline.dataset.galnetSelect || "";
+  renderGalnetReader();
+});
+
+async function refreshGalnet(button) {
+  button.disabled = true;
+  const accepted = await command("refresh_galnet");
+  button.disabled = false;
+  if (accepted) showToast("Galnet refresh requested");
+}
+byId("galnet-refresh").addEventListener("click", () => refreshGalnet(byId("galnet-refresh")));
+byId("galnet-reader-refresh").addEventListener("click", () => refreshGalnet(byId("galnet-reader-refresh")));
+
+window.setInterval(() => {
+  const card = document.querySelector(".galnet-card");
+  const articles = galnetArticles();
+  if (document.hidden || !card || card.hidden || articles.length < 2 || !byId("galnet-reader").hidden) return;
+  galnetTickerIndex = (galnetTickerIndex + 1) % articles.length;
+  renderGalnet(model, true);
+}, 6500);
+
 byId("decision-primary").addEventListener("click", async () => {
   const primary = model.decision?.primary || {};
   if (!primary.command) return;
@@ -2574,6 +2689,12 @@ window.addEventListener("keydown", async (event) => {
     const input = document.querySelector(`[data-hotkey-action="${CSS.escape(hotkeyCaptureAction)}"]`);
     if (input) input.value = chord;
     await finishHotkeyCapture(`Captured ${chord}. Save Settings to activate it.`);
+    return;
+  }
+  if (event.key === "Escape" && !byId("galnet-reader").hidden) {
+    event.preventDefault();
+    byId("galnet-reader").hidden = true;
+    byId("galnet-open").focus();
     return;
   }
   if (event.key === "Escape" && document.body.classList.contains("atlas-focus")) {
