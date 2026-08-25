@@ -1,0 +1,58 @@
+:root {
+  color-scheme: dark;
+  --accent: #00d1ff;
+  --orange: #ff8a3d;
+  --green: #54e39a;
+  --red: #ff5a5a;
+  --bg: #010101;
+  --panel: #0d141c;
+  --border: #243746;
+  --text: #dcebf3;
+  --muted: #91a8b7;
+  --scale: 1;
+}
+* { box-sizing: border-box; }
+html, body { width: 132px; height: 48px; margin: 0; overflow: hidden; background: transparent; }
+body { pointer-events: none; user-select: none; }
+.heartbeat {
+  position: relative; width: 132px; height: 48px; display: grid;
+  grid-template-columns: 40px minmax(0,1fr); align-items: center; gap: 3px;
+  padding: 4px 8px 4px 4px; overflow: hidden; color: var(--accent);
+  clip-path: polygon(6px 0,126px 0,132px 6px,132px 42px,126px 48px,6px 48px,0 42px,0 6px);
+  border: 1px solid color-mix(in srgb,currentColor 34%,var(--border));
+  background: radial-gradient(circle at 15% 50%,color-mix(in srgb,currentColor 12%,transparent),transparent 33%),color-mix(in srgb,var(--panel) 94%,transparent);
+  filter: drop-shadow(0 0 4px color-mix(in srgb,currentColor 38%,transparent));
+}
+.pulse-cell { position: relative; width: 38px; height: 38px; display: grid; place-items: center; }
+.orbit,.core,.pulse { position: absolute; display: block; }
+.orbit { border: 1px solid currentColor; border-radius: 50%; opacity: .42; }
+.orbit-a { inset: 3px; border-left-color: transparent; animation: orbit 5s linear infinite; }
+.orbit-b { inset: 9px; border-right-color: transparent; animation: orbit 3.2s linear infinite reverse; }
+.core { width: 9px; height: 9px; border-radius: 50%; background: var(--bg); border: 2px solid currentColor; box-shadow: 0 0 5px currentColor; }
+.pulse { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0; }
+.telemetry-copy { z-index: 2; min-width: 0; display: grid; align-content: center; }
+.telemetry-copy small,.telemetry-copy strong,.telemetry-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.telemetry-copy small { color: currentColor; font: 700 calc(7px * var(--scale)) Consolas,monospace; letter-spacing: .09em; }
+.telemetry-copy strong { margin-top: 1px; color: var(--text); font: 700 calc(11px * var(--scale)) "Bahnschrift SemiCondensed",sans-serif; letter-spacing: .05em; }
+.telemetry-copy span { color: var(--muted); font: calc(7px * var(--scale)) Consolas,monospace; }
+.heartbeat-wave { position: absolute; z-index: 1; left: 41px; bottom: 3px; width: 84px; height: 12px; opacity: .2; }
+.heartbeat-wave polyline { fill: none; stroke: currentColor; stroke-width: 1; vector-effect: non-scaling-stroke; stroke-dasharray: 90; stroke-dashoffset: 90; }
+.edge { position: absolute; left: 8px; right: 8px; height: 1px; background: linear-gradient(90deg,transparent,currentColor 18%,currentColor 82%,transparent); opacity: .52; }
+.edge-top { top: 1px; }.edge-bottom { bottom: 1px; opacity: .3; }
+.heartbeat.beat .pulse { animation: beat-core .72s ease-out; }
+.heartbeat.beat .pulse-cell::after { content:""; position:absolute; width:9px; height:9px; border:1px solid currentColor; border-radius:50%; animation:beat-ring .82s ease-out; }
+.heartbeat.beat .heartbeat-wave polyline { animation: wave-trace .8s ease-out; }
+.heartbeat.state-change { color: var(--orange); }
+.heartbeat.journal:not(.state-change) { color: var(--accent); }
+.heartbeat.status:not(.state-change) { color: var(--green); }
+.heartbeat.stalled { color: var(--red); }
+.heartbeat.stalled .orbit { animation:none; border-style:dashed; opacity:.78; }
+.heartbeat.stalled .core { animation:stalled 1.4s steps(2,end) infinite; }
+.reduced-motion .orbit { animation:none; }
+.reduced-motion.beat .pulse { animation:beat-core .28s ease-out; }
+.reduced-motion.beat .pulse-cell::after { animation:beat-ring .3s ease-out; }
+@keyframes orbit { to { transform:rotate(360deg); } }
+@keyframes beat-core { 0%{opacity:1;transform:scale(.6)}45%{opacity:.9;transform:scale(1.55)}100%{opacity:0;transform:scale(.8)} }
+@keyframes beat-ring { 0%{opacity:.9;transform:scale(.8)}100%{opacity:0;transform:scale(3)} }
+@keyframes wave-trace { 0%{stroke-dashoffset:90;opacity:.25}45%{stroke-dashoffset:0;opacity:1}100%{stroke-dashoffset:-90;opacity:.12} }
+@keyframes stalled { 50%{opacity:.38} }

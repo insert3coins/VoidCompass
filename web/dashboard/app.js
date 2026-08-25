@@ -40,6 +40,12 @@ let decisionTagsFingerprint = "";
 let routeHorizonFingerprint = "";
 let sessionHighlightsFingerprint = "";
 let codexCandidatesFingerprint = "";
+let pageLayoutEditing = "";
+let pageLayoutOriginal = null;
+let pageLayoutDrag = null;
+let pageLayoutDragArmed = null;
+let pageLayoutDrop = null;
+const pageLayoutDefaults = {};
 
 const HOTKEY_MODIFIER_KEYS = new Set([
   "Alt", "AltGraph", "Control", "Meta", "OS", "Shift",
@@ -51,6 +57,37 @@ const HOTKEY_CODE_NAMES = {
   Delete: "Delete", Insert: "Insert", Home: "Home", End: "End",
   Backspace: "Backspace", Tab: "Tab", Escape: "Escape",
 };
+
+const STRUCTURAL_BUTTON_SELECTOR = [
+  ".nav-item", "[data-feed-filter]", ".studio-overlay-card",
+  ".studio-index-row", ".mission-row", ".workspace-tabs button",
+  "[data-analytics-view]", "[data-studio-view]",
+].join(",");
+
+function decorateCockpitButtons(root = document) {
+  const buttons = [];
+  if (root instanceof HTMLButtonElement) buttons.push(root);
+  if (root?.querySelectorAll) buttons.push(...root.querySelectorAll("button"));
+  for (const button of buttons) {
+    if (button.matches(STRUCTURAL_BUTTON_SELECTOR)) continue;
+    button.classList.add("cockpit-button");
+    button.classList.toggle("cockpit-primary", button.matches(
+      ".primary, .commission-action, #settings-save-html, #save-deck-layout, [data-page-layout-save]",
+    ));
+    button.classList.toggle("cockpit-danger", button.matches(
+      ".danger-action, .row-delete, #studio-delete-preset, #annotation-delete",
+    ));
+    button.classList.toggle("cockpit-ghost", button.matches(".ghost, .quiet-action"));
+  }
+}
+
+const cockpitButtonObserver = new MutationObserver((records) => {
+  for (const record of records) {
+    for (const node of record.addedNodes) {
+      if (node.nodeType === Node.ELEMENT_NODE) decorateCockpitButtons(node);
+    }
+  }
+});
 
 function hotkeyFinalKey(event) {
   const code = String(event.code || "");
@@ -137,6 +174,238 @@ function showToast(message) {
   toast.classList.add("show");
   window.clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => toast.classList.remove("show"), 2800);
+}
+
+const PAGE_LAYOUT_CONTAINER_SELECTOR = [
+  "#overview-modules", ".intel-grid", ".record-metrics", ".records-grid",
+  ".tool-grid", ".settings-grid", ".about-grid",
+  ".workspace-shell > .workspace-grid", ".workspace-shell > .settings-workspace-grid",
+  ".workspace-shell > .stellar-grid", ".workspace-shell > .mission-layout",
+].join(",");
+
+function layoutSlug(value, fallback = "panel") {
+  const slug = String(value || "").toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
+  return slug || fallback;
+}
+
+function pageLayoutContainers(pageName) {
+  const page = document.querySelector(`[data-page-name="${CSS.escape(pageName)}"]`);
+  if (!page) return [];
+  const containers = [...page.querySelectorAll(PAGE_LAYOUT_CONTAINER_SELECTOR)]
+    .filter((node) => node.closest(".page") === page);
+  const used = new Set();
+  containers.forEach((container, index) => {
+    if (!container.dataset.layoutContainer) {
+      const specific = [...container.classList].filter((name) => ![
+        "workspace-grid", "two", "card", "core-module",
+      ].includes(name)).join("-");
+      let key = layoutSlug(container.id || specific || `container-${index + 1}`, `container-${index + 1}`);
+      let suffix = 2;
+      while (used.has(key)) key = `${layoutSlug(container.id || specific || "container")}-${suffix++}`;
+      container.dataset.layoutContainer = key;
+    }
+    used.add(container.dataset.layoutContainer);
+  });
+  return containers.filter((container) => layoutPanels(container).length > 1);
+}
+
+function layoutPanels(container) {
+  const candidates = [...container.children].filter((node) => node.matches(
+    "article, aside, main, section.telemetry-strip, section.workspace-card, .tool-card",
+  ));
+  const used = new Set();
+  candidates.forEach((panel, index) => {
+    if (!panel.dataset.layoutPanel) {
+      const heading = panel.querySelector(":scope > header span")?.textContent
+        ?.split("·", 1)[0]?.trim();
+      const identity = panel.dataset.deckModule
+        || heading
+        || panel.querySelector(":scope > h3")?.textContent
+        || panel.querySelector(":scope > small")?.textContent
+        || [...panel.classList].find((name) => name !== "card" && name !== "workspace-card")
+        || `panel-${index + 1}`;
+      let key = layoutSlug(identity, `panel-${index + 1}`);
+      let suffix = 2;
+      while (used.has(key)) key = `${layoutSlug(identity)}-${suffix++}`;
+      panel.dataset.layoutPanel = key;
+    }
+    used.add(panel.dataset.layoutPanel);
+  });
+  return candidates;
+}
+
+function capturePageLayout(pageName) {
+  return Object.fromEntries(pageLayoutContainers(pageName).map((container) => [
+    container.dataset.layoutContainer,
+    layoutPanels(container).map((panel) => panel.dataset.layoutPanel),
+  ]));
+}
+
+function applyPageLayout(pageName, layout) {
+  if (!layout || typeof layout !== "object") return;
+  for (const container of pageLayoutContainers(pageName)) {
+    const saved = layout[container.dataset.layoutContainer];
+    if (!Array.isArray(saved)) continue;
+    const panels = layoutPanels(container);
+    const indexed = new Map(panels.map((panel) => [panel.dataset.layoutPanel, panel]));
+    const ordered = saved.map((key) => indexed.get(key)).filter(Boolean);
+    ordered.push(...panels.filter((panel) => !ordered.includes(panel)));
+    const current = panels.map((panel) => panel.dataset.layoutPanel).join("\u0000");
+    const desired = ordered.map((panel) => panel.dataset.layoutPanel).join("\u0000");
+    if (pageName === "overview") panels.forEach((panel) => { panel.style.order = ""; });
+    if (current !== desired) container.append(...ordered);
+  }
+}
+
+function ensurePageLayoutControl(pageName) {
+  if (["map", "overlay-studio"].includes(pageName)) return;
+  const containers = pageLayoutContainers(pageName);
+  if (!containers.length) return;
+  const page = document.querySelector(`[data-page-name="${CSS.escape(pageName)}"]`);
+  const header = page?.querySelector(":scope > .page-title, :scope > .about-hero");
+  if (!header || header.querySelector("[data-page-layout-open]")) return;
+  let actions = header.querySelector(":scope > .title-actions");
+  if (!actions) {
+    actions = document.createElement("div");
+    actions.className = "title-actions";
+    header.appendChild(actions);
+  }
+  const button = document.createElement("button");
+  button.className = "ghost";
+  button.dataset.pageLayoutOpen = pageName;
+  button.textContent = "ARRANGE PANELS";
+  actions.prepend(button);
+  decorateCockpitButtons(button);
+}
+
+function preparePageLayout(pageName) {
+  const containers = pageLayoutContainers(pageName);
+  if (!containers.length) return;
+  if (!pageLayoutDefaults[pageName]) pageLayoutDefaults[pageName] = capturePageLayout(pageName);
+  if (pageLayoutEditing !== pageName) applyPageLayout(pageName, model.page_layouts?.[pageName]);
+  ensurePageLayoutControl(pageName);
+}
+
+function normalisePageVisualOrder(pageName) {
+  for (const container of pageLayoutContainers(pageName)) {
+    const panels = layoutPanels(container);
+    const originalIndex = new Map(panels.map((panel, index) => [panel, index]));
+    const ordered = [...panels].sort((left, right) => {
+      const leftOrder = Number.parseFloat(getComputedStyle(left).order);
+      const rightOrder = Number.parseFloat(getComputedStyle(right).order);
+      const a = Number.isFinite(leftOrder) ? leftOrder : 0;
+      const b = Number.isFinite(rightOrder) ? rightOrder : 0;
+      return a - b || originalIndex.get(left) - originalIndex.get(right);
+    });
+    container.append(...ordered);
+    panels.forEach((panel) => { panel.style.order = ""; });
+  }
+}
+
+function addPanelLayoutHandles(pageName) {
+  for (const container of pageLayoutContainers(pageName)) {
+    const panels = layoutPanels(container);
+    panels.forEach((panel, index) => {
+      panel.classList.add("layout-panel");
+      panel.draggable = true;
+      const handle = document.createElement("div");
+      handle.className = "panel-layout-handle";
+      handle.innerHTML = `<span title="Drag this panel">⠿</span><button type="button" data-panel-move="up" ${index === 0 ? "disabled" : ""} aria-label="Move panel earlier">↑</button><button type="button" data-panel-move="down" ${index === panels.length - 1 ? "disabled" : ""} aria-label="Move panel later">↓</button>`;
+      panel.appendChild(handle);
+    });
+  }
+}
+
+function refreshPanelLayoutHandles(pageName) {
+  for (const container of pageLayoutContainers(pageName)) {
+    const panels = layoutPanels(container);
+    panels.forEach((panel, index) => {
+      const controls = panel.querySelector(":scope > .panel-layout-handle");
+      if (!controls) return;
+      controls.querySelector('[data-panel-move="up"]').disabled = index === 0;
+      controls.querySelector('[data-panel-move="down"]').disabled = index === panels.length - 1;
+    });
+  }
+}
+
+function removePanelLayoutHandles(pageName) {
+  const page = document.querySelector(`[data-page-name="${CSS.escape(pageName)}"]`);
+  page?.querySelectorAll(":scope .panel-layout-handle").forEach((node) => node.remove());
+  page?.querySelectorAll(":scope .layout-panel").forEach((panel) => {
+    panel.classList.remove(
+      "layout-panel", "layout-dragging", "layout-drop-before", "layout-drop-after",
+    );
+    panel.removeAttribute("draggable");
+  });
+  page?.querySelector(":scope > .page-layout-toolbar")?.remove();
+  page?.classList.remove("layout-editing");
+  pageLayoutDrop = null;
+}
+
+function beginPageLayout(pageName) {
+  if (pageLayoutEditing) cancelPageLayout();
+  normalisePageVisualOrder(pageName);
+  pageLayoutEditing = pageName;
+  pageLayoutOriginal = capturePageLayout(pageName);
+  const page = document.querySelector(`[data-page-name="${CSS.escape(pageName)}"]`);
+  page.classList.add("layout-editing");
+  const toolbar = document.createElement("section");
+  toolbar.className = "page-layout-toolbar";
+  toolbar.innerHTML = `<div><small>PROFILE-AWARE PANEL LAYOUT</small><strong>${escapeHtml(page.querySelector(":scope > .page-title h2")?.textContent || pageName)}</strong><span>Drag panels or use the arrow controls. Lists and controls remain intact.</span></div><div><button type="button" data-page-layout-cancel>CANCEL</button><button type="button" data-page-layout-reset>RESET DEFAULT</button><button type="button" class="primary" data-page-layout-save>SAVE TO THIS PROFILE</button></div>`;
+  page.querySelector(":scope > .page-title, :scope > .about-hero")?.insertAdjacentElement("afterend", toolbar);
+  addPanelLayoutHandles(pageName);
+  decorateCockpitButtons(toolbar);
+  toolbar.scrollIntoView({block: "nearest", behavior: "smooth"});
+}
+
+function cancelPageLayout() {
+  if (!pageLayoutEditing) return;
+  const pageName = pageLayoutEditing;
+  removePanelLayoutHandles(pageName);
+  if (pageLayoutOriginal) applyPageLayout(pageName, pageLayoutOriginal);
+  pageLayoutEditing = "";
+  pageLayoutOriginal = null;
+  pageLayoutDrag = null;
+  pageLayoutDragArmed = null;
+  pageLayoutDrop = null;
+}
+
+async function savePageLayout() {
+  if (!pageLayoutEditing) return;
+  const pageName = pageLayoutEditing;
+  const containers = capturePageLayout(pageName);
+  const accepted = await command("save_page_layout", {page: pageName, containers});
+  if (!accepted) {
+    showToast("Panel layout could not be saved");
+    return;
+  }
+  model.page_layouts ||= {};
+  model.page_layouts[pageName] = containers;
+  removePanelLayoutHandles(pageName);
+  pageLayoutEditing = "";
+  pageLayoutOriginal = null;
+  pageLayoutDrag = null;
+  pageLayoutDragArmed = null;
+  pageLayoutDrop = null;
+  showToast("Panel layout saved to this commander profile");
+}
+
+async function resetPageLayout() {
+  if (!pageLayoutEditing) return;
+  const pageName = pageLayoutEditing;
+  const accepted = await command("reset_page_layout", {page: pageName});
+  if (!accepted) return;
+  removePanelLayoutHandles(pageName);
+  model.page_layouts ||= {};
+  delete model.page_layouts[pageName];
+  applyPageLayout(pageName, pageLayoutDefaults[pageName] || {});
+  pageLayoutEditing = "";
+  pageLayoutOriginal = null;
+  pageLayoutDrag = null;
+  pageLayoutDragArmed = null;
+  pageLayoutDrop = null;
+  showToast("Default panel order restored for this profile");
 }
 
 function applyTheme(theme = {}) {
@@ -257,11 +526,8 @@ function renderHeader(state) {
 
 function renderAdaptive(state) {
   const adaptive = state.adaptive || {};
-  const session = adaptive.session || {};
-  text("adaptive-label", adaptive.label || "GENERAL FLIGHT");
-  text("adaptive-detail", `${adaptive.automatic ? "AUTO" : "MANUAL LOCK"} · ${numeric(session.events)} journal actions · ${numeric(session.jumps)} jumps · ${numeric(session.scans)} survey actions`);
-  const select = byId("adaptive-mode");
-  if (select && select !== document.activeElement) select.value = adaptive.automatic ? "auto" : adaptive.mode || "general";
+  // Activity awareness now stays automatic and quietly drives contextual
+  // emphasis; the retired manual mode strip no longer consumes dashboard space.
   document.body.dataset.activity = adaptive.mode || "general";
 }
 
@@ -328,6 +594,10 @@ function renderSurvey(state) {
   badge.textContent = badgeText;
   badge.style.color = survey.complete ? "var(--green)" : survey.undiscovered ? "var(--yellow)" : "var(--dim)";
   text("workboard-badge", survey.complete ? "COMPLETE" : "LIVE");
+  text("workboard-system", state.flight?.system, "NO SYSTEM DATA");
+  text("workboard-class", survey.star_class ? `PRIMARY · ${survey.star_class}` : "PRIMARY STAR · CLASS UNKNOWN");
+  text("workboard-percent", survey.total_known ? `${Math.round(completion)}%` : "—");
+  text("workboard-count", `${number(survey.scanned)} / ${survey.total_known ? number(survey.total) : "?"} BODIES`);
 
   const rows = Array.isArray(survey.notables) ? survey.notables : [];
   const notable = byId("survey-notables");
@@ -345,9 +615,28 @@ function renderSurvey(state) {
 
   const bodies = Array.isArray(survey.bodies) ? survey.bodies : [];
   const workboard = byId("body-workboard");
+  const orbits = byId("workboard-orbits");
+  orbits.replaceChildren(...bodies.slice(0, 18).map((row, index) => {
+    const marker = document.createElement("i");
+    marker.className = [
+      "workboard-body-marker",
+      row.priority ? "priority" : "",
+      row.mapped ? "mapped" : "",
+      number(row.bio_count) ? "bio" : "",
+      number(row.geo_count) ? "geo" : "",
+      row.landable === true ? "landable" : "",
+    ].filter(Boolean).join(" ");
+    marker.style.setProperty("--body-index", String(index));
+    marker.title = `${row.name || "Unknown body"} · ${row.detail || "Survey record"}`;
+    const label = document.createElement("b");
+    label.textContent = row.body_id > 0 ? String(row.body_id) : String(index + 1);
+    marker.appendChild(label);
+    return marker;
+  }));
+  orbits.classList.toggle("empty", bodies.length === 0);
   if (!bodies.length) {
     const empty = document.createElement("div");
-    empty.className = "body-row";
+    empty.className = "body-row empty";
     const copy = document.createElement("div");
     const title = document.createElement("strong");
     title.textContent = "AWAITING FSS / DSS DATA";
@@ -357,9 +646,11 @@ function renderSurvey(state) {
     empty.append(copy);
     workboard.replaceChildren(empty);
   } else {
-    workboard.replaceChildren(...bodies.slice(0, 16).map((row) => {
+    workboard.replaceChildren(...bodies.slice(0, 18).map((row, index) => {
       const item = document.createElement("div");
-      item.className = "body-row";
+      item.className = `body-row${row.priority ? " priority" : ""}${row.mapped ? " mapped" : ""}`;
+      const indexNode = document.createElement("i");
+      indexNode.textContent = row.body_id > 0 ? String(row.body_id).padStart(2, "0") : String(index + 1).padStart(2, "0");
       const copy = document.createElement("div");
       const name = document.createElement("strong");
       name.textContent = row.name || "UNKNOWN BODY";
@@ -368,7 +659,7 @@ function renderSurvey(state) {
       copy.append(name, detail);
       const badgeNode = document.createElement("b");
       badgeNode.textContent = row.badge || "SCAN";
-      item.append(copy, badgeNode);
+      item.append(indexNode, copy, badgeNode);
       return item;
     }));
   }
@@ -531,7 +822,7 @@ function renderDeckLayout(state) {
 function renderDeckModuleControls(available = []) {
   if (!deckLayoutDraft) return;
   const labels = Object.fromEntries(available.map((row) => [row.id, row.label]));
-  byId("deck-module-controls").replaceChildren(...deckLayoutDraft.order.map((id, index) => {
+  byId("deck-module-controls").replaceChildren(...deckLayoutDraft.order.map((id) => {
     const row = document.createElement("div");
     row.className = "deck-module-row";
     row.dataset.moduleId = id;
@@ -541,13 +832,7 @@ function renderDeckModuleControls(available = []) {
     visible.dataset.deckVisible = id;
     const label = document.createElement("label");
     label.textContent = labels[id] || id;
-    const controls = document.createElement("span");
-    const up = document.createElement("button");
-    up.textContent = "↑"; up.dataset.deckMove = "up"; up.dataset.moduleId = id; up.disabled = index === 0;
-    const down = document.createElement("button");
-    down.textContent = "↓"; down.dataset.deckMove = "down"; down.dataset.moduleId = id; down.disabled = index === deckLayoutDraft.order.length - 1;
-    controls.append(up, down);
-    row.append(visible, label, controls);
+    row.append(visible, label);
     return row;
   }));
 }
@@ -656,7 +941,23 @@ function renderSources(state) {
   const sources = state.sources || {};
   const mapping = [["journal", "journal-state"], ["status", "status-state"], ["navigation", "nav-state"]];
   for (const [key, id] of mapping) text(id, String(sources[key] || "cached").toUpperCase());
-  byId("journal-light").classList.toggle("live", sources.journal === "live");
+  for (const key of ["journal", "status", "nav"]) {
+    const sourceKey = key === "nav" ? "navigation" : key;
+    byId(`${key}-light`)?.classList.toggle("live", sources[sourceKey] === "live");
+  }
+  text("ui-state", sources.ui === "warn" ? "RECOVERED" : "LIVE");
+  byId("ui-light")?.classList.toggle("live", sources.ui !== "warn");
+  byId("ui-light")?.classList.toggle("warn", sources.ui === "warn");
+  const heartbeat = sources.heartbeat || {};
+  const uiHeartbeat = byId("ui-heartbeat");
+  const pulseId = String(heartbeat.pulse_id ?? "");
+  if (pulseId && uiHeartbeat?.dataset.pulse !== pulseId) {
+    uiHeartbeat.dataset.pulse = pulseId;
+    uiHeartbeat.classList.remove("beat");
+    void uiHeartbeat.offsetWidth;
+    uiHeartbeat.classList.add("beat");
+    uiHeartbeat.title = `${heartbeat.activity || "TELEMETRY"} · ${heartbeat.state || "FLIGHT"}`;
+  }
 }
 
 function renderAtlas(state) {
@@ -1423,12 +1724,11 @@ function renderSettingsWorkspace(data) {
   root.classList.remove("loading-panel");
   root.innerHTML = `<section class="settings-workspace-grid">
     ${workspaceCard("CORE PATHS & ACCESSIBILITY", `${settingInput("setting-journal", "Journal folder", value.journal_path)}${settingInput("setting-screenshots", "Screenshot folder", value.screenshots_path)}${settingToggle("setting-screenshots-enabled", "Convert BMP screenshots to PNG", "Watch the configured screenshot folder.", value.screenshots_enabled)}<label class="settings-input"><span>Application scale</span><select id="setting-ui-scale">${[90,100,110,125,140].map((item) => `<option ${number(value.ui_scale_percent,100) === item ? "selected" : ""}>${item}</option>`).join("")}</select></label><label class="settings-input"><span>Navigation animation</span><select id="setting-motion-intensity">${["Calm","Standard","Energetic"].map((item) => `<option ${String(value.hud_animation_intensity || "Standard") === item ? "selected" : ""}>${item}</option>`).join("")}</select></label>${settingToggle("setting-reduced-motion", "Reduced motion", "Gentler activity pulses and transitions.", value.reduced_motion_enabled)}`)}
-    ${workspaceCard("ADAPTIVE COMMAND DECK", `${settingToggle("setting-adaptive", "Activity-aware command deck", "Follow exploration, mining, surface and Carrier journal state.", value.adaptive_command_enabled)}<label class="settings-input"><span>Activity mode</span><select id="setting-adaptive-mode">${["auto","general","exploration","mining","ground","carrier","station"].map((item) => `<option value="${item}" ${String(value.adaptive_mode_lock || "auto") === item ? "selected" : ""}>${item.toUpperCase()}</option>`).join("")}</select></label><div class="health-readout"><b>${escapeHtml(health.level || "NOMINAL")}</b><span>UI queue ${numeric(health.ui?.pending || health.ui_pending)} · max lag ${numeric(health.ui?.max_lag_ms || health.ui_max_lag_ms)} ms · disk queue ${numeric(health.persistence?.pending || health.writes_pending)}</span></div>`)}
     ${workspaceCard("GLOBAL HOTKEYS", `${settingToggle("setting-hotkeys-enabled", "Enable system-wide hotkeys", "Shortcuts remain profile-aware and work while Elite has focus.", value.overlay_hotkeys_enabled)}<div class="hotkey-status" id="hotkey-status">Click RECORD, then press the complete shortcut.</div><div class="hotkey-list">${hotkeys}</div><div class="workspace-actions"><button id="hotkey-defaults">RESTORE DEFAULTS</button></div>`, `${(data.hotkeys || []).filter((row) => row.value).length} ACTIVE`)}
     ${workspaceCard("THEME WORKSHOP", `<div class="theme-editor-head"><label>CUSTOM THEME NAME<input id="custom-theme-name" value="${escapeHtml((editor.custom || []).includes(editor.name) ? editor.name : `${editor.name || "Void"} Custom`)}"></label><label>EXISTING CUSTOM THEME<select id="custom-theme-existing"><option value="">SELECT TO DELETE</option>${(editor.custom || []).map((name) => `<option>${escapeHtml(name)}</option>`).join("")}</select></label></div><details><summary>EDIT COMPLETE PALETTE</summary><div class="theme-colour-grid">${themeColors}</div></details><div class="workspace-actions wrap"><button data-ws-page="settings" data-ws-op="save_theme">SAVE & APPLY CUSTOM THEME</button><button class="danger-action" data-ws-page="settings" data-ws-op="delete_theme">DELETE SELECTED CUSTOM THEME</button></div>`, `${(editor.custom || []).length} CUSTOM`)}
     ${workspaceCard("EDSM & EDDN", `${settingInput("setting-edsm-name", "EDSM commander name", value.edsm_cmdr_name)}${settingInput("setting-edsm-key", "EDSM API key", value.edsm_api_key, "password")}${settingToggle("setting-edsm-upload", "Upload exploration events to EDSM", "Uses the active commander's credentials.", value.edsm_upload_enabled)}${settingToggle("setting-eddn-upload", "Upload visited markets to EDDN", "Community market publishing remains independent from Trade UI.", value.eddn_market_upload_enabled)}<p class="settings-note">${numeric(data.eddn?.uploads)} EDDN uploads this run${data.eddn?.last_error ? ` · LAST ERROR ${escapeHtml(data.eddn.last_error)}` : ""}</p><div class="workspace-actions"><button data-ws-page="settings" data-ws-op="test_edsm">TEST EDSM CREDENTIALS</button></div>`)}
     ${workspaceCard("CARRIER INTEGRATION", `${settingInput("setting-discord", "Discord webhook URL", value.carrier_discord_webhook_url, "password")}<p class="settings-note">One webhook handles personal and Squadron Carrier status, jump and expedition updates.</p><div class="workspace-actions"><button data-ws-page="settings" data-ws-op="test_discord">SEND TEST PREVIEW</button><button data-page="carrier">OPEN CARRIER COMMAND</button></div>`)}
-    ${workspaceCard("DIAGNOSTICS & RECOVERY", `${settingToggle("setting-runtime-trace", "Runtime performance trace", "Retain startup and UI timing evidence.", value.runtime_trace_enabled)}${settingToggle("setting-crash-report", "Crash and UI-freeze reporter", "Rotate current and previous diagnostic logs.", value.crash_reporting_enabled)}${settingToggle("setting-safe-mode", "Safe unclean-shutdown recovery", "Restore the last graceful profile checkpoint first.", value.recovery_safe_mode_enabled)}${settingToggle("setting-auto-backups", "Automatic profile safety snapshots", "Keep up to five snapshots before upgrades and cache rebuilds. Manual backup and restore rollback remain available.", value.automatic_profile_backups_enabled)}${settingToggle("setting-cache-edsm", "Upload history during cache rebuild", "Optional EDSM backfill while reconstructing profile history.", value.edsm_backfill_on_cache_rebuild)}<div class="workspace-actions wrap"><button data-ws-page="settings" data-ws-op="rebuild_cache">REBUILD CACHE</button><button data-ws-page="settings" data-ws-op="support_bundle">CREATE SUPPORT BUNDLE</button><button data-command="open_logs">OPEN LOGS</button><button data-ws-page="settings" data-ws-op="run_setup">RUN SETUP</button></div>`)}
+    ${workspaceCard("DIAGNOSTICS & RECOVERY", `<div class="health-readout"><b>${escapeHtml(health.level || "NOMINAL")}</b><span>UI queue ${numeric(health.ui?.pending || health.ui_pending)} · max lag ${numeric(health.ui?.max_lag_ms || health.ui_max_lag_ms)} ms · disk queue ${numeric(health.persistence?.pending || health.writes_pending)}</span></div>${settingToggle("setting-runtime-trace", "Runtime performance trace", "Retain startup and UI timing evidence.", value.runtime_trace_enabled)}${settingToggle("setting-crash-report", "Crash and UI-freeze reporter", "Rotate current and previous diagnostic logs.", value.crash_reporting_enabled)}${settingToggle("setting-safe-mode", "Safe unclean-shutdown recovery", "Restore the last graceful profile checkpoint first.", value.recovery_safe_mode_enabled)}${settingToggle("setting-auto-backups", "Automatic profile safety snapshots", "Keep up to five snapshots before upgrades and cache rebuilds. Manual backup and restore rollback remain available.", value.automatic_profile_backups_enabled)}${settingToggle("setting-cache-edsm", "Upload history during cache rebuild", "Optional EDSM backfill while reconstructing profile history.", value.edsm_backfill_on_cache_rebuild)}<div class="workspace-actions wrap"><button data-ws-page="settings" data-ws-op="rebuild_cache">REBUILD CACHE</button><button data-ws-page="settings" data-ws-op="support_bundle">CREATE SUPPORT BUNDLE</button><button data-command="open_logs">OPEN LOGS</button><button data-ws-page="settings" data-ws-op="run_setup">RUN SETUP</button></div>`)}
   </section><p id="settings-test-status" class="workspace-status ${escapeHtml(data.tools?.status || "ready")}">${escapeHtml(data.tools?.detail || "Integration tests have not run this session.")}</p><footer class="settings-savebar"><span>All settings belong to the active commander profile.</span><button id="settings-save-html">SAVE SETTINGS</button></footer>`;
 }
 
@@ -1436,6 +1736,7 @@ function renderWorkspace(state) {
   const workspace = state.workspace || {};
   const page = workspace.page || "";
   if (page !== currentPage || !workspace.ready) return;
+  if (pageLayoutEditing === page) return;
   const fingerprintData = page === "analytics"
     ? {...(workspace.data || {}), current: {...(workspace.data?.current || {}), elapsed: ""}}
     : (workspace.data || {});
@@ -1463,12 +1764,15 @@ function renderWorkspace(state) {
     ledger: renderLedgerWorkspace, settings: renderSettingsWorkspace,
   };
   renderers[page]?.(workspace.data || {});
+  preparePageLayout(page);
 }
 
 function renderDashboard(state) {
   const nextProfileKey = model.profile?.key || "default";
   if (nextProfileKey !== profileKey) {
+    cancelPageLayout();
     profileKey = nextProfileKey;
+    Object.keys(pageLayoutDefaults).forEach((page) => delete pageLayoutDefaults[page]);
     workspaceFingerprints = {};
     missionSelectedId = "";
     orrerySelectedBodyId = "";
@@ -1508,6 +1812,7 @@ function renderDashboard(state) {
   renderExpedition(model);
   renderSources(model);
   renderWorkspace(model);
+  preparePageLayout(currentPage);
   // The Studio has a richer DOM than the briefing pages. Hydrate it only
   // while visible so routine journal publications stay inexpensive.
   if (currentPage === "overlay-studio") renderOverlayStudio(model);
@@ -1518,9 +1823,9 @@ function renderDashboard(state) {
     showPage(requestedPage.page);
   }
   renderAtlas(model);
-  text("rail-version", `v${model.app?.version || "5.4.1.2"} // WEBVIEW2`);
-  text("boot-version", `v${model.app?.version || "5.4.1.2"} // SECURE LOOPBACK // WEBVIEW2`);
-  text("about-version", `Version ${model.app?.version || "5.4.1.2"} // HTML Command Deck`);
+  text("rail-version", `v${model.app?.version || "5.4.1.3"} // WEBVIEW2`);
+  text("boot-version", `v${model.app?.version || "5.4.1.3"} // SECURE LOOPBACK // WEBVIEW2`);
+  text("about-version", `Version ${model.app?.version || "5.4.1.3"} // HTML Command Deck`);
   text("overview-subtitle", model.profile?.profile_label || "Journal-backed field intelligence");
   if (currentPage === "map" && !model.boot?.active) ensureAtlas();
 }
@@ -1540,6 +1845,7 @@ function queueDashboardRender() {
 function renderState(state) {
   model = state || {};
   applyTheme(model.theme || {});
+  document.body.classList.toggle("reduced-motion", Boolean(model.ui?.reduced_motion));
   const nextBootActive = Boolean(model.boot?.active || model.onboarding?.active);
   const leavingBoot = bootActive && !nextBootActive;
   bootActive = nextBootActive;
@@ -1586,6 +1892,7 @@ async function eventLoop() {
 function showPage(name) {
   const page = document.querySelector(`[data-page-name="${CSS.escape(name)}"]`);
   if (!page) return;
+  if (pageLayoutEditing && pageLayoutEditing !== name) cancelPageLayout();
   if (name === "settings" && currentPage !== "settings") workspaceFingerprints.settings = "";
   currentPage = name;
   localStorage.setItem(`voidcompass.dashboard.page.${profileKey}`, name);
@@ -1602,6 +1909,7 @@ function showPage(name) {
   if (name === "map") syncAtlasViewport();
   if (name === "map") window.setTimeout(syncAtlasLayerRequest, 160);
   if (name === "overlay-studio") renderOverlayStudio(model);
+  preparePageLayout(name);
 }
 
 function studioPointerPosition(event, drag) {
@@ -1700,14 +2008,33 @@ async function nudgeStudioOverlay(vector) {
 }
 
 document.addEventListener("click", async (event) => {
-  const deckMove = event.target.closest("[data-deck-move]");
-  if (deckMove && deckLayoutDraft) {
-    const index = deckLayoutDraft.order.indexOf(deckMove.dataset.moduleId);
-    const offset = deckMove.dataset.deckMove === "up" ? -1 : 1;
-    const target = index + offset;
-    if (index >= 0 && target >= 0 && target < deckLayoutDraft.order.length) {
-      [deckLayoutDraft.order[index], deckLayoutDraft.order[target]] = [deckLayoutDraft.order[target], deckLayoutDraft.order[index]];
-      renderDeckModuleControls(model.dashboard_layout?.available_modules || []);
+  const layoutOpen = event.target.closest("[data-page-layout-open]");
+  if (layoutOpen) {
+    beginPageLayout(layoutOpen.dataset.pageLayoutOpen);
+    return;
+  }
+  if (event.target.closest("[data-page-layout-cancel]")) {
+    cancelPageLayout();
+    return;
+  }
+  if (event.target.closest("[data-page-layout-reset]")) {
+    await resetPageLayout();
+    return;
+  }
+  if (event.target.closest("[data-page-layout-save]")) {
+    await savePageLayout();
+    return;
+  }
+  const panelMove = event.target.closest("[data-panel-move]");
+  if (panelMove && pageLayoutEditing) {
+    const panel = panelMove.closest("[data-layout-panel]");
+    const panels = panel ? layoutPanels(panel.parentElement) : [];
+    const index = panels.indexOf(panel);
+    const targetIndex = index + (panelMove.dataset.panelMove === "up" ? -1 : 1);
+    if (index >= 0 && targetIndex >= 0 && targetIndex < panels.length) {
+      if (targetIndex < index) panel.parentElement.insertBefore(panel, panels[targetIndex]);
+      else panel.parentElement.insertBefore(panel, panels[targetIndex].nextSibling);
+      refreshPanelLayoutHandles(pageLayoutEditing);
     }
     return;
   }
@@ -1821,8 +2148,6 @@ document.addEventListener("click", async (event) => {
       reduced_motion_enabled: Boolean(byId("setting-reduced-motion")?.checked),
       hud_animation_intensity: byId("setting-motion-intensity")?.value || "Standard",
       overlay_hotkeys_enabled: Boolean(byId("setting-hotkeys-enabled")?.checked),
-      adaptive_command_enabled: Boolean(byId("setting-adaptive")?.checked),
-      adaptive_mode_lock: byId("setting-adaptive-mode")?.value || "auto",
       edsm_cmdr_name: byId("setting-edsm-name")?.value.trim() || "",
       edsm_api_key: byId("setting-edsm-key")?.value.trim() || "",
       edsm_upload_enabled: Boolean(byId("setting-edsm-upload")?.checked),
@@ -1975,10 +2300,12 @@ document.addEventListener("click", async (event) => {
   const action = button.dataset.command;
   if (action === "rebuild_cache" && !window.confirm("Rebuild the profile's journal cache now?")) return;
   button.classList.add("busy");
+  button.setAttribute("aria-busy", "true");
   const payload = button.dataset.target ? {target: button.dataset.target} : {};
   if (button.dataset.enabled !== undefined) payload.enabled = button.dataset.enabled === "true";
   const accepted = await command(action, payload);
   button.classList.remove("busy");
+  button.removeAttribute("aria-busy");
   if (accepted && action !== "copy_next") showToast("Command handed to the flight computer");
 });
 
@@ -2012,9 +2339,6 @@ document.addEventListener("change", async (event) => {
   } else if (event.target.id === "replay-session") {
     replaySelectedSessionIndex = Math.max(0, number(event.target.value));
     renderChronicleWorkspace(model.workspace?.data || {});
-  } else if (event.target.id === "adaptive-mode") {
-    const accepted = await command("set_adaptive_mode", {mode: event.target.value});
-    showToast(accepted ? "Command Deck mode updated" : "That activity mode is unavailable");
   }
 });
 
@@ -2259,6 +2583,76 @@ window.addEventListener("keydown", async (event) => {
   }
 }, true);
 
+document.addEventListener("pointerdown", (event) => {
+  if (!pageLayoutEditing) return;
+  const grip = event.target.closest(".panel-layout-handle > span");
+  pageLayoutDragArmed = grip?.closest("[data-layout-panel]") || null;
+});
+
+document.addEventListener("pointerup", () => { pageLayoutDragArmed = null; });
+
+document.addEventListener("dragstart", (event) => {
+  if (!pageLayoutEditing) return;
+  const panel = event.target.closest?.("[data-layout-panel]");
+  if (!panel || panel !== pageLayoutDragArmed) {
+    event.preventDefault();
+    return;
+  }
+  pageLayoutDrag = panel;
+  panel.classList.add("layout-dragging");
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", panel.dataset.layoutPanel || "panel");
+});
+
+document.addEventListener("dragover", (event) => {
+  if (!pageLayoutDrag) return;
+  const target = event.target.closest?.("[data-layout-panel]");
+  if (!target || target === pageLayoutDrag || target.parentElement !== pageLayoutDrag.parentElement) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  const rect = target.getBoundingClientRect();
+  const xWeight = Math.abs((event.clientX - (rect.left + rect.width / 2)) / Math.max(1, rect.width));
+  const yWeight = Math.abs((event.clientY - (rect.top + rect.height / 2)) / Math.max(1, rect.height));
+  const after = xWeight > yWeight
+    ? event.clientX >= rect.left + rect.width / 2
+    : event.clientY >= rect.top + rect.height / 2;
+  if (pageLayoutDrop?.target === target && pageLayoutDrop.after === after) return;
+  document.querySelectorAll(".layout-drop-before,.layout-drop-after").forEach((panel) => {
+    panel.classList.remove("layout-drop-before", "layout-drop-after");
+  });
+  pageLayoutDrop = {target, after};
+  target.classList.add(after ? "layout-drop-after" : "layout-drop-before");
+});
+
+document.addEventListener("dragleave", (event) => {
+  const target = event.target.closest?.("[data-layout-panel]");
+  if (!target || target.contains(event.relatedTarget)) return;
+  if (pageLayoutDrop?.target === target) {
+    target.classList.remove("layout-drop-before", "layout-drop-after");
+    pageLayoutDrop = null;
+  }
+});
+
+document.addEventListener("drop", (event) => {
+  if (!pageLayoutDrag || !pageLayoutDrop) return;
+  event.preventDefault();
+  const {target, after} = pageLayoutDrop;
+  if (target !== pageLayoutDrag && target.parentElement === pageLayoutDrag.parentElement) {
+    target.parentElement.insertBefore(pageLayoutDrag, after ? target.nextSibling : target);
+    refreshPanelLayoutHandles(pageLayoutEditing);
+  }
+});
+
+document.addEventListener("dragend", () => {
+  if (pageLayoutDrag) pageLayoutDrag.classList.remove("layout-dragging");
+  document.querySelectorAll(".layout-drop-before,.layout-drop-after").forEach((panel) => {
+    panel.classList.remove("layout-drop-before", "layout-drop-after");
+  });
+  pageLayoutDrag = null;
+  pageLayoutDragArmed = null;
+  pageLayoutDrop = null;
+});
+
 window.addEventListener("error", (event) => {
   reportClientError(event.error || event.message, "window-error");
 });
@@ -2268,5 +2662,7 @@ window.addEventListener("unhandledrejection", (event) => {
 });
 
 window.setInterval(() => text("footer-clock", new Date().toLocaleTimeString([], {hour12: false})), 500);
+decorateCockpitButtons();
+cockpitButtonObserver.observe(document.body, {childList: true, subtree: true});
 showPage("overview");
 eventLoop();

@@ -229,6 +229,13 @@ class HtmlDashboardMixin:
         else:
             sources["overall"] = "CACHED"
             sources["detail"] = "WAITING FOR GAME"
+        stall_age = (
+            now - float(getattr(self, "_last_ui_stall_ts", 0.0) or 0.0)
+            if getattr(self, "_last_ui_stall_ts", 0.0) else None
+        )
+        sources["ui"] = "warn" if stall_age is not None and stall_age < 30 else "live"
+        heartbeat = getattr(getattr(self, "heartbeat_hud", None), "_html_render_model", None)
+        sources["heartbeat"] = dict(heartbeat or {})
         return sources
 
     def _html_dashboard_route(self):
@@ -356,10 +363,20 @@ class HtmlDashboardMixin:
             )
             body_payload = {
                 "name": _text(row.get("name") or f"Body {row.get('body_id', '?')}", 140),
+                "body_id": _integer(row.get("body_id"), 0),
                 "type": _text(body_class, 100),
                 "detail": self._html_dashboard_body_detail(row),
                 "badge": self._html_dashboard_body_badge(row),
                 "priority": priority,
+                "bio_count": max(0, _integer(row.get("bio_count"))),
+                "geo_count": max(0, _integer(row.get("geo_count"))),
+                "mapped": bool(row.get("dss_complete")),
+                "terraformable": bool(row.get("terraformable")),
+                "landable": (
+                    bool(row.get("landable"))
+                    if "landable" in row and row.get("landable") is not None
+                    else None
+                ),
             }
             bodies.append(body_payload)
             if priority:
@@ -1566,7 +1583,7 @@ class HtmlDashboardMixin:
         for key in (
             "journal_path", "screenshots_path", "screenshots_enabled",
             "ui_scale_percent", "reduced_motion_enabled", "hud_animation_intensity",
-            "overlay_hotkeys_enabled", "adaptive_command_enabled", "adaptive_mode_lock",
+            "overlay_hotkeys_enabled",
             "edsm_cmdr_name", "edsm_api_key", "edsm_upload_enabled",
             "eddn_market_upload_enabled", "carrier_discord_webhook_url",
             "runtime_trace_enabled", "crash_reporting_enabled",
@@ -1757,6 +1774,7 @@ class HtmlDashboardMixin:
                 "prospector_hud_timeout_s": _integer(self.config.get("prospector_hud_timeout_s"), 45),
                 "gravity_warning_hud_timeout_s": _integer(self.config.get("gravity_warning_hud_timeout_s"), 20),
                 "station_info_auto_hide_enabled": bool(self.config.get("station_info_auto_hide_enabled", False)),
+                "survey_status_show_all_bodies": bool(self.config.get("survey_status_show_all_bodies", False)),
                 "station_info_timeout_s": _integer(self.config.get("station_info_timeout_s"), 30),
                 "gravity_warning_threshold_g": _number(self.config.get("gravity_warning_threshold_g"), 3.0),
                 "hud_html_renderer": bool(self.config.get("hud_html_renderer", True)),
@@ -1875,6 +1893,7 @@ class HtmlDashboardMixin:
             "overlay_mouse_passthrough", "hud_compact_mode",
             "sample_clear_notifications_enabled", "rebuy_warnings_enabled",
             "data_risk_warnings_enabled", "station_info_auto_hide_enabled",
+            "survey_status_show_all_bodies",
             "hud_html_renderer", "hud_crt_enabled", "hud_crt_motion_enabled",
         }
         key = _text(key, 80)
@@ -1897,6 +1916,12 @@ class HtmlDashboardMixin:
                     station.on_docked(self)
                 else:
                     station.hide()
+        elif key == "survey_status_show_all_bodies":
+            survey = getattr(self, "survey_status_hud", None)
+            if survey is not None:
+                survey._last_render_key = None
+                if survey._last_update is not None:
+                    survey.update(*survey._last_update)
         self._schedule_html_dashboard_publish(immediate=True)
         return True
 
@@ -2088,6 +2113,22 @@ class HtmlDashboardMixin:
             str(name) for name in (self.config.get("dashboard_hidden_modules") or [])
             if str(name) in configurable_modules
         ]
+        raw_page_layouts = self.config.get("dashboard_page_layouts") or {}
+        page_layouts = {}
+        if isinstance(raw_page_layouts, dict):
+            for page, containers in list(raw_page_layouts.items())[:32]:
+                if not isinstance(containers, dict):
+                    continue
+                clean_containers = {}
+                for container, panels in list(containers.items())[:32]:
+                    if not isinstance(panels, list):
+                        continue
+                    clean_panels = [
+                        _text(panel, 100) for panel in panels[:100]
+                        if _text(panel, 100)
+                    ]
+                    clean_containers[_text(container, 100)] = list(dict.fromkeys(clean_panels))
+                page_layouts[_text(page, 40).casefold()] = clean_containers
         return {
             "app": {"renderer": "html-command-deck", "platform": "windows"},
             "profile": {
@@ -2131,6 +2172,7 @@ class HtmlDashboardMixin:
                     {"id": key, "label": label} for key, label in DOCTRINES.items()
                 ],
             },
+            "page_layouts": page_layouts,
             "priorities": self._html_dashboard_priorities(intelligence, route, survey),
             "expedition": self._html_dashboard_expedition(),
             "atlas": {
@@ -2158,6 +2200,7 @@ class HtmlDashboardMixin:
             ),
             "ui": {
                 "flight_log_mode": bool(self.config.get("flight_log_mode_enabled", False)),
+                "reduced_motion": bool(self.config.get("reduced_motion_enabled", False)),
                 "page_request": {
                     "id": _integer(getattr(self, "_html_dashboard_page_request_seq", 0)),
                     "page": _text(getattr(self, "_html_dashboard_page_request", ""), 40),
@@ -2975,8 +3018,7 @@ class HtmlDashboardMixin:
                     "journal_path": str, "screenshots_path": str,
                     "screenshots_enabled": bool, "ui_scale_percent": int,
                     "reduced_motion_enabled": bool, "hud_animation_intensity": str,
-                    "overlay_hotkeys_enabled": bool, "adaptive_command_enabled": bool,
-                    "adaptive_mode_lock": str, "edsm_cmdr_name": str,
+                    "overlay_hotkeys_enabled": bool, "edsm_cmdr_name": str,
                     "edsm_api_key": str, "edsm_upload_enabled": bool,
                     "eddn_market_upload_enabled": bool,
                     "carrier_discord_webhook_url": str,
@@ -3019,6 +3061,11 @@ class HtmlDashboardMixin:
                 return True
 
         if changed:
+            if page == "explore":
+                # Waypoint edits are profile-local rather than journal
+                # events, so explicitly republish the cockpit route instead
+                # of waiting for the next Elite event to happen to refresh it.
+                self.update_hud()
             self._schedule_html_dashboard_publish(immediate=True)
         return bool(changed)
 
@@ -3085,6 +3132,37 @@ class HtmlDashboardMixin:
             self._persist_config()
             self._schedule_html_dashboard_publish(immediate=True)
             return True
+        if action in {"save_page_layout", "reset_page_layout"}:
+            page = _text(payload.get("page"), 40).casefold()
+            allowed_pages = {
+                "overview", "explore", "records", "operations", "profile",
+                "analytics", "chronicle", "mission", "ground", "mining",
+                "engineering", "carrier", "recon", "achievements", "ledger",
+                "settings", "about",
+            }
+            if page not in allowed_pages:
+                return False
+            layouts = dict(self.config.get("dashboard_page_layouts") or {})
+            if action == "reset_page_layout":
+                layouts.pop(page, None)
+            else:
+                raw_containers = payload.get("containers")
+                if not isinstance(raw_containers, dict) or len(raw_containers) > 32:
+                    return False
+                clean_containers = {}
+                for container, panels in raw_containers.items():
+                    container_key = _text(container, 100)
+                    if not container_key or not isinstance(panels, list) or len(panels) > 100:
+                        return False
+                    clean_panels = [_text(panel, 100) for panel in panels]
+                    if any(not panel for panel in clean_panels):
+                        return False
+                    clean_containers[container_key] = list(dict.fromkeys(clean_panels))
+                layouts[page] = clean_containers
+            self.config["dashboard_page_layouts"] = layouts
+            self._persist_config()
+            self._schedule_html_dashboard_publish(immediate=True)
+            return True
         if action == "add_codex_objective":
             target = _text(payload.get("target"), 200)
             manager = getattr(self, "expedition_manager", None)
@@ -3118,13 +3196,6 @@ class HtmlDashboardMixin:
             self._persist_config()
             self._schedule_html_dashboard_publish(immediate=True)
             return True
-        if action == "set_adaptive_mode":
-            mode = _text(payload.get("mode") or "auto", 30).casefold()
-            if mode not in {"auto", "general", "exploration", "mining", "ground", "carrier", "station"}:
-                return False
-            self._adaptive_select_mode(mode)
-            self._schedule_html_dashboard_publish(immediate=True)
-            return True
         if action == "set_flight_log_mode":
             enabled = bool(payload.get("enabled"))
             if enabled == bool(self.config.get("flight_log_mode_enabled", False)):
@@ -3139,17 +3210,6 @@ class HtmlDashboardMixin:
             self._persist_config()
             self._schedule_html_dashboard_publish(immediate=True)
             return True
-        if action == "open_adaptive_mode":
-            deck = getattr(self, "adaptive_command", None)
-            try:
-                mode = str((deck.status() if deck is not None else {}).get("mode") or "general").casefold()
-            except Exception:
-                mode = "general"
-            page = {
-                "exploration": "explore", "mining": "mining", "ground": "ground",
-                "carrier": "carrier", "station": "overview", "general": "overview",
-            }.get(mode, "overview")
-            return self._request_html_dashboard_page(page)
         if action == "rebuild_cache":
             self.scan_all_logs_threaded()
             return True

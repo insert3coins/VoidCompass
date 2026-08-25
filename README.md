@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.4.1.2**
+**Current version: 5.4.1.3**
 
 Void Compass is an exploration-first companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a persistent command dashboard, deep survey intelligence, expedition planning and native in-game overlays.
 
@@ -10,7 +10,7 @@ Void Compass is distributed as a native Windows x64 application and does not req
 
 ## At a glance
 
-- **HTML Explorer Decision Deck** — a GPU-composited WebView2 briefing with one explainable next action, selectable exploration doctrine, five-jump Route Horizon, Session Pulse, Regional Codex Hunt and commander-specific card layout.
+- **HTML Explorer Decision Deck** — a GPU-composited WebView2 briefing with one explainable next action, selectable exploration doctrine, five-jump Route Horizon, Session Pulse, Regional Codex Hunt and commander-specific panel layouts throughout its workspaces.
 - **Exploration-focused navigation** — seven clear destinations keep survey, map and commander records prominent while a small Field Tools page supports surface work and mining.
 - **Stellar Cartography** — a live schematic System Orrery with Elite body-target lock, commander-controlled Survey Queue, planetary field mapping, expedition replay, science correlations and a complete 42-region passport built from retained journal evidence.
 - **Deep Survey** — explainable FSS, DSS, biological and geological progress; a Bio Field Assistant; discovery-significance ratings; valuable bodies; revisit targets; Colonisation Recon and a searchable discovery archive.
@@ -29,14 +29,14 @@ The HTML Command Deck is the visible application shell for every launch. Its ani
 
 | Group | Direct workspaces |
 | --- | --- |
-| **Exploration** | Dashboard, Explore & Survey, Mission Control and Galactic Atlas. Explore adds the live System Orrery and Survey Queue to the body workboard, editable profile waypoints, Elite NavRoute inspection and manual Spansh neutron plotting/import. |
+| **Exploration** | Dashboard, Explore & Survey, Mission Control and Galactic Atlas. Explore adds an Elite-style live system body schematic, System Orrery and Survey Queue to the workboard, alongside editable profile waypoints, Elite NavRoute inspection and manual Spansh neutron plotting/import. |
 | **Records** | Flight Records, Analytics, Commander Profile, Captain's Log and the System Value Ledger. Analytics includes the Explorer Science Lab and Galactic Region Passport; Captain's Log includes interactive expedition replay and standalone HTML export. |
 | **Field Tools** | Ground/Exobiology with the Planetary Field Map, Mining, Engineering/Synthesis, Fleet Carrier Command, Colonisation Recon and Explorer Achievements. |
 | **System** | Overlay Layout Studio, complete profile-aware Settings and About. |
 
 Specialist state is hydrated only when its HTML page is opened, keeping routine journal publications and startup light while preserving live profile and theme changes.
 
-Settings is focused on the application itself: profile themes and the custom palette workshop, journal paths, EDSM/EDDN/Discord integrations and tests, Adaptive Command, overlays and hotkeys, diagnostics, journal cache maintenance and first-run setup. Voice packs, personas, learned cockpit memory and speech controls are no longer part of the active application.
+Settings is focused on the application itself: profile themes and the custom palette workshop, journal paths, EDSM/EDDN/Discord integrations and tests, overlays and hotkeys, diagnostics, journal cache maintenance and first-run setup. Voice packs, personas, learned cockpit memory and speech controls are no longer part of the active application.
 
 ### Deep Survey Intelligence
 
@@ -81,23 +81,25 @@ Carrier Command plots Fleet and Squadron Carrier routes through Spansh, can impo
 
 ## Adaptive Command Deck
 
-Void Compass keeps the Dashboard centred on exploration: Current Survey exposes FSS, DSS, biological and geological progress; Explorer Decision ranks one explainable next action; Route Horizon inspects the next five plotted stars for scoopability, compact-star hazards and region crossings; Session Pulse summarises the active journal session; and Regional Codex Hunt compares personal coverage without pretending a missing record must exist locally. Its focused activity modes are General Flight, Exploration, Mining, Surface Survey, Carrier Expedition and Station/Data Sale. Unrelated career activity no longer creates dashboard objectives, modes or companion-state records.
+Void Compass keeps the Dashboard centred on exploration: Current Survey exposes FSS, DSS, biological and geological progress; Explorer Decision ranks one explainable next action; Route Horizon inspects the next five plotted stars for scoopability, compact-star hazards and region crossings; Session Pulse summarises the active journal session; and Regional Codex Hunt compares personal coverage without pretending a missing record must exist locally. Journal activity quietly adjusts contextual emphasis for flight, exploration, mining, surface work, Carrier operations and data sales; there is no separate manual mode to manage, and unrelated career activity does not create dashboard objectives or companion-state records.
 
-Automatic activity detection can be locked to a chosen mode per commander. Overlay visibility remains an explicit commander choice in **Overlay Studio** and is never silently changed by the active Dashboard mode.
+Overlay visibility remains an explicit commander choice in **Overlay Studio** and is never silently changed by Dashboard context. Every applicable Dashboard and specialist-workspace panel group can be rearranged in place, with the resulting layout retained independently for each commander profile.
 
 ## HTML cockpit overlays
 
-Every overlay can be enabled independently, dragged to a saved position and styled with the active theme. A single isolated WebView2 process renders Navigation plus Cargo, Carrier, Prospector, Gravity, Station Link, Survey Operations, Cockpit Notifications, Heartbeat and Planet Waypoint Navigation surfaces. The command deck owns the complete visual Overlay Studio; internal compatibility proxies retain journal state, cross-platform geometry and hotkey integration but no longer present an additional Tk cockpit surface on Windows.
+Every overlay can be enabled independently, dragged to a saved position and styled with the active theme. A single isolated WebView2 process renders Navigation plus Cargo, Carrier, Prospector, Gravity, Station Link, Survey Operations, Cockpit Notifications, Heartbeat and Planet Waypoint Navigation surfaces. Every surface now consumes a semantic journal model through its own HTML/CSS presentation rather than replaying Tk canvas primitives. The compact telemetry Heartbeat distinguishes journal writes, Status updates, cockpit-state transitions and recent UI stalls; matching Journal, Status, Navigation and UI-health lamps remain visible in the command-deck footer. The command deck owns the complete visual Overlay Studio; internal compatibility proxies retain journal state, geometry and hotkey integration but no longer present an additional Tk cockpit surface on Windows.
 
-- Journal-aware Navigation HUD with a focused **Standard** everyday layout and an optional **Expanded** planning layout, unified route/state/survey instrumentation, a large current-system readout and journal-restored system-time clock, persistent distance-proportional route history with an advancing current marker and arrival-driven next-leg handoff, next-star scoop and fuel-range intelligence, live fuel-scoop flow, local-target context, galactic travel direction and plane position, surface approach and ship-configuration cues, traffic and a Discovery Rail that distinguishes unknown, locally retained, live FSS and completed survey evidence. Its bundled offline HTML/CSS renderer runs in an isolated transparent Edge WebView2 surface for fluid state-specific motion while a hidden migration proxy preserves journal drawing state, hotkeys and profile-aware positions. A journal-ID catalogue selects local artwork for all 48 currently released human motherships, with matching Nomad, Scarab, Scorpion, fighter and carrier identities for vehicle hand-offs.
-- Survey Operations as a persistent, priority-filtered cockpit work list that appears during FSS intake and retains bodies with confirmed biological or geological signals plus valuable/notable mapping targets such as terraformables, Earth-like worlds, water worlds and ammonia worlds. Its focused-body card adds three-stage biological sampling, explicit predicted/detected/completed evidence, geology-only targets, compact completed-species manifests and notable-world value evidence. Routine bodies remain in Explore & Survey instead of filling the overlay; live signal-cache fallback keeps priority targets current while detailed body scans catch up, and Navigation remains the single owner of system scan percentage.
+- Journal-aware Navigation HUD with a focused **Standard** everyday layout and an optional **Expanded** planning layout, unified route/state/survey instrumentation, a large current-system readout and journal-restored system-time clock, one scalable distance-proportional waypoint rail for every route length, persistent completed history, an advancing current marker and arrival-driven next-leg handoff, next-star scoop and fuel-range intelligence, live fuel-scoop flow, local-target context, galactic travel direction and plane position, surface approach and ship-configuration cues, traffic and a Discovery Rail that distinguishes unknown, locally retained, live FSS and completed survey evidence. Profile waypoints republish immediately when edited and deliberately lead the HUD until that manual plan is cleared. Its bundled offline HTML/CSS renderer runs in an isolated transparent Edge WebView2 surface for fluid state-specific motion while a hidden migration proxy preserves journal drawing state, hotkeys and profile-aware positions. A journal-ID catalogue selects local artwork for all 48 currently released human motherships, with matching Nomad, Scarab, Scorpion, fighter and carrier identities for vehicle hand-offs.
+- Survey Operations as a persistent cockpit work list that appears during FSS intake and defaults to bodies with confirmed biological or geological signals plus valuable/notable mapping targets such as terraformables, Earth-like worlds, water worlds and ammonia worlds. A profile-aware Overlay Studio switch can instead include every surveyed body. Its focused-body card adds three-stage biological sampling, explicit predicted/detected/completed evidence, geology-only targets, compact completed-species manifests and notable-world value evidence; live signal-cache fallback keeps targets current while detailed body scans catch up, and Navigation remains the single owner of system scan percentage.
 - Purpose-built Gravity and Planet Waypoint Navigation HTML surfaces provide a clear descent-envelope warning and live surface bearing, turn and range solution without exposing the old Tk popup renderer.
-- A dynamic Cargo Manifest with hold utilisation plus mission/stolen distinctions; Fleet/Squadron Carrier Command with jump, expedition, Tritium and capacity status; and Prospector Analysis with themed material composition, core and refinery evidence.
-- A focused Station Link overlay for contextual services and data-sale information while docked.
+- A dedicated semantic HTML Cargo Manifest with a live capacity rail, readable commodity stacks, mission/stolen distinctions, compact overflow handling and an explicit empty-hold state.
+- Semantic Fleet/Squadron Carrier Command with identity and location, animated jump state, expedition progress, remaining-route fuel, Tritium reserve, range, cargo capacity and market-order evidence.
+- Purpose-built Prospector Analysis with deposit state, motherlode emphasis, proportional material rails and a live per-asteroid refinery log.
+- A dedicated semantic HTML Station Link with port identity, landing context, flight and explorer service readiness, unsold-data sale status, local authority/economy evidence and specialist availability while docked.
 - Gravity, touchdown/liftoff, on-foot and other low-noise safety notifications.
-- Severity-aware cockpit notifications, dedicated achievement unlock cards and the journal activity heartbeat pulse.
+- Severity-aware cockpit notifications, dedicated achievement unlock cards and a lightweight CSS-driven journal heartbeat with live and stalled states.
 
-The HTML command deck's **Overlay Studio** is the single profile-aware overlay-control workspace. Its Layout view enables or disables every module and provides a scaled virtual-desktop preview: drag overlay cards to position the real HUD windows without disabling mouse passthrough. Saved positions remain authoritative through dynamic redraws, and activity modes never hide an enabled overlay. Its Overlay Settings view owns passthrough, Standard/Expanded Navigation HUD layout, overlay text scale, alert policy, auto-hide timing, gravity threshold and Navigation HUD CRT controls. Layout snapping, resets and named commander-specific presets remain available alongside those controls; application scale, Calm/Standard/Energetic Navigation animation and reduced motion remain under **Settings → Core → Accessibility**.
+The HTML command deck's **Overlay Studio** is the single profile-aware overlay-control workspace. Its Layout view enables or disables every module and provides a scaled virtual-desktop preview: drag overlay cards to position the real HUD windows without disabling mouse passthrough. Saved positions remain authoritative through dynamic redraws, and Dashboard context never hides an enabled overlay. Its Overlay Settings view owns passthrough, Standard/Expanded Navigation HUD layout, overlay text scale, alert policy, auto-hide timing, gravity threshold and Navigation HUD CRT controls. Layout snapping, resets and named commander-specific presets remain available alongside those controls; application scale, Calm/Standard/Energetic Navigation animation and reduced motion remain under **Settings → Core → Accessibility**.
 
 Profile-aware global shortcuts can open or close the Layout Studio, switch the Navigation HUD between Standard and Expanded, and temporarily hide or restore all overlays while Elite has focus, with optional individual shortcuts for the main exploration and field overlays. The low-conflict defaults are **Ctrl+Alt+Shift+F10** for Layout Studio, **Ctrl+Alt+Shift+F11** for all overlays and **Ctrl+Alt+Shift+F12** for a field bookmark at the current system/body; the layout switch is intentionally unbound so each commander can avoid game or GPU conflicts. Assignments can be recorded directly from the keyboard, typed manually or cleared on the dedicated **Settings → Hotkeys** page without changing which modules are enabled.
 
@@ -145,7 +147,7 @@ Packaged releases create `config.json`, commander profiles and logs beside the e
 C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous
 ```
 
-The 5.4.1.2 interface is Windows x64 only. The former experimental Linux build has been retired as the application moves to one WebView2 presentation architecture.
+The 5.4.1.3 interface is Windows x64 only. The former experimental Linux build has been retired as the application moves to one WebView2 presentation architecture.
 
 ## Contributing and support
 

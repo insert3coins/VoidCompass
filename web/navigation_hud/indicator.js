@@ -95,8 +95,17 @@
         landingGear: Boolean(source.landing_gear),
         analysisMode: Boolean(source.analysis_mode),
         neutronBoost: Boolean(source.neutron_boost),
+        neutronBoostValue: number(source.neutron_boost_value, 0, 0, 10),
         routeActive: Boolean(source.route_active),
       };
+    }
+
+    boostTier(state) {
+      if (!state?.dynamics?.neutronBoost) return 0;
+      const value = Number(state.dynamics.neutronBoostValue) || 0;
+      if (value >= 5.5) return 3;
+      if (value >= 3.5) return 2;
+      return 1;
     }
 
     resize() {
@@ -123,7 +132,8 @@
         this.stateStarted = now;
         this.receivedModel = true;
       } else if (incoming.motion !== this.state.motion || incoming.label !== this.state.label
-          || incoming.vehicleKey !== this.state.vehicleKey) {
+          || incoming.vehicleKey !== this.state.vehicleKey
+          || this.boostTier(incoming) !== this.boostTier(this.state)) {
         this.previous = {...this.state};
         this.state = incoming;
         this.stateStarted = now;
@@ -845,7 +855,10 @@
       const c = state.color, y = g.y;
       const cx = (g.left + g.right) / 2;
       const span = Math.max(28, g.right - g.left);
-      const energy = overcharge ? 1.65 : 1;
+      const boostTier = this.boostTier(state);
+      const boostValue = state.dynamics.neutronBoostValue;
+      const neutron = boostTier > 0 && !overcharge;
+      const energy = overcharge ? 1.65 : neutron ? 1.12 + boostTier * .08 : 1;
 
       // A forward flight corridor: stable horizon/vanishing point plus
       // expanding angular gates. It reads as supercruise rather than a
@@ -896,6 +909,45 @@
             points.push([x, py]);
           }
           this.path(points, c, alpha * (band ? .28 : .54), band ? 1 : 1.5);
+        }
+      } else if (neutron) {
+        // Jet-cone charge changes the normal supercruise corridor itself. The
+        // actual journal BoostValue selects the number and speed of locked
+        // field coils, so enhanced boosts remain visibly stronger than the
+        // ordinary neutron charge without inventing a fixed multiplier.
+        const coils = boostTier === 3 ? 6 : boostTier === 2 ? 4 : 3;
+        const phaseSpeed = 1.2 + boostTier * .28;
+        for (let coil = 0; coil < coils; coil += 1) {
+          const phase = (p * phaseSpeed + coil / coils) % 1;
+          const x = g.left + 7 + phase * (span - 14);
+          const envelope = Math.sin(phase * Math.PI);
+          const radius = 3.2 + envelope * (4 + boostTier * 1.2);
+          this.angularRing(x, y, radius, radius * .58, boostTier === 3 ? 8 : 6,
+            c, alpha * envelope * (.34 + boostTier * .11),
+            boostTier === 3 ? 1.5 : 1.15, p * TAU + coil);
+        }
+        for (const side of [-1, 1]) {
+          const points = [];
+          for (let step = 0; step <= 28; step += 1) {
+            const progress = step / 28;
+            const x = cx + side * progress * span * .47;
+            const cone = progress * (4.2 + boostTier * 1.8);
+            const py = y + Math.sin((progress * (2 + boostTier) - p * phaseSpeed) * TAU)
+              * cone;
+            points.push([x, py]);
+          }
+          this.path(points, c, alpha * (.23 + boostTier * .1), boostTier === 3 ? 1.45 : 1.05);
+        }
+        this.angularRing(cx, y, 11 + boostTier * 2.5, 6 + boostTier,
+          6 + boostTier * 2, c, alpha * (.42 + .25 * wave(p * phaseSpeed)),
+          1.2 + boostTier * .18, -p * TAU * phaseSpeed);
+        if (boostValue > 0) {
+          const markers = Math.max(1, Math.min(6, Math.round(boostValue)));
+          for (let index = 0; index < markers; index += 1) {
+            const angle = index / markers * TAU - p * TAU * .45;
+            this.dot(cx + Math.cos(angle) * (7 + boostTier * 2),
+              y + Math.sin(angle) * (3 + boostTier), .7, c, alpha * .78);
+          }
         }
       }
     }

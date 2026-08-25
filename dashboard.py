@@ -42,11 +42,15 @@ from station_info_hud import StationInfoHUD
 from survey_status_hud import SurveyStatusHUD
 from toast_hud import ToastHUD
 from heartbeat_hud import HeartbeatHUD
-from html_canvas_overlay import attach_html_canvas_overlay
 from html_survey_overlay import attach_html_survey_overlay
 from html_toast_overlay import attach_html_toast_overlay
 from html_gravity_overlay import attach_html_gravity_overlay
 from html_ground_overlay import attach_html_ground_overlay
+from html_station_overlay import attach_html_station_overlay
+from html_cargo_overlay import attach_html_cargo_overlay
+from html_carrier_overlay import attach_html_carrier_overlay
+from html_prospector_overlay import attach_html_prospector_overlay
+from html_heartbeat_overlay import attach_html_heartbeat_overlay
 from overlay_input import set_mouse_passthrough
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
@@ -350,7 +354,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         ("heartbeat_hud", "heartbeat_hud_x", "heartbeat_hud_y"),
         ("ground_popup", "ground_popup_x", "ground_popup_y"),
     )
-    _HTML_CANVAS_OVERLAY_SPECS = {
+    _HTML_OVERLAY_SPECS = {
         "cargo_hud": ("cargo", "Void Compass Cargo", "cargo_overlay_enabled"),
         "carrier_hud": ("carrier", "Void Compass Carrier", "carrier_overlay_enabled"),
         "prospector_hud": ("prospector", "Void Compass Prospector", "prospector_overlay_enabled"),
@@ -1021,6 +1025,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.current_vehicle_name = ""
         self._vehicle_name_by_id = {}
         self._last_surface_vehicle_name = ""
+        self._vehicle_handoff_latch = None
         self.current_music_track = ""
         self.current_music_mode = ""
         self.current_music_label = ""
@@ -1790,6 +1795,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.current_vehicle_name = ""
         self._vehicle_name_by_id = {}
         self._last_surface_vehicle_name = ""
+        self._vehicle_handoff_latch = None
         self.current_music_track = ""
         self.current_music_mode = ""
         self.current_music_label = ""
@@ -3985,11 +3991,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._enforce_overlay_hotkey_visibility()
 
     def _attach_html_overlay_renderers(self):
-        """Give every managed Canvas overlay a surface in the shared host."""
+        """Attach every managed overlay to its dedicated semantic web surface."""
         positions = {
             attr: (x_key, y_key) for attr, x_key, y_key in self._OVERLAY_POSITION_SPECS
         }
-        for attr, (overlay_id, title, enabled_key) in self._HTML_CANVAS_OVERLAY_SPECS.items():
+        for attr, (overlay_id, title, enabled_key) in self._HTML_OVERLAY_SPECS.items():
             overlay = getattr(self, attr, None)
             if overlay is None:
                 continue
@@ -3998,8 +4004,18 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 attach_html_ground_overlay(
                     self, overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
-            elif not hasattr(overlay, "canvas"):
-                continue
+            elif attr == "cargo_hud":
+                attach_html_cargo_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "carrier_hud":
+                attach_html_carrier_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "prospector_hud":
+                attach_html_prospector_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
             elif attr == "survey_status_hud":
                 attach_html_survey_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
@@ -4012,15 +4028,21 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 attach_html_gravity_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
-            else:
-                attach_html_canvas_overlay(
+            elif attr == "station_info_hud":
+                attach_html_station_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
+            elif attr == "heartbeat_hud":
+                attach_html_heartbeat_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            else:
+                logging.warning("No semantic HTML renderer registered for %s", attr)
 
     def _apply_html_overlay_renderer(self):
         """Switch every managed overlay proxy to the shared HTML renderer."""
         enabled = bool(self.config.get("hud_html_renderer", False))
-        for attr in ("hud", *self._HTML_CANVAS_OVERLAY_SPECS):
+        for attr in ("hud", *self._HTML_OVERLAY_SPECS):
             overlay = getattr(self, attr, None)
             setter = getattr(overlay, "set_html_renderer", None)
             if callable(setter):
@@ -4333,14 +4355,34 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         entries = getattr(self, "nav_route_entries", None) or []
         route_idx = -1
         route_remaining = None
+        waypoint_manager = getattr(self, "waypoint_manager", None)
+        manual_next = (
+            waypoint_manager.get_next_waypoint(current)
+            if waypoint_manager is not None else None
+        )
 
-        if current != "---":
+        if manual_next:
+            next_name = manual_next
+            route_remaining = sum(
+                1 for waypoint in waypoint_manager.waypoints
+                if not waypoint.get("visited")
+            )
+            matching_waypoint = next(
+                (waypoint for waypoint in waypoint_manager.waypoints
+                 if str(waypoint.get("name") or "").casefold()
+                 == str(manual_next).casefold()),
+                None,
+            )
+            if matching_waypoint:
+                next_coords = matching_waypoint.get("coords")
+
+        if not manual_next and current != "---":
             try:
                 route_idx = route.index(current)
             except ValueError:
                 route_idx = -1
 
-        if route:
+        if not manual_next and route:
             if route_idx > 0:
                 previous = route[route_idx - 1]
                 if route_idx - 1 < len(entries):
@@ -4373,7 +4415,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     next_coords = entry.get("StarPos")
                     break
 
-        waypoint_manager = getattr(self, "waypoint_manager", None)
         hops, hops_truncated = route_strip.build_route_hops(
             self.current_coords, route, entries, current, waypoint_manager=waypoint_manager
         )
@@ -6475,6 +6516,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             logging.warning(f"Achievement engine event error [{ev}]: {exc}")
         if not startup_replay:
             self._record_journal_event()
+            if getattr(self, "heartbeat_hud", None):
+                self.heartbeat_hud.pulse(
+                    "journal", ev,
+                    getattr(self, "hud_flight_state", None) or "FLIGHT",
+                )
         # Apply personal-credit changes before toast and tool
         # handlers. A failure in a secondary feature must never leave the HUD
         # balance behind a confirmed journal transaction.
@@ -7270,6 +7316,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._handle_music_event(raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
 
         elif ev == "Disembark":
+            self._clear_navigation_vehicle_handoff()
             vehicle_id = d.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
             if vehicle_id is not None and self.current_vehicle_name:
                 self._vehicle_name_by_id[vehicle_id] = self.current_vehicle_name
@@ -7300,34 +7347,43 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.current_in_srv = True
                 self.current_in_fighter = False
                 self.hud_flight_state = "NOMAD" if self.current_vehicle_name == "NOMAD" else "SRV"
+                self._arm_navigation_vehicle_handoff("srv", self.current_vehicle_name)
             elif in_taxi or in_multicrew:
                 self.current_vehicle_id = None
                 self.current_vehicle_name = ""
                 self.current_in_srv = False
                 self.current_in_fighter = False
                 self._sync_navigation_hud_flight_state(supercruise=False)
+                if in_taxi:
+                    self._arm_navigation_vehicle_handoff("taxi")
+                else:
+                    self._clear_navigation_vehicle_handoff()
             elif self.current_docked:
                 self.current_vehicle_id = None
                 self.current_vehicle_name = ""
                 self.current_in_srv = False
                 self.current_in_fighter = False
                 self.hud_flight_state = "DOCKED"
+                self._arm_navigation_vehicle_handoff("ship")
             elif self.current_landed:
                 self.current_vehicle_id = None
                 self.current_vehicle_name = ""
                 self.current_in_srv = False
                 self.current_in_fighter = False
                 self.hud_flight_state = "LANDED"
+                self._arm_navigation_vehicle_handoff("ship")
             else:
                 self.current_vehicle_id = None
                 self.current_vehicle_name = ""
                 self.current_in_srv = False
                 self.current_in_fighter = False
                 self.hud_flight_state = "FLIGHT"
+                self._arm_navigation_vehicle_handoff("ship")
             self._surface_departure_active = False
             self.update_hud()
 
         elif ev == "LaunchFighter":
+            self._clear_navigation_vehicle_handoff()
             player_controlled = d.get("PlayerControlled")
             if player_controlled is None and isinstance(raw, dict):
                 player_controlled = raw.get("PlayerControlled")
@@ -7353,6 +7409,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.update_hud()
 
         elif ev == "LaunchSRV":
+            self._clear_navigation_vehicle_handoff()
             self.current_in_fighter = False
             self.current_in_srv = True
             self.current_on_foot = False
@@ -7370,6 +7427,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.update_hud()
 
         elif ev in ("DockFighter", "FighterDestroyed"):
+            self._clear_navigation_vehicle_handoff()
             self.current_in_fighter = False
             self.current_in_srv = False
             self.current_vehicle_id = None
@@ -7380,6 +7438,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.update_hud()
 
         elif ev == "DockSRV":
+            self._clear_navigation_vehicle_handoff()
             departure_active = bool(getattr(self, "_surface_departure_active", False))
             vehicle_id = d.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
             vehicle_name = self._srv_toast_vehicle_name(raw, d)

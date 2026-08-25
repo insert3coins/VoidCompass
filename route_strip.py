@@ -27,11 +27,27 @@ def build_route_hops(current_coords, route_list, nav_route_entries, current_sys=
     Each hop is {"name": str, "dist": float|None, "scoopable": bool|None,
     "star_class": str}, where
     "dist" is the LY distance from the previous point (current position for
-    the first hop). Prefers the game's NavRoute.json data; falls back to
-    unvisited custom waypoints when no in-game route is active.
+    the first hop). A pending commander-authored profile route takes
+    precedence; otherwise the game's NavRoute.json supplies the upcoming legs.
     """
     route = list(route_list or [])
     entries = list(nav_route_entries or [])
+    waypoints = list(getattr(waypoint_manager, "waypoints", None) or [])
+    pending = [wp for wp in waypoints if not wp.get("visited")]
+    if pending:
+        hops = []
+        prev_coords = current_coords
+        for wp in pending[:max_hops]:
+            coords = wp.get("coords")
+            dist = waypoint_manager.get_distance(prev_coords, coords) if prev_coords and coords else None
+            hops.append({
+                "name": wp.get("name"), "dist": dist,
+                "scoopable": None, "star_class": "",
+            })
+            if coords:
+                prev_coords = coords
+        return hops, max(0, len(pending) - len(hops))
+
     route_idx = -1
     if current_sys and current_sys != "---" and route:
         try:
@@ -63,22 +79,6 @@ def build_route_hops(current_coords, route_list, nav_route_entries, current_sys=
         if len(hops) >= max_hops:
             break
 
-    if not hops and waypoint_manager and getattr(waypoint_manager, "waypoints", None):
-        pending = [wp for wp in waypoint_manager.waypoints if not wp.get("visited")]
-        total_upcoming = len(pending)
-        prev_coords = current_coords
-        for wp in pending:
-            coords = wp.get("coords")
-            dist = waypoint_manager.get_distance(prev_coords, coords) if prev_coords and coords else None
-            hops.append({
-                "name": wp.get("name"), "dist": dist,
-                "scoopable": None, "star_class": "",
-            })
-            if coords:
-                prev_coords = coords
-            if len(hops) >= max_hops:
-                break
-
     truncated = max(0, total_upcoming - len(hops))
     return hops, truncated
 
@@ -95,6 +95,55 @@ def build_route_track(current_coords, route_list, nav_route_entries, current_sys
     route = list(route_list or [])
     entries = list(nav_route_entries or [])
     current_key = str(current_sys or "").strip().casefold()
+
+    # A commander-authored profile route is deliberate and takes visual
+    # precedence over a leftover Elite NavRoute snapshot. This keeps a newly
+    # added manual waypoint on the HUD immediately while the game route remains
+    # available again as soon as the profile plan is cleared.
+    waypoints = list(getattr(waypoint_manager, "waypoints", None) or [])
+    if waypoints:
+        exact_current = next(
+            (index for index, waypoint in enumerate(waypoints)
+             if str(waypoint.get("name") or "").strip().casefold() == current_key),
+            -1,
+        ) if current_key else -1
+        last_visited = max(
+            (index for index, waypoint in enumerate(waypoints)
+             if waypoint.get("visited")),
+            default=-1,
+        )
+        current_index = exact_current if exact_current >= 0 else last_visited
+        next_index = next(
+            (index for index, waypoint in enumerate(waypoints)
+             if not waypoint.get("visited")),
+            -1,
+        )
+        hops = []
+        previous_coords = current_coords if current_index < 0 else None
+        for index, waypoint in enumerate(waypoints):
+            coords = waypoint.get("coords")
+            distance = None
+            if previous_coords and coords:
+                try:
+                    distance = waypoint_manager.get_distance(previous_coords, coords)
+                except Exception:
+                    distance = None
+            hops.append({
+                "name": waypoint.get("name"),
+                "dist": distance,
+                "scoopable": None,
+                "star_class": "",
+                "completed": bool(waypoint.get("visited")),
+                "current": index == current_index,
+                "next": index == next_index,
+            })
+            if coords:
+                previous_coords = coords
+        return {
+            "hops": hops,
+            "origin_current": current_index < 0,
+            "source": "waypoints",
+        }
 
     if route:
         route_idx = -1
@@ -139,52 +188,7 @@ def build_route_track(current_coords, route_list, nav_route_entries, current_sys
             "source": "game",
         }
 
-    waypoints = list(getattr(waypoint_manager, "waypoints", None) or [])
-    if not waypoints:
-        return {"hops": [], "origin_current": True, "source": "none"}
-
-    exact_current = next(
-        (index for index, waypoint in enumerate(waypoints)
-         if str(waypoint.get("name") or "").strip().casefold() == current_key),
-        -1,
-    ) if current_key else -1
-    last_visited = max(
-        (index for index, waypoint in enumerate(waypoints)
-         if waypoint.get("visited")),
-        default=-1,
-    )
-    current_index = exact_current if exact_current >= 0 else last_visited
-    next_index = next(
-        (index for index, waypoint in enumerate(waypoints)
-         if not waypoint.get("visited")),
-        -1,
-    )
-    hops = []
-    previous_coords = current_coords if current_index < 0 else None
-    for index, waypoint in enumerate(waypoints):
-        coords = waypoint.get("coords")
-        distance = None
-        if previous_coords and coords:
-            try:
-                distance = waypoint_manager.get_distance(previous_coords, coords)
-            except Exception:
-                distance = None
-        hops.append({
-            "name": waypoint.get("name"),
-            "dist": distance,
-            "scoopable": False,
-            "star_class": "",
-            "completed": bool(waypoint.get("visited")),
-            "current": index == current_index,
-            "next": index == next_index,
-        })
-        if coords:
-            previous_coords = coords
-    return {
-        "hops": hops,
-        "origin_current": current_index < 0,
-        "source": "waypoints",
-    }
+    return {"hops": [], "origin_current": True, "source": "none"}
 
 
 def total_distance_text(hops, truncated=0):

@@ -165,6 +165,7 @@ class CarrierHUD:
         self._mx = self._my = 0
         self._height = 206
         self._last_render_key = None
+        self._html_render_model = build_carrier_hud_model({})
         self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
 
         self.win = tk.Toplevel(root)
@@ -265,6 +266,7 @@ class CarrierHUD:
             return
         cd = carrier_data or getattr(self.tracker, "carrier_data", {}) or {}
         model = build_carrier_hud_model(cd)
+        self._html_render_model = model
         render_key = repr(model)
         if render_key == self._last_render_key:
             return

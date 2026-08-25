@@ -111,6 +111,7 @@ class ProspectorHUD:
         self._last_raw = None
         self._refined = {}
         self._hide_job = None
+        self._html_render_model = build_prospector_model({}, {})
 
         self.win = tk.Toplevel(root)
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
@@ -222,6 +223,7 @@ class ProspectorHUD:
             return
 
         model = build_prospector_model(self._last_raw, self._refined)
+        self._html_render_model = model
         palette = self._palette
         shown = model["materials"][:self.MAX_MATERIALS]
         core_mat = model["core_material"]

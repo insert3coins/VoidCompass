@@ -126,7 +126,7 @@
     const geo = Math.max(0, Math.round(safeNumber(row.geo_count)));
     const complete = Boolean(row.bio_complete || (bio && done >= bio));
     const value = valueRange(row.min_value, row.max_value);
-    const card = node("article", `target${complete ? " complete" : ""}${!bio && geo ? " geo-only" : ""}`);
+    const card = node("article", `target${complete ? " complete" : ""}${!bio && geo ? " geo-only" : ""}${row.priority === false ? " routine" : ""}`);
     const head = node("div", "target-head");
     head.appendChild(node("span", "target-name", row.display_name || row.name || "Unknown body"));
     const badges = node("span", "badges");
@@ -145,6 +145,7 @@
       badges.appendChild(badge);
     }
     if (row.needs_dss) badges.appendChild(node("b", "badge dss", "DSS"));
+    if (row.priority === false) badges.appendChild(node("b", "badge routine", "BODY"));
     if (complete && value) badges.appendChild(node("b", "badge", `BASE ${value}`));
     head.appendChild(badges); card.appendChild(head);
 
@@ -291,7 +292,13 @@
       const complete = rows.filter((row) => row.bio_complete).length;
       const low = rows.reduce((sum, row) => sum + safeNumber(row.min_value), 0);
       const high = rows.reduce((sum, row) => sum + safeNumber(row.max_value), 0);
-      dom.footer.appendChild(node("span", "", `TARGETS ${rows.length} · OPEN ${rows.length - complete} · COMPLETE ${complete}`));
+      const scope = model.scope === "all" ? "ALL BODIES" : "PRIORITY TARGETS";
+      const priority = rows.filter((row) => row.priority !== false).length;
+      const mapped = rows.filter((row) => !row.needs_dss).length;
+      const summary = model.scope === "all"
+        ? `${scope} ${rows.length} · PRIORITY ${priority} · MAPPED ${mapped}`
+        : `${scope} ${rows.length} · OPEN ${rows.length - complete} · COMPLETE ${complete}`;
+      dom.footer.appendChild(node("span", "", summary));
       dom.footer.appendChild(node("span", "credits", valueRange(low, high) ? `BIO BASE ${valueRange(low, high)}` : ""));
     }
   }

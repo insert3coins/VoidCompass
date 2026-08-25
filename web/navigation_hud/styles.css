@@ -284,15 +284,20 @@ body {
 .route-line > i { display: block; height: 2px; width: 0; background: color-mix(in srgb, var(--accent) 55%, transparent); transition: width .65s cubic-bezier(.2,.8,.2,1); }
 .route-line > b { position: absolute; top: -1px; left: 0; width: 12px; height: 4px; background: linear-gradient(90deg, transparent, var(--orange)); filter: drop-shadow(0 0 3px var(--orange)); animation: route-flow calc(1.9s * var(--motion-scale)) ease-in-out infinite; }
 .route-pips { position: absolute; inset: 0; }
-.route-pip { position: absolute; top: 5px; width: 11px; height: 11px; border: 2px solid var(--orange); border-radius: 50%; background: var(--inset); transform: translateX(-50%); box-shadow: 0 0 4px rgba(0,0,0,.9); }
-.route-pip.completed { border-color: color-mix(in srgb, var(--accent) 55%, #1a2530); width: 8px; height: 8px; top: 7px; }
-.route-pip.current { border-color: var(--accent); border-radius: 0; transform: translateX(-50%) rotate(45deg); box-shadow: 0 0 7px color-mix(in srgb, var(--accent) 60%, transparent); }
-.route-pip.next { border-color: var(--orange); animation: next-beacon calc(1.2s * var(--motion-scale)) ease-in-out infinite; }
-.route-pip.unscoopable.next { border-color: var(--yellow); }
-.route-pips.dense { display: grid; grid-template-columns: repeat(var(--cells), 1fr); align-items: center; gap: 3px; }
-.route-pips.dense .route-cell { height: 5px; border: 1px solid color-mix(in srgb, var(--orange) 55%, #1a2530); background: rgba(0,0,0,.55); }
-.route-pips.dense .route-cell.done { background: color-mix(in srgb, var(--accent) 45%, transparent); border-color: var(--accent); }
-.route-pips.dense .route-cell.here { height: 11px; border-color: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.route-pips.unified { overflow: visible; }
+.route-segment { position: absolute; top: 6px; height: 10px; min-width: 1px; border: 1px solid color-mix(in srgb, var(--orange) 66%, #1a2530); border-left-width: 0; background: color-mix(in srgb, var(--orange) 10%, rgba(0,0,0,.72)); box-shadow: inset 0 1px color-mix(in srgb, var(--orange) 12%, transparent); transition: background .38s ease, border-color .38s ease, filter .38s ease; }
+.route-segment:first-child { border-left-width: 1px; }
+.route-segment > b { position: absolute; z-index: 2; right: -1px; top: -3px; width: 2px; height: 14px; background: color-mix(in srgb, var(--orange) 72%, var(--border)); box-shadow: 0 0 3px rgba(0,0,0,.9); }
+.route-segment.completed { border-color: color-mix(in srgb, var(--accent) 55%, #1a2530); background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 20%, transparent), color-mix(in srgb, var(--accent) 42%, transparent)); }
+.route-segment.completed > b { background: color-mix(in srgb, var(--accent) 62%, var(--border)); }
+.route-segment.current { z-index: 4; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 60%, var(--inset)); box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 52%, transparent), inset 0 0 4px color-mix(in srgb, var(--accent) 34%, transparent); }
+.route-segment.current > b { width: 3px; background: var(--accent); box-shadow: 0 0 7px var(--accent); }
+.route-segment.next { z-index: 3; border-color: var(--orange); background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 15%, transparent), color-mix(in srgb, var(--orange) 30%, transparent)); animation: next-segment calc(1.25s * var(--motion-scale)) ease-in-out infinite; }
+.route-segment.next > b { width: 3px; background: var(--orange); box-shadow: 0 0 7px var(--orange); }
+.route-segment.unscoopable.next { border-color: var(--yellow); background: color-mix(in srgb, var(--yellow) 18%, var(--inset)); }
+.route-segment.unscoopable.next > b { background: var(--yellow); box-shadow: 0 0 7px var(--yellow); }
+.route-pips.dense .route-segment { border-right-color: color-mix(in srgb, var(--orange) 45%, #1a2530); }
+.route-pips.ultra-dense .route-segment > b { width: 1px; opacity: .72; }
 .route-captions { display: flex; justify-content: space-between; color: var(--dim); font-size: calc(11px * var(--text-scale)); font-weight: 700; }
 #route-origin { color: var(--accent); } #route-destination { color: var(--orange); }
 
@@ -342,7 +347,7 @@ body {
 .hud.reduced-motion *, .hud.reduced-motion *::before, .hud.reduced-motion *::after { animation: none !important; transition-duration: 0s !important; }
 
 @keyframes route-flow { 0% { left: 0; opacity: 0; } 16% { opacity: 1; } 84% { opacity: 1; } 100% { left: calc(100% - 12px); opacity: 0; } }
-@keyframes next-beacon { 50% { transform: translateX(-50%) scale(1.28); box-shadow: 0 0 10px currentColor; } }
+@keyframes next-segment { 50% { filter: brightness(1.42); box-shadow: 0 0 9px color-mix(in srgb, var(--orange) 66%, transparent), inset 0 0 6px color-mix(in srgb, var(--orange) 30%, transparent); } }
 @keyframes survey-scan { 0% { left: 0; opacity: 0; } 20% { opacity: 1; } 100% { left: calc(100% - 12px); opacity: 0; } }
 @keyframes core-breathe { 50% { opacity: .72; transform: scaleX(1.28); } }
 @keyframes vehicle-idle { 50% { transform: translateY(-.7px); filter: saturate(.9) brightness(1.4) contrast(1.18) drop-shadow(0 0 5px color-mix(in srgb, var(--state) 72%, transparent)); } }
