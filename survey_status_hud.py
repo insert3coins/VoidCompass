@@ -315,7 +315,8 @@ def _joined_lines(values, max_chars=62):
 def build_survey_model(system_name, scan_items, focused_body_id=None,
                        focused_body_name=None, sampling=None, scanned=0, total=0,
                        min_notable_value=50_000, palette=None, total_known=True,
-                       body_signals=None, belt_clusters=None):
+                       body_signals=None, belt_clusters=None,
+                       show_all_bodies=False):
     """Build a renderer-neutral survey model for the overlay and tests."""
     bodies = _survey_bodies(scan_items, body_signals)
     notable_rows = build_notable_body_rows(scan_items, min_notable_value, palette)
@@ -383,7 +384,8 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
         # Survey; this overlay retains only confirmed surface signals and
         # valuable/notable mapping targets (including terraformables and the
         # valuable world classes classified by notable_bodies.py).
-        if not (bio_count or geo_count or notable):
+        priority = bool(bio_count or geo_count or notable)
+        if not show_all_bodies and not priority:
             continue
         if notable:
             represented_notable.add((
@@ -411,6 +413,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
             "landable_known": "landable" in body and body.get("landable") is not None,
             "gravity_g": body.get("gravity_g"),
             "notable": notable,
+            "priority": priority,
             # System mode used to stop at BIO 0/N. Include only journal-
             # identified genera/species here; predictions remain exclusive to
             # the focused-body view so they cannot be mistaken for DSS facts.
@@ -440,6 +443,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
         return None
     return {
         "mode": "system", "system": system_name or "", "rows": rows,
+        "scope": "all" if show_all_bodies else "priority",
         "notable_rows": remaining_notable, "sampling": sampling,
         "scanned": _safe_int(scanned), "total": _safe_int(total),
         "total_known": bool(total_known),
@@ -483,6 +487,7 @@ def _survey_render_key(model):
 
     common = (
         model.get("mode"), model.get("system"), sampling_key,
+        model.get("scope"),
         _safe_int(model.get("scanned")), _safe_int(model.get("total")),
         bool(model.get("total_known")),
         tuple(notable_key(row) for row in model.get("notable_rows") or ()),
@@ -506,6 +511,7 @@ def _survey_render_key(model):
     for row in model.get("rows") or ():
         row_keys.append((
             row.get("display_name") or row.get("name"),
+            bool(row.get("priority")),
             _safe_int(row.get("bio_count")), _safe_int(row.get("geo_count")),
             _safe_int(row.get("complete")), bool(row.get("bio_complete")),
             bool(row.get("needs_dss")), bool(row.get("landable_known")),
@@ -661,7 +667,10 @@ class SurveyStatusHUD:
                                    _safe_int(self.config.get("survey_min_body_value"), 50_000),
                                    self._palette, total_known,
                                    body_signals=body_signals,
-                                   belt_clusters=belt_clusters)
+                                   belt_clusters=belt_clusters,
+                                   show_all_bodies=bool(
+                                       self.config.get("survey_status_show_all_bodies", False)
+                                   ))
         if not model:
             self._last_render_key = None
             self._html_render_model = None

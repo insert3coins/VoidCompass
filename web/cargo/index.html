@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Void Compass Cargo Manifest</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="cargo" class="cargo empty">
+    <div class="edge edge-top"></div><div class="edge edge-bottom"></div>
+    <header>
+      <div class="title-lock"><i></i><strong>CARGO MANIFEST</strong></div>
+      <b id="hold-state">HOLD EMPTY</b>
+    </header>
+
+    <section class="hold-summary">
+      <div class="hold-glyph" aria-hidden="true"><i></i><i></i><b></b></div>
+      <div class="hold-total"><small>HOLD LOAD</small><strong id="hold-total">0 T</strong><span id="hold-detail">CAPACITY UNKNOWN</span></div>
+      <div class="hold-free"><small>AVAILABLE</small><strong id="hold-free">—</strong><span>TONNES FREE</span></div>
+    </section>
+
+    <section class="capacity">
+      <div id="capacity-segments" class="capacity-segments"></div>
+      <div class="capacity-label"><span id="capacity-percent">CAPACITY UNKNOWN</span><b id="stack-count">0 STACKS</b></div>
+    </section>
+
+    <section id="cargo-flags" class="cargo-flags"></section>
+    <section id="manifest" class="manifest"></section>
+    <footer><span id="manifest-footer">LIVE CARGO.JSON LINK</span><b id="manifest-summary">HOLD EMPTY</b></footer>
+    <div class="scanlines"></div><div class="vignette"></div>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

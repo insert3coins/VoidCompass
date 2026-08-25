@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Void Compass Carrier Command</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="carrier" class="carrier" data-state="idle">
+    <div class="edge edge-top"></div><div class="edge edge-bottom"></div>
+    <header>
+      <div class="title-lock"><i></i><strong id="carrier-type">FLEET CARRIER</strong></div>
+      <b id="status-badge">READY</b>
+    </header>
+
+    <section class="identity">
+      <div><small>CARRIER COMMAND</small><strong id="carrier-name">Fleet Carrier</strong><span id="carrier-location">Unknown</span></div>
+      <b id="carrier-callsign">[---]</b>
+    </section>
+
+    <section class="movement">
+      <div class="jump-graphic" aria-hidden="true"><i></i><i></i><b></b><em></em></div>
+      <div class="movement-copy"><small id="movement-label">NEXT JUMP</small><strong id="movement-value">READY TO PLOT JUMP</strong><span id="movement-detail"></span></div>
+    </section>
+
+    <section id="route" class="route" hidden>
+      <div class="section-head"><span id="route-name">EXPEDITION ROUTE</span><b id="route-progress">0/0 COMPLETE</b></div>
+      <div class="route-rail"><i id="route-fill"></i><b id="route-marker"></b></div>
+      <div class="route-foot"><span id="route-remaining">ROUTE FUEL CLEAR</span><b id="route-state">IN PROGRESS</b></div>
+    </section>
+
+    <section class="logistics">
+      <div class="section-head"><span>TRITIUM RESERVE</span><b id="fuel-value">UNKNOWN</b></div>
+      <div class="fuel-rail"><i id="fuel-fill"></i></div>
+      <div class="metrics">
+        <div><small>JUMP RANGE</small><strong id="jump-range">—</strong></div>
+        <div><small>CARGO</small><strong id="cargo-value">—</strong></div>
+        <div><small>FREE SPACE</small><strong id="free-value">—</strong></div>
+        <div><small>ORDERS</small><strong id="orders-value">0</strong></div>
+      </div>
+    </section>
+    <footer><span>LIVE CARRIER JOURNAL LINK</span><b id="footer-state">COMMAND READY</b></footer>
+    <div class="scanlines"></div><div class="vignette"></div>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

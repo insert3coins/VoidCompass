@@ -21,7 +21,7 @@ import overlay_chrome
 import themes
 
 _CHROMA = "#ff00ff"
-_SIZE = 34
+_SIZE = 48
 _STALL_COLOR = "#ff5a5a"
 _STALL_AFTER_S = 15
 _MAX_GROWTH = 6
@@ -32,9 +32,23 @@ class HeartbeatHUD:
         self.root = root
         self.config = config
         self._pulse_level = 0
+        self._pulse_serial = 0
         self._last_pulse_ts = time.time()
+        self._activity_kind = "startup"
+        self._activity_label = "LINK READY"
+        self._activity_state = "STARTUP"
+        self._state_changed = False
         self._tick_job = None
         self._last_render_key = None
+        self._html_render_model = {
+            "pulse_id": self._pulse_serial,
+            "stalled": False,
+            "status": "TELEMETRY LIVE",
+            "kind": self._activity_kind,
+            "activity": self._activity_label,
+            "state": self._activity_state,
+            "state_changed": False,
+        }
         self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
 
         self.win = tk.Toplevel(root)
@@ -102,11 +116,28 @@ class HeartbeatHUD:
 
     # ── Data interface ───────────────────────────────────────────────────
 
-    def pulse(self):
-        """Flash for recent journal or Status.json activity."""
+    def pulse(self, kind="status", activity=None, state=None):
+        """Flash for journal/Status activity and retain its cockpit context."""
         growth = 1 if self.config.get("reduced_motion_enabled", False) else None
         self._pulse_level = growth if growth is not None else _MAX_GROWTH
+        self._pulse_serial += 1
         self._last_pulse_ts = time.time()
+        previous_state = self._activity_state
+        self._activity_kind = str(kind or "status").casefold()
+        self._activity_label = str(activity or kind or "TELEMETRY").upper()[:28]
+        self._activity_state = str(state or previous_state or "FLIGHT").upper()[:28]
+        self._state_changed = bool(
+            previous_state and self._activity_state != previous_state
+        )
+        self._html_render_model = {
+            "pulse_id": self._pulse_serial,
+            "stalled": False,
+            "status": "TELEMETRY LIVE",
+            "kind": self._activity_kind,
+            "activity": self._activity_label,
+            "state": self._activity_state,
+            "state_changed": self._state_changed,
+        }
         if self._last_render_key != (self._pulse_level, False):
             self._redraw()
 
@@ -136,6 +167,15 @@ class HeartbeatHUD:
         cx = cy = _SIZE // 2
         stalled = (time.time() - self._last_pulse_ts) > _STALL_AFTER_S
         self._last_render_key = (self._pulse_level, stalled)
+        self._html_render_model = {
+            "pulse_id": self._pulse_serial,
+            "stalled": stalled,
+            "status": "TELEMETRY STALLED" if stalled else "TELEMETRY LIVE",
+            "kind": self._activity_kind,
+            "activity": self._activity_label,
+            "state": self._activity_state,
+            "state_changed": self._state_changed,
+        }
         color = _STALL_COLOR if stalled else self._palette["accent"]
         base_r = 5
         r = base_r if stalled else base_r + self._pulse_level

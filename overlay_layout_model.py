@@ -10,17 +10,17 @@ DEFAULT_POSITIONS = {
 }
 
 DEFAULT_SIZES = {
-    "hud": (430, 230), "cargo_hud": (360, 220),
+    "hud": (430, 230), "cargo_hud": (380, 220),
     "carrier_hud": (430, 270),
-    "prospector_hud": (380, 220),
+    "prospector_hud": (400, 250),
     "gravity_warning_hud": (320, 106), "station_info_hud": (520, 442),
     "survey_status_hud": (520, 340), "toast_hud": (400, 94),
-    "heartbeat_hud": (42, 42), "ground_popup": (370, 154),
+    "heartbeat_hud": (132, 48), "ground_popup": (370, 154),
 }
 
 OVERLAY_LABELS = {
     "hud": "Navigation HUD",
-    "cargo_hud": "Cargo HUD",
+    "cargo_hud": "Cargo Manifest",
     "carrier_hud": "Fleet / Squadron Carrier HUD",
     "prospector_hud": "Prospector Analysis",
     "gravity_warning_hud": "Gravity Warning",

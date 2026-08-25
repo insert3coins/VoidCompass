@@ -328,6 +328,14 @@ class _OverlayHost:
     def page_url(self, overlay_id, template):
         if template == "navigation":
             path = "/navigation_hud/index.html"
+        elif template == "cargo":
+            path = "/cargo/index.html"
+        elif template == "carrier":
+            path = "/carrier/index.html"
+        elif template == "prospector":
+            path = "/prospector/index.html"
+        elif template == "heartbeat":
+            path = "/heartbeat/index.html"
         elif template == "survey":
             path = "/survey/index.html"
         elif template == "toast":
@@ -336,8 +344,10 @@ class _OverlayHost:
             path = "/gravity/index.html"
         elif template == "ground":
             path = "/ground/index.html"
+        elif template == "station":
+            path = "/station/index.html"
         else:
-            path = "/overlays/index.html"
+            raise ValueError(f"Unsupported semantic overlay template: {template}")
         return self._url(path, overlay_id)
 
     def create_window(self, overlay_id, spec, hidden=True):

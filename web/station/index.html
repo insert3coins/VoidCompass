@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Void Compass Station Link</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="station" class="station">
+    <div class="edge edge-top"></div><div class="edge edge-bottom"></div>
+    <header>
+      <div class="title-lock"><i></i><strong>STATION LINK</strong><span>PORT TELEMETRY</span></div>
+      <b id="badge">DOCKED</b>
+    </header>
+
+    <section class="identity">
+      <div class="link-sigil" aria-hidden="true"><i></i><i></i><b></b></div>
+      <div class="identity-copy">
+        <small id="station-type">STATION</small>
+        <strong id="station-name">UNKNOWN STATION</strong>
+        <span id="station-location">UNKNOWN SYSTEM</span>
+      </div>
+      <div class="link-state"><small>CONNECTION</small><b id="link-state">LINKED</b><span>JOURNAL VERIFIED</span></div>
+    </section>
+
+    <section id="metrics" class="metrics"></section>
+
+    <section class="service-deck">
+      <article>
+        <div class="section-head"><span>FLIGHT SERVICES</span><b id="core-count">0/4</b></div>
+        <div id="core-services" class="service-grid"></div>
+      </article>
+      <article>
+        <div class="section-head"><span>EXPLORER SERVICES</span><b id="explorer-count">0/4</b></div>
+        <div id="explorer-services" class="service-grid"></div>
+      </article>
+    </section>
+
+    <section class="data-panel">
+      <div class="section-head"><span>DATA ABOARD</span><b id="data-count">NONE REPORTED</b></div>
+      <div id="data-rows" class="data-rows"></div>
+    </section>
+
+    <section class="port-profile">
+      <div class="section-head"><span>LOCAL PROFILE</span><b id="special-count">PORT DOSSIER</b></div>
+      <div id="local-facts" class="local-facts"></div>
+      <div id="specialists" class="specialists"></div>
+    </section>
+
+    <footer><span id="footer-status">LIVE DOCK LINK</span><b id="footer-summary">SERVICES ACQUIRED</b></footer>
+    <div class="scanlines"></div><div class="vignette"></div>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -2204,6 +2204,9 @@ class TacticalHUD:
                 "landing_gear": bool(ship_config.get("landing_gear")),
                 "analysis_mode": bool(ship_config.get("analysis_mode")),
                 "neutron_boost": bool((nav_context.get("neutron_boost") or {}).get("armed")),
+                "neutron_boost_value": finite_number(
+                    (nav_context.get("neutron_boost") or {}).get("value"), 0.0,
+                ),
                 "route_active": str(nav_context.get("route_mode") or "NO ROUTE") != "NO ROUTE",
             },
         }
@@ -2231,7 +2234,7 @@ class TacticalHUD:
         )
         source_hops = list(route.get("track_hops") or route.get("hops") or [])
         track_width = max(260, self._target_dimensions()[0] - 32)
-        positions, dense = route_strip.pip_layout(0, track_width, source_hops)
+        positions, _dense = route_strip.pip_layout(0, track_width, source_hops)
         html_hops = []
         for index, hop in enumerate(source_hops):
             html_hops.append({
@@ -2264,8 +2267,6 @@ class TacticalHUD:
             "complete": bool(route.get("complete")),
             "origin_current": bool(route.get("track_origin_current", True)),
             "progress_percent": round(progress_percent, 2),
-            "dense": bool(dense),
-            "cells": max(10, min(18, int(round(track_width / 28.0)))),
             "hops": html_hops,
         }
         model["state"]["dynamics"]["route_progress"] = round(

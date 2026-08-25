@@ -178,29 +178,23 @@ function renderRoute(route = {}) {
   const host = dom['route-pips'];
   host.replaceChildren();
   const hops = Array.isArray(route.hops) ? route.hops : [];
-  if (route.dense && hops.length) {
-    const cells = Math.max(10, Math.min(18, Number(route.cells || 14)));
-    host.className = 'route-pips dense';
-    host.style.setProperty('--cells', cells);
-    const progress = Math.max(0, Math.min(1, Number(route.progress_percent || 0) / 100));
-    const currentCell = Math.max(0, Math.min(cells - 1, Math.round(progress * (cells - 1))));
-    for (let index = 0; index < cells; index += 1) {
-      const cell = document.createElement('i');
-      cell.className = `route-cell${index < currentCell ? ' done' : ''}${index === currentCell ? ' here' : ''}`;
-      host.appendChild(cell);
-    }
-    return;
-  }
-  host.className = 'route-pips';
+  host.className = `route-pips unified${hops.length > 48 ? ' ultra-dense' : hops.length > 18 ? ' dense' : ''}`;
+  let previousPosition = 0;
   for (const hop of hops) {
-    const pip = document.createElement('i');
-    pip.className = [
-      'route-pip', hop.completed && 'completed', hop.current && 'current',
+    const endPosition = Math.max(previousPosition, Math.min(100, Number(hop.position || 0)));
+    const segment = document.createElement('i');
+    segment.className = [
+      'route-segment', hop.completed && 'completed', hop.current && 'current',
       hop.next && 'next', hop.scoopable === false && 'unscoopable',
     ].filter(Boolean).join(' ');
-    pip.style.left = `${Math.max(0, Math.min(100, Number(hop.position || 0)))}%`;
-    pip.title = hop.name || '';
-    host.appendChild(pip);
+    segment.style.left = `${previousPosition}%`;
+    segment.style.width = `${Math.max(.18, endPosition - previousPosition)}%`;
+    segment.title = hop.name || '';
+    const waypoint = document.createElement('b');
+    waypoint.setAttribute('aria-hidden', 'true');
+    segment.appendChild(waypoint);
+    host.appendChild(segment);
+    previousPosition = endPosition;
   }
 }
 

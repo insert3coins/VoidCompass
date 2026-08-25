@@ -302,9 +302,9 @@ class HtmlDashboardRuntime:
             "open", "copy_next", "set_theme", "rebuild_cache",
             "open_screenshots", "open_logs", "quit",
             "page_changed", "overlay_studio", "workspace",
-            "set_adaptive_mode", "open_adaptive_mode",
             "set_flight_log_mode",
             "set_exploration_doctrine", "save_dashboard_layout",
+            "save_page_layout", "reset_page_layout",
             "add_codex_objective", "open_codex_atlas",
             "onboarding_submit", "onboarding_cancel",
         }:

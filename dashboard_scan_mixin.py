@@ -35,6 +35,73 @@ class DashboardScanMixin:
     _SURFACE_HOLD_DWELL_SECONDS = 2.25
     _SURFACE_HOLD_INFER_SECONDS = 10.0
     _SURFACE_HOLD_POSITION_EPSILON_M = 1.25
+    _VEHICLE_HANDOFF_LATCH_SECONDS = 4.0
+
+    def _arm_navigation_vehicle_handoff(self, destination, vehicle_name=""):
+        """Hold an authoritative journal hand-off across one stale Status frame.
+
+        Elite writes the Embark journal event and Status.json independently.
+        The latter can briefly retain its old on-foot flags after boarding has
+        completed, which used to make the HUD jump back to ON FOOT before the
+        vehicle flag arrived.  The latch clears as soon as Status confirms the
+        destination, and otherwise expires quickly so it can never mask a real
+        later state change.
+        """
+        destination = str(destination or "").strip().casefold()
+        if destination not in {"srv", "fighter", "ship", "taxi"}:
+            self._vehicle_handoff_latch = None
+            return
+        self._vehicle_handoff_latch = {
+            "destination": destination,
+            "vehicle": str(vehicle_name or "").strip().upper(),
+            "expires": time.monotonic() + self._VEHICLE_HANDOFF_LATCH_SECONDS,
+        }
+
+    def _clear_navigation_vehicle_handoff(self):
+        self._vehicle_handoff_latch = None
+
+    def _apply_navigation_vehicle_handoff_latch(self):
+        """Reconcile Status flags with an in-flight journal vehicle hand-off."""
+        latch = getattr(self, "_vehicle_handoff_latch", None)
+        if not isinstance(latch, dict):
+            return False
+        destination = str(latch.get("destination") or "").casefold()
+        confirmed = {
+            "srv": bool(getattr(self, "current_in_srv", False)
+                        and not getattr(self, "current_on_foot", False)),
+            "fighter": bool(getattr(self, "current_in_fighter", False)
+                            and not getattr(self, "current_on_foot", False)),
+            "taxi": bool(getattr(self, "current_in_taxi", False)
+                         and not getattr(self, "current_on_foot", False)),
+            "ship": bool(not getattr(self, "current_on_foot", False)
+                         and not getattr(self, "current_in_srv", False)
+                         and not getattr(self, "current_in_fighter", False)),
+        }.get(destination, True)
+        if confirmed or time.monotonic() >= float(latch.get("expires") or 0.0):
+            self._clear_navigation_vehicle_handoff()
+            return False
+
+        self.current_on_foot = False
+        if destination == "srv":
+            self.current_in_srv = True
+            self.current_in_fighter = False
+            self.current_in_taxi = False
+            vehicle = str(latch.get("vehicle") or "").upper()
+            if vehicle:
+                self.current_vehicle_name = vehicle
+        elif destination == "fighter":
+            self.current_in_fighter = True
+            self.current_in_srv = False
+            self.current_in_taxi = False
+        elif destination == "taxi":
+            self.current_in_taxi = True
+            self.current_in_srv = False
+            self.current_in_fighter = False
+        else:
+            self.current_in_srv = False
+            self.current_in_fighter = False
+            self.current_in_taxi = False
+        return True
 
     def _sync_navigation_hud_flight_state(self, *, supercruise=False):
         """Resolve the navigation HUD state from the latest verified vehicle flags."""
@@ -93,6 +160,7 @@ class DashboardScanMixin:
             self._surface_departure_active = False
             self._surface_climb_samples = 0
             self._surface_descent_samples = 0
+            self._clear_navigation_vehicle_handoff()
         self._sync_navigation_hud_flight_state(
             supercruise=self.hud_flight_state == "SUPERCRUISE"
         )
@@ -309,8 +377,6 @@ class DashboardScanMixin:
     def _apply_status_update(self, data):
         t0 = self._perf_start()
         self.last_status_event_ts = time.time()
-        if getattr(self, "heartbeat_hud", None):
-            self.heartbeat_hud.pulse()
         was_on_planet = bool(self.on_planet)
         was_landed = bool(getattr(self, "current_landed", False))
         was_docked = bool(getattr(self, "current_docked", False))
@@ -462,6 +528,10 @@ class DashboardScanMixin:
             self.current_glide_mode = False
             if not getattr(self, "current_fsd_charging", False):
                 self.current_fsd_hyperdrive_charging = False
+        # Embark and Status are separate file writes. Preserve the journal's
+        # completed vehicle transfer while a just-late Status snapshot still
+        # carries the former on-foot flags.
+        self._apply_navigation_vehicle_handoff_latch()
         jump_phase = str(getattr(self, "_navigation_jump_phase", "") or "")
         set_jump_phase = getattr(self, "_set_navigation_jump_phase", None)
         if jump_phase == "arrival":
@@ -679,6 +749,11 @@ class DashboardScanMixin:
         if not self.batch_mode:
             self._check_low_fuel()
             self._check_status_toasts(data, flags, flags2)
+        if getattr(self, "heartbeat_hud", None):
+            self.heartbeat_hud.pulse(
+                "status", "STATUS",
+                getattr(self, "hud_flight_state", None) or "FLIGHT",
+            )
         self._perf_spike("_apply_status_update", t0, threshold_ms=20.0)
 
     def _check_status_toasts(self, data, flags, flags2):

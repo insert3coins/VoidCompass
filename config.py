@@ -192,6 +192,7 @@ PROFILE_BOOL_SETTINGS = (
     "station_info_overlay_enabled",
     "station_info_auto_hide_enabled",
     "survey_status_overlay_enabled",
+    "survey_status_show_all_bodies",
     "toast_overlay_enabled",
     "sample_clear_notifications_enabled",
     "rebuy_warnings_enabled",
@@ -257,6 +258,7 @@ PROFILE_VALUE_SETTINGS = (
     "overlay_layout_studio_geometry",
     "dashboard_module_order",
     "dashboard_hidden_modules",
+    "dashboard_page_layouts",
     "dashboard_window_geometry",
     "flight_log_geometry",
     "explore_map_view_state",
@@ -433,6 +435,11 @@ def apply_profile_config(config, profile_key=None):
     ):
         profile.pop(retired_dashboard_key, None)
         config.pop(retired_dashboard_key, None)
+    # Manual activity modes belonged to the retired split dashboard. The HTML
+    # command deck still observes activity for contextual emphasis and
+    # decisions, but it always does so automatically.
+    profile["adaptive_mode_lock"] = "auto"
+    config["adaptive_mode_lock"] = "auto"
     if "flight_log_geometry" not in profile:
         dashboard_geometry = str(
             profile.get("dashboard_window_geometry")
@@ -492,6 +499,7 @@ def apply_profile_config(config, profile_key=None):
         "station_info_overlay_enabled": True,
         "station_info_auto_hide_enabled": False,
         "survey_status_overlay_enabled": True,
+        "survey_status_show_all_bodies": False,
         "toast_overlay_enabled": True,
         "sample_clear_notifications_enabled": True,
         "rebuy_warnings_enabled": True,
@@ -529,6 +537,7 @@ def apply_profile_config(config, profile_key=None):
                 "overlay_layout_studio_geometry": "1080x720",
                 "dashboard_module_order": ["route", "session", "priorities", "codex", "feed"],
                 "dashboard_hidden_modules": [],
+                "dashboard_page_layouts": {},
                 "dashboard_window_geometry": "1720x1120",
                 "flight_log_geometry": "820x650",
                 "explore_map_view_state": {},
@@ -652,11 +661,13 @@ def load_config():
         'station_info_timeout_semantics_version': 1,
         'survey_status_hud_x': 30,
         'survey_status_hud_y': 520,
+        'survey_status_show_all_bodies': False,
         'low_fuel_threshold_pct': 0.25,
         'main_geometry': '1000x700',
         'dashboard_window_geometry': '1720x1120',
         'dashboard_module_order': ['route', 'session', 'priorities', 'codex', 'feed'],
         'dashboard_hidden_modules': [],
+        'dashboard_page_layouts': {},
         'flight_log_geometry': '820x650',
         'flight_log_mode_enabled': False,
         'settings_geometry': '980x800',

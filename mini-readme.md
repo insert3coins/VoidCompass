@@ -1,17 +1,21 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.1.2 // Explorer Decision Deck
-**Release Date:** 2026-Aug-25
+## v5.4.1.3 // Command Deck Personalisation
+**Release Date:** 2026-Aug-26
 
-*   Rebuilt the exploration briefing around one explainable, journal-backed primary action, with direct System Survey, Ground/Exobiology, Value Ledger, Codex Atlas and Copy Next handoffs selected from current evidence.
-*   Added six profile-aware exploration doctrines—Balanced, Completionist, Exobiology, Codex Hunter, Value Hunter and Fast Transit—without letting advisory preferences override an active biological sample chain.
-*   Added a five-jump Route Horizon with exact NavRoute star classes, leg distance, scoopability, compact-star hazards and factual Universal Cartographics region crossings; unknown route facts remain explicitly unknown.
-*   Added Session Pulse from the active Captain's Log session and a Regional Codex Hunt that compares the commander's personal coverage, opens the Codex Atlas layer and can add a category objective to an active expedition without claiming local spawn availability.
-*   Made optional briefing cards hideable and reorderable per commander profile, with activity-aware emphasis, live theme inheritance and pinned Current System Survey and Explorer Decision instruments.
-*   Added a profile-aware Automatic Safety Snapshots setting for pre-upgrade and pre-cache-rebuild backups; manual backups and the mandatory rollback created before a restore remain available.
+*   Unified dashboard actions under live theme-aware HTML cockpit controls and added profile-aware panel arranging throughout the Dashboard and specialist workspaces.
+*   Rebuilt Navigation's waypoint display as one distance-proportional route rail for short and long plans, with immediate profile-waypoint refresh and deliberate precedence over a retained game route.
+*   Smoothed completed on-foot-to-SRV, Nomad, taxi and ship boarding across late Status updates, and retired the obsolete manual Dashboard mode selector while preserving automatic journal context.
+*   Promoted Station Link from a mirrored Tk canvas to a dedicated semantic HTML overlay with clearer port identity, service readiness, unsold-data sale status and local specialist intelligence.
+*   Rebuilt Cargo Manifest as a dedicated semantic HTML surface with live capacity segments, readable commodity cards, mission and stolen-cargo distinctions, compact overflow handling and content-aware sizing.
+*   Completed the semantic cockpit conversion with purpose-built Carrier Command, Prospector Analysis and CSS-driven Journal Heartbeat surfaces, then retired the generic Tk-canvas scene bridge.
+*   Stabilised profile panel arranging with drop markers and single-step reordering, reduced oversized command controls and rebuilt Explore & Survey's System Workboard as a live Elite-style body schematic.
+*   Added a profile-aware Survey Operations scope switch for priority targets or every surveyed body, and gave journal-backed neutron boost values their own tiered Supercruise field animation.
+*   Reworked the Heartbeat into a compact journal/Status/state telemetry instrument and added live Journal, Status, Navigation and UI-health pulses to the Dashboard footer.
 
 ## Earlier releases
 
+*   **v5.4.1.2** — Added the Explorer Decision Deck, six exploration doctrines, five-jump Route Horizon, Session Pulse, Regional Codex Hunt, profile-aware briefing-card layouts and optional automatic profile safety snapshots.
 *   **v5.4.1.1** — Refined Navigation arrival, planetary flight, landing gear, FSD cooldown, map/scanner and side-panel states; simplified vehicle departures and retired the redundant System Intelligence overlay.
 *   **v5.4.1** — Stabilised HTML overlay transparency and profile-aware opacity across hide/show cycles, and corrected the Galactic Atlas Focus Map viewport so every WebGL and overlay layer stays clipped and aligned.
 *   **v5.4.0** — Added Stellar Cartography with the live System Orrery, Exploration Survey Queue, Planetary Field Map, Expedition Replay, Explorer Science Lab and 42-region Galactic Passport; refined Navigation's vehicle and exploration states, added Survey Operations landability markers and repaired the initial Focus Map layout.

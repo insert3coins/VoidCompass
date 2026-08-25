@@ -73,6 +73,7 @@ class CargoHUD:
         self._last_inventory = []
         self._last_capacity = 0
         self._last_render_key = None
+        self._html_render_model = build_cargo_model([], 0)
         self._height = MIN_HEIGHT
         self._save_job = None
 
@@ -191,6 +192,7 @@ class CargoHUD:
         self._last_inventory = list(inventory)
         self._last_capacity = capacity
         model = build_cargo_model(inventory, capacity)
+        self._html_render_model = model
         render_key = repr(model)
         if render_key == self._last_render_key:
             return

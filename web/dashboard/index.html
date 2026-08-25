@@ -151,7 +151,7 @@
       <footer class="rail-footer">
         <div class="connection"><i id="connection-light"></i><span>LOCAL LINK</span><b id="connection-state">CONNECTING</b></div>
         <button data-command="open_screenshots">OPEN SCREENSHOTS</button>
-        <small id="rail-version">v5.4.1.2 // WEBVIEW2</small>
+        <small id="rail-version">v5.4.1.3 // WEBVIEW2</small>
       </footer>
     </aside>
 
@@ -179,25 +179,20 @@
           <header class="page-title">
             <div><p>LIVE COMMAND DECK</p><h2>Exploration briefing</h2><span id="overview-subtitle">Journal-backed field intelligence</span></div>
             <div class="title-actions">
-              <button class="ghost" id="customise-deck">CUSTOMISE DECK</button>
+              <button class="ghost" id="customise-deck">DECK OPTIONS</button>
               <button class="ghost" data-command="set_flight_log_mode" data-enabled="true">FOCUSED LOG</button>
               <button class="ghost" data-command="open" data-target="explore">FULL SURVEY</button>
               <button class="primary" data-page="map">OPEN GALACTIC ATLAS</button>
             </div>
           </header>
 
-          <section class="adaptive-strip">
-            <div><small>ADAPTIVE COMMAND DECK</small><b id="adaptive-label">GENERAL FLIGHT</b><span id="adaptive-detail">AUTO · following live journal activity</span></div>
-            <div><label for="adaptive-mode">MODE</label><select id="adaptive-mode"><option value="auto">AUTO</option><option value="general">GENERAL FLIGHT</option><option value="exploration">EXPLORATION</option><option value="mining">MINING</option><option value="ground">GROUND OPS</option><option value="carrier">CARRIER OPS</option><option value="station">STATION OPS</option></select><button data-command="open_adaptive_mode">OPEN MODE</button></div>
-          </section>
-
           <section id="deck-customiser" class="deck-customiser" hidden>
             <header><div><small>PROFILE-AWARE LAYOUT</small><strong>Explorer Decision Deck</strong></div><button id="close-deck-customiser" class="ghost">CLOSE</button></header>
             <div class="deck-customiser-body">
               <label>EXPLORATION DOCTRINE<select id="exploration-doctrine"></select></label>
-              <div><small>VISIBLE MODULES / ORDER</small><div id="deck-module-controls" class="deck-module-controls"></div></div>
+              <div><small>OPTIONAL MODULES</small><div id="deck-module-controls" class="deck-module-controls"></div></div>
             </div>
-            <footer><span>Current System Survey and the primary decision remain pinned.</span><button id="save-deck-layout" class="primary">SAVE TO THIS PROFILE</button></footer>
+            <footer><span>Current Survey and Explorer Decision remain visible; use Arrange Panels for placement.</span><button id="save-deck-layout" class="primary">SAVE TO THIS PROFILE</button></footer>
           </section>
 
           <section id="overview-modules" class="overview-modules">
@@ -286,7 +281,17 @@
             <div class="title-actions"><button class="primary" id="explore-complete">ROUTE & WAYPOINTS</button></div>
           </header>
           <section class="intel-grid">
-            <article class="card tall-card"><header><span>SYSTEM WORKBOARD</span><b id="workboard-badge">LIVE</b></header><div id="body-workboard" class="workboard"></div></article>
+            <article class="card tall-card system-workboard-card">
+              <header><span>SYSTEM WORKBOARD</span><b id="workboard-badge">LIVE</b></header>
+              <section class="workboard-system">
+                <div class="workboard-star" aria-hidden="true"><i></i><em></em></div>
+                <div class="workboard-identity"><small>FSS SYSTEM MODEL</small><strong id="workboard-system">NO SYSTEM DATA</strong><span id="workboard-class">STAR CLASS —</span></div>
+                <div class="workboard-completion"><b id="workboard-percent">0%</b><span id="workboard-count">0 / ? BODIES</span></div>
+              </section>
+              <div id="workboard-orbits" class="workboard-orbits" aria-label="System body schematic"></div>
+              <div class="workboard-key"><span><i class="priority"></i>PRIORITY</span><span><i class="mapped"></i>MAPPED</span><span><i></i>SCANNED</span></div>
+              <div id="body-workboard" class="workboard"></div>
+            </article>
             <article class="card"><header><span>DISCOVERY INTELLIGENCE</span></header><div class="big-stat"><strong id="intel-value">0 CR</strong><span>ESTIMATED DATA ABOARD</span></div><div id="intel-facts" class="fact-list"></div></article>
             <article class="card"><header><span>EXPEDITION PULSE</span><b id="expedition-badge">NO MISSION</b></header><h3 id="expedition-name">NO ACTIVE EXPEDITION</h3><p id="expedition-detail">Create or resume a named expedition in Mission Control.</p><div class="route-track"><i id="expedition-progress"></i><span id="expedition-progress-label">0 / 0</span></div><button class="wide-button" data-command="open" data-target="mission">OPEN MISSION CONTROL</button></article>
             <article class="card"><header><span>QUICK FIELD ACTIONS</span></header><div class="action-grid compact-actions"><button data-command="open" data-target="ground">GROUND NAV</button><button data-command="open" data-target="ledger">VALUE LEDGER</button><button data-command="open" data-target="achievements">ACHIEVEMENTS</button><button data-page="map">GALACTIC ATLAS</button></div></article>
@@ -492,6 +497,7 @@
                 <header><span>DISPLAY & INTERACTION</span></header>
                 <label class="studio-switch"><span><b>Mouse passthrough</b><small>Let Elite receive input through cockpit overlays.</small></span><input type="checkbox" data-overlay-option="overlay_mouse_passthrough"><i></i></label>
                 <label class="studio-switch"><span><b>Compact Navigation HUD</b><small>Use the compact-first navigation surface.</small></span><input type="checkbox" data-overlay-option="hud_compact_mode"><i></i></label>
+                <label class="studio-switch"><span><b>All surveyed bodies</b><small>Show every scanned body in Survey Operations; off keeps only biology, geology and valuable targets.</small></span><input type="checkbox" data-overlay-option="survey_status_show_all_bodies"><i></i></label>
                 <label class="studio-field"><span>Overlay text scale</span><div><input id="studio-text-scale" type="number" min="75" max="200" step="5"><b>%</b></div></label>
                 <label class="studio-field studio-opacity-field"><span>Overlay opacity</span><div><input id="studio-overlay-opacity" type="range" min="40" max="100" step="5"><b id="studio-overlay-opacity-value">100%</b></div></label>
               </article>
@@ -542,7 +548,7 @@
         </section>
 
         <section class="page" data-page-name="about">
-          <header class="about-hero"><div class="about-glyph"><span></span></div><div><p>ELITE DANGEROUS EXPLORATION COMPANION</p><h2>Void Compass</h2><span id="about-version">Version 5.4.1.2 // HTML Command Deck</span></div></header>
+          <header class="about-hero"><div class="about-glyph"><span></span></div><div><p>ELITE DANGEROUS EXPLORATION COMPANION</p><h2>Void Compass</h2><span id="about-version">Version 5.4.1.3 // HTML Command Deck</span></div></header>
           <section class="about-grid">
             <article class="card"><header><span>LOCAL FIRST</span></header><p>Void Compass reads Elite's journal and companion files and stores commander profiles locally. The dashboard server is private to this computer and binds only to loopback.</p></article>
             <article class="card"><header><span>GPL-3.0</span></header><p>Void Compass is free software. You may use, study, modify and redistribute it under GNU GPL version 3.</p></article>
@@ -554,8 +560,9 @@
 
       <footer class="statusbar">
         <span><i id="journal-light"></i> JOURNAL <b id="journal-state">CACHED</b></span>
-        <span>STATUS <b id="status-state">CACHED</b></span>
-        <span>NAV <b id="nav-state">CACHED</b></span>
+        <span><i id="status-light"></i> STATUS <b id="status-state">CACHED</b></span>
+        <span><i id="nav-light"></i> NAV <b id="nav-state">CACHED</b></span>
+        <span id="ui-heartbeat"><i id="ui-light"></i> UI <b id="ui-state">LIVE</b></span>
         <span class="status-spacer"></span>
         <span id="footer-region">REGION UNKNOWN</span>
         <span id="footer-clock">--:--:--</span>

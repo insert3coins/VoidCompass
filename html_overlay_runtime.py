@@ -179,7 +179,9 @@ class HtmlOverlayRuntime:
 class HtmlOverlaySurface:
     """Independent model stream backed by the application's shared host."""
 
-    def __init__(self, root, overlay_id, template="canvas", title=None):
+    def __init__(self, root, overlay_id, template=None, title=None):
+        if not template:
+            raise ValueError("A dedicated semantic overlay template is required")
         self.root = root
         self.overlay_id = str(overlay_id)
         self.template = str(template)
