@@ -185,7 +185,12 @@ class TacticalHUD:
             },
             "system": {"name": "---", "region": "REGION UNKNOWN", "arrival_epoch": 0},
             "route": {"header": "NO ACTIVE ROUTE", "hops": []},
-            "survey": {"label": "COUNT UNKNOWN", "count": "0/? · --%", "percent": 0},
+            "survey": {
+                "label": "COUNT UNKNOWN", "state": "unknown",
+                "scanned": 0, "total": 0, "total_known": False,
+                "count": "0/? · --%", "percent": 0,
+                "signals": {"bio": 0, "geo": 0, "valuable": 0},
+            },
             "metrics": {
                 "fuel": {"value": "--", "color": str(theme.dim)},
                 "bio": {"value": "0/0", "color": str(theme.dim)},
@@ -1648,15 +1653,16 @@ class TacticalHUD:
         if source == "unknown":
             label, tone, state = "COUNT UNKNOWN", "#7d8891", "unknown"
         elif complete:
-            label, tone, state = "COMPLETE", COLOR_GREEN, "complete"
+            label, tone, state = "COMPLETE", COLOR_ACCENT, "complete"
         elif live:
             label, tone, state = "LIVE FSS", COLOR_ORANGE, "live"
         else:
-            label, tone, state = "LOCAL RECORD", COLOR_ACCENT, "local"
-        if remaining:
-            label += f" · {remaining} REMAINS"
-        elif dss:
-            label += f" · DSS {dss}"
+            label, tone, state = "RECORDED SURVEY", COLOR_ACCENT, "retained"
+        if not complete:
+            if remaining:
+                label += f" · {remaining} REMAINS"
+            elif dss:
+                label += f" · DSS {dss}"
         return {
             "label": label,
             "tone": tone,
@@ -2283,10 +2289,19 @@ class TacticalHUD:
         model["survey"] = {
             "label": survey["label"],
             "tone": survey["tone"],
+            "state": survey["state"],
+            "scanned": int(survey["scanned"]),
+            "total": int(survey["total"]),
+            "total_known": survey["state"] != "unknown",
             "count": scan_progress_text,
             "percent": round(float(survey["pct"]) * 100.0, 2),
             "live": bool(survey["live"]),
             "complete": bool(survey["complete"]),
+            "signals": {
+                "bio": max(0, int(nav_context.get("bio_signals", 0) or 0)),
+                "geo": max(0, int(nav_context.get("geo_signals", 0) or 0)),
+                "valuable": max(0, int(nav_context.get("valuable_count", 0) or 0)),
+            },
         }
 
         survey_metrics = self._survey_metrics(nav_context)

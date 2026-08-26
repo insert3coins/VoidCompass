@@ -8,8 +8,10 @@ const dom = Object.fromEntries([
   'hud', 'state-canvas', 'state-label', 'vehicle-display', 'vehicle-image',
   'region-label', 'system-clock', 'current-system',
   'route-title', 'route-next', 'route-distance', 'route-progress', 'route-packet',
-  'route-pips', 'route-origin', 'route-destination', 'survey-state', 'survey-count',
-  'survey-rail', 'metric-fuel', 'metric-bio', 'metric-geo', 'expanded-fuel',
+  'route-pips', 'route-origin', 'route-destination', 'survey-block', 'survey-title',
+  'survey-title-text', 'survey-state', 'survey-mode', 'survey-remaining',
+  'survey-count', 'survey-percent', 'survey-progress-marker',
+  'survey-rail', 'survey-signals', 'metric-fuel', 'metric-bio', 'metric-geo', 'expanded-fuel',
   'expanded-bio', 'expanded-geo', 'expanded-traffic', 'context-label',
   'secondary-label', 'traffic-label', 'link-state',
 ].map((id) => [id, $(id)]));
@@ -23,6 +25,9 @@ let vehicleImageTransition = null;
 let lastServerContact = Date.now();
 let lastRevision = -1;
 let healthPollActive = false;
+let lastSurveyProgress = null;
+let surveyPulseTimer = null;
+let surveyMarkerTimer = null;
 
 function colour(value, fallback) {
   return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : fallback;
@@ -198,24 +203,135 @@ function renderRoute(route = {}) {
   }
 }
 
-function renderSurvey(survey = {}) {
-  dom['survey-state'].textContent = survey.label || 'COUNT UNKNOWN';
-  dom['survey-state'].style.color = survey.tone || 'var(--accent)';
-  dom['survey-count'].textContent = survey.count || '0/? · --%';
-  dom['survey-count'].style.color = survey.tone || 'var(--accent)';
+function renderSurvey(survey = {}, theme = {}, systemName = '') {
+  const state = ['unknown', 'live', 'retained', 'complete'].includes(String(survey.state))
+    ? String(survey.state) : (survey.complete ? 'complete' : survey.live ? 'live' : 'unknown');
+  const scanned = Math.max(0, Number.parseInt(survey.scanned, 10) || 0);
+  const total = Math.max(0, Number.parseInt(survey.total, 10) || 0);
+  const totalKnown = survey.total_known !== false && state !== 'unknown';
+  const percent = Math.max(0, Math.min(100, Number(survey.percent || 0)));
+  const rawSignals = survey.signals || {};
+  const signalCounts = Object.fromEntries(['bio', 'geo', 'valuable'].map((kind) => [
+    kind, Math.max(0, Number.parseInt(rawSignals[kind], 10) || 0),
+  ]));
+  const tone = survey.tone
+    ? themedStateColour(survey.tone, theme)
+    : (state === 'unknown' ? (theme.dim || 'var(--dim)') : (theme.accent || 'var(--accent)'));
+  const block = dom['survey-block'];
+  block.dataset.surveyState = state;
+  block.style.setProperty('--survey-tone', tone);
+  dom['survey-title-text'].textContent = state === 'complete'
+    ? 'SYSTEM SURVEY COMPLETE' : 'SYSTEM SURVEY';
+  const remaining = totalKnown ? Math.max(0, total - scanned) : null;
+  const modeLabels = {
+    unknown: 'COUNT UNKNOWN', live: 'LIVE FSS', retained: 'RECORDED', complete: '',
+  };
+  dom['survey-mode'].textContent = modeLabels[state];
+  dom['survey-remaining'].textContent = state !== 'complete' && remaining > 0
+    ? `${remaining} REMAIN` : '';
+  dom['survey-state'].style.color = tone;
+  dom['survey-count'].textContent = `${scanned} / ${totalKnown ? total : '?'} BODIES`;
+  dom['survey-count'].style.color = tone;
+  dom['survey-percent'].textContent = totalKnown ? `${Math.round(percent)}%` : '--%';
+  dom['survey-percent'].style.color = tone;
+
   const host = dom['survey-rail'];
-  host.className = `survey-rail${survey.live ? ' live' : ''}`;
-  host.style.setProperty('--survey-tone', survey.tone || 'var(--accent)');
-  host.replaceChildren();
-  const completion = Math.max(0, Math.min(12, Number(survey.percent || 0) / 100 * 12));
-  for (let index = 0; index < 12; index += 1) {
-    const segment = document.createElement('span');
-    segment.className = 'survey-segment';
-    const fill = document.createElement('i');
-    fill.style.setProperty('--fill', Math.max(0, Math.min(1, completion - index)));
-    segment.appendChild(fill);
-    host.appendChild(segment);
+  const previous = lastSurveyProgress;
+  const sameSystem = Boolean(previous && previous.systemName === systemName);
+  const progressed = Boolean(sameSystem && totalKnown && (
+    scanned > previous.scanned || percent > previous.percent
+  ));
+  if (progressed) {
+    host.classList.remove('scan-pulse');
+    void host.offsetWidth;
+    host.classList.add('scan-pulse');
+    block.classList.remove('survey-progressing');
+    void block.offsetWidth;
+    block.classList.add('survey-progressing');
+    if (surveyPulseTimer) clearTimeout(surveyPulseTimer);
+    surveyPulseTimer = setTimeout(() => {
+      host.classList.remove('scan-pulse');
+      block.classList.remove('survey-progressing');
+      surveyPulseTimer = null;
+    }, 1050);
+  } else if (!surveyPulseTimer) {
+    host.classList.remove('scan-pulse');
   }
+  const segmentCount = totalKnown && total > 0 && total <= 24 ? total : (total > 24 ? 24 : 12);
+  host.style.setProperty('--survey-segments', String(segmentCount));
+  const completion = percent / 100 * segmentCount;
+  if (host.children.length !== segmentCount) {
+    host.replaceChildren();
+    for (let index = 0; index < segmentCount; index += 1) {
+      const segment = document.createElement('span');
+      segment.className = 'survey-segment';
+      const fill = document.createElement('i');
+      segment.appendChild(fill);
+      host.appendChild(segment);
+    }
+  }
+  const segments = Array.from(host.children);
+  segments.forEach((segment, index) => {
+    const fill = segment.firstElementChild;
+    fill.style.setProperty('--fill', Math.max(0, Math.min(1, completion - index)));
+  });
+  if (progressed) {
+    segments.forEach((segment) => segment.classList.remove('acquired'));
+    void host.offsetWidth;
+    const priorCompletion = Math.max(0, Math.min(segmentCount,
+      Number(previous.percent || 0) / 100 * segmentCount));
+    const firstChanged = Math.min(segmentCount - 1, Math.floor(priorCompletion));
+    const lastChanged = Math.min(segmentCount - 1,
+      Math.max(firstChanged, Math.ceil(completion) - 1));
+    for (let index = firstChanged; index <= lastChanged; index += 1) {
+      segments[index]?.classList.add('acquired');
+    }
+  }
+
+  const marker = dom['survey-progress-marker'];
+  const markerPosition = 7 + (percent / 100 * 86);
+  if (!sameSystem) marker.classList.add('resetting');
+  marker.style.left = `${markerPosition}%`;
+  if (!sameSystem) requestAnimationFrame(() => marker.classList.remove('resetting'));
+  marker.classList.toggle('unavailable', !totalKnown);
+  marker.classList.toggle('complete', state === 'complete');
+  if (progressed) {
+    marker.classList.remove('acquiring');
+    void marker.offsetWidth;
+    marker.classList.add('acquiring');
+    if (surveyMarkerTimer) clearTimeout(surveyMarkerTimer);
+    surveyMarkerTimer = setTimeout(() => {
+      marker.classList.remove('acquiring');
+      surveyMarkerTimer = null;
+    }, 850);
+  }
+  const signalHost = dom['survey-signals'];
+  for (const [kind, shortLabel, title] of [
+    ['bio', 'B', 'Biological signals'],
+    ['geo', 'G', 'Geological signals'],
+    ['valuable', 'V', 'High-value bodies'],
+  ]) {
+    const count = signalCounts[kind];
+    let marker = signalHost.querySelector(`[data-signal-kind="${kind}"]`);
+    if (!marker) {
+      marker = document.createElement('i');
+      marker.className = `survey-notch ${kind}`;
+      marker.dataset.signalKind = kind;
+      signalHost.appendChild(marker);
+    }
+    marker.textContent = shortLabel;
+    marker.title = `${title}: ${count}`;
+    marker.setAttribute('aria-label', `${title}: ${count}`);
+    marker.classList.toggle('present', count > 0);
+    const signalFound = Boolean(sameSystem
+      && count > Number(previous?.signals?.[kind] || 0));
+    if (signalFound) {
+      marker.classList.remove('found');
+      void marker.offsetWidth;
+      marker.classList.add('found');
+    }
+  }
+  lastSurveyProgress = {systemName, scanned, total, percent, state, signals: signalCounts};
 }
 
 function formatClock(epoch) {
@@ -283,7 +399,7 @@ function render(data) {
   dom['current-system'].textContent = system.name || '---';
   dom['region-label'].textContent = system.region || 'REGION UNKNOWN';
   renderRoute(data.route);
-  renderSurvey(data.survey);
+  renderSurvey(data.survey, theme, system.name || '');
   const metrics = data.metrics || {};
   for (const prefix of ['metric', 'expanded']) {
     setMetric(`${prefix}-fuel`, metrics.fuel);
