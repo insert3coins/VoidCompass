@@ -2138,7 +2138,7 @@ class HtmlDashboardMixin:
             doctrine, survey, route, (intelligence or {}).get("actions") or (),
             flight, data, codex_hunt, adaptive,
         )
-        configurable_modules = ("route", "session", "priorities", "codex", "feed", "galnet")
+        configurable_modules = ("route", "session", "priorities", "codex", "feed")
         configured_order = self.config.get("dashboard_module_order") or configurable_modules
         module_order = [
             str(name) for name in configured_order
@@ -2203,7 +2203,6 @@ class HtmlDashboardMixin:
                     {"id": "priorities", "label": "Field Priorities"},
                     {"id": "codex", "label": "Regional Codex Hunt"},
                     {"id": "feed", "label": "Live Exploration Feed"},
-                    {"id": "galnet", "label": "Galnet Relay"},
                 ],
                 "doctrine": decision.get("doctrine"),
                 "doctrines": [
@@ -3160,7 +3159,7 @@ class HtmlDashboardMixin:
             self._schedule_html_dashboard_publish(immediate=True)
             return True
         if action == "save_dashboard_layout":
-            available = ("route", "session", "priorities", "codex", "feed", "galnet")
+            available = ("route", "session", "priorities", "codex", "feed")
             raw_order = payload.get("module_order")
             raw_hidden = payload.get("hidden_modules")
             if not isinstance(raw_order, list) or not isinstance(raw_hidden, list):

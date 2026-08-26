@@ -3,9 +3,9 @@
 ## v5.4.1.4 // Galnet Relay
 **Release Date:** 2026-Aug-26
 
-*   Added a theme-aware Galnet Relay to the Dashboard's lower-right briefing row, with an unobtrusive rotating headline ticker, manual navigation and a full in-app archive reader.
+*   Added a theme-aware Galnet Relay to the persistent bottom status bar beside the clock, with an unobtrusive rotating headline ticker and a full in-app archive reader.
 *   Fetches Frontier's official RSS feed on a bounded background worker, keeps the command deck responsive and restores a small local cache immediately when the network is unavailable.
-*   Preserves Frontier's editorial ordering and the current headline across refreshes, sanitises article markup into readable local text and keeps the optional Galnet panel inside each commander's arrange/hide layout.
+*   Preserves Frontier's editorial ordering and the current headline across refreshes, sanitises article markup into readable local text and leaves the main exploration briefing uncluttered.
 
 ## Earlier releases
 

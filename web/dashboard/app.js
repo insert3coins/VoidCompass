@@ -67,7 +67,7 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".nav-item", "[data-feed-filter]", ".studio-overlay-card",
   ".studio-index-row", ".mission-row", ".workspace-tabs button",
   "[data-analytics-view]", "[data-studio-view]",
-  ".galnet-headline-row", "#galnet-ticker",
+  ".galnet-headline-row", "#status-galnet",
 ].join(",");
 
 function decorateCockpitButtons(root = document) {
@@ -899,10 +899,6 @@ function galnetArticles(state = model) {
   return Array.isArray(state.galnet?.articles) ? state.galnet.articles : [];
 }
 
-function galnetTeaser(body) {
-  return String(body || "").replace(/\s+/g, " ").trim().slice(0, 220);
-}
-
 function renderGalnetReader(state = model) {
   const articles = galnetArticles(state);
   if (!articles.some((row) => row.id === galnetSelectedId)) {
@@ -941,14 +937,12 @@ function renderGalnet(state, force = false) {
   const renderKey = `${fingerprint}:${galnetTickerIndex}`;
   if (force || renderKey !== galnetRenderKey) {
     galnetRenderKey = renderKey;
-    text("galnet-stamp", row?.stamp || "FRONTIER NEWS SERVICE");
-    text("galnet-title", row?.title || "AWAITING GALNET DISPATCHES");
-    text("galnet-teaser", row ? galnetTeaser(row.body) : (feed.detail || "The relay will update quietly in the background."));
-    text("galnet-position", `${articles.length ? galnetTickerIndex + 1 : 0} / ${articles.length}`);
+    text("footer-galnet-title", row?.title || "AWAITING DISPATCHES");
   }
-  const badge = byId("galnet-status");
-  badge.className = `galnet-status ${status}`;
-  badge.textContent = status === "refreshing" ? "RECEIVING" : status.toUpperCase();
+  const ticker = byId("status-galnet");
+  ticker.className = `status-galnet ${status}`;
+  ticker.title = row ? `${row.stamp || "GALNET"} · ${row.title || ""}` : (feed.detail || "Galnet relay");
+  text("footer-galnet-state", status === "refreshing" ? "RX" : (articles.length ? `${galnetTickerIndex + 1}/${articles.length}` : status.toUpperCase()));
   if (!byId("galnet-reader").hidden) renderGalnetReader(state);
 }
 
@@ -2450,17 +2444,7 @@ function openGalnetReader() {
   byId("galnet-close").focus();
 }
 
-document.querySelectorAll("[data-galnet-step]").forEach((button) => {
-  button.addEventListener("click", () => {
-    const articles = galnetArticles();
-    if (!articles.length) return;
-    galnetTickerIndex = (galnetTickerIndex + number(button.dataset.galnetStep) + articles.length) % articles.length;
-    renderGalnet(model, true);
-  });
-});
-
-byId("galnet-ticker").addEventListener("click", openGalnetReader);
-byId("galnet-open").addEventListener("click", openGalnetReader);
+byId("status-galnet").addEventListener("click", openGalnetReader);
 byId("galnet-close").addEventListener("click", () => { byId("galnet-reader").hidden = true; });
 byId("galnet-reader").addEventListener("click", (event) => {
   if (event.target === byId("galnet-reader")) byId("galnet-reader").hidden = true;
@@ -2476,13 +2460,11 @@ async function refreshGalnet(button) {
   button.disabled = false;
   if (accepted) showToast("Galnet refresh requested");
 }
-byId("galnet-refresh").addEventListener("click", () => refreshGalnet(byId("galnet-refresh")));
 byId("galnet-reader-refresh").addEventListener("click", () => refreshGalnet(byId("galnet-reader-refresh")));
 
 window.setInterval(() => {
-  const card = document.querySelector(".galnet-card");
   const articles = galnetArticles();
-  if (document.hidden || !card || card.hidden || articles.length < 2 || !byId("galnet-reader").hidden) return;
+  if (document.hidden || articles.length < 2 || !byId("galnet-reader").hidden) return;
   galnetTickerIndex = (galnetTickerIndex + 1) % articles.length;
   renderGalnet(model, true);
 }, 6500);
@@ -2694,7 +2676,7 @@ window.addEventListener("keydown", async (event) => {
   if (event.key === "Escape" && !byId("galnet-reader").hidden) {
     event.preventDefault();
     byId("galnet-reader").hidden = true;
-    byId("galnet-open").focus();
+    byId("status-galnet").focus();
     return;
   }
   if (event.key === "Escape" && document.body.classList.contains("atlas-focus")) {

@@ -173,8 +173,7 @@ body.atlas-focus .atlas-frame { pointer-events: auto; }
 
 .overview-modules { display: grid; grid-template-columns: repeat(12,minmax(0,1fr)); grid-auto-flow: row dense; gap: 13px; align-items: stretch; }
 .overview-modules > .decision-card, .overview-modules > .telemetry-strip { grid-column: span 12; }
-.overview-modules > .feed-card { grid-column: span 8; }
-.overview-modules > .galnet-card { grid-column: span 4; }
+.overview-modules > .feed-card { grid-column: span 12; }
 .overview-modules > .survey-card { grid-column: span 7; }
 .overview-modules > .route-card { grid-column: span 5; }
 .overview-modules > .session-card, .overview-modules > .priority-card, .overview-modules > .codex-hunt-card { grid-column: span 4; }
@@ -292,24 +291,6 @@ body.atlas-focus .atlas-frame { pointer-events: auto; }
 .event-row.warn b, .event-row.fail b { color: var(--yellow); }
 .event-row.fail p { color: var(--red); }
 .event-row.discovery b { color: var(--orange); }
-.galnet-card { min-height: 287px; overflow: hidden; background: radial-gradient(circle at 92% 0,color-mix(in srgb,var(--orange) 11%,transparent),transparent 34%),var(--panel); }
-.galnet-status { color: var(--dim) !important; background: transparent !important; }
-.galnet-status.live { color: var(--green) !important; }
-.galnet-status.cached { color: var(--yellow) !important; }
-.galnet-status.error { color: var(--red) !important; }
-.galnet-ticker { width: 100%; height: 201px; display: block; position: relative; overflow: hidden; border: 0; border-bottom: 1px solid var(--border-soft); background: linear-gradient(120deg,color-mix(in srgb,var(--accent) 5%,var(--inset)),var(--inset)); color: var(--text); padding: 21px 18px 15px 62px; text-align: left; cursor: pointer; }
-.galnet-ticker::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; opacity: .55; background: linear-gradient(90deg,transparent,var(--orange),transparent); animation: galnet-scan 5.8s ease-in-out infinite; }
-@keyframes galnet-scan { 0%,100% { transform: translateX(-70%); opacity: .12; } 50% { transform: translateX(70%); opacity: .72; } }
-.galnet-ticker small { display: block; color: var(--orange); font: 700 9px Consolas,monospace; letter-spacing: .08em; }
-.galnet-ticker strong { display: -webkit-box; margin: 9px 0 7px; overflow: hidden; color: var(--text); font: 700 18px/1.12 "Bahnschrift SemiCondensed","Arial Narrow",sans-serif; letter-spacing: .025em; text-transform: uppercase; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
-.galnet-ticker .galnet-teaser { display: -webkit-box; margin: 0; overflow: hidden; color: var(--muted); font: 9px/1.45 Consolas,monospace; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
-.galnet-signal { position: absolute; left: 17px; top: 22px; width: 28px; height: 28px; border: 1px solid color-mix(in srgb,var(--orange) 55%,var(--border)); transform: rotate(45deg); }
-.galnet-signal i { position: absolute; width: 3px; bottom: 6px; background: var(--orange); box-shadow: 0 0 7px color-mix(in srgb,var(--orange) 60%,transparent); animation: galnet-bars 1.5s ease-in-out infinite; }
-.galnet-signal i:nth-child(1) { left: 6px; height: 6px; }.galnet-signal i:nth-child(2) { left: 12px; height: 12px; animation-delay: -.5s; }.galnet-signal i:nth-child(3) { left: 18px; height: 17px; animation-delay: -1s; }
-@keyframes galnet-bars { 50% { transform: scaleY(.45); opacity: .45; } }
-.galnet-controls { min-height: 45px; display: flex; align-items: center; justify-content: space-between; gap: 9px; padding: 6px 10px 6px 14px; }
-.galnet-controls > span { color: var(--dim); font: 8px Consolas,monospace; }
-.galnet-controls > div { display: flex; gap: 4px; }.galnet-controls button { min-width: 27px; min-height: 28px; padding: 0 7px; font-size: 8px; }
 .galnet-reader { position: fixed; z-index: 120; inset: 0; padding: clamp(20px,4vw,70px); background: rgba(1,6,10,.86); backdrop-filter: blur(7px); }
 .galnet-reader-shell { width: min(1280px,100%); height: min(820px,100%); margin: auto; display: grid; grid-template-rows: auto 1fr; border: 1px solid var(--border); border-top: 2px solid var(--orange); background: var(--panel); box-shadow: 0 25px 90px #000c,0 0 40px color-mix(in srgb,var(--orange) 8%,transparent); }
 .galnet-reader-shell > header { min-height: 69px; display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 10px 15px 10px 20px; border-bottom: 1px solid var(--border); background: var(--header); }
@@ -601,6 +582,10 @@ body[data-activity="exploration"] .survey-card, body[data-activity="ground"] .co
 .statusbar b { color: var(--muted); }
 .statusbar #ui-heartbeat.beat i { animation: dashboard-heartbeat .52s ease-out; }
 .status-spacer { flex: 1; }
+.status-galnet { min-width: 180px; max-width: min(38vw,560px); height: 25px; display: grid; grid-template-columns: auto auto minmax(70px,1fr) auto; align-items: center; gap: 7px; overflow: hidden; border: 0; border-left: 1px solid var(--border-soft); border-right: 1px solid var(--border-soft); background: color-mix(in srgb,var(--accent) 3%,transparent); color: var(--dim); padding: 0 10px; cursor: pointer; font: 9px Consolas,monospace; letter-spacing: .04em; }
+.status-galnet:hover,.status-galnet:focus-visible { background: var(--selection); outline: none; }
+.status-galnet b { color: var(--orange); }.status-galnet span { min-width: 0; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }.status-galnet em { color: var(--dim); font-style: normal; font-size: 8px; }
+.status-galnet.live #galnet-light { background: var(--green); box-shadow: 0 0 9px var(--green); }.status-galnet.cached #galnet-light { background: var(--yellow); box-shadow: 0 0 9px var(--yellow); }.status-galnet.error #galnet-light { background: var(--red); box-shadow: 0 0 9px var(--red); }
 @keyframes dashboard-heartbeat { 0%{transform:scale(.65);filter:brightness(1)}45%{transform:scale(1.9);filter:brightness(1.6)}100%{transform:scale(1);filter:brightness(1)} }
 
 .boot { position: fixed; inset: 0; z-index: 50; background: radial-gradient(ellipse at 24% 48%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 35%), radial-gradient(ellipse at 79% 31%, color-mix(in srgb, var(--orange) 6%, transparent), transparent 28%), linear-gradient(145deg, #05080c, var(--bg) 56%, #060b10); overflow: hidden; transition: opacity .6s ease, visibility .6s; isolation: isolate; contain: strict; }
@@ -927,8 +912,7 @@ button.cockpit-button.busy::after { opacity: .5; animation: cockpit-button-scan 
   .overview-modules > .survey-card, .overview-modules > .route-card { grid-column: span 6; }
   .overview-modules > .session-card, .overview-modules > .priority-card { grid-column: span 6; }
   .overview-modules > .codex-hunt-card { grid-column: span 12; }
-  .overview-modules > .feed-card { grid-column: span 7; }
-  .overview-modules > .galnet-card { grid-column: span 5; }
+  .overview-modules > .feed-card { grid-column: span 12; }
   .deck-module-controls { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .telemetry-strip { grid-template-columns: repeat(2,1fr); }
   .tool-grid { grid-template-columns: repeat(2,1fr); }
@@ -951,7 +935,7 @@ button.cockpit-button.busy::after { opacity: .5; animation: cockpit-button-scan 
   .overview-modules > .survey-card, .overview-modules > .route-card,
   .overview-modules > .session-card, .overview-modules > .priority-card,
   .overview-modules > .codex-hunt-card { grid-column: span 12; }
-  .overview-modules > .feed-card, .overview-modules > .galnet-card { grid-column: span 12; }
+  .overview-modules > .feed-card { grid-column: span 12; }
   .galnet-reader { padding: 16px; }.galnet-reader-shell > main { grid-template-columns: 250px minmax(0,1fr); }
   .decision-body { grid-template-columns: 46px minmax(0,1fr); }
   .decision-body > button { grid-column: 1/-1; width: 100%; }
