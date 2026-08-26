@@ -193,7 +193,7 @@ def build_route_track(current_coords, route_list, nav_route_entries, current_sys
 
 def total_distance_text(hops, truncated=0):
     dists = [h["dist"] for h in hops if h.get("dist")]
-    if not dists and not truncated:
+    if not dists:
         return ""
     total = sum(dists)
     suffix = "+" if truncated else ""

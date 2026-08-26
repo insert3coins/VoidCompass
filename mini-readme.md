@@ -6,6 +6,8 @@
 *   Added a theme-aware Galnet Relay to the persistent bottom status bar beside the clock, with an unobtrusive rotating headline ticker and a full in-app archive reader.
 *   Fetches Frontier's official RSS feed on a bounded background worker, keeps the command deck responsive and restores a small local cache immediately when the network is unavailable.
 *   Preserves Frontier's editorial ordering and the current headline across refreshes, sanitises article markup into readable local text and leaves the main exploration briefing uncluttered.
+*   Added profile-aware Galnet controls for relay visibility, headline rotation, rotation and refresh cadence, manual refresh and local cache clearing.
+*   Made panel arranging respond live and predictably for tall and full-width cards, and separated Navigation waypoint destination, stop progress and current-leg distance while suppressing unknown `0 LY` totals.
 
 ## Earlier releases
 

@@ -1589,6 +1589,8 @@ class HtmlDashboardMixin:
             "runtime_trace_enabled", "crash_reporting_enabled",
             "recovery_safe_mode_enabled", "edsm_backfill_on_cache_rebuild",
             "automatic_profile_backups_enabled",
+            "galnet_enabled", "galnet_auto_rotate_enabled",
+            "galnet_rotation_seconds", "galnet_refresh_minutes",
         ):
             value = self.config.get(key)
             values[key] = value if isinstance(value, (str, int, float, bool)) or value is None else str(value)
@@ -1601,6 +1603,7 @@ class HtmlDashboardMixin:
         )
         return {
             "values": values, "hotkeys": hotkeys, "health": health, "eddn": eddn,
+            "galnet": self._html_dashboard_galnet(),
             "theme_editor": {
                 "name": theme_name,
                 "palette": theme_palette,
@@ -2020,6 +2023,10 @@ class HtmlDashboardMixin:
         service = getattr(self, "galnet_feed", None)
         if service is None:
             return {
+                "enabled": bool(self.config.get("galnet_enabled", True)),
+                "auto_rotate": bool(self.config.get("galnet_auto_rotate_enabled", True)),
+                "rotation_seconds": max(4, min(60, _integer(self.config.get("galnet_rotation_seconds"), 7))),
+                "refresh_minutes": max(5, min(240, _integer(self.config.get("galnet_refresh_minutes"), 30))),
                 "status": "waiting", "detail": "Awaiting Galnet relay",
                 "busy": False, "source": "Frontier Galnet",
                 "updated_at": "", "articles": [],
@@ -2028,6 +2035,10 @@ class HtmlDashboardMixin:
             snapshot = service.snapshot()
         except Exception:
             return {
+                "enabled": bool(self.config.get("galnet_enabled", True)),
+                "auto_rotate": bool(self.config.get("galnet_auto_rotate_enabled", True)),
+                "rotation_seconds": max(4, min(60, _integer(self.config.get("galnet_rotation_seconds"), 7))),
+                "refresh_minutes": max(5, min(240, _integer(self.config.get("galnet_refresh_minutes"), 30))),
                 "status": "error", "detail": "Galnet relay unavailable",
                 "busy": False, "source": "Frontier Galnet",
                 "updated_at": "", "articles": [],
@@ -2044,6 +2055,10 @@ class HtmlDashboardMixin:
                 "stamp": _text(row.get("stamp"), 40),
             })
         return {
+            "enabled": bool(self.config.get("galnet_enabled", True)),
+            "auto_rotate": bool(self.config.get("galnet_auto_rotate_enabled", True)),
+            "rotation_seconds": max(4, min(60, _integer(self.config.get("galnet_rotation_seconds"), 7))),
+            "refresh_minutes": max(5, min(240, _integer(self.config.get("galnet_refresh_minutes"), 30))),
             "status": _text(snapshot.get("status") or "waiting", 30).casefold(),
             "detail": _text(snapshot.get("detail") or "Awaiting Galnet relay", 180),
             "busy": bool(snapshot.get("busy")),
@@ -3063,6 +3078,10 @@ class HtmlDashboardMixin:
                     "recovery_safe_mode_enabled": bool,
                     "edsm_backfill_on_cache_rebuild": bool,
                     "automatic_profile_backups_enabled": bool,
+                    "galnet_enabled": bool,
+                    "galnet_auto_rotate_enabled": bool,
+                    "galnet_rotation_seconds": int,
+                    "galnet_refresh_minutes": int,
                 }
                 for key, cast in allowed.items():
                     if key not in values:
@@ -3070,6 +3089,10 @@ class HtmlDashboardMixin:
                     value = values[key]
                     if cast is bool:
                         self.config[key] = bool(value)
+                    elif key == "galnet_rotation_seconds":
+                        self.config[key] = max(4, min(60, _integer(value, 7)))
+                    elif key == "galnet_refresh_minutes":
+                        self.config[key] = max(5, min(240, _integer(value, 30)))
                     elif cast is int:
                         self.config[key] = max(75, min(200, _integer(value, 100)))
                     else:
@@ -3090,6 +3113,7 @@ class HtmlDashboardMixin:
                 self._apply_active_profile_theme()
                 self._apply_runtime_feature_toggles()
                 self._configure_overlay_hotkeys()
+                self._restart_galnet_feed_schedule(delay_ms=250)
                 changed = True
             elif operation == "rebuild_cache":
                 self.config["edsm_backfill_on_cache_rebuild"] = bool(payload.get("upload_edsm"))
@@ -3149,6 +3173,12 @@ class HtmlDashboardMixin:
             return True
         if action == "refresh_galnet":
             self.refresh_galnet(force=True)
+            return True
+        if action == "clear_galnet_cache":
+            service = getattr(self, "galnet_feed", None)
+            if service is None or not service.clear_cache():
+                return False
+            self._schedule_html_dashboard_publish(immediate=True)
             return True
         if action == "set_exploration_doctrine":
             doctrine = _text(payload.get("doctrine") or "balanced", 30).casefold()

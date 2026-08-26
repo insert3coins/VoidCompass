@@ -1613,6 +1613,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         ).start()
         self._persist_config()
         self._apply_runtime_feature_toggles()
+        self._restart_galnet_feed_schedule(delay_ms=250)
         self._start_eddn_market_upload()
         self._configure_overlay_hotkeys(announce=False)
         self._apply_navigation_group_state()
@@ -1688,6 +1689,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         )
         self.galnet_feed = GalnetFeedService(
             application_base_dir() / "cache" / "galnet.json", APP_VERSION,
+            refresh_seconds=self._galnet_refresh_minutes() * 60,
         )
         self._galnet_refresh_job = None
         self._adaptive_startup_synced = False
@@ -2197,7 +2199,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             )
 
         threading.Thread(target=self.check_updates, daemon=True).start()
-        self._galnet_refresh_job = self.root.after(900, self._tick_galnet_feed)
+        self._restart_galnet_feed_schedule(delay_ms=900)
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self._configure_overlay_hotkeys(announce=False)
@@ -2997,9 +2999,42 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             return
         self._schedule_html_dashboard_publish(immediate=True)
 
+    def _galnet_refresh_minutes(self):
+        try:
+            value = int(float(self.config.get("galnet_refresh_minutes", 30) or 30))
+        except (TypeError, ValueError):
+            value = 30
+        return max(5, min(240, value))
+
+    def _restart_galnet_feed_schedule(self, delay_ms=None):
+        job = getattr(self, "_galnet_refresh_job", None)
+        if job is not None:
+            try:
+                self.root.after_cancel(job)
+            except Exception:
+                pass
+        self._galnet_refresh_job = None
+        service = getattr(self, "galnet_feed", None)
+        if service is not None:
+            service.set_refresh_seconds(self._galnet_refresh_minutes() * 60)
+        if not self.is_running or not self.config.get("galnet_enabled", True):
+            self._schedule_html_dashboard_publish(immediate=True)
+            return
+        interval_ms = self._galnet_refresh_minutes() * 60 * 1000
+        try:
+            self._galnet_refresh_job = self.root.after(
+                interval_ms if delay_ms is None else max(0, int(delay_ms)),
+                self._tick_galnet_feed,
+            )
+        except Exception:
+            self._galnet_refresh_job = None
+
     def refresh_galnet(self, force=False):
         service = getattr(self, "galnet_feed", None)
-        if service is None or not self.is_running:
+        if (
+            service is None or not self.is_running
+            or (not force and not self.config.get("galnet_enabled", True))
+        ):
             return False
         started = service.refresh_async(
             lambda: self._ui_post(
@@ -3015,13 +3050,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._galnet_refresh_job = None
         if not self.is_running:
             return
+        if not self.config.get("galnet_enabled", True):
+            self._schedule_html_dashboard_publish(immediate=True)
+            return
         self.refresh_galnet(force=False)
-        try:
-            self._galnet_refresh_job = self.root.after(
-                30 * 60 * 1000, self._tick_galnet_feed,
-            )
-        except Exception:
-            self._galnet_refresh_job = None
+        self._restart_galnet_feed_schedule()
 
     def _tick_runtime_trace(self):
         if not self.is_running:
@@ -4276,35 +4309,50 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         route_counts = None
         
         if self.waypoint_manager.waypoints:
-            total_wp = len(self.waypoint_manager.waypoints)
-            
-            visited_count = sum(1 for wp in self.waypoint_manager.waypoints if wp.get('visited', False))
-            route_counts = (visited_count, total_wp)
-            step = visited_count + 1
-            if step > total_wp: step = total_wp
+            waypoints = self.waypoint_manager.waypoints
+            total_wp = len(waypoints)
+            visited_count = sum(1 for wp in waypoints if wp.get('visited', False))
+            current_wp_index = self.waypoint_manager.get_waypoint_index(self.current_sys)
+            displayed_progress = max(
+                visited_count,
+                current_wp_index + 1 if current_wp_index >= 0 else 0,
+            )
+            route_counts = (min(displayed_progress, total_wp), total_wp)
+            step = min(displayed_progress + 1, total_wp)
             
             # Calculate remaining distance
             rem_dist = 0.0
+            rem_dist_known = bool(self.current_coords)
             idx = -1
-            for i, wp in enumerate(self.waypoint_manager.waypoints):
+            search_from = current_wp_index + 1 if current_wp_index >= 0 else 0
+            for i, wp in enumerate(waypoints[search_from:], start=search_from):
                 if not wp.get('visited', False):
                     idx = i
                     break
             
             if idx != -1:
-                next_wp = self.waypoint_manager.waypoints[idx]
+                next_wp = waypoints[idx]
                 route_waypoint = next_wp.get("name")
-                if self.current_coords and next_wp['coords']:
-                    rem_dist += self.waypoint_manager.get_distance(self.current_coords, next_wp['coords'])
+                next_coords = next_wp.get('coords')
+                if self.current_coords and next_coords:
+                    rem_dist += self.waypoint_manager.get_distance(self.current_coords, next_coords)
+                else:
+                    rem_dist_known = False
                 
-                prev_coords = next_wp['coords']
+                prev_coords = next_coords
                 for i in range(idx + 1, total_wp):
-                    wp = self.waypoint_manager.waypoints[i]
-                    if prev_coords and wp['coords']:
-                        rem_dist += self.waypoint_manager.get_distance(prev_coords, wp['coords'])
-                    prev_coords = wp['coords']
+                    wp = waypoints[i]
+                    coords = wp.get('coords')
+                    if prev_coords and coords:
+                        rem_dist += self.waypoint_manager.get_distance(prev_coords, coords)
+                    else:
+                        rem_dist_known = False
+                    prev_coords = coords
             
-            custom_r_pos = (step, total_wp, f"{rem_dist:,.0f} LY")
+            custom_r_pos = (
+                step, total_wp,
+                f"{rem_dist:,.0f} LY" if rem_dist_known and idx != -1 else "",
+            )
 
         game_r_pos = None
         if self.route_list and self.current_sys in self.route_list:

@@ -12,6 +12,8 @@ let galnetRenderKey = "";
 let galnetTickerIndex = 0;
 let galnetTickerId = "";
 let galnetSelectedId = "";
+let galnetRotationTimer = 0;
+let galnetRotationSettingsKey = "";
 let onboardingSession = -1;
 let atlasRequested = false;
 let lastClientError = "";
@@ -50,6 +52,7 @@ let pageLayoutOriginal = null;
 let pageLayoutDrag = null;
 let pageLayoutDragArmed = null;
 let pageLayoutDrop = null;
+let pageLayoutPointer = null;
 const pageLayoutDefaults = {};
 
 const HOTKEY_MODIFIER_KEYS = new Set([
@@ -314,7 +317,7 @@ function addPanelLayoutHandles(pageName) {
     const panels = layoutPanels(container);
     panels.forEach((panel, index) => {
       panel.classList.add("layout-panel");
-      panel.draggable = true;
+      panel.draggable = false;
       const handle = document.createElement("div");
       handle.className = "panel-layout-handle";
       handle.innerHTML = `<span title="Drag this panel">⠿</span><button type="button" data-panel-move="up" ${index === 0 ? "disabled" : ""} aria-label="Move panel earlier">↑</button><button type="button" data-panel-move="down" ${index === panels.length - 1 ? "disabled" : ""} aria-label="Move panel later">↓</button>`;
@@ -375,6 +378,7 @@ function cancelPageLayout() {
   pageLayoutDrag = null;
   pageLayoutDragArmed = null;
   pageLayoutDrop = null;
+  pageLayoutPointer = null;
 }
 
 async function savePageLayout() {
@@ -394,6 +398,7 @@ async function savePageLayout() {
   pageLayoutDrag = null;
   pageLayoutDragArmed = null;
   pageLayoutDrop = null;
+  pageLayoutPointer = null;
   showToast("Panel layout saved to this commander profile");
 }
 
@@ -411,6 +416,7 @@ async function resetPageLayout() {
   pageLayoutDrag = null;
   pageLayoutDragArmed = null;
   pageLayoutDrop = null;
+  pageLayoutPointer = null;
   showToast("Default panel order restored for this profile");
 }
 
@@ -940,10 +946,36 @@ function renderGalnet(state, force = false) {
     text("footer-galnet-title", row?.title || "AWAITING DISPATCHES");
   }
   const ticker = byId("status-galnet");
+  const enabled = feed.enabled !== false;
+  ticker.hidden = !enabled;
+  if (!enabled && !byId("galnet-reader").hidden) byId("galnet-reader").hidden = true;
   ticker.className = `status-galnet ${status}`;
   ticker.title = row ? `${row.stamp || "GALNET"} · ${row.title || ""}` : (feed.detail || "Galnet relay");
   text("footer-galnet-state", status === "refreshing" ? "RX" : (articles.length ? `${galnetTickerIndex + 1}/${articles.length}` : status.toUpperCase()));
-  if (!byId("galnet-reader").hidden) renderGalnetReader(state);
+  configureGalnetRotation(feed, articles);
+  if (enabled && !byId("galnet-reader").hidden) renderGalnetReader(state);
+}
+
+function configureGalnetRotation(feed, articles) {
+  const enabled = feed.enabled !== false && feed.auto_rotate !== false && articles.length > 1;
+  const seconds = Math.max(4, Math.min(60, Math.round(number(feed.rotation_seconds, 7))));
+  const key = `${enabled}:${seconds}:${articles.length}`;
+  if (key === galnetRotationSettingsKey) return;
+  galnetRotationSettingsKey = key;
+  if (galnetRotationTimer) window.clearTimeout(galnetRotationTimer);
+  galnetRotationTimer = 0;
+  if (!enabled) return;
+  const rotate = () => {
+    if (!document.hidden && byId("galnet-reader").hidden) {
+      const current = galnetArticles();
+      if (current.length > 1) {
+        galnetTickerIndex = (galnetTickerIndex + 1) % current.length;
+        renderGalnet(model, true);
+      }
+    }
+    galnetRotationTimer = window.setTimeout(rotate, seconds * 1000);
+  };
+  galnetRotationTimer = window.setTimeout(rotate, seconds * 1000);
 }
 
 function setFactList(id, rows) {
@@ -1774,6 +1806,7 @@ function settingInput(id, label, value, type = "text") {
 function renderSettingsWorkspace(data) {
   const root = byId("settings-workspace");
   const value = data.values || {};
+  const galnet = data.galnet || {};
   const hotkeys = (data.hotkeys || []).map((row) => `<div class="hotkey-row"><span><b>${escapeHtml(row.label)}</b><small>${escapeHtml(row.action)}</small></span><input data-hotkey-action="${escapeHtml(row.action)}" value="${escapeHtml(row.value || "")}" placeholder="UNBOUND"><button data-hotkey-record="${escapeHtml(row.action)}">RECORD</button><button data-hotkey-clear="${escapeHtml(row.action)}">CLEAR</button></div>`).join("");
   const health = data.health || {};
   const editor = data.theme_editor || {};
@@ -1784,6 +1817,7 @@ function renderSettingsWorkspace(data) {
     ${workspaceCard("GLOBAL HOTKEYS", `${settingToggle("setting-hotkeys-enabled", "Enable system-wide hotkeys", "Shortcuts remain profile-aware and work while Elite has focus.", value.overlay_hotkeys_enabled)}<div class="hotkey-status" id="hotkey-status">Click RECORD, then press the complete shortcut.</div><div class="hotkey-list">${hotkeys}</div><div class="workspace-actions"><button id="hotkey-defaults">RESTORE DEFAULTS</button></div>`, `${(data.hotkeys || []).filter((row) => row.value).length} ACTIVE`)}
     ${workspaceCard("THEME WORKSHOP", `<div class="theme-editor-head"><label>CUSTOM THEME NAME<input id="custom-theme-name" value="${escapeHtml((editor.custom || []).includes(editor.name) ? editor.name : `${editor.name || "Void"} Custom`)}"></label><label>EXISTING CUSTOM THEME<select id="custom-theme-existing"><option value="">SELECT TO DELETE</option>${(editor.custom || []).map((name) => `<option>${escapeHtml(name)}</option>`).join("")}</select></label></div><details><summary>EDIT COMPLETE PALETTE</summary><div class="theme-colour-grid">${themeColors}</div></details><div class="workspace-actions wrap"><button data-ws-page="settings" data-ws-op="save_theme">SAVE & APPLY CUSTOM THEME</button><button class="danger-action" data-ws-page="settings" data-ws-op="delete_theme">DELETE SELECTED CUSTOM THEME</button></div>`, `${(editor.custom || []).length} CUSTOM`)}
     ${workspaceCard("EDSM & EDDN", `${settingInput("setting-edsm-name", "EDSM commander name", value.edsm_cmdr_name)}${settingInput("setting-edsm-key", "EDSM API key", value.edsm_api_key, "password")}${settingToggle("setting-edsm-upload", "Upload exploration events to EDSM", "Uses the active commander's credentials.", value.edsm_upload_enabled)}${settingToggle("setting-eddn-upload", "Upload visited markets to EDDN", "Community market publishing remains independent from Trade UI.", value.eddn_market_upload_enabled)}<p class="settings-note">${numeric(data.eddn?.uploads)} EDDN uploads this run${data.eddn?.last_error ? ` · LAST ERROR ${escapeHtml(data.eddn.last_error)}` : ""}</p><div class="workspace-actions"><button data-ws-page="settings" data-ws-op="test_edsm">TEST EDSM CREDENTIALS</button></div>`)}
+    ${workspaceCard("GALNET RELAY", `${settingToggle("setting-galnet-enabled", "Enable Galnet relay", "Show the bottom-bar news ticker and permit background feed refreshes.", value.galnet_enabled)}${settingToggle("setting-galnet-rotate", "Rotate headlines automatically", "Hold the current dispatch when disabled; the archive remains available.", value.galnet_auto_rotate_enabled)}<label class="settings-input"><span>Headline rotation cadence</span><select id="setting-galnet-rotation">${[4,7,10,15,30,60].map((item) => `<option value="${item}" ${number(value.galnet_rotation_seconds,7) === item ? "selected" : ""}>${item} seconds</option>`).join("")}</select></label><label class="settings-input"><span>Feed refresh cadence</span><select id="setting-galnet-refresh">${[5,15,30,60,120,240].map((item) => `<option value="${item}" ${number(value.galnet_refresh_minutes,30) === item ? "selected" : ""}>${item < 60 ? `${item} minutes` : `${item / 60} hour${item === 60 ? "" : "s"}`}</option>`).join("")}</select></label><p class="settings-note">${escapeHtml(galnet.detail || "Galnet relay standing by.")} · ${numeric((galnet.articles || []).length)} cached dispatches</p><div class="workspace-actions wrap"><button id="galnet-settings-refresh">REFRESH NOW</button><button id="galnet-settings-clear" class="danger-action">CLEAR CACHE</button></div>`, galnet.busy ? "RECEIVING" : String(galnet.status || "STANDBY").toUpperCase())}
     ${workspaceCard("CARRIER INTEGRATION", `${settingInput("setting-discord", "Discord webhook URL", value.carrier_discord_webhook_url, "password")}<p class="settings-note">One webhook handles personal and Squadron Carrier status, jump and expedition updates.</p><div class="workspace-actions"><button data-ws-page="settings" data-ws-op="test_discord">SEND TEST PREVIEW</button><button data-page="carrier">OPEN CARRIER COMMAND</button></div>`)}
     ${workspaceCard("DIAGNOSTICS & RECOVERY", `<div class="health-readout"><b>${escapeHtml(health.level || "NOMINAL")}</b><span>UI queue ${numeric(health.ui?.pending || health.ui_pending)} · max lag ${numeric(health.ui?.max_lag_ms || health.ui_max_lag_ms)} ms · disk queue ${numeric(health.persistence?.pending || health.writes_pending)}</span></div>${settingToggle("setting-runtime-trace", "Runtime performance trace", "Retain startup and UI timing evidence.", value.runtime_trace_enabled)}${settingToggle("setting-crash-report", "Crash and UI-freeze reporter", "Rotate current and previous diagnostic logs.", value.crash_reporting_enabled)}${settingToggle("setting-safe-mode", "Safe unclean-shutdown recovery", "Restore the last graceful profile checkpoint first.", value.recovery_safe_mode_enabled)}${settingToggle("setting-auto-backups", "Automatic profile safety snapshots", "Keep up to five snapshots before upgrades and cache rebuilds. Manual backup and restore rollback remain available.", value.automatic_profile_backups_enabled)}${settingToggle("setting-cache-edsm", "Upload history during cache rebuild", "Optional EDSM backfill while reconstructing profile history.", value.edsm_backfill_on_cache_rebuild)}<div class="workspace-actions wrap"><button data-ws-page="settings" data-ws-op="rebuild_cache">REBUILD CACHE</button><button data-ws-page="settings" data-ws-op="support_bundle">CREATE SUPPORT BUNDLE</button><button data-command="open_logs">OPEN LOGS</button><button data-ws-page="settings" data-ws-op="run_setup">RUN SETUP</button></div>`)}
   </section><p id="settings-test-status" class="workspace-status ${escapeHtml(data.tools?.status || "ready")}">${escapeHtml(data.tools?.detail || "Integration tests have not run this session.")}</p><footer class="settings-savebar"><span>All settings belong to the active commander profile.</span><button id="settings-save-html">SAVE SETTINGS</button></footer>`;
@@ -1846,6 +1880,9 @@ function renderDashboard(state) {
     galnetTickerIndex = 0;
     galnetTickerId = "";
     galnetSelectedId = "";
+    galnetRotationSettingsKey = "";
+    if (galnetRotationTimer) window.clearTimeout(galnetRotationTimer);
+    galnetRotationTimer = 0;
     byId("galnet-reader").hidden = true;
     if (replayTimer) { clearInterval(replayTimer); replayTimer = 0; }
     atlasRequested = false;
@@ -2202,6 +2239,17 @@ document.addEventListener("click", async (event) => {
     text("hotkey-status", "Default bindings restored. Save Settings to apply.");
     return;
   }
+  const galnetSettingsRefresh = event.target.closest("#galnet-settings-refresh");
+  if (galnetSettingsRefresh) {
+    await refreshGalnet(galnetSettingsRefresh);
+    return;
+  }
+  if (event.target.closest("#galnet-settings-clear")) {
+    if (!window.confirm("Clear locally cached Galnet dispatches?")) return;
+    const accepted = await command("clear_galnet_cache");
+    showToast(accepted ? "Galnet cache cleared" : "Galnet is busy; try again after the current refresh");
+    return;
+  }
   if (event.target.closest("#settings-save-html")) {
     const values = {
       journal_path: byId("setting-journal")?.value.trim() || "",
@@ -2221,6 +2269,10 @@ document.addEventListener("click", async (event) => {
       recovery_safe_mode_enabled: Boolean(byId("setting-safe-mode")?.checked),
       automatic_profile_backups_enabled: Boolean(byId("setting-auto-backups")?.checked),
       edsm_backfill_on_cache_rebuild: Boolean(byId("setting-cache-edsm")?.checked),
+      galnet_enabled: Boolean(byId("setting-galnet-enabled")?.checked),
+      galnet_auto_rotate_enabled: Boolean(byId("setting-galnet-rotate")?.checked),
+      galnet_rotation_seconds: number(byId("setting-galnet-rotation")?.value, 7),
+      galnet_refresh_minutes: number(byId("setting-galnet-refresh")?.value, 30),
     };
     const hotkeys = Object.fromEntries([...document.querySelectorAll("[data-hotkey-action]")].map((input) => [input.dataset.hotkeyAction, input.value.trim()]));
     const accepted = await command("workspace", {page: "settings", operation: "save", values, hotkeys});
@@ -2462,13 +2514,6 @@ async function refreshGalnet(button) {
 }
 byId("galnet-reader-refresh").addEventListener("click", () => refreshGalnet(byId("galnet-reader-refresh")));
 
-window.setInterval(() => {
-  const articles = galnetArticles();
-  if (document.hidden || articles.length < 2 || !byId("galnet-reader").hidden) return;
-  galnetTickerIndex = (galnetTickerIndex + 1) % articles.length;
-  renderGalnet(model, true);
-}, 6500);
-
 byId("decision-primary").addEventListener("click", async () => {
   const primary = model.decision?.primary || {};
   if (!primary.command) return;
@@ -2687,74 +2732,78 @@ window.addEventListener("keydown", async (event) => {
 }, true);
 
 document.addEventListener("pointerdown", (event) => {
-  if (!pageLayoutEditing) return;
+  if (!pageLayoutEditing || event.button !== 0) return;
   const grip = event.target.closest(".panel-layout-handle > span");
-  pageLayoutDragArmed = grip?.closest("[data-layout-panel]") || null;
-});
-
-document.addEventListener("pointerup", () => { pageLayoutDragArmed = null; });
-
-document.addEventListener("dragstart", (event) => {
-  if (!pageLayoutEditing) return;
-  const panel = event.target.closest?.("[data-layout-panel]");
-  if (!panel || panel !== pageLayoutDragArmed) {
-    event.preventDefault();
-    return;
-  }
-  pageLayoutDrag = panel;
-  panel.classList.add("layout-dragging");
-  event.dataTransfer.effectAllowed = "move";
-  event.dataTransfer.setData("text/plain", panel.dataset.layoutPanel || "panel");
-});
-
-document.addEventListener("dragover", (event) => {
-  if (!pageLayoutDrag) return;
-  const target = event.target.closest?.("[data-layout-panel]");
-  if (!target || target === pageLayoutDrag || target.parentElement !== pageLayoutDrag.parentElement) return;
+  const panel = grip?.closest("[data-layout-panel]");
+  if (!grip || !panel) return;
   event.preventDefault();
-  event.dataTransfer.dropEffect = "move";
+  pageLayoutDragArmed = panel;
+  pageLayoutPointer = {
+    pointerId: event.pointerId,
+    grip,
+    panel,
+    startX: event.clientX,
+    startY: event.clientY,
+    active: false,
+  };
+  try { grip.setPointerCapture(event.pointerId); } catch (_) { /* capture is best effort */ }
+});
+
+document.addEventListener("pointermove", (event) => {
+  const drag = pageLayoutPointer;
+  if (!drag || drag.pointerId !== event.pointerId || !pageLayoutEditing) return;
+  if (!drag.active && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 5) return;
+  event.preventDefault();
+  if (!drag.active) {
+    drag.active = true;
+    pageLayoutDrag = drag.panel;
+    drag.panel.classList.add("layout-dragging", "layout-pointer-dragging");
+  }
+
+  const scroller = document.querySelector(".pages");
+  const scrollRect = scroller?.getBoundingClientRect();
+  if (scroller && scrollRect) {
+    const edge = 58;
+    if (event.clientY < scrollRect.top + edge) scroller.scrollTop -= 18;
+    else if (event.clientY > scrollRect.bottom - edge) scroller.scrollTop += 18;
+  }
+
+  const target = document.elementFromPoint(event.clientX, event.clientY)
+    ?.closest?.("[data-layout-panel]");
+  if (!target || target === drag.panel || target.parentElement !== drag.panel.parentElement) return;
   const rect = target.getBoundingClientRect();
-  const xWeight = Math.abs((event.clientX - (rect.left + rect.width / 2)) / Math.max(1, rect.width));
-  const yWeight = Math.abs((event.clientY - (rect.top + rect.height / 2)) / Math.max(1, rect.height));
-  const after = xWeight > yWeight
+  const horizontal = Math.abs(event.clientX - (rect.left + rect.width / 2)) / Math.max(1, rect.width);
+  const vertical = Math.abs(event.clientY - (rect.top + rect.height / 2)) / Math.max(1, rect.height);
+  const after = horizontal > vertical
     ? event.clientX >= rect.left + rect.width / 2
     : event.clientY >= rect.top + rect.height / 2;
-  if (pageLayoutDrop?.target === target && pageLayoutDrop.after === after) return;
+  const reference = after ? target.nextSibling : target;
+  if (reference !== drag.panel) target.parentElement.insertBefore(drag.panel, reference);
   document.querySelectorAll(".layout-drop-before,.layout-drop-after").forEach((panel) => {
     panel.classList.remove("layout-drop-before", "layout-drop-after");
   });
   pageLayoutDrop = {target, after};
   target.classList.add(after ? "layout-drop-after" : "layout-drop-before");
+  refreshPanelLayoutHandles(pageLayoutEditing);
 });
 
-document.addEventListener("dragleave", (event) => {
-  const target = event.target.closest?.("[data-layout-panel]");
-  if (!target || target.contains(event.relatedTarget)) return;
-  if (pageLayoutDrop?.target === target) {
-    target.classList.remove("layout-drop-before", "layout-drop-after");
-    pageLayoutDrop = null;
-  }
-});
-
-document.addEventListener("drop", (event) => {
-  if (!pageLayoutDrag || !pageLayoutDrop) return;
-  event.preventDefault();
-  const {target, after} = pageLayoutDrop;
-  if (target !== pageLayoutDrag && target.parentElement === pageLayoutDrag.parentElement) {
-    target.parentElement.insertBefore(pageLayoutDrag, after ? target.nextSibling : target);
-    refreshPanelLayoutHandles(pageLayoutEditing);
-  }
-});
-
-document.addEventListener("dragend", () => {
-  if (pageLayoutDrag) pageLayoutDrag.classList.remove("layout-dragging");
+function finishPageLayoutPointer(event) {
+  const drag = pageLayoutPointer;
+  if (!drag || (event && drag.pointerId !== event.pointerId)) return;
+  try { drag.grip.releasePointerCapture(drag.pointerId); } catch (_) { /* already released */ }
+  drag.panel.classList.remove("layout-dragging", "layout-pointer-dragging");
   document.querySelectorAll(".layout-drop-before,.layout-drop-after").forEach((panel) => {
     panel.classList.remove("layout-drop-before", "layout-drop-after");
   });
   pageLayoutDrag = null;
   pageLayoutDragArmed = null;
   pageLayoutDrop = null;
-});
+  pageLayoutPointer = null;
+  if (pageLayoutEditing) refreshPanelLayoutHandles(pageLayoutEditing);
+}
+
+document.addEventListener("pointerup", finishPageLayoutPointer);
+document.addEventListener("pointercancel", finishPageLayoutPointer);
 
 window.addEventListener("error", (event) => {
   reportClientError(event.error || event.message, "window-error");

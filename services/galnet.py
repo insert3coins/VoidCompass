@@ -158,6 +158,33 @@ class GalnetFeedService:
                 "articles": [dict(row) for row in self._articles],
             }
 
+    def set_refresh_seconds(self, refresh_seconds):
+        """Apply a new refresh cadence without replacing the live service."""
+        with self._lock:
+            self.refresh_seconds = max(300, int(refresh_seconds or DEFAULT_REFRESH_SECONDS))
+
+    def clear_cache(self):
+        """Clear cached dispatches when no network refresh is in flight."""
+        with self._lock:
+            if self._busy:
+                return False
+            self._articles = []
+            self._updated_at = ""
+            self._fetched_epoch = 0.0
+            self._status = "waiting"
+            self._detail = "Galnet cache cleared"
+        for path in (
+            self.cache_path,
+            self.cache_path.with_suffix(self.cache_path.suffix + ".tmp"),
+        ):
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+            except Exception as exc:
+                logging.debug("Galnet cache removal skipped for %s: %s", path, exc)
+        return True
+
     def refresh_async(self, callback=None, force=False):
         now = time.time()
         with self._lock:
