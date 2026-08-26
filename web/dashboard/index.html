@@ -273,19 +273,6 @@
               <div id="event-feed" class="event-feed"></div>
             </article>
 
-            <article class="card galnet-card" data-deck-module="galnet">
-              <header><span>GALNET RELAY</span><b id="galnet-status" class="galnet-status">STANDBY</b></header>
-              <button id="galnet-ticker" class="galnet-ticker" type="button" aria-label="Read current Galnet dispatch">
-                <span class="galnet-signal" aria-hidden="true"><i></i><i></i><i></i></span>
-                <small id="galnet-stamp">FRONTIER NEWS SERVICE</small>
-                <strong id="galnet-title">AWAITING GALNET DISPATCHES</strong>
-                <span id="galnet-teaser" class="galnet-teaser">The relay will update quietly in the background.</span>
-              </button>
-              <footer class="galnet-controls">
-                <span id="galnet-position">0 / 0</span>
-                <div><button type="button" data-galnet-step="-1" aria-label="Previous Galnet dispatch">‹</button><button id="galnet-open" type="button">OPEN READER</button><button type="button" data-galnet-step="1" aria-label="Next Galnet dispatch">›</button><button id="galnet-refresh" type="button">REFRESH</button></div>
-              </footer>
-            </article>
           </section>
         </section>
 
@@ -579,6 +566,7 @@
         <span id="ui-heartbeat"><i id="ui-light"></i> UI <b id="ui-state">LIVE</b></span>
         <span class="status-spacer"></span>
         <span id="footer-region">REGION UNKNOWN</span>
+        <button id="status-galnet" class="status-galnet" type="button" aria-label="Open Galnet reader"><i id="galnet-light"></i><b>GALNET</b><span id="footer-galnet-title">AWAITING DISPATCHES</span><em id="footer-galnet-state">STANDBY</em></button>
         <span id="footer-clock">--:--:--</span>
       </footer>
     </section>
