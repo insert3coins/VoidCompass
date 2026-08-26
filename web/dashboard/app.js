@@ -52,7 +52,6 @@ let pageLayoutOriginal = null;
 let pageLayoutDrag = null;
 let pageLayoutDragArmed = null;
 let pageLayoutDrop = null;
-let pageLayoutPointer = null;
 const pageLayoutDefaults = {};
 
 const HOTKEY_MODIFIER_KEYS = new Set([
@@ -317,7 +316,7 @@ function addPanelLayoutHandles(pageName) {
     const panels = layoutPanels(container);
     panels.forEach((panel, index) => {
       panel.classList.add("layout-panel");
-      panel.draggable = false;
+      panel.draggable = true;
       const handle = document.createElement("div");
       handle.className = "panel-layout-handle";
       handle.innerHTML = `<span title="Drag this panel">⠿</span><button type="button" data-panel-move="up" ${index === 0 ? "disabled" : ""} aria-label="Move panel earlier">↑</button><button type="button" data-panel-move="down" ${index === panels.length - 1 ? "disabled" : ""} aria-label="Move panel later">↓</button>`;
@@ -378,7 +377,6 @@ function cancelPageLayout() {
   pageLayoutDrag = null;
   pageLayoutDragArmed = null;
   pageLayoutDrop = null;
-  pageLayoutPointer = null;
 }
 
 async function savePageLayout() {
@@ -398,7 +396,6 @@ async function savePageLayout() {
   pageLayoutDrag = null;
   pageLayoutDragArmed = null;
   pageLayoutDrop = null;
-  pageLayoutPointer = null;
   showToast("Panel layout saved to this commander profile");
 }
 
@@ -416,7 +413,6 @@ async function resetPageLayout() {
   pageLayoutDrag = null;
   pageLayoutDragArmed = null;
   pageLayoutDrop = null;
-  pageLayoutPointer = null;
   showToast("Default panel order restored for this profile");
 }
 
@@ -804,15 +800,27 @@ function renderDeckLayout(state) {
   const layout = state.dashboard_layout || {};
   const order = Array.isArray(layout.module_order) ? layout.module_order : [];
   const hidden = new Set(Array.isArray(layout.hidden_modules) ? layout.hidden_modules : []);
+  const overviewLayout = model.page_layouts?.overview;
+  const pageLayoutOwnsOrder = pageLayoutEditing === "overview"
+    || Boolean(overviewLayout && typeof overviewLayout === "object" && Object.keys(overviewLayout).length);
   document.querySelectorAll("[data-deck-module]").forEach((node) => {
     const index = order.indexOf(node.dataset.deckModule);
-    node.style.order = String(2 + (index < 0 ? order.length : index) * 2);
+    node.style.order = pageLayoutOwnsOrder ? "" : String(2 + (index < 0 ? order.length : index) * 2);
     node.hidden = hidden.has(node.dataset.deckModule);
   });
-  const routeIndex = Math.max(0, order.indexOf("route"));
-  document.querySelector(".overview-modules > .decision-card").style.order = "0";
-  document.querySelector(".overview-modules > .survey-card").style.order = "1";
-  document.querySelector(".overview-modules > .telemetry-strip").style.order = String(3 + routeIndex * 2);
+  const corePanels = [
+    document.querySelector(".overview-modules > .decision-card"),
+    document.querySelector(".overview-modules > .survey-card"),
+    document.querySelector(".overview-modules > .telemetry-strip"),
+  ];
+  if (pageLayoutOwnsOrder) {
+    corePanels.forEach((node) => { if (node) node.style.order = ""; });
+  } else {
+    const routeIndex = Math.max(0, order.indexOf("route"));
+    if (corePanels[0]) corePanels[0].style.order = "0";
+    if (corePanels[1]) corePanels[1].style.order = "1";
+    if (corePanels[2]) corePanels[2].style.order = String(3 + routeIndex * 2);
+  }
 
   const panel = byId("deck-customiser");
   if (!panel.hidden && deckLayoutDraft) return;
@@ -1453,7 +1461,7 @@ function renderExploreWorkspace(data) {
   ])}${stellarCartographyMarkup(data.cartography || {})}<section class="workspace-grid route-workspace-grid">
     ${workspaceCard("ELITE NAV ROUTE", workspaceRows(navRows, "Plot a route in Elite to populate the live NavRoute."), `${(data.nav_route || []).length} STOPS`)}
     ${workspaceCard("PROFILE WAYPOINT ROUTE", `${workspaceRows(waypointRows, "No saved waypoints. Add a destination below or import a plotted route.")}<div class="route-add-form"><input id="waypoint-name" placeholder="SYSTEM NAME"><input id="waypoint-note" placeholder="OPTIONAL NOTE"><button data-ws-page="explore" data-ws-op="add_waypoint">ADD</button></div><div class="workspace-actions wrap"><button data-ws-page="explore" data-ws-op="copy_next">COPY NEXT</button><button data-ws-page="explore" data-ws-op="set_auto_copy" data-enabled="${!data.auto_copy}">AUTO COPY ${data.auto_copy ? "ON" : "OFF"}</button><button class="danger-action" data-ws-page="explore" data-ws-op="clear_waypoints">CLEAR ROUTE</button></div>`, `${(data.waypoints || []).filter((row) => row.visited).length}/${(data.waypoints || []).length} COMPLETE`)}
-    ${workspaceCard("SPANSH NEUTRON PLOTTER", `<div class="neutron-form"><label>FROM<input id="neutron-from" value="${escapeHtml(data.plotter?.from || data.current || "")}"></label><label>DESTINATION<input id="neutron-to" value="${escapeHtml(data.plotter?.to || "")}"></label><label>SHIP RANGE<input id="neutron-range" type="number" min="1" step="0.1" value="${number(data.plotter?.range, 30)}"></label><label>EFFICIENCY<input id="neutron-efficiency" type="number" min="1" max="100" value="${number(data.plotter?.efficiency, 60)}"></label><label>BOOST<select id="neutron-multiplier"><option value="4" ${number(data.plotter?.multiplier, 4) === 4 ? "selected" : ""}>NEUTRON 4×</option><option value="6" ${number(data.plotter?.multiplier, 4) === 6 ? "selected" : ""}>OVERCHARGE 6×</option></select></label><button class="primary" data-ws-page="explore" data-ws-op="neutron_plot" ${data.plotter?.status === "working" ? "disabled" : ""}>${data.plotter?.status === "working" ? "PLOTTING…" : "PLOT ROUTE"}</button></div><p class="workspace-status ${escapeHtml(data.plotter?.status || "ready")}">${escapeHtml(data.plotter?.detail || "Ready.")}</p>${plottedRows}<div class="workspace-actions wrap"><button data-ws-page="explore" data-ws-op="neutron_copy" ${plotted.waypoints?.length ? "" : "disabled"}>COPY LIST</button><button data-ws-page="explore" data-ws-op="neutron_import" ${plotted.waypoints?.length ? "" : "disabled"}>IMPORT TO WAYPOINTS</button><button data-ws-page="explore" data-ws-op="neutron_clear" ${plotted.waypoints?.length ? "" : "disabled"}>CLEAR RESULT</button></div>`, plotted.total_jumps ? `${numeric(plotted.total_jumps)} JUMPS` : "MANUAL ROUTE")}
+    ${workspaceCard("SPANSH NEUTRON PLOTTER", `<div class="neutron-form"><label>FROM<input id="neutron-from" value="${escapeHtml(data.plotter?.from || data.current || "")}"></label><label>DESTINATION<input id="neutron-to" value="${escapeHtml(data.plotter?.to || "")}"></label><label>SHIP RANGE<input id="neutron-range" type="number" min="1" step="0.1" value="${number(data.plotter?.range, 30)}"></label><label>EFFICIENCY<input id="neutron-efficiency" type="number" min="1" max="100" value="${number(data.plotter?.efficiency, 60)}"></label><label>BOOST<select id="neutron-multiplier"><option value="4" ${number(data.plotter?.multiplier, 4) === 4 ? "selected" : ""}>NEUTRON 4×</option><option value="6" ${number(data.plotter?.multiplier, 4) === 6 ? "selected" : ""}>OVERCHARGE 6×</option></select></label><button class="primary" data-ws-page="explore" data-ws-op="neutron_plot" ${data.plotter?.status === "working" ? "disabled" : ""}>${data.plotter?.status === "working" ? "PLOTTING…" : "PLOT ROUTE"}</button></div><p class="workspace-status ${escapeHtml(data.plotter?.status || "ready")}">${escapeHtml(data.plotter?.detail || "Ready.")}</p>${plottedRows}<div class="workspace-actions wrap"><button data-ws-page="explore" data-ws-op="neutron_copy" ${plotted.waypoints?.length ? "" : "disabled"}>COPY LIST</button><button data-ws-page="explore" data-ws-op="neutron_import" ${plotted.waypoints?.length ? "" : "disabled"}>IMPORT TO WAYPOINTS</button><button data-ws-page="explore" data-ws-op="neutron_clear" ${plotted.waypoints?.length ? "" : "disabled"}>CLEAR RESULT</button></div>`, plotted.total_jumps ? `${numeric(plotted.total_jumps)} JUMPS` : "MANUAL ROUTE", "neutron-plotter-card")}
   </section>`;
 }
 
@@ -1535,14 +1543,14 @@ function renderAnalyticsWorkspace(data) {
       {label: "Route", render: (row) => `${escapeHtml(row.start_system)}<small>→ ${escapeHtml(row.end_system)}</small>`},
       {label: "Jumps", key: "jumps"}, {label: "Distance", render: (row) => `${numeric(row.distance, 1)} LY`},
       {label: "FSS", key: "fss"}, {label: "DSS", key: "dss"}, {label: "Bio", key: "bio"},
-    ], rows, "No Captain's Log sessions have been retained yet."), `${rows.length} SESSIONS`)}
+    ], rows, "No Captain's Log sessions have been retained yet."), `${rows.length} SESSIONS`, "flight-history-card")}
   </section></section>
   <section data-analytics-panel="science">${workspaceMetrics([
     {label: "Indexed systems", value: numeric(science.systems), detail: `${numeric(science.bodies)} PLANETARY BODIES`},
     {label: "Biological worlds", value: numeric(science.biological_bodies), detail: `${numeric(science.species_total)} SPECIES`},
     {label: "Organic analyses", value: numeric(science.analyses), detail: "JOURNAL-CONFIRMED RECORDS"},
     {label: "Notable worlds", value: numeric(science.valuable), detail: `${numeric(science.terraformable)} TERRAFORMABLE`},
-  ])}<section class="workspace-grid two science-grid">${workspaceCard("ORGANIC ECOLOGY INDEX", species, `${numeric(science.species_total)} SPECIES`)}${workspaceCard("BIOLOGY BY ATMOSPHERE", distribution(science.atmospheres), `${numeric(science.biological_bodies)} WORLDS`)}${workspaceCard("BIOLOGY BY GRAVITY", distribution(science.gravity, "orange"))}${workspaceCard("WORLD CLASS MIX", distribution(science.body_classes))}${workspaceCard("STELLAR CLASS MIX", distribution(science.star_classes, "orange"))}</section></section>
+  ])}<section class="workspace-grid two science-grid">${workspaceCard("ORGANIC ECOLOGY INDEX", species, `${numeric(science.species_total)} SPECIES`, "science-index-card")}${workspaceCard("BIOLOGY BY ATMOSPHERE", distribution(science.atmospheres), `${numeric(science.biological_bodies)} WORLDS`)}${workspaceCard("BIOLOGY BY GRAVITY", distribution(science.gravity, "orange"))}${workspaceCard("WORLD CLASS MIX", distribution(science.body_classes))}${workspaceCard("STELLAR CLASS MIX", distribution(science.star_classes, "orange"))}</section></section>
   <section data-analytics-panel="passport">${workspaceMetrics([
     {label: "Regions stamped", value: `${numeric(passport.visited)} / ${numeric(passport.total)}`, detail: `${numeric(passport.percent, 1)}% OF GALACTIC REGIONS`},
     {label: "Systems indexed", value: numeric(passport.systems), detail: "REGION-ASSIGNED VISITS"},
@@ -2732,34 +2740,28 @@ window.addEventListener("keydown", async (event) => {
 }, true);
 
 document.addEventListener("pointerdown", (event) => {
-  if (!pageLayoutEditing || event.button !== 0) return;
+  if (!pageLayoutEditing) return;
   const grip = event.target.closest(".panel-layout-handle > span");
-  const panel = grip?.closest("[data-layout-panel]");
-  if (!grip || !panel) return;
-  event.preventDefault();
-  pageLayoutDragArmed = panel;
-  pageLayoutPointer = {
-    pointerId: event.pointerId,
-    grip,
-    panel,
-    startX: event.clientX,
-    startY: event.clientY,
-    active: false,
-  };
-  try { grip.setPointerCapture(event.pointerId); } catch (_) { /* capture is best effort */ }
+  pageLayoutDragArmed = grip?.closest("[data-layout-panel]") || null;
 });
 
-document.addEventListener("pointermove", (event) => {
-  const drag = pageLayoutPointer;
-  if (!drag || drag.pointerId !== event.pointerId || !pageLayoutEditing) return;
-  if (!drag.active && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 5) return;
-  event.preventDefault();
-  if (!drag.active) {
-    drag.active = true;
-    pageLayoutDrag = drag.panel;
-    drag.panel.classList.add("layout-dragging", "layout-pointer-dragging");
-  }
+document.addEventListener("pointerup", () => { pageLayoutDragArmed = null; });
 
+document.addEventListener("dragstart", (event) => {
+  if (!pageLayoutEditing) return;
+  const panel = event.target.closest?.("[data-layout-panel]");
+  if (!panel || panel !== pageLayoutDragArmed) {
+    event.preventDefault();
+    return;
+  }
+  pageLayoutDrag = panel;
+  panel.classList.add("layout-dragging");
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", panel.dataset.layoutPanel || "panel");
+});
+
+document.addEventListener("dragover", (event) => {
+  if (!pageLayoutDrag) return;
   const scroller = document.querySelector(".pages");
   const scrollRect = scroller?.getBoundingClientRect();
   if (scroller && scrollRect) {
@@ -2767,43 +2769,52 @@ document.addEventListener("pointermove", (event) => {
     if (event.clientY < scrollRect.top + edge) scroller.scrollTop -= 18;
     else if (event.clientY > scrollRect.bottom - edge) scroller.scrollTop += 18;
   }
-
-  const target = document.elementFromPoint(event.clientX, event.clientY)
-    ?.closest?.("[data-layout-panel]");
-  if (!target || target === drag.panel || target.parentElement !== drag.panel.parentElement) return;
+  const target = event.target.closest?.("[data-layout-panel]");
+  if (!target || target === pageLayoutDrag || target.parentElement !== pageLayoutDrag.parentElement) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
   const rect = target.getBoundingClientRect();
-  const horizontal = Math.abs(event.clientX - (rect.left + rect.width / 2)) / Math.max(1, rect.width);
-  const vertical = Math.abs(event.clientY - (rect.top + rect.height / 2)) / Math.max(1, rect.height);
-  const after = horizontal > vertical
+  const sourceRect = pageLayoutDrag.getBoundingClientRect();
+  const sameVisualRow = Math.abs(sourceRect.top - rect.top) < Math.min(sourceRect.height, rect.height) * .35;
+  const after = sameVisualRow
     ? event.clientX >= rect.left + rect.width / 2
     : event.clientY >= rect.top + rect.height / 2;
-  const reference = after ? target.nextSibling : target;
-  if (reference !== drag.panel) target.parentElement.insertBefore(drag.panel, reference);
+  if (pageLayoutDrop?.target === target && pageLayoutDrop.after === after) return;
   document.querySelectorAll(".layout-drop-before,.layout-drop-after").forEach((panel) => {
     panel.classList.remove("layout-drop-before", "layout-drop-after");
   });
   pageLayoutDrop = {target, after};
   target.classList.add(after ? "layout-drop-after" : "layout-drop-before");
-  refreshPanelLayoutHandles(pageLayoutEditing);
 });
 
-function finishPageLayoutPointer(event) {
-  const drag = pageLayoutPointer;
-  if (!drag || (event && drag.pointerId !== event.pointerId)) return;
-  try { drag.grip.releasePointerCapture(drag.pointerId); } catch (_) { /* already released */ }
-  drag.panel.classList.remove("layout-dragging", "layout-pointer-dragging");
+document.addEventListener("dragleave", (event) => {
+  const target = event.target.closest?.("[data-layout-panel]");
+  if (!target || target.contains(event.relatedTarget)) return;
+  if (pageLayoutDrop?.target === target) {
+    target.classList.remove("layout-drop-before", "layout-drop-after");
+    pageLayoutDrop = null;
+  }
+});
+
+document.addEventListener("drop", (event) => {
+  if (!pageLayoutDrag || !pageLayoutDrop) return;
+  event.preventDefault();
+  const {target, after} = pageLayoutDrop;
+  if (target !== pageLayoutDrag && target.parentElement === pageLayoutDrag.parentElement) {
+    target.parentElement.insertBefore(pageLayoutDrag, after ? target.nextSibling : target);
+    refreshPanelLayoutHandles(pageLayoutEditing);
+  }
+});
+
+document.addEventListener("dragend", () => {
+  if (pageLayoutDrag) pageLayoutDrag.classList.remove("layout-dragging");
   document.querySelectorAll(".layout-drop-before,.layout-drop-after").forEach((panel) => {
     panel.classList.remove("layout-drop-before", "layout-drop-after");
   });
   pageLayoutDrag = null;
   pageLayoutDragArmed = null;
   pageLayoutDrop = null;
-  pageLayoutPointer = null;
-  if (pageLayoutEditing) refreshPanelLayoutHandles(pageLayoutEditing);
-}
-
-document.addEventListener("pointerup", finishPageLayoutPointer);
-document.addEventListener("pointercancel", finishPageLayoutPointer);
+});
 
 window.addEventListener("error", (event) => {
   reportClientError(event.error || event.message, "window-error");

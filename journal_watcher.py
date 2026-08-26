@@ -46,6 +46,7 @@ class JournalWatcher:
         self._skip_partial_line_once = False
         self._startup_location_seeded = False
         self._startup_location_event = None
+        self._startup_surface_vehicle_identity = {}
         
         self.event_callback = None
         self.batch_event_callback = None
@@ -571,8 +572,50 @@ class JournalWatcher:
                 except Exception:
                     pass
 
+    @staticmethod
+    def _surface_vehicle_identity(raw):
+        """Return a surface-vehicle identity exposed by a journal event.
+
+        Location and Status only expose the generic InSRV bit.  Elite's
+        LoadGame/launch/dock records retain the actual model, including the
+        Nomad's Lander01 identifier, so startup combines both evidence types.
+        """
+        if not isinstance(raw, dict):
+            return None
+        event = str(raw.get("event") or "")
+        values = [
+            raw.get("SRVType_Localised"), raw.get("SRVType"),
+            raw.get("VehicleType"),
+        ]
+        if event == "LoadGame":
+            values.extend((raw.get("Ship_Localised"), raw.get("Ship")))
+        if event == "LaunchFighter" and str(raw.get("Loadout") or "").casefold() == "galactic":
+            values.insert(0, "Nomad")
+        name = ""
+        for value in values:
+            key = str(value or "").strip().casefold()
+            if not key:
+                continue
+            if "nomad" in key or key == "lander01":
+                name = "NOMAD"
+            elif "scorpion" in key or "combat_multicrew_srv_01" in key:
+                name = "SCORPION"
+            elif "scarab" in key or key == "testbuggy":
+                name = "SCARAB"
+            elif "rhino" in key:
+                name = "RHINO"
+            if name:
+                break
+        if not name:
+            return None
+        return {"name": name, "id": raw.get("ID") or raw.get("ShipID")}
+
+    def get_startup_surface_vehicle_identity(self):
+        """Return the active journal's cached startup vehicle evidence."""
+        return dict(self._startup_surface_vehicle_identity or {})
+
     def _seed_startup_location(self, tail_bytes=2 * 1024 * 1024):
-        """Retain the newest known location for the final startup restore batch."""
+        """Retain newest location and surface-vehicle identity for startup."""
         if self._startup_location_seeded:
             return
         self._startup_location_seeded = True
@@ -587,28 +630,41 @@ class JournalWatcher:
             lines = content.splitlines()
             if start > 0 and lines:
                 lines = lines[1:]
-            for line in reversed(lines):
+            latest_location = None
+            latest_identity = None
+            identities_by_id = {}
+            for line in lines:
                 try:
                     raw = json.loads(line)
                 except Exception:
                     continue
                 ev = raw.get("event")
+                identity = self._surface_vehicle_identity(raw)
+                if identity:
+                    latest_identity = identity
+                    if identity.get("id") is not None:
+                        identities_by_id[identity["id"]] = identity["name"]
+                elif ev in ("Embark", "Disembark") and raw.get("SRV") and raw.get("ID") in identities_by_id:
+                    latest_identity = {
+                        "name": identities_by_id[raw.get("ID")],
+                        "id": raw.get("ID"),
+                    }
                 if ev in ("FSDJump", "Location"):
-                    seeded = self._normalize_event(raw)
-                    seeded["type"] = "Location"
-                    seeded["startup_catchup"] = True
-                    seeded["startup_location_seed"] = True
-                    self._startup_location_event = seeded
-                    return
+                    latest_location = raw
                 # CarrierJump sets player location while ship-docked or walking
                 # on the carrier concourse.
-                if carrier_jump_moves_player(raw):
-                    seeded = self._normalize_event(raw)
-                    seeded["type"] = "Location"
-                    seeded["startup_catchup"] = True
-                    seeded["startup_location_seed"] = True
-                    self._startup_location_event = seeded
-                    return
+                elif carrier_jump_moves_player(raw):
+                    latest_location = raw
+            self._startup_surface_vehicle_identity = dict(latest_identity or {})
+            if latest_location:
+                seeded = self._normalize_event(latest_location)
+                seeded["type"] = "Location"
+                seeded["startup_catchup"] = True
+                seeded["startup_location_seed"] = True
+                if latest_identity:
+                    seeded.setdefault("data", {})["surface_vehicle_name"] = latest_identity["name"]
+                    seeded["data"]["surface_vehicle_id"] = latest_identity.get("id")
+                self._startup_location_event = seeded
         except Exception:
             return
 
