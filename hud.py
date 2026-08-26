@@ -1600,7 +1600,12 @@ class TacticalHUD:
         if not route.get("active"):
             return "NO ACTIVE ROUTE", "", ""
         if route_waypoint:
-            left_parts = (route.get("target"), route.get("progress_text"))
+            left = str(route.get("target") or "")
+            center = str(route.get("progress_text") or route.get("jump_text") or "")
+            right = str((nav_context or {}).get("next_distance") or "")
+            if right == "--":
+                right = ""
+            return left, center, right
         else:
             left_parts = (
                 route.get("progress_text") or route.get("source"),

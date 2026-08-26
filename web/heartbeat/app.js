@@ -5,9 +5,6 @@
   const overlay = params.get("overlay") || "heartbeat";
   const suffix = `token=${encodeURIComponent(token)}&overlay=${encodeURIComponent(overlay)}`;
   const root = document.getElementById("heartbeat");
-  const kindNode = document.getElementById("heartbeat-kind");
-  const stateNode = document.getElementById("heartbeat-state");
-  const activityNode = document.getElementById("heartbeat-activity");
   let revision = -1, polling = false, ready = false, pulseId = -1;
 
   function applyTheme(theme = {}, effects = {}) {
@@ -26,11 +23,8 @@
     root.classList.toggle("journal", model.kind === "journal");
     root.classList.toggle("status", model.kind === "status");
     root.classList.toggle("state-change", Boolean(model.state_changed));
-    kindNode.textContent = stalled ? "LINK STALLED" : `${String(model.kind || "status").toUpperCase()} LINK`;
-    stateNode.textContent = String(model.state || "FLIGHT").toUpperCase();
-    activityNode.textContent = String(model.activity || model.status || "TELEMETRY").toUpperCase();
-    root.setAttribute("aria-label", model.status || (stalled ? "Telemetry stalled" : "Telemetry live"));
-    root.title = `${model.status || "Telemetry live"} · ${model.activity || ""}`;
+    root.setAttribute("aria-label", stalled ? "Telemetry heartbeat stalled" : "Telemetry heartbeat active");
+    root.title = stalled ? "Telemetry heartbeat stalled" : "Telemetry heartbeat active";
     const nextPulse = Number(model.pulse_id);
     if (!stalled && Number.isFinite(nextPulse) && nextPulse !== pulseId) {
       pulseId = nextPulse;
@@ -40,7 +34,7 @@
     }
   }
 
-  async function refresh(nextRevision) { const response = await fetch(`/api/snapshot?${suffix}`, {cache:"no-store"}); if (!response.ok) return; render(await response.json()); await new Promise((resolve) => requestAnimationFrame(resolve)); revision = nextRevision; try { await fetch(`/api/rendered?${suffix}`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({revision:nextRevision,content_height:48})}); if (!ready) { ready = true; await fetch(`/api/ready?${suffix}`, {method:"POST",body:"{}"}); } } catch (_) {} }
+  async function refresh(nextRevision) { const response = await fetch(`/api/snapshot?${suffix}`, {cache:"no-store"}); if (!response.ok) return; render(await response.json()); await new Promise((resolve) => requestAnimationFrame(resolve)); revision = nextRevision; try { await fetch(`/api/rendered?${suffix}`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({revision:nextRevision,content_height:54})}); if (!ready) { ready = true; await fetch(`/api/ready?${suffix}`, {method:"POST",body:"{}"}); } } catch (_) {} }
   async function poll() { if (polling) return; polling = true; try { const response = await fetch(`/api/health?${suffix}`, {cache:"no-store"}); if (response.ok) { const next = Number((await response.json()).revision); if (Number.isFinite(next) && next !== revision) await refresh(next); } } catch (_) {} finally { polling = false; } }
   poll(); window.setInterval(poll, 160);
 })();

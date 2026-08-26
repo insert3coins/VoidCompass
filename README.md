@@ -11,7 +11,7 @@ Void Compass is distributed as a native Windows x64 application and does not req
 ## At a glance
 
 - **HTML Explorer Decision Deck** — a GPU-composited WebView2 briefing with one explainable next action, selectable exploration doctrine, five-jump Route Horizon, Session Pulse, Regional Codex Hunt and commander-specific panel layouts throughout its workspaces.
-- **Galnet Relay** — Frontier's official news feed in a quiet bottom-bar ticker beside the clock, with an in-app article reader, non-blocking refresh and a small offline cache.
+- **Galnet Relay** — Frontier's official news feed in a quiet bottom-bar ticker beside the clock, with an in-app article reader, non-blocking refresh, a small offline cache and profile-aware controls for visibility, rotation and refresh cadence.
 - **Exploration-focused navigation** — seven clear destinations keep survey, map and commander records prominent while a small Field Tools page supports surface work and mining.
 - **Stellar Cartography** — a live schematic System Orrery with Elite body-target lock, commander-controlled Survey Queue, planetary field mapping, expedition replay, science correlations and a complete 42-region passport built from retained journal evidence.
 - **Deep Survey** — explainable FSS, DSS, biological and geological progress; a Bio Field Assistant; discovery-significance ratings; valuable bodies; revisit targets; Colonisation Recon and a searchable discovery archive.

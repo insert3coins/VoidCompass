@@ -15,7 +15,7 @@ DEFAULT_SIZES = {
     "prospector_hud": (400, 250),
     "gravity_warning_hud": (320, 106), "station_info_hud": (520, 442),
     "survey_status_hud": (520, 340), "toast_hud": (400, 94),
-    "heartbeat_hud": (132, 48), "ground_popup": (370, 154),
+    "heartbeat_hud": (54, 54), "ground_popup": (370, 154),
 }
 
 OVERLAY_LABELS = {

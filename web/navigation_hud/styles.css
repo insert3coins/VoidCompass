@@ -276,7 +276,7 @@ body {
 .current-system { color: var(--text); font: 700 calc(14px * var(--text-scale)) "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .8px; line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 1px 1px #000; }
 
 .route-block { top: 102px; height: 62px; }
-.route-header { height: 17px; display: grid; grid-template-columns: 1fr 100px 145px; gap: 8px; align-items: center; font-size: calc(12px * var(--text-scale)); font-weight: 700; color: var(--orange); }
+.route-header { height: 17px; display: grid; grid-template-columns: minmax(0,1fr) 90px 85px; gap: 8px; align-items: center; font-size: calc(12px * var(--text-scale)); font-weight: 700; color: var(--orange); }
 .route-header strong, .route-header span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 #route-next { text-align: center; } #route-distance { text-align: right; }
 .route-track { position: relative; height: 25px; }
@@ -327,7 +327,7 @@ body {
 .hud.expanded .survey-block { top: 207px; height: 43px; left: 20px; right: 20px; }
 .hud.expanded .standard-metrics { display: none; }
 .hud.expanded .context-rail { left: 20px; right: 20px; bottom: 8px; font-size: calc(12px * var(--text-scale)); }
-.hud.expanded .route-header { grid-template-columns: 1fr 115px 220px; }
+.hud.expanded .route-header { grid-template-columns: minmax(0,1fr) 110px 130px; }
 
 /* Canvas owns the state language; CSS keeps only the live label crisp. */
 .hud[data-motion="fsd_charge"] .core-pulse,

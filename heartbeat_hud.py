@@ -21,7 +21,7 @@ import overlay_chrome
 import themes
 
 _CHROMA = "#ff00ff"
-_SIZE = 48
+_SIZE = 54
 _STALL_COLOR = "#ff5a5a"
 _STALL_AFTER_S = 15
 _MAX_GROWTH = 6
