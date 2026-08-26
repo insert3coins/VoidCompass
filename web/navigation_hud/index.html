@@ -57,13 +57,22 @@
       <div class="route-captions"><span id="route-origin">CURRENT</span><span id="route-destination">NEXT</span></div>
     </section>
 
-    <section class="survey-block section">
+    <section id="survey-block" class="survey-block section" data-survey-state="unknown">
       <div class="survey-header">
-        <strong>SYSTEM SURVEY</strong>
-        <span id="survey-state">COUNT UNKNOWN</span>
-        <span id="survey-count">0/? · --%</span>
+        <strong id="survey-title"><i aria-hidden="true"></i><span id="survey-title-text">SYSTEM SURVEY</span></strong>
+        <span id="survey-state" class="survey-status">
+          <b id="survey-mode">COUNT UNKNOWN</b>
+          <small id="survey-remaining"></small>
+        </span>
+        <span class="survey-readout"><b id="survey-count">0 / ? BODIES</b><small id="survey-percent">--%</small></span>
       </div>
-      <div id="survey-rail" class="survey-rail"></div>
+      <div class="survey-instrument">
+        <div class="survey-track">
+          <div id="survey-rail" class="survey-rail"></div>
+          <i id="survey-progress-marker" class="survey-progress-marker" aria-hidden="true"></i>
+        </div>
+        <div id="survey-signals" class="survey-signals" aria-label="Survey discoveries"></div>
+      </div>
     </section>
 
     <section class="standard-metrics section" aria-label="Exploration metrics">

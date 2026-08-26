@@ -11,51 +11,85 @@
     <div class="boot-stars" aria-hidden="true"></div>
     <div class="boot-nebula" aria-hidden="true"></div>
     <div class="boot-scanline" aria-hidden="true"></div>
-    <span class="boot-corner corner-nw">VC // LOCAL FLIGHT COMPUTER</span>
-    <span class="boot-corner corner-ne" id="boot-version">SECURE LOOPBACK // WEBVIEW2</span>
-    <span class="boot-corner corner-sw">FRONTIER JOURNAL // READ ONLY</span>
-    <span class="boot-corner corner-se">EXPLORATION SYSTEMS // STANDBY</span>
+    <div class="boot-frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <header class="boot-command-bar">
+      <span>VOID COMPASS // EXPLORATION FLIGHT COMPUTER</span>
+      <b><i></i>LOCAL JOURNAL LINK</b>
+      <em id="boot-version">SECURE LOOPBACK // WEBVIEW2</em>
+    </header>
+    <footer class="boot-footer-bar">
+      <span>FRONTIER JOURNAL // READ ONLY</span>
+      <b id="boot-stage-footer">PRE-FLIGHT SYSTEMS // STANDBY</b>
+      <em>LOCAL-FIRST // NO CLOUD ACCOUNT</em>
+    </footer>
 
-    <section id="boot-loader" class="boot-loader">
+    <section id="boot-loader" class="boot-loader" data-boot-stage="profile">
       <div class="boot-instrument" aria-hidden="true">
-        <div class="galactic-plane"></div>
-        <div class="instrument-ring ring-outer"></div>
-        <div class="instrument-ring ring-bearing"></div>
-        <div class="instrument-ring ring-inner"></div>
-        <div class="instrument-sweep"></div>
+        <div class="instrument-shell"></div>
+        <div class="sensor-plane"><i></i><b></b></div>
+        <div class="sensor-arc arc-outer"></div>
+        <div class="sensor-arc arc-bearing"></div>
+        <div class="sensor-arc arc-inner"></div>
+        <div class="sensor-sweep"><i></i></div>
+        <div class="sensor-contact contact-a"></div>
+        <div class="sensor-contact contact-b"></div>
+        <div class="sensor-contact contact-c"></div>
         <div class="instrument-axis axis-x"></div>
         <div class="instrument-axis axis-y"></div>
-        <div class="instrument-ship"><i></i><b></b></div>
+        <div class="instrument-horizon horizon-left"></div>
+        <div class="instrument-horizon horizon-right"></div>
+        <div class="instrument-lock"><i></i><b></b></div>
+        <div class="instrument-ship">
+          <span class="vessel-wing wing-port"></span>
+          <span class="vessel-wing wing-starboard"></span>
+          <span class="vessel-hull"></span>
+          <i class="vessel-cockpit"></i>
+          <b class="vessel-spine"></b>
+          <em class="vessel-engine engine-port"><i></i></em>
+          <em class="vessel-engine engine-starboard"><i></i></em>
+          <small class="vessel-node node-port"></small>
+          <small class="vessel-node node-starboard"></small>
+          <div class="vessel-energy"><i></i></div>
+        </div>
         <div class="instrument-pulse pulse-a"></div>
         <div class="instrument-pulse pulse-b"></div>
-        <span class="instrument-label label-n">GALACTIC N</span>
+        <span class="instrument-label label-n">GALACTIC VECTOR // N</span>
         <span class="instrument-label label-e">+X</span>
-        <span class="instrument-label label-s">SOL DATUM</span>
+        <span class="instrument-label label-s">SOL DATUM // LOCKED</span>
         <span class="instrument-label label-w">−X</span>
-        <small class="instrument-coordinate coord-a">X +00000.00</small>
-        <small class="instrument-coordinate coord-b">Y +00000.00</small>
-        <small class="instrument-coordinate coord-c">Z +00000.00</small>
+        <div class="instrument-progress"><small>NAV CORE SYNC</small><strong id="boot-core-percent">00</strong><em>%</em></div>
+        <small class="instrument-coordinate coord-a">JOURNAL BUS // LOCAL</small>
+        <small class="instrument-coordinate coord-b">PROFILE DATUM // ARMED</small>
+        <small class="instrument-coordinate coord-c">COCKPIT OUTPUT // HELD</small>
       </div>
 
       <section class="boot-copy">
-        <p class="eyebrow">EXPLORATION FLIGHT COMPUTER</p>
+        <div class="boot-identity"><p class="eyebrow">PILOT INTERFACE // PRE-FLIGHT</p><b>VC-EXPLORER</b></div>
         <h1>VOID <span>COMPASS</span></h1>
-        <div class="boot-status-line"><i></i><p id="boot-status" class="boot-status">INITIALISING FLIGHT COMPUTER</p></div>
-        <p id="boot-detail" class="boot-detail">Starting the private command deck</p>
-        <div class="boot-track"><i id="boot-progress"></i><em></em></div>
+        <div class="boot-operation">
+          <div class="boot-stage-code"><small>SEQUENCE</small><strong id="boot-stage-code">01</strong></div>
+          <div class="boot-operation-copy">
+            <div class="boot-status-line"><i></i><p id="boot-status" class="boot-status">INITIALISING FLIGHT COMPUTER</p></div>
+            <p id="boot-detail" class="boot-detail">Starting the private command deck</p>
+          </div>
+          <strong id="boot-progress-percent" class="boot-progress-percent">00%</strong>
+        </div>
+        <div id="boot-track" class="boot-track" role="progressbar" aria-label="Flight computer startup" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="boot-progress"></i><em></em></div>
+        <div class="boot-track-labels"><span>POWER ON</span><b id="boot-stage-label">PROFILE CORE</b><span>LIVE DECK</span></div>
         <div class="boot-readouts">
-          <span>PROFILE VAULT</span><b id="boot-profile">WAIT</b>
-          <span>SURVEY INDEX</span><b id="boot-survey">WAIT</b>
-          <span>LIVE JOURNAL</span><b id="boot-journal">WAIT</b>
-          <span>COCKPIT BUS</span><b id="boot-cockpit">WAIT</b>
+          <div><span>PROFILE VAULT</span><b id="boot-profile">WAIT</b></div>
+          <div><span>SURVEY INDEX</span><b id="boot-survey">WAIT</b></div>
+          <div><span>LIVE JOURNAL</span><b id="boot-journal">WAIT</b></div>
+          <div><span>COCKPIT BUS</span><b id="boot-cockpit">WAIT</b></div>
         </div>
       </section>
 
       <aside class="boot-sequence" aria-hidden="true">
-        <div data-boot-stage="profile"><i></i><span>01</span><p>PROFILE CORE</p><b>LOCAL</b></div>
-        <div data-boot-stage="survey"><i></i><span>02</span><p>SURVEY HISTORY</p><b>INDEX</b></div>
-        <div data-boot-stage="journal"><i></i><span>03</span><p>JOURNAL TAIL</p><b>SYNC</b></div>
-        <div data-boot-stage="cockpit"><i></i><span>04</span><p>COCKPIT LINK</p><b>ARM</b></div>
+        <header><span>STARTUP SEQUENCE</span><b>04 SYSTEMS</b></header>
+        <div data-boot-stage="profile"><i></i><span>01</span><p>COMMANDER PROFILE<small>LOCAL IDENTITY CORE</small></p><b>ACTIVE</b></div>
+        <div data-boot-stage="survey"><i></i><span>02</span><p>SURVEY ARCHIVE<small>DISCOVERY INDEX</small></p><b>QUEUED</b></div>
+        <div data-boot-stage="journal"><i></i><span>03</span><p>JOURNAL TAIL<small>RECENT EVENT REDUCER</small></p><b>QUEUED</b></div>
+        <div data-boot-stage="cockpit"><i></i><span>04</span><p>COCKPIT LINK<small>LIVE HTML SURFACES</small></p><b>QUEUED</b></div>
         <div class="sequence-vector"><i></i></div>
       </aside>
     </section>
@@ -151,7 +185,7 @@
       <footer class="rail-footer">
         <div class="connection"><i id="connection-light"></i><span>LOCAL LINK</span><b id="connection-state">CONNECTING</b></div>
         <button data-command="open_screenshots">OPEN SCREENSHOTS</button>
-        <small id="rail-version">v5.4.1.4 // WEBVIEW2</small>
+        <small id="rail-version">v5.4.1.5 // WEBVIEW2</small>
       </footer>
     </aside>
 
@@ -549,7 +583,7 @@
         </section>
 
         <section class="page" data-page-name="about">
-          <header class="about-hero"><div class="about-glyph"><span></span></div><div><p>ELITE DANGEROUS EXPLORATION COMPANION</p><h2>Void Compass</h2><span id="about-version">Version 5.4.1.4 // HTML Command Deck</span></div></header>
+          <header class="about-hero"><div class="about-glyph"><span></span></div><div><p>ELITE DANGEROUS EXPLORATION COMPANION</p><h2>Void Compass</h2><span id="about-version">Version 5.4.1.5 // HTML Command Deck</span></div></header>
           <section class="about-grid">
             <article class="card"><header><span>LOCAL FIRST</span></header><p>Void Compass reads Elite's journal and companion files and stores commander profiles locally. The dashboard server is private to this computer and binds only to loopback.</p></article>
             <article class="card"><header><span>GPL-3.0</span></header><p>Void Compass is free software. You may use, study, modify and redistribute it under GNU GPL version 3.</p></article>
@@ -573,12 +607,55 @@
   </div>
 
   <section id="galnet-reader" class="galnet-reader" hidden aria-modal="true" role="dialog" aria-labelledby="galnet-reader-title">
-    <div class="galnet-reader-shell">
-      <header><div><small>FRONTIER NEWS SERVICE</small><strong id="galnet-reader-title">GALNET ARCHIVE</strong><span id="galnet-reader-status">LOCAL CACHED RELAY</span></div><div><button id="galnet-reader-refresh" type="button">REFRESH</button><button id="galnet-close" type="button">CLOSE</button></div></header>
+    <div id="galnet-reader-shell" class="galnet-reader-shell" data-relay-state="waiting">
+      <div class="galnet-reader-scan" aria-hidden="true"></div>
+      <header class="galnet-reader-header">
+        <div class="galnet-reader-identity">
+          <small><i id="galnet-reader-light"></i> FRONTIER NEWS SERVICE // SECURE RELAY</small>
+          <strong id="galnet-reader-title">GALNET INTELLIGENCE</strong>
+          <span id="galnet-reader-status">LOCAL CACHED RELAY</span>
+        </div>
+        <div class="galnet-reader-telemetry" aria-label="Galnet relay telemetry">
+          <span><small>DISPATCHES</small><b id="galnet-reader-count">00</b></span>
+          <span><small>LAST SYNC</small><b id="galnet-reader-updated">NOT SYNCED</b></span>
+          <span><small>CHANNEL</small><b id="galnet-reader-source">FRONTIER GALNET</b></span>
+        </div>
+        <div class="galnet-reader-actions">
+          <button id="galnet-reader-refresh" class="galnet-reader-refresh" type="button"><span>SYNC</span> RELAY</button>
+          <button id="galnet-close" class="galnet-reader-close" type="button" aria-label="Close Galnet reader"><span>CLOSE</span><b>ESC</b></button>
+        </div>
+      </header>
+      <div class="galnet-relay-band" aria-hidden="true"><i></i><span>GALNET // PUBLIC INFORMATION CHANNEL</span><i></i></div>
       <main>
-        <aside id="galnet-headlines" aria-label="Galnet headlines"></aside>
-        <article class="galnet-article"><small id="galnet-article-stamp">NO DISPATCH SELECTED</small><h2 id="galnet-article-title">GALNET RELAY</h2><div id="galnet-article-body">Select a headline to read the full dispatch.</div></article>
+        <aside class="galnet-archive" aria-label="Galnet headline archive">
+          <header>
+            <div><small>RECEIVED TRANSMISSIONS</small><strong>DISPATCH INDEX</strong></div>
+            <span id="galnet-archive-count">00 RECORDS</span>
+          </header>
+          <div id="galnet-headlines" aria-label="Galnet headlines"></div>
+          <footer><i></i><span>OFFICIAL FRONTIER BROADCAST</span></footer>
+        </aside>
+        <article class="galnet-article">
+          <div class="galnet-article-grid" aria-hidden="true"></div>
+          <header>
+            <div class="galnet-article-channel"><i></i><span>GALNET TEXT TRANSMISSION</span><b id="galnet-article-number">DISPATCH 00</b></div>
+            <small id="galnet-article-stamp">NO DISPATCH SELECTED</small>
+            <h2 id="galnet-article-title">GALNET RELAY</h2>
+            <div class="galnet-article-meta">
+              <span><small>ISSUED</small><b id="galnet-article-published">UNKNOWN</b></span>
+              <span><small>NETWORK</small><b>GALNET</b></span>
+              <span><small>INTEGRITY</small><b id="galnet-article-integrity">STANDBY</b></span>
+            </div>
+          </header>
+          <div id="galnet-article-body" class="galnet-article-body">Select a headline to read the full dispatch.</div>
+          <footer>
+            <button id="galnet-previous" type="button"><span>PREVIOUS</span><b>DISPATCH</b></button>
+            <span id="galnet-article-position">00 // 00</span>
+            <button id="galnet-next" type="button"><span>NEXT</span><b>DISPATCH</b></button>
+          </footer>
+        </article>
       </main>
+      <footer class="galnet-reader-footer"><span><i></i><em id="galnet-reader-link">RELAY LINK ESTABLISHED</em></span><b>VOID COMPASS // GALNET TERMINAL</b><span>LOCAL ARCHIVE</span></footer>
     </div>
   </section>
 

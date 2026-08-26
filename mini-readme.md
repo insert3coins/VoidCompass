@@ -1,16 +1,17 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.1.4 // Galnet Relay
-**Release Date:** 2026-Aug-26
+## v5.4.1.5 // Survey Discovery Rail
+**Release Date:** 2026-Aug-27
 
-*   Added a theme-aware Galnet Relay to the persistent bottom status bar beside the clock, with an unobtrusive rotating headline ticker and a full in-app archive reader.
-*   Fetches Frontier's official RSS feed on a bounded background worker, keeps the command deck responsive and restores a small local cache immediately when the network is unavailable.
-*   Preserves Frontier's editorial ordering and the current headline across refreshes, sanitises article markup into readable local text and leaves the main exploration briefing uncluttered.
-*   Added profile-aware Galnet controls for relay visibility, headline rotation, rotation and refresh cadence, manual refresh and local cache clearing.
-*   Made panel arranging respond live and predictably for tall and full-width cards, and separated Navigation waypoint destination, stop progress and current-leg distance while suppressing unknown `0 LY` totals.
+*   Rebuilt the Navigation HUD's System Survey readout as a theme-aware angular discovery rail, with exact body counts as the primary readout and completion percentage retained as secondary telemetry.
+*   Added distinct unknown, live FSS, recorded-survey and complete presentations, with readable split status and remaining-body fields; completed surveys now settle into a clean accent-coloured `SYSTEM SURVEY COMPLETE` state.
+*   Replaced continuous idle scanning with discovery-driven motion: the rail advances smoothly, newly found segments lock in, the progress boundary moves and the body count responds once per acquisition. Compact biological, geological and high-value discovery notches now give their own colour-coded lock-on response without duplicating Survey Operations.
+*   Rebuilt the HTML bootloader as an Elite-inspired staged pre-flight deck, with an angular sensor display, top-down exploration vessel and live scanner effects, plus an angular progress vector, active/queued/ready subsystem telemetry and a restrained non-skippable journal handoff.
+*   Rebuilt the expanded Galnet reader as a theme-aware intelligence terminal, with a navigable transmission archive, live relay telemetry, stronger dispatch typography and a focused full-article viewport that preserves reading position during dashboard updates.
 
 ## Earlier releases
 
+*   **v5.4.1.4** — Added the persistent Galnet Relay and in-app archive, official RSS caching and profile-aware controls; repaired complex panel arranging and clarified Navigation waypoint destination, progress and distance.
 *   **v5.4.1.3** — Unified theme-aware Dashboard controls and profile panel arranging, rebuilt the System Workboard and waypoint rail, completed semantic Station, Cargo, Carrier, Prospector and Heartbeat overlays, refined vehicle handoffs and added neutron-tier flight animation.
 *   **v5.4.1.2** — Added the Explorer Decision Deck, six exploration doctrines, five-jump Route Horizon, Session Pulse, Regional Codex Hunt, profile-aware briefing-card layouts and optional automatic profile safety snapshots.
 *   **v5.4.1.1** — Refined Navigation arrival, planetary flight, landing gear, FSD cooldown, map/scanner and side-panel states; simplified vehicle departures and retired the redundant System Intelligence overlay.
@@ -19,28 +20,3 @@
 *   **v5.3.9.3** — Completed the visible HTML overlay conversion, rebuilt Overlay Studio dragging, refined Navigation flight effects, retired obsolete speech/career/Tk code, restored Planet Waypoint lifecycle and repaired HTML hotkey recording.
 *   **v5.3.9.2** — Converted cockpit notifications and achievement unlocks to semantic HTML, prevented empty Survey Operations startup flashes and restored its planet-side focus lifecycle.
 *   **v5.3.9.1** — Rebuilt the Navigation State Spine with a complete ship/vehicle identity catalogue, state-specific 30 FPS motion, readable biological workboards and restart-safe surface context.
-*   **v5.3.9** — Replaced the visible Tk workspace and boot sequence with the private HTML command deck, migrated the full feature set and Galactic Atlas, rebuilt Overlay Layout Studio, restored focused Survey Operations and Carrier Discord controls, and retained Python as the journal/state authority.
-*   **v5.3.8.4** — Split HTML Navigation into distinct state-identity and live-response fields, added staged family-specific animations and journal reactions, rebuilt Supercruise from scratch and improved Survey Operations readability.
-*   **v5.3.8.3** — Unified the Windows cockpit overlays under one private WebView2 runtime, rebuilt Survey Operations and Navigation as semantic HTML/Canvas displays, retained native overlay/profile controls, and polished startup, shutdown, taskbar behaviour and in-game readability.
-*   **v5.3.8.2** — Kept an open Galactic Atlas subscribed to live journal, scan, route and position updates with connection-aware background publication and browser-reconnection grace.
-*   **v5.3.8.1** — Replaced the Tk/Pillow map with the private offline HTML/Three.js Galactic Atlas, preserving profile history, routes, intelligence and annotations while adding corrected north-up/east-right orientation, GPU clustering and a polished browser command deck.
-*   **v5.3.8** — Smoothed the Navigation HUD lifecycle, rebuilt its Discovery Rail, focused Survey Operations on priority targets, added route-direction and vertical context, and retained profile-safe system-arrival time.
-*   **v5.3.7.9** — Rebuilt all 29 Navigation HUD states as one code-native state instrument with distinct cockpit motion, family-specific transitions, bounded journal reactions, profile-aware animation intensity and detailed reduced-motion sigils.
-*   **v5.3.7.8** — Introduced Navigation Instrument V3 and its state/event vocabulary, repaired restart-safe biological sampling and totals, aligned the bootloader instruments and added dedicated mining responses.
-*   **v5.3.7.7** — Added the themed Flight Computer Bootloader and First Commissioning sequence, made startup a non-skippable live loading boundary, restored journals behind it and delayed the Dashboard and overlays until the final cached state was ready.
-*   **v5.3.7.6** — Added the genuinely compact profile-aware Flight Log, retained the curated exploration model and independent Compact Navigation HUD, and smoothed full-Dashboard resizing by coalescing responsive layout, telemetry and projection redraws until the drag settles.
-*   **v5.3.7.5** — Retired the duplicate first-generation Compact Dashboard, consolidated each profile onto one authoritative Dashboard footprint, completed the Navigation HUD's journal/status lifecycle and vehicle-awareness audit, replaced duplicate top-instrument metrics with state-driven motion, and removed belt clusters from Survey Operations while retaining their data tracking and uploads.
-*   **v5.3.7.4** — Deepened Navigation HUD awareness with scoopability and fuel-risk intelligence, surface approach/departure, gravity and ship configuration, local-target acquisition, SCO, Fleet Carrier transit, valuable arrival signatures and the narrower signal-focused Survey Operations presentation.
-*   **v5.3.7.3** — Made complete game and custom routes persist in fixed geometry on the Navigation HUD, with readable short/long-route treatments, completed history, an advancing current locator and a bounded one-leg arrival handoff.
-*   **v5.3.7.2** — Introduced the journal-aware Navigation HUD v2, Standard/Expanded overlay layouts, readiness and neutron-boost state, 30 FPS theme-aware motion, profile-safe hotkey switching and the first dedicated system-survey workflow.
-*   **v5.3.7** — Rebuilt the exploration Dashboard and unified route model, expanded Mission Control with long-range expedition templates, refined Station Link lifecycle and presentation, added safe hotkey recording and evolved the Navigation HUD into a readable theme-aware route/state/survey instrument.
-*   **v5.3.6** — Refocused Void Compass around exploration and mining, consolidated the application shell and Expedition workspace, retired cockpit speech and unrelated career surfaces, added Deep Survey field intelligence and refined the System Intelligence overlay.
-*   **v5.3.5.6** — Refined both Navigation HUD layouts with clearer cockpit hierarchy, live fuel integrity, larger telemetry, a segmented survey track and a quiet context footer that appears only for meaningful information.
-*   **v5.3.5.5** — Refocused Void Compass by retiring Trade Assist and its market database while retaining independent visited-market EDDN uploads, exploration Analytics, belt-cluster EDSM uploads, fleet synchronisation and the first live-fuel Navigation HUD readout.
-*   **v5.3.5.3** — Restored the readable classic Navigation HUD with real route pips, permanent survey progress, live flight/map state, larger text, state-aware context, immediate overlay theme changes and quieter routine docking.
-*   **v5.3.5.2** — Rebuilt System Intelligence, Survey Operations, Prospector Analysis, Carrier, Cargo and Colony overlays around theme-aware journal models; removed redundant redraws and corrected false startup survey completion after offline Carrier jumps.
-*   **v5.3.5.1** — Added compact theme-aware personal/Squadron Carrier Discord embeds with safe EDSM links and detailed manual status posts, and corrected unknown startup scan totals until journal evidence confirms them.
-*   **v5.3.5** — Replaced the multi-gigabyte trade database with on-demand Ardent Insight searches, rebuilt Trade Assist around practical one-way and round-trip planning, added the Trade Route HUD and persistent Trade Log, and kept visited-market EDDN uploads independent.
-*   **v5.3.4** — Replaced Trade Command with the three-action Trade Assist, retained automatic EDDN uploads and journal-confirmed Current Run tracking, removed advanced route-watch machinery and made Station Link auto-hide explicit and immediately applied.
-*   **v5.3.3.1** — Restored biological sample progress and Survey Status lifecycle, corrected legacy bio predictions, simplified carrier expedition editing, reduced danger noise, rebuilt Station Link, completed remaining overlay theming and removed measured persistence stalls.
-*   **v5.3.3** — Added position-aware species-level biological prediction for all 116 published EDMC-BioScan species, including airless families, testable confidence, narrower value estimates, Codex-region HUD awareness and clearer Survey Status and expedition evidence.

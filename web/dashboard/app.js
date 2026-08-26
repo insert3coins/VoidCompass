@@ -19,6 +19,8 @@ let atlasRequested = false;
 let lastClientError = "";
 let bootActive = true;
 let bootHideTimer = 0;
+let lastBootStage = "";
+let bootStageTransitionTimer = 0;
 let dashboardRenderQueued = false;
 let themeFingerprint = "";
 let pageRequestId = 0;
@@ -469,19 +471,51 @@ function renderBoot(state) {
 
   text("boot-status", boot.status, "INITIALISING FLIGHT COMPUTER");
   text("boot-detail", boot.detail, "Preparing local state");
-  percentWidth("boot-progress", number(boot.progress) * 100);
-  const progress = number(boot.progress);
+  const progress = Math.max(0, Math.min(1, number(boot.progress)));
+  const progressPercent = Math.round(progress * 100);
+  percentWidth("boot-progress", progressPercent);
+  text("boot-progress-percent", `${String(progressPercent).padStart(2, "0")}%`);
+  text("boot-core-percent", String(progressPercent).padStart(2, "0"));
+  byId("boot-track").setAttribute("aria-valuenow", String(progressPercent));
   const stages = [
-    ["boot-profile", progress >= .18],
-    ["boot-survey", progress >= .64],
-    ["boot-journal", progress >= .76],
-    ["boot-cockpit", progress >= .90],
+    {id: "boot-profile", key: "profile", label: "PROFILE CORE", ready: progress >= .18},
+    {id: "boot-survey", key: "survey", label: "SURVEY ARCHIVE", ready: progress >= .64},
+    {id: "boot-journal", key: "journal", label: "JOURNAL TAIL", ready: progress >= .76},
+    {id: "boot-cockpit", key: "cockpit", label: "COCKPIT LINK", ready: progress >= .90},
   ];
-  for (const [id, ready] of stages) {
-    text(id, ready ? "READY" : "WAIT");
+  const activeIndex = stages.findIndex((stage) => !stage.ready);
+  const activeStage = activeIndex >= 0 ? stages[activeIndex] : {
+    key: "handoff", label: "LIVE HANDOFF",
+  };
+  const loader = byId("boot-loader");
+  loader.dataset.bootStage = activeStage.key;
+  text("boot-stage-code", activeIndex >= 0
+    ? String(activeIndex + 1).padStart(2, "0") : "05");
+  text("boot-stage-label", activeStage.label);
+  text("boot-stage-footer", `${activeStage.label} // ${progressPercent}%`);
+  if (lastBootStage && activeStage.key !== lastBootStage) {
+    loader.classList.remove("stage-changing");
+    void loader.offsetWidth;
+    loader.classList.add("stage-changing");
+    window.clearTimeout(bootStageTransitionTimer);
+    bootStageTransitionTimer = window.setTimeout(() => {
+      loader.classList.remove("stage-changing");
+      bootStageTransitionTimer = 0;
+    }, 720);
+  }
+  lastBootStage = activeStage.key;
+  for (const [index, item] of stages.entries()) {
+    const {id, ready} = item;
+    const active = index === activeIndex;
+    text(id, ready ? "READY" : active ? "ACTIVE" : "WAIT");
     byId(id).classList.toggle("ready", ready);
     const stage = document.querySelector(`[data-boot-stage="${id.replace("boot-", "")}"]`);
-    if (stage) stage.classList.toggle("ready", ready);
+    if (stage) {
+      stage.classList.toggle("ready", ready);
+      stage.classList.toggle("active", active);
+      const state = stage.querySelector(":scope > b");
+      if (state) state.textContent = ready ? "READY" : active ? "ACTIVE" : "QUEUED";
+    }
   }
   if (!boot.active) {
     document.body.classList.add("ready");
@@ -913,26 +947,73 @@ function galnetArticles(state = model) {
   return Array.isArray(state.galnet?.articles) ? state.galnet.articles : [];
 }
 
+function galnetTimestamp(value, fallback = "UNKNOWN") {
+  if (!value) return fallback;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value).toUpperCase();
+  return `${parsed.toLocaleString(undefined, {
+    timeZone: "UTC", day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).toUpperCase()} UTC`;
+}
+
 function renderGalnetReader(state = model) {
   const articles = galnetArticles(state);
   if (!articles.some((row) => row.id === galnetSelectedId)) {
     galnetSelectedId = articles[Math.min(galnetTickerIndex, Math.max(0, articles.length - 1))]?.id || "";
   }
   const selected = articles.find((row) => row.id === galnetSelectedId) || articles[0];
-  byId("galnet-headlines").replaceChildren(...articles.map((row) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `galnet-headline-row${row.id === selected?.id ? " active" : ""}`;
-    button.dataset.galnetSelect = row.id || "";
-    const stamp = document.createElement("small"); stamp.textContent = row.stamp || "GALNET";
-    const title = document.createElement("strong"); title.textContent = row.title || "UNTITLED DISPATCH";
-    button.append(stamp, title);
-    return button;
-  }));
-  text("galnet-reader-status", state.galnet?.detail || "Galnet relay");
+  const selectedIndex = articles.findIndex((row) => row.id === selected?.id);
+  const selectedOrdinal = selectedIndex >= 0 ? selectedIndex + 1 : 0;
+  const archive = byId("galnet-headlines");
+  const archiveKey = `${galnetSelectedId}:${articles.map((row) => `${row.id}:${row.stamp}:${row.title}`).join("|")}`;
+  if (archive.dataset.renderKey !== archiveKey) {
+    archive.dataset.renderKey = archiveKey;
+    archive.replaceChildren(...articles.map((row, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `galnet-headline-row${row.id === selected?.id ? " active" : ""}`;
+      button.dataset.galnetSelect = row.id || "";
+      if (row.id === selected?.id) button.setAttribute("aria-current", "true");
+      const indexNode = document.createElement("span");
+      indexNode.className = "galnet-headline-index";
+      indexNode.textContent = String(index + 1).padStart(2, "0");
+      const copy = document.createElement("span");
+      copy.className = "galnet-headline-copy";
+      const stamp = document.createElement("small"); stamp.textContent = row.stamp || "GALNET";
+      const title = document.createElement("strong"); title.textContent = row.title || "UNTITLED DISPATCH";
+      copy.append(stamp, title);
+      const chevron = document.createElement("i");
+      chevron.className = "galnet-headline-chevron";
+      chevron.setAttribute("aria-hidden", "true");
+      button.append(indexNode, copy, chevron);
+      return button;
+    }));
+  }
+  const feed = state.galnet || {};
+  const relayState = feed.busy ? "refreshing" : String(feed.status || "waiting").toLowerCase();
+  byId("galnet-reader-shell").dataset.relayState = relayState;
+  text("galnet-reader-status", feed.detail || "Galnet relay");
+  text("galnet-reader-count", String(articles.length).padStart(2, "0"));
+  text("galnet-archive-count", `${String(articles.length).padStart(2, "0")} RECORDS`);
+  text("galnet-reader-updated", galnetTimestamp(feed.updated_at, "NOT SYNCED"));
+  text("galnet-reader-source", feed.source || "FRONTIER GALNET");
   text("galnet-article-stamp", selected?.stamp || "NO DISPATCH SELECTED");
   text("galnet-article-title", selected?.title || "GALNET RELAY");
-  text("galnet-article-body", selected?.body || "No Galnet dispatch is available yet.");
+  text("galnet-article-number", `DISPATCH ${String(selectedOrdinal).padStart(2, "0")}`);
+  text("galnet-article-published", galnetTimestamp(selected?.published, selected?.stamp || "UNKNOWN"));
+  text("galnet-article-integrity", relayState === "live" ? "VERIFIED LIVE" : relayState === "cached" ? "CACHED COPY" : relayState === "refreshing" ? "RECEIVING" : relayState === "error" ? "SIGNAL ERROR" : "LOCAL COPY");
+  text("galnet-article-position", `${String(selectedOrdinal).padStart(2, "0")} // ${String(articles.length).padStart(2, "0")}`);
+  text("galnet-reader-link", relayState === "live" ? "RELAY LINK ESTABLISHED" : relayState === "cached" ? "LOCAL ARCHIVE LINK" : relayState === "refreshing" ? "RECEIVING TRANSMISSIONS" : relayState === "error" ? "RELAY LINK DEGRADED" : "RELAY STANDING BY");
+  const articleBody = byId("galnet-article-body");
+  const articleChanged = articleBody.dataset.articleId !== (selected?.id || "");
+  if (articleChanged) {
+    articleBody.dataset.articleId = selected?.id || "";
+    text("galnet-article-body", selected?.body || "No Galnet dispatch is available yet.");
+    articleBody.scrollTop = 0;
+  }
+  byId("galnet-previous").disabled = selectedIndex <= 0;
+  byId("galnet-next").disabled = selectedIndex < 0 || selectedIndex >= articles.length - 1;
 }
 
 function renderGalnet(state, force = false) {
@@ -1931,9 +2012,9 @@ function renderDashboard(state) {
     showPage(requestedPage.page);
   }
   renderAtlas(model);
-  text("rail-version", `v${model.app?.version || "5.4.1.4"} // WEBVIEW2`);
-  text("boot-version", `v${model.app?.version || "5.4.1.4"} // SECURE LOOPBACK // WEBVIEW2`);
-  text("about-version", `Version ${model.app?.version || "5.4.1.4"} // HTML Command Deck`);
+  text("rail-version", `v${model.app?.version || "5.4.1.5"} // WEBVIEW2`);
+  text("boot-version", `v${model.app?.version || "5.4.1.5"} // SECURE LOOPBACK // WEBVIEW2`);
+  text("about-version", `Version ${model.app?.version || "5.4.1.5"} // HTML Command Deck`);
   text("overview-subtitle", model.profile?.profile_label || "Journal-backed field intelligence");
   if (currentPage === "map" && !model.boot?.active) ensureAtlas();
 }
@@ -2504,10 +2585,28 @@ function openGalnetReader() {
   byId("galnet-close").focus();
 }
 
+function closeGalnetReader() {
+  byId("galnet-reader").hidden = true;
+  byId("status-galnet").focus();
+}
+
+function moveGalnetSelection(offset) {
+  const articles = galnetArticles();
+  if (!articles.length) return;
+  const current = Math.max(0, articles.findIndex((row) => row.id === galnetSelectedId));
+  const next = Math.max(0, Math.min(articles.length - 1, current + offset));
+  if (next === current) return;
+  galnetSelectedId = articles[next].id || "";
+  renderGalnetReader();
+  byId("galnet-headlines").querySelector(".galnet-headline-row.active")?.scrollIntoView({block: "nearest"});
+}
+
 byId("status-galnet").addEventListener("click", openGalnetReader);
-byId("galnet-close").addEventListener("click", () => { byId("galnet-reader").hidden = true; });
+byId("galnet-close").addEventListener("click", closeGalnetReader);
+byId("galnet-previous").addEventListener("click", () => moveGalnetSelection(-1));
+byId("galnet-next").addEventListener("click", () => moveGalnetSelection(1));
 byId("galnet-reader").addEventListener("click", (event) => {
-  if (event.target === byId("galnet-reader")) byId("galnet-reader").hidden = true;
+  if (event.target === byId("galnet-reader")) return closeGalnetReader();
   const headline = event.target.closest?.("[data-galnet-select]");
   if (!headline) return;
   galnetSelectedId = headline.dataset.galnetSelect || "";
@@ -2728,8 +2827,7 @@ window.addEventListener("keydown", async (event) => {
   }
   if (event.key === "Escape" && !byId("galnet-reader").hidden) {
     event.preventDefault();
-    byId("galnet-reader").hidden = true;
-    byId("status-galnet").focus();
+    closeGalnetReader();
     return;
   }
   if (event.key === "Escape" && document.body.classList.contains("atlas-focus")) {
