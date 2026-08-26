@@ -319,7 +319,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         "current_docked", "hud_flight_state", "current_landed",
         "current_in_fighter", "current_in_srv", "current_on_foot",
         "current_in_taxi", "current_in_multicrew",
-        "current_vehicle_id", "current_vehicle_name", "current_legal_state",
+        "current_vehicle_id", "current_vehicle_name",
+        "_last_surface_vehicle_name", "current_legal_state",
         "current_fuel_main", "current_fuel_reservoir", "fuel_capacity_main",
         "current_altitude_m", "current_landing_gear_down",
         "current_cargo_scoop_deployed", "current_analysis_mode",
@@ -669,6 +670,15 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         for field in self._COCKPIT_STATE_FIELDS:
             if field in state:
                 setattr(self, field, state[field])
+        surface_vehicles = {"NOMAD", "SCARAB", "SCORPION", "RHINO", "SRV"}
+        restored_vehicle = str(getattr(self, "current_vehicle_name", "") or "").upper()
+        remembered_vehicle = str(getattr(self, "_last_surface_vehicle_name", "") or "").upper()
+        if remembered_vehicle not in surface_vehicles and restored_vehicle in surface_vehicles:
+            # Schema-1 snapshots already retained the current vehicle but not
+            # its reusable surface identity. Migrate that evidence in memory.
+            self._last_surface_vehicle_name = restored_vehicle
+        if restored_vehicle in surface_vehicles and self.current_vehicle_id is not None:
+            self._vehicle_name_by_id[self.current_vehicle_id] = restored_vehicle
         if "scan_total_confirmed" not in state:
             # Older snapshots could only express an inferred N/N body floor.
             # A partial system with a confirmed total is N/M, while explicit
@@ -1333,6 +1343,19 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         """Seed navigation/station state from a Location login event."""
         location = raw if isinstance(raw, dict) else {}
         data = data if isinstance(data, dict) else {}
+        restored_vehicle = str(
+            data.get("surface_vehicle_name")
+            or location.get("surface_vehicle_name") or ""
+        ).strip().upper()
+        restored_vehicle_id = (
+            data.get("surface_vehicle_id")
+            or location.get("surface_vehicle_id")
+        )
+        surface_vehicles = {"NOMAD", "SCARAB", "SCORPION", "RHINO", "SRV"}
+        if restored_vehicle in surface_vehicles:
+            self._last_surface_vehicle_name = restored_vehicle
+            if restored_vehicle_id is not None:
+                self._vehicle_name_by_id[restored_vehicle_id] = restored_vehicle
         station_name = data.get("station_name") or location.get("StationName")
         docked_value = data.get("docked")
         if docked_value is None:
@@ -1357,14 +1380,17 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         if self.current_in_taxi or self.current_in_multicrew or self.current_in_srv:
             self.current_on_foot = False
         self.current_in_fighter = False
-        self.current_vehicle_id = None
         if self.current_in_srv:
+            current_vehicle = str(getattr(self, "current_vehicle_name", "") or "").upper()
             remembered = str(getattr(self, "_last_surface_vehicle_name", "") or "").upper()
             self.current_vehicle_name = (
-                remembered if remembered in {"NOMAD", "SCARAB", "SCORPION", "RHINO", "SRV"}
+                current_vehicle if current_vehicle in surface_vehicles and current_vehicle != "SRV"
+                else remembered if remembered in surface_vehicles
                 else "SRV"
             )
+            self.current_vehicle_id = restored_vehicle_id or self.current_vehicle_id
         else:
+            self.current_vehicle_id = None
             self.current_vehicle_name = ""
         if docked_value is not None or (self.current_on_foot and station_name):
             self.current_docked = bool(docked_value or (self.current_on_foot and station_name))

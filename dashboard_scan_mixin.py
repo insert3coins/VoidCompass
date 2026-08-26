@@ -503,6 +503,29 @@ class DashboardScanMixin:
             self.current_cargo_scoop_deployed = bool(flags & self._STATUS_CARGO_SCOOP_DEPLOYED)
             self.current_analysis_mode = bool(flags & self._STATUS_ANALYSIS_MODE)
             self.current_scooping_fuel = bool(flags & self._STATUS_SCOOPING_FUEL)
+            if self.current_in_srv:
+                surface_vehicles = {"NOMAD", "SCARAB", "SCORPION", "RHINO", "SRV"}
+                remembered = str(getattr(self, "current_vehicle_name", "") or "").upper()
+                if remembered not in surface_vehicles or remembered == "SRV":
+                    remembered = str(getattr(self, "_last_surface_vehicle_name", "") or "").upper()
+                if remembered not in surface_vehicles or remembered == "SRV":
+                    startup_identity = {}
+                    watcher = getattr(self, "watcher", None)
+                    resolver = getattr(watcher, "get_startup_surface_vehicle_identity", None)
+                    if callable(resolver):
+                        startup_identity = resolver() or {}
+                    recovered = str(startup_identity.get("name") or "").upper()
+                    if recovered in surface_vehicles:
+                        remembered = recovered
+                        vehicle_id = startup_identity.get("id")
+                        if vehicle_id is not None:
+                            self.current_vehicle_id = vehicle_id
+                            self._vehicle_name_by_id[vehicle_id] = recovered
+                self.current_vehicle_name = (
+                    remembered if remembered in surface_vehicles else "SRV"
+                )
+                if self.current_vehicle_name != "SRV":
+                    self._last_surface_vehicle_name = self.current_vehicle_name
         flags2 = data.get("Flags2")
         if isinstance(flags2, int):
             self.current_status_flags2 = flags2
