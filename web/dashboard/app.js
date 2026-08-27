@@ -1576,7 +1576,7 @@ function renderProfileWorkspace(data) {
       {label: "Achievements", value: `${numeric(achievements.unlocked)} / ${numeric(achievements.total)}`, detail: `${numeric(achievements.points)} POINTS`},
       {label: "Captain's Log", value: `${numeric(log.sessions)} FLIGHTS`, detail: `${numeric(log.distance, 1)} LY · ${numeric(log.jumps)} JUMPS`},
     ])}
-    <section class="workspace-grid two">
+    <section class="workspace-grid two profile-workspace-grid">
       ${workspaceCard("CAREER RANKS", workspaceRows(rankRows, "Awaiting Rank and Progress journal events."), `${rankRows.length} TRACKED`)}
       ${workspaceCard("SUPERPOWER REPUTATION", workspaceRows(repRows, "Awaiting Reputation journal data."))}
       ${workspaceCard("CAREER RECORDS", `<div class="fact-list spacious">${careerRows.join("") || "<p class='workspace-empty'>Elite will provide lifetime statistics through its Statistics event.</p>"}</div>`)}

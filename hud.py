@@ -2307,6 +2307,7 @@ class TacticalHUD:
                 "night_vision": bool(ship_config.get("night_vision")),
                 "in_main_ship": bool(ship_config.get("in_main_ship")),
                 "low_fuel": bool(ship_config.get("low_fuel")),
+                "fuel_scooping": bool(nav_context.get("fuel_scooping")),
                 "neutron_boost": bool((nav_context.get("neutron_boost") or {}).get("armed")),
                 "neutron_boost_value": finite_number(
                     (nav_context.get("neutron_boost") or {}).get("value"), 0.0,
