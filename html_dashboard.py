@@ -1891,7 +1891,7 @@ class HtmlDashboardMixin:
         self._schedule_html_dashboard_publish(immediate=True)
         return True
 
-    def _html_overlay_option_toggle(self, key):
+    def _html_overlay_option_toggle(self, key, requested_value=None):
         allowed = {
             "overlay_mouse_passthrough", "hud_compact_mode",
             "sample_clear_notifications_enabled", "rebuy_warnings_enabled",
@@ -1902,7 +1902,10 @@ class HtmlDashboardMixin:
         key = _text(key, 80)
         if key not in allowed:
             return False
-        self.config[key] = not bool(self.config.get(key, False))
+        self.config[key] = (
+            requested_value if isinstance(requested_value, bool)
+            else not bool(self.config.get(key, False))
+        )
         self._persist_config()
         if key == "overlay_mouse_passthrough":
             self._apply_overlay_mouse_passthrough()
@@ -1915,7 +1918,10 @@ class HtmlDashboardMixin:
         elif key == "station_info_auto_hide_enabled":
             station = getattr(self, "station_info_hud", None)
             if station is not None:
-                if getattr(self, "current_docked", False) and getattr(self, "current_station_name", None):
+                apply_setting = getattr(station, "apply_auto_hide_setting", None)
+                if callable(apply_setting):
+                    apply_setting(self, self.config[key])
+                elif getattr(self, "current_docked", False) and getattr(self, "current_station_name", None):
                     station.on_docked(self)
                 else:
                     station.hide()
@@ -1978,7 +1984,9 @@ class HtmlDashboardMixin:
             x, y = DEFAULT_POSITIONS.get(overlay_id, (30, 30))
             return self._html_overlay_position(overlay_id, x, y, persist=True)
         if operation == "toggle_option":
-            return self._html_overlay_option_toggle(payload.get("key"))
+            return self._html_overlay_option_toggle(
+                payload.get("key"), payload.get("value"),
+            )
         if operation == "save_settings":
             return self._html_overlay_settings_save(payload)
         if operation == "save_preset":
