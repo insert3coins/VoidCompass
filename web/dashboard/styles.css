@@ -786,6 +786,8 @@ body.ready .boot * { animation-play-state: paused !important; }
 .workspace-metrics span { display: block; overflow: hidden; color: var(--muted); font: 9px Consolas,monospace; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-grid { display: grid; gap: 13px; align-items: start; }
 .workspace-grid.two { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.workspace-grid.profile-workspace-grid { display: block; column-count: 2; column-gap: 13px; }
+.profile-workspace-grid > .workspace-card { width: 100%; margin: 0 0 13px; break-inside: avoid; }
 .route-workspace-grid { grid-template-columns: minmax(300px,.85fr) minmax(420px,1.15fr); }
 .route-workspace-grid > .neutron-plotter-card { grid-column: 1/-1; }
 .route-system,.waypoint-row { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 8px 4px; }
@@ -1019,6 +1021,7 @@ input,select,textarea,button { max-width: 100%; }
   .intel-grid,.records-grid,.settings-grid,
   .workspace-grid.two,.route-workspace-grid,.ground-grid,.carrier-grid,
   .settings-workspace-grid,.mission-layout { grid-template-columns: minmax(0,1fr); }
+  .workspace-grid.profile-workspace-grid { column-count: 1; }
   .route-workspace-grid > .neutron-plotter-card,
   .carrier-grid > .carrier-expedition-card { grid-column: auto; }
   .overview-modules > .survey-card,.overview-modules > .route-card,

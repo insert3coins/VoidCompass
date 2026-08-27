@@ -103,6 +103,7 @@
         nightVision: Boolean(source.night_vision),
         inMainShip: Boolean(source.in_main_ship),
         lowFuel: Boolean(source.low_fuel),
+        fuelScooping: Boolean(source.fuel_scooping),
         neutronBoost: Boolean(source.neutron_boost),
         neutronBoostValue: number(source.neutron_boost_value, 0, 0, 10),
         routeActive: Boolean(source.route_active),
@@ -2228,6 +2229,36 @@
       }
     }
 
+    drawFuelPulse(g, state, p, alpha) {
+      const d = state.dynamics || {};
+      if (!d.inMainShip || !d.fuelScooping) return;
+      const green = this.themeColor("green", "#4ee59b");
+      const beat = wave(p);
+      const baseAlpha = alpha * (.08 + beat * .08);
+
+      // Fuel intake breathes along the chassis rails without adding another
+      // label or competing with the live FUEL readout below the instrument.
+      this.line(g.left + 5, g.bottom - 1, g.centerLeft - 5, g.bottom - 1,
+        green, baseAlpha, 1.15);
+      this.line(g.centerRight + 5, g.bottom - 1, g.right - 5, g.bottom - 1,
+        green, baseAlpha, 1.15);
+
+      if (this.reduced) return;
+      for (const offset of [0, .5]) {
+        const local = (p + offset) % 1;
+        const envelope = Math.sin(local * Math.PI);
+        const leftX = g.left + 7 + local * Math.max(1, g.centerLeft - g.left - 14);
+        const rightX = g.right - 7 - local * Math.max(1, g.right - g.centerRight - 14);
+        const packetAlpha = alpha * envelope * .34;
+        this.line(Math.max(g.left + 5, leftX - 7), g.bottom - 1,
+          leftX, g.bottom - 1, green, packetAlpha * .62, 1.2);
+        this.line(Math.min(g.right - 5, rightX + 7), g.bottom - 1,
+          rightX, g.bottom - 1, green, packetAlpha * .62, 1.2);
+        this.glowDot(leftX, g.bottom - 1, .65 + beat * .35, green, packetAlpha);
+        this.glowDot(rightX, g.bottom - 1, .65 + beat * .35, green, packetAlpha);
+      }
+    }
+
     drawState(g, state, p, alpha) {
       if (alpha <= .002) return;
       const key = this.key(state);
@@ -2451,7 +2482,9 @@
         this.drawIdentity(g, this.state, phase, 1);
         this.drawState(response, this.state, phase, 1);
       }
-      this.drawStatusModifiers(response, this.state, this.phase(this.state, now), 1);
+      const livePhase = this.phase(this.state, now);
+      this.drawFuelPulse(g, this.state, livePhase, 1);
+      this.drawStatusModifiers(response, this.state, livePhase, 1);
       if (!this.reduced) {
         this.drawEvent(response, now);
         this.drawGearPulse(response, now);
