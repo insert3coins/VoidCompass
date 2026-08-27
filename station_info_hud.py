@@ -243,6 +243,10 @@ class StationInfoHUD:
         self._last_model = None
         self._hide_job = None
         self._visible = False
+        # Station details may remain cached after departure, but cached data is
+        # not permission to map the overlay.  Only a reconciled docked state may
+        # present Station Link.
+        self._docked_context = False
 
         self.win = tk.Toplevel(root)
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
@@ -271,6 +275,8 @@ class StationInfoHUD:
         self.win.after(refresh_ms, self._force_topmost)
 
     def show(self):
+        if not self._docked_context:
+            return False
         try:
             x = _safe_int(self.config.get("station_info_hud_x"), 30)
             y = _safe_int(self.config.get("station_info_hud_y"), 380)
@@ -279,8 +285,9 @@ class StationInfoHUD:
             self.win.attributes("-topmost", True)
             self.win.lift()
             self._visible = True
+            return True
         except Exception:
-            pass
+            return False
 
     def hide(self):
         if self._hide_job:
@@ -314,6 +321,11 @@ class StationInfoHUD:
     def on_docked(self, dash):
         self.reconcile(dash, present=True)
 
+    def on_undocked(self):
+        """Clear presentation authority while retaining the last station model."""
+        self._docked_context = False
+        self.hide()
+
     def apply_auto_hide_setting(self, dash, enabled):
         """Apply the live Station Link policy without waiting for a redock.
 
@@ -325,7 +337,8 @@ class StationInfoHUD:
         self.config["station_info_auto_hide_enabled"] = bool(enabled)
         docked = bool(getattr(dash, "current_docked", False))
         station = getattr(dash, "current_station_name", None)
-        if not docked or not station:
+        self._docked_context = bool(docked and station)
+        if not self._docked_context:
             self.hide()
             return False
         self.refresh(dash)
@@ -342,7 +355,8 @@ class StationInfoHUD:
         """
         docked = bool(getattr(dash, "current_docked", False))
         station = getattr(dash, "current_station_name", None)
-        if not docked or not station:
+        self._docked_context = bool(docked and station)
+        if not self._docked_context:
             self.hide()
             return False
         self.refresh(dash)

@@ -712,6 +712,16 @@ class TacticalHUD:
         track_key = music_track.replace(" ", "").replace("_", "").upper()
         fsd = nav_context.get("fsd_readiness") or {}
         fsd_state = str(fsd.get("state") or "ready")
+        asteroid_context = bool(
+            fsd_state == "asteroid_field" or fsd.get("asteroid_kind")
+        )
+        normal_ship_flight = bool(
+            flight_state in {"", "FLIGHT"}
+            and not any(nav_context.get(key) for key in (
+                "docked", "landed", "in_fighter", "in_srv", "on_foot",
+                "in_taxi", "in_multicrew",
+            ))
+        )
         ship_config = nav_context.get("ship_config") or {}
         suit_status = nav_context.get("suit_status") or {}
         docking_state = nav_context.get("docking_state") or {}
@@ -836,11 +846,18 @@ class TacticalHUD:
                 "SRV THREAT", "CAPITAL SHIP", "UNIDENTIFIED",
                 "HEAVY COMBAT", "DOCK ASSIST", "LOCAL ARRIVAL"}:
             return music_state
-        if (fsd_state == "asteroid_field" and flight_state in {"", "FLIGHT"}
-                and not any(nav_context.get(key) for key in (
-                    "docked", "landed", "in_fighter", "in_srv", "on_foot",
-                    "in_taxi", "in_multicrew",
-                ))):
+
+        # Pilot-selected ship modes are more useful than the persistent local
+        # environment.  In a ring/cluster they should temporarily animate in
+        # place of ASTEROID FIELD, which returns as soon as the mode is cleared.
+        # Short-lived hazards, scanner/map focus and journal transitions above
+        # still retain first refusal.
+        if normal_ship_flight:
+            if ship_config.get("silent_running"):
+                return "SILENT RUNNING"
+            if ship_config.get("flight_assist_off"):
+                return "FLIGHT ASSIST OFF"
+        if asteroid_context and normal_ship_flight:
             return "ASTEROID FIELD"
         approach = nav_context.get("surface_approach") or {}
         if approach.get("active"):
@@ -864,21 +881,8 @@ class TacticalHUD:
         # than a generic mass-lock state while the mood remains current.
         if music_state:
             return music_state
-        if (fsd_state == "mass_lock" and flight_state in {"", "FLIGHT"}
-                and not any(nav_context.get(key) for key in (
-                    "docked", "landed", "in_fighter", "in_srv", "on_foot",
-                    "in_taxi", "in_multicrew",
-                ))):
+        if fsd_state == "mass_lock" and normal_ship_flight:
             return "MASS LOCK"
-        if (flight_state in {"", "FLIGHT"}
-                and not any(nav_context.get(key) for key in (
-                    "docked", "landed", "in_fighter", "in_srv", "on_foot",
-                    "in_taxi", "in_multicrew",
-                ))):
-            if ship_config.get("silent_running"):
-                return "SILENT RUNNING"
-            if ship_config.get("flight_assist_off"):
-                return "FLIGHT ASSIST OFF"
         if flight_state == "TAXI" or nav_context.get("in_taxi"):
             return "TAXI"
         if on_foot:

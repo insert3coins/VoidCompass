@@ -7292,6 +7292,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     self.current_in_multicrew = in_multicrew
                     self.current_in_fighter = False
                     self.current_in_srv = False
+                    if self.station_info_hud:
+                        self.station_info_hud.on_undocked()
                     # A completed inter-system FSD jump arrives in
                     # supercruise. Taxi/multicrew ownership remains more
                     # specific than that transport's flight regime.
@@ -7557,7 +7559,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._queue_edsm_upload(raw, startup_replay=startup_replay)
             self.update_hud()
             if self.station_info_hud:
-                self.station_info_hud.hide()
+                self.station_info_hud.on_undocked()
             if self.survey_status_hud:
                 self.survey_status_hud.resume()
                 self._refresh_survey_status_progress()
@@ -7574,6 +7576,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.current_in_fighter = False
             self.current_in_srv = False
             self._clear_navigation_local_space()
+            if self.station_info_hud:
+                self.station_info_hud.on_undocked()
             self._sync_navigation_hud_flight_state(supercruise=True)
             # When a body is still tracked, entering supercruise is an
             # outbound orbital transition. Keep the Liftoff direction latched
