@@ -39,8 +39,10 @@
   ]);
   const DOCK_EVENTS = new Set(["dock", "dock_request", "dock_denied", "undock"]);
   const SURFACE_EVENTS = new Set(["body_approach", "planet_clear", "touchdown", "liftoff"]);
+  const MAINTENANCE_EVENTS = new Set(["maintenance", "system_reboot"]);
   const WARNING_EVENTS = new Set([
     "warning", "interdiction", "signal_drop", "fighter_destroyed", "srv_destroyed",
+    "jet_cone_damage",
   ]);
 
   class NavigationIndicator {
@@ -93,7 +95,14 @@
         scan: number(source.scan_percent, 0, 0, 1),
         route: number(source.route_progress, 0, 0, 1),
         landingGear: Boolean(source.landing_gear),
+        cargoScoop: Boolean(source.cargo_scoop),
         analysisMode: Boolean(source.analysis_mode),
+        hardpoints: Boolean(source.hardpoints_deployed),
+        shieldsKnown: Boolean(source.shields_known),
+        shieldsUp: Boolean(source.shields_up),
+        nightVision: Boolean(source.night_vision),
+        inMainShip: Boolean(source.in_main_ship),
+        lowFuel: Boolean(source.low_fuel),
         neutronBoost: Boolean(source.neutron_boost),
         neutronBoostValue: number(source.neutron_boost_value, 0, 0, 10),
         routeActive: Boolean(source.route_active),
@@ -196,16 +205,19 @@
       const key = this.key(state);
       if (["fsd_charge", "hyper_charge", "hyperspace", "jumping", "arrival",
         "interdiction_evaded", "fsd_cooldown", "supercruise_overcharge",
-        "local_arrival"].includes(key)) return "fsd";
-      if (PLANETARY.has(key) || ["landed", "srv", "scorpion", "nomad", "on_foot"].includes(key)) return "surface";
+        "supercruise_assist", "local_arrival"].includes(key)) return "fsd";
+      if (PLANETARY.has(key) || ["landed", "srv", "scorpion", "nomad", "on_foot",
+        "srv_handbrake", "srv_turret", "srv_drive_assist"].includes(key)) return "surface";
       if (["fss", "dss", "map", "galaxy_map", "system_map", "power_map",
         "orrery", "codex", "exploration", "phenomena"].includes(key)) return "scope";
       if (["mass_lock", "signal_lock", "signal_drop", "signal_threat", "combat",
         "interdiction", "interdicted", "asteroid_field", "srv_threat",
-        "capital_contact", "unknown_contact", "heavy_combat"].includes(key)) return "hazard";
+        "capital_contact", "unknown_contact", "heavy_combat", "heat_critical",
+        "suit_hazard", "jet_cone_damage", "docking_denied"].includes(key)) return "hazard";
       if (key.startsWith("vehicle_") || ["fighter", "multicrew"].includes(key)) return "vehicle";
       if (key.startsWith("carrier_")) return "carrier";
-      if (["docked", "station", "docking_assist"].includes(key)) return "station";
+      if (["docked", "station", "docking_assist", "docking_clearance",
+        "maintenance", "system_reboot"].includes(key)) return "station";
       if (key === "settlement_area") return "surface";
       if (["left_panel", "right_panel", "comms_panel", "role_panel",
         "station_services"].includes(key)) return "interface";
@@ -226,6 +238,7 @@
       return ({
         flight: 1.9, fighter: .82, multicrew: 1.5, exploration: 2.25,
         supercruise: .94, supercruise_overcharge: .48,
+        supercruise_assist: 1.28, flight_assist_off: .84, silent_running: 2.2,
         fsd_charge: .86, hyper_charge: .64, hyperspace: .58, jumping: .72,
         arrival: 1.15, interdiction_evaded: 1.05, fsd_cooldown: 1.55,
         local_arrival: 1.42,
@@ -240,9 +253,13 @@
         orbital_approach: 1.68, glide: .82, surface_approach: 1.38,
         surface_hold: 2.25, surface_departure: 1.28, orbital_departure: 1.55,
         landed: 2.4, on_foot: 1.32, srv: 1.18, scorpion: .9, nomad: 1.05,
+        srv_handbrake: 1.8, srv_turret: 1.2, srv_drive_assist: 1.35,
         asteroid_field: 2.2, mass_lock: 1.12, signal_lock: 1.55,
         signal_drop: .92, signal_threat: .76, combat: .64,
         interdiction: .5, interdicted: .43, docked: 2.3, station: 2.1,
+        heat_critical: .58, suit_hazard: .72, jet_cone_damage: .46,
+        docking_clearance: 1.42, docking_denied: .68,
+        maintenance: 1.7, system_reboot: .92,
       })[key] || 1.45;
     }
 
@@ -1971,6 +1988,246 @@
       }
     }
 
+    drawCruiseAssist(g, state, p, alpha) {
+      const c = state.color, y = g.y;
+      const cx = (g.left + g.right) / 2;
+      const span = Math.max(28, g.right - g.left);
+      // Supercruise Assist is a closed guidance solution: paired rails feed a
+      // stable acquisition gate instead of Supercruise's expanding tunnel.
+      this.line(g.left + 2, y - 9, cx - 8, y - 2, c, alpha * .42, 1);
+      this.line(g.left + 2, y + 9, cx - 8, y + 2, c, alpha * .42, 1);
+      this.line(g.right - 2, y - 9, cx + 8, y - 2, c, alpha * .42, 1);
+      this.line(g.right - 2, y + 9, cx + 8, y + 2, c, alpha * .42, 1);
+      for (let guide = 0; guide < 4; guide += 1) {
+        const progress = (p + guide / 4) % 1;
+        const fade = Math.sin(progress * Math.PI);
+        const distance = (1 - smooth(progress)) * span * .43;
+        for (const side of [-1, 1]) {
+          const x = cx + side * distance;
+          this.chevron(x, y, -side, c, alpha * fade * .72, 3.2);
+        }
+      }
+      const lock = 7 + 2 * wave(p * 2);
+      this.path([[cx - lock, y - 7], [cx - lock, y - 2], [cx - 3, y - 2]],
+        c, alpha * .8, 1.3);
+      this.path([[cx + lock, y + 7], [cx + lock, y + 2], [cx + 3, y + 2]],
+        c, alpha * .8, 1.3);
+      this.glowDot(cx, y, 1.2, c, alpha * (.68 + .3 * wave(p)));
+    }
+
+    drawControlMode(g, state, p, alpha, key) {
+      const c = state.color, y = g.y;
+      const cx = (g.left + g.right) / 2;
+      const span = Math.max(24, g.right - g.left);
+      if (key === "silent_running") {
+        // Suppressed emissions: a damped signature repeatedly collapses into
+        // the centre while the outer hull remains deliberately dark.
+        const envelope = .24 + .76 * wave(p);
+        const points = [];
+        for (let step = 0; step <= 24; step += 1) {
+          const progress = step / 24;
+          const x = g.left + progress * span;
+          const falloff = Math.sin(progress * Math.PI);
+          points.push([x, y + Math.sin((progress * 3 + p) * TAU) * 2.2 * falloff * envelope]);
+        }
+        this.path(points, c, alpha * (.18 + envelope * .32), 1);
+        this.angularRing(cx, y, 5 + 5 * (1 - envelope), 3 + 2 * (1 - envelope),
+          6, c, alpha * (.25 + envelope * .35), 1, Math.PI / 6);
+        this.line(g.left + 2, y - 10, g.left + span * .24, y - 10, c, alpha * .22, 1);
+        this.line(g.right - span * .24, y + 10, g.right - 2, y + 10, c, alpha * .22, 1);
+        return;
+      }
+      // Flight Assist Off permits lateral drift. Two inertial vectors slide
+      // out of phase while the centre datum remains fixed.
+      const drift = Math.sin(p * TAU) * span * .18;
+      this.line(g.left + 3, y, g.right - 3, y, c, alpha * .2, 1);
+      this.path([[cx - 5 + drift, y - 9], [cx + drift, y], [cx - 5 + drift, y + 9]],
+        c, alpha * .78, 1.4);
+      this.path([[cx + 5 - drift, y - 9], [cx - drift, y], [cx + 5 - drift, y + 9]],
+        c, alpha * .46, 1.1);
+      for (const side of [-1, 1]) {
+        const x = cx + side * (span * .24 + drift * .45);
+        this.line(x, y - 6, x + side * 7, y - 2, c, alpha * .48, 1.1);
+        this.line(x, y + 6, x + side * 7, y + 2, c, alpha * .48, 1.1);
+      }
+    }
+
+    drawSurfaceControl(g, state, p, alpha, key) {
+      const c = state.color, y = g.y;
+      const cx = (g.left + g.right) / 2;
+      const span = Math.max(24, g.right - g.left);
+      if (key === "srv_handbrake") {
+        const clampWidth = 9 + 3 * wave(p);
+        this.line(g.left + 4, y + 7, g.right - 4, y + 7, c, alpha * .34, 1.2);
+        this.path([[cx - clampWidth - 6, y - 8], [cx - clampWidth, y - 3],
+          [cx - clampWidth, y + 6], [cx - 3, y + 6]], c, alpha * .78, 1.5);
+        this.path([[cx + clampWidth + 6, y - 8], [cx + clampWidth, y - 3],
+          [cx + clampWidth, y + 6], [cx + 3, y + 6]], c, alpha * .78, 1.5);
+        this.line(cx - 4, y, cx + 4, y, c, alpha * .56, 1.4);
+        return;
+      }
+      if (key === "srv_turret") {
+        const angle = p * TAU;
+        this.arc(cx, y, span * .28, 9, Math.PI * 1.08, Math.PI * 1.92,
+          c, alpha * .38, 1.1);
+        this.line(cx, y, cx + Math.cos(angle) * span * .35,
+          y + Math.sin(angle) * 9, c, alpha * .82, 1.4);
+        this.angularRing(cx, y, 7, 5, 8, c, alpha * .62, 1.2, -angle * .5);
+        this.glowDot(cx + Math.cos(angle) * span * .35,
+          y + Math.sin(angle) * 9, 1.1, c, alpha * .84);
+        return;
+      }
+      // Drive Assist owns a ground guidance lane with a bounded correction
+      // packet rather than the ordinary SRV suspension motion.
+      for (const offset of [-6, 6]) {
+        this.line(g.left + 3, y + offset, g.right - 3, y + offset,
+          c, alpha * .3, 1);
+      }
+      const point = this.trackPoint(p, g);
+      this.path([[point.x - 5, y - 4], [point.x, y], [point.x - 5, y + 4]],
+        c, alpha * .86, 1.4);
+      for (const marker of [.2, .5, .8]) {
+        const x = g.left + span * marker;
+        this.line(x, y - 3, x, y + 3, c,
+          alpha * (.28 + .28 * wave(p + marker)), 1);
+      }
+    }
+
+    drawDockingState(g, state, p, alpha, denied = false) {
+      const c = state.color, y = g.y;
+      const cx = (g.left + g.right) / 2;
+      const span = Math.max(24, g.right - g.left);
+      if (denied) {
+        const slam = 7 + wave(p * 2) * span * .19;
+        this.line(cx - slam, y - 11, cx - slam, y + 11, c, alpha * .9, 1.8);
+        this.line(cx + slam, y - 11, cx + slam, y + 11, c, alpha * .9, 1.8);
+        this.path([[cx - 7, y - 6], [cx + 7, y + 6]], c, alpha * .72, 1.6);
+        this.path([[cx + 7, y - 6], [cx - 7, y + 6]], c, alpha * .72, 1.6);
+        return;
+      }
+      const travel = smooth(p);
+      for (let gate = 0; gate < 4; gate += 1) {
+        const progress = (travel + gate / 4) % 1;
+        const fade = Math.sin(progress * Math.PI);
+        const half = 4 + progress * span * .37;
+        const height = 3 + progress * 8;
+        this.path([[cx - half, y - height], [cx - half, y + height],
+          [cx - half + 4, y + height]], c, alpha * fade * .62, 1.2);
+        this.path([[cx + half, y - height], [cx + half, y + height],
+          [cx + half - 4, y + height]], c, alpha * fade * .62, 1.2);
+      }
+      this.line(cx - 8, y, cx + 8, y, c, alpha * .7, 1.4);
+      this.glowDot(cx, y, 1.2, c, alpha * (.62 + .34 * wave(p * 2)));
+    }
+
+    drawEmergency(g, state, p, alpha, key) {
+      const c = state.color, y = g.y;
+      const cx = (g.left + g.right) / 2;
+      const span = Math.max(24, g.right - g.left);
+      if (key === "heat_critical") {
+        for (let band = 0; band < 5; band += 1) {
+          const progress = (p + band / 5) % 1;
+          const fade = Math.sin(progress * Math.PI);
+          const x = g.left + 4 + progress * (span - 8);
+          const rise = 3 + progress * 7;
+          this.path([[x - 3, y + rise], [x, y - rise], [x + 3, y + rise]],
+            c, alpha * fade * .7, band % 2 ? 1 : 1.4);
+        }
+        this.line(g.left + 2, y + 10, g.right - 2, y + 10,
+          c, alpha * (.38 + .5 * wave(p * 2)), 1.8);
+        return;
+      }
+      if (key === "jet_cone_damage") {
+        for (let bolt = 0; bolt < 3; bolt += 1) {
+          const offset = (bolt - 1) * 7;
+          const jitter = (wave(p * 3 + bolt * .21) - .5) * 4;
+          this.path([[g.left + 3, y + offset], [cx - 8, y - offset * .4 + jitter],
+            [cx + 1, y + offset * .5 - jitter], [g.right - 3, y - offset]],
+          c, alpha * (.35 + .2 * bolt), bolt === 1 ? 1.7 : 1.1);
+        }
+        this.angularRing(cx, y, 8 + 4 * wave(p * 2), 5 + 2 * wave(p * 2),
+          6, c, alpha * .72, 1.3, p * TAU);
+        return;
+      }
+      // Suit hazards use a life-support trace, visually separate from ship
+      // heat and damage geometry.
+      const points = [];
+      for (let step = 0; step <= 24; step += 1) {
+        const progress = step / 24;
+        let pulse = 0;
+        const local = (progress - p + 1) % 1;
+        if (local > .42 && local < .48) pulse = -7 * Math.sin((local - .42) / .06 * Math.PI);
+        if (local >= .48 && local < .56) pulse = 10 * Math.sin((local - .48) / .08 * Math.PI);
+        points.push([g.left + progress * span, y + pulse]);
+      }
+      this.path(points, c, alpha * .78, 1.4);
+      this.rect(g.right - 16, y - 9, 11, 18, c, alpha * .45, false);
+      this.rect(g.right - 14, y + 3, 7, 4 + 3 * wave(p), c, alpha * .72, true);
+    }
+
+    drawMaintenance(g, state, p, alpha, reboot = false) {
+      const c = state.color, y = g.y;
+      const cx = (g.left + g.right) / 2;
+      if (reboot) {
+        const stage = Math.floor(p * 6);
+        this.angularRing(cx, y, 9, 6, 6, c, alpha * .54, 1.2, Math.PI / 6);
+        for (let index = 0; index < 6; index += 1) {
+          const angle = index * TAU / 6;
+          const active = index <= stage;
+          this.line(cx + Math.cos(angle) * 11, y + Math.sin(angle) * 7,
+            cx + Math.cos(angle) * 19, y + Math.sin(angle) * 11,
+            c, alpha * (active ? .9 : .18), active ? 1.6 : 1);
+        }
+        this.glowDot(cx, y, 1 + 1.2 * wave(p * 2), c, alpha * .82);
+        return;
+      }
+      const columns = 6;
+      for (let index = 0; index < columns; index += 1) {
+        const x = g.left + 4 + index * (g.right - g.left - 8) / columns;
+        const active = index === Math.floor(p * columns) % columns;
+        this.rect(x, y - 6, 7, 12, c, alpha * (active ? .78 : .24), active);
+      }
+      const sweep = g.left + 3 + p * (g.right - g.left - 6);
+      this.line(sweep, y - 10, sweep, y + 10, c, alpha * .7, 1.3);
+    }
+
+    drawStatusModifiers(g, state, p, alpha) {
+      const d = state.dynamics || {};
+      const c = state.color;
+      const orange = this.themeColor("orange", "#ff7a18");
+      const green = this.themeColor("green", "#4ee59b");
+      if (d.inMainShip && d.hardpoints) {
+        this.chevron(g.left + 8, g.y - 9, -1, orange, alpha * .72, 2.4);
+        this.chevron(g.right - 8, g.y - 9, 1, orange, alpha * .72, 2.4);
+      }
+      if (d.inMainShip && d.cargoScoop) {
+        const spread = 6 + 2 * wave(p);
+        this.path([[g.center - spread, g.y + 7], [g.center, g.y + 11],
+          [g.center + spread, g.y + 7]], c, alpha * .52, 1.1);
+      }
+      if (d.inMainShip && d.shieldsKnown && !d.shieldsUp) {
+        this.arc(g.right - 8, g.y, 5, 7, Math.PI * .6, Math.PI * 1.35,
+          orange, alpha * .62, 1.2);
+        this.arc(g.right - 8, g.y, 5, 7, Math.PI * 1.55, Math.PI * 2.25,
+          orange, alpha * .62, 1.2);
+      }
+      if (d.nightVision) {
+        const scan = g.left + ((p + .2) % 1) * Math.max(1, g.right - g.left);
+        this.line(scan, g.y - 10, scan, g.y + 10, green, alpha * .28, 1);
+      }
+      if (d.analysisMode) {
+        this.path([[g.left + 2, g.y - 6], [g.left + 2, g.y - 10], [g.left + 7, g.y - 10]],
+          c, alpha * .42, 1);
+        this.path([[g.right - 2, g.y + 6], [g.right - 2, g.y + 10], [g.right - 7, g.y + 10]],
+          c, alpha * .42, 1);
+      }
+      if (d.inMainShip && d.lowFuel) {
+        const flash = .35 + .45 * wave(p * 2);
+        this.path([[g.left + 3, g.y + 10], [g.left + 7, g.y + 5],
+          [g.left + 11, g.y + 10]], orange, alpha * flash, 1.2);
+      }
+    }
+
     drawState(g, state, p, alpha) {
       if (alpha <= .002) return;
       const key = this.key(state);
@@ -1981,6 +2238,10 @@
       if (key === "exploration") { this.drawExploration(g, state, p, alpha); return; }
       if (key === "supercruise") { this.drawSupercruise(g, state, p, alpha); return; }
       if (key === "supercruise_overcharge") { this.drawSupercruise(g, state, p, alpha, true); return; }
+      if (key === "supercruise_assist") { this.drawCruiseAssist(g, state, p, alpha); return; }
+      if (key === "flight_assist_off" || key === "silent_running") {
+        this.drawControlMode(g, state, p, alpha, key); return;
+      }
       if (key === "fsd_charge" || key === "hyper_charge") {
         this.drawCharge(g, state, p, alpha, key === "hyper_charge"); return;
       }
@@ -2004,6 +2265,9 @@
         this.drawSRV(g, state, p, alpha, key === "scorpion"); return;
       }
       if (key === "nomad") { this.drawNomad(g, state, p, alpha); return; }
+      if (["srv_handbrake", "srv_turret", "srv_drive_assist"].includes(key)) {
+        this.drawSurfaceControl(g, state, p, alpha, key); return;
+      }
       if (key === "on_foot") { this.drawOnFoot(g, state, p, alpha); return; }
       if (key === "docked" || key === "station") {
         this.drawDocked(g, state, p, alpha, key === "station"); return;
@@ -2024,6 +2288,15 @@
       }
       if (key === "carrier_transit" || key === "carrier_arrival") {
         this.drawCarrier(g, state, p, alpha, key === "carrier_arrival"); return;
+      }
+      if (key === "docking_clearance" || key === "docking_denied") {
+        this.drawDockingState(g, state, p, alpha, key === "docking_denied"); return;
+      }
+      if (["heat_critical", "suit_hazard", "jet_cone_damage"].includes(key)) {
+        this.drawEmergency(g, state, p, alpha, key); return;
+      }
+      if (key === "maintenance" || key === "system_reboot") {
+        this.drawMaintenance(g, state, p, alpha, key === "system_reboot"); return;
       }
       this.drawFlight(g, state, p, alpha, "flight");
     }
@@ -2126,6 +2399,13 @@
           ? [[g.center - 4, markerY + 2], [g.center, markerY - 2], [g.center + 4, markerY + 2]]
           : [[g.center - 4, markerY - 2], [g.center, markerY + 2], [g.center + 4, markerY - 2]],
         c, fade, 1.5);
+      } else if (MAINTENANCE_EVENTS.has(this.eventKind)) {
+        const columns = 5;
+        for (let index = 0; index < columns; index += 1) {
+          const x = g.left + 3 + index * Math.max(8, (g.right - g.left - 8) / columns);
+          const active = index <= Math.floor(p * columns);
+          this.rect(x, y - 5, 6, 10, c, fade * (active ? .72 : .2), active);
+        }
       } else if (WARNING_EVENTS.has(this.eventKind)) {
         const flash = .35 + .65 * wave(elapsed * 3.2);
         this.line(g.left, g.top, g.centerLeft, g.top, c, fade * flash, 2);
@@ -2171,6 +2451,7 @@
         this.drawIdentity(g, this.state, phase, 1);
         this.drawState(response, this.state, phase, 1);
       }
+      this.drawStatusModifiers(response, this.state, this.phase(this.state, now), 1);
       if (!this.reduced) {
         this.drawEvent(response, now);
         this.drawGearPulse(response, now);

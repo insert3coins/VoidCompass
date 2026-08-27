@@ -712,6 +712,12 @@ class TacticalHUD:
         track_key = music_track.replace(" ", "").replace("_", "").upper()
         fsd = nav_context.get("fsd_readiness") or {}
         fsd_state = str(fsd.get("state") or "ready")
+        ship_config = nav_context.get("ship_config") or {}
+        suit_status = nav_context.get("suit_status") or {}
+        docking_state = nav_context.get("docking_state") or {}
+        journal_event = nav_context.get("journal_event") or {}
+        journal_kind = str(journal_event.get("kind") or "")
+        transition_label = str(journal_event.get("state_label") or "").strip()
 
         # StartJump is only the countdown. The exact Status fsdJump flag owns
         # HYPERSPACE, and FSDJump supplies the bounded ARRIVAL phase.
@@ -723,6 +729,10 @@ class TacticalHUD:
             return "ARRIVAL"
         if fsd_state == "hyperspace":
             return "HYPERSPACE"
+        if journal_kind in {"system_reboot", "jet_cone_damage"} and transition_label:
+            return transition_label.upper()
+        if ship_config.get("overheating"):
+            return "HEAT CRITICAL"
         if fsd_state == "supercruise_entry":
             return "SUPERCRUISE"
         if fsd_state in {"charge", "hyper_charge"}:
@@ -734,15 +744,32 @@ class TacticalHUD:
         if (nav_context.get("supercruise_overcharge")
                 and flight_state == "SUPERCRUISE"):
             return "SCO OVERCHARGE"
-        journal_event = nav_context.get("journal_event") or {}
-        if str(journal_event.get("kind") or "") in {
+        if journal_kind in {
                 "vehicle_deploy", "vehicle_board", "vehicle_switch",
-                "interdiction", "interdiction_clear", "signal_drop"}:
-            transition_label = str(journal_event.get("state_label") or "").strip()
+                "interdiction", "interdiction_clear", "signal_drop",
+                "dock_request", "dock_denied", "maintenance"}:
             if transition_label:
                 return transition_label.upper()
         if nav_context.get("interdicted") or track_key == "INTERDICTION":
             return "INTERDICTION"
+
+        on_foot = bool(
+            flight_state == "ONFOOT" or nav_context.get("on_foot")
+            or music_mode == "ONFOOT"
+        )
+        if on_foot:
+            if suit_status.get("low_oxygen"):
+                return "SUIT OXYGEN LOW"
+            if suit_status.get("low_health"):
+                return "SUIT HEALTH LOW"
+            if suit_status.get("very_hot"):
+                return "EXTREME HEAT"
+            if suit_status.get("very_cold"):
+                return "EXTREME COLD"
+            if suit_status.get("hot"):
+                return "SUIT HEAT"
+            if suit_status.get("cold"):
+                return "SUIT COLD"
 
         focus_key = (
             str(nav_context.get("gui_focus", ""))
@@ -787,6 +814,10 @@ class TacticalHUD:
             return "MAP"
         if nav_context.get("in_fss"):
             return "FSS"
+        if docking_state.get("phase") in {"requested", "granted"}:
+            docking_label = str(docking_state.get("label") or "").strip()
+            if docking_label:
+                return docking_label.upper()
         music_states = {
             "LIFEFORMFOGCLOUD": "PHENOMENA",
             "COMBATSRV": "SRV THREAT",
@@ -825,6 +856,9 @@ class TacticalHUD:
             if phase == "hold":
                 return "SURFACE HOLD"
             return "SURFACE APPROACH"
+        if (ship_config.get("supercruise_assist")
+                and flight_state == "SUPERCRUISE"):
+            return "SC ASSIST"
         # Phenomena and settlement music provides context only after exact
         # surface motion has had first refusal, but is still more informative
         # than a generic mass-lock state while the mood remains current.
@@ -836,12 +870,28 @@ class TacticalHUD:
                     "in_taxi", "in_multicrew",
                 ))):
             return "MASS LOCK"
+        if (flight_state in {"", "FLIGHT"}
+                and not any(nav_context.get(key) for key in (
+                    "docked", "landed", "in_fighter", "in_srv", "on_foot",
+                    "in_taxi", "in_multicrew",
+                ))):
+            if ship_config.get("silent_running"):
+                return "SILENT RUNNING"
+            if ship_config.get("flight_assist_off"):
+                return "FLIGHT ASSIST OFF"
         if flight_state == "TAXI" or nav_context.get("in_taxi"):
             return "TAXI"
-        if flight_state == "ONFOOT" or nav_context.get("on_foot") or music_mode == "ONFOOT":
+        if on_foot:
             return "ONFOOT"
         if nav_context.get("docked"):
             return "DOCKED"
+        if flight_state in {"SRV", "NOMAD"} or nav_context.get("in_srv"):
+            if ship_config.get("srv_handbrake"):
+                return "HANDBRAKE"
+            if ship_config.get("srv_turret"):
+                return "TURRET VIEW"
+            if ship_config.get("srv_drive_assist"):
+                return "DRIVE ASSIST"
         if flight_state == "NOMAD" or vehicle_name == "NOMAD":
             return "NOMAD"
         if flight_state == "FIGHTER" or nav_context.get("in_fighter"):
@@ -866,6 +916,8 @@ class TacticalHUD:
             return COLOR_ACCENT
         if state_text in {"ARRIVAL", "CARRIER ARRIVAL"}:
             return COLOR_GREEN
+        if state_text.startswith("PAD ") or state_text == "DOCK CLEARED":
+            return COLOR_GREEN
         if state_text in {"PHENOMENA", "LOCAL ARRIVAL"}:
             return COLOR_GREEN
         if state_text in (
@@ -875,18 +927,24 @@ class TacticalHUD:
             "CODEX", "EXPLORATION", "STATION", "FSD COOLDOWN", "ORBITAL APPROACH",
             "ORBITAL DEPARTURE", "SURFACE HOLD", "DOCK ASSIST", "RIGHT PANEL",
             "LEFT PANEL", "COMMS", "ROLE PANEL", "SERVICES",
+            "SC ASSIST", "HANDBRAKE", "TURRET VIEW", "DRIVE ASSIST",
+            "AFMU REPAIR", "DOCK REQUEST",
         ):
             return COLOR_ACCENT
         if state_text in {
                 "MASS LOCK", "ASTEROID FIELD", "GLIDE",
                 "SURFACE APPROACH", "SURFACE DEPARTURE", "UNIDENTIFIED",
-                "SETTLEMENT"}:
+                "SETTLEMENT", "FLIGHT ASSIST OFF", "SILENT RUNNING",
+                "SYSTEM REBOOT", "DOCK CANCELLED", "DOCK TIMEOUT"}:
             return COLOR_YELLOW
         if state_text in (
             "HYPERSPACE", "SUPERCRUISE", "JUMPING", "COMBAT",
             "FSD CHARGE", "HYPER CHARGE", "SCO OVERCHARGE", "CARRIER TRANSIT",
             "INTERDICTION", "INTERDICTED", "SRV THREAT", "CAPITAL SHIP",
             "HEAVY COMBAT",
+            "HEAT CRITICAL", "SUIT OXYGEN LOW", "SUIT HEALTH LOW",
+            "EXTREME HEAT", "EXTREME COLD", "SUIT HEAT", "SUIT COLD",
+            "JET CONE DAMAGE", "DOCK DENIED",
         ):
             return COLOR_ORANGE
         if state_text == "INTERDICTION EVADED":
@@ -915,6 +973,34 @@ class TacticalHUD:
             return "arrival"
         if state.startswith("SIGNAL "):
             return "fsd_lock"
+        if state == "SC ASSIST":
+            return "supercruise_assist"
+        if state == "FLIGHT ASSIST OFF":
+            return "flight_assist_off"
+        if state == "SILENT RUNNING":
+            return "silent_running"
+        if state == "HEAT CRITICAL":
+            return "heat_critical"
+        if state in {
+                "SUIT OXYGEN LOW", "SUIT HEALTH LOW", "EXTREME HEAT",
+                "EXTREME COLD", "SUIT HEAT", "SUIT COLD"}:
+            return "suit_hazard"
+        if state == "HANDBRAKE":
+            return "srv_handbrake"
+        if state == "TURRET VIEW":
+            return "srv_turret"
+        if state == "DRIVE ASSIST":
+            return "srv_drive_assist"
+        if state.startswith("PAD ") or state in {"DOCK CLEARED", "DOCK REQUEST"}:
+            return "docking_clearance"
+        if state in {"DOCK DENIED", "DOCK CANCELLED", "DOCK TIMEOUT"}:
+            return "docking_denied"
+        if state == "AFMU REPAIR":
+            return "maintenance"
+        if state == "SYSTEM REBOOT":
+            return "system_reboot"
+        if state == "JET CONE DAMAGE":
+            return "jet_cone_damage"
         if state == "MASS LOCK":
             return "fsd_lock"
         if state == "ASTEROID FIELD":
@@ -2213,7 +2299,14 @@ class TacticalHUD:
                 "vertical_mps": finite_number(approach.get("descent_mps"), 0.0),
                 "scan_percent": finite_number(nav_context.get("scan_progress"), 0.0),
                 "landing_gear": bool(ship_config.get("landing_gear")),
+                "cargo_scoop": bool(ship_config.get("cargo_scoop")),
                 "analysis_mode": bool(ship_config.get("analysis_mode")),
+                "hardpoints_deployed": bool(ship_config.get("hardpoints_deployed")),
+                "shields_known": ship_config.get("shields_up") is not None,
+                "shields_up": bool(ship_config.get("shields_up")),
+                "night_vision": bool(ship_config.get("night_vision")),
+                "in_main_ship": bool(ship_config.get("in_main_ship")),
+                "low_fuel": bool(ship_config.get("low_fuel")),
                 "neutron_boost": bool((nav_context.get("neutron_boost") or {}).get("armed")),
                 "neutron_boost_value": finite_number(
                     (nav_context.get("neutron_boost") or {}).get("value"), 0.0,

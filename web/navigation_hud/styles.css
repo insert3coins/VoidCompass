@@ -148,6 +148,9 @@ body {
 .hud[data-motion="supercruise"] .state-vehicle img {
   animation: vehicle-cruise calc(1.55s * var(--motion-scale)) ease-in-out infinite;
 }
+.hud[data-motion="supercruise_assist"] .state-vehicle img {
+  animation: vehicle-cruise calc(1.9s * var(--motion-scale)) ease-in-out infinite;
+}
 .hud[data-motion="supercruise_overcharge"] .state-vehicle img,
 .hud[data-motion="fsd_charge"] .state-vehicle img {
   animation: vehicle-charge calc(.78s * var(--motion-scale)) ease-in-out infinite;
@@ -210,6 +213,28 @@ body {
 .hud[data-motion="surface_hold"] .state-vehicle img {
   animation: vehicle-hold calc(2.3s * var(--motion-scale)) ease-in-out infinite;
 }
+.hud[data-motion="flight_assist_off"] .state-vehicle img {
+  animation: vehicle-threat calc(1.35s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="silent_running"] .state-vehicle img {
+  animation: vehicle-hold calc(2.2s * var(--motion-scale)) ease-in-out infinite;
+  opacity: .68;
+}
+.hud[data-motion="docking_clearance"] .state-vehicle img {
+  animation: vehicle-approach calc(1.42s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="maintenance"] .state-vehicle img {
+  animation: vehicle-cooldown calc(1.7s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="system_reboot"] .state-vehicle img {
+  animation: vehicle-charge calc(.92s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="heat_critical"] .state-vehicle img,
+.hud[data-motion="suit_hazard"] .state-vehicle img,
+.hud[data-motion="jet_cone_damage"] .state-vehicle img,
+.hud[data-motion="docking_denied"] .state-vehicle img {
+  animation: vehicle-threat calc(.72s * var(--motion-scale)) ease-in-out infinite;
+}
 .hud[data-motion="scanner"] .vehicle-scan,
 .hud[data-motion="map"] .vehicle-scan {
   opacity: .7; animation: vehicle-scan calc(1.8s * var(--motion-scale)) ease-in-out infinite;
@@ -227,7 +252,10 @@ body {
   animation: vehicle-map-orbit calc(1.86s * var(--motion-scale)) ease-in-out infinite;
 }
 .hud[data-motion="surface_vehicle"] .state-vehicle img,
-.hud[data-motion="on_foot"] .state-vehicle img {
+.hud[data-motion="on_foot"] .state-vehicle img,
+.hud[data-motion="srv_handbrake"] .state-vehicle img,
+.hud[data-motion="srv_turret"] .state-vehicle img,
+.hud[data-motion="srv_drive_assist"] .state-vehicle img {
   animation: vehicle-surface calc(1.2s * var(--motion-scale)) ease-in-out infinite;
 }
 .hud[data-motion="surface_vehicle"] .state-vehicle[data-vehicle="scarab"] img,
@@ -374,6 +402,12 @@ body {
 .hud[data-motion="unknown_contact"] .state-core strong,
 .hud[data-motion="heavy_combat"] .state-core strong {
   animation: threat calc(1s * var(--motion-scale)) steps(2,end) infinite;
+}
+.hud[data-motion="heat_critical"] .state-core strong,
+.hud[data-motion="suit_hazard"] .state-core strong,
+.hud[data-motion="jet_cone_damage"] .state-core strong,
+.hud[data-motion="docking_denied"] .state-core strong {
+  animation: threat calc(.86s * var(--motion-scale)) steps(2,end) infinite;
 }
 .hud.state-changing .state-core strong { animation: state-label-resolve .58s cubic-bezier(.2,.75,.2,1) 1; }
 .hud[data-motion="arrival"] .core-pulse,

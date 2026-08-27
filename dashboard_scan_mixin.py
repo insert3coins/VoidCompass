@@ -9,25 +9,43 @@ from stellar_types import star_type_label
 
 
 class DashboardScanMixin:
+    _STATUS_SHIELDS_UP = 0x00000008
     _STATUS_SUPERCRUISE = 0x00000010
+    _STATUS_FLIGHT_ASSIST_OFF = 0x00000020
+    _STATUS_HARDPOINTS_DEPLOYED = 0x00000040
+    _STATUS_SILENT_RUNNING = 0x00000400
     _STATUS_IN_FIGHTER = 0x02000000
     _STATUS_IN_SRV = 0x04000000
     _STATUS_LANDING_GEAR_DOWN = 0x00000004
     _STATUS_CARGO_SCOOP_DEPLOYED = 0x00000200
     _STATUS_SCOOPING_FUEL = 0x00000800
+    _STATUS_SRV_HANDBRAKE = 0x00001000
+    _STATUS_SRV_TURRET = 0x00002000
+    _STATUS_SRV_DRIVE_ASSIST = 0x00008000
     _STATUS_ANALYSIS_MODE = 0x08000000
+    _STATUS_LOW_FUEL = 0x00080000
+    _STATUS_OVERHEATING = 0x00100000
     _STATUS_FSD_MASS_LOCKED = 0x00010000
     _STATUS_FSD_CHARGING = 0x00020000
     _STATUS_FSD_COOLDOWN = 0x00040000
     _STATUS_INTERDICTED = 0x00800000
+    _STATUS_IN_MAIN_SHIP = 0x01000000
+    _STATUS_NIGHT_VISION = 0x10000000
     _STATUS_FSD_JUMPING = 0x40000000
     _STATUS2_FSD_HYPERDRIVE_CHARGING = 0x00080000
     _STATUS2_SUPERCRUISE_OVERCHARGE = 0x00100000
+    _STATUS2_SUPERCRUISE_ASSIST = 0x00200000
     _STATUS2_GLIDE_MODE = 0x00001000
     _STATUS2_IN_TAXI = 0x00000002
     _STATUS2_IN_MULTICREW = 0x00000004
     _STATUS2_TELEPRESENCE_MULTICREW = 0x00020000
     _STATUS2_PHYSICAL_MULTICREW = 0x00040000
+    _STATUS2_LOW_OXYGEN = 0x00000040
+    _STATUS2_LOW_HEALTH = 0x00000080
+    _STATUS2_COLD = 0x00000100
+    _STATUS2_HOT = 0x00000200
+    _STATUS2_VERY_COLD = 0x00000400
+    _STATUS2_VERY_HOT = 0x00000800
     _SURFACE_GLIDE_DEPARTURE_GUARD_SECONDS = 8.0
     _SURFACE_DIRECTION_RATE_MPS = 1.0
     _SURFACE_DIRECTION_SAMPLES = 2
@@ -402,6 +420,24 @@ class DashboardScanMixin:
             bool(getattr(self, "current_interdicted", False)),
             bool(getattr(self, "_surface_departure_active", False)),
             bool(getattr(self, "_surface_hold_active", False)),
+            bool(getattr(self, "current_flight_assist_off", False)),
+            bool(getattr(self, "current_hardpoints_deployed", False)),
+            bool(getattr(self, "current_silent_running", False)),
+            getattr(self, "current_shields_up", None),
+            bool(getattr(self, "current_low_fuel", False)),
+            bool(getattr(self, "current_overheating", False)),
+            bool(getattr(self, "current_night_vision", False)),
+            bool(getattr(self, "current_in_main_ship", False)),
+            bool(getattr(self, "current_srv_handbrake", False)),
+            bool(getattr(self, "current_srv_turret", False)),
+            bool(getattr(self, "current_srv_drive_assist", False)),
+            bool(getattr(self, "current_supercruise_assist", False)),
+            bool(getattr(self, "current_suit_low_oxygen", False)),
+            bool(getattr(self, "current_suit_low_health", False)),
+            bool(getattr(self, "current_suit_cold", False)),
+            bool(getattr(self, "current_suit_hot", False)),
+            bool(getattr(self, "current_suit_very_cold", False)),
+            bool(getattr(self, "current_suit_very_hot", False)),
         )
         was_navigation_readiness = (
             bool(getattr(self, "current_fsd_mass_locked", False)),
@@ -503,6 +539,17 @@ class DashboardScanMixin:
             self.current_cargo_scoop_deployed = bool(flags & self._STATUS_CARGO_SCOOP_DEPLOYED)
             self.current_analysis_mode = bool(flags & self._STATUS_ANALYSIS_MODE)
             self.current_scooping_fuel = bool(flags & self._STATUS_SCOOPING_FUEL)
+            self.current_flight_assist_off = bool(flags & self._STATUS_FLIGHT_ASSIST_OFF)
+            self.current_hardpoints_deployed = bool(flags & self._STATUS_HARDPOINTS_DEPLOYED)
+            self.current_silent_running = bool(flags & self._STATUS_SILENT_RUNNING)
+            self.current_shields_up = bool(flags & self._STATUS_SHIELDS_UP)
+            self.current_low_fuel = bool(flags & self._STATUS_LOW_FUEL)
+            self.current_overheating = bool(flags & self._STATUS_OVERHEATING)
+            self.current_night_vision = bool(flags & self._STATUS_NIGHT_VISION)
+            self.current_in_main_ship = bool(flags & self._STATUS_IN_MAIN_SHIP)
+            self.current_srv_handbrake = bool(flags & self._STATUS_SRV_HANDBRAKE)
+            self.current_srv_turret = bool(flags & self._STATUS_SRV_TURRET)
+            self.current_srv_drive_assist = bool(flags & self._STATUS_SRV_DRIVE_ASSIST)
             if self.current_in_srv:
                 surface_vehicles = {"NOMAD", "SCARAB", "SCORPION", "RHINO", "SRV"}
                 remembered = str(getattr(self, "current_vehicle_name", "") or "").upper()
@@ -542,13 +589,29 @@ class DashboardScanMixin:
             self.current_supercruise_overcharge = bool(
                 flags2 & self._STATUS2_SUPERCRUISE_OVERCHARGE
             )
+            self.current_supercruise_assist = bool(
+                flags2 & self._STATUS2_SUPERCRUISE_ASSIST
+            )
             self.current_glide_mode = bool(flags2 & self._STATUS2_GLIDE_MODE)
+            self.current_suit_low_oxygen = bool(flags2 & self._STATUS2_LOW_OXYGEN)
+            self.current_suit_low_health = bool(flags2 & self._STATUS2_LOW_HEALTH)
+            self.current_suit_cold = bool(flags2 & self._STATUS2_COLD)
+            self.current_suit_hot = bool(flags2 & self._STATUS2_HOT)
+            self.current_suit_very_cold = bool(flags2 & self._STATUS2_VERY_COLD)
+            self.current_suit_very_hot = bool(flags2 & self._STATUS2_VERY_HOT)
         else:
             # Status.json normally supplies Flags2 on every snapshot. If a
             # partial or older snapshot omits it, never leave transient SCO
             # latched on after the game has stopped reporting the state.
             self.current_supercruise_overcharge = False
+            self.current_supercruise_assist = False
             self.current_glide_mode = False
+            self.current_suit_low_oxygen = False
+            self.current_suit_low_health = False
+            self.current_suit_cold = False
+            self.current_suit_hot = False
+            self.current_suit_very_cold = False
+            self.current_suit_very_hot = False
             if not getattr(self, "current_fsd_charging", False):
                 self.current_fsd_hyperdrive_charging = False
         # Embark and Status are separate file writes. Preserve the journal's
@@ -763,6 +826,24 @@ class DashboardScanMixin:
             bool(getattr(self, "current_interdicted", False)),
             bool(getattr(self, "_surface_departure_active", False)),
             bool(getattr(self, "_surface_hold_active", False)),
+            bool(getattr(self, "current_flight_assist_off", False)),
+            bool(getattr(self, "current_hardpoints_deployed", False)),
+            bool(getattr(self, "current_silent_running", False)),
+            getattr(self, "current_shields_up", None),
+            bool(getattr(self, "current_low_fuel", False)),
+            bool(getattr(self, "current_overheating", False)),
+            bool(getattr(self, "current_night_vision", False)),
+            bool(getattr(self, "current_in_main_ship", False)),
+            bool(getattr(self, "current_srv_handbrake", False)),
+            bool(getattr(self, "current_srv_turret", False)),
+            bool(getattr(self, "current_srv_drive_assist", False)),
+            bool(getattr(self, "current_supercruise_assist", False)),
+            bool(getattr(self, "current_suit_low_oxygen", False)),
+            bool(getattr(self, "current_suit_low_health", False)),
+            bool(getattr(self, "current_suit_cold", False)),
+            bool(getattr(self, "current_suit_hot", False)),
+            bool(getattr(self, "current_suit_very_cold", False)),
+            bool(getattr(self, "current_suit_very_hot", False)),
         )
         if fuel_percent_changed:
             self._invalidate_exploration_intelligence()
@@ -785,7 +866,7 @@ class DashboardScanMixin:
             return
         active = getattr(self, "_toast_status_alerts", set())
 
-        overheat = isinstance(flags, int) and bool(flags & 0x00100000)
+        overheat = isinstance(flags, int) and bool(flags & self._STATUS_OVERHEATING)
         interdicted = isinstance(flags, int) and bool(flags & self._STATUS_INTERDICTED)
         generic_danger = isinstance(flags, int) and bool(flags & 0x00400000)
         # InDanger is a broad, frequently flapping game flag.  It is useful as
