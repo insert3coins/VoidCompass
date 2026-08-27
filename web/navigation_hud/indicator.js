@@ -243,7 +243,7 @@
         fsd_charge: .86, hyper_charge: .64, hyperspace: .58, jumping: .72,
         arrival: 1.15, interdiction_evaded: 1.05, fsd_cooldown: 1.55,
         local_arrival: 1.42,
-        carrier_transit: 1.08, carrier_arrival: 1.34,
+        carrier_transit: 1.08, carrier_arrival: 1.34, carrier_deck: 2.4,
         fss: 1.52, dss: 1.82, map: 2.1, galaxy_map: 2.35,
         system_map: 1.86, power_map: 1.7, orrery: 2.5, codex: 1.9,
         phenomena: 2.6, docking_assist: 1.34, settlement_area: 1.95,
@@ -1969,6 +1969,50 @@
         alpha * Math.sin((activeFloat % 1) * Math.PI) * .36, 1);
     }
 
+    drawCarrierDeck(g, state, p, alpha) {
+      const c = state.color, y = g.y;
+      const cx = (g.left + g.right) / 2;
+      const span = Math.max(48, g.right - g.left);
+      const breathe = wave(p);
+      const shuttle = p < .5 ? smooth(p * 2) : 1 - smooth((p - .5) * 2);
+      const hullHalf = Math.min(21, span * .13);
+
+      // A settled carrier silhouette anchors the deck state.  Unlike carrier
+      // transit, all motion stays inside symmetrical command rails: this is a
+      // live bridge, not a ship travelling through space.
+      this.path([
+        [cx - hullHalf, y - 3], [cx - hullHalf * .62, y - 7],
+        [cx + hullHalf * .64, y - 5], [cx + hullHalf, y],
+        [cx + hullHalf * .64, y + 5], [cx - hullHalf * .62, y + 7],
+        [cx - hullHalf, y + 3], [cx - hullHalf * .76, y],
+      ], c, alpha * (.68 + breathe * .16), 1.35, true, .08);
+      this.line(cx - hullHalf * .68, y, cx + hullHalf * .66, y,
+        c, alpha * .62, 1.4);
+
+      const railGap = hullHalf + 7;
+      for (const side of [-1, 1]) {
+        const outer = side < 0 ? g.left + 3 : g.right - 3;
+        const inner = cx + side * railGap;
+        this.line(outer, y - 8, inner, y - 4, c, alpha * .25, 1);
+        this.line(outer, y + 8, inner, y + 4, c, alpha * .25, 1);
+        const x = side < 0
+          ? outer + (inner - outer) * shuttle
+          : outer - (outer - inner) * shuttle;
+        const envelope = Math.sin(shuttle * Math.PI);
+        this.glowDot(x, y + side * 5, .8 + breathe * .35,
+          c, alpha * (.28 + envelope * .46));
+      }
+
+      // Three restrained command lights imply an occupied, ready bridge.
+      for (let index = -1; index <= 1; index += 1) {
+        const active = ((Math.floor(p * 3) + 3) % 3) - 1 === index;
+        this.glowDot(cx + index * 7, y, active ? 1.25 : .65,
+          c, alpha * (active ? .82 : .28));
+      }
+      this.angularRing(cx, y, hullHalf + 4 + breathe * 1.5, 10 + breathe,
+        8, c, alpha * (.12 + breathe * .1), 1, Math.PI / 8);
+    }
+
     drawCarrier(g, state, p, alpha, arrival = false) {
       const c = state.color, y = g.y;
       if (arrival) {
@@ -2316,6 +2360,9 @@
       if (["mass_lock", "signal_lock", "signal_drop", "signal_threat", "combat",
         "interdiction", "interdicted", "asteroid_field"].includes(key)) {
         this.drawHazard(g, state, p, alpha, key); return;
+      }
+      if (key === "carrier_deck") {
+        this.drawCarrierDeck(g, state, p, alpha); return;
       }
       if (key === "carrier_transit" || key === "carrier_arrival") {
         this.drawCarrier(g, state, p, alpha, key === "carrier_arrival"); return;

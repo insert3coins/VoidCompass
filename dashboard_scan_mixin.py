@@ -38,6 +38,9 @@ class DashboardScanMixin:
     _STATUS2_GLIDE_MODE = 0x00001000
     _STATUS2_IN_TAXI = 0x00000002
     _STATUS2_IN_MULTICREW = 0x00000004
+    _STATUS2_ON_FOOT_IN_STATION = 0x00000008
+    _STATUS2_ON_FOOT_IN_HANGAR = 0x00002000
+    _STATUS2_ON_FOOT_SOCIAL_SPACE = 0x00004000
     _STATUS2_TELEPRESENCE_MULTICREW = 0x00020000
     _STATUS2_PHYSICAL_MULTICREW = 0x00040000
     _STATUS2_LOW_OXYGEN = 0x00000040
@@ -54,6 +57,23 @@ class DashboardScanMixin:
     _SURFACE_HOLD_INFER_SECONDS = 10.0
     _SURFACE_HOLD_POSITION_EPSILON_M = 1.25
     _VEHICLE_HANDOFF_LATCH_SECONDS = 4.0
+
+    def _navigation_on_carrier_deck(self):
+        """Return whether the commander is on foot inside a Fleet Carrier.
+
+        Elite does not expose a separate commander-chair flag.  Its status
+        remains OnFoot both standing and seated in the carrier social space.
+        The Navigation HUD therefore uses the retained Fleet Carrier identity
+        as its deck presentation without changing the underlying on-foot
+        gameplay state. Carrier transit and arrival retain higher priority.
+        """
+        if not getattr(self, "current_on_foot", False):
+            return False
+        station_type = (
+            str(getattr(self, "current_station_type", "") or "")
+            .replace(" ", "").replace("_", "").casefold()
+        )
+        return station_type == "fleetcarrier"
 
     def _arm_navigation_vehicle_handoff(self, destination, vehicle_name=""):
         """Hold an authoritative journal hand-off across one stale Status frame.
@@ -403,6 +423,7 @@ class DashboardScanMixin:
         was_on_foot = bool(getattr(self, "current_on_foot", False))
         was_in_taxi = bool(getattr(self, "current_in_taxi", False))
         was_in_multicrew = bool(getattr(self, "current_in_multicrew", False))
+        was_on_carrier_deck = self._navigation_on_carrier_deck()
         was_glide_mode = bool(getattr(self, "current_glide_mode", False))
         was_hud_flight_state = str(
             getattr(self, "hud_flight_state", "") or ""
@@ -662,7 +683,10 @@ class DashboardScanMixin:
             # The ship remains docked while its commander is walking inside a
             # station, although Status.json clears the ship's Docked flag.
             if self.current_on_foot and isinstance(flags2, int):
-                if flags2 & (0x0008 | 0x2000 | 0x4000):
+                if flags2 & (
+                        self._STATUS2_ON_FOOT_IN_STATION
+                        | self._STATUS2_ON_FOOT_IN_HANGAR
+                        | self._STATUS2_ON_FOOT_SOCIAL_SPACE):
                     self.current_docked = True
                 elif flags2 & (0x0010 | 0x8000):
                     self.current_docked = False
@@ -804,6 +828,7 @@ class DashboardScanMixin:
             or was_on_foot != bool(getattr(self, "current_on_foot", False))
             or was_in_taxi != bool(getattr(self, "current_in_taxi", False))
             or was_in_multicrew != bool(getattr(self, "current_in_multicrew", False))
+            or was_on_carrier_deck != self._navigation_on_carrier_deck()
         )
         fuel_percent_changed = self._current_fuel_percent() != was_fuel_percent
         navigation_readiness_changed = was_navigation_readiness != (

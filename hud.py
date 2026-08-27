@@ -882,6 +882,8 @@ class TacticalHUD:
         if flight_state == "TAXI" or nav_context.get("in_taxi"):
             return "TAXI"
         if on_foot:
+            if nav_context.get("on_carrier_deck"):
+                return "CARRIER DECK"
             return "ONFOOT"
         if nav_context.get("docked"):
             return "DOCKED"
@@ -922,7 +924,7 @@ class TacticalHUD:
             return COLOR_GREEN
         if state_text in (
             "DOCKED", "LANDED", "FSS", "DSS", "FIGHTER", "SRV", "SCARAB", "SCORPION", "NOMAD",
-            "TAXI", "MULTICREW",
+            "TAXI", "MULTICREW", "CARRIER DECK",
             "ONFOOT", "MAP", "GALAXY MAP", "SYSTEM MAP", "POWER MAP", "ORRERY",
             "CODEX", "EXPLORATION", "STATION", "FSD COOLDOWN", "ORBITAL APPROACH",
             "ORBITAL DEPARTURE", "SURFACE HOLD", "DOCK ASSIST", "RIGHT PANEL",
@@ -1013,6 +1015,8 @@ class TacticalHUD:
             return "carrier_transit"
         if state == "CARRIER ARRIVAL":
             return "carrier_arrival"
+        if state == "CARRIER DECK":
+            return "carrier_deck"
         if state == "ORBITAL APPROACH":
             return "orbital_approach"
         if state == "GLIDE":

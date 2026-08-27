@@ -63,6 +63,7 @@ STATE_SCENES = {
     "supercruise_overcharge": StateScene("dedicated", 7.0, packets=0, intensity=0.92),
     "carrier_transit": StateScene("dedicated", 16.0, packets=0, intensity=0.9),
     "carrier_arrival": StateScene("dedicated", 34.0, packets=0),
+    "carrier_deck": StateScene("dedicated", 52.0, packets=0, intensity=0.66),
     "orbital_approach": StateScene("dedicated", 24.0, packets=0),
     "glide": StateScene("dedicated", 9.0, packets=0, intensity=0.88),
     "surface_approach": StateScene("dedicated", 24.0, packets=0),

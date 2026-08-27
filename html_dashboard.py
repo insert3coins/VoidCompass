@@ -718,6 +718,32 @@ class HtmlDashboardMixin:
             if isinstance(row, dict)
         ]
         body_target = self._html_local_body_target()
+        local_ids = {
+            str(row.get("body_id")) for row in scan_items
+            if row.get("body_id") is not None
+        }
+        cached_edsm = (
+            getattr(self, "_edsm_orrery_bodies", {})
+            .get(current.casefold(), [])
+        )
+        external_items = [
+            row for row in cached_edsm
+            if isinstance(row, dict)
+            and row.get("body_id") is not None
+            and str(row.get("body_id")) not in local_ids
+        ]
+        orrery_items = [*scan_items, *external_items]
+        orrery = build_orrery(orrery_items, body_target)
+        orrery["loading"] = bool(
+            not orrery_items
+            and current.casefold() in getattr(self, "_edsm_orrery_pending", set())
+        )
+        if external_items:
+            orrery["mode"] = (
+                "EDSM KNOWN-SYSTEM ARCHITECTURE"
+                if not scan_items else "JOURNAL + EDSM ARCHITECTURE"
+            )
+            orrery["external_bodies"] = len(external_items)
         return {
             "current": current,
             "destination": _text(getattr(self, "dest_name", None), 140),
@@ -730,7 +756,7 @@ class HtmlDashboardMixin:
             "cartography": {
                 "system": current,
                 "target": body_target,
-                "orrery": build_orrery(scan_items, body_target),
+                "orrery": orrery,
                 "queue": build_survey_queue(scan_items, survey_state, body_target),
             },
             "plotter": {
