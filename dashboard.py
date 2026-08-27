@@ -284,12 +284,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         "SellOrganicData": ("data_sale", "right", "green", 1.8, 80),
         "ProspectedAsteroid": ("prospector_scan", "right", "yellow", 1.7, 62),
         "MiningRefined": ("mining_refined", "right", "green", 1.4, 60),
+        "AfmuRepairs": ("maintenance", "all", "accent", 2.0, 76),
+        "RebootRepair": ("system_reboot", "all", "yellow", 2.6, 97),
         "HeatWarning": ("warning", "all", "orange", 1.6, 100),
         "HeatDamage": ("warning", "all", "orange", 1.8, 100),
         "HullDamage": ("warning", "all", "orange", 1.6, 100),
         "CockpitBreached": ("warning", "all", "orange", 2.0, 100),
         "UnderAttack": ("warning", "all", "orange", 1.6, 100),
-        "JetConeDamage": ("warning", "all", "orange", 1.6, 100),
+        "JetConeDamage": ("jet_cone_damage", "all", "orange", 2.2, 100),
         "SystemsShutdown": ("warning", "all", "orange", 2.0, 100),
         "SelfDestruct": ("warning", "all", "orange", 2.0, 100),
         "Died": ("warning", "all", "orange", 1.9, 100),
@@ -1065,9 +1067,27 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.current_landing_gear_down = False
         self.current_cargo_scoop_deployed = False
         self.current_analysis_mode = False
+        self.current_flight_assist_off = False
+        self.current_hardpoints_deployed = False
+        self.current_silent_running = False
+        self.current_shields_up = None
+        self.current_low_fuel = False
+        self.current_overheating = False
+        self.current_night_vision = False
+        self.current_in_main_ship = False
+        self.current_srv_handbrake = False
+        self.current_srv_turret = False
+        self.current_srv_drive_assist = False
         self.current_scooping_fuel = False
         self.current_supercruise_overcharge = False
+        self.current_supercruise_assist = False
         self.current_glide_mode = False
+        self.current_suit_low_oxygen = False
+        self.current_suit_low_health = False
+        self.current_suit_cold = False
+        self.current_suit_hot = False
+        self.current_suit_very_cold = False
+        self.current_suit_very_hot = False
         self.current_interdicted = False
         self._surface_departure_active = False
         self._surface_glide_guard_until = 0.0
@@ -1090,6 +1110,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._navigation_charge_resolution_pending = False
         self._navigation_jump_phase_started = 0.0
         self._navigation_selected_star = None
+        self._navigation_docking_state = None
         self.neutron_boost_armed = False
         self.neutron_boost_value = None
 
@@ -1856,9 +1877,27 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.current_landing_gear_down = False
         self.current_cargo_scoop_deployed = False
         self.current_analysis_mode = False
+        self.current_flight_assist_off = False
+        self.current_hardpoints_deployed = False
+        self.current_silent_running = False
+        self.current_shields_up = None
+        self.current_low_fuel = False
+        self.current_overheating = False
+        self.current_night_vision = False
+        self.current_in_main_ship = False
+        self.current_srv_handbrake = False
+        self.current_srv_turret = False
+        self.current_srv_drive_assist = False
         self.current_scooping_fuel = False
         self.current_supercruise_overcharge = False
+        self.current_supercruise_assist = False
         self.current_glide_mode = False
+        self.current_suit_low_oxygen = False
+        self.current_suit_low_health = False
+        self.current_suit_cold = False
+        self.current_suit_hot = False
+        self.current_suit_very_cold = False
+        self.current_suit_very_hot = False
         self.current_interdicted = False
         self._surface_departure_active = False
         self._surface_glide_guard_until = 0.0
@@ -1881,6 +1920,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._navigation_charge_resolution_pending = False
         self._navigation_jump_phase_started = 0.0
         self._navigation_selected_star = None
+        self._navigation_docking_state = None
         self._navigation_transition_job = None
         self.neutron_boost_armed = False
         self.neutron_boost_value = None
@@ -4646,6 +4686,26 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "landing_gear": bool(getattr(self, "current_landing_gear_down", False)),
             "cargo_scoop": bool(getattr(self, "current_cargo_scoop_deployed", False)),
             "analysis_mode": bool(getattr(self, "current_analysis_mode", False)),
+            "flight_assist_off": bool(getattr(self, "current_flight_assist_off", False)),
+            "hardpoints_deployed": bool(getattr(self, "current_hardpoints_deployed", False)),
+            "silent_running": bool(getattr(self, "current_silent_running", False)),
+            "shields_up": getattr(self, "current_shields_up", None),
+            "low_fuel": bool(getattr(self, "current_low_fuel", False)),
+            "overheating": bool(getattr(self, "current_overheating", False)),
+            "night_vision": bool(getattr(self, "current_night_vision", False)),
+            "in_main_ship": bool(getattr(self, "current_in_main_ship", False)),
+            "srv_handbrake": bool(getattr(self, "current_srv_handbrake", False)),
+            "srv_turret": bool(getattr(self, "current_srv_turret", False)),
+            "srv_drive_assist": bool(getattr(self, "current_srv_drive_assist", False)),
+            "supercruise_assist": bool(getattr(self, "current_supercruise_assist", False)),
+        }
+        suit_status = {
+            "low_oxygen": bool(getattr(self, "current_suit_low_oxygen", False)),
+            "low_health": bool(getattr(self, "current_suit_low_health", False)),
+            "cold": bool(getattr(self, "current_suit_cold", False)),
+            "hot": bool(getattr(self, "current_suit_hot", False)),
+            "very_cold": bool(getattr(self, "current_suit_very_cold", False)),
+            "very_hot": bool(getattr(self, "current_suit_very_hot", False)),
         }
 
         sampling = self._sampling_snapshot() if getattr(self, "bio_sampling", None) else None
@@ -4721,6 +4781,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "next_star": next_star,
             "surface_approach": surface_approach,
             "ship_config": ship_config,
+            "suit_status": suit_status,
+            "docking_state": dict(getattr(self, "_navigation_docking_state", None) or {}),
             "fsd_readiness": fsd_readiness,
             "local_target": local_target,
             "galactic_vector": galactic_vector,
@@ -4884,11 +4946,49 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             return f"{vehicle} DEPART"
         return f"{vehicle} CONTROL"
 
+    def _observe_navigation_docking_state(self, event, raw, data):
+        """Latch docking clearance until the game resolves the request."""
+        event = str(event or "")
+        raw = raw if isinstance(raw, dict) else {}
+        data = data if isinstance(data, dict) else {}
+        station = str(
+            raw.get("StationName") or data.get("station_name")
+            or data.get("StationName") or ""
+        ).strip()
+        if event == "DockingRequested":
+            self._navigation_docking_state = {
+                "phase": "requested",
+                "label": "DOCK REQUEST",
+                "station": station,
+                "pad": None,
+            }
+        elif event == "DockingGranted":
+            pad = raw.get("LandingPad", data.get("landing_pad"))
+            try:
+                pad = int(pad)
+            except (TypeError, ValueError):
+                pad = None
+            self._navigation_docking_state = {
+                "phase": "granted",
+                "label": f"PAD {pad:02d} CLEARED" if pad is not None else "DOCK CLEARED",
+                "station": station,
+                "pad": pad,
+            }
+        elif event in {
+                "DockingCancelled", "DockingDenied", "DockingTimeout",
+                "Docked", "Undocked", "SupercruiseEntry", "StartJump",
+                "FSDJump", "CarrierJump", "Location", "LoadGame",
+                "Shutdown", "Died", "Resurrect"}:
+            self._navigation_docking_state = None
+
     def _observe_navigation_hud_event(self, event, raw, data, startup_replay=False):
         """Publish one compact, live-only event pulse to the Navigation HUD."""
         if (startup_replay or getattr(self, "_startup_restore_active", False)
                 or not event):
             return False
+        payload = raw if isinstance(raw, dict) else {}
+        normalised = data if isinstance(data, dict) else {}
+        self._observe_navigation_docking_state(event, payload, normalised)
         if event in {"FSSAllBodiesFound", "SAAScanComplete", "ScanOrganic"}:
             # Completion/sample state already has authoritative, persistent
             # presentation below the top instrument and in Survey Operations.
@@ -4920,8 +5020,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             return False
 
         kind, lane, tone, duration_s, priority = spec
-        payload = raw if isinstance(raw, dict) else {}
-        normalised = data if isinstance(data, dict) else {}
         if event == "CarrierJump" and not self._carrier_jump_presence(
             event, payload, normalised,
         )[0]:
@@ -5081,6 +5179,23 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 payload.get("Type_Localised") or payload.get("Type")
                 or normalised.get("type") or ""
             ).strip()
+        elif event == "AfmuRepairs":
+            detail["state_label"] = "AFMU REPAIR"
+        elif event == "RebootRepair":
+            detail["state_label"] = "SYSTEM REBOOT"
+        elif event == "JetConeDamage":
+            detail["state_label"] = "JET CONE DAMAGE"
+        elif event == "DockingRequested":
+            detail["state_label"] = "DOCK REQUEST"
+        elif event == "DockingGranted":
+            docking = getattr(self, "_navigation_docking_state", None) or {}
+            detail["state_label"] = str(docking.get("label") or "DOCK CLEARED")
+        elif event == "DockingCancelled":
+            detail["state_label"] = "DOCK CANCELLED"
+        elif event == "DockingDenied":
+            detail["state_label"] = "DOCK DENIED"
+        elif event == "DockingTimeout":
+            detail["state_label"] = "DOCK TIMEOUT"
         elif event == "Interdicted":
             detail["state_label"] = "INTERDICTED"
         elif event == "EscapeInterdiction":

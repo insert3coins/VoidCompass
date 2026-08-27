@@ -1,16 +1,16 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.1.5 // Survey Discovery Rail
+## v5.4.1.6 // Navigation State Expansion
 **Release Date:** 2026-Aug-27
 
-*   Rebuilt the Navigation HUD's System Survey readout as a theme-aware angular discovery rail, with exact body counts as the primary readout and completion percentage retained as secondary telemetry.
-*   Added distinct unknown, live FSS, recorded-survey and complete presentations, with readable split status and remaining-body fields; completed surveys now settle into a clean accent-coloured `SYSTEM SURVEY COMPLETE` state.
-*   Replaced continuous idle scanning with discovery-driven motion: the rail advances smoothly, newly found segments lock in, the progress boundary moves and the body count responds once per acquisition. Compact biological, geological and high-value discovery notches now give their own colour-coded lock-on response without duplicating Survey Operations.
-*   Rebuilt the HTML bootloader as an Elite-inspired staged pre-flight deck, with an angular sensor display, top-down exploration vessel and live scanner effects, plus an angular progress vector, active/queued/ready subsystem telemetry and a restrained non-skippable journal handoff.
-*   Rebuilt the expanded Galnet reader as a theme-aware intelligence terminal, with a navigable transmission archive, live relay telemetry, stronger dispatch typography and a focused full-article viewport that preserves reading position during dashboard updates.
+*   Expanded the Navigation HUD's authoritative live states with Supercruise Assist, Flight Assist Off, Silent Running, SRV/Nomad handbrake, turret view and drive-assist presentations, each with its own HTML motion language.
+*   Added high-priority heat and suit hazard states for overheating, low oxygen, low health and extreme surface temperatures, while low fuel, shields, hardpoints, cargo scoop, night vision and analysis mode remain restrained instrument modifiers instead of displacing navigation.
+*   Added persistent docking guidance: docking requests and granted landing pads remain visible until docking, cancellation, timeout or departure resolves them, with distinct clearance and rejection animations.
+*   Added dedicated AFMU repair, system reboot and jet-cone damage responses from their journal events, replacing generic pulses with recognisable maintenance and emergency sequences.
 
 ## Earlier releases
 
+*   **v5.4.1.5** — Rebuilt the Navigation System Survey as a discovery-driven angular rail, rebuilt the HTML bootloader and Galnet intelligence reader, and hardened dashboard/overlay update recovery.
 *   **v5.4.1.4** — Added the persistent Galnet Relay and in-app archive, official RSS caching and profile-aware controls; repaired complex panel arranging and clarified Navigation waypoint destination, progress and distance.
 *   **v5.4.1.3** — Unified theme-aware Dashboard controls and profile panel arranging, rebuilt the System Workboard and waypoint rail, completed semantic Station, Cargo, Carrier, Prospector and Heartbeat overlays, refined vehicle handoffs and added neutron-tier flight animation.
 *   **v5.4.1.2** — Added the Explorer Decision Deck, six exploration doctrines, five-jump Route Horizon, Session Pulse, Regional Codex Hunt, profile-aware briefing-card layouts and optional automatic profile safety snapshots.
