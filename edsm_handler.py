@@ -747,6 +747,22 @@ class EDSMHandler:
             callback(result)
         threading.Thread(target=_fetch, daemon=True).start()
 
+    def fetch_system_bodies(self, system_name, callback):
+        """Fetch public body architecture for a known system."""
+        def _fetch():
+            result = None
+            try:
+                params = {"systemName": system_name}
+                url = "https://www.edsm.net/api-system-v1/bodies"
+                response = self._limited_get(url, params=params, timeout=12, retries=1)
+                data = response.json()
+                if isinstance(data, dict) and isinstance(data.get("bodies"), list):
+                    result = data
+            except Exception as exc:
+                logging.warning("EDSM body architecture fetch failed for %s: %s", system_name, exc)
+            callback(result)
+        threading.Thread(target=_fetch, daemon=True).start()
+
     def fetch_system_coords(self, system_name, callback):
         def _fetch():
             try:

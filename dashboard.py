@@ -79,6 +79,7 @@ from explorer_fieldcraft import (
     HIGH_VALUE_WORLDS, WHITE_DWARF_CLASSES, revisit_candidate,
     route_safety_forecast, surface_trail_snapshot,
 )
+from stellar_cartography import edsm_bodies_to_orrery_items
 from expedition_manager import ExpeditionManager
 from diagnostic_logs import application_base_dir, resolve_log_path
 from adaptive_command import (
@@ -978,6 +979,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.scanned_bodies = set()
         self.scan_items = []
         self.scan_items_by_id = {}
+        self._edsm_orrery_bodies = {}
+        self._edsm_orrery_pending = set()
         self.belt_clusters = []
         self.in_fss = False
         self.fss_summary_active = False
@@ -1360,7 +1363,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             getattr(self, "_survey_status_refresh_generation", 0) + 1
         )
 
-    def _apply_location_navigation_state(self, raw, data):
+    def _apply_location_navigation_state(
+            self, raw, data, *, preserve_incomplete_station=False):
         """Seed navigation/station state from a Location login event."""
         location = raw if isinstance(raw, dict) else {}
         data = data if isinstance(data, dict) else {}
@@ -1436,6 +1440,20 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.current_station_dist_ls = location.get("DistFromStarLS")
             self.current_station_landing_pads = location.get("LandingPads")
         else:
+            retained_type = (
+                str(getattr(self, "current_station_type", "") or "")
+                .replace(" ", "").replace("_", "").casefold()
+            )
+            retain_carrier_interior = bool(
+                preserve_incomplete_station
+                and retained_type == "fleetcarrier"
+                and self.current_station_name
+                and self.current_docked
+                and self.current_on_foot
+            )
+            if retain_carrier_interior:
+                self._sync_navigation_hud_flight_state(supercruise=False)
+                return
             self.current_station_name = None
             self.current_station_type = None
             self.current_station_market_id = None
@@ -4209,6 +4227,55 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._ui_post(_apply, key="edsm-traffic")
         self.edsm.fetch_traffic(system_name, callback)
 
+    def _ensure_known_system_orrery(self, system_name=None):
+        """Hydrate missing architecture for an already-complete known system.
+
+        Journal scan rows remain authoritative. Public EDSM bodies only fill
+        gaps in the visual orrery and never enter scan progress or the survey
+        queue.
+        """
+        system_name = str(system_name or self.current_sys or "").strip()
+        if not system_name or system_name in {"---", "Unknown"}:
+            return False
+        try:
+            total = max(0, int(self.total or 0))
+            scanned = max(0, int(self.scanned or 0))
+        except (TypeError, ValueError):
+            return False
+        if not (self.scan_total_confirmed and total > 0 and scanned >= total):
+            return False
+        local_ids = {
+            str(row.get("body_id")) for row in (self.scan_items or [])
+            if isinstance(row, dict) and row.get("body_id") is not None
+        }
+        if len(local_ids) >= total:
+            return False
+
+        key = system_name.casefold()
+        cache = getattr(self, "_edsm_orrery_bodies", None)
+        if not isinstance(cache, dict):
+            cache = self._edsm_orrery_bodies = {}
+        pending = getattr(self, "_edsm_orrery_pending", None)
+        if not isinstance(pending, set):
+            pending = self._edsm_orrery_pending = set()
+        if key in cache or key in pending:
+            return False
+        pending.add(key)
+
+        def callback(payload):
+            rows = edsm_bodies_to_orrery_items(payload, system_name)
+
+            def _apply():
+                self._edsm_orrery_pending.discard(key)
+                self._edsm_orrery_bodies[key] = rows
+                if str(self.current_sys or "").casefold() == key:
+                    self._refresh_html_workspace()
+
+            self._ui_post(_apply, key=f"edsm-orrery:{key}")
+
+        self.edsm.fetch_system_bodies(system_name, callback)
+        return True
+
     @staticmethod
     def _traffic_has_visits(traffic):
         if not isinstance(traffic, dict):
@@ -4740,6 +4807,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "in_fighter": bool(getattr(self, "current_in_fighter", False)),
             "in_srv": bool(getattr(self, "current_in_srv", False)),
             "on_foot": bool(getattr(self, "current_on_foot", False)),
+            "on_carrier_deck": bool(self._navigation_on_carrier_deck()),
             "in_taxi": bool(getattr(self, "current_in_taxi", False)),
             "in_multicrew": bool(getattr(self, "current_in_multicrew", False)),
             "vehicle_name": getattr(self, "current_vehicle_name", ""),
@@ -7192,7 +7260,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             # Docked event. Apply its state immediately so a profile switch
             # cannot retain the outgoing commander's HUD label or station.
             if ev == "Location":
-                self._apply_location_navigation_state(raw, d)
+                self._apply_location_navigation_state(
+                    raw, d,
+                    preserve_incomplete_station=bool(
+                        data.get("startup_location_seed")
+                    ),
+                )
                 self._capture_navigation_local_space(raw, d)
                 if self.station_info_hud and not self.batch_mode and not startup_replay:
                     self.station_info_hud.reconcile(self, present=True)
@@ -7337,6 +7410,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._rebuild_scan_index()
             self._rebuild_system_state_from_scan_items()
             self._seed_navigation_scan_progress()
+            if not startup_replay:
+                self._ensure_known_system_orrery(self.current_sys)
             self._promote_navigation_arrival_emphasis(
                 ev, startup_replay=startup_replay,
             )
@@ -7721,6 +7796,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 # individual Scan event on a return visit.
                 self.fss_all_bodies = True
                 self._mark_system_scan_complete(self.total)
+                if not startup_replay:
+                    self._ensure_known_system_orrery(self.current_sys)
             else:
                 self.db_update_system(self.current_sys, self.total, self.scanned)
                 if not self.batch_mode:
@@ -8957,6 +9034,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                         sys_snap,
                         preserve_total_confirmation=preserve_unconfirmed,
                     )
+                    self._ensure_known_system_orrery(sys_snap)
                 self.update_dashboard_ui()
                 self.update_hud()
                 if self.current_sys and self.current_sys != "---":

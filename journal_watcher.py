@@ -47,6 +47,7 @@ class JournalWatcher:
         self._startup_location_seeded = False
         self._startup_location_event = None
         self._startup_surface_vehicle_identity = {}
+        self._startup_station_context = {}
         
         self.event_callback = None
         self.batch_event_callback = None
@@ -614,6 +615,10 @@ class JournalWatcher:
         """Return the active journal's cached startup vehicle evidence."""
         return dict(self._startup_surface_vehicle_identity or {})
 
+    def get_startup_station_context(self):
+        """Return the station that still owns the commander's startup state."""
+        return dict(self._startup_station_context or {})
+
     def _seed_startup_location(self, tail_bytes=2 * 1024 * 1024):
         """Retain newest location and surface-vehicle identity for startup."""
         if self._startup_location_seeded:
@@ -633,6 +638,8 @@ class JournalWatcher:
             latest_location = None
             latest_identity = None
             identities_by_id = {}
+            active_station = None
+            station_on_foot = None
             for line in lines:
                 try:
                     raw = json.loads(line)
@@ -655,7 +662,53 @@ class JournalWatcher:
                 # on the carrier concourse.
                 elif carrier_jump_moves_player(raw):
                     latest_location = raw
+                if ev == "Docked":
+                    active_station = {
+                        key: raw.get(key) for key in (
+                            "StationName", "StationType", "MarketID",
+                            "StationState", "StationEconomy",
+                            "StationEconomy_Localised", "StationEconomies",
+                            "StationFaction", "StationGovernment",
+                            "StationGovernment_Localised",
+                            "StationAllegiance", "StationServices",
+                            "DistFromStarLS", "LandingPads", "StarSystem",
+                            "SystemAddress",
+                        ) if raw.get(key) is not None
+                    }
+                    station_on_foot = False
+                elif ev == "Location":
+                    if raw.get("StationName"):
+                        active_station = {
+                            key: raw.get(key) for key in (
+                                "StationName", "StationType", "MarketID",
+                                "StationState", "StationEconomy",
+                                "StationEconomy_Localised", "StationEconomies",
+                                "StationFaction", "StationGovernment",
+                                "StationGovernment_Localised",
+                                "StationAllegiance", "StationServices",
+                                "DistFromStarLS", "LandingPads", "StarSystem",
+                                "SystemAddress",
+                            ) if raw.get(key) is not None
+                        }
+                        station_on_foot = raw.get("OnFoot")
+                    elif raw.get("Docked") is False:
+                        active_station = None
+                        station_on_foot = None
+                elif ev in ("Undocked", "FSDJump", "SupercruiseEntry"):
+                    active_station = None
+                    station_on_foot = None
+                elif ev == "CarrierJump" and carrier_jump_moves_player(raw):
+                    if active_station:
+                        if raw.get("StarSystem"):
+                            active_station["StarSystem"] = raw.get("StarSystem")
+                        if raw.get("SystemAddress") is not None:
+                            active_station["SystemAddress"] = raw.get("SystemAddress")
+                elif ev == "Disembark" and active_station:
+                    station_on_foot = True
+                elif ev == "Embark" and active_station:
+                    station_on_foot = False
             self._startup_surface_vehicle_identity = dict(latest_identity or {})
+            self._startup_station_context = dict(active_station or {})
             if latest_location:
                 seeded = self._normalize_event(latest_location)
                 seeded["type"] = "Location"
@@ -664,6 +717,21 @@ class JournalWatcher:
                 if latest_identity:
                     seeded.setdefault("data", {})["surface_vehicle_name"] = latest_identity["name"]
                     seeded["data"]["surface_vehicle_id"] = latest_identity.get("id")
+                if active_station:
+                    # The final seed can be an older FSD/Carrier arrival.  A
+                    # later Docked event still owns the current location, so
+                    # carry that station identity into the seed instead of
+                    # letting its absent StationName erase the recovered dock.
+                    seed_raw = seeded.setdefault("raw", {})
+                    for key, value in active_station.items():
+                        seed_raw.setdefault(key, value)
+                    seed_data = seeded.setdefault("data", {})
+                    seed_data["station_name"] = active_station.get("StationName")
+                    seed_data["station_type"] = active_station.get("StationType")
+                    seed_data["market_id"] = active_station.get("MarketID")
+                    seed_data["docked"] = True
+                    if station_on_foot is not None:
+                        seed_data["on_foot"] = bool(station_on_foot)
                 self._startup_location_event = seeded
         except Exception:
             return

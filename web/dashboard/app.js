@@ -1475,7 +1475,10 @@ function orreryLayout(bodies = []) {
 
 function orrerySvg(orrery = {}) {
   const bodies = orrery.bodies || [];
-  if (!bodies.length) return `<div class="orrery-empty"><i></i><b>AWAITING SYSTEM SCANS</b><span>Honk or begin FSS to assemble the live architecture.</span></div>`;
+  if (!bodies.length) {
+    const loading = Boolean(orrery.loading);
+    return `<div class="orrery-empty${loading ? " loading" : ""}"><i></i><b>${loading ? "RECOVERING KNOWN SYSTEM" : "AWAITING SYSTEM SCANS"}</b><span>${loading ? "Requesting public body architecture while retained journal evidence remains authoritative." : "Honk or begin FSS to assemble the live architecture."}</span></div>`;
+  }
   const layout = orreryLayout(bodies);
   const orbits = layout.orbits.map((row) => `<ellipse cx="${row.cx}" cy="${row.cy}" rx="${row.rx}" ry="${row.ry}" class="${row.moon ? "moon-orbit" : "planet-orbit"}"/>`).join("");
   const nodes = layout.nodes.map((row) => {

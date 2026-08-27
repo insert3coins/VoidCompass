@@ -45,6 +45,7 @@ DESIGNS = {
     "supercruise_overcharge": IndicatorDesign("fsd", "overcharge"),
     "carrier_transit": IndicatorDesign("carrier", "transit"),
     "carrier_arrival": IndicatorDesign("carrier", "arrival"),
+    "carrier_deck": IndicatorDesign("carrier", "deck"),
     "orbital_approach": IndicatorDesign("planetary", "orbital_approach"),
     "glide": IndicatorDesign("planetary", "glide"),
     "surface_approach": IndicatorDesign("planetary", "surface_approach"),
@@ -1422,6 +1423,29 @@ class NavigationStateIndicator:
 
         x1, x2 = g["right_start"] + 4, g["right"] - 4
         span = x2 - x1
+        if variant == "deck":
+            # The command deck remains centred and ready.  Paired console
+            # pulses breathe toward the carrier instead of implying travel.
+            console_wave = self._wave(progress)
+            center = (x1 + x2) / 2
+            self._line(x1, y - 7, center - 9, y - 3,
+                       colour=dim, tags=tags)
+            self._line(x1, y + 7, center - 9, y + 3,
+                       colour=dim, tags=tags)
+            self._line(center + 9, y - 3, x2, y - 7,
+                       colour=dim, tags=tags)
+            self._line(center + 9, y + 3, x2, y + 7,
+                       colour=dim, tags=tags)
+            travel = console_wave * max(1, ((span / 2) - 10))
+            self._dot(x1 + travel, y - 5, colour,
+                      radius=1.2, tags=tags)
+            self._dot(x2 - travel, y + 5, colour,
+                      radius=1.2, tags=tags)
+            for index, offset in enumerate((-7, 0, 7)):
+                tone = colour if index == int(progress * 3) % 3 else glow
+                self._dot(center + offset, y, tone,
+                          radius=1.25 if tone == colour else 0.8, tags=tags)
+            return
         for lane in (-7, 0, 7):
             self._line(x1, y + lane, x2, y + lane,
                        colour=dim, tags=tags)

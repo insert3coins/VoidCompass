@@ -88,6 +88,81 @@ def _body_matches_target(item, target):
     return name_matches and body_matches is not False
 
 
+def edsm_bodies_to_orrery_items(payload, system_name=None):
+    """Translate public EDSM body architecture into display-only scan rows.
+
+    These rows are deliberately suitable for the schematic orrery only. They
+    never claim commander discovery, mapping, biology or geology progress and
+    are not written to the profile's journal-backed scan cache.
+    """
+    payload = payload if isinstance(payload, dict) else {}
+    system_name = _text(system_name or payload.get("name"), 180)
+    system_address = payload.get("id64")
+    rows = []
+    for body in payload.get("bodies") or ():
+        if not isinstance(body, dict) or body.get("bodyId") is None:
+            continue
+        full_name = _text(body.get("name"), 180)
+        short_name = full_name
+        if system_name and full_name.casefold().startswith(system_name.casefold()):
+            short_name = full_name[len(system_name):].strip() or system_name
+        body_type = _text(body.get("type"), 30).casefold()
+        is_star = body_type == "star"
+        body_class = _text(body.get("subType") or body.get("type") or "Unknown", 120)
+        terraforming = _text(body.get("terraformingState"), 80).casefold()
+        terraformable = bool(
+            terraforming
+            and "terraform" in terraforming
+            and not terraforming.startswith("not ")
+        )
+        orbital_days = _number(body.get("orbitalPeriod"))
+        rotation_days = _number(body.get("rotationalPeriod"))
+        semi_major_au = _number(body.get("semiMajorAxis"))
+        radius_km = _number(body.get("radius"))
+        rows.append({
+            "body_id": body.get("bodyId"),
+            "system_address": system_address,
+            "name": short_name or f"Body {body.get('bodyId')}",
+            "full_name": full_name or short_name,
+            "class": body_class,
+            "star_type": body_class if is_star else None,
+            "planet_class": None if is_star else body_class,
+            "is_star": is_star,
+            "parents": list(body.get("parents") or []),
+            "distance_to_arrival": _number(body.get("distanceToArrival")),
+            "landable": bool(body.get("isLandable")),
+            "terraformable": terraformable,
+            "mass": _number(
+                body.get("solarMasses") if is_star else body.get("earthMasses"),
+                1.0,
+            ),
+            "gravity_g": _number(body.get("gravity")),
+            "radius": radius_km * 1000.0 if radius_km is not None else None,
+            "surface_temp": _number(body.get("surfaceTemperature")),
+            "surface_pressure": _number(body.get("surfacePressure")),
+            "atmosphere_type": _text(body.get("atmosphereType"), 100),
+            "volcanism": _text(body.get("volcanismType"), 100),
+            "rings": list(body.get("rings") or []),
+            "reserve_level": _text(body.get("reserveLevel"), 80),
+            # EDSM publishes these periods in days and axes in AU; the journal
+            # model retained by Void Compass uses seconds and metres.
+            "orbital_period": orbital_days * 86400.0 if orbital_days is not None else None,
+            "rotation_period": rotation_days * 86400.0 if rotation_days is not None else None,
+            "semi_major_axis": semi_major_au * 149597870700.0 if semi_major_au is not None else None,
+            "eccentricity": _number(body.get("orbitalEccentricity")),
+            "axial_tilt": _number(body.get("axialTilt")),
+            "tidal_lock": bool(body.get("rotationalPeriodTidallyLocked")),
+            "was_discovered": True,
+            "was_mapped": False,
+            "dss_complete": False,
+            "bio_count": 0,
+            "geo_count": 0,
+            "icons": [],
+            "_orrery_source": "edsm",
+        })
+    return rows
+
+
 def build_orrery(items, target=None):
     """Return a compact, schematic system architecture model."""
     source = [row for row in (items or ()) if isinstance(row, dict)]

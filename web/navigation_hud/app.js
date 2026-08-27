@@ -66,7 +66,7 @@ function vehiclePresentation(state = {}) {
   const label = String(state.label || 'FLIGHT').toUpperCase();
   const vehicle = state.vehicle || {};
   const catalog = window.VoidCompassShipCatalog;
-  if (motion === 'carrier_transit' || motion === 'carrier_arrival') {
+  if (motion.startsWith('carrier_')) {
     return catalog.carrier();
   }
   if (motion === 'on_foot' || label === 'ONFOOT' || label === 'ON FOOT') {
