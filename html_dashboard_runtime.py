@@ -89,6 +89,7 @@ class HtmlDashboardRuntime:
         self._disposed = False
         self._commands = queue.SimpleQueue()
         self._command_job = None
+        self._command_pump_last_tick = time.monotonic()
         self._host_watchdog_job = None
         self._host_exit_seen_at = 0.0
         self._host_log = None
@@ -379,25 +380,45 @@ class HtmlDashboardRuntime:
             self._close_from_window()
             return
         self._host_exit_seen_at = 0.0
+        # A modal Tk transition or a cancelled ``after`` callback can leave a
+        # stale job id behind while the HTML deck continues accepting commands.
+        # Recover the pump here so page changes and live settings never remain
+        # queued until the next application restart.
+        if time.monotonic() - self._command_pump_last_tick > 1.5:
+            stale_job, self._command_job = self._command_job, None
+            if stale_job is not None:
+                try:
+                    self.root.after_cancel(stale_job)
+                except Exception:
+                    pass
+            self._schedule_command_pump()
         self._schedule_host_watchdog()
 
     def _drain_commands(self):
         self._command_job = None
-        app = self.app
-        for _index in range(24):
-            try:
-                payload = self._commands.get_nowait()
-            except queue.Empty:
-                break
-            action = str(payload.get("action") or "").strip().casefold()
-            if action in {"onboarding_submit", "onboarding_cancel"}:
-                self._handle_commissioning_command(payload)
-            elif app is not None:
+        self._command_pump_last_tick = time.monotonic()
+        try:
+            app = self.app
+            for _index in range(24):
                 try:
-                    app.handle_html_dashboard_command(payload)
-                except Exception:
-                    pass
-        self._schedule_command_pump()
+                    payload = self._commands.get_nowait()
+                except queue.Empty:
+                    break
+                action = str(payload.get("action") or "").strip().casefold()
+                try:
+                    if action in {"onboarding_submit", "onboarding_cancel"}:
+                        self._handle_commissioning_command(payload)
+                    elif app is not None:
+                        app.handle_html_dashboard_command(payload)
+                except Exception as exc:
+                    logging.exception("HTML dashboard command failed: %s", action)
+                    self._write_host_log(
+                        f"[command:{action or 'unknown'}] "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+        finally:
+            self._command_pump_last_tick = time.monotonic()
+            self._schedule_command_pump()
 
     def _handle_commissioning_command(self, payload):
         if not self._onboarding.get("active"):

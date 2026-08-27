@@ -11,7 +11,9 @@ const dom = Object.fromEntries([
   'route-pips', 'route-origin', 'route-destination', 'survey-block', 'survey-title',
   'survey-title-text', 'survey-state', 'survey-mode', 'survey-remaining',
   'survey-count', 'survey-percent', 'survey-progress-marker',
-  'survey-rail', 'survey-signals', 'metric-fuel', 'metric-bio', 'metric-geo', 'expanded-fuel',
+  'survey-rail', 'survey-progress-fill', 'survey-acquisition', 'survey-signals',
+  'survey-signal-bio', 'survey-signal-geo', 'survey-signal-valuable',
+  'metric-fuel', 'metric-bio', 'metric-geo', 'expanded-fuel',
   'expanded-bio', 'expanded-geo', 'expanded-traffic', 'context-label',
   'secondary-label', 'traffic-label', 'link-state',
 ].map((id) => [id, $(id)]));
@@ -25,9 +27,9 @@ let vehicleImageTransition = null;
 let lastServerContact = Date.now();
 let lastRevision = -1;
 let healthPollActive = false;
+let lastRouteSignature = '';
 let lastSurveyProgress = null;
-let surveyPulseTimer = null;
-let surveyMarkerTimer = null;
+let lastSurveySignature = '';
 
 function colour(value, fallback) {
   return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : fallback;
@@ -173,6 +175,15 @@ function setMetric(id, metric) {
 }
 
 function renderRoute(route = {}) {
+  const hops = Array.isArray(route.hops) ? route.hops : [];
+  const signature = JSON.stringify([
+    route.header || '', route.next_distance || '', route.distance || '',
+    Boolean(route.active), route.origin_current === false ? 'start' : 'current',
+    Number(route.progress_percent || 0),
+    hops.map((hop) => [hop.position, hop.completed, hop.current, hop.next, hop.scoopable, hop.name]),
+  ]);
+  if (signature === lastRouteSignature) return;
+  lastRouteSignature = signature;
   dom['route-title'].textContent = route.header || 'NO ACTIVE ROUTE';
   dom['route-next'].textContent = route.next_distance || '';
   dom['route-distance'].textContent = route.distance || '';
@@ -182,7 +193,6 @@ function renderRoute(route = {}) {
   dom['route-packet'].style.display = route.active ? '' : 'none';
   const host = dom['route-pips'];
   host.replaceChildren();
-  const hops = Array.isArray(route.hops) ? route.hops : [];
   host.className = `route-pips unified${hops.length > 48 ? ' ultra-dense' : hops.length > 18 ? ' dense' : ''}`;
   let previousPosition = 0;
   for (const hop of hops) {
@@ -203,7 +213,7 @@ function renderRoute(route = {}) {
   }
 }
 
-function renderSurvey(survey = {}, theme = {}, systemName = '') {
+function renderSurvey(survey = {}, theme = {}, systemName = '', reducedMotion = false) {
   const state = ['unknown', 'live', 'retained', 'complete'].includes(String(survey.state))
     ? String(survey.state) : (survey.complete ? 'complete' : survey.live ? 'live' : 'unknown');
   const scanned = Math.max(0, Number.parseInt(survey.scanned, 10) || 0);
@@ -217,7 +227,18 @@ function renderSurvey(survey = {}, theme = {}, systemName = '') {
   const tone = survey.tone
     ? themedStateColour(survey.tone, theme)
     : (state === 'unknown' ? (theme.dim || 'var(--dim)') : (theme.accent || 'var(--accent)'));
+  const signature = JSON.stringify([
+    systemName, state, scanned, total, totalKnown, Math.round(percent * 100) / 100,
+    signalCounts.bio, signalCounts.geo, signalCounts.valuable, tone, reducedMotion,
+  ]);
+  if (signature === lastSurveySignature) return;
+
   const block = dom['survey-block'];
+  const previous = lastSurveyProgress;
+  const sameSystem = Boolean(previous && previous.systemName === systemName);
+  const progressed = Boolean(sameSystem && totalKnown && (
+    scanned > previous.scanned || percent > previous.percent
+  ));
   block.dataset.surveyState = state;
   block.style.setProperty('--survey-tone', tone);
   dom['survey-title-text'].textContent = state === 'complete'
@@ -236,102 +257,74 @@ function renderSurvey(survey = {}, theme = {}, systemName = '') {
   dom['survey-percent'].style.color = tone;
 
   const host = dom['survey-rail'];
-  const previous = lastSurveyProgress;
-  const sameSystem = Boolean(previous && previous.systemName === systemName);
-  const progressed = Boolean(sameSystem && totalKnown && (
-    scanned > previous.scanned || percent > previous.percent
-  ));
-  if (progressed) {
-    host.classList.remove('scan-pulse');
-    void host.offsetWidth;
-    host.classList.add('scan-pulse');
-    block.classList.remove('survey-progressing');
-    void block.offsetWidth;
-    block.classList.add('survey-progressing');
-    if (surveyPulseTimer) clearTimeout(surveyPulseTimer);
-    surveyPulseTimer = setTimeout(() => {
-      host.classList.remove('scan-pulse');
-      block.classList.remove('survey-progressing');
-      surveyPulseTimer = null;
-    }, 1050);
-  } else if (!surveyPulseTimer) {
-    host.classList.remove('scan-pulse');
-  }
   const segmentCount = totalKnown && total > 0 && total <= 24 ? total : (total > 24 ? 24 : 12);
-  host.style.setProperty('--survey-segments', String(segmentCount));
-  const completion = percent / 100 * segmentCount;
-  if (host.children.length !== segmentCount) {
-    host.replaceChildren();
-    for (let index = 0; index < segmentCount; index += 1) {
-      const segment = document.createElement('span');
-      segment.className = 'survey-segment';
-      const fill = document.createElement('i');
-      segment.appendChild(fill);
-      host.appendChild(segment);
-    }
-  }
-  const segments = Array.from(host.children);
-  segments.forEach((segment, index) => {
-    const fill = segment.firstElementChild;
-    fill.style.setProperty('--fill', Math.max(0, Math.min(1, completion - index)));
-  });
-  if (progressed) {
-    segments.forEach((segment) => segment.classList.remove('acquired'));
-    void host.offsetWidth;
-    const priorCompletion = Math.max(0, Math.min(segmentCount,
-      Number(previous.percent || 0) / 100 * segmentCount));
-    const firstChanged = Math.min(segmentCount - 1, Math.floor(priorCompletion));
-    const lastChanged = Math.min(segmentCount - 1,
-      Math.max(firstChanged, Math.ceil(completion) - 1));
-    for (let index = firstChanged; index <= lastChanged; index += 1) {
-      segments[index]?.classList.add('acquired');
-    }
-  }
-
+  const progressRatio = totalKnown ? percent / 100 : 0;
+  const markerPosition = Math.max(1, Math.min(99, percent));
+  host.style.setProperty('--survey-tick', `${100 / Math.max(1, segmentCount)}%`);
+  host.style.setProperty('--survey-progress', String(progressRatio));
+  host.style.setProperty('--survey-head', `${markerPosition}%`);
+  host.classList.toggle('resetting', !sameSystem);
+  dom['survey-progress-fill'].style.transform = `scaleX(${progressRatio})`;
   const marker = dom['survey-progress-marker'];
-  const markerPosition = 7 + (percent / 100 * 86);
-  if (!sameSystem) marker.classList.add('resetting');
   marker.style.left = `${markerPosition}%`;
-  if (!sameSystem) requestAnimationFrame(() => marker.classList.remove('resetting'));
   marker.classList.toggle('unavailable', !totalKnown);
   marker.classList.toggle('complete', state === 'complete');
-  if (progressed) {
-    marker.classList.remove('acquiring');
-    void marker.offsetWidth;
-    marker.classList.add('acquiring');
-    if (surveyMarkerTimer) clearTimeout(surveyMarkerTimer);
-    surveyMarkerTimer = setTimeout(() => {
-      marker.classList.remove('acquiring');
-      surveyMarkerTimer = null;
-    }, 850);
+  dom['survey-acquisition'].style.left = `${markerPosition}%`;
+  if (!sameSystem) requestAnimationFrame(() => host.classList.remove('resetting'));
+
+  const animatedNodes = [dom['survey-acquisition'], marker, dom['survey-count']];
+  if (reducedMotion) {
+    for (const node of animatedNodes) node.getAnimations?.().forEach((animation) => animation.cancel());
+  } else if (progressed && typeof dom['survey-acquisition'].animate === 'function') {
+    dom['survey-acquisition'].getAnimations().forEach((animation) => animation.cancel());
+    marker.getAnimations().forEach((animation) => animation.cancel());
+    dom['survey-count'].getAnimations().forEach((animation) => animation.cancel());
+    dom['survey-acquisition'].animate([
+      {opacity: 0, transform: 'translate(-50%,-50%) scaleX(.25)'},
+      {opacity: .95, transform: 'translate(-50%,-50%) scaleX(1.5)', offset: .34},
+      {opacity: .42, transform: 'translate(-50%,-50%) scaleX(.72)', offset: .64},
+      {opacity: 0, transform: 'translate(-50%,-50%) scaleX(1.08)'},
+    ], {duration: 620, easing: 'cubic-bezier(.16,.78,.2,1)'});
+    marker.animate([
+      {filter: 'brightness(1)', transform: 'translateX(-50%) scaleY(.45)'},
+      {filter: 'brightness(2.25)', transform: 'translateX(-50%) scaleY(1.35)', offset: .38},
+      {filter: 'brightness(1)', transform: 'translateX(-50%) scaleY(1)'},
+    ], {duration: 540, easing: 'cubic-bezier(.16,.78,.2,1)'});
+    dom['survey-count'].animate([
+      {color: tone, textShadow: 'none'},
+      {color: theme.text || '#dce8ef', textShadow: `0 0 7px ${tone}`, offset: .38},
+      {color: tone, textShadow: 'none'},
+    ], {duration: 520, easing: 'ease-out'});
   }
+
   const signalHost = dom['survey-signals'];
-  for (const [kind, shortLabel, title] of [
-    ['bio', 'B', 'Biological signals'],
-    ['geo', 'G', 'Geological signals'],
-    ['valuable', 'V', 'High-value bodies'],
+  let visibleSignals = 0;
+  for (const [kind, title] of [
+    ['bio', 'Biological signals'],
+    ['geo', 'Geological signals'],
+    ['valuable', 'High-value bodies'],
   ]) {
     const count = signalCounts[kind];
-    let marker = signalHost.querySelector(`[data-signal-kind="${kind}"]`);
-    if (!marker) {
-      marker = document.createElement('i');
-      marker.className = `survey-notch ${kind}`;
-      marker.dataset.signalKind = kind;
-      signalHost.appendChild(marker);
-    }
-    marker.textContent = shortLabel;
-    marker.title = `${title}: ${count}`;
-    marker.setAttribute('aria-label', `${title}: ${count}`);
-    marker.classList.toggle('present', count > 0);
+    const alert = dom[`survey-signal-${kind}`];
+    alert.querySelector('em').textContent = String(count);
+    alert.title = `${title}: ${count}`;
+    alert.setAttribute('aria-label', `${title}: ${count}`);
+    alert.classList.toggle('present', count > 0);
+    if (count > 0) visibleSignals += 1;
     const signalFound = Boolean(sameSystem
       && count > Number(previous?.signals?.[kind] || 0));
-    if (signalFound) {
-      marker.classList.remove('found');
-      void marker.offsetWidth;
-      marker.classList.add('found');
+    if (signalFound && !reducedMotion && typeof alert.animate === 'function') {
+      alert.getAnimations().forEach((animation) => animation.cancel());
+      alert.animate([
+        {opacity: .18, transform: 'scale(.72)', filter: 'brightness(1)'},
+        {opacity: 1, transform: 'scale(1.12)', filter: 'brightness(2.25)', offset: .34},
+        {opacity: 1, transform: 'scale(1)', filter: 'brightness(1)'},
+      ], {duration: 680, easing: 'cubic-bezier(.16,.78,.2,1)'});
     }
   }
+  signalHost.classList.toggle('has-signals', visibleSignals > 0);
   lastSurveyProgress = {systemName, scanned, total, percent, state, signals: signalCounts};
+  lastSurveySignature = signature;
 }
 
 function formatClock(epoch) {
@@ -399,7 +392,7 @@ function render(data) {
   dom['current-system'].textContent = system.name || '---';
   dom['region-label'].textContent = system.region || 'REGION UNKNOWN';
   renderRoute(data.route);
-  renderSurvey(data.survey, theme, system.name || '');
+  renderSurvey(data.survey, theme, system.name || '', reducedMotion);
   const metrics = data.metrics || {};
   for (const prefix of ['metric', 'expanded']) {
     setMetric(`${prefix}-fuel`, metrics.fuel);

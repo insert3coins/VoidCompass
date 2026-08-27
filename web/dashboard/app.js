@@ -35,6 +35,8 @@ let studioPendingPosition = null;
 let studioFilter = "all";
 let studioSearch = "";
 let workspaceFingerprints = {};
+let workspaceSyncTimer = 0;
+let workspaceSyncTicket = 0;
 let missionSelectedId = "";
 let hotkeyCaptureAction = "";
 let orrerySelectedBodyId = "";
@@ -475,7 +477,6 @@ function renderBoot(state) {
   const progressPercent = Math.round(progress * 100);
   percentWidth("boot-progress", progressPercent);
   text("boot-progress-percent", `${String(progressPercent).padStart(2, "0")}%`);
-  text("boot-core-percent", String(progressPercent).padStart(2, "0"));
   byId("boot-track").setAttribute("aria-valuenow", String(progressPercent));
   const stages = [
     {id: "boot-profile", key: "profile", label: "PROFILE CORE", ready: progress >= .18},
@@ -1915,7 +1916,19 @@ function renderSettingsWorkspace(data) {
 function renderWorkspace(state) {
   const workspace = state.workspace || {};
   const page = workspace.page || "";
-  if (page !== currentPage || !workspace.ready) return;
+  if (page !== currentPage || !workspace.ready) {
+    if (page === currentPage && workspace.error) {
+      const root = byId(`${page}-workspace`);
+      if (root) {
+        root.classList.remove("loading-panel");
+        root.innerHTML = `<div class="workspace-empty"><b>COMMANDER RECORD LINK INTERRUPTED</b><span>${escapeHtml(workspace.error)}</span><button type="button" data-page="${escapeHtml(page)}">RETRY PANEL</button></div>`;
+      }
+    }
+    return;
+  }
+  workspaceSyncTicket += 1;
+  if (workspaceSyncTimer) window.clearTimeout(workspaceSyncTimer);
+  workspaceSyncTimer = 0;
   if (pageLayoutEditing === page) return;
   const fingerprintData = page === "analytics"
     ? {...(workspace.data || {}), current: {...(workspace.data?.current || {}), elapsed: ""}}
@@ -2058,6 +2071,7 @@ function setConnection(online) {
 async function syncSnapshot() {
   const state = await getJson("/api/snapshot");
   renderState(state);
+  lastClientError = "";
   setConnection(true);
 }
 
@@ -2066,9 +2080,13 @@ async function eventLoop() {
     try {
       const event = await getJson(`/api/events?since=${revision}&wait=12`);
       if (event.closing) return;
-      if (number(event.revision, -1) !== revision) {
-        revision = number(event.revision, -1);
+      const nextRevision = number(event.revision, -1);
+      if (nextRevision !== revision) {
+        // Commit the revision only after its snapshot has fetched and rendered.
+        // Otherwise one transient WebView2/loopback failure leaves the page
+        // waiting forever because the failed revision appears consumed.
         await syncSnapshot();
+        revision = nextRevision;
       }
     } catch (_error) {
       reportClientError(_error, "event-loop");
@@ -2093,12 +2111,32 @@ function showPage(name) {
     text("atlas-focus-toggle", "FOCUS MAP");
   }
   document.querySelector(".pages").scrollTo({top: 0, behavior: "instant"});
-  command("page_changed", {page: name});
+  requestPageChange(name);
   if (name === "map" && !model.boot?.active) ensureAtlas();
   if (name === "map") syncAtlasViewport();
   if (name === "map") window.setTimeout(syncAtlasLayerRequest, 160);
   if (name === "overlay-studio") renderOverlayStudio(model);
   preparePageLayout(name);
+}
+
+function requestPageChange(name) {
+  const ticket = ++workspaceSyncTicket;
+  if (workspaceSyncTimer) window.clearTimeout(workspaceSyncTimer);
+  workspaceSyncTimer = 0;
+  command("page_changed", {page: name});
+  if (!byId(`${name}-workspace`)) return;
+  let attempt = 0;
+  const retry = () => {
+    if (ticket !== workspaceSyncTicket || currentPage !== name) return;
+    const workspace = model.workspace || {};
+    if (workspace.page === name && workspace.ready) return;
+    attempt += 1;
+    command("page_changed", {page: name});
+    if (attempt < 5) {
+      workspaceSyncTimer = window.setTimeout(retry, 350 + attempt * 300);
+    }
+  };
+  workspaceSyncTimer = window.setTimeout(retry, 450);
 }
 
 function studioPointerPosition(event, drag) {
@@ -2693,7 +2731,15 @@ byId("studio-filter").addEventListener("change", (event) => {
 
 document.querySelectorAll("[data-overlay-option]").forEach((input) => {
   input.addEventListener("change", async () => {
-    await command("overlay_studio", {operation: "toggle_option", key: input.dataset.overlayOption});
+    const requested = Boolean(input.checked);
+    if (input.dataset.overlayOption === "station_info_auto_hide_enabled") {
+      const timeout = byId("studio-station-timeout");
+      if (timeout) timeout.disabled = !requested;
+    }
+    const accepted = await command("overlay_studio", {
+      operation: "toggle_option", key: input.dataset.overlayOption, value: requested,
+    });
+    if (!accepted) input.checked = !requested;
   });
 });
 

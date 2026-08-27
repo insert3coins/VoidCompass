@@ -257,7 +257,8 @@ class _WindowController:
             visibility_drifted = (
                 native_visible is not None and native_visible != visible
             )
-            if visible != self.last_visible or visibility_drifted:
+            visibility_changed = visible != self.last_visible or visibility_drifted
+            if visibility_changed:
                 if visible:
                     _apply_windows_style(self.window, click_through)
                     _apply_windows_geometry(self.window, *geometry)
@@ -273,12 +274,18 @@ class _WindowController:
             now = time.monotonic()
             if visible and now - self.last_topmost_refresh >= 12.0:
                 _apply_windows_style(self.window, click_through)
+                _apply_webview_transparency(self.window)
                 self.last_topmost_refresh = now
             return {
                 "ok": True,
                 "handle": handle,
                 "visible": visible,
                 "curtained": bool(presentation_held),
+                # Mapping or unmapping one WebView2 form can disturb the
+                # transparent composition brush on sibling forms in the
+                # shared overlay process.  The host consumes this private
+                # flag and repairs every surface in one pass.
+                "_restore_all_transparency": bool(visibility_changed),
             }
         except Exception as exc:
             return {"ok": False, "reason": f"{type(exc).__name__}: {exc}"}
@@ -377,6 +384,7 @@ class _OverlayHost:
             try:
                 manifest = self.manifest()
                 self.last_contact = time.monotonic()
+                restore_shared_transparency = False
                 for overlay_id, spec in manifest.items():
                     if overlay_id not in self.controllers:
                         self.create_window(overlay_id, spec, hidden=True)
@@ -388,6 +396,9 @@ class _OverlayHost:
                         spec.get("window"),
                         presentation_held=self.presentation_held,
                     )
+                    restore_shared_transparency = bool(
+                        result.pop("_restore_all_transparency", False)
+                    ) or restore_shared_transparency
                     if result != last_status.get(overlay_id):
                         last_status[overlay_id] = result
                         try:
@@ -403,6 +414,10 @@ class _OverlayHost:
                 for overlay_id, controller in self.controllers.items():
                     if overlay_id not in manifest:
                         controller.hide()
+                if restore_shared_transparency:
+                    for controller in self.controllers.values():
+                        if controller.last_visible:
+                            _apply_webview_transparency(controller.window)
             except Exception:
                 if time.monotonic() - self.last_contact > 15.0:
                     self.close()

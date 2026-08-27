@@ -314,6 +314,25 @@ class StationInfoHUD:
     def on_docked(self, dash):
         self.reconcile(dash, present=True)
 
+    def apply_auto_hide_setting(self, dash, enabled):
+        """Apply the live Station Link policy without waiting for a redock.
+
+        The HTML settings surface can change this while the station card is
+        already mapped.  Treat that as a fresh presentation: cancel any old
+        countdown, keep the dock link visible, and only arm a new countdown
+        when auto-hide is enabled.
+        """
+        self.config["station_info_auto_hide_enabled"] = bool(enabled)
+        docked = bool(getattr(dash, "current_docked", False))
+        station = getattr(dash, "current_station_name", None)
+        if not docked or not station:
+            self.hide()
+            return False
+        self.refresh(dash)
+        self.show()
+        self._schedule_hide()
+        return True
+
     def reconcile(self, dash, present=False):
         """Bring the overlay into line with the settled journal dock state.
 

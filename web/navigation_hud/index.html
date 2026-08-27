@@ -68,10 +68,18 @@
       </div>
       <div class="survey-instrument">
         <div class="survey-track">
-          <div id="survey-rail" class="survey-rail"></div>
-          <i id="survey-progress-marker" class="survey-progress-marker" aria-hidden="true"></i>
+          <div id="survey-rail" class="survey-rail" aria-hidden="true">
+            <i class="survey-grid"></i>
+            <i id="survey-progress-fill" class="survey-progress-fill"></i>
+            <b id="survey-progress-marker" class="survey-progress-marker"></b>
+            <span id="survey-acquisition" class="survey-acquisition"></span>
+          </div>
         </div>
-        <div id="survey-signals" class="survey-signals" aria-label="Survey discoveries"></div>
+        <div id="survey-signals" class="survey-signals" aria-label="Survey discoveries">
+          <span id="survey-signal-bio" class="survey-alert bio" data-signal-kind="bio"><i></i><b>BIO</b><em>0</em></span>
+          <span id="survey-signal-geo" class="survey-alert geo" data-signal-kind="geo"><i></i><b>GEO</b><em>0</em></span>
+          <span id="survey-signal-valuable" class="survey-alert valuable" data-signal-kind="valuable"><i></i><b>VALUE</b><em>0</em></span>
+        </div>
       </div>
     </section>
 
