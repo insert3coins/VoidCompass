@@ -255,7 +255,7 @@
         surface_hold: 2.25, surface_departure: 1.28, orbital_departure: 1.55,
         landed: 2.4, on_foot: 1.32, srv: 1.18, scorpion: .9, nomad: 1.05,
         srv_handbrake: 1.8, srv_turret: 1.2, srv_drive_assist: 1.35,
-        asteroid_field: 2.2, mass_lock: 1.12, signal_lock: 1.55,
+        asteroid_field: 5.2, mass_lock: 1.12, signal_lock: 1.55,
         signal_drop: .92, signal_threat: .76, combat: .64,
         interdiction: .5, interdicted: .43, docked: 2.3, station: 2.1,
         heat_critical: .58, suit_hazard: .72, jet_cone_damage: .46,
@@ -1623,15 +1623,38 @@
       const c = state.color, y = g.y;
       if (key === "asteroid_field") {
         for (let i = 0; i < 12; i += 1) {
-          const progress = (hash(i + 8) + p * (.08 + hash(i + 31) * .12)) % 1;
-          const point = this.trackPoint(progress, g, y + (hash(i + 51) - .5) * 17);
+          // Every contact completes an integer number of journeys and full
+          // rotations per phase. The old fractional drift reset to a visibly
+          // different position every 2.2 seconds, which made the whole field
+          // hitch at the loop boundary. Contacts now fade at the rail ends,
+          // so their wrap is both mathematically seamless and visually quiet.
+          const direction = hash(i + 31) < .5 ? -1 : 1;
+          const rate = i % 4 === 0 ? 2 : 1;
+          const progress = ((hash(i + 8) + p * direction * rate) % 1 + 1) % 1;
+          const verticalRate = 1 + (i % 2);
+          const verticalPhase = (p * verticalRate + hash(i + 43)) * TAU;
+          const point = this.trackPoint(
+            progress, g,
+            y + (hash(i + 51) - .5) * 15 + Math.sin(verticalPhase) * 1.4,
+          );
           const radius = 1.7 + hash(i + 71) * 2.8;
           const sides = 5 + (i % 3), points = [];
+          const rotationRate = 1 + (i % 2);
+          const rotation = hash(i + 93) * TAU
+            + p * TAU * direction * rotationRate;
           for (let n = 0; n < sides; n += 1) {
-            const angle = n / sides * TAU + p * (i % 2 ? -1 : 1);
-            points.push([point.x + Math.cos(angle) * radius, point.y + Math.sin(angle) * radius]);
+            const angle = n / sides * TAU + rotation;
+            const irregularity = .82 + hash(i * 17 + n + 117) * .34;
+            points.push([
+              point.x + Math.cos(angle) * radius * irregularity,
+              point.y + Math.sin(angle) * radius * irregularity,
+            ]);
           }
-          this.path(points, c, alpha * (.28 + hash(i) * .46), 1, true);
+          const edgeFade = smooth(clamp(Math.min(progress, 1 - progress) / .075));
+          const depthPulse = .84 + .16 * wave(p * verticalRate + hash(i + 139));
+          this.path(points, c,
+            alpha * edgeFade * depthPulse * (.28 + hash(i) * .46),
+            1, true);
         }
         return;
       }

@@ -74,13 +74,14 @@ class HtmlStationOverlayBridge:
         use_live = ((fallback_x, fallback_y) != (0, 0)
                     or (config_x, config_y) == (0, 0))
         model = self._model()
+        docked_context = bool(getattr(self.overlay, "_docked_context", False))
         return {
             "x": fallback_x if use_live else config_x,
             "y": fallback_y if use_live else config_y,
             "width": width,
             "height": height,
             "visible": bool(
-                shown and model.get("station") and not held
+                shown and docked_context and model.get("station") and not held
                 and self.config.get(self.enabled_key, False)
             ),
             "click_through": True,

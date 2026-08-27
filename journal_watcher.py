@@ -533,8 +533,12 @@ class JournalWatcher:
                         eof_reached = f.tell() >= os.fstat(f.fileno()).st_size
                     except OSError:
                         pass
-                if startup_catchup and eof_reached and self._startup_location_event:
-                    events.append(self._startup_location_event)
+                # The synthetic location is a baseline for a clipped journal
+                # tail, not the newest event.  Apply it before chronological
+                # catch-up records so later Undocked/Supercruise/vehicle and
+                # local-space transitions retain final authority.
+                if startup_catchup and self._startup_location_event:
+                    events.insert(0, self._startup_location_event)
                     self._startup_location_event = None
                 if startup_catchup and eof_reached and not events:
                     # Complete the restore handshake even for a new/empty
@@ -640,6 +644,7 @@ class JournalWatcher:
             identities_by_id = {}
             active_station = None
             station_on_foot = None
+            local_space = None
             for line in lines:
                 try:
                     raw = json.loads(line)
@@ -658,10 +663,19 @@ class JournalWatcher:
                     }
                 if ev in ("FSDJump", "Location"):
                     latest_location = raw
+                    local_space = None
                 # CarrierJump sets player location while ship-docked or walking
                 # on the carrier concourse.
                 elif carrier_jump_moves_player(raw):
                     latest_location = raw
+                    local_space = None
+                if ev == "SupercruiseExit":
+                    local_space = {
+                        "Body": raw.get("Body"),
+                        "BodyType": raw.get("BodyType"),
+                    }
+                elif ev in ("SupercruiseEntry", "Docked"):
+                    local_space = None
                 if ev == "Docked":
                     active_station = {
                         key: raw.get(key) for key in (
@@ -717,21 +731,49 @@ class JournalWatcher:
                 if latest_identity:
                     seeded.setdefault("data", {})["surface_vehicle_name"] = latest_identity["name"]
                     seeded["data"]["surface_vehicle_id"] = latest_identity.get("id")
+                seed_raw = seeded.setdefault("raw", {})
+                seed_data = seeded.setdefault("data", {})
                 if active_station:
                     # The final seed can be an older FSD/Carrier arrival.  A
                     # later Docked event still owns the current location, so
                     # carry that station identity into the seed instead of
                     # letting its absent StationName erase the recovered dock.
-                    seed_raw = seeded.setdefault("raw", {})
                     for key, value in active_station.items():
                         seed_raw.setdefault(key, value)
-                    seed_data = seeded.setdefault("data", {})
                     seed_data["station_name"] = active_station.get("StationName")
                     seed_data["station_type"] = active_station.get("StationType")
                     seed_data["market_id"] = active_station.get("MarketID")
                     seed_data["docked"] = True
                     if station_on_foot is not None:
                         seed_data["on_foot"] = bool(station_on_foot)
+                else:
+                    # latest_location may be an old docked Location followed
+                    # by a later Undocked event.  The station scan above owns
+                    # the final context, so do not let stale Location fields
+                    # resurrect a port when the clipped tail omits departure.
+                    station_fields = (
+                        "StationName", "StationType", "MarketID",
+                        "StationState", "StationEconomy",
+                        "StationEconomy_Localised", "StationEconomies",
+                        "StationFaction", "StationGovernment",
+                        "StationGovernment_Localised", "StationAllegiance",
+                        "StationServices", "DistFromStarLS", "LandingPads",
+                    )
+                    for container in (seed_raw, seed_data):
+                        for key in station_fields:
+                            container.pop(key, None)
+                    seed_raw["Docked"] = False
+                    seed_data["docked"] = False
+                    seed_data["station_name"] = None
+                if local_space and local_space.get("BodyType"):
+                    # Preserve the persistent normal-space environment even
+                    # when a long mining session has pushed SupercruiseExit
+                    # outside the smaller incremental replay tail.
+                    for key, value in local_space.items():
+                        if value is not None:
+                            seed_raw[key] = value
+                    seed_data["body"] = local_space.get("Body")
+                    seed_data["body_type"] = local_space.get("BodyType")
                 self._startup_location_event = seeded
         except Exception:
             return
