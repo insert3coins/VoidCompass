@@ -218,24 +218,31 @@
       focusEntered: sameSystem && previous.mode !== "body" && current.mode === "body",
       focusLeft: sameSystem && previous.mode === "body" && current.mode !== "body",
       scanAdvanced: sameSystem && current.scanned > previous.scanned,
+      scanCompleted: sameSystem && current.total > 0
+        && current.scanned >= current.total
+        && (previous.total <= 0 || previous.scanned < previous.total),
       bioAdvanced: sameMode && fill > fromFill,
       fromFill,
     };
   }
 
   function applyMotionClass(motion) {
-    const names = ["event-active", "event-system", "event-focus-in", "event-focus-out"];
+    const names = [
+      "event-active", "event-system", "event-focus-in", "event-focus-out",
+      "event-scan-complete",
+    ];
     dom.root.classList.remove(...names);
     if (!motion.enabled) return;
     // Restart only the short acknowledgement layer; ordinary revisions do not
     // receive a class and therefore never produce ambient redraw flicker.
     void dom.root.offsetWidth;
     const activity = motion.rows.size || motion.notable.size || motion.sampling
-      || motion.scanAdvanced || motion.bioAdvanced;
+      || motion.scanAdvanced || motion.scanCompleted || motion.bioAdvanced;
     if (activity) dom.root.classList.add("event-active");
     if (motion.systemChanged) dom.root.classList.add("event-system");
     if (motion.focusEntered) dom.root.classList.add("event-focus-in");
     if (motion.focusLeft) dom.root.classList.add("event-focus-out");
+    if (motion.scanCompleted) dom.root.classList.add("event-scan-complete");
     window.clearTimeout(motionClassTimer);
     motionClassTimer = window.setTimeout(() => dom.root.classList.remove(...names), 1100);
   }
@@ -454,8 +461,12 @@
     const fillPercent = bio ? Math.min(100, (done / bio) * 100) : 0;
     fill.style.setProperty("--fill", `${fillPercent}%`);
     fill.style.setProperty("--from-fill", `${Number.isFinite(motion.fromFill) ? motion.fromFill : fillPercent}%`);
+    rail.style.setProperty("--fill", `${fillPercent}%`);
     if (motion.bioAdvanced) fill.classList.add("event-progress");
-    rail.appendChild(fill); dom.overview.appendChild(rail);
+    rail.appendChild(fill);
+    rail.appendChild(node("b", "rail-sweep"));
+    rail.appendChild(node("em", "rail-beacon"));
+    dom.overview.appendChild(rail);
   }
 
   function render(snapshot = {}) {
@@ -463,8 +474,23 @@
     const model = snapshot.survey || {};
     const motion = motionContext(model);
     const bodyMode = model.mode === "body";
+    const rows = Array.isArray(model.rows) ? model.rows : [];
+    const total = Math.max(0, safeNumber(model.total));
+    const scanned = Math.max(0, safeNumber(model.scanned));
+    const body = model.body || {};
+    const openBiology = bodyMode
+      ? safeNumber(body.bio_count) > safeNumber(body.organic_complete_count)
+      : rows.some((row) => safeNumber(row.bio_count) > safeNumber(row.complete));
     dom.root.classList.toggle("body", bodyMode);
     dom.root.classList.toggle("system", !bodyMode);
+    dom.root.classList.toggle("scan-active", Boolean(
+      !bodyMode && model.total_known && total > 0 && scanned < total
+    ));
+    dom.root.classList.toggle("sampling-active", Boolean(model.sampling));
+    dom.root.classList.toggle("signal-open", Boolean(openBiology || model.sampling));
+    dom.root.classList.toggle("survey-locked", Boolean(
+      !bodyMode && model.total_known && total > 0 && scanned >= total
+    ));
     dom.system.textContent = String(model.system || "SYSTEM").toUpperCase();
     dom.content.replaceChildren(); dom.footer.replaceChildren();
     if (!model.mode) {
@@ -476,7 +502,6 @@
     dom.root.classList.remove("empty");
     overview(model, motion);
     if (model.sampling) dom.content.appendChild(sampleCard(model.sampling, motion.sampling || {}));
-    const rows = Array.isArray(model.rows) ? model.rows : [];
     if (bodyMode) {
       const body = model.body || {};
       const samplingName = String((model.sampling || {}).species || "").toLowerCase();

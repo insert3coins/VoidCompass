@@ -93,6 +93,7 @@ class ContactScopeHUD:
         self._visible = False
         self._suppressed = False
         self._startup_pending_visible = False
+        self._hide_job = None
 
         self.win = tk.Toplevel(root)
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
@@ -114,7 +115,7 @@ class ContactScopeHUD:
             pass
         self.win.withdraw()
 
-    def update(self, system_name, expected, contacts):
+    def update(self, system_name, expected, contacts, *, present=True):
         self._last_update = (system_name, expected, list(contacts or ()))
         model = build_contact_scope_model(system_name, expected, contacts)
         self._html_render_model = model if model["total"] else None
@@ -122,7 +123,7 @@ class ContactScopeHUD:
             self.hide()
             return False
         self._redraw(model)
-        return self.show()
+        return self.show() if present else bool(self._visible)
 
     def clear(self):
         self._last_update = None
@@ -144,6 +145,7 @@ class ContactScopeHUD:
                 pass
             return False
         if self._visible:
+            self._schedule_hide()
             return True
         try:
             x = _integer(self.config.get("contact_scope_hud_x"), 1180)
@@ -155,11 +157,13 @@ class ContactScopeHUD:
             self.win.lift()
             self._visible = True
             self._startup_pending_visible = False
+            self._schedule_hide()
             return True
         except Exception:
             return False
 
     def hide(self):
+        self._cancel_hide()
         pending = self._startup_pending_visible
         self._startup_pending_visible = False
         if not self._visible:
@@ -169,6 +173,38 @@ class ContactScopeHUD:
         except Exception:
             return False
         self._visible = False
+        return True
+
+    def _cancel_hide(self):
+        if self._hide_job is None:
+            return
+        try:
+            self.win.after_cancel(self._hide_job)
+        except Exception:
+            pass
+        self._hide_job = None
+
+    def _schedule_hide(self):
+        self._cancel_hide()
+        timeout_s = max(0, _integer(self.config.get("contact_scope_timeout_s"), 45))
+        if timeout_s <= 0:
+            return False
+        try:
+            self._hide_job = self.win.after(timeout_s * 1000, self._auto_hide)
+            return True
+        except Exception:
+            self._hide_job = None
+            return False
+
+    def _auto_hide(self):
+        self._hide_job = None
+        self.hide()
+
+    def apply_auto_hide_setting(self):
+        """Apply a changed timer without resurrecting an already hidden scope."""
+        self._cancel_hide()
+        if self._visible:
+            self._schedule_hide()
         return True
 
     def suppress(self):
@@ -246,6 +282,7 @@ class ContactScopeHUD:
         save_config(self.config)
 
     def destroy(self):
+        self._cancel_hide()
         try:
             self.win.destroy()
         except Exception:
