@@ -757,7 +757,9 @@ class TacticalHUD:
         if journal_kind in {
                 "vehicle_deploy", "vehicle_board", "vehicle_switch",
                 "interdiction", "interdiction_clear", "signal_drop",
-                "dock_request", "dock_denied", "maintenance"}:
+                "dock_request", "dock_denied", "maintenance",
+                "target_lock", "target_body", "target_signal", "target_system",
+                "target_clear", "dss_efficiency", "dss_complete", "fsd_injection"}:
             if transition_label:
                 return transition_label.upper()
         if nav_context.get("interdicted") or track_key == "INTERDICTION":
@@ -881,6 +883,8 @@ class TacticalHUD:
         # than a generic mass-lock state while the mood remains current.
         if music_state:
             return music_state
+        if fsd_state == "station_vicinity" and normal_ship_flight:
+            return "STATION VICINITY"
         if fsd_state == "mass_lock" and normal_ship_flight:
             return "MASS LOCK"
         if flight_state == "TAXI" or nav_context.get("in_taxi"):
@@ -934,7 +938,7 @@ class TacticalHUD:
             "ORBITAL DEPARTURE", "SURFACE HOLD", "DOCK ASSIST", "RIGHT PANEL",
             "LEFT PANEL", "COMMS", "ROLE PANEL", "SERVICES",
             "SC ASSIST", "HANDBRAKE", "TURRET VIEW", "DRIVE ASSIST",
-            "AFMU REPAIR", "DOCK REQUEST",
+            "AFMU REPAIR", "DOCK REQUEST", "STATION VICINITY",
         ):
             return COLOR_ACCENT
         if state_text in {
@@ -955,6 +959,10 @@ class TacticalHUD:
             return COLOR_ORANGE
         if state_text == "INTERDICTION EVADED":
             return COLOR_GREEN
+        if state_text.startswith("DSS EFFICIENT"):
+            return COLOR_GREEN
+        if state_text.startswith("DSS ") or state_text.startswith("TARGET ") or state_text.endswith(" TARGET"):
+            return COLOR_ACCENT
         if state_text.startswith("SIGNAL THREAT"):
             return COLOR_ORANGE
         if state_text == "SIGNAL DROP":
@@ -1008,6 +1016,14 @@ class TacticalHUD:
         if state == "JET CONE DAMAGE":
             return "jet_cone_damage"
         if state == "MASS LOCK":
+            return "fsd_lock"
+        if state == "STATION VICINITY":
+            return "station"
+        if state.startswith("TARGET ") or state.endswith(" TARGET"):
+            return "target_lock"
+        if state.startswith("DSS "):
+            return "scanner"
+        if state.startswith("FSD INJECTION"):
             return "fsd_lock"
         if state == "ASTEROID FIELD":
             return "asteroid_field"
@@ -1529,6 +1545,18 @@ class TacticalHUD:
             if travel_state == "carrier_transit":
                 return f"CARRIER TRANSIT{detail}", COLOR_ORANGE
             return f"CARRIER ARRIVAL{detail}", COLOR_GREEN
+        if travel_state == "station_vicinity":
+            station = str(travel.get("local_space_name") or "").strip()
+            detail = f" · {station}" if station else ""
+            return f"STATION VICINITY{detail}", COLOR_ACCENT
+        injection = context.get("fsd_injection") or {}
+        if injection.get("armed"):
+            try:
+                amount = int(float(injection.get("percent") or 0))
+            except (TypeError, ValueError):
+                amount = 0
+            suffix = f" · +{amount}%" if amount else ""
+            return f"FSD INJECTION ARMED{suffix}", COLOR_ACCENT
         neutron_boost = context.get("neutron_boost") or {}
         if neutron_boost.get("armed"):
             try:
@@ -2319,6 +2347,10 @@ class TacticalHUD:
                 "neutron_boost": bool((nav_context.get("neutron_boost") or {}).get("armed")),
                 "neutron_boost_value": finite_number(
                     (nav_context.get("neutron_boost") or {}).get("value"), 0.0,
+                ),
+                "fsd_injection": bool((nav_context.get("fsd_injection") or {}).get("armed")),
+                "fsd_injection_percent": finite_number(
+                    (nav_context.get("fsd_injection") or {}).get("percent"), 0.0,
                 ),
                 "route_active": str(nav_context.get("route_mode") or "NO ROUTE") != "NO ROUTE",
             },

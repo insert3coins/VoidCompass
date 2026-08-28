@@ -98,6 +98,9 @@ def _survey_bodies(scan_items, body_signals):
         body["dss_complete"] = bool(
             body.get("dss_complete") or signals.get("dss_complete")
         )
+        for key in ("dss_probes_used", "dss_efficiency_target", "dss_efficiency_met"):
+            if signals.get(key) is not None:
+                body[key] = signals.get(key)
         if signals.get("genuses"):
             body["genuses"] = list(signals["genuses"])
 
@@ -118,6 +121,9 @@ def _survey_bodies(scan_items, body_signals):
             "organic_scans": {},
             "organic_complete_count": 0,
             "dss_complete": bool(signals.get("dss_complete")),
+            "dss_probes_used": signals.get("dss_probes_used"),
+            "dss_efficiency_target": signals.get("dss_efficiency_target"),
+            "dss_efficiency_met": signals.get("dss_efficiency_met"),
         })
     return bodies
 
@@ -316,7 +322,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
                        focused_body_name=None, sampling=None, scanned=0, total=0,
                        min_notable_value=50_000, palette=None, total_known=True,
                        body_signals=None, belt_clusters=None,
-                       show_all_bodies=False):
+                       show_all_bodies=False, dss_stats=None):
     """Build a renderer-neutral survey model for the overlay and tests."""
     bodies = _survey_bodies(scan_items, body_signals)
     notable_rows = build_notable_body_rows(scan_items, min_notable_value, palette)
@@ -368,6 +374,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
             "notable_rows": [],
             "scanned": _safe_int(scanned), "total": _safe_int(total),
             "total_known": bool(total_known),
+            "dss_stats": dss_stats or {},
         }
 
     rows = []
@@ -404,6 +411,9 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
             "complete": complete,
             "bio_complete": bool(bio_count and complete >= bio_count),
             "needs_dss": needs_dss,
+            "dss_probes_used": body.get("dss_probes_used"),
+            "dss_efficiency_target": body.get("dss_efficiency_target"),
+            "dss_efficiency_met": body.get("dss_efficiency_met"),
             "min_value": lo,
             "max_value": hi,
             "first_footfall": bool(body.get("first_footfall")),
@@ -449,6 +459,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
         "total_known": bool(total_known),
         "notable_count": len(notable_rows),
         "scan_in_progress": scan_in_progress,
+        "dss_stats": dss_stats or {},
     }
 
 
@@ -488,6 +499,7 @@ def _survey_render_key(model):
     common = (
         model.get("mode"), model.get("system"), sampling_key,
         model.get("scope"),
+        repr(model.get("dss_stats") or {}),
         _safe_int(model.get("scanned")), _safe_int(model.get("total")),
         bool(model.get("total_known")),
         tuple(notable_key(row) for row in model.get("notable_rows") or ()),
@@ -499,6 +511,8 @@ def _survey_render_key(model):
             _safe_int(body.get("bio_count")),
             _safe_int(body.get("organic_complete_count")),
             _safe_int(body.get("geo_count")), bool(body.get("dss_complete")),
+            body.get("dss_probes_used"), body.get("dss_efficiency_target"),
+            body.get("dss_efficiency_met"),
             bool(body.get("first_footfall")),
             body.get("landable") if "landable" in body else None,
             body.get("gravity_g"),
@@ -515,6 +529,8 @@ def _survey_render_key(model):
             _safe_int(row.get("bio_count")), _safe_int(row.get("geo_count")),
             _safe_int(row.get("complete")), bool(row.get("bio_complete")),
             bool(row.get("needs_dss")), bool(row.get("landable_known")),
+            row.get("dss_probes_used"), row.get("dss_efficiency_target"),
+            row.get("dss_efficiency_met"),
             bool(row.get("landable")) if row.get("landable_known") else None,
             row.get("min_value"), row.get("max_value"),
             notable_key(row.get("notable")) if row.get("notable") else None,
@@ -654,11 +670,12 @@ class SurveyStatusHUD:
 
     def update(self, system_name, scanned, total, scan_items, body_signals,
                sampling=None, focused_body_id=None, focused_body_name=None,
-               total_known=True, belt_clusters=None):
+               total_known=True, belt_clusters=None, dss_stats=None):
         self._last_update = (
             system_name, scanned, total, scan_items, body_signals,
             sampling, focused_body_id, focused_body_name, total_known,
             belt_clusters,
+            dss_stats,
         )
         if self._suppressed:
             return
@@ -670,7 +687,7 @@ class SurveyStatusHUD:
                                    belt_clusters=belt_clusters,
                                    show_all_bodies=bool(
                                        self.config.get("survey_status_show_all_bodies", False)
-                                   ))
+                                   ), dss_stats=dss_stats)
         if not model:
             self._last_render_key = None
             self._html_render_model = None

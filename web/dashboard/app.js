@@ -2028,9 +2028,9 @@ function renderDashboard(state) {
     showPage(requestedPage.page);
   }
   renderAtlas(model);
-  text("rail-version", `v${model.app?.version || "5.4.1.6"} // WEBVIEW2`);
-  text("boot-version", `v${model.app?.version || "5.4.1.6"} // SECURE LOOPBACK // WEBVIEW2`);
-  text("about-version", `Version ${model.app?.version || "5.4.1.6"} // HTML Command Deck`);
+  text("rail-version", `v${model.app?.version || "5.4.1.7"} // WEBVIEW2`);
+  text("boot-version", `v${model.app?.version || "5.4.1.7"} // SECURE LOOPBACK // WEBVIEW2`);
+  text("about-version", `Version ${model.app?.version || "5.4.1.7"} // HTML Command Deck`);
   text("overview-subtitle", model.profile?.profile_label || "Journal-backed field intelligence");
   if (currentPage === "map" && !model.boot?.active) ensureAtlas();
 }

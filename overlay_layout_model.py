@@ -7,15 +7,17 @@ DEFAULT_POSITIONS = {
     "gravity_warning_hud": (1200, 530), "station_info_hud": (30, 380),
     "survey_status_hud": (30, 520), "toast_hud": (1200, 80),
     "heartbeat_hud": (24, 24), "ground_popup": (1320, 160),
+    "contact_scope_hud": (1180, 250),
 }
 
 DEFAULT_SIZES = {
-    "hud": (430, 230), "cargo_hud": (380, 220),
+    "hud": (430, 230), "cargo_hud": (410, 260),
     "carrier_hud": (430, 270),
     "prospector_hud": (400, 250),
     "gravity_warning_hud": (320, 106), "station_info_hud": (520, 442),
     "survey_status_hud": (520, 340), "toast_hud": (400, 94),
     "heartbeat_hud": (54, 54), "ground_popup": (370, 154),
+    "contact_scope_hud": (460, 190),
 }
 
 OVERLAY_LABELS = {
@@ -29,6 +31,7 @@ OVERLAY_LABELS = {
     "toast_hud": "Cockpit Notifications",
     "heartbeat_hud": "Journal Heartbeat",
     "ground_popup": "Planet Waypoint Navigation",
+    "contact_scope_hud": "Deep Space Contact Scope",
 }
 
 OVERLAY_CARD_LABELS = {
@@ -42,6 +45,7 @@ OVERLAY_CARD_LABELS = {
     "toast_hud": "NOTIFY",
     "heartbeat_hud": "HEARTBEAT",
     "ground_popup": "SURFACE NAV",
+    "contact_scope_hud": "CONTACTS",
 }
 
 OVERLAY_ENABLE_KEYS = {
@@ -55,4 +59,5 @@ OVERLAY_ENABLE_KEYS = {
     "toast_hud": "toast_overlay_enabled",
     "heartbeat_hud": "heartbeat_overlay_enabled",
     "ground_popup": "ground_popup_enabled",
+    "contact_scope_hud": "contact_scope_overlay_enabled",
 }

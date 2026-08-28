@@ -37,6 +37,7 @@ header { position: absolute; left: 13px; right: 13px; top: 7px; height: 27px; di
 .overview-rail i { display: block; width: var(--fill, 0%); height: 100%; background: var(--green); box-shadow: 0 0 5px var(--green); transition: width .45s ease-out; }
 .content { position: absolute; left: 13px; right: 13px; top: 67px; bottom: 24px; overflow: hidden; display: flex; flex-direction: column; gap: 3px; }
 .target { position: relative; flex: 0 0 auto; min-height: 22px; padding: 3px 6px 3px 9px; background: linear-gradient(90deg, color-mix(in srgb, var(--raised) 58%, transparent), transparent); border-left: 2px solid var(--tone, var(--orange)); }
+.target::after { content: ""; position: absolute; z-index: 4; inset: 0; pointer-events: none; opacity: 0; background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--tone, var(--accent)) 25%, transparent) 44%, color-mix(in srgb, var(--tone, var(--accent)) 58%, transparent) 50%, transparent 56%); transform: translateX(-115%); }
 .target.complete { --tone: var(--green); opacity: .82; }
 .target.geo-only { --tone: var(--accent); }
 .target.routine { --tone: var(--muted); opacity: .78; }
@@ -46,6 +47,7 @@ header { position: absolute; left: 13px; right: 13px; top: 7px; height: 27px; di
 .badge { min-width: 0; padding: 0 3px; overflow: hidden; text-overflow: ellipsis; border: 1px solid var(--soft); white-space: nowrap; }
 .badge.bio { color: var(--orange); }.complete .badge.bio { color: var(--green); }
 .badge.geo { color: var(--accent); }.badge.dss { color: var(--dim); }
+.badge.dss-result { color: var(--accent); }.badge.dss-result.efficient { color: var(--green); }
 .badge.routine { color: var(--dim); border-style: dashed; }
 .badge.landable {
   color: var(--green);
@@ -60,7 +62,7 @@ header { position: absolute; left: 13px; right: 13px; top: 7px; height: 27px; di
 .bio-node.sample { border: 2px solid var(--orange); background: var(--raised); box-shadow: 0 0 4px color-mix(in srgb, var(--orange) 55%, transparent); }
 .bio-node.complete { border-color: var(--green); background: var(--green); box-shadow: 0 0 4px color-mix(in srgb, var(--green) 50%, transparent); }
 .biological-list { display: grid; align-items: stretch; gap: 2px; overflow: visible; white-space: normal; }
-.biological-row { min-width: 0; min-height: 20px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 2px 3px; border-left: 1px solid color-mix(in srgb, var(--accent) 38%, var(--soft)); background: color-mix(in srgb, var(--raised) 30%, transparent); }
+.biological-row { position: relative; min-width: 0; min-height: 20px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 2px 3px; border-left: 1px solid color-mix(in srgb, var(--accent) 38%, var(--soft)); background: color-mix(in srgb, var(--raised) 30%, transparent); }
 .biological-identity { min-width: 0; display: flex; align-items: center; gap: 6px; }
 .biological-symbol { flex: 0 0 10px; color: var(--accent); font-style: normal; text-align: center; }
 .biological-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: var(--type-support); }
@@ -75,7 +77,7 @@ header { position: absolute; left: 13px; right: 13px; top: 7px; height: 27px; di
 .value { flex: 0 0 auto; margin-left: auto; color: var(--orange); }.complete .value { color: var(--green); }
 .notable { color: var(--yellow); }
 .group-label { display: flex; justify-content: space-between; padding: 3px 3px 1px; color: var(--dim); font-size: var(--type-compact); font-weight: 700; letter-spacing: .55px; }
-.sample-card { flex: 0 0 auto; min-height: 49px; padding: 6px 8px; display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 9px; background: color-mix(in srgb, var(--orange) 7%, var(--panel)); border-left: 3px solid var(--orange); }
+.sample-card { position: relative; flex: 0 0 auto; min-height: 49px; padding: 6px 8px; display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 9px; background: color-mix(in srgb, var(--orange) 7%, var(--panel)); border-left: 3px solid var(--orange); }
 .sample-nodes { position: relative; display: flex; justify-content: space-between; align-items: center; }
 .sample-nodes::before { content: ""; position: absolute; left: 8px; right: 8px; height: 2px; background: var(--soft); }
 .sample-node { z-index: 1; width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid var(--dim); border-radius: 50%; background: var(--panel); color: var(--dim); font-size: var(--type-compact); font-weight: 700; }
@@ -84,7 +86,7 @@ header { position: absolute; left: 13px; right: 13px; top: 7px; height: 27px; di
 .sample-species { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); font-size: var(--type-primary); font-weight: 700; }
 .sample-status { display: flex; justify-content: space-between; gap: 6px; color: var(--muted); font-size: var(--type-support); font-weight: 700; }
 .sample-status .clear { color: var(--green); }
-.notable-card { min-height: 25px; padding: 4px 7px; border-left: 2px solid var(--yellow); background: color-mix(in srgb, var(--yellow) 5%, transparent); }
+.notable-card { position: relative; min-height: 25px; padding: 4px 7px; border-left: 2px solid var(--yellow); background: color-mix(in srgb, var(--yellow) 5%, transparent); }
 .notable-card strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--yellow); font-size: var(--type-support); }
 .notable-card span { display: flex; justify-content: space-between; color: var(--muted); font-size: var(--type-compact); }
 footer { position: absolute; left: 13px; right: 13px; bottom: 6px; height: 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; overflow: hidden; border-top: 1px solid var(--soft); color: var(--dim); font-size: var(--type-compact); font-weight: 700; white-space: nowrap; }
@@ -92,4 +94,49 @@ footer .credits { color: var(--orange); overflow: hidden; text-overflow: ellipsi
 .scanlines { position: absolute; inset: 0; z-index: 30; opacity: .15; pointer-events: none; background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(30,60,74,.12) 3px); }
 .vignette { position: absolute; inset: 0; z-index: 29; pointer-events: none; box-shadow: inset 0 0 17px rgba(0,0,0,.76); }
 .survey.no-crt .scanlines, .survey.no-crt .vignette { display: none; }
-.survey.reduced-motion * { transition: none !important; }
+.event-new-target { animation: survey-target-acquire .54s cubic-bezier(.2,.8,.2,1) both; }
+.event-new-target::after,.event-mapped::after,.event-target-complete::after { animation: survey-card-sweep .72s ease-out both; }
+.event-target-complete { animation: survey-complete-lock .8s ease-out both; }
+.badge.event-signal { animation: survey-signal-lock .78s ease-out both; }
+.badge.event-lock { animation: survey-dss-lock .82s ease-out both; }
+.badge.event-value-badge { animation: survey-value-confirm 1s ease-out both; }
+.bio-nodes.event-progress .bio-node.complete { animation: survey-node-confirm .66s ease-out both; }
+.biological-row.event-new-detail { animation: survey-detail-acquire .48s ease-out both; }
+.biological-row.event-sample-progress { animation: survey-sample-row .68s ease-out both; }
+.biological-row.event-bio-complete { animation: survey-bio-lock .86s ease-out both; }
+.event-value .value,.event-value .biological-value,.notable-card.event-value b { animation: survey-value-confirm 1s ease-out both; }
+.sample-card.event-sample-start { animation: survey-sample-acquire .58s ease-out both; }
+.sample-card.event-sample-step { animation: survey-sample-card .72s ease-out both; }
+.sample-card.event-sample-complete { animation: survey-sample-complete .95s ease-out both; }
+.sample-node.acknowledged { animation: survey-sample-node .8s cubic-bezier(.2,.75,.2,1) both; }
+.notable-card.event-new-notable { animation: survey-notable-acquire .9s ease-out both; }
+.overview-rail i.event-progress { animation: survey-progress-step .72s ease-out both; }
+.survey.event-active .title-lock i { animation: survey-title-pulse .72s ease-out both; }
+.survey.event-active .overview-meta { animation: survey-meta-pulse .68s ease-out both; }
+.survey.event-system #system-name { animation: survey-system-acquire .8s ease-out both; }
+.survey.event-focus-in .overview,.survey.event-focus-in .content { animation: survey-focus-in .65s cubic-bezier(.2,.8,.2,1) both; }
+.survey.event-focus-out .overview,.survey.event-focus-out .content { animation: survey-focus-out .58s ease-out both; }
+
+@keyframes survey-target-acquire { 0% { opacity: 0; transform: translateX(-12px); } 55% { opacity: 1; transform: translateX(2px); } 100% { transform: none; } }
+@keyframes survey-card-sweep { 0% { opacity: 0; transform: translateX(-115%); } 18% { opacity: .75; } 100% { opacity: 0; transform: translateX(115%); } }
+@keyframes survey-complete-lock { 0%,100% { box-shadow: none; } 38% { box-shadow: inset 3px 0 0 var(--green), inset 0 0 13px color-mix(in srgb, var(--green) 13%, transparent); } }
+@keyframes survey-signal-lock { 0% { opacity: .35; transform: scale(.78); } 42% { color: var(--text); border-color: currentColor; box-shadow: 0 0 9px currentColor; transform: scale(1.08); } 100% { opacity: 1; transform: none; } }
+@keyframes survey-dss-lock { 0% { opacity: .3; } 45% { color: var(--green); border-color: var(--green); box-shadow: 0 0 8px color-mix(in srgb, var(--green) 65%, transparent); } 100% { opacity: 1; } }
+@keyframes survey-node-confirm { 0% { transform: scale(.55); } 55% { transform: scale(1.45); box-shadow: 0 0 8px var(--green); } 100% { transform: none; } }
+@keyframes survey-detail-acquire { from { opacity: 0; transform: translateX(-7px); } to { opacity: 1; transform: none; } }
+@keyframes survey-sample-row { 0%,100% { background: color-mix(in srgb, var(--raised) 30%, transparent); } 42% { background: color-mix(in srgb, var(--orange) 17%, transparent); } }
+@keyframes survey-bio-lock { 0% { border-left-color: var(--orange); } 48% { color: var(--green); border-left-width: 4px; background: color-mix(in srgb, var(--green) 14%, transparent); } 100% { border-left-color: color-mix(in srgb, var(--green) 58%, var(--soft)); } }
+@keyframes survey-value-confirm { 0% { opacity: .35; } 38% { color: var(--yellow); text-shadow: 0 0 9px var(--yellow); transform: scale(1.06); } 100% { opacity: 1; text-shadow: none; transform: none; } }
+@keyframes survey-sample-acquire { 0% { opacity: 0; transform: translateY(-6px); } 100% { opacity: 1; transform: none; } }
+@keyframes survey-sample-card { 0%,100% { box-shadow: none; } 42% { box-shadow: inset 4px 0 0 var(--orange), inset 0 0 15px color-mix(in srgb, var(--orange) 15%, transparent); } }
+@keyframes survey-sample-complete { 0% { border-left-color: var(--orange); } 46% { border-left-color: var(--green); background: color-mix(in srgb, var(--green) 14%, var(--panel)); } 100% { border-left-color: var(--orange); } }
+@keyframes survey-sample-node { 0% { opacity: .25; transform: scale(.5); } 42% { color: var(--text); border-color: var(--orange); box-shadow: 0 0 11px var(--orange); transform: scale(1.35); } 100% { opacity: 1; transform: none; } }
+@keyframes survey-notable-acquire { 0% { opacity: 0; transform: translateX(-8px); } 38% { border-left-color: var(--text); background: color-mix(in srgb, var(--yellow) 17%, transparent); } 100% { opacity: 1; transform: none; } }
+@keyframes survey-progress-step { from { width: var(--from-fill, 0%); filter: brightness(1.8); } to { width: var(--fill, 0%); filter: none; } }
+@keyframes survey-title-pulse { 0%,100% { transform: scaleY(1); } 45% { background: var(--text); box-shadow: 0 0 11px var(--accent); transform: scaleY(.55); } }
+@keyframes survey-meta-pulse { 0%,100% { color: var(--muted); } 45% { color: var(--accent); text-shadow: 0 0 7px color-mix(in srgb, var(--accent) 65%, transparent); } }
+@keyframes survey-system-acquire { 0% { opacity: .25; letter-spacing: .16em; } 100% { opacity: 1; letter-spacing: .35px; } }
+@keyframes survey-focus-in { 0% { opacity: .25; transform: translateX(10px); filter: blur(1px); } 100% { opacity: 1; transform: none; filter: none; } }
+@keyframes survey-focus-out { 0% { opacity: .35; transform: translateX(-8px); } 100% { opacity: 1; transform: none; } }
+
+.survey.reduced-motion * { animation: none !important; transition: none !important; }

@@ -42,6 +42,7 @@ from station_info_hud import StationInfoHUD
 from survey_status_hud import SurveyStatusHUD
 from toast_hud import ToastHUD
 from heartbeat_hud import HeartbeatHUD
+from contact_scope_hud import ContactScopeHUD
 from html_survey_overlay import attach_html_survey_overlay
 from html_toast_overlay import attach_html_toast_overlay
 from html_gravity_overlay import attach_html_gravity_overlay
@@ -51,6 +52,7 @@ from html_cargo_overlay import attach_html_cargo_overlay
 from html_carrier_overlay import attach_html_carrier_overlay
 from html_prospector_overlay import attach_html_prospector_overlay
 from html_heartbeat_overlay import attach_html_heartbeat_overlay
+from html_contact_overlay import attach_html_contact_overlay
 from overlay_input import set_mouse_passthrough
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
@@ -329,9 +331,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         "current_cargo_scoop_deployed", "current_analysis_mode",
         "current_scooping_fuel",
         "current_destination", "current_destination_details",
+        "deep_space_contact_system", "deep_space_contact_expected",
+        "deep_space_contacts",
         "current_local_space_body_type", "current_local_space_name",
         "current_asteroid_field_kind",
         "neutron_boost_armed", "neutron_boost_value",
+        "fsd_injection_armed", "fsd_injection_percent",
         "cargo_capacity", "current_cargo_tons",
         "current_cargo_inventory", "dest_coords", "dest_name", "route_list",
         "nav_route_entries", "current_latitude", "current_longitude",
@@ -346,6 +351,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         "route_list": 256,
         "nav_route_entries": 256,
         "bio_sample_points": 8,
+        "deep_space_contacts": 128,
     }
     _OVERLAY_POSITION_SPECS = (
         ("hud", "hud_x", "hud_y"),
@@ -357,6 +363,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         ("survey_status_hud", "survey_status_hud_x", "survey_status_hud_y"),
         ("toast_hud", "toast_hud_x", "toast_hud_y"),
         ("heartbeat_hud", "heartbeat_hud_x", "heartbeat_hud_y"),
+        ("contact_scope_hud", "contact_scope_hud_x", "contact_scope_hud_y"),
         ("ground_popup", "ground_popup_x", "ground_popup_y"),
     )
     _HTML_OVERLAY_SPECS = {
@@ -368,6 +375,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         "survey_status_hud": ("survey", "Void Compass Survey Operations", "survey_status_overlay_enabled"),
         "toast_hud": ("toast", "Void Compass Cockpit Notifications", "toast_overlay_enabled"),
         "heartbeat_hud": ("heartbeat", "Void Compass Journal Heartbeat", "heartbeat_overlay_enabled"),
+        "contact_scope_hud": ("contact-scope", "Void Compass Deep Space Contacts", "contact_scope_overlay_enabled"),
         "ground_popup": ("ground-target", "Void Compass Planet Waypoint Navigation", "ground_popup_enabled"),
     }
 
@@ -750,6 +758,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     focused_body_name=self.current_body_name,
                     total_known=self.scan_total_confirmed,
                     belt_clusters=list(self.belt_clusters),
+                    dss_stats=self._dss_efficiency_snapshot(),
                 )
         if self.station_info_hud and self.current_docked and self.current_station_name:
             self.station_info_hud.on_docked(self)
@@ -839,6 +848,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "survey_status_hud",
             "toast_hud",
             "heartbeat_hud",
+            "contact_scope_hud",
         ):
             overlay = getattr(self, attr, None)
             apply_overlay_theme = getattr(overlay, "apply_theme", None)
@@ -922,6 +932,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "hud", "cargo_hud", "carrier_hud", "prospector_hud",
             "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "heartbeat_hud",
+            "contact_scope_hud",
         ):
             overlay = getattr(self, attr, None)
             try:
@@ -1061,6 +1072,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.current_legal_state = None
         self.current_destination = None
         self.current_destination_details = {}
+        self._navigation_target_status_seen = False
+        self.deep_space_contact_system = ""
+        self.deep_space_contact_expected = 0
+        self.deep_space_contacts = []
         self.current_local_space_body_type = ""
         self.current_local_space_name = ""
         self.current_asteroid_field_kind = ""
@@ -1116,6 +1131,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._navigation_docking_state = None
         self.neutron_boost_armed = False
         self.neutron_boost_value = None
+        self.fsd_injection_armed = False
+        self.fsd_injection_percent = None
+        self.dss_efficiency_session = {
+            "mapped": 0, "efficient": 0, "probes": 0, "target": 0,
+        }
 
         self.cargo_capacity = 0
         self.current_cargo_tons = 0
@@ -1319,6 +1339,105 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             key="survey-status-progress-schedule",
         )
 
+    def _refresh_contact_scope(self):
+        """Publish non-body FSS contacts without duplicating survey bodies."""
+        overlay = getattr(self, "contact_scope_hud", None)
+        if overlay is None:
+            return False
+        if getattr(self, "current_docked", False):
+            overlay.suppress()
+            return False
+        overlay.resume(refresh=False)
+        return overlay.update(
+            getattr(self, "deep_space_contact_system", "") or self.current_sys,
+            getattr(self, "deep_space_contact_expected", 0),
+            list(getattr(self, "deep_space_contacts", None) or ()),
+        )
+
+    def _clear_deep_space_contacts(self, hide=True):
+        self.deep_space_contact_system = ""
+        self.deep_space_contact_expected = 0
+        self.deep_space_contacts = []
+        overlay = getattr(self, "contact_scope_hud", None)
+        if overlay is not None and hide:
+            overlay.clear()
+
+    def _record_deep_space_contact(self, raw, data):
+        """Deduplicate one journal-confirmed non-body contact for this system."""
+        raw = raw if isinstance(raw, dict) else {}
+        data = data if isinstance(data, dict) else {}
+        name = str(data.get("signal_name") or raw.get("SignalName_Localised")
+                   or raw.get("SignalName") or "Unidentified signal").strip()
+        signal_type = str(data.get("signal_type") or raw.get("USSType_Localised")
+                          or raw.get("USSType") or "").strip()
+        key = "|".join((name.casefold(), signal_type.casefold(),
+                        "station" if data.get("is_station") else "signal"))
+        remaining = data.get("time_remaining")
+        try:
+            expires_at = _journal_epoch(raw.get("timestamp"), time.time()) + float(remaining)
+        except (TypeError, ValueError):
+            expires_at = None
+        row = {
+            "key": key, "name": name, "type": signal_type,
+            "threat": data.get("threat_level"),
+            "is_station": bool(data.get("is_station")),
+            "faction": data.get("faction"), "expires_at": expires_at,
+        }
+        rows = [item for item in (getattr(self, "deep_space_contacts", None) or ())
+                if isinstance(item, dict) and item.get("key") != key]
+        rows.append(row)
+        self.deep_space_contacts = rows[-128:]
+        self.deep_space_contact_system = self.current_sys
+        if not self.batch_mode:
+            self._refresh_contact_scope()
+
+    def _dss_efficiency_snapshot(self):
+        lifetime = self.config.get("dss_efficiency_stats")
+        if not isinstance(lifetime, dict):
+            lifetime = {}
+        session = getattr(self, "dss_efficiency_session", None) or {}
+        return {
+            "session": {key: int(session.get(key) or 0)
+                        for key in ("mapped", "efficient", "probes", "target")},
+            "lifetime": {key: int(lifetime.get(key) or 0)
+                         for key in ("mapped", "efficient", "probes", "target")},
+        }
+
+    def _record_dss_efficiency(self, raw, data, startup_replay=False):
+        raw = raw if isinstance(raw, dict) else {}
+        data = data if isinstance(data, dict) else {}
+        try:
+            probes = int(data.get("probes_used"))
+            target = int(data.get("efficiency_target"))
+        except (TypeError, ValueError):
+            return False
+        if probes <= 0 or target <= 0:
+            return False
+        efficient = probes <= target
+        uid = ":".join(str(value or "") for value in (
+            raw.get("timestamp"), data.get("system_address"), data.get("body_id"),
+        ))
+        stats = self.config.get("dss_efficiency_stats")
+        if not isinstance(stats, dict):
+            stats = {}
+        seen = list(stats.get("seen") or ())
+        is_new = uid not in seen
+        if is_new:
+            stats["mapped"] = int(stats.get("mapped") or 0) + 1
+            stats["efficient"] = int(stats.get("efficient") or 0) + int(efficient)
+            stats["probes"] = int(stats.get("probes") or 0) + probes
+            stats["target"] = int(stats.get("target") or 0) + target
+            stats["seen"] = (seen + [uid])[-2048:]
+            self.config["dss_efficiency_stats"] = stats
+            save_active_profile_config(self.config)
+        if not startup_replay and is_new:
+            session = self.dss_efficiency_session
+            session["mapped"] += 1
+            session["efficient"] += int(efficient)
+            session["probes"] += probes
+            session["target"] += target
+        return efficient
+
     def _schedule_survey_status_refresh_ui(self, generation):
         """Debounce Survey Operations after journal state settles."""
         if generation != getattr(self, "_survey_status_refresh_generation", 0):
@@ -1341,6 +1460,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                         focused_body_name=self.current_body_name,
                         total_known=self.scan_total_confirmed,
                         belt_clusters=list(self.belt_clusters),
+                        dss_stats=self._dss_efficiency_snapshot(),
                     )
         try:
             self._survey_status_refresh_job = self.root.after(150, _run)
@@ -1886,6 +2006,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.current_legal_state = None
         self.current_destination = None
         self.current_destination_details = {}
+        self._navigation_target_status_seen = False
+        self.deep_space_contact_system = ""
+        self.deep_space_contact_expected = 0
+        self.deep_space_contacts = []
         self.current_local_space_body_type = ""
         self.current_local_space_name = ""
         self.current_asteroid_field_kind = ""
@@ -1942,6 +2066,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._navigation_transition_job = None
         self.neutron_boost_armed = False
         self.neutron_boost_value = None
+        self.fsd_injection_armed = False
+        self.fsd_injection_percent = None
+        self.dss_efficiency_session = {
+            "mapped": 0, "efficient": 0, "probes": 0, "target": 0,
+        }
         self.cargo_capacity = 0
         self.current_cargo_tons = 0
         self.current_cargo_inventory = []
@@ -2162,6 +2291,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         else:
             self.heartbeat_hud = None
 
+        if self.config.get("contact_scope_overlay_enabled", True):
+            self.contact_scope_hud = ContactScopeHUD(self.root, self.config)
+            self._refresh_contact_scope()
+            if self.current_docked:
+                self.contact_scope_hud.suppress()
+        else:
+            self.contact_scope_hud = None
+
         self._attach_html_overlay_renderers()
 
         # Capture each overlay's intended initial visibility and withdraw it
@@ -2360,16 +2497,13 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 # intentionally false here. Keep an active HTML proxy clear
                 # while its browser surface starts; its bridge restores the
                 # native renderer automatically if startup genuinely fails.
-                html_pending = bool(getattr(overlay, "_html_bridge", None))
-                canvas_bridge = getattr(overlay, "_html_canvas_bridge", None)
-                survey_bridge = getattr(overlay, "_html_survey_bridge", None)
-                toast_bridge = getattr(overlay, "_html_toast_bridge", None)
-                html_pending = bool(
-                    html_pending
-                    or getattr(canvas_bridge, "surface", None) is not None
-                    or getattr(survey_bridge, "surface", None) is not None
-                    or getattr(toast_bridge, "surface", None) is not None
-                )
+                html_pending = any(
+                    name.startswith("_html_") and name.endswith("_bridge")
+                    and (bridge is not None)
+                    and (name == "_html_bridge"
+                         or getattr(bridge, "surface", None) is not None)
+                    for name, bridge in vars(overlay).items()
+                ) if overlay is not None else False
                 window.attributes(
                     "-alpha", 0.0 if html_ready or html_pending else 1.0,
                 )
@@ -3951,6 +4085,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 bool(dss_complete) if dss_complete is not None
                 else bool(previous.get("dss_complete"))
             ),
+            "dss_probes_used": previous.get("dss_probes_used"),
+            "dss_efficiency_target": previous.get("dss_efficiency_target"),
+            "dss_efficiency_met": previous.get("dss_efficiency_met"),
         }
         self.system_bio_signals = sum(
             int(signals.get("bio", 0) or 0)
@@ -4141,6 +4278,16 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.heartbeat_hud.destroy()
             self.heartbeat_hud = None
 
+        if self.config.get("contact_scope_overlay_enabled", True):
+            if self.contact_scope_hud is None:
+                self.contact_scope_hud = ContactScopeHUD(self.root, self.config)
+            self._refresh_contact_scope()
+            if self.current_docked:
+                self.contact_scope_hud.suppress()
+        elif self.contact_scope_hud:
+            self.contact_scope_hud.destroy()
+            self.contact_scope_hud = None
+
         self._attach_html_overlay_renderers()
         self._apply_html_overlay_renderer()
 
@@ -4192,6 +4339,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 )
             elif attr == "heartbeat_hud":
                 attach_html_heartbeat_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "contact_scope_hud":
+                attach_html_contact_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             else:
@@ -4701,6 +4852,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "armed": bool(getattr(self, "neutron_boost_armed", False)),
             "value": getattr(self, "neutron_boost_value", None),
         }
+        fsd_injection = {
+            "armed": bool(getattr(self, "fsd_injection_armed", False)),
+            "percent": getattr(self, "fsd_injection_percent", None),
+        }
         altitude = getattr(self, "current_altitude_m", None)
         approach_body_known = getattr(self, "current_body_id", None) is not None
         glide_active = bool(getattr(self, "current_glide_mode", False))
@@ -4856,6 +5011,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "galactic_vector": galactic_vector,
             "system_arrival_epoch": arrival_epoch,
             "neutron_boost": neutron_boost,
+            "fsd_injection": fsd_injection,
             "region": self._navigation_region_context(),
             "journal_event": self._navigation_hud_event_context(),
             "badges": badges[:6],
@@ -5057,7 +5213,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         payload = raw if isinstance(raw, dict) else {}
         normalised = data if isinstance(data, dict) else {}
         self._observe_navigation_docking_state(event, payload, normalised)
-        if event in {"FSSAllBodiesFound", "SAAScanComplete", "ScanOrganic"}:
+        if event in {"FSSAllBodiesFound", "ScanOrganic"}:
             # Completion/sample state already has authoritative, persistent
             # presentation below the top instrument and in Survey Operations.
             # Do not resurrect the retired green survey channel as a short
@@ -5161,6 +5317,18 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 kind, tone, duration_s, priority = "first_discovery", "green", 1.8, 78
             elif first_footfall:
                 kind, tone, duration_s, priority = "footfall_candidate", "green", 1.7, 74
+        elif event == "SAAScanComplete":
+            try:
+                probes = int(normalised.get("probes_used", payload.get("ProbesUsed")))
+                target = int(normalised.get("efficiency_target", payload.get("EfficiencyTarget")))
+            except (TypeError, ValueError):
+                probes = target = 0
+            if probes <= 0 or target <= 0:
+                return False
+            if probes <= target:
+                kind, tone, duration_s, priority = "dss_efficiency", "green", 1.9, 83
+            else:
+                kind, tone, duration_s, priority = "dss_complete", "accent", 1.6, 70
         elif event == "ProspectedAsteroid":
             materials = payload.get("Materials") or normalised.get("materials") or ()
             material_rows = [item for item in materials if isinstance(item, dict)]
@@ -5235,6 +5403,13 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 detail["body_count"] = max(0, int(body_count or 0))
             except (TypeError, ValueError):
                 pass
+        elif kind in {"dss_efficiency", "dss_complete"}:
+            detail["probes_used"] = probes
+            detail["efficiency_target"] = target
+            detail["state_label"] = (
+                f"DSS EFFICIENT {probes}/{target}"
+                if kind == "dss_efficiency" else f"DSS COMPLETE {probes}/{target}"
+            )
         elif kind in {"valuable_discovery", "first_discovery", "footfall_candidate"}:
             detail["body_name"] = body_name
         elif kind in {"prospector_scan", "prospector_rich", "prospector_core"}:
@@ -5522,33 +5697,57 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         return changed
 
     def _observe_navigation_readiness_event(self, event, raw, data, startup_replay=False):
-        """Maintain profile-safe neutron boost readiness from journal truth."""
+        """Maintain profile-safe neutron and synthesis FSD readiness."""
         event = str(event or "")
         raw = raw if isinstance(raw, dict) else {}
         data = data if isinstance(data, dict) else {}
-        was_armed = bool(getattr(self, "neutron_boost_armed", False))
-        was_value = getattr(self, "neutron_boost_value", None)
+        before = (
+            bool(getattr(self, "neutron_boost_armed", False)),
+            getattr(self, "neutron_boost_value", None),
+            bool(getattr(self, "fsd_injection_armed", False)),
+            getattr(self, "fsd_injection_percent", None),
+        )
+        handled = False
 
         if event == "JetConeBoost":
+            handled = True
             self.neutron_boost_armed = True
             value = raw.get("BoostValue", data.get("boost_value"))
             try:
                 self.neutron_boost_value = float(value) if value is not None else None
             except (TypeError, ValueError):
                 self.neutron_boost_value = None
+        elif event == "Synthesis":
+            name = str(raw.get("Name") or data.get("Name") or data.get("name") or "").strip()
+            tier = {"fsd basic": 25, "fsd standard": 50, "fsd premium": 100}.get(
+                name.casefold()
+            )
+            if tier is None:
+                return False
+            handled = True
+            self.fsd_injection_armed = True
+            self.fsd_injection_percent = tier
+            if not startup_replay:
+                self._publish_navigation_transient(
+                    "fsd_injection", f"FSD INJECTION +{tier}%", "accent", 1.8, 80,
+                )
         elif event in {
             "FSDJump", "Died", "Shutdown", "LoadGame",
             "ShipyardBuy", "ShipyardNew", "ShipyardSwap",
         }:
+            handled = True
             self.neutron_boost_armed = False
             self.neutron_boost_value = None
+            self.fsd_injection_armed = False
+            self.fsd_injection_percent = None
         else:
             return False
 
-        changed = (
-            was_armed != bool(self.neutron_boost_armed)
-            or was_value != self.neutron_boost_value
+        after = (
+            bool(self.neutron_boost_armed), self.neutron_boost_value,
+            bool(self.fsd_injection_armed), self.fsd_injection_percent,
         )
+        changed = handled and before != after
         if changed and not startup_replay and not getattr(self, "batch_mode", False):
             self.update_hud()
         return changed
@@ -5568,6 +5767,51 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     break
             text = text.replace("_", " ")
         return " ".join(text.split())
+
+    def _publish_navigation_transient(self, kind, state_label, tone="accent",
+                                      duration=1.35, priority=62):
+        """Publish a brief state acquisition cue, never another data panel."""
+        if getattr(self, "_startup_restore_active", False):
+            return False
+        self._hud_event_sequence = int(getattr(self, "_hud_event_sequence", 0) or 0) + 1
+        self._hud_event_pulse = {
+            "seq": self._hud_event_sequence, "event": "Status",
+            "kind": str(kind), "lane": "centre", "tone": str(tone),
+            "duration": float(duration), "priority": int(priority),
+            "count": 1, "observed": time.monotonic(),
+            "state_label": str(state_label or "").upper(),
+        }
+        if not getattr(self, "batch_mode", False):
+            self.update_hud()
+        return True
+
+    def _observe_navigation_target_transition(self, previous, current):
+        """Turn Status Destination changes into one restrained acquisition pulse."""
+        previous = previous if isinstance(previous, dict) else {}
+        current = current if isinstance(current, dict) else {}
+        if not getattr(self, "_navigation_target_status_seen", False):
+            self._navigation_target_status_seen = True
+            return False
+        if previous == current:
+            return False
+        name = self._navigation_destination_label(current.get("Name"))
+        if not current or not name:
+            return self._publish_navigation_transient(
+                "target_clear", "TARGET CLEARED", "muted", 1.0, 48,
+            ) if previous else False
+        body = current.get("Body")
+        system = current.get("System")
+        key = name.casefold()
+        if body not in (None, 0, "0"):
+            if any(word in key for word in ("signal", "beacon", "anomaly", "phenomena")):
+                kind, label = "target_signal", "SIGNAL TARGET"
+            else:
+                kind, label = "target_body", "BODY TARGET"
+        elif system not in (None, 0, "0"):
+            kind, label = "target_system", "SYSTEM TARGET"
+        else:
+            kind, label = "target_lock", "TARGET LOCK"
+        return self._publish_navigation_transient(kind, label, "accent", 1.35, 63)
 
     @staticmethod
     def _navigation_asteroid_field_kind(body_type):
@@ -5624,6 +5868,13 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         asteroid_kind = str(
             getattr(self, "current_asteroid_field_kind", "") or ""
         )
+        local_space_type = str(
+            getattr(self, "current_local_space_body_type", "") or ""
+        )
+        local_space_key = "".join(
+            char for char in local_space_type.casefold() if char.isalnum()
+        )
+        station_vicinity = local_space_key == "station"
         if phase == "carrier_transit":
             state, label, tone = "carrier_transit", "CARRIER TRANSIT", "orange"
         elif phase == "carrier_arrival":
@@ -5651,6 +5902,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             # PlanetaryRing/StellarRing/AsteroidCluster drop is the more meaningful live
             # navigation state for the centre instrument.
             state, label, tone = "asteroid_field", "ASTEROID FIELD", "yellow"
+        elif station_vicinity:
+            # SupercruiseExit supplies BodyType: Station for an orbital or
+            # carrier drop.  That destination is stronger evidence than the
+            # generic Status mass-lock bit and remains valid until Docked or
+            # SupercruiseEntry clears the local-space context.
+            state, label, tone = "station_vicinity", "STATION VICINITY", "accent"
         elif mass_locked:
             state, label, tone = "mass_lock", "MASS LOCK", "yellow"
         else:
@@ -5668,9 +5925,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "phase": phase,
             "target": str(getattr(self, "_navigation_jump_target", "") or ""),
             "asteroid_kind": asteroid_kind,
-            "local_space_type": str(
-                getattr(self, "current_local_space_body_type", "") or ""
-            ),
+            "station_vicinity": station_vicinity,
+            "local_space_type": local_space_type,
             "local_space_name": str(
                 getattr(self, "current_local_space_name", "") or ""
             ),
@@ -7238,6 +7494,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                         self._record_departure_revisit(raw.get("timestamp"))
                     self._save_exploration_checkpoint("departure")
                     self._hide_survey_status_for_jump()
+                    if self.contact_scope_hud:
+                        self.contact_scope_hud.hide()
                 self.in_fss = False
                 self.fss_summary_active = False
                 # StartJump is the countdown for both low and high wake. Keep
@@ -7312,6 +7570,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 cached_confirmed=getattr(self, "_cached_scan_total_confirmed", False),
             )
             outgoing_sys = self.current_sys if self.current_sys not in ("---", "Unknown", incoming_sys) else None
+            if incoming_sys != previous_current_sys:
+                self._clear_deep_space_contacts()
             traffic_before_reset = dict(self.system_traffic or {})
             preserve_startup_traffic = (
                 startup_replay
@@ -7491,7 +7751,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                             focused_body_id=self.current_body_id,
                             focused_body_name=self.current_body_name,
                             total_known=self.scan_total_confirmed,
-                            belt_clusters=list(self.belt_clusters)),
+                            belt_clusters=list(self.belt_clusters),
+                            dss_stats=self._dss_efficiency_snapshot()),
                         key="survey-status",
                     )
             self._refresh_exploration_window()
@@ -7527,6 +7788,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.current_station_landing_pads = d.get("LandingPads")
             if self.survey_status_hud:
                 self.survey_status_hud.suppress()
+            if self.contact_scope_hud:
+                self.contact_scope_hud.suppress()
             label = f"{station} ({stype})" if stype else station
             self._queue_edsm_upload(raw, startup_replay=startup_replay)
             self.update_hud()
@@ -7563,6 +7826,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             if self.survey_status_hud:
                 self.survey_status_hud.resume()
                 self._refresh_survey_status_progress()
+            if self.contact_scope_hud:
+                self.contact_scope_hud.resume(refresh=False)
+                self._refresh_contact_scope()
             if not self.batch_mode and not startup_replay:
                 self.add_event_feed_entry("DOCK", f"Undocked: {station}", severity="INFO", copy_text=station)
 
@@ -7777,6 +8043,16 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             if d.get("system_name") and d.get("system_name") != self.current_sys:
                 return
             body_count = int(d.get("body_count") or 0)
+            try:
+                non_body_count = max(0, int(d.get("non_body_count") or 0))
+            except (TypeError, ValueError):
+                non_body_count = 0
+            if non_body_count:
+                self.deep_space_contact_system = self.current_sys
+                self.deep_space_contact_expected = max(
+                    int(getattr(self, "deep_space_contact_expected", 0) or 0),
+                    non_body_count,
+                )
             # Only advance total — never let a missing/zero BodyCount wipe a
             # value that load_system_from_db already restored from the DB.
             if body_count > 0:
@@ -7815,6 +8091,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.schedule_dashboard_refresh()
                 self._refresh_exploration_window()
                 self._refresh_survey_status_progress()
+                self._refresh_contact_scope()
+
+        elif ev == "FSSSignalDiscovered":
+            if not self._matches_current_system_address(d):
+                return
+            self._record_deep_space_contact(raw, d)
 
         elif ev == "DiscoveryScan":
             if not self._matches_current_system_address(d):
@@ -7937,21 +8219,54 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 return
             body_id = self._normalize_body_id(d.get("body_id"))
             if body_id is not None:
+                try:
+                    probes_used = int(d.get("probes_used"))
+                    efficiency_target = int(d.get("efficiency_target"))
+                except (TypeError, ValueError):
+                    probes_used = efficiency_target = 0
+                efficiency_met = bool(
+                    probes_used > 0 and efficiency_target > 0
+                    and probes_used <= efficiency_target
+                )
                 self.body_dss_complete.add(body_id)
+                signals = self.body_signals.setdefault(body_id, {})
+                signals["dss_complete"] = True
+                if probes_used and efficiency_target:
+                    signals.update({
+                        "dss_probes_used": probes_used,
+                        "dss_efficiency_target": efficiency_target,
+                        "dss_efficiency_met": efficiency_met,
+                    })
                 item = self.scan_items_by_id.get(body_id)
                 if item:
                     item["dss_complete"] = True
+                    if probes_used and efficiency_target:
+                        item.update({
+                            "dss_probes_used": probes_used,
+                            "dss_efficiency_target": efficiency_target,
+                            "dss_efficiency_met": efficiency_met,
+                        })
                     if item.get("_ts") is None:
                         item["_ts"] = int(time.time())
                     self.save_scan_item_to_db(self.current_sys, item)
                     body_label = item.get("name") or f"Body {body_id}"
                     if not startup_replay:
-                        self.add_event_feed_entry("DSS", f"DSS complete: {body_label}", severity="INFO", copy_text=body_label)
+                        result = (
+                            f"DSS efficient: {body_label} · {probes_used}/{efficiency_target} probes"
+                            if efficiency_met else
+                            f"DSS complete: {body_label} · {probes_used}/{efficiency_target} probes"
+                            if probes_used and efficiency_target else
+                            f"DSS complete: {body_label}"
+                        )
+                        self.add_event_feed_entry("DSS", result, severity="INFO", copy_text=body_label)
                     self._queue_edsm_upload(raw, startup_replay=startup_replay)
                     if not self.batch_mode:
                         self.update_hud()
                         self.schedule_dashboard_refresh()
                         self._refresh_survey_status_progress()
+                elif not self.batch_mode:
+                    self._refresh_survey_status_progress()
+                self._record_dss_efficiency(raw, d, startup_replay=startup_replay)
 
         elif ev == "Scan":
             if not self._matches_current_system_address(d):
@@ -8727,6 +9042,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 focused_body_name=self.current_body_name,
                 total_known=self.scan_total_confirmed,
                 belt_clusters=list(self.belt_clusters),
+                dss_stats=self._dss_efficiency_snapshot(),
             ), key="survey-status")
         if getattr(self, "exploration_window", None) and self.exploration_window.is_open():
             self._ui_post(self.exploration_window._render_sampling, key="exploration-sampling")
@@ -9081,6 +9397,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         )
         if survey_changed:
             self._refresh_survey_status_progress()
+        if startup_final or batch_event_types.intersection({
+            "FSSDiscoveryScan", "FSSSignalDiscovered", "FSDJump",
+            "CarrierJump", "Location", "Docked", "Undocked",
+        }):
+            self._refresh_contact_scope()
         self._refresh_html_workspace()
         self._refresh_exploration_window()
 

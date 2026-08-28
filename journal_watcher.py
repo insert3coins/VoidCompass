@@ -918,7 +918,22 @@ class JournalWatcher:
                     "system_name": data.get("SystemName"),
                     "system_address": data.get("SystemAddress"),
                     "progress": data.get("Progress"),
-                    "body_count": data.get("BodyCount", 0)
+                    "body_count": data.get("BodyCount", 0),
+                    "non_body_count": data.get("NonBodyCount", 0)
+                }
+            }
+        if ev == "FSSSignalDiscovered":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "system_address": data.get("SystemAddress"),
+                    "signal_name": data.get("SignalName_Localised") or data.get("SignalName"),
+                    "signal_type": data.get("USSType_Localised") or data.get("USSType"),
+                    "time_remaining": data.get("TimeRemaining"),
+                    "threat_level": data.get("ThreatLevel"),
+                    "is_station": bool(data.get("IsStation")),
+                    "faction": data.get("Faction"),
                 }
             }
         if ev == "DiscoveryScan":
@@ -997,8 +1012,11 @@ class JournalWatcher:
                 "type": ev,
                 "raw": data,
                 "data": {
+                    "body_name": data.get("BodyName"),
                     "body_id": data.get("BodyID"),
-                    "system_address": data.get("SystemAddress")
+                    "system_address": data.get("SystemAddress"),
+                    "probes_used": data.get("ProbesUsed"),
+                    "efficiency_target": data.get("EfficiencyTarget")
                 }
             }
         if ev == "ScanOrganic":

@@ -1,15 +1,18 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.1.6 // Navigation State Expansion
-**Release Date:** 2026-Aug-27
+## v5.4.1.7 // Deep-Space Awareness
+**Release Date:** 2026-Aug-28
 
-*   Expanded the Navigation HUD's authoritative live states with Supercruise Assist, Flight Assist Off, Silent Running, SRV/Nomad handbrake, turret view and drive-assist presentations, each with its own HTML motion language.
-*   Added high-priority heat and suit hazard states for overheating, low oxygen, low health and extreme surface temperatures, while low fuel, shields, hardpoints, cargo scoop, night vision and analysis mode remain restrained instrument modifiers instead of displacing navigation.
-*   Added persistent docking guidance: docking requests and granted landing pads remain visible until docking, cancellation, timeout or departure resolves them, with distinct clearance and rejection animations.
-*   Added dedicated AFMU repair, system reboot and jet-cone damage responses from their journal events, replacing generic pulses with recognisable maintenance and emergency sequences.
+*   Added a profile-aware Deep Space Contact Scope for non-body FSS contacts such as signal sources, distress calls, vessels, stations and notable stellar phenomena, with threat and expiry telemetry.
+*   Added restrained target-acquisition transitions to Navigation, active Basic, Standard or Premium FSD-injection readiness and journal-backed Station Vicinity context for normal-space station mass locks without duplicating route or inventory information.
+*   Added DSS probe-efficiency receipts and profile-aware session/lifetime efficiency tracking to Survey Operations, where mapped-body work already belongs.
+*   Kept every new channel purpose-specific: Contact Scope excludes bodies and survey value, Navigation receives only short state cues, and existing bio, geo, route, fuel and gravity displays remain authoritative.
+*   Rebuilt Cargo Manifest as an animated hold instrument with intake/release acknowledgements, a live load aperture, capacity cells and per-stack allocation rails; removed redundant journal-link captions from HTML overlay footers while retaining useful live status values.
+*   Added an event-driven Survey Operations motion pass for new bodies, biological and geological signals, DSS mapping, high-value discoveries, biological sample stages and surface-focus transitions; restored or unchanged survey data remains still.
 
 ## Earlier releases
 
+*   **v5.4.1.6** — Expanded authoritative Navigation states, docking guidance, cockpit modifiers, repair/reboot responses and heat, suit and jet-cone hazards.
 *   **v5.4.1.5** — Rebuilt the Navigation System Survey as a discovery-driven angular rail, rebuilt the HTML bootloader and Galnet intelligence reader, and hardened dashboard/overlay update recovery.
 *   **v5.4.1.4** — Added the persistent Galnet Relay and in-app archive, official RSS caching and profile-aware controls; repaired complex panel arranging and clarified Navigation waypoint destination, progress and distance.
 *   **v5.4.1.3** — Unified theme-aware Dashboard controls and profile panel arranging, rebuilt the System Workboard and waypoint rail, completed semantic Station, Cargo, Carrier, Prospector and Heartbeat overlays, refined vehicle handoffs and added neutron-tier flight animation.
