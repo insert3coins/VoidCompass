@@ -15,6 +15,7 @@
   let previousModel = null;
   let eventSequence = 0;
   let settleTimer = null;
+  let flagSignature = "";
 
   function node(tag, className = "", text = "") {
     const element = document.createElement(tag);
@@ -87,12 +88,24 @@
     root.dataset.load = tone;
     root.style.setProperty("--utilisation", String(utilisation || 0));
     root.style.setProperty("--load-angle", `${Math.round((utilisation || 0) * 360)}deg`);
-    const cells = Array.from({length: CAPACITY_CELLS}, (_, index) => {
-      const cell = node("i", index < active ? `active ${tone}` : "");
-      cell.style.setProperty("--cell", String(index));
-      return cell;
+    const host = byId("capacity-segments");
+    if (host.children.length !== CAPACITY_CELLS) {
+      host.replaceChildren(...Array.from({length: CAPACITY_CELLS}, (_, index) => {
+        const cell = node("i");
+        cell.style.setProperty("--cell", String(index));
+        return cell;
+      }));
+    }
+    [...host.children].forEach((cell, index) => {
+      const wasActive = cell.classList.contains("active");
+      const isActive = index < active;
+      cell.className = isActive ? `active ${tone}` : "";
+      if (isActive && !wasActive) {
+        cell.classList.remove("cell-changed");
+        void cell.offsetWidth;
+        cell.classList.add("cell-changed");
+      }
     });
-    byId("capacity-segments").replaceChildren(...cells);
     const percent = utilisation === null ? null : Math.round(utilisation * 100);
     set("capacity-percent", percent === null ? "CAPACITY UNKNOWN" : `${percent}% OCCUPIED`);
     set("hold-percent", percent === null ? "—" : `${percent}%`);
@@ -105,9 +118,13 @@
     if (number(model.mission)) flags.push(["mission", `MISSION ${tonnes(model.mission)}`]);
     if (number(model.stolen)) flags.push(["stolen", `STOLEN ${tonnes(model.stolen)}`]);
     if (!flags.length) flags.push(["clear", model.total ? "HOLD STABLE" : "HOLD CLEAR"]);
-    byId("cargo-flags").replaceChildren(
-      ...flags.map(([kind, label]) => node("span", kind, label)),
-    );
+    const signature = JSON.stringify(flags);
+    if (signature !== flagSignature) {
+      byId("cargo-flags").replaceChildren(
+        ...flags.map(([kind, label]) => node("span", kind, label)),
+      );
+      flagSignature = signature;
+    }
   }
 
   function orderedRows(rows) {
@@ -132,6 +149,7 @@
       added ? "acquired" : "", changed ? "adjusted" : "", direction,
     ].filter(Boolean).join(" "));
     item.dataset.key = cargoKey(row);
+    item.dataset.signature = rowSignature(row);
 
     const copy = node("div", "commodity-copy");
     copy.appendChild(node("strong", "", row.name || "Unknown commodity"));
@@ -163,6 +181,32 @@
     return item;
   }
 
+  function rowSignature(row) {
+    return JSON.stringify([
+      String(row?.name || ""), number(row?.count),
+      number(row?.mission), number(row?.stolen),
+    ]);
+  }
+
+  function updateAllocation(item, row, total) {
+    const fill = item?.querySelector(".commodity-allocation i");
+    if (!fill) return;
+    const count = Math.max(0, number(row.count));
+    fill.style.setProperty("--share", `${total ? Math.max(2, count / total * 100) : 0}%`);
+  }
+
+  function placeChildren(host, desired) {
+    const keep = new Set(desired);
+    [...host.children].forEach((child) => {
+      if (!keep.has(child)) child.remove();
+    });
+    desired.forEach((child, index) => {
+      if (host.children[index] !== child) {
+        host.insertBefore(child, host.children[index] || null);
+      }
+    });
+  }
+
   function renderManifest(model) {
     const rows = orderedRows(Array.isArray(model.rows) ? model.rows : []);
     const shown = rows.slice(0, MAX_ROWS);
@@ -171,48 +215,72 @@
       (previousModel?.rows || []).map((row) => [cargoKey(row), number(row.count)]),
     );
     const host = byId("manifest");
-    host.replaceChildren();
+    const existing = new Map(
+      [...host.children].map((item) => [String(item.dataset.key || ""), item]),
+    );
+    const desired = [];
     if (!shown.length) {
-      const empty = node("div", "empty-hold");
-      empty.appendChild(node("i", "", "◇"));
-      empty.appendChild(node("strong", "", "HOLD CLEAR"));
-      empty.appendChild(node("span", "", "NO COMMODITY STACKS REPORTED"));
-      host.appendChild(empty);
+      let empty = existing.get("__empty__");
+      if (!empty) {
+        empty = node("div", "empty-hold");
+        empty.dataset.key = "__empty__";
+        empty.appendChild(node("i", "", "◇"));
+        empty.appendChild(node("strong", "", "HOLD CLEAR"));
+        empty.appendChild(node("span", "", "NO COMMODITY STACKS REPORTED"));
+      }
+      desired.push(empty);
     } else {
       shown.forEach((row) => {
         const key = cargoKey(row);
-        host.appendChild(manifestRow(
-          row, previousCounts.has(key) ? previousCounts.get(key) : null,
-          Math.max(1, number(model.total)),
-        ));
+        const total = Math.max(1, number(model.total));
+        const previousCount = previousCounts.has(key) ? previousCounts.get(key) : null;
+        let item = existing.get(key);
+        if (!item || item.dataset.signature !== rowSignature(row)) {
+          const replacement = manifestRow(row, previousCount, total);
+          if (item) item.replaceWith(replacement);
+          item = replacement;
+        } else {
+          updateAllocation(item, row, total);
+        }
+        desired.push(item);
       });
     }
     if (overflow.length) {
       const hidden = overflow.reduce((sum, row) => sum + number(row.count), 0);
-      host.appendChild(node(
-        "div", "overflow", `+ ${overflow.length} MORE STACKS · ${tonnes(hidden)}`,
-      ));
+      const overflowText = `+ ${overflow.length} MORE STACKS · ${tonnes(hidden)}`;
+      let overflowRow = existing.get("__overflow__");
+      if (!overflowRow) {
+        overflowRow = node("div", "overflow");
+        overflowRow.dataset.key = "__overflow__";
+      }
+      overflowRow.textContent = overflowText;
+      desired.push(overflowRow);
     }
+    placeChildren(host, desired);
   }
 
   function acknowledgeCargoChange(delta, hasRows) {
+    if (!delta) {
+      if (!settleTimer) {
+        set("hold-state", hasRows ? "MANIFEST LIVE" : "HOLD CLEAR");
+      }
+      return;
+    }
     eventSequence += 1;
     const sequence = eventSequence;
     window.clearTimeout(settleTimer);
     root.classList.remove("cargo-event", "intake-event", "release-event");
-    if (delta) {
-      root.classList.add("cargo-event", delta > 0 ? "intake-event" : "release-event");
-      set("hold-state", delta > 0
-        ? `CARGO INTAKE ${tonnes(delta, true)}`
-        : `CARGO RELEASE ${tonnes(Math.abs(delta))}`);
-      settleTimer = window.setTimeout(() => {
-        if (sequence !== eventSequence) return;
-        root.classList.remove("cargo-event", "intake-event", "release-event");
-        set("hold-state", hasRows ? "MANIFEST LIVE" : "HOLD CLEAR");
-      }, 1650);
-    } else {
+    void root.offsetWidth;
+    root.classList.add("cargo-event", delta > 0 ? "intake-event" : "release-event");
+    set("hold-state", delta > 0
+      ? `CARGO INTAKE ${tonnes(delta, true)}`
+      : `CARGO RELEASE ${tonnes(Math.abs(delta))}`);
+    settleTimer = window.setTimeout(() => {
+      if (sequence !== eventSequence) return;
+      settleTimer = null;
+      root.classList.remove("cargo-event", "intake-event", "release-event");
       set("hold-state", hasRows ? "MANIFEST LIVE" : "HOLD CLEAR");
-    }
+    }, 1650);
   }
 
   function render(snapshot = {}) {

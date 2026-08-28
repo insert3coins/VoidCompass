@@ -883,6 +883,8 @@ class TacticalHUD:
         # than a generic mass-lock state while the mood remains current.
         if music_state:
             return music_state
+        if fsd_state == "carrier_vicinity" and normal_ship_flight:
+            return "CARRIER VICINITY"
         if fsd_state == "station_vicinity" and normal_ship_flight:
             return "STATION VICINITY"
         if fsd_state == "mass_lock" and normal_ship_flight:
@@ -938,7 +940,7 @@ class TacticalHUD:
             "ORBITAL DEPARTURE", "SURFACE HOLD", "DOCK ASSIST", "RIGHT PANEL",
             "LEFT PANEL", "COMMS", "ROLE PANEL", "SERVICES",
             "SC ASSIST", "HANDBRAKE", "TURRET VIEW", "DRIVE ASSIST",
-            "AFMU REPAIR", "DOCK REQUEST", "STATION VICINITY",
+            "AFMU REPAIR", "DOCK REQUEST", "STATION VICINITY", "CARRIER VICINITY",
         ):
             return COLOR_ACCENT
         if state_text in {
@@ -1017,7 +1019,7 @@ class TacticalHUD:
             return "jet_cone_damage"
         if state == "MASS LOCK":
             return "fsd_lock"
-        if state == "STATION VICINITY":
+        if state in {"STATION VICINITY", "CARRIER VICINITY"}:
             return "station"
         if state.startswith("TARGET ") or state.endswith(" TARGET"):
             return "target_lock"
@@ -1545,10 +1547,15 @@ class TacticalHUD:
             if travel_state == "carrier_transit":
                 return f"CARRIER TRANSIT{detail}", COLOR_ORANGE
             return f"CARRIER ARRIVAL{detail}", COLOR_GREEN
-        if travel_state == "station_vicinity":
+        if travel_state in {"station_vicinity", "carrier_vicinity"}:
             station = str(travel.get("local_space_name") or "").strip()
             detail = f" · {station}" if station else ""
-            return f"STATION VICINITY{detail}", COLOR_ACCENT
+            label = (
+                "CARRIER VICINITY"
+                if travel_state == "carrier_vicinity"
+                else "STATION VICINITY"
+            )
+            return f"{label}{detail}", COLOR_ACCENT
         injection = context.get("fsd_injection") or {}
         if injection.get("armed"):
             try:

@@ -130,7 +130,7 @@ header > b {
   height: 1px;
   opacity: .45;
   background: linear-gradient(90deg, var(--accent), transparent 72%);
-  transform: scaleX(max(.08, var(--utilisation)));
+  transform: scaleX(var(--utilisation));
   transform-origin: left;
   transition: transform .55s cubic-bezier(.2, .8, .2, 1);
 }
@@ -245,9 +245,8 @@ header > b {
   background: var(--green);
   border-color: var(--green);
   box-shadow: 0 0 4px color-mix(in srgb, var(--green) 48%, transparent);
-  animation: cell-acquire .38s ease-out both;
-  animation-delay: calc(var(--cell) * 18ms);
 }
+.capacity-segments i.cell-changed { animation: cell-acquire .38s ease-out both; animation-delay: calc(var(--cell) * 18ms); }
 .capacity-segments i.active.warning { background: var(--yellow); border-color: var(--yellow); box-shadow: 0 0 4px color-mix(in srgb, var(--yellow) 48%, transparent); }
 .capacity-segments i.active.critical { background: var(--red); border-color: var(--red); box-shadow: 0 0 5px color-mix(in srgb, var(--red) 55%, transparent); }
 .capacity-flow {

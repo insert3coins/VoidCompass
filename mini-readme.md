@@ -3,9 +3,10 @@
 ## v5.4.1.7 // Deep-Space Awareness
 **Release Date:** 2026-Aug-28
 
-*   Added a profile-aware Deep Space Contact Scope for non-body FSS contacts such as signal sources, distress calls, vessels, stations and notable stellar phenomena, with threat and expiry telemetry.
-*   Added restrained target-acquisition transitions to Navigation, active Basic, Standard or Premium FSD-injection readiness and journal-backed Station Vicinity context for normal-space station mass locks without duplicating route or inventory information.
+*   Added a profile-aware animated Deep Space Contact Scope for non-body FSS contacts such as signal sources, distress calls, vessels, stations and notable stellar phenomena, with a live sensor plot, threat acquisition, resolution progress and in-place expiry telemetry.
+*   Added restrained target-acquisition transitions to Navigation, active Basic, Standard or Premium FSD-injection readiness and journal-backed Station/Carrier Vicinity context for normal-space mass locks, including the immediate post-undock state, without duplicating route or inventory information.
 *   Added DSS probe-efficiency receipts and profile-aware session/lifetime efficiency tracking to Survey Operations, where mapped-body work already belongs.
+*   Refined the HTML overlay pass with a correctly routed Deep Space Contact Scope, left-anchored Prospector Analysis title and keyed Cargo Manifest updates so capacity and commodity changes animate without repainting the entire overlay.
 *   Kept every new channel purpose-specific: Contact Scope excludes bodies and survey value, Navigation receives only short state cues, and existing bio, geo, route, fuel and gravity displays remain authoritative.
 *   Rebuilt Cargo Manifest as an animated hold instrument with intake/release acknowledgements, a live load aperture, capacity cells and per-stack allocation rails; removed redundant journal-link captions from HTML overlay footers while retaining useful live status values.
 *   Added an event-driven Survey Operations motion pass for new bodies, biological and geological signals, DSS mapping, high-value discoveries, biological sample stages and surface-focus transitions; restored or unchanged survey data remains still.

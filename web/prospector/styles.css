@@ -76,12 +76,13 @@ header {
   min-height: 26px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 8px;
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 22%, var(--soft));
 }
 
 .title-lock {
+  margin-right: auto;
   display: flex;
   align-items: center;
   gap: 7px;
