@@ -29,10 +29,12 @@
     "surface_departure", "orbital_departure",
   ]);
   const ROUTE_EVENTS = new Set(["route_set", "route_clear", "route_target", "route_divert"]);
+  const TARGET_EVENTS = new Set(["target_lock", "target_body", "target_signal", "target_system", "target_clear"]);
   const SCAN_EVENTS = new Set([
     "honk", "fss_progress", "fss_signal", "body_scan", "signals",
     "survey_complete", "mapping_complete", "bio_sample", "codex",
     "valuable_discovery", "first_discovery", "footfall_candidate", "data_sale",
+    "dss_efficiency", "dss_complete",
   ]);
   const RESOURCE_EVENTS = new Set([
     "prospector_scan", "prospector_rich", "prospector_core", "mining_refined",
@@ -106,6 +108,8 @@
         fuelScooping: Boolean(source.fuel_scooping),
         neutronBoost: Boolean(source.neutron_boost),
         neutronBoostValue: number(source.neutron_boost_value, 0, 0, 10),
+        fsdInjection: Boolean(source.fsd_injection),
+        fsdInjectionPercent: number(source.fsd_injection_percent, 0, 0, 100),
         routeActive: Boolean(source.route_active),
       };
     }
@@ -165,7 +169,7 @@
     key(state) {
       const motion = String(state?.motion || "flight");
       const label = String(state?.label || "FLIGHT").toUpperCase();
-      if (motion === "scanner") return label === "DSS" ? "dss" : "fss";
+      if (motion === "scanner") return label.startsWith("DSS") ? "dss" : "fss";
       if (motion === "map") return ({
         "GALAXY MAP": "galaxy_map", "SYSTEM MAP": "system_map",
         "POWER MAP": "power_map", ORRERY: "orrery", CODEX: "codex",
@@ -2294,6 +2298,18 @@
         this.path([[g.left + 3, g.y + 10], [g.left + 7, g.y + 5],
           [g.left + 11, g.y + 10]], orange, alpha * flash, 1.2);
       }
+      if (d.inMainShip && d.fsdInjection) {
+        const tier = d.fsdInjectionPercent >= 100 ? 3 : d.fsdInjectionPercent >= 50 ? 2 : 1;
+        const breathe = .35 + .35 * wave(p);
+        for (const side of [-1, 1]) {
+          const origin = side < 0 ? g.centerLeft - 7 : g.centerRight + 7;
+          for (let index = 0; index < tier; index += 1) {
+            const x = origin + side * index * 5;
+            this.line(x, g.y - 9, x + side * 3, g.y - 6,
+              c, alpha * breathe, 1.15);
+          }
+        }
+      }
     }
 
     drawFuelPulse(g, state, p, alpha) {
@@ -2404,7 +2420,7 @@
 
     eventColor(kind, fallback) {
       if (WARNING_EVENTS.has(kind) || kind === "dock_denied") return this.themeColor("orange", "#ff7a18");
-      if (["survey_complete", "mapping_complete", "bio_sample", "data_sale", "touchdown",
+      if (["survey_complete", "mapping_complete", "dss_efficiency", "bio_sample", "data_sale", "touchdown",
         "mining_refined", "interdiction_clear"].includes(kind)) return this.themeColor("green", "#4ee59b");
       if (RESOURCE_EVENTS.has(kind) || kind === "signals" || kind === "codex") return this.themeColor("yellow", "#ffd166");
       return fallback;
@@ -2465,6 +2481,32 @@
         for (const progress of [.16, .38, .62, .84]) {
           const point = this.trackPoint(progress, g, y - 7);
           this.dot(point.x, point.y, 1.1, c, fade * .62);
+        }
+      } else if (TARGET_EVENTS.has(this.eventKind)) {
+        const clearing = this.eventKind === "target_clear";
+        const spread = clearing ? 7 + p * 30 : 35 - p * 28;
+        for (const side of [-1, 1]) {
+          const x = g.center + side * spread;
+          this.path([[x + side * 5, y - 7], [x, y - 7], [x, y - 2]],
+            c, fade * .9, 1.35);
+          this.path([[x + side * 5, y + 7], [x, y + 7], [x, y + 2]],
+            c, fade * .9, 1.35);
+        }
+        if (!clearing) this.glowDot(g.center, y, 1.2 + wave(p) * 1.1, c, fade * .85);
+      } else if (this.eventKind === "dss_efficiency" || this.eventKind === "dss_complete") {
+        const rings = this.eventKind === "dss_efficiency" ? 3 : 2;
+        for (let index = 0; index < rings; index += 1) {
+          const radius = 5 + ((p + index / rings) % 1) * 27;
+          this.arc(g.center, y, radius, radius * .34, 0, TAU,
+            c, fade * (.65 - index * .13), 1.25);
+        }
+        this.line(g.center - 5, y, g.center + 5, y, c, fade * .85, 1.3);
+      } else if (this.eventKind === "fsd_injection") {
+        for (const side of [-1, 1]) {
+          for (let index = 0; index < 3; index += 1) {
+            const x = g.center + side * (8 + index * 8 + p * 3);
+            this.chevron(x, y, -side, c, fade * (.85 - index * .16), 1.5);
+          }
         }
       } else if (SCAN_EVENTS.has(this.eventKind)) {
         const sweep = this.trackPoint(p, g);

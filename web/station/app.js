@@ -126,7 +126,6 @@
     renderServices("explorer-services", explorer);
     renderData(Array.isArray(model.data_rows) ? model.data_rows : []);
     renderLocal(model);
-    set("footer-status", model.is_personal_carrier ? "PERSONAL CARRIER LINK" : "LIVE DOCK LINK");
     set("footer-summary", `${coreOnline + explorerOnline}/${core.length + explorer.length || 8} SERVICES ONLINE`);
   }
 

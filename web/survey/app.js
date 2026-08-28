@@ -14,6 +14,8 @@
   let lastRevision = -1;
   let pollActive = false;
   let readySent = false;
+  let previousMotionState = null;
+  let motionClassTimer = 0;
 
   function node(tag, className = "", text = "") {
     const element = document.createElement(tag);
@@ -39,6 +41,203 @@
     low = safeNumber(low); high = safeNumber(high);
     if (!high) return "";
     return low === high ? credits(low) : `${credits(low)}–${credits(high)}`;
+  }
+
+  function identityKey(value) {
+    return String(value || "unknown").trim().toLowerCase();
+  }
+
+  function rowKey(row = {}) {
+    return identityKey(row.name || row.display_name);
+  }
+
+  function detailKey(detail = {}) {
+    return identityKey(detail.name || detail.display_name);
+  }
+
+  function detailState(detail = {}) {
+    return {
+      kind: String(detail.kind || "detected"),
+      progress: Math.max(0, Math.round(safeNumber(detail.progress))),
+      value: Math.max(safeNumber(detail.value), safeNumber(detail.max_value)),
+    };
+  }
+
+  function detailStateMap(details = []) {
+    return new Map((details || []).map((detail) => [detailKey(detail), detailState(detail)]));
+  }
+
+  function rowState(row = {}) {
+    const details = row.bio_details || row.rows || [];
+    return {
+      bio: Math.max(0, Math.round(safeNumber(row.bio_count))),
+      geo: Math.max(0, Math.round(safeNumber(row.geo_count))),
+      complete: Math.max(0, Math.round(safeNumber(row.complete || row.organic_complete_count))),
+      bioComplete: Boolean(row.bio_complete),
+      needsDss: Boolean(row.needs_dss),
+      probes: Math.max(0, Math.round(safeNumber(row.dss_probes_used))),
+      notable: Boolean(row.notable),
+      value: Math.max(safeNumber(row.max_value), safeNumber(row.min_value)),
+      details: detailStateMap(details),
+    };
+  }
+
+  function captureMotionState(model = {}) {
+    const rows = Array.isArray(model.rows) ? model.rows : [];
+    const body = model.body || {};
+    const sampling = model.sampling || null;
+    return {
+      system: identityKey(model.system),
+      mode: String(model.mode || ""),
+      scanned: Math.max(0, Math.round(safeNumber(model.scanned))),
+      total: Math.max(0, Math.round(safeNumber(model.total))),
+      rows: new Map(rows.map((row) => [rowKey(row), rowState(row)])),
+      bodyKey: rowKey({...body, display_name: model.body_display || body.name}),
+      body: rowState({
+        ...body,
+        complete: body.organic_complete_count,
+        bio_complete: safeNumber(body.bio_count) > 0
+          && safeNumber(body.organic_complete_count) >= safeNumber(body.bio_count),
+        bio_details: rows,
+        min_value: model.min_value,
+        max_value: model.max_value,
+        notable: model.notable,
+      }),
+      notable: new Map((model.notable_rows || []).map((row) => [
+        rowKey(row), Math.max(safeNumber(row.value), safeNumber(row.max_value)),
+      ])),
+      sampling: sampling ? {
+        key: identityKey(sampling.species),
+        progress: Math.max(1, Math.min(3, Math.round(safeNumber(sampling.progress) || 1))),
+        clear: Boolean(sampling.clear),
+      } : null,
+    };
+  }
+
+  function compareDetails(current, previous = new Map()) {
+    const events = new Map();
+    for (const [key, detail] of current.entries()) {
+      const old = previous.get(key);
+      if (!old) {
+        events.set(key, {fresh: true, progress: detail.progress > 0, complete: detail.kind === "complete"});
+        continue;
+      }
+      const progressed = detail.progress > old.progress || (old.kind !== "sample" && detail.kind === "sample");
+      const completed = old.kind !== "complete" && detail.kind === "complete";
+      if (progressed || completed || detail.value > old.value) {
+        events.set(key, {progress: progressed, complete: completed, value: detail.value > old.value});
+      }
+    }
+    return events;
+  }
+
+  function compareRow(current, previous) {
+    if (!previous) {
+      return {fresh: true, bio: current.bio > 0, geo: current.geo > 0,
+        value: current.value > 0, notable: current.notable, details: new Map()};
+    }
+    return {
+      fresh: false,
+      bio: current.bio > previous.bio,
+      geo: current.geo > previous.geo,
+      value: current.value > previous.value,
+      notable: current.notable && !previous.notable,
+      mapped: (previous.needsDss && !current.needsDss) || current.probes > previous.probes,
+      bioProgress: current.complete > previous.complete,
+      completed: current.bioComplete && !previous.bioComplete,
+      details: compareDetails(current.details, previous.details),
+    };
+  }
+
+  function motionContext(model = {}) {
+    const current = captureMotionState(model);
+    const previous = previousMotionState;
+    previousMotionState = current;
+    if (!previous) return {enabled: false, rows: new Map(), notable: new Map()};
+
+    const sameSystem = current.system === previous.system;
+    const sameMode = sameSystem && current.mode === previous.mode;
+    const rowEvents = new Map();
+    if (sameMode && current.mode === "system") {
+      for (const [key, row] of current.rows.entries()) {
+        const event = compareRow(row, previous.rows.get(key));
+        if (Object.values(event).some((value) => value === true) || event.details.size) {
+          rowEvents.set(key, event);
+        }
+      }
+    }
+
+    let bodyEvent = null;
+    if (sameMode && current.mode === "body" && current.bodyKey === previous.bodyKey) {
+      bodyEvent = compareRow(current.body, previous.body);
+    }
+
+    const notableEvents = new Map();
+    if (sameMode) {
+      for (const [key, value] of current.notable.entries()) {
+        const old = previous.notable.get(key);
+        if (old == null || value > old) notableEvents.set(key, {fresh: old == null, value: value > (old || 0)});
+      }
+    }
+
+    let sampling = null;
+    if (current.sampling) {
+      const old = previous.sampling;
+      const sampleEvent = {
+        fresh: !old || old.key !== current.sampling.key,
+        progress: Boolean(old && old.key === current.sampling.key
+          && current.sampling.progress > old.progress),
+        complete: Boolean(old && old.key === current.sampling.key
+          && current.sampling.progress >= 3 && old.progress < 3),
+      };
+      if (Object.values(sampleEvent).some(Boolean)) sampling = sampleEvent;
+    }
+
+    const currentBio = current.mode === "body"
+      ? current.body.complete
+      : [...current.rows.values()].reduce((sum, row) => sum + row.complete, 0);
+    const currentBioTotal = current.mode === "body"
+      ? current.body.bio
+      : [...current.rows.values()].reduce((sum, row) => sum + row.bio, 0);
+    const previousBio = previous.mode === "body"
+      ? previous.body.complete
+      : [...previous.rows.values()].reduce((sum, row) => sum + row.complete, 0);
+    const previousBioTotal = previous.mode === "body"
+      ? previous.body.bio
+      : [...previous.rows.values()].reduce((sum, row) => sum + row.bio, 0);
+    const fill = currentBioTotal ? Math.min(100, (currentBio / currentBioTotal) * 100) : 0;
+    const fromFill = previousBioTotal ? Math.min(100, (previousBio / previousBioTotal) * 100) : fill;
+
+    return {
+      enabled: true,
+      rows: rowEvents,
+      body: bodyEvent,
+      notable: notableEvents,
+      sampling,
+      systemChanged: current.system !== previous.system,
+      focusEntered: sameSystem && previous.mode !== "body" && current.mode === "body",
+      focusLeft: sameSystem && previous.mode === "body" && current.mode !== "body",
+      scanAdvanced: sameSystem && current.scanned > previous.scanned,
+      bioAdvanced: sameMode && fill > fromFill,
+      fromFill,
+    };
+  }
+
+  function applyMotionClass(motion) {
+    const names = ["event-active", "event-system", "event-focus-in", "event-focus-out"];
+    dom.root.classList.remove(...names);
+    if (!motion.enabled) return;
+    // Restart only the short acknowledgement layer; ordinary revisions do not
+    // receive a class and therefore never produce ambient redraw flicker.
+    void dom.root.offsetWidth;
+    const activity = motion.rows.size || motion.notable.size || motion.sampling
+      || motion.scanAdvanced || motion.bioAdvanced;
+    if (activity) dom.root.classList.add("event-active");
+    if (motion.systemChanged) dom.root.classList.add("event-system");
+    if (motion.focusEntered) dom.root.classList.add("event-focus-in");
+    if (motion.focusLeft) dom.root.classList.add("event-focus-out");
+    window.clearTimeout(motionClassTimer);
+    motionClassTimer = window.setTimeout(() => dom.root.classList.remove(...names), 1100);
   }
 
   function applyTheme(theme = {}, effects = {}) {
@@ -76,17 +275,23 @@
     ].slice(0, total);
   }
 
-  function appendNodes(parent, row) {
+  function appendNodes(parent, row, event = {}) {
     const states = detailStates(row);
     if (!states.length) return;
-    const rail = node("span", "bio-nodes");
+    const rail = node("span", `bio-nodes${event.bioProgress ? " event-progress" : ""}`);
     for (const state of states) rail.appendChild(node("i", `bio-node ${state}`));
     parent.appendChild(rail);
   }
 
-  function biologicalRow(detail) {
+  function biologicalRow(detail, event = {}) {
     const kind = String(detail.kind || "detected");
-    const row = node("div", `biological-row ${kind}`);
+    const eventClasses = [
+      event.fresh ? "event-new-detail" : "",
+      event.progress ? "event-sample-progress" : "",
+      event.complete ? "event-bio-complete" : "",
+      event.value ? "event-value" : "",
+    ].filter(Boolean).join(" ");
+    const row = node("div", `biological-row ${kind}${eventClasses ? ` ${eventClasses}` : ""}`);
     const identity = node("span", "biological-identity");
     const symbol = {complete: "✓", sample: "●", detected: "○", predicted: "?", possible: "·"}[kind] || "·";
     identity.appendChild(node("i", "biological-symbol", symbol));
@@ -120,18 +325,24 @@
     });
   }
 
-  function targetCard(row) {
+  function targetCard(row, event = {}) {
     const bio = Math.max(0, Math.round(safeNumber(row.bio_count)));
     const done = Math.max(0, Math.round(safeNumber(row.complete)));
     const geo = Math.max(0, Math.round(safeNumber(row.geo_count)));
     const complete = Boolean(row.bio_complete || (bio && done >= bio));
     const value = valueRange(row.min_value, row.max_value);
-    const card = node("article", `target${complete ? " complete" : ""}${!bio && geo ? " geo-only" : ""}${row.priority === false ? " routine" : ""}`);
+    const eventClasses = [
+      event.fresh ? "event-new-target" : "",
+      event.completed ? "event-target-complete" : "",
+      event.mapped ? "event-mapped" : "",
+      event.value || event.notable ? "event-value" : "",
+    ].filter(Boolean).join(" ");
+    const card = node("article", `target${complete ? " complete" : ""}${!bio && geo ? " geo-only" : ""}${row.priority === false ? " routine" : ""}${eventClasses ? ` ${eventClasses}` : ""}`);
     const head = node("div", "target-head");
     head.appendChild(node("span", "target-name", row.display_name || row.name || "Unknown body"));
     const badges = node("span", "badges");
-    if (bio) badges.appendChild(node("b", "badge bio", `BIO ${done}/${bio}`));
-    if (geo) badges.appendChild(node("b", "badge geo", `GEO ${geo}`));
+    if (bio) badges.appendChild(node("b", `badge bio${event.bio ? " event-signal" : ""}`, `BIO ${done}/${bio}`));
+    if (geo) badges.appendChild(node("b", `badge geo${event.geo ? " event-signal" : ""}`, `GEO ${geo}`));
     const landableKnown = Object.prototype.hasOwnProperty.call(row, "landable_known")
       ? row.landable_known === true
       : Object.prototype.hasOwnProperty.call(row, "landable") && row.landable !== null;
@@ -144,9 +355,17 @@
       badge.title = landable ? "Landable surface" : "Not landable";
       badges.appendChild(badge);
     }
-    if (row.needs_dss) badges.appendChild(node("b", "badge dss", "DSS"));
+    const probes = Math.max(0, Math.round(safeNumber(row.dss_probes_used)));
+    const target = Math.max(0, Math.round(safeNumber(row.dss_efficiency_target)));
+    if (probes && target) {
+      const efficient = row.dss_efficiency_met === true;
+      const badge = node("b", `badge dss-result${efficient ? " efficient" : ""}${event.mapped ? " event-lock" : ""}`,
+        `DSS ${efficient ? "✓ " : ""}${probes}/${target}`);
+      badge.title = efficient ? "DSS efficiency target met" : "DSS mapping complete";
+      badges.appendChild(badge);
+    } else if (row.needs_dss) badges.appendChild(node("b", "badge dss", "DSS"));
     if (row.priority === false) badges.appendChild(node("b", "badge routine", "BODY"));
-    if (complete && value) badges.appendChild(node("b", "badge", `BASE ${value}`));
+    if (complete && value) badges.appendChild(node("b", `badge${event.value ? " event-value-badge" : ""}`, `BASE ${value}`));
     head.appendChild(badges); card.appendChild(head);
 
     const biological = orderedBiologicalDetails(row.bio_details || row.rows || []);
@@ -154,10 +373,10 @@
     if (!complete) {
       if (biological.length) {
         for (const entry of biological) {
-          detail.appendChild(biologicalRow(entry));
+          detail.appendChild(biologicalRow(entry, event.details?.get(detailKey(entry)) || {}));
         }
       } else {
-        appendNodes(detail, row);
+        appendNodes(detail, row, event);
       }
     }
     if (row.notable) detail.appendChild(node("span", "notable", "◆ NOTABLE"));
@@ -166,12 +385,18 @@
     return card;
   }
 
-  function sampleCard(sampling) {
+  function sampleCard(sampling, event = {}) {
     const progress = Math.max(1, Math.min(3, Math.round(safeNumber(sampling.progress) || 1)));
-    const card = node("article", "sample-card");
+    const eventClasses = [
+      event.fresh ? "event-sample-start" : "",
+      event.progress ? "event-sample-step" : "",
+      event.complete ? "event-sample-complete" : "",
+    ].filter(Boolean).join(" ");
+    const card = node("article", `sample-card${eventClasses ? ` ${eventClasses}` : ""}`);
     const nodes = node("div", "sample-nodes");
     for (let index = 1; index <= 3; index += 1) {
-      nodes.appendChild(node("i", `sample-node${index <= progress ? " done" : ""}`, index));
+      const acknowledged = index === progress && (event.fresh || event.progress || event.complete);
+      nodes.appendChild(node("i", `sample-node${index <= progress ? " done" : ""}${acknowledged ? " acknowledged" : ""}`, index));
     }
     card.appendChild(nodes);
     const copy = node("div", "sample-copy");
@@ -188,8 +413,8 @@
     return card;
   }
 
-  function notableCard(row) {
-    const card = node("article", "notable-card");
+  function notableCard(row, event = {}) {
+    const card = node("article", `notable-card${event.fresh ? " event-new-notable" : ""}${event.value ? " event-value" : ""}`);
     card.appendChild(node("strong", "", `${row.icons || "◆"} ${row.display_name || row.name || "Notable body"}`));
     const line = node("span");
     line.appendChild(node("i", "", "SURVEY VALUE"));
@@ -198,7 +423,7 @@
     return card;
   }
 
-  function overview(model) {
+  function overview(model, motion = {}) {
     dom.overview.replaceChildren();
     const bodyMode = model.mode === "body";
     const body = model.body || {};
@@ -226,13 +451,17 @@
     dom.overview.appendChild(line);
     const rail = node("div", "overview-rail");
     const fill = node("i");
-    fill.style.setProperty("--fill", `${bio ? Math.min(100, (done / bio) * 100) : 0}%`);
+    const fillPercent = bio ? Math.min(100, (done / bio) * 100) : 0;
+    fill.style.setProperty("--fill", `${fillPercent}%`);
+    fill.style.setProperty("--from-fill", `${Number.isFinite(motion.fromFill) ? motion.fromFill : fillPercent}%`);
+    if (motion.bioAdvanced) fill.classList.add("event-progress");
     rail.appendChild(fill); dom.overview.appendChild(rail);
   }
 
   function render(snapshot = {}) {
     applyTheme(snapshot.theme || {}, snapshot.effects || {});
     const model = snapshot.survey || {};
+    const motion = motionContext(model);
     const bodyMode = model.mode === "body";
     dom.root.classList.toggle("body", bodyMode);
     dom.root.classList.toggle("system", !bodyMode);
@@ -241,11 +470,12 @@
     if (!model.mode) {
       dom.root.classList.add("empty");
       dom.overview.replaceChildren();
+      applyMotionClass({enabled: false});
       return;
     }
     dom.root.classList.remove("empty");
-    overview(model);
-    if (model.sampling) dom.content.appendChild(sampleCard(model.sampling));
+    overview(model, motion);
+    if (model.sampling) dom.content.appendChild(sampleCard(model.sampling, motion.sampling || {}));
     const rows = Array.isArray(model.rows) ? model.rows : [];
     if (bodyMode) {
       const body = model.body || {};
@@ -269,25 +499,31 @@
           && body.landable !== null,
       };
       if (rows.length || safeNumber(body.geo_count) || model.notable) {
-        dom.content.appendChild(targetCard(projected));
+        dom.content.appendChild(targetCard(projected, motion.body || {}));
       }
     } else {
       const active = rows.filter((row) => !row.bio_complete);
       const complete = rows.filter((row) => row.bio_complete);
-      for (const row of active) dom.content.appendChild(targetCard(row));
+      for (const row of active) dom.content.appendChild(targetCard(row, motion.rows.get(rowKey(row)) || {}));
       if (complete.length) {
         const label = node("div", "group-label");
         label.appendChild(node("span", "", "COMPLETED BIOLOGY"));
         label.appendChild(node("span", "", `${complete.length} SURFACE${complete.length === 1 ? "" : "S"}`));
         dom.content.appendChild(label);
-        for (const row of complete) dom.content.appendChild(targetCard(row));
+        for (const row of complete) dom.content.appendChild(targetCard(row, motion.rows.get(rowKey(row)) || {}));
       }
     }
-    for (const row of (model.notable_rows || [])) dom.content.appendChild(notableCard(row));
+    for (const row of (model.notable_rows || [])) {
+      dom.content.appendChild(notableCard(row, motion.notable.get(rowKey(row)) || {}));
+    }
 
     if (bodyMode) {
       dom.footer.appendChild(node("span", "", "BIOLOGICAL SURFACE WORKBOARD"));
-      dom.footer.appendChild(node("span", "credits", `BIO BASE ${valueRange(model.min_value, model.max_value) || "-"}`));
+      const lifetime = model.dss_stats?.lifetime || {};
+      const mapped = Math.max(0, Math.round(safeNumber(lifetime.mapped)));
+      const efficient = Math.max(0, Math.round(safeNumber(lifetime.efficient)));
+      const receipt = mapped ? ` · DSS ${efficient}/${mapped}` : "";
+      dom.footer.appendChild(node("span", "credits", `BIO BASE ${valueRange(model.min_value, model.max_value) || "-"}${receipt}`));
     } else {
       const complete = rows.filter((row) => row.bio_complete).length;
       const low = rows.reduce((sum, row) => sum + safeNumber(row.min_value), 0);
@@ -299,8 +535,14 @@
         ? `${scope} ${rows.length} · PRIORITY ${priority} · MAPPED ${mapped}`
         : `${scope} ${rows.length} · OPEN ${rows.length - complete} · COMPLETE ${complete}`;
       dom.footer.appendChild(node("span", "", summary));
-      dom.footer.appendChild(node("span", "credits", valueRange(low, high) ? `BIO BASE ${valueRange(low, high)}` : ""));
+      const session = model.dss_stats?.session || {};
+      const mappedSession = Math.max(0, Math.round(safeNumber(session.mapped)));
+      const efficientSession = Math.max(0, Math.round(safeNumber(session.efficient)));
+      const dssReceipt = mappedSession ? `DSS EFF ${efficientSession}/${mappedSession}` : "";
+      const bioReceipt = valueRange(low, high) ? `BIO BASE ${valueRange(low, high)}` : "";
+      dom.footer.appendChild(node("span", "credits", [dssReceipt, bioReceipt].filter(Boolean).join(" · ")));
     }
+    applyMotionClass(motion);
   }
 
   function renderedContentHeight() {

@@ -54,8 +54,8 @@ class HtmlCargoOverlayBridge:
         return model if isinstance(model, dict) else {}
 
     def _dimensions(self):
-        height = max(170, min(720, _integer(self._browser_content_height, 220)))
-        return 380, height
+        height = max(190, min(760, _integer(self._browser_content_height, 260)))
+        return 410, height
 
     def _window_payload(self):
         width, height = self._dimensions()
