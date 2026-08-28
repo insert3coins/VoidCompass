@@ -1339,7 +1339,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             key="survey-status-progress-schedule",
         )
 
-    def _refresh_contact_scope(self):
+    def _refresh_contact_scope(self, *, present=True):
         """Publish non-body FSS contacts without duplicating survey bodies."""
         overlay = getattr(self, "contact_scope_hud", None)
         if overlay is None:
@@ -1352,6 +1352,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             getattr(self, "deep_space_contact_system", "") or self.current_sys,
             getattr(self, "deep_space_contact_expected", 0),
             list(getattr(self, "deep_space_contacts", None) or ()),
+            present=present,
         )
 
     def _clear_deep_space_contacts(self, hide=True):
@@ -4279,9 +4280,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.heartbeat_hud = None
 
         if self.config.get("contact_scope_overlay_enabled", True):
+            contact_scope_created = self.contact_scope_hud is None
             if self.contact_scope_hud is None:
                 self.contact_scope_hud = ContactScopeHUD(self.root, self.config)
-            self._refresh_contact_scope()
+            # A shared runtime-toggle pass runs when any overlay changes. Keep
+            # an existing, auto-hidden Contact Scope silent; only enabling the
+            # Contact Scope itself (which creates it here) presents retained
+            # data again.
+            self._refresh_contact_scope(present=contact_scope_created)
             if self.current_docked:
                 self.contact_scope_hud.suppress()
         elif self.contact_scope_hud:

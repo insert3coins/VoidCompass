@@ -8,8 +8,9 @@
 *   Added DSS probe-efficiency receipts and profile-aware session/lifetime efficiency tracking to Survey Operations, where mapped-body work already belongs.
 *   Refined the HTML overlay pass with a correctly routed Deep Space Contact Scope, left-anchored Prospector Analysis title and keyed Cargo Manifest updates so capacity and commodity changes animate without repainting the entire overlay.
 *   Kept every new channel purpose-specific: Contact Scope excludes bodies and survey value, Navigation receives only short state cues, and existing bio, geo, route, fuel and gravity displays remain authoritative.
-*   Rebuilt Cargo Manifest as an animated hold instrument with intake/release acknowledgements, a live load aperture, capacity cells and per-stack allocation rails; removed redundant journal-link captions from HTML overlay footers while retaining useful live status values.
-*   Added an event-driven Survey Operations motion pass for new bodies, biological and geological signals, DSS mapping, high-value discoveries, biological sample stages and surface-focus transitions; restored or unchanged survey data remains still.
+*   Rebuilt Cargo Manifest as an animated hold instrument with intake/release acknowledgements, a live load aperture, capacity cells and per-stack allocation rails; removed redundant journal-link captions and ordinary `STANDARD HOLD` labels while retaining useful mission, stolen and live status values.
+*   Added an event-driven Survey Operations motion pass for new bodies, biological and geological signals, DSS mapping, high-value discoveries, biological sample stages and surface-focus transitions, plus restrained intake, unresolved-signal and sample-flow activity between discoveries.
+*   Added a profile-aware Deep Space Contact Scope auto-hide delay to Overlay Studio; setting it to zero keeps the scope persistent, fresh contact data reopens and rearms timed presentation, and unrelated overlay changes no longer resurrect a hidden scope.
 
 ## Earlier releases
 

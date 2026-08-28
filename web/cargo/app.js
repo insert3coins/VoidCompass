@@ -156,8 +156,7 @@
     const tags = node("span", "commodity-tags");
     if (mission) tags.appendChild(node("i", "mission", `MISSION ${tonnes(row.mission)}`));
     if (stolen) tags.appendChild(node("i", "stolen", `STOLEN ${tonnes(row.stolen)}`));
-    if (!tags.childNodes.length) tags.appendChild(node("i", "standard", "STANDARD HOLD"));
-    copy.appendChild(tags);
+    if (tags.childNodes.length) copy.appendChild(tags);
 
     const allocation = node("span", "commodity-allocation");
     const fill = node("i");

@@ -242,6 +242,7 @@ PROFILE_VALUE_SETTINGS = (
     "survey_status_hud_y",
     "contact_scope_hud_x",
     "contact_scope_hud_y",
+    "contact_scope_timeout_s",
     "dss_efficiency_stats",
     "toast_hud_x",
     "toast_hud_y",
@@ -558,6 +559,7 @@ def apply_profile_config(config, profile_key=None):
                 "explore_map_view_state": {},
                 "explore_map_annotations": [],
                 "explore_map_annotation_geometry": "470x360",
+                "contact_scope_timeout_s": 45,
                 "dss_efficiency_stats": {
                     "mapped": 0, "efficient": 0, "probes": 0,
                     "target": 0, "seen": [],
@@ -685,6 +687,7 @@ def load_config():
         'contact_scope_overlay_enabled': True,
         'contact_scope_hud_x': 1180,
         'contact_scope_hud_y': 250,
+        'contact_scope_timeout_s': 45,
         'dss_efficiency_stats': {
             'mapped': 0, 'efficient': 0, 'probes': 0,
             'target': 0, 'seen': [],

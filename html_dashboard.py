@@ -1805,6 +1805,7 @@ class HtmlDashboardMixin:
                 "station_info_auto_hide_enabled": bool(self.config.get("station_info_auto_hide_enabled", False)),
                 "survey_status_show_all_bodies": bool(self.config.get("survey_status_show_all_bodies", False)),
                 "station_info_timeout_s": _integer(self.config.get("station_info_timeout_s"), 30),
+                "contact_scope_timeout_s": _integer(self.config.get("contact_scope_timeout_s"), 45),
                 "gravity_warning_threshold_g": _number(self.config.get("gravity_warning_threshold_g"), 3.0),
                 "hud_html_renderer": bool(self.config.get("hud_html_renderer", True)),
                 "hud_crt_enabled": bool(self.config.get("hud_crt_enabled", True)),
@@ -1967,6 +1968,7 @@ class HtmlDashboardMixin:
             "prospector_hud_timeout_s": (5.0, 3600.0, 45.0, True),
             "gravity_warning_hud_timeout_s": (5.0, 3600.0, 20.0, True),
             "station_info_timeout_s": (5.0, 3600.0, 30.0, True),
+            "contact_scope_timeout_s": (0.0, 3600.0, 45.0, True),
             "gravity_warning_threshold_g": (0.5, 20.0, 3.0, False),
         }
         for key, (low, high, default, integer) in numeric.items():
@@ -1982,6 +1984,11 @@ class HtmlDashboardMixin:
         station = getattr(self, "station_info_hud", None)
         if station is not None and getattr(self, "current_docked", False):
             station.on_docked(self)
+        contact_scope = getattr(self, "contact_scope_hud", None)
+        if contact_scope is not None:
+            apply_timer = getattr(contact_scope, "apply_auto_hide_setting", None)
+            if callable(apply_timer):
+                apply_timer()
         self._schedule_html_dashboard_publish(immediate=True)
         return True
 
