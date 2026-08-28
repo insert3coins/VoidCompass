@@ -9,9 +9,29 @@
 <body>
   <main id="scope" class="scope empty">
     <div class="edge top"></div><div class="edge bottom"></div>
-    <header><div class="title"><i></i><strong>DEEP SPACE CONTACTS</strong></div><b id="counter">0 / 0</b></header>
-    <section class="system"><span id="system-name">SYSTEM</span><span id="scope-state">FSS CONTACT SCOPE</span></section>
-    <div class="progress"><i id="progress-fill"></i><b id="progress-pulse"></b></div>
+    <header>
+      <div class="title"><i></i><strong>DEEP SPACE CONTACT SCOPE</strong></div>
+      <b id="counter">0 / 0</b>
+    </header>
+    <section class="sensor-deck">
+      <div class="radar" aria-hidden="true">
+        <i class="radar-ring ring-outer"></i><i class="radar-ring ring-inner"></i>
+        <i class="radar-axis axis-x"></i><i class="radar-axis axis-y"></i>
+        <i class="radar-sweep"></i><i class="radar-core"></i>
+        <div id="radar-blips" class="radar-blips"></div>
+      </div>
+      <div class="sensor-copy">
+        <small>LOCAL SIGNAL ENVELOPE</small>
+        <strong id="system-name">SYSTEM</strong>
+        <span id="scope-state">FSS CONTACT SCOPE</span>
+        <div class="resolution-line">
+          <span id="resolution-label">AWAITING RESOLUTION</span>
+          <b id="threat-summary">FIELD CLEAR</b>
+        </div>
+        <div class="progress"><i id="progress-fill"></i><b id="progress-pulse"></b></div>
+      </div>
+    </section>
+    <div class="contacts-heading"><span>RESOLVED CONTACTS</span><b id="contact-summary">0 SIGNALS</b></div>
     <section id="contacts" class="contacts"></section>
     <footer><b id="footer-state">AWAITING CONTACTS</b></footer>
     <div class="scanlines"></div><div class="vignette"></div>

@@ -10,7 +10,7 @@ import themes
 
 
 _CHROMA = "#ff00ff"
-WIDTH = 440
+WIDTH = 480
 
 
 def _integer(value, default=0):

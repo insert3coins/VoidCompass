@@ -5179,7 +5179,32 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             raw.get("StationName") or data.get("station_name")
             or data.get("StationName") or ""
         ).strip()
+        station_type = str(
+            raw.get("StationType") or data.get("station_type")
+            or data.get("StationType") or ""
+        ).strip()
+        if event == "SupercruiseDestinationDrop" and raw.get("MarketID") is not None:
+            destination = str(raw.get("Type") or station or "").strip()
+            own_carrier_id = (
+                getattr(getattr(self, "carrier_tracker", None), "carrier_data", {})
+                or {}
+            ).get("carrier_id")
+            destination_type = (
+                "FleetCarrier"
+                if own_carrier_id is not None
+                and str(own_carrier_id) == str(raw.get("MarketID"))
+                else "Station"
+            )
+            self._capture_navigation_local_space({
+                "Body": destination,
+                "BodyType": destination_type,
+            })
         if event == "DockingRequested":
+            if station:
+                self._capture_navigation_local_space({
+                    "Body": station,
+                    "BodyType": station_type or "Station",
+                })
             self._navigation_docking_state = {
                 "phase": "requested",
                 "label": "DOCK REQUEST",
@@ -5187,6 +5212,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 "pad": None,
             }
         elif event == "DockingGranted":
+            if station:
+                self._capture_navigation_local_space({
+                    "Body": station,
+                    "BodyType": station_type or "Station",
+                })
             pad = raw.get("LandingPad", data.get("landing_pad"))
             try:
                 pad = int(pad)
@@ -5838,6 +5868,21 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             raw.get("Body") or data.get("Body")
             or data.get("body") or data.get("body_name") or ""
         )
+        incoming_key = "".join(
+            char for char in str(body_type or "").casefold() if char.isalnum()
+        )
+        existing_key = "".join(
+            char for char in str(
+                getattr(self, "current_local_space_body_type", "") or ""
+            ).casefold() if char.isalnum()
+        )
+        if (existing_key in {"station", "fleetcarrier", "carrier"}
+                and incoming_key in {"planet", "star"}):
+            # Carrier and station destinations are announced before the
+            # following SupercruiseExit, which can name their parent body.
+            # Retain the more specific local-space destination until the next
+            # SupercruiseEntry clears it.
+            return
         self.current_local_space_body_type = str(body_type or "").strip()
         self.current_local_space_name = str(body_name or "").strip()
         self.current_asteroid_field_kind = self._navigation_asteroid_field_kind(
@@ -5874,6 +5919,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         local_space_key = "".join(
             char for char in local_space_type.casefold() if char.isalnum()
         )
+        carrier_vicinity = local_space_key in {"fleetcarrier", "carrier"}
         station_vicinity = local_space_key == "station"
         if phase == "carrier_transit":
             state, label, tone = "carrier_transit", "CARRIER TRANSIT", "orange"
@@ -5902,6 +5948,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             # PlanetaryRing/StellarRing/AsteroidCluster drop is the more meaningful live
             # navigation state for the centre instrument.
             state, label, tone = "asteroid_field", "ASTEROID FIELD", "yellow"
+        elif carrier_vicinity:
+            state, label, tone = "carrier_vicinity", "CARRIER VICINITY", "accent"
         elif station_vicinity:
             # SupercruiseExit supplies BodyType: Station for an orbital or
             # carrier drop.  That destination is stronger evidence than the
@@ -5925,6 +5973,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "phase": phase,
             "target": str(getattr(self, "_navigation_jump_target", "") or ""),
             "asteroid_kind": asteroid_kind,
+            "carrier_vicinity": carrier_vicinity,
             "station_vicinity": station_vicinity,
             "local_space_type": local_space_type,
             "local_space_name": str(
@@ -7800,6 +7849,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
 
         elif ev == "Undocked":
             station = d.get("StationName") or d.get("station_name", "")
+            station_type = (
+                d.get("StationType") or d.get("station_type")
+                or self.current_station_type or "Station"
+            )
             self.current_docked = False
             self.current_on_foot = False
             self.current_in_taxi = False
@@ -7807,6 +7860,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.current_in_fighter = False
             self.current_in_srv = False
             self.hud_flight_state = "FLIGHT"
+            self._capture_navigation_local_space({
+                "Body": station,
+                "BodyType": station_type,
+            })
             self.current_station_name = None
             self.current_station_type = None
             self.current_station_market_id = None
