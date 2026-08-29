@@ -6,7 +6,7 @@ import logging
 import os
 
 import themes
-from html_overlay_runtime import HtmlOverlaySurface, overlay_opacity_ratio
+from html_overlay_runtime import HtmlOverlaySurface, apply_native_fallback_visibility, overlay_opacity_ratio
 
 
 def _integer(value, default=0):
@@ -191,11 +191,8 @@ class HtmlGroundOverlayBridge:
                 was_ready = self._ready
                 self._ready = self.surface.ready
                 self.win._html_ready = self._ready
+                apply_native_fallback_visibility(self.root, self.win, self._ready)
                 if self._ready:
-                    try:
-                        self.win.attributes("-alpha", 0.0)
-                    except Exception:
-                        pass
                     if not was_ready:
                         logging.info("HTML Planet Waypoint Navigation renderer is live")
                 snapshot = self._snapshot()

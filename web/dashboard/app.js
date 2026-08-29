@@ -48,6 +48,7 @@ let deckLayoutDraft = null;
 let deckLayoutFingerprint = "";
 let atlasLayerRequest = "";
 let decisionTagsFingerprint = "";
+let preflightFingerprint = "";
 let routeHorizonFingerprint = "";
 let sessionHighlightsFingerprint = "";
 let codexCandidatesFingerprint = "";
@@ -595,6 +596,32 @@ function renderDecision(state) {
   byId("decision-primary").disabled = !primary.command;
 }
 
+function renderPreflight(state) {
+  const preflight = state.preflight || {};
+  const checks = Array.isArray(preflight.checks) ? preflight.checks : [];
+  const badge = byId("preflight-status");
+  text("preflight-status", preflight.status || "CHECK");
+  if (badge) badge.dataset.state = String(preflight.status || "check").toLowerCase();
+  text("preflight-summary", preflight.summary || "Checking departure systems.");
+  const fingerprint = JSON.stringify(checks.map((row) => [row.id, row.status, row.label, row.value, row.detail]));
+  if (fingerprint === preflightFingerprint) return;
+  preflightFingerprint = fingerprint;
+  byId("preflight-checks")?.replaceChildren(...checks.map((row) => {
+    const node = document.createElement("div");
+    node.className = `preflight-check ${String(row.status || "warn").toLowerCase()}`;
+    node.title = row.detail || "";
+    const light = document.createElement("i");
+    const copy = document.createElement("span");
+    const label = document.createElement("small");
+    const value = document.createElement("b");
+    label.textContent = row.label || "CHECK";
+    value.textContent = row.value || "—";
+    copy.append(label, value);
+    node.append(light, copy);
+    return node;
+  }));
+}
+
 function renderFlightLog(state) {
   const enabled = Boolean(state.ui?.flight_log_mode);
   document.body.classList.toggle("flight-log-mode", enabled);
@@ -845,6 +872,7 @@ function renderDeckLayout(state) {
   });
   const corePanels = [
     document.querySelector(".overview-modules > .decision-card"),
+    document.querySelector(".overview-modules > .preflight-card"),
     document.querySelector(".overview-modules > .survey-card"),
     document.querySelector(".overview-modules > .telemetry-strip"),
   ];
@@ -854,7 +882,8 @@ function renderDeckLayout(state) {
     const routeIndex = Math.max(0, order.indexOf("route"));
     if (corePanels[0]) corePanels[0].style.order = "0";
     if (corePanels[1]) corePanels[1].style.order = "1";
-    if (corePanels[2]) corePanels[2].style.order = String(3 + routeIndex * 2);
+    if (corePanels[2]) corePanels[2].style.order = "2";
+    if (corePanels[3]) corePanels[3].style.order = String(4 + routeIndex * 2);
   }
 
   const panel = byId("deck-customiser");
@@ -1701,13 +1730,24 @@ function renderChronicleWorkspace(data) {
     const highlights = (session.highlights || []).map((row) => `<div class="chronicle-event"><b>${escapeHtml(row.kind)}</b><p><strong>${escapeHtml(row.title)}</strong><span>${escapeHtml(row.detail)}</span></p><time>${escapeHtml(String(row.timestamp || "").replace("T", " ").slice(0, 16))}</time></div>`);
     return workspaceCard(`${String(session.started || "UNKNOWN SESSION").replace("T", " ").slice(0, 16)}`, `<div class="chronicle-summary"><strong>${escapeHtml(session.start_system)} → ${escapeHtml(session.end_system)}</strong><span>${numeric(session.jumps)} jumps · ${numeric(session.distance, 1)} ly · ${numeric(session.fss)} FSS · ${numeric(session.dss)} DSS · ${numeric(session.bio)} bio</span></div>${workspaceRows(highlights, "No notable highlights were retained for this flight.")}`, session.ended ? "COMPLETE" : "ACTIVE");
   });
+  const photos = [...(data.replay?.photos || [])].reverse().slice(0, 24);
+  const photoRows = photos.map((photo) => {
+    const location = [photo.system, photo.body].filter(Boolean).join(" · ") || "Location unavailable";
+    const coordinates = photo.latitude === null || photo.latitude === undefined
+      ? "" : ` · ${numeric(photo.latitude, 4)}°, ${numeric(photo.longitude, 4)}°`;
+    const context = photo.nearby_label
+      ? `${photo.nearby_label}${photo.nearby_detail ? ` · ${photo.nearby_detail}` : ""}`
+      : "No nearby notable journal event retained";
+    const filename = String(photo.filename || "Screenshot").split(/[\\/]/).pop();
+    return `<div class="photo-chronicle-row"><i></i><p><strong>${escapeHtml(location)}</strong><span>${escapeHtml(context)}</span><small>${escapeHtml(filename)}${escapeHtml(coordinates)}</small></p><time>${escapeHtml(String(photo.timestamp || "").replace("T", " ").slice(0, 16))}</time></div>`;
+  });
   root.classList.remove("loading-panel");
   root.innerHTML = `${workspaceMetrics([
     {label: "Flights", value: numeric(sessions.length), detail: "PROFILE CHRONICLE"},
     {label: "Distance", value: `${numeric(sessions.reduce((sum, row) => sum + number(row.distance), 0), 1)} LY`, detail: "RETAINED TRAVEL"},
     {label: "FSS surveys", value: numeric(sessions.reduce((sum, row) => sum + number(row.fss), 0)), detail: "SYSTEM COMPLETIONS"},
     {label: "Bio analyses", value: numeric(sessions.reduce((sum, row) => sum + number(row.bio), 0)), detail: "GENETIC SAMPLES"},
-  ])}${workspaceCard("EXPEDITION REPLAY", replayMarkup(data.replay || {}), `${numeric(data.replay?.points?.length)} ROUTE POINTS`, "replay-card")}<section class="chronicle-list">${cards.join("") || `<p class="workspace-empty">Captain's Log will populate as journal sessions are completed.</p>`}</section>`;
+  ])}${workspaceCard("EXPEDITION REPLAY", replayMarkup(data.replay || {}), `${numeric(data.replay?.points?.length)} ROUTE POINTS`, "replay-card")}${workspaceCard("SCREENSHOT CHRONICLE", `${workspaceRows(photoRows, "Screenshots will be associated with their system, body and nearby journal event.")}<div class="workspace-actions"><button data-command="open_screenshots">OPEN SCREENSHOT FOLDER</button></div>`, `${photos.length} RECENT PHOTOS`, "photo-chronicle-card")}<section class="chronicle-list">${cards.join("") || `<p class="workspace-empty">Captain's Log will populate as journal sessions are completed.</p>`}</section>`;
 }
 
 function renderMissionWorkspace(data) {
@@ -1979,6 +2019,7 @@ function renderDashboard(state) {
     deckLayoutDraft = null;
     deckLayoutFingerprint = "";
     decisionTagsFingerprint = "";
+    preflightFingerprint = "";
     routeHorizonFingerprint = "";
     sessionHighlightsFingerprint = "";
     codexCandidatesFingerprint = "";
@@ -2004,6 +2045,7 @@ function renderDashboard(state) {
   renderHeader(model);
   renderAdaptive(model);
   renderDecision(model);
+  renderPreflight(model);
   renderFlightLog(model);
   renderSurvey(model);
   renderRoute(model);
@@ -2029,9 +2071,9 @@ function renderDashboard(state) {
     showPage(requestedPage.page);
   }
   renderAtlas(model);
-  text("rail-version", `v${model.app?.version || "5.4.1.7"} // WEBVIEW2`);
-  text("boot-version", `v${model.app?.version || "5.4.1.7"} // SECURE LOOPBACK // WEBVIEW2`);
-  text("about-version", `Version ${model.app?.version || "5.4.1.7"} // HTML Command Deck`);
+  text("rail-version", `v${model.app?.version || "5.4.1.8"} // WEBVIEW2`);
+  text("boot-version", `v${model.app?.version || "5.4.1.8"} // SECURE LOOPBACK // WEBVIEW2`);
+  text("about-version", `Version ${model.app?.version || "5.4.1.8"} // HTML Command Deck`);
   text("overview-subtitle", model.profile?.profile_label || "Journal-backed field intelligence");
   if (currentPage === "map" && !model.boot?.active) ensureAtlas();
 }

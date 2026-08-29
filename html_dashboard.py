@@ -14,6 +14,7 @@ import math
 import os
 from pathlib import Path
 import re
+import shutil
 import threading
 import time
 import webbrowser
@@ -237,6 +238,109 @@ class HtmlDashboardMixin:
         heartbeat = getattr(getattr(self, "heartbeat_hud", None), "_html_render_model", None)
         sources["heartbeat"] = dict(heartbeat or {})
         return sources
+
+    def _html_exploration_preflight(self, route, flight, sources):
+        """Return compact departure readiness without repeating survey data."""
+        checks = []
+
+        def add(check_id, label, status, value, detail):
+            checks.append({
+                "id": check_id, "label": label, "status": status,
+                "value": value, "detail": detail,
+            })
+
+        journal_path = str(self.config.get("journal_path") or "").strip()
+        if journal_path and os.path.isdir(journal_path):
+            link = str((sources or {}).get("overall") or "CACHED").upper()
+            add("journal", "Journal link", "ready", link,
+                "Elite journal folder linked" if link == "LIVE" else "Folder ready; waiting for live events")
+        else:
+            add("journal", "Journal link", "fail", "NOT LINKED", "Choose the Elite Dangerous journal folder")
+
+        edsm_enabled = bool(self.config.get("edsm_upload_enabled"))
+        edsm_configured = bool(
+            str(self.config.get("edsm_cmdr_name") or "").strip()
+            and str(self.config.get("edsm_api_key") or "").strip()
+        )
+        if edsm_enabled and edsm_configured:
+            add("edsm", "EDSM relay", "ready", "ARMED", "Exploration events can upload")
+        elif edsm_enabled:
+            add("edsm", "EDSM relay", "fail", "INCOMPLETE", "Commander name or API key is missing")
+        else:
+            add("edsm", "EDSM relay", "optional", "OPTIONAL", "Uploads are disabled for this profile")
+
+        runtime = getattr(self.root, "_voidcompass_html_overlay_runtime", None)
+        master_enabled = bool(self.config.get("overlay_enabled", True))
+        health = runtime.health_snapshot() if runtime is not None else {}
+        if not master_enabled:
+            add("overlays", "Cockpit overlays", "optional", "OFF", "Overlay master switch is disabled")
+        elif health.get("recovering"):
+            add("overlays", "Cockpit overlays", "warn", "RECOVERING", "HTML renderer watchdog is restoring surfaces")
+        elif health.get("total") and health.get("ready") == health.get("total"):
+            add("overlays", "Cockpit overlays", "ready", f"{health.get('total')} READY", "HTML surfaces are responding")
+        elif health.get("total"):
+            add("overlays", "Cockpit overlays", "warn", f"{health.get('ready', 0)}/{health.get('total')} LIVE", "Native fallbacks remain available")
+        else:
+            add("overlays", "Cockpit overlays", "warn", "STARTING", "Enabled overlays have not registered yet")
+
+        commander = str(
+            self.config.get("active_commander_name") or getattr(self, "cmdr_name", "") or ""
+        ).strip()
+        profile_key = str(self.config.get("active_commander_profile") or "").strip()
+        profile_ready = bool(profile_key and commander and "unknown" not in commander.casefold())
+        add("profile", "Commander profile", "ready" if profile_ready else "warn",
+            commander.upper() if profile_ready else "UNRESOLVED",
+            "Profile-local state active" if profile_ready else "Waiting for LoadGame commander identity")
+
+        next_system = str((route or {}).get("next") or "").strip()
+        if next_system:
+            add("route", "Departure route", "ready", "PLOTTED", next_system)
+        else:
+            add("route", "Departure route", "optional", "STANDBY", "No next system is currently plotted")
+
+        fuel = (flight or {}).get("fuel_percent")
+        if fuel is None:
+            add("fuel", "Fuel reserve", "warn", "UNKNOWN", "Loadout or status fuel telemetry is not available")
+        elif fuel < 15:
+            add("fuel", "Fuel reserve", "fail", f"{fuel:.0f}%", "Refuel before departure")
+        elif fuel < 30:
+            add("fuel", "Fuel reserve", "warn", f"{fuel:.0f}%", "Low reserve for an unplanned diversion")
+        else:
+            add("fuel", "Fuel reserve", "ready", f"{fuel:.0f}%", "Departure reserve is available")
+
+        now = time.monotonic()
+        disk_cache = getattr(self, "_html_preflight_disk_cache", None)
+        if not isinstance(disk_cache, dict) or now - disk_cache.get("time", 0.0) > 30.0:
+            paths = [get_profile_dir(get_active_profile(self.config))]
+            screenshot_path = str(self.config.get("screenshots_path") or "").strip()
+            if screenshot_path:
+                paths.append(screenshot_path if os.path.exists(screenshot_path) else os.path.dirname(screenshot_path))
+            free_values = []
+            for path in paths:
+                try:
+                    free_values.append(shutil.disk_usage(path or application_base_dir()).free)
+                except OSError:
+                    continue
+            disk_cache = {"time": now, "free": min(free_values) if free_values else None}
+            self._html_preflight_disk_cache = disk_cache
+        free = disk_cache.get("free")
+        if free is None:
+            add("storage", "Storage", "warn", "UNKNOWN", "Profile or screenshot storage could not be checked")
+        else:
+            free_gb = free / (1024 ** 3)
+            status = "fail" if free_gb < 0.5 else "warn" if free_gb < 2.0 else "ready"
+            add("storage", "Storage", status, f"{free_gb:.1f} GB FREE", "Profile and screenshot storage")
+
+        blocking = sum(row["status"] == "fail" for row in checks)
+        warnings = sum(row["status"] == "warn" for row in checks)
+        return {
+            "status": "BLOCKED" if blocking else "CHECK" if warnings else "READY",
+            "summary": (
+                f"{blocking} blocking · {warnings} caution"
+                if blocking or warnings else "Departure systems nominal"
+            ),
+            "checks": checks,
+        }
 
     def _html_dashboard_route(self):
         progress = dict(self._current_route_progress())
@@ -2194,6 +2298,7 @@ class HtmlDashboardMixin:
             doctrine, survey, route, (intelligence or {}).get("actions") or (),
             flight, data, codex_hunt, adaptive,
         )
+        preflight = self._html_exploration_preflight(route, flight, sources)
         configurable_modules = ("route", "session", "priorities", "codex", "feed")
         configured_order = self.config.get("dashboard_module_order") or configurable_modules
         module_order = [
@@ -2248,6 +2353,7 @@ class HtmlDashboardMixin:
             "data": data,
             "intelligence": intelligence_summary,
             "decision": decision,
+            "preflight": preflight,
             "codex_hunt": codex_hunt,
             "galnet": self._html_dashboard_galnet(),
             "dashboard_layout": {

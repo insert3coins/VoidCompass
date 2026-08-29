@@ -443,6 +443,7 @@ def build_region_passport(region_stats):
 
 def build_replay(sessions, survey_snapshot, max_points=1200):
     """Build one bounded timeline shared by recent Captain's Log sessions."""
+    sessions = list(sessions or ())
     survey_snapshot = survey_snapshot if isinstance(survey_snapshot, dict) else {}
     points = []
     for row in sorted(survey_snapshot.get("route_points") or (), key=lambda item: _epoch(item.get("timestamp"))):
@@ -465,17 +466,48 @@ def build_replay(sessions, survey_snapshot, max_points=1200):
             "fss_complete": bool(row.get("fss_complete")),
         })
     points = points[-max(100, int(max_points)):]
-    photos = [
-        {
+    highlight_context = []
+    for session in sessions:
+        for row in session.get("highlights") or ():
+            if not isinstance(row, dict) or str(row.get("kind") or "").upper() == "PHOTO":
+                continue
+            epoch = _epoch(row.get("timestamp"))
+            if epoch:
+                highlight_context.append({
+                    "epoch": epoch, "timestamp": _text(row.get("timestamp"), 50),
+                    "event": _text(row.get("kind"), 30),
+                    "label": _text(row.get("title"), 180),
+                    "detail": _text(row.get("detail"), 260),
+                })
+
+    photos = []
+    for row in (survey_snapshot.get("screenshots") or ())[-240:]:
+        if not isinstance(row, dict):
+            continue
+        photo_epoch = _epoch(row.get("timestamp"))
+        nearby = None
+        if not row.get("nearby_label") and photo_epoch:
+            candidates = [
+                item for item in highlight_context
+                if abs(item["epoch"] - photo_epoch) <= 600
+            ]
+            nearby = min(
+                candidates, default=None,
+                key=lambda item: abs(item["epoch"] - photo_epoch),
+            )
+        nearby = nearby or {}
+        photos.append({
             "timestamp": _text(row.get("timestamp"), 50), "epoch": _epoch(row.get("timestamp")),
             "system": _text(row.get("system"), 160), "body": _text(row.get("body"), 180),
             "filename": _text(row.get("filename"), 500),
             "latitude": _number(row.get("latitude")), "longitude": _number(row.get("longitude")),
-        }
-        for row in (survey_snapshot.get("screenshots") or ())[-240:] if isinstance(row, dict)
-    ]
+            "nearby_event": _text(row.get("nearby_event") or nearby.get("event"), 30),
+            "nearby_label": _text(row.get("nearby_label") or nearby.get("label"), 180),
+            "nearby_detail": _text(row.get("nearby_detail") or nearby.get("detail"), 260),
+            "nearby_timestamp": _text(row.get("nearby_timestamp") or nearby.get("timestamp"), 50),
+        })
     rendered_sessions = []
-    for index, session in enumerate(sessions or ()):
+    for index, session in enumerate(sessions):
         start = _epoch(session.get("started"))
         end = _epoch(session.get("ended")) or float("inf")
         matching = [idx for idx, row in enumerate(points) if start <= row["epoch"] <= end]

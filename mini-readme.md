@@ -1,5 +1,14 @@
 # VoidCompass // UPDATE LOG
 
+## v5.4.1.8 // Explorer Readiness
+**Release Date:** 2026-Aug-29
+
+*   Added an always-on HTML overlay recovery watchdog that detects a lost shared WebView renderer, restores every registered surface with bounded retry backoff and keeps the native fallback available during recovery instead of requiring an application restart.
+*   Added a profile-aware Screenshot Chronicle that associates retained Elite screenshots with system, body, coordinates and the closest meaningful journal event, with best-effort context for existing Captain's Log history.
+*   Added a compact Exploration Preflight instrument covering journal linkage, EDSM readiness, cockpit overlays, commander profile, departure route, fuel reserve and profile/screenshot storage without repeating survey telemetry.
+*   Evolved Explorer Decision into Smart Next Action with explicit discovery-scan, FSS, DSS/body, biological landing/sampling, waypoint continuation and survey-complete departure cues, all ranked from journal-backed facts.
+*   Hardened cold-start overlay restoration so enabled persistent surfaces appear on the first launch, and normalised station/carrier vicinity after undocking so Navigation no longer falls back to a misleading generic mass-lock state.
+
 ## v5.4.1.7 // Deep-Space Awareness
 **Release Date:** 2026-Aug-28
 

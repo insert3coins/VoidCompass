@@ -296,6 +296,8 @@ def explorer_decision(doctrine, survey, route, actions, flight, data, codex_hunt
         primary = {"label": "OPEN GROUND & EXOBIO", "command": "open", "target": "ground"}
     elif chosen_id == "review-data" or kind == "data":
         primary = {"label": "OPEN VALUE LEDGER", "command": "open", "target": "ledger"}
+    elif chosen_id == "depart-system" or kind == "departure":
+        primary = {"label": "OPEN GALACTIC ATLAS", "command": "open", "target": "map"}
     elif kind == "mining":
         primary = {"label": "OPEN MINING COMMAND", "command": "open", "target": "mining"}
     elif kind == "carrier":
@@ -317,7 +319,7 @@ def explorer_decision(doctrine, survey, route, actions, flight, data, codex_hunt
         "score": chosen["score"],
         "doctrine": doctrine,
         "doctrine_label": doctrine_label,
-        "confidence": "JOURNAL-BACKED" if chosen_id != "regional-codex" else "PERSONAL COVERAGE",
+        "confidence": "SMART JOURNAL CUE" if chosen_id != "regional-codex" else "PERSONAL COVERAGE",
         "tags": tags[:4],
         "primary": primary,
     }

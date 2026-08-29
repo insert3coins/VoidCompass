@@ -191,6 +191,27 @@ class HtmlOverlayServer:
             self._condition.notify_all()
             return self._window_revision
 
+    def reset_host_session(self):
+        """Forget browser-only state before a replacement host connects.
+
+        Models and requested window geometry remain authoritative in this
+        process.  Only the per-process readiness/heartbeat evidence is reset,
+        allowing a newly launched WebView host to recreate every surface.
+        """
+        with self._condition:
+            self._host_shutdown = False
+            for state in self._overlays.values():
+                state.clients = 0
+                state.last_client_seen = 0.0
+                state.rendered_revision = -1
+                state.content_height = 0
+                state.last_rendered_at = 0.0
+                state.ready.clear()
+                state.host_status = {}
+            self._window_revision += 1
+            self._condition.notify_all()
+            return self._window_revision
+
     def request_host_shutdown(self):
         """Wake the browser host and ask it to close every WebView window."""
         with self._condition:

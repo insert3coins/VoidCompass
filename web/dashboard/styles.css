@@ -172,7 +172,7 @@ body.atlas-focus .atlas-frame-shell {
 body.atlas-focus .atlas-frame { pointer-events: auto; }
 
 .overview-modules { display: grid; grid-template-columns: repeat(12,minmax(0,1fr)); grid-auto-flow: row; gap: 13px; align-items: stretch; }
-.overview-modules > .decision-card, .overview-modules > .telemetry-strip { grid-column: span 12; }
+.overview-modules > .decision-card, .overview-modules > .preflight-card, .overview-modules > .telemetry-strip { grid-column: span 12; }
 .overview-modules > .feed-card { grid-column: span 12; }
 .overview-modules > .survey-card { grid-column: span 7; }
 .overview-modules > .route-card { grid-column: span 5; }
@@ -199,6 +199,23 @@ body.atlas-focus .atlas-frame { pointer-events: auto; }
 .decision-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
 .decision-tags span { padding: 2px 6px; background: var(--selection); color: var(--dim); font: 700 8px Consolas, monospace; }
 .decision-body > button { justify-self: end; width: max-content; min-width: 0; min-height: 30px; padding: 0 11px; font: 700 10px Consolas,monospace; }
+.preflight-card { min-height: 94px; background: linear-gradient(110deg,color-mix(in srgb,var(--inset) 92%,transparent),color-mix(in srgb,var(--panel) 96%,transparent)); }
+.preflight-card > header { min-height: 30px; }
+.preflight-card > header > b[data-state="ready"] { color: var(--green); }
+.preflight-card > header > b[data-state="check"] { color: var(--yellow); }
+.preflight-card > header > b[data-state="blocked"] { color: var(--red); }
+.preflight-body { padding: 9px 13px 8px; }
+.preflight-checks { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 5px; }
+.preflight-check { min-width: 0; display: grid; grid-template-columns: 8px minmax(0,1fr); align-items: center; gap: 7px; min-height: 35px; padding: 5px 7px; border: 1px solid var(--border-soft); background: color-mix(in srgb,var(--panel-alt) 75%,transparent); }
+.preflight-check > i { width: 6px; height: 6px; border-radius: 50%; background: var(--yellow); box-shadow: 0 0 7px color-mix(in srgb,var(--yellow) 70%,transparent); }
+.preflight-check.ready > i { background: var(--green); box-shadow: 0 0 7px color-mix(in srgb,var(--green) 70%,transparent); }
+.preflight-check.fail > i { background: var(--red); box-shadow: 0 0 8px color-mix(in srgb,var(--red) 75%,transparent); }
+.preflight-check.optional > i { background: var(--dim); box-shadow: none; }
+.preflight-check span { min-width: 0; }
+.preflight-check small,.preflight-check b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preflight-check small { color: var(--dim); font: 7px Consolas,monospace; letter-spacing: .06em; }
+.preflight-check b { margin-top: 2px; color: var(--text); font: 700 9px Consolas,monospace; }
+.preflight-body > p { margin: 6px 1px 0; color: var(--dim); font: 8px Consolas,monospace; }
 
 .deck-customiser { margin-bottom: 13px; border: 1px solid var(--border); border-top-color: var(--accent); background: var(--panel); box-shadow: 0 14px 42px #0008; }
 .deck-customiser > header, .deck-customiser > footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; background: var(--header); border-bottom: 1px solid var(--border-soft); }
@@ -857,6 +874,15 @@ button:disabled { opacity: .38; cursor: default !important; }
 .chronicle-summary { display: flex; align-items: baseline; justify-content: space-between; gap: 15px; padding: 14px 16px 7px; }.chronicle-summary strong { color: var(--text); font: 700 12px Consolas,monospace; }.chronicle-summary span { color: var(--muted); font: 9px Consolas,monospace; }
 .chronicle-event { display: grid; grid-template-columns: 86px 1fr 120px; gap: 10px; align-items: baseline; padding: 9px 2px; border-bottom: 1px solid var(--border-soft); }
 .chronicle-event > b { color: var(--orange); font: 700 9px Consolas,monospace; }.chronicle-event p { margin: 0; }.chronicle-event p strong,.chronicle-event p span { display: block; }.chronicle-event p strong { color: var(--text); font: 700 11px "Segoe UI",sans-serif; }.chronicle-event p span { margin-top: 2px; color: var(--muted); font: 9px Consolas,monospace; }.chronicle-event time { color: var(--dim); font: 9px Consolas,monospace; text-align: right; }
+.photo-chronicle-card { margin-bottom: 14px; }
+.photo-chronicle-row { display: grid; grid-template-columns: 11px minmax(0,1fr) 120px; gap: 10px; align-items: center; padding: 10px 2px; border-bottom: 1px solid var(--border-soft); }
+.photo-chronicle-row > i { width: 8px; height: 8px; border: 1px solid var(--orange); transform: rotate(45deg); box-shadow: 0 0 8px color-mix(in srgb,var(--orange) 35%,transparent); }
+.photo-chronicle-row p { min-width: 0; margin: 0; }
+.photo-chronicle-row strong,.photo-chronicle-row span,.photo-chronicle-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.photo-chronicle-row strong { color: var(--text); font: 700 11px "Segoe UI",sans-serif; }
+.photo-chronicle-row span { margin-top: 2px; color: var(--accent); font: 9px Consolas,monospace; }
+.photo-chronicle-row small,.photo-chronicle-row time { margin-top: 2px; color: var(--dim); font: 8px Consolas,monospace; }
+.photo-chronicle-row time { text-align: right; }
 
 .mission-layout { display: grid; grid-template-columns: minmax(270px,.38fr) minmax(0,1fr); gap: 13px; }
 .mission-list > div { max-height: 680px; overflow-y: auto; }
@@ -1066,6 +1092,7 @@ input,select,textarea,button { max-width: 100%; }
   .overview-modules > .feed-card { grid-column: span 12; }
   .deck-module-controls { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .telemetry-strip { grid-template-columns: repeat(2,1fr); }
+  .preflight-checks { grid-template-columns: repeat(4,minmax(0,1fr)); }
   .tool-grid { grid-template-columns: repeat(2,1fr); }
   .achievement-grid { grid-template-columns: repeat(2,1fr); }
   .stellar-grid { grid-template-columns: 1fr; }
@@ -1099,6 +1126,7 @@ input,select,textarea,button { max-width: 100%; }
   .galnet-article > header { padding-left:30px; padding-right:30px; }.galnet-article-body,.galnet-article > footer { padding-left:30px; padding-right:30px; }
   .decision-body { grid-template-columns: 46px minmax(0,1fr); }
   .decision-body > button { grid-column: 1/-1; width: 100%; }
+  .preflight-checks { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .deck-customiser-body { grid-template-columns: 1fr; }
   .deck-module-controls { grid-template-columns: 1fr; }
   .tall-card { grid-row: auto; min-height: 430px; }

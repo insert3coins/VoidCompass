@@ -17,7 +17,7 @@ import overlay_chrome
 import route_strip
 import ui_theme
 from html_navigation_hud import HtmlNavigationHudBridge
-from html_overlay_runtime import overlay_opacity_ratio
+from html_overlay_runtime import apply_native_fallback_visibility, overlay_opacity_ratio
 from navigation_instrument import (
     NavigationEventRenderer,
 )
@@ -269,14 +269,8 @@ class TacticalHUD:
                 was_ready = self._html_ready
                 ready = bridge.ready
                 self._html_ready = ready
+                apply_native_fallback_visibility(self.root, self.win, ready)
                 if ready:
-                    try:
-                        # Keep the native Tk window as the authoritative
-                        # position/visibility proxy used by hotkeys and Layout
-                        # Studio, but make its renderer completely invisible.
-                        self.win.attributes("-alpha", 0.0)
-                    except Exception:
-                        pass
                     if not was_ready:
                         logging.info("HTML Navigation HUD renderer is live")
                 window = self._html_window_payload()

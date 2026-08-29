@@ -47,6 +47,12 @@ TRACKED_EVENTS = frozenset({
     "SAASignalsFound", "FSSDiscoveryScan", "FSSAllBodiesFound", "NavBeaconScan",
     "ScanOrganic",
 })
+SCREENSHOT_CONTEXT_EVENTS = frozenset({
+    "FSDJump", "CarrierJump", "Location", "DiscoveryScan", "FSSDiscoveryScan",
+    "FSSAllBodiesFound", "Scan", "SAAScanComplete", "SAASignalsFound",
+    "ScanOrganic", "CodexEntry", "ApproachBody", "LeaveBody", "Touchdown",
+    "Liftoff", "SupercruiseExit", "Docked", "Undocked", "ProspectedAsteroid",
+})
 IMPORT_EVENTS = TRACKED_EVENTS | {"Commander", "LoadGame"}
 IMPORT_MARKERS = tuple(
     marker
@@ -57,6 +63,16 @@ IMPORT_MARKERS = tuple(
 
 def _stamp(raw):
     return str((raw or {}).get("timestamp") or datetime.now(timezone.utc).isoformat(timespec="seconds"))
+
+
+def _epoch(value):
+    try:
+        parsed = datetime.fromisoformat(str(value or "").replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.timestamp()
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _number(value, default=0.0):
@@ -459,6 +475,7 @@ class DeepSurveyTracker:
         self._milestone_furthest = None
         self._milestone_route_count = 0
         self._milestone_last_route_key = None
+        self._recent_screenshot_context = []
         self.load()
 
     @staticmethod
@@ -479,6 +496,7 @@ class DeepSurveyTracker:
             self._milestone_furthest = None
             self._milestone_route_count = 0
             self._milestone_last_route_key = None
+            self._recent_screenshot_context = []
             self.load()
 
     def load(self):
@@ -708,10 +726,62 @@ class DeepSurveyTracker:
                     return str(row.get("system") or "")
         return ""
 
+    def _remember_screenshot_context(self, raw, context=None):
+        event = str(raw.get("event") or "")
+        if event not in SCREENSHOT_CONTEXT_EVENTS:
+            return
+        context = context if isinstance(context, dict) else {}
+        body = (raw.get("BodyName") or raw.get("Body")
+                or context.get("body_name") or context.get("body") or "")
+        labels = {
+            "FSDJump": "Ship arrival", "CarrierJump": "Carrier arrival",
+            "Location": "Location restored", "DiscoveryScan": "Discovery scan",
+            "FSSDiscoveryScan": "Discovery scan", "FSSAllBodiesFound": "FSS complete",
+            "Scan": "Body scanned", "SAAScanComplete": "Surface mapping complete",
+            "SAASignalsFound": "Surface signals found", "ScanOrganic": "Biological sample",
+            "CodexEntry": "Codex discovery", "ApproachBody": "Body approach",
+            "LeaveBody": "Body departure", "Touchdown": "Surface touchdown",
+            "Liftoff": "Surface departure", "SupercruiseExit": "Supercruise exit",
+            "Docked": "Docking complete", "Undocked": "Departure complete",
+            "ProspectedAsteroid": "Asteroid prospected",
+        }
+        detail = (
+            raw.get("BodyName") or raw.get("StarSystem")
+            or raw.get("Species_Localised") or raw.get("Species")
+            or raw.get("Name_Localised") or raw.get("Name")
+            or raw.get("StationName") or body or ""
+        )
+        row = {
+            "timestamp": _stamp(raw), "epoch": _epoch(_stamp(raw)),
+            "event": event, "label": labels.get(event, event),
+            "detail": str(detail or ""),
+            "system": self._system_name(raw, context), "body": str(body or ""),
+        }
+        with self.lock:
+            self._recent_screenshot_context.append(row)
+            self._recent_screenshot_context = self._recent_screenshot_context[-32:]
+
+    def _screenshot_context(self, raw, context=None):
+        timestamp = _epoch(_stamp(raw))
+        system = self._system_name(raw, context).casefold()
+        with self.lock:
+            for row in reversed(self._recent_screenshot_context):
+                if timestamp and row.get("epoch") and abs(timestamp - row["epoch"]) > 600:
+                    continue
+                row_system = str(row.get("system") or "").casefold()
+                if system and row_system and system != row_system:
+                    continue
+                return dict(row)
+        return {}
+
     def observe_event(self, raw, context=None, event_uid=None, save=True):
         if not isinstance(raw, dict):
             return False
         event = raw.get("event")
+        if event == "LoadGame":
+            with self.lock:
+                self._recent_screenshot_context = []
+        self._remember_screenshot_context(raw, context)
         if event not in TRACKED_EVENTS:
             return False
         key = _event_key(raw, event_uid)
@@ -785,6 +855,7 @@ class DeepSurveyTracker:
                     self._system_name(raw, context), "dss", timestamp=_stamp(raw),
                 )
             elif event == "Screenshot":
+                nearby = self._screenshot_context(raw, context)
                 self._append("screenshots", {
                     "timestamp": _stamp(raw), "filename": raw.get("Filename") or "",
                     "system": self._system_name(raw, context),
@@ -792,6 +863,10 @@ class DeepSurveyTracker:
                     "latitude": raw.get("Latitude"), "longitude": raw.get("Longitude"),
                     "altitude": raw.get("Altitude"), "heading": raw.get("Heading"),
                     "width": raw.get("Width"), "height": raw.get("Height"),
+                    "nearby_event": nearby.get("event") or "",
+                    "nearby_label": nearby.get("label") or "",
+                    "nearby_detail": nearby.get("detail") or "",
+                    "nearby_timestamp": nearby.get("timestamp") or "",
                 })
                 self._touch_route(raw, screenshots=1)
                 self._touch_region(
