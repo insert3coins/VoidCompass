@@ -47,27 +47,25 @@ def scaled_font(font, config):
 
 
 def configure_overlay_window(window, chroma="#ff00ff"):
-    """Apply the strongest portable borderless/topmost overlay treatment.
+    """Configure a permanently invisible native overlay state proxy.
 
-    Windows supports Tk's chroma-key and tool-window flags. Tk on Linux does
-    not, so X11/XWayland receives an opaque near-black background rather than
-    failing construction or displaying a magenta rectangle.
+    Windows still receives chroma-key and tool-window flags for geometry and
+    hotkey compatibility; HTML owns presentation on every supported runtime.
     """
     background = chroma if os.name == "nt" else _BG
-    # Every overlay is constructed while the startup bootloader owns the
-    # presentation. Make new Toplevels fully transparent before Tk gets an
-    # idle opportunity to map them; Dashboard releases the curtain only after
-    # journal/history recovery and saved-position restoration are complete.
+    # Tk owns state, geometry and event compatibility only. HTML owns every
+    # visible cockpit surface, so native proxies must be transparent from the
+    # instant they are created, including overlays enabled after startup.
     master = getattr(window, "master", None)
     startup_held = bool(
         getattr(master, "_voidcompass_startup_presentation_held", False)
     )
-    if startup_held:
-        try:
-            window.attributes("-alpha", 0.0)
+    try:
+        window.attributes("-alpha", 0.0)
+        if startup_held:
             window._voidcompass_startup_held = True
-        except Exception:
-            pass
+    except Exception:
+        pass
     try:
         if os.name == "nt":
             window.attributes(

@@ -45,7 +45,13 @@ from overlay_layout_model import (
 )
 from platform_support import open_path
 from profile_backups import schedule_restore, snapshot_profile, validate_backup
-from mining_data import search_spansh_rings
+from mining_data import (
+    MINING_MATERIALS,
+    MiningDataStore,
+    normalize_material_name,
+    search_spansh_buyers,
+    search_spansh_rings,
+)
 from services.spansh import (
     SpanshError,
     fleet_carrier_job_id,
@@ -279,7 +285,7 @@ class HtmlDashboardMixin:
         elif health.get("total") and health.get("ready") == health.get("total"):
             add("overlays", "Cockpit overlays", "ready", f"{health.get('total')} READY", "HTML surfaces are responding")
         elif health.get("total"):
-            add("overlays", "Cockpit overlays", "warn", f"{health.get('ready', 0)}/{health.get('total')} LIVE", "Native fallbacks remain available")
+            add("overlays", "Cockpit overlays", "warn", f"{health.get('ready', 0)}/{health.get('total')} LIVE", "HTML surface recovery pending")
         else:
             add("overlays", "Cockpit overlays", "warn", "STARTING", "Enabled overlays have not registered yet")
 
@@ -1320,6 +1326,75 @@ class HtmlDashboardMixin:
             },
         }
 
+    def _html_mining_store(self):
+        path = os.path.abspath(self.config.get("mining_db_file") or "mining_data.db")
+        store = getattr(self, "_html_mining_data_store", None)
+        if store is None or os.path.abspath(store.db_path) != path:
+            store = MiningDataStore(path)
+            self._html_mining_data_store = store
+        return store
+
+    def _record_mining_ring_signal(self, raw):
+        """Persist a journal-confirmed ring hotspot in the active profile."""
+        raw = raw if isinstance(raw, dict) else {}
+        body = _text(raw.get("BodyName"), 180)
+        if "ring" not in body.casefold():
+            return False
+        signals = [row for row in raw.get("Signals") or [] if isinstance(row, dict)]
+        if not signals:
+            return False
+        coords = getattr(self, "current_coords", None) or ()
+        if not isinstance(coords, (list, tuple)):
+            coords = ()
+        changed = False
+        store = self._html_mining_store()
+        for signal in signals:
+            material = normalize_material_name(
+                signal.get("Type_Localised") or signal.get("Type")
+            )
+            if not material or material.casefold() in {"biological", "geological", "human"}:
+                continue
+            store.upsert_hotspot({
+                "system_name": getattr(self, "current_sys", None),
+                "body_name": body, "material_name": material,
+                "hotspot_count": _integer(signal.get("Count")),
+                "x_coord": coords[0] if len(coords) >= 3 else None,
+                "y_coord": coords[1] if len(coords) >= 3 else None,
+                "z_coord": coords[2] if len(coords) >= 3 else None,
+                "data_source": "Commander DSS",
+                "scan_date": raw.get("timestamp"),
+            })
+            changed = True
+        return changed
+
+    @staticmethod
+    def _html_mining_missions(companion):
+        missions = (companion or {}).get("missions") or {}
+        rows = missions.values() if isinstance(missions, dict) else missions
+        mining_names = {name.casefold() for name in MINING_MATERIALS}
+        result = []
+        for mission in rows or []:
+            if not isinstance(mission, dict):
+                continue
+            internal = str(mission.get("internal_name") or mission.get("name") or "")
+            commodity = _text(
+                mission.get("commodity") or mission.get("commodity_symbol"), 100,
+            )
+            if "mining" not in internal.casefold() and commodity.casefold() not in mining_names:
+                continue
+            required = _integer(mission.get("to_deliver") or mission.get("count"))
+            delivered = _integer(mission.get("delivered"))
+            result.append({
+                "commodity": commodity or "Mining commodity",
+                "required": required, "delivered": delivered,
+                "remaining": max(0, required - delivered),
+                "destination": _text(
+                    mission.get("destination_station") or mission.get("destination_system"), 160,
+                ),
+                "expiry": mission.get("expiry"),
+            })
+        return result[:20]
+
     def _html_mining_workspace(self):
         engine = getattr(self, "specialist_engine", None)
         try:
@@ -1327,8 +1402,43 @@ class HtmlDashboardMixin:
         except Exception:
             snapshot = {}
         session = snapshot.get("session") or {}
+        plan = snapshot.get("plan") or {}
+        readiness = snapshot.get("readiness") or {}
+        current = session.get("current_prospect") or {}
+        tool = self._html_profile_transient(
+            "_html_mining_tool_state",
+            {
+                "ring_status": "ready", "ring_detail": "Search commander and Spansh ring intelligence.",
+                "ring_results": [], "buyer_status": "ready",
+                "buyer_detail": "Find a market for the planned mining haul.",
+                "buyer_results": [],
+            },
+        )
+        try:
+            bookmarks = self._html_mining_store().list_bookmarks()
+        except Exception:
+            bookmarks = []
+        companion = getattr(self, "companion_state", None) or {}
         return {
             "active": bool(snapshot.get("active")),
+            "system": _text(getattr(self, "current_sys", None), 140),
+            "materials": sorted(MINING_MATERIALS),
+            "plan": {
+                "target": _text(plan.get("target_material"), 100),
+                "minimum": _number(plan.get("minimum_percent"), 20),
+                "cargo_goal": _integer(plan.get("cargo_goal_t")),
+                "method": _text(plan.get("method") or "auto", 30),
+            },
+            "readiness": {
+                "ready": bool(readiness.get("ready")),
+                "method": _text(readiness.get("method") or "auto", 30),
+                "ship": _text(readiness.get("ship"), 100),
+                "cargo_capacity": _integer(readiness.get("cargo_capacity")),
+                "limpets": _integer(readiness.get("limpets")),
+                "missing": [_text(row, 100) for row in readiness.get("missing") or []],
+                "equipment": dict(readiness.get("equipment") or {}),
+                "dss_recommended": bool(readiness.get("dss_recommended")),
+            },
             "session": {
                 "started": session.get("started_ts"),
                 "duration": _integer(session.get("duration_s")),
@@ -1336,9 +1446,45 @@ class HtmlDashboardMixin:
                 "cracked": _integer(session.get("asteroids_cracked")),
                 "refined_t": _integer(session.get("refined_t")),
                 "tons_per_hour": _number(session.get("tons_per_hour")),
+                "tons_per_asteroid": _number(session.get("tons_per_asteroid")),
+                "asteroids_per_hour": _number(session.get("asteroids_per_hour")),
                 "revenue": _number(session.get("attributed_revenue_cr")),
                 "net": _number(session.get("net_after_limpet_cash_cr")),
+                "revenue_per_hour": _number(session.get("revenue_per_hour_cr")),
+                "hit_rate": _number(session.get("target_hit_rate")),
+                "qualified_rate": _number(session.get("qualified_rate")),
+                "target_average": _number(session.get("target_average_pct")),
+                "target_best": _number(session.get("target_best_pct"), 0),
+                "cargo_goal": _integer(session.get("cargo_goal_t")),
+                "cargo_goal_remaining": _integer(session.get("cargo_goal_remaining_t")),
+                "cargo_goal_percent": _number(session.get("cargo_goal_percent")),
+                "goal_minutes": _integer(session.get("estimated_goal_minutes")),
                 "limpets": session.get("limpets") or {},
+                "current": {
+                    "decision": _text(current.get("decision") or "AWAITING", 30),
+                    "target": _text(current.get("target"), 100),
+                    "target_percent": _number(current.get("target_pct"), 0),
+                    "content": _text(current.get("content"), 100),
+                    "remaining": _number(current.get("remaining")),
+                    "motherlode": _text(current.get("motherlode"), 100),
+                    "refined_since_prospect": _integer(current.get("refined_since_prospect")),
+                    "materials": [
+                        {"name": _text(row.get("name"), 100), "percent": _number(row.get("percent"), 0)}
+                        for row in current.get("materials") or [] if isinstance(row, dict)
+                    ],
+                },
+                "prospects": [
+                    {
+                        "decision": _text(row.get("decision"), 30),
+                        "target": _text(row.get("target"), 100),
+                        "target_percent": _number(row.get("target_pct"), 0),
+                        "motherlode": _text(row.get("motherlode"), 100),
+                        "refined": _integer(row.get("refined_since_prospect")),
+                        "timestamp": row.get("timestamp"),
+                    }
+                    for row in reversed((session.get("prospect_log") or [])[-20:])
+                    if isinstance(row, dict)
+                ],
                 "materials": [
                     {
                         "name": _text(row.get("name") or row.get("symbol"), 100),
@@ -1366,9 +1512,45 @@ class HtmlDashboardMixin:
                     "refined": _integer(row.get("refined_t")),
                     "prospected": _integer(row.get("asteroids_prospected")),
                     "revenue": _number(row.get("attributed_revenue_cr")),
+                    "duration": _integer(row.get("duration_s")),
+                    "tons_per_hour": _number(row.get("tons_per_hour")),
+                    "hit_rate": _number(row.get("target_hit_rate")),
+                    "qualified_rate": _number(row.get("qualified_rate")),
+                    "target_best": _number(row.get("target_best_pct"), 0),
+                    "target": _text((row.get("plan") or {}).get("target_material"), 100),
                 }
                 for row in (snapshot.get("history") or [])[:80] if isinstance(row, dict)
             ],
+            "ring_scans": [
+                {
+                    "system": _text(row.get("system"), 140),
+                    "body": _text(row.get("body"), 180),
+                    "timestamp": row.get("timestamp"),
+                    "signals": [
+                        {"name": _text(signal.get("name"), 100), "count": _integer(signal.get("count"))}
+                        for signal in row.get("signals") or [] if isinstance(signal, dict)
+                    ],
+                }
+                for row in (snapshot.get("ring_scans") or [])[:30] if isinstance(row, dict)
+            ],
+            "bookmarks": [
+                {
+                    "id": _integer(row.get("id")), "system": _text(row.get("system_name"), 140),
+                    "body": _text(row.get("body_name"), 180),
+                    "material": _text(row.get("material_name"), 100),
+                    "notes": _text(row.get("notes"), 500), "created": row.get("created_at"),
+                }
+                for row in bookmarks[:100] if isinstance(row, dict)
+            ],
+            "missions": self._html_mining_missions(companion),
+            "tools": {
+                "ring_status": _text(tool.get("ring_status") or "ready", 30),
+                "ring_detail": _text(tool.get("ring_detail"), 500),
+                "ring_results": list(tool.get("ring_results") or [])[:250],
+                "buyer_status": _text(tool.get("buyer_status") or "ready", 30),
+                "buyer_detail": _text(tool.get("buyer_detail"), 500),
+                "buyer_results": list(tool.get("buyer_results") or [])[:250],
+            },
         }
 
     def _html_engineering_workspace(self):
@@ -1911,7 +2093,6 @@ class HtmlDashboardMixin:
                 "station_info_timeout_s": _integer(self.config.get("station_info_timeout_s"), 30),
                 "contact_scope_timeout_s": _integer(self.config.get("contact_scope_timeout_s"), 45),
                 "gravity_warning_threshold_g": _number(self.config.get("gravity_warning_threshold_g"), 3.0),
-                "hud_html_renderer": bool(self.config.get("hud_html_renderer", True)),
                 "hud_crt_enabled": bool(self.config.get("hud_crt_enabled", True)),
                 "hud_crt_motion_enabled": bool(self.config.get("hud_crt_motion_enabled", True)),
                 "hud_crt_intensity": _text(self.config.get("hud_crt_intensity") or "Subtle", 20).title(),
@@ -2028,7 +2209,7 @@ class HtmlDashboardMixin:
             "sample_clear_notifications_enabled", "rebuy_warnings_enabled",
             "data_risk_warnings_enabled", "station_info_auto_hide_enabled",
             "survey_status_show_all_bodies",
-            "hud_html_renderer", "hud_crt_enabled", "hud_crt_motion_enabled",
+            "hud_crt_enabled", "hud_crt_motion_enabled",
         }
         key = _text(key, 80)
         if key not in allowed:
@@ -2040,10 +2221,6 @@ class HtmlDashboardMixin:
         self._persist_config()
         if key == "overlay_mouse_passthrough":
             self._apply_overlay_mouse_passthrough()
-        elif key == "hud_html_renderer":
-            self._attach_html_overlay_renderers()
-            self._apply_html_overlay_renderer()
-            self.update_hud()
         elif key in {"hud_compact_mode", "hud_crt_enabled", "hud_crt_motion_enabled"}:
             self.update_hud()
         elif key == "station_info_auto_hide_enabled":
@@ -2790,6 +2967,221 @@ class HtmlDashboardMixin:
                 )
             if changed:
                 self.update_ground_target_ui()
+
+        elif page == "mining":
+            engine = getattr(self, "specialist_engine", None)
+            if engine is None:
+                return False
+            if operation == "save_plan":
+                engine.configure_mining(
+                    _text(payload.get("target"), 100),
+                    _number(payload.get("minimum"), 20),
+                    _integer(payload.get("cargo_goal")),
+                    _text(payload.get("method") or "auto", 30),
+                )
+                changed = True
+            elif operation == "start_run":
+                changed = engine.start_mining({
+                    "system": getattr(self, "current_sys", None),
+                    "body": getattr(self, "current_body_name", None),
+                })
+            elif operation == "end_run":
+                changed = engine.end_mining("manual")
+            elif operation == "ring_search":
+                reference = _text(payload.get("reference") or getattr(self, "current_sys", ""), 140)
+                material = _text(payload.get("material"), 100)
+                ring_type = _text(payload.get("ring_type"), 50)
+                max_distance = max(1, min(5000, _integer(payload.get("range"), 300)))
+                if not reference:
+                    return False
+                profile = get_active_profile(self.config)
+                generation = time.time_ns()
+                tool = self._html_profile_transient("_html_mining_tool_state", {})
+                tool.update({
+                    "ring_generation": generation, "ring_status": "working",
+                    "ring_detail": f"Searching ring intelligence near {reference}…",
+                    "ring_results": [],
+                })
+                self._schedule_html_dashboard_publish(immediate=True)
+
+                def worker():
+                    try:
+                        store = self._html_mining_store()
+                        current = str(getattr(self, "current_sys", "") or "")
+                        coords = getattr(self, "current_coords", None) if reference.casefold() == current.casefold() else None
+                        local_rows = store.search_hotspots(
+                            material=material or None, ring_type=ring_type or None,
+                            reference_coords=coords,
+                            max_distance=max_distance if coords else None,
+                            limit=250,
+                        )
+                        if not coords:
+                            local_rows = [
+                                row for row in local_rows
+                                if str(row.get("system_name") or "").casefold() == reference.casefold()
+                            ]
+                        remote_rows = search_spansh_rings(
+                            reference, material=material or None,
+                            ring_type=ring_type or None, max_results=200,
+                            max_distance=max_distance,
+                        )
+                        combined = []
+                        seen = set()
+                        for source, rows in (("COMMANDER DSS", local_rows), ("SPANSH", remote_rows)):
+                            for row in rows:
+                                if not isinstance(row, dict):
+                                    continue
+                                clean = {
+                                    "system": _text(row.get("system_name"), 140),
+                                    "body": _text(row.get("body_name"), 180),
+                                    "material": _text(row.get("material_name") or material, 100),
+                                    "hotspots": _integer(row.get("hotspot_count")),
+                                    "ring_type": _text(row.get("ring_type"), 60),
+                                    "distance": _number(row.get("distance_ly")),
+                                    "arrival": _number(row.get("ls_distance")),
+                                    "reserve": _text(row.get("reserve_level"), 60),
+                                    "updated": row.get("updated_at") or row.get("scan_date"),
+                                    "source": source,
+                                    "body_id64": row.get("body_id64"),
+                                }
+                                key = (
+                                    clean["system"].casefold(), clean["body"].casefold(),
+                                    clean["material"].casefold(),
+                                )
+                                if not clean["system"] or key in seen:
+                                    continue
+                                seen.add(key)
+                                combined.append(clean)
+                        combined.sort(key=lambda row: (
+                            row.get("distance") is None,
+                            row.get("distance") if row.get("distance") is not None else 0,
+                            -_integer(row.get("hotspots")),
+                        ))
+                        result, error = combined[:250], None
+                    except Exception as exc:
+                        result, error = [], exc
+
+                    def finish():
+                        active = self._html_profile_transient("_html_mining_tool_state", {})
+                        if active.get("profile") != profile or active.get("ring_generation") != generation:
+                            return
+                        if error:
+                            active.update({"ring_status": "failed", "ring_detail": str(error), "ring_results": []})
+                        else:
+                            active.update({
+                                "ring_status": "ready", "ring_results": result,
+                                "ring_detail": f"Found {len(result):,} ring records near {reference}.",
+                            })
+                        self._schedule_html_dashboard_publish(immediate=True)
+
+                    self._ui_post(finish, key="html-mining-rings")
+
+                threading.Thread(target=worker, name="HtmlMiningRings", daemon=True).start()
+                return True
+            elif operation == "buyer_search":
+                reference = _text(payload.get("reference") or getattr(self, "current_sys", ""), 140)
+                commodity = _text(payload.get("commodity"), 100)
+                quantity = max(1, min(100000, _integer(payload.get("quantity"), 1)))
+                max_distance = max(1, min(5000, _integer(payload.get("range"), 500)))
+                max_ls = max(1, min(10000000, _integer(payload.get("max_ls"), 10000)))
+                if not reference or not commodity:
+                    return False
+                profile = get_active_profile(self.config)
+                generation = time.time_ns()
+                tool = self._html_profile_transient("_html_mining_tool_state", {})
+                tool.update({
+                    "buyer_generation": generation, "buyer_status": "working",
+                    "buyer_detail": f"Finding {commodity} demand around {reference}…",
+                    "buyer_results": [],
+                })
+                self._schedule_html_dashboard_publish(immediate=True)
+
+                def worker():
+                    try:
+                        rows = search_spansh_buyers(
+                            commodity, reference_system=reference,
+                            max_distance=max_distance, max_results=200,
+                            exclude_carriers=bool(payload.get("exclude_carriers", True)),
+                            quantity=quantity, large_pad=bool(payload.get("large_pad")),
+                            max_ls=max_ls, min_demand=quantity,
+                        )
+                        result = [
+                            {
+                                "system": _text(row.get("system_name"), 140),
+                                "station": _text(row.get("station_name"), 180),
+                                "station_type": _text(row.get("station_type"), 80),
+                                "distance": _number(row.get("distance_ly")),
+                                "arrival": _number(row.get("ls_distance")),
+                                "price": _integer(row.get("price")),
+                                "demand": _integer(row.get("demand")),
+                                "updated": row.get("updated_at"),
+                                "large_pad": bool(row.get("large_pad")),
+                                "planetary": bool(row.get("planetary")),
+                                "market_id": row.get("market_id"),
+                            }
+                            for row in rows[:200] if isinstance(row, dict)
+                        ]
+                        error = None
+                    except Exception as exc:
+                        result, error = [], exc
+
+                    def finish():
+                        active = self._html_profile_transient("_html_mining_tool_state", {})
+                        if active.get("profile") != profile or active.get("buyer_generation") != generation:
+                            return
+                        if error:
+                            active.update({"buyer_status": "failed", "buyer_detail": str(error), "buyer_results": []})
+                        else:
+                            active.update({
+                                "buyer_status": "ready", "buyer_results": result,
+                                "buyer_detail": f"Found {len(result):,} markets with demand for {quantity:,} T of {commodity}.",
+                            })
+                        self._schedule_html_dashboard_publish(immediate=True)
+
+                    self._ui_post(finish, key="html-mining-buyers")
+
+                threading.Thread(target=worker, name="HtmlMiningBuyers", daemon=True).start()
+                return True
+            elif operation in {"ring_copy", "ring_open", "ring_bookmark"}:
+                tool = self._html_profile_transient("_html_mining_tool_state", {})
+                index = _integer(payload.get("result_index"), -1)
+                rows = tool.get("ring_results") or []
+                if not 0 <= index < len(rows):
+                    return False
+                row = rows[index]
+                if operation == "ring_copy":
+                    return self._html_copy_text(row.get("system"))
+                if operation == "ring_open":
+                    body_id64 = row.get("body_id64")
+                    webbrowser.open_new_tab(
+                        f"https://spansh.co.uk/body/{body_id64}" if body_id64 else "https://spansh.co.uk/bodies"
+                    )
+                    return True
+                self._html_mining_store().add_bookmark(
+                    row.get("system"), row.get("body"), row.get("material"),
+                    f"{row.get('ring_type') or 'Ring'} · {row.get('reserve') or 'reserve unknown'}",
+                )
+                changed = True
+            elif operation in {"buyer_copy", "buyer_open"}:
+                tool = self._html_profile_transient("_html_mining_tool_state", {})
+                index = _integer(payload.get("result_index"), -1)
+                rows = tool.get("buyer_results") or []
+                if not 0 <= index < len(rows):
+                    return False
+                row = rows[index]
+                if operation == "buyer_copy":
+                    return self._html_copy_text(row.get("system"))
+                market_id = row.get("market_id")
+                webbrowser.open_new_tab(
+                    f"https://spansh.co.uk/station/{market_id}" if market_id else "https://spansh.co.uk/stations"
+                )
+                return True
+            elif operation == "delete_bookmark":
+                if not payload.get("confirmed"):
+                    return False
+                changed = self._html_mining_store().remove_bookmark(
+                    _integer(payload.get("bookmark_id")),
+                )
 
         elif page == "engineering":
             materials = getattr(self, "engineer_materials", None)

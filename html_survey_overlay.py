@@ -6,7 +6,7 @@ import json
 import logging
 import os
 
-from html_overlay_runtime import HtmlOverlaySurface, apply_native_fallback_visibility, overlay_opacity_ratio
+from html_overlay_runtime import HtmlOverlaySurface, suppress_native_proxy, overlay_opacity_ratio
 
 
 def _safe_int(value, default=0):
@@ -44,7 +44,7 @@ class HtmlSurveyOverlayBridge:
             self.win.bind("<Destroy>", self._on_destroy, add="+")
         except Exception:
             pass
-        self.set_enabled(bool(self.config.get("hud_html_renderer", False)))
+        self.set_enabled(True)
         self._schedule()
 
     @property
@@ -161,10 +161,7 @@ class HtmlSurveyOverlayBridge:
             if surface is not None:
                 surface.dispose()
             try:
-                held = bool(getattr(
-                    self.win.master, "_voidcompass_startup_presentation_held", False,
-                ))
-                self.win.attributes("-alpha", 0.0 if held else 1.0)
+                self.win.attributes("-alpha", 0.0)
             except Exception:
                 pass
             self._last_fingerprint = None
@@ -182,7 +179,11 @@ class HtmlSurveyOverlayBridge:
             return True
         except Exception as exc:
             self.surface = None
-            logging.warning("HTML Survey Operations unavailable; using Tk renderer: %s", exc)
+            try:
+                self.win.attributes("-alpha", 0.0)
+            except Exception:
+                pass
+            logging.warning("HTML Survey Operations unavailable; overlay suppressed: %s", exc)
             return False
 
     def _schedule(self):
@@ -197,7 +198,7 @@ class HtmlSurveyOverlayBridge:
         if surface is not None:
             if surface.startup_failed:
                 logging.warning(
-                    "HTML Survey Operations unavailable; returning to Tk renderer (%s)",
+                    "HTML Survey Operations unavailable; overlay remains suppressed (%s)",
                     surface.host_status or "renderer did not connect",
                 )
                 self.set_enabled(False)
@@ -205,7 +206,7 @@ class HtmlSurveyOverlayBridge:
                 was_ready = self._ready
                 self._ready = surface.ready
                 self.overlay._html_ready = self._ready
-                apply_native_fallback_visibility(self.root, self.win, self._ready)
+                suppress_native_proxy(self.win)
                 measured_height = surface.server.rendered_content_height(
                     self.overlay_id,
                 )

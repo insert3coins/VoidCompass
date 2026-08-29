@@ -186,7 +186,6 @@ PROFILE_BOOL_SETTINGS = (
     "overlay_enabled",
     "overlay_mouse_passthrough",
     "overlay_hotkeys_enabled",
-    "hud_html_renderer",
     "hud_compact_mode",
     "cargo_overlay_enabled",
     "carrier_overlay_enabled",
@@ -500,7 +499,6 @@ def apply_profile_config(config, profile_key=None):
         "overlay_enabled": True,
         "overlay_mouse_passthrough": os.name == "nt",
         "overlay_hotkeys_enabled": os.name == "nt",
-        "hud_html_renderer": os.name == "nt",
         # Existing profile files without the old boolean retain Expanded;
         # genuinely new commander profiles begin with the everyday Standard
         # layout. Stored True/False choices remain authoritative either way.
@@ -643,7 +641,6 @@ def load_config():
         'overlay_enabled': True,
         'overlay_mouse_passthrough': os.name == 'nt',
         'overlay_hotkeys_enabled': os.name == 'nt',
-        'hud_html_renderer': os.name == 'nt',
         'overlay_hotkey_layout_studio': 'Ctrl+Alt+Shift+F10',
         'overlay_hotkey_toggle_all': 'Ctrl+Alt+Shift+F11',
         'overlay_hotkey_navigation': '',

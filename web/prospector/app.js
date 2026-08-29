@@ -37,6 +37,10 @@
     const refined = Array.isArray(model.refined) ? model.refined : [];
     const remaining = model.remaining === null || model.remaining === undefined ? null : Math.max(0, Math.min(100, number(model.remaining)));
     const core = String(model.core_material || "");
+    const decision = String(model.decision || "ASSESS").toLowerCase();
+    const target = String(model.target_material || "");
+    const targetPercent = number(model.target_percent);
+    const minimum = number(model.minimum_percent, 20);
     root.classList.toggle("has-core", Boolean(core)); root.dataset.contentTone = tone(model.content_tone);
     set("content-badge", core ? "CORE DETECTED" : `${model.content_label || "UNKNOWN"} CONTENT`);
     set("mining-type", model.mining_type, "Asteroid");
@@ -44,6 +48,12 @@
     set("remaining-value", remaining === null ? "—" : `${remaining.toFixed(1)}%`);
     byId("rock-glyph").style.setProperty("--remaining", `${remaining === null ? 0 : remaining}%`);
     byId("core").hidden = !core; set("core-material", core, "UNKNOWN");
+    const directive = byId("directive");
+    directive.className = `directive ${decision}`;
+    set("directive-label", model.decision, "ASSESS");
+    set("directive-detail", target
+      ? `${target} ${targetPercent.toFixed(1)}% · directive ${minimum.toFixed(1)}%+`
+      : core ? `${core} motherlode confirmed` : "No target mineral selected");
     set("material-count", `${materials.length} SIGNAL${materials.length === 1 ? "" : "S"}`);
     const maximum = Math.max(1, ...materials.map((item) => number(item.proportion)));
     const materialHost = byId("materials"); materialHost.replaceChildren();
@@ -53,7 +63,7 @@
     const refinedHost = byId("refined"); refinedHost.replaceChildren();
     if (refined.length) refined.forEach((item) => { const chip = node("span"); chip.appendChild(node("b", "", `${Math.round(number(item.tonnes))} T`)); chip.appendChild(node("i", "", item.name || "Unknown")); refinedHost.appendChild(chip); });
     else refinedHost.appendChild(node("span", "empty-refined", "Refinery events for this asteroid will appear here"));
-    set("analysis-state", core ? "MOTHERLODE LOCK" : materials.length ? "COMPOSITION LOCK" : "PROSPECTOR LOCK");
+    set("analysis-state", `${model.decision || "ASSESS"} · ${core ? "MOTHERLODE LOCK" : materials.length ? "COMPOSITION LOCK" : "PROSPECTOR LOCK"}`);
   }
 
   function contentHeight() { return Math.max(180, Math.ceil(root.getBoundingClientRect().height + 2)); }

@@ -1,9 +1,18 @@
 # VoidCompass // UPDATE LOG
 
+## v5.4.1.9 // Mining Operations
+**Release Date:** 2026-Aug-29
+
+*   Rebuilt Mining Command around one profile-aware journal reducer, with retained run directives, ship/loadout readiness, prospect quality, refined yield, limpet economy, cargo objectives, run history and derived tonnes-per-hour analytics.
+*   Added target-aware Prospector guidance with MINE, OPTIONAL, SKIP, CORE and ASSESS decisions driven by the commander's selected mineral and minimum asteroid grade, while retaining composition, motherlode and per-rock refinery evidence.
+*   Added integrated ring intelligence from commander DSS scans and Spansh, profile-aware ring bookmarks, mining mission awareness and a threaded Sell Mining Haul search using the purpose-built Spansh commodity endpoint.
+*   Removed the duplicate legacy mining-session tracker, made the specialist mining brain the sole session authority and hardened older retained sessions and mining database connections.
+*   Audited every cockpit overlay and enforced HTML-only presentation: removed the renderer switch and all visible Tk fallback paths, while keeping native state proxies permanently invisible so Cargo, Navigation and any later-enabled overlay cannot appear twice during startup or watchdog recovery.
+
 ## v5.4.1.8 // Explorer Readiness
 **Release Date:** 2026-Aug-29
 
-*   Added an always-on HTML overlay recovery watchdog that detects a lost shared WebView renderer, restores every registered surface with bounded retry backoff and keeps the native fallback available during recovery instead of requiring an application restart.
+*   Added an always-on HTML overlay recovery watchdog that detects a lost shared WebView renderer and restores every registered surface with bounded retry backoff instead of requiring an application restart.
 *   Added a profile-aware Screenshot Chronicle that associates retained Elite screenshots with system, body, coordinates and the closest meaningful journal event, with best-effort context for existing Captain's Log history.
 *   Added a compact Exploration Preflight instrument covering journal linkage, EDSM readiness, cockpit overlays, commander profile, departure route, fuel reserve and profile/screenshot storage without repeating survey telemetry.
 *   Evolved Explorer Decision into Smart Next Action with explicit discovery-scan, FSS, DSS/body, biological landing/sampling, waypoint continuation and survey-complete departure cues, all ranked from journal-backed facts.

@@ -1821,6 +1821,13 @@ function renderGroundWorkspace(data) {
 function renderMiningWorkspace(data) {
   const root = byId("mining-workspace");
   const session = data.session || {};
+  const plan = data.plan || {};
+  const readiness = data.readiness || {};
+  const current = session.current || {};
+  const tools = data.tools || {};
+  const selectedTarget = plan.target || "";
+  const materialOptions = [`<option value="">ANY MINERAL / MANUAL ASSESSMENT</option>`, ...(data.materials || []).map((name) => `<option value="${escapeHtml(name)}" ${name === selectedTarget ? "selected" : ""}>${escapeHtml(name)}</option>`)].join("");
+  const methodOptions = [["auto", "AUTO / JOURNAL EVIDENCE"], ["laser", "LASER MINING"], ["core", "CORE MINING"], ["subsurface", "SUB-SURFACE"], ["surface", "SURFACE DEPOSITS"]].map(([value, label]) => `<option value="${value}" ${plan.method === value ? "selected" : ""}>${label}</option>`).join("");
   const materials = workspaceTable([
     {label: "Material", key: "name"}, {label: "Sightings", key: "sightings"},
     {label: "Best", render: (row) => `${numeric(row.best, 2)}%`}, {label: "Average", render: (row) => `${numeric(row.average, 2)}%`},
@@ -1829,13 +1836,64 @@ function renderMiningWorkspace(data) {
     {label: "Commodity", key: "name"}, {label: "Refined", render: (row) => `${numeric(row.count)} T`},
     {label: "Cargo delta", render: (row) => `${numeric(row.cargo_delta)} T`}, {label: "Sold", render: (row) => `${numeric(row.sold)} T`},
   ], session.yield || [], "No refined commodities in this run.");
+  const equipment = Object.entries(readiness.equipment || {}).map(([key, present]) => `<span class="mining-equipment ${present ? "ready" : "missing"}"><i>${present ? "◆" : "◇"}</i>${escapeHtml(key.replaceAll("_", " ").toUpperCase())}</span>`).join("");
+  const missing = (readiness.missing || []).map((label) => `<li>${escapeHtml(label)}</li>`).join("");
+  const prospectMaterials = (current.materials || []).map((row) => `<div class="mining-current-material"><span>${escapeHtml(row.name)}</span><i><b style="--fill:${Math.min(100, number(row.percent))}%"></b></i><strong>${numeric(row.percent, 1)}%</strong></div>`).join("");
+  const prospectRows = (session.prospects || []).map((row) => `<div class="mining-prospect-row ${escapeHtml(String(row.decision || "assess").toLowerCase())}"><b>${escapeHtml(row.decision || "ASSESS")}</b><span>${escapeHtml(row.target || row.motherlode || "Unplanned mineral")}</span><em>${row.motherlode ? "CORE" : `${numeric(row.target_percent, 1)}%`} · ${numeric(row.refined)} T SINCE</em></div>`);
+  const gradeBars = (session.prospects || []).slice(0, 12).reverse().map((row) => `<i class="${escapeHtml(String(row.decision || "assess").toLowerCase())}" style="--grade:${Math.max(4, Math.min(100, number(row.target_percent)))}%" title="${escapeHtml(row.decision)} · ${numeric(row.target_percent, 1)}%"></i>`).join("");
+  const ringRows = workspaceTable([
+    {label: "System / ring", render: (row) => `<b>${escapeHtml(row.system)}</b><small>${escapeHtml(row.body)}</small>`},
+    {label: "Mineral", render: (row) => `<b>${escapeHtml(row.material || "Multiple")}</b><small>${escapeHtml(row.ring_type || "TYPE UNKNOWN")} · ${escapeHtml(row.reserve || "RESERVE UNKNOWN")}</small>`},
+    {label: "Range", render: (row) => `${row.distance === null || row.distance === undefined ? "—" : `${numeric(row.distance, 1)} LY`}<small>${row.arrival === null || row.arrival === undefined ? "" : `${numeric(row.arrival)} LS`}</small>`},
+    {label: "Signals", render: (row) => numeric(row.hotspots)},
+    {label: "Source", key: "source"},
+    {label: "", render: (row) => `<div class="table-actions"><button data-ws-page="mining" data-ws-op="ring_copy" data-result-index="${row.index}">COPY</button><button data-ws-page="mining" data-ws-op="ring_bookmark" data-result-index="${row.index}">SAVE</button><button data-ws-page="mining" data-ws-op="ring_open" data-result-index="${row.index}">VIEW</button></div>`},
+  ], (tools.ring_results || []).map((row, index) => ({...row, index})), "Search commander DSS records and Spansh for known rings.");
+  const buyerRows = workspaceTable([
+    {label: "Market", render: (row) => `<b>${escapeHtml(row.station)}</b><small>${escapeHtml(row.system)} · ${escapeHtml(row.station_type)}</small>`},
+    {label: "Price", render: (row) => `<b>${credits(row.price)}</b>`},
+    {label: "Demand", render: (row) => numeric(row.demand)},
+    {label: "Range", render: (row) => `${numeric(row.distance, 1)} LY<small>${numeric(row.arrival)} LS</small>`},
+    {label: "Pad", render: (row) => row.large_pad ? "LARGE" : "M / S"},
+    {label: "", render: (row) => `<div class="table-actions"><button data-ws-page="mining" data-ws-op="buyer_copy" data-result-index="${row.index}">COPY</button><button data-ws-page="mining" data-ws-op="buyer_open" data-result-index="${row.index}">VIEW</button></div>`},
+  ], (tools.buyer_results || []).map((row, index) => ({...row, index})), "Search for current community-reported demand when the haul is ready.");
+  const bookmarkRows = (data.bookmarks || []).map((row) => `<div class="mining-bookmark"><span><b>${escapeHtml(row.system)}</b><small>${escapeHtml(row.body)} · ${escapeHtml(row.material || "ANY MINERAL")}</small></span><em>${escapeHtml(row.notes || "COMMANDER RING RECORD")}</em><button class="row-delete" data-ws-page="mining" data-ws-op="delete_bookmark" data-bookmark-id="${numeric(row.id)}">×</button></div>`);
+  const scanRows = (data.ring_scans || []).flatMap((row) => (row.signals || []).map((signal) => `<div class="mining-ring-scan"><span><b>${escapeHtml(signal.name)}</b><small>${escapeHtml(row.system)} · ${escapeHtml(row.body)}</small></span><em>${numeric(signal.count)} SIGNAL${number(signal.count) === 1 ? "" : "S"}</em></div>`));
+  const missionRows = workspaceTable([
+    {label: "Commodity", key: "commodity"}, {label: "Delivered", render: (row) => `${numeric(row.delivered)} / ${numeric(row.required)} T`},
+    {label: "Remaining", render: (row) => `${numeric(row.remaining)} T`}, {label: "Destination", key: "destination"},
+  ], data.missions || [], "No active mining contracts detected.");
+  const history = data.history || [];
+  const trend = history.slice(0, 12).reverse();
+  const maxTph = Math.max(1, ...trend.map((row) => number(row.tons_per_hour)));
+  const historyBars = trend.map((row) => `<i style="--yield:${Math.max(3, number(row.tons_per_hour) * 100 / maxTph)}%" title="${escapeHtml(row.system || "Unknown system")} · ${numeric(row.tons_per_hour, 1)} T/H"></i>`).join("");
+  const historyTable = workspaceTable([
+    {label: "System", render: (row) => `<b>${escapeHtml(row.system || "Unknown")}</b><small>${escapeHtml(row.target || "UNPLANNED")}</small>`},
+    {label: "Prospected", key: "prospected"}, {label: "Refined", render: (row) => `${numeric(row.refined)} T`},
+    {label: "Yield", render: (row) => `${numeric(row.tons_per_hour, 1)} T/H`}, {label: "Hit rate", render: (row) => row.hit_rate === null || row.hit_rate === undefined ? "—" : `${numeric(row.hit_rate, 1)}%`},
+    {label: "Revenue", render: (row) => credits(row.revenue)},
+  ], history, "No completed mining runs retained yet.");
+  const haulTons = Math.max(1, (session.yield || []).reduce((total, row) => total + Math.max(0, number(row.cargo_delta)), 0) || number(session.refined_t));
   root.classList.remove("loading-panel");
   root.innerHTML = `${workspaceMetrics([
     {label: "Run state", value: data.active ? "ACTIVE" : "STANDBY", detail: duration(session.duration)},
-    {label: "Prospected", value: numeric(session.prospected), detail: `${numeric(session.cracked)} CORES CRACKED`},
+    {label: "Target hit rate", value: session.hit_rate === null || session.hit_rate === undefined ? "—" : `${numeric(session.hit_rate, 1)}%`, detail: `${numeric(session.prospected)} ROCKS PROSPECTED`},
     {label: "Refined yield", value: `${numeric(session.refined_t)} T`, detail: session.tons_per_hour === null ? "RATE AWAITING DATA" : `${numeric(session.tons_per_hour, 1)} T / HR`},
-    {label: "Attributed return", value: credits(session.revenue), detail: `NET ${credits(session.net)}`},
-  ])}<section class="workspace-grid two">${workspaceCard("PROSPECTOR QUALITY", materials)}${workspaceCard("REFINERY & CARGO YIELD", yields)}${workspaceCard("LIMPET ECONOMY", `<div class="fact-list spacious"><div><span>PROSPECTORS</span><b>${numeric(session.limpets?.prospectors_used)}</b></div><div><span>COLLECTORS</span><b>${numeric(session.limpets?.collectors_launched)}</b></div><div><span>ESTIMATED USED</span><b>${numeric(session.limpets?.estimated_used)}</b></div><div><span>REMAINING</span><b>${numeric(session.limpets?.remaining)}</b></div><div><span>CASH COST</span><b>${credits(session.limpets?.cash_net_cost_cr)}</b></div></div>`)}${workspaceCard("RECENT MINING RUNS", workspaceTable([{label: "System", key: "system"}, {label: "Prospected", key: "prospected"}, {label: "Refined", render: (row) => `${numeric(row.refined)} T`}, {label: "Revenue", render: (row) => credits(row.revenue)}], data.history || [], "No completed mining history yet."), `${(data.history || []).length} RETAINED`)}</section>`;
+    {label: "Cargo objective", value: session.cargo_goal ? `${numeric(session.cargo_goal_percent, 1)}%` : "OPEN", detail: session.cargo_goal ? `${numeric(session.cargo_goal_remaining)} T REMAINING` : "NO TONNAGE LIMIT"},
+  ])}<section class="mining-command-grid">
+    ${workspaceCard("RUN DIRECTIVE", `<div class="mining-plan-form"><label>TARGET MINERAL<select id="mining-target">${materialOptions}</select></label><label>MINIMUM GRADE %<input id="mining-minimum" type="number" min="0" max="100" step="0.1" value="${number(plan.minimum, 20)}"></label><label>CARGO GOAL T<input id="mining-cargo-goal" type="number" min="0" max="100000" value="${number(plan.cargo_goal)}"></label><label>METHOD<select id="mining-method">${methodOptions}</select></label></div><div class="workspace-actions wrap"><button class="primary" data-ws-page="mining" data-ws-op="save_plan">SAVE DIRECTIVE</button><button data-ws-page="mining" data-ws-op="start_run" ${data.active ? "disabled" : ""}>START RUN</button><button class="danger-action" data-ws-page="mining" data-ws-op="end_run" ${data.active ? "" : "disabled"}>END & RETAIN RUN</button></div>`, selectedTarget ? `${escapeHtml(selectedTarget)} · ${numeric(plan.minimum, 1)}%+` : "MANUAL ASSESSMENT", "mining-plan-card")}
+    ${workspaceCard("SHIP READINESS", `<div class="mining-readiness ${readiness.ready ? "ready" : "incomplete"}"><strong>${readiness.ready ? "MINING FIT READY" : "LOADOUT INCOMPLETE"}</strong><span>${escapeHtml(readiness.ship || "Awaiting Loadout journal")} · ${numeric(readiness.cargo_capacity)} T HOLD · ${numeric(readiness.limpets)} LIMPETS</span></div><div class="mining-equipment-grid">${equipment || "<span>LOADOUT AWAITING JOURNAL</span>"}</div>${missing ? `<ul class="mining-missing">${missing}</ul>` : ""}${readiness.dss_recommended ? `<p class="workspace-note">DSS not detected · hotspot navigation will rely on retained/community records.</p>` : ""}`, readiness.ready ? "GO" : `${(readiness.missing || []).length} GAPS`, "mining-readiness-card")}
+    ${workspaceCard("CURRENT PROSPECT", `<div class="mining-current ${escapeHtml(String(current.decision || "awaiting").toLowerCase())}"><div><small>FLIGHT DECISION</small><strong>${escapeHtml(current.decision || "AWAITING PROSPECTOR")}</strong><span>${escapeHtml(current.motherlode ? `${current.motherlode} MOTHERLODE` : current.target || selectedTarget || "No target mineral selected")}</span></div><b>${current.motherlode ? "CORE" : `${numeric(current.target_percent, 1)}%`}</b></div>${prospectMaterials || `<p class="workspace-empty">Fire a prospector limpet to evaluate the next asteroid.</p>`}<div class="mining-grade-strip">${gradeBars || ""}</div>`, current.remaining === null || current.remaining === undefined ? "NO ACTIVE ROCK" : `${numeric(current.remaining, 1)}% REMAINING`, "mining-current-card")}
+    ${workspaceCard("LIVE EXTRACTION", `<div class="fact-list spacious mining-live-facts"><div><span>TONNES / ROCK</span><b>${session.tons_per_asteroid === null || session.tons_per_asteroid === undefined ? "—" : numeric(session.tons_per_asteroid, 2)}</b></div><div><span>ROCKS / HOUR</span><b>${session.asteroids_per_hour === null || session.asteroids_per_hour === undefined ? "—" : numeric(session.asteroids_per_hour, 1)}</b></div><div><span>QUALIFIED ROCKS</span><b>${session.qualified_rate === null || session.qualified_rate === undefined ? "—" : `${numeric(session.qualified_rate, 1)}%`}</b></div><div><span>TARGET AVERAGE</span><b>${session.target_average === null || session.target_average === undefined ? "—" : `${numeric(session.target_average, 1)}%`}</b></div><div><span>BEST TARGET</span><b>${numeric(session.target_best, 1)}%</b></div><div><span>GOAL ETA</span><b>${session.goal_minutes ? `${numeric(session.goal_minutes)} MIN` : "—"}</b></div></div>${workspaceRows(prospectRows, "Prospector decisions will build a compact run timeline.")}`, `${numeric(current.refined_since_prospect)} T SINCE PROSPECT`, "mining-live-card")}
+    ${workspaceCard("PROSPECTOR QUALITY", materials)}
+    ${workspaceCard("REFINERY & CARGO YIELD", yields)}
+    ${workspaceCard("LIMPET ECONOMY", `<div class="fact-list spacious"><div><span>PROSPECTORS</span><b>${numeric(session.limpets?.prospectors_used)}</b></div><div><span>COLLECTORS</span><b>${numeric(session.limpets?.collectors_launched)}</b></div><div><span>ESTIMATED USED</span><b>${numeric(session.limpets?.estimated_used)}</b></div><div><span>REMAINING</span><b>${numeric(session.limpets?.remaining)}</b></div><div><span>LIMPETS / TONNE</span><b>${session.limpets?.limpets_per_tonne === null || session.limpets?.limpets_per_tonne === undefined ? "—" : numeric(session.limpets.limpets_per_tonne, 2)}</b></div><div><span>CASH COST</span><b>${credits(session.limpets?.cash_net_cost_cr)}</b></div></div>`)}
+    ${workspaceCard("MINING CONTRACTS", missionRows, `${(data.missions || []).length} ACTIVE`)}
+    ${workspaceCard("RING INTELLIGENCE", `<div class="mining-search-form"><label>SEARCH FROM<input id="mining-ring-reference" value="${escapeHtml(data.system || "")}"></label><label>MINERAL<select id="mining-ring-material">${materialOptions}</select></label><label>RING TYPE<select id="mining-ring-type"><option value="">ANY RING</option><option>Metallic</option><option>Metal Rich</option><option>Rocky</option><option>Icy</option></select></label><label>RANGE LY<input id="mining-ring-range" type="number" min="1" max="5000" value="300"></label><button data-ws-page="mining" data-ws-op="ring_search" ${tools.ring_status === "working" ? "disabled" : ""}>${tools.ring_status === "working" ? "SEARCHING…" : "SEARCH RINGS"}</button></div><p class="workspace-status ${escapeHtml(tools.ring_status || "ready")}">${escapeHtml(tools.ring_detail || "Ring intelligence ready.")}</p>${ringRows}`, `${numeric((tools.ring_results || []).length)} RESULTS`, "mining-ring-card")}
+    ${workspaceCard("COMMANDER RING RECORDS", `${workspaceRows(scanRows, "DSS ring signals discovered by this commander will appear here.")}${workspaceRows(bookmarkRows, "Save useful ring results for later expeditions.")}`, `${numeric((data.ring_scans || []).length)} SCANNED · ${numeric((data.bookmarks || []).length)} SAVED`)}
+    ${workspaceCard("SELL MINING HAUL", `<div class="mining-buyer-form"><label>SEARCH FROM<input id="mining-buyer-reference" value="${escapeHtml(data.system || "")}"></label><label>COMMODITY<select id="mining-buyer-commodity">${materialOptions}</select></label><label>QUANTITY T<input id="mining-buyer-quantity" type="number" min="1" value="${numeric(haulTons)}"></label><label>RANGE LY<input id="mining-buyer-range" type="number" min="1" max="5000" value="500"></label><label>MAX ARRIVAL LS<input id="mining-buyer-ls" type="number" min="1" value="10000"></label><label class="check"><input id="mining-buyer-large" type="checkbox">LARGE PAD</label><label class="check"><input id="mining-buyer-no-carriers" type="checkbox" checked>EXCLUDE CARRIERS</label><button data-ws-page="mining" data-ws-op="buyer_search" ${tools.buyer_status === "working" ? "disabled" : ""}>${tools.buyer_status === "working" ? "SEARCHING…" : "FIND BUYERS"}</button></div><p class="workspace-status ${escapeHtml(tools.buyer_status || "ready")}">${escapeHtml(tools.buyer_detail || "Mining market lookup ready.")}</p>${buyerRows}`, `${numeric((tools.buyer_results || []).length)} MARKETS`, "mining-buyer-card")}
+    ${workspaceCard("RUN ANALYTICS", `<div class="mining-history-chart">${historyBars || `<span>COMPLETE A RUN TO BEGIN THE YIELD TREND</span>`}</div>${historyTable}`, `${history.length} RETAINED`, "mining-history-card")}
+  </section>`;
 }
 
 function renderEngineeringWorkspace(data) {
@@ -2465,7 +2523,7 @@ document.addEventListener("click", async (event) => {
     const page = workspaceButton.dataset.wsPage;
     const operation = workspaceButton.dataset.wsOp;
     const payload = {page, operation};
-    for (const [datasetKey, payloadKey] of [["expeditionId", "expedition_id"], ["objectiveId", "objective_id"], ["achievementId", "achievement_id"], ["bodyKey", "body_key"], ["pinId", "pin_id"], ["sessionIndex", "session_index"], ["system", "system"], ["name", "name"]]) {
+    for (const [datasetKey, payloadKey] of [["expeditionId", "expedition_id"], ["objectiveId", "objective_id"], ["achievementId", "achievement_id"], ["bodyKey", "body_key"], ["pinId", "pin_id"], ["bookmarkId", "bookmark_id"], ["sessionIndex", "session_index"], ["system", "system"], ["name", "name"]]) {
       if (workspaceButton.dataset[datasetKey] !== undefined) payload[payloadKey] = workspaceButton.dataset[datasetKey];
     }
     if (workspaceButton.dataset.status !== undefined) payload.status = workspaceButton.dataset.status;
@@ -2474,7 +2532,7 @@ document.addEventListener("click", async (event) => {
     if (workspaceButton.dataset.resultIndex !== undefined) payload.result_index = number(workspaceButton.dataset.resultIndex, -1);
     if (workspaceButton.dataset.visited !== undefined) payload.visited = workspaceButton.dataset.visited === "true";
     if (workspaceButton.dataset.enabled !== undefined) payload.enabled = workspaceButton.dataset.enabled === "true";
-    if (["delete", "remove_objective", "delete_stop", "clear_route", "delete_candidate", "reset", "delete_waypoint", "clear_waypoints", "delete_theme"].includes(operation)) {
+    if (["delete", "remove_objective", "delete_stop", "clear_route", "delete_candidate", "reset", "delete_waypoint", "clear_waypoints", "delete_theme", "delete_bookmark"].includes(operation)) {
       if (!window.confirm("Confirm this profile-local change?")) return;
       payload.confirmed = true;
     }
@@ -2522,6 +2580,32 @@ document.addEventListener("click", async (event) => {
       payload.lon = byId(`${prefix}-lon`)?.value;
     } else if (page === "ground" && operation === "add_pin") {
       payload.label = byId("field-marker-label")?.value.trim() || "Field marker";
+    } else if (page === "mining" && operation === "save_plan") {
+      Object.assign(payload, {
+        target: byId("mining-target")?.value || "",
+        minimum: byId("mining-minimum")?.value,
+        cargo_goal: byId("mining-cargo-goal")?.value,
+        method: byId("mining-method")?.value || "auto",
+      });
+    } else if (page === "mining" && operation === "ring_search") {
+      Object.assign(payload, {
+        reference: byId("mining-ring-reference")?.value.trim() || "",
+        material: byId("mining-ring-material")?.value || "",
+        ring_type: byId("mining-ring-type")?.value || "",
+        range: byId("mining-ring-range")?.value,
+      });
+      if (!payload.reference || number(payload.range) <= 0) return;
+    } else if (page === "mining" && operation === "buyer_search") {
+      Object.assign(payload, {
+        reference: byId("mining-buyer-reference")?.value.trim() || "",
+        commodity: byId("mining-buyer-commodity")?.value || "",
+        quantity: byId("mining-buyer-quantity")?.value,
+        range: byId("mining-buyer-range")?.value,
+        max_ls: byId("mining-buyer-ls")?.value,
+        large_pad: Boolean(byId("mining-buyer-large")?.checked),
+        exclude_carriers: Boolean(byId("mining-buyer-no-carriers")?.checked),
+      });
+      if (!payload.reference || !payload.commodity || number(payload.quantity) <= 0) return;
     } else if (page === "engineering" && operation === "pin") {
       payload.name = byId("engineering-blueprint")?.value || "";
       payload.grade = byId("engineering-grade")?.value;

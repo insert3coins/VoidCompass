@@ -29,11 +29,16 @@ def overlay_opacity_ratio(config):
     return max(0.4, min(1.0, percent / 100.0))
 
 
-def apply_native_fallback_visibility(root, window, html_ready):
-    """Show Tk while HTML is unavailable, except behind the boot curtain."""
-    held = bool(getattr(root, "_voidcompass_startup_presentation_held", False))
+def suppress_native_proxy(window):
+    """Keep the native proxy hidden while an HTML surface owns presentation.
+
+    Revealing Tk during a short WebView heartbeat gap can overlap the still
+    visible browser window and produce duplicate HUDs. A failed initial HTML
+    attachment restores Tk in the bridge error path; watchdog recovery keeps
+    one visual owner throughout.
+    """
     try:
-        window.attributes("-alpha", 0.0 if held or html_ready else 1.0)
+        window.attributes("-alpha", 0.0)
     except Exception:
         pass
 
@@ -170,9 +175,11 @@ class HtmlOverlayRuntime:
                     process.wait(timeout=0.5)
                 except subprocess.TimeoutExpired:
                     process.kill()
+                    process.wait(timeout=1.5)
                 except Exception:
                     try:
                         process.kill()
+                        process.wait(timeout=1.5)
                     except Exception:
                         pass
             self.server.reset_host_session()
@@ -343,8 +350,8 @@ class HtmlOverlaySurface:
             reason = "shared browser host exited"
         if failed:
             self.runtime.request_recovery(reason)
-        # Keep the native surface available while the watchdog recovers.  A
-        # transient renderer fault must never permanently disable an overlay.
+        # Recovery owns the renderer transition. Native proxies stay hidden
+        # so a late browser frame can never overlap a native proxy window.
         return False
 
     def is_alive(self):
