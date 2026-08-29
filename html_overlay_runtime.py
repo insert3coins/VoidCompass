@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import atexit
 import importlib.util
+import logging
 import os
 from pathlib import Path
 import subprocess
@@ -28,6 +29,15 @@ def overlay_opacity_ratio(config):
     return max(0.4, min(1.0, percent / 100.0))
 
 
+def apply_native_fallback_visibility(root, window, html_ready):
+    """Show Tk while HTML is unavailable, except behind the boot curtain."""
+    held = bool(getattr(root, "_voidcompass_startup_presentation_held", False))
+    try:
+        window.attributes("-alpha", 0.0 if held or html_ready else 1.0)
+    except Exception:
+        pass
+
+
 class HtmlOverlayRuntime:
     """Own one HTTP transport and one WebView2 process per application."""
 
@@ -43,6 +53,12 @@ class HtmlOverlayRuntime:
         self._closing_process = None
         self.surfaces = {}
         self._disposed = False
+        self._process_lock = threading.RLock()
+        self._recovery_in_progress = False
+        self._recovery_attempts = 0
+        self._last_recovery_at = 0.0
+        self._last_recovery_reason = ""
+        self._next_recovery_at = 0.0
         atexit.register(self._force_process_exit)
         self._launch()
         try:
@@ -79,11 +95,12 @@ class HtmlOverlayRuntime:
         self._popen_kwargs = kwargs
 
     def _ensure_process(self):
-        if self._disposed:
-            raise RuntimeError("HTML overlay runtime is closed")
-        if self.process is not None and self.process.poll() is None:
-            return
-        self.process = subprocess.Popen(self._command, **self._popen_kwargs)
+        with self._process_lock:
+            if self._disposed:
+                raise RuntimeError("HTML overlay runtime is closed")
+            if self.process is not None and self.process.poll() is None:
+                return
+            self.process = subprocess.Popen(self._command, **self._popen_kwargs)
 
     def register(self, surface):
         self.surfaces[surface.overlay_id] = surface
@@ -119,6 +136,76 @@ class HtmlOverlayRuntime:
 
     def is_alive(self):
         return bool(self.process is not None and self.process.poll() is None)
+
+    def request_recovery(self, reason="renderer heartbeat lost"):
+        """Quietly replace a failed shared WebView host with bounded retries."""
+        now = time.monotonic()
+        with self._process_lock:
+            if (self._disposed or self._recovery_in_progress
+                    or now < self._next_recovery_at):
+                return False
+            self._recovery_in_progress = True
+            self._recovery_attempts += 1
+            self._last_recovery_at = now
+            self._last_recovery_reason = str(reason or "renderer heartbeat lost")
+            # A short increasing backoff prevents a damaged WebView runtime
+            # from turning the watchdog into a process-launch loop.
+            self._next_recovery_at = now + min(30.0, 2.0 + self._recovery_attempts * 2.0)
+        threading.Thread(
+            target=self._recover_process,
+            name="html-overlay-recovery",
+            daemon=True,
+        ).start()
+        return True
+
+    def _recover_process(self):
+        process = None
+        try:
+            with self._process_lock:
+                process = self.process
+                self.process = None
+            if process is not None and process.poll() is None:
+                try:
+                    process.terminate()
+                    process.wait(timeout=0.5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                except Exception:
+                    try:
+                        process.kill()
+                    except Exception:
+                        pass
+            self.server.reset_host_session()
+            started_at = time.monotonic()
+            for surface in list(self.surfaces.values()):
+                surface._renderer_seen = False
+                surface._renderer_lost_at = None
+                surface._started_at = started_at
+            self._ensure_process()
+            logging.info(
+                "HTML overlay renderer restored after %s",
+                self._last_recovery_reason,
+            )
+        except Exception as exc:
+            logging.warning("HTML overlay recovery attempt failed: %s", exc)
+        finally:
+            with self._process_lock:
+                self._recovery_in_progress = False
+
+    def health_snapshot(self):
+        surfaces = list(self.surfaces.values())
+        return {
+            "alive": self.is_alive(),
+            "recovering": bool(self._recovery_in_progress),
+            "ready": sum(bool(surface.ready) for surface in surfaces),
+            "total": len(surfaces),
+            "attempts": int(self._recovery_attempts),
+            "last_reason": self._last_recovery_reason,
+            "last_recovery_age": (
+                max(0.0, time.monotonic() - self._last_recovery_at)
+                if self._last_recovery_at else None
+            ),
+        }
 
     def _on_root_destroy(self, event):
         if event.widget is self.root:
@@ -246,10 +333,19 @@ class HtmlOverlaySurface:
         if self.ready:
             return False
         if self._renderer_seen and self._renderer_lost_at is not None:
-            return time.monotonic() - self._renderer_lost_at >= 2.5
-        if self.runtime.is_alive():
-            return elapsed > 12.0
-        return elapsed > 0.35
+            failed = time.monotonic() - self._renderer_lost_at >= 2.5
+            reason = f"{self.overlay_id} browser heartbeat expired"
+        elif self.runtime.is_alive():
+            failed = elapsed > 12.0
+            reason = f"{self.overlay_id} did not finish rendering"
+        else:
+            failed = elapsed > 0.35
+            reason = "shared browser host exited"
+        if failed:
+            self.runtime.request_recovery(reason)
+        # Keep the native surface available while the watchdog recovers.  A
+        # transient renderer fault must never permanently disable an overlay.
+        return False
 
     def is_alive(self):
         return self.runtime.is_alive()

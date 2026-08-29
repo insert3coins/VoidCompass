@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 
-from html_overlay_runtime import HtmlOverlaySurface, overlay_opacity_ratio
+from html_overlay_runtime import HtmlOverlaySurface, apply_native_fallback_visibility, overlay_opacity_ratio
 
 
 def _integer(value, default=0):
@@ -158,11 +158,8 @@ class HtmlGravityOverlayBridge:
                 was_ready = self._ready
                 self._ready = self.surface.ready
                 self.overlay._html_ready = self._ready
+                apply_native_fallback_visibility(self.root, self.win, self._ready)
                 if self._ready:
-                    try:
-                        self.win.attributes("-alpha", 0.0)
-                    except Exception:
-                        pass
                     if not was_ready:
                         logging.info("HTML Gravity Warning renderer is live")
                 snapshot = self._snapshot()

@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.4.1.7**
+**Current version: 5.4.1.8**
 
 Void Compass is an exploration-first companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a persistent command dashboard, deep survey intelligence, expedition planning and native in-game overlays.
 
@@ -10,13 +10,13 @@ Void Compass is distributed as a native Windows x64 application and does not req
 
 ## At a glance
 
-- **HTML Explorer Decision Deck** — a GPU-composited WebView2 briefing with one explainable next action, selectable exploration doctrine, five-jump Route Horizon, Session Pulse, Regional Codex Hunt and commander-specific panel layouts throughout its workspaces.
+- **HTML Explorer Decision Deck** — a GPU-composited WebView2 briefing with one explainable Smart Next Action, a seven-point departure preflight, selectable exploration doctrine, five-jump Route Horizon, Session Pulse, Regional Codex Hunt and commander-specific panel layouts throughout its workspaces.
 - **Galnet Relay** — Frontier's official news feed in a quiet bottom-bar ticker beside the clock, with an in-app article reader, non-blocking refresh, a small offline cache and profile-aware controls for visibility, rotation and refresh cadence.
 - **Exploration-focused navigation** — seven clear destinations keep survey, map and commander records prominent while a small Field Tools page supports surface work and mining.
-- **Stellar Cartography** — a live schematic System Orrery with Elite body-target lock, commander-controlled Survey Queue, planetary field mapping, expedition replay, science correlations and a complete 42-region passport built from retained journal evidence.
+- **Stellar Cartography** — a live schematic System Orrery with Elite body-target lock, commander-controlled Survey Queue, planetary field mapping, expedition replay, a system/body/event-aware Screenshot Chronicle, science correlations and a complete 42-region passport built from retained journal evidence.
 - **Deep Survey** — explainable FSS, DSS, biological and geological progress; a Bio Field Assistant; discovery-significance ratings; valuable bodies; revisit targets; Colonisation Recon and a searchable discovery archive.
 - **Galactic Atlas** — a fully offline, GPU-accelerated HTML/Three.js Milky Way map docked directly into the command deck, with genuine Elite XYZ structure, all 42 Universal Cartographics regions, routes, travel history, smart clusters, intelligence layers and commander annotations.
-- **Cockpit overlays** — themed, profile-aware HTML HUDs with mouse passthrough, global hotkeys and a visual Overlay Layout Studio, rendered by one shared offline WebView2 runtime.
+- **Cockpit overlays** — themed, profile-aware HTML HUDs with mouse passthrough, global hotkeys, a visual Overlay Layout Studio and quiet renderer self-recovery, rendered by one shared offline WebView2 runtime.
 - **Quiet by design** — themed cockpit overlays, HTML notifications and a curated flight log provide useful feedback without cockpit chatter, speech synthesis or an AI service.
 - **Explorer field tools** — a touchdown-anchored Surface Survey Trail, Ground/Exobiology, Mining, exploration Engineering/Synthesis, Colonisation Recon and focused Achievements remain available without turning the app into a general career suite.
 
@@ -148,7 +148,7 @@ Packaged releases create `config.json`, commander profiles and logs beside the e
 C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous
 ```
 
-The 5.4.1.7 interface is Windows x64 only. The former experimental Linux build has been retired as the application moves to one WebView2 presentation architecture.
+The 5.4.1.8 interface is Windows x64 only. The former experimental Linux build has been retired as the application moves to one WebView2 presentation architecture.
 
 ## Contributing and support
 

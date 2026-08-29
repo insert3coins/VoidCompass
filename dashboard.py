@@ -1903,6 +1903,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._startup_boot_handoff_job = None
         self._startup_boot_journal_timeout_job = None
         self._startup_boot_history_timeout_job = None
+        self._startup_overlay_resync_job = None
+        self._startup_overlay_resync_attempt = 0
         self._startup_history_handoff_bypassed = False
         
         self.current_sys = "---"
@@ -2485,7 +2487,13 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             pass
 
     def _release_startup_overlay_curtain(self):
-        """Make fully prepared overlays drawable without mapping them yet."""
+        """Make prepared overlays drawable without mapping them yet.
+
+        A cold WebView2 process can still be warming when the journal handoff
+        finishes.  Keep the transparent Tk proxy as a visible fallback until
+        that overlay's browser surface has actually painted; each HTML bridge
+        hides its proxy as soon as it reports ready.
+        """
         self._reapply_overlay_positions()
         for name, window in self._overlay_hotkey_window_items():
             try:
@@ -2494,25 +2502,83 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 attr = "hud" if name == "navigation" else name
                 overlay = getattr(self, attr, None)
                 html_ready = bool(getattr(overlay, "_html_ready", False))
-                # With the WebView host deferred until handoff, readiness is
-                # intentionally false here. Keep an active HTML proxy clear
-                # while its browser surface starts; its bridge restores the
-                # native renderer automatically if startup genuinely fails.
-                html_pending = any(
-                    name.startswith("_html_") and name.endswith("_bridge")
-                    and (bridge is not None)
-                    and (name == "_html_bridge"
-                         or getattr(bridge, "surface", None) is not None)
-                    for name, bridge in vars(overlay).items()
-                ) if overlay is not None else False
                 window.attributes(
-                    "-alpha", 0.0 if html_ready or html_pending else 1.0,
+                    "-alpha", 0.0 if html_ready else 1.0,
                 )
                 window._voidcompass_startup_held = False
             except (AttributeError, tk.TclError):
                 continue
         self._startup_presentation_held = False
         self.root._voidcompass_startup_presentation_held = False
+
+    def _persistent_startup_overlay_names(self):
+        """Return enabled overlays whose normal policy is always-on.
+
+        Tk can report an as-yet-unmapped Toplevel as withdrawn during a cold
+        start.  Those window-manager timings must not erase the commander's
+        explicit visibility intent.  Event-driven overlays remain governed by
+        their own pending/show policies and are deliberately excluded here.
+        """
+        enabled_keys = {
+            "hud": "overlay_enabled",
+            "cargo_hud": "cargo_overlay_enabled",
+            "carrier_hud": "carrier_overlay_enabled",
+            "heartbeat_hud": "heartbeat_overlay_enabled",
+        }
+        hidden = set(getattr(self, "_overlay_hotkey_hidden", set()))
+        if bool(getattr(self, "_overlay_hotkey_global_hidden", False)):
+            return set()
+        return {
+            attr for attr, key in enabled_keys.items()
+            if attr not in hidden
+            and bool(self.config.get(key, False))
+            and getattr(self, attr, None) is not None
+        }
+
+    def _sync_html_overlay_windows(self):
+        """Publish authoritative post-handoff visibility to every web surface."""
+        synced = 0
+        for attr, _x_key, _y_key in self._OVERLAY_POSITION_SPECS:
+            overlay = getattr(self, attr, None)
+            target = overlay
+            sync = getattr(target, "sync_html_window", None)
+            if not callable(sync):
+                target = self._overlay_window(overlay)
+                sync = getattr(target, "sync_html_window", None)
+            if not callable(sync):
+                continue
+            try:
+                if sync():
+                    synced += 1
+            except Exception as exc:
+                logging.debug("HTML overlay visibility sync failed for %s: %s", attr, exc)
+        return synced
+
+    def _resync_startup_html_overlays(self):
+        """Close cold-host timing gaps with a few cheap, idempotent passes."""
+        self._startup_overlay_resync_job = None
+        if not self.is_running or bool(getattr(
+            self.root, "_voidcompass_startup_presentation_held", False,
+        )):
+            return
+        self._sync_html_overlay_windows()
+        runtime = getattr(self.root, "_voidcompass_html_overlay_runtime", None)
+        release = getattr(runtime, "release_startup_hold", None)
+        if callable(release):
+            try:
+                release()
+            except Exception as exc:
+                logging.debug("HTML overlay visibility retry failed: %s", exc)
+        self._startup_overlay_resync_attempt += 1
+        delays = (420, 1200)
+        attempt = self._startup_overlay_resync_attempt
+        if attempt <= len(delays):
+            try:
+                self._startup_overlay_resync_job = self.root.after(
+                    delays[attempt - 1], self._resync_startup_html_overlays,
+                )
+            except tk.TclError:
+                self._startup_overlay_resync_job = None
 
     def _run_startup_history_phase(self, phase, target, args):
         try:
@@ -2646,6 +2712,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         # coordinates while invisible, then permit mapping exactly once.
         self._hold_startup_presentation()
         restore = set(self._startup_overlay_restore)
+        restore.update(self._persistent_startup_overlay_names())
         self._startup_overlay_restore.clear()
         self._release_startup_overlay_curtain()
         splash = getattr(self.root, "_voidcompass_startup_splash", None)
@@ -2671,6 +2738,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 pass
         self._restore_overlay_hotkey_windows(restore, force_show=False)
         self._enforce_overlay_hotkey_visibility()
+        # Publish the restored Tk proxy states before dropping the independent
+        # host curtain.  The normal bridge timers are deliberately not the sole
+        # owner of this one-time visibility transition.
+        self._sync_html_overlay_windows()
         # HTML surfaces and their shared WebView2 process have pre-warmed
         # behind a host-enforced native window curtain. Drop that final curtain
         # only now, after the splash has gone and the live UI owns the
@@ -2684,6 +2755,13 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 release_html()
             except Exception as exc:
                 logging.warning("HTML overlay handoff failed: %s", exc)
+        self._startup_overlay_resync_attempt = 0
+        try:
+            self._startup_overlay_resync_job = self.root.after(
+                160, self._resync_startup_html_overlays,
+            )
+        except tk.TclError:
+            self._startup_overlay_resync_job = None
         try:
             self.root.after(80, self._reapply_overlay_positions)
         except tk.TclError:
@@ -3423,6 +3501,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "_journal_history_resize_job", "_startup_boot_handoff_job",
             "_startup_boot_journal_timeout_job",
             "_startup_boot_history_timeout_job",
+            "_startup_overlay_resync_job",
             "_galnet_refresh_job",
         ):
             resize_job = getattr(self, resize_job_attr, None)
@@ -5209,7 +5288,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             if station:
                 self._capture_navigation_local_space({
                     "Body": station,
-                    "BodyType": station_type or "Station",
+                    "BodyType": self._navigation_dock_vicinity_type(station_type),
                 })
             self._navigation_docking_state = {
                 "phase": "requested",
@@ -5221,7 +5300,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             if station:
                 self._capture_navigation_local_space({
                     "Body": station,
-                    "BodyType": station_type or "Station",
+                    "BodyType": self._navigation_dock_vicinity_type(station_type),
                 })
             pad = raw.get("LandingPad", data.get("landing_pad"))
             try:
@@ -5861,6 +5940,15 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "stellarring": "belt",
             "asteroidcluster": "cluster",
         }.get(key, "")
+
+    @staticmethod
+    def _navigation_dock_vicinity_type(station_type):
+        """Reduce a journal StationType to station or carrier vicinity."""
+        key = "".join(
+            char for char in str(station_type or "").casefold()
+            if char.isalnum()
+        )
+        return "FleetCarrier" if "carrier" in key else "Station"
 
     def _capture_navigation_local_space(self, raw, data=None):
         """Remember the authoritative destination of a normal-space drop."""
@@ -7868,7 +7956,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.hud_flight_state = "FLIGHT"
             self._capture_navigation_local_space({
                 "Body": station,
-                "BodyType": station_type,
+                "BodyType": self._navigation_dock_vicinity_type(station_type),
             })
             self.current_station_name = None
             self.current_station_type = None
@@ -8167,6 +8255,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             discovered = d.get("bodies", 0)
             if isinstance(discovered, int) and discovered > 0:
                 self.total = max(self.total, self.scanned + discovered)
+                # A live discovery scan is the authority the Smart Next Action
+                # card was waiting for; do not keep suggesting another honk.
+                self.scan_total_confirmed = True
                 self.db_update_system(self.current_sys, self.total, self.scanned)
                 if not self.batch_mode:
                     scan_text = self._scan_progress_count_text()

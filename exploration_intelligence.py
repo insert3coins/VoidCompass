@@ -333,6 +333,15 @@ def action_queue(app, completion=None, route=None, snapshot=None):
             "detail": f"Approximately {unsold:,} cr of exploration and biology data remains unsold",
             "system": current_system,
         })
+    if (current_system and current_system not in {"---", "Unknown"}
+            and not bool(getattr(app, "scan_total_confirmed", False))
+            and not bool(getattr(app, "current_docked", False))):
+        rows.append({
+            "id": "run-discovery-scan", "priority": 116, "kind": "survey",
+            "title": "Run a discovery scan",
+            "detail": f"The live body count for {current_system} has not been confirmed",
+            "system": current_system,
+        })
     if completion["unknown_bodies"]:
         count = completion["unknown_bodies"]
         rows.append({
@@ -385,6 +394,13 @@ def action_queue(app, completion=None, route=None, snapshot=None):
             "title": f"Continue to {route['next_system']}",
             "detail": f"{route.get('remaining', 0)} plotted point(s) remain",
             "system": route["next_system"],
+        })
+    elif completion.get("complete") and current_system:
+        rows.append({
+            "id": "depart-system", "priority": 44, "kind": "departure",
+            "title": "Survey complete — ready to depart",
+            "detail": "No unresolved FSS, mapping or biological work remains in this system",
+            "system": current_system,
         })
     deduped = {}
     for row in rows:
