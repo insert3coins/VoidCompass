@@ -17,7 +17,7 @@ import overlay_chrome
 import route_strip
 import ui_theme
 from html_navigation_hud import HtmlNavigationHudBridge
-from html_overlay_runtime import apply_native_fallback_visibility, overlay_opacity_ratio
+from html_overlay_runtime import suppress_native_proxy, overlay_opacity_ratio
 from navigation_instrument import (
     NavigationEventRenderer,
 )
@@ -93,9 +93,8 @@ class TacticalHUD:
         self._anim_interval_ms = int(self.config.get("hud_anim_interval_ms", 33) or 33)
         self._anim_interval_ms = max(30, min(500, self._anim_interval_ms))
         self.win.bind("<Destroy>", self._on_window_destroyed, add="+")
-        # load_config/apply_profile_config always supplies the platform-aware
-        # default. Treat deliberately minimal/test configs as native-only.
-        self.set_html_renderer(bool(self.config.get("hud_html_renderer", False)))
+        # Tk remains the hidden state/geometry proxy; HTML is the sole surface.
+        self.set_html_renderer(True)
         self._schedule_html_sync()
         self.animate_ui()
 
@@ -202,7 +201,7 @@ class TacticalHUD:
         }
 
     def set_html_renderer(self, enabled):
-        """Enable the isolated WebView2 HUD, retaining Tk as live fallback."""
+        """Enable the isolated WebView2 HUD; Tk remains a hidden model proxy."""
         enabled = bool(enabled and os.name == "nt")
         if not enabled:
             bridge, self._html_bridge = self._html_bridge, None
@@ -210,10 +209,7 @@ class TacticalHUD:
             if bridge is not None:
                 bridge.dispose()
             try:
-                held = bool(getattr(
-                    self.win.master, "_voidcompass_startup_presentation_held", False,
-                ))
-                self.win.attributes("-alpha", 0.0 if held else 1.0)
+                self.win.attributes("-alpha", 0.0)
             except Exception:
                 pass
             self._last_render_fingerprint = None
@@ -232,7 +228,11 @@ class TacticalHUD:
         except Exception as exc:
             self._html_bridge = None
             self._html_ready = False
-            logging.warning("HTML Navigation HUD unavailable; using Tk renderer: %s", exc)
+            try:
+                self.win.attributes("-alpha", 0.0)
+            except Exception:
+                pass
+            logging.warning("HTML Navigation HUD unavailable; overlay suppressed: %s", exc)
             return False
 
     def _schedule_html_sync(self):
@@ -261,7 +261,7 @@ class TacticalHUD:
         if bridge is not None:
             if bridge.startup_failed:
                 logging.warning(
-                    "HTML Navigation HUD unavailable; returning to Tk renderer (%s)",
+                    "HTML Navigation HUD unavailable; overlay remains suppressed (%s)",
                     bridge.host_status or "host exited or renderer did not connect",
                 )
                 self.set_html_renderer(False)
@@ -269,7 +269,7 @@ class TacticalHUD:
                 was_ready = self._html_ready
                 ready = bridge.ready
                 self._html_ready = ready
-                apply_native_fallback_visibility(self.root, self.win, ready)
+                suppress_native_proxy(self.win)
                 if ready:
                     if not was_ready:
                         logging.info("HTML Navigation HUD renderer is live")

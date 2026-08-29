@@ -60,7 +60,36 @@ def _as_float(value, default=0.0):
         return float(default)
 
 
-def build_prospector_model(raw, refined=None):
+def _material_key(value):
+    return "".join(character for character in str(value or "").casefold()
+                   if character.isalnum())
+
+
+def _prospector_directive(plan, materials, core_material):
+    plan = plan if isinstance(plan, dict) else {}
+    target_name = str(plan.get("target_material") or "").strip()
+    target_key = _material_key(target_name)
+    minimum = max(0.0, min(100.0, _as_float(plan.get("minimum_percent"), 20.0)))
+    target_percent = 0.0
+    if target_key:
+        for material in materials:
+            if _material_key(material.get("name")) == target_key:
+                target_name = material.get("name") or target_name
+                target_percent = _as_float(material.get("proportion"))
+                break
+        if _material_key(core_material) == target_key:
+            return "MINE", target_name, max(100.0, target_percent), minimum
+        if target_percent >= minimum:
+            return "MINE", target_name, target_percent, minimum
+        if target_percent > 0:
+            return "OPTIONAL", target_name, target_percent, minimum
+        return "SKIP", target_name, 0.0, minimum
+    if core_material:
+        return "CORE", core_material, 100.0, minimum
+    return "ASSESS", "", 0.0, minimum
+
+
+def build_prospector_model(raw, refined=None, plan=None):
     """Normalise one ProspectedAsteroid event for any future renderer."""
     raw = raw if isinstance(raw, dict) else {}
     materials = []
@@ -86,12 +115,20 @@ def build_prospector_model(raw, refined=None):
     remaining = raw.get("Remaining")
     remaining_value = None if remaining is None else max(0.0, _as_float(remaining))
     content_label, content_tone = _content_info(raw)
+    core_material = _core_name(raw)
+    decision, target_name, target_percent, minimum = _prospector_directive(
+        plan, materials, core_material,
+    )
     return {
         "mining_type": _mining_type(raw),
         "content_label": content_label,
         "content_tone": content_tone,
         "remaining": remaining_value,
-        "core_material": _core_name(raw),
+        "core_material": core_material,
+        "decision": decision,
+        "target_material": target_name,
+        "target_percent": round(target_percent, 1),
+        "minimum_percent": round(minimum, 1),
         "materials": materials,
         "refined": refined_rows,
         "refined_total": sum(item["tonnes"] for item in refined_rows),
@@ -110,6 +147,7 @@ class ProspectorHUD:
         self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
         self._last_raw = None
         self._refined = {}
+        self._plan = {}
         self._hide_job = None
         self._html_render_model = build_prospector_model({}, {})
 
@@ -177,9 +215,10 @@ class ProspectorHUD:
         self._hide_job = None
         self.hide()
 
-    def update(self, raw):
+    def update(self, raw, plan=None):
         self._last_raw = raw
         self._refined = {}
+        self._plan = dict(plan or {})
         self._redraw()
         self.show()
         self._schedule_hide()
@@ -222,7 +261,7 @@ class ProspectorHUD:
         if not self._last_raw:
             return
 
-        model = build_prospector_model(self._last_raw, self._refined)
+        model = build_prospector_model(self._last_raw, self._refined, self._plan)
         self._html_render_model = model
         palette = self._palette
         shown = model["materials"][:self.MAX_MATERIALS]

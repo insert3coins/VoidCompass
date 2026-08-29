@@ -24,8 +24,8 @@ import bio_values
 
 MINING_EVENTS = {
     "AsteroidCracked", "BuyDrones", "Cargo", "CollectCargo", "Died",
-    "EjectCargo", "LaunchDrone", "MarketSell", "MiningRefined",
-    "ProspectedAsteroid", "SellDrones", "Shutdown",
+    "EjectCargo", "LaunchDrone", "Loadout", "MarketSell", "MiningRefined",
+    "ProspectedAsteroid", "SAASignalsFound", "SellDrones", "Shutdown",
 }
 COMBAT_EVENTS = {
     "Bounty", "CapShipBond", "Cargo", "Died", "Docked",
@@ -93,8 +93,26 @@ def _named_increment(bucket, symbol, name, count):
         row["name"] = name
 
 
+def _material_key(value):
+    """Return a comparison key shared by journal symbols and localised names."""
+    return "".join(
+        character for character in _symbol(value).casefold()
+        if character.isalnum()
+    )
+
+
+def _default_mining_plan():
+    return {
+        "target_material": "",
+        "minimum_percent": 20.0,
+        "cargo_goal_t": 0,
+        "method": "auto",
+    }
+
+
 def _new_mining_session(ts, context=None):
     context = context or {}
+    plan = {**_default_mining_plan(), **copy.deepcopy(context.get("plan") or {})}
     return {
         "session_key": f"{ts}-{uuid.uuid4().hex[:10]}", "active": True,
         "started_ts": ts, "last_event_ts": ts, "ended_ts": None,
@@ -106,6 +124,10 @@ def _new_mining_session(ts, context=None):
         "cargo_start": {}, "cargo_current": {}, "collected": {},
         "jettisoned": {}, "refined": {}, "prospected_materials": {},
         "motherlodes": {}, "sales": {}, "attributed_revenue_cr": 0,
+        "plan": plan, "target_hits": 0, "qualified_rocks": 0,
+        "target_total_pct": 0.0, "target_best_pct": 0.0,
+        "prospect_log": [], "current_prospect": None,
+        "last_refined_ts": None,
     }
 
 
@@ -125,7 +147,10 @@ def _defaults():
     return {
         "version": 1,
         "seen": [],
-        "mining": {"last_cargo": {}, "session": None, "history": []},
+        "mining": {
+            "last_cargo": {}, "loadout": None, "session": None,
+            "history": [], "plan": _default_mining_plan(), "ring_scans": [],
+        },
         "combat": {
             "loadout": None, "cargo": {}, "materials": {}, "target": None,
             "synthesis_lifetime": {}, "session": None, "history": [],
@@ -175,6 +200,10 @@ class SpecialistEngine:
                             base[key].update(value[key])
                         else:
                             base[key] = value[key]
+                base["mining"]["plan"] = {
+                    **_default_mining_plan(),
+                    **(base["mining"].get("plan") or {}),
+                }
                 self.state = base
         except (OSError, ValueError, TypeError):
             self.state = _defaults()
@@ -262,6 +291,8 @@ class SpecialistEngine:
         state = self.state["mining"]
         session = state.get("session")
         if not session or not session.get("active"):
+            context = dict(context or {})
+            context.setdefault("plan", state.get("plan") or {})
             session = _new_mining_session(ts, context)
             session["cargo_start"] = copy.deepcopy(state.get("last_cargo") or {})
             session["cargo_current"] = copy.deepcopy(state.get("last_cargo") or {})
@@ -283,7 +314,9 @@ class SpecialistEngine:
         with self._lock:
             if (self.state["mining"].get("session") or {}).get("active"):
                 return False
-            self._ensure_mining(_epoch_ms(), context or {})
+            start_context = dict(context or {})
+            start_context.setdefault("plan", self.state["mining"].get("plan") or {})
+            self._ensure_mining(_epoch_ms(), start_context)
             self._save()
             return True
 
@@ -299,9 +332,85 @@ class SpecialistEngine:
             session = self.state.get("mining", {}).get("session") or {}
             return bool(session.get("active"))
 
+    def configure_mining(self, target_material="", minimum_percent=20,
+                         cargo_goal_t=0, method="auto"):
+        """Persist one commander mining plan and apply it to an active run."""
+        method = str(method or "auto").strip().casefold()
+        if method not in {"auto", "laser", "core", "subsurface", "surface"}:
+            method = "auto"
+        plan = {
+            "target_material": str(target_material or "").strip()[:100],
+            "minimum_percent": max(0.0, min(100.0, _float(minimum_percent, 20.0))),
+            "cargo_goal_t": max(0, min(100000, _int(cargo_goal_t))),
+            "method": method,
+        }
+        with self._lock:
+            self.state["mining"]["plan"] = plan
+            session = self.state["mining"].get("session")
+            if session and session.get("active"):
+                session["plan"] = copy.deepcopy(plan)
+            self._save()
+        return copy.deepcopy(plan)
+
+    @staticmethod
+    def _prospector_decision(plan, materials, motherlode=None):
+        target = _material_key((plan or {}).get("target_material"))
+        minimum = max(0.0, _float((plan or {}).get("minimum_percent"), 20.0))
+        target_pct = 0.0
+        target_name = str((plan or {}).get("target_material") or "").strip()
+        if target:
+            for item in materials or []:
+                names = (item.get("Name"), item.get("Name_Localised"))
+                if target in {_material_key(value) for value in names if value}:
+                    target_pct = max(0.0, _float(item.get("Proportion"), 0.0))
+                    target_name = item.get("Name_Localised") or item.get("Name") or target_name
+                    break
+            core_match = target in {
+                _material_key(motherlode),
+            } if motherlode else False
+            if core_match:
+                return "MINE", target_name, max(target_pct, 100.0), True
+            if target_pct >= minimum:
+                return "MINE", target_name, target_pct, True
+            if target_pct > 0:
+                return "OPTIONAL", target_name, target_pct, False
+            return "SKIP", target_name, 0.0, False
+        if motherlode:
+            return "CORE", str(motherlode), 100.0, True
+        return "ASSESS", "", 0.0, False
+
     def _observe_mining(self, event, ts, context):
         state = self.state["mining"]
         kind = event["event"]
+        if kind == "Loadout":
+            state["loadout"] = copy.deepcopy(event)
+            return True
+        if kind == "SAASignalsFound":
+            body = str(event.get("BodyName") or "")
+            if "ring" not in body.casefold():
+                return False
+            signals = []
+            for item in event.get("Signals") or []:
+                if not isinstance(item, dict):
+                    continue
+                name = item.get("Type_Localised") or item.get("Type")
+                if name:
+                    signals.append({"name": str(name), "count": max(0, _int(item.get("Count")))})
+            if not signals:
+                return False
+            record = {
+                "timestamp": event.get("timestamp"),
+                "system": context.get("system"), "body": body,
+                "system_address": event.get("SystemAddress"),
+                "body_id": event.get("BodyID"), "signals": signals,
+            }
+            key = (str(record.get("system") or "").casefold(), body.casefold())
+            retained = [
+                row for row in state.get("ring_scans") or []
+                if (str(row.get("system") or "").casefold(), str(row.get("body") or "").casefold()) != key
+            ]
+            state["ring_scans"] = [record, *retained][:200]
+            return True
         if kind == "Cargo":
             cargo = _inventory(event)
             state["last_cargo"] = cargo
@@ -336,10 +445,14 @@ class SpecialistEngine:
             session["limpet_sale_cr"] += _int(event.get("TotalSale"), count * _int(event.get("SellPrice")))
         elif kind == "ProspectedAsteroid":
             session["asteroids_prospected"] += 1
-            motherlode = _symbol(event.get("MotherlodeMaterial"))
+            motherlode = _symbol(
+                event.get("MotherlodeMaterial")
+                or event.get("MotherlodeMaterial_Localised")
+            )
             _named_increment(session["motherlodes"], motherlode, event.get("MotherlodeMaterial_Localised"), 1)
-            for item in event.get("Materials") or []:
-                symbol = _symbol(item.get("Name"))
+            raw_materials = [item for item in event.get("Materials") or [] if isinstance(item, dict)]
+            for item in raw_materials:
+                symbol = _symbol(item.get("Name") or item.get("Name_Localised"))
                 if not symbol:
                     continue
                 row = session["prospected_materials"].setdefault(symbol, {
@@ -350,17 +463,57 @@ class SpecialistEngine:
                 row["sightings"] += 1
                 row["total_pct"] += pct
                 row["best_pct"] = max(row["best_pct"], pct)
+            motherlode_name = event.get("MotherlodeMaterial_Localised") or event.get("MotherlodeMaterial")
+            plan = {**_default_mining_plan(), **(session.get("plan") or state.get("plan") or {})}
+            decision, target_name, target_pct, qualified = self._prospector_decision(
+                plan, raw_materials, motherlode_name,
+            )
+            if target_pct > 0:
+                session["target_hits"] = _int(session.get("target_hits")) + 1
+                session["target_total_pct"] = _float(session.get("target_total_pct"), 0.0) + target_pct
+                session["target_best_pct"] = max(_float(session.get("target_best_pct"), 0.0), target_pct)
+            if qualified:
+                session["qualified_rocks"] = _int(session.get("qualified_rocks")) + 1
+            prospect = {
+                "timestamp": event.get("timestamp"), "ts": ts,
+                "decision": decision, "target": target_name,
+                "target_pct": round(target_pct, 2), "qualified": bool(qualified),
+                "content": event.get("Content_Localised") or event.get("Content"),
+                "remaining": _float(event.get("Remaining")),
+                "motherlode": motherlode_name,
+                "materials": [
+                    {
+                        "name": item.get("Name_Localised") or item.get("Name"),
+                        "percent": round(max(0.0, _float(item.get("Proportion"), 0.0)), 2),
+                    }
+                    for item in raw_materials
+                ],
+                # Refinery events can overlap collector work from older rocks;
+                # this counter is explicitly "since this prospect", not an
+                # invented per-asteroid yield claim.
+                "refined_since_prospect": 0,
+            }
+            session["current_prospect"] = prospect
+            session.setdefault("prospect_log", []).append(prospect)
+            session["prospect_log"] = session["prospect_log"][-250:]
         elif kind == "AsteroidCracked":
             session["asteroids_cracked"] += 1
+            current = session.get("current_prospect")
+            if isinstance(current, dict):
+                current["cracked"] = True
         elif kind == "MiningRefined":
-            symbol = _symbol(event.get("Type"))
+            symbol = _symbol(event.get("Type") or event.get("Type_Localised"))
             _named_increment(session["refined"], symbol, event.get("Type_Localised") or event.get("Type"), max(1, _int(event.get("Count"), 1)))
+            session["last_refined_ts"] = ts
+            current = session.get("current_prospect")
+            if isinstance(current, dict):
+                current["refined_since_prospect"] = _int(current.get("refined_since_prospect")) + max(1, _int(event.get("Count"), 1))
         elif kind in {"CollectCargo", "EjectCargo"}:
             bucket = session["collected"] if kind == "CollectCargo" else session["jettisoned"]
-            symbol = _symbol(event.get("Type"))
+            symbol = _symbol(event.get("Type") or event.get("Type_Localised"))
             _named_increment(bucket, symbol, event.get("Type_Localised") or event.get("Type"), max(1, _int(event.get("Count"), 1)))
         elif kind == "MarketSell":
-            symbol = _symbol(event.get("Type"))
+            symbol = _symbol(event.get("Type") or event.get("Type_Localised"))
             refined = (session["refined"].get(symbol) or {}).get("count", 0)
             previous = (session["sales"].get(symbol) or {}).get("count", 0)
             sold = max(0, _int(event.get("Count")))
@@ -700,11 +853,81 @@ class SpecialistEngine:
         return {"distance_m": round(distance, 1), "bearing_deg": round(bearing, 1), "east_m": round(distance * math.sin(math.radians(bearing)), 1), "north_m": round(distance * math.cos(math.radians(bearing)), 1)}
 
     # Presentation ---------------------------------------------------
-    def _mining_snapshot(self):
-        state = self.state["mining"]
-        session = copy.deepcopy(state.get("session"))
+    @staticmethod
+    def _mining_readiness(loadout, cargo, plan):
+        loadout = loadout if isinstance(loadout, dict) else {}
+        modules = [
+            _symbol(row.get("Item")) for row in loadout.get("Modules") or []
+            if isinstance(row, dict) and row.get("On", True)
+        ]
+        has = lambda *needles: any(
+            any(needle in item for needle in needles) for item in modules
+        )
+        multi_mining = has("multidronecontrol_mining")
+        equipment = {
+            "refinery": has("int_refinery"),
+            "prospector": multi_mining or has("dronecontrol_prospector"),
+            "collector": multi_mining or has("dronecontrol_collection"),
+            "dss": has("detailedsurfacescanner"),
+            "laser": has("mininglaser", "miningtool"),
+            "seismic": has("seism"),
+            "abrasion": has("abrasion"),
+            "subsurface": has("subsurf"),
+        }
+        method = str((plan or {}).get("method") or "auto").casefold()
+        extraction_ready = {
+            "laser": equipment["laser"],
+            "core": equipment["seismic"] and equipment["abrasion"],
+            "subsurface": equipment["subsurface"],
+            "surface": equipment["abrasion"],
+        }.get(method, any(equipment[key] for key in ("laser", "seismic", "abrasion", "subsurface")))
+        missing = [
+            label for key, label in (
+                ("refinery", "Refinery"), ("prospector", "Prospector controller"),
+                ("collector", "Collector controller"),
+            ) if not equipment[key]
+        ]
+        if not extraction_ready:
+            missing.append({
+                "laser": "Mining laser", "core": "Seismic launcher + abrasion blaster",
+                "subsurface": "Sub-surface displacement missile",
+                "surface": "Abrasion blaster",
+            }.get(method, "Mining extraction tool"))
+        cargo_capacity = max(0, _int(loadout.get("CargoCapacity")))
+        limpets = _int((cargo.get("drones") or {}).get("count")) if isinstance(cargo, dict) else 0
+        return {
+            "ready": not missing, "method": method, "equipment": equipment,
+            "missing": missing, "cargo_capacity": cargo_capacity,
+            "limpets": limpets,
+            "dss_recommended": not equipment["dss"],
+            "ship": loadout.get("ShipName") or loadout.get("Ship"),
+        }
+
+    @staticmethod
+    def _present_mining_session(source):
+        session = copy.deepcopy(source or {})
         if not session:
-            return {"active": False, "session": None, "history": copy.deepcopy(state["history"])}
+            return None
+        session.setdefault("refined", {})
+        session.setdefault("prospected_materials", {})
+        session.setdefault("cargo_start", {})
+        session.setdefault("cargo_current", {})
+        session.setdefault("sales", {})
+        session["plan"] = {
+            **_default_mining_plan(), **(session.get("plan") or {}),
+        }
+        for key, default in (
+            ("started_ts", _epoch_ms()), ("last_event_ts", _epoch_ms()),
+            ("asteroids_prospected", 0), ("asteroids_cracked", 0),
+            ("prospector_limpets", 0), ("collector_limpets", 0),
+            ("other_limpets", 0), ("limpets_bought", 0),
+            ("limpets_sold", 0), ("limpet_buy_cost_cr", 0),
+            ("limpet_sale_cr", 0), ("attributed_revenue_cr", 0),
+            ("target_hits", 0), ("qualified_rocks", 0),
+            ("target_total_pct", 0.0), ("target_best_pct", 0.0),
+            ("prospect_log", []), ("current_prospect", None),
+        ):
+            session.setdefault(key, copy.deepcopy(default))
         refined = [{"symbol": key, **row} for key, row in session["refined"].items()]
         refined.sort(key=lambda row: (-row["count"], row["name"]))
         refined_t = sum(row["count"] for row in refined)
@@ -729,8 +952,61 @@ class SpecialistEngine:
         for row in refined:
             key = row["symbol"]
             cargo_yield.append({**row, "cargo_delta": (session["cargo_current"].get(key) or {}).get("count", 0) - (session["cargo_start"].get(key) or {}).get("count", 0), "sold_t": (session["sales"].get(key) or {}).get("count", 0)})
-        session.update(duration_s=round(duration), refined_t=refined_t, refined=refined, cargo_yield=cargo_yield, prospected_materials=targets, tons_per_hour=round(refined_t / (duration / 3600), 2) if duration else None, tons_per_asteroid=round(refined_t / prospectors, 2) if prospectors else None, attributed_revenue_cr=session["attributed_revenue_cr"], net_after_limpet_cash_cr=session["attributed_revenue_cr"] - cash_cost, limpets={"prospectors_used": prospectors, "collectors_launched": session["collector_limpets"], "other_launched": session["other_limpets"], "estimated_used": used, "inventory_accounting": inventory_used, "bought": session["limpets_bought"], "sold": session["limpets_sold"], "remaining": current_limpets, "cash_net_cost_cr": cash_cost, "estimated_consumed_cost_cr": consumed_cost, "cost_source": "observed purchase price" if avg_buy is not None else "unknown", "limpets_per_tonne": round(used / refined_t, 2) if refined_t else None, "cost_per_tonne_cr": round(consumed_cost / refined_t) if consumed_cost is not None and refined_t else None})
-        return {"active": bool(session.get("active")), "session": session, "history": copy.deepcopy(state["history"])}
+        plan = {**_default_mining_plan(), **(session.get("plan") or {})}
+        target_hits = _int(session.get("target_hits"))
+        qualified = _int(session.get("qualified_rocks"))
+        cargo_goal = max(0, _int(plan.get("cargo_goal_t")))
+        remaining_goal = max(0, cargo_goal - refined_t)
+        tph = round(refined_t / (duration / 3600), 2) if duration and refined_t else None
+        session.update(
+            duration_s=round(duration), refined_t=refined_t, refined=refined,
+            cargo_yield=cargo_yield, prospected_materials=targets,
+            tons_per_hour=tph,
+            tons_per_asteroid=round(refined_t / prospectors, 2) if prospectors else None,
+            asteroids_per_hour=round(prospectors / (duration / 3600), 2) if duration and prospectors else None,
+            attributed_revenue_cr=_int(session.get("attributed_revenue_cr")),
+            net_after_limpet_cash_cr=_int(session.get("attributed_revenue_cr")) - cash_cost,
+            revenue_per_hour_cr=round(_int(session.get("attributed_revenue_cr")) / (duration / 3600)) if duration and session.get("attributed_revenue_cr") else None,
+            target_hit_rate=round(target_hits * 100 / prospectors, 1) if prospectors else None,
+            qualified_rate=round(qualified * 100 / prospectors, 1) if prospectors else None,
+            target_average_pct=round(_float(session.get("target_total_pct"), 0.0) / target_hits, 2) if target_hits else None,
+            target_best_pct=round(_float(session.get("target_best_pct"), 0.0), 2),
+            cargo_goal_t=cargo_goal, cargo_goal_remaining_t=remaining_goal,
+            cargo_goal_percent=round(min(100, refined_t * 100 / cargo_goal), 1) if cargo_goal else None,
+            estimated_goal_minutes=round(remaining_goal / tph * 60) if remaining_goal and tph else None,
+            limpets={
+                "prospectors_used": prospectors,
+                "collectors_launched": _int(session.get("collector_limpets")),
+                "other_launched": _int(session.get("other_limpets")),
+                "estimated_used": used, "inventory_accounting": inventory_used,
+                "bought": _int(session.get("limpets_bought")),
+                "sold": _int(session.get("limpets_sold")), "remaining": current_limpets,
+                "cash_net_cost_cr": cash_cost, "estimated_consumed_cost_cr": consumed_cost,
+                "cost_source": "observed purchase price" if avg_buy is not None else "unknown",
+                "limpets_per_tonne": round(used / refined_t, 2) if refined_t else None,
+                "cost_per_tonne_cr": round(consumed_cost / refined_t) if consumed_cost is not None and refined_t else None,
+            },
+        )
+        return session
+
+    def _mining_snapshot(self):
+        state = self.state["mining"]
+        session = self._present_mining_session(state.get("session"))
+        history = [
+            row for row in (
+                self._present_mining_session(item) for item in state.get("history") or []
+            ) if row
+        ]
+        plan = {**_default_mining_plan(), **copy.deepcopy(state.get("plan") or {})}
+        readiness = self._mining_readiness(
+            state.get("loadout") or self.state.get("combat", {}).get("loadout"),
+            state.get("last_cargo") or {}, plan,
+        )
+        return {
+            "active": bool(session and session.get("active")), "session": session,
+            "history": history, "plan": plan, "readiness": readiness,
+            "ring_scans": copy.deepcopy(state.get("ring_scans") or []),
+        }
 
     @staticmethod
     def _ax_readiness(loadout, materials, cargo):

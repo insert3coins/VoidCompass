@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 
-from html_overlay_runtime import HtmlOverlaySurface, apply_native_fallback_visibility, overlay_opacity_ratio
+from html_overlay_runtime import HtmlOverlaySurface, suppress_native_proxy, overlay_opacity_ratio
 
 
 def _integer(value, default=0):
@@ -36,7 +36,7 @@ class HtmlGravityOverlayBridge:
             self.win.bind("<Destroy>", self._on_destroy, add="+")
         except Exception:
             pass
-        self.set_enabled(bool(self.config.get("hud_html_renderer", False)))
+        self.set_enabled(True)
         self._schedule()
 
     @property
@@ -115,10 +115,7 @@ class HtmlGravityOverlayBridge:
             if surface is not None:
                 surface.dispose()
             try:
-                held = bool(getattr(
-                    self.win.master, "_voidcompass_startup_presentation_held", False,
-                ))
-                self.win.attributes("-alpha", 0.0 if held else 1.0)
+                self.win.attributes("-alpha", 0.0)
             except Exception:
                 pass
             self._last_fingerprint = None
@@ -136,7 +133,11 @@ class HtmlGravityOverlayBridge:
             return True
         except Exception as exc:
             self.surface = None
-            logging.warning("HTML Gravity Warning unavailable; using Tk renderer: %s", exc)
+            try:
+                self.win.attributes("-alpha", 0.0)
+            except Exception:
+                pass
+            logging.warning("HTML Gravity Warning unavailable; overlay suppressed: %s", exc)
             return False
 
     def _schedule(self):
@@ -150,7 +151,7 @@ class HtmlGravityOverlayBridge:
         if self.surface is not None:
             if self.surface.startup_failed:
                 logging.warning(
-                    "HTML Gravity Warning unavailable; returning to Tk renderer (%s)",
+                    "HTML Gravity Warning unavailable; overlay remains suppressed (%s)",
                     self.surface.host_status or "renderer did not connect",
                 )
                 self.set_enabled(False)
@@ -158,7 +159,7 @@ class HtmlGravityOverlayBridge:
                 was_ready = self._ready
                 self._ready = self.surface.ready
                 self.overlay._html_ready = self._ready
-                apply_native_fallback_visibility(self.root, self.win, self._ready)
+                suppress_native_proxy(self.win)
                 if self._ready:
                     if not was_ready:
                         logging.info("HTML Gravity Warning renderer is live")

@@ -3,7 +3,7 @@
 Not exploration-specific: any part of the app can call push(title, message,
 severity, icon) to show a short-lived popup. The dedicated HTML renderer gives
 ordinary alerts and commander achievements distinct visual treatments while
-this class retains the native fallback and authoritative expiry queue.
+this class retains the hidden native state proxy and authoritative expiry queue.
 """
 
 import time

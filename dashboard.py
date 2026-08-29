@@ -1140,7 +1140,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.cargo_capacity = 0
         self.current_cargo_tons = 0
         self.current_cargo_inventory = []
-        self.mining_session = self._new_mining_session()
         self.operational_state = operational_state.fresh_runtime_state()
         self.colonisation_projects = {}
         self.engineer_materials = {}
@@ -2077,7 +2076,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.cargo_capacity = 0
         self.current_cargo_tons = 0
         self.current_cargo_inventory = []
-        self.mining_session = self._new_mining_session()
         self.operational_state = operational_state.fresh_runtime_state()
         self._hud_balance_cache = {"ts": 0.0, "balance": None}
         self.last_journal_event_ts = 0.0
@@ -2487,24 +2485,13 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             pass
 
     def _release_startup_overlay_curtain(self):
-        """Make prepared overlays drawable without mapping them yet.
-
-        A cold WebView2 process can still be warming when the journal handoff
-        finishes.  Keep the transparent Tk proxy as a visible fallback until
-        that overlay's browser surface has actually painted; each HTML bridge
-        hides its proxy as soon as it reports ready.
-        """
+        """Release HTML presentation while native state proxies stay invisible."""
         self._reapply_overlay_positions()
         for name, window in self._overlay_hotkey_window_items():
             try:
                 if not window.winfo_exists():
                     continue
-                attr = "hud" if name == "navigation" else name
-                overlay = getattr(self, attr, None)
-                html_ready = bool(getattr(overlay, "_html_ready", False))
-                window.attributes(
-                    "-alpha", 0.0 if html_ready else 1.0,
-                )
+                window.attributes("-alpha", 0.0)
                 window._voidcompass_startup_held = False
             except (AttributeError, tk.TclError):
                 continue
@@ -4434,13 +4421,18 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 logging.warning("No semantic HTML renderer registered for %s", attr)
 
     def _apply_html_overlay_renderer(self):
-        """Switch every managed overlay proxy to the shared HTML renderer."""
-        enabled = bool(self.config.get("hud_html_renderer", False))
+        """Give each enabled overlay exactly one visual renderer."""
         for attr in ("hud", *self._HTML_OVERLAY_SPECS):
             overlay = getattr(self, attr, None)
             setter = getattr(overlay, "set_html_renderer", None)
             if callable(setter):
-                setter(enabled)
+                attached = setter(True)
+                if attached:
+                    window = self._overlay_window(overlay)
+                    try:
+                        window.attributes("-alpha", 0.0)
+                    except Exception:
+                        pass
 
     def open_settings(self):
         self._route_to_html_workspace("settings")
@@ -6553,138 +6545,15 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 }
         return snapshot
 
-    @staticmethod
-    def _new_mining_session(previous=None):
-        return {
-            "active": False,
-            "started_at": None,
-            "system": None,
-            "body": None,
-            "prospected": 0,
-            "cores_found": 0,
-            "cores_cracked": 0,
-            "refined_tons": 0,
-            "refined_by_material": {},
-            "best_material": None,
-            "best_percent": 0.0,
-            "last_materials": [],
-            "limpets": None,
-            "context_body": (previous or {}).get("context_body"),
-            "last_summary": (previous or {}).get("last_summary"),
-            "last_summary_pending": False,
-        }
-
-    @staticmethod
-    def _journal_display_name(value, fallback="Commodity"):
-        text = str(value or "").strip().strip("$;")
-        if text.casefold().endswith("_name"):
-            text = text[:-5]
-        return text.replace("_", " ").strip().title() or fallback
-
-    def _start_mining_session(self):
-        previous = getattr(self, "mining_session", {}) or {}
-        state = self._new_mining_session(previous)
-        state.update({
-            "active": True,
-            "started_at": time.time(),
-            "system": getattr(self, "current_sys", None),
-            "body": previous.get("context_body") or getattr(self, "current_body_name", None),
-        })
-        self.mining_session = state
-        return state
-
-    def _finish_mining_session(self, reason):
-        state = getattr(self, "mining_session", {}) or {}
-        if not state.get("active"):
-            return
-        duration = max(0.0, time.time() - float(state.get("started_at") or time.time()))
-        state["last_summary"] = {
-            "reason": str(reason or "complete"),
-            "system": state.get("system"),
-            "body": state.get("body"),
-            "duration_minutes": round(duration / 60.0, 1),
-            "prospected": int(state.get("prospected") or 0),
-            "cores_found": int(state.get("cores_found") or 0),
-            "cores_cracked": int(state.get("cores_cracked") or 0),
-            "refined_tons": int(state.get("refined_tons") or 0),
-            "refined_by_material": dict(state.get("refined_by_material") or {}),
-            "best_material": state.get("best_material"),
-            "best_percent": float(state.get("best_percent") or 0),
-        }
-        state["last_summary_pending"] = True
-        state["active"] = False
-        state["context_body"] = None
-
-    def _observe_mining_event(self, event, raw, startup_replay=False):
-        """Maintain panel-independent live mining-session facts."""
-        if startup_replay or not isinstance(raw, dict):
-            return
-        state = getattr(self, "mining_session", None)
-        if not isinstance(state, dict):
-            state = self._new_mining_session()
-            self.mining_session = state
-
-        if event == "LoadGame":
-            self.mining_session = self._new_mining_session()
-            return
-
-        if event == "SAASignalsFound" and "ring" in str(raw.get("BodyName") or "").casefold():
-            state["context_body"] = raw.get("BodyName")
-        if event in ("ProspectedAsteroid", "MiningRefined", "AsteroidCracked") and not state.get("active"):
-            state = self._start_mining_session()
-
-        if event == "ProspectedAsteroid":
-            state["prospected"] = int(state.get("prospected") or 0) + 1
-            state["last_core"] = None
-            core = raw.get("MotherlodeMaterial_Localised") or raw.get("MotherlodeMaterial")
-            if core:
-                state["cores_found"] = int(state.get("cores_found") or 0) + 1
-            materials = []
-            for item in raw.get("Materials") or ():
-                if not isinstance(item, dict):
-                    continue
-                name = self._journal_display_name(item.get("Name_Localised") or item.get("Name"), "Mineral")
-                try:
-                    percent = float(item.get("Proportion") if item.get("Proportion") is not None else item.get("Percent") or 0)
-                except (TypeError, ValueError):
-                    percent = 0.0
-                if percent <= 1 and item.get("Proportion") is not None:
-                    percent *= 100.0
-                materials.append({"name": name, "percent": round(percent, 1)})
-                if percent > float(state.get("best_percent") or 0):
-                    state["best_percent"] = round(percent, 1)
-                    state["best_material"] = name
-            state["last_materials"] = sorted(materials, key=lambda row: row["percent"], reverse=True)[:5]
-            if core:
-                state["last_core"] = self._journal_display_name(core, "Core material")
-        elif event == "AsteroidCracked":
-            state["cores_cracked"] = int(state.get("cores_cracked") or 0) + 1
-        elif event == "MiningRefined":
-            material = self._journal_display_name(raw.get("Type_Localised") or raw.get("Type"), "Mineral")
-            state["refined_tons"] = int(state.get("refined_tons") or 0) + 1
-            refined = state.setdefault("refined_by_material", {})
-            refined[material] = int(refined.get(material) or 0) + 1
-        elif event == "Cargo":
-            inventory = raw.get("Inventory") or ()
-            if isinstance(inventory, list):
-                state["limpets"] = sum(
-                    int(item.get("Count") or 0) for item in inventory if isinstance(item, dict)
-                    and "limpet" in str(item.get("Name_Localised") or item.get("Name") or "").casefold()
-                )
-        elif event in ("FSDJump", "CarrierJump", "Shutdown"):
-            self._finish_mining_session(event)
-
     def _mining_activity_snapshot(self, mission_rows):
-        state = dict(getattr(self, "mining_session", {}) or {})
-        limpets = state.get("limpets")
-        if limpets is None:
-            inventory = list(getattr(self, "current_cargo_inventory", None) or ())
-            if inventory or float(getattr(self, "last_cargo_event_ts", 0) or 0) > 0:
-                limpets = sum(
-                    int(item.get("Count", item.get("count", 0)) or 0)
-                    for item in inventory if isinstance(item, dict)
-                    and "limpet" in str(item.get("Name_Localised") or item.get("Name") or item.get("name") or "").casefold()
-                )
+        """Compatibility projection over the authoritative specialist reducer."""
+        try:
+            snapshot = self.specialist_engine.mining_snapshot()
+        except Exception:
+            snapshot = {}
+        state = snapshot.get("session") or {}
+        readiness = snapshot.get("readiness") or {}
+        plan = snapshot.get("plan") or {}
         mining_names = {name.casefold() for name in MINING_MATERIALS}
         mining_missions = []
         for mission in mission_rows:
@@ -6703,27 +6572,33 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 "remaining": max(0, required - delivered),
                 "destination": mission.get("destination_station") or mission.get("destination_system"),
             })
-        started = state.get("started_at")
-        duration_hours = max((time.time() - float(started or time.time())) / 3600.0, 1 / 3600.0)
-        refined = int(state.get("refined_tons") or 0)
+        refined_rows = state.get("refined") or []
+        refined_by_material = {
+            str(row.get("name") or row.get("symbol") or "Mineral"): int(row.get("count") or 0)
+            for row in refined_rows if isinstance(row, dict)
+        }
+        materials = list(state.get("prospected_materials") or [])
+        best = materials[0] if materials else {}
+        current = state.get("current_prospect") or {}
+        motherlodes = state.get("motherlodes") or {}
         return {
-            "active": bool(state.get("active")),
+            "active": bool(snapshot.get("active")),
             "system": state.get("system"),
             "body": state.get("body"),
-            "duration_minutes": round(duration_hours * 60, 1) if state.get("active") else 0.0,
-            "prospected": int(state.get("prospected") or 0),
-            "cores_found": int(state.get("cores_found") or 0),
-            "cores_cracked": int(state.get("cores_cracked") or 0),
-            "refined_tons": refined,
-            "yield_tph": round(refined / duration_hours, 1) if state.get("active") and refined else 0.0,
-            "refined_by_material": dict(state.get("refined_by_material") or {}),
-            "best_material": state.get("best_material"),
-            "best_percent": float(state.get("best_percent") or 0),
-            "last_materials": list(state.get("last_materials") or []),
-            "last_core": state.get("last_core"),
-            "limpets": int(limpets) if limpets is not None else None,
+            "duration_minutes": round(float(state.get("duration_s") or 0) / 60, 1),
+            "prospected": int(state.get("asteroids_prospected") or 0),
+            "cores_found": sum(int(row.get("count") or 0) for row in motherlodes.values() if isinstance(row, dict)),
+            "cores_cracked": int(state.get("asteroids_cracked") or 0),
+            "refined_tons": int(state.get("refined_t") or 0),
+            "yield_tph": float(state.get("tons_per_hour") or 0),
+            "refined_by_material": refined_by_material,
+            "best_material": plan.get("target_material") or best.get("name"),
+            "best_percent": float(state.get("target_best_pct") or best.get("best_pct") or 0),
+            "last_materials": list(current.get("materials") or []),
+            "last_core": current.get("motherlode"),
+            "limpets": readiness.get("limpets"),
             "missions": mining_missions[:6],
-            "last_summary": state.get("last_summary") if state.get("last_summary_pending") else None,
+            "last_summary": None,
         }
 
     def _adaptive_health_snapshot(self):
@@ -7195,6 +7070,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             )
         except Exception as exc:
             logging.warning("Specialist workflow event failed [%s]: %s", ev, exc)
+        if ev == "SAASignalsFound":
+            try:
+                self._record_mining_ring_signal(raw if isinstance(raw, dict) else d)
+            except Exception as exc:
+                logging.debug("Mining ring intelligence update skipped: %s", exc)
         if ev == "CargoTransfer" and at_own_carrier and not startup_replay:
             try:
                 self.carrier_tracker.apply_observed_cargo_transfer(raw)
@@ -7284,9 +7164,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._handle_live_journal_toast(
                 ev, raw, d, startup_replay=startup_replay,
             )
-        self._observe_mining_event(
-            ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay,
-        )
         try:
             operational_state.observe_event(
                 self.operational_state,
@@ -8724,7 +8601,15 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         # any multi-event poll, not just startup, which was silently dropping updates.
         if self.prospector_hud and not startup_replay:
             if ev == "ProspectedAsteroid":
-                self._ui_post(lambda r=raw: self.prospector_hud.update(r), key="prospector-hud")
+                mining_plan = {}
+                try:
+                    mining_plan = self.specialist_engine.mining_snapshot().get("plan") or {}
+                except Exception:
+                    pass
+                self._ui_post(
+                    lambda r=raw, p=mining_plan: self.prospector_hud.update(r, p),
+                    key="prospector-hud",
+                )
             elif ev == "MiningRefined":
                 mat = raw.get("Type_Localised") or raw.get("Type") or ""
                 self._ui_post(lambda m=mat: self.prospector_hud.add_refined(m))

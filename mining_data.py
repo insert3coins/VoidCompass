@@ -2,6 +2,7 @@ import math
 import os
 import sqlite3
 from datetime import datetime
+from urllib.parse import quote
 
 import requests
 
@@ -90,13 +91,23 @@ def normalize_ring_type(value):
     return RING_TYPE_CANONICAL.get(text.lower(), text.title())
 
 
+class _ClosingConnection(sqlite3.Connection):
+    """Commit or roll back a context block, then release its file handle."""
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            return super().__exit__(exc_type, exc_value, traceback)
+        finally:
+            self.close()
+
+
 class MiningDataStore:
     def __init__(self, db_path=None):
         self.db_path = db_path or os.path.abspath(MINING_DB_FILE)
         self._init_db()
 
     def _connect(self):
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, factory=_ClosingConnection)
         conn.row_factory = sqlite3.Row
         return conn
 
@@ -311,6 +322,14 @@ class MiningDataStore:
                     """
                 )
             ]
+
+    def remove_bookmark(self, bookmark_id):
+        with self._connect() as conn:
+            cur = conn.execute(
+                "DELETE FROM mining_bookmarks WHERE id=?", (int(bookmark_id),),
+            )
+            conn.commit()
+            return cur.rowcount > 0
 
     def create_session(self, started_at, system_name=None, body_name=None):
         with self._connect() as conn:
@@ -575,24 +594,36 @@ def search_spansh_rings(system_name, material=None, ring_type=None, max_results=
     )
 
 
-def search_spansh_buyers(commodity, reference_system=None, max_distance=500, max_results=100, exclude_carriers=True):
+def search_spansh_buyers(commodity, reference_system=None, max_distance=500,
+                         max_results=100, exclude_carriers=True, quantity=1,
+                         large_pad=False, max_ls=None, min_demand=0):
+    """Find stations buying a mined commodity through Spansh's commodity API.
+
+    The station search filter previously returned an effectively unfiltered
+    catalogue.  The purpose-built ``commodity/sell`` route applies the demand
+    quantity server-side and orders candidates around the reference system.
+    """
     spansh_name = SPANSH_COMMODITY_MAP.get(commodity, commodity)
-    payload = {
-        "filters": {"buying_commodities": {"value": [spansh_name]}},
-        "sort": [{"market_updated_at": {"direction": "desc"}}],
-        "size": max(1, min(int(max_results or 100), 250)),
-    }
-    if reference_system:
-        payload["reference_system"] = reference_system
-    response = requests.post(SPANSH_STATIONS_SEARCH_URL, json=payload, timeout=18)
+    reference = str(reference_system or "Sol").strip() or "Sol"
+    amount = max(1, int(quantity or 1))
+    url = (
+        "https://spansh.co.uk/api/commodity/sell/"
+        f"{quote(reference, safe='')}/{quote(str(spansh_name), safe='')}/{amount}"
+    )
+    response = requests.get(url, timeout=45)
     response.raise_for_status()
     rows = []
     for station in response.json().get("results", []):
         distance = station.get("distance")
         if max_distance and distance is not None and float(distance) > float(max_distance):
             continue
+        arrival = station.get("distance_to_arrival") or 0
+        if max_ls is not None and arrival is not None and float(arrival) > float(max_ls):
+            continue
         station_type = station.get("type") or ""
         if exclude_carriers and ("carrier" in station_type.lower() or station_type == "Drake-Class Carrier"):
+            continue
+        if large_pad and not station.get("has_large_pad"):
             continue
         market = station.get("market") or []
         entry = next(
@@ -602,8 +633,8 @@ def search_spansh_buyers(commodity, reference_system=None, max_distance=500, max
         if not entry:
             continue
         price = entry.get("sell_price") or 0
-        demand = entry.get("demand") or 0
-        if not price:
+        demand = int(entry.get("demand") or 0)
+        if not price or demand < max(amount, int(min_demand or 0)):
             continue
         rows.append(
             {
@@ -611,10 +642,13 @@ def search_spansh_buyers(commodity, reference_system=None, max_distance=500, max
                 "station_name": station.get("name") or "",
                 "station_type": station_type,
                 "distance_ly": distance,
-                "ls_distance": station.get("distance_to_arrival") or 0,
+                "ls_distance": arrival,
                 "price": int(price or 0),
-                "demand": int(demand or 0),
+                "demand": demand,
                 "updated_at": station.get("market_updated_at") or "",
+                "market_id": station.get("market_id"),
+                "large_pad": bool(station.get("has_large_pad")),
+                "planetary": bool(station.get("is_planetary")),
             }
         )
     rows.sort(key=lambda r: (-r["price"], r["distance_ly"] is None, r["distance_ly"] or 0))
