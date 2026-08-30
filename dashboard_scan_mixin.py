@@ -150,7 +150,8 @@ class DashboardScanMixin:
         elif getattr(self, "current_in_fighter", False):
             state = getattr(self, "current_vehicle_name", None) or "FIGHTER"
         elif getattr(self, "current_in_srv", False):
-            state = "NOMAD" if getattr(self, "current_vehicle_name", "") == "NOMAD" else "SRV"
+            vehicle = str(getattr(self, "current_vehicle_name", "") or "").upper()
+            state = vehicle if vehicle in {"NOMAD", "SCARAB", "SCORPION", "RHINO"} else "SRV"
         elif getattr(self, "current_in_multicrew", False):
             state = "MULTICREW"
         elif getattr(self, "current_docked", False):
@@ -1048,13 +1049,17 @@ class DashboardScanMixin:
             body_id = _body_id(item.get("body_id"))
             bio_count = _integer(item.get("bio_count"))
             geo_count = _integer(item.get("geo_count"))
+            mining_count = _integer(item.get("mining_count"))
             previous_signals = restored_signals.get(body_id, {})
             if body_id is not None and (
-                    bio_count or geo_count or previous_signals
+                    bio_count or geo_count or mining_count or previous_signals
                     or item.get("genuses") or item.get("dss_complete")):
                 restored_signals[body_id] = {
                     "bio": max(bio_count, _integer(previous_signals.get("bio"))),
                     "geo": max(geo_count, _integer(previous_signals.get("geo"))),
+                    "mining": max(
+                        mining_count, _integer(previous_signals.get("mining")),
+                    ),
                     "genuses": list(
                         item.get("genuses")
                         or previous_signals.get("genuses")
@@ -1543,6 +1548,7 @@ class DashboardScanMixin:
             "dss_complete": dss_complete,
             "bio_count": bio_count,
             "geo_count": signal_state.get("geo", 0),
+            "mining_count": signal_state.get("mining", 0),
             "genuses": list(signal_state.get("genuses") or []),
             "is_star": is_star,
             "was_discovered": was_discovered,
@@ -1572,7 +1578,7 @@ class DashboardScanMixin:
             # planet record.
             for key in (
                 "genuses", "organic_scans", "organic_complete_count",
-                "geo_count",
+                "geo_count", "mining_count",
             ):
                 if existing.get(key) not in (None, [], {}):
                     item[key] = existing[key]

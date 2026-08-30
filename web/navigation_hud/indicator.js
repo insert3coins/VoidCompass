@@ -177,6 +177,7 @@
       if (motion === "surface_vehicle") {
         if (label === "NOMAD" || state?.vehicleKey === "nomad") return "nomad";
         if (state?.vehicleKey === "scorpion") return "scorpion";
+        if (label === "RHINO" || state?.vehicleKey === "rhino") return "rhino";
         return "srv";
       }
       if (motion === "fsd_charge") return label === "HYPER CHARGE" ? "hyper_charge" : "fsd_charge";
@@ -196,6 +197,7 @@
         const vehicle = label.includes("NOMAD") || state?.vehicleKey === "nomad" ? "nomad"
           : label.includes("FIGHTER") || state?.vehicleKey === "fighter" ? "fighter"
             : label.includes("SCORPION") || state?.vehicleKey === "scorpion" ? "scorpion"
+              : label.includes("RHINO") || state?.vehicleKey === "rhino" ? "rhino"
               : label.includes("SRV") || label.includes("SCARAB") || state?.vehicleKey === "scarab" ? "srv"
               : label.includes("CREW") ? "crew" : "ship";
         return `${motion}_${vehicle}`;
@@ -211,7 +213,7 @@
       if (["fsd_charge", "hyper_charge", "hyperspace", "jumping", "arrival",
         "interdiction_evaded", "fsd_cooldown", "supercruise_overcharge",
         "supercruise_assist", "local_arrival"].includes(key)) return "fsd";
-      if (PLANETARY.has(key) || ["landed", "srv", "scorpion", "nomad", "on_foot",
+      if (PLANETARY.has(key) || ["landed", "srv", "scorpion", "rhino", "nomad", "on_foot",
         "srv_handbrake", "srv_turret", "srv_drive_assist"].includes(key)) return "surface";
       if (["fss", "dss", "map", "galaxy_map", "system_map", "power_map",
         "orrery", "codex", "exploration", "phenomena"].includes(key)) return "scope";
@@ -257,7 +259,7 @@
         role_panel: 1.78, station_services: 2.05,
         orbital_approach: 1.68, glide: .82, surface_approach: 1.38,
         surface_hold: 2.25, surface_departure: 1.28, orbital_departure: 1.55,
-        landed: 2.4, on_foot: 1.32, srv: 1.18, scorpion: .9, nomad: 1.05,
+        landed: 2.4, on_foot: 1.32, srv: 1.18, scorpion: .9, rhino: 1.04, nomad: 1.05,
         srv_handbrake: 1.8, srv_turret: 1.2, srv_drive_assist: 1.35,
         asteroid_field: 5.2, mass_lock: 1.12, signal_lock: 1.55,
         signal_drop: .92, signal_threat: .76, combat: .64,
@@ -636,27 +638,28 @@
           this.dot(cx, cy, i === Math.floor(p * 4) ? 1.5 : .75, c,
             alpha * (i === Math.floor(p * 4) ? .82 : .34));
         }
-      } else if (key === "srv" || key === "scorpion") {
+      } else if (key === "srv" || key === "scorpion" || key === "rhino") {
         const armoured = key === "scorpion";
+        const mining = key === "rhino";
         const terrain = [];
         for (let i = 0; i <= 14; i += 1) {
           const progress = i / 14;
           terrain.push([
             start + span * progress,
-            y + 7 + Math.sin((progress * 2 + p) * TAU) * (armoured ? 1.4 : 2.1),
+            y + 7 + Math.sin((progress * 2 + p) * TAU) * (armoured ? 1.4 : mining ? 1.7 : 2.1),
           ]);
         }
         this.path(terrain, c, alpha * .48, 1.1);
         for (const progress of [.26, .5, .74]) {
           const x = start + span * progress;
-          const angle = (p + progress) * TAU * (armoured ? 1.3 : 1.8);
+          const angle = (p + progress) * TAU * (armoured ? 1.3 : mining ? 1.55 : 1.8);
           this.arc(x, y + 3, 2.7, 2.7, 0, TAU, c, alpha * .56, 1.1);
           this.dot(x + Math.cos(angle) * 1.7, y + 3 + Math.sin(angle) * 1.7,
             .65, c, alpha * .8);
         }
         const sweepX = start + span * p;
         this.line(sweepX, y - 8, sweepX, y + 8, c,
-          alpha * (armoured ? .22 : .48) * Math.sin(p * Math.PI), 1.2);
+          alpha * (armoured ? .22 : mining ? .62 : .48) * Math.sin(p * Math.PI), 1.2);
       } else if (key === "nomad") {
         const hover = wave(p) * 1.5;
         this.line(start, y + 8, end, y + 8, c, alpha * .34, 1);
@@ -1584,6 +1587,7 @@
       const vehicle = key.endsWith("fighter") ? "fighter"
         : key.endsWith("nomad") ? "nomad"
           : key.endsWith("scorpion") ? "scorpion"
+          : key.endsWith("rhino") ? "rhino"
           : key.endsWith("crew") ? "crew"
             : "ground";
       for (const edge of [g.centerLeft, g.centerRight]) {
@@ -1603,10 +1607,10 @@
         this.line(point.x + 2, y + 3, point.x + 2, y + 8,
           c, alpha * .55, 1.2);
       }
-      else if (vehicle === "scorpion") {
+      else if (vehicle === "scorpion" || vehicle === "rhino") {
         this.rect(point.x - 5, y - 3, 10, 6, c, alpha);
         this.rect(point.x - 3, y - 6, 6, 2.5, c, alpha * .78);
-        this.line(point.x, y - 5, point.x + (deploy ? 6 : -6), y - 7,
+        this.line(point.x, y - 5, point.x + (deploy ? 6 : -6), y - (vehicle === "rhino" ? 4 : 7),
           c, alpha * .82, 1.3);
         this.dot(point.x - 3, y + 5, 1.4, c, alpha);
         this.dot(point.x + 3, y + 5, 1.4, c, alpha);
@@ -2375,7 +2379,7 @@
       if (PLANETARY.has(key) || key === "landed") {
         this.drawPlanet(g, state, p, alpha, key); return;
       }
-      if (key === "srv" || key === "scorpion") {
+      if (key === "srv" || key === "scorpion" || key === "rhino") {
         this.drawSRV(g, state, p, alpha, key === "scorpion"); return;
       }
       if (key === "nomad") { this.drawNomad(g, state, p, alpha); return; }

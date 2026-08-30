@@ -967,27 +967,7 @@ class JournalWatcher:
         if ev == "FSSBodySignals":
             bio_count = 0
             geo_count = 0
-            for signal in data.get("Signals", []):
-                signal_type = signal.get("Type")
-                signal_label = signal.get("Type_Localised")
-                if signal_type == "$SAA_SignalType_Biological;" or signal_label == "Biological":
-                    bio_count = signal.get("Count", 0)
-                elif signal_type == "$SAA_SignalType_Geological;" or signal_label == "Geological":
-                    geo_count = signal.get("Count", 0)
-            return {
-                "type": ev,
-                "raw": data,
-                "data": {
-                    "body_name": data.get("BodyName"),
-                    "body_id": data.get("BodyID"),
-                    "system_address": data.get("SystemAddress"),
-                    "bio_count": bio_count,
-                    "geo_count": geo_count
-                }
-            }
-        if ev == "SAASignalsFound":
-            bio_count = 0
-            geo_count = 0
+            mining_count = None
             for signal in data.get("Signals", []):
                 signal_type = signal.get("Type")
                 signal_label = signal.get("Type_Localised")
@@ -995,6 +975,9 @@ class JournalWatcher:
                     bio_count += signal.get("Count", 0)
                 elif signal_type == "$SAA_SignalType_Geological;" or signal_label == "Geological":
                     geo_count += signal.get("Count", 0)
+                elif (signal_type == "$PlanetaryMiningLocation_Name;"
+                      or signal_label == "Planetary Mining Location"):
+                    mining_count = (mining_count or 0) + signal.get("Count", 0)
             return {
                 "type": ev,
                 "raw": data,
@@ -1004,6 +987,33 @@ class JournalWatcher:
                     "system_address": data.get("SystemAddress"),
                     "bio_count": bio_count,
                     "geo_count": geo_count,
+                    "mining_count": mining_count,
+                }
+            }
+        if ev == "SAASignalsFound":
+            bio_count = 0
+            geo_count = 0
+            mining_count = 0
+            for signal in data.get("Signals", []):
+                signal_type = signal.get("Type")
+                signal_label = signal.get("Type_Localised")
+                if signal_type == "$SAA_SignalType_Biological;" or signal_label == "Biological":
+                    bio_count += signal.get("Count", 0)
+                elif signal_type == "$SAA_SignalType_Geological;" or signal_label == "Geological":
+                    geo_count += signal.get("Count", 0)
+                elif (signal_type == "$PlanetaryMiningLocation_Name;"
+                      or signal_label == "Planetary Mining Location"):
+                    mining_count += signal.get("Count", 0)
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "body_name": data.get("BodyName"),
+                    "body_id": data.get("BodyID"),
+                    "system_address": data.get("SystemAddress"),
+                    "bio_count": bio_count,
+                    "geo_count": geo_count,
+                    "mining_count": mining_count,
                     "genuses": data.get("Genuses", [])
                 }
             }

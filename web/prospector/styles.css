@@ -242,18 +242,6 @@ header>b {
   display: none;
 }
 
-.directive { min-height:46px; display:grid; grid-template-columns:24px minmax(0,1fr); align-items:center; gap:8px; padding:6px 9px; border:1px solid color-mix(in srgb,var(--yellow) 38%,var(--soft)); border-left:3px solid var(--yellow); background:linear-gradient(90deg,color-mix(in srgb,var(--yellow) 10%,transparent),transparent); }
-.directive>i { width:16px; height:16px; border:1px solid currentColor; color:var(--yellow); transform:rotate(45deg); box-shadow:0 0 8px currentColor; animation:directive-lock 1.8s ease-in-out infinite; }
-.directive small,.directive strong,.directive span { display:block; }
-.directive small { color:var(--dim); font-size:var(--small); font-weight:700; }
-.directive strong { margin:1px 0; color:var(--yellow); font:700 calc(17px * var(--scale)) "Bahnschrift SemiCondensed",sans-serif; }
-.directive span { color:var(--muted); font-size:var(--small); }
-.directive.mine { border-color:color-mix(in srgb,var(--green) 42%,var(--soft)); border-left-color:var(--green); background:linear-gradient(90deg,color-mix(in srgb,var(--green) 11%,transparent),transparent); }
-.directive.mine>i,.directive.mine strong { color:var(--green); }
-.directive.skip { border-color:color-mix(in srgb,var(--red) 42%,var(--soft)); border-left-color:var(--red); background:linear-gradient(90deg,color-mix(in srgb,var(--red) 10%,transparent),transparent); }
-.directive.skip>i,.directive.skip strong { color:var(--red); }
-.directive.core { border-color:color-mix(in srgb,var(--orange) 42%,var(--soft)); border-left-color:var(--orange); background:linear-gradient(90deg,color-mix(in srgb,var(--orange) 11%,transparent),transparent); }
-.directive.core>i,.directive.core strong { color:var(--orange); }
 
 .core>i {
   font-style: normal;
@@ -459,5 +447,3 @@ footer b {
     opacity: .62;
   }
 }
-
-@keyframes directive-lock { 50% { transform:rotate(135deg) scale(.72); opacity:.58; } }

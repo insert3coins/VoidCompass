@@ -449,7 +449,10 @@ class NavigationStateIndicator:
                 "CODEX": "codex",
             }.get(state, default)
         if profile == "surface_vehicle":
-            return "nomad" if state == "NOMAD" else "srv"
+            return {
+                "NOMAD": "nomad", "SCORPION": "scorpion",
+                "RHINO": "rhino",
+            }.get(state, "srv")
         if profile == "combat" and state.startswith("INTERDICT"):
             return "interdiction"
         if profile == "fsd_lock":
@@ -1026,7 +1029,7 @@ class NavigationStateIndicator:
             for gear_x in (cx - 9, cx + 9):
                 self._dot(gear_x, y + 11, colour if wave > 0.52 else dim,
                           radius=1.0 + wave * 0.55, tags=tags)
-        elif variant in {"vehicle", "srv", "nomad"}:
+        elif variant in {"vehicle", "srv", "scorpion", "rhino", "nomad"}:
             bob = math.sin(progress * math.tau) * (0.9 if variant == "nomad" else 0.65)
             body_y = y + bob
             self.canvas.create_rectangle(
@@ -1114,7 +1117,7 @@ class NavigationStateIndicator:
             index += 1
         if len(points) >= 4:
             self._line(*points, colour=dim, tags=tags, smooth=True)
-        if variant in {"vehicle", "srv", "nomad"}:
+        if variant in {"vehicle", "srv", "scorpion", "rhino", "nomad"}:
             contact_count = 3 if variant == "nomad" else 2
             for index in range(contact_count):
                 marker_x = x1 + (x2 - x1) * (index + 1) / (contact_count + 1)

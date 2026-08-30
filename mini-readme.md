@@ -1,37 +1,18 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.1.9 // Mining Operations
-**Release Date:** 2026-Aug-29
+## v5.4.2 // Rhino & Planetary Mining
+**Release Date:** 2026-Aug-31
 
-*   Rebuilt Mining Command around one profile-aware journal reducer, with retained run directives, ship/loadout readiness, prospect quality, refined yield, limpet economy, cargo objectives, run history and derived tonnes-per-hour analytics.
-*   Added target-aware Prospector guidance with MINE, OPTIONAL, SKIP, CORE and ASSESS decisions driven by the commander's selected mineral and minimum asteroid grade, while retaining composition, motherlode and per-rock refinery evidence.
-*   Added integrated ring intelligence from commander DSS scans and Spansh, profile-aware ring bookmarks, mining mission awareness and a threaded Sell Mining Haul search using the purpose-built Spansh commodity endpoint.
-*   Removed the duplicate legacy mining-session tracker, made the specialist mining brain the sole session authority and hardened older retained sessions and mining database connections.
-*   Audited every cockpit overlay and enforced HTML-only presentation: removed the renderer switch and all visible Tk fallback paths, while keeping native state proxies permanently invisible so Cargo, Navigation and any later-enabled overlay cannot appear twice during startup or watchdog recovery.
-
-## v5.4.1.8 // Explorer Readiness
-**Release Date:** 2026-Aug-29
-
-*   Added an always-on HTML overlay recovery watchdog that detects a lost shared WebView renderer and restores every registered surface with bounded retry backoff instead of requiring an application restart.
-*   Added a profile-aware Screenshot Chronicle that associates retained Elite screenshots with system, body, coordinates and the closest meaningful journal event, with best-effort context for existing Captain's Log history.
-*   Added a compact Exploration Preflight instrument covering journal linkage, EDSM readiness, cockpit overlays, commander profile, departure route, fuel reserve and profile/screenshot storage without repeating survey telemetry.
-*   Evolved Explorer Decision into Smart Next Action with explicit discovery-scan, FSS, DSS/body, biological landing/sampling, waypoint continuation and survey-complete departure cues, all ranked from journal-backed facts.
-*   Hardened cold-start overlay restoration so enabled persistent surfaces appear on the first launch, and normalised station/carrier vicinity after undocking so Navigation no longer falls back to a misleading generic mass-lock state.
-
-## v5.4.1.7 // Deep-Space Awareness
-**Release Date:** 2026-Aug-28
-
-*   Added a profile-aware animated Deep Space Contact Scope for non-body FSS contacts such as signal sources, distress calls, vessels, stations and notable stellar phenomena, with a live sensor plot, threat acquisition, resolution progress and in-place expiry telemetry.
-*   Added restrained target-acquisition transitions to Navigation, active Basic, Standard or Premium FSD-injection readiness and journal-backed Station/Carrier Vicinity context for normal-space mass locks, including the immediate post-undock state, without duplicating route or inventory information.
-*   Added DSS probe-efficiency receipts and profile-aware session/lifetime efficiency tracking to Survey Operations, where mapped-body work already belongs.
-*   Refined the HTML overlay pass with a correctly routed Deep Space Contact Scope, left-anchored Prospector Analysis title and keyed Cargo Manifest updates so capacity and commodity changes animate without repainting the entire overlay.
-*   Kept every new channel purpose-specific: Contact Scope excludes bodies and survey value, Navigation receives only short state cues, and existing bio, geo, route, fuel and gravity displays remain authoritative.
-*   Rebuilt Cargo Manifest as an animated hold instrument with intake/release acknowledgements, a live load aperture, capacity cells and per-stack allocation rails; removed redundant journal-link captions and ordinary `STANDARD HOLD` labels while retaining useful mission, stolen and live status values.
-*   Added an event-driven Survey Operations motion pass for new bodies, biological and geological signals, DSS mapping, high-value discoveries, biological sample stages and surface-focus transitions, plus restrained intake, unresolved-signal and sample-flow activity between discoveries.
-*   Added a profile-aware Deep Space Contact Scope auto-hide delay to Overlay Studio; setting it to zero keeps the scope persistent, fresh contact data reopens and rearms timed presentation, and unrelated overlay changes no longer resurrect a hidden scope.
+*   Added first-class Rhino support for the early-access `LaunchSRV` and `DockSRV` journal identity `mev_rhino`, including exact vehicle-state restoration, on-foot boarding handoff, dedicated Navigation portrait selection and Rhino-specific surface motion.
+*   Added `$PlanetaryMiningLocation_Name;` DSS signal handling as a clearly labelled `MINING` count beside biological and geological evidence in Survey Operations and Navigation's System Survey rail.
+*   Persisted planetary mining-location counts with each body and the profile-aware cockpit cache so known systems restore the same mining evidence after a restart or revisit.
+*   Retained Rhino `MiningRefined` and SRV cargo events through the existing unified Mining Command and Cargo pipelines without adding a duplicate tracker.
 
 ## Earlier releases
 
+*   **v5.4.1.9** — Rebuilt Mining Command around one journal reducer with target directives, readiness, prospect/refinery yield, objectives, analytics, ring intelligence and buyer lookup; simplified Prospector Analysis and enforced HTML-only overlay presentation.
+*   **v5.4.1.8** — Added overlay recovery, Screenshot Chronicle, Exploration Preflight and Smart Next Action; hardened first-launch overlay restoration and station/carrier vicinity state.
+*   **v5.4.1.7** — Added Deep Space Contact Scope, FSD-injection and station/carrier awareness, DSS efficiency receipts, animated Cargo and Survey Operations, and profile-aware contact auto-hide.
 *   **v5.4.1.6** — Expanded authoritative Navigation states, docking guidance, cockpit modifiers, repair/reboot responses and heat, suit and jet-cone hazards.
 *   **v5.4.1.5** — Rebuilt the Navigation System Survey as a discovery-driven angular rail, rebuilt the HTML bootloader and Galnet intelligence reader, and hardened dashboard/overlay update recovery.
 *   **v5.4.1.4** — Added the persistent Galnet Relay and in-app archive, official RSS caching and profile-aware controls; repaired complex panel arranging and clarified Navigation waypoint destination, progress and distance.
