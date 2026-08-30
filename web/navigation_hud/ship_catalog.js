@@ -72,6 +72,7 @@
     nomad: {key: 'nomad', name: 'Nomad ship-launched vessel', file: 'Nomad.png'},
     scarab: {key: 'scarab', name: 'Scarab SRV', file: 'SRV Scarab.png'},
     scorpion: {key: 'scorpion', name: 'Scorpion SRV', file: 'SRV Scorpion.png'},
+    rhino: {key: 'rhino', name: 'Rhino mining SRV', file: 'Rhino.png'},
   };
 
   function presentation(item, alt) {
@@ -94,6 +95,9 @@
     if (key.includes('nomad') || key === 'lander01') return presentation(vehicles.nomad);
     if (key.includes('scorpion') || key.includes('combatmulticrewsrv01')) {
       return presentation(vehicles.scorpion);
+    }
+    if (key.includes('rhino') || key === 'mevrhino') {
+      return presentation(vehicles.rhino);
     }
     if (!key || key === 'srv' || key.includes('scarab') || key === 'testbuggy') {
       return presentation(vehicles.scarab);

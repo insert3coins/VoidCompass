@@ -48,7 +48,7 @@ header { position: absolute; left: 13px; right: 13px; top: 7px; height: 27px; di
 .signal-open .target:nth-child(2n):not(.complete)::before { animation-delay: -1.15s; }
 .signal-open .target:nth-child(3n):not(.complete)::before { animation-delay: -2.05s; }
 .target.complete { --tone: var(--green); opacity: .82; }
-.target.geo-only { --tone: var(--accent); }
+.target.surface-only { --tone: var(--accent); }
 .target.routine { --tone: var(--muted); opacity: .78; }
 .target-head { display: grid; grid-template-columns: minmax(90px, 1fr) auto; gap: 7px; align-items: center; min-height: 15px; }
 .target-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tone, var(--orange)); font-size: var(--type-primary); font-weight: 700; }
@@ -56,6 +56,7 @@ header { position: absolute; left: 13px; right: 13px; top: 7px; height: 27px; di
 .badge { min-width: 0; padding: 0 3px; overflow: hidden; text-overflow: ellipsis; border: 1px solid var(--soft); white-space: nowrap; }
 .badge.bio { color: var(--orange); }.complete .badge.bio { color: var(--green); }
 .badge.geo { color: var(--accent); }.badge.dss { color: var(--dim); }
+.badge.mining { color: var(--yellow); }
 .badge.dss-result { color: var(--accent); }.badge.dss-result.efficient { color: var(--green); }
 .badge.routine { color: var(--dim); border-style: dashed; }
 .badge.landable {

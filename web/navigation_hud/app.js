@@ -12,7 +12,7 @@ const dom = Object.fromEntries([
   'survey-title-text', 'survey-state', 'survey-mode', 'survey-remaining',
   'survey-count', 'survey-percent', 'survey-progress-marker',
   'survey-rail', 'survey-progress-fill', 'survey-acquisition', 'survey-signals',
-  'survey-signal-bio', 'survey-signal-geo', 'survey-signal-valuable',
+  'survey-signal-bio', 'survey-signal-geo', 'survey-signal-mining', 'survey-signal-valuable',
   'metric-fuel', 'metric-bio', 'metric-geo', 'expanded-fuel',
   'expanded-bio', 'expanded-geo', 'expanded-traffic', 'context-label',
   'secondary-label', 'traffic-label', 'link-state',
@@ -79,9 +79,11 @@ function vehiclePresentation(state = {}) {
     if (label.includes('FIGHTER')) {
       return catalog.fighter();
     }
-    if (label.includes('SRV') || label.includes('SCARAB') || label.includes('SCORPION') || vehicle.surface) {
+    if (label.includes('SRV') || label.includes('SCARAB') || label.includes('SCORPION')
+        || label.includes('RHINO') || vehicle.surface) {
       const surface = label.includes('SCORPION') ? 'SCORPION'
-        : label.includes('SCARAB') ? 'SCARAB' : vehicle.surface;
+        : label.includes('RHINO') ? 'RHINO'
+          : label.includes('SCARAB') ? 'SCARAB' : vehicle.surface;
       return catalog.resolveSurface(surface);
     }
   }
@@ -221,7 +223,7 @@ function renderSurvey(survey = {}, theme = {}, systemName = '', reducedMotion = 
   const totalKnown = survey.total_known !== false && state !== 'unknown';
   const percent = Math.max(0, Math.min(100, Number(survey.percent || 0)));
   const rawSignals = survey.signals || {};
-  const signalCounts = Object.fromEntries(['bio', 'geo', 'valuable'].map((kind) => [
+  const signalCounts = Object.fromEntries(['bio', 'geo', 'mining', 'valuable'].map((kind) => [
     kind, Math.max(0, Number.parseInt(rawSignals[kind], 10) || 0),
   ]));
   const tone = survey.tone
@@ -229,7 +231,7 @@ function renderSurvey(survey = {}, theme = {}, systemName = '', reducedMotion = 
     : (state === 'unknown' ? (theme.dim || 'var(--dim)') : (theme.accent || 'var(--accent)'));
   const signature = JSON.stringify([
     systemName, state, scanned, total, totalKnown, Math.round(percent * 100) / 100,
-    signalCounts.bio, signalCounts.geo, signalCounts.valuable, tone, reducedMotion,
+    signalCounts.bio, signalCounts.geo, signalCounts.mining, signalCounts.valuable, tone, reducedMotion,
   ]);
   if (signature === lastSurveySignature) return;
 
@@ -302,6 +304,7 @@ function renderSurvey(survey = {}, theme = {}, systemName = '', reducedMotion = 
   for (const [kind, title] of [
     ['bio', 'Biological signals'],
     ['geo', 'Geological signals'],
+    ['mining', 'Planetary mining locations'],
     ['valuable', 'High-value bodies'],
   ]) {
     const count = signalCounts[kind];

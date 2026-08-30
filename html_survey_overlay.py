@@ -65,6 +65,7 @@ class HtmlSurveyOverlayBridge:
                 or model.get("notable")
                 or body.get("bio_count")
                 or body.get("geo_count")
+                or body.get("mining_count")
             )
         return bool(model.get("rows") or model.get("notable_rows"))
 

@@ -95,6 +95,9 @@ def _survey_bodies(scan_items, body_signals):
             continue
         body["bio_count"] = _safe_int(signals.get("bio"), _safe_int(body.get("bio_count")))
         body["geo_count"] = _safe_int(signals.get("geo"), _safe_int(body.get("geo_count")))
+        body["mining_count"] = _safe_int(
+            signals.get("mining"), _safe_int(body.get("mining_count")),
+        )
         body["dss_complete"] = bool(
             body.get("dss_complete") or signals.get("dss_complete")
         )
@@ -110,13 +113,15 @@ def _survey_bodies(scan_items, body_signals):
             continue
         bio_count = _safe_int(signals.get("bio"))
         geo_count = _safe_int(signals.get("geo"))
-        if not bio_count and not geo_count:
+        mining_count = _safe_int(signals.get("mining"))
+        if not bio_count and not geo_count and not mining_count:
             continue
         bodies.append({
             "body_id": body_id,
             "name": signals.get("body_name") or f"Body {body_id}",
             "bio_count": bio_count,
             "geo_count": geo_count,
+            "mining_count": mining_count,
             "genuses": list(signals.get("genuses") or []),
             "organic_scans": {},
             "organic_complete_count": 0,
@@ -155,19 +160,22 @@ def _bio_display_name(name, variant=None):
     return f"{name} · {variant}"
 
 
-def _surface_signal_state(bio_count=0, complete=0, geo_count=0, needs_dss=False,
-                          palette=None):
+def _surface_signal_state(bio_count=0, complete=0, geo_count=0, mining_count=0,
+                          needs_dss=False, palette=None):
     """Return the compact, truthful surface-signal label and colour."""
     palette = palette or themes.ACTIVE_PALETTE
     bio_count = _safe_int(bio_count)
     complete = _safe_int(complete)
     geo_count = _safe_int(geo_count)
+    mining_count = _safe_int(mining_count)
     parts = []
     bio_finished = bool(bio_count and complete >= bio_count)
     if bio_count:
         parts.append("BIO COMPLETE" if bio_finished else f"BIO {complete}/{bio_count}")
     if geo_count:
         parts.append(f"GEO {geo_count}")
+    if mining_count:
+        parts.append(f"MINING {mining_count}")
     if parts:
         if bio_count:
             color = palette["green"] if bio_finished else palette["orange"]
@@ -353,6 +361,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
         has_surface_work = bool(
             _safe_int(focused.get("bio_count"))
             or _safe_int(focused.get("geo_count"))
+            or _safe_int(focused.get("mining_count"))
             or focused_notable
             or sampling
         )
@@ -382,6 +391,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
     for body in bodies:
         bio_count = _safe_int(body.get("bio_count"))
         geo_count = _safe_int(body.get("geo_count"))
+        mining_count = _safe_int(body.get("mining_count"))
         complete = _safe_int(body.get("organic_complete_count"))
         needs_dss = not bool(body.get("dss_complete"))
         notable = notable_by_id.get(str(body.get("body_id"))) if body.get("body_id") is not None else None
@@ -391,7 +401,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
         # Survey; this overlay retains only confirmed surface signals and
         # valuable/notable mapping targets (including terraformables and the
         # valuable world classes classified by notable_bodies.py).
-        priority = bool(bio_count or geo_count or notable)
+        priority = bool(bio_count or geo_count or mining_count or notable)
         if not show_all_bodies and not priority:
             continue
         if notable:
@@ -408,6 +418,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
             "terraformable": bool(body.get("terraformable")),
             "bio_count": bio_count,
             "geo_count": geo_count,
+            "mining_count": mining_count,
             "complete": complete,
             "bio_complete": bool(bio_count and complete >= bio_count),
             "needs_dss": needs_dss,
@@ -434,7 +445,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None,
         })
     rows.sort(key=lambda row: (
         bool(row["bio_complete"]),
-        not bool(row["bio_count"] or row["geo_count"]),
+        not bool(row["bio_count"] or row["geo_count"] or row["mining_count"]),
         not bool(row["bio_count"]), row["name"],
     ))
     remaining_notable = [
@@ -510,7 +521,9 @@ def _survey_render_key(model):
             model.get("body_display") or body.get("name"),
             _safe_int(body.get("bio_count")),
             _safe_int(body.get("organic_complete_count")),
-            _safe_int(body.get("geo_count")), bool(body.get("dss_complete")),
+            _safe_int(body.get("geo_count")),
+            _safe_int(body.get("mining_count")),
+            bool(body.get("dss_complete")),
             body.get("dss_probes_used"), body.get("dss_efficiency_target"),
             body.get("dss_efficiency_met"),
             bool(body.get("first_footfall")),
@@ -527,6 +540,7 @@ def _survey_render_key(model):
             row.get("display_name") or row.get("name"),
             bool(row.get("priority")),
             _safe_int(row.get("bio_count")), _safe_int(row.get("geo_count")),
+            _safe_int(row.get("mining_count")),
             _safe_int(row.get("complete")), bool(row.get("bio_complete")),
             bool(row.get("needs_dss")), bool(row.get("landable_known")),
             row.get("dss_probes_used"), row.get("dss_efficiency_target"),
@@ -968,11 +982,13 @@ class SurveyStatusHUD:
                 else self._compact_detail_groups(detail_rows)
             )
             geo_count = _safe_int(body.get("geo_count"))
+            mining_count = _safe_int(body.get("mining_count"))
             body_notable = model.get("notable")
             content_h = (
                 (SAMPLE_CARD_H if sampling else 0)
                 + len(detail_groups) * 18
                 + (17 if geo_count else 0)
+                + (17 if mining_count else 0)
                 + (16 if body_notable else 0)
             )
             height = max(96, 68 + content_h + 25)
@@ -996,6 +1012,8 @@ class SurveyStatusHUD:
                 )
                 row_h = 20 + len(groups) * 17
                 if _safe_int(row.get("geo_count")):
+                    row_h += 15
+                if _safe_int(row.get("mining_count")):
                     row_h += 15
                 if row.get("notable"):
                     row_h += 14
@@ -1024,6 +1042,7 @@ class SurveyStatusHUD:
             bio_count = _safe_int(body.get("bio_count"))
             bio_done = _safe_int(body.get("organic_complete_count"))
             geo_count = _safe_int(body.get("geo_count"))
+            mining_count = _safe_int(body.get("mining_count"))
             body_label = model.get("body_display") or body.get("name") or "SURFACE"
             self._text(16, 42, _truncate(body_label, 22), palette["orange"], ("Courier", 8, "bold"))
             bio_complete = bool(bio_count and bio_done >= bio_count and not sampling)
@@ -1033,6 +1052,8 @@ class SurveyStatusHUD:
             )
             if geo_count:
                 summary += f" · GEO {geo_count}"
+            if mining_count:
+                summary += f" · MINING {mining_count}"
             self._text(WIDTH - 16, 42, summary, palette["text"], ("Courier", 8, "bold"), "e")
             self._draw_completion_rail(16, WIDTH - 16, 56, bio_done, bio_count, palette["orange"])
             y = 72
@@ -1043,6 +1064,9 @@ class SurveyStatusHUD:
                 y += 18
             if geo_count:
                 self._text(24, y, f"◇ GEOLOGICAL SIGNALS ×{geo_count}", palette["accent"], ("Courier", 8, "bold"))
+                y += 17
+            if mining_count:
+                self._text(24, y, f"◆ PLANETARY MINING ×{mining_count}", palette["yellow"], ("Courier", 8, "bold"))
                 y += 17
             if model.get("notable"):
                 notable = model["notable"]
@@ -1074,7 +1098,10 @@ class SurveyStatusHUD:
         bio_total = sum(_safe_int(row.get("bio_count")) for row in rows)
         bio_done = sum(_safe_int(row.get("complete")) for row in rows)
         geo_total = sum(_safe_int(row.get("geo_count")) for row in rows)
-        left_summary = f"BIO SIGNALS {bio_total} | ANALYSED {bio_done} | GEO {geo_total}"
+        mining_total = sum(_safe_int(row.get("mining_count")) for row in rows)
+        left_summary = (
+            f"BIO {bio_total} | ANALYSED {bio_done} | GEO {geo_total} | MINING {mining_total}"
+        )
         if not rows and model.get("scan_in_progress"):
             left_summary = "FSS INTAKE ACTIVE | TARGETS PENDING"
         self._text(16, 42, left_summary, palette["orange"], ("Courier", 8, "bold"))
@@ -1101,9 +1128,10 @@ class SurveyStatusHUD:
                 y += 16
             bio_count = _safe_int(row.get("bio_count"))
             geo_count = _safe_int(row.get("geo_count"))
+            mining_count = _safe_int(row.get("mining_count"))
             complete = _safe_int(row.get("complete"))
             completed = bool(row.get("bio_complete"))
-            has_signals = bool(bio_count or geo_count)
+            has_signals = bool(bio_count or geo_count or mining_count)
             row_color = palette["green"] if completed else (
                 palette["muted"] if not has_signals else palette["orange"]
             )
@@ -1136,6 +1164,9 @@ class SurveyStatusHUD:
                 y += 17
             if geo_count:
                 self._text(24, y, f"◇ GEO ×{geo_count}", palette["accent"], ("Courier", 7, "bold"))
+                y += 15
+            if mining_count:
+                self._text(24, y, f"◆ MINING ×{mining_count}", palette["yellow"], ("Courier", 7, "bold"))
                 y += 15
             if row.get("notable"):
                 notable = row["notable"]

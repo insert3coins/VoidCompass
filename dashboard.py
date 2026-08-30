@@ -492,6 +492,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "landable": bool(scan_data.get("landable", True)),
             "bio_count": int(signals.get("bio", 0) or 0),
             "geo_count": int(signals.get("geo", 0) or 0),
+            "mining_count": int(signals.get("mining", 0) or 0),
             "genuses": list(signals.get("genuses") or []),
             "dss_complete": bool(signals.get("dss_complete")),
             "organic_scans": {},
@@ -4138,7 +4139,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         return event_address is None or current_address is None or event_address == current_address
 
     def _set_body_signals(self, body_id, bio_count=0, geo_count=0, genuses=None,
-                          body_name=None, dss_complete=None):
+                          body_name=None, dss_complete=None, mining_count=None):
         body_id = self._normalize_body_id(body_id)
         if body_id is None:
             return
@@ -4146,6 +4147,13 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.body_signals[body_id] = {
             "bio": int(bio_count or 0),
             "geo": int(geo_count or 0),
+            # Older signal sources do not expose planetary mining locations.
+            # Preserve the last DSS-backed count unless this event supplied
+            # an authoritative value, including an explicit zero.
+            "mining": (
+                int(mining_count or 0) if mining_count is not None
+                else int(previous.get("mining", 0) or 0)
+            ),
             "genuses": list(genuses) if genuses else list(previous.get("genuses") or []),
             "body_name": body_name or previous.get("body_name") or "",
             "dss_complete": (
@@ -4906,6 +4914,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             int(signals.get("geo", 0) or 0)
             for signals in (getattr(self, "body_signals", None) or {}).values()
         )
+        mining_signals = sum(
+            int(signals.get("mining", 0) or 0)
+            for signals in (getattr(self, "body_signals", None) or {}).values()
+        )
         valuable_count = len(getattr(self, "valuable_bodies", None) or ())
         badges = []
         if self.system_undiscovered:
@@ -5064,6 +5076,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "bio_complete": int(getattr(self, "organic_count", 0) or 0),
             "bio_signals": int(getattr(self, "system_bio_signals", 0) or 0),
             "geo_signals": geo_signals,
+            "mining_signals": mining_signals,
             "valuable_count": valuable_count,
             "undiscovered": bool(getattr(self, "system_undiscovered", False)),
             "body": getattr(self, "current_body_name", "") or "",
@@ -7949,7 +7962,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.current_vehicle_name = remembered_vehicle or self.current_vehicle_name or self._last_surface_vehicle_name or "SRV"
                 self.current_in_srv = True
                 self.current_in_fighter = False
-                self.hud_flight_state = "NOMAD" if self.current_vehicle_name == "NOMAD" else "SRV"
+                self.hud_flight_state = (
+                    self.current_vehicle_name
+                    if self.current_vehicle_name in {"NOMAD", "SCARAB", "SCORPION", "RHINO"}
+                    else "SRV"
+                )
                 self._arm_navigation_vehicle_handoff("srv", self.current_vehicle_name)
             elif in_taxi or in_multicrew:
                 self.current_vehicle_id = None
@@ -8182,23 +8199,32 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             if body_id is not None:
                 bio_count = d.get("bio_count", 0)
                 geo_count = d.get("geo_count", 0)
-                if not startup_replay and (bio_count or geo_count):
+                mining_count = d.get("mining_count")
+                if not startup_replay and (bio_count or geo_count or mining_count):
                     body = d.get("body_name") or f"Body {body_id}"
                     parts = []
                     if bio_count:
                         parts.append(f"{bio_count} biological")
                     if geo_count:
                         parts.append(f"{geo_count} geological")
+                    if mining_count:
+                        parts.append(f"{mining_count} mining")
                     self._push_live_toast("SURFACE SIGNALS", f"{body}: {', '.join(parts)}", "success", 12)
                 self._set_body_signals(
                     body_id, bio_count, geo_count,
                     body_name=d.get("body_name"),
+                    mining_count=mining_count,
                 )
                 item = self.scan_items_by_id.get(body_id)
                 if item:
                     item["bio_count"] = bio_count
                     item["geo_count"] = geo_count
-                    item["color"] = COLOR_ACCENT if (bio_count > 0 or (not item.get("is_star") and item.get("dss_reward", 0) > item.get("reward", 0))) else COLOR_TEXT
+                    if mining_count is not None:
+                        item["mining_count"] = mining_count
+                    item["color"] = COLOR_ACCENT if (
+                        bio_count > 0 or geo_count > 0 or int(mining_count or 0) > 0
+                        or (not item.get("is_star") and item.get("dss_reward", 0) > item.get("reward", 0))
+                    ) else COLOR_TEXT
                     if item.get("_ts") is None:
                         item["_ts"] = int(time.time())
                     self.save_scan_item_to_db(self.current_sys, item)
@@ -8216,25 +8242,33 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             if body_id is not None:
                 bio_count = d.get("bio_count", 0)
                 geo_count = d.get("geo_count", 0)
-                if not startup_replay and (bio_count or geo_count):
+                mining_count = d.get("mining_count", 0)
+                if not startup_replay and (bio_count or geo_count or mining_count):
                     body = d.get("body_name") or f"Body {body_id}"
                     parts = []
                     if bio_count:
                         parts.append(f"{bio_count} biological")
                     if geo_count:
                         parts.append(f"{geo_count} geological")
+                    if mining_count:
+                        parts.append(f"{mining_count} mining")
                     self._push_live_toast("DSS SIGNALS", f"{body}: {', '.join(parts)}", "success", 12)
-                if bio_count or geo_count:
+                if bio_count or geo_count or mining_count:
                     self._set_body_signals(
                         body_id, bio_count, geo_count, genuses=d.get("genuses") or [],
                         body_name=d.get("body_name"), dss_complete=True,
+                        mining_count=mining_count,
                     )
                 item = self.scan_items_by_id.get(body_id)
                 if item:
                     item["bio_count"] = bio_count
                     item["geo_count"] = geo_count
+                    item["mining_count"] = mining_count
                     item["genuses"] = d.get("genuses") or item.get("genuses") or []
-                    item["color"] = COLOR_ACCENT if (bio_count > 0 or (not item.get("is_star") and item.get("dss_reward", 0) > item.get("reward", 0))) else COLOR_TEXT
+                    item["color"] = COLOR_ACCENT if (
+                        bio_count > 0 or geo_count > 0 or mining_count > 0
+                        or (not item.get("is_star") and item.get("dss_reward", 0) > item.get("reward", 0))
+                    ) else COLOR_TEXT
                     if item.get("_ts") is None:
                         item["_ts"] = int(time.time())
                     self.save_scan_item_to_db(self.current_sys, item)
@@ -8601,13 +8635,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         # any multi-event poll, not just startup, which was silently dropping updates.
         if self.prospector_hud and not startup_replay:
             if ev == "ProspectedAsteroid":
-                mining_plan = {}
-                try:
-                    mining_plan = self.specialist_engine.mining_snapshot().get("plan") or {}
-                except Exception:
-                    pass
                 self._ui_post(
-                    lambda r=raw, p=mining_plan: self.prospector_hud.update(r, p),
+                    lambda r=raw: self.prospector_hud.update(r),
                     key="prospector-hud",
                 )
             elif ev == "MiningRefined":

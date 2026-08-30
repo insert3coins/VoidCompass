@@ -72,6 +72,7 @@
     return {
       bio: Math.max(0, Math.round(safeNumber(row.bio_count))),
       geo: Math.max(0, Math.round(safeNumber(row.geo_count))),
+      mining: Math.max(0, Math.round(safeNumber(row.mining_count))),
       complete: Math.max(0, Math.round(safeNumber(row.complete || row.organic_complete_count))),
       bioComplete: Boolean(row.bio_complete),
       needsDss: Boolean(row.needs_dss),
@@ -134,12 +135,14 @@
   function compareRow(current, previous) {
     if (!previous) {
       return {fresh: true, bio: current.bio > 0, geo: current.geo > 0,
+        mining: current.mining > 0,
         value: current.value > 0, notable: current.notable, details: new Map()};
     }
     return {
       fresh: false,
       bio: current.bio > previous.bio,
       geo: current.geo > previous.geo,
+      mining: current.mining > previous.mining,
       value: current.value > previous.value,
       notable: current.notable && !previous.notable,
       mapped: (previous.needsDss && !current.needsDss) || current.probes > previous.probes,
@@ -336,6 +339,7 @@
     const bio = Math.max(0, Math.round(safeNumber(row.bio_count)));
     const done = Math.max(0, Math.round(safeNumber(row.complete)));
     const geo = Math.max(0, Math.round(safeNumber(row.geo_count)));
+    const mining = Math.max(0, Math.round(safeNumber(row.mining_count)));
     const complete = Boolean(row.bio_complete || (bio && done >= bio));
     const value = valueRange(row.min_value, row.max_value);
     const eventClasses = [
@@ -344,12 +348,13 @@
       event.mapped ? "event-mapped" : "",
       event.value || event.notable ? "event-value" : "",
     ].filter(Boolean).join(" ");
-    const card = node("article", `target${complete ? " complete" : ""}${!bio && geo ? " geo-only" : ""}${row.priority === false ? " routine" : ""}${eventClasses ? ` ${eventClasses}` : ""}`);
+    const card = node("article", `target${complete ? " complete" : ""}${!bio && (geo || mining) ? " surface-only" : ""}${row.priority === false ? " routine" : ""}${eventClasses ? ` ${eventClasses}` : ""}`);
     const head = node("div", "target-head");
     head.appendChild(node("span", "target-name", row.display_name || row.name || "Unknown body"));
     const badges = node("span", "badges");
     if (bio) badges.appendChild(node("b", `badge bio${event.bio ? " event-signal" : ""}`, `BIO ${done}/${bio}`));
     if (geo) badges.appendChild(node("b", `badge geo${event.geo ? " event-signal" : ""}`, `GEO ${geo}`));
+    if (mining) badges.appendChild(node("b", `badge mining${event.mining ? " event-signal" : ""}`, `MINING ${mining}`));
     const landableKnown = Object.prototype.hasOwnProperty.call(row, "landable_known")
       ? row.landable_known === true
       : Object.prototype.hasOwnProperty.call(row, "landable") && row.landable !== null;
@@ -444,13 +449,16 @@
     const geo = bodyMode
       ? safeNumber(body.geo_count)
       : rows.reduce((sum, row) => sum + safeNumber(row.geo_count), 0);
+    const mining = bodyMode
+      ? safeNumber(body.mining_count)
+      : rows.reduce((sum, row) => sum + safeNumber(row.mining_count), 0);
     const line = node("div", "overview-line");
     line.appendChild(node(
       "strong", "overview-primary",
-      bodyMode ? (model.body_display || body.name || "SURFACE TARGET") : `BIO SIGNALS ${bio} · ANALYSED ${done} · GEO ${geo}`,
+      bodyMode ? (model.body_display || body.name || "SURFACE TARGET") : `BIO SIGNALS ${bio} · ANALYSED ${done} · GEO ${geo} · MINING ${mining}`,
     ));
     const scan = bodyMode
-      ? `BIO ${done}/${bio}${geo ? ` · GEO ${geo}` : ""}`
+      ? `BIO ${done}/${bio}${geo ? ` · GEO ${geo}` : ""}${mining ? ` · MINING ${mining}` : ""}`
       : model.total_known && safeNumber(model.total)
         ? `FSS ${safeNumber(model.scanned)}/${safeNumber(model.total)}`
         : "FSS INTAKE";
@@ -523,7 +531,7 @@
         landable_known: Object.prototype.hasOwnProperty.call(body, "landable")
           && body.landable !== null,
       };
-      if (rows.length || safeNumber(body.geo_count) || model.notable) {
+      if (rows.length || safeNumber(body.geo_count) || safeNumber(body.mining_count) || model.notable) {
         dom.content.appendChild(targetCard(projected, motion.body || {}));
       }
     } else {

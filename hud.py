@@ -188,7 +188,7 @@ class TacticalHUD:
                 "label": "COUNT UNKNOWN", "state": "unknown",
                 "scanned": 0, "total": 0, "total_known": False,
                 "count": "0/? · --%", "percent": 0,
-                "signals": {"bio": 0, "geo": 0, "valuable": 0},
+                "signals": {"bio": 0, "geo": 0, "mining": 0, "valuable": 0},
             },
             "metrics": {
                 "fuel": {"value": "--", "color": str(theme.dim)},
@@ -891,7 +891,7 @@ class TacticalHUD:
             return "ONFOOT"
         if nav_context.get("docked"):
             return "DOCKED"
-        if flight_state in {"SRV", "NOMAD"} or nav_context.get("in_srv"):
+        if flight_state in {"SRV", "SCARAB", "SCORPION", "RHINO", "NOMAD"} or nav_context.get("in_srv"):
             if ship_config.get("srv_handbrake"):
                 return "HANDBRAKE"
             if ship_config.get("srv_turret"):
@@ -902,8 +902,8 @@ class TacticalHUD:
             return "NOMAD"
         if flight_state == "FIGHTER" or nav_context.get("in_fighter"):
             return "FIGHTER"
-        if flight_state == "SRV" or nav_context.get("in_srv"):
-            return vehicle_name if vehicle_name in {"SCARAB", "SCORPION"} else "SRV"
+        if flight_state in {"SRV", "SCARAB", "SCORPION", "RHINO"} or nav_context.get("in_srv"):
+            return vehicle_name if vehicle_name in {"SCARAB", "SCORPION", "RHINO"} else "SRV"
         if flight_state == "MULTICREW" or nav_context.get("in_multicrew"):
             return "MULTICREW"
         if flight_state == "LANDED" or nav_context.get("landed"):
@@ -927,7 +927,7 @@ class TacticalHUD:
         if state_text in {"PHENOMENA", "LOCAL ARRIVAL"}:
             return COLOR_GREEN
         if state_text in (
-            "DOCKED", "LANDED", "FSS", "DSS", "FIGHTER", "SRV", "SCARAB", "SCORPION", "NOMAD",
+            "DOCKED", "LANDED", "FSS", "DSS", "FIGHTER", "SRV", "SCARAB", "SCORPION", "RHINO", "NOMAD",
             "TAXI", "MULTICREW", "CARRIER DECK",
             "ONFOOT", "MAP", "GALAXY MAP", "SYSTEM MAP", "POWER MAP", "ORRERY",
             "CODEX", "EXPLORATION", "STATION", "FSD COOLDOWN", "ORBITAL APPROACH",
@@ -1081,7 +1081,7 @@ class TacticalHUD:
             return "landed"
         if state == "ONFOOT":
             return "on_foot"
-        if state in {"SRV", "SCARAB", "SCORPION", "NOMAD"}:
+        if state in {"SRV", "SCARAB", "SCORPION", "RHINO", "NOMAD"}:
             return "surface_vehicle"
         if state in {"FSS", "DSS"}:
             return "scanner"
@@ -2435,6 +2435,7 @@ class TacticalHUD:
             "signals": {
                 "bio": max(0, int(nav_context.get("bio_signals", 0) or 0)),
                 "geo": max(0, int(nav_context.get("geo_signals", 0) or 0)),
+                "mining": max(0, int(nav_context.get("mining_signals", 0) or 0)),
                 "valuable": max(0, int(nav_context.get("valuable_count", 0) or 0)),
             },
         }
