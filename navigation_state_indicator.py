@@ -27,6 +27,7 @@ DESIGNS = {
     "fighter": IndicatorDesign("flight", "fighter"),
     "exploration": IndicatorDesign("survey", "exploration"),
     "docked": IndicatorDesign("station", "docked"),
+    "surface_station": IndicatorDesign("station", "surface"),
     "landed": IndicatorDesign("surface", "landed"),
     "surface_vehicle": IndicatorDesign("surface", "vehicle"),
     "on_foot": IndicatorDesign("surface", "foot"),

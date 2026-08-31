@@ -55,7 +55,6 @@ let codexCandidatesFingerprint = "";
 let pageLayoutEditing = "";
 let pageLayoutOriginal = null;
 let pageLayoutDrag = null;
-let pageLayoutDragArmed = null;
 let pageLayoutDrop = null;
 const pageLayoutDefaults = {};
 
@@ -192,8 +191,11 @@ function showToast(message) {
 const PAGE_LAYOUT_CONTAINER_SELECTOR = [
   "#overview-modules", ".intel-grid", ".record-metrics", ".records-grid",
   ".tool-grid", ".settings-grid", ".about-grid",
-  ".workspace-shell > .workspace-grid", ".workspace-shell > .settings-workspace-grid",
-  ".workspace-shell > .stellar-grid", ".workspace-shell > .mission-layout",
+  ".workspace-shell .workspace-metrics", ".workspace-shell .workspace-grid",
+  ".workspace-shell .settings-workspace-grid", ".workspace-shell .stellar-grid",
+  ".workspace-shell .mission-layout", ".workspace-shell .chronicle-list",
+  ".workspace-shell .region-passport-grid", ".workspace-shell .achievement-grid",
+  ".workspace-shell .mining-command-grid",
 ].join(",");
 
 function layoutSlug(value, fallback = "panel") {
@@ -225,7 +227,7 @@ function pageLayoutContainers(pageName) {
 
 function layoutPanels(container) {
   const candidates = [...container.children].filter((node) => node.matches(
-    "article, aside, main, section.telemetry-strip, section.workspace-card, .tool-card",
+    "article, aside, main, .card, .mission-detail, section.telemetry-strip, section.workspace-card, .tool-card",
   ));
   const used = new Set();
   candidates.forEach((panel, index) => {
@@ -235,6 +237,7 @@ function layoutPanels(container) {
       const identity = panel.dataset.deckModule
         || heading
         || panel.querySelector(":scope > h3")?.textContent
+        || panel.querySelector(":scope > h4")?.textContent
         || panel.querySelector(":scope > small")?.textContent
         || [...panel.classList].find((name) => name !== "card" && name !== "workspace-card")
         || `panel-${index + 1}`;
@@ -246,6 +249,17 @@ function layoutPanels(container) {
     used.add(panel.dataset.layoutPanel);
   });
   return candidates;
+}
+
+function pageLayoutPanelTitle(panel, fallback = "Dashboard panel") {
+  return String(
+    panel.querySelector(":scope > header span")?.textContent?.split("·", 1)[0]
+    || panel.querySelector(":scope > h3, :scope > h4")?.textContent
+    || panel.querySelector(":scope > small")?.textContent
+    || panel.dataset.deckModule
+    || panel.dataset.layoutPanel
+    || fallback
+  ).trim();
 }
 
 function capturePageLayout(pageName) {
@@ -321,10 +335,10 @@ function addPanelLayoutHandles(pageName) {
     const panels = layoutPanels(container);
     panels.forEach((panel, index) => {
       panel.classList.add("layout-panel");
-      panel.draggable = true;
       const handle = document.createElement("div");
       handle.className = "panel-layout-handle";
-      handle.innerHTML = `<span title="Drag this panel">⠿</span><button type="button" data-panel-move="up" ${index === 0 ? "disabled" : ""} aria-label="Move panel earlier">↑</button><button type="button" data-panel-move="down" ${index === panels.length - 1 ? "disabled" : ""} aria-label="Move panel later">↓</button>`;
+      const title = pageLayoutPanelTitle(panel, `Panel ${index + 1}`);
+      handle.innerHTML = `<span class="panel-layout-grip" title="Drag ${escapeHtml(title)}" role="button" aria-label="Drag ${escapeHtml(title)}">⠿</span><div><small>PANEL ${String(index + 1).padStart(2, "0")} / ${String(panels.length).padStart(2, "0")}</small><strong>${escapeHtml(title)}</strong></div><button type="button" data-panel-move="up" ${index === 0 ? "disabled" : ""} aria-label="Move panel earlier">↑</button><button type="button" data-panel-move="down" ${index === panels.length - 1 ? "disabled" : ""} aria-label="Move panel later">↓</button>`;
       panel.appendChild(handle);
     });
   }
@@ -336,20 +350,34 @@ function refreshPanelLayoutHandles(pageName) {
     panels.forEach((panel, index) => {
       const controls = panel.querySelector(":scope > .panel-layout-handle");
       if (!controls) return;
+      const position = controls.querySelector(":scope > div > small");
+      if (position) position.textContent = `PANEL ${String(index + 1).padStart(2, "0")} / ${String(panels.length).padStart(2, "0")}`;
       controls.querySelector('[data-panel-move="up"]').disabled = index === 0;
       controls.querySelector('[data-panel-move="down"]').disabled = index === panels.length - 1;
     });
   }
 }
 
+function clearPageLayoutPointer() {
+  const drag = pageLayoutDrag;
+  if (drag?.panel) drag.panel.classList.remove("layout-dragging");
+  if (drag?.ghost) drag.ghost.remove();
+  document.body.classList.remove("layout-pointer-dragging");
+  document.querySelectorAll(".layout-drop-before,.layout-drop-after").forEach((panel) => {
+    panel.classList.remove("layout-drop-before", "layout-drop-after");
+  });
+  pageLayoutDrag = null;
+  pageLayoutDrop = null;
+}
+
 function removePanelLayoutHandles(pageName) {
+  clearPageLayoutPointer();
   const page = document.querySelector(`[data-page-name="${CSS.escape(pageName)}"]`);
   page?.querySelectorAll(":scope .panel-layout-handle").forEach((node) => node.remove());
   page?.querySelectorAll(":scope .layout-panel").forEach((panel) => {
     panel.classList.remove(
       "layout-panel", "layout-dragging", "layout-drop-before", "layout-drop-after",
     );
-    panel.removeAttribute("draggable");
   });
   page?.querySelector(":scope > .page-layout-toolbar")?.remove();
   page?.classList.remove("layout-editing");
@@ -365,7 +393,7 @@ function beginPageLayout(pageName) {
   page.classList.add("layout-editing");
   const toolbar = document.createElement("section");
   toolbar.className = "page-layout-toolbar";
-  toolbar.innerHTML = `<div><small>PROFILE-AWARE PANEL LAYOUT</small><strong>${escapeHtml(page.querySelector(":scope > .page-title h2")?.textContent || pageName)}</strong><span>Drag panels or use the arrow controls. Lists and controls remain intact.</span></div><div><button type="button" data-page-layout-cancel>CANCEL</button><button type="button" data-page-layout-reset>RESET DEFAULT</button><button type="button" class="primary" data-page-layout-save>SAVE TO THIS PROFILE</button></div>`;
+  toolbar.innerHTML = `<div><small>PROFILE-AWARE PANEL LAYOUT</small><strong>${escapeHtml(page.querySelector(":scope > .page-title h2")?.textContent || pageName)}</strong><span>Cards are compact while arranging, so every panel is easy to place. Drag a tile or use its arrow controls.</span></div><div><button type="button" data-page-layout-cancel>CANCEL</button><button type="button" data-page-layout-reset>RESET DEFAULT</button><button type="button" class="primary" data-page-layout-save>SAVE TO THIS PROFILE</button></div>`;
   page.querySelector(":scope > .page-title, :scope > .about-hero")?.insertAdjacentElement("afterend", toolbar);
   addPanelLayoutHandles(pageName);
   decorateCockpitButtons(toolbar);
@@ -380,7 +408,6 @@ function cancelPageLayout() {
   pageLayoutEditing = "";
   pageLayoutOriginal = null;
   pageLayoutDrag = null;
-  pageLayoutDragArmed = null;
   pageLayoutDrop = null;
 }
 
@@ -399,7 +426,6 @@ async function savePageLayout() {
   pageLayoutEditing = "";
   pageLayoutOriginal = null;
   pageLayoutDrag = null;
-  pageLayoutDragArmed = null;
   pageLayoutDrop = null;
   showToast("Panel layout saved to this commander profile");
 }
@@ -416,7 +442,6 @@ async function resetPageLayout() {
   pageLayoutEditing = "";
   pageLayoutOriginal = null;
   pageLayoutDrag = null;
-  pageLayoutDragArmed = null;
   pageLayoutDrop = null;
   showToast("Default panel order restored for this profile");
 }
@@ -1747,7 +1772,7 @@ function renderChronicleWorkspace(data) {
     {label: "Distance", value: `${numeric(sessions.reduce((sum, row) => sum + number(row.distance), 0), 1)} LY`, detail: "RETAINED TRAVEL"},
     {label: "FSS surveys", value: numeric(sessions.reduce((sum, row) => sum + number(row.fss), 0)), detail: "SYSTEM COMPLETIONS"},
     {label: "Bio analyses", value: numeric(sessions.reduce((sum, row) => sum + number(row.bio), 0)), detail: "GENETIC SAMPLES"},
-  ])}${workspaceCard("EXPEDITION REPLAY", replayMarkup(data.replay || {}), `${numeric(data.replay?.points?.length)} ROUTE POINTS`, "replay-card")}${workspaceCard("SCREENSHOT CHRONICLE", `${workspaceRows(photoRows, "Screenshots will be associated with their system, body and nearby journal event.")}<div class="workspace-actions"><button data-command="open_screenshots">OPEN SCREENSHOT FOLDER</button></div>`, `${photos.length} RECENT PHOTOS`, "photo-chronicle-card")}<section class="chronicle-list">${cards.join("") || `<p class="workspace-empty">Captain's Log will populate as journal sessions are completed.</p>`}</section>`;
+  ])}<section class="workspace-grid chronicle-feature-grid">${workspaceCard("EXPEDITION REPLAY", replayMarkup(data.replay || {}), `${numeric(data.replay?.points?.length)} ROUTE POINTS`, "replay-card")}${workspaceCard("SCREENSHOT CHRONICLE", `${workspaceRows(photoRows, "Screenshots will be associated with their system, body and nearby journal event.")}<div class="workspace-actions"><button data-command="open_screenshots">OPEN SCREENSHOT FOLDER</button></div>`, `${photos.length} RECENT PHOTOS`, "photo-chronicle-card")}</section><section class="chronicle-list">${cards.join("") || `<p class="workspace-empty">Captain's Log will populate as journal sessions are completed.</p>`}</section>`;
 }
 
 function renderMissionWorkspace(data) {
@@ -1914,7 +1939,7 @@ function renderEngineeringWorkspace(data) {
     {label: "Material deficit", value: numeric(wishlist.missing), detail: wishlist.complete ? "ALL GOALS READY" : "COLLECTION REQUIRED"},
     {label: "Odyssey goals", value: numeric(data.odyssey?.goals?.length), detail: `${numeric(data.odyssey?.missing)} MISSING UNITS`},
     {label: "Inventory types", value: numeric(data.inventory?.length), detail: data.last_updated || "AWAITING MATERIALS"},
-  ])}<section class="engineering-add card"><header><span>ADD ENGINEERING GOAL</span></header><div><select id="engineering-blueprint">${(data.catalogue || []).map((row) => `<option value="${escapeHtml(row.name)}" data-grade="${number(row.grade, 5)}">${escapeHtml(row.name)} · G${numeric(row.grade)}</option>`).join("")}</select><label>TARGET GRADE<input id="engineering-grade" type="number" min="1" max="5" value="5"></label><label>CURRENT GRADE<input id="engineering-current-grade" type="number" min="0" max="4" value="0"></label><label>QUANTITY<input id="engineering-quantity" type="number" min="1" max="99" value="1"></label><button data-ws-page="engineering" data-ws-op="pin">PIN GOAL</button></div></section><section class="workspace-grid two">${workspaceCard("PINNED BLUEPRINTS", workspaceRows(pinRows, "No engineering goals pinned."), `${pinRows.length} GOALS`)}${workspaceCard("COLLECTION PLAN", priorities, `${numeric(wishlist.missing)} MISSING`)}${workspaceCard("FSD INJECTION SYNTHESIS", `<div class="profile-ship-grid"><div><span>BASIC +25%</span><b>${numeric(data.synthesis?.basic)}</b></div><div><span>STANDARD +50%</span><b>${numeric(data.synthesis?.standard)}</b></div><div><span>PREMIUM +100%</span><b>${numeric(data.synthesis?.premium)}</b></div></div>`)}${workspaceCard("ENGINEER ACCESS", engineers, `${(data.engineers || []).length} KNOWN`)}${workspaceCard("ODYSSEY WORKSHOP", `<div class="odyssey-add"><select id="odyssey-blueprint">${(data.odyssey_catalogue || []).map((name) => `<option>${escapeHtml(name)}</option>`).join("")}</select><input id="odyssey-quantity" type="number" min="1" max="99" value="1"><button data-ws-page="engineering" data-ws-op="odyssey_pin">ADD GOAL</button></div>${workspaceRows(odysseyGoals, "No Odyssey suit or weapon goals pinned.")}${workspaceTable([{label: "Material", key: "name"}, {label: "Have", key: "have"}, {label: "Need", key: "need"}, {label: "Missing", key: "deficit"}], data.odyssey?.materials || [], "Add an Odyssey goal to calculate its shopping list.")}`, `${numeric(data.odyssey?.missing)} MISSING`)}${workspaceCard("MATERIAL INVENTORY", inventory, `${numeric((data.inventory || []).length)} TYPES`)}</section>`;
+  ])}<section class="workspace-grid two engineering-workspace-grid"><section class="engineering-add card"><header><span>ADD ENGINEERING GOAL</span></header><div><select id="engineering-blueprint">${(data.catalogue || []).map((row) => `<option value="${escapeHtml(row.name)}" data-grade="${number(row.grade, 5)}">${escapeHtml(row.name)} · G${numeric(row.grade)}</option>`).join("")}</select><label>TARGET GRADE<input id="engineering-grade" type="number" min="1" max="5" value="5"></label><label>CURRENT GRADE<input id="engineering-current-grade" type="number" min="0" max="4" value="0"></label><label>QUANTITY<input id="engineering-quantity" type="number" min="1" max="99" value="1"></label><button data-ws-page="engineering" data-ws-op="pin">PIN GOAL</button></div></section>${workspaceCard("PINNED BLUEPRINTS", workspaceRows(pinRows, "No engineering goals pinned."), `${pinRows.length} GOALS`)}${workspaceCard("COLLECTION PLAN", priorities, `${numeric(wishlist.missing)} MISSING`)}${workspaceCard("FSD INJECTION SYNTHESIS", `<div class="profile-ship-grid"><div><span>BASIC +25%</span><b>${numeric(data.synthesis?.basic)}</b></div><div><span>STANDARD +50%</span><b>${numeric(data.synthesis?.standard)}</b></div><div><span>PREMIUM +100%</span><b>${numeric(data.synthesis?.premium)}</b></div></div>`)}${workspaceCard("ENGINEER ACCESS", engineers, `${(data.engineers || []).length} KNOWN`)}${workspaceCard("ODYSSEY WORKSHOP", `<div class="odyssey-add"><select id="odyssey-blueprint">${(data.odyssey_catalogue || []).map((name) => `<option>${escapeHtml(name)}</option>`).join("")}</select><input id="odyssey-quantity" type="number" min="1" max="99" value="1"><button data-ws-page="engineering" data-ws-op="odyssey_pin">ADD GOAL</button></div>${workspaceRows(odysseyGoals, "No Odyssey suit or weapon goals pinned.")}${workspaceTable([{label: "Material", key: "name"}, {label: "Have", key: "have"}, {label: "Need", key: "need"}, {label: "Missing", key: "deficit"}], data.odyssey?.materials || [], "Add an Odyssey goal to calculate its shopping list.")}`, `${numeric(data.odyssey?.missing)} MISSING`)}${workspaceCard("MATERIAL INVENTORY", inventory, `${numeric((data.inventory || []).length)} TYPES`)}</section>`;
 }
 
 function renderCarrierWorkspace(data) {
@@ -3014,82 +3039,107 @@ window.addEventListener("keydown", async (event) => {
   }
 }, true);
 
-document.addEventListener("pointerdown", (event) => {
-  if (!pageLayoutEditing) return;
-  const grip = event.target.closest(".panel-layout-handle > span");
-  pageLayoutDragArmed = grip?.closest("[data-layout-panel]") || null;
-});
-
-document.addEventListener("pointerup", () => { pageLayoutDragArmed = null; });
-
-document.addEventListener("dragstart", (event) => {
-  if (!pageLayoutEditing) return;
-  const panel = event.target.closest?.("[data-layout-panel]");
-  if (!panel || panel !== pageLayoutDragArmed) {
-    event.preventDefault();
-    return;
+function movePageLayoutGhost(drag, clientX, clientY) {
+  if (!drag.ghost) {
+    drag.ghost = document.createElement("div");
+    drag.ghost.className = "panel-layout-ghost";
+    drag.ghost.innerHTML = `<small>REPOSITION PANEL</small><strong>${escapeHtml(pageLayoutPanelTitle(drag.panel))}</strong>`;
+    document.body.appendChild(drag.ghost);
   }
-  pageLayoutDrag = panel;
-  panel.classList.add("layout-dragging");
-  event.dataTransfer.effectAllowed = "move";
-  event.dataTransfer.setData("text/plain", panel.dataset.layoutPanel || "panel");
-});
+  drag.ghost.style.transform = `translate3d(${Math.round(clientX + 16)}px,${Math.round(clientY + 14)}px,0)`;
+}
 
-document.addEventListener("dragover", (event) => {
-  if (!pageLayoutDrag) return;
+function pageLayoutDropAt(drag, clientX, clientY) {
+  const panels = layoutPanels(drag.container).filter((panel) => panel !== drag.panel);
+  if (!panels.length) return null;
+  const hit = document.elementFromPoint(clientX, clientY)?.closest?.("[data-layout-panel]");
+  let target = hit && hit !== drag.panel && hit.parentElement === drag.container ? hit : null;
+  if (!target) {
+    target = panels.reduce((nearest, panel) => {
+      const rect = panel.getBoundingClientRect();
+      const dx = clientX - (rect.left + rect.width / 2);
+      const dy = clientY - (rect.top + rect.height / 2);
+      const distance = dx * dx + dy * dy;
+      return !nearest || distance < nearest.distance ? {panel, distance} : nearest;
+    }, null)?.panel || null;
+  }
+  if (!target) return null;
+  const rect = target.getBoundingClientRect();
+  const withinRow = clientY >= rect.top && clientY <= rect.bottom;
+  const after = withinRow
+    ? clientX >= rect.left + rect.width / 2
+    : clientY >= rect.top + rect.height / 2;
+  return {target, after};
+}
+
+function updatePageLayoutDrop(drag, clientX, clientY) {
   const scroller = document.querySelector(".pages");
   const scrollRect = scroller?.getBoundingClientRect();
   if (scroller && scrollRect) {
     const edge = 58;
-    if (event.clientY < scrollRect.top + edge) scroller.scrollTop -= 18;
-    else if (event.clientY > scrollRect.bottom - edge) scroller.scrollTop += 18;
+    if (clientY < scrollRect.top + edge) scroller.scrollTop -= 18;
+    else if (clientY > scrollRect.bottom - edge) scroller.scrollTop += 18;
   }
-  const target = event.target.closest?.("[data-layout-panel]");
-  if (!target || target === pageLayoutDrag || target.parentElement !== pageLayoutDrag.parentElement) return;
-  event.preventDefault();
-  event.dataTransfer.dropEffect = "move";
-  const rect = target.getBoundingClientRect();
-  const sourceRect = pageLayoutDrag.getBoundingClientRect();
-  const sameVisualRow = Math.abs(sourceRect.top - rect.top) < Math.min(sourceRect.height, rect.height) * .35;
-  const after = sameVisualRow
-    ? event.clientX >= rect.left + rect.width / 2
-    : event.clientY >= rect.top + rect.height / 2;
+  const nextDrop = pageLayoutDropAt(drag, clientX, clientY);
+  if (!nextDrop) return;
+  const {target, after} = nextDrop;
   if (pageLayoutDrop?.target === target && pageLayoutDrop.after === after) return;
   document.querySelectorAll(".layout-drop-before,.layout-drop-after").forEach((panel) => {
     panel.classList.remove("layout-drop-before", "layout-drop-after");
   });
   pageLayoutDrop = {target, after};
   target.classList.add(after ? "layout-drop-after" : "layout-drop-before");
-});
+}
 
-document.addEventListener("dragleave", (event) => {
-  const target = event.target.closest?.("[data-layout-panel]");
-  if (!target || target.contains(event.relatedTarget)) return;
-  if (pageLayoutDrop?.target === target) {
-    target.classList.remove("layout-drop-before", "layout-drop-after");
-    pageLayoutDrop = null;
-  }
-});
-
-document.addEventListener("drop", (event) => {
-  if (!pageLayoutDrag || !pageLayoutDrop) return;
+document.addEventListener("pointerdown", (event) => {
+  if (!pageLayoutEditing || (event.button !== undefined && event.button !== 0)) return;
+  const grip = event.target.closest?.(".panel-layout-grip");
+  const panel = grip?.closest("[data-layout-panel]");
+  if (!panel?.parentElement) return;
   event.preventDefault();
-  const {target, after} = pageLayoutDrop;
-  if (target !== pageLayoutDrag && target.parentElement === pageLayoutDrag.parentElement) {
-    target.parentElement.insertBefore(pageLayoutDrag, after ? target.nextSibling : target);
-    refreshPanelLayoutHandles(pageLayoutEditing);
-  }
+  pageLayoutDrag = {
+    panel,
+    container: panel.parentElement,
+    grip,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    active: false,
+    ghost: null,
+  };
+  try { grip.setPointerCapture(event.pointerId); } catch (_error) { /* WebView capture is best effort. */ }
 });
 
-document.addEventListener("dragend", () => {
-  if (pageLayoutDrag) pageLayoutDrag.classList.remove("layout-dragging");
-  document.querySelectorAll(".layout-drop-before,.layout-drop-after").forEach((panel) => {
-    panel.classList.remove("layout-drop-before", "layout-drop-after");
-  });
-  pageLayoutDrag = null;
-  pageLayoutDragArmed = null;
-  pageLayoutDrop = null;
+document.addEventListener("pointermove", (event) => {
+  const drag = pageLayoutDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  event.preventDefault();
+  if (!drag.active) {
+    if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 4) return;
+    drag.active = true;
+    drag.panel.classList.add("layout-dragging");
+    document.body.classList.add("layout-pointer-dragging");
+  }
+  movePageLayoutGhost(drag, event.clientX, event.clientY);
+  updatePageLayoutDrop(drag, event.clientX, event.clientY);
 });
+
+function finishPageLayoutDrag(event, commit) {
+  const drag = pageLayoutDrag;
+  if (!drag || (event?.pointerId !== undefined && drag.pointerId !== event.pointerId)) return;
+  if (commit && drag.active && pageLayoutDrop) {
+    const {target, after} = pageLayoutDrop;
+    if (target !== drag.panel && target.parentElement === drag.container) {
+      drag.container.insertBefore(drag.panel, after ? target.nextSibling : target);
+    }
+  }
+  try { drag.grip?.releasePointerCapture(drag.pointerId); } catch (_error) { /* Already released. */ }
+  clearPageLayoutPointer();
+  if (commit && drag.active) refreshPanelLayoutHandles(pageLayoutEditing);
+}
+
+document.addEventListener("pointerup", (event) => finishPageLayoutDrag(event, true));
+document.addEventListener("pointercancel", (event) => finishPageLayoutDrag(event, false));
 
 window.addEventListener("error", (event) => {
   reportClientError(event.error || event.message, "window-error");

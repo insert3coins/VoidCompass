@@ -213,7 +213,7 @@
       if (["fsd_charge", "hyper_charge", "hyperspace", "jumping", "arrival",
         "interdiction_evaded", "fsd_cooldown", "supercruise_overcharge",
         "supercruise_assist", "local_arrival"].includes(key)) return "fsd";
-      if (PLANETARY.has(key) || ["landed", "srv", "scorpion", "rhino", "nomad", "on_foot",
+      if (PLANETARY.has(key) || ["surface_station", "landed", "srv", "scorpion", "rhino", "nomad", "on_foot",
         "srv_handbrake", "srv_turret", "srv_drive_assist"].includes(key)) return "surface";
       if (["fss", "dss", "map", "galaxy_map", "system_map", "power_map",
         "orrery", "codex", "exploration", "phenomena"].includes(key)) return "scope";
@@ -264,6 +264,7 @@
         asteroid_field: 5.2, mass_lock: 1.12, signal_lock: 1.55,
         signal_drop: .92, signal_threat: .76, combat: .64,
         interdiction: .5, interdicted: .43, docked: 2.3, station: 2.1,
+        surface_station: 1.72,
         heat_critical: .58, suit_hazard: .72, jet_cone_damage: .46,
         docking_clearance: 1.42, docking_denied: .68,
         maintenance: 1.7, system_reboot: .92,
@@ -1579,6 +1580,36 @@
       });
     }
 
+    drawSurfaceStation(g, state, p, alpha) {
+      const c = state.color, y = g.y;
+      const pulse = .38 + .5 * wave(p);
+      [[g.left + 5, g.centerLeft - 7], [g.centerRight + 7, g.right - 5]].forEach(([start, end], side) => {
+        const cx = (start + end) / 2;
+        const width = Math.max(32, end - start);
+        const horizon = y + 7;
+        this.line(start + 2, horizon, end - 2, horizon, c, alpha * .36, 1.1);
+        // A low planetary skyline distinguishes this from an orbital station.
+        const buildings = [[-.28, 8, 6], [-.08, 12, 10], [.16, 7, 5], [.31, 10, 8]];
+        buildings.forEach(([offset, buildingWidth, height], index) => {
+          const x = cx + offset * width - buildingWidth / 2;
+          this.rect(x, horizon - height, buildingWidth, height, c,
+            alpha * (.22 + (index === Math.floor(p * buildings.length) % buildings.length ? .2 : 0)));
+        });
+        // Docking gates travel inward above the horizon while a pad beacon
+        // pulses at the surface-port centre.
+        const gateProgress = smooth((p + side * .12 + 1) % 1);
+        const spread = 23 - gateProgress * 10;
+        for (const direction of [-1, 1]) {
+          const x = cx + direction * spread;
+          this.path([[x, y - 9], [x, y + 3], [x - direction * 5, y + 3]],
+            c, alpha * (.32 + .38 * (1 - gateProgress)), 1.2);
+        }
+        this.path([[cx - 9, horizon], [cx - 5, y + 2], [cx + 5, y + 2], [cx + 9, horizon]],
+          c, alpha * .58, 1.25);
+        this.glowDot(cx, y + 4, 1.2, c, alpha * pulse);
+      });
+    }
+
     drawHandoff(g, state, p, alpha, key) {
       const c = state.color, y = g.y;
       const deploy = key.startsWith("vehicle_deploy");
@@ -2387,6 +2418,9 @@
         this.drawSurfaceControl(g, state, p, alpha, key); return;
       }
       if (key === "on_foot") { this.drawOnFoot(g, state, p, alpha); return; }
+      if (key === "surface_station") {
+        this.drawSurfaceStation(g, state, p, alpha); return;
+      }
       if (key === "docked" || key === "station") {
         this.drawDocked(g, state, p, alpha, key === "station"); return;
       }
