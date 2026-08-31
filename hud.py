@@ -855,6 +855,11 @@ class TacticalHUD:
                 return "FLIGHT ASSIST OFF"
         if asteroid_context and normal_ship_flight:
             return "ASTEROID FIELD"
+        if fsd_state == "surface_station_vicinity" and normal_ship_flight:
+            # A surface port is more specific than the parent planet's generic
+            # approach phase, but maps, scanners, clearance and pilot-selected
+            # ship modes above still retain priority.
+            return "SURFACE STATION"
         approach = nav_context.get("surface_approach") or {}
         if approach.get("active"):
             phase = str(approach.get("phase") or "surface").casefold()
@@ -935,6 +940,7 @@ class TacticalHUD:
             "LEFT PANEL", "COMMS", "ROLE PANEL", "SERVICES",
             "SC ASSIST", "HANDBRAKE", "TURRET VIEW", "DRIVE ASSIST",
             "AFMU REPAIR", "DOCK REQUEST", "STATION VICINITY", "CARRIER VICINITY",
+            "SURFACE STATION",
         ):
             return COLOR_ACCENT
         if state_text in {
@@ -1013,6 +1019,8 @@ class TacticalHUD:
             return "jet_cone_damage"
         if state == "MASS LOCK":
             return "fsd_lock"
+        if state == "SURFACE STATION":
+            return "surface_station"
         if state in {"STATION VICINITY", "CARRIER VICINITY"}:
             return "station"
         if state.startswith("TARGET ") or state.endswith(" TARGET"):
@@ -1541,14 +1549,17 @@ class TacticalHUD:
             if travel_state == "carrier_transit":
                 return f"CARRIER TRANSIT{detail}", COLOR_ORANGE
             return f"CARRIER ARRIVAL{detail}", COLOR_GREEN
-        if travel_state in {"station_vicinity", "carrier_vicinity"}:
+        if travel_state in {
+                "station_vicinity", "carrier_vicinity",
+                "surface_station_vicinity"}:
             station = str(travel.get("local_space_name") or "").strip()
             detail = f" · {station}" if station else ""
-            label = (
-                "CARRIER VICINITY"
-                if travel_state == "carrier_vicinity"
-                else "STATION VICINITY"
-            )
+            labels = {
+                "carrier_vicinity": "CARRIER VICINITY",
+                "surface_station_vicinity": "SURFACE STATION",
+                "station_vicinity": "STATION VICINITY",
+            }
+            label = labels[travel_state]
             return f"{label}{detail}", COLOR_ACCENT
         injection = context.get("fsd_injection") or {}
         if injection.get("armed"):

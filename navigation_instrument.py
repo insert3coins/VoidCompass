@@ -40,6 +40,7 @@ STATE_SCENES = {
 
     # Passive modes retain visible life without pretending the ship is moving.
     "docked": StateScene("readiness", 92.0, packets=1, segments=5, intensity=0.55),
+    "surface_station": StateScene("readiness", 68.0, packets=1, segments=5, intensity=0.62),
     "landed": StateScene("horizon", 84.0, packets=1, segments=4, intensity=0.58),
     "surface_vehicle": StateScene("terrain", 46.0, packets=2, segments=4),
     "on_foot": StateScene("terrain", 66.0, packets=1, segments=4, intensity=0.58),

@@ -5948,12 +5948,19 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
 
     @staticmethod
     def _navigation_dock_vicinity_type(station_type):
-        """Reduce a journal StationType to station or carrier vicinity."""
+        """Reduce a journal StationType to a useful local-space vicinity."""
         key = "".join(
             char for char in str(station_type or "").casefold()
             if char.isalnum()
         )
-        return "FleetCarrier" if "carrier" in key else "Station"
+        if "carrier" in key:
+            return "FleetCarrier"
+        if any(marker in key for marker in (
+                "craterport", "crateroutpost", "surfacestation",
+                "planetaryport", "planetaryoutpost", "onfootsettlement",
+                "settlement")):
+            return "SurfaceStation"
+        return "Station"
 
     def _capture_navigation_local_space(self, raw, data=None):
         """Remember the authoritative destination of a normal-space drop."""
@@ -5975,12 +5982,13 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 getattr(self, "current_local_space_body_type", "") or ""
             ).casefold() if char.isalnum()
         )
-        if (existing_key in {"station", "fleetcarrier", "carrier"}
+        if (existing_key in {
+                "station", "surfacestation", "fleetcarrier", "carrier"}
                 and incoming_key in {"planet", "star"}):
-            # Carrier and station destinations are announced before the
-            # following SupercruiseExit, which can name their parent body.
-            # Retain the more specific local-space destination until the next
-            # SupercruiseEntry clears it.
+            # Carrier, orbital-station and surface-station destinations can be
+            # announced before the following SupercruiseExit, which may name
+            # only their parent body. Retain the more specific destination
+            # until SupercruiseEntry clears the local-space context.
             return
         self.current_local_space_body_type = str(body_type or "").strip()
         self.current_local_space_name = str(body_name or "").strip()
@@ -6020,6 +6028,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         )
         carrier_vicinity = local_space_key in {"fleetcarrier", "carrier"}
         station_vicinity = local_space_key == "station"
+        surface_station_vicinity = local_space_key == "surfacestation"
         if phase == "carrier_transit":
             state, label, tone = "carrier_transit", "CARRIER TRANSIT", "orange"
         elif phase == "carrier_arrival":
@@ -6049,6 +6058,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             state, label, tone = "asteroid_field", "ASTEROID FIELD", "yellow"
         elif carrier_vicinity:
             state, label, tone = "carrier_vicinity", "CARRIER VICINITY", "accent"
+        elif surface_station_vicinity:
+            # ApproachSettlement identifies a planetary port before its
+            # parent-planet SupercruiseExit and well before docking clearance.
+            state, label, tone = (
+                "surface_station_vicinity", "SURFACE STATION", "accent"
+            )
         elif station_vicinity:
             # SupercruiseExit supplies BodyType: Station for an orbital or
             # carrier drop.  That destination is stronger evidence than the
@@ -6074,6 +6089,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "asteroid_kind": asteroid_kind,
             "carrier_vicinity": carrier_vicinity,
             "station_vicinity": station_vicinity,
+            "surface_station_vicinity": surface_station_vicinity,
             "local_space_type": local_space_type,
             "local_space_name": str(
                 getattr(self, "current_local_space_name", "") or ""
@@ -7903,6 +7919,23 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._capture_navigation_local_space(raw, d)
             self._sync_navigation_hud_flight_state(supercruise=False)
             self.update_hud()
+
+        elif ev == "ApproachSettlement":
+            # Planetary ports do not produce the orbital-station destination
+            # drop used by the existing vicinity state. Their authoritative
+            # early cue is ApproachSettlement; SupercruiseExit may follow with
+            # BodyType: Planet and must not erase this more specific target.
+            source = raw if isinstance(raw, dict) else d
+            surface_station = str(
+                source.get("Name") or d.get("name") or d.get("Name") or ""
+            ).strip()
+            if surface_station:
+                self._capture_navigation_local_space({
+                    "Body": surface_station,
+                    "BodyType": "SurfaceStation",
+                })
+                if not self.batch_mode:
+                    self.update_hud()
 
         elif ev == "VehicleSwitch":
             self._apply_vehicle_switch(raw.get("To") or d.get("To"))
