@@ -415,6 +415,8 @@ class HtmlDashboardMixin:
     @staticmethod
     def _html_dashboard_body_detail(item):
         details = []
+        if item.get("_orrery_source") == "edsm":
+            details.append("KNOWN-SYSTEM ARCHIVE")
         body_class = item.get("planet_class") or item.get("class") or item.get("star_type")
         if body_class:
             details.append(str(body_class))
@@ -432,6 +434,8 @@ class HtmlDashboardMixin:
 
     @staticmethod
     def _html_dashboard_body_badge(item):
+        if item.get("_orrery_source") == "edsm":
+            return "KNOWN"
         bio = _integer(item.get("bio_count"))
         geo = _integer(item.get("geo_count"))
         body_class = str(item.get("planet_class") or item.get("class") or "")
@@ -459,7 +463,28 @@ class HtmlDashboardMixin:
         bodies = []
         notables = []
         high_classes = {"Earthlike body", "Water world", "Ammonia world"}
-        rows = [row for row in (getattr(self, "scan_items", None) or []) if isinstance(row, dict)]
+        journal_rows = [
+            row for row in (getattr(self, "scan_items", None) or [])
+            if isinstance(row, dict)
+        ]
+        local_ids = {
+            str(row.get("body_id")) for row in journal_rows
+            if row.get("body_id") is not None
+        }
+        current_key = str(getattr(self, "current_sys", "") or "").casefold()
+        archived_rows = [
+            row for row in (
+                getattr(self, "_edsm_orrery_bodies", {}).get(current_key, [])
+                if current_key else []
+            )
+            if isinstance(row, dict)
+            and row.get("body_id") is not None
+            and str(row.get("body_id")) not in local_ids
+        ]
+        # The local journal remains authoritative. Public known-system bodies
+        # only fill historical detail that this profile did not retain (for
+        # example a visit made before Void Compass began caching Scan events).
+        rows = [*journal_rows, *archived_rows]
         rows.sort(key=lambda row: (_integer(row.get("body_id"), 9999), _text(row.get("name"))))
         for row in rows:
             if row.get("is_star"):
@@ -487,6 +512,7 @@ class HtmlDashboardMixin:
                     if "landable" in row and row.get("landable") is not None
                     else None
                 ),
+                "archived": row.get("_orrery_source") == "edsm",
             }
             bodies.append(body_payload)
             if priority:
@@ -495,6 +521,19 @@ class HtmlDashboardMixin:
                 )
         if not notables:
             notables = [_text(row, 180) for row in (getattr(self, "valuable_bodies", None) or [])]
+        star_class = _text(getattr(self, "star_class", ""), 50)
+        if not star_class:
+            star_class = next((
+                _text(row.get("star_type"), 50) for row in rows
+                if row.get("is_star") and row.get("star_type")
+            ), "")
+        known_valuable = sum(
+            bool(
+                row.get("terraformable")
+                or str(row.get("planet_class") or row.get("class") or "") in high_classes
+            )
+            for row in rows if not row.get("is_star")
+        )
         return {
             "scanned": scanned,
             "total": total,
@@ -502,13 +541,22 @@ class HtmlDashboardMixin:
             "percent": round(percent, 1),
             "complete": complete,
             "undiscovered": bool(getattr(self, "system_undiscovered", False)),
-            "star_class": _text(getattr(self, "star_class", ""), 50),
+            "star_class": star_class,
             "bio_signals": max(0, _integer(getattr(self, "system_bio_signals", 0))),
             "bio_complete": max(0, _integer(getattr(self, "organic_count", 0))),
             "geo_signals": sum(_integer(row.get("geo_count")) for row in rows),
-            "valuable_count": len(getattr(self, "valuable_bodies", None) or []),
+            "valuable_count": max(
+                len(getattr(self, "valuable_bodies", None) or []),
+                known_valuable,
+            ),
             "notables": notables[:8],
             "bodies": bodies[:28],
+            "journal_bodies": len(journal_rows),
+            "archive_bodies": len(archived_rows),
+            "archive_loading": bool(
+                current_key
+                and current_key in getattr(self, "_edsm_orrery_pending", set())
+            ),
             "summary": _text(completion.get("summary"), 180),
             "completion": {
                 "unknown_bodies": max(0, _integer(completion.get("unknown_bodies"))),

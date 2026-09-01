@@ -690,7 +690,7 @@ function renderSurvey(state) {
   const badgeText = survey.complete ? "COMPLETE" : survey.undiscovered ? "NEW SYSTEM" : survey.total_known ? "IN PROGRESS" : "AWAITING";
   badge.textContent = badgeText;
   badge.style.color = survey.complete ? "var(--green)" : survey.undiscovered ? "var(--yellow)" : "var(--dim)";
-  text("workboard-badge", survey.complete ? "COMPLETE" : "LIVE");
+  text("workboard-badge", survey.complete ? "COMPLETE" : survey.archive_bodies ? "KNOWN" : "LIVE");
   text("workboard-system", state.flight?.system, "NO SYSTEM DATA");
   text("workboard-class", survey.star_class ? `PRIMARY · ${survey.star_class}` : "PRIMARY STAR · CLASS UNKNOWN");
   text("workboard-percent", survey.total_known ? `${Math.round(completion)}%` : "—");
@@ -736,9 +736,16 @@ function renderSurvey(state) {
     empty.className = "body-row empty";
     const copy = document.createElement("div");
     const title = document.createElement("strong");
-    title.textContent = "AWAITING FSS / DSS DATA";
+    const knownRecord = Boolean(survey.total_known && number(survey.scanned) >= number(survey.total));
+    title.textContent = survey.archive_loading
+      ? "RECOVERING KNOWN SYSTEM"
+      : knownRecord ? "KNOWN SYSTEM RECORD" : "AWAITING FSS / DSS DATA";
     const detail = document.createElement("span");
-    detail.textContent = "Priority bodies will appear as the system survey develops.";
+    detail.textContent = survey.archive_loading
+      ? "Requesting historical body architecture while retained scan progress remains authoritative."
+      : knownRecord
+        ? "Survey completion is retained; detailed body records were not captured by this profile."
+        : "Priority bodies will appear as the system survey develops.";
     copy.append(title, detail);
     empty.append(copy);
     workboard.replaceChildren(empty);
