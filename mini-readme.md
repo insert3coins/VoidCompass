@@ -7,6 +7,7 @@
 *   Retained the journal's full Kepler orbital elements and parent-child architecture so newly scanned stars, planets and moons use time-resolved positions instead of a flat schematic. Public EDSM recovery remains visibly marked as approximate where phase data is unavailable.
 *   Added branch-aware logarithmic scaling so close moons, rings and distant worlds remain readable together, while preserving body class, landability, terraformability, biological, geological and survey-value intelligence.
 *   Replaced the decorative radar sweep with a calm deep-space starfield and adopted ORRERY's journal-class palette, radius-aware body sizing, restrained orbit language, ring materials, moon/landability glyphs and wireframe treatment for approximate EDSM architecture.
+*   Unified the System Workboard with the Orrery's known-system recovery so previously completed visits can display archived body architecture instead of incorrectly waiting for new FSS/DSS data; journal records remain authoritative and recovered rows are labelled `KNOWN`.
 *   Kept rendering lightweight and responsive through an on-demand Canvas projection with profile-aware view memory, live theme colours and no duplicate journal watcher or continuous 3D render loop.
 
 ## Earlier releases
