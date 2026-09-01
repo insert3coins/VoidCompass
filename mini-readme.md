@@ -1,15 +1,17 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.2 // Rhino & Planetary Mining
-**Release Date:** 2026-Aug-31
+## v5.4.2.1 // Elite-Style Live System Orrery
+**Release Date:** 2026-Sep-01
 
-*   Added first-class Rhino support for the early-access `LaunchSRV` and `DockSRV` journal identity `mev_rhino`, including exact vehicle-state restoration, on-foot boarding handoff, dedicated Navigation portrait selection and Rhino-specific surface motion.
-*   Added `$PlanetaryMiningLocation_Name;` DSS signal handling as a clearly labelled `MINING` count beside biological and geological evidence in Survey Operations and Navigation's System Survey rail.
-*   Persisted planetary mining-location counts with each body and the profile-aware cockpit cache so known systems restore the same mining evidence after a restart or revisit.
-*   Retained Rhino `MiningRefined` and SRV cargo events through the existing unified Mining Command and Cargo pipelines without adding a duplicate tracker.
+*   Rebuilt the Live System Orrery as a permanently full-width, interactive Elite-inspired three-dimensional instrument with the Exploration Survey Queue beneath it, plus drag rotation, wheel zoom, top and tilted views, optional orbit paths and labels, body selection and target highlighting.
+*   Retained the journal's full Kepler orbital elements and parent-child architecture so newly scanned stars, planets and moons use time-resolved positions instead of a flat schematic. Public EDSM recovery remains visibly marked as approximate where phase data is unavailable.
+*   Added branch-aware logarithmic scaling so close moons, rings and distant worlds remain readable together, while preserving body class, landability, terraformability, biological, geological and survey-value intelligence.
+*   Replaced the decorative radar sweep with a calm deep-space starfield and adopted ORRERY's journal-class palette, radius-aware body sizing, restrained orbit language, ring materials, moon/landability glyphs and wireframe treatment for approximate EDSM architecture.
+*   Kept rendering lightweight and responsive through an on-demand Canvas projection with profile-aware view memory, live theme colours and no duplicate journal watcher or continuous 3D render loop.
 
 ## Earlier releases
 
+*   **v5.4.2** — Added first-class Rhino journal and vehicle-state support, planetary mining-location DSS evidence and retained survey presentation, with Rhino mining and SRV cargo flowing through the existing unified pipelines.
 *   **v5.4.1.9** — Rebuilt Mining Command around one journal reducer with target directives, readiness, prospect/refinery yield, objectives, analytics, ring intelligence and buyer lookup; simplified Prospector Analysis and enforced HTML-only overlay presentation.
 *   **v5.4.1.8** — Added overlay recovery, Screenshot Chronicle, Exploration Preflight and Smart Next Action; hardened first-launch overlay restoration and station/carrier vicinity state.
 *   **v5.4.1.7** — Added Deep Space Contact Scope, FSD-injection and station/carrier awareness, DSS efficiency receipts, animated Cargo and Survey Operations, and profile-aware contact auto-hide.
