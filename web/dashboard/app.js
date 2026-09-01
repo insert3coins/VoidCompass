@@ -41,6 +41,7 @@ let missionSelectedId = "";
 let hotkeyCaptureAction = "";
 let orrerySelectedBodyId = "";
 let orreryLiveTargetBodyId = "";
+let orreryView = null;
 let analyticsView = "trends";
 let replaySelectedSessionIndex = 0;
 let replayTimer = 0;
@@ -476,6 +477,7 @@ function applyTheme(theme = {}) {
       item.style.background = theme.palette?.[key] || "transparent";
       return item;
     }));
+    orreryView?.render();
   }
 }
 
@@ -1479,76 +1481,532 @@ function workspaceTable(columns, rows, empty = "No records available.") {
   return `<div class="workspace-table-wrap"><table class="workspace-table"><thead><tr>${columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${columns.map((column) => `<td>${column.render ? column.render(row) : escapeHtml(row[column.key] ?? "—")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 
-function orreryLayout(bodies = []) {
-  if (!bodies.length) return {nodes: [], orbits: []};
-  const nodes = [];
-  const orbits = [];
-  const byId = new Map(bodies.map((row) => [String(row.id), row]));
-  const positions = new Map();
-  const stars = bodies.filter((row) => row.kind === "star");
-  const primaryStars = stars.length ? stars : bodies.slice(0, 1);
-  primaryStars.forEach((row, index) => {
-    const angle = primaryStars.length === 1 ? 0 : index * Math.PI * 2 / primaryStars.length;
-    const radius = primaryStars.length === 1 ? 0 : 36;
-    positions.set(String(row.id), {x: 360 + Math.cos(angle) * radius, y: 250 + Math.sin(angle) * radius});
-  });
-  const rootPlanets = bodies.filter((row) => row.kind !== "star" && (!row.parent_id || byId.get(String(row.parent_id))?.kind === "star"));
-  rootPlanets.sort((a, b) => number(a.semi_major_axis, number(a.distance_ls)) - number(b.semi_major_axis, number(b.distance_ls)) || number(a.body_id) - number(b.body_id));
-  const radialStep = Math.min(33, 184 / Math.max(1, rootPlanets.length));
-  rootPlanets.forEach((row, index) => {
-    const radius = 54 + radialStep * index;
-    const eccentricity = clamp(number(row.eccentricity), 0, .82);
-    const rx = radius * (1 + eccentricity * .22);
-    const ry = radius * (.62 - eccentricity * .12);
-    const angle = ((number(row.body_id, index + 1) * 137.508) % 360) * Math.PI / 180;
-    const x = 360 + Math.cos(angle) * rx;
-    const y = 250 + Math.sin(angle) * ry;
-    positions.set(String(row.id), {x, y});
-    orbits.push({cx: 360, cy: 250, rx, ry, id: row.id});
-  });
-  const pending = bodies.filter((row) => !positions.has(String(row.id)));
-  for (let pass = 0; pass < 4 && pending.length; pass += 1) {
-    for (let index = pending.length - 1; index >= 0; index -= 1) {
-      const row = pending[index];
-      const parent = positions.get(String(row.parent_id));
-      if (!parent) continue;
-      const siblings = bodies.filter((item) => String(item.parent_id) === String(row.parent_id));
-      const siblingIndex = Math.max(0, siblings.findIndex((item) => String(item.id) === String(row.id)));
-      const radius = 14 + siblingIndex * 6;
-      const angle = ((number(row.body_id, siblingIndex + 1) * 111.25) % 360) * Math.PI / 180;
-      positions.set(String(row.id), {x: parent.x + Math.cos(angle) * radius, y: parent.y + Math.sin(angle) * radius});
-      orbits.push({cx: parent.x, cy: parent.y, rx: radius, ry: radius * .7, id: row.id, moon: true});
-      pending.splice(index, 1);
-    }
-  }
-  for (const row of bodies) {
-    const point = positions.get(String(row.id)) || {x: 360, y: 250};
-    nodes.push({...row, ...point});
-  }
-  return {nodes, orbits};
+const ORRERY_TAU = Math.PI * 2;
+const ORRERY_STAR_COLORS = {
+  O: "#9bb0ff", B: "#aabfff", A: "#cad7ff", F: "#f8f7ff",
+  G: "#fff4ea", K: "#ffd2a1", M: "#ffb56c", L: "#ff8c5a",
+  T: "#cc6b52", Y: "#8a4a3c", D: "#dfe9ff", N: "#b0e0ff",
+  H: "#1a0a12",
+};
+
+// Journal PlanetClass colours follow ORRERY's astronomical palette. EDSM's
+// public subtype aliases are included because recovered architecture must look
+// like the same body class without pretending its orbital phase is known.
+const ORRERY_PLANET_COLORS = new Map([
+  ["icy body", "#cfe8f5"], ["rocky ice body", "#9fb3c8"],
+  ["rocky body", "#8a7866"], ["high metal content body", "#b08060"],
+  ["metal rich body", "#d99a5b"], ["earthlike body", "#4f9bd6"],
+  ["water world", "#3f7fc9"], ["ammonia world", "#b7c65a"],
+  ["water giant", "#5c8fd6"], ["sudarsky class i gas giant", "#7fa8c9"],
+  ["sudarsky class ii gas giant", "#e0c493"], ["sudarsky class iii gas giant", "#d9a066"],
+  ["sudarsky class iv gas giant", "#c97a5a"], ["sudarsky class v gas giant", "#8a5a7a"],
+  ["gas giant with water based life", "#6fa8b0"],
+  ["gas giant with ammonia based life", "#9ab06f"],
+  // EDSM subtype spellings.
+  ["earth like world", "#4f9bd6"], ["metal rich world", "#d99a5b"],
+  ["high metal content world", "#b08060"], ["rocky ice world", "#9fb3c8"],
+  ["class i gas giant", "#7fa8c9"], ["class ii gas giant", "#e0c493"],
+  ["class iii gas giant", "#d9a066"], ["class iv gas giant", "#c97a5a"],
+  ["class v gas giant", "#8a5a7a"],
+]);
+
+const ORRERY_RING_COLORS = new Map([
+  ["eringclass icy", "#cfe8f5"], ["icy", "#cfe8f5"],
+  ["eringclass rocky", "#8a7866"], ["rocky", "#8a7866"],
+  ["eringclass metalic", "#b0b0b0"], ["metallic", "#b0b0b0"],
+  ["eringclass metalrich", "#d99a5b"], ["metal rich", "#d99a5b"],
+]);
+
+function orreryClassKey(value) {
+  return String(value || "").trim().toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ");
 }
 
-function orrerySvg(orrery = {}) {
+function orreryHash(value) {
+  let hash = 2166136261;
+  for (const character of String(value ?? "")) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 4294967295;
+}
+
+function orreryPlanetColor(body) {
+  if (body.kind === "star") return ORRERY_STAR_COLORS[String(body.star_type || "?")[0]?.toUpperCase()] || "#ffc46b";
+  return ORRERY_PLANET_COLORS.get(orreryClassKey(body.class)) || "#8a8a8a";
+}
+
+function orreryRingColor(body) {
+  const key = orreryClassKey(body.ring_class);
+  return ORRERY_RING_COLORS.get(key)
+    || [...ORRERY_RING_COLORS].find(([name]) => key.includes(name))?.[1]
+    || "#7a4a1e";
+}
+
+function orreryBodyIcon(body) {
+  if (body.kind === "star") return "✦";
+  if (body.is_moon) return body.landable ? "◈" : "·";
+  return body.landable ? "◉" : "○";
+}
+
+function orreryCanvas(orrery = {}) {
   const bodies = orrery.bodies || [];
   if (!bodies.length) {
     const loading = Boolean(orrery.loading);
     return `<div class="orrery-empty${loading ? " loading" : ""}"><i></i><b>${loading ? "RECOVERING KNOWN SYSTEM" : "AWAITING SYSTEM SCANS"}</b><span>${loading ? "Requesting public body architecture while retained journal evidence remains authoritative." : "Honk or begin FSS to assemble the live architecture."}</span></div>`;
   }
-  const layout = orreryLayout(bodies);
-  const orbits = layout.orbits.map((row) => `<ellipse cx="${row.cx}" cy="${row.cy}" rx="${row.rx}" ry="${row.ry}" class="${row.moon ? "moon-orbit" : "planet-orbit"}"/>`).join("");
-  const nodes = layout.nodes.map((row) => {
-    const classes = [row.kind, row.bio ? "bio" : "", row.geo ? "geo" : "", row.terraformable ? "terraformable" : "", row.mapped ? "mapped" : "", row.targeted ? "targeted" : ""].filter(Boolean).join(" ");
-    const radius = row.kind === "star" ? 10 : row.rings ? 6 : 4.5;
-    const targetReticle = row.targeted ? `<g class="orrery-target-reticle" transform="translate(${row.x} ${row.y})"><circle r="${radius + 12}"/><path d="M-${radius + 19} 0H-${radius + 9}M${radius + 9} 0H${radius + 19}M0 -${radius + 19}V-${radius + 9}M0 ${radius + 9}V${radius + 19}"/></g>` : "";
-    return `<g class="orrery-node ${classes}" data-orrery-body="${escapeHtml(row.id)}" tabindex="0" role="button">${targetReticle}<circle cx="${row.x}" cy="${row.y}" r="${radius}"/>${row.rings ? `<ellipse cx="${row.x}" cy="${row.y}" rx="${radius + 5}" ry="${radius + 1.5}"/>` : ""}<title>${escapeHtml(row.name)} · ${escapeHtml(row.class)}${row.targeted ? " · ELITE TARGET" : ""}</title></g>`;
-  }).join("");
-  return `<svg class="orrery-chart" viewBox="0 0 720 500" role="img" aria-label="Schematic system architecture"><defs><radialGradient id="orrery-star"><stop offset="0" stop-color="#fff"/><stop offset=".3" stop-color="var(--orange)"/><stop offset="1" stop-color="transparent"/></radialGradient></defs><path class="orrery-axis" d="M360 18V482M18 250H702"/>${orbits}<g class="orrery-sweep"><path d="M360 250L688 250"/></g>${nodes}<text x="20" y="28">${escapeHtml(orrery.mode || "JOURNAL ARCHITECTURE")}</text></svg>`;
+  const resolved = bodies.filter((body) => body.orbit?.resolved).length;
+  const approximate = bodies.filter((body) => body.orbit?.semi_major_axis && !body.orbit?.resolved).length;
+  return `<div class="orrery-stage">
+    <canvas id="system-orrery-canvas" tabindex="0" role="img" aria-label="Interactive three-dimensional model of the current Elite Dangerous system"></canvas>
+    <div class="orrery-frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="orrery-telemetry"><span>COMPRESSED ORBITAL SCALE</span><b>${resolved ? `${resolved} LIVE POSITIONS` : "SCHEMATIC POSITIONS"}</b><em>${approximate ? `${approximate} APPROXIMATE` : "JOURNAL ELEMENTS"}</em></div>
+    <div class="orrery-legend"><span><i class="star"></i>STAR</span><span><i class="world"></i>WORLD</span><span><i class="bio"></i>BIO</span><span><i class="target"></i>TARGET</span></div>
+    <div class="orrery-controls" aria-label="Orrery view controls"><button type="button" data-orrery-action="top">TOP</button><button type="button" data-orrery-action="tilt">3D</button><button type="button" data-orrery-action="orbits">ORBITS</button><button type="button" data-orrery-action="labels">LABELS</button><button type="button" data-orrery-action="reset">RESET</button></div>
+    <div class="orrery-help">DRAG ROTATE · WHEEL ZOOM · CLICK BODY</div>
+  </div>`;
+}
+
+class EliteSystemOrrery {
+  constructor(canvas, bodies) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext("2d", {alpha: true});
+    this.bodies = (bodies || []).map((body) => ({...body, id: String(body.id)}));
+    this.byId = new Map(this.bodies.map((body) => [body.id, body]));
+    this.abort = new AbortController();
+    this.drag = null;
+    this.hovered = "";
+    this.hits = [];
+    this.world = new Map();
+    this.orbits = [];
+    this.extent = 10;
+    this.selected = String(orrerySelectedBodyId || this.bodies[0]?.id || "");
+    this.storeKey = `voidcompass.orrery.view.${profileKey}`;
+    this.view = this.loadView();
+    this.palette = this.readPalette();
+    const fieldSeed = this.bodies.map((body) => `${body.id}:${body.name}`).join("|");
+    this.starfield = Array.from({length: 260}, (_unused, index) => ({
+      x: orreryHash(`${fieldSeed}:x:${index}`),
+      y: orreryHash(`${fieldSeed}:y:${index}`),
+      size: .45 + orreryHash(`${fieldSeed}:s:${index}`) * 1.25,
+      alpha: .16 + orreryHash(`${fieldSeed}:a:${index}`) * .48,
+      warm: index % 5 !== 0,
+    }));
+    this.prepareBodies();
+    this.buildScene(Date.now());
+    this.bind();
+    if (typeof ResizeObserver === "function") {
+      this.resizeObserver = new ResizeObserver(() => this.resize());
+      this.resizeObserver.observe(canvas);
+    } else {
+      window.addEventListener("resize", () => this.resize(), {signal: this.abort.signal});
+    }
+    this.resize();
+  }
+
+  loadView() {
+    const fallback = {yaw: -.72, pitch: .72, zoom: 1, labels: true, orbits: true};
+    try {
+      const saved = JSON.parse(localStorage.getItem(this.storeKey) || "{}");
+      return {
+        yaw: Number.isFinite(saved.yaw) ? saved.yaw : fallback.yaw,
+        pitch: Number.isFinite(saved.pitch) ? clamp(saved.pitch, 0, 1.28) : fallback.pitch,
+        zoom: Number.isFinite(saved.zoom) ? clamp(saved.zoom, .45, 5) : fallback.zoom,
+        labels: saved.labels !== false,
+        orbits: saved.orbits !== false,
+      };
+    } catch (_error) {
+      return fallback;
+    }
+  }
+
+  saveView() {
+    try { localStorage.setItem(this.storeKey, JSON.stringify(this.view)); } catch (_error) { /* Optional preference. */ }
+  }
+
+  readPalette() {
+    const styles = getComputedStyle(document.documentElement);
+    const css = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
+    return {
+      accent: css("--accent", "#43d8ff"), orange: css("--orange", "#ff9f43"),
+      yellow: css("--yellow", "#ffd166"), green: css("--green", "#72e6a6"),
+      text: css("--text", "#d9edf5"), muted: css("--muted", "#7895a4"),
+      dim: css("--dim", "#49606c"), border: css("--border", "#244150"),
+      panel: css("--panel", "#071016"),
+    };
+  }
+
+  prepareBodies() {
+    const groups = new Map();
+    for (const body of this.bodies) {
+      const parent = body.parent_id === null || body.parent_id === undefined ? "root" : String(body.parent_id);
+      if (!groups.has(parent)) groups.set(parent, []);
+      groups.get(parent).push(body);
+    }
+    for (const [parent, siblings] of groups) {
+      siblings.sort((a, b) => number(a.orbit?.semi_major_axis, Infinity) - number(b.orbit?.semi_major_axis, Infinity) || number(a.body_id) - number(b.body_id));
+      siblings.forEach((body, index) => {
+        const reported = number(body.orbit?.semi_major_axis, 0);
+        if (reported > 0) body._axis = reported;
+        else if (parent === "root" && body.kind === "star" && index === 0) body._axis = 0;
+        else {
+          const base = body.is_moon ? 2.2e6 : parent === "root" && body.kind === "star" ? 5e10 : 2.4e8;
+          body._axis = base * Math.pow(body.is_moon ? 2.05 : 2.35, Math.max(0, index));
+        }
+        const seed = orreryHash(`${body.id}:${body.name}`);
+        body._seed = seed;
+        body._ascending = body.orbit?.ascending_node_deg ?? seed * 360;
+        body._periapsis = body.orbit?.periapsis_deg ?? ((seed * 613.7) % 360);
+        body._inclination = body.orbit?.inclination_deg ?? ((seed - .5) * 12);
+      });
+    }
+  }
+
+  compressDistance(distance) {
+    if (!(distance > 0)) return 0;
+    return 2 + 7.2 * Math.log10(1 + distance / 1e8);
+  }
+
+  solveEccentric(mean, eccentricity) {
+    let anomaly = mean + eccentricity * Math.sin(mean);
+    for (let iteration = 0; iteration < 6; iteration += 1) {
+      anomaly -= (anomaly - eccentricity * Math.sin(anomaly) - mean) / (1 - eccentricity * Math.cos(anomaly));
+    }
+    return anomaly;
+  }
+
+  localPoint(body, atMs, fraction = null) {
+    const axis = number(body._axis);
+    if (!(axis > 0)) return {x: 0, y: 0, z: 0};
+    const eccentricity = clamp(number(body.orbit?.eccentricity), 0, .92);
+    let eccentricAnomaly;
+    if (fraction !== null) eccentricAnomaly = fraction * ORRERY_TAU;
+    else if (body.orbit?.resolved) {
+      const elapsed = atMs / 1000 - number(body.orbit.epoch_s);
+      const mean = (number(body.orbit.mean_anomaly_deg) * Math.PI / 180 + ORRERY_TAU * elapsed / number(body.orbit.period_s)) % ORRERY_TAU;
+      eccentricAnomaly = this.solveEccentric(mean, eccentricity);
+    } else eccentricAnomaly = body._seed * ORRERY_TAU;
+    const px = axis * (Math.cos(eccentricAnomaly) - eccentricity);
+    const py = axis * Math.sqrt(Math.max(.01, 1 - eccentricity * eccentricity)) * Math.sin(eccentricAnomaly);
+    const periapsis = number(body._periapsis) * Math.PI / 180;
+    const ascending = number(body._ascending) * Math.PI / 180;
+    const inclination = number(body._inclination) * Math.PI / 180;
+    const x1 = px * Math.cos(periapsis) - py * Math.sin(periapsis);
+    const y1 = px * Math.sin(periapsis) + py * Math.cos(periapsis);
+    const x2 = x1;
+    const y2 = y1 * Math.cos(inclination);
+    const z2 = y1 * Math.sin(inclination);
+    const x = x2 * Math.cos(ascending) - y2 * Math.sin(ascending);
+    const y = x2 * Math.sin(ascending) + y2 * Math.cos(ascending);
+    const radius = Math.hypot(x, y, z2);
+    const compressed = this.compressDistance(radius);
+    const scale = radius > 0 ? compressed / radius : 0;
+    return {x: x * scale, y: y * scale, z: z2 * scale};
+  }
+
+  buildScene(atMs) {
+    this.world.clear();
+    this.orbits = [];
+    const resolving = new Set();
+    const resolve = (body) => {
+      if (this.world.has(body.id)) return this.world.get(body.id);
+      if (resolving.has(body.id)) return {x: 0, y: 0, z: 0};
+      resolving.add(body.id);
+      const parent = this.byId.get(String(body.parent_id));
+      const origin = parent ? resolve(parent) : {x: 0, y: 0, z: 0};
+      const offset = this.localPoint(body, atMs);
+      const point = {x: origin.x + offset.x, y: origin.y + offset.y, z: origin.z + offset.z};
+      this.world.set(body.id, point);
+      resolving.delete(body.id);
+      return point;
+    };
+    for (const body of this.bodies) resolve(body);
+    for (const body of this.bodies) {
+      if (!(body._axis > 0)) continue;
+      const parent = this.byId.get(String(body.parent_id));
+      const origin = parent ? this.world.get(parent.id) : {x: 0, y: 0, z: 0};
+      const points = [];
+      for (let sample = 0; sample <= 72; sample += 1) {
+        const offset = this.localPoint(body, atMs, sample / 72);
+        points.push({x: origin.x + offset.x, y: origin.y + offset.y, z: origin.z + offset.z});
+      }
+      this.orbits.push({body, points});
+    }
+    const samples = [...this.world.values(), ...this.orbits.flatMap((orbit) => orbit.points)];
+    this.extent = Math.max(8, ...samples.map((point) => Math.hypot(point.x, point.y, point.z)));
+  }
+
+  bind() {
+    const signal = this.abort.signal;
+    this.canvas.addEventListener("pointerdown", (event) => {
+      this.canvas.setPointerCapture(event.pointerId);
+      this.drag = {id: event.pointerId, x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false};
+      this.canvas.classList.add("dragging");
+    }, {signal});
+    this.canvas.addEventListener("pointermove", (event) => {
+      if (this.drag?.id === event.pointerId) {
+        const dx = event.clientX - this.drag.x, dy = event.clientY - this.drag.y;
+        this.drag.moved ||= Math.hypot(event.clientX - this.drag.startX, event.clientY - this.drag.startY) > 3;
+        if (this.drag.moved) {
+          this.view.yaw += dx * .007;
+          this.view.pitch = clamp(this.view.pitch + dy * .006, 0, 1.28);
+          this.drag.x = event.clientX; this.drag.y = event.clientY;
+          this.render();
+        }
+        return;
+      }
+      const hit = this.hitAt(event.offsetX, event.offsetY);
+      const next = hit?.body.id || "";
+      if (next !== this.hovered) { this.hovered = next; this.canvas.style.cursor = next ? "pointer" : "grab"; this.render(); }
+    }, {signal});
+    this.canvas.addEventListener("pointerup", (event) => {
+      if (this.drag?.id !== event.pointerId) return;
+      if (!this.drag.moved) {
+        const rect = this.canvas.getBoundingClientRect();
+        const hit = this.hitAt(event.clientX - rect.left, event.clientY - rect.top);
+        if (hit) this.select(hit.body.id);
+      }
+      this.drag = null;
+      this.canvas.classList.remove("dragging");
+      this.saveView();
+    }, {signal});
+    this.canvas.addEventListener("pointercancel", () => { this.drag = null; this.canvas.classList.remove("dragging"); }, {signal});
+    this.canvas.addEventListener("pointerleave", () => { if (!this.drag && this.hovered) { this.hovered = ""; this.render(); } }, {signal});
+    this.canvas.addEventListener("wheel", (event) => {
+      event.preventDefault();
+      this.view.zoom = clamp(this.view.zoom * (event.deltaY > 0 ? .9 : 1.1), .45, 5);
+      this.saveView(); this.render();
+    }, {passive: false, signal});
+    this.canvas.addEventListener("keydown", (event) => {
+      const key = event.key;
+      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "+", "=", "-", "0"].includes(key)) return;
+      event.preventDefault();
+      if (key === "ArrowLeft") this.view.yaw -= .12;
+      if (key === "ArrowRight") this.view.yaw += .12;
+      if (key === "ArrowUp") this.view.pitch = clamp(this.view.pitch - .1, 0, 1.28);
+      if (key === "ArrowDown") this.view.pitch = clamp(this.view.pitch + .1, 0, 1.28);
+      if (key === "+" || key === "=") this.view.zoom = clamp(this.view.zoom * 1.12, .45, 5);
+      if (key === "-") this.view.zoom = clamp(this.view.zoom / 1.12, .45, 5);
+      if (key === "0") this.reset(); else { this.saveView(); this.render(); }
+    }, {signal});
+    const stage = this.canvas.closest(".orrery-stage");
+    stage?.querySelectorAll("[data-orrery-action]").forEach((button) => button.addEventListener("click", () => {
+      const action = button.dataset.orreryAction;
+      if (action === "top") this.view.pitch = 0;
+      if (action === "tilt") this.view.pitch = .72;
+      if (action === "orbits") this.view.orbits = !this.view.orbits;
+      if (action === "labels") this.view.labels = !this.view.labels;
+      if (action === "reset") { this.reset(); return; }
+      this.saveView(); this.render(); this.updateControls();
+    }, {signal}));
+    this.updateControls();
+  }
+
+  reset() {
+    Object.assign(this.view, {yaw: -.72, pitch: .72, zoom: 1, labels: true, orbits: true});
+    this.saveView(); this.updateControls(); this.render();
+  }
+
+  updateControls() {
+    const stage = this.canvas.closest(".orrery-stage");
+    stage?.querySelector('[data-orrery-action="orbits"]')?.classList.toggle("active", this.view.orbits);
+    stage?.querySelector('[data-orrery-action="labels"]')?.classList.toggle("active", this.view.labels);
+    stage?.querySelector('[data-orrery-action="top"]')?.classList.toggle("active", this.view.pitch < .08);
+    stage?.querySelector('[data-orrery-action="tilt"]')?.classList.toggle("active", this.view.pitch >= .08);
+  }
+
+  resize() {
+    const rect = this.canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const ratio = Math.min(2, window.devicePixelRatio || 1);
+    const width = Math.max(1, Math.round(rect.width * ratio));
+    const height = Math.max(1, Math.round(rect.height * ratio));
+    if (this.canvas.width !== width || this.canvas.height !== height) {
+      this.canvas.width = width; this.canvas.height = height;
+    }
+    this.width = rect.width; this.height = rect.height; this.ratio = ratio;
+    this.render();
+  }
+
+  project(point) {
+    const yawCos = Math.cos(this.view.yaw), yawSin = Math.sin(this.view.yaw);
+    const rx = point.x * yawCos - point.y * yawSin;
+    const ry = point.x * yawSin + point.y * yawCos;
+    const pitchCos = Math.cos(this.view.pitch), pitchSin = Math.sin(this.view.pitch);
+    const py = ry * pitchCos - point.z * pitchSin;
+    const depth = ry * pitchSin + point.z * pitchCos;
+    const scale = Math.min(this.width * .43, this.height * .39) / this.extent * this.view.zoom;
+    return {x: this.width * .5 + rx * scale, y: this.height * .52 + py * scale, depth, scale};
+  }
+
+  line(points, color, alpha = 1, width = 1, dashed = false) {
+    if (points.length < 2) return;
+    const ctx = this.ctx;
+    ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.setLineDash(dashed ? [3, 5] : []); ctx.beginPath();
+    points.forEach((point, index) => { const p = this.project(point); if (index) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); });
+    ctx.stroke(); ctx.restore();
+  }
+
+  drawBackdrop() {
+    const ctx = this.ctx;
+    ctx.save();
+    for (const star of this.starfield) {
+      ctx.globalAlpha = star.alpha;
+      ctx.fillStyle = star.warm ? "#756151" : this.palette.dim;
+      const size = star.size;
+      ctx.fillRect(star.x * this.width, star.y * this.height, size, size);
+    }
+    ctx.restore();
+  }
+
+  bodyRadius(body) {
+    const realRadius = number(body.radius_m, 0);
+    let radius;
+    if (realRadius > 0) {
+      const star = body.kind === "star";
+      const minDisplay = star ? 1.2 : .35;
+      const scaleMetres = star ? 3e8 : 3e6;
+      const gain = star ? 1.3 : .7;
+      const compressed = minDisplay + gain * Math.log10(1 + realRadius / scaleMetres);
+      radius = star ? 7 + compressed * 3.1 : 2.35 + compressed * 3.15;
+    } else {
+      const gas = orreryClassKey(body.class).includes("gas giant");
+      radius = body.kind === "star" ? 11.5 : gas ? 6.5 : 4.5;
+    }
+    if (body.is_moon) radius *= .84;
+    return clamp(radius * clamp(Math.sqrt(this.view.zoom), .82, 1.45), body.kind === "star" ? 8 : 3, body.kind === "star" ? 18 : 10);
+  }
+
+  drawBody(body, projected) {
+    const ctx = this.ctx, radius = this.bodyRadius(body), color = orreryPlanetColor(body);
+    const selected = body.id === this.selected, targeted = Boolean(body.targeted), hovered = body.id === this.hovered;
+    ctx.save();
+    if (body.rings) {
+      ctx.globalAlpha = body.source === "edsm" ? .3 : .68;
+      ctx.strokeStyle = orreryRingColor(body);
+      ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(projected.x, projected.y, radius * 2.15, radius * .62, -.22, 0, ORRERY_TAU); ctx.stroke();
+      ctx.globalAlpha *= .4; ctx.beginPath(); ctx.ellipse(projected.x, projected.y, radius * 1.65, radius * .45, -.22, 0, ORRERY_TAU); ctx.stroke();
+    }
+    if (body.source === "edsm") {
+      // Backfill provides system architecture, not live phase: match ORRERY's
+      // visual promise by rendering an unfilled, dashed body wireframe.
+      ctx.globalAlpha = .54; ctx.strokeStyle = color; ctx.lineWidth = 1;
+      ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.arc(projected.x, projected.y, radius, 0, ORRERY_TAU); ctx.stroke(); ctx.setLineDash([]);
+      ctx.globalAlpha = .22; ctx.beginPath(); ctx.ellipse(projected.x, projected.y, radius, radius * .38, 0, 0, ORRERY_TAU); ctx.stroke();
+    } else if (body.kind === "star") {
+      ctx.shadowColor = color; ctx.shadowBlur = body.star_type?.startsWith("H") ? 7 : 13;
+      ctx.globalAlpha = .96; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(projected.x, projected.y, radius, 0, ORRERY_TAU); ctx.fill();
+      ctx.shadowBlur = 0;
+      const light = ctx.createRadialGradient(projected.x - radius * .35, projected.y - radius * .38, 0, projected.x, projected.y, radius);
+      light.addColorStop(0, "rgba(255,255,255,.58)"); light.addColorStop(.26, "rgba(255,255,255,.16)"); light.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = light; ctx.fill();
+      ctx.globalAlpha = .34; ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(projected.x, projected.y, radius + 3, 0, ORRERY_TAU); ctx.stroke();
+    } else {
+      ctx.globalAlpha = .96; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(projected.x, projected.y, radius, 0, ORRERY_TAU); ctx.fill();
+      const shade = ctx.createRadialGradient(projected.x - radius * .42, projected.y - radius * .45, 0, projected.x, projected.y, radius * 1.12);
+      shade.addColorStop(0, "rgba(255,255,255,.24)"); shade.addColorStop(.46, "rgba(255,255,255,0)"); shade.addColorStop(1, "rgba(0,0,0,.56)");
+      ctx.fillStyle = shade; ctx.fill();
+      ctx.strokeStyle = color; ctx.globalAlpha = .72; ctx.lineWidth = .7; ctx.stroke();
+    }
+    if (body.terraformable || body.bio || body.geo) {
+      ctx.globalAlpha = body.bio ? .78 : .48;
+      ctx.strokeStyle = body.bio ? this.palette.green : body.terraformable ? this.palette.accent : this.palette.orange;
+      ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(projected.x, projected.y, radius + 4, -.25, body.bio ? 1.9 : 1.1); ctx.stroke();
+    }
+    if (body.landable) {
+      ctx.globalAlpha = .7; ctx.strokeStyle = this.palette.text; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(projected.x - radius - 3, projected.y + radius + 4); ctx.lineTo(projected.x, projected.y + radius + 7); ctx.lineTo(projected.x + radius + 3, projected.y + radius + 4); ctx.stroke();
+    }
+    if (targeted || selected || hovered) {
+      const reticle = radius + (targeted ? 10 : 7);
+      ctx.globalAlpha = targeted ? .95 : selected ? .82 : .55;
+      ctx.strokeStyle = targeted ? this.palette.yellow : selected ? this.palette.accent : this.palette.text;
+      ctx.lineWidth = targeted ? 1.6 : 1.1;
+      for (let corner = 0; corner < 4; corner += 1) {
+        const angle = corner * Math.PI / 2 + Math.PI / 4;
+        const x = projected.x + Math.cos(angle) * reticle, y = projected.y + Math.sin(angle) * reticle;
+        ctx.save(); ctx.translate(x, y); ctx.rotate(angle); ctx.beginPath(); ctx.moveTo(-4, 0); ctx.lineTo(0, 0); ctx.lineTo(0, 4); ctx.stroke(); ctx.restore();
+      }
+    }
+    ctx.restore();
+    this.hits.push({body, x: projected.x, y: projected.y, radius: Math.max(10, radius + 5), depth: projected.depth});
+  }
+
+  drawLabels(projectedBodies) {
+    if (!this.view.labels) return;
+    const ctx = this.ctx, boxes = [];
+    const dense = this.bodies.length > 18 && this.view.zoom < 1.28;
+    for (const {body, projected} of [...projectedBodies].sort((a, b) => b.projected.depth - a.projected.depth)) {
+      const important = body.kind === "star" || body.targeted || body.id === this.selected || body.bio || body.terraformable;
+      if (dense && !important) continue;
+      const name = `${orreryBodyIcon(body)} ${String(body.name || `Body ${body.body_id ?? "?"}`)}`;
+      const detail = `${body.is_moon ? "MOON" : body.kind.toUpperCase()} · ${String(body.class || "UNKNOWN").toUpperCase()}`;
+      ctx.font = "700 10px Consolas, monospace";
+      const width = Math.max(ctx.measureText(name).width, ctx.measureText(detail).width * .82) + 12;
+      const right = projected.x < this.width * .72;
+      const x = right ? projected.x + 12 : projected.x - width - 12;
+      const y = projected.y - 11;
+      const box = {x, y: y - 2, width, height: 27};
+      const overlaps = boxes.some((other) => box.x < other.x + other.width && box.x + box.width > other.x && box.y < other.y + other.height && box.y + box.height > other.y);
+      if (overlaps && !body.targeted && body.id !== this.selected) continue;
+      boxes.push(box);
+      ctx.save(); ctx.globalAlpha = .92; ctx.fillStyle = "rgba(3,9,13,.72)"; ctx.fillRect(box.x, box.y, box.width, box.height);
+      ctx.strokeStyle = body.targeted ? this.palette.yellow : body.id === this.selected ? this.palette.accent : this.palette.border; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(right ? projected.x + 5 : projected.x - 5, projected.y); ctx.lineTo(right ? x : x + width, projected.y); ctx.stroke();
+      ctx.fillStyle = body.targeted ? this.palette.yellow : this.palette.text; ctx.font = "700 10px Consolas, monospace"; ctx.fillText(name, x + 6, y + 8);
+      ctx.fillStyle = this.palette.dim; ctx.font = "8px Consolas, monospace"; ctx.fillText(detail, x + 6, y + 20); ctx.restore();
+    }
+  }
+
+  hitAt(x, y) {
+    return [...this.hits].reverse().find((hit) => Math.hypot(hit.x - x, hit.y - y) <= hit.radius);
+  }
+
+  select(id) {
+    this.selected = String(id); orrerySelectedBodyId = this.selected;
+    const body = this.byId.get(this.selected);
+    const detail = byId("orrery-detail");
+    if (detail) detail.innerHTML = orreryDetail(body);
+    this.render();
+  }
+
+  render() {
+    if (!this.width || !this.height || !this.ctx) return;
+    this.palette = this.readPalette();
+    const ctx = this.ctx;
+    ctx.setTransform(this.ratio, 0, 0, this.ratio, 0, 0); ctx.clearRect(0, 0, this.width, this.height);
+    this.hits = [];
+    this.drawBackdrop();
+    if (this.view.orbits) {
+      for (const orbit of this.orbits) {
+        const active = orbit.body.id === this.selected || orbit.body.targeted;
+        this.line(orbit.points, active ? (orbit.body.targeted ? this.palette.yellow : this.palette.accent) : this.palette.orange,
+          active ? .58 : orbit.body.source === "edsm" ? .14 : .25, active ? 1.25 : .75, orbit.body.source === "edsm" || !orbit.body.orbit?.resolved);
+      }
+    }
+    const projectedBodies = this.bodies.map((body) => ({body, projected: this.project(this.world.get(body.id) || {x: 0, y: 0, z: 0})}));
+    projectedBodies.sort((a, b) => a.projected.depth - b.projected.depth).forEach(({body, projected}) => this.drawBody(body, projected));
+    this.drawLabels(projectedBodies);
+  }
+
+  dispose() {
+    this.saveView(); this.abort.abort(); this.resizeObserver?.disconnect();
+  }
+}
+
+function mountSystemOrrery(orrery = {}) {
+  orreryView?.dispose(); orreryView = null;
+  const canvas = byId("system-orrery-canvas");
+  if (!canvas || !(orrery.bodies || []).length) return;
+  orreryView = new EliteSystemOrrery(canvas, orrery.bodies || []);
 }
 
 function orreryDetail(body) {
   if (!body) return `<p class="workspace-empty">Select a body in the system architecture.</p>`;
   const period = body.orbital_period ? `${numeric(body.orbital_period / 86400, 2)} DAYS` : "UNREPORTED";
-  return `<div class="orrery-body-title"><i class="${escapeHtml(body.kind)}"></i><div><small>BODY ${escapeHtml(body.body_id ?? "—")}</small><h3>${escapeHtml(body.name)}</h3><span>${escapeHtml(body.class)}</span></div><b>${credits(body.value)}</b></div><div class="orrery-facts"><span>ORBIT <b>${period}</b></span><span>DISTANCE <b>${body.distance_ls === null ? "—" : `${numeric(body.distance_ls, 1)} LS`}</b></span><span>GRAVITY <b>${body.gravity_g === null ? "—" : `${numeric(body.gravity_g, 2)} G`}</b></span><span>ATMOSPHERE <b>${escapeHtml(body.atmosphere || "AIRLESS")}</b></span><span>BIOLOGY <b>${numeric(body.bio_complete)} / ${numeric(body.bio)}</b></span><span>GEOLOGY <b>${numeric(body.geo)}</b></span></div><div class="orrery-flags">${(body.flags || []).map((flag) => `<em>${escapeHtml(flag)}</em>`).join("") || "<em>STANDARD SURVEY RECORD</em>"}</div>`;
+  const position = body.orbit?.resolved ? "LIVE KEPLER POSITION" : body.source === "edsm" ? "EDSM ORBIT · POSITION APPROXIMATE" : "SCHEMATIC POSITION";
+  const flags = [...(body.flags || []), position, body.rings ? `${numeric(body.rings)} RING${number(body.rings) === 1 ? "" : "S"}` : ""].filter(Boolean);
+  return `<div class="orrery-body-title"><i class="${escapeHtml(body.kind)}"></i><div><small>BODY ${escapeHtml(body.body_id ?? "—")} · ${body.is_moon ? "MOON" : escapeHtml(String(body.kind || "BODY").toUpperCase())}</small><h3>${escapeHtml(body.name)}</h3><span>${escapeHtml(body.class)}</span></div><b>${credits(body.value)}</b></div><div class="orrery-facts"><span>ORBIT <b>${period}</b></span><span>DISTANCE <b>${body.distance_ls === null ? "—" : `${numeric(body.distance_ls, 1)} LS`}</b></span><span>GRAVITY <b>${body.gravity_g === null ? "—" : `${numeric(body.gravity_g, 2)} G`}</b></span><span>ATMOSPHERE <b>${escapeHtml(body.atmosphere || "AIRLESS")}</b></span><span>BIOLOGY <b>${numeric(body.bio_complete)} / ${numeric(body.bio)}</b></span><span>GEOLOGY <b>${numeric(body.geo)}</b></span></div><div class="orrery-flags">${flags.map((flag) => `<em>${escapeHtml(flag)}</em>`).join("") || "<em>STANDARD SURVEY RECORD</em>"}</div>`;
 }
 
 function stellarCartographyMarkup(cartography = {}) {
@@ -1570,7 +2028,7 @@ function stellarCartographyMarkup(cartography = {}) {
     <header><div><small>STELLAR CARTOGRAPHY // LIVE SYSTEM MODEL</small><h3>${escapeHtml(cartography.system || "AWAITING SYSTEM")}</h3><span>${numeric(orrery.stars)} STARS · ${numeric(orrery.planets)} PLANETS · ${numeric(orrery.mapped)} MAPPED</span></div><div><b>${numeric(queue.pending)} ACTIVE</b><span>${numeric(queue.complete)} COMPLETE · ${numeric(queue.skipped)} SKIPPED</span></div></header>
     ${liveTarget.resolved ? `<div class="cartography-target-lock"><i>⌖</i><span><small>ELITE NAVIGATION TARGET</small><b>${escapeHtml(liveTarget.name || "TARGETED BODY")}</b></span><em>BODY ${escapeHtml(liveTarget.body_id ?? "—")} · LOCKED IN ORRERY & SURVEY QUEUE</em></div>` : ""}
     <div class="stellar-grid">
-      ${workspaceCard("LIVE SYSTEM ORRERY", `${orrerySvg(orrery)}<div id="orrery-detail" class="orrery-detail">${orreryDetail(selected)}</div>`, `${numeric((orrery.bodies || []).length)} BODIES`, "orrery-card")}
+      ${workspaceCard("LIVE SYSTEM ORRERY", `${orreryCanvas(orrery)}<div id="orrery-detail" class="orrery-detail">${orreryDetail(selected)}</div>`, `${numeric((orrery.bodies || []).length)} BODIES`, "orrery-card")}
       ${workspaceCard("EXPLORATION SURVEY QUEUE", `${queue.next ? `<div class="survey-next"><small>NEXT RECOMMENDATION</small><b>${escapeHtml(queue.next.body)}</b><span>${escapeHtml(queue.next.action)} · ${escapeHtml(queue.next.reason)}</span></div>` : ""}${workspaceRows(queueRows, "FSS body records will create a prioritised survey queue.")}<div class="workspace-actions"><button data-ws-page="explore" data-ws-op="survey_reset" data-system="${escapeHtml(cartography.system || "")}">RESET COMMANDER CHOICES</button></div>`, `${numeric(queue.pending)} PENDING`, "survey-queue-card")}
     </div>
   </section>`;
@@ -1603,6 +2061,7 @@ function renderExploreWorkspace(data) {
     ${workspaceCard("PROFILE WAYPOINT ROUTE", `${workspaceRows(waypointRows, "No saved waypoints. Add a destination below or import a plotted route.")}<div class="route-add-form"><input id="waypoint-name" placeholder="SYSTEM NAME"><input id="waypoint-note" placeholder="OPTIONAL NOTE"><button data-ws-page="explore" data-ws-op="add_waypoint">ADD</button></div><div class="workspace-actions wrap"><button data-ws-page="explore" data-ws-op="copy_next">COPY NEXT</button><button data-ws-page="explore" data-ws-op="set_auto_copy" data-enabled="${!data.auto_copy}">AUTO COPY ${data.auto_copy ? "ON" : "OFF"}</button><button class="danger-action" data-ws-page="explore" data-ws-op="clear_waypoints">CLEAR ROUTE</button></div>`, `${(data.waypoints || []).filter((row) => row.visited).length}/${(data.waypoints || []).length} COMPLETE`)}
     ${workspaceCard("SPANSH NEUTRON PLOTTER", `<div class="neutron-form"><label>FROM<input id="neutron-from" value="${escapeHtml(data.plotter?.from || data.current || "")}"></label><label>DESTINATION<input id="neutron-to" value="${escapeHtml(data.plotter?.to || "")}"></label><label>SHIP RANGE<input id="neutron-range" type="number" min="1" step="0.1" value="${number(data.plotter?.range, 30)}"></label><label>EFFICIENCY<input id="neutron-efficiency" type="number" min="1" max="100" value="${number(data.plotter?.efficiency, 60)}"></label><label>BOOST<select id="neutron-multiplier"><option value="4" ${number(data.plotter?.multiplier, 4) === 4 ? "selected" : ""}>NEUTRON 4×</option><option value="6" ${number(data.plotter?.multiplier, 4) === 6 ? "selected" : ""}>OVERCHARGE 6×</option></select></label><button class="primary" data-ws-page="explore" data-ws-op="neutron_plot" ${data.plotter?.status === "working" ? "disabled" : ""}>${data.plotter?.status === "working" ? "PLOTTING…" : "PLOT ROUTE"}</button></div><p class="workspace-status ${escapeHtml(data.plotter?.status || "ready")}">${escapeHtml(data.plotter?.detail || "Ready.")}</p>${plottedRows}<div class="workspace-actions wrap"><button data-ws-page="explore" data-ws-op="neutron_copy" ${plotted.waypoints?.length ? "" : "disabled"}>COPY LIST</button><button data-ws-page="explore" data-ws-op="neutron_import" ${plotted.waypoints?.length ? "" : "disabled"}>IMPORT TO WAYPOINTS</button><button data-ws-page="explore" data-ws-op="neutron_clear" ${plotted.waypoints?.length ? "" : "disabled"}>CLEAR RESULT</button></div>`, plotted.total_jumps ? `${numeric(plotted.total_jumps)} JUMPS` : "MANUAL ROUTE", "neutron-plotter-card")}
   </section>`;
+  mountSystemOrrery(data.cartography?.orrery || {});
 }
 
 function renderProfileWorkspace(data) {
@@ -2091,6 +2550,8 @@ function renderDashboard(state) {
   const nextProfileKey = model.profile?.key || "default";
   if (nextProfileKey !== profileKey) {
     cancelPageLayout();
+    orreryView?.dispose();
+    orreryView = null;
     profileKey = nextProfileKey;
     Object.keys(pageLayoutDefaults).forEach((page) => delete pageLayoutDefaults[page]);
     workspaceFingerprints = {};
@@ -2154,9 +2615,9 @@ function renderDashboard(state) {
     showPage(requestedPage.page);
   }
   renderAtlas(model);
-  text("rail-version", `v${model.app?.version || "5.4.2"} // WEBVIEW2`);
-  text("boot-version", `v${model.app?.version || "5.4.2"} // SECURE LOOPBACK // WEBVIEW2`);
-  text("about-version", `Version ${model.app?.version || "5.4.2"} // HTML Command Deck`);
+  text("rail-version", `v${model.app?.version || "5.4.2.1"} // WEBVIEW2`);
+  text("boot-version", `v${model.app?.version || "5.4.2.1"} // SECURE LOOPBACK // WEBVIEW2`);
+  text("about-version", `Version ${model.app?.version || "5.4.2.1"} // HTML Command Deck`);
   text("overview-subtitle", model.profile?.profile_label || "Journal-backed field intelligence");
   if (currentPage === "map" && !model.boot?.active) ensureAtlas();
 }
@@ -2399,14 +2860,6 @@ document.addEventListener("click", async (event) => {
     analyticsView = analyticsTab.dataset.analyticsView || "trends";
     document.querySelectorAll("[data-analytics-view]").forEach((button) => button.classList.toggle("active", button === analyticsTab));
     document.querySelectorAll("[data-analytics-panel]").forEach((panel) => { panel.hidden = panel.dataset.analyticsPanel !== analyticsView; });
-    return;
-  }
-  const orreryNode = event.target.closest("[data-orrery-body]");
-  if (orreryNode) {
-    orrerySelectedBodyId = orreryNode.dataset.orreryBody;
-    const bodies = model.workspace?.page === "explore" ? model.workspace.data?.cartography?.orrery?.bodies || [] : [];
-    byId("orrery-detail").innerHTML = orreryDetail(bodies.find((row) => String(row.id) === String(orrerySelectedBodyId)));
-    document.querySelectorAll("[data-orrery-body]").forEach((node) => node.classList.toggle("selected", node === orreryNode));
     return;
   }
   if (event.target.closest("#replay-play")) {

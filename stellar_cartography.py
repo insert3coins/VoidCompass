@@ -91,7 +91,7 @@ def _body_matches_target(item, target):
 def edsm_bodies_to_orrery_items(payload, system_name=None):
     """Translate public EDSM body architecture into display-only scan rows.
 
-    These rows are deliberately suitable for the schematic orrery only. They
+    These rows are deliberately suitable for the display orrery only. They
     never claim commander discovery, mapping, biology or geology progress and
     are not written to the profile's journal-backed scan cache.
     """
@@ -150,6 +150,14 @@ def edsm_bodies_to_orrery_items(payload, system_name=None):
             "rotation_period": rotation_days * 86400.0 if rotation_days is not None else None,
             "semi_major_axis": semi_major_au * 149597870700.0 if semi_major_au is not None else None,
             "eccentricity": _number(body.get("orbitalEccentricity")),
+            "orbital_inclination": _number(body.get("orbitalInclination")),
+            "periapsis": _number(body.get("argOfPeriapsis")),
+            # EDSM does not publish the two elements needed to resolve a live
+            # position. The renderer marks these rows approximate and uses a
+            # stable schematic phase rather than pretending otherwise.
+            "ascending_node": None,
+            "mean_anomaly": None,
+            "scan_timestamp": None,
             "axial_tilt": _number(body.get("axialTilt")),
             "tidal_lock": bool(body.get("rotationalPeriodTidallyLocked")),
             "was_discovered": True,
@@ -164,7 +172,7 @@ def edsm_bodies_to_orrery_items(payload, system_name=None):
 
 
 def build_orrery(items, target=None):
-    """Return a compact, schematic system architecture model."""
+    """Return journal-backed system architecture and orbital presentation data."""
     source = [row for row in (items or ()) if isinstance(row, dict)]
     known_ids = {
         str(row.get("body_id")) for row in source if row.get("body_id") is not None
@@ -178,6 +186,30 @@ def build_orrery(items, target=None):
         body_class = _text(item.get("planet_class") or item.get("class") or "Unknown", 120)
         is_star = bool(item.get("is_star") or item.get("star_type"))
         mapped = bool(item.get("dss_complete") or item.get("was_mapped"))
+        rings = [row for row in (item.get("rings") or ()) if isinstance(row, dict)]
+        ring_class = _text(
+            (rings[0].get("RingClass") or rings[0].get("type")) if rings else "",
+            80,
+        )
+        orbit = {
+            "semi_major_axis": _number(item.get("semi_major_axis")),
+            "period_s": _number(item.get("orbital_period")),
+            "eccentricity": _number(item.get("eccentricity"), 0.0),
+            "inclination_deg": _number(item.get("orbital_inclination"), 0.0),
+            "periapsis_deg": _number(item.get("periapsis"), 0.0),
+            "ascending_node_deg": _number(item.get("ascending_node")),
+            "mean_anomaly_deg": _number(item.get("mean_anomaly")),
+            "epoch_s": _epoch(item.get("scan_timestamp") or item.get("timestamp")),
+        }
+        orbit["resolved"] = bool(
+            orbit["semi_major_axis"] is not None
+            and orbit["semi_major_axis"] > 0
+            and orbit["period_s"] is not None
+            and orbit["period_s"] > 0
+            and orbit["ascending_node_deg"] is not None
+            and orbit["mean_anomaly_deg"] is not None
+            and orbit["epoch_s"] > 0
+        )
         organic = item.get("organic_scans") or {}
         analysed = sum(
             1 for row in (organic.values() if isinstance(organic, dict) else organic)
@@ -210,12 +242,16 @@ def build_orrery(items, target=None):
             "orbital_period": _number(item.get("orbital_period")),
             "rotation_period": _number(item.get("rotation_period")),
             "eccentricity": _number(item.get("eccentricity")),
+            "orbit": orbit,
             "distance_ls": _number(item.get("distance_to_arrival")),
             "mass": _number(item.get("mass")),
+            "radius_m": _number(item.get("radius")),
             "gravity_g": _number(item.get("gravity_g")),
             "temperature_k": _number(item.get("surface_temp")),
             "atmosphere": _text(item.get("atmosphere_type") or item.get("atmosphere") or "Airless", 100),
-            "rings": len(item.get("rings") or ()),
+            "rings": len(rings),
+            "ring_class": ring_class,
+            "reserve_level": _text(item.get("reserve_level"), 80),
             "bio": max(0, _integer(item.get("bio_count"))),
             "bio_complete": analysed,
             "geo": max(0, _integer(item.get("geo_count"))),
@@ -225,7 +261,12 @@ def build_orrery(items, target=None):
             "terraformable": bool(item.get("terraformable")),
             "targeted": _body_matches_target(item, target),
             "flags": flags,
+            "source": "edsm" if item.get("_orrery_source") == "edsm" else "journal",
         })
+    by_id = {str(row["id"]): row for row in bodies}
+    for row in bodies:
+        parent = by_id.get(str(row.get("parent_id")))
+        row["is_moon"] = bool(parent and parent.get("kind") == "planet")
     children = {row["parent_id"] for row in bodies if row.get("parent_id")}
     targeted = next((row for row in bodies if row["targeted"]), None)
     target_model = None
