@@ -12,6 +12,15 @@ WIDTH = 360
 MIN_HEIGHT = 148
 MAX_ROWS = 14
 
+# Cargo.json only identifies the active hold as Ship or SRV. These fixed
+# vehicle capacities are not emitted by that file, so keep them isolated from
+# the mothership Loadout capacity and use unknown for any unrecognised model.
+VEHICLE_CARGO_CAPACITIES = {
+    "SCARAB": 4,
+    "SCORPION": 2,
+    "RHINO": 72,
+}
+
 
 def _integer(value, default=0):
     try:
@@ -29,7 +38,29 @@ def _cargo_name(item):
     return value.replace("_name", "").replace("_", " ").title() or "Unknown"
 
 
-def build_cargo_model(inventory, capacity=0):
+def _cargo_owner(vessel="Ship", vehicle_name=""):
+    """Return stable journal and presentation labels for the active cargo hold."""
+    vessel_text = str(vessel or "Ship").strip()
+    vessel_key = vessel_text.casefold()
+    if vessel_key == "ship":
+        return "Ship", "SHIP"
+    if vessel_key == "srv":
+        vehicle = str(vehicle_name or "SRV").strip().upper()
+        if vehicle not in {"NOMAD", "SCARAB", "SCORPION", "RHINO", "SRV"}:
+            vehicle = "SRV"
+        return "SRV", vehicle
+    return vessel_text or "Unknown", str(vehicle_name or vessel_text or "UNKNOWN").strip().upper()
+
+
+def cargo_capacity_for(vessel="Ship", vehicle_name="", ship_capacity=0):
+    """Resolve a capacity without ever leaking the ship hold into an SRV."""
+    vessel, owner = _cargo_owner(vessel, vehicle_name)
+    if vessel == "Ship":
+        return max(0, _integer(ship_capacity))
+    return max(0, _integer(VEHICLE_CARGO_CAPACITIES.get(owner, 0)))
+
+
+def build_cargo_model(inventory, capacity=0, vessel="Ship", vehicle_name=""):
     """Normalise Cargo.json inventory and expose mission/stolen distinctions."""
     stacks = {}
     for item in inventory or []:
@@ -50,7 +81,11 @@ def build_cargo_model(inventory, capacity=0):
 
     rows = sorted(stacks.values(), key=lambda row: row["name"].casefold())
     total = sum(row["count"] for row in rows)
-    capacity_value = max(0, _integer(capacity))
+    vessel, owner = _cargo_owner(vessel, vehicle_name)
+    # Never combine an SRV snapshot with the last ship Loadout.CargoCapacity.
+    # Known fixed vehicle holds come from the vehicle catalogue above; unknown
+    # models remain explicitly unknown rather than showing false free space.
+    capacity_value = cargo_capacity_for(vessel, owner, capacity)
     utilisation = None
     if capacity_value:
         utilisation = max(0.0, min(1.0, total / capacity_value))
@@ -62,6 +97,10 @@ def build_cargo_model(inventory, capacity=0):
         "utilisation": utilisation,
         "mission": sum(row["mission"] for row in rows),
         "stolen": sum(row["stolen"] for row in rows),
+        "vessel": vessel,
+        "owner": owner,
+        "hold_key": f"{vessel.casefold()}:{owner.casefold()}",
+        "capacity_known": bool(capacity_value),
     }
 
 
@@ -72,8 +111,10 @@ class CargoHUD:
         self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
         self._last_inventory = []
         self._last_capacity = 0
+        self._last_vessel = "Ship"
+        self._last_vehicle_name = ""
         self._last_render_key = None
-        self._html_render_model = build_cargo_model([], 0)
+        self._html_render_model = build_cargo_model([], 0, "Ship", "")
         self._height = MIN_HEIGHT
         self._save_job = None
 
@@ -187,11 +228,13 @@ class CargoHUD:
                 width=1,
             )
 
-    def update(self, inventory, capacity=0):
+    def update(self, inventory, capacity=0, vessel="Ship", vehicle_name=""):
         inventory = list(inventory or [])
         self._last_inventory = list(inventory)
         self._last_capacity = capacity
-        model = build_cargo_model(inventory, capacity)
+        self._last_vessel = vessel
+        self._last_vehicle_name = vehicle_name
+        model = build_cargo_model(inventory, capacity, vessel, vehicle_name)
         self._html_render_model = model
         render_key = repr(model)
         if render_key == self._last_render_key:
@@ -211,7 +254,10 @@ class CargoHUD:
         overlay_chrome.draw_chrome(
             self.canvas, WIDTH, self._height, accent=palette["accent"], scanlines=False,
         )
-        self.draw_text(16, 18, "CARGO MANIFEST", palette["accent"], ("Courier", 10, "bold"))
+        self.draw_text(
+            16, 18, f'{model["owner"]} CARGO',
+            palette["accent"], ("Courier", 10, "bold"),
+        )
         total_text = f'{model["total"]:,}'
         if model["capacity"]:
             total_text += f' / {model["capacity"]:,} T'
@@ -220,7 +266,10 @@ class CargoHUD:
         self.draw_text(WIDTH - 16, 18, total_text, palette["orange"],
                        ("Courier", 10, "bold"), anchor="e")
         utilisation = model["utilisation"]
-        status_text = "CAPACITY UNKNOWN"
+        status_text = (
+            "CAPACITY NOT REPORTED BY JOURNAL"
+            if model["vessel"] != "Ship" else "CAPACITY UNKNOWN"
+        )
         status_tone = "dim"
         if utilisation is not None:
             status_text = f'{utilisation * 100:.0f}% USED  ·  {model["free"]:,} T FREE'
@@ -273,4 +322,7 @@ class CargoHUD:
     def apply_theme(self, palette=None):
         self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)
         self._last_render_key = None
-        self.update(self._last_inventory, self._last_capacity)
+        self.update(
+            self._last_inventory, self._last_capacity,
+            self._last_vessel, self._last_vehicle_name,
+        )

@@ -2367,7 +2367,7 @@ class DashboardUIMixin(ThemedWindowMixin):
         except (TypeError, ValueError, ZeroDivisionError):
             pass
         cargo = int(getattr(self, "current_cargo_tons", 0) or 0)
-        cargo_cap = int(getattr(self, "cargo_capacity", 0) or 0)
+        cargo_cap = self._active_cargo_capacity()
         unsold = int(state.get("unsold_exploration_cr") or 0) + int(state.get("unsold_bio_cr") or 0)
         potential_bonus = int(state.get("unsold_bio_bonus_potential_cr") or 0)
         flight_bits = []

@@ -27,7 +27,7 @@ from ui_theme import apply_theme_live
 from version import APP_VERSION
 import bio_values
 from hud import TacticalHUD
-from cargo_hud import CargoHUD
+from cargo_hud import CargoHUD, cargo_capacity_for
 from carrier_hud import CarrierHUD
 from edsm_handler import EDSMHandler
 from screenshot_handler import ScreenshotHandler
@@ -337,7 +337,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         "current_asteroid_field_kind",
         "neutron_boost_armed", "neutron_boost_value",
         "fsd_injection_armed", "fsd_injection_percent",
-        "cargo_capacity", "current_cargo_tons",
+        "cargo_capacity", "current_cargo_tons", "current_cargo_vessel",
         "current_cargo_inventory", "dest_coords", "dest_name", "route_list",
         "nav_route_entries", "current_latitude", "current_longitude",
         "current_heading", "current_planet_radius", "on_planet",
@@ -764,7 +764,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         if self.station_info_hud and self.current_docked and self.current_station_name:
             self.station_info_hud.on_docked(self)
         if self.cargo_hud:
-            self.cargo_hud.update(self.current_cargo_inventory, self.cargo_capacity)
+            self._refresh_cargo_consumers()
         # This warning is a transient response to a live ApproachBody. Cached
         # recovery previously raised PLANETARY FLIGHT ENVELOPE on every launch,
         # making it look like the coordinate compass was the wrong overlay.
@@ -1141,6 +1141,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.cargo_capacity = 0
         self.current_cargo_tons = 0
         self.current_cargo_inventory = []
+        self.current_cargo_vessel = "Ship"
         self.operational_state = operational_state.fresh_runtime_state()
         self.colonisation_projects = {}
         self.engineer_materials = {}
@@ -2077,6 +2078,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.cargo_capacity = 0
         self.current_cargo_tons = 0
         self.current_cargo_inventory = []
+        self.current_cargo_vessel = "Ship"
         self.operational_state = operational_state.fresh_runtime_state()
         self._hud_balance_cache = {"ts": 0.0, "balance": None}
         self.last_journal_event_ts = 0.0
@@ -2249,7 +2251,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             except Exception:
                 pass
             try:
-                self.cargo_hud.update(self.current_cargo_inventory, self.cargo_capacity)
+                inventory, capacity, vessel, owner = self._cargo_hold_snapshot()
+                self.cargo_hud.update(inventory, capacity, vessel, owner)
                 self.cargo_hud.win.deiconify()
                 self.cargo_hud.win.attributes("-topmost", True)
                 self.cargo_hud.win.lift()
@@ -4273,7 +4276,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.cargo_hud = CargoHUD(self.root, self.config)
                 self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
                 self.watcher.force_check_cargo()
-            self.cargo_hud.update(self.current_cargo_inventory, self.cargo_capacity)
+            inventory, capacity, vessel, owner = self._cargo_hold_snapshot()
+            self.cargo_hud.update(inventory, capacity, vessel, owner)
             try:
                 self.cargo_hud.win.deiconify()
                 self.cargo_hud.win.attributes("-topmost", True)
@@ -4909,7 +4913,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 cargo_tons = sum(int(item.get("Count", item.get("count", 0)) or 0) for item in self.current_cargo_inventory)
             except Exception:
                 cargo_tons = 0
-        cargo_cap = int(getattr(self, "cargo_capacity", 0) or 0)
+        cargo_cap = self._active_cargo_capacity()
         geo_signals = sum(
             int(signals.get("geo", 0) or 0)
             for signals in (getattr(self, "body_signals", None) or {}).values()
@@ -6454,7 +6458,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         except (TypeError, ValueError, ZeroDivisionError):
             pass
         cargo_tons = int(getattr(self, "current_cargo_tons", 0) or 0)
-        cargo_capacity = int(getattr(self, "cargo_capacity", 0) or 0)
+        cargo_capacity = self._active_cargo_capacity()
         cargo_percent = round(cargo_tons * 100 / cargo_capacity) if cargo_capacity else None
 
         missions = state.get("missions") or {}
@@ -8060,6 +8064,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 # hand-offs, not evidence of mothership approach/departure.
                 self._surface_departure_active = False
             self.update_hud()
+            self._refresh_cargo_consumers()
 
         elif ev == "LaunchSRV":
             self._clear_navigation_vehicle_handoff()
@@ -8078,6 +8083,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.hud_flight_state = vehicle_name
             self._surface_departure_active = False
             self.update_hud()
+            self._refresh_cargo_consumers()
 
         elif ev in ("DockFighter", "FighterDestroyed"):
             self._clear_navigation_vehicle_handoff()
@@ -8089,6 +8095,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._sync_navigation_hud_flight_state(supercruise=False)
             self._surface_departure_active = False
             self.update_hud()
+            self._refresh_cargo_consumers()
 
         elif ev == "DockSRV":
             self._clear_navigation_vehicle_handoff()
@@ -8114,6 +8121,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 and not self.current_landed
             )
             self.update_hud()
+            self._refresh_cargo_consumers()
 
         elif ev == "FSSDiscoveryScan":
             if not self._matches_current_system_address(d):
@@ -9506,20 +9514,71 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._refresh_html_workspace()
         self._refresh_exploration_window()
 
+    @staticmethod
+    def _normalise_cargo_vessel(vessel):
+        value = str(vessel or "Ship").strip()
+        key = value.casefold()
+        if key == "ship":
+            return "Ship"
+        if key == "srv":
+            return "SRV"
+        return value or "Ship"
+
+    def _cargo_vehicle_owner(self, vessel=None):
+        """Name the vehicle which owns an SRV Cargo.json snapshot."""
+        vessel = self._normalise_cargo_vessel(
+            vessel if vessel is not None else getattr(self, "current_cargo_vessel", "Ship")
+        )
+        if vessel == "Ship":
+            return "SHIP"
+        supported = {"NOMAD", "SCARAB", "SCORPION", "RHINO", "SRV"}
+        current = str(getattr(self, "current_vehicle_name", "") or "").strip().upper()
+        remembered = str(getattr(self, "_last_surface_vehicle_name", "") or "").strip().upper()
+        if current in supported:
+            return current
+        if remembered in supported:
+            return remembered
+        return "SRV" if vessel == "SRV" else vessel.upper()
+
+    def _active_cargo_capacity(self):
+        """Return the active ship or known vehicle hold capacity."""
+        vessel = self._normalise_cargo_vessel(
+            getattr(self, "current_cargo_vessel", "Ship")
+        )
+        return cargo_capacity_for(
+            vessel, self._cargo_vehicle_owner(vessel),
+            getattr(self, "cargo_capacity", 0),
+        )
+
+    def _cargo_hold_snapshot(self):
+        vessel = self._normalise_cargo_vessel(
+            getattr(self, "current_cargo_vessel", "Ship")
+        )
+        return (
+            list(getattr(self, "current_cargo_inventory", None) or []),
+            self._active_cargo_capacity(),
+            vessel,
+            self._cargo_vehicle_owner(vessel),
+        )
+
     def _refresh_cargo_consumers(self):
-        """Publish inventory and hold capacity as one live ship snapshot."""
-        if self.cargo_hud:
-            cargo_hud = self.cargo_hud
-            inventory = list(self.current_cargo_inventory)
-            capacity = self.cargo_capacity
+        """Publish one vessel-aware Cargo.json snapshot to the live overlay."""
+        cargo_hud = getattr(self, "cargo_hud", None)
+        if cargo_hud:
+            inventory, capacity, vessel, owner = self._cargo_hold_snapshot()
             self._ui_post(
-                lambda hud=cargo_hud, inv=inventory, cap=capacity: hud.update(inv, cap),
+                lambda hud=cargo_hud, inv=inventory, cap=capacity,
+                       ves=vessel, own=owner: hud.update(inv, cap, ves, own),
                 key="cargo-hud",
             )
+
     def update_cargo(self, inventory, vessel="Ship"):
         self.last_cargo_event_ts = time.time()
+        self.current_cargo_vessel = self._normalise_cargo_vessel(vessel)
         self.current_cargo_inventory = list(inventory or [])
-        self.edsm.queue_cargo_snapshot(self.current_cargo_inventory, vessel=vessel)
+        self.edsm.queue_cargo_snapshot(
+            self.current_cargo_inventory, vessel=self.current_cargo_vessel,
+        )
         try:
             specialist_engine = getattr(self, "specialist_engine", None)
             if specialist_engine:

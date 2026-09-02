@@ -258,10 +258,11 @@
     placeChildren(host, desired);
   }
 
-  function acknowledgeCargoChange(delta, hasRows) {
+  function acknowledgeCargoChange(delta, hasRows, owner) {
+    const holdLabel = `${owner || "CARGO"} HOLD`;
     if (!delta) {
       if (!settleTimer) {
-        set("hold-state", hasRows ? "MANIFEST LIVE" : "HOLD CLEAR");
+        set("hold-state", hasRows ? `${holdLabel} LIVE` : `${holdLabel} CLEAR`);
       }
       return;
     }
@@ -278,7 +279,7 @@
       if (sequence !== eventSequence) return;
       settleTimer = null;
       root.classList.remove("cargo-event", "intake-event", "release-event");
-      set("hold-state", hasRows ? "MANIFEST LIVE" : "HOLD CLEAR");
+      set("hold-state", hasRows ? `${holdLabel} LIVE` : `${holdLabel} CLEAR`);
     }, 1650);
   }
 
@@ -288,20 +289,34 @@
     const total = Math.max(0, number(model.total));
     const capacity = Math.max(0, number(model.capacity));
     const rows = Array.isArray(model.rows) ? model.rows : [];
-    const oldTotal = previousModel ? number(previousModel.total) : total;
+    const owner = String(model.owner || (model.vessel === "SRV" ? "SRV" : "SHIP")).toUpperCase();
+    const holdKey = String(model.hold_key || model.vessel || "ship").toLowerCase();
+    const previousHoldKey = String(previousModel?.hold_key || previousModel?.vessel || "ship").toLowerCase();
+    const sameHold = Boolean(previousModel) && holdKey === previousHoldKey;
+    if (previousModel && !sameHold) {
+      window.clearTimeout(settleTimer);
+      settleTimer = null;
+      root.classList.remove("cargo-event", "intake-event", "release-event");
+      previousModel = null;
+      flagSignature = "";
+    }
+    const oldTotal = sameHold ? number(previousModel.total) : total;
     const delta = total - oldTotal;
     root.classList.toggle("empty", !rows.length);
     root.classList.toggle("has-cargo", rows.length > 0);
     root.classList.toggle("has-stolen", number(model.stolen) > 0);
     root.classList.toggle("has-mission", number(model.mission) > 0);
-    acknowledgeCargoChange(delta, rows.length > 0);
+    root.dataset.vessel = String(model.vessel || "Ship").toLowerCase();
+    set("cargo-title", `${owner} CARGO`);
+    set("hold-owner", `${owner} CARGO HOLD`);
+    acknowledgeCargoChange(delta, rows.length > 0, owner);
 
     set("hold-total", capacity
       ? `${total.toLocaleString()} / ${capacity.toLocaleString()} T`
       : tonnes(total));
     set("hold-detail", capacity
       ? `${rows.length} STACK${rows.length === 1 ? "" : "S"} · ${Math.round(total / Math.max(1, capacity) * 100)}% LOAD`
-      : `${rows.length} STACK${rows.length === 1 ? "" : "S"} · CAPACITY UNKNOWN`);
+      : `${rows.length} STACK${rows.length === 1 ? "" : "S"} · ${model.vessel === "SRV" ? "VEHICLE CAPACITY NOT REPORTED" : "CAPACITY UNKNOWN"}`);
     set("hold-free", model.free === null || model.free === undefined
       ? "—" : number(model.free).toLocaleString());
     set("stack-count", `${rows.length} STACK${rows.length === 1 ? "" : "S"}`);

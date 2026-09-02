@@ -204,6 +204,9 @@ class DashboardScanMixin:
             supercruise=self.hud_flight_state == "SUPERCRUISE"
         )
         self.update_hud()
+        refresh_cargo = getattr(self, "_refresh_cargo_consumers", None)
+        if callable(refresh_cargo):
+            refresh_cargo()
         return self.hud_flight_state
 
     def _flush_pending_status_update(self):
