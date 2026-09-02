@@ -1,17 +1,16 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.2.1 // Elite-Style Live System Orrery
-**Release Date:** 2026-Sep-01
+## v5.4.2.2 // Vessel-Aware Cargo Holds
+**Release Date:** 2026-Sep-03
 
-*   Rebuilt the Live System Orrery as a permanently full-width, interactive Elite-inspired three-dimensional instrument with the Exploration Survey Queue beneath it, plus drag rotation, wheel zoom, top and tilted views, optional orbit paths and labels, body selection and target highlighting.
-*   Retained the journal's full Kepler orbital elements and parent-child architecture so newly scanned stars, planets and moons use time-resolved positions instead of a flat schematic. Public EDSM recovery remains visibly marked as approximate where phase data is unavailable.
-*   Added branch-aware logarithmic scaling so close moons, rings and distant worlds remain readable together, while preserving body class, landability, terraformability, biological, geological and survey-value intelligence.
-*   Replaced the decorative radar sweep with a calm deep-space starfield and adopted ORRERY's journal-class palette, radius-aware body sizing, restrained orbit language, ring materials, moon/landability glyphs and wireframe treatment for approximate EDSM architecture.
-*   Unified the System Workboard with the Orrery's known-system recovery so previously completed visits can display archived body architecture instead of incorrectly waiting for new FSS/DSS data; journal records remain authoritative and recovered rows are labelled `KNOWN`.
-*   Kept rendering lightweight and responsive through an on-demand Canvas projection with profile-aware view memory, live theme colours and no duplicate journal watcher or continuous 3D render loop.
+*   Made Cargo Manifest follow the active `Cargo.json` vessel so ship, Rhino, Scarab, Scorpion and Nomad/SRV snapshots no longer share the mothership's hold capacity.
+*   Added the released Rhino's 72-tonne hold, live vehicle identity, correct used/free calculations and vessel-aware cargo telemetry across the HTML overlay, Navigation HUD and Dashboard.
+*   Preserved the active cargo vessel per commander profile and refreshed the manifest across vehicle launch, docking and journal `VehicleSwitch` hand-offs.
+*   Prevented switching between holds from being misread as a large cargo intake or release animation; unreported vehicle capacities now remain explicitly unknown instead of showing misleading ship figures.
 
 ## Earlier releases
 
+*   **v5.4.2.1** — Rebuilt the Live System Orrery as a full-width interactive Elite-inspired instrument with journal-accurate orbital architecture, known-system recovery, branch-aware scaling and lightweight profile-aware controls.
 *   **v5.4.2** — Added first-class Rhino journal and vehicle-state support, planetary mining-location DSS evidence and retained survey presentation, with Rhino mining and SRV cargo flowing through the existing unified pipelines.
 *   **v5.4.1.9** — Rebuilt Mining Command around one journal reducer with target directives, readiness, prospect/refinery yield, objectives, analytics, ring intelligence and buyer lookup; simplified Prospector Analysis and enforced HTML-only overlay presentation.
 *   **v5.4.1.8** — Added overlay recovery, Screenshot Chronicle, Exploration Preflight and Smart Next Action; hardened first-launch overlay restoration and station/carrier vicinity state.
