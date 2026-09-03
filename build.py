@@ -38,12 +38,13 @@ if __name__ == '__main__':
     if os.path.exists('build'):
         print("Removing previous build folder...")
         shutil.rmtree('build')
-    # Convert "1.3.0" -> (1, 3, 0, 0) for Windows Version Info
+    # Windows PE version fields accept exactly four numeric components. Keep
+    # the complete application version in the descriptive string fields while
+    # safely truncating only the fixed numeric tuple for hotfix versions such
+    # as 5.4.2.2.1.
     v_parts = [int(x) for x in APP_VERSION.split('.')]
-    while len(v_parts) < 4:
-        v_parts.append(0)
-    v_tuple = tuple(v_parts)
-    v_str = f"{v_parts[0]}.{v_parts[1]}.{v_parts[2]}.{v_parts[3]}"
+    v_tuple = tuple((v_parts + [0, 0, 0, 0])[:4])
+    v_str = APP_VERSION
 
     # Create PE metadata only for the Windows build.
     if is_windows:
