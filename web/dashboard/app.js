@@ -1561,8 +1561,8 @@ function orreryCanvas(orrery = {}) {
     const loading = Boolean(orrery.loading);
     return `<div class="orrery-empty${loading ? " loading" : ""}"><i></i><b>${loading ? "RECOVERING KNOWN SYSTEM" : "AWAITING SYSTEM SCANS"}</b><span>${loading ? "Requesting public body architecture while retained journal evidence remains authoritative." : "Honk or begin FSS to assemble the live architecture."}</span></div>`;
   }
-  const resolved = bodies.filter((body) => body.orbit?.resolved).length;
-  const approximate = bodies.filter((body) => body.orbit?.semi_major_axis && !body.orbit?.resolved).length;
+  const resolved = bodies.filter((body) => !body.hidden && body.orbit?.resolved).length;
+  const approximate = bodies.filter((body) => !body.hidden && body.orbit?.semi_major_axis && !body.orbit?.resolved).length;
   return `<div class="orrery-stage">
     <canvas id="system-orrery-canvas" tabindex="0" role="img" aria-label="Interactive three-dimensional model of the current Elite Dangerous system"></canvas>
     <div class="orrery-frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -1586,7 +1586,8 @@ class EliteSystemOrrery {
     this.world = new Map();
     this.orbits = [];
     this.extent = 10;
-    this.selected = String(orrerySelectedBodyId || this.bodies[0]?.id || "");
+    const firstVisible = this.bodies.find((body) => !body.hidden);
+    this.selected = String(orrerySelectedBodyId || firstVisible?.id || "");
     this.storeKey = `voidcompass.orrery.view.${profileKey}`;
     this.view = this.loadView();
     this.palette = this.readPalette();
@@ -1885,6 +1886,7 @@ class EliteSystemOrrery {
   }
 
   drawBody(body, projected) {
+    if (body.hidden) return;
     const ctx = this.ctx, radius = this.bodyRadius(body), color = orreryPlanetColor(body);
     const selected = body.id === this.selected, targeted = Boolean(body.targeted), hovered = body.id === this.hovered;
     ctx.save();
@@ -1944,6 +1946,7 @@ class EliteSystemOrrery {
     const ctx = this.ctx, boxes = [];
     const dense = this.bodies.length > 18 && this.view.zoom < 1.28;
     for (const {body, projected} of [...projectedBodies].sort((a, b) => b.projected.depth - a.projected.depth)) {
+      if (body.hidden) continue;
       const important = body.kind === "star" || body.targeted || body.id === this.selected || body.bio || body.terraformable;
       if (dense && !important) continue;
       const name = `${orreryBodyIcon(body)} ${String(body.name || `Body ${body.body_id ?? "?"}`)}`;
@@ -1988,7 +1991,9 @@ class EliteSystemOrrery {
       for (const orbit of this.orbits) {
         const active = orbit.body.id === this.selected || orbit.body.targeted;
         this.line(orbit.points, active ? (orbit.body.targeted ? this.palette.yellow : this.palette.accent) : this.palette.orange,
-          active ? .58 : orbit.body.source === "edsm" ? .14 : .25, active ? 1.25 : .75, orbit.body.source === "edsm" || !orbit.body.orbit?.resolved);
+          orbit.body.hidden ? .11 : active ? .58 : orbit.body.source === "edsm" ? .14 : .25,
+          orbit.body.hidden ? .55 : active ? 1.25 : .75,
+          orbit.body.source === "edsm" || !orbit.body.orbit?.resolved);
       }
     }
     const projectedBodies = this.bodies.map((body) => ({body, projected: this.project(this.world.get(body.id) || {x: 0, y: 0, z: 0})}));
@@ -2013,7 +2018,8 @@ function orreryDetail(body) {
   const period = body.orbital_period ? `${numeric(body.orbital_period / 86400, 2)} DAYS` : "UNREPORTED";
   const position = body.orbit?.resolved ? "LIVE KEPLER POSITION" : body.source === "edsm" ? "EDSM ORBIT · POSITION APPROXIMATE" : "SCHEMATIC POSITION";
   const flags = [...(body.flags || []), position, body.rings ? `${numeric(body.rings)} RING${number(body.rings) === 1 ? "" : "S"}` : ""].filter(Boolean);
-  return `<div class="orrery-body-title"><i class="${escapeHtml(body.kind)}"></i><div><small>BODY ${escapeHtml(body.body_id ?? "—")} · ${body.is_moon ? "MOON" : escapeHtml(String(body.kind || "BODY").toUpperCase())}</small><h3>${escapeHtml(body.name)}</h3><span>${escapeHtml(body.class)}</span></div><b>${credits(body.value)}</b></div><div class="orrery-facts"><span>ORBIT <b>${period}</b></span><span>DISTANCE <b>${body.distance_ls === null ? "—" : `${numeric(body.distance_ls, 1)} LS`}</b></span><span>GRAVITY <b>${body.gravity_g === null ? "—" : `${numeric(body.gravity_g, 2)} G`}</b></span><span>ATMOSPHERE <b>${escapeHtml(body.atmosphere || "AIRLESS")}</b></span><span>BIOLOGY <b>${numeric(body.bio_complete)} / ${numeric(body.bio)}</b></span><span>GEOLOGY <b>${numeric(body.geo)}</b></span></div><div class="orrery-flags">${flags.map((flag) => `<em>${escapeHtml(flag)}</em>`).join("") || "<em>STANDARD SURVEY RECORD</em>"}</div>`;
+  const materials = (body.materials || []).slice(0, 8).map((row) => `<em>${escapeHtml(row.name)} ${numeric(row.percent, 1)}%</em>`).join("");
+  return `<div class="orrery-body-title"><i class="${escapeHtml(body.kind)}"></i><div><small>BODY ${escapeHtml(body.body_id ?? "—")} · ${body.is_moon ? "MOON" : escapeHtml(String(body.kind || "BODY").toUpperCase())}</small><h3>${escapeHtml(body.name)}</h3><span>${escapeHtml(body.class)}</span></div><b>${credits(body.value)}</b></div><div class="orrery-facts"><span>ORBIT <b>${period}</b></span><span>DISTANCE <b>${body.distance_ls === null ? "—" : `${numeric(body.distance_ls, 1)} LS`}</b></span><span>GRAVITY <b>${body.gravity_g === null ? "—" : `${numeric(body.gravity_g, 2)} G`}</b></span><span>ATMOSPHERE <b>${escapeHtml(body.atmosphere || "AIRLESS")}</b></span><span>BIOLOGY <b>${numeric(body.bio_complete)} / ${numeric(body.bio)}</b></span><span>GEOLOGY <b>${numeric(body.geo)}</b></span><span>MINING SITES <b>${numeric(body.mining)}</b></span></div><div class="orrery-flags">${flags.map((flag) => `<em>${escapeHtml(flag)}</em>`).join("") || "<em>STANDARD SURVEY RECORD</em>"}</div>${materials ? `<div class="orrery-flags resource-composition">${materials}</div>` : ""}`;
 }
 
 function stellarCartographyMarkup(cartography = {}) {
@@ -2028,15 +2034,21 @@ function stellarCartographyMarkup(cartography = {}) {
   } else if (!targetId) {
     orreryLiveTargetBodyId = "";
   }
-  if (!orrerySelectedBodyId || !bodies.some((row) => String(row.id) === String(orrerySelectedBodyId))) orrerySelectedBodyId = String(bodies[0]?.id || "");
+  if (!orrerySelectedBodyId || !bodies.some((row) => !row.hidden && String(row.id) === String(orrerySelectedBodyId))) orrerySelectedBodyId = String(bodies.find((row) => !row.hidden)?.id || "");
   const selected = bodies.find((row) => String(row.id) === String(orrerySelectedBodyId));
   const queueRows = (queue.rows || []).map((row) => `<div class="survey-queue-row ${escapeHtml(row.status)}${row.targeted ? " targeted" : ""}"><i>${row.targeted ? "⌖" : row.status === "complete" ? "✓" : row.status === "skipped" ? "–" : row.pinned ? "◆" : String(number(row.score)).padStart(2, "0")}</i><span><b>${escapeHtml(row.body)}${row.targeted ? " <strong>ELITE TARGET</strong>" : ""}</b><small>${escapeHtml(row.action)} · ${escapeHtml(row.reason)}</small><em>${row.distance_ls ? `${numeric(row.distance_ls, 0)} LS · ` : ""}${credits(row.value)}</em></span><div><button data-ws-page="explore" data-ws-op="survey_pin" data-body-key="${escapeHtml(row.key)}" data-system="${escapeHtml(cartography.system || "")}">${row.pinned ? "UNPIN" : "PIN"}</button><button data-ws-page="explore" data-ws-op="survey_complete" data-body-key="${escapeHtml(row.key)}" data-system="${escapeHtml(cartography.system || "")}">${row.status === "complete" && row.manual_complete ? "REOPEN" : "DONE"}</button><button data-ws-page="explore" data-ws-op="survey_skip" data-body-key="${escapeHtml(row.key)}" data-system="${escapeHtml(cartography.system || "")}">${row.status === "skipped" ? "RESTORE" : "SKIP"}</button></div></div>`);
+  const resources = cartography.resources || {};
+  const resourceRows = (resources.bodies || []).map((row) => {
+    const composition = (row.materials || []).slice(0, 10).map((material) => `<em class="${material.rare ? "rare" : ""}">${escapeHtml(material.name)} <b>${numeric(material.percent, 1)}%</b></em>`).join("");
+    return `<div class="planet-resource-row"><span><b>${escapeHtml(row.body)}</b><small>${escapeHtml(row.class || "PLANETARY BODY")} · ${row.landable ? "LANDABLE" : "ORBITAL SCAN"}</small></span><div>${composition || "<em>COMPOSITION UNREPORTED</em>"}</div><strong>${row.mining_locations ? `${numeric(row.mining_locations)} MINING SITES` : row.rare_count ? `${numeric(row.rare_count)} RARE` : "MATERIAL SCAN"}</strong></div>`;
+  });
   return `<section class="stellar-cartography">
     <header><div><small>STELLAR CARTOGRAPHY // LIVE SYSTEM MODEL</small><h3>${escapeHtml(cartography.system || "AWAITING SYSTEM")}</h3><span>${numeric(orrery.stars)} STARS · ${numeric(orrery.planets)} PLANETS · ${numeric(orrery.mapped)} MAPPED</span></div><div><b>${numeric(queue.pending)} ACTIVE</b><span>${numeric(queue.complete)} COMPLETE · ${numeric(queue.skipped)} SKIPPED</span></div></header>
     ${liveTarget.resolved ? `<div class="cartography-target-lock"><i>⌖</i><span><small>ELITE NAVIGATION TARGET</small><b>${escapeHtml(liveTarget.name || "TARGETED BODY")}</b></span><em>BODY ${escapeHtml(liveTarget.body_id ?? "—")} · LOCKED IN ORRERY & SURVEY QUEUE</em></div>` : ""}
     <div class="stellar-grid">
-      ${workspaceCard("LIVE SYSTEM ORRERY", `${orreryCanvas(orrery)}<div id="orrery-detail" class="orrery-detail">${orreryDetail(selected)}</div>`, `${numeric((orrery.bodies || []).length)} BODIES`, "orrery-card")}
+      ${workspaceCard("LIVE SYSTEM ORRERY", `${orreryCanvas(orrery)}<div id="orrery-detail" class="orrery-detail">${orreryDetail(selected)}</div>`, `${numeric(number(orrery.stars) + number(orrery.planets))} BODIES · ${numeric(orrery.barycentres)} BARYCENTRES`, "orrery-card")}
       ${workspaceCard("EXPLORATION SURVEY QUEUE", `${queue.next ? `<div class="survey-next"><small>NEXT RECOMMENDATION</small><b>${escapeHtml(queue.next.body)}</b><span>${escapeHtml(queue.next.action)} · ${escapeHtml(queue.next.reason)}</span></div>` : ""}${workspaceRows(queueRows, "FSS body records will create a prioritised survey queue.")}<div class="workspace-actions"><button data-ws-page="explore" data-ws-op="survey_reset" data-system="${escapeHtml(cartography.system || "")}">RESET COMMANDER CHOICES</button></div>`, `${numeric(queue.pending)} PENDING`, "survey-queue-card")}
+      ${workspaceCard("PLANETARY RESOURCE INTELLIGENCE", workspaceRows(resourceRows, "Detailed planet scans will reveal raw-material composition and Rhino mining locations."), `${numeric(resources.scanned)} SCANNED · ${numeric(resources.rare_bodies)} RARE · ${numeric(resources.mining_sites)} SITES`, "planet-resources-card")}
     </div>
   </section>`;
 }
@@ -2091,6 +2103,14 @@ function renderProfileWorkspace(data) {
     {label: "Expiry", key: "expiry"},
     {label: "Reward", render: (row) => credits(row.reward)},
   ], data.missions || [], "No active mission responsibilities.");
+  const surfaceVehicles = workspaceTable([
+    {label: "Vehicle", render: (row) => `<b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.symbol || "JOURNAL VEHICLE")}</small>`},
+    {label: "ID", render: (row) => row.id ?? "—"},
+    {label: "Loadout", key: "loadout"},
+    {label: "Launches", key: "launches"},
+    {label: "Restocks", key: "restocks"},
+    {label: "Last state", render: (row) => row.destroyed ? "DESTROYED" : escapeHtml(row.last_event || "OBSERVED")},
+  ], data.surface_vehicles || [], "Launch, dock or restock an SRV to establish the observed vehicle ledger.");
   root.classList.remove("loading-panel");
   root.innerHTML = `
     <section class="workspace-hero"><div><small>ACTIVE COMMANDER // ${escapeHtml(data.key)}</small><h3>${escapeHtml(data.name)}</h3><span>${escapeHtml(data.fid || "FID awaiting journal")} · ${escapeHtml(ship.name || ship.type || "No active ship")}</span></div><div><button data-ws-page="profile" data-ws-op="open_folder">OPEN PROFILE FOLDER</button><button data-ws-page="profile" data-ws-op="backup_picker">BACKUP</button><button data-ws-page="profile" data-ws-op="restore_picker">RESTORE</button></div></section>
@@ -2106,9 +2126,10 @@ function renderProfileWorkspace(data) {
       ${workspaceCard("CAREER RECORDS", `<div class="fact-list spacious">${careerRows.join("") || "<p class='workspace-empty'>Elite will provide lifetime statistics through its Statistics event.</p>"}</div>`)}
       ${workspaceCard("ACTIVE SHIP & LOADOUT", `<div class="profile-ship-grid"><div><span>TYPE</span><b>${escapeHtml(ship.type || "—")}</b></div><div><span>IDENT</span><b>${escapeHtml(ship.ident || "—")}</b></div><div><span>CARGO</span><b>${numeric(ship.cargo)} T</b></div><div><span>JUMP RANGE</span><b>${numeric(ship.jump_range, 2)} LY</b></div><div><span>REBUY</span><b>${credits(ship.rebuy)}</b></div><div><span>HULL</span><b>${ship.hull === null || ship.hull === undefined ? "—" : `${numeric(Number(ship.hull) * 100, 1)}%`}</b></div></div><div class="workspace-actions"><button data-ws-page="profile" data-ws-op="open_edsy" ${data.loadout_ready ? "" : "disabled"}>OPEN IN EDSY</button><button data-ws-page="profile" data-ws-op="copy_slef" ${data.loadout_ready ? "" : "disabled"}>COPY SLEF</button></div>`, data.loadout_ready ? "EXPORT READY" : "AWAITING LOADOUT")}
       ${workspaceCard(`STORED FLEET · ${(data.fleet || []).length}`, fleet)}
+      ${workspaceCard(`OBSERVED SURFACE VEHICLES · ${(data.surface_vehicles || []).length}`, surfaceVehicles, "JOURNAL OBSERVATIONS")}
       ${workspaceCard("FLEET CARRIER", `<div class="fact-list spacious"><div><span>CARRIER</span><b>${escapeHtml(data.carrier?.name || "NO OWNED CARRIER DATA")}</b></div><div><span>CALLSIGN</span><b>${escapeHtml(data.carrier?.callsign || "—")}</b></div><div><span>LOCATION</span><b>${escapeHtml(data.carrier?.system || "—")}</b></div><div><span>TRITIUM</span><b>${numeric(data.carrier?.fuel)} T</b></div></div><div class="workspace-actions"><button data-page="carrier">OPEN CARRIER COMMAND</button></div>`)}
       ${workspaceCard(`MISSION RESPONSIBILITIES · ${(data.missions || []).length}`, missions)}
-      ${workspaceCard("PROFILE CUSTODY", `<div class="fact-list spacious"><div><span>PROFILE KEY</span><b>${escapeHtml(data.key)}</b></div><div><span>PROFILE FOLDER</span><b class="path-value">${escapeHtml(data.folder)}</b></div><div><span>EDSM UPLOAD</span><b>${data.integrations?.edsm ? "ON" : "OFF"}</b></div><div><span>EDDN MARKET</span><b>${data.integrations?.eddn ? "ON" : "OFF"}</b></div><div><span>CARRIER DISCORD</span><b>${data.integrations?.discord ? "CONFIGURED" : "OFF"}</b></div></div>`)}
+      ${workspaceCard("PROFILE CUSTODY", `<div class="fact-list spacious"><div><span>PROFILE KEY</span><b>${escapeHtml(data.key)}</b></div><div><span>PROFILE FOLDER</span><b class="path-value">${escapeHtml(data.folder)}</b></div><div><span>GAME MODE</span><b>${escapeHtml(data.session?.game_mode || "UNKNOWN")}</b></div><div><span>REPAIR DRONE RECORDS</span><b>${numeric(data.session?.repair_drone_events)}</b></div><div><span>EDSM UPLOAD</span><b>${data.integrations?.edsm ? "ON" : "OFF"}</b></div><div><span>EDDN MARKET</span><b>${data.integrations?.eddn ? "ON" : "OFF"}</b></div><div><span>CARRIER DISCORD</span><b>${data.integrations?.discord ? "CONFIGURED" : "OFF"}</b></div></div>`)}
     </section>`;
 }
 
@@ -2232,13 +2253,14 @@ function renderChronicleWorkspace(data) {
     const filename = String(photo.filename || "Screenshot").split(/[\\/]/).pop();
     return `<div class="photo-chronicle-row"><i></i><p><strong>${escapeHtml(location)}</strong><span>${escapeHtml(context)}</span><small>${escapeHtml(filename)}${escapeHtml(coordinates)}</small></p><time>${escapeHtml(String(photo.timestamp || "").replace("T", " ").slice(0, 16))}</time></div>`;
   });
+  const discoveryRows = (data.discoveries || []).map((row) => `<div class="chronicle-event"><b>${escapeHtml(row.event || "SCAN")}</b><p><strong>${escapeHtml(row.title)}</strong><span>${escapeHtml([row.system, row.body, row.detail].filter(Boolean).join(" · "))}</span></p><time>${escapeHtml(String(row.timestamp || "").replace("T", " ").slice(0, 16))}${row.value ? `<small>${credits(row.value)}</small>` : ""}</time></div>`);
   root.classList.remove("loading-panel");
   root.innerHTML = `${workspaceMetrics([
     {label: "Flights", value: numeric(sessions.length), detail: "PROFILE CHRONICLE"},
     {label: "Distance", value: `${numeric(sessions.reduce((sum, row) => sum + number(row.distance), 0), 1)} LY`, detail: "RETAINED TRAVEL"},
     {label: "FSS surveys", value: numeric(sessions.reduce((sum, row) => sum + number(row.fss), 0)), detail: "SYSTEM COMPLETIONS"},
     {label: "Bio analyses", value: numeric(sessions.reduce((sum, row) => sum + number(row.bio), 0)), detail: "GENETIC SAMPLES"},
-  ])}<section class="workspace-grid chronicle-feature-grid">${workspaceCard("EXPEDITION REPLAY", replayMarkup(data.replay || {}), `${numeric(data.replay?.points?.length)} ROUTE POINTS`, "replay-card")}${workspaceCard("SCREENSHOT CHRONICLE", `${workspaceRows(photoRows, "Screenshots will be associated with their system, body and nearby journal event.")}<div class="workspace-actions"><button data-command="open_screenshots">OPEN SCREENSHOT FOLDER</button></div>`, `${photos.length} RECENT PHOTOS`, "photo-chronicle-card")}</section><section class="chronicle-list">${cards.join("") || `<p class="workspace-empty">Captain's Log will populate as journal sessions are completed.</p>`}</section>`;
+  ])}<section class="workspace-grid chronicle-feature-grid">${workspaceCard("EXPEDITION REPLAY", replayMarkup(data.replay || {}), `${numeric(data.replay?.points?.length)} ROUTE POINTS`, "replay-card")}${workspaceCard("SCREENSHOT CHRONICLE", `${workspaceRows(photoRows, "Screenshots will be associated with their system, body and nearby journal event.")}<div class="workspace-actions"><button data-command="open_screenshots">OPEN SCREENSHOT FOLDER</button></div>`, `${photos.length} RECENT PHOTOS`, "photo-chronicle-card")}${workspaceCard("FIELD DISCOVERIES", workspaceRows(discoveryRows, "Material and datalink discoveries will be retained here."), `${numeric((data.discoveries || []).length)} RETAINED`, "field-discovery-card")}</section><section class="chronicle-list">${cards.join("") || `<p class="workspace-empty">Captain's Log will populate as journal sessions are completed.</p>`}</section>`;
 }
 
 function renderMissionWorkspace(data) {
@@ -2315,6 +2337,7 @@ function renderMiningWorkspace(data) {
   const plan = data.plan || {};
   const readiness = data.readiness || {};
   const current = session.current || {};
+  const surfaceMode = session.mode === "surface" || Boolean(readiness.surface_vehicle);
   const tools = data.tools || {};
   const selectedTarget = plan.target || "";
   const materialOptions = [`<option value="">ANY MINERAL / MANUAL ASSESSMENT</option>`, ...(data.materials || []).map((name) => `<option value="${escapeHtml(name)}" ${name === selectedTarget ? "selected" : ""}>${escapeHtml(name)}</option>`)].join("");
@@ -2350,6 +2373,7 @@ function renderMiningWorkspace(data) {
   ], (tools.buyer_results || []).map((row, index) => ({...row, index})), "Search for current community-reported demand when the haul is ready.");
   const bookmarkRows = (data.bookmarks || []).map((row) => `<div class="mining-bookmark"><span><b>${escapeHtml(row.system)}</b><small>${escapeHtml(row.body)} · ${escapeHtml(row.material || "ANY MINERAL")}</small></span><em>${escapeHtml(row.notes || "COMMANDER RING RECORD")}</em><button class="row-delete" data-ws-page="mining" data-ws-op="delete_bookmark" data-bookmark-id="${numeric(row.id)}">×</button></div>`);
   const scanRows = (data.ring_scans || []).flatMap((row) => (row.signals || []).map((signal) => `<div class="mining-ring-scan"><span><b>${escapeHtml(signal.name)}</b><small>${escapeHtml(row.system)} · ${escapeHtml(row.body)}</small></span><em>${numeric(signal.count)} SIGNAL${number(signal.count) === 1 ? "" : "S"}</em></div>`));
+  const surfaceRows = (data.surface_scans || []).map((row) => `<div class="mining-ring-scan surface"><span><b>${escapeHtml(row.body || "PLANETARY BODY")}</b><small>${escapeHtml(row.system || data.system || "UNKNOWN SYSTEM")} · BODY ${escapeHtml(row.body_id ?? "—")}</small></span><em>${numeric(row.mining_locations)} MINING SITE${number(row.mining_locations) === 1 ? "" : "S"}</em></div>`);
   const missionRows = workspaceTable([
     {label: "Commodity", key: "commodity"}, {label: "Delivered", render: (row) => `${numeric(row.delivered)} / ${numeric(row.required)} T`},
     {label: "Remaining", render: (row) => `${numeric(row.remaining)} T`}, {label: "Destination", key: "destination"},
@@ -2365,23 +2389,36 @@ function renderMiningWorkspace(data) {
     {label: "Revenue", render: (row) => credits(row.revenue)},
   ], history, "No completed mining runs retained yet.");
   const haulTons = Math.max(1, (session.yield || []).reduce((total, row) => total + Math.max(0, number(row.cargo_delta)), 0) || number(session.refined_t));
+  const surfaceCapacity = Math.max(number(session.cargo_capacity), number(readiness.cargo_capacity));
+  const surfaceCurrent = Math.max(0, number(session.cargo_current_t));
+  const surfaceFree = Math.max(0, surfaceCapacity - surfaceCurrent);
+  const surfaceCargoNames = (session.yield || []).map((row) => row.name).filter(Boolean).slice(0, 3).join(" · ");
+  const currentCardBody = surfaceMode
+    ? `<div class="mining-current mine"><div><small>LIVE SRV CARGO</small><strong>${escapeHtml(surfaceCargoNames || "AWAITING RECOVERED CARGO")}</strong><span>${numeric(session.refined_t)} T recovered this run · ${numeric(session.processing_events)} processing pulses</span></div><b>${numeric(surfaceCurrent)} / ${numeric(surfaceCapacity)} T</b></div><div class="mining-grade-strip surface-hold"><i class="mine" style="--grade:${surfaceCapacity ? Math.max(2, Math.min(100, surfaceCurrent * 100 / surfaceCapacity)) : 2}%" title="${numeric(surfaceCurrent)} of ${numeric(surfaceCapacity)} tonnes occupied"></i></div>`
+    : `<div class="mining-current ${escapeHtml(String(current.decision || "awaiting").toLowerCase())}"><div><small>FLIGHT DECISION</small><strong>${escapeHtml(current.decision || "AWAITING PROSPECTOR")}</strong><span>${escapeHtml(current.motherlode ? `${current.motherlode} MOTHERLODE` : current.target || selectedTarget || "No target mineral selected")}</span></div><b>${current.motherlode ? "CORE" : `${numeric(current.target_percent, 1)}%`}</b></div>${prospectMaterials || `<p class="workspace-empty">Fire a prospector limpet to evaluate the next asteroid.</p>`}<div class="mining-grade-strip">${gradeBars || ""}</div>`;
+  const liveExtractionBody = surfaceMode
+    ? `<div class="fact-list spacious mining-live-facts"><div><span>RECOVERED THIS RUN</span><b>${numeric(session.refined_t)} T</b></div><div><span>CURRENT SRV CARGO</span><b>${numeric(surfaceCurrent)} T</b></div><div><span>HOLD FREE</span><b>${numeric(surfaceFree)} T</b></div><div><span>TRANSFERRED / REMOVED</span><b>${numeric(session.cargo_removed_t)} T</b></div><div><span>PROCESSING PULSES</span><b>${numeric(session.processing_events)}</b></div><div><span>HAUL RATE</span><b>${session.tons_per_hour === null || session.tons_per_hour === undefined ? "—" : `${numeric(session.tons_per_hour, 1)} T/H`}</b></div></div>`
+    : `<div class="fact-list spacious mining-live-facts"><div><span>TONNES / ROCK</span><b>${session.tons_per_asteroid === null || session.tons_per_asteroid === undefined ? "—" : numeric(session.tons_per_asteroid, 2)}</b></div><div><span>ROCKS / HOUR</span><b>${session.asteroids_per_hour === null || session.asteroids_per_hour === undefined ? "—" : numeric(session.asteroids_per_hour, 1)}</b></div><div><span>QUALIFIED ROCKS</span><b>${session.qualified_rate === null || session.qualified_rate === undefined ? "—" : `${numeric(session.qualified_rate, 1)}%`}</b></div><div><span>TARGET AVERAGE</span><b>${session.target_average === null || session.target_average === undefined ? "—" : `${numeric(session.target_average, 1)}%`}</b></div><div><span>BEST TARGET</span><b>${numeric(session.target_best, 1)}%</b></div><div><span>GOAL ETA</span><b>${session.goal_minutes ? `${numeric(session.goal_minutes)} MIN` : "—"}</b></div></div>${workspaceRows(prospectRows, "Prospector decisions will build a compact run timeline.")}`;
   root.classList.remove("loading-panel");
   root.innerHTML = `${workspaceMetrics([
-    {label: "Run state", value: data.active ? "ACTIVE" : "STANDBY", detail: duration(session.duration)},
-    {label: "Target hit rate", value: session.hit_rate === null || session.hit_rate === undefined ? "—" : `${numeric(session.hit_rate, 1)}%`, detail: `${numeric(session.prospected)} ROCKS PROSPECTED`},
-    {label: "Refined yield", value: `${numeric(session.refined_t)} T`, detail: session.tons_per_hour === null ? "RATE AWAITING DATA" : `${numeric(session.tons_per_hour, 1)} T / HR`},
+    {label: "Run state", value: data.active ? "ACTIVE" : "STANDBY", detail: `${surfaceMode ? "SURFACE" : "ASTEROID"} · ${duration(session.duration)}`},
+    surfaceMode
+      ? {label: "Processing activity", value: numeric(session.processing_events), detail: "MININGREFINED JOURNAL PULSES"}
+      : {label: "Target hit rate", value: session.hit_rate === null || session.hit_rate === undefined ? "—" : `${numeric(session.hit_rate, 1)}%`, detail: `${numeric(session.prospected)} ROCKS PROSPECTED`},
+    {label: surfaceMode ? "Recovered cargo" : "Refined yield", value: `${numeric(session.refined_t)} T`, detail: session.tons_per_hour === null ? "RATE AWAITING DATA" : `${numeric(session.tons_per_hour, 1)} T / HR`},
     {label: "Cargo objective", value: session.cargo_goal ? `${numeric(session.cargo_goal_percent, 1)}%` : "OPEN", detail: session.cargo_goal ? `${numeric(session.cargo_goal_remaining)} T REMAINING` : "NO TONNAGE LIMIT"},
   ])}<section class="mining-command-grid">
     ${workspaceCard("RUN DIRECTIVE", `<div class="mining-plan-form"><label>TARGET MINERAL<select id="mining-target">${materialOptions}</select></label><label>MINIMUM GRADE %<input id="mining-minimum" type="number" min="0" max="100" step="0.1" value="${number(plan.minimum, 20)}"></label><label>CARGO GOAL T<input id="mining-cargo-goal" type="number" min="0" max="100000" value="${number(plan.cargo_goal)}"></label><label>METHOD<select id="mining-method">${methodOptions}</select></label></div><div class="workspace-actions wrap"><button class="primary" data-ws-page="mining" data-ws-op="save_plan">SAVE DIRECTIVE</button><button data-ws-page="mining" data-ws-op="start_run" ${data.active ? "disabled" : ""}>START RUN</button><button class="danger-action" data-ws-page="mining" data-ws-op="end_run" ${data.active ? "" : "disabled"}>END & RETAIN RUN</button></div>`, selectedTarget ? `${escapeHtml(selectedTarget)} · ${numeric(plan.minimum, 1)}%+` : "MANUAL ASSESSMENT", "mining-plan-card")}
-    ${workspaceCard("SHIP READINESS", `<div class="mining-readiness ${readiness.ready ? "ready" : "incomplete"}"><strong>${readiness.ready ? "MINING FIT READY" : "LOADOUT INCOMPLETE"}</strong><span>${escapeHtml(readiness.ship || "Awaiting Loadout journal")} · ${numeric(readiness.cargo_capacity)} T HOLD · ${numeric(readiness.limpets)} LIMPETS</span></div><div class="mining-equipment-grid">${equipment || "<span>LOADOUT AWAITING JOURNAL</span>"}</div>${missing ? `<ul class="mining-missing">${missing}</ul>` : ""}${readiness.dss_recommended ? `<p class="workspace-note">DSS not detected · hotspot navigation will rely on retained/community records.</p>` : ""}`, readiness.ready ? "GO" : `${(readiness.missing || []).length} GAPS`, "mining-readiness-card")}
-    ${workspaceCard("CURRENT PROSPECT", `<div class="mining-current ${escapeHtml(String(current.decision || "awaiting").toLowerCase())}"><div><small>FLIGHT DECISION</small><strong>${escapeHtml(current.decision || "AWAITING PROSPECTOR")}</strong><span>${escapeHtml(current.motherlode ? `${current.motherlode} MOTHERLODE` : current.target || selectedTarget || "No target mineral selected")}</span></div><b>${current.motherlode ? "CORE" : `${numeric(current.target_percent, 1)}%`}</b></div>${prospectMaterials || `<p class="workspace-empty">Fire a prospector limpet to evaluate the next asteroid.</p>`}<div class="mining-grade-strip">${gradeBars || ""}</div>`, current.remaining === null || current.remaining === undefined ? "NO ACTIVE ROCK" : `${numeric(current.remaining, 1)}% REMAINING`, "mining-current-card")}
-    ${workspaceCard("LIVE EXTRACTION", `<div class="fact-list spacious mining-live-facts"><div><span>TONNES / ROCK</span><b>${session.tons_per_asteroid === null || session.tons_per_asteroid === undefined ? "—" : numeric(session.tons_per_asteroid, 2)}</b></div><div><span>ROCKS / HOUR</span><b>${session.asteroids_per_hour === null || session.asteroids_per_hour === undefined ? "—" : numeric(session.asteroids_per_hour, 1)}</b></div><div><span>QUALIFIED ROCKS</span><b>${session.qualified_rate === null || session.qualified_rate === undefined ? "—" : `${numeric(session.qualified_rate, 1)}%`}</b></div><div><span>TARGET AVERAGE</span><b>${session.target_average === null || session.target_average === undefined ? "—" : `${numeric(session.target_average, 1)}%`}</b></div><div><span>BEST TARGET</span><b>${numeric(session.target_best, 1)}%</b></div><div><span>GOAL ETA</span><b>${session.goal_minutes ? `${numeric(session.goal_minutes)} MIN` : "—"}</b></div></div>${workspaceRows(prospectRows, "Prospector decisions will build a compact run timeline.")}`, `${numeric(current.refined_since_prospect)} T SINCE PROSPECT`, "mining-live-card")}
+    ${workspaceCard(surfaceMode ? "SURFACE VEHICLE READINESS" : "SHIP READINESS", `<div class="mining-readiness ${readiness.ready ? "ready" : "incomplete"}"><strong>${readiness.ready ? surfaceMode ? "SURFACE EXTRACTION READY" : "MINING FIT READY" : "LOADOUT INCOMPLETE"}</strong><span>${escapeHtml(readiness.ship || "Awaiting Loadout journal")} · ${numeric(readiness.cargo_capacity)} T HOLD${surfaceMode ? "" : ` · ${numeric(readiness.limpets)} LIMPETS`}</span></div><div class="mining-equipment-grid">${equipment || "<span>LOADOUT AWAITING JOURNAL</span>"}</div>${missing ? `<ul class="mining-missing">${missing}</ul>` : ""}${readiness.dss_recommended ? `<p class="workspace-note">DSS not detected · hotspot navigation will rely on retained/community records.</p>` : ""}`, readiness.ready ? "GO" : `${(readiness.missing || []).length} GAPS`, "mining-readiness-card")}
+    ${workspaceCard(surfaceMode ? "ACTIVE RHINO HOLD" : "CURRENT PROSPECT", currentCardBody, surfaceMode ? `${numeric(surfaceFree)} T FREE` : current.remaining === null || current.remaining === undefined ? "NO ACTIVE ROCK" : `${numeric(current.remaining, 1)}% REMAINING`, "mining-current-card")}
+    ${workspaceCard(surfaceMode ? "LIVE SURFACE EXTRACTION" : "LIVE EXTRACTION", liveExtractionBody, surfaceMode ? `${numeric(session.refined_t)} T RECOVERED` : `${numeric(current.refined_since_prospect)} T SINCE PROSPECT`, "mining-live-card")}
     ${workspaceCard("PROSPECTOR QUALITY", materials)}
-    ${workspaceCard("REFINERY & CARGO YIELD", yields)}
+    ${workspaceCard(surfaceMode ? "SURFACE CARGO YIELD" : "REFINERY & CARGO YIELD", yields)}
     ${workspaceCard("LIMPET ECONOMY", `<div class="fact-list spacious"><div><span>PROSPECTORS</span><b>${numeric(session.limpets?.prospectors_used)}</b></div><div><span>COLLECTORS</span><b>${numeric(session.limpets?.collectors_launched)}</b></div><div><span>ESTIMATED USED</span><b>${numeric(session.limpets?.estimated_used)}</b></div><div><span>REMAINING</span><b>${numeric(session.limpets?.remaining)}</b></div><div><span>LIMPETS / TONNE</span><b>${session.limpets?.limpets_per_tonne === null || session.limpets?.limpets_per_tonne === undefined ? "—" : numeric(session.limpets.limpets_per_tonne, 2)}</b></div><div><span>CASH COST</span><b>${credits(session.limpets?.cash_net_cost_cr)}</b></div></div>`)}
     ${workspaceCard("MINING CONTRACTS", missionRows, `${(data.missions || []).length} ACTIVE`)}
     ${workspaceCard("RING INTELLIGENCE", `<div class="mining-search-form"><label>SEARCH FROM<input id="mining-ring-reference" value="${escapeHtml(data.system || "")}"></label><label>MINERAL<select id="mining-ring-material">${materialOptions}</select></label><label>RING TYPE<select id="mining-ring-type"><option value="">ANY RING</option><option>Metallic</option><option>Metal Rich</option><option>Rocky</option><option>Icy</option></select></label><label>RANGE LY<input id="mining-ring-range" type="number" min="1" max="5000" value="300"></label><button data-ws-page="mining" data-ws-op="ring_search" ${tools.ring_status === "working" ? "disabled" : ""}>${tools.ring_status === "working" ? "SEARCHING…" : "SEARCH RINGS"}</button></div><p class="workspace-status ${escapeHtml(tools.ring_status || "ready")}">${escapeHtml(tools.ring_detail || "Ring intelligence ready.")}</p>${ringRows}`, `${numeric((tools.ring_results || []).length)} RESULTS`, "mining-ring-card")}
-    ${workspaceCard("COMMANDER RING RECORDS", `${workspaceRows(scanRows, "DSS ring signals discovered by this commander will appear here.")}${workspaceRows(bookmarkRows, "Save useful ring results for later expeditions.")}`, `${numeric((data.ring_scans || []).length)} SCANNED · ${numeric((data.bookmarks || []).length)} SAVED`)}
+    ${workspaceCard("COMMANDER RING RECORDS", `${workspaceRows(scanRows, "DSS ring signals discovered by this commander will appear here.")}${workspaceRows(bookmarkRows, "Save useful ring results for later expeditions.")}`, `${numeric((data.ring_scans || []).length)} SCANNED · ${numeric((data.bookmarks || []).length)} SAVED`, "mining-records-card")}
+    ${workspaceCard("RHINO SURFACE MINING", `<div class="mining-readiness ${surfaceMode ? "ready" : "incomplete"}"><strong>${surfaceMode ? escapeHtml(session.vehicle || readiness.ship || "SURFACE VEHICLE ACTIVE") : "SURFACE VEHICLE STANDBY"}</strong><span>${surfaceMode ? `${numeric(session.cargo_capacity || readiness.cargo_capacity)} T VEHICLE HOLD · CARGO-GAIN TRACKING ACTIVE` : "Launch a Rhino to switch this command deck to surface extraction."}</span></div>${workspaceRows(surfaceRows, "DSS planetary mining locations will appear here; drill deployment itself is not journaled by Elite.")}`, `${numeric((data.surface_scans || []).reduce((sum, row) => sum + number(row.mining_locations), 0))} KNOWN SITES`, "mining-surface-card")}
     ${workspaceCard("SELL MINING HAUL", `<div class="mining-buyer-form"><label>SEARCH FROM<input id="mining-buyer-reference" value="${escapeHtml(data.system || "")}"></label><label>COMMODITY<select id="mining-buyer-commodity">${materialOptions}</select></label><label>QUANTITY T<input id="mining-buyer-quantity" type="number" min="1" value="${numeric(haulTons)}"></label><label>RANGE LY<input id="mining-buyer-range" type="number" min="1" max="5000" value="500"></label><label>MAX ARRIVAL LS<input id="mining-buyer-ls" type="number" min="1" value="10000"></label><label class="check"><input id="mining-buyer-large" type="checkbox">LARGE PAD</label><label class="check"><input id="mining-buyer-no-carriers" type="checkbox" checked>EXCLUDE CARRIERS</label><button data-ws-page="mining" data-ws-op="buyer_search" ${tools.buyer_status === "working" ? "disabled" : ""}>${tools.buyer_status === "working" ? "SEARCHING…" : "FIND BUYERS"}</button></div><p class="workspace-status ${escapeHtml(tools.buyer_status || "ready")}">${escapeHtml(tools.buyer_detail || "Mining market lookup ready.")}</p>${buyerRows}`, `${numeric((tools.buyer_results || []).length)} MARKETS`, "mining-buyer-card")}
     ${workspaceCard("RUN ANALYTICS", `<div class="mining-history-chart">${historyBars || `<span>COMPLETE A RUN TO BEGIN THE YIELD TREND</span>`}</div>${historyTable}`, `${history.length} RETAINED`, "mining-history-card")}
   </section>`;
@@ -2622,9 +2659,9 @@ function renderDashboard(state) {
     showPage(requestedPage.page);
   }
   renderAtlas(model);
-  text("rail-version", `v${model.app?.version || "5.4.2.2.1"} // WEBVIEW2`);
-  text("boot-version", `v${model.app?.version || "5.4.2.2.1"} // SECURE LOOPBACK // WEBVIEW2`);
-  text("about-version", `Version ${model.app?.version || "5.4.2.2.1"} // HTML Command Deck`);
+  text("rail-version", `v${model.app?.version || "5.4.2.3"} // WEBVIEW2`);
+  text("boot-version", `v${model.app?.version || "5.4.2.3"} // SECURE LOOPBACK // WEBVIEW2`);
+  text("about-version", `Version ${model.app?.version || "5.4.2.3"} // HTML Command Deck`);
   text("overview-subtitle", model.profile?.profile_label || "Journal-backed field intelligence");
   if (currentPage === "map" && !model.boot?.active) ensureAtlas();
 }

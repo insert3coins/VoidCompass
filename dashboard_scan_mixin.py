@@ -1377,6 +1377,14 @@ class DashboardScanMixin:
         if bio_count is None:
             bio_count = 0
 
+        materials = item.get("materials") or []
+        if isinstance(materials, dict):
+            materials = [
+                {"symbol": str(name).casefold(), "name": str(name), "percent": percent}
+                for name, percent in materials.items()
+            ]
+        item["materials"] = [row for row in materials if isinstance(row, dict)]
+
         is_star = item.get("is_star")
         if is_star is None:
             is_star = bool(star_type)
@@ -1508,6 +1516,25 @@ class DashboardScanMixin:
         color = COLOR_ACCENT if highlight else COLOR_TEXT
 
         ts = int(time.time())
+        materials = []
+        for material in data.get("Materials") or []:
+            if not isinstance(material, dict):
+                continue
+            symbol = str(material.get("Name") or "").strip().strip("$;")
+            if symbol.casefold().endswith("_name"):
+                symbol = symbol[:-5]
+            label = material.get("Name_Localised") or symbol.replace("_", " ").title()
+            try:
+                percent = max(0.0, float(material.get("Percent") or 0))
+            except (TypeError, ValueError):
+                percent = 0.0
+            if symbol or label:
+                materials.append({
+                    "symbol": symbol.casefold(),
+                    "name": str(label),
+                    "percent": round(percent, 3),
+                })
+        materials.sort(key=lambda row: (-row["percent"], row["name"]))
         item = {
             "body_id": body_id,
             "system_address": data.get("SystemAddress") or getattr(self, "current_system_address", None),
@@ -1545,6 +1572,10 @@ class DashboardScanMixin:
             "atmosphere": data.get("Atmosphere") or data.get("AtmosphereType"),
             "atmosphere_type": data.get("AtmosphereType") or data.get("Atmosphere"),
             "atmosphere_composition": list(data.get("AtmosphereComposition") or []),
+            # Scan.Materials is the authoritative planetary raw-material
+            # composition. Keep it in the profile scan cache so resource
+            # intelligence survives a restart and can feed Mining/Engineering.
+            "materials": materials,
             # Published species requirements are bounded by pressure as well as
             # gravity and temperature, so the reported value is retained.
             "surface_pressure": data.get("SurfacePressure"),
@@ -1586,7 +1617,7 @@ class DashboardScanMixin:
             # planet record.
             for key in (
                 "genuses", "organic_scans", "organic_complete_count",
-                "geo_count", "mining_count",
+                "geo_count", "mining_count", "materials",
             ):
                 if existing.get(key) not in (None, [], {}):
                     item[key] = existing[key]

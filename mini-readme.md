@@ -1,12 +1,17 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.2.2.1 // Surface Vehicle HUD Identity
+## v5.4.2.3 // Exploration Journal Intelligence
 **Release Date:** 2026-Sep-03
 
-*   Corrected surface-control HUD states so handbrake, turret and drive-assist animations retain the active Rhino, Nomad, Scarab or Scorpion artwork instead of falling back to the mothership portrait.
+*   Added journal-backed Rhino surface-mining sessions to Mining Command, including the active 72-tonne vehicle hold, cargo-gain haul accounting across ship transfers, separate processing activity, observed vehicle lifecycle and DSS planetary-mining locations without inventing unreported drill telemetry; tightened its card layout so mixed-height panels no longer leave empty holes.
+*   Retained `Scan.Materials` composition per body and added Planetary Resource Intelligence to Explore & Survey, with rare raw materials and mining sites also available from live Orrery body detail.
+*   Added persistent `ScanBaryCentre` orbital records and barycentre-aware parent hierarchy to the Live System Orrery, including a one-time background re-index of existing profile journals.
+*   Added a profile-local Field Discoveries ledger for material discoveries, composition/data scans and datalink vouchers, surfaced through Captain's Log alongside the existing Screenshot Chronicle.
+*   Added an observed surface-vehicle ledger from launch, dock, restock and destruction journals, plus quiet `GameModeChange`, repair-drone and fuel-reservoir state awareness for Profile and Exploration Pre-flight.
 
 ## Earlier releases
 
+*   **v5.4.2.2.1** — Corrected surface-control HUD states so handbrake, turret and drive-assist animations retain the active Rhino, Nomad, Scarab or Scorpion artwork instead of falling back to the mothership portrait.
 *   **v5.4.2.2** — Made Cargo Manifest vessel-aware with the Rhino's 72-tonne hold, correct active-vehicle telemetry, profile persistence and clean hold-switch animations.
 *   **v5.4.2.1** — Rebuilt the Live System Orrery as a full-width interactive Elite-inspired instrument with journal-accurate orbital architecture, known-system recovery, branch-aware scaling and lightweight profile-aware controls.
 *   **v5.4.2** — Added first-class Rhino journal and vehicle-state support, planetary mining-location DSS evidence and retained survey presentation, with Rhino mining and SRV cargo flowing through the existing unified pipelines.

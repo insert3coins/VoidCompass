@@ -25,7 +25,11 @@ import bio_values
 MINING_EVENTS = {
     "AsteroidCracked", "BuyDrones", "Cargo", "CollectCargo", "Died",
     "EjectCargo", "LaunchDrone", "Loadout", "MarketSell", "MiningRefined",
-    "ProspectedAsteroid", "SAASignalsFound", "SellDrones", "Shutdown",
+    "ProspectedAsteroid", "SAASignalsFound", "FSSBodySignals", "SellDrones", "Shutdown",
+    "LaunchSRV", "DockSRV", "RestockVehicle", "SRVDestroyed",
+}
+VEHICLE_EVENTS = {
+    "LaunchSRV", "DockSRV", "RestockVehicle", "SRVDestroyed",
 }
 COMBAT_EVENTS = {
     "Bounty", "CapShipBond", "Cargo", "Died", "Docked",
@@ -113,10 +117,17 @@ def _default_mining_plan():
 def _new_mining_session(ts, context=None):
     context = context or {}
     plan = {**_default_mining_plan(), **copy.deepcopy(context.get("plan") or {})}
+    vehicle = str(context.get("vehicle") or "").strip()
+    cargo_vessel = str(context.get("cargo_vessel") or "").strip()
+    surface_mode = bool(context.get("in_srv") or vehicle or cargo_vessel.casefold() == "srv")
+    cargo_count = max(0, _int(context.get("cargo_count")))
     return {
         "session_key": f"{ts}-{uuid.uuid4().hex[:10]}", "active": True,
         "started_ts": ts, "last_event_ts": ts, "ended_ts": None,
         "end_reason": None, "system": context.get("system"),
+        "mode": "surface" if surface_mode else "asteroid",
+        "vehicle": vehicle, "vehicle_id": context.get("vehicle_id"),
+        "cargo_capacity": max(0, _int(context.get("cargo_capacity"))),
         "body": context.get("body"), "asteroids_prospected": 0,
         "asteroids_cracked": 0, "prospector_limpets": 0,
         "collector_limpets": 0, "other_limpets": 0, "limpets_bought": 0,
@@ -128,6 +139,16 @@ def _new_mining_session(ts, context=None):
         "target_total_pct": 0.0, "target_best_pct": 0.0,
         "prospect_log": [], "current_prospect": None,
         "last_refined_ts": None,
+        # Rhino MiningRefined events are processing pulses rather than a
+        # one-event/one-tonne receipt.  Surface haul accounting therefore
+        # follows positive changes in the SRV Cargo count and survives cargo
+        # transfers back to the mothership.
+        "cargo_count_start": cargo_count,
+        "cargo_count_current": cargo_count,
+        "cargo_gained_t": 0,
+        "cargo_removed_t": 0,
+        "cargo_gain_unassigned_t": 0,
+        "cargo_gained": {},
     }
 
 
@@ -150,7 +171,9 @@ def _defaults():
         "mining": {
             "last_cargo": {}, "loadout": None, "session": None,
             "history": [], "plan": _default_mining_plan(), "ring_scans": [],
+            "surface_scans": [], "cargo_context": {},
         },
+        "vehicles": {"observed": {}, "history": [], "active": None},
         "combat": {
             "loadout": None, "cargo": {}, "materials": {}, "target": None,
             "synthesis_lifetime": {}, "session": None, "history": [],
@@ -194,7 +217,7 @@ class SpecialistEngine:
                 value = json.load(handle)
             if isinstance(value, dict):
                 base = _defaults()
-                for key in ("seen", "mining", "combat", "carrier", "exobiology"):
+                for key in ("seen", "mining", "combat", "carrier", "exobiology", "vehicles"):
                     if isinstance(value.get(key), type(base[key])):
                         if isinstance(base[key], dict):
                             base[key].update(value[key])
@@ -246,6 +269,8 @@ class SpecialistEngine:
             ts = _epoch_ms(event.get("timestamp"))
             if kind in MINING_EVENTS:
                 changed |= self._observe_mining(event, ts, context or {})
+            if kind in VEHICLE_EVENTS:
+                changed |= self._observe_vehicle(event, ts, context or {})
             if kind in COMBAT_EVENTS:
                 changed |= self._observe_combat(event, ts)
             if kind in EXOBIO_EVENTS:
@@ -261,16 +286,183 @@ class SpecialistEngine:
                     self._save()
             return changed
 
-    def update_cargo(self, inventory):
-        event = {"Inventory": list(inventory or [])}
+    def update_cargo(self, inventory, vessel=None, capacity=None, vehicle=None):
+        cargo = _inventory({"Inventory": list(inventory or [])})
         with self._lock:
-            cargo = _inventory(event)
-            self.state["mining"]["last_cargo"] = cargo
+            self._update_mining_cargo(
+                cargo,
+                vessel=vessel,
+                count=sum(_int(row.get("count")) for row in cargo.values()),
+                capacity=capacity,
+                vehicle=vehicle,
+            )
             self.state["combat"]["cargo"] = cargo
-            session = self.state["mining"].get("session")
-            if session and session.get("active"):
-                session["cargo_current"] = copy.deepcopy(cargo)
             self._save()
+
+    def _update_mining_cargo(self, cargo=None, *, vessel=None, count=None,
+                             capacity=None, vehicle=None):
+        """Apply one cargo observation without confusing capacity and yield.
+
+        Journal Cargo rows reliably expose the total count while Cargo.json
+        supplies the commodity inventory.  Either can arrive first, so total
+        gains are accumulated once and assigned to commodities when the
+        detailed inventory becomes available.
+        """
+        state = self.state["mining"]
+        previous_context = state.get("cargo_context") or {}
+        vessel_name = str(vessel or previous_context.get("vessel") or "Ship")
+        cargo_count = (
+            max(0, _int(count)) if count is not None
+            else sum(_int(row.get("count")) for row in (cargo or {}).values())
+        )
+        context = {
+            "vessel": vessel_name,
+            "capacity": max(0, _int(
+                previous_context.get("capacity") if capacity is None else capacity
+            )),
+            "vehicle": str(
+                previous_context.get("vehicle") if vehicle is None else vehicle
+                or ""
+            ),
+            "count": cargo_count,
+        }
+        state["cargo_context"] = context
+        if cargo is not None:
+            state["last_cargo"] = copy.deepcopy(cargo)
+
+        session = state.get("session") or {}
+        if not session.get("active"):
+            return
+        surface = str(session.get("mode") or "").casefold() == "surface"
+        applies = (
+            vessel_name.casefold() == "srv" if surface
+            else vessel_name.casefold() != "srv"
+        )
+        if not applies:
+            return
+
+        if surface and "cargo_gained_t" not in session:
+            # Keep an active pre-5.4.2.3 Rhino session continuous.  Earlier
+            # builds retained current/start inventories but did not accumulate
+            # transfers, so preserve their truthful positive delta as the
+            # migration baseline before accepting new live cargo changes.
+            legacy_gained = {}
+            for symbol in set(session.get("cargo_start") or {}) | set(session.get("cargo_current") or {}):
+                current_row = (session.get("cargo_current") or {}).get(symbol) or {}
+                gained = max(
+                    0,
+                    _int(current_row.get("count"))
+                    - _int(((session.get("cargo_start") or {}).get(symbol) or {}).get("count")),
+                )
+                if gained:
+                    legacy_gained[symbol] = {
+                        "name": current_row.get("name") or symbol.replace("_", " ").title(),
+                        "count": gained,
+                    }
+            legacy_total = sum(_int(row.get("count")) for row in legacy_gained.values())
+            legacy_current = sum(
+                _int(row.get("count"))
+                for row in (session.get("cargo_current") or {}).values()
+            )
+            session.update(
+                cargo_gained=legacy_gained,
+                cargo_gained_t=legacy_total,
+                cargo_removed_t=0,
+                cargo_gain_unassigned_t=0,
+                cargo_count_start=sum(
+                    _int(row.get("count"))
+                    for row in (session.get("cargo_start") or {}).values()
+                ),
+                cargo_count_current=legacy_current,
+            )
+
+        previous_count = session.get("cargo_count_current")
+        if previous_count is None:
+            previous_count = session.get("cargo_count_start")
+        if previous_count is None:
+            previous_count = cargo_count
+        delta = cargo_count - max(0, _int(previous_count))
+        session["cargo_count_current"] = cargo_count
+        if surface and delta > 0:
+            session["cargo_gained_t"] = _int(session.get("cargo_gained_t")) + delta
+            session["cargo_gain_unassigned_t"] = (
+                _int(session.get("cargo_gain_unassigned_t")) + delta
+            )
+        elif surface and delta < 0:
+            session["cargo_removed_t"] = _int(session.get("cargo_removed_t")) - delta
+
+        if cargo is None:
+            return
+        previous_cargo = session.get("cargo_current") or {}
+        if surface:
+            increases = []
+            for symbol, row in cargo.items():
+                gained = max(
+                    0,
+                    _int(row.get("count"))
+                    - _int((previous_cargo.get(symbol) or {}).get("count")),
+                )
+                if gained:
+                    increases.append((symbol, row, gained))
+            budget = max(0, _int(session.get("cargo_gain_unassigned_t")))
+            gained_bucket = session.setdefault("cargo_gained", {})
+            for symbol, row, observed in increases:
+                attributed = min(observed, budget)
+                if not attributed:
+                    continue
+                _named_increment(
+                    gained_bucket, symbol, row.get("name") or symbol, attributed,
+                )
+                budget -= attributed
+            session["cargo_gain_unassigned_t"] = budget
+        session["cargo_current"] = copy.deepcopy(cargo)
+
+    def _observe_vehicle(self, event, ts, context):
+        """Retain vehicles actually observed in this commander's journals."""
+        state = self.state["vehicles"]
+        kind = str(event.get("event") or "")
+        vehicle_id = event.get("ID")
+        event_symbol = _symbol(
+            event.get("SRVType") or event.get("Type") or event.get("Vehicle")
+        )
+        symbol = event_symbol or _symbol(context.get("vehicle"))
+        name = str(
+            event.get("SRVType_Localised") or event.get("Type_Localised")
+            or context.get("vehicle") or symbol.replace("_", " ").title()
+        ).strip()
+        if not symbol and vehicle_id is None and kind != "SRVDestroyed":
+            return False
+        key = (
+            str(vehicle_id) if vehicle_id is not None
+            else str(state.get("active")) if kind == "SRVDestroyed" and state.get("active")
+            else symbol or "active"
+        )
+        observed = state.setdefault("observed", {})
+        existing = observed.get(key) or {}
+        record = {
+            **existing,
+            "id": vehicle_id if vehicle_id is not None else existing.get("id"),
+            "symbol": symbol or existing.get("symbol") or "",
+            "name": name or existing.get("name") or "Surface vehicle",
+            "loadout": event.get("Loadout") or existing.get("loadout") or "",
+            "last_event": kind, "last_seen_ts": ts,
+            "destroyed": kind == "SRVDestroyed",
+            "restocks": _int(existing.get("restocks")) + (1 if kind == "RestockVehicle" else 0),
+            "launches": _int(existing.get("launches")) + (1 if kind == "LaunchSRV" else 0),
+        }
+        observed[key] = record
+        history = state.setdefault("history", [])
+        history.append({
+            "timestamp": event.get("timestamp"), "ts": ts, "event": kind,
+            "id": record.get("id"), "name": record.get("name"),
+            "system": context.get("system"), "body": context.get("body"),
+        })
+        state["history"] = history[-200:]
+        if kind == "LaunchSRV":
+            state["active"] = key
+        elif kind in {"DockSRV", "SRVDestroyed"}:
+            state["active"] = None
+        return True
 
     def update_position(self, position):
         lat = _float((position or {}).get("lat"))
@@ -292,6 +484,15 @@ class SpecialistEngine:
         session = state.get("session")
         if not session or not session.get("active"):
             context = dict(context or {})
+            cargo_context = state.get("cargo_context") or {}
+            if not context.get("vehicle"):
+                context["vehicle"] = cargo_context.get("vehicle")
+            if not context.get("cargo_vessel"):
+                context["cargo_vessel"] = cargo_context.get("vessel")
+            if not context.get("cargo_capacity"):
+                context["cargo_capacity"] = cargo_context.get("capacity")
+            if context.get("cargo_count") is None:
+                context["cargo_count"] = cargo_context.get("count")
             context.setdefault("plan", state.get("plan") or {})
             session = _new_mining_session(ts, context)
             session["cargo_start"] = copy.deepcopy(state.get("last_cargo") or {})
@@ -385,17 +586,19 @@ class SpecialistEngine:
         if kind == "Loadout":
             state["loadout"] = copy.deepcopy(event)
             return True
-        if kind == "SAASignalsFound":
+        if kind in {"SAASignalsFound", "FSSBodySignals"}:
             body = str(event.get("BodyName") or "")
-            if "ring" not in body.casefold():
-                return False
             signals = []
+            surface_mining = 0
             for item in event.get("Signals") or []:
                 if not isinstance(item, dict):
                     continue
                 name = item.get("Type_Localised") or item.get("Type")
                 if name:
                     signals.append({"name": str(name), "count": max(0, _int(item.get("Count")))})
+                if (str(item.get("Type") or "") == "$PlanetaryMiningLocation_Name;"
+                        or str(name or "").casefold() == "planetary mining location"):
+                    surface_mining += max(0, _int(item.get("Count")))
             if not signals:
                 return False
             record = {
@@ -405,6 +608,17 @@ class SpecialistEngine:
                 "body_id": event.get("BodyID"), "signals": signals,
             }
             key = (str(record.get("system") or "").casefold(), body.casefold())
+            if "ring" not in body.casefold():
+                if not surface_mining:
+                    return False
+                record["mining_locations"] = surface_mining
+                retained = [
+                    row for row in state.get("surface_scans") or []
+                    if (str(row.get("system") or "").casefold(),
+                        str(row.get("body") or "").casefold()) != key
+                ]
+                state["surface_scans"] = [record, *retained][:200]
+                return True
             retained = [
                 row for row in state.get("ring_scans") or []
                 if (str(row.get("system") or "").casefold(), str(row.get("body") or "").casefold()) != key
@@ -412,12 +626,50 @@ class SpecialistEngine:
             state["ring_scans"] = [record, *retained][:200]
             return True
         if kind == "Cargo":
-            cargo = _inventory(event)
-            state["last_cargo"] = cargo
+            inventory = event.get("Inventory")
+            cargo = _inventory(event) if isinstance(inventory, list) else None
+            self._update_mining_cargo(
+                cargo,
+                vessel=event.get("Vessel") or context.get("cargo_vessel"),
+                count=event.get("Count"),
+                capacity=context.get("cargo_capacity"),
+                vehicle=context.get("vehicle"),
+            )
             if state.get("session") and state["session"].get("active"):
-                state["session"]["cargo_current"] = copy.deepcopy(cargo)
                 state["session"]["last_event_ts"] = ts
             return True
+        if kind == "LaunchSRV":
+            vehicle = str(
+                event.get("SRVType_Localised") or event.get("SRVType")
+                or context.get("vehicle") or "Surface vehicle"
+            )
+            capacity = 72 if "rhino" in vehicle.casefold() else 0
+            state["cargo_context"] = {
+                "vessel": "SRV", "capacity": capacity, "vehicle": vehicle,
+                "count": 0,
+            }
+            session = state.get("session") or {}
+            if session.get("active") and session.get("mode") != "surface":
+                self._archive("mining", "surface_vehicle_launch", ts)
+            return True
+        if kind == "DockSRV":
+            session = state.get("session") or {}
+            state["cargo_context"] = {
+                "vessel": "Ship", "capacity": 0, "vehicle": "", "count": 0,
+            }
+            if session.get("active") and session.get("mode") == "surface":
+                self._archive("mining", "dock_srv", ts)
+            return True
+        if kind in {"RestockVehicle", "SRVDestroyed"}:
+            if kind == "SRVDestroyed":
+                session = state.get("session") or {}
+                if session.get("active") and session.get("mode") == "surface":
+                    self._archive("mining", "srv_destroyed", ts)
+                state["cargo_context"] = {
+                    "vessel": "Ship", "capacity": 0, "vehicle": "", "count": 0,
+                }
+                return True
+            return False
         if kind in {"Died", "Shutdown"}:
             return self._archive("mining", kind.lower(), ts)
         session = state.get("session")
@@ -854,8 +1106,20 @@ class SpecialistEngine:
 
     # Presentation ---------------------------------------------------
     @staticmethod
-    def _mining_readiness(loadout, cargo, plan):
+    def _mining_readiness(loadout, cargo, plan, cargo_context=None):
         loadout = loadout if isinstance(loadout, dict) else {}
+        cargo_context = cargo_context if isinstance(cargo_context, dict) else {}
+        surface_vehicle = str(cargo_context.get("vehicle") or "").strip()
+        if str(cargo_context.get("vessel") or "").casefold() == "srv" or surface_vehicle:
+            return {
+                "ready": True, "method": "surface", "equipment": {
+                    "vehicle": True, "surface_drill": "rhino" in surface_vehicle.casefold(),
+                },
+                "missing": [], "cargo_capacity": max(0, _int(cargo_context.get("capacity"))),
+                "limpets": 0, "dss_recommended": False,
+                "ship": surface_vehicle or "Surface vehicle",
+                "surface_vehicle": True,
+            }
         modules = [
             _symbol(row.get("Item")) for row in loadout.get("Modules") or []
             if isinstance(row, dict) and row.get("On", True)
@@ -901,6 +1165,7 @@ class SpecialistEngine:
             "limpets": limpets,
             "dss_recommended": not equipment["dss"],
             "ship": loadout.get("ShipName") or loadout.get("Ship"),
+            "surface_vehicle": False,
         }
 
     @staticmethod
@@ -908,6 +1173,7 @@ class SpecialistEngine:
         session = copy.deepcopy(source or {})
         if not session:
             return None
+        has_surface_cargo_accounting = "cargo_gained_t" in session
         session.setdefault("refined", {})
         session.setdefault("prospected_materials", {})
         session.setdefault("cargo_start", {})
@@ -926,11 +1192,56 @@ class SpecialistEngine:
             ("target_hits", 0), ("qualified_rocks", 0),
             ("target_total_pct", 0.0), ("target_best_pct", 0.0),
             ("prospect_log", []), ("current_prospect", None),
+            ("cargo_gained_t", 0), ("cargo_removed_t", 0),
+            ("cargo_gain_unassigned_t", 0), ("cargo_gained", {}),
         ):
             session.setdefault(key, copy.deepcopy(default))
-        refined = [{"symbol": key, **row} for key, row in session["refined"].items()]
-        refined.sort(key=lambda row: (-row["count"], row["name"]))
-        refined_t = sum(row["count"] for row in refined)
+        processing = [{"symbol": key, **row} for key, row in session["refined"].items()]
+        processing.sort(key=lambda row: (-row["count"], row["name"]))
+        processing_events = sum(row["count"] for row in processing)
+        surface_mode = str(session.get("mode") or "").casefold() == "surface"
+        if surface_mode:
+            gained_bucket = copy.deepcopy(session.get("cargo_gained") or {})
+            if not has_surface_cargo_accounting:
+                # Migration path for sessions captured before Rhino cargo-gain
+                # accounting existed.  The current-minus-start inventory is a
+                # truthful lower bound, unlike MiningRefined event counts.
+                for key in set(session["cargo_start"]) | set(session["cargo_current"]):
+                    current_row = session["cargo_current"].get(key) or {}
+                    gained = max(
+                        0,
+                        _int(current_row.get("count"))
+                        - _int((session["cargo_start"].get(key) or {}).get("count")),
+                    )
+                    if gained:
+                        gained_bucket[key] = {
+                            "name": current_row.get("name") or key.replace("_", " ").title(),
+                            "count": gained,
+                        }
+                session["cargo_gained_t"] = sum(
+                    _int(row.get("count")) for row in gained_bucket.values()
+                )
+            refined_t = max(0, _int(session.get("cargo_gained_t")))
+            attributed_t = sum(
+                _int(row.get("count")) for row in gained_bucket.values()
+            )
+            unattributed_t = max(0, refined_t - attributed_t)
+            if unattributed_t:
+                if len(processing) == 1:
+                    row = processing[0]
+                    _named_increment(
+                        gained_bucket, row["symbol"], row.get("name"), unattributed_t,
+                    )
+                else:
+                    _named_increment(
+                        gained_bucket, "surface_cargo",
+                        "Recovered surface cargo", unattributed_t,
+                    )
+            refined = [{"symbol": key, **row} for key, row in gained_bucket.items()]
+            refined.sort(key=lambda row: (-row["count"], row["name"]))
+        else:
+            refined = processing
+            refined_t = processing_events
         targets = []
         for key, row in session["prospected_materials"].items():
             sightings = row.get("sightings") or 0
@@ -958,8 +1269,15 @@ class SpecialistEngine:
         cargo_goal = max(0, _int(plan.get("cargo_goal_t")))
         remaining_goal = max(0, cargo_goal - refined_t)
         tph = round(refined_t / (duration / 3600), 2) if duration and refined_t else None
+        cargo_current_t = session.get("cargo_count_current")
+        if cargo_current_t is None:
+            cargo_current_t = sum(
+                _int(row.get("count")) for row in session["cargo_current"].values()
+            )
         session.update(
             duration_s=round(duration), refined_t=refined_t, refined=refined,
+            processing=processing, processing_events=processing_events,
+            cargo_current_t=max(0, _int(cargo_current_t)),
             cargo_yield=cargo_yield, prospected_materials=targets,
             tons_per_hour=tph,
             tons_per_asteroid=round(refined_t / prospectors, 2) if prospectors else None,
@@ -1000,12 +1318,13 @@ class SpecialistEngine:
         plan = {**_default_mining_plan(), **copy.deepcopy(state.get("plan") or {})}
         readiness = self._mining_readiness(
             state.get("loadout") or self.state.get("combat", {}).get("loadout"),
-            state.get("last_cargo") or {}, plan,
+            state.get("last_cargo") or {}, plan, state.get("cargo_context") or {},
         )
         return {
             "active": bool(session and session.get("active")), "session": session,
             "history": history, "plan": plan, "readiness": readiness,
             "ring_scans": copy.deepcopy(state.get("ring_scans") or []),
+            "surface_scans": copy.deepcopy(state.get("surface_scans") or []),
         }
 
     @staticmethod
@@ -1120,7 +1439,25 @@ class SpecialistEngine:
 
     def snapshot(self, carrier_data=None):
         with self._lock:
-            return {"mining": self._mining_snapshot(), "combat": self._combat_snapshot(), "carrier": self._carrier_snapshot(carrier_data), "exobiology": self._exobio_snapshot()}
+            return {
+                "mining": self._mining_snapshot(), "combat": self._combat_snapshot(),
+                "carrier": self._carrier_snapshot(carrier_data),
+                "exobiology": self._exobio_snapshot(),
+                "vehicles": self._vehicle_snapshot(),
+            }
+
+    def _vehicle_snapshot(self):
+        state = copy.deepcopy(self.state.get("vehicles") or {})
+        observed = list((state.get("observed") or {}).values())
+        observed.sort(key=lambda row: _int(row.get("last_seen_ts")), reverse=True)
+        return {
+            "active": state.get("active"), "observed": observed[:80],
+            "history": list(reversed(state.get("history") or []))[:80],
+        }
+
+    def vehicle_snapshot(self):
+        with self._lock:
+            return self._vehicle_snapshot()
 
     def mining_snapshot(self):
         with self._lock:

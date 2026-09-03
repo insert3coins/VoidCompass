@@ -1127,6 +1127,71 @@ class JournalWatcher:
                 }
             }
 
+        if ev == "ScanBaryCentre":
+            return {
+                "type": ev,
+                "raw": data,
+                "data": {
+                    "star_system": data.get("StarSystem"),
+                    "system_address": data.get("SystemAddress"),
+                    "body_id": data.get("BodyID"),
+                    "semi_major_axis": data.get("SemiMajorAxis"),
+                    "orbital_period": data.get("OrbitalPeriod"),
+                    "eccentricity": data.get("Eccentricity"),
+                    "orbital_inclination": data.get("OrbitalInclination"),
+                    "periapsis": data.get("Periapsis"),
+                    "ascending_node": data.get("AscendingNode"),
+                    "mean_anomaly": data.get("MeanAnomaly"),
+                },
+            }
+
+        if ev == "GameModeChange":
+            return {
+                "type": ev, "raw": data,
+                "data": {"game_mode": data.get("GameMode")},
+            }
+
+        if ev == "RestockVehicle":
+            return {
+                "type": ev, "raw": data,
+                "data": {
+                    "vehicle_type": data.get("Type"),
+                    "vehicle_localised": data.get("Type_Localised"),
+                    "loadout": data.get("Loadout"),
+                    "vehicle_id": data.get("ID"),
+                    "count": data.get("Count"),
+                    "cost": data.get("Cost"),
+                },
+            }
+
+        if ev in ("MaterialDiscovered", "DatalinkScan", "DataScanned", "DatalinkVoucher"):
+            return {
+                "type": ev, "raw": data,
+                "data": {
+                    key: value for key, value in data.items()
+                    if key not in ("timestamp", "event")
+                },
+            }
+
+        if ev == "RepairDrone":
+            return {
+                "type": ev, "raw": data,
+                "data": {
+                    "hull_repaired": data.get("HullRepaired"),
+                    "cockpit_repaired": data.get("CockpitRepaired"),
+                    "corrosion_repaired": data.get("CorrosionRepaired"),
+                },
+            }
+
+        if ev == "ReservoirReplenished":
+            return {
+                "type": ev, "raw": data,
+                "data": {
+                    "fuel_main": data.get("FuelMain"),
+                    "fuel_reservoir": data.get("FuelReservoir"),
+                },
+            }
+
         if ev == "ApproachBody":
             return {
                 "type": ev,

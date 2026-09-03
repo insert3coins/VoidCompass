@@ -314,7 +314,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         "last_bio_scan", "bio_sampling", "bio_sample_points",
         "cmdr_balance", "cmdr_loan", "cmdr_ranks", "cmdr_rank_progress",
         "cmdr_reputation", "cmdr_ship", "game_version", "game_build",
-        "game_horizons", "game_odyssey", "current_station_name",
+        "game_horizons", "game_odyssey", "current_game_mode",
+        "maintenance_state", "current_station_name",
         "current_station_type", "current_station_market_id",
         "current_station_state",
         "current_station_economy", "current_station_economies",
@@ -741,6 +742,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 if body_id is not None:
                     self.scan_items_by_id[body_id] = item
             self._rebuild_system_state_from_scan_items()
+        self.system_barycentres = self.load_barycentres_from_db(self.current_sys)
 
     def _show_cached_cockpit_state(self):
         """Paint the last state once, then freeze redraws during catch-up."""
@@ -991,6 +993,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.scanned_bodies = set()
         self.scan_items = []
         self.scan_items_by_id = {}
+        self.system_barycentres = []
         self._edsm_orrery_bodies = {}
         self._edsm_orrery_pending = set()
         self.belt_clusters = []
@@ -1026,6 +1029,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.game_build = ""
         self.game_horizons = None
         self.game_odyssey = None
+        self.current_game_mode = ""
+        self.maintenance_state = {}
 
         self.current_station_name = None
         self.current_station_type = None
@@ -1305,6 +1310,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         if self.current_sys not in systems:
             return
         self.load_system_from_db(self.current_sys)
+        self.scan_items = self.load_scan_items_from_db(self.current_sys)
+        self.system_barycentres = self.load_barycentres_from_db(self.current_sys)
+        self._rebuild_scan_index()
+        self._rebuild_system_state_from_scan_items()
         self._seed_navigation_scan_progress()
         self.update_dashboard_ui()
         self.update_hud()
@@ -1930,6 +1939,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.scanned_bodies = set()
         self.scan_items = []
         self.scan_items_by_id = {}
+        self.system_barycentres = []
         self.belt_clusters = []
         self.in_fss = False
         self.fss_summary_active = False
@@ -1945,6 +1955,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.game_build = ""
         self.game_horizons = None
         self.game_odyssey = None
+        self.current_game_mode = ""
+        self.maintenance_state = {}
         self.cmdr_ranks = {}
         self.cmdr_rank_progress = {}
         self.cmdr_reputation = {}
@@ -7098,6 +7110,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     "body": getattr(self, "current_body_name", None),
                     "historical": startup_replay,
                     "at_own_carrier": at_own_carrier,
+                    "vehicle": getattr(self, "current_vehicle_name", None),
+                    "vehicle_id": getattr(self, "current_vehicle_id", None),
+                    "in_srv": bool(getattr(self, "current_in_srv", False)),
+                    "cargo_capacity": self._active_cargo_capacity(),
+                    "cargo_vessel": getattr(self, "current_cargo_vessel", "Ship"),
                 },
                 defer_save=True,
             )
@@ -7154,8 +7171,13 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 survey_raw = raw if isinstance(raw, dict) else d
                 if isinstance(survey_raw, dict) and not survey_raw.get("event"):
                     survey_raw = dict(survey_raw, event=ev)
+                survey_context = dict(d) if isinstance(d, dict) else {}
+                if not survey_context.get("system"):
+                    survey_context["system"] = getattr(self, "current_sys", None)
+                if not survey_context.get("body"):
+                    survey_context["body"] = getattr(self, "current_body_name", None)
                 if self.deep_survey.observe_event(
-                    survey_raw, context=d, event_uid=data.get("_journal_uid"),
+                    survey_raw, context=survey_context, event_uid=data.get("_journal_uid"),
                 ):
                     self._refresh_exploration_window()
             except Exception as exc:
@@ -7339,6 +7361,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         elif ev == "Statistics":
             self._queue_edsm_upload(raw, allow_startup=True)
 
+        elif ev == "GameModeChange":
+            # Odyssey reports this when switching between the main galaxy and
+            # Operations. It is session context, not a notification-worthy
+            # event, but retaining it prevents the dashboard from guessing.
+            self.current_game_mode = str(d.get("game_mode") or "")
+            if not self.batch_mode:
+                self._refresh_html_workspace()
+
         elif ev == "Materials":
             self._queue_edsm_upload(raw, allow_startup=True)
             self._sync_materials_full(
@@ -7367,6 +7397,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.game_horizons = bool(d.get("horizons"))
             if d.get("odyssey") is not None:
                 self.game_odyssey = bool(d.get("odyssey"))
+            self.current_game_mode = str(d.get("game_mode") or self.current_game_mode or "")
             if game_version and game_build:
                 self.edsm.set_game_version(game_version, game_build)
                 self.log(f"Game version detected from LoadGame: {game_version} ({game_build})")
@@ -7421,6 +7452,38 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.watcher.force_check_status()
             if not self.batch_mode:
                 self.update_hud()
+
+        elif ev == "ReservoirReplenished":
+            # This event is emitted very frequently while the main tank feeds
+            # the active reservoir. Treat it strictly as quiet telemetry.
+            try:
+                if d.get("fuel_main") is not None:
+                    self.current_fuel_main = float(d.get("fuel_main"))
+                if d.get("fuel_reservoir") is not None:
+                    self.current_fuel_reservoir = float(d.get("fuel_reservoir"))
+            except (TypeError, ValueError):
+                pass
+            self.maintenance_state["last_reservoir"] = {
+                "timestamp": raw.get("timestamp") if isinstance(raw, dict) else None,
+                "fuel_main": self.current_fuel_main,
+                "fuel_reservoir": self.current_fuel_reservoir,
+            }
+            if not self.batch_mode:
+                self.update_hud()
+
+        elif ev == "RepairDrone":
+            record = {
+                "timestamp": raw.get("timestamp") if isinstance(raw, dict) else None,
+                "hull": d.get("hull_repaired"),
+                "cockpit": d.get("cockpit_repaired"),
+                "corrosion": d.get("corrosion_repaired"),
+            }
+            self.maintenance_state["last_repair_drone"] = record
+            self.maintenance_state["repair_drone_events"] = int(
+                self.maintenance_state.get("repair_drone_events") or 0
+            ) + 1
+            if not self.batch_mode:
+                self._refresh_html_workspace()
 
         elif ev == "ScanOrganic":
             # A live ScanOrganic event can only come from the commander's
@@ -7717,6 +7780,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._system_traffic_resolved = bool(preserve_startup_traffic)
             self._pending_system_discovery = None
             self.scan_items = self.load_scan_items_from_db(self.current_sys)
+            self.system_barycentres = self.load_barycentres_from_db(self.current_sys)
             self.body_signals = {}
             self.body_dss_complete = set()
             self.system_undiscovered = False
@@ -8374,6 +8438,33 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     self._refresh_survey_status_progress()
                 self._record_dss_efficiency(raw, d, startup_replay=startup_replay)
 
+        elif ev == "ScanBaryCentre":
+            if not self._matches_current_system_address(d):
+                return
+            body_id = self._normalize_body_id(d.get("body_id"))
+            if body_id is not None:
+                row = {
+                    "body_id": body_id,
+                    "system_address": d.get("system_address") or self.current_system_address,
+                    "semi_major_axis": d.get("semi_major_axis"),
+                    "orbital_period": d.get("orbital_period"),
+                    "eccentricity": d.get("eccentricity"),
+                    "orbital_inclination": d.get("orbital_inclination"),
+                    "periapsis": d.get("periapsis"),
+                    "ascending_node": d.get("ascending_node"),
+                    "mean_anomaly": d.get("mean_anomaly"),
+                    "scan_timestamp": raw.get("timestamp") if isinstance(raw, dict) else None,
+                    "_ts": int(time.time()),
+                }
+                retained = [
+                    item for item in self.system_barycentres
+                    if self._normalize_body_id(item.get("body_id")) != body_id
+                ]
+                self.system_barycentres = [*retained, row][-64:]
+                self.save_barycentre_to_db(self.current_sys, row)
+                if not self.batch_mode:
+                    self._refresh_html_workspace()
+
         elif ev == "Scan":
             if not self._matches_current_system_address(d):
                 return
@@ -8680,7 +8771,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     lambda r=raw: self.prospector_hud.update(r),
                     key="prospector-hud",
                 )
-            elif ev == "MiningRefined":
+            elif ev == "MiningRefined" and not getattr(self, "current_in_srv", False):
                 mat = raw.get("Type_Localised") or raw.get("Type") or ""
                 self._ui_post(lambda m=mat: self.prospector_hud.add_refined(m))
 
@@ -9582,7 +9673,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         try:
             specialist_engine = getattr(self, "specialist_engine", None)
             if specialist_engine:
-                specialist_engine.update_cargo(self.current_cargo_inventory)
+                specialist_engine.update_cargo(
+                    self.current_cargo_inventory,
+                    vessel=self.current_cargo_vessel,
+                    capacity=self._active_cargo_capacity(),
+                    vehicle=getattr(self, "current_vehicle_name", None),
+                )
         except Exception as exc:
             logging.debug("Specialist cargo snapshot skipped: %s", exc)
         self.current_cargo_tons = sum(
