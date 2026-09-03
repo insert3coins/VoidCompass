@@ -61,6 +61,7 @@ from services.spansh import (
 )
 from stellar_cartography import (
     build_orrery,
+    build_planetary_resources,
     build_region_passport,
     build_replay,
     build_science_lab,
@@ -297,6 +298,20 @@ class HtmlDashboardMixin:
         add("profile", "Commander profile", "ready" if profile_ready else "warn",
             commander.upper() if profile_ready else "UNRESOLVED",
             "Profile-local state active" if profile_ready else "Waiting for LoadGame commander identity")
+
+        game_mode = str(getattr(self, "current_game_mode", None) or "").strip()
+        if game_mode:
+            main_mode = game_mode.casefold() == "maingame"
+            add("game_mode", "Elite session", "ready" if main_mode else "warn",
+                "MAIN GAME" if main_mode else game_mode.upper(),
+                "Flight journals active" if main_mode else "Operations session context retained")
+
+        hull = _number(getattr(self, "current_hull_percent", None))
+        repair = (getattr(self, "maintenance_state", None) or {}).get("last_repair_drone") or {}
+        if hull is not None:
+            add("maintenance", "Hull condition",
+                "fail" if hull < 30 else "warn" if hull < 70 else "ready",
+                f"{hull:.0f}%", "Repair drone activity retained" if repair else "Live status telemetry")
 
         next_system = str((route or {}).get("next") or "").strip()
         if next_system:
@@ -891,7 +906,10 @@ class HtmlDashboardMixin:
             and str(row.get("body_id")) not in local_ids
         ]
         orrery_items = [*scan_items, *external_items]
-        orrery = build_orrery(orrery_items, body_target)
+        orrery = build_orrery(
+            orrery_items, body_target,
+            getattr(self, "system_barycentres", None) or [],
+        )
         orrery["loading"] = bool(
             not orrery_items
             and current.casefold() in getattr(self, "_edsm_orrery_pending", set())
@@ -916,6 +934,7 @@ class HtmlDashboardMixin:
                 "target": body_target,
                 "orrery": orrery,
                 "queue": build_survey_queue(scan_items, survey_state, body_target),
+                "resources": build_planetary_resources(scan_items),
             },
             "plotter": {
                 "from": _text(saved_form.get("from") or current, 140),
@@ -1023,6 +1042,11 @@ class HtmlDashboardMixin:
         missions = list((companion.get("missions") or {}).values())
         profile_key = get_active_profile(self.config)
         session_distance = sum(float(row.get("distance_ly") or 0) for row in sessions)
+        try:
+            vehicles = self.specialist_engine.vehicle_snapshot()
+        except Exception:
+            vehicles = {}
+        maintenance = dict(getattr(self, "maintenance_state", None) or {})
         return {
             "name": _text(getattr(self, "cmdr_name", None) or self.config.get("active_commander_name") or "Unknown Commander", 120),
             "fid": _text(getattr(self, "cmdr_fid", None) or self.config.get("active_commander_fid"), 120),
@@ -1088,6 +1112,24 @@ class HtmlDashboardMixin:
                 }
                 for row in missions[:80] if isinstance(row, dict)
             ],
+            "surface_vehicles": [
+                {
+                    "name": _text(row.get("name") or "Surface vehicle", 120),
+                    "symbol": _text(row.get("symbol"), 80),
+                    "id": row.get("id"), "loadout": _text(row.get("loadout"), 80),
+                    "launches": _integer(row.get("launches")),
+                    "restocks": _integer(row.get("restocks")),
+                    "destroyed": bool(row.get("destroyed")),
+                    "last_event": _text(row.get("last_event"), 40),
+                    "last_seen": row.get("last_seen_ts"),
+                }
+                for row in (vehicles.get("observed") or [])[:80] if isinstance(row, dict)
+            ],
+            "session": {
+                "game_mode": _text(getattr(self, "current_game_mode", None) or "Unknown", 50),
+                "repair_drone_events": _integer(maintenance.get("repair_drone_events")),
+                "last_repair": maintenance.get("last_repair_drone") or {},
+            },
             "loadout_ready": bool(companion.get("loadout")),
             "integrations": {
                 "edsm": bool(self.config.get("edsm_upload_enabled")),
@@ -1206,6 +1248,22 @@ class HtmlDashboardMixin:
         except Exception:
             replay_state = {}
         analytics["replay"] = build_replay(sessions[:120], replay_state)
+        try:
+            discoveries = deep.discovery_state(160) if deep is not None else []
+        except Exception:
+            discoveries = []
+        analytics["discoveries"] = [
+            {
+                "timestamp": _text(row.get("timestamp"), 40),
+                "event": _text(row.get("event"), 40),
+                "system": _text(row.get("system"), 140),
+                "body": _text(row.get("body"), 160),
+                "title": _text(row.get("title") or "Field discovery", 180),
+                "detail": _text(row.get("detail"), 220),
+                "value": _integer(row.get("value")),
+            }
+            for row in reversed(discoveries) if isinstance(row, dict)
+        ]
         return analytics
 
     def _html_mission_workspace(self):
@@ -1486,13 +1544,21 @@ class HtmlDashboardMixin:
                 "missing": [_text(row, 100) for row in readiness.get("missing") or []],
                 "equipment": dict(readiness.get("equipment") or {}),
                 "dss_recommended": bool(readiness.get("dss_recommended")),
+                "surface_vehicle": bool(readiness.get("surface_vehicle")),
             },
             "session": {
+                "mode": _text(session.get("mode") or "asteroid", 30),
+                "vehicle": _text(session.get("vehicle"), 100),
+                "vehicle_id": session.get("vehicle_id"),
+                "cargo_capacity": _integer(session.get("cargo_capacity")),
                 "started": session.get("started_ts"),
                 "duration": _integer(session.get("duration_s")),
                 "prospected": _integer(session.get("asteroids_prospected")),
                 "cracked": _integer(session.get("asteroids_cracked")),
                 "refined_t": _integer(session.get("refined_t")),
+                "processing_events": _integer(session.get("processing_events")),
+                "cargo_current_t": _integer(session.get("cargo_current_t")),
+                "cargo_removed_t": _integer(session.get("cargo_removed_t")),
                 "tons_per_hour": _number(session.get("tons_per_hour")),
                 "tons_per_asteroid": _number(session.get("tons_per_asteroid")),
                 "asteroids_per_hour": _number(session.get("asteroids_per_hour")),
@@ -1580,6 +1646,20 @@ class HtmlDashboardMixin:
                     ],
                 }
                 for row in (snapshot.get("ring_scans") or [])[:30] if isinstance(row, dict)
+            ],
+            "surface_scans": [
+                {
+                    "system": _text(row.get("system"), 140),
+                    "body": _text(row.get("body"), 180),
+                    "body_id": row.get("body_id"),
+                    "timestamp": row.get("timestamp"),
+                    "mining_locations": _integer(row.get("mining_locations")),
+                    "signals": [
+                        {"name": _text(signal.get("name"), 100), "count": _integer(signal.get("count"))}
+                        for signal in row.get("signals") or [] if isinstance(signal, dict)
+                    ],
+                }
+                for row in (snapshot.get("surface_scans") or [])[:30] if isinstance(row, dict)
             ],
             "bookmarks": [
                 {

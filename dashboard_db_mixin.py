@@ -16,6 +16,7 @@ SCAN_CACHE_FILE = "scan_cache.json"
 _SCAN_HISTORY_EVENTS = (
     "Commander", "LoadGame", "Location", "FSDJump", "CarrierJump",
     "FSSDiscoveryScan", "FSSAllBodiesFound", "NavBeaconScan", "Scan",
+    "ScanBaryCentre",
 )
 
 
@@ -55,9 +56,47 @@ def import_scan_journal_history(db_path, journal_path, commander=None, fid=None)
     try:
         conn.execute("PRAGMA busy_timeout=10000")
         conn.execute(
+            "CREATE TABLE IF NOT EXISTS systems ("
+            "name TEXT PRIMARY KEY, total INTEGER, scanned_count INTEGER)"
+        )
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS bodies ("
+            "system_name TEXT, body_id INTEGER, PRIMARY KEY (system_name, body_id))"
+        )
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS scan_hud_items ("
+            "system_name TEXT, body_id INTEGER, data_json TEXT, ts INTEGER, "
+            "PRIMARY KEY (system_name, body_id))"
+        )
+        conn.execute(
             "CREATE TABLE IF NOT EXISTS scan_journal_imports ("
             "journal_file TEXT PRIMARY KEY, signature TEXT NOT NULL, imported_at REAL NOT NULL)"
         )
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS scan_barycentres ("
+            "system_name TEXT, body_id INTEGER, data_json TEXT, ts INTEGER, "
+            "PRIMARY KEY (system_name, body_id))"
+        )
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS scan_history_meta (key TEXT PRIMARY KEY, value TEXT)"
+        )
+        feature_version = 2
+        old_version = conn.execute(
+            "SELECT value FROM scan_history_meta WHERE key='feature_version'"
+        ).fetchone()
+        try:
+            imported_feature_version = int(old_version[0] or 0) if old_version else 0
+        except (TypeError, ValueError):
+            imported_feature_version = 0
+        if imported_feature_version < feature_version:
+            # One deliberate re-index adds historical ScanBaryCentre support;
+            # event-derived body totals remain idempotent.
+            conn.execute("DELETE FROM scan_journal_imports")
+            conn.execute(
+                "INSERT OR REPLACE INTO scan_history_meta (key, value) VALUES ('feature_version', ?)",
+                (str(feature_version),),
+            )
+            conn.commit()
         imported = dict(conn.execute(
             "SELECT journal_file, signature FROM scan_journal_imports"
         ).fetchall())
@@ -102,6 +141,7 @@ def import_scan_journal_history(db_path, journal_path, commander=None, fid=None)
                             continue
                         row = aggregate.setdefault(system, {
                             "total": 0, "scanned": 0, "bodies": set(), "complete": False,
+                            "barycentres": {}, "materials": {},
                         })
                         if event == "FSSDiscoveryScan":
                             count = int(raw.get("BodyCount") or 0)
@@ -128,9 +168,48 @@ def import_scan_journal_history(db_path, journal_path, commander=None, fid=None)
                             body_id = raw.get("BodyID")
                             if body_id is not None:
                                 try:
-                                    row["bodies"].add(int(body_id))
+                                    body_id = int(body_id)
+                                    row["bodies"].add(body_id)
+                                    composition = []
+                                    for material in raw.get("Materials") or []:
+                                        if not isinstance(material, dict):
+                                            continue
+                                        symbol = str(material.get("Name") or "").strip().strip("$;")
+                                        if symbol.casefold().endswith("_name"):
+                                            symbol = symbol[:-5]
+                                        label = material.get("Name_Localised") or symbol.replace("_", " ").title()
+                                        try:
+                                            percent = round(max(0.0, float(material.get("Percent") or 0)), 3)
+                                        except (TypeError, ValueError):
+                                            percent = 0.0
+                                        if symbol or label:
+                                            composition.append({
+                                                "symbol": symbol.casefold(), "name": str(label),
+                                                "percent": percent,
+                                            })
+                                    if composition:
+                                        composition.sort(key=lambda item: (-item["percent"], item["name"]))
+                                        row["materials"][body_id] = composition
                                 except (TypeError, ValueError):
                                     pass
+                        elif event == "ScanBaryCentre" and raw.get("BodyID") is not None:
+                            try:
+                                body_id = int(raw.get("BodyID"))
+                            except (TypeError, ValueError):
+                                continue
+                            row["barycentres"][body_id] = {
+                                "body_id": body_id,
+                                "system_address": raw.get("SystemAddress"),
+                                "semi_major_axis": raw.get("SemiMajorAxis"),
+                                "orbital_period": raw.get("OrbitalPeriod"),
+                                "eccentricity": raw.get("Eccentricity"),
+                                "orbital_inclination": raw.get("OrbitalInclination"),
+                                "periapsis": raw.get("Periapsis"),
+                                "ascending_node": raw.get("AscendingNode"),
+                                "mean_anomaly": raw.get("MeanAnomaly"),
+                                "scan_timestamp": raw.get("timestamp"),
+                                "_ts": int(time.time()),
+                            }
                         parsed = True
             except OSError:
                 continue
@@ -166,6 +245,32 @@ def import_scan_journal_history(db_path, journal_path, commander=None, fid=None)
                     result["systems"].add(system)
                     if evidence["complete"]:
                         result["completed"] += 1
+                for body_id, barycentre in evidence.get("barycentres", {}).items():
+                    conn.execute(
+                        "INSERT OR REPLACE INTO scan_barycentres "
+                        "(system_name, body_id, data_json, ts) VALUES (?, ?, ?, ?)",
+                        (system, body_id, json.dumps(barycentre), barycentre["_ts"]),
+                    )
+                for body_id, materials in evidence.get("materials", {}).items():
+                    cached = conn.execute(
+                        "SELECT data_json, ts FROM scan_hud_items "
+                        "WHERE system_name=? AND body_id=?", (system, body_id),
+                    ).fetchone()
+                    if not cached:
+                        continue
+                    try:
+                        payload = json.loads(cached[0])
+                    except (TypeError, ValueError):
+                        continue
+                    if isinstance(payload, dict) and payload.get("materials") != materials:
+                        payload["materials"] = materials
+                        conn.execute(
+                            "UPDATE scan_hud_items SET data_json=? "
+                            "WHERE system_name=? AND body_id=?",
+                            (json.dumps(payload), system, body_id),
+                        )
+                if evidence.get("barycentres") or evidence.get("materials"):
+                    result["systems"].add(system)
             for name, signature in signatures.items():
                 conn.execute(
                     "INSERT OR REPLACE INTO scan_journal_imports "
@@ -295,6 +400,7 @@ class DashboardDBMixin:
     def survey_evidence_snapshot(self, system=None):
         system = str(system or getattr(self, "current_sys", "") or "Unknown")
         db = {"total": 0, "scanned": 0, "body ids": 0, "cached body details": 0,
+              "cached barycentres": 0,
               "latest cached detail": "-", "journal imports indexed": 0}
         with self.db_lock:
             try:
@@ -313,6 +419,9 @@ class DashboardDBMixin:
                     time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(float(detail[1])))
                     if detail[1] else "-"
                 )
+                db["cached barycentres"] = int(self.conn.execute(
+                    "SELECT COUNT(*) FROM scan_barycentres WHERE system_name=?", (system,),
+                ).fetchone()[0] or 0)
                 db["journal imports indexed"] = int(self.conn.execute(
                     "SELECT COUNT(*) FROM scan_journal_imports"
                 ).fetchone()[0] or 0)
@@ -411,6 +520,9 @@ class DashboardDBMixin:
             )
             self.conn.execute(
                 "CREATE TABLE IF NOT EXISTS scan_hud_items (system_name TEXT, body_id INTEGER, data_json TEXT, ts INTEGER, PRIMARY KEY (system_name, body_id))"
+            )
+            self.conn.execute(
+                "CREATE TABLE IF NOT EXISTS scan_barycentres (system_name TEXT, body_id INTEGER, data_json TEXT, ts INTEGER, PRIMARY KEY (system_name, body_id))"
             )
             self.conn.execute(
                 "CREATE TABLE IF NOT EXISTS edsm_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, queued_ts REAL NOT NULL, event_json TEXT NOT NULL)"
@@ -650,6 +762,51 @@ class DashboardDBMixin:
             except Exception:
                 pass
             return
+
+    def load_barycentres_from_db(self, system_name):
+        """Load retained ScanBaryCentre orbital elements for one system."""
+        rows = []
+        if not system_name:
+            return rows
+        with self.db_lock:
+            try:
+                cur = self.conn.cursor()
+                cur.execute(
+                    "SELECT data_json FROM scan_barycentres "
+                    "WHERE system_name=? ORDER BY body_id",
+                    (system_name,),
+                )
+                for (payload,) in cur.fetchall():
+                    try:
+                        row = json.loads(payload)
+                        if isinstance(row, dict):
+                            rows.append(row)
+                    except (TypeError, ValueError):
+                        continue
+            except sqlite3.Error:
+                return []
+        return rows
+
+    def save_barycentre_to_db(self, system_name, row):
+        """Persist one journal-backed barycentre without blocking on commit."""
+        if not system_name or not isinstance(row, dict):
+            return
+        try:
+            body_id = int(row.get("body_id"))
+            ts = int(row.get("_ts") or time.time())
+            payload = json.dumps(row)
+        except (TypeError, ValueError):
+            return
+        with self.db_lock:
+            try:
+                self.conn.execute(
+                    "INSERT OR REPLACE INTO scan_barycentres "
+                    "(system_name, body_id, data_json, ts) VALUES (?, ?, ?, ?)",
+                    (system_name, body_id, payload, ts),
+                )
+                self._db_maybe_commit(reason="scan_barycentre")
+            except sqlite3.Error:
+                return
 
     def migrate_json_history(self):
         self.log("📦 MIGRATING HISTORY TO DATABASE...")

@@ -28,6 +28,7 @@ LIMITS = {
     "candidates": 250,
     "revisit_queue": 250,
     "milestones": 250,
+    "field_discoveries": 1200,
     "milestone_keys": 1200,
     "seen": 12000,
     "imported_files": 400,
@@ -46,12 +47,14 @@ TRACKED_EVENTS = frozenset({
     "FSSSignalDiscovered", "SAAScanComplete", "Screenshot", "Scan",
     "SAASignalsFound", "FSSDiscoveryScan", "FSSAllBodiesFound", "NavBeaconScan",
     "ScanOrganic",
+    "MaterialDiscovered", "DatalinkScan", "DataScanned", "DatalinkVoucher",
 })
 SCREENSHOT_CONTEXT_EVENTS = frozenset({
     "FSDJump", "CarrierJump", "Location", "DiscoveryScan", "FSSDiscoveryScan",
     "FSSAllBodiesFound", "Scan", "SAAScanComplete", "SAASignalsFound",
     "ScanOrganic", "CodexEntry", "ApproachBody", "LeaveBody", "Touchdown",
     "Liftoff", "SupercruiseExit", "Docked", "Undocked", "ProspectedAsteroid",
+    "MaterialDiscovered", "DatalinkScan", "DataScanned",
 })
 IMPORT_EVENTS = TRACKED_EVENTS | {"Commander", "LoadGame"}
 IMPORT_MARKERS = tuple(
@@ -105,7 +108,7 @@ def _localized(raw, field, default=""):
 def _event_key(raw, uid=None):
     key = "|".join(str(raw.get(field) or "") for field in (
         "timestamp", "event", "StarSystem", "SystemAddress", "BodyName",
-        "BodyID", "EntryID", "SignalName", "Filename",
+        "BodyID", "EntryID", "SignalName", "Filename", "Name", "Type", "Message",
     ))
     return key if key.strip("|") else str(uid or "")
 
@@ -369,6 +372,7 @@ def expedition_report_markdown(
     signals = scoped("signals")
     dss = scoped("dss")
     screenshots = scoped("screenshots")
+    field_discoveries = scoped("field_discoveries")
     systems = list(dict.fromkeys(
         str(name) for name in (session_systems or []) if str(name or "").strip()
     ))
@@ -417,6 +421,7 @@ def expedition_report_markdown(
         f"- Biological analyses: {_integer(session.get('bio_analyses')):,}",
         f"- DSS mappings: {len(dss):,} ({efficient_dss:,} efficiency targets met)",
         f"- Signals recorded: {len(signals):,}",
+        f"- Material and datalink discoveries: {len(field_discoveries):,}",
         f"- Screenshots: {len(screenshots):,}",
     ]
     if codex:
@@ -481,8 +486,9 @@ class DeepSurveyTracker:
     @staticmethod
     def _empty():
         return {
-            "schema": 3, "route_points": [], "codex": [], "signals": [],
+            "schema": 4, "route_points": [], "codex": [], "signals": [],
             "dss": [], "screenshots": [], "candidates": [], "revisit_queue": [], "seen": [],
+            "field_discoveries": [],
             "imported_files": {}, "region_stats": {}, "checkpoint": {},
             "last_departure": {}, "milestones": [], "milestone_keys": [],
             "milestones_initialized": False,
@@ -507,11 +513,12 @@ class DeepSurveyTracker:
                 loaded = json.load(handle)
             if isinstance(loaded, dict):
                 upgrading = _integer(loaded.get("schema"), 1) < 2
+                discovery_upgrade = _integer(loaded.get("schema"), 1) < 4
                 for key in self.data:
                     if key in loaded:
                         self.data[key] = loaded[key]
-                self.data["schema"] = 3
-                if upgrading:
+                self.data["schema"] = 4
+                if upgrading or discovery_upgrade:
                     # Re-index journals once in the existing background import.
                     # The retained seen set deduplicates old facts, while newly
                     # tracked FSS/biology events fill the 5.2.5 region passport.
@@ -576,6 +583,15 @@ class DeepSurveyTracker:
                 "route_points": copy.deepcopy((self.data.get("route_points") or [])[-point_limit:]),
                 "screenshots": copy.deepcopy((self.data.get("screenshots") or [])[-screenshot_limit:]),
             }
+
+    def discovery_state(self, limit=120):
+        """Return the bounded commander field-intelligence ledger."""
+        try:
+            limit = max(1, min(LIMITS["field_discoveries"], int(limit)))
+        except (TypeError, ValueError):
+            limit = 120
+        with self.lock:
+            return copy.deepcopy((self.data.get("field_discoveries") or [])[-limit:])
 
     def save(self, immediate=False):
         if not self.path:
@@ -911,6 +927,33 @@ class DeepSurveyTracker:
                 self._touch_region(
                     self._system_name(raw, context), "biology", timestamp=_stamp(raw),
                 )
+            elif event in {"MaterialDiscovered", "DatalinkScan", "DataScanned", "DatalinkVoucher"}:
+                if event == "MaterialDiscovered":
+                    title = _localized(raw, "Name", "Material discovery")
+                    detail = _localized(raw, "Category", "Material")
+                    value = _integer(raw.get("DiscoveryNumber"))
+                elif event == "DatalinkScan":
+                    title = _localized(raw, "Message", "Datalink scan")
+                    detail = "Datalink archive"
+                    value = 0
+                elif event == "DataScanned":
+                    title = _localized(raw, "Type", "Data scan")
+                    detail = "Composition scanner record"
+                    value = 0
+                else:
+                    title = "Datalink voucher"
+                    detail = " → ".join(filter(None, (
+                        str(raw.get("VictimFaction") or ""),
+                        str(raw.get("PayeeFaction") or ""),
+                    ))) or "Voucher awarded"
+                    value = _integer(raw.get("Reward"))
+                self._append("field_discoveries", {
+                    "timestamp": _stamp(raw), "event": event,
+                    "system": self._system_name(raw, context),
+                    "body": str(raw.get("BodyName") or raw.get("Body") or ""),
+                    "title": title, "detail": detail, "value": value,
+                })
+                self._touch_route(raw, discoveries=1)
         if changed and save:
             self.save()
         return changed
@@ -946,6 +989,7 @@ class DeepSurveyTracker:
             if imported.get(name) == signature:
                 continue
             active = not bool(commander or fid)
+            current_system = ""
             try:
                 with open(path, "r", encoding="utf-8", errors="ignore") as handle:
                     for line in handle:
@@ -957,14 +1001,17 @@ class DeepSurveyTracker:
                             continue
                         if raw.get("event") in ("Commander", "LoadGame"):
                             active = self._commander_matches(raw, commander, fid)
-                        if active and self.observe_event(raw, save=False):
+                        if raw.get("event") in {"Location", "FSDJump", "CarrierJump"}:
+                            current_system = str(raw.get("StarSystem") or current_system)
+                        if active and self.observe_event(
+                                raw, context={"system": current_system}, save=False):
                             count += 1
             except OSError:
                 continue
             imported[name] = signature
         with self.lock:
             self.data["imported_files"] = dict(list(imported.items())[-LIMITS["imported_files"]:])
-            for key in ("route_points", "codex", "signals", "dss", "screenshots"):
+            for key in ("route_points", "codex", "signals", "dss", "screenshots", "field_discoveries"):
                 self.data[key] = sorted(
                     self.data.get(key) or [], key=lambda row: str(row.get("timestamp") or "")
                 )[-LIMITS[key]:]

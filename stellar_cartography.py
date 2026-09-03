@@ -17,6 +17,12 @@ from deep_survey import HIGH_VALUE_WORLDS, item_value, survey_plan
 from galactic_regions import region_names
 
 
+RARE_RAW_MATERIALS = {
+    "antimony", "polonium", "ruthenium", "selenium", "technetium",
+    "tellurium", "yttrium",
+}
+
+
 def _number(value, default=None):
     try:
         parsed = float(value)
@@ -57,7 +63,7 @@ def _parent_id(item, known_ids):
         if not isinstance(parent, dict):
             continue
         for kind, value in parent.items():
-            if kind not in {"Star", "Planet"}:
+            if kind not in {"Star", "Planet", "Null"}:
                 continue
             candidate = str(value)
             if candidate != own and candidate in known_ids:
@@ -171,13 +177,76 @@ def edsm_bodies_to_orrery_items(payload, system_name=None):
     return rows
 
 
-def build_orrery(items, target=None):
+def _barycentre_parent_id(body_id, items, known_ids):
+    """Infer a barycentre parent from a child's ordered Parents chain."""
+    wanted = str(body_id)
+    for item in items:
+        parents = item.get("parents") or []
+        for index, parent in enumerate(parents):
+            if not isinstance(parent, dict) or str(parent.get("Null", "")) != wanted:
+                continue
+            for outer in parents[index + 1:]:
+                if not isinstance(outer, dict):
+                    continue
+                for kind, value in outer.items():
+                    candidate = str(value)
+                    if kind in {"Star", "Planet", "Null"} and candidate != wanted and candidate in known_ids:
+                        return candidate
+    return None
+
+
+def build_orrery(items, target=None, barycentres=None):
     """Return journal-backed system architecture and orbital presentation data."""
     source = [row for row in (items or ()) if isinstance(row, dict)]
+    barycentre_source = [
+        row for row in (barycentres or ()) if isinstance(row, dict)
+    ]
     known_ids = {
         str(row.get("body_id")) for row in source if row.get("body_id") is not None
     }
+    known_ids.update(
+        str(row.get("body_id")) for row in barycentre_source
+        if row.get("body_id") is not None
+    )
     bodies = []
+    for row in barycentre_source:
+        if row.get("body_id") is None:
+            continue
+        body_id = str(row.get("body_id"))
+        orbit = {
+            "semi_major_axis": _number(row.get("semi_major_axis")),
+            "period_s": _number(row.get("orbital_period")),
+            "eccentricity": _number(row.get("eccentricity"), 0.0),
+            "inclination_deg": _number(row.get("orbital_inclination"), 0.0),
+            "periapsis_deg": _number(row.get("periapsis"), 0.0),
+            "ascending_node_deg": _number(row.get("ascending_node")),
+            "mean_anomaly_deg": _number(row.get("mean_anomaly")),
+            "epoch_s": _epoch(row.get("scan_timestamp") or row.get("timestamp")),
+        }
+        orbit["resolved"] = bool(
+            orbit["semi_major_axis"] is not None
+            and orbit["semi_major_axis"] > 0
+            and orbit["period_s"] is not None
+            and orbit["period_s"] > 0
+            and orbit["ascending_node_deg"] is not None
+            and orbit["mean_anomaly_deg"] is not None
+            and orbit["epoch_s"] > 0
+        )
+        bodies.append({
+            "id": body_id, "body_id": row.get("body_id"),
+            "parent_id": _barycentre_parent_id(body_id, source, known_ids),
+            "name": f"Barycentre {body_id}", "full_name": f"Barycentre {body_id}",
+            "class": "Orbital barycentre", "kind": "barycentre",
+            "orbit": orbit, "semi_major_axis": orbit["semi_major_axis"],
+            "orbital_period": orbit["period_s"], "rotation_period": None,
+            "eccentricity": orbit["eccentricity"], "distance_ls": None,
+            "mass": None, "radius_m": None, "gravity_g": None,
+            "temperature_k": None, "atmosphere": "", "rings": 0,
+            "ring_class": "", "reserve_level": "", "bio": 0,
+            "bio_complete": 0, "geo": 0, "value": 0, "mapped": False,
+            "landable": False, "terraformable": False, "targeted": False,
+            "flags": [], "source": "journal", "hidden": True,
+        })
     for ordinal, item in enumerate(sorted(
         source,
         key=lambda row: (_integer(row.get("body_id"), 999999), _text(row.get("name"))),
@@ -255,6 +324,15 @@ def build_orrery(items, target=None):
             "bio": max(0, _integer(item.get("bio_count"))),
             "bio_complete": analysed,
             "geo": max(0, _integer(item.get("geo_count"))),
+            "mining": max(0, _integer(item.get("mining_count"))),
+            "materials": [
+                {
+                    "symbol": _text(row.get("symbol"), 80),
+                    "name": _text(row.get("name") or row.get("symbol"), 100),
+                    "percent": _number(row.get("percent"), 0.0),
+                }
+                for row in (item.get("materials") or []) if isinstance(row, dict)
+            ][:24],
             "value": max(0, item_value(item)),
             "mapped": mapped,
             "landable": bool(item.get("landable")),
@@ -283,11 +361,60 @@ def build_orrery(items, target=None):
         "bodies": bodies,
         "stars": sum(1 for row in bodies if row["kind"] == "star"),
         "planets": sum(1 for row in bodies if row["kind"] == "planet"),
+        "barycentres": sum(1 for row in bodies if row["kind"] == "barycentre"),
         "mapped": sum(1 for row in bodies if row["kind"] == "planet" and row["mapped"]),
         "roots": sum(1 for row in bodies if not row.get("parent_id")),
         "parents": len(children),
         "mode": "SCHEMATIC JOURNAL ARCHITECTURE",
         "target": target_model,
+    }
+
+
+def build_planetary_resources(items):
+    """Build compact, journal-authoritative Scan.Materials intelligence."""
+    rows = []
+    for item in items or ():
+        if not isinstance(item, dict) or item.get("is_star"):
+            continue
+        materials = []
+        raw_materials = item.get("materials") or []
+        if isinstance(raw_materials, dict):
+            raw_materials = [
+                {"symbol": name, "name": name, "percent": percent}
+                for name, percent in raw_materials.items()
+            ]
+        for material in raw_materials:
+            if not isinstance(material, dict):
+                continue
+            name = _text(material.get("name") or material.get("symbol"), 100)
+            symbol = _text(material.get("symbol") or name, 80).casefold()
+            percent = max(0.0, _number(material.get("percent"), 0.0))
+            if name:
+                materials.append({
+                    "symbol": symbol, "name": name, "percent": percent,
+                    "rare": symbol.replace("_", " ") in RARE_RAW_MATERIALS,
+                })
+        materials.sort(key=lambda row: (not row["rare"], -row["percent"], row["name"]))
+        mining = max(0, _integer(item.get("mining_count")))
+        if not materials and not mining:
+            continue
+        rows.append({
+            "body_id": item.get("body_id"),
+            "body": _text(item.get("name") or item.get("full_name"), 160),
+            "class": _text(item.get("planet_class") or item.get("class"), 120),
+            "landable": bool(item.get("landable")),
+            "mining_locations": mining,
+            "materials": materials[:24],
+            "rare_count": sum(1 for row in materials if row["rare"]),
+        })
+    rows.sort(key=lambda row: (
+        -row["rare_count"], -row["mining_locations"], not row["landable"], row["body"],
+    ))
+    return {
+        "bodies": rows[:60],
+        "scanned": len(rows),
+        "rare_bodies": sum(1 for row in rows if row["rare_count"]),
+        "mining_sites": sum(row["mining_locations"] for row in rows),
     }
 
 
