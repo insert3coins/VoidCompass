@@ -66,24 +66,27 @@ function vehiclePresentation(state = {}) {
   const label = String(state.label || 'FLIGHT').toUpperCase();
   const vehicle = state.vehicle || {};
   const catalog = window.VoidCompassShipCatalog;
+  const surfaceControl = [
+    'srv_handbrake', 'srv_turret', 'srv_drive_assist',
+  ].includes(motion);
   if (motion.startsWith('carrier_')) {
     return catalog.carrier();
   }
   if (motion === 'on_foot' || label === 'ONFOOT' || label === 'ON FOOT') {
     return catalog.onFoot();
   }
-  if (motion === 'surface_vehicle' || motion.startsWith('vehicle_')) {
+  if (motion === 'surface_vehicle' || motion.startsWith('vehicle_') || surfaceControl) {
     if (label.includes('NOMAD') || String(vehicle.surface || '').toUpperCase() === 'NOMAD') {
       return catalog.resolveSurface('NOMAD');
     }
-    if (label.includes('FIGHTER')) {
+    if (!surfaceControl && label.includes('FIGHTER')) {
       return catalog.fighter();
     }
     if (label.includes('SRV') || label.includes('SCARAB') || label.includes('SCORPION')
-        || label.includes('RHINO') || vehicle.surface) {
+        || label.includes('RHINO') || vehicle.surface || surfaceControl) {
       const surface = label.includes('SCORPION') ? 'SCORPION'
         : label.includes('RHINO') ? 'RHINO'
-          : label.includes('SCARAB') ? 'SCARAB' : vehicle.surface;
+          : label.includes('SCARAB') ? 'SCARAB' : (vehicle.surface || 'SRV');
       return catalog.resolveSurface(surface);
     }
   }

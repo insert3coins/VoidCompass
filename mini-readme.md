@@ -1,15 +1,13 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.2.2 // Vessel-Aware Cargo Holds
+## v5.4.2.2.1 // Surface Vehicle HUD Identity
 **Release Date:** 2026-Sep-03
 
-*   Made Cargo Manifest follow the active `Cargo.json` vessel so ship, Rhino, Scarab, Scorpion and Nomad/SRV snapshots no longer share the mothership's hold capacity.
-*   Added the released Rhino's 72-tonne hold, live vehicle identity, correct used/free calculations and vessel-aware cargo telemetry across the HTML overlay, Navigation HUD and Dashboard.
-*   Preserved the active cargo vessel per commander profile and refreshed the manifest across vehicle launch, docking and journal `VehicleSwitch` hand-offs.
-*   Prevented switching between holds from being misread as a large cargo intake or release animation; unreported vehicle capacities now remain explicitly unknown instead of showing misleading ship figures.
+*   Corrected surface-control HUD states so handbrake, turret and drive-assist animations retain the active Rhino, Nomad, Scarab or Scorpion artwork instead of falling back to the mothership portrait.
 
 ## Earlier releases
 
+*   **v5.4.2.2** — Made Cargo Manifest vessel-aware with the Rhino's 72-tonne hold, correct active-vehicle telemetry, profile persistence and clean hold-switch animations.
 *   **v5.4.2.1** — Rebuilt the Live System Orrery as a full-width interactive Elite-inspired instrument with journal-accurate orbital architecture, known-system recovery, branch-aware scaling and lightweight profile-aware controls.
 *   **v5.4.2** — Added first-class Rhino journal and vehicle-state support, planetary mining-location DSS evidence and retained survey presentation, with Rhino mining and SRV cargo flowing through the existing unified pipelines.
 *   **v5.4.1.9** — Rebuilt Mining Command around one journal reducer with target directives, readiness, prospect/refinery yield, objectives, analytics, ring intelligence and buyer lookup; simplified Prospector Analysis and enforced HTML-only overlay presentation.
