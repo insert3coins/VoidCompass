@@ -837,6 +837,18 @@ class DashboardScanMixin:
             or was_in_multicrew != bool(getattr(self, "current_in_multicrew", False))
             or was_on_carrier_deck != self._navigation_on_carrier_deck()
         )
+        if vehicle_state_changed:
+            # Cargo.json can remain on its final SRV snapshot after DockSRV.
+            # Select the hold from verified Status state immediately, then ask
+            # the watcher to accept a newly written matching snapshot if Elite
+            # produces one during the hand-off.
+            refresh_cargo = getattr(self, "_refresh_cargo_consumers", None)
+            if callable(refresh_cargo):
+                refresh_cargo()
+            watcher = getattr(self, "watcher", None)
+            force_cargo = getattr(watcher, "force_check_cargo", None)
+            if callable(force_cargo):
+                force_cargo()
         fuel_percent_changed = self._current_fuel_percent() != was_fuel_percent
         navigation_readiness_changed = was_navigation_readiness != (
             bool(getattr(self, "current_fsd_mass_locked", False)),

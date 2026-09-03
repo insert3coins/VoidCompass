@@ -1147,6 +1147,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.current_cargo_tons = 0
         self.current_cargo_inventory = []
         self.current_cargo_vessel = "Ship"
+        self._cargo_inventory_by_hold = {}
         self.operational_state = operational_state.fresh_runtime_state()
         self.colonisation_projects = {}
         self.engineer_materials = {}
@@ -2091,6 +2092,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.current_cargo_tons = 0
         self.current_cargo_inventory = []
         self.current_cargo_vessel = "Ship"
+        self._cargo_inventory_by_hold = {}
         self.operational_state = operational_state.fresh_runtime_state()
         self._hud_balance_cache = {"ts": 0.0, "balance": None}
         self.last_journal_event_ts = 0.0
@@ -9631,6 +9633,55 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             return remembered
         return "SRV" if vessel == "SRV" else vessel.upper()
 
+    def _cargo_hold_key(self, vessel=None, owner=None):
+        """Return a stable cache key for each independently reported hold."""
+        vessel = self._normalise_cargo_vessel(
+            vessel if vessel is not None else getattr(self, "current_cargo_vessel", "Ship")
+        )
+        if vessel == "Ship":
+            return "Ship"
+        owner = str(owner or self._cargo_vehicle_owner(vessel) or vessel).strip().upper()
+        return f"{vessel}:{owner}"
+
+    @staticmethod
+    def _cargo_inventory_total(inventory):
+        return sum(
+            int(item.get("Count", item.get("count", 0)) or 0)
+            for item in (inventory or []) if isinstance(item, dict)
+        )
+
+    def _runtime_cargo_vessel(self):
+        """Resolve the hold that belongs to the commander's current cockpit."""
+        vehicle = str(getattr(self, "current_vehicle_name", "") or "").upper()
+        if (getattr(self, "current_in_srv", False)
+                or (getattr(self, "current_in_fighter", False) and vehicle == "NOMAD")):
+            return "SRV"
+        return "Ship"
+
+    def _activate_cargo_vessel(self, vessel):
+        """Switch holds without carrying one vehicle's manifest into another."""
+        vessel = self._normalise_cargo_vessel(vessel)
+        current = self._normalise_cargo_vessel(
+            getattr(self, "current_cargo_vessel", "Ship")
+        )
+        cache = getattr(self, "_cargo_inventory_by_hold", None)
+        if not isinstance(cache, dict):
+            cache = {}
+            self._cargo_inventory_by_hold = cache
+        current_rows = list(getattr(self, "current_cargo_inventory", None) or [])
+        cache[self._cargo_hold_key(current)] = current_rows
+        if vessel == current:
+            return False
+        rows = list(cache.get(self._cargo_hold_key(vessel), []) or [])
+        self.current_cargo_vessel = vessel
+        self.current_cargo_inventory = rows
+        self.current_cargo_tons = self._cargo_inventory_total(rows)
+        return True
+
+    def _reconcile_active_cargo_vessel(self):
+        """Keep stale Cargo.json data from overriding verified vehicle state."""
+        return self._activate_cargo_vessel(self._runtime_cargo_vessel())
+
     def _active_cargo_capacity(self):
         """Return the active ship or known vehicle hold capacity."""
         vessel = self._normalise_cargo_vessel(
@@ -9654,6 +9705,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
 
     def _refresh_cargo_consumers(self):
         """Publish one vessel-aware Cargo.json snapshot to the live overlay."""
+        self._reconcile_active_cargo_vessel()
         cargo_hud = getattr(self, "cargo_hud", None)
         if cargo_hud:
             inventory, capacity, vessel, owner = self._cargo_hold_snapshot()
@@ -9664,9 +9716,29 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             )
 
     def update_cargo(self, inventory, vessel="Ship"):
+        incoming_vessel = self._normalise_cargo_vessel(vessel)
+        incoming_inventory = list(inventory or [])
+        cache = getattr(self, "_cargo_inventory_by_hold", None)
+        if not isinstance(cache, dict):
+            cache = {}
+            self._cargo_inventory_by_hold = cache
+        cache[self._cargo_hold_key(incoming_vessel)] = incoming_inventory
+
+        expected_vessel = self._runtime_cargo_vessel()
+        if incoming_vessel != expected_vessel:
+            # Cargo.json is not rewritten when an SRV docks. On startup it can
+            # therefore still describe the Rhino long after Status.json and
+            # DockSRV/Loadout have placed the commander back in the ship.
+            logging.debug(
+                "Cargo snapshot retained but not presented: %s hold while active hold is %s",
+                incoming_vessel, expected_vessel,
+            )
+            self._refresh_cargo_consumers()
+            return False
+
         self.last_cargo_event_ts = time.time()
-        self.current_cargo_vessel = self._normalise_cargo_vessel(vessel)
-        self.current_cargo_inventory = list(inventory or [])
+        self.current_cargo_vessel = incoming_vessel
+        self.current_cargo_inventory = incoming_inventory
         self.edsm.queue_cargo_snapshot(
             self.current_cargo_inventory, vessel=self.current_cargo_vessel,
         )
@@ -9681,13 +9753,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 )
         except Exception as exc:
             logging.debug("Specialist cargo snapshot skipped: %s", exc)
-        self.current_cargo_tons = sum(
-            int(item.get("Count", item.get("count", 0)) or 0)
-            for item in self.current_cargo_inventory
-            if isinstance(item, dict)
-        )
+        self.current_cargo_tons = self._cargo_inventory_total(self.current_cargo_inventory)
         self._refresh_cargo_consumers()
         self._refresh_html_workspace()
+        return True
 
     def _eddn_market_context(self, data):
         return {
