@@ -259,8 +259,10 @@ class CarrierTracker:
 
     def __init__(self):
         self.carrier_data = self._empty_carrier_data()
-        self._last_cancel_ts = None
-        self._prev_status = "idle"
+        self._carriers = {}
+        self._active_carrier_key = None
+        self._squadron_context = {}
+        self._replaying_history = False
         self._profile_generation = 0
         self._profile_lock = threading.RLock()
         self._diagnostic_last = {}
@@ -277,15 +279,171 @@ class CarrierTracker:
                 ticker.cancel()
             self._status_ticker = None
             self.carrier_data = self._empty_carrier_data()
-            self._last_cancel_ts = None
-            self._prev_status = "idle"
+            self._carriers = {}
+            self._active_carrier_key = None
+            self._squadron_context = {}
             self._config = config
             self.load_state()
 
+    @staticmethod
+    def _normalise_carrier_type(value):
+        text = str(value or "").strip().casefold().replace("_", "")
+        if "squadron" in text:
+            return "SquadronCarrier"
+        if text in {"fleet", "fleetcarrier", "drakeclasscarrier"}:
+            return "FleetCarrier"
+        return str(value or "").strip() or None
+
+    @classmethod
+    def _carrier_key(cls, carrier_id=None, carrier_type=None):
+        if carrier_id is not None and str(carrier_id).strip():
+            return f"id:{carrier_id}"
+        normalised = cls._normalise_carrier_type(carrier_type)
+        return f"type:{normalised}" if normalised else None
+
+    def _register_carrier(self, data, *, make_active=False):
+        """Add/merge one managed carrier and return its canonical record."""
+        if not isinstance(data, dict):
+            data = {}
+        carrier_type = self._normalise_carrier_type(data.get("carrier_type"))
+        carrier_id = data.get("carrier_id")
+        key = self._carrier_key(carrier_id, carrier_type)
+        if not key:
+            return data
+
+        existing = self._carriers.get(key)
+        if existing is None and carrier_type:
+            # CarrierLocation can establish a typed placeholder before the
+            # later CarrierStats event supplies the permanent numeric ID.
+            type_key = self._carrier_key(None, carrier_type)
+            placeholder = self._carriers.get(type_key)
+            if placeholder is not None:
+                existing = placeholder
+                if type_key != key:
+                    self._carriers.pop(type_key, None)
+                    if self._active_carrier_key == type_key:
+                        self._active_carrier_key = key
+        if existing is None:
+            existing = self._empty_carrier_data()
+        for field, value in data.items():
+            if value is not None or field not in existing:
+                existing[field] = deepcopy(value)
+        existing["carrier_type"] = carrier_type or existing.get("carrier_type")
+        existing.setdefault("_runtime_prev_status", existing.get("status", "idle"))
+        existing.setdefault("_runtime_cancel_ts", None)
+        for field, value in self._squadron_context.items():
+            if value is not None and existing.get(field) is None:
+                existing[field] = value
+        self._carriers[key] = existing
+        if make_active or self._active_carrier_key not in self._carriers:
+            self._active_carrier_key = key
+        self._restore_active_carrier()
+        return existing
+
+    def _restore_active_carrier(self):
+        record = self._carriers.get(self._active_carrier_key)
+        if record is None and self._carriers:
+            # A personal carrier remains the least surprising default when
+            # both personal and Squadron carriers have been observed.
+            choice = next((
+                (key, row) for key, row in self._carriers.items()
+                if row.get("carrier_type") == "FleetCarrier"
+            ), next(iter(self._carriers.items())))
+            self._active_carrier_key, record = choice
+        self.carrier_data = record if record is not None else self._empty_carrier_data()
+        return self.carrier_data
+
+    def carriers(self):
+        """Return independent managed-carrier snapshots in stable UI order."""
+        with self._profile_lock:
+            rows = [deepcopy(row) for row in self._carriers.values()]
+        return sorted(rows, key=lambda row: (
+            row.get("carrier_type") == "SquadronCarrier",
+            str(row.get("name") or row.get("callsign") or "").casefold(),
+        ))
+
+    def carrier_for_id(self, carrier_id):
+        key = self._carrier_key(carrier_id)
+        with self._profile_lock:
+            return self._carriers.get(key)
+
+    def display_carrier(self):
+        """Return the carrier whose live operation deserves overlay priority."""
+        with self._profile_lock:
+            priority = {"jumping": 0, "cooldown_cancel": 1, "cooldown": 2}
+            active = [
+                row for row in self._carriers.values()
+                if row.get("status") in priority
+            ]
+            if active:
+                active.sort(key=lambda row: (
+                    priority.get(row.get("status"), 9),
+                    str(row.get("jump_departure_time") or row.get("last_updated") or ""),
+                ))
+                return active[0]
+            return self.carrier_data
+
+    def set_active_carrier(self, carrier_id):
+        key = self._carrier_key(carrier_id)
+        with self._profile_lock:
+            if key not in self._carriers:
+                return False
+            if key == self._active_carrier_key and self.carrier_data is self._carriers[key]:
+                return True
+            self._active_carrier_key = key
+            self.carrier_data = self._carriers[key]
+            self.save_state()
+            snapshot = self.carrier_data
+        if callable(self.on_updated):
+            self.on_updated(snapshot)
+        if callable(self.on_panel_updated):
+            self.on_panel_updated(snapshot)
+        return True
+
+    def _event_carrier(self, raw, *, create=False):
+        # Preserve the original public ``carrier_data`` contract for callers
+        # and older state/tests that seed that dictionary directly.
+        if not self._carriers and (
+            self.carrier_data.get("carrier_id") is not None
+            or self.carrier_data.get("carrier_type")
+        ):
+            self._register_carrier(self.carrier_data, make_active=True)
+        carrier_id = raw.get("CarrierID")
+        if carrier_id is None and raw.get("event") == "CarrierJump":
+            carrier_id = raw.get("MarketID")
+        carrier_type = self._normalise_carrier_type(raw.get("CarrierType"))
+        key = self._carrier_key(carrier_id, carrier_type)
+        record = self._carriers.get(key) if key else None
+        if record is None and carrier_id is not None:
+            record = next((
+                row for row in self._carriers.values()
+                if row.get("carrier_id") is not None
+                and str(row.get("carrier_id")) == str(carrier_id)
+            ), None)
+        if record is None and carrier_type:
+            record = next((
+                row for row in self._carriers.values()
+                if row.get("carrier_type") == carrier_type
+                and (carrier_id is None or row.get("carrier_id") is None)
+            ), None)
+        if record is None and not create:
+            return None
+        if record is None:
+            record = self._empty_carrier_data()
+        if carrier_id is not None:
+            record["carrier_id"] = carrier_id
+        if carrier_type:
+            record["carrier_type"] = carrier_type
+        return self._register_carrier(record)
+
     def scan_journal_history(self, journal_path, max_files=10, commander=None, fid=None):
         """
-        One-time startup scan through recent journal files to catch carrier
-        events that happened while the app was closed.
+        Catch up every managed carrier independently from recent journals.
+
+        The game can emit personal Fleet Carrier and Squadron Carrier records
+        in the same session. Replaying them chronologically preserves both
+        identities, while each record's last-updated watermark prevents an
+        older startup event from rewinding persisted state.
         """
         generation = self._profile_generation
         if not journal_path or not os.path.exists(journal_path):
@@ -299,23 +457,12 @@ class CarrierTracker:
         except Exception:
             return
 
-        recent = files[-max_files:][::-1]
-        carrier_id = self.carrier_data.get("carrier_id")
-        buckets = {
-            "CarrierStats": None,
-            "CarrierLocation": None,
-            "CarrierJumpRequest": None,
-            "CarrierJumpCancelled": None,
-            "CarrierNameChange": None,
-            "CarrierBankTransfer": None,
-        }
-        trade_events = []
+        recent = files[-max_files:]
+        replay = []
         expected_name = str(commander or "").strip().casefold()
         expected_fid = str(fid or "").strip().casefold()
 
         for filepath in recent:
-            file_events = {k: None for k in buckets}
-            file_trades = []
             active_commander = not bool(expected_name or expected_fid)
             try:
                 with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
@@ -342,108 +489,42 @@ class CarrierTracker:
                             )
                         if not active_commander:
                             continue
-                        cid = raw.get("CarrierID")
-                        if ev == "CarrierJump" and cid is None:
-                            cid = raw.get("MarketID")
-                        if carrier_id and cid and cid != carrier_id:
-                            continue
-                        if ev == "CarrierStats":
-                            file_events["CarrierStats"] = raw
-                            if not carrier_id:
-                                carrier_id = raw.get("CarrierID")
-                        elif ev == "CarrierLocation":
-                            # CarrierLocation is an owner startup event and is
-                            # normally written before CarrierStats in the same
-                            # journal. Keep it until the later identity snapshot
-                            # supplies CarrierID instead of losing the location.
-                            file_events["CarrierLocation"] = raw
-                        elif ev == "CarrierJump":
-                            if not carrier_id:
-                                continue
-                            file_events["CarrierLocation"] = raw
-                        elif ev == "CarrierJumpRequest":
-                            file_events["CarrierJumpRequest"] = raw
-                        elif ev == "CarrierJumpCancelled":
-                            file_events["CarrierJumpCancelled"] = raw
-                        elif ev == "CarrierNameChange":
-                            file_events["CarrierNameChange"] = raw
-                        elif ev == "CarrierBankTransfer":
-                            file_events["CarrierBankTransfer"] = raw
-                        elif ev == "CarrierTradeOrder":
-                            file_trades.append(raw)
+                        if ev.startswith("Carrier") or ev in {
+                            "SquadronStartup", "SquadronCreated", "JoinedSquadron",
+                            "SquadronPromotion", "SquadronDemotion", "LeftSquadron",
+                            "KickedFromSquadron", "DisbandedSquadron",
+                        }:
+                            replay.append(raw)
             except Exception:
                 continue
 
-            for k in buckets:
-                if buckets[k] is None and file_events[k] is not None:
-                    buckets[k] = file_events[k]
-            if not trade_events:
-                trade_events = file_trades
-
-            if buckets["CarrierStats"] is not None:
-                break
-
         if generation != self._profile_generation:
             return
-        replay = []
-        if buckets["CarrierStats"]:
-            replay.append(buckets["CarrierStats"])
-        if buckets["CarrierLocation"]:
-            replay.append(buckets["CarrierLocation"])
-        if buckets["CarrierJumpRequest"]:
-            replay.append(buckets["CarrierJumpRequest"])
-        if buckets["CarrierJumpCancelled"]:
-            req_ts = _parse_dt((buckets["CarrierJumpRequest"] or {}).get("timestamp"))
-            can_ts = _parse_dt(buckets["CarrierJumpCancelled"].get("timestamp"))
-            if req_ts and can_ts and can_ts > req_ts:
-                replay.append(buckets["CarrierJumpCancelled"])
-        if buckets["CarrierNameChange"]:
-            replay.append(buckets["CarrierNameChange"])
-        if buckets["CarrierBankTransfer"]:
-            bank_ts = _parse_dt(buckets["CarrierBankTransfer"].get("timestamp"))
-            stats_ts = _parse_dt((buckets["CarrierStats"] or {}).get("timestamp"))
-            if not stats_ts or (bank_ts and bank_ts > stats_ts):
-                replay.append(buckets["CarrierBankTransfer"])
-        for t in trade_events:
-            replay.append(t)
-
         if not replay:
             return
 
         with self._profile_lock:
             if generation != self._profile_generation:
                 return
-            orig_on_updated = self.on_updated
+            callbacks = (
+                self.on_updated, self.on_panel_updated, self.on_status_changed,
+            )
             self.on_updated = None
+            self.on_panel_updated = None
+            self.on_status_changed = None
+            self._replaying_history = True
             try:
                 for raw in replay:
-                    ev = raw.get("event")
-                    if ev == "CarrierStats":
-                        self._handle_stats(raw)
-                    elif ev in ("CarrierLocation", "CarrierJump"):
-                        self._handle_location(raw)
-                    elif ev == "CarrierJumpRequest":
-                        self._handle_jump_request(raw)
-                    elif ev == "CarrierJumpCancelled":
-                        self._handle_jump_cancelled(raw)
-                    elif ev == "CarrierTradeOrder":
-                        self._handle_trade_order(raw)
-                    elif ev == "CarrierNameChange":
-                        self._handle_name_change(raw)
-                    elif ev == "CarrierBankTransfer":
-                        self._handle_bank_transfer(raw)
+                    self._process_event_unlocked(raw)
             finally:
-                self.on_updated = orig_on_updated
+                self._replaying_history = False
+                self.on_updated, self.on_panel_updated, self.on_status_changed = callbacks
 
-            self.carrier_data["last_updated"] = _utc_stamp()
-            self._update_status()
-            self._prev_status = self.carrier_data["status"]
+            self._restore_active_carrier()
             self.save_state()
         logging.info(
-            f"CarrierTracker: history scan complete — "
-            f"{self.carrier_data.get('name') or 'unknown'} "
-            f"@ {self.carrier_data.get('system') or '?'} "
-            f"({self.carrier_data.get('status')})"
+            "CarrierTracker: history scan complete — %d managed carrier(s)",
+            len(self._carriers),
         )
         self._ensure_status_ticker()
         if callable(self.on_updated):
@@ -464,7 +545,16 @@ class CarrierTracker:
         # Journal events arrive on the Tk thread, so writing the file here
         # blocked the interface; the shared queue coalesces repeat saves.
         try:
-            data = {k: v for k, v in self.carrier_data.items() if k in _PERSIST_KEYS}
+            carriers = [
+                {k: deepcopy(v) for k, v in row.items() if k in _PERSIST_KEYS}
+                for row in self._carriers.values()
+                if row.get("carrier_id") is not None or row.get("carrier_type")
+            ]
+            data = {
+                "schema_version": 2,
+                "active_carrier_key": self._active_carrier_key,
+                "carriers": carriers,
+            }
             persistence_queue().submit_json(
                 self._state_path(), data, indent=2,
                 delay_s=1.0, immediate=immediate,
@@ -479,22 +569,37 @@ class CarrierTracker:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 saved = json.load(f)
-            for k in _PERSIST_KEYS:
-                if k in saved:
-                    self.carrier_data[k] = saved[k]
-            # Self-heal a route saved before an arrival was observed by the
-            # UI. The carrier's persisted system is authoritative on reload.
-            route_repaired = bool(self._repair_current_expedition_stop(
-                self.carrier_data.get("system"),
-                self.carrier_data.get("last_updated"),
-                self.carrier_data.get("system_address"),
-            ))
-            self._update_status()
-            self._prev_status = self.carrier_data["status"]
+            records = saved.get("carriers") if isinstance(saved, dict) else None
+            if not isinstance(records, list):
+                # Seamless migration from the original single-carrier file.
+                records = [saved] if isinstance(saved, dict) else []
+            route_repaired = False
+            for saved_row in records:
+                if not isinstance(saved_row, dict):
+                    continue
+                row = self._empty_carrier_data()
+                for key in _PERSIST_KEYS:
+                    if key in saved_row:
+                        row[key] = deepcopy(saved_row[key])
+                if not row.get("carrier_id") and not row.get("carrier_type"):
+                    continue
+                row = self._register_carrier(row)
+                self.carrier_data = row
+                route_repaired = bool(self._repair_current_expedition_stop(
+                    row.get("system"), row.get("last_updated"),
+                    row.get("system_address"),
+                )) or route_repaired
+                self._update_status()
+                row["_runtime_prev_status"] = row["status"]
+            requested_active = saved.get("active_carrier_key") if isinstance(saved, dict) else None
+            if requested_active in self._carriers:
+                self._active_carrier_key = requested_active
+            self._restore_active_carrier()
             logging.info(
-                f"CarrierTracker: loaded state for "
-                f"{self.carrier_data.get('name') or 'unknown carrier'} "
-                f"@ {self.carrier_data.get('system') or '?'}"
+                "CarrierTracker: loaded %d managed carrier(s); active %s @ %s",
+                len(self._carriers),
+                self.carrier_data.get("name") or "unknown carrier",
+                self.carrier_data.get("system") or "?",
             )
             self._ensure_status_ticker()
             if route_repaired:
@@ -511,21 +616,36 @@ class CarrierTracker:
         if not ev:
             return
 
-        # CarrierJump is written for any carrier the commander is aboard, and
-        # CarrierDepositFuel can describe a donation to somebody else's
-        # carrier.  Never let those events replace the owned/managed carrier
-        # established by CarrierStats or CarrierBuy.
-        identity_events = {"CarrierStats", "CarrierBuy"}
-        carrier_events = ev.startswith("Carrier")
-        if carrier_events and ev not in identity_events:
-            known_id = self.carrier_data.get("carrier_id")
-            event_id = raw.get("CarrierID")
-            if event_id is None and ev == "CarrierJump":
-                event_id = raw.get("MarketID")
-            if not known_id:
-                return
-            if event_id is not None and str(event_id) != str(known_id):
-                return
+        squadron_events = {
+            "SquadronStartup", "SquadronCreated", "JoinedSquadron",
+            "SquadronPromotion", "SquadronDemotion", "LeftSquadron",
+            "KickedFromSquadron", "DisbandedSquadron",
+        }
+        if ev in squadron_events:
+            changed = self._apply_squadron_event(raw)
+            if changed:
+                self.save_state()
+                if callable(self.on_panel_updated):
+                    self.on_panel_updated(self.carrier_data)
+            return
+
+        if not ev.startswith("Carrier"):
+            return
+
+        # CarrierJump can describe a carrier merely carrying the commander,
+        # and CarrierDepositFuel can be a donation to somebody else's carrier.
+        # Only identity-bearing owner events may create a managed record.
+        create = ev in {"CarrierStats", "CarrierBuy", "CarrierLocation"}
+        record = self._event_carrier(raw, create=create)
+        if record is None:
+            return
+
+        event_ts = _parse_dt(raw.get("timestamp"))
+        known_ts = _parse_dt(record.get("last_updated"))
+        if self._replaying_history and event_ts and known_ts and event_ts < known_ts:
+            return
+        selected_key = self._active_carrier_key
+        self.carrier_data = record
 
         changed = False
 
@@ -557,48 +677,54 @@ class CarrierTracker:
             changed = self._handle_bank_transfer(raw)
         elif ev == "CarrierBuy":
             changed = self._handle_carrier_buy(raw)
-        elif ev in ("SquadronStartup", "SquadronCreated", "JoinedSquadron"):
-            name = raw.get("SquadronName")
-            if name:
-                if raw.get("SquadronID") is not None:
-                    self.carrier_data["squadron_id"] = raw.get("SquadronID")
-                self.carrier_data["squadron_name"] = name
-                if raw.get("CurrentRank") is not None:
-                    self.carrier_data["squadron_rank"] = raw.get("CurrentRank")
-                if raw.get("CurrentRankName"):
-                    self.carrier_data["squadron_rank_name"] = raw.get("CurrentRankName")
-                changed = True
-        elif ev in ("SquadronPromotion", "SquadronDemotion"):
-            name = raw.get("SquadronName")
-            if name:
-                self.carrier_data["squadron_name"] = name
-            if raw.get("NewRank") is not None:
-                self.carrier_data["squadron_rank"] = raw.get("NewRank")
-            if raw.get("NewRankName"):
-                self.carrier_data["squadron_rank_name"] = raw.get("NewRankName")
-            changed = bool(name or raw.get("NewRank") is not None or raw.get("NewRankName"))
-        elif ev in ("LeftSquadron", "KickedFromSquadron", "DisbandedSquadron"):
-            self.carrier_data["squadron_id"] = None
-            self.carrier_data["squadron_name"] = None
-            self.carrier_data["squadron_rank"] = None
-            self.carrier_data["squadron_rank_name"] = None
-            changed = True
 
         if changed:
-            self.carrier_data["last_updated"] = _utc_stamp()
-            old_status = self._prev_status
+            self.carrier_data["last_updated"] = raw.get("timestamp") or _utc_stamp()
+            old_status = self.carrier_data.get("_runtime_prev_status", "idle")
             self._update_status()
             new_status = self.carrier_data["status"]
-            fresh = self._event_is_fresh(raw)
+            fresh = self._event_is_fresh(raw) and not self._replaying_history
             if new_status != old_status:
-                self._prev_status = new_status
-                self._fire_status_changed(old_status, new_status, discord=fresh)
+                self.carrier_data["_runtime_prev_status"] = new_status
+                self._fire_status_changed(
+                    old_status, new_status, self.carrier_data, discord=fresh,
+                )
             self._ensure_status_ticker()
             self.save_state()
+            changed_record = self.carrier_data
             if callable(self.on_updated):
-                self.on_updated(self.carrier_data)
+                self.on_updated(changed_record)
             if callable(self.on_panel_updated):
-                self.on_panel_updated(self.carrier_data)
+                self.on_panel_updated(changed_record)
+        if selected_key in self._carriers:
+            self._active_carrier_key = selected_key
+        self._restore_active_carrier()
+
+    def _apply_squadron_event(self, raw):
+        ev = raw.get("event")
+        clear = ev in {"LeftSquadron", "KickedFromSquadron", "DisbandedSquadron"}
+        if clear:
+            updates = {
+                "squadron_id": None, "squadron_name": None,
+                "squadron_rank": None, "squadron_rank_name": None,
+            }
+        else:
+            updates = {
+                "squadron_id": raw.get("SquadronID"),
+                "squadron_name": raw.get("SquadronName"),
+                "squadron_rank": raw.get("NewRank", raw.get("CurrentRank")),
+                "squadron_rank_name": raw.get(
+                    "NewRankName", raw.get("CurrentRankName"),
+                ),
+            }
+            updates = {key: value for key, value in updates.items() if value is not None}
+        if not updates:
+            return False
+        self._squadron_context.update(updates)
+        for row in self._carriers.values():
+            row.update(updates)
+            row["last_updated"] = raw.get("timestamp") or _utc_stamp()
+        return True
 
     # ------------------------------------------------------------------
     # Event handlers
@@ -665,7 +791,7 @@ class CarrierTracker:
         cd["balance"] = raw.get("CarrierBalance", cd.get("balance"))
         return True
 
-    def apply_observed_cargo_transfer(self, raw):
+    def apply_observed_cargo_transfer(self, raw, carrier_id=None):
         """Advance an exact owner snapshot with a confirmed own-carrier transfer."""
         if not isinstance(raw, dict):
             return False
@@ -685,7 +811,10 @@ class CarrierTracker:
         if not delta:
             return False
         with self._profile_lock:
-            cd = self.carrier_data
+            carrier_id = carrier_id or raw.get("CarrierID") or raw.get("MarketID")
+            cd = self.carrier_for_id(carrier_id) if carrier_id is not None else self.carrier_data
+            if cd is None:
+                return False
             if cd.get("space_cargo") is None:
                 return False
             cd["space_cargo"] = max(0, int(cd["space_cargo"]) + delta)
@@ -696,15 +825,18 @@ class CarrierTracker:
             cd["last_updated"] = _utc_stamp()
             self.save_state()
         if callable(self.on_updated):
-            self.on_updated(self.carrier_data)
+            self.on_updated(cd)
         if callable(self.on_panel_updated):
-            self.on_panel_updated(self.carrier_data)
+            self.on_panel_updated(cd)
         return True
 
     def _handle_carrier_buy(self, raw):
         cd = self.carrier_data
         cd["carrier_id"] = raw.get("CarrierID") or cd.get("carrier_id")
-        cd["carrier_type"] = "FleetCarrier"
+        cd["carrier_type"] = (
+            self._normalise_carrier_type(raw.get("CarrierType"))
+            or cd.get("carrier_type") or "FleetCarrier"
+        )
         cd["callsign"] = raw.get("Callsign") or cd.get("callsign")
         cd["carrier_purchased_at"] = raw.get("timestamp")
         cd["carrier_spawn_system"] = raw.get("Location")
@@ -716,7 +848,7 @@ class CarrierTracker:
         cd["jump_destination_address"] = raw.get("SystemAddress")
         cd["jump_body"] = raw.get("Body")
         cd["jump_departure_time"] = raw.get("DepartureTime")
-        self._last_cancel_ts = None
+        cd["_runtime_cancel_ts"] = None
         return True
 
     def _handle_jump_cancelled(self, raw):
@@ -726,7 +858,7 @@ class CarrierTracker:
         cd["jump_body"] = None
         cd["jump_departure_time"] = None
         ts = _parse_dt(raw.get("timestamp"))
-        self._last_cancel_ts = ts if ts else datetime.now(timezone.utc)
+        cd["_runtime_cancel_ts"] = ts if ts else datetime.now(timezone.utc)
         return True
 
     def _handle_location(self, raw):
@@ -1200,8 +1332,9 @@ class CarrierTracker:
                     cd["status"] = "cooldown"
                     return
 
-        if self._last_cancel_ts:
-            if (now - self._last_cancel_ts).total_seconds() < 60:
+        last_cancel = cd.get("_runtime_cancel_ts")
+        if last_cancel:
+            if (now - last_cancel).total_seconds() < 60:
                 cd["status"] = "cooldown_cancel"
                 return
 
@@ -1212,19 +1345,26 @@ class CarrierTracker:
     # ------------------------------------------------------------------
 
     def _ensure_status_ticker(self):
-        status = self.carrier_data.get("status", "idle")
-        if status not in ("jumping", "cooldown", "cooldown_cancel"):
+        active = [
+            row for row in self._carriers.values()
+            if row.get("status") in ("jumping", "cooldown", "cooldown_cancel")
+        ]
+        if not active:
             return
         existing = getattr(self, "_status_ticker", None)
         if existing and existing.is_alive():
             return
-        if status == "jumping":
-            dep_dt = _parse_dt(self.carrier_data.get("jump_departure_time"))
-            if dep_dt:
-                secs_until = (dep_dt - datetime.now(timezone.utc)).total_seconds()
-                delay = max(5.0, secs_until + 2.0)
-            else:
-                delay = 30.0
+        departures = [
+            _parse_dt(row.get("jump_departure_time")) for row in active
+            if row.get("status") == "jumping"
+        ]
+        departures = [value for value in departures if value is not None]
+        if departures:
+            secs_until = min(
+                (value - datetime.now(timezone.utc)).total_seconds()
+                for value in departures
+            )
+            delay = max(5.0, min(30.0, secs_until + 2.0))
         else:
             delay = 30.0
         self._schedule_status_check(delay)
@@ -1239,19 +1379,33 @@ class CarrierTracker:
         self._status_ticker = t
 
     def _status_check_tick(self):
-        old = self._prev_status
-        self._update_status()
-        new = self.carrier_data["status"]
-        if new != old:
-            self._prev_status = new
-            self.carrier_data["last_updated"] = _utc_stamp()
-            self._fire_status_changed(old, new)
+        changed = []
+        selected_key = self._active_carrier_key
+        for row in list(self._carriers.values()):
+            self.carrier_data = row
+            old = row.get("_runtime_prev_status", row.get("status", "idle"))
+            self._update_status()
+            new = row["status"]
+            if new != old:
+                row["_runtime_prev_status"] = new
+                row["last_updated"] = _utc_stamp()
+                self._fire_status_changed(old, new, row)
+                changed.append(row)
+        if selected_key in self._carriers:
+            self._active_carrier_key = selected_key
+        self._restore_active_carrier()
+        if changed:
             self.save_state()
-            if callable(self.on_updated):
-                self.on_updated(self.carrier_data)
-            if callable(self.on_panel_updated):
-                self.on_panel_updated(self.carrier_data)
-        if new in ("jumping", "cooldown", "cooldown_cancel"):
+            for row in changed:
+                if callable(self.on_updated):
+                    self.on_updated(row)
+                if callable(self.on_panel_updated):
+                    self.on_panel_updated(row)
+        active = any(
+            row.get("status") in ("jumping", "cooldown", "cooldown_cancel")
+            for row in self._carriers.values()
+        )
+        if active:
             self._schedule_status_check(30.0)
         else:
             self._status_ticker = None
@@ -1273,10 +1427,11 @@ class CarrierTracker:
         except Exception:
             return True
 
-    def _fire_status_changed(self, old_status, new_status, discord=True):
+    def _fire_status_changed(self, old_status, new_status, carrier_data=None, discord=True):
+        carrier_data = carrier_data if isinstance(carrier_data, dict) else self.carrier_data
         if callable(self.on_status_changed):
             try:
-                self.on_status_changed(old_status, new_status, self.carrier_data)
+                self.on_status_changed(old_status, new_status, carrier_data)
             except Exception as exc:
                 self._warn_throttled(
                     "status-callback",
@@ -1284,7 +1439,7 @@ class CarrierTracker:
                     exc,
                 )
         if discord:
-            self._maybe_discord(old_status, new_status)
+            self._maybe_discord(old_status, new_status, carrier_data)
 
     def _warn_throttled(self, key, message, *args, interval_s=120.0):
         """Retain useful carrier diagnostics without flooding normal logs."""
@@ -1294,7 +1449,7 @@ class CarrierTracker:
         self._diagnostic_last[key] = now
         logging.warning(message, *args)
 
-    def _maybe_discord(self, old_status, new_status):
+    def _maybe_discord(self, old_status, new_status, carrier_data=None):
         url = (self._config.get("carrier_discord_webhook_url") or "").strip()
         if not url:
             return
@@ -1315,7 +1470,9 @@ class CarrierTracker:
             return
 
         with self._profile_lock:
-            snapshot = deepcopy(self.carrier_data)
+            snapshot = deepcopy(
+                carrier_data if isinstance(carrier_data, dict) else self.carrier_data
+            )
         threading.Thread(
             target=self._send_discord,
             args=(url, event_type, snapshot),

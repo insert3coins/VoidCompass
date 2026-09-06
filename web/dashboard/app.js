@@ -2448,6 +2448,7 @@ function renderEngineeringWorkspace(data) {
 function renderCarrierWorkspace(data) {
   const root = byId("carrier-workspace");
   const carrier = data.carrier || {};
+  const carriers = data.carriers || [];
   const expedition = data.expedition || {};
   const route = expedition.route || [];
   const tools = data.tools || {};
@@ -2464,8 +2465,15 @@ function renderCarrierWorkspace(data) {
     {label: "Reserve", key: "reserve"},
     {label: "Actions", render: (row) => `<div class="table-actions"><button data-ws-page="carrier" data-ws-op="tritium_copy" data-result-index="${row.index}">COPY</button><button data-ws-page="carrier" data-ws-op="tritium_add" data-result-index="${row.index}">ADD</button><button data-ws-page="carrier" data-ws-op="tritium_open" data-result-index="${row.index}">VIEW</button></div>`},
   ], (tools.tritium_results || []).map((row, index) => ({...row, index})), "Search from a system to find known community-reported Tritium ring signals.");
+  root.dataset.carrierId = carrier.id === null || carrier.id === undefined ? "" : String(carrier.id);
+  const carrierSwitcher = carriers.length ? `<section class="carrier-switcher">${carriers.map((row) => `
+    <button class="${row.active ? "active" : ""}" data-ws-page="carrier" data-ws-op="select_carrier" data-carrier-id="${escapeHtml(row.id)}">
+      <span>${escapeHtml(row.kind || row.type || "CARRIER")}</span>
+      <b>${escapeHtml(row.name || row.callsign || "UNKNOWN CARRIER")}</b>
+      <small>${escapeHtml(row.callsign || "—")} · ${escapeHtml(row.system || "LOCATION UNKNOWN")} · ${escapeHtml(String(row.status || "idle").toUpperCase())}</small>
+    </button>`).join("")}</section>` : `<p class="workspace-empty carrier-empty">No personal or Squadron Carrier record has reached this profile yet.</p>`;
   root.classList.remove("loading-panel");
-  root.innerHTML = `${workspaceMetrics([
+  root.innerHTML = `${carrierSwitcher}${workspaceMetrics([
     {label: "Carrier", value: carrier.name || "NO CARRIER DATA", detail: carrier.callsign || carrier.type || "JOURNAL AWAITING"},
     {label: "Location", value: carrier.system || "—", detail: carrier.status || "IDLE"},
     {label: "Tritium", value: `${numeric(carrier.fuel)} / ${numeric(carrier.fuel_capacity)} T`, detail: `${numeric(carrier.jump_range)} LY RANGE`},
@@ -2659,9 +2667,9 @@ function renderDashboard(state) {
     showPage(requestedPage.page);
   }
   renderAtlas(model);
-  text("rail-version", `v${model.app?.version || "5.4.2.3"} // WEBVIEW2`);
-  text("boot-version", `v${model.app?.version || "5.4.2.3"} // SECURE LOOPBACK // WEBVIEW2`);
-  text("about-version", `Version ${model.app?.version || "5.4.2.3"} // HTML Command Deck`);
+  text("rail-version", `v${model.app?.version || "5.4.2.4"} // WEBVIEW2`);
+  text("boot-version", `v${model.app?.version || "5.4.2.4"} // SECURE LOOPBACK // WEBVIEW2`);
+  text("about-version", `Version ${model.app?.version || "5.4.2.4"} // HTML Command Deck`);
   text("overview-subtitle", model.profile?.profile_label || "Journal-backed field intelligence");
   if (currentPage === "map" && !model.boot?.active) ensureAtlas();
 }
@@ -3045,8 +3053,11 @@ document.addEventListener("click", async (event) => {
     const page = workspaceButton.dataset.wsPage;
     const operation = workspaceButton.dataset.wsOp;
     const payload = {page, operation};
-    for (const [datasetKey, payloadKey] of [["expeditionId", "expedition_id"], ["objectiveId", "objective_id"], ["achievementId", "achievement_id"], ["bodyKey", "body_key"], ["pinId", "pin_id"], ["bookmarkId", "bookmark_id"], ["sessionIndex", "session_index"], ["system", "system"], ["name", "name"]]) {
+    for (const [datasetKey, payloadKey] of [["expeditionId", "expedition_id"], ["objectiveId", "objective_id"], ["achievementId", "achievement_id"], ["bodyKey", "body_key"], ["pinId", "pin_id"], ["bookmarkId", "bookmark_id"], ["sessionIndex", "session_index"], ["carrierId", "carrier_id"], ["system", "system"], ["name", "name"]]) {
       if (workspaceButton.dataset[datasetKey] !== undefined) payload[payloadKey] = workspaceButton.dataset[datasetKey];
+    }
+    if (page === "carrier" && payload.carrier_id === undefined) {
+      payload.carrier_id = byId("carrier-workspace")?.dataset.carrierId || null;
     }
     if (workspaceButton.dataset.status !== undefined) payload.status = workspaceButton.dataset.status;
     if (workspaceButton.dataset.index !== undefined) payload.index = number(workspaceButton.dataset.index, -1);

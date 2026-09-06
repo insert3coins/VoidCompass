@@ -3970,9 +3970,16 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._startup_restore_ui_pending = True
             return
         try:
-            name     = carrier_data.get("name") or "Fleet Carrier"
+            name = carrier_data.get("name") or (
+                "Squadron Carrier"
+                if carrier_data.get("carrier_type") == "SquadronCarrier"
+                else "Fleet Carrier"
+            )
             callsign = carrier_data.get("callsign") or ""
             label    = f"{name} ({callsign})" if callsign else name
+            carrier_prefix = (
+                "SC" if carrier_data.get("carrier_type") == "SquadronCarrier" else "FC"
+            )
 
             if new_status == "jumping":
                 dest = carrier_data.get("jump_destination") or "?"
@@ -3986,23 +3993,23 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                         dep_txt = f"  dep {dt.astimezone().strftime('%H:%M')}"
                     except Exception:
                         pass
-                msg = f"FC {label}: jump plotted → {dest}{dep_txt}"
+                msg = f"{carrier_prefix} {label}: jump plotted → {dest}{dep_txt}"
                 self._ui_post(lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="INFO"))
 
             elif new_status == "cooldown":
                 system = carrier_data.get("system") or "?"
-                msg = f"FC {label}: arrived at {system}"
+                msg = f"{carrier_prefix} {label}: arrived at {system}"
                 self._ui_post(lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="INFO"))
                 if self.toast_hud:
                     self._ui_post(lambda m=msg: self.toast_hud.push("CARRIER JUMPED", m, severity="success"))
 
             elif new_status == "cooldown_cancel":
-                msg = f"FC {label}: jump cancelled"
+                msg = f"{carrier_prefix} {label}: jump cancelled"
                 self._ui_post(lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="WARN"))
 
             elif old_status in ("cooldown", "cooldown_cancel") and new_status == "idle":
                 system = carrier_data.get("system") or "?"
-                msg = f"FC {label}: cooldown complete @ {system}"
+                msg = f"{carrier_prefix} {label}: cooldown complete @ {system}"
                 self._ui_post(lambda m=msg: self.add_event_feed_entry("CARRIER", m, severity="INFO"))
                 if self.toast_hud:
                     self._ui_post(lambda m=msg: self.toast_hud.push("CARRIER READY", m, severity="success"))
@@ -4039,12 +4046,19 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._carrier_panel_tick_job = None
         if not self.is_running:
             return
-        status = self.carrier_tracker.carrier_data.get("status", "idle")
+        carriers = self.carrier_tracker.carriers()
+        carrier = next((
+            row for row in carriers
+            if row.get("status") == "jumping" and self._commander_aboard_carrier(row)
+        ), None)
+        if carrier is None:
+            carrier = self.carrier_tracker.display_carrier()
+        status = carrier.get("status", "idle")
         if status == "jumping":
             self.update_carrier_panel()
             if self.carrier_hud:
-                self.carrier_hud.update()
-            self._sync_navigation_carrier_transit(self.carrier_tracker.carrier_data)
+                self.carrier_hud.update(carrier)
+            self._sync_navigation_carrier_transit(carrier)
             self._carrier_panel_tick_job = self.root.after(1000, self._tick_carrier_panel)
         elif str(getattr(self, "_navigation_jump_phase", "") or "") == "carrier_transit":
             self._clear_navigation_jump_phase(refresh=True)
@@ -5293,14 +5307,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         ).strip()
         if event == "SupercruiseDestinationDrop" and raw.get("MarketID") is not None:
             destination = str(raw.get("Type") or station or "").strip()
-            own_carrier_id = (
-                getattr(getattr(self, "carrier_tracker", None), "carrier_data", {})
-                or {}
-            ).get("carrier_id")
+            tracker = getattr(self, "carrier_tracker", None)
+            managed = (
+                tracker.carrier_for_id(raw.get("MarketID"))
+                if tracker is not None else None
+            )
             destination_type = (
                 "FleetCarrier"
-                if own_carrier_id is not None
-                and str(own_carrier_id) == str(raw.get("MarketID"))
+                if managed is not None
                 else "Station"
             )
             self._capture_navigation_local_space({
@@ -7096,11 +7110,29 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             startup_replay=startup_replay,
         )
         specialist_changed = False
+        station_market_id = getattr(self, "current_station_market_id", None)
+        event_station_type = str(
+            (raw if isinstance(raw, dict) else {}).get("StationType")
+            or (d if isinstance(d, dict) else {}).get("station_type") or ""
+        ).replace("_", "").casefold()
+        event_market_id = (
+            (raw if isinstance(raw, dict) else {}).get("MarketID")
+            or (d if isinstance(d, dict) else {}).get("market_id")
+        )
+        if (
+            ev in {"Docked", "Location"}
+            and event_market_id is not None
+            and event_station_type in {"fleetcarrier", "squadroncarrier"}
+            and self.carrier_tracker.carrier_for_id(event_market_id) is not None
+        ):
+            self.carrier_tracker.set_active_carrier(event_market_id)
+            station_market_id = event_market_id
+        managed_carrier = (
+            self.carrier_tracker.carrier_for_id(station_market_id)
+            if station_market_id is not None else None
+        )
         at_own_carrier = bool(
-            getattr(self, "current_docked", False)
-            and getattr(self, "current_station_market_id", None)
-            and getattr(self.carrier_tracker, "carrier_data", {}).get("carrier_id")
-            == getattr(self, "current_station_market_id", None)
+            getattr(self, "current_docked", False) and managed_carrier is not None
         )
         try:
             specialist_engine = getattr(self, "specialist_engine", None)
@@ -7129,7 +7161,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 logging.debug("Mining ring intelligence update skipped: %s", exc)
         if ev == "CargoTransfer" and at_own_carrier and not startup_replay:
             try:
-                self.carrier_tracker.apply_observed_cargo_transfer(raw)
+                self.carrier_tracker.apply_observed_cargo_transfer(
+                    raw, carrier_id=station_market_id,
+                )
             except Exception as exc:
                 logging.warning("Carrier cargo total update failed: %s", exc)
         if specialist_changed and not self.batch_mode:

@@ -1,16 +1,22 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.2.3 // Exploration Journal Intelligence
-**Release Date:** 2026-Sep-03
+## v5.4.2.4 // Navigation in Motion
+**Release Date:** 2026-Sep-06
 
-*   Added journal-backed Rhino surface-mining sessions to Mining Command, including the active 72-tonne vehicle hold, cargo-gain haul accounting across ship transfers, separate processing activity, observed vehicle lifecycle and DSS planetary-mining locations without inventing unreported drill telemetry; tightened its card layout so mixed-height panels no longer leave empty holes.
-*   Retained `Scan.Materials` composition per body and added Planetary Resource Intelligence to Explore & Survey, with rare raw materials and mining sites also available from live Orrery body detail.
-*   Added persistent `ScanBaryCentre` orbital records and barycentre-aware parent hierarchy to the Live System Orrery, including a one-time background re-index of existing profile journals.
-*   Added a profile-local Field Discoveries ledger for material discoveries, composition/data scans and datalink vouchers, surfaced through Captain's Log alongside the existing Screenshot Chronicle.
-*   Added an observed surface-vehicle ledger from launch, dock, restock and destruction journals, plus quiet `GameModeChange`, repair-drone and fuel-reservoir state awareness for Profile and Exploration Pre-flight.
+*   Rebuilt the Navigation HUD animation catalogue as Elite-inspired holographic instruments: bowed supercruise wakes, local-drive coils, a hypercharge aperture, a faceted witch-space tunnel, settling arrival acquisition and cooling fins. Kept the smooth state transitions, readable centre labels and journal/Status-driven state selection.
+*   Added distinct FSS spectra, DSS probe arcs, galaxy/system/orrery displays, planetary glide corridors and ascent/descent instruments, docking pads, station/carrier silhouettes, cockpit panels and hazard signatures. Replaced the old repeated scene drawings rather than layering more effects over them.
+*   Gave Rhino, Scarab, Scorpion, Nomad, fighter and on-foot states their own holographic geometry, with smoothed planetary altitude/gravity response and ship-side accents. Arrival and vehicle boarding/departure settle after a single pass instead of endlessly repeating the manoeuvre.
+*   Corrected static or barely visible idle effects across station, docked, landed, hold, handbrake, target, carrier and cockpit-panel states. Added visible housing/entrance lighting, stabiliser sweeps and confirmation circuits that keep settled states animated without moving parked vehicles or replaying handoffs.
+*   Improved 30 FPS pacing, removed fractional-speed loop snapbacks across indicator states, smoothed telemetry changes and interrupted transitions, and paused hidden canvas rendering while retaining live updates. Preserved themes, ship artwork and reduced-motion support.
+*   Reworked the Asteroid Field indicator into layered, shaded low-poly rocks with slow tumbling, depth-dependent drift and subtle debris around the ship. Stable geometry and faded crossings avoid loop jumps while preserving the readable state label and existing journal detection.
+*   Corrected the Planet Waypoint compass helper window to use the same invisible, taskbar-hidden setup as the other HTML overlays.
+*   Raised Fleet/Squadron Carrier overlay labels and values to the Navigation HUD's readable font sizes, with wrapping route details and roomier logistics metrics to avoid clipping.
+*   Replaced the single overwritten carrier record with profile-aware personal and Squadron Carrier records keyed by journal CarrierID. Each carrier now retains its own location, fuel, cargo capacity, jump state, expedition route, notes and Discord transitions, with a clear Carrier Command selector and gap-free card layout.
+*   Removed the Carrier overlay's misleading `NEXT JUMP / READY TO PLOT JUMP` block when the selected carrier has no plotted jump, destination note or pending expedition stop.
 
 ## Earlier releases
 
+*   **v5.4.2.3** — Added Rhino mining haul/processing accounting, Planetary Resource Intelligence, barycentre-aware Orrery records, Field Discoveries and vehicle ledgers; tightened Mining Command layout and corrected cargo-hold recovery after returning from an SRV.
 *   **v5.4.2.2.1** — Corrected surface-control HUD states so handbrake, turret and drive-assist animations retain the active Rhino, Nomad, Scarab or Scorpion artwork instead of falling back to the mothership portrait.
 *   **v5.4.2.2** — Made Cargo Manifest vessel-aware with the Rhino's 72-tonne hold, correct active-vehicle telemetry, profile persistence and clean hold-switch animations.
 *   **v5.4.2.1** — Rebuilt the Live System Orrery as a full-width interactive Elite-inspired instrument with journal-accurate orbital architecture, known-system recovery, branch-aware scaling and lightweight profile-aware controls.

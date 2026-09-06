@@ -53,6 +53,7 @@
     set("carrier-name", model.name, "Fleet Carrier");
     set("carrier-callsign", `[${model.callsign || "---"}]`);
     set("carrier-location", model.location, "Location unknown");
+    byId("movement").hidden = !model.movement_visible;
     set("movement-label", model.movement_label, "NEXT JUMP");
     set("movement-value", model.movement_value, "READY TO PLOT JUMP");
     set("movement-detail", model.movement_detail, "");
