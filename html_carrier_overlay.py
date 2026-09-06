@@ -9,5 +9,5 @@ def attach_html_carrier_overlay(overlay, overlay_id, title, enabled_key, x_key, 
         bridge_attr="_html_carrier_bridge", template="carrier",
         snapshot_key="carrier", model_attr="_html_render_model",
         log_name="Carrier Command", width=430,
-        min_height=214, default_height=270, max_height=520,
+        min_height=214, default_height=270, max_height=940,
     )

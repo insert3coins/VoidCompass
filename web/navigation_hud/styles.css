@@ -80,9 +80,8 @@ body {
 .state-vehicle {
   position: relative; z-index: 2; grid-column: 1; align-self: stretch; width: min(142px, 96%);
   overflow: hidden; display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(90deg,
-    color-mix(in srgb, var(--inset) 94%, transparent) 0 58%,
-    color-mix(in srgb, var(--state) 9%, transparent) 76%, transparent 100%);
+  background: radial-gradient(ellipse 38% 65% at 48% 50%,
+    color-mix(in srgb, var(--inset) 84%, transparent), transparent);
   opacity: 1;
 }
 .state-vehicle[hidden] { display: none; }
@@ -161,13 +160,13 @@ body {
 }
 .hud[data-motion="arrival"] .state-vehicle img,
 .hud[data-motion="carrier_arrival"] .state-vehicle img {
-  animation: vehicle-arrival calc(1.05s * var(--motion-scale)) ease-in-out infinite;
+  animation: vehicle-arrival calc(2.2s * var(--motion-scale)) ease-out 1 both;
 }
 .hud[data-motion="fsd_cooldown"] .state-vehicle img {
   animation: vehicle-cooldown calc(1.55s * var(--motion-scale)) ease-in-out infinite;
 }
 .hud[data-motion="local_arrival"] .state-vehicle img {
-  animation: vehicle-arrival calc(1.42s * var(--motion-scale)) ease-in-out infinite;
+  animation: vehicle-arrival calc(2.2s * var(--motion-scale)) ease-out 1 both;
 }
 .hud[data-motion="phenomena"] .state-vehicle img {
   animation: vehicle-phenomena calc(2.6s * var(--motion-scale)) ease-in-out infinite;
@@ -258,24 +257,19 @@ body {
 .hud[data-motion="srv_drive_assist"] .state-vehicle img {
   animation: vehicle-surface calc(1.2s * var(--motion-scale)) ease-in-out infinite;
 }
-.hud[data-motion="surface_vehicle"] .state-vehicle[data-vehicle="scarab"] img,
-.hud[data-motion^="vehicle_"] .state-vehicle[data-vehicle="scarab"] img {
+.hud[data-motion="surface_vehicle"] .state-vehicle[data-vehicle="scarab"] img {
   animation: vehicle-srv calc(1.18s * var(--motion-scale)) ease-in-out infinite;
 }
-.hud[data-motion="surface_vehicle"] .state-vehicle[data-vehicle="scorpion"] img,
-.hud[data-motion^="vehicle_"] .state-vehicle[data-vehicle="scorpion"] img {
+.hud[data-motion="surface_vehicle"] .state-vehicle[data-vehicle="scorpion"] img {
   animation: vehicle-scorpion calc(.9s * var(--motion-scale)) ease-in-out infinite;
 }
-.hud[data-motion="surface_vehicle"] .state-vehicle[data-vehicle="rhino"] img,
-.hud[data-motion^="vehicle_"] .state-vehicle[data-vehicle="rhino"] img {
+.hud[data-motion="surface_vehicle"] .state-vehicle[data-vehicle="rhino"] img {
   animation: vehicle-rhino calc(1.04s * var(--motion-scale)) ease-in-out infinite;
 }
-.hud[data-motion="surface_vehicle"] .state-vehicle[data-vehicle="nomad"] img,
-.hud[data-motion^="vehicle_"] .state-vehicle[data-vehicle="nomad"] img {
+.hud[data-motion="surface_vehicle"] .state-vehicle[data-vehicle="nomad"] img {
   animation: vehicle-nomad calc(1.05s * var(--motion-scale)) ease-in-out infinite;
 }
-.hud[data-motion="fighter"] .state-vehicle[data-vehicle="fighter"] img,
-.hud[data-motion^="vehicle_"] .state-vehicle[data-vehicle="fighter"] img {
+.hud[data-motion="fighter"] .state-vehicle[data-vehicle="fighter"] img {
   animation: vehicle-fighter calc(.82s * var(--motion-scale)) ease-in-out infinite;
 }
 .state-vehicle[data-vehicle="nomad"] .vehicle-frame {
@@ -299,6 +293,7 @@ body {
 }
 .hud[data-motion="docked"] .state-vehicle img,
 .hud[data-motion="landed"] .state-vehicle img { animation: none; opacity: .9; }
+.hud[data-motion^="vehicle_"] .state-vehicle img { animation: none; }
 
 .system-block { top: 54px; height: 44px; padding-left: 11px; }
 .locator-rail { position: absolute; left: 0; top: 5px; bottom: 6px; width: 4px; background: color-mix(in srgb, var(--accent) 35%, transparent); }
@@ -431,8 +426,9 @@ body {
 @keyframes vehicle-charge { 50% { transform: scale(.975); filter: saturate(1) brightness(1.55) contrast(1.2) drop-shadow(-4px 0 7px color-mix(in srgb, var(--state) 78%, transparent)); } }
 @keyframes vehicle-jump { 50% { transform: translateX(2.2px) scaleX(1.025); filter: saturate(.95) brightness(1.5) contrast(1.2) blur(.2px) drop-shadow(-4px 0 7px color-mix(in srgb, var(--state) 72%, transparent)); } }
 @keyframes vehicle-arrival {
-  0%, 100% { transform: translateX(1.2px) scaleX(1.012); }
-  50% { transform: translateX(0) scaleX(1); filter: saturate(1.08) brightness(1.52) contrast(1.22) drop-shadow(0 0 7px color-mix(in srgb, var(--state) 78%, transparent)); }
+  0% { transform: translateX(2px) scaleX(1.025); }
+  35% { transform: translateX(.4px) scaleX(1.004); filter: saturate(1.08) brightness(1.52) contrast(1.22) drop-shadow(0 0 7px color-mix(in srgb, var(--state) 78%, transparent)); }
+  100% { transform: translateX(0) scaleX(1); }
 }
 @keyframes vehicle-cooldown {
   0%, 100% { transform: scale(.995); filter: saturate(.88) brightness(1.34) contrast(1.2) drop-shadow(0 0 3px color-mix(in srgb, var(--state) 44%, transparent)); }
@@ -502,7 +498,6 @@ body {
 }
 @keyframes threat { 50% { filter: brightness(1.7); transform: translateX(1px); } }
 @keyframes state-label-resolve {
-  0% { opacity: .42; letter-spacing: 2.8px; filter: blur(1px); }
-  42% { opacity: 1; filter: blur(0); }
-  100% { opacity: 1; letter-spacing: 1.1px; filter: none; }
+  0% { opacity: .78; }
+  100% { opacity: 1; }
 }

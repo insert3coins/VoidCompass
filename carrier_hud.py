@@ -77,28 +77,35 @@ def build_carrier_hud_model(carrier_data, now=None):
     )
 
     dep = _parse_dt(cd.get("jump_departure_time"))
+    movement_visible = False
     movement_label = "NEXT JUMP"
     movement_value = "READY TO PLOT JUMP"
     movement_tone = "muted"
     movement_detail = ""
     if status == "jumping":
+        movement_visible = True
         movement_value = _fmt_location(cd.get("jump_destination") or "TBD", cd.get("jump_body"))
         movement_tone = "orange"
         movement_detail = f"DEPARTS IN {_fmt_duration((dep - now).total_seconds())}" if dep else "DEPARTURE SCHEDULED"
     elif status == "cooldown":
+        movement_visible = True
         movement_label = "JUMP COOLDOWN"
         movement_value = f"READY IN {_fmt_duration(((dep + timedelta(seconds=_COOLDOWN_SECS)) - now).total_seconds())}" if dep else "RECOVERY ACTIVE"
         movement_tone = "yellow"
         previous = cd.get("previous_system")
         movement_detail = f"FROM {previous}" if previous else ""
     elif status == "cooldown_cancel":
+        movement_visible = True
         movement_label = "JUMP STATUS"
         movement_value = "JUMP CANCELLED"
         movement_tone = "red"
         movement_detail = "BRIEF COOLDOWN ACTIVE"
     else:
-        destination = cd.get("destination_note") or cd.get("jump_destination") or (next_route or {}).get("system")
+        # A Discord/operator destination note is not a plotted jump. Only
+        # journal evidence or a pending expedition stop earns this panel.
+        destination = cd.get("jump_destination") or (next_route or {}).get("system")
         if destination:
+            movement_visible = True
             movement_value = str(destination)
             movement_tone = "orange"
             if next_route and str(destination) == str(next_route.get("system")):
@@ -132,6 +139,7 @@ def build_carrier_hud_model(carrier_data, now=None):
         "badge": badge,
         "badge_tone": badge_tone,
         "movement_label": movement_label,
+        "movement_visible": movement_visible,
         "movement_value": movement_value,
         "movement_tone": movement_tone,
         "movement_detail": movement_detail,
@@ -264,7 +272,12 @@ class CarrierHUD:
     def update(self, carrier_data=None):
         if not self.is_open():
             return
-        cd = carrier_data or getattr(self.tracker, "carrier_data", {}) or {}
+        if carrier_data:
+            cd = carrier_data
+        else:
+            display = getattr(self.tracker, "display_carrier", None)
+            cd = display() if callable(display) else getattr(self.tracker, "carrier_data", {})
+            cd = cd or {}
         model = build_carrier_hud_model(cd)
         self._html_render_model = model
         render_key = repr(model)

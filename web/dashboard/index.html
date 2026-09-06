@@ -184,7 +184,7 @@
         <button class="nav-item" data-page="ground"><i>⌖</i><span>Ground & Exobio</span><b>12</b></button>
         <button class="nav-item" data-page="mining"><i>◆</i><span>Mining Command</span><b>13</b></button>
         <button class="nav-item" data-page="engineering"><i>⚙</i><span>Engineering</span><b>14</b></button>
-        <button class="nav-item" data-page="carrier"><i>◈</i><span>Fleet Carrier</span><b>15</b></button>
+        <button class="nav-item" data-page="carrier"><i>◈</i><span>Carrier Command</span><b>15</b></button>
         <button class="nav-item" data-page="recon"><i>✧</i><span>System Recon</span><b>16</b></button>
         <button class="nav-item" data-page="overlay-studio"><i>⌗</i><span>Overlay Studio</span><b>17</b></button>
         <p>APPLICATION</p>
@@ -195,7 +195,7 @@
       <footer class="rail-footer">
         <div class="connection"><i id="connection-light"></i><span>LOCAL LINK</span><b id="connection-state">CONNECTING</b></div>
         <button data-command="open_screenshots">OPEN SCREENSHOTS</button>
-        <small id="rail-version">v5.4.2.3 // WEBVIEW2</small>
+        <small id="rail-version">v5.4.2.4 // WEBVIEW2</small>
       </footer>
     </aside>
 
@@ -397,7 +397,7 @@
             <article class="tool-card"><i>⌖</i><div><small>SURFACE OPERATIONS</small><h3>Ground & Exobiology</h3><p>Coordinate targets, bearing, distance guidance and biological field work.</p></div><button data-command="open" data-target="ground">OPEN GROUND TOOL</button></article>
             <article class="tool-card"><i>◆</i><div><small>RESOURCE OPERATIONS</small><h3>Mining</h3><p>Prospector analysis, refinery yield, cargo economics and session history.</p></div><button data-command="open" data-target="mining">OPEN MINING</button></article>
             <article class="tool-card"><i>⚙</i><div><small>SHIP READINESS</small><h3>Engineering & Synthesis</h3><p>FSD injections, synthesis inventory and pinned exploration upgrades.</p></div><button data-command="open" data-target="engineering">OPEN ENGINEERING</button></article>
-            <article class="tool-card"><i>◈</i><div><small>LONG-RANGE SUPPORT</small><h3>Fleet Carrier</h3><p>Carrier inventory, expedition routes, Tritium planning and jump operations.</p></div><button data-command="open" data-target="carrier">OPEN CARRIER</button></article>
+            <article class="tool-card"><i>◈</i><div><small>LONG-RANGE SUPPORT</small><h3>Carrier Command</h3><p>Personal and Squadron Carrier inventory, expedition routes, Tritium planning and jump operations.</p></div><button data-command="open" data-target="carrier">OPEN CARRIERS</button></article>
             <article class="tool-card"><i>✦</i><div><small>FIELD RECON</small><h3>Colonisation Recon</h3><p>Assess surveyed systems as possible expansion candidates.</p></div><button data-command="open" data-target="recon">OPEN RECON</button></article>
             <article class="tool-card"><i>★</i><div><small>COMMANDER MILESTONES</small><h3>Explorer Achievements</h3><p>Journal-driven milestones for travel, biology, mining and expeditions.</p></div><button data-command="open" data-target="achievements">OPEN ACHIEVEMENTS</button></article>
           </section>
@@ -439,7 +439,7 @@
         </section>
 
         <section class="page specialist-page" data-page-name="carrier">
-          <header class="page-title"><div><p>LONG-RANGE SUPPORT</p><h2>Fleet Carrier command</h2><span>Fuel, capacity, cargo evidence and expedition route control</span></div><div class="title-actions"><button data-page="operations">FIELD TOOLS</button><button class="primary" data-ws-page="carrier" data-ws-op="copy_next">COPY NEXT STOP</button></div></header>
+          <header class="page-title"><div><p>LONG-RANGE SUPPORT</p><h2>Carrier command</h2><span>Independent personal and Squadron Carrier fuel, cargo, jumps and expedition routes</span></div><div class="title-actions"><button data-page="operations">FIELD TOOLS</button><button class="primary" data-ws-page="carrier" data-ws-op="copy_next">COPY NEXT STOP</button></div></header>
           <div id="carrier-workspace" class="workspace-shell loading-panel">Synchronising Carrier operations…</div>
         </section>
 
@@ -601,7 +601,7 @@
         </section>
 
         <section class="page" data-page-name="about">
-          <header class="about-hero"><div class="about-glyph"><span></span></div><div><p>ELITE DANGEROUS EXPLORATION COMPANION</p><h2>Void Compass</h2><span id="about-version">Version 5.4.2.3 // HTML Command Deck</span></div></header>
+          <header class="about-hero"><div class="about-glyph"><span></span></div><div><p>ELITE DANGEROUS EXPLORATION COMPANION</p><h2>Void Compass</h2><span id="about-version">Version 5.4.2.4 // HTML Command Deck</span></div></header>
           <section class="about-grid">
             <article class="card"><header><span>LOCAL FIRST</span></header><p>Void Compass reads Elite's journal and companion files and stores commander profiles locally. The dashboard server is private to this computer and binds only to loopback.</p></article>
             <article class="card"><header><span>GPL-3.0</span></header><p>Void Compass is free software. You may use, study, modify and redistribute it under GNU GPL version 3.</p></article>

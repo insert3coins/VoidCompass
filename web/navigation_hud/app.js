@@ -391,6 +391,7 @@ function render(data) {
     energy,
     dynamics: data.state?.dynamics || {},
     reduced: Boolean(data.effects?.reduced_motion),
+    visible: data.window?.visible !== false,
     eventSequence: data.state?.event_sequence,
     eventKind: data.state?.event_kind,
   });

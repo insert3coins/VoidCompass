@@ -1762,6 +1762,7 @@ class HtmlDashboardMixin:
     def _html_carrier_workspace(self):
         tracker = getattr(self, "carrier_tracker", None)
         carrier = dict(getattr(tracker, "carrier_data", {}) or {})
+        managed_carriers = tracker.carriers() if tracker is not None else []
         engine = getattr(self, "specialist_engine", None)
         try:
             specialist = engine.carrier_snapshot(carrier) if engine is not None else {}
@@ -1809,6 +1810,25 @@ class HtmlDashboardMixin:
             })
         inventory.sort(key=lambda row: (-row["count"], row["name"].casefold()))
         return {
+            "carriers": [
+                {
+                    "id": row.get("carrier_id"),
+                    "type": _text(row.get("carrier_type"), 80),
+                    "kind": (
+                        "SQUADRON CARRIER"
+                        if row.get("carrier_type") == "SquadronCarrier"
+                        else "PERSONAL FLEET CARRIER"
+                    ),
+                    "name": _text(row.get("name") or row.get("callsign"), 140),
+                    "callsign": _text(row.get("callsign"), 40),
+                    "system": _text(row.get("system"), 140),
+                    "status": _text(row.get("status") or "idle", 40),
+                    "destination": _text(row.get("jump_destination"), 140),
+                    "fuel": _number(row.get("fuel_level")),
+                    "active": str(row.get("carrier_id")) == str(carrier.get("carrier_id")),
+                }
+                for row in managed_carriers
+            ],
             "carrier": {
                 "id": carrier.get("carrier_id"),
                 "type": carrier_type,
@@ -3343,6 +3363,14 @@ class HtmlDashboardMixin:
             tracker = getattr(self, "carrier_tracker", None)
             if tracker is None:
                 return False
+            requested_carrier_id = payload.get("carrier_id")
+            if operation == "select_carrier":
+                changed = tracker.set_active_carrier(requested_carrier_id)
+                if changed:
+                    self._schedule_html_dashboard_publish(immediate=True)
+                return changed
+            if requested_carrier_id is not None:
+                tracker.set_active_carrier(requested_carrier_id)
             index = _integer(payload.get("index"), -1)
             if operation == "copy_next":
                 row = tracker.next_expedition_stop()

@@ -14,6 +14,7 @@ from config import COLOR_ACCENT, COLOR_ORANGE, COLOR_TEXT
 from ui_theme import THEME, ThemedWindowMixin, apply_window, button, panel, scrollbar, section_label
 from version import APP_VERSION
 from overlay_input import set_mouse_passthrough
+from overlay_chrome import configure_overlay_window
 from adaptive_command import AUTOMATIC_MODE_IDLE_S
 from stellar_types import star_type_label
 import route_strip
@@ -4568,8 +4569,10 @@ class DashboardUIMixin(ThemedWindowMixin):
         self.ground_popup = tk.Toplevel(self.root)
         self.ground_popup.withdraw()
         self._ground_popup_visible = False
-        self.ground_popup.overrideredirect(True)
-        self.ground_popup.attributes("-topmost", True)
+        # This Toplevel only owns geometry and visibility state; the HTML
+        # surface owns presentation. Match the other overlays from creation,
+        # including opacity and the Windows tool-window/taskbar flags.
+        configure_overlay_window(self.ground_popup)
         self.ground_popup.configure(bg=self.UI_PANEL, highlightbackground=COLOR_ACCENT, highlightthickness=1)
         legacy_geometry = str(self.config.get("ground_popup_geometry", "340x140+1320+160"))
         geometry_match = re.fullmatch(
@@ -4627,8 +4630,7 @@ class DashboardUIMixin(ThemedWindowMixin):
             self.ground_popup,
             bool(self.config.get("overlay_mouse_passthrough", True)),
         )
-        # The Toplevel remains the cross-platform state/proxy surface. On
-        # Windows its content is replaced by the purpose-built browser HUD.
+        # The invisible Toplevel remains the geometry/state proxy for HTML.
         self._attach_html_overlay_renderers()
         self._apply_html_overlay_renderer()
 

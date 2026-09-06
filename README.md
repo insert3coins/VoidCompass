@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.4.2.3**
+**Current version: 5.4.2.4**
 
 Void Compass is an exploration-first companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a persistent command dashboard, deep survey intelligence, expedition planning and native in-game overlays.
 
@@ -78,7 +78,7 @@ Mining is the single intentional side activity. Mining Command combines a saved 
 
 *The deliberately compact Field Tools hub keeps Ground/Exobiology, Mining, exploration Engineering, Colonisation Recon and Explorer Achievements available without crowding the primary rail.*
 
-Carrier Command plots Fleet and Squadron Carrier routes through Spansh, can import an existing Fleet Carrier result URL or job, marks journal-confirmed arrivals complete and advances Copy Next to the first pending jump, and carries route/fuel progress into the carrier overlay. Its Tritium view finds known hotspots around the carrier through Spansh and can copy or add a selected system to the expedition; its Cargo view combines the exact journal cargo total with an explicitly labelled manual/observed commodity manifest and active market orders.
+Carrier Command tracks a commander's personal Fleet Carrier and Squadron Carrier as separate journal-backed vessels, with an in-page selector and independent identity, location, fuel, cargo capacity, jump state, expedition route, notes and Discord jump transitions. It plots either carrier's route through Spansh, can import an existing Fleet Carrier result URL or job, marks journal-confirmed arrivals complete and advances Copy Next to the first pending jump, and carries the selected route/fuel progress into the carrier overlay. Its Tritium view finds known hotspots around the selected carrier through Spansh and can copy or add a selected system to its expedition; its Cargo view combines the exact journal cargo total with an explicitly labelled manual/observed commodity manifest and active market orders.
 
 ## Adaptive Command Deck
 
@@ -148,7 +148,7 @@ Packaged releases create `config.json`, commander profiles and logs beside the e
 C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous
 ```
 
-The 5.4.2.3 interface is Windows x64 only. The former experimental Linux build has been retired as the application moves to one WebView2 presentation architecture.
+The 5.4.2.4 interface is Windows x64 only. The former experimental Linux build has been retired as the application moves to one WebView2 presentation architecture.
 
 ## Contributing and support
 
