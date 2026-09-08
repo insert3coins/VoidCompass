@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
 const dom = Object.fromEntries([
   'hud', 'state-canvas', 'state-label', 'vehicle-display', 'vehicle-image',
   'region-label', 'system-clock', 'current-system',
-  'route-title', 'route-next', 'route-distance', 'route-progress', 'route-packet',
+  'route-title', 'route-target', 'route-target-label', 'route-next', 'route-distance', 'route-progress',
   'route-pips', 'route-origin', 'route-destination', 'survey-block', 'survey-title',
   'survey-title-text', 'survey-state', 'survey-mode', 'survey-remaining',
   'survey-count', 'survey-percent', 'survey-progress-marker',
@@ -181,7 +181,10 @@ function setMetric(id, metric) {
 
 function renderRoute(route = {}) {
   const hops = Array.isArray(route.hops) ? route.hops : [];
+  const previousSignature = lastRouteSignature;
+  const previousProgress = Number(dom['route-progress'].dataset.progress || 0);
   const signature = JSON.stringify([
+    route.target, route.progress_text, route.leg_distance, route.remaining_distance, route.complete,
     route.header || '', route.next_distance || '', route.distance || '',
     Boolean(route.active), route.origin_current === false ? 'start' : 'current',
     Number(route.progress_percent || 0),
@@ -189,13 +192,20 @@ function renderRoute(route = {}) {
   ]);
   if (signature === lastRouteSignature) return;
   lastRouteSignature = signature;
-  dom['route-title'].textContent = route.header || 'NO ACTIVE ROUTE';
-  dom['route-next'].textContent = route.next_distance || '';
-  dom['route-distance'].textContent = route.distance || '';
+  const target = route.target || hops.find(hop => hop.next)?.name || '';
+  dom['route-target-label'].textContent = route.complete ? 'ARRIVED' : 'NEXT SYSTEM';
+  dom['route-target'].textContent = target || (route.active ? 'DESTINATION PENDING' : 'NO DESTINATION PLOTTED');
+  dom['route-title'].textContent = route.complete ? 'ROUTE COMPLETE' : route.progress_text || route.header || 'NO ACTIVE ROUTE';
+  const distance = value => value && !['--', 'None'].includes(String(value)) ? String(value) : '—';
+  dom['route-next'].textContent = route.active && !route.complete ? `NEXT ${distance(route.leg_distance ?? route.next_distance)}` : '';
+  dom['route-distance'].textContent = route.active && !route.complete ? `LEFT ${distance(route.remaining_distance ?? route.distance)}` : '';
   dom['route-origin'].textContent = route.origin_current === false ? 'START' : 'CURRENT';
   dom['route-destination'].textContent = route.active || route.hops?.length ? 'DEST' : 'NEXT';
   dom['route-progress'].style.width = `${Math.max(0, Math.min(100, Number(route.progress_percent || 0)))}%`;
-  dom['route-packet'].style.display = route.active ? '' : 'none';
+  dom['route-progress'].dataset.progress = String(route.progress_percent || 0);
+  if (previousSignature && Number(route.progress_percent || 0) > previousProgress) {
+    briefHighlight(dom['route-progress'], 'route-arrival');
+  }
   const host = dom['route-pips'];
   host.replaceChildren();
   host.className = `route-pips unified${hops.length > 48 ? ' ultra-dense' : hops.length > 18 ? ' dense' : ''}`;
@@ -247,7 +257,7 @@ function renderSurvey(survey = {}, theme = {}, systemName = '', reducedMotion = 
   block.dataset.surveyState = state;
   block.style.setProperty('--survey-tone', tone);
   dom['survey-title-text'].textContent = state === 'complete'
-    ? 'SYSTEM SURVEY COMPLETE' : 'SYSTEM SURVEY';
+    ? 'SURVEY COMPLETE' : 'SYSTEM SURVEY';
   const remaining = totalKnown ? Math.max(0, total - scanned) : null;
   const modeLabels = {
     unknown: 'COUNT UNKNOWN', live: 'LIVE FSS', retained: 'RECORDED', complete: '',
@@ -348,6 +358,20 @@ function updateClock() {
   dom['system-clock'].textContent = formatClock(snapshot?.system?.arrival_epoch);
 }
 
+// Event highlights settle automatically; ordinary telemetry refreshes do not
+// restart them. Keep the live state instrument as the sustained animation.
+const highlightTimers = new WeakMap();
+function briefHighlight(element, className) {
+  if (dom.hud.classList.contains('reduced-motion')) return;
+  clearTimeout(highlightTimers.get(element));
+  element.classList.remove(className);
+  void element.offsetWidth;
+  element.classList.add(className);
+  highlightTimers.set(element, setTimeout(() => element.classList.remove(className), 1600));
+}
+let lastSystemName = '';
+let lastAttentionText = '';
+
 function render(data) {
   if (!data || data.schema !== 1) return;
   snapshot = data;
@@ -396,6 +420,8 @@ function render(data) {
     eventKind: data.state?.event_kind,
   });
   const system = data.system || {};
+  if (lastSystemName && system.name && lastSystemName !== system.name) briefHighlight(dom['current-system'], 'system-arrival');
+  lastSystemName = system.name || '';
   dom['current-system'].textContent = system.name || '---';
   dom['region-label'].textContent = system.region || 'REGION UNKNOWN';
   renderRoute(data.route);
@@ -413,6 +439,10 @@ function render(data) {
   dom['secondary-label'].textContent = data.layout === 'expanded' ? (data.context?.secondary || '') : '';
   dom['secondary-label'].style.color = data.context?.secondary_color || 'var(--yellow)';
   dom['traffic-label'].textContent = data.layout === 'expanded' ? '' : (data.context?.traffic || '');
+  const attentionText = ['alert', 'warn', 'warning'].includes(data.context?.attention)
+    ? [data.context?.primary, data.context?.secondary].filter(Boolean).join('|') : '';
+  if (attentionText && attentionText !== lastAttentionText) briefHighlight(dom['context-label'], 'context-attention');
+  lastAttentionText = attentionText;
   updateClock();
 }
 
