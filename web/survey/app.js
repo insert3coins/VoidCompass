@@ -585,11 +585,13 @@
       (total, child) => total + child.getBoundingClientRect().height,
       0,
     ) + Math.max(0, children.length - 1) * gap;
-    // Content begins at 67px. Reserve the footer's 24px lower band plus an
-    // eight-pixel compositor-safe margin. Measure children directly rather
-    // than content.scrollHeight: the content viewport itself expands with the
-    // window and would otherwise create a positive resize feedback loop.
-    return Math.max(90, Math.ceil(67 + contentHeight + 32));
+    // Content begins at 67px. Reserve only the footer's 24px lower band and
+    // its one-pixel boundary. The shared compositor already clips safely, so
+    // an additional margin merely leaves a visible gap below the final body.
+    // Measure children directly rather than content.scrollHeight: the content
+    // viewport itself expands with the window and would otherwise create a
+    // positive resize feedback loop.
+    return Math.max(90, Math.ceil(67 + contentHeight + 25));
   }
 
   async function refresh(revision) {

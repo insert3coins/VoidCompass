@@ -34,9 +34,9 @@ class TacticalHUD:
         overlay_bg = overlay_chrome.configure_overlay_window(self.win, "#ff00ff")
 
         self.full_width = 620
-        self.full_height = 294
+        self.full_height = 322
         self.compact_width = 500
-        self.compact_height = 254
+        self.compact_height = 306
         self.width, self.base_height = self._target_dimensions()
         self.canvas = tk.Canvas(self.win, width=self.width, height=self.base_height, bg=overlay_bg, highlightthickness=0)
         self.canvas.pack()
@@ -2418,6 +2418,10 @@ class TacticalHUD:
                 progress_percent = float(html_hops[progress_index]["position"])
         model["route"] = {
             "header": route_header,
+            "target": str(route.get("target") or ""),
+            "progress_text": str(route.get("progress_text") or route.get("jump_text") or ""),
+            "leg_distance": str((route.get("distance") if route_waypoint else nav_context.get("next_distance")) or ""),
+            "remaining_distance": str(nav_context.get("total_distance_text") or "") if not route_waypoint else "",
             "next_distance": next_distance,
             "distance": route_distance,
             "active": bool(route.get("active")),
@@ -2475,6 +2479,7 @@ class TacticalHUD:
             attention_text if attention_text and context_text != attention_text else ""
         )
         model["context"] = {
+            "attention": attention_state if attention_text else "",
             "primary": context_text,
             "primary_color": context_color,
             "secondary": secondary_text,

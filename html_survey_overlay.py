@@ -72,10 +72,17 @@ class HtmlSurveyOverlayBridge:
     def _dimensions(self):
         try:
             width = max(_safe_int(self.canvas.cget("width"), 420), self.canvas.winfo_width())
-            height = max(_safe_int(self.canvas.cget("height"), 90), self.canvas.winfo_height())
+            native_height = max(
+                _safe_int(self.canvas.cget("height"), 90),
+                self.canvas.winfo_height(),
+            )
         except Exception:
-            width, height = 420, 90
-        return width, max(height, _safe_int(self._browser_content_height))
+            width, native_height = 420, 90
+        # The Tk canvas is now only an invisible lifecycle/position proxy. Its
+        # legacy row estimator is deliberately generous and must not prevent
+        # the measured HTML surface from shrinking around its final body row.
+        browser_height = _safe_int(self._browser_content_height)
+        return width, max(90, browser_height) if browser_height else native_height
 
     def _window_payload(self):
         width, height = self._dimensions()
