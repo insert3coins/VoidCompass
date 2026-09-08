@@ -1,4 +1,4 @@
-"""Bounded, coalescing dispatcher for all cross-thread Tk work."""
+"""Bounded, coalescing dispatcher onto the Python application event loop."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import threading
 import time
 
 
-class TkDispatcher:
+class ApplicationDispatcher:
     def __init__(self, root, *, interval_ms=15, budget_ms=8.0, max_tasks=48):
         self.root = root
         self.interval_ms = max(5, int(interval_ms))
@@ -22,7 +22,7 @@ class TkDispatcher:
         self._failures = 0
         self._max_lag_ms = 0.0
         self._main_thread = threading.get_ident()
-        self.root.after(self.interval_ms, self._drain)
+        self.root.call_later(self.interval_ms, self._drain)
 
     def post(self, callback, *args, key=None, **kwargs):
         if not self._running or not callable(callback):
@@ -68,14 +68,14 @@ class TkDispatcher:
             except Exception:
                 self._failures += 1
                 logging.exception(
-                    "Tk dispatcher callback failed: %s",
+                    "Application dispatcher callback failed: %s",
                     getattr(callback, "__name__", type(callback).__name__),
                 )
             self._processed += 1
             handled += 1
             if (time.perf_counter() - started) * 1000.0 >= self.budget_ms:
                 break
-        self.root.after(1 if self.pending else self.interval_ms, self._drain)
+        self.root.call_later(1 if self.pending else self.interval_ms, self._drain)
 
     @property
     def pending(self):

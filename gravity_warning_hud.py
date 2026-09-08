@@ -5,14 +5,11 @@ has a known surface gravity (from an earlier Scan this session) at or
 above a configurable threshold. Auto-hides after a timeout, same pattern
 as ProspectorHUD.
 """
-
-import tkinter as tk
+from application_runtime import OverlayWindowState
 from config import save_config
 import overlay_chrome
 import themes
-
-_CHROMA = "#ff00ff"
-
+_CHROMA = '#ff00ff'
 
 class GravityWarningHUD:
     WIDTH = 300
@@ -25,32 +22,14 @@ class GravityWarningHUD:
         self._last_body = None
         self._last_gravity = None
         self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
-
-        self.win = tk.Toplevel(root)
-        overlay_bg = overlay_chrome.configure_overlay_window(self.win, _CHROMA)
-
-        self.canvas = tk.Canvas(self.win, width=self.WIDTH, height=self.HEIGHT, bg=overlay_bg, highlightthickness=0)
-        self.canvas.pack()
-
-        self.canvas.bind("<Button-1>", self._drag_start)
-        self.canvas.bind("<B1-Motion>", self._drag_move)
-        self.canvas.bind("<ButtonRelease-1>", self._drag_end)
-
-        # Right side, clear of the left-edge overlay stack (system info /
-        # carrier / station info / survey status).
+        self.win = OverlayWindowState(root)
         screen_w = root.winfo_screenwidth()
         default_x = max(30, screen_w - self.WIDTH - 30)
-        x = self._safe_int(config.get("gravity_warning_hud_x"), default_x)
-        y = self._safe_int(config.get("gravity_warning_hud_y"), 530)
-        # Keep the screen-relative first-run placement available to the HTML
-        # renderer and Overlay Studio.  Without this, the first show() call
-        # could fall back to the left edge even though the constructor placed
-        # the compatibility proxy on the right.
-        self.config["gravity_warning_hud_x"] = x
-        self.config["gravity_warning_hud_y"] = y
+        x = self._safe_int(config.get('gravity_warning_hud_x'), default_x)
+        y = self._safe_int(config.get('gravity_warning_hud_y'), 530)
+        self.config['gravity_warning_hud_x'] = x
+        self.config['gravity_warning_hud_y'] = y
         self.win.geometry(overlay_chrome.position_geometry(x, y))
-
-        self._force_topmost()
         self.win.withdraw()
 
     @staticmethod
@@ -60,33 +39,19 @@ class GravityWarningHUD:
         except Exception:
             return int(default)
 
-    # ── Lifecycle ────────────────────────────────────────────────────────
-
-    def _force_topmost(self):
-        try:
-            self.win.attributes("-topmost", True)
-        except Exception:
-            pass
-        refresh_ms = max(2000, int(self.config.get("overlay_topmost_refresh_ms", 12000) or 12000))
-        self.win.after(refresh_ms, self._force_topmost)
-
     def _startup_held(self):
         """Return whether the bootloader still owns the visible cockpit."""
-        return bool(getattr(
-            self.root, "_voidcompass_startup_presentation_held", False,
-        ))
+        return bool(getattr(self.root, '_voidcompass_startup_presentation_held', False))
 
     def show(self):
         if self._startup_held():
             self.hide()
             return False
         try:
-            x = self._safe_int(self.config.get("gravity_warning_hud_x"), 30)
-            y = self._safe_int(self.config.get("gravity_warning_hud_y"), 30)
+            x = self._safe_int(self.config.get('gravity_warning_hud_x'), 30)
+            y = self._safe_int(self.config.get('gravity_warning_hud_y'), 30)
             self.win.geometry(overlay_chrome.position_geometry(x, y))
             self.win.deiconify()
-            self.win.attributes("-topmost", True)
-            self.win.lift()
             return True
         except Exception:
             return False
@@ -94,7 +59,7 @@ class GravityWarningHUD:
     def hide(self):
         if self._hide_job:
             try:
-                self.win.after_cancel(self._hide_job)
+                self.win.cancel(self._hide_job)
             except Exception:
                 pass
             self._hide_job = None
@@ -106,11 +71,11 @@ class GravityWarningHUD:
     def _schedule_hide(self):
         if self._hide_job:
             try:
-                self.win.after_cancel(self._hide_job)
+                self.win.cancel(self._hide_job)
             except Exception:
                 pass
-        timeout_s = max(5, int(self.config.get("gravity_warning_hud_timeout_s") or 20))
-        self._hide_job = self.win.after(timeout_s * 1000, self._auto_hide)
+        timeout_s = max(5, int(self.config.get('gravity_warning_hud_timeout_s') or 20))
+        self._hide_job = self.win.call_later(timeout_s * 1000, self._auto_hide)
 
     def _auto_hide(self):
         self._hide_job = None
@@ -118,11 +83,9 @@ class GravityWarningHUD:
 
     def _threshold(self):
         try:
-            return max(0.5, float(self.config.get("gravity_warning_threshold_g", 3.0) or 3.0))
+            return max(0.5, float(self.config.get('gravity_warning_threshold_g', 3.0) or 3.0))
         except Exception:
             return 3.0
-
-    # ── Data interface ───────────────────────────────────────────────────
 
     def check_body(self, body_name, gravity_g):
         """Show/refresh/hide the warning for the currently-approached body.
@@ -132,8 +95,6 @@ class GravityWarningHUD:
         have data for, same limitation as the local-data-only game state.
         """
         if self._startup_held():
-            # Recovery may revisit an old ApproachBody without its matching
-            # LeaveBody. Cached history must not manufacture a fresh alert.
             self.clear()
             return
         if not body_name or gravity_g is None:
@@ -158,45 +119,8 @@ class GravityWarningHUD:
         self._last_gravity = None
         self.hide()
 
-    # ── Drag-to-move ─────────────────────────────────────────────────────
-
-    def _drag_start(self, event):
-        self._dx = event.x
-        self._dy = event.y
-
-    def _drag_move(self, event):
-        x = self.win.winfo_x() + (event.x - self._dx)
-        y = self.win.winfo_y() + (event.y - self._dy)
-        self.win.geometry(overlay_chrome.position_geometry(x, y))
-
-    def _drag_end(self, event):
-        self.config["gravity_warning_hud_x"] = self.win.winfo_x()
-        self.config["gravity_warning_hud_y"] = self.win.winfo_y()
-        try:
-            save_config(self.config)
-        except Exception:
-            pass
-
-    # ── Rendering ────────────────────────────────────────────────────────
-
-    def _text(self, x, y, text, fill, font, anchor="w"):
-        font = overlay_chrome.scaled_font(font, self.config)
-        self.canvas.create_text(x + 1, y + 1, text=text, fill="black", font=font, anchor=anchor)
-        self.canvas.create_text(x, y, text=text, fill=fill, font=font, anchor=anchor)
-
-    def _redraw(self, body_name, gravity_g):
-        w, h = self.WIDTH, self.HEIGHT
-        palette = self._palette
-        self.canvas.delete("all")
-        overlay_chrome.draw_chrome(
-            self.canvas, w, h, accent=palette["red"], bracket_len=10,
-            scanlines=False,
-        )
-        self._text(w / 2, 18, "⚠  HIGH GRAVITY WORLD  ⚠", palette["red"], ("Courier", 10, "bold"), anchor="center")
-        self._text(w / 2, 48, body_name.upper() if len(body_name) <= 30 else body_name[:29].upper() + "…",
-                    palette["text"], ("Courier", 11, "bold"), anchor="center")
-        self._text(w / 2, 70, f"{gravity_g:.2f} g   (threshold {self._threshold():.1f} g)",
-                    palette["orange"], ("Courier", 9, "bold"), anchor="center")
+    def _redraw(self, body_name, g):
+        self._last_body, self._last_gravity = (body_name, g)
 
     def apply_theme(self, palette=None):
         self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)

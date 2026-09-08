@@ -45,3 +45,5 @@ version_info.txt
 venv/
 mining_data.db
 mining_data.db-*
+.codex/config.toml
+temp/

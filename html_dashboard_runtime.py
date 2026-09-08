@@ -51,27 +51,10 @@ def _geometry_payload(value):
     return payload
 
 
-class HtmlDashboardSplash:
-    """Small Tk-splash-compatible facade backed by the browser boot scene."""
-
+class StartupPresentation:
+    """Reference to the browser-owned boot presentation."""
     def __init__(self, runtime):
-        self.runtime = runtime
         self._voidcompass_boot = runtime
-
-    def update_idletasks(self):
-        return None
-
-    def deiconify(self):
-        return None
-
-    def attributes(self, *_args):
-        return None
-
-    def lift(self):
-        return None
-
-    def destroy(self):
-        return None
 
 
 class HtmlDashboardRuntime:
@@ -134,7 +117,7 @@ class HtmlDashboardRuntime:
             host_state=host_state,
         )
         self._open_host_log()
-        self.splash = HtmlDashboardSplash(self)
+        self.splash = StartupPresentation(self)
         self._publish()
         self._launch()
         self._schedule_host_watchdog()
@@ -295,7 +278,7 @@ class HtmlDashboardRuntime:
             return True
         if action == "window_closed":
             try:
-                self.root.after(0, self._close_from_window)
+                self.root.call_later(0, self._close_from_window)
             except Exception:
                 pass
             return True
@@ -322,7 +305,7 @@ class HtmlDashboardRuntime:
             app.on_close()
         else:
             try:
-                self.root.destroy()
+                self.root.close()
             except Exception:
                 pass
 
@@ -330,7 +313,7 @@ class HtmlDashboardRuntime:
         if self._disposed or self._command_job is not None:
             return
         try:
-            self._command_job = self.root.after(40, self._drain_commands)
+            self._command_job = self.root.call_later(40, self._drain_commands)
         except Exception:
             self._command_job = None
 
@@ -338,7 +321,7 @@ class HtmlDashboardRuntime:
         if self._disposed or self._host_watchdog_job is not None:
             return
         try:
-            self._host_watchdog_job = self.root.after(500, self._check_host_process)
+            self._host_watchdog_job = self.root.call_later(500, self._check_host_process)
         except Exception:
             self._host_watchdog_job = None
 
@@ -349,7 +332,7 @@ class HtmlDashboardRuntime:
         process = self.process
         if process is None or process.poll() is not None:
             # A normal window close posts its command immediately before the
-            # host exits. Give Tk one turn to consume that command before
+            # host exits. Give the application loop one turn to consume that command before
             # treating an unannounced exit as a renderer failure.
             now = time.monotonic()
             if not self._host_exit_seen_at:
@@ -367,7 +350,7 @@ class HtmlDashboardRuntime:
                 "HTML command-deck host exited unexpectedly (code %s)", exit_code,
             )
             try:
-                from tkinter import messagebox
+                from native_services import messagebox
 
                 messagebox.showerror(
                     "Void Compass",
@@ -380,7 +363,7 @@ class HtmlDashboardRuntime:
             self._close_from_window()
             return
         self._host_exit_seen_at = 0.0
-        # A modal Tk transition or a cancelled ``after`` callback can leave a
+        # A delayed or cancelled application callback can leave a
         # stale job id behind while the HTML deck continues accepting commands.
         # Recover the pump here so page changes and live settings never remain
         # queued until the next application restart.
@@ -388,7 +371,7 @@ class HtmlDashboardRuntime:
             stale_job, self._command_job = self._command_job, None
             if stale_job is not None:
                 try:
-                    self.root.after_cancel(stale_job)
+                    self.root.cancel(stale_job)
                 except Exception:
                     pass
             self._schedule_command_pump()
@@ -470,7 +453,7 @@ class HtmlDashboardRuntime:
                 callback(values)
 
         try:
-            self.root.after(280, complete)
+            self.root.call_later(280, complete)
         except Exception:
             complete()
         return True
@@ -497,13 +480,13 @@ class HtmlDashboardRuntime:
         self._disposed = True
         if self._command_job is not None:
             try:
-                self.root.after_cancel(self._command_job)
+                self.root.cancel(self._command_job)
             except Exception:
                 pass
             self._command_job = None
         if self._host_watchdog_job is not None:
             try:
-                self.root.after_cancel(self._host_watchdog_job)
+                self.root.cancel(self._host_watchdog_job)
             except Exception:
                 pass
             self._host_watchdog_job = None

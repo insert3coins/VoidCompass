@@ -1280,3 +1280,21 @@ input,select,textarea,button { max-width: 100%; }
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 }
 body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+
+.planet-materials-wide { grid-column: 1 / -1; }
+.planet-materials-wide > form, .planet-materials-wide > p, .planet-materials-wide > label, #planet-site-list { margin-left: 16px; margin-right: 16px; }
+.planet-materials-wide input, .planet-materials-wide select { min-height: 36px; padding: 8px 10px; border: 1px solid var(--border); background: var(--input); color: var(--text); font: 12px Consolas, monospace; }
+.planet-materials-wide input:focus-visible, .planet-materials-wide select:focus-visible { outline: 1px solid var(--accent); }
+.planet-site-form button { align-self: end; min-height: 36px; padding: 8px 14px; border: 1px solid var(--border); background: var(--panel-alt); color: var(--accent); cursor: pointer; font: 700 11px Consolas, monospace; }
+.planet-site-form button:hover { background: var(--selection); border-color: var(--accent); }
+.planet-site-form [data-site-delete] { color: var(--red); }
+.planet-materials-wide .planet-resource-row { font-size: 12px; }
+.planet-materials-wide .planet-resource-row small, .planet-materials-wide .planet-resource-row em { font-size: 11px; }
+.planet-site-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; padding: 16px 0; }
+.planet-site-form label, .planet-materials-wide > label { display: flex; flex-direction: column; gap: 7px; font-size: 11px; }
+.planet-site-form input { width: 100%; min-width: 0; }
+#planet-site-list { display: grid; gap: 10px; margin-top: 16px; }
+#planet-site-list summary { cursor: pointer; padding: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.planet-materials-wide > p { padding: 10px 0; line-height: 1.6; }
+
+.planet-site-form button:disabled { opacity: .45; cursor: default; }

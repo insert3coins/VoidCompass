@@ -2,7 +2,7 @@ import os
 import sys
 
 # HTML cockpit overlays share a separate WinForms/WebView2 message loop.
-# Dispatch it before importing Tk/dashboard modules or acquiring the primary
+# Dispatch it before importing backend modules or acquiring the primary
 # Void Compass instance lock. PyInstaller retains this direct import for the
 # one-file helper invocation used by the frozen executable.
 if __name__ == "__main__" and "--html-overlay-host" in sys.argv:
@@ -12,14 +12,15 @@ if __name__ == "__main__" and "--html-overlay-host" in sys.argv:
     raise SystemExit(_run_html_overlay_host(sys.argv[_flag_index + 1:]))
 
 # The main HTML command deck owns a normal taskbar window and therefore runs
-# in its own WebView2 message loop during the staged Tk-backend migration.
+# in its own WebView2 message loop independently of the Python application event loop.
 if __name__ == "__main__" and "--html-dashboard-host" in sys.argv:
     from html_dashboard_host import main as _run_html_dashboard_host
 
     _flag_index = sys.argv.index("--html-dashboard-host")
     raise SystemExit(_run_html_dashboard_host(sys.argv[_flag_index + 1:]))
 
-import tkinter as tk
+from application_runtime import ApplicationRuntime
+from native_services import messagebox
 import logging
 import atexit
 import tempfile
@@ -98,47 +99,17 @@ def main():
 
     dashboard_runtime = None
     try:
-        root = tk.Tk()
-        # Do not let Windows map Tk's small default root while the dashboard is
-        # still being constructed.  Apart from looking like a stray startup
-        # window, mapping it early can make child HUDs report transient window
-        # manager coordinates before their saved positions are reapplied.
-        root.withdraw()
-        # Shared overlay chrome reads this before any HUD Toplevel can map.
-        # The Dashboard clears it only at the authoritative live handoff.
-        root._voidcompass_startup_presentation_held = True
-        if not HtmlDashboardRuntime.supported():
-            from tkinter import messagebox
-
-            messagebox.showerror(
-                "Void Compass",
-                "Void Compass 5.3.9 requires Windows WebView2 and pywebview.\n\n"
-                "Install the Microsoft Edge WebView2 Runtime and reinstall Void Compass.",
-                parent=root,
-            )
-            root.destroy()
-            return
-        root._voidcompass_html_dashboard_enabled = True
-        root._voidcompass_first_commissioning = False
-        dashboard_runtime = HtmlDashboardRuntime(
-            root, startup_config, APP_VERSION,
-        )
-        root._voidcompass_html_dashboard_runtime = dashboard_runtime
+        root = ApplicationRuntime()
         if crash_reporting_enabled:
-            crash_reporter.install_tk(root)
-            root.bind_all("<Control-Alt-d>", lambda _event: crash_reporter.dump_stacks("manual Ctrl+Alt+D"))
-
-        # Attempt to set the native window icon.
-        try:
-            if sys.platform == "win32":
-                root.iconbitmap(resource_path("icon.ico"))
-            else:
-                root._voidcompass_icon = tk.PhotoImage(
-                    file=resource_path("icon-source.png")
-                )
-                root.iconphoto(True, root._voidcompass_icon)
-        except Exception:
-            pass # Icon file likely missing or invalid
+            crash_reporter.install_runtime(root)
+        root._voidcompass_startup_presentation_held = True
+        root._voidcompass_first_commissioning = False
+        if not HtmlDashboardRuntime.supported():
+            messagebox.showerror("Void Compass", "Void Compass requires Windows WebView2 and pywebview.")
+            root.close()
+            return
+        dashboard_runtime = HtmlDashboardRuntime(root, startup_config, APP_VERSION)
+        root._voidcompass_html_dashboard_runtime = dashboard_runtime
 
         def launch_dashboard(splash):
             try:
@@ -150,10 +121,10 @@ def main():
                         "Loading profile, databases and flight systems",
                         0.18,
                     )
-                splash.update_idletasks()
+
                 app = MainDashboard(root)
                 # Retain an explicit reference for the callback-driven startup
-                # path; Tk callbacks alone should not own the application.
+                # path; application callbacks alone should not own the application.
                 root._voidcompass_app = app
                 if dashboard_runtime is not None:
                     app.start_html_dashboard_bridge()
@@ -168,18 +139,14 @@ def main():
                 # Flush final geometry while the root is still hidden. This
                 # prevents the default Tk size from flashing before the
                 # dashboard receives its saved dimensions.
-                root.update_idletasks()
+
                 return True
             except BaseException:
-                try:
-                    splash.destroy()
-                except tk.TclError:
-                    pass
                 if crash_reporting_enabled:
                     crash_reporter.log_exception(*sys.exc_info(), source="startup")
                 try:
-                    root.destroy()
-                except tk.TclError:
+                    root.close()
+                except RuntimeError:
                     pass
                 raise
 
@@ -210,7 +177,7 @@ def main():
                 "Local settings saved; bringing the exploration core online",
                 0.17,
             )
-            root.after(120, lambda: launch_dashboard(startup_splash))
+            root.call_later(120, lambda: launch_dashboard(startup_splash))
 
         def begin_startup():
             # The event loop is already live before either presented startup
@@ -223,8 +190,8 @@ def main():
             else:
                 launch_dashboard(startup_splash)
 
-        root.after(0, begin_startup)
-        root.mainloop()
+        root.call_later(0, begin_startup)
+        root.run()
     except BaseException:
         if crash_reporting_enabled:
             crash_reporter.log_exception(*sys.exc_info(), source="main")

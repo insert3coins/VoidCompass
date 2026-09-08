@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 
-from html_overlay_runtime import HtmlOverlaySurface, suppress_native_proxy, overlay_opacity_ratio
+from html_overlay_runtime import HtmlOverlaySurface, overlay_opacity_ratio
 
 
 def _integer(value, default=0):
@@ -33,7 +33,7 @@ class HtmlGravityOverlayBridge:
         self._sync_job = None
         self._last_fingerprint = None
         try:
-            self.win.bind("<Destroy>", self._on_destroy, add="+")
+            self.win.on_destroy(self._on_destroy)
         except Exception:
             pass
         self.set_enabled(True)
@@ -65,7 +65,7 @@ class HtmlGravityOverlayBridge:
                 and self.overlay._last_gravity is not None
                 and not held and self.config.get(self.enabled_key, False)
             ),
-            "click_through": True,
+            "click_through": bool(self.config.get("overlay_mouse_passthrough", True)),
         }
 
     def _snapshot(self):
@@ -114,10 +114,7 @@ class HtmlGravityOverlayBridge:
             self.overlay._html_ready = False
             if surface is not None:
                 surface.dispose()
-            try:
-                self.win.attributes("-alpha", 0.0)
-            except Exception:
-                pass
+            pass
             self._last_fingerprint = None
             return False
         if self.surface is not None:
@@ -133,16 +130,13 @@ class HtmlGravityOverlayBridge:
             return True
         except Exception as exc:
             self.surface = None
-            try:
-                self.win.attributes("-alpha", 0.0)
-            except Exception:
-                pass
+            pass
             logging.warning("HTML Gravity Warning unavailable; overlay suppressed: %s", exc)
             return False
 
     def _schedule(self):
         try:
-            self._sync_job = self.win.after(100, self._sync)
+            self._sync_job = self.win.call_later(100, self._sync)
         except Exception:
             self._sync_job = None
 
@@ -159,7 +153,7 @@ class HtmlGravityOverlayBridge:
                 was_ready = self._ready
                 self._ready = self.surface.ready
                 self.overlay._html_ready = self._ready
-                suppress_native_proxy(self.win)
+                pass
                 if self._ready:
                     if not was_ready:
                         logging.info("HTML Gravity Warning renderer is live")
@@ -180,7 +174,7 @@ class HtmlGravityOverlayBridge:
         self._disposed = True
         if self._sync_job is not None:
             try:
-                self.win.after_cancel(self._sync_job)
+                self.win.cancel(self._sync_job)
             except Exception:
                 pass
             self._sync_job = None

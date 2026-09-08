@@ -6,7 +6,7 @@ import json
 import logging
 import os
 
-from html_overlay_runtime import HtmlOverlaySurface, suppress_native_proxy, overlay_opacity_ratio
+from html_overlay_runtime import HtmlOverlaySurface, overlay_opacity_ratio
 
 
 def _safe_int(value, default=0):
@@ -27,7 +27,6 @@ class HtmlSurveyOverlayBridge:
     def __init__(self, overlay, overlay_id, title, enabled_key, x_key, y_key):
         self.overlay = overlay
         self.win = overlay.win
-        self.canvas = overlay.canvas
         self.config = overlay.config
         self.overlay_id = str(overlay_id)
         self.title = str(title)
@@ -41,7 +40,7 @@ class HtmlSurveyOverlayBridge:
         self._last_fingerprint = None
         self._browser_content_height = 0
         try:
-            self.win.bind("<Destroy>", self._on_destroy, add="+")
+            self.win.on_destroy(self._on_destroy)
         except Exception:
             pass
         self.set_enabled(True)
@@ -70,17 +69,8 @@ class HtmlSurveyOverlayBridge:
         return bool(model.get("rows") or model.get("notable_rows"))
 
     def _dimensions(self):
-        try:
-            width = max(_safe_int(self.canvas.cget("width"), 420), self.canvas.winfo_width())
-            native_height = max(
-                _safe_int(self.canvas.cget("height"), 90),
-                self.canvas.winfo_height(),
-            )
-        except Exception:
-            width, native_height = 420, 90
-        # The Tk canvas is now only an invisible lifecycle/position proxy. Its
-        # legacy row estimator is deliberately generous and must not prevent
-        # the measured HTML surface from shrinking around its final body row.
+        width, native_height = 420, 90
+        # HTML supplies measured content size; there is no secondary renderer.
         browser_height = _safe_int(self._browser_content_height)
         return width, max(90, browser_height) if browser_height else native_height
 
@@ -110,7 +100,7 @@ class HtmlSurveyOverlayBridge:
                 and not startup_held
                 and self.config.get(self.enabled_key, False)
             ),
-            "click_through": True,
+            "click_through": bool(self.config.get("overlay_mouse_passthrough", True)),
         }
 
     def _snapshot(self):
@@ -168,10 +158,7 @@ class HtmlSurveyOverlayBridge:
             self.overlay._html_ready = False
             if surface is not None:
                 surface.dispose()
-            try:
-                self.win.attributes("-alpha", 0.0)
-            except Exception:
-                pass
+            pass
             self._last_fingerprint = None
             self._browser_content_height = 0
             return False
@@ -187,16 +174,13 @@ class HtmlSurveyOverlayBridge:
             return True
         except Exception as exc:
             self.surface = None
-            try:
-                self.win.attributes("-alpha", 0.0)
-            except Exception:
-                pass
+            pass
             logging.warning("HTML Survey Operations unavailable; overlay suppressed: %s", exc)
             return False
 
     def _schedule(self):
         try:
-            self._sync_job = self.win.after(100, self._sync)
+            self._sync_job = self.win.call_later(100, self._sync)
         except Exception:
             self._sync_job = None
 
@@ -214,7 +198,7 @@ class HtmlSurveyOverlayBridge:
                 was_ready = self._ready
                 self._ready = surface.ready
                 self.overlay._html_ready = self._ready
-                suppress_native_proxy(self.win)
+                pass
                 measured_height = surface.server.rendered_content_height(
                     self.overlay_id,
                 )
@@ -247,7 +231,7 @@ class HtmlSurveyOverlayBridge:
         self._disposed = True
         if self._sync_job is not None:
             try:
-                self.win.after_cancel(self._sync_job)
+                self.win.cancel(self._sync_job)
             except Exception:
                 pass
             self._sync_job = None

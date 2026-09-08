@@ -29,18 +29,6 @@ def overlay_opacity_ratio(config):
     return max(0.4, min(1.0, percent / 100.0))
 
 
-def suppress_native_proxy(window):
-    """Keep the native proxy hidden while an HTML surface owns presentation.
-
-    Revealing Tk during a short WebView heartbeat gap can overlap the still
-    visible browser window and produce duplicate HUDs. A failed initial HTML
-    attachment restores Tk in the bridge error path; watchdog recovery keeps
-    one visual owner throughout.
-    """
-    try:
-        window.attributes("-alpha", 0.0)
-    except Exception:
-        pass
 
 
 class HtmlOverlayRuntime:
@@ -67,7 +55,7 @@ class HtmlOverlayRuntime:
         atexit.register(self._force_process_exit)
         self._launch()
         try:
-            root.bind("<Destroy>", self._on_root_destroy, add="+")
+            root.on_shutdown(self.dispose)
         except Exception:
             pass
 

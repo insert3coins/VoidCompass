@@ -1,12 +1,10 @@
-import PyInstaller.__main__
-import PyInstaller
 import importlib.util
 import os
+from pathlib import Path
 import shutil
+import subprocess
 import sys
 from version import APP_VERSION
-from mining_data import MiningDataStore
-from release_packager import create_release
 
 # This script automates the build process for SurveyAnalysis
 
@@ -16,6 +14,28 @@ if __name__ == '__main__':
             "Void Compass 5.3.9 and newer require Windows x64/WebView2. "
             "The experimental Linux build has been retired."
         )
+    # Resolve dependencies and build paths relative to this script, even when
+    # invoked from another directory. Bootstrap before importing packages that
+    # may not yet be installed in this Python environment.
+    project_dir = Path(__file__).resolve().parent
+    os.chdir(project_dir)
+    print(f"Installing build requirements with {sys.executable}...", flush=True)
+    try:
+        subprocess.run(
+            [sys.executable, '-m', 'pip', 'install', '-r',
+             str(project_dir / 'requirements.txt')],
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise SystemExit(
+            f"Requirements installation failed; build stopped: {exc}"
+        ) from exc
+    importlib.invalidate_caches()
+    import PyInstaller.__main__
+    import PyInstaller
+    from mining_data import MiningDataStore
+    from release_packager import create_release
+
     is_windows = True
     target_name = "Windows-x64"
     pyinstaller_version = tuple(
@@ -95,6 +115,13 @@ VSVersionInfo(
         '--windowed',              # Hide the console (GUI only)
         '--clean',                 # Clean cache before building
         '--log-level=INFO',
+        # Python owns application state; WebView2 owns all UI windows.
+        # Exclude Tk and Pillow's optional Tk adapters so PyInstaller cannot
+        # pull Tcl/Tk libraries into the executable through dependency hooks.
+        '--exclude-module=tkinter',
+        '--exclude-module=_tkinter',
+        '--exclude-module=PIL.ImageTk',
+        '--exclude-module=PIL._tkinter_finder',
         f'--add-data=icon.ico{data_sep}.',
         f'--add-data=icon-source.png{data_sep}.',
         f'--add-data=Images{data_sep}Images',

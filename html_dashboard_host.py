@@ -185,6 +185,15 @@ class DashboardApi:
     def choose_journal_folder(self):
         return self.choose_folder()
 
+    def choose_replay_file(self):
+        window = self._host.window
+        if window is None:
+            return ''
+        import webview
+        selected = window.create_file_dialog(webview.FileDialog.SAVE,
+            save_filename='VoidCompass-Replay.html', file_types=('Interactive HTML (*.html)',))
+        return str(selected[0]) if selected else ''
+
     def choose_folder(self):
         """Choose a local directory for profile backup/restore and paths."""
         window = self._host.window
@@ -245,7 +254,7 @@ def main(argv=None):
     storage = Path(str(state.get("storage_path") or "")).resolve()
     storage.mkdir(parents=True, exist_ok=True)
     try:
-        webview.start(private_mode=False, storage_path=str(storage))
+        webview.start(gui='edgechromium', private_mode=False, storage_path=str(storage))
     except Exception:
         print("Dashboard WebView2 message loop failed", file=sys.stderr)
         traceback.print_exc()
