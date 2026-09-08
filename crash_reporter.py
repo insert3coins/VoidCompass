@@ -82,12 +82,12 @@ def install_ui_freeze_watchdog(root, interval_ms=500, timeout_s=5.0, dump_cooldo
     def _tick():
         heartbeat()
         try:
-            root.after(interval_ms, _tick)
+            root.call_later(interval_ms, _tick)
         except Exception:
             pass
 
     try:
-        root.after(interval_ms, _tick)
+        root.call_later(interval_ms, _tick)
     except Exception:
         pass
 
@@ -112,7 +112,7 @@ def install(root=None):
     global _CRASH_FILE, _CRASH_PATH
     if _CRASH_FILE is not None:
         if root is not None:
-            install_tk(root)
+            install_runtime(root)
         return _CRASH_PATH
 
     _CRASH_PATH = crash_log_path()
@@ -150,15 +150,15 @@ def install(root=None):
         threading.excepthook = _thread_hook
 
     if root is not None:
-        install_tk(root)
+        install_runtime(root)
     return _CRASH_PATH
 
 
-def install_tk(root):
-    def _tk_exception(exc_type, exc_value, exc_tb):
-        log_exception(exc_type, exc_value, exc_tb, "tkinter callback")
+def install_runtime(root):
+    def _runtime_exception(exc_type, exc_value, exc_tb):
+        log_exception(exc_type, exc_value, exc_tb, "application callback")
     try:
-        root.report_callback_exception = _tk_exception
+        root.report_callback_exception = _runtime_exception
     except Exception:
         pass
     install_ui_freeze_watchdog(root)

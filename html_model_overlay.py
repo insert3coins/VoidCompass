@@ -8,7 +8,6 @@ import os
 
 from html_overlay_runtime import (
     HtmlOverlaySurface,
-    suppress_native_proxy,
     overlay_opacity_ratio,
 )
 
@@ -56,7 +55,7 @@ class HtmlModelOverlayBridge:
         self._last_quick_fingerprint = None
         self._browser_content_height = 0
         try:
-            self.win.bind("<Destroy>", self._on_destroy, add="+")
+            self.win.on_destroy(self._on_destroy)
         except Exception:
             pass
         self.set_enabled(True)
@@ -100,7 +99,7 @@ class HtmlModelOverlayBridge:
             "visible": bool(
                 shown and not held and self.config.get(self.enabled_key, False)
             ),
-            "click_through": True,
+            "click_through": bool(self.config.get("overlay_mouse_passthrough", True)),
         }
 
     def _snapshot(self):
@@ -159,10 +158,7 @@ class HtmlModelOverlayBridge:
             self.overlay._html_ready = False
             if surface is not None:
                 surface.dispose()
-            try:
-                self.win.attributes("-alpha", 0.0)
-            except Exception:
-                pass
+            pass
             self._last_fingerprint = None
             self._last_quick_fingerprint = None
             self._browser_content_height = 0
@@ -180,10 +176,7 @@ class HtmlModelOverlayBridge:
             return True
         except Exception as exc:
             self.surface = None
-            try:
-                self.win.attributes("-alpha", 0.0)
-            except Exception:
-                pass
+            pass
             logging.warning(
                 "HTML %s unavailable; overlay suppressed: %s",
                 self.log_name, exc,
@@ -192,7 +185,7 @@ class HtmlModelOverlayBridge:
 
     def _schedule(self):
         try:
-            self._sync_job = self.win.after(100, self._sync)
+            self._sync_job = self.win.call_later(100, self._sync)
         except Exception:
             self._sync_job = None
 
@@ -211,7 +204,7 @@ class HtmlModelOverlayBridge:
                 was_ready = self._ready
                 self._ready = surface.ready
                 self.overlay._html_ready = self._ready
-                suppress_native_proxy(self.win)
+                pass
                 measured_height = surface.server.rendered_content_height(
                     self.overlay_id,
                 )
@@ -241,7 +234,7 @@ class HtmlModelOverlayBridge:
         self._disposed = True
         if self._sync_job is not None:
             try:
-                self.win.after_cancel(self._sync_job)
+                self.win.cancel(self._sync_job)
             except Exception:
                 pass
             self._sync_job = None

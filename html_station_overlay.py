@@ -6,7 +6,7 @@ import json
 import logging
 import os
 
-from html_overlay_runtime import HtmlOverlaySurface, suppress_native_proxy, overlay_opacity_ratio
+from html_overlay_runtime import HtmlOverlaySurface, overlay_opacity_ratio
 
 
 def _integer(value, default=0):
@@ -40,7 +40,7 @@ class HtmlStationOverlayBridge:
         self._last_fingerprint = None
         self._browser_content_height = 0
         try:
-            self.win.bind("<Destroy>", self._on_destroy, add="+")
+            self.win.on_destroy(self._on_destroy)
         except Exception:
             pass
         self.set_enabled(True)
@@ -84,7 +84,7 @@ class HtmlStationOverlayBridge:
                 shown and docked_context and model.get("station") and not held
                 and self.config.get(self.enabled_key, False)
             ),
-            "click_through": True,
+            "click_through": bool(self.config.get("overlay_mouse_passthrough", True)),
         }
 
     def _snapshot(self):
@@ -136,10 +136,7 @@ class HtmlStationOverlayBridge:
             self.overlay._html_ready = False
             if surface is not None:
                 surface.dispose()
-            try:
-                self.win.attributes("-alpha", 0.0)
-            except Exception:
-                pass
+            pass
             self._last_fingerprint = None
             self._browser_content_height = 0
             return False
@@ -156,10 +153,7 @@ class HtmlStationOverlayBridge:
             return True
         except Exception as exc:
             self.surface = None
-            try:
-                self.win.attributes("-alpha", 0.0)
-            except Exception:
-                pass
+            pass
             logging.warning(
                 "HTML Station Link unavailable; overlay suppressed: %s", exc,
             )
@@ -167,7 +161,7 @@ class HtmlStationOverlayBridge:
 
     def _schedule(self):
         try:
-            self._sync_job = self.win.after(100, self._sync)
+            self._sync_job = self.win.call_later(100, self._sync)
         except Exception:
             self._sync_job = None
 
@@ -185,7 +179,7 @@ class HtmlStationOverlayBridge:
                 was_ready = self._ready
                 self._ready = surface.ready
                 self.overlay._html_ready = self._ready
-                suppress_native_proxy(self.win)
+                pass
                 measured_height = surface.server.rendered_content_height(
                     self.overlay_id,
                 )
@@ -215,7 +209,7 @@ class HtmlStationOverlayBridge:
         self._disposed = True
         if self._sync_job is not None:
             try:
-                self.win.after_cancel(self._sync_job)
+                self.win.cancel(self._sync_job)
             except Exception:
                 pass
             self._sync_job = None

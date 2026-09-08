@@ -986,7 +986,7 @@ class DashboardDBMixin:
 
             self.load_system_from_db(self.current_sys)
             self._ui_post(
-                lambda: self.scan_stat.config(text=self._scan_progress_count_text()),
+                lambda: self._schedule_html_dashboard_publish(),
                 key="cache-rebuild-scan-progress",
             )
             self.update_hud()

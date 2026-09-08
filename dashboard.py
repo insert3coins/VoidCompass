@@ -8,8 +8,7 @@ import logging
 import sys
 import time
 import traceback
-import tkinter as tk
-from tkinter import messagebox
+from native_services import messagebox
 import webbrowser
 import shutil
 from collections import deque
@@ -23,7 +22,7 @@ from config import (
 )
 import themes
 import overlay_chrome
-from ui_theme import apply_theme_live
+from theme_state import apply_theme_live
 from version import APP_VERSION
 import bio_values
 from hud import TacticalHUD
@@ -53,10 +52,9 @@ from html_carrier_overlay import attach_html_carrier_overlay
 from html_prospector_overlay import attach_html_prospector_overlay
 from html_heartbeat_overlay import attach_html_heartbeat_overlay
 from html_contact_overlay import attach_html_contact_overlay
-from overlay_input import set_mouse_passthrough
 from runtime_trace import RuntimeTrace
 from dashboard_db_mixin import DashboardDBMixin
-from dashboard_ui_mixin import DashboardUIMixin
+from dashboard_core_mixin import DashboardCoreMixin
 from dashboard_scan_mixin import DashboardScanMixin
 from html_dashboard import HtmlDashboardMixin
 from field_state import (
@@ -68,7 +66,7 @@ import companion_features
 import operational_state
 from credit_events import authoritative_balance, credit_delta
 from stellar_types import star_type_label
-from exploration_window import ExplorationWindow
+from expedition_map_view import ExpeditionMapView
 from services.eddn_upload import UPLOADER as eddn_market_uploader
 from services.galnet import GalnetFeedService
 from achievement_engine import AchievementEngine
@@ -90,10 +88,10 @@ from adaptive_command import (
 from diagnostic_bundle import create_support_bundle
 from persistence_queue import flush_persistence, persistence_queue
 from session_recovery import ProfileSessionGuard
-from ui_dispatcher import TkDispatcher
+from ui_dispatcher import ApplicationDispatcher
 from global_hotkeys import GlobalHotkeyManager, OVERLAY_HOTKEY_SPECS
 from platform_support import default_screenshot_path, open_path
-from ui_theme import apply_ui_scale
+from theme_state import apply_ui_scale
 from profile_backups import automatic_backup
 
 
@@ -220,7 +218,7 @@ def _location_surface_focus(event, raw, data):
     return body_id, body_name
 
 
-class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, DashboardDBMixin):
+class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, DashboardDBMixin):
     _SURVEY_REFRESH_EVENTS = frozenset({
         "Location", "FSDJump", "CarrierJump", "StartJump",
         "Docked", "Undocked", "ApproachBody", "LeaveBody",
@@ -773,7 +771,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         if self.gravity_warning_hud:
             self.gravity_warning_hud.clear()
         self.update_ground_target_ui()
-        self.root.title(f"VOID COMPASS // v{APP_VERSION} // RESTORING JOURNAL")
+        self._update_main_window_title()
         self._startup_restore_active = True
         self._startup_restore_ui_pending = False
 
@@ -869,8 +867,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         # panels. Publishing a fresh immutable snapshot updates its CSS and
         # WebGL materials without reloading the browser page.
         map_view = getattr(
-            getattr(self, "exploration_window", None),
-            "expedition_map_view", None,
+            self, "atlas", None,
         )
         if map_view is not None:
             try:
@@ -889,6 +886,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
 
     def _close_profile_surfaces(self):
         """Close every UI surface holding references to the outgoing profile."""
+        if getattr(self, "atlas", None):
+            self.atlas.dispose()
+            self.atlas = None
         try:
             self._capture_overlay_positions()
         except Exception:
@@ -954,13 +954,13 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         hud_job = getattr(self, "_hud_refresh_job", None)
         if hud_job is not None:
             try:
-                self.root.after_cancel(hud_job)
+                self.root.cancel(hud_job)
             except Exception:
                 pass
         transition_job = getattr(self, "_navigation_transition_job", None)
         if transition_job is not None:
             try:
-                self.root.after_cancel(transition_job)
+                self.root.cancel(transition_job)
             except Exception:
                 pass
         self._navigation_transition_job = None
@@ -1255,9 +1255,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             return
         def _run():
             self._exploration_refresh_job = None
-            self._refresh_tool_window("exploration_window")
+
+            if getattr(self, "atlas", None):
+                self.atlas.refresh()
+            self._schedule_html_dashboard_publish()
         try:
-            self._exploration_refresh_job = self.root.after(150, _run)
+            self._exploration_refresh_job = self.root.call_later(150, _run)
         except Exception:
             self._exploration_refresh_job = None
 
@@ -1333,7 +1336,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 threading.Thread(target=engine.flush, daemon=True).start()
 
         try:
-            self._specialist_flush_job = self.root.after(750, flush_later)
+            self._specialist_flush_job = self.root.call_later(750, flush_later)
         except Exception:
             self._specialist_flush_job = None
 
@@ -1475,7 +1478,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                         dss_stats=self._dss_efficiency_snapshot(),
                     )
         try:
-            self._survey_status_refresh_job = self.root.after(150, _run)
+            self._survey_status_refresh_job = self.root.call_later(150, _run)
         except Exception:
             self._survey_status_refresh_job = None
 
@@ -1484,7 +1487,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         job = getattr(self, "_survey_status_refresh_job", None)
         if job is not None:
             try:
-                self.root.after_cancel(job)
+                self.root.cancel(job)
             except Exception:
                 pass
             self._survey_status_refresh_job = None
@@ -1677,7 +1680,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             save_active_profile_config(self.config)
             try:
                 if hasattr(self, "summary_cmdr"):
-                    self.summary_cmdr.config(text=str(commander_name).upper())
+                    self._schedule_html_dashboard_publish()
             except Exception:
                 pass
             self._refresh_html_workspace()
@@ -1820,7 +1823,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.update_carrier_panel()
         self.update_ground_target_ui()
         try:
-            self.root.after(120, self._reapply_overlay_positions)
+            self.root.call_later(120, self._reapply_overlay_positions)
         except Exception:
             pass
         if getattr(self, "watcher", None):
@@ -1860,7 +1863,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         # This is the only cross-thread gateway into Tk. Background journal,
         # network and file workers enqueue bounded work here; Tk drains it in
         # short slices so flight controls and overlays remain responsive.
-        self.ui_dispatcher = TkDispatcher(root)
+        self.ui_dispatcher = ApplicationDispatcher(root)
         self._overlay_hotkey_global_hidden = False
         self._overlay_hotkey_hidden = set()
         self._overlay_hotkey_restore = set()
@@ -1897,10 +1900,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.session_guard.unclean
             and self.config.get("recovery_safe_mode_enabled", True)
         )
-        self.root.title(f"VOID COMPASS // v{APP_VERSION}")
+        self._update_main_window_title()
         self._apply_dashboard_window_geometry()
-        self.root.configure(bg=COLOR_BG)
-        
+
+
         self.is_running = True
         self.is_first_load = True
         self._startup_history_pending = set()
@@ -1917,7 +1920,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._startup_overlay_resync_job = None
         self._startup_overlay_resync_attempt = 0
         self._startup_history_handoff_bypassed = False
-        
+
         self.current_sys = "---"
         self._navigation_system_arrival_epoch = None
         self.previous_sys = None
@@ -2114,7 +2117,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "C": (25.0, 120.0),  # Cargo.json updates are sparse
             "E": (45.0, 180.0),  # EDSM network callbacks are slower and bursty
         }
-        
+
         self.dest_coords = None
         self.current_coords = [0,0,0]
         self.dest_name = None
@@ -2206,13 +2209,13 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._cached_cockpit_state_saved_at = 0.0
         self._cached_cockpit_state_loaded = self._load_profile_cockpit_state()
         self.session_start_balance = self.cmdr_balance
-        
+
         self.setup_layout()
         self.waypoint_manager = WaypointManager(self.config.get("waypoints_file"))
         self.route_plotter = None
         self.target_waypoint = None
         self.waypoint_cache = {}
-        
+
         # Initialize Handlers
         self.edsm = EDSMHandler(self.config)
         self.edsm.set_log_callback(
@@ -2255,7 +2258,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 pass
         else:
             self.hud = None
-            
+
         if self.config.get("cargo_overlay_enabled", False):
             self.cargo_hud = CargoHUD(self.root, self.config)
             try:
@@ -2268,8 +2271,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 inventory, capacity, vessel, owner = self._cargo_hold_snapshot()
                 self.cargo_hud.update(inventory, capacity, vessel, owner)
                 self.cargo_hud.win.deiconify()
-                self.cargo_hud.win.attributes("-topmost", True)
-                self.cargo_hud.win.lift()
+                pass
+                pass
             except Exception:
                 pass
         else:
@@ -2320,6 +2323,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
 
         self._attach_html_overlay_renderers()
 
+        # Navigation owns its bridge directly; the other HUDs attach through
+        # the shared adapters above. Activate both paths on cold startup,
+        # just as the runtime settings/profile path does.
+        self._apply_html_overlay_renderer()
+
         # Capture each overlay's intended initial visibility and withdraw it
         # before database construction or any Tk idle processing can map a
         # transparent startup Toplevel. Journal catch-up may update these
@@ -2353,7 +2361,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.import_scan_cache_json()
         self._hydrate_cached_system_scan_state()
         self._show_cached_cockpit_state()
-        
+
         self.watcher = JournalWatcher(
             self.config.get("journal_path"),
             trace_callback=self._trace_record_ms,
@@ -2375,7 +2383,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self.watcher.prime_market_file()
         # Let Tk paint the cached cockpit and overlay windows before the
         # journal worker begins its potentially large startup replay.
-        self.root.after(75, self.watcher.start)
+        self.root.call_later(75, self.watcher.start)
         self._start_eddn_market_upload()
         self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
         latest_fuel_capacity = self.watcher.get_latest_fuel_capacity()
@@ -2423,7 +2431,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 max(5_000, min(90_000, configured_timeout))
                 if has_journal_path else 3_000
             )
-            self._startup_boot_journal_timeout_job = self.root.after(
+            self._startup_boot_journal_timeout_job = self.root.call_later(
                 timeout_ms, self._startup_journal_timeout,
             )
             try:
@@ -2433,7 +2441,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 )
             except (TypeError, ValueError):
                 history_timeout_ms = 20_000
-            self._startup_boot_history_timeout_job = self.root.after(
+            self._startup_boot_history_timeout_job = self.root.call_later(
                 max(5_000, min(60_000, history_timeout_ms)),
                 self._startup_history_timeout,
             )
@@ -2441,7 +2449,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         threading.Thread(target=self.check_updates, daemon=True).start()
         self._restart_galnet_feed_schedule(delay_ms=900)
 
-        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+
         self._configure_overlay_hotkeys(announce=False)
         self.log(
             f"CONFIG FILE: {CONFIG_FILE} | HUD({self.config.get('hud_x')},{self.config.get('hud_y')}) "
@@ -2454,7 +2462,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 + " Cached cockpit state is visible while the journal catches up.",
                 severity="WARN",
             )
-        self.root.after(120, self._reapply_overlay_positions)
+        self.root.call_later(120, self._reapply_overlay_positions)
         self.update_hud()
         self.update_ground_target_ui()
         self.update_carrier_panel()
@@ -2490,17 +2498,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 pending = bool(getattr(
                     overlay, "_startup_pending_visible", False,
                 ))
-                if self._overlay_window_is_shown(window) or pending:
+                shown = self._overlay_window_is_shown(window)
+                if shown or pending:
                     self._startup_overlay_restore.add(name)
+                    if shown and callable(getattr(overlay, "release_startup_visibility", None)):
+                        overlay._startup_pending_visible = True
                 window.withdraw()
-            except (AttributeError, tk.TclError):
+            except (AttributeError, RuntimeError):
                 continue
-        try:
-            splash.deiconify()
-            splash.attributes("-topmost", True)
-            splash.lift()
-        except tk.TclError:
-            pass
 
     def _release_startup_overlay_curtain(self):
         """Release HTML presentation while native state proxies stay invisible."""
@@ -2509,9 +2514,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             try:
                 if not window.winfo_exists():
                     continue
-                window.attributes("-alpha", 0.0)
+                pass
                 window._voidcompass_startup_held = False
-            except (AttributeError, tk.TclError):
+            except (AttributeError, RuntimeError):
                 continue
         self._startup_presentation_held = False
         self.root._voidcompass_startup_presentation_held = False
@@ -2579,10 +2584,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         attempt = self._startup_overlay_resync_attempt
         if attempt <= len(delays):
             try:
-                self._startup_overlay_resync_job = self.root.after(
+                self._startup_overlay_resync_job = self.root.call_later(
                     delays[attempt - 1], self._resync_startup_html_overlays,
                 )
-            except tk.TclError:
+            except RuntimeError:
                 self._startup_overlay_resync_job = None
 
     def _run_startup_history_phase(self, phase, target, args):
@@ -2613,8 +2618,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self._startup_boot_history_timeout_job = None
             if timeout_job is not None:
                 try:
-                    self.root.after_cancel(timeout_job)
-                except tk.TclError:
+                    self.root.cancel(timeout_job)
+                except RuntimeError:
                     pass
             self._startup_boot_update(
                 "HISTORICAL INDEX READY",
@@ -2663,8 +2668,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._startup_boot_journal_timeout_job = None
         if timeout_job is not None:
             try:
-                self.root.after_cancel(timeout_job)
-            except tk.TclError:
+                self.root.cancel(timeout_job)
+            except RuntimeError:
                 pass
         self._startup_boot_update(
             "LIVE JOURNAL TAIL REACHED",
@@ -2693,7 +2698,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "Journal, survey history and overlays are synchronized",
             1.0,
         )
-        self._startup_boot_handoff_job = self.root.after(
+        self._startup_boot_handoff_job = self.root.call_later(
             240, self._finish_startup_presentation,
         )
         self._trace_bump("startup_handoff_scheduled")
@@ -2708,8 +2713,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             job = getattr(self, job_attr, None)
             if job is not None:
                 try:
-                    self.root.after_cancel(job)
-                except tk.TclError:
+                    self.root.cancel(job)
+                except RuntimeError:
                     pass
                 setattr(self, job_attr, None)
         # One last curtain pass catches overlays whose final journal
@@ -2724,26 +2729,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         boot = self._startup_boot()
         if boot is not None:
             boot.stop()
-        if splash is not None:
-            try:
-                splash.destroy()
-            except tk.TclError:
-                pass
         self.root._voidcompass_startup_splash = None
-        if not bool(getattr(self.root, "_voidcompass_html_dashboard_enabled", False)):
-            try:
-                self.root.deiconify()
-                self.root.lift()
-            except tk.TclError:
-                return
-        else:
-            try:
-                self.root.withdraw()
-            except tk.TclError:
-                pass
         self._restore_overlay_hotkey_windows(restore, force_show=False)
         self._enforce_overlay_hotkey_visibility()
-        # Publish the restored Tk proxy states before dropping the independent
+        # Publish the restored overlay states before dropping the independent
         # host curtain.  The normal bridge timers are deliberately not the sole
         # owner of this one-time visibility transition.
         self._sync_html_overlay_windows()
@@ -2762,14 +2751,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 logging.warning("HTML overlay handoff failed: %s", exc)
         self._startup_overlay_resync_attempt = 0
         try:
-            self._startup_overlay_resync_job = self.root.after(
+            self._startup_overlay_resync_job = self.root.call_later(
                 160, self._resync_startup_html_overlays,
             )
-        except tk.TclError:
+        except RuntimeError:
             self._startup_overlay_resync_job = None
         try:
-            self.root.after(80, self._reapply_overlay_positions)
-        except tk.TclError:
+            self.root.call_later(80, self._reapply_overlay_positions)
+        except RuntimeError:
             pass
 
     def _show_first_run_onboarding(self):
@@ -2784,10 +2773,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 "SYSTEM", "HTML commissioning host unavailable", severity="WARN",
             )
             return
-        try:
-            self.root.withdraw()
-        except tk.TclError:
-            pass
+        pass
 
         def complete(values):
             self.config.update(values)
@@ -2853,7 +2839,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             try:
                 if window.winfo_exists():
                     window.geometry(overlay_chrome.position_geometry(x, y))
-            except (AttributeError, tk.TclError):
+            except (AttributeError, RuntimeError):
                 pass
         sync_html_window = getattr(overlay, "sync_html_window", None)
         if callable(sync_html_window):
@@ -2888,36 +2874,13 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 # Position-only geometry preserves each HUD's current/dynamic size.
                 win.geometry(overlay_chrome.position_geometry(x, y))
                 self._overlay_pos_last_saved[attr] = (x, y)
-            except (TypeError, ValueError, tk.TclError):
+            except (TypeError, ValueError, RuntimeError):
                 continue
-        self.root.after(250, self._log_applied_overlay_positions)
+        self.root.call_later(250, self._log_applied_overlay_positions)
 
     def _apply_overlay_mouse_passthrough(self):
-        """Apply the profile's input mode to every live native overlay."""
-        enabled = bool(self.config.get("overlay_mouse_passthrough", True))
-        windows = []
-        for attr, _x_key, _y_key in self._OVERLAY_POSITION_SPECS:
-            overlay = getattr(self, attr, None)
-            window = getattr(overlay, "win", overlay)
-            if window is not None:
-                windows.append(window)
-        ground_popup = getattr(self, "ground_popup", None)
-        if ground_popup is not None:
-            windows.append(ground_popup)
-
-        applied = 0
-        seen = set()
-        for window in windows:
-            marker = id(window)
-            if marker in seen:
-                continue
-            seen.add(marker)
-            try:
-                if window.winfo_exists() and set_mouse_passthrough(window, enabled):
-                    applied += 1
-            except (AttributeError, tk.TclError):
-                continue
-        return applied
+        """Publish profile input policy to the WebView overlay host."""
+        self._sync_html_overlay_windows()
 
     def _overlay_hotkey_window_items(self):
         """Return unique live overlay windows, including the ground popup."""
@@ -2938,7 +2901,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
     def _overlay_window_is_shown(window):
         try:
             return bool(window.winfo_exists()) and str(window.state()) not in ("withdrawn", "iconic")
-        except (AttributeError, tk.TclError):
+        except (AttributeError, RuntimeError):
             return False
 
     def _restore_overlay_hotkey_windows(self, names, force_show=True):
@@ -2986,11 +2949,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                             continue
                     else:
                         window.deiconify()
-                    window.attributes("-topmost", True)
-                    window.lift()
+                    pass
+                    pass
                     if attr == "ground_popup":
                         self._ground_popup_visible = True
-            except (AttributeError, tk.TclError):
+            except (AttributeError, RuntimeError):
                 continue
 
     def _reset_overlay_hotkey_visibility(self, restore=False):
@@ -3115,7 +3078,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                                 overlay_obj.hide()
                             else:
                                 window.withdraw()
-                    except (AttributeError, tk.TclError):
+                    except (AttributeError, RuntimeError):
                         continue
                 message = "Overlays hidden"
         else:
@@ -3146,7 +3109,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                         overlay_obj.hide()
                     else:
                         window.withdraw()
-                except (AttributeError, tk.TclError):
+                except (AttributeError, RuntimeError):
                     pass
                 message = f"{label} hidden"
             else:
@@ -3168,7 +3131,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 if global_hidden and attr not in hidden:
                     self._overlay_hotkey_restore.add(attr)
                 window.withdraw()
-            except (AttributeError, tk.TclError):
+            except (AttributeError, RuntimeError):
                 continue
 
     def _tick_overlay_hotkey_guard(self):
@@ -3178,7 +3141,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         active = bool(
             self._overlay_hotkey_global_hidden or self._overlay_hotkey_hidden
         )
-        self.root.after(90 if active else 350, self._tick_overlay_hotkey_guard)
+        self.root.call_later(90 if active else 350, self._tick_overlay_hotkey_guard)
 
     def _log_applied_overlay_positions(self):
         try:
@@ -3223,7 +3186,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     # Lightweight diagnostic/test windows without Tk mapping
                     # APIs represent ordinary visible windows.
                     window_is_shown = True
-                except tk.TclError:
+                except RuntimeError:
                     window_is_shown = False
                 authority = authorities.get(attr)
                 if authority and now >= float(authority.get("until") or 0):
@@ -3270,7 +3233,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 if configured != pos:
                     self.config[x_key], self.config[y_key] = pos
                     changed = True
-            except (TypeError, ValueError, tk.TclError):
+            except (TypeError, ValueError, RuntimeError):
                 continue
         return changed
 
@@ -3291,7 +3254,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         if dispatcher:
             return dispatcher.post(callback, *args, key=key, **kwargs)
         try:
-            self.root.after(0, lambda: callback(*args, **kwargs))
+            self.root.call_later(0, lambda: callback(*args, **kwargs))
             return True
         except Exception:
             return False
@@ -3312,7 +3275,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         job = getattr(self, "_galnet_refresh_job", None)
         if job is not None:
             try:
-                self.root.after_cancel(job)
+                self.root.cancel(job)
             except Exception:
                 pass
         self._galnet_refresh_job = None
@@ -3324,7 +3287,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             return
         interval_ms = self._galnet_refresh_minutes() * 60 * 1000
         try:
-            self._galnet_refresh_job = self.root.after(
+            self._galnet_refresh_job = self.root.call_later(
                 interval_ms if delay_ms is None else max(0, int(delay_ms)),
                 self._tick_galnet_feed,
             )
@@ -3372,7 +3335,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         }
         if self.runtime_trace:
             self.runtime_trace.flush(extra=extra)
-        self.root.after(1000, self._tick_runtime_trace)
+        self.root.call_later(1000, self._tick_runtime_trace)
 
     def _tick_overlay_position_sync(self):
         if not self.is_running:
@@ -3380,11 +3343,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         now = time.time()
         if now < self._overlay_sync_grace_until:
             remaining_ms = int((self._overlay_sync_grace_until - now) * 1000) + 25
-            self.root.after(max(100, min(700, remaining_ms)), self._tick_overlay_position_sync)
+            self.root.call_later(max(100, min(700, remaining_ms)), self._tick_overlay_position_sync)
             return
         if self._capture_overlay_positions():
             self._save_config_file()
-        self.root.after(700, self._tick_overlay_position_sync)
+        self.root.call_later(700, self._tick_overlay_position_sync)
 
     def _perf_spike(self, label, started_at, threshold_ms=None):
         threshold = self._perf_spike_threshold_ms if threshold_ms is None else float(threshold_ms)
@@ -3486,7 +3449,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 logging.warning(msg)
                 self.log(msg)
                 self._trace_record_ms("ui_stall_overrun", overrun_ms)
-        self.root.after(self._ui_watchdog_interval_ms, self._tick_ui_stall_watchdog)
+        self.root.call_later(self._ui_watchdog_interval_ms, self._tick_ui_stall_watchdog)
 
     def on_close(self):
         """Cancel live work, queue the final state and stop background services."""
@@ -3497,7 +3460,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         html_dashboard_job = getattr(self, "_html_dashboard_publish_job", None)
         if html_dashboard_job is not None:
             try:
-                self.root.after_cancel(html_dashboard_job)
+                self.root.cancel(html_dashboard_job)
             except Exception:
                 pass
             self._html_dashboard_publish_job = None
@@ -3512,17 +3475,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             resize_job = getattr(self, resize_job_attr, None)
             if resize_job is not None:
                 try:
-                    self.root.after_cancel(resize_job)
+                    self.root.cancel(resize_job)
                 except Exception:
                     pass
                 setattr(self, resize_job_attr, None)
         galnet_feed = getattr(self, "galnet_feed", None)
         if galnet_feed is not None:
             galnet_feed.request_stop()
-        try:
-            self.root.withdraw()
-        except Exception:
-            pass
+        pass
         for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
             "gravity_warning_hud", "toast_hud", "heartbeat_hud",
         ):
@@ -3590,7 +3550,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.expedition_manager.flush(wait=False)
             except Exception:
                 pass
-            
+
+        if getattr(self, "atlas", None):
+            self.atlas.dispose()
         self.screenshots.stop()
         if time.time() >= self._overlay_sync_grace_until:
             self._capture_overlay_positions()
@@ -3618,7 +3580,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._destroy_ground_popup()
         if getattr(self, "session_guard", None):
             self.session_guard.close()
-        self.root.destroy()
+        self.root.close()
 
     def _save_config_file(self):
         try:
@@ -3775,13 +3737,13 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.update_ground_target_ui()
             except Exception:
                 pass
-        self.root.after(220, self._tick_ground_target)
+        self.root.call_later(220, self._tick_ground_target)
 
     def open_screenshots_folder(self):
         path = self.config.get("screenshots_path")
         if not path:
             path = default_screenshot_path(self.config.get("journal_path"))
-            
+
         if os.path.exists(path):
             if not open_path(path):
                 self.log("❌ Could not open the screenshot folder with the desktop handler.")
@@ -3897,29 +3859,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._route_to_html_workspace(html_page)
 
     def open_galaxy_map_page(self, embedded_origin=None):
-        """Prepare the Atlas bridge without presenting a native fallback.
-
-        Explore owns the survey, ledger and route intelligence the map draws,
-        so it is built first if the commander opens the map before Explore.
-        """
-        if embedded_origin is None and self._route_to_html_workspace("map"):
-            return
-        if not (self.exploration_window and self.exploration_window.is_open()):
-            self.exploration_window = ExplorationWindow(self.dashboard_host, self, embedded=True)
-        workspace = getattr(self.exploration_window, "map_workspace", None)
-        if workspace is None:
-            self.log("Galaxy map workspace unavailable")
-            return
-        view = getattr(self.exploration_window, "expedition_map_view", None)
         if not embedded_origin:
-            self.log("Galactic Atlas is available inside the HTML command deck")
-            return None
-        if view is None or not view.prepare_embedded(embedded_origin):
-            self.log("Galaxy map could not be linked to the HTML command deck")
-            return None
-        # The dashboard owns the presented Atlas. Do not switch or reveal
-        # Tk's migration workspace merely to initialise its state bridge.
-        return view
+            return self._route_to_html_workspace("map")
+        if getattr(self, "atlas", None) is None:
+            self.atlas = ExpeditionMapView(self.root, self)
+        self.atlas.refresh()
+        return self.atlas if self.atlas.prepare_embedded(embedded_origin) else None
 
     def open_achievements_workspace(self):
         self._route_to_html_workspace("achievements")
@@ -4059,9 +4004,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             if self.carrier_hud:
                 self.carrier_hud.update(carrier)
             self._sync_navigation_carrier_transit(carrier)
-            self._carrier_panel_tick_job = self.root.after(1000, self._tick_carrier_panel)
-        elif str(getattr(self, "_navigation_jump_phase", "") or "") == "carrier_transit":
-            self._clear_navigation_jump_phase(refresh=True)
+            self._carrier_panel_tick_job = self.root.call_later(1000, self._tick_carrier_panel)
+        else:
+            self._sync_navigation_carrier_transit(carrier)
         # Ticker stops naturally when status is no longer jumping;
         # _on_carrier_panel_updated will have already refreshed the panel.
 
@@ -4071,6 +4016,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             getattr(self, "current_docked", False)
             or getattr(self, "current_on_foot", False)
         ):
+            return False
+        if any(getattr(self, key, False) for key in ("on_planet", "current_in_srv", "current_in_fighter")):
             return False
         carrier_data = carrier_data if isinstance(carrier_data, dict) else {}
         carrier_id = carrier_data.get("carrier_id")
@@ -4092,37 +4039,53 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         return bool(station_name and station_name in carrier_names)
 
     def _sync_navigation_carrier_transit(self, carrier_data):
-        """Start carrier transit at its scheduled departure while aboard.
-
-        Frontier emits CarrierJump at arrival, but an owned/squadron carrier's
-        CarrierJumpRequest supplies the departure time. The existing one-second
-        carrier ticker bridges that gap without polling or guessing movement.
-        """
-        carrier_data = carrier_data if isinstance(carrier_data, dict) else {}
+        """Follow the aboard carrier's schedule; completion requires a journal event."""
         current_phase = str(getattr(self, "_navigation_jump_phase", "") or "")
-        active = (
-            carrier_data.get("status") == "jumping"
-            and self._commander_aboard_carrier(carrier_data)
-        )
-        departure_text = str(carrier_data.get("jump_departure_time") or "").strip()
-        departed = False
-        if active and departure_text:
+        tracker = getattr(self, "carrier_tracker", None)
+        rows = tracker.carriers() if tracker else [carrier_data or {}]
+        carrier = next((row for row in rows if self._commander_aboard_carrier(row)), None)
+        if carrier is None:
+            if current_phase.startswith("carrier_"):
+                self._clear_navigation_jump_phase(refresh=True)
+            return False
+        if current_phase == "carrier_arrival":
+            return True
+        departure_text = str(carrier.get("jump_departure_time") or "").strip()
+        remaining = None
+        if departure_text:
             try:
                 departure = datetime.fromisoformat(departure_text.replace("Z", "+00:00"))
                 if departure.tzinfo is None:
                     departure = departure.replace(tzinfo=timezone.utc)
-                departed = datetime.now(timezone.utc) >= departure.astimezone(timezone.utc)
+                remaining = (departure - datetime.now(timezone.utc)).total_seconds()
             except (TypeError, ValueError):
-                departed = False
-        if active and departed:
-            if current_phase != "carrier_transit":
-                self._set_navigation_jump_phase(
-                    "carrier_transit",
-                    target=carrier_data.get("jump_destination"),
-                    refresh=True,
-                )
+                pass
+        scheduled_departure = (
+            carrier.get("status") == "cooldown"
+            and current_phase in {"carrier_preparing", "carrier_lockdown", "carrier_transit"}
+            and bool(carrier.get("jump_destination"))
+            and remaining is not None and remaining <= 0
+        )
+        if remaining is not None and (carrier.get("status") == "jumping" or scheduled_departure):
+            # Do not resurrect a historic transit when launching the application.
+            if remaining <= -180 and current_phase != "carrier_transit":
+                return False
+            self._navigation_carrier_schedule = {
+                "carrier_id": carrier.get("carrier_id"),
+                "carrier_type": carrier.get("carrier_type"),
+                "departure_epoch": departure.timestamp(),
+                "remaining_seconds": max(0, int(math.ceil(remaining))),
+            }
+            phase = "carrier_transit" if remaining <= 0 else "carrier_lockdown" if remaining <= 200 else "carrier_preparing"
+            changed = self._set_navigation_jump_phase(phase, target=carrier.get("jump_destination"), refresh=False) if phase != current_phase else False
+            if not getattr(self, "batch_mode", False):
+                self.update_hud()
             return True
-        if current_phase == "carrier_transit":
+        # CarrierLocation may clear the tracker's destination before CarrierJump.
+        # Keep transit until the arrival event or explicit cancellation/exit.
+        if current_phase == "carrier_transit" and departure_text:
+            return True
+        if current_phase in {"carrier_preparing", "carrier_lockdown", "carrier_transit"}:
             self._clear_navigation_jump_phase(refresh=True)
         return False
 
@@ -4243,7 +4206,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.db_update_system(self.current_sys, self.total, self.scanned)
             if not self.batch_mode:
                 scan_text = self._scan_progress_count_text()
-                self._ui_post(lambda value=scan_text: self.scan_stat.config(text=value), key="scan-progress-label")
+                self._ui_post(lambda value=scan_text: self._schedule_html_dashboard_publish(), key="scan-progress-label")
                 self.update_hud()
                 self.schedule_dashboard_refresh()
                 self._refresh_exploration_window()
@@ -4308,8 +4271,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.cargo_hud.update(inventory, capacity, vessel, owner)
             try:
                 self.cargo_hud.win.deiconify()
-                self.cargo_hud.win.attributes("-topmost", True)
-                self.cargo_hud.win.lift()
+                pass
+                pass
             except Exception:
                 pass
         elif self.cargo_hud:
@@ -4466,13 +4429,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             overlay = getattr(self, attr, None)
             setter = getattr(overlay, "set_html_renderer", None)
             if callable(setter):
-                attached = setter(True)
-                if attached:
-                    window = self._overlay_window(overlay)
-                    try:
-                        window.attributes("-alpha", 0.0)
-                    except Exception:
-                        pass
+                setter(True)
 
     def open_settings(self):
         self._route_to_html_workspace("settings")
@@ -4480,7 +4437,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
     def open_overlay_layout_studio(self):
         """Open the profile-aware Studio inside the HTML command deck."""
         self._request_html_dashboard_page("overlay-studio")
-        self.hide_native_dashboard_tool()
 
     def fetch_system_traffic(self, system_name):
         self.last_edsm_request_ts = time.time()
@@ -4642,14 +4598,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             # Journal batches run on the watcher thread. Tk clipboard work
             # must remain on the UI thread; the old nested root.update() call
             # could freeze startup while replay callbacks accumulated.
-            self.root.after(
+            self.root.call_later(
                 0,
                 lambda name=waypoint_name, label=log_label: self._copy_waypoint_to_clipboard(name, label),
             )
             return True
         try:
-            self.root.clipboard_clear()
-            self.root.clipboard_append(waypoint_name)
+
+            self.root.copy_text(waypoint_name)
             self.log(f"📋 COPIED {log_label}: {waypoint_name}")
             self.add_event_feed_entry("ROUTE", f"Copied {log_label}: {waypoint_name}", severity="INFO", copy_text=waypoint_name)
             return True
@@ -4671,7 +4627,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._perform_hud_update()
         # If additional requests came in while rendering, schedule one more pass.
         if self._hud_refresh_requested and self._hud_refresh_job is None:
-            self._hud_refresh_job = self.root.after(self._hud_refresh_interval_ms, self._run_scheduled_hud_refresh)
+            self._hud_refresh_job = self.root.call_later(self._hud_refresh_interval_ms, self._run_scheduled_hud_refresh)
         self._perf_spike("_run_scheduled_hud_refresh", t0, threshold_ms=35.0)
 
     def update_hud(self):
@@ -4688,7 +4644,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         now = time.time()
         elapsed_ms = int((now - self._last_hud_refresh_ts) * 1000.0)
         delay = 0 if elapsed_ms >= self._hud_refresh_interval_ms else (self._hud_refresh_interval_ms - elapsed_ms)
-        self._hud_refresh_job = self.root.after(delay, self._run_scheduled_hud_refresh)
+        self._hud_refresh_job = self.root.call_later(delay, self._run_scheduled_hud_refresh)
 
     def _perform_hud_update(self):
         t0 = self._perf_start()
@@ -4704,11 +4660,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 dist = f"{d:,.1f} LY"
             except Exception:
                 pass
-        
+
         custom_r_pos = None
         route_waypoint = None
         route_counts = None
-        
+
         if self.waypoint_manager.waypoints:
             waypoints = self.waypoint_manager.waypoints
             total_wp = len(waypoints)
@@ -4720,7 +4676,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             )
             route_counts = (min(displayed_progress, total_wp), total_wp)
             step = min(displayed_progress + 1, total_wp)
-            
+
             # Calculate remaining distance
             rem_dist = 0.0
             rem_dist_known = bool(self.current_coords)
@@ -4730,7 +4686,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 if not wp.get('visited', False):
                     idx = i
                     break
-            
+
             if idx != -1:
                 next_wp = waypoints[idx]
                 route_waypoint = next_wp.get("name")
@@ -4739,7 +4695,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     rem_dist += self.waypoint_manager.get_distance(self.current_coords, next_coords)
                 else:
                     rem_dist_known = False
-                
+
                 prev_coords = next_coords
                 for i in range(idx + 1, total_wp):
                     wp = waypoints[i]
@@ -4749,7 +4705,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     else:
                         rem_dist_known = False
                     prev_coords = coords
-            
+
             custom_r_pos = (
                 step, total_wp,
                 f"{rem_dist:,.0f} LY" if rem_dist_known and idx != -1 else "",
@@ -5660,7 +5616,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         if job is None:
             return
         try:
-            self.root.after_cancel(job)
+            self.root.cancel(job)
         except Exception:
             pass
 
@@ -5673,15 +5629,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
     def _schedule_navigation_jump_phase_expiry(self, phase):
         self._cancel_navigation_transition_job()
         root = getattr(self, "root", None)
-        after = getattr(root, "after", None)
+        after = getattr(root, "call_later", None)
         if not callable(after):
             return
         delay_ms = {
             "charging": 12000,
             "hyperspace": 90000,
             "arrival": 1800,
-            "carrier_transit": 180000,
-            "carrier_arrival": 3200,
+            "carrier_arrival": 12000,
         }.get(phase)
         if delay_ms is None:
             return
@@ -5700,7 +5655,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._navigation_charge_resolution_pending = True
         self._cancel_navigation_transition_job()
         root = getattr(self, "root", None)
-        after = getattr(root, "after", None)
+        after = getattr(root, "call_later", None)
         if not callable(after):
             self._navigation_charge_resolution_pending = False
             return
@@ -5723,9 +5678,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         phase = str(phase or "").strip().casefold()
         if phase not in {
             "charging", "hyperspace", "arrival",
-            "carrier_transit", "carrier_arrival",
+            "carrier_preparing", "carrier_lockdown", "carrier_transit", "carrier_arrival",
         }:
             phase = ""
+        if not phase.startswith("carrier_"):
+            self._navigation_carrier_schedule = {}
         previous = str(getattr(self, "_navigation_jump_phase", "") or "")
         previous_target = str(getattr(self, "_navigation_jump_target", "") or "")
         next_target = previous_target if target is None else str(target or "").strip()
@@ -5781,6 +5738,22 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 return self._clear_navigation_jump_phase(refresh=False)
             target = raw.get("StarSystem") or data.get("star_system")
             return self._set_navigation_jump_phase("arrival", target=target)
+        elif event == "CarrierLocation" and not startup_replay:
+            schedule = getattr(self, "_navigation_carrier_schedule", {}) or {}
+            target = raw.get("StarSystem") or raw.get("SystemName")
+            if (getattr(self, "_navigation_jump_phase", "") == "carrier_transit"
+                    and raw.get("CarrierID") is not None
+                    and str(raw["CarrierID"]) == str(schedule.get("carrier_id"))
+                    and target == getattr(self, "_navigation_jump_target", None)
+                    and self._commander_aboard_carrier(schedule)):
+                return self._set_navigation_jump_phase("carrier_arrival", target=target)
+        elif event == "CarrierJumpCancelled":
+            schedule = getattr(self, "_navigation_carrier_schedule", {}) or {}
+            if raw.get("CarrierID") is not None and str(raw["CarrierID"]) == str(schedule.get("carrier_id")):
+                return self._clear_navigation_jump_phase(refresh=not startup_replay)
+        elif event == "Undocked":
+            if str(getattr(self, "_navigation_jump_phase", "")).startswith("carrier_"):
+                return self._clear_navigation_jump_phase(refresh=not startup_replay)
         elif event == "CarrierJump":
             self.current_fsd_jumping = False
             self.current_fsd_charging = False
@@ -6035,6 +6008,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
 
     def _navigation_fsd_readiness_context(self):
         phase = str(getattr(self, "_navigation_jump_phase", "") or "")
+        if phase.startswith("carrier_") and hasattr(self, "current_docked"):
+            aboard = (getattr(self, "current_docked", False) or self._navigation_on_carrier_deck())
+            if not aboard or getattr(self, "on_planet", False) or getattr(self, "current_in_srv", False):
+                self._clear_navigation_jump_phase(refresh=False)
+                phase = ""
         jumping = bool(getattr(self, "current_fsd_jumping", False))
         hyperdrive = bool(getattr(self, "current_fsd_hyperdrive_charging", False))
         charging = bool(
@@ -6061,7 +6039,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         carrier_vicinity = local_space_key in {"fleetcarrier", "carrier"}
         station_vicinity = local_space_key == "station"
         surface_station_vicinity = local_space_key == "surfacestation"
-        if phase == "carrier_transit":
+        if phase in {"carrier_preparing", "carrier_lockdown"}:
+            state, label, tone = phase, ("CARRIER PREPARING" if phase == "carrier_preparing" else "CARRIER LOCKDOWN"), "orange"
+        elif phase == "carrier_transit":
             state, label, tone = "carrier_transit", "CARRIER TRANSIT", "orange"
         elif phase == "carrier_arrival":
             state, label, tone = "carrier_arrival", "CARRIER ARRIVAL", "green"
@@ -6117,6 +6097,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             "jumping": jumping,
             "high_wake": high_wake,
             "phase": phase,
+            "carrier_schedule": dict(getattr(self, "_navigation_carrier_schedule", {}) or {}) if phase.startswith("carrier_") else {},
             "target": str(getattr(self, "_navigation_jump_target", "") or ""),
             "asteroid_kind": asteroid_kind,
             "carrier_vicinity": carrier_vicinity,
@@ -6286,7 +6267,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             self.set_event_feed_filter("SCAN")
         else:
             self.set_event_feed_filter("ALL")
-        self.root.after(0, self.root.lift)
+        self._request_html_dashboard_page("overview")
 
     def _queue_edsm_upload(self, raw_event, allow_startup=False, flush=False, startup_replay=False):
         """Queue accepted live journal events for EDSM without replaying startup history."""
@@ -6841,9 +6822,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     row.get("workspace"), section=row_section,
                 )
             if hasattr(self, "dashboard_mode_detail"):
-                self.dashboard_mode_detail.config(
-                    text=f"{status.get('label') or 'GENERAL FLIGHT'} uses this Dashboard · no queued task to open"
-                )
+                self._schedule_html_dashboard_publish()
             return False
 
         return self._adaptive_open_workspace(workspace, section=section)
@@ -7778,7 +7757,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     self.session_ly += jump_ly
                 except Exception:
                     pass
-            
+
             # Load from history if available.  During startup, preserve an
             # explicitly unconfirmed cached total until a honk/completion
             # event in the replay supplies authoritative evidence.
@@ -7854,16 +7833,16 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
 
             # Retain travel history for the Galactic Atlas and profile records.
             self.db_record_visit(self.current_sys, self.current_system_address)
-            
+
             if not self.batch_mode:
                 sys_text = self.current_sys.upper()
                 if self.star_class:
                     sys_text += f" [{star_type_label(self.star_class)}]"
-                self._ui_post(lambda value=sys_text: self.sys_stat.config(text=value), key="system-label")
+                self._ui_post(lambda value=sys_text: self._schedule_html_dashboard_publish(), key="system-label")
                 self.update_nav_label()
             # Bio logs hidden for now (counting disabled)
                 scan_text = self._scan_progress_count_text()
-                self._ui_post(lambda value=scan_text: self.scan_stat.config(text=value), key="scan-progress-label")
+                self._ui_post(lambda value=scan_text: self._schedule_html_dashboard_publish(), key="scan-progress-label")
                 self._ui_post(self.update_waypoint_display, key="waypoint-display")
                 self.schedule_dashboard_refresh(full=True)
                 self.update_hud()
@@ -8268,7 +8247,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.db_update_system(self.current_sys, self.total, self.scanned)
                 if not self.batch_mode:
                     scan_text = self._scan_progress_count_text()
-                    self._ui_post(lambda value=scan_text: self.scan_stat.config(text=value), key="scan-progress-label")
+                    self._ui_post(lambda value=scan_text: self._schedule_html_dashboard_publish(), key="scan-progress-label")
             self.log(f"🔭 HONK: {self.total} bodies detected.")
             if not startup_replay:
                 self.add_event_feed_entry("SCAN", f"Honk complete: {self.total} bodies", severity="INFO", copy_text=self.current_sys)
@@ -8296,7 +8275,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                 self.db_update_system(self.current_sys, self.total, self.scanned)
                 if not self.batch_mode:
                     scan_text = self._scan_progress_count_text()
-                    self._ui_post(lambda value=scan_text: self.scan_stat.config(text=value), key="scan-progress-label")
+                    self._ui_post(lambda value=scan_text: self._schedule_html_dashboard_publish(), key="scan-progress-label")
                     self.update_hud()
                     self.schedule_dashboard_refresh()
                     self._refresh_survey_status_progress()
@@ -8557,7 +8536,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     "bio_signals_count": d.get("bio_signals_count", 0),
                 }
                 self.body_scan_data[body_id]["predicted_genuses"] = self._bio_predictions_for_scan(self.body_scan_data[body_id])
-            
+
             # Only count scans of stars or planets/moons, not belts.
             if d.get("is_body_scan"):
                 # Ensure the scan belongs to the current system to prevent state corruption
@@ -8565,7 +8544,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     return
 
                 is_new_body_scan = body_id not in self.scanned_bodies
-                
+
                 if is_new_body_scan:
                     # --- State Updates for a new body ---
                     self.scanned_bodies.add(body_id)
@@ -8580,7 +8559,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
                     self.db_update_system(self.current_sys, self.total, self.scanned)
                     if not self.batch_mode:
                         scan_text = self._scan_progress_count_text()
-                        self._ui_post(lambda value=scan_text: self.scan_stat.config(text=value), key="scan-progress-label")
+                        self._ui_post(lambda value=scan_text: self._schedule_html_dashboard_publish(), key="scan-progress-label")
                     self.last_scan_event = data
                     self.add_scan_item(raw)
                     self._queue_edsm_upload(raw, startup_replay=startup_replay)
@@ -8841,7 +8820,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
             except Exception:
                 pass
         try:
-            self._companion_refresh_job = self.root.after(200, run)
+            self._companion_refresh_job = self.root.call_later(200, run)
         except Exception:
             self._companion_refresh_job = None
 
@@ -9348,7 +9327,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardUIMixin, Da
         self._refresh_html_workspace()
 
     def update_ship_locker(self, data):
-        """Marshal ShipLocker.json updates from the watcher onto the Tk thread."""
+        """Marshal ShipLocker.json updates from the watcher onto the application thread."""
         try:
             self._ui_post(
                 self._apply_ship_locker, dict(data or {}), key="ship-locker",

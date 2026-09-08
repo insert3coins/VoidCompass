@@ -2053,6 +2053,58 @@ function stellarCartographyMarkup(cartography = {}) {
   </section>`;
 }
 
+function renderPlanetMaterialsWorkspace(data) {
+  const root = byId("planet-materials-workspace");
+  root.dataset.profileKey = data.profile_key;
+  root.currentPosition = data.current_position;
+  const fields = (site = {}) => `<input type="hidden" name="id" value="${escapeHtml(site.id || "")}">${[
+    ["system", "SYSTEM", site.system || data.system || ""], ["body", "PLANET", site.body || data.body || ""],
+    ["name", "SITE NAME", site.name || ""], ["latitude", "LATITUDE (Y) · −90 TO 90", site.latitude ?? ""],
+    ["longitude", "LONGITUDE (X) · −180 TO 180", site.longitude ?? ""],
+    ["materials", "MINING MATERIALS · COMMA SEPARATED", site.materials || ""],
+    ["notes", "NOTES / DENSITY / CONDITIONS", site.notes || ""]
+  ].map(([key, label, value]) => `<label>${label}<input name="${key}" value="${escapeHtml(value)}" ${["latitude", "longitude"].includes(key) ? `type="number" step="any" min="-${key === "latitude" ? 90 : 180}" max="${key === "latitude" ? 90 : 180}"` : `maxlength="${key === "notes" ? 4000 : key === "materials" ? 2000 : key === "body" ? 160 : key === "system" ? 140 : 120}"`} ${key === "notes" ? "" : "required"}></label>`).join("")}<button type="button" data-current-coordinates ${data.current_position ? "" : "disabled"}>USE CURRENT COORDINATES</button><label>ADD MINING MATERIAL<select data-material-choice><option value="">Choose a material…</option>${(data.mining_catalogue || []).map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}${(data.new_mining_materials || []).includes(name) ? " · NEW" : ""}</option>`).join("")}</select></label><button type="submit" class="primary">${site.id ? "SAVE CHANGES" : "ADD SITE"}</button>${site.id ? `<button type="button" data-site-delete="${site.id}">DELETE SITE</button>` : ""}`;
+  const sites = (data.sites || []).map(site => `<details class="card"><summary>${escapeHtml(site.system)} / ${escapeHtml(site.body)} · ${escapeHtml(site.name)} · ${numeric(site.latitude, 4)}, ${numeric(site.longitude, 4)} · ${escapeHtml(site.materials)}</summary><form class="planet-site-form">${fields(site)}</form></details>`).join("");
+  const resources = (data.resources?.bodies || []).map(body => `<div class="planet-resource-row"><span><b>${escapeHtml(body.body)}</b><small>${escapeHtml(body.class)} · ${body.landable ? "LANDABLE" : "ORBITAL SCAN"} · ${numeric(body.mining_locations)} DSS MINING LOCATIONS</small></span><div>${(body.materials || []).map(mat => `<em class="${mat.rare ? "rare" : ""}">${escapeHtml(mat.name)} <b>${numeric(mat.percent, 1)}%</b></em>`).join("") || "COMPOSITION UNREPORTED"}</div></div>`);
+  root.innerHTML = `<section class="workspace-grid"><article class="card planet-materials-wide"><header>RECORD A SURFACE MINING SITE</header><p>Enter planetary coordinates in degrees. Use your live planetary position or enter coordinates manually. Choose mining materials from the populated catalogue, or type additional observations. Planet scans below show known raw materials; mining contents must be confirmed at the site.</p><form class="planet-site-form">${fields()}</form></article>${workspaceCard("CURRENT SYSTEM · NORMAL PLANET MATERIALS", workspaceRows(resources, "Scan planets to reveal their raw-material percentages and DSS mining-location counts."), escapeHtml(data.system || ""), "planet-materials-wide")}<article class="card planet-materials-wide"><header>ALL SAVED SITES · ACTIVE COMMANDER</header><label>FIND SYSTEM, PLANET OR MATERIAL<input id="planet-site-filter" placeholder="Search saved sites"></label><div id="planet-site-list">${sites || '<p>No mining sites recorded yet.</p>'}</div></article></section>`;
+  root.querySelectorAll("[data-current-coordinates]").forEach(button => button.addEventListener("click", () => {
+    const position = root.currentPosition;
+    if (!position) return showToast("Current planetary coordinates are unavailable.");
+    const form = button.closest("form");
+    for (const key of ["system", "body", "latitude", "longitude"]) form.elements[key].value = position[key];
+    form.dataset.dirty = "true";
+  }));
+  root.querySelectorAll("[data-material-choice]").forEach(select => select.addEventListener("change", () => {
+    if (!select.value) return;
+    const form = select.closest("form");
+    const input = form.elements.materials;
+    const values = input.value.split(",").map(value => value.trim()).filter(Boolean);
+    if (!values.some(value => value.toLowerCase() === select.value.toLowerCase())) values.push(select.value);
+    input.value = values.join(", ");
+    form.dataset.dirty = "true";
+    select.value = "";
+  }));
+  root.querySelectorAll("form").forEach(form => form.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (form.dataset.saving) return;
+    form.dataset.saving = "true";
+    const payload = Object.fromEntries(new FormData(form));
+    const accepted = await command("workspace", {...payload, page: "planet-materials", operation: "save", profile_key: root.dataset.profileKey});
+    delete form.dataset.saving;
+    if (accepted) { delete form.dataset.dirty; delete workspaceFingerprints["planet-materials"]; document.activeElement?.blur(); showToast("Mining site saved"); }
+    else showToast("Site could not be saved. Check the fields and active commander, then try again.");
+  }));
+  root.querySelectorAll("form").forEach(form => form.addEventListener("input", () => { form.dataset.dirty = "true"; }));
+  root.querySelectorAll("[data-site-delete]").forEach(button => button.addEventListener("click", async () => {
+    if (!window.confirm("Delete this mining site from the active commander profile?")) return;
+    if (await command("workspace", {page: "planet-materials", operation: "delete_site", id: button.dataset.siteDelete, profile_key: root.dataset.profileKey})) delete workspaceFingerprints["planet-materials"];
+  }));
+  byId("planet-site-filter").addEventListener("input", event => {
+    const query = event.target.value.toLowerCase();
+    root.querySelectorAll("#planet-site-list details").forEach(row => { row.hidden = !row.querySelector("summary").textContent.toLowerCase().includes(query); });
+  });
+}
+
 function renderExploreWorkspace(data) {
   const root = byId("explore-workspace");
   const navRows = (data.nav_route || []).map((row) => `<div class="route-system${row.current ? " current" : row.passed ? " passed" : ""}"><i>${row.passed ? "✓" : row.current ? "◆" : "·"}</i><span><b>${escapeHtml(row.system)}</b><small>${escapeHtml(row.star_class || "STAR CLASS UNKNOWN")} · ${row.distance === null ? "LEG UNKNOWN" : `${numeric(row.distance, 1)} LY`}</small></span></div>`);
@@ -2583,9 +2635,16 @@ function renderWorkspace(state) {
   if (workspaceFingerprints[page] === fingerprint) return;
   const root = byId(`${page}-workspace`);
   const focused = document.activeElement;
-  if (root?.contains(focused) && focused?.matches("input, textarea, select, [contenteditable='true']")) return;
+  if (page === "planet-materials" && root) {
+    root.currentPosition = workspace.data?.current_position;
+    root.querySelectorAll("[data-current-coordinates]").forEach(button => { button.disabled = !root.currentPosition; });
+  }
+  if (page === "planet-materials" && root?.dataset.profileKey === workspace.data?.profile_key && root.querySelector("form[data-dirty]")) return;
+  const profileChanged = page === "planet-materials" && root?.dataset.profileKey !== workspace.data?.profile_key;
+  if (!profileChanged && root?.contains(focused) && focused?.matches("input, textarea, select, [contenteditable='true']")) return;
   workspaceFingerprints[page] = fingerprint;
   const renderers = {
+    "planet-materials": renderPlanetMaterialsWorkspace,
     explore: renderExploreWorkspace,
     profile: renderProfileWorkspace, analytics: renderAnalyticsWorkspace,
     chronicle: renderChronicleWorkspace, mission: renderMissionWorkspace,
@@ -3069,7 +3128,10 @@ document.addEventListener("click", async (event) => {
       if (!window.confirm("Confirm this profile-local change?")) return;
       payload.confirmed = true;
     }
-    if (operation === "backup_picker" || operation === "restore_picker") {
+    if (page === "chronicle" && operation === "export_replay") {
+      payload.path = await window.pywebview?.api?.choose_replay_file?.();
+      if (!payload.path) return;
+    } else if (operation === "backup_picker" || operation === "restore_picker") {
       try {
         const selected = await window.pywebview?.api?.choose_folder?.();
         if (!selected) return;

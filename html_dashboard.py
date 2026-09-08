@@ -28,6 +28,7 @@ from explorer_decision_deck import (
     route_horizon,
 )
 import themes
+from planet_materials import PlanetMaterialsStore, mining_material_catalogue, SURFACE_MINING_NEW
 from config import get_active_profile, get_profile_dir
 from deep_survey import recon_report
 from diagnostic_logs import application_base_dir
@@ -68,7 +69,7 @@ from stellar_cartography import (
     build_survey_queue,
     replay_export_html,
 )
-from ui_theme import apply_ui_scale
+from theme_state import apply_ui_scale
 
 
 PROJECT_URL = "https://github.com/insert3coins/VoidCompass"
@@ -88,7 +89,7 @@ _CORE_RANKS = {
 }
 
 _HTML_WORKSPACE_PAGES = {
-    "explore", "profile", "analytics", "chronicle", "mission", "ground", "mining",
+    "planet-materials", "explore", "profile", "analytics", "chronicle", "mission", "ground", "mining",
     "engineering", "carrier", "recon", "achievements", "ledger", "settings",
 }
 
@@ -178,7 +179,7 @@ class HtmlDashboardMixin:
         if getattr(self, "_html_dashboard_publish_job", None) is not None:
             return
         try:
-            self._html_dashboard_publish_job = self.root.after(
+            self._html_dashboard_publish_job = self.root.call_later(
                 0 if immediate else 350,
                 self._publish_html_dashboard,
             )
@@ -2076,8 +2077,33 @@ class HtmlDashboardMixin:
             },
         }
 
+    def _planet_materials_store(self):
+        return PlanetMaterialsStore(os.path.join(
+            get_profile_dir(get_active_profile(self.config)), "planet_materials.db"))
+
+    def _html_planet_materials_workspace(self):
+        lat = _number(getattr(self, "current_latitude", None))
+        lon = _number(getattr(self, "current_longitude", None))
+        body = str(getattr(self, "current_body_name", "") or "")
+        position = None
+        if (getattr(self, "on_planet", False) and body and lat is not None and lon is not None
+                and math.isfinite(lat) and math.isfinite(lon) and -90 <= lat <= 90 and -180 <= lon <= 180):
+            position = {"latitude": lat, "longitude": lon, "body": body,
+                        "system": getattr(self, "current_sys", "")}
+        return {
+            "current_position": position,
+            "body": body,
+            "mining_catalogue": mining_material_catalogue(),
+            "new_mining_materials": list(SURFACE_MINING_NEW),
+            "profile_key": get_active_profile(self.config),
+            "system": getattr(self, "current_sys", ""),
+            "resources": build_planetary_resources(getattr(self, "scan_items", []) or []),
+            "sites": self._planet_materials_store().rows(),
+        }
+
     def _html_workspace(self, page):
         builders = {
+            "planet-materials": self._html_planet_materials_workspace,
             "explore": self._html_explore_workspace,
             "profile": self._html_profile_workspace,
             "analytics": self._html_analytics_workspace,
@@ -2576,8 +2602,7 @@ class HtmlDashboardMixin:
         )
         sources = self._html_dashboard_sources()
         map_view = getattr(
-            getattr(self, "exploration_window", None),
-            "expedition_map_view", None,
+            self, "atlas", None,
         )
         atlas_url = ""
         if map_view is not None:
@@ -2738,7 +2763,6 @@ class HtmlDashboardMixin:
             return False
         if not self._request_html_dashboard_page(page):
             return False
-        self.hide_native_dashboard_tool()
         return True
 
     def _html_copy_text(self, value):
@@ -2746,9 +2770,9 @@ class HtmlDashboardMixin:
         if not value:
             return False
         try:
-            self.root.clipboard_clear()
-            self.root.clipboard_append(value)
-            self.root.update_idletasks()
+
+            self.root.copy_text(value)
+
             return True
         except Exception:
             return False
@@ -2763,6 +2787,19 @@ class HtmlDashboardMixin:
 
         if operation == "copy":
             return self._html_copy_text(_text(payload.get("text"), 20000))
+
+        if page == "planet-materials":
+            if payload.get("profile_key") != get_active_profile(self.config):
+                return False
+            store = self._planet_materials_store()
+            if operation == "save":
+                store.save(payload)
+            elif operation == "delete_site":
+                store.delete(payload.get("id"))
+            else:
+                return False
+            self._schedule_html_dashboard_publish(immediate=True)
+            return True
 
         if page == "explore":
             if operation in {"survey_pin", "survey_skip", "survey_complete", "survey_reset"}:
@@ -2978,15 +3015,9 @@ class HtmlDashboardMixin:
                 180,
             )
             try:
-                from tkinter import filedialog
-                default_day = str(session.get("started") or "expedition")[:10].replace("-", "")
-                path = filedialog.asksaveasfilename(
-                    parent=self.root,
-                    title="Export Interactive Expedition Replay",
-                    defaultextension=".html",
-                    filetypes=[("Interactive HTML", "*.html")],
-                    initialfile=f"VoidCompass-Replay-{default_day}.html",
-                )
+                path = str(payload.get("path") or "").strip()
+                if path and (not Path(path).is_absolute() or Path(path).suffix.lower() != ".html"):
+                    return False
                 if not path:
                     return True
                 document = replay_export_html(
@@ -3825,20 +3856,12 @@ class HtmlDashboardMixin:
             self._schedule_html_dashboard_publish(immediate=True)
         return bool(changed)
 
-    def hide_native_dashboard_tool(self):
-        """Keep the internal Tk state host withdrawn behind the HTML deck."""
-        try:
-            self.root.withdraw()
-        except Exception:
-            pass
-
     def _open_html_dashboard_map(self):
         runtime = getattr(self.root, "_voidcompass_html_dashboard_runtime", None)
         parent_origin = getattr(runtime, "origin", "")
         self.open_galaxy_map_page(embedded_origin=parent_origin)
         view = getattr(
-            getattr(self, "exploration_window", None),
-            "expedition_map_view", None,
+            self, "atlas", None,
         )
         if view is not None and runtime is not None:
             runtime.allow_frame_source(view.server.origin)

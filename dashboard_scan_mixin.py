@@ -67,7 +67,9 @@ class DashboardScanMixin:
         as its deck presentation without changing the underlying on-foot
         gameplay state. Carrier transit and arrival retain higher priority.
         """
-        if not getattr(self, "current_on_foot", False):
+        if (not getattr(self, "current_on_foot", False)
+                or getattr(self, "on_planet", False)
+                or getattr(self, "current_in_srv", False)):
             return False
         station_type = (
             str(getattr(self, "current_station_type", "") or "")
@@ -317,7 +319,7 @@ class DashboardScanMixin:
         if job is None:
             return
         try:
-            self.root.after_cancel(job)
+            self.root.cancel(job)
         except Exception:
             pass
 
@@ -335,7 +337,7 @@ class DashboardScanMixin:
             self._SURFACE_HOLD_INFER_SECONDS - (now - float(last_motion)),
         )
         try:
-            self._surface_hold_job = self.root.after(
+            self._surface_hold_job = self.root.call_later(
                 max(10, int(remaining * 1000)),
                 self._infer_surface_hold_after_silence,
             )
@@ -648,7 +650,7 @@ class DashboardScanMixin:
         self._apply_navigation_vehicle_handoff_latch()
         jump_phase = str(getattr(self, "_navigation_jump_phase", "") or "")
         set_jump_phase = getattr(self, "_set_navigation_jump_phase", None)
-        if jump_phase == "arrival":
+        if jump_phase in {"arrival", "carrier_arrival"}:
             # FSDJump is the definitive completed-arrival event. A Status
             # snapshot carrying the short-lived fsdJump bit can be delivered
             # just afterwards by the independent file watcher; never let that
@@ -1446,7 +1448,7 @@ class DashboardScanMixin:
             self._pending_status_data = data
             if not getattr(self, "_status_dispatch_scheduled", False):
                 self._status_dispatch_scheduled = True
-                self.root.after(0, self._flush_pending_status_update)
+                self.root.call_later(0, self._flush_pending_status_update)
             return
         self._apply_status_update(data)
 

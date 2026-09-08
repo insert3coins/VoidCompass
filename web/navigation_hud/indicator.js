@@ -1206,6 +1206,14 @@
         this.path([[16, 29], [32, 10], [97, 10], [108, 29]], c, .24);
         this.line(6, 32, 115, 32, c, .22);
       }
+      if (key === "carrier_lockdown") {
+        const close = smooth(Math.min(state.age / 3, 1));
+        this.line(18, 4 + close * 10, 108, 4 + close * 10, c, .65);
+        this.brackets(62, 19, 48 - close * 5, 16, c, .7);
+      } else if (key === "carrier_preparing") {
+        for (let i = 0; i < 4; i++) this.line(30 + i * 20, 8, 40 + i * 20, 8, c,
+          .2 + .65 * wave(p * .35 - i / 4), 1.6);
+      }
       this.path([[14, 21], [26, 17], [42, 17], [45, 13], [91, 13], [105, 18],
         [105, 24], [32, 24]], c, .75, 1.2, true, .08);
       this.path([[71, 13], [73, 6], [80, 6], [85, 13]], c, .65);
