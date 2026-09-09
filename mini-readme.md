@@ -7,7 +7,7 @@
 * Moved Planet Materials into its own main-menu tab directly below Explore & Survey.
 * Planet awareness now reads the current body from live Status updates. Use current captures the system, planet, latitude (Y), longitude (X), known planet conditions and scanned raw-material percentages, including zero and negative coordinates.
 * Live coordinates continue updating while editing. Capture is disabled when planetary coordinates are unavailable; mining materials and observed deposit density remain manually entered.
-* Added Select Body, Heat Map and By Material views, showing planet conditions, engineering composition and saved mining observations. The heat map counts recorded sites; it does not predict mining probabilities.
+* Redesigned Planet Materials around one canonical planet selector, an explicit saved-location count, individual expandable site cards, planet conditions and known raw composition. Case, spacing and short/full body-name variants now resolve to the same planet, and site-list refreshes preserve unfinished form edits. Heat Map and By Material remain available across recorded observations; the heat map counts saved sites and does not predict mining probabilities.
 * Saved sites retain their captured scan details and density in the commander-profile database. Existing databases migrate automatically without losing sites; mismatched planet snapshots are rejected.
 * Updated documentation and verified the patch with 153 Python tests, browser checks for site editing and live capture, and a Tk-free startup/journal/profile-switch smoke check.
 
