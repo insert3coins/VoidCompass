@@ -174,6 +174,9 @@ PROFILE_TEXT_SETTINGS = (
     "overlay_hotkey_carrier",
     "overlay_hotkey_prospector",
     "overlay_hotkey_field_bookmark",
+    "ground_target_system",
+    "ground_target_body",
+    "ground_target_label",
 )
 
 PROFILE_BOOL_SETTINGS = (
@@ -254,6 +257,7 @@ PROFILE_VALUE_SETTINGS = (
     "ground_popup_y",
     "ground_target_lat",
     "ground_target_lon",
+    "ground_target_site_id",
     "route_plotter_geometry",
     "edit_dialog_geometry",
     "import_dialog_geometry",
@@ -707,6 +711,10 @@ def load_config():
         'ground_target_active': False,
         'ground_target_lat': None,
         'ground_target_lon': None,
+        'ground_target_system': '',
+        'ground_target_body': '',
+        'ground_target_label': '',
+        'ground_target_site_id': None,
         'perf_spike_threshold_ms': 45.0,
         'ui_watchdog_spike_ms': 120.0,
         'ui_stall_sampler_enabled': True,

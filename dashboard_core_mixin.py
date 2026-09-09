@@ -208,9 +208,41 @@ class DashboardCoreMixin:
     def clear_ground_target(self):
         self.target_latlon_active = False
         self.target_lat = self.target_lon = None
-        self.config.update(ground_target_active=False, ground_target_lat=None, ground_target_lon=None)
+        self.ground_target_system = ""
+        self.ground_target_body = ""
+        self.ground_target_label = ""
+        self.ground_target_site_id = None
+        self.config.update(
+            ground_target_active=False, ground_target_lat=None, ground_target_lon=None,
+            ground_target_system="", ground_target_body="", ground_target_label="",
+            ground_target_site_id=None,
+        )
         self._save_config_file()
         self.update_ground_target_ui()
+
+    def set_ground_target(self, latitude, longitude, *, system="", body="", label="", site_id=None):
+        """Arm the planet compass with an optional body-bound saved location."""
+        lat = float(latitude)
+        lon = self._normalize_lon(float(longitude))
+        if not math.isfinite(lat) or not math.isfinite(lon) or not -90.0 <= lat <= 90.0:
+            raise ValueError("Invalid planet waypoint coordinates.")
+        self.target_lat = lat
+        self.target_lon = lon
+        self.target_latlon_active = True
+        self.ground_target_system = str(system or "").strip()
+        self.ground_target_body = str(body or "").strip()
+        self.ground_target_label = str(label or "").strip()
+        self.ground_target_site_id = int(site_id) if site_id is not None else None
+        self.config.update(
+            ground_target_active=True, ground_target_lat=lat, ground_target_lon=lon,
+            ground_target_system=self.ground_target_system,
+            ground_target_body=self.ground_target_body,
+            ground_target_label=self.ground_target_label,
+            ground_target_site_id=self.ground_target_site_id,
+        )
+        self._save_config_file()
+        self.update_ground_target_ui()
+        return True
 
     def check_updates(self, manual=False):
         def check():
@@ -331,9 +363,31 @@ class DashboardCoreMixin:
             solution = self._ground_target_solution()
         return bool(solution and solution.get("state") == "OK")
 
+    @staticmethod
+    def _ground_planet_key(system, body):
+        system_text = " ".join(str(system or "").split()).casefold()
+        body_text = " ".join(str(body or "").split()).casefold()
+        prefix = f"{system_text} "
+        if system_text and body_text.startswith(prefix):
+            body_text = body_text[len(prefix):].strip()
+        return system_text, body_text
+
+    def _ground_target_matches_current_body(self):
+        target_system = getattr(self, "ground_target_system", "")
+        target_body = getattr(self, "ground_target_body", "")
+        if not target_system and not target_body:
+            return True
+        target = self._ground_planet_key(target_system, target_body)
+        current = self._ground_planet_key(
+            getattr(self, "current_sys", ""), getattr(self, "current_body_name", ""),
+        )
+        return (not target[0] or target[0] == current[0]) and (not target[1] or target[1] == current[1])
+
     def _ground_target_solution(self):
         if not self._ground_target_configured():
             return None
+        if not self._ground_target_matches_current_body():
+            return {"state": "WAIT_BODY"}
         if self.current_latitude is None or self.current_longitude is None:
             return {"state": "WAIT_POS"}
 

@@ -105,6 +105,7 @@ class HtmlGroundOverlayBridge:
                 "active": self._active(solution),
                 "state": str(solution.get("state") or "OFF"),
                 "body": str(getattr(self.app, "current_body_name", "") or "SURFACE FIX"),
+                "target_label": str(getattr(self.app, "ground_target_label", "") or ""),
                 "target_lat": getattr(self.app, "target_lat", None),
                 "target_lon": getattr(self.app, "target_lon", None),
                 "current_lat": getattr(self.app, "current_latitude", None),

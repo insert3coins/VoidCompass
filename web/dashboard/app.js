@@ -2120,7 +2120,13 @@ function renderPlanetMaterialsWorkspace(data) {
     <button type="submit" class="primary">${site.id ? "SAVE CHANGES" : "ADD SITE"}</button>${site.id ? `<button type="button" data-site-delete="${site.id}">DELETE SITE</button>` : ""}
     <div class="planet-captured" data-captured-evidence>${site.body_details?.body ? `<small>CAPTURED PLANET SCAN · ${escapeHtml(site.body_details.body)}</small>${evidence(site.body_details)}` : '<small>Use current to capture planet conditions and known raw materials with this site.</small>'}</div>`;
   const materialsFor = site => clean(site.materials).split(",").map(clean).filter(Boolean);
-  const siteCards = rows => `<div class="planet-site-grid">${rows.map(site => `<details class="planet-site-card" data-site-id="${site.id}"><summary><span><b>${escapeHtml(site.name)}</b><small>X ${numeric(site.longitude,5)} · Y ${numeric(site.latitude,5)}</small></span><strong>${materialsFor(site).map(material=>`<i>${escapeHtml(material)}</i>`).join("")}</strong><em>${escapeHtml(site.density || "Density unrecorded")}</em></summary><div class="planet-site-meta">${escapeHtml(site.notes || "No field notes")}</div><form class="planet-site-form">${fields(site)}</form></details>`).join("") || '<p class="workspace-empty">No mining locations saved for this planet yet.</p>'}</div>`;
+  const navigationTarget = data.navigation_target || {};
+  const siteIsActive = site => Boolean(navigationTarget.active && (
+    navigationTarget.site_id != null ? String(navigationTarget.site_id) === String(site.id) :
+    planetKey(site) === planetKey(navigationTarget)
+      && Math.abs(number(site.latitude) - number(navigationTarget.latitude)) < 0.000001
+      && Math.abs(number(site.longitude) - number(navigationTarget.longitude)) < 0.000001));
+  const siteCards = rows => `<div class="planet-site-grid">${rows.map(site => `<details class="planet-site-card" data-site-id="${site.id}"><summary><span><b>${escapeHtml(site.name)}</b><small>X ${numeric(site.longitude,5)} · Y ${numeric(site.latitude,5)}</small></span><strong>${materialsFor(site).map(material=>`<i>${escapeHtml(material)}</i>`).join("")}</strong><em>${escapeHtml(site.density || "Density unrecorded")}</em><button type="button" class="planet-compass-action${siteIsActive(site) ? " active" : ""}" data-site-navigate="${site.id}">${siteIsActive(site) ? "COMPASS TARGET ACTIVE" : "SEND TO COMPASS"}</button></summary><div class="planet-site-meta">${escapeHtml(site.notes || "No field notes")}</div><form class="planet-site-form">${fields(site)}</form></details>`).join("") || '<p class="workspace-empty">No mining locations saved for this planet yet.</p>'}</div>`;
   const materialNames = new Map();
   (data.sites || []).flatMap(materialsFor).forEach(name => materialNames.set(folded(name), materialNames.get(folded(name)) || name));
   const minerals = [...materialNames.values()].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
@@ -2178,6 +2184,19 @@ function renderPlanetMaterialsWorkspace(data) {
   root.onclick = async event => {
     const viewButton=event.target.closest('button[data-atlas-view]');
     if(viewButton)return showView(viewButton.dataset.atlasView);
+    const navigateButton=event.target.closest('[data-site-navigate]');
+    if(navigateButton){
+      event.preventDefault();event.stopPropagation();
+      const site=(data.sites||[]).find(row=>String(row.id)===String(navigateButton.dataset.siteNavigate));
+      if(!site)return;
+      const accepted=await command('workspace',{page:'planet-materials',operation:'navigate_site',id:site.id,profile_key:root.dataset.profileKey});
+      if(accepted){
+        root.querySelectorAll('[data-site-navigate]').forEach(button=>{button.classList.remove('active');button.textContent='SEND TO COMPASS';});
+        navigateButton.classList.add('active');navigateButton.textContent='COMPASS TARGET ACTIVE';
+        showToast(`Compass armed for ${site.name}. It will open on ${site.body}.`);
+      } else showToast('This saved location could not be sent to the compass.');
+      return;
+    }
     const button=event.target.closest('[data-current-coordinates]');
     if(button){
     const position=root.currentPosition;

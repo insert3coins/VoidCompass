@@ -1,18 +1,16 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.2.6.1 // Carrier Arrival & Planet Materials Patch
+## v5.4.2.7 // Planet Materials Navigation
 **Release Date:** 2026-Sep-09
 
-* Fixed carrier travel returning to Docked during the jump tunnel. CarrierLocation now keeps Navigation in Carrier Transit; CarrierJump confirms arrival, which remains visible for 12 seconds before the normal onboard state resumes.
-* Moved Planet Materials into its own main-menu tab directly below Explore & Survey.
-* Planet awareness now reads the current body from live Status updates. Use current captures the system, planet, latitude (Y), longitude (X), known planet conditions and scanned raw-material percentages, including zero and negative coordinates.
-* Live coordinates continue updating while editing. Capture is disabled when planetary coordinates are unavailable; mining materials and observed deposit density remain manually entered.
 * Redesigned Planet Materials around one canonical planet selector, an explicit saved-location count, individual expandable site cards, planet conditions and known raw composition. Case, spacing and short/full body-name variants now resolve to the same planet, and site-list refreshes preserve unfinished form edits. Heat Map and By Material remain available across recorded observations; the heat map counts saved sites and does not predict mining probabilities.
-* Saved sites retain their captured scan details and density in the commander-profile database. Existing databases migrate automatically without losing sites; mismatched planet snapshots are rejected.
-* Updated documentation and verified the patch with 153 Python tests, browser checks for site editing and live capture, and a Tk-free startup/journal/profile-switch smoke check.
+* Added Send to Compass on every saved surface location. It arms Planet Waypoint Navigation directly from the stored X/Y coordinates, displays the saved site name and binds the target to its recorded system and planet so it activates on the correct body.
+* Compass targets remain synchronized when their saved site is edited and clear when that site is deleted. Manual, current-position and return-to-ship targets also record the current body where available.
+* Hardened legacy site loading so invalid captured scan metadata cannot hide otherwise valid saved locations.
 
 ## Earlier releases
 
+* **v5.4.2.6.1** — Corrected Carrier Transit/arrival journal ordering, moved Planet Materials into its own menu tab, added live planet/coordinate/scan capture and a commander-profile mining-site database.
 * **v5.4.2.6** — Replaced the Tk backend with the Python runtime and HTML/WebView2 overlays, repaired HUD startup visibility, added profile-aware planet mining sites and material choices, and introduced carrier preparation/lockdown countdowns for the carrier aboard.
 * **v5.4.2.5** — Improved Navigation route hierarchy, next-system and distance labels, expanded survey/discovery rows, brief attention highlights and Survey Operations window sizing.
 *   **v5.4.2.4** — Rebuilt navigation state animations with holographic instruments and a layered asteroid field, improved animation pacing, refined carrier readability, and separated personal/Squadron Carrier tracking, routes and Discord transitions.
