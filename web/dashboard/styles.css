@@ -1301,6 +1301,13 @@ body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::aft
 
 .planet-live { margin-bottom: 14px; }
 [data-planet-live-status] { padding: 16px; color: var(--accent); font: 13px Consolas, monospace; }
+.planet-materials-shell { display: grid; gap: 14px; }
+.planet-command-bar { display: grid; grid-template-columns: minmax(280px,1.25fr) minmax(260px,1fr) auto; gap: 18px; align-items: end; padding: 18px; border-left: 3px solid var(--accent); background: radial-gradient(circle at 0 50%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 42%),var(--panel); }
+.planet-command-bar > div, .planet-command-bar > label { min-width: 0; display: grid; gap: 7px; }
+.planet-command-bar small, .planet-command-bar label { color: var(--muted); font: 10px Consolas,monospace; }
+.planet-command-bar [data-planet-live-status] { min-width: 0; padding: 0; overflow-wrap: anywhere; color: var(--text); font: 12px Consolas,monospace; }
+.planet-command-bar select { min-height: 38px; width: 100%; padding: 8px 12px; border: 1px solid var(--border); background: var(--input); color: var(--accent); font: 12px Consolas,monospace; }
+.planet-command-bar > strong { padding: 11px 13px; border: 1px solid var(--accent); color: var(--accent); background: var(--selection); white-space: nowrap; font: 700 10px Consolas,monospace; }
 .planet-atlas-tabs { margin: 14px 0; gap: 10px; }
 .planet-atlas-tabs button, .planet-body-picker select { min-height: 36px; padding: 8px 14px; color: var(--accent); background: var(--panel-alt); border: 1px solid var(--border); }
 .planet-atlas-tabs button.primary { border-color: var(--accent); background: var(--selection); }
@@ -1309,8 +1316,24 @@ body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::aft
 .planet-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; padding: 14px; }
 .planet-facts small, .planet-atlas-table small { display: block; color: var(--muted); font: 10px Consolas, monospace; margin-bottom: 7px; }
 .planet-facts b { font: 12px Consolas, monospace; }
+.planet-condition-card .planet-facts { grid-template-columns: repeat(7,minmax(105px,1fr)); }
 .planet-atlas-columns { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; margin: 14px 0; }
 .planet-atlas-columns > *, [data-atlas-panel] > * { min-width: 0; }
+.planet-location-library > header b { color: var(--accent); }
+.planet-site-grid { display: grid; gap: 8px; padding: 12px; }
+.planet-site-card { border: 1px solid var(--border-soft); background: var(--inset); }
+.planet-site-card[open] { border-color: var(--border); box-shadow: inset 3px 0 color-mix(in srgb,var(--accent) 70%,transparent); }
+.planet-site-card summary { display: grid; grid-template-columns: minmax(175px,1fr) minmax(160px,1fr) auto; gap: 12px; align-items: center; padding: 13px 14px; cursor: pointer; list-style-position: inside; }
+.planet-site-card summary span { min-width: 0; }
+.planet-site-card summary span b, .planet-site-card summary span small { display: block; overflow-wrap: anywhere; }
+.planet-site-card summary span b { margin-bottom: 5px; color: var(--text); font: 700 13px "Bahnschrift SemiCondensed",sans-serif; text-transform: uppercase; }
+.planet-site-card summary span small { color: var(--accent); font: 10px Consolas,monospace; }
+.planet-site-card summary strong { display: flex; flex-wrap: wrap; gap: 5px; }
+.planet-site-card summary strong i { padding: 4px 7px; border: 1px solid var(--border); color: var(--text); background: var(--panel-alt); font: normal 9px Consolas,monospace; }
+.planet-site-card summary em { color: var(--muted); white-space: nowrap; font: normal 9px Consolas,monospace; }
+.planet-site-meta { margin: 0 14px; padding: 10px 0; border-top: 1px solid var(--border-soft); color: var(--muted); font: 10px Consolas,monospace; }
+.planet-site-card .planet-site-form { padding: 14px; border-top: 1px solid var(--border-soft); }
+.planet-new-site { margin-top: 14px; }
 .planet-composition-row { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(40px, 1fr) 65px; gap: 12px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); font: 12px Consolas, monospace; }
 .planet-composition-row i { height: 6px; background: linear-gradient(to right, var(--accent) var(--share), var(--panel-alt) var(--share)); }
 .planet-composition-row b { text-align: right; color: var(--accent); }
@@ -1324,4 +1347,14 @@ body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::aft
 .planet-atlas-table small { margin: 7px 0 0; }
 .planet-heat-present { color: var(--accent); background: var(--selection); font-weight: bold; }
 [data-atlas-panel] p { padding: 0 14px; color: var(--muted); font-size: 12px; }
-@media (max-width: 1100px) { .planet-atlas-columns { grid-template-columns: minmax(0,1fr); } }
+@media (max-width: 1100px) {
+  .planet-command-bar { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .planet-command-bar > strong { grid-column: 1 / -1; justify-self: start; }
+  .planet-condition-card .planet-facts { grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); }
+  .planet-atlas-columns { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width: 760px) {
+  .planet-command-bar { grid-template-columns: minmax(0,1fr); }
+  .planet-command-bar > strong { grid-column: auto; }
+  .planet-site-card summary { grid-template-columns: minmax(0,1fr); }
+}

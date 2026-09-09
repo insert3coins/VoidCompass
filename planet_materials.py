@@ -28,7 +28,11 @@ class PlanetMaterialsStore:
             rows = [dict(row) for row in db.execute(
                 "SELECT * FROM sites ORDER BY system COLLATE NOCASE, body COLLATE NOCASE, name COLLATE NOCASE, id")]
             for row in rows:
-                row["body_details"] = json.loads(row["body_details"])
+                try:
+                    details = json.loads(row.get("body_details") or "{}")
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    details = {}
+                row["body_details"] = details if isinstance(details, dict) else {}
             return rows
 
     def save(self, data):

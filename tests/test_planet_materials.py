@@ -77,6 +77,15 @@ class PlanetMaterialsTests(unittest.TestCase):
                     store.save({**data, key: value})
             self.assertEqual(store.rows(), [])
 
+    def test_invalid_legacy_scan_snapshot_does_not_hide_saved_sites(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'sites.db'
+            store = PlanetMaterialsStore(path)
+            store.save(dict(system='Sol', body='Moon', name='Site', materials='Iron', latitude=0, longitude=0))
+            with closing(sqlite3.connect(path)) as db, db:
+                db.execute("UPDATE sites SET body_details='not-json'")
+            self.assertEqual(store.rows()[0]['body_details'], {})
+
     def test_stale_profile_command_is_rejected(self):
         dashboard = MainDashboard.__new__(MainDashboard)
         dashboard.config = {}
