@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.4.2.6**
+**Current version: 5.4.2.6.1**
 
 Void Compass is an exploration-first companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a persistent command dashboard, deep survey intelligence, expedition planning and native in-game overlays.
 
@@ -165,4 +165,6 @@ The packaged offline galactic-region raster retains its upstream MIT notice in [
 
 Void Compass is an independent community project and is not affiliated with or endorsed by Frontier Developments. Elite Dangerous and its related marks belong to their respective owners.
 
-Carrier navigation follows the personal or Squadron Carrier the commander is aboard, using journal `DepartureTime` for the preparation/lockdown countdown. Lockdown is the final scheduled 3m20s, since no dedicated lockdown event is documented. `CarrierJump`, or a matching `CarrierLocation` during observed transit, confirms arrival; the HUD holds that confirmation for 12 seconds. See the [journal schemas](https://schemas.edomh.nl/index.html).
+Carrier navigation follows the personal or Squadron Carrier the commander is aboard, using journal `DepartureTime` for the preparation/lockdown countdown. Lockdown is the final scheduled 3m20s, since no dedicated lockdown event is documented. `CarrierLocation` can precede arrival by a minute and keeps the HUD in transit. `CarrierJump` confirms arrival; the HUD holds that confirmation for 12 seconds. See the [journal schemas](https://schemas.edomh.nl/index.html).
+
+Planet Materials has its own main-menu tab directly below Explore & Survey. Use current captures the planet, live latitude/longitude and known scan composition/conditions into an editable, commander-profile mining site. Mining materials and density are entered manually. Select Body, Heat Map and By Material views show saved observations; the heat map represents recorded site counts, not predicted mining probabilities.

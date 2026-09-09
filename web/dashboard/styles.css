@@ -1298,3 +1298,30 @@ body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::aft
 .planet-materials-wide > p { padding: 10px 0; line-height: 1.6; }
 
 .planet-site-form button:disabled { opacity: .45; cursor: default; }
+
+.planet-live { margin-bottom: 14px; }
+[data-planet-live-status] { padding: 16px; color: var(--accent); font: 13px Consolas, monospace; }
+.planet-atlas-tabs { margin: 14px 0; gap: 10px; }
+.planet-atlas-tabs button, .planet-body-picker select { min-height: 36px; padding: 8px 14px; color: var(--accent); background: var(--panel-alt); border: 1px solid var(--border); }
+.planet-atlas-tabs button.primary { border-color: var(--accent); background: var(--selection); }
+.planet-body-picker { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 14px; color: var(--muted); font: 11px Consolas, monospace; }
+.planet-body-picker select { max-width: 100%; }
+.planet-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; padding: 14px; }
+.planet-facts small, .planet-atlas-table small { display: block; color: var(--muted); font: 10px Consolas, monospace; margin-bottom: 7px; }
+.planet-facts b { font: 12px Consolas, monospace; }
+.planet-atlas-columns { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; margin: 14px 0; }
+.planet-atlas-columns > *, [data-atlas-panel] > * { min-width: 0; }
+.planet-composition-row { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(40px, 1fr) 65px; gap: 12px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); font: 12px Consolas, monospace; }
+.planet-composition-row i { height: 6px; background: linear-gradient(to right, var(--accent) var(--share), var(--panel-alt) var(--share)); }
+.planet-composition-row b { text-align: right; color: var(--accent); }
+.planet-captured { grid-column: 1 / -1; border: 1px solid var(--border); padding: 12px; }
+.planet-captured > small { color: var(--muted); font: 11px Consolas, monospace; }
+.planet-captured .planet-composition { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px,1fr)); }
+.planet-table-scroll { max-width: 100%; overflow: auto; }
+.planet-atlas-table { width: 100%; border-collapse: collapse; font: 12px Consolas, monospace; }
+.planet-atlas-table th, .planet-atlas-table td { padding: 12px; border-bottom: 1px solid var(--border); text-align: left; }
+.planet-atlas-table thead th { color: var(--muted); font-size: 10px; }
+.planet-atlas-table small { margin: 7px 0 0; }
+.planet-heat-present { color: var(--accent); background: var(--selection); font-weight: bold; }
+[data-atlas-panel] p { padding: 0 14px; color: var(--muted); font-size: 12px; }
+@media (max-width: 1100px) { .planet-atlas-columns { grid-template-columns: minmax(0,1fr); } }

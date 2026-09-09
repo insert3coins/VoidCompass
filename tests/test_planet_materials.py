@@ -1,4 +1,6 @@
 import tempfile
+import sqlite3
+from contextlib import closing
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -11,6 +13,42 @@ from hud import TacticalHUD
 
 
 class PlanetMaterialsTests(unittest.TestCase):
+    def test_legacy_database_migrates_and_retains_scan_snapshot(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'sites.db'
+            with closing(sqlite3.connect(path)) as db, db:
+                db.execute('CREATE TABLE sites (id INTEGER PRIMARY KEY, system TEXT, body TEXT, name TEXT, latitude REAL, longitude REAL, materials TEXT, notes TEXT, updated_at TEXT)')
+                db.execute("INSERT INTO sites VALUES (1,'Sol','Moon','Old',0,0,'Ruby','','old')")
+            store = PlanetMaterialsStore(path)
+            row = store.rows()[0]
+            self.assertEqual(row['body_details'], {})
+            row.update(body_details={'system':'Sol','body':'Moon','class':'Rocky body',
+                'materials':[{'name':'Iron','percent':18.2}]}, density='High')
+            store.save(row)
+            saved = PlanetMaterialsStore(path).rows()[0]
+            self.assertEqual(saved['body_details'], row['body_details'])
+            self.assertEqual(saved['density'], 'High')
+            with self.assertRaises(ValueError):
+                store.save({**row, 'body':'Mars'})
+
+    def test_live_position_captures_matching_scan_and_disables_off_planet(self):
+        app = MainDashboard.__new__(MainDashboard)
+        app.config = {}
+        app.current_sys = 'Sol'
+        app.current_body_name = 'Moon'
+        app.current_latitude = 0
+        app.current_longitude = -180
+        app.on_planet = True
+        app._planet_materials_store = lambda: SimpleNamespace(rows=lambda: [])
+        app.scan_items = [dict(name='Mars', materials={'carbon':12}),
+            dict(name='Moon', planet_class='Rocky body', materials={'iron':18.2})]
+        current = app._html_planet_materials_workspace()['current_position']
+        self.assertEqual(current['latitude'], 0)
+        self.assertEqual(current['longitude'], -180)
+        self.assertEqual(current['body_details']['materials'][0]['name'], 'iron')
+        app.on_planet = False
+        self.assertIsNone(app._html_planet_materials_workspace()['current_position'])
+
     def test_edit_reopen_delete_and_profile_isolation(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'one' / 'planet_materials.db'
@@ -118,7 +156,7 @@ class CarrierJournalOrderingTests(unittest.TestCase):
         self.assertFalse(app._commander_aboard_carrier(rows[1]))
         self.assertNotEqual(app._navigation_fsd_readiness_context()['state'], 'carrier_preparing')
 
-    def test_location_confirms_only_matching_live_transit(self):
+    def test_location_waits_for_aboard_jump_confirmation(self):
         app, rows = self.make_dashboard()
         rows[1]['jump_departure_time'] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
         app._sync_navigation_carrier_transit(rows[0])
@@ -126,9 +164,13 @@ class CarrierJournalOrderingTests(unittest.TestCase):
         app._observe_navigation_jump_event('CarrierLocation', {'CarrierID':11,'StarSystem':'Achenar'}, {})
         self.assertEqual(app._navigation_jump_phase, 'carrier_transit')
         app._observe_navigation_jump_event('CarrierLocation', {'CarrierID':22,'StarSystem':'Achenar'}, {})
-        self.assertEqual(app._navigation_jump_phase, 'carrier_arrival')
+        self.assertEqual(app._navigation_jump_phase, 'carrier_transit')
         rows[1]['status']='cooldown'
+        rows[1]['jump_destination']=''
         app._sync_navigation_carrier_transit(rows[0])
+        self.assertEqual(app._navigation_jump_phase, 'carrier_transit')
+        app._observe_navigation_jump_event('CarrierJump', {'MarketID':22,'StarSystem':'Achenar',
+            'Docked':True,'StationType':'FleetCarrier'}, {})
         self.assertEqual(app._navigation_jump_phase, 'carrier_arrival')
         app._observe_navigation_jump_event('Undocked', {}, {})
         self.assertEqual(app._navigation_jump_phase, '')
