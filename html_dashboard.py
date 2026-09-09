@@ -2118,6 +2118,15 @@ class HtmlDashboardMixin:
             "system": getattr(self, "current_sys", ""),
             "resources": resources,
             "sites": self._planet_materials_store().rows(),
+            "navigation_target": {
+                "active": bool(getattr(self, "target_latlon_active", False)),
+                "system": getattr(self, "ground_target_system", ""),
+                "body": getattr(self, "ground_target_body", ""),
+                "label": getattr(self, "ground_target_label", ""),
+                "site_id": getattr(self, "ground_target_site_id", None),
+                "latitude": _number(getattr(self, "target_lat", None)),
+                "longitude": _number(getattr(self, "target_lon", None)),
+            },
         }
 
     def _html_workspace(self, page):
@@ -2812,9 +2821,35 @@ class HtmlDashboardMixin:
                 return False
             store = self._planet_materials_store()
             if operation == "save":
-                store.save(payload)
+                saved_id = store.save(payload)
+                if str(getattr(self, "ground_target_site_id", "")) == str(saved_id):
+                    saved = next((row for row in store.rows() if int(row.get("id", -1)) == saved_id), None)
+                    if saved:
+                        self.set_ground_target(
+                            saved["latitude"], saved["longitude"], system=saved["system"],
+                            body=saved["body"], label=saved["name"], site_id=saved_id,
+                        )
             elif operation == "delete_site":
-                store.delete(payload.get("id"))
+                deleted_id = payload.get("id")
+                if not store.delete(deleted_id):
+                    return False
+                if str(getattr(self, "ground_target_site_id", "")) == str(deleted_id):
+                    self.clear_ground_target()
+            elif operation == "navigate_site":
+                try:
+                    site_id = int(payload.get("id"))
+                except (TypeError, ValueError):
+                    return False
+                site = next((row for row in store.rows() if int(row.get("id", -1)) == site_id), None)
+                if site is None:
+                    return False
+                try:
+                    self.set_ground_target(
+                        site["latitude"], site["longitude"], system=site["system"],
+                        body=site["body"], label=site["name"], site_id=site_id,
+                    )
+                except (TypeError, ValueError):
+                    return False
             else:
                 return False
             self._schedule_html_dashboard_publish(immediate=True)
@@ -3099,45 +3134,30 @@ class HtmlDashboardMixin:
                     or not -90 <= lat <= 90
                 ):
                     return False
-                normalizer = getattr(self, "_normalize_lon", None)
-                lon = normalizer(lon) if callable(normalizer) else ((lon + 180) % 360) - 180
-                self.target_lat = lat
-                self.target_lon = lon
-                self.target_latlon_active = True
-                self.config.update({
-                    "ground_target_active": True,
-                    "ground_target_lat": lat,
-                    "ground_target_lon": lon,
-                })
-                self._save_config_file()
-                changed = True
+                changed = self.set_ground_target(
+                    lat, lon,
+                    system=getattr(self, "current_sys", "") if getattr(self, "on_planet", False) else "",
+                    body=getattr(self, "current_body_name", "") if getattr(self, "on_planet", False) else "",
+                )
             elif operation == "set_current":
                 if getattr(self, "current_latitude", None) is None or getattr(self, "current_longitude", None) is None:
                     return False
-                self.target_lat = float(self.current_latitude)
-                self.target_lon = float(self.current_longitude)
-                self.target_latlon_active = True
-                self.config.update({
-                    "ground_target_active": True,
-                    "ground_target_lat": self.target_lat,
-                    "ground_target_lon": self.target_lon,
-                })
-                self._save_config_file()
-                changed = True
+                changed = self.set_ground_target(
+                    self.current_latitude, self.current_longitude,
+                    system=getattr(self, "current_sys", ""),
+                    body=getattr(self, "current_body_name", ""),
+                    label="Current position",
+                )
             elif operation == "return_ship":
                 ship = getattr(self, "surface_ship_position", None)
                 if not isinstance(ship, dict):
                     return False
-                self.target_lat = float(ship["lat"])
-                self.target_lon = float(ship["lon"])
-                self.target_latlon_active = True
-                self.config.update({
-                    "ground_target_active": True,
-                    "ground_target_lat": self.target_lat,
-                    "ground_target_lon": self.target_lon,
-                })
-                self._save_config_file()
-                changed = True
+                changed = self.set_ground_target(
+                    ship["lat"], ship["lon"],
+                    system=getattr(self, "current_sys", ""),
+                    body=getattr(self, "current_body_name", ""),
+                    label="Return to ship",
+                )
             elif operation == "clear":
                 self.clear_ground_target()
                 changed = True

@@ -93,6 +93,48 @@ class PlanetMaterialsTests(unittest.TestCase):
             self.assertFalse(dashboard._handle_html_workspace_command({
                 'page': 'planet-materials', 'operation': 'save', 'profile_key': 'old'}))
 
+    def test_saved_site_arms_body_bound_planet_compass(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store = PlanetMaterialsStore(Path(folder) / 'sites.db')
+            site_id = store.save(dict(system='Sol', body='Sol Moon', name='Ruby ridge',
+                materials='Ruby', latitude=-12.5, longitude=44.25))
+            dashboard = MainDashboard.__new__(MainDashboard)
+            dashboard.config = {}
+            dashboard._planet_materials_store = lambda: store
+            dashboard._save_config_file = lambda: None
+            dashboard.update_ground_target_ui = lambda: None
+            dashboard.is_running = False
+            with patch('html_dashboard.get_active_profile', return_value='test'):
+                self.assertTrue(dashboard._handle_html_workspace_command({
+                    'page':'planet-materials', 'operation':'navigate_site',
+                    'profile_key':'test', 'id':site_id}))
+                self.assertFalse(dashboard._handle_html_workspace_command({
+                    'page':'planet-materials', 'operation':'navigate_site',
+                    'profile_key':'test', 'id':site_id + 1}))
+            self.assertEqual((dashboard.target_lat, dashboard.target_lon), (-12.5, 44.25))
+            self.assertEqual(dashboard.ground_target_system, 'Sol')
+            self.assertEqual(dashboard.ground_target_body, 'Sol Moon')
+            self.assertEqual(dashboard.ground_target_label, 'Ruby ridge')
+            self.assertEqual(dashboard.ground_target_site_id, site_id)
+            dashboard.current_sys = 'Sol'
+            dashboard.current_body_name = 'Moon'
+            self.assertTrue(dashboard._ground_target_matches_current_body())
+            dashboard.current_body_name = 'Mars'
+            self.assertFalse(dashboard._ground_target_matches_current_body())
+            self.assertEqual(dashboard._ground_target_solution()['state'], 'WAIT_BODY')
+            with patch('html_dashboard.get_active_profile', return_value='test'):
+                self.assertTrue(dashboard._handle_html_workspace_command({
+                    'page':'planet-materials', 'operation':'save', 'profile_key':'test',
+                    'id':site_id, 'system':'Sol', 'body':'Sol Moon', 'name':'Ruby valley',
+                    'materials':'Ruby', 'latitude':-13, 'longitude':45}))
+                self.assertEqual((dashboard.target_lat, dashboard.target_lon), (-13, 45))
+                self.assertEqual(dashboard.ground_target_label, 'Ruby valley')
+                self.assertTrue(dashboard._handle_html_workspace_command({
+                    'page':'planet-materials', 'operation':'delete_site',
+                    'profile_key':'test', 'id':site_id}))
+            self.assertFalse(dashboard.target_latlon_active)
+            self.assertIsNone(dashboard.ground_target_site_id)
+
 
 class CarrierPreparationTests(unittest.TestCase):
     def make_dashboard(self):

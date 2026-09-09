@@ -1167,6 +1167,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
 
         self.target_lat = self._to_float(self.config.get("ground_target_lat"))
         self.target_lon = self._to_float(self.config.get("ground_target_lon"))
+        self.ground_target_system = str(self.config.get("ground_target_system") or "")
+        self.ground_target_body = str(self.config.get("ground_target_body") or "")
+        self.ground_target_label = str(self.config.get("ground_target_label") or "")
+        self.ground_target_site_id = self.config.get("ground_target_site_id")
         self.target_latlon_active = bool(self.config.get("ground_target_active", False))
         if not self.target_latlon_active:
             self.target_lat = None
@@ -2130,6 +2134,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         self._expedition_resume_brief_key = None
         self.target_lat = self._to_float(self.config.get("ground_target_lat"))
         self.target_lon = self._to_float(self.config.get("ground_target_lon"))
+        self.ground_target_system = str(self.config.get("ground_target_system") or "")
+        self.ground_target_body = str(self.config.get("ground_target_body") or "")
+        self.ground_target_label = str(self.config.get("ground_target_label") or "")
+        self.ground_target_site_id = self.config.get("ground_target_site_id")
         self.target_latlon_active = bool(self.config.get("ground_target_active", False))
         if not self.target_latlon_active:
             self.target_lat = None
