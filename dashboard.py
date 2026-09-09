@@ -5741,12 +5741,16 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         elif event == "CarrierLocation" and not startup_replay:
             schedule = getattr(self, "_navigation_carrier_schedule", {}) or {}
             target = raw.get("StarSystem") or raw.get("SystemName")
-            if (getattr(self, "_navigation_jump_phase", "") == "carrier_transit"
+            if (getattr(self, "_navigation_jump_phase", "") in {
+                    "carrier_preparing", "carrier_lockdown", "carrier_transit"}
                     and raw.get("CarrierID") is not None
                     and str(raw["CarrierID"]) == str(schedule.get("carrier_id"))
                     and target == getattr(self, "_navigation_jump_target", None)
                     and self._commander_aboard_carrier(schedule)):
-                return self._set_navigation_jump_phase("carrier_arrival", target=target)
+                # Live journals can relocate the carrier at the start of its
+                # tunnel, a minute before the aboard player's CarrierJump.
+                # Location is transit evidence, never arrival confirmation.
+                return self._set_navigation_jump_phase("carrier_transit", target=target)
         elif event == "CarrierJumpCancelled":
             schedule = getattr(self, "_navigation_carrier_schedule", {}) or {}
             if raw.get("CarrierID") is not None and str(raw["CarrierID"]) == str(schedule.get("carrier_id")):

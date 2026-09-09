@@ -1,20 +1,19 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.2.6 // Python Runtime, Planet Materials & Carrier Travel
-**Release Date:** 2026-Sep-08
+## v5.4.2.6.1 // Carrier Arrival & Planet Materials Patch
+**Release Date:** 2026-Sep-09
 
-* Removed the Tk backend, hidden widgets and native Canvas renderers. A Python event loop now owns startup, scheduling, journal dispatch, profile state and shutdown; the HTML command deck, Atlas and overlays receive models directly from the application. WebView2 owns the visible windows, file dialogs and overlay input policy; clipboard access uses Windows directly. Packaged builds exclude Tk.
-* Fixed cold-start HUD activation, including Navigation, and startup visibility restoration for Survey Operations and Contact Scope. Verified all 11 overlay windows with representative content.
-* Added Planet materials under Explore & survey, showing scanned raw-material percentages and DSS mining-location counts alongside editable surface mining sites.
-* Use current coordinates fills the current system, planet, latitude (Y) and longitude (X), including zero and negative coordinates. Live coordinates remain available while editing; unavailable planetary coordinates disable capture.
-* Added a populated mining-material selector, including all 13 new Rhino commodities in Frontier's 4.4.1.0 notes. Additional materials can be entered manually. Catalogue entries are choices; saved site contents record commander observations, while normal raw percentages retain their journal evidence.
-* Mining sites use a separate commander-profile SQLite database, included in profile backups. Add, edit, delete and search sites across planets; stale-profile commands and invalid coordinates are rejected.
-* Carrier preparation and lockdown now show the countdown to journal DepartureTime for the personal or Squadron Carrier actually being ridden. The navigation states apply only while docked or on foot aboard a carrier and clear on departure or cancellation.
-* Lockdown uses the final 3m20s of the scheduled countdown; the journal does not emit a separate physical-lockdown event.
-* CarrierJump confirms arrival. A matching CarrierLocation during an already-observed transit also confirms arrival, covering journals that write it first. Transit waits for journal confirmation; the confirmed arrival remains readable for 12 seconds before returning to the ordinary onboard state.
+* Fixed carrier travel returning to Docked during the jump tunnel. CarrierLocation now keeps Navigation in Carrier Transit; CarrierJump confirms arrival, which remains visible for 12 seconds before the normal onboard state resumes.
+* Moved Planet Materials into its own main-menu tab directly below Explore & Survey.
+* Planet awareness now reads the current body from live Status updates. Use current captures the system, planet, latitude (Y), longitude (X), known planet conditions and scanned raw-material percentages, including zero and negative coordinates.
+* Live coordinates continue updating while editing. Capture is disabled when planetary coordinates are unavailable; mining materials and observed deposit density remain manually entered.
+* Added Select Body, Heat Map and By Material views, showing planet conditions, engineering composition and saved mining observations. The heat map counts recorded sites; it does not predict mining probabilities.
+* Saved sites retain their captured scan details and density in the commander-profile database. Existing databases migrate automatically without losing sites; mismatched planet snapshots are rejected.
+* Updated documentation and verified the patch with 153 Python tests, browser checks for site editing and live capture, and a Tk-free startup/journal/profile-switch smoke check.
 
 ## Earlier releases
 
+* **v5.4.2.6** — Replaced the Tk backend with the Python runtime and HTML/WebView2 overlays, repaired HUD startup visibility, added profile-aware planet mining sites and material choices, and introduced carrier preparation/lockdown countdowns for the carrier aboard.
 * **v5.4.2.5** — Improved Navigation route hierarchy, next-system and distance labels, expanded survey/discovery rows, brief attention highlights and Survey Operations window sizing.
 *   **v5.4.2.4** — Rebuilt navigation state animations with holographic instruments and a layered asteroid field, improved animation pacing, refined carrier readability, and separated personal/Squadron Carrier tracking, routes and Discord transitions.
 *   **v5.4.2.3** — Added Rhino mining haul/processing accounting, Planetary Resource Intelligence, barycentre-aware Orrery records, Field Discoveries and vehicle ledgers; tightened Mining Command layout and corrected cargo-hold recovery after returning from an SRV.

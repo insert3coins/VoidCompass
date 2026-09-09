@@ -521,6 +521,8 @@ class DashboardScanMixin:
             and self.current_planet_radius is not None
             and self.current_planet_radius > 0
         )
+        if self.on_planet and data.get("BodyName"):
+            self.current_body_name = str(data["BodyName"])
         altitude = self._to_float(data.get("Altitude"))
         altitude_now = time.monotonic()
         instantaneous_descent_rate = 0.0

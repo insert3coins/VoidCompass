@@ -2085,19 +2085,38 @@ class HtmlDashboardMixin:
         lat = _number(getattr(self, "current_latitude", None))
         lon = _number(getattr(self, "current_longitude", None))
         body = str(getattr(self, "current_body_name", "") or "")
+        items = list(getattr(self, "scan_items", []) or [])
+        resources = build_planetary_resources(items)
+        stars = sorted({str(item.get("star_type")) for item in items if item.get("star_type")})
+        bodies = []
+        for item in items:
+            if item.get("is_star") or item.get("star_type"):
+                continue
+            name = str(item.get("full_name") or item.get("name") or "")
+            resource = next(iter(build_planetary_resources([item])["bodies"]), {})
+            bodies.append({"body": name, "short_name": item.get("name"),
+                "system": getattr(self, "current_sys", ""), "body_id": item.get("body_id"),
+                "class": item.get("planet_class") or item.get("class") or "Unknown",
+                "volcanism": item.get("volcanism"), "atmosphere": item.get("atmosphere_type"),
+                "temperature": _number(item.get("surface_temp")), "gravity": _number(item.get("gravity_g")),
+                "landable": bool(item.get("landable")), "stars": stars,
+                "materials": resource.get("materials", []), "mining_locations": resource.get("mining_locations", 0)})
+        details = next((row for row in bodies if body in (row["body"], row["short_name"])), {})
         position = None
         if (getattr(self, "on_planet", False) and body and lat is not None and lon is not None
                 and math.isfinite(lat) and math.isfinite(lon) and -90 <= lat <= 90 and -180 <= lon <= 180):
             position = {"latitude": lat, "longitude": lon, "body": body,
-                        "system": getattr(self, "current_sys", "")}
+                        "system": getattr(self, "current_sys", ""), "body_details": details}
         return {
+            "on_planet": bool(getattr(self, "on_planet", False)),
+            "bodies": bodies,
             "current_position": position,
             "body": body,
             "mining_catalogue": mining_material_catalogue(),
             "new_mining_materials": list(SURFACE_MINING_NEW),
             "profile_key": get_active_profile(self.config),
             "system": getattr(self, "current_sys", ""),
-            "resources": build_planetary_resources(getattr(self, "scan_items", []) or []),
+            "resources": resources,
             "sites": self._planet_materials_store().rows(),
         }
 
