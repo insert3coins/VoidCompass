@@ -173,6 +173,10 @@ PROFILE_TEXT_SETTINGS = (
     "overlay_hotkey_cargo",
     "overlay_hotkey_carrier",
     "overlay_hotkey_prospector",
+    "overlay_hotkey_gravity",
+    "overlay_hotkey_notifications",
+    "overlay_hotkey_heartbeat",
+    "overlay_hotkey_planet_waypoint",
     "overlay_hotkey_field_bookmark",
     "ground_target_system",
     "ground_target_body",
@@ -491,6 +495,10 @@ def apply_profile_config(config, profile_key=None):
         "overlay_hotkey_cargo": "",
         "overlay_hotkey_carrier": "",
         "overlay_hotkey_prospector": "",
+        "overlay_hotkey_gravity": "",
+        "overlay_hotkey_notifications": "",
+        "overlay_hotkey_heartbeat": "",
+        "overlay_hotkey_planet_waypoint": "",
         "overlay_hotkey_field_bookmark": "Ctrl+Alt+Shift+F12",
     }
     bool_defaults = {
@@ -655,6 +663,10 @@ def load_config():
         'overlay_hotkey_cargo': '',
         'overlay_hotkey_carrier': '',
         'overlay_hotkey_prospector': '',
+        'overlay_hotkey_gravity': '',
+        'overlay_hotkey_notifications': '',
+        'overlay_hotkey_heartbeat': '',
+        'overlay_hotkey_planet_waypoint': '',
         'overlay_hotkey_field_bookmark': 'Ctrl+Alt+Shift+F12',
         # New installs start with Standard. An older root config that somehow
         # lacks the setting keeps the historical Expanded default.

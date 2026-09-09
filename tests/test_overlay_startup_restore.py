@@ -1,6 +1,7 @@
 import unittest
 
 from dashboard import MainDashboard
+from global_hotkeys import OVERLAY_HOTKEY_SPECS
 
 
 class _Window:
@@ -73,6 +74,11 @@ class _Harness:
 
 
 class OverlayStartupRestoreTests(unittest.TestCase):
+    def test_every_managed_overlay_has_a_settings_hotkey(self):
+        managed = {attr for attr, _x_key, _y_key in MainDashboard._OVERLAY_POSITION_SPECS}
+        hotkey_managed = {attr for _action, _key, _label, attr in OVERLAY_HOTKEY_SPECS if attr}
+        self.assertEqual(hotkey_managed, managed)
+
     def _harness(self, survey_pending=False, has_content=True):
         survey_window = _Window()
         plain_window = _Window()
