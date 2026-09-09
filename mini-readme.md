@@ -7,6 +7,7 @@
 * Added Send to Compass on every saved surface location. It arms Planet Waypoint Navigation directly from the stored X/Y coordinates, displays the saved site name and binds the target to its recorded system and planet so it activates on the correct body.
 * Compass targets remain synchronized when their saved site is edited and clear when that site is deleted. Manual, current-position and return-to-ship targets also record the current body where available.
 * Hardened legacy site loading so invalid captured scan metadata cannot hide otherwise valid saved locations.
+* Completed Settings hotkey coverage for all 11 managed overlays by adding Gravity Warning, Cockpit Notifications, Journal Heartbeat and Planet Waypoint Navigation bindings.
 
 ## Earlier releases
 
