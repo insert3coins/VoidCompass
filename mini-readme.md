@@ -1,16 +1,18 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.2.7 // Planet Materials Navigation
-**Release Date:** 2026-Sep-09
+## v5.4.3 // Engineering Companion
+**Release Date:** 2026-Sep-10
 
-* Redesigned Planet Materials around one canonical planet selector, an explicit saved-location count, individual expandable site cards, planet conditions and known raw composition. Case, spacing and short/full body-name variants now resolve to the same planet, and site-list refreshes preserve unfinished form edits. Heat Map and By Material remain available across recorded observations; the heat map counts saved sites and does not predict mining probabilities.
-* Added Send to Compass on every saved surface location. It arms Planet Waypoint Navigation directly from the stored X/Y coordinates, displays the saved site name and binds the target to its recorded system and planet so it activates on the correct body.
-* Compass targets remain synchronized when their saved site is edited and clear when that site is deleted. Manual, current-position and return-to-ship targets also record the current body where available.
-* Hardened legacy site loading so invalid captured scan metadata cannot hide otherwise valid saved locations.
-* Completed Settings hotkey coverage for all 11 managed overlays by adding Gravity Warning, Cockpit Notifications, Journal Heartbeat and Planet Waypoint Navigation bindings.
+* Rebuilt Engineering as a complete HTML companion suite with Operations, Ship Engineering, Wishlist, Engineers, Materials, Odyssey, State Finds and Tech Brokers. Ship Engineering uses counted module-group tabs, a compact slot grid and a side-by-side modification browser so large hull loadouts stay readable.
+* Added Powerplay as its own profile-aware Field Tools workspace, showing the commander's Journal-reported pledge, rank, merits, salary, current system state, cargo activity and bundled power portrait.
+* Added the complete bundled ship blueprint and experimental-effect catalogues, authoritative 137-material reference, Engineer unlock chains, Technology Broker recipes, module identities and ship definitions. Engineer portraits and 48 interactive ship schematics are bundled for offline use.
+* Engineering now follows ship changes immediately, retains the last complete Journal `Loadout` per ShipID and supports profile-local planned builds for every ship in the bundled catalogue. Planned hulls expose their real core, optional, hardpoint and utility slots so module choices and Engineering goals can be edited before owning or boarding the ship.
+* Added profile-aware, ship-bound wishlists with per-grade material calculations, live Raw/Manufactured/Encoded inventory, missing/ready/surplus/tradeable filters, protected build reserves, material sourcing guidance and Journal-backed Engineer access progress.
+* Added preview-first EDEC, EDSY/SLEF and Coriolis build import with strict hull and physical-slot validation, plus anonymous current-loadout export to the clipboard. Existing legacy engineering and Odyssey goals remain readable by the runtime.
 
 ## Earlier releases
 
+* **v5.4.2.7** — Redesigned Planet Materials saved locations, added Send to Compass, synchronized edited/deleted compass targets, hardened legacy site loading and completed Settings hotkey coverage for all 11 overlays.
 * **v5.4.2.6.1** — Corrected Carrier Transit/arrival journal ordering, moved Planet Materials into its own menu tab, added live planet/coordinate/scan capture and a commander-profile mining-site database.
 * **v5.4.2.6** — Replaced the Tk backend with the Python runtime and HTML/WebView2 overlays, repaired HUD startup visibility, added profile-aware planet mining sites and material choices, and introduced carrier preparation/lockdown countdowns for the carrier aboard.
 * **v5.4.2.5** — Improved Navigation route hierarchy, next-system and distance labels, expanded survey/discovery rows, brief attention highlights and Survey Operations window sizing.

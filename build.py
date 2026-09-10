@@ -129,6 +129,7 @@ VSVersionInfo(
         f'--add-data=mining_data.db{data_sep}.',
         f'--add-data=codexRef.json{data_sep}.',
         f'--add-data=data/achievements.json{data_sep}data',
+        f'--add-data=data/engineering_companion{data_sep}data/engineering_companion',
     ]
     if is_windows:
         opts.extend([

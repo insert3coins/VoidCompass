@@ -19,7 +19,12 @@ from persistence_queue import persistence_queue
 
 DEFAULT_STATE = {
     "loadout": None,
+    # Last complete Loadout observed for each ShipID.  Engineering plans bind
+    # to these physical slots and stay available while another hull is active.
+    "fleet_loadouts": {},
     "stored_ships": None,
+    "powerplay": {"pledged": False, "power": "", "rank": None, "merits": None,
+                  "time_pledged": None, "salary": None, "location": {}, "cargo_history": []},
     "missions": {},
     "statistics": None,
     "statistics_updated": None,
@@ -315,9 +320,25 @@ def update_ship_companion_state(state, event, raw):
     raw = raw if isinstance(raw, dict) else {}
     changed = False
 
-    if event in SHIP_CHANGE_EVENTS and state.get("loadout") is not None:
-        state["loadout"] = None
-        changed = True
+    if event in SHIP_CHANGE_EVENTS:
+        # Shipyard events arrive before the new ship's complete Loadout. Keep a
+        # provisional current ship so HTML workspaces switch immediately, then
+        # replace it with the authoritative physical slots on Loadout.
+        incoming_id = raw.get("ShipID") if event == "ShipyardSwap" else raw.get("NewShipID")
+        incoming_type = raw.get("ShipType")
+        provisional = {
+            "event": event,
+            "ShipID": incoming_id if incoming_id is not None else "pending-current",
+            "Ship": incoming_type or "",
+            "Ship_Localised": raw.get("ShipType_Localised"),
+            "ShipName": raw.get("ShipName") or raw.get("UserShipName") or "",
+            "ShipIdent": raw.get("ShipIdent") or raw.get("UserShipId") or "",
+            "Modules": [],
+            "Provisional": True,
+        }
+        if state.get("loadout") != provisional:
+            state["loadout"] = provisional
+            changed = True
     elif event == "SetUserShipName" and isinstance(state.get("loadout"), dict):
         loadout = state["loadout"]
         if _same_ship_id(loadout.get("ShipID"), raw.get("ShipID")):

@@ -3,6 +3,8 @@ config.json
 profiles/
 
 # Application Cache
+backups/
+cache/
 webview/
 edsm_cache
 edsm_cache.json
@@ -21,8 +23,12 @@ waypoints.json
 __pycache__/
 *.log
 
-# Local-only test scaffolding (not shipped/tracked)
+# Local-only test scaffolding (not shipped/tracked). Release regression tests
+# are explicitly opted in as they are added.
 tests/
+!tests/
+tests/*
+!tests/test_engineering_companion_543.py
 art_sources/
 
 # PyInstaller
@@ -37,6 +43,8 @@ data/
 !data/
 data/*
 !data/achievements.json
+!data/engineering_companion/
+!data/engineering_companion/**
 version_info.txt
 
 # Virtual environment

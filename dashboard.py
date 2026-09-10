@@ -121,7 +121,7 @@ def _galactic_vector_context(current_coords, next_coords):
     try:
         current = tuple(float(value) for value in current_coords[:3])
         target = tuple(float(value) for value in next_coords[:3])
-    except (TypeError, ValueError, IndexError):
+    except (TypeError, ValueError, IndexError, KeyError):
         return {}
     if len(current) < 3 or len(target) < 3:
         return {}
@@ -8860,6 +8860,56 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
 
         if ev == "Loadout":
             state["loadout"] = dict(raw)
+            ship_id = raw.get("ShipID")
+            if ship_id is not None and isinstance(raw.get("Modules"), list):
+                state.setdefault("fleet_loadouts", {})[str(ship_id)] = dict(raw)
+            changed = True
+
+        elif ev in {
+            "Powerplay", "PowerplayJoin", "PowerplayLeave", "PowerplayDefect",
+            "PowerplayRank", "PowerplayMerits", "PowerplaySalary",
+            "PowerplayDeliver", "PowerplayCollect", "Location", "FSDJump",
+            "CarrierJump",
+        }:
+            power = state.get("powerplay")
+            if not isinstance(power, dict):
+                power = {}
+                state["powerplay"] = power
+            if ev == "PowerplayLeave":
+                power.update({"pledged": False, "power": "", "rank": None,
+                              "merits": None, "time_pledged": None})
+            elif ev in {"PowerplayJoin", "Powerplay"} and raw.get("Power"):
+                power.update({"pledged": True, "power": raw.get("Power")})
+            elif ev in {"PowerplayRank", "PowerplayMerits"} and raw.get("Power"):
+                power.update({"pledged": True, "power": raw.get("Power")})
+            elif ev == "PowerplayDefect" and (raw.get("ToPower") or raw.get("Power")):
+                power.update({"pledged": True, "power": raw.get("ToPower") or raw.get("Power"),
+                              "rank": None, "merits": None, "time_pledged": None})
+            if ev in {"Powerplay", "PowerplayRank"} and raw.get("Rank") is not None:
+                power["rank"] = int(raw.get("Rank") or 0)
+            if ev == "Powerplay" and raw.get("Merits") is not None:
+                power["merits"] = int(raw.get("Merits") or 0)
+            if ev == "PowerplayMerits" and raw.get("TotalMerits") is not None:
+                power["merits"] = int(raw.get("TotalMerits") or 0)
+            if ev == "Powerplay" and raw.get("TimePledged") is not None:
+                power["time_pledged"] = int(raw.get("TimePledged") or 0)
+            if ev == "PowerplaySalary" and raw.get("Amount") is not None:
+                power["salary"] = int(raw.get("Amount") or 0)
+            if ev in {"Location", "FSDJump", "CarrierJump"}:
+                power["location"] = {
+                    "system": raw.get("StarSystem"), "controlling_power": raw.get("ControllingPower"),
+                    "powers": list(raw.get("Powers") or []), "state": raw.get("PowerplayState"),
+                    "control_progress": raw.get("PowerplayStateControlProgress"),
+                    "reinforcement": raw.get("PowerplayStateReinforcement"),
+                    "undermining": raw.get("PowerplayStateUndermining"),
+                }
+            if ev in {"PowerplayDeliver", "PowerplayCollect"}:
+                history = list(power.get("cargo_history") or [])
+                history.append({"direction": "DELIVER" if ev == "PowerplayDeliver" else "COLLECT",
+                                "type": raw.get("Type_Localised") or raw.get("Type"),
+                                "count": int(raw.get("Count") or 0), "timestamp": raw.get("timestamp")})
+                power["cargo_history"] = history[-10:]
+            power["last_updated"] = raw.get("timestamp")
             changed = True
 
         elif ev in companion_features.SHIP_COMPANION_EVENTS:
@@ -8982,7 +9032,19 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 changed = True
 
         if changed:
+            if ev in {"Loadout", "ShipyardBuy", "ShipyardNew", "ShipyardSwap"}:
+                engineering = getattr(self, "engineer_materials", None)
+                if isinstance(engineering, dict) and engineering.get("engineering_follow_current", True) is not False:
+                    active_ship_id = (
+                        raw.get("ShipID") or raw.get("NewShipID")
+                        or (state.get("loadout") or {}).get("ShipID")
+                    )
+                    if active_ship_id is not None:
+                        engineering["engineering_selected_ship"] = str(active_ship_id)
+                        self._save_engineer_materials(engineering)
             self._save_companion_state()
+            if ev in {"Loadout", "ShipyardBuy", "ShipyardNew", "ShipyardSwap", "SetUserShipName"}:
+                self._schedule_html_dashboard_publish(immediate=True)
             self._refresh_companion_surfaces()
         self._check_rebuy_warning(raw if ev in ("Loadout", "LoadGame") else None,
                                   notify=not startup_replay)

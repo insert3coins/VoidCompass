@@ -1,5 +1,25 @@
 # Third-Party Notices
 
+## ED Engineering Companion
+
+VoidCompass v5.4.3 adapts the offline Engineering, Wishlist, Engineers,
+Materials and Technology Broker workflows from
+[ED Engineering Companion](https://github.com/CMDRForcer/ED-Engineering-Companion).
+It includes the upstream blueprint, experimental-effect, material, Engineer
+unlock, module identity, ship and Technology Broker JSON catalogues; its strict
+build-import parser; Engineer portraits; and ship schematic assets.
+
+ED Engineering Companion is licensed under the GNU General Public License
+version 3. VoidCompass uses the adapted code and data under its own matching
+GPL-3.0 licence. The complete licence text is in [LICENSE](LICENSE).
+
+The bundled ship schematics were sourced upstream from the
+[Elite Dangerous Almanac](https://github.com/DarkSession/Elite-Dangerous-Almanac)
+and are MIT-licensed. Upstream credits the schematics to the Elite Dangerous
+community. Elite Dangerous ship designs and game data remain the property of
+Frontier Developments plc and are used by these unofficial, non-commercial fan
+projects under Frontier's media-usage terms.
+
 ## three.js
 
 The offline HTML Galactic Atlas bundles three.js 0.185.1 and its OrbitControls

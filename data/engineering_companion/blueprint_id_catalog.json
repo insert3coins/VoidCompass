@@ -1,0 +1,446 @@
+[
+  {
+    "blueprint_name": "Armour_Advanced",
+    "level": 1,
+    "blueprint_id": 128673630,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Armour_Advanced",
+    "level": 2,
+    "blueprint_id": 128673631,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Armour_Advanced",
+    "level": 3,
+    "blueprint_id": 128673632,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Armour_Advanced",
+    "level": 4,
+    "blueprint_id": 128673633,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Armour_Advanced",
+    "level": 5,
+    "blueprint_id": 128673634,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Engine_Dirty",
+    "level": 1,
+    "blueprint_id": 128673655,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Engine_Dirty",
+    "level": 2,
+    "blueprint_id": 128673656,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Engine_Dirty",
+    "level": 3,
+    "blueprint_id": 128673657,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Engine_Dirty",
+    "level": 4,
+    "blueprint_id": 128673658,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Engine_Dirty",
+    "level": 5,
+    "blueprint_id": 128673659,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "FSD_LongRange",
+    "level": 1,
+    "blueprint_id": 128673690,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "FSD_LongRange",
+    "level": 2,
+    "blueprint_id": 128673691,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "FSD_LongRange",
+    "level": 3,
+    "blueprint_id": 128673692,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "FSD_LongRange",
+    "level": 4,
+    "blueprint_id": 128673693,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "FSD_LongRange",
+    "level": 5,
+    "blueprint_id": 128673694,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "HullReinforcement_HeavyDuty",
+    "level": 1,
+    "blueprint_id": 128673715,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "HullReinforcement_HeavyDuty",
+    "level": 2,
+    "blueprint_id": 128673716,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "HullReinforcement_HeavyDuty",
+    "level": 3,
+    "blueprint_id": 128673717,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "HullReinforcement_HeavyDuty",
+    "level": 4,
+    "blueprint_id": 128673718,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "HullReinforcement_HeavyDuty",
+    "level": 5,
+    "blueprint_id": 128673719,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Misc_HeatSinkCapacity",
+    "level": 1,
+    "blueprint_id": 128731666,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Misc_LightWeight",
+    "level": 1,
+    "blueprint_id": 128731471,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Misc_Shielded",
+    "level": 1,
+    "blueprint_id": 128731611,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "PowerDistributor_HighFrequency",
+    "level": 1,
+    "blueprint_id": 128673735,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "PowerDistributor_HighFrequency",
+    "level": 2,
+    "blueprint_id": 128673736,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "PowerDistributor_HighFrequency",
+    "level": 3,
+    "blueprint_id": 128673737,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "PowerDistributor_PriorityWeapons",
+    "level": 1,
+    "blueprint_id": 128673750,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "PowerDistributor_PriorityWeapons",
+    "level": 2,
+    "blueprint_id": 128673751,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "PowerDistributor_PriorityWeapons",
+    "level": 3,
+    "blueprint_id": 128673752,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "PowerDistributor_PriorityWeapons",
+    "level": 4,
+    "blueprint_id": 128673753,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "PowerDistributor_PriorityWeapons",
+    "level": 5,
+    "blueprint_id": 128673754,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "PowerPlant_Boosted",
+    "level": 1,
+    "blueprint_id": 128673765,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "PowerPlant_Boosted",
+    "level": 2,
+    "blueprint_id": 128673766,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "PowerPlant_Boosted",
+    "level": 3,
+    "blueprint_id": 128673767,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Sensor_FastScan",
+    "level": 1,
+    "blueprint_id": 128740127,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Sensor_FastScan",
+    "level": 2,
+    "blueprint_id": 128740128,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Sensor_FastScan",
+    "level": 3,
+    "blueprint_id": 128740129,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Sensor_LongRange",
+    "level": 1,
+    "blueprint_id": 128740132,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Sensor_LongRange",
+    "level": 2,
+    "blueprint_id": 128740133,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Sensor_LongRange",
+    "level": 3,
+    "blueprint_id": 128740134,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldBooster_HeavyDuty",
+    "level": 1,
+    "blueprint_id": 128673780,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldBooster_HeavyDuty",
+    "level": 2,
+    "blueprint_id": 128673781,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldBooster_HeavyDuty",
+    "level": 3,
+    "blueprint_id": 128673782,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldBooster_HeavyDuty",
+    "level": 4,
+    "blueprint_id": 128673783,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldBooster_HeavyDuty",
+    "level": 5,
+    "blueprint_id": 128673784,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldBooster_Resistive",
+    "level": 1,
+    "blueprint_id": 128673790,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldBooster_Resistive",
+    "level": 2,
+    "blueprint_id": 128673791,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldBooster_Resistive",
+    "level": 3,
+    "blueprint_id": 128673792,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldBooster_Resistive",
+    "level": 4,
+    "blueprint_id": 128673793,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldBooster_Resistive",
+    "level": 5,
+    "blueprint_id": 128673794,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldBooster_Thermic",
+    "level": 1,
+    "blueprint_id": 128673795,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldBooster_Thermic",
+    "level": 2,
+    "blueprint_id": 128673796,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldBooster_Thermic",
+    "level": 3,
+    "blueprint_id": 128673797,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldBooster_Thermic",
+    "level": 4,
+    "blueprint_id": 128673798,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldBooster_Thermic",
+    "level": 5,
+    "blueprint_id": 128673799,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldGenerator_Kinetic",
+    "level": 1,
+    "blueprint_id": 128673820,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldGenerator_Reinforced",
+    "level": 1,
+    "blueprint_id": 128673835,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldGenerator_Reinforced",
+    "level": 2,
+    "blueprint_id": 128673836,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldGenerator_Reinforced",
+    "level": 3,
+    "blueprint_id": 128673837,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "ShieldGenerator_Reinforced",
+    "level": 4,
+    "blueprint_id": 128673838,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Weapon_Efficient",
+    "level": 1,
+    "blueprint_id": 128673560,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Weapon_Efficient",
+    "level": 2,
+    "blueprint_id": 128673561,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Weapon_Efficient",
+    "level": 3,
+    "blueprint_id": 128673562,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Weapon_Efficient",
+    "level": 4,
+    "blueprint_id": 128673563,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Weapon_RapidFire",
+    "level": 1,
+    "blueprint_id": 128673505,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Weapon_RapidFire",
+    "level": 2,
+    "blueprint_id": 128673506,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Weapon_RapidFire",
+    "level": 3,
+    "blueprint_id": 128673507,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Weapon_RapidFire",
+    "level": 4,
+    "blueprint_id": 128673508,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Weapon_RapidFire",
+    "level": 5,
+    "blueprint_id": 128673509,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Weapon_ShortRange",
+    "level": 1,
+    "blueprint_id": 128673620,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Weapon_ShortRange",
+    "level": 2,
+    "blueprint_id": 128673621,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Weapon_ShortRange",
+    "level": 3,
+    "blueprint_id": 128673622,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Weapon_ShortRange",
+    "level": 4,
+    "blueprint_id": 128673623,
+    "source": "journal_confirmed"
+  },
+  {
+    "blueprint_name": "Weapon_ShortRange",
+    "level": 5,
+    "blueprint_id": 128673624,
+    "source": "journal_confirmed"
+  }
+]
