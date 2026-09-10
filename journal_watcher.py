@@ -1377,17 +1377,30 @@ class JournalWatcher:
                 pass
 
     def scan_history(self, progress_callback=None):
+        def report(processed, total):
+            if not callable(progress_callback):
+                return
+            try:
+                progress_callback(processed, total)
+            except Exception:
+                logging.debug("Journal history progress callback failed", exc_info=True)
+
         if not self.journal_path or not os.path.exists(self.journal_path):
+            report(0, 0)
             return {}
 
         try:
             files = sorted([os.path.join(self.journal_path, f) for f in os.listdir(self.journal_path) if f.startswith("Journal.") and f.endswith(".log")])
         except Exception:
+            report(0, 0)
             return {}
 
         total_files = len(files)
         if total_files == 0:
+            report(0, 0)
             return {}
+
+        report(0, total_files)
 
         new_history = {}
         processed = 0
@@ -1482,7 +1495,6 @@ class JournalWatcher:
                 pass
             
             processed += 1
-            if progress_callback and processed % 10 == 0:
-                progress_callback(processed, total_files)
+            report(processed, total_files)
         
         return new_history

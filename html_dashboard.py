@@ -2036,6 +2036,28 @@ class HtmlDashboardMixin:
             "_html_settings_tool_state",
             {"status": "ready", "detail": "Integration tests have not run this session."},
         )
+        profile = get_active_profile(self.config)
+        rebuild = getattr(self, "_cache_rebuild_state", None)
+        if not isinstance(rebuild, dict) or rebuild.get("profile") != profile:
+            rebuild = {
+                "running": False,
+                "status": "ready",
+                "phase": "Ready",
+                "detail": "No cache rebuild has run for this profile this session.",
+                "percent": 0,
+                "processed": 0,
+                "total": 0,
+                "systems": 0,
+                "started_at": 0,
+                "finished_at": 0,
+            }
+        started_at = max(0.0, _number(rebuild.get("started_at"), 0.0))
+        finished_at = max(0.0, _number(rebuild.get("finished_at"), 0.0))
+        elapsed = _number(rebuild.get("elapsed_seconds"), 0.0)
+        if rebuild.get("running") and started_at:
+            elapsed = max(0.0, time.time() - started_at)
+        elif not elapsed and started_at and finished_at:
+            elapsed = max(0.0, finished_at - started_at)
         return {
             "values": values, "hotkeys": hotkeys, "health": health, "eddn": eddn,
             "galnet": self._html_dashboard_galnet(),
@@ -2048,6 +2070,17 @@ class HtmlDashboardMixin:
             "tools": {
                 "status": _text(tools.get("status"), 30),
                 "detail": _text(tools.get("detail"), 500),
+            },
+            "cache_rebuild": {
+                "running": bool(rebuild.get("running")),
+                "status": _text(rebuild.get("status"), 30) or "ready",
+                "phase": _text(rebuild.get("phase"), 100) or "Ready",
+                "detail": _text(rebuild.get("detail"), 500),
+                "percent": max(0, min(100, _integer(rebuild.get("percent")))),
+                "processed": max(0, _integer(rebuild.get("processed"))),
+                "total": max(0, _integer(rebuild.get("total"))),
+                "systems": max(0, _integer(rebuild.get("systems"))),
+                "elapsed_seconds": round(max(0.0, elapsed), 1),
             },
         }
 
@@ -4056,8 +4089,9 @@ class HtmlDashboardMixin:
             elif operation == "rebuild_cache":
                 self.config["edsm_backfill_on_cache_rebuild"] = bool(payload.get("upload_edsm"))
                 self._persist_config()
-                self.scan_all_logs_threaded()
-                return True
+                started = self.scan_all_logs_threaded()
+                self._schedule_html_dashboard_publish(immediate=True)
+                return started is not False
 
         if changed:
             if page == "explore":
@@ -4211,8 +4245,9 @@ class HtmlDashboardMixin:
             self._schedule_html_dashboard_publish(immediate=True)
             return True
         if action == "rebuild_cache":
-            self.scan_all_logs_threaded()
-            return True
+            started = self.scan_all_logs_threaded()
+            self._schedule_html_dashboard_publish(immediate=True)
+            return started is not False
         if action == "open_screenshots":
             self.open_screenshots_folder()
             return True

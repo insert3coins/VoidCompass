@@ -1,9 +1,18 @@
+import json
+import sqlite3
+import tempfile
+import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import engineering_companion as companion
 from companion_features import fresh_state, update_ship_companion_state
+from dashboard_db_mixin import DashboardDBMixin
 from html_dashboard import HtmlDashboardMixin
+import hud
+from hud import TacticalHUD
+from journal_watcher import JournalWatcher
 
 
 class EngineeringCompanion543Tests(unittest.TestCase):
@@ -149,6 +158,150 @@ class EngineeringCompanion543Tests(unittest.TestCase):
         self.assertTrue(model["follow_current"])
         self.assertEqual(model["selected_ship_id"], "77")
         self.assertEqual(model["ship"]["label"], "Live ship")
+
+    def test_selecting_another_planned_ship_updates_profile_and_workspace(self):
+        class Host(HtmlDashboardMixin):
+            engineer_materials = {
+                "engineering_follow_current": False,
+                "engineering_selected_ship": "plan:one",
+                "engineering_builds": [
+                    {"id": "plan:one", "ship_symbol": "Anaconda", "name": "One", "slots": {}},
+                    {"id": "plan:two", "ship_symbol": "Python", "name": "Two", "slots": {}},
+                ],
+            }
+            companion_state = {}
+            current_sys = "Sol"
+            current_coords = (0, 0, 0)
+
+            def _html_profile_transient(self, _name, default):
+                return default
+
+            def _save_engineer_materials(self, _materials):
+                return True
+
+            def _schedule_html_dashboard_publish(self, immediate=False):
+                self.published_immediately = immediate
+
+        host = Host()
+        accepted = host._handle_html_workspace_command({
+            "page": "engineering", "operation": "select_ship", "ship_id": "plan:two",
+        })
+        model = host._html_engineering_workspace()
+        self.assertTrue(accepted)
+        self.assertEqual(host.engineer_materials["engineering_selected_ship"], "plan:two")
+        self.assertFalse(host.engineer_materials["engineering_follow_current"])
+        self.assertTrue(host.published_immediately)
+        self.assertEqual(model["selected_ship_id"], "plan:two")
+        self.assertEqual(model["ship"]["label"], "Two")
+
+    def test_ship_selector_allows_its_committed_snapshot_to_render(self):
+        root = Path(__file__).resolve().parents[1]
+        app = (root / "web" / "dashboard" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('id="engineering-ship-select" data-refresh-on-change', app)
+        self.assertIn('!focused?.matches("[data-refresh-on-change]")', app)
+
+    def test_journal_cache_progress_reports_every_file_in_small_histories(self):
+        with tempfile.TemporaryDirectory() as folder:
+            journal = Path(folder) / "Journal.2026-09-10T000000.01.log"
+            journal.write_text(
+                json.dumps({"event": "Location", "StarSystem": "Sol"}) + "\n",
+                encoding="utf-8",
+            )
+            updates = []
+            history = JournalWatcher(folder).scan_history(
+                lambda processed, total: updates.append((processed, total)),
+            )
+        self.assertEqual(updates, [(0, 1), (1, 1)])
+        self.assertIn("Sol", history)
+
+    def test_cache_rebuild_rejects_an_overlapping_worker(self):
+        class Host(DashboardDBMixin):
+            config = {
+                "active_commander_profile": "test",
+                "edsm_backfill_on_cache_rebuild": False,
+            }
+
+            def _ui_post(self, callback, *args, **_kwargs):
+                callback(*args)
+
+            def _schedule_html_dashboard_publish(self, immediate=False):
+                self.published = immediate
+
+        threads = []
+
+        class Thread:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+                threads.append(self)
+
+            def start(self):
+                self.started = True
+
+        host = Host()
+        with patch("dashboard_db_mixin.threading.Thread", Thread):
+            self.assertTrue(host.scan_all_logs_threaded())
+            self.assertFalse(host.scan_all_logs_threaded())
+        self.assertEqual(len(threads), 1)
+        self.assertTrue(threads[0].started)
+        self.assertTrue(host._cache_rebuild_state["running"])
+        self.assertEqual(host._cache_rebuild_state["phase"], "Preparing")
+
+    def test_completed_cache_rebuild_retains_visible_result(self):
+        class Watcher:
+            journal_path = "."
+
+            @staticmethod
+            def scan_history(progress):
+                progress(0, 1)
+                progress(1, 1)
+                return {"Sol": {"total": 1, "scanned_count": 1, "bodies": [0]}}
+
+        class Host(DashboardDBMixin):
+            config = {
+                "active_commander_profile": "test",
+                "automatic_profile_backups_enabled": False,
+                "edsm_upload_enabled": False,
+            }
+            watcher = Watcher()
+            current_sys = "Sol"
+
+            def _ui_post(self, *_args, **_kwargs):
+                return True
+
+            def update_hud(self):
+                return None
+
+        host = Host()
+        host.conn = sqlite3.connect(":memory:")
+        host.conn.execute(
+            "CREATE TABLE systems (name TEXT PRIMARY KEY, total INTEGER, scanned_count INTEGER)"
+        )
+        host.conn.execute(
+            "CREATE TABLE bodies (system_name TEXT, body_id INTEGER, PRIMARY KEY (system_name, body_id))"
+        )
+        host.db_lock = threading.RLock()
+        try:
+            host.scan_all_logs(upload_history_to_edsm=False)
+        finally:
+            host.conn.close()
+        self.assertFalse(host._cache_rebuild_state["running"])
+        self.assertEqual(host._cache_rebuild_state["status"], "ready")
+        self.assertEqual(host._cache_rebuild_state["phase"], "Complete")
+        self.assertEqual(host._cache_rebuild_state["percent"], 100)
+        self.assertEqual(host._cache_rebuild_state["systems"], 1)
+
+    def test_settings_cache_rebuild_has_live_state_and_progress_controls(self):
+        root = Path(__file__).resolve().parents[1]
+        app = (root / "web" / "dashboard" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function updateSettingsLive", app)
+        self.assertIn('id="settings-cache-rebuild-button"', app)
+        self.assertIn('id="settings-cache-meter"', app)
+        self.assertIn('updateSettingsLive(workspace.data || {})', app)
+
+    def test_carrier_countdown_states_use_the_active_theme_warning_colour(self):
+        renderer = TacticalHUD.__new__(TacticalHUD)
+        for state in ("CARRIER PREPARING", "CARRIER LOCKDOWN", "CARRIER TRANSIT"):
+            self.assertEqual(renderer._state_color(state), hud.COLOR_ORANGE)
 
     def test_profile_companion_state_has_fleet_and_powerplay_storage(self):
         state = fresh_state()

@@ -839,40 +839,88 @@ class DashboardDBMixin:
             self.log(f"❌ MIGRATION FAILED: {e}")
 
     def scan_all_logs_threaded(self):
-        import threading
-
-        if getattr(self, "_cache_rebuild_running", False):
+        lock = getattr(self, "_cache_rebuild_lock", None)
+        if lock is None:
+            lock = threading.Lock()
+            self._cache_rebuild_lock = lock
+        with lock:
+            if getattr(self, "_cache_rebuild_running", False):
+                already_running = True
+            else:
+                already_running = False
+                self._cache_rebuild_running = True
+        if already_running:
             self._cache_rebuild_feed("Cache rebuild is already in progress.")
-            return
+            self._publish_cache_rebuild_state()
+            return False
 
         # Snapshot the profile preference on the UI thread so this rebuild is
         # not affected by a later profile switch or checkbox change.
         upload_history_to_edsm = bool(
             self.config.get("edsm_backfill_on_cache_rebuild", True)
         )
-        self._cache_rebuild_running = True
-        update_button = getattr(self, "_update_cache_rebuild_button", None)
-        if callable(update_button):
-            update_button(True, 0)
+        self._set_cache_rebuild_state(
+            running=True,
+            status="working",
+            phase="Preparing",
+            detail="Preparing the active profile before scanning journal history.",
+            percent=0,
+            processed=0,
+            total=0,
+            systems=0,
+            started_at=time.time(),
+            finished_at=0.0,
+        )
         threading.Thread(
             target=self.scan_all_logs,
             kwargs={"upload_history_to_edsm": upload_history_to_edsm},
+            name="CacheRebuild",
             daemon=True,
         ).start()
+        return True
 
     def _cache_rebuild_feed(self, message, severity="INFO"):
         publish = getattr(self, "add_event_feed_entry", None)
         if callable(publish):
             publish("CACHE", message, severity=severity)
 
-    def _post_cache_rebuild_progress(self, running, percent=None):
-        update_button = getattr(self, "_update_cache_rebuild_button", None)
+    def _publish_cache_rebuild_state(self):
+        publish = getattr(self, "_schedule_html_dashboard_publish", None)
         post = getattr(self, "_ui_post", None)
-        if callable(update_button) and callable(post):
+        if callable(publish) and callable(post):
             post(
-                update_button, running, percent,
-                key="cache-rebuild-button",
+                lambda: publish(immediate=True),
+                key="cache-rebuild-state",
             )
+
+    def _set_cache_rebuild_state(self, **changes):
+        """Replace the cross-thread rebuild snapshot used by the HTML UI."""
+        profile = get_active_profile(self.config)
+        current = getattr(self, "_cache_rebuild_state", None)
+        if not isinstance(current, dict) or current.get("profile") != profile:
+            current = {
+                "profile": profile,
+                "running": False,
+                "status": "ready",
+                "phase": "Ready",
+                "detail": "No cache rebuild has run for this profile this session.",
+                "percent": 0,
+                "processed": 0,
+                "total": 0,
+                "systems": 0,
+                "started_at": 0.0,
+                "finished_at": 0.0,
+            }
+        next_state = {**current, **changes, "profile": profile}
+        self._cache_rebuild_state = next_state
+        self._publish_cache_rebuild_state()
+        return next_state
+
+    def _post_cache_rebuild_progress(self, running, percent=None, **details):
+        changes = {"running": bool(running), **details}
+        if percent is not None:
+            changes["percent"] = max(0, min(100, int(percent)))
+        return self._set_cache_rebuild_state(**changes)
 
     def scan_all_logs(self, upload_history_to_edsm=None):
         if upload_history_to_edsm is None:
@@ -881,10 +929,29 @@ class DashboardDBMixin:
             )
         self._cache_rebuild_running = True
         started_at = time.monotonic()
+        state = getattr(self, "_cache_rebuild_state", None)
+        if not isinstance(state, dict) or not state.get("running"):
+            self._set_cache_rebuild_state(
+                running=True, status="working", phase="Preparing",
+                detail="Preparing the active profile before scanning journal history.",
+                percent=0, processed=0, total=0, systems=0,
+                started_at=time.time(), finished_at=0.0,
+            )
         edsm_enabled = bool(self.config.get("edsm_upload_enabled"))
         edsm_requested = edsm_enabled and bool(upload_history_to_edsm)
         edsm_mode = "EDSM history enabled" if edsm_requested else "local cache only"
         self._cache_rebuild_feed(f"Cache rebuild started · {edsm_mode}.")
+        journal_path = str(getattr(self.watcher, "journal_path", "") or "")
+        if not journal_path or not os.path.isdir(journal_path):
+            detail = "The configured journal folder is unavailable; cache rebuild did not run."
+            self._cache_rebuild_feed(detail, severity="FAIL")
+            self._set_cache_rebuild_state(
+                status="failed", phase="Journal folder unavailable", detail=detail,
+                percent=0,
+            )
+            self._cache_rebuild_running = False
+            self._set_cache_rebuild_state(running=False, finished_at=time.time())
+            return
         if bool(self.config.get("automatic_profile_backups_enabled", True)):
             try:
                 profile_key = get_active_profile(self.config)
@@ -902,18 +969,33 @@ class DashboardDBMixin:
                 "Automatic profile safety snapshot disabled; scanning journals.",
             )
 
+        self._set_cache_rebuild_state(
+            status="working", phase="Scanning journals",
+            detail="Reading journal history for the active commander.",
+            percent=0, processed=0, total=0,
+        )
+
         last_progress_milestone = -10
 
         def report_progress(processed, total):
             nonlocal last_progress_milestone
             try:
                 processed = max(0, int(processed))
-                total = max(1, int(total))
-                percent = max(0, min(99, int((processed / total) * 100)))
+                total = max(0, int(total))
+                percent = max(0, min(88, int((processed / total) * 88))) if total else 0
             except (TypeError, ValueError, ZeroDivisionError):
                 return
-            self._post_cache_rebuild_progress(True, percent)
-            milestone = (percent // 10) * 10
+            self._post_cache_rebuild_progress(
+                True, percent,
+                status="working", phase="Scanning journals",
+                detail=(
+                    f"Read {min(processed, total):,} of {total:,} journal files."
+                    if total else "No journal files were found in the configured folder."
+                ),
+                processed=processed, total=total,
+            )
+            scan_percent = int((processed / total) * 100) if total else 0
+            milestone = (scan_percent // 10) * 10
             if milestone >= 10 and milestone > last_progress_milestone:
                 last_progress_milestone = milestone
                 self._cache_rebuild_feed(
@@ -926,20 +1008,28 @@ class DashboardDBMixin:
                 new_history = self.watcher.scan_history(report_progress)
             except Exception as exc:
                 logging.exception("History cache rebuild failed while scanning journals")
-                self._cache_rebuild_feed(
-                    f"Cache rebuild failed while scanning journals: {exc}",
-                    severity="FAIL",
+                detail = f"Cache rebuild failed while scanning journals: {exc}"
+                self._cache_rebuild_feed(detail, severity="FAIL")
+                self._set_cache_rebuild_state(
+                    status="failed", phase="Journal scan failed", detail=detail,
                 )
                 return
 
             if not new_history:
-                self._cache_rebuild_feed(
-                    "Cache rebuild found no matching journal history.",
-                    severity="WARN",
+                detail = "No matching commander journal history was found; the existing cache was left unchanged."
+                self._cache_rebuild_feed(detail, severity="WARN")
+                self._set_cache_rebuild_state(
+                    status="warning", phase="No matching history", detail=detail,
+                    percent=100,
                 )
                 return
 
-            self._post_cache_rebuild_progress(True, 100)
+            self._post_cache_rebuild_progress(
+                True, 90,
+                status="working", phase="Updating cache",
+                detail=f"Writing survey history for {len(new_history):,} systems.",
+                systems=len(new_history),
+            )
             self._cache_rebuild_feed(
                 f"Journal scan complete · {len(new_history):,} systems found; updating cache."
             )
@@ -978,9 +1068,10 @@ class DashboardDBMixin:
                     self.conn.commit()
                 except sqlite3.Error as exc:
                     self.conn.rollback()
-                    self._cache_rebuild_feed(
-                        f"Cache rebuild database update failed: {exc}",
-                        severity="FAIL",
+                    detail = f"Cache rebuild database update failed: {exc}"
+                    self._cache_rebuild_feed(detail, severity="FAIL")
+                    self._set_cache_rebuild_state(
+                        status="failed", phase="Database update failed", detail=detail,
                     )
                     return
 
@@ -992,6 +1083,11 @@ class DashboardDBMixin:
             self.update_hud()
 
             if edsm_requested:
+                self._post_cache_rebuild_progress(
+                    True, 96,
+                    status="working", phase="Queuing EDSM history",
+                    detail="The local cache is ready; requesting the optional EDSM backfill.",
+                )
                 self.edsm.run_backfill(self.config.get("journal_path", ""))
 
             elapsed = max(0.0, time.monotonic() - started_at)
@@ -1005,9 +1101,31 @@ class DashboardDBMixin:
                 f"Cache rebuild complete · {len(new_history):,} systems · "
                 f"{elapsed:.1f}s · {completion}."
             )
+            self._set_cache_rebuild_state(
+                status="ready", phase="Complete",
+                detail=(
+                    f"Rebuilt {len(new_history):,} systems in {elapsed:.1f}s · {completion}."
+                ),
+                percent=100, systems=len(new_history),
+                elapsed_seconds=round(elapsed, 1),
+            )
+        except Exception as exc:
+            logging.exception("Cache rebuild failed")
+            detail = f"Cache rebuild failed: {exc}"
+            self._cache_rebuild_feed(detail, severity="FAIL")
+            self._set_cache_rebuild_state(
+                status="failed", phase="Rebuild failed", detail=detail,
+            )
         finally:
-            self._cache_rebuild_running = False
-            self._post_cache_rebuild_progress(False)
+            lock = getattr(self, "_cache_rebuild_lock", None)
+            if lock is not None:
+                with lock:
+                    self._cache_rebuild_running = False
+            else:
+                self._cache_rebuild_running = False
+            self._post_cache_rebuild_progress(
+                False, finished_at=time.time(),
+            )
 
     def load_system_from_db(self, sys_name, preserve_total_confirmation=False):
         with self.db_lock:

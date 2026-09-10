@@ -495,7 +495,8 @@ class TacticalHUD:
             return COLOR_YELLOW
         if state_text in (
             "HYPERSPACE", "SUPERCRUISE", "JUMPING", "COMBAT",
-            "FSD CHARGE", "HYPER CHARGE", "SCO OVERCHARGE", "CARRIER TRANSIT",
+            "FSD CHARGE", "HYPER CHARGE", "SCO OVERCHARGE",
+            "CARRIER PREPARING", "CARRIER LOCKDOWN", "CARRIER TRANSIT",
             "INTERDICTION", "INTERDICTED", "SRV THREAT", "CAPITAL SHIP",
             "HEAVY COMBAT",
             "HEAT CRITICAL", "SUIT OXYGEN LOW", "SUIT HEALTH LOW",
