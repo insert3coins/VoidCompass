@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.4.2.7**
+**Current version: 5.4.3**
 
 Void Compass is an exploration-first companion for Elite Dangerous. It turns Frontier's live journal, status and companion files into a persistent command dashboard, deep survey intelligence, expedition planning and native in-game overlays.
 
@@ -15,13 +15,15 @@ Void Compass is distributed as a native Windows x64 application and does not req
 - **Exploration-focused navigation** — seven clear destinations keep survey, map and commander records prominent while a small Field Tools page supports surface work and mining.
 - **Stellar Cartography** — a live System Orrery with journal-backed barycentres and Elite body-target lock, commander-controlled Survey Queue, planetary raw-material intelligence, planetary field mapping, expedition replay, a system/body/event-aware Screenshot Chronicle, science correlations and a complete 42-region passport built from retained journal evidence.
 - **Planet materials** — a dedicated tab from Explore & survey with all scanned raw-material percentages and searchable, editable surface mining sites (latitude/longitude, materials and notes). Sites use a separate `planet_materials.db` in the active commander profile and are included in profile backups. Carrier navigation distinguishes preparation, scheduled lockdown, transit and a 12-second journal-confirmed arrival state. Use current coordinates captures the system/body and latitude/longitude together. The populated material selector includes the 13 Rhino commodities from [Frontier’s 4.4.1.0 update](https://www.elitedangerous.com/news/updates/4-4-1-0); catalogue choices are separate from confirmed site observations.
+- **Engineering Companion** — a full HTML suite adapted from ED Engineering Companion: Operations guidance, immediate live-ship following, retained fleet loadouts and editable profile-local builds for every bundled ship, a compact category-filtered slot workbench, a side-by-side modification browser, the complete blueprint and experimental-effect catalogues, ship-bound goals, protected material reserves, live Raw/Manufactured/Encoded stock, Odyssey goals, Engineer unlock guides and portraits, material State Finds and nearby traders, Tech Broker recipes, ship schematics, and preview-first EDEC/EDSY/SLEF/Coriolis build import.
+- **Powerplay operations** — a dedicated Field Tools workspace for the active commander's Journal-reported pledge, rank, merits, salary, current system state and Powerplay cargo activity, with bundled offline power portraits.
 - **Deep Survey** — explainable FSS, DSS, biological, geological and planetary-mining signal progress; a Bio Field Assistant; discovery-significance ratings; valuable bodies; revisit targets; Colonisation Recon and a searchable discovery archive.
 - **Galactic Atlas** — a fully offline, GPU-accelerated HTML/Three.js Milky Way map docked directly into the command deck, with genuine Elite XYZ structure, all 42 Universal Cartographics regions, routes, travel history, smart clusters, intelligence layers and commander annotations.
 - **Cockpit overlays** — themed, profile-aware HTML HUDs with mouse passthrough, global hotkeys, a visual Overlay Layout Studio and quiet renderer self-recovery, rendered by one shared offline WebView2 runtime.
 - **Quiet by design** — themed cockpit overlays, HTML notifications and a curated flight log provide useful feedback without cockpit chatter, speech synthesis or an AI service.
 - **Explorer field tools** — a touchdown-anchored Surface Survey Trail, Ground/Exobiology, Mining, exploration Engineering/Synthesis, Colonisation Recon and focused Achievements remain available without turning the app into a general career suite.
 
-The HTML Command Deck is the visible application shell for every launch. Its animated galactic flight-computer sequence covers profile, survey-history, live-journal and cockpit readiness, while first launch and later setup reruns use a matching HTML First Commissioning deck with native journal-folder selection. The live exploration briefing combines Current Survey, one explainable primary decision, a factual five-jump Route Horizon, Session Pulse, ranked field priorities, personal regional Codex coverage and the curated Flight Log; a cached Galnet ticker shares the persistent status bar beside the clock. Balanced, Completionist, Exobiology, Codex Hunter, Value Hunter and Fast Transit doctrines tune the advice without inventing journal facts; optional briefing cards can be hidden and reordered independently for each commander. Profile and theme changes update it from the same Python-owned journal state used by the overlays and map. Every presented application workspace now remains inside this command deck; the withdrawn Tk root is an internal journal/state host only and is never exposed as a second UI.
+The HTML Command Deck is the visible application shell for every launch. Its animated galactic flight-computer sequence covers profile, survey-history, live-journal and cockpit readiness, while first launch and later setup reruns use a matching HTML First Commissioning deck with native journal-folder selection. The live exploration briefing combines Current Survey, one explainable primary decision, a factual five-jump Route Horizon, Session Pulse, ranked field priorities, personal regional Codex coverage and the curated Flight Log; a cached Galnet ticker shares the persistent status bar beside the clock. Balanced, Completionist, Exobiology, Codex Hunter, Value Hunter and Fast Transit doctrines tune the advice without inventing journal facts; optional briefing cards can be hidden and reordered independently for each commander. Profile and theme changes update it from the same Python-owned journal state used by the overlays and map. Every presented application workspace remains inside this command deck, while the Tk-free Python runtime owns journal processing, profiles and persistence.
 
 ![Void Compass exploration dashboard](DashBoard.PNG)
 
@@ -33,7 +35,7 @@ The HTML Command Deck is the visible application shell for every launch. Its ani
 | --- | --- |
 | **Exploration** | Dashboard, Explore & Survey, Mission Control and Galactic Atlas. Explore adds an Elite-style live system body schematic, System Orrery and Survey Queue to the workboard, alongside editable profile waypoints, Elite NavRoute inspection and manual Spansh neutron plotting/import. |
 | **Records** | Flight Records, Analytics, Commander Profile, Captain's Log and the System Value Ledger. Analytics includes the Explorer Science Lab and Galactic Region Passport; Captain's Log includes interactive expedition replay and standalone HTML export. |
-| **Field Tools** | Ground/Exobiology with the Planetary Field Map, Mining, Engineering/Synthesis, Fleet Carrier Command, Colonisation Recon and Explorer Achievements. |
+| **Field Tools** | Ground/Exobiology with the Planetary Field Map, Mining, the complete Engineering Companion suite, Powerplay operations, Fleet Carrier Command, Colonisation Recon and Explorer Achievements. |
 | **System** | Overlay Layout Studio, complete profile-aware Settings and About. |
 
 Specialist state is hydrated only when its HTML page is opened, keeping routine journal publications and startup light while preserving live profile and theme changes.
@@ -149,7 +151,7 @@ Packaged releases create `config.json`, commander profiles and logs beside the e
 C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous
 ```
 
-The 5.4.2.4 interface is Windows x64 only. The former experimental Linux build has been retired as the application moves to one WebView2 presentation architecture.
+The 5.4.3 interface is Windows x64 only. The former experimental Linux build has been retired as the application moves to one WebView2 presentation architecture.
 
 ## Contributing and support
 

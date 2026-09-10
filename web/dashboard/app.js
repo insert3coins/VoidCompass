@@ -26,6 +26,15 @@ let themeFingerprint = "";
 let pageRequestId = 0;
 let studioSelectedId = "";
 let studioView = "layout";
+let engineeringView = "engineering";
+let engineeringData = null;
+let engineeringSelectedSlot = "";
+let engineeringSlotCategory = "";
+let engineeringSelectedBlueprint = "";
+let engineeringSelectedEngineer = "";
+let engineeringMaterialFilter = "all";
+let engineeringSearch = "";
+let engineeringSearchTimer = 0;
 let studioDragging = null;
 let studioFingerprint = "";
 let studioMoveSentAt = 0;
@@ -2643,23 +2652,103 @@ function renderMiningWorkspace(data) {
 
 function renderEngineeringWorkspace(data) {
   const root = byId("engineering-workspace");
+  engineeringData = data;
+  const fleet = data.fleet || [];
+  const ship = data.ship || {};
+  const slots = data.slots || [];
+  const pins = data.pins || [];
   const wishlist = data.wishlist || {};
-  const pinRows = (data.pins || []).map((row) => `<div class="engineering-pin"><div><b>${escapeHtml(row.name)}</b><span>G${numeric(row.current_grade)} → G${numeric(row.grade)} · QTY ${numeric(row.quantity)}</span></div><em class="${row.craftable ? "ready" : "missing"}">${row.craftable ? "READY" : "MISSING"}</em><button data-ws-page="engineering" data-ws-op="unpin" data-name="${escapeHtml(row.name)}">×</button></div>`);
-  const odysseyGoals = (data.odyssey?.goals || []).map((row) => `<div class="engineering-pin"><div><b>${escapeHtml(row.name)}</b><span>ODYSSEY WORKSHOP · QTY ${numeric(row.quantity)}</span></div><em class="missing">GOAL</em><button data-ws-page="engineering" data-ws-op="odyssey_unpin" data-name="${escapeHtml(row.name)}">×</button></div>`);
-  const priorities = workspaceTable([
-    {label: "Material", render: (row) => `<b>${escapeHtml(row.name || row.symbol)}</b><small>${escapeHtml(row.category || row.family || "")}</small>`},
-    {label: "Have", render: (row) => numeric(row.have ?? row.count)}, {label: "Need", render: (row) => numeric(row.need)},
-    {label: "Missing", render: (row) => `<b class="warn-text">${numeric(row.deficit)}</b>`},
-  ], wishlist.materials || data.priorities || [], "Pin a blueprint to build a shared material wishlist.");
-  const engineers = workspaceTable([{label: "Engineer", key: "name"}, {label: "Rank", key: "rank"}, {label: "Progress", key: "progress"}, {label: "System", key: "system"}], data.engineers || [], "EngineerProgress will populate access records.");
-  const inventory = workspaceTable([{label: "Material", render: (row) => `<b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.category)} · G${numeric(row.grade)}</small>`}, {label: "Stock", render: (row) => numeric(row.count)}, {label: "Capacity", render: (row) => numeric(row.capacity)}], data.inventory || [], "Materials and Backpack journal events will populate inventory.");
+  const shipCatalogue = data.ship_catalogue || [];
+  const allBlueprints = data.catalogue || [];
+  if (!engineeringSelectedSlot || !slots.some((row) => row.slot === engineeringSelectedSlot)) engineeringSelectedSlot = slots[0]?.slot || "";
+  const groups = ["Core Internals", "Fuel Tank", "Optional Internals", "Hardpoints", "Utility Mounts"];
+  const populatedGroups = groups.filter((group) => slots.some((row) => row.category === group));
+  const selectedCandidate = slots.find((row) => row.slot === engineeringSelectedSlot) || {};
+  if (!engineeringSlotCategory || !populatedGroups.includes(engineeringSlotCategory)) engineeringSlotCategory = selectedCandidate.category || populatedGroups[0] || "";
+  if (selectedCandidate.category && selectedCandidate.category !== engineeringSlotCategory) engineeringSelectedSlot = slots.find((row) => row.category === engineeringSlotCategory)?.slot || engineeringSelectedSlot;
+  const slot = slots.find((row) => row.slot === engineeringSelectedSlot) || {};
+  const slotType = slot.planned ? (slot.empty ? "" : slot.name) : slot.moduleId ? slot.name : "";
+  const allowedTypes = slot.allowedTypes || [];
+  const matchingBlueprints = allBlueprints.filter((row) => {
+    if (slot.engineerable === false) return false;
+    if (slot.planned && slot.empty && allowedTypes.length) return allowedTypes.includes(row.type);
+    return !slotType || row.type.toLowerCase() === slotType.toLowerCase() || row.type.toLowerCase().includes(slotType.toLowerCase()) || slotType.toLowerCase().includes(row.type.toLowerCase());
+  });
+  const visibleBlueprints = !slot.slot ? [] : slot.planned || slot.engineerable === false ? matchingBlueprints : matchingBlueprints.length ? matchingBlueprints : allBlueprints;
+  if (!engineeringSelectedBlueprint || !visibleBlueprints.some((row) => `${row.type}::${row.name}` === engineeringSelectedBlueprint)) engineeringSelectedBlueprint = visibleBlueprints[0] ? `${visibleBlueprints[0].type}::${visibleBlueprints[0].name}` : "";
+  const blueprint = allBlueprints.find((row) => `${row.type}::${row.name}` === engineeringSelectedBlueprint) || {};
+  const experimentals = (data.experimentals || []).filter((row) => (row.module_types || []).includes(blueprint.type) || row.type === blueprint.type);
+  const shipOptions = fleet.map((row) => `<option value="${escapeHtml(row.id)}" ${row.id === data.selected_ship_id ? "selected" : ""}>${escapeHtml(row.label)} · ${escapeHtml(row.type || row.symbol)}${row.planned ? " · PLANNED BUILD" : row.observed ? "" : " · LOADOUT NOT OBSERVED"}</option>`).join("");
+  const newShipOptions = shipCatalogue.map((row) => `<option value="${escapeHtml(row.symbol)}">${escapeHtml(row.name)} · ${escapeHtml(row.manufacturer)} · ${escapeHtml(String(row.size || "").toUpperCase())}</option>`).join("");
+  const categoryTabs = populatedGroups.map((group) => {
+    const count = slots.filter((row) => row.category === group).length;
+    const shortLabel = {"Core Internals":"CORE", "Fuel Tank":"FUEL", "Optional Internals":"OPTIONAL", "Hardpoints":"HARDPOINTS", "Utility Mounts":"UTILITIES"}[group] || group;
+    return `<button class="${engineeringSlotCategory === group ? "active" : ""}" data-engineering-category="${escapeHtml(group)}"><span>${escapeHtml(shortLabel)}</span><b>${numeric(count)}</b></button>`;
+  }).join("");
+  const visibleSlots = slots.filter((row) => row.category === engineeringSlotCategory);
+  const slotRows = visibleSlots.map((row) => `<button class="engineering-module ${row.slot === engineeringSelectedSlot ? "active" : ""}" data-engineering-slot="${escapeHtml(row.slot)}"><i>${escapeHtml(row.rating || "—")}</i><span><b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.slot)}</small></span>${row.engineeringGrade ? `<em>⚒ G${numeric(row.engineeringGrade)}</em>` : ""}</button>`).join("");
+  const blueprintRows = visibleBlueprints.filter((row) => !engineeringSearch || `${row.type} ${row.name}`.toLowerCase().includes(engineeringSearch)).map((row) => `<button class="engineering-catalog-row ${`${row.type}::${row.name}` === engineeringSelectedBlueprint ? "active" : ""}" data-engineering-blueprint="${escapeHtml(`${row.type}::${row.name}`)}"><span><b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.type)} · ${(row.engineers || []).length} ENGINEERS</small></span><em>G${numeric(row.max_grade)}</em></button>`).join("");
+  const effects = (blueprint.effects || []).map((row) => `<span class="${row.good ? "good" : "bad"}">${escapeHtml(row.effect)} ${escapeHtml(row.property)}</span>`).join("");
+  const ingredients = (blueprint.ingredients || []).map((row) => `<span>${numeric(row.amount)} × ${escapeHtml(row.name)}</span>`).join("");
+  const blueprintDetail = blueprint.name ? `<div class="engineering-blueprint-detail"><header><small>${escapeHtml(blueprint.type)}</small><h3>${escapeHtml(blueprint.name)}</h3><span>${escapeHtml(slot.name || "SELECTED MODULE")} · ${escapeHtml(slot.rating || "UNRATED")}</span></header><h4>MODIFICATION EFFECTS</h4><div class="engineering-effect-list">${effects || "<span>NO EFFECT DATA</span>"}</div><h4>TOP-GRADE MATERIALS</h4><div class="engineering-ingredient-list">${ingredients || "<span>NO MATERIAL DATA</span>"}</div><div class="engineering-plan-form"><label>TARGET GRADE<input id="engineering-grade" type="number" min="1" max="${numeric(blueprint.max_grade)}" value="${numeric(blueprint.max_grade)}"></label><label>CURRENT GRADE<input id="engineering-current-grade" type="number" min="0" max="${Math.max(0, number(blueprint.max_grade)-1)}" value="${Math.min(number(slot.engineeringGrade), Math.max(0, number(blueprint.max_grade)-1))}"></label><label>QUANTITY<input id="engineering-quantity" type="number" min="1" max="99" value="1"></label><label>EXPERIMENTAL<select id="engineering-experimental"><option value="">NONE</option>${experimentals.map((row) => `<option>${escapeHtml(row.name)}</option>`).join("")}</select></label><button class="primary" data-ws-page="engineering" data-ws-op="pin">${ship.planned ? "ASSIGN SLOT & ADD GOAL" : "ADD TO WISHLIST"}</button>${ship.planned && slot.assigned ? `<button class="danger-action" data-ws-page="engineering" data-ws-op="clear_slot" data-ship-id="${escapeHtml(ship.id)}">CLEAR SLOT & GOALS</button>` : ""}</div></div>` : `<div class="engineering-blueprint-empty"><b>${slot.engineerable === false ? "NO ENGINEERING AVAILABLE" : "SELECT A MODIFICATION"}</b><span>${slot.engineerable === false ? "This module cannot be modified." : "Choose a blueprint from the results to review effects, materials and grades."}</span></div>`;
+  const buildManager = `<section class="engineering-build-manager"><div><b>SHIP BUILD WORKSHOP</b><span>${data.follow_current ? "FOLLOWING CURRENT JOURNAL SHIP" : ship.planned ? "EDITING A PROFILE PLANNED BUILD" : "VIEWING A RETAINED FLEET LOADOUT"}</span></div><button data-ws-page="engineering" data-ws-op="follow_current" class="${data.follow_current ? "active" : ""}">FOLLOW LIVE SHIP</button><details><summary>CREATE BUILD FOR ANY SHIP</summary><div><select id="engineering-new-ship">${newShipOptions}</select><input id="engineering-new-build-name" placeholder="BUILD NAME (OPTIONAL)"><button data-ws-page="engineering" data-ws-op="create_build">CREATE PLANNED BUILD</button></div></details>${ship.planned ? `<div class="engineering-build-edit"><input id="engineering-build-name" value="${escapeHtml(ship.label || "Planned build")}"><button data-ws-page="engineering" data-ws-op="rename_build" data-ship-id="${escapeHtml(ship.id)}">RENAME</button><button class="danger-action" data-ws-page="engineering" data-ws-op="delete_build" data-ship-id="${escapeHtml(ship.id)}">DELETE BUILD</button></div>` : ""}</section>`;
+  const engineeringPanel = `${buildManager}<section class="engineering-ship-grid">
+    <article class="engineering-ship-card"><label>ACTIVE PLAN SHIP<select id="engineering-ship-select">${shipOptions}</select></label>${ship.asset ? `<img src="${escapeHtml(ship.asset)}" alt="${escapeHtml(ship.type || ship.label)}">` : `<div class="engineering-ship-placeholder">LOADOUT AWAITING JOURNAL</div>`}<h3>${escapeHtml(ship.label || "No observed ship")}</h3><p>${escapeHtml(ship.manufacturer || "JOURNAL SOURCE")} · ${escapeHtml(String(ship.size || "").toUpperCase())}${ship.planned ? " · PLANNED BUILD" : ""}</p><div class="engineering-ship-stats"><span><b>${data.ship_stats?.jump_range == null ? "—" : `${numeric(data.ship_stats.jump_range, 1)} LY`}</b>JUMP RANGE</span><span><b>${data.ship_stats?.unladen_mass == null ? "—" : `${numeric(data.ship_stats.unladen_mass, 1)} T`}</b>UNLADEN MASS</span><span><b>${data.ship_stats?.cargo == null ? "—" : `${numeric(data.ship_stats.cargo)} T`}</b>CARGO</span><span><b>${numeric(data.ship_stats?.engineerable)}</b>ENGINEERABLE</span></div><small>${ship.planned ? "Choose a slot and modification to assign its module type and create an Engineering goal." : "Select any observed fleet loadout without changing ships in Elite."}</small></article>
+    <section class="engineering-workbench"><article class="engineering-module-card"><nav class="engineering-module-tabs">${categoryTabs}</nav><header class="engineering-module-heading"><div><small>MODULE GROUP</small><h3>${escapeHtml(engineeringSlotCategory || "NO LOADOUT")}</h3></div><b>${numeric(visibleSlots.length)} SLOTS</b></header><div class="engineering-slot-grid">${slotRows || `<p class="workspace-empty">Switch to this ship once in Elite to capture its physical Loadout slots.</p>`}</div></article><article class="engineering-planner-card"><div class="engineering-blueprint-browser"><section class="engineering-blueprint-results"><header><div><small>SELECTED SLOT</small><b>${escapeHtml(slot.name || "NO MODULE SELECTED")}</b></div><span>${escapeHtml(slot.rating || "—")}</span></header><input id="engineering-search" value="${escapeHtml(engineeringSearch)}" placeholder="SEARCH COMPATIBLE MODIFICATIONS…"><div class="engineering-catalog">${blueprintRows || `<p class="workspace-empty">${slot.engineerable === false ? "This slot has no Engineering modifications." : "No compatible modification found."}</p>`}</div></section>${blueprintDetail}</div></article></section>
+  </section><section class="engineering-transfer"><button data-ws-page="engineering" data-ws-op="export_copy" ${ship.observed ? "" : "disabled"}>COPY OUTFITTING EXPORT</button><details><summary>IMPORT EDEC, EDSY/SLEF OR CORIOLIS BUILD</summary><textarea id="engineering-build-import" placeholder="PASTE BUILD JSON, URL OR EXPORT HERE"></textarea><button data-ws-page="engineering" data-ws-op="import_preview" ${ship.observed ? "" : "disabled"}>VALIDATE IMPORT</button></details></section>`;
+
+  const pinCards = pins.map((row) => `<article class="engineering-wishlist-card ${row.craftable ? "ready" : "missing"}"><header><span>${escapeHtml(row.type || "ENGINEERING")}</span><b>${row.craftable ? "READY" : "COLLECT"}</b></header><h3>${escapeHtml(row.name)}</h3><p>${escapeHtml(row.slot || "UNBOUND PLAN")} · G${numeric(row.current_grade)} → G${numeric(row.grade)}${row.experimental ? ` · ${escapeHtml(row.experimental)}` : ""}</p><div class="engineering-plan-materials">${(row.materials || []).map((item) => `<span class="${item.missing ? "missing" : "ready"}"><b>${numeric(item.have)} / ${numeric(item.amount)}</b>${escapeHtml(item.name)}</span>`).join("") || "<small>Legacy plan uses the original VoidCompass recipe catalogue.</small>"}</div><button class="danger-action" data-ws-page="engineering" data-ws-op="unpin" data-plan-id="${escapeHtml(row.id)}">REMOVE</button></article>`).join("");
+  const requiredRows = (data.materials || []).filter((row) => row.need > 0).sort((a,b) => b.missing-a.missing || a.name.localeCompare(b.name));
+  const wishlistPanel = `${workspaceMetrics([{label:"Plans",value:numeric(wishlist.plans),detail:`${numeric(wishlist.ready)} READY`},{label:"Required units",value:numeric(wishlist.required),detail:"RESERVED FOR BUILD"},{label:"Missing units",value:numeric(wishlist.missing),detail:wishlist.missing?"COLLECTION REQUIRED":"ALL MATERIALS READY"}])}<section class="engineering-wishlist-grid">${pinCards || `<p class="workspace-empty">Select a ship slot and add a modification to begin a ship-bound wishlist.</p>`}</section>${workspaceCard("PROTECTED BUILD RESERVES", workspaceTable([{label:"Material",render:(row)=>`<b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.category)} · G${numeric(row.grade)}</small>`},{label:"Have",key:"have"},{label:"Reserved",key:"need"},{label:"Missing",render:(row)=>`<b class="${row.missing ? "warn-text" : "ok-text"}">${numeric(row.missing)}</b>`}], requiredRows, "No materials reserved."), `${requiredRows.length} MATERIAL TYPES`)}${workspaceCard("BUILD INTERCHANGE", `${data.tool?.import_preview?.warnings?.map((row)=>`<p class="workspace-note">${escapeHtml(row)}</p>`).join("") || ""}${data.tool?.import_preview?.rows?.length ? workspaceTable([{label:"Slot",key:"slot"},{label:"Module",key:"moduleType"},{label:"Blueprint",key:"blueprint"},{label:"Grade",render:(row)=>row.grade?`G${numeric(row.grade)}`:"—"},{label:"Status",key:"status"}],data.tool.import_preview.rows,"No import rows.") : `<p class="workspace-empty">Validate a build from Ship Engineering to preview exact physical-slot bindings.</p>`}<div class="workspace-actions"><button data-ws-page="engineering" data-ws-op="import_apply" ${data.tool?.import_preview?.compatible ? "" : "disabled"}>APPLY VALIDATED PLANS</button></div>`, escapeHtml(data.tool?.import_preview?.status || "IDLE"))}`;
+
+  if (!engineeringSelectedEngineer || !(data.engineers || []).some((row) => row.name === engineeringSelectedEngineer)) engineeringSelectedEngineer = data.engineers?.[0]?.name || "";
+  const engineer = (data.engineers || []).find((row) => row.name === engineeringSelectedEngineer) || {};
+  const engineerList = (data.engineers || []).filter((row) => !engineeringSearch || `${row.name} ${row.system} ${row.station}`.toLowerCase().includes(engineeringSearch)).map((row) => `<button class="engineering-engineer-row ${row.name === engineeringSelectedEngineer ? "active" : ""}" data-engineering-engineer="${escapeHtml(row.name)}"><img src="${escapeHtml(row.portrait)}" onerror="this.hidden=true"><span><b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.system)} · ${escapeHtml(row.progress || "UNKNOWN")}${row.rank ? ` G${numeric(row.rank)}` : ""}</small></span></button>`).join("");
+  const engineersPanel = `<section class="engineering-engineers-layout"><aside><input id="engineering-search" value="${escapeHtml(engineeringSearch)}" placeholder="ENGINEER, SYSTEM OR BLUEPRINT…">${engineerList}</aside><article class="engineering-engineer-detail">${engineer.name ? `<header><img src="${escapeHtml(engineer.portrait)}" onerror="this.hidden=true"><div><small>${escapeHtml(engineer.discipline || "SHIP ENGINEERING")}</small><h2>${escapeHtml(engineer.name)}</h2><p>${escapeHtml(engineer.system)} · ${escapeHtml(engineer.station)}</p></div><button data-ws-page="engineering" data-ws-op="copy_system" data-system="${escapeHtml(engineer.system)}">COPY SYSTEM</button></header><div class="engineering-unlock-progress">${(engineer.steps || []).map((step,index)=>`<div class="${step.done ? "done" : "pending"}"><i>${step.done ? "✓" : index+1}</i><span><b>${escapeHtml(step.label)}</b><small>${escapeHtml(step.detail)}</small></span><em>${step.done ? "READY" : "PENDING"}</em></div>`).join("")}</div><h3>CAPABILITIES</h3><div class="engineering-offers">${(engineer.offers || []).map((row)=>`<span><b>${escapeHtml(row.name)}</b>${escapeHtml(row.type)} · G${numeric(row.grade)}</span>`).join("") || "<small>No ship blueprint catalogue entries.</small>"}</div>` : ""}</article></section>`;
+
+  const filters = ["all","needed","missing","ready","surplus","tradeable"];
+  const shownMaterials = (data.materials || []).filter((row) => engineeringMaterialFilter === "all" || (engineeringMaterialFilter === "needed" && row.need) || (engineeringMaterialFilter === "missing" && row.missing) || (engineeringMaterialFilter === "ready" && row.need && !row.missing) || (engineeringMaterialFilter === "surplus" && row.surplus) || (engineeringMaterialFilter === "tradeable" && row.tradeable)).filter((row)=>!engineeringSearch || `${row.name} ${row.category}`.toLowerCase().includes(engineeringSearch));
+  const materialColumns = ["Raw","Manufactured","Encoded"].map((category)=>`<section class="engineering-material-column"><header><h3>${category}</h3><b>${shownMaterials.filter((row)=>row.category===category).length}</b></header>${shownMaterials.filter((row)=>row.category===category).map((row)=>`<article><div><b>${escapeHtml(row.name)}</b><em>G${numeric(row.grade)}</em></div><i><span style="width:${row.capacity ? Math.min(100,100*row.have/row.capacity) : 0}%"></span></i><p>STOCK ${numeric(row.have)} / ${numeric(row.capacity)}<strong class="${row.missing ? "warn-text" : row.need ? "ok-text" : ""}">${row.missing ? `${numeric(row.missing)} MISSING` : row.need ? "BUILD READY" : row.surplus ? `+${numeric(row.surplus)} SURPLUS` : "NOT NEEDED"}</strong></p><small>${escapeHtml((row.origins || []).slice(0,2).join(" · "))}</small></article>`).join("") || `<p class="workspace-empty">NO MATCHES</p>`}</section>`).join("");
+  const materialsPanel = `<div class="engineering-material-toolbar"><div>${filters.map((name)=>`<button class="${engineeringMaterialFilter===name?"active":""}" data-engineering-material-filter="${name}">${name.toUpperCase()}</button>`).join("")}</div><input id="engineering-search" value="${escapeHtml(engineeringSearch)}" placeholder="SEARCH MATERIAL OR CATEGORY…"></div><section class="engineering-materials-grid">${materialColumns}</section>`;
+
+  const brokerCards = (data.tech_brokers || []).map((row)=>`<article class="engineering-broker-card ${row.ready?"ready":""}"><header><span>${escapeHtml(row.broker)} TECH BROKER</span><b>${row.ready?"READY":"INCOMPLETE"}</b></header><h3>${escapeHtml(row.name)}</h3>${(row.materials||[]).map((item)=>`<p><span>${escapeHtml(item.name)}</span><b class="${item.have>=item.need?"ok-text":"warn-text"}">${numeric(item.have)} / ${numeric(item.need)}</b></p>`).join("")}</article>`).join("");
+  const brokerGuide = data.tech_broker_guidance?.recommended_destinations || {};
+  const brokersPanel = `${workspaceMetrics(Object.entries(brokerGuide).map(([kind,row])=>({label:`${kind} broker`,value:row.system,detail:row.station}))) }<section class="engineering-broker-grid">${brokerCards || `<p class="workspace-empty">Tech Broker catalogue unavailable.</p>`}</section>`;
+
+  const missingSources = (data.materials || []).filter((row)=>row.missing).sort((a,b)=>b.missing-a.missing);
+  const sourceRows = workspaceTable([{label:"Material",render:(row)=>`<b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.category)} · G${numeric(row.grade)}</small>`},{label:"Missing",render:(row)=>`<b class="warn-text">${numeric(row.missing)}</b>`},{label:"Acquisition",render:(row)=>escapeHtml((row.origins||[]).join(" · ") || "No verified source in catalogue")}],missingSources,"Your current wishlist has no missing materials.");
+  const traderRows = workspaceTable([{label:"Type",key:"category"},{label:"System",render:(row)=>`<b>${escapeHtml(row.system)}</b><small>${escapeHtml(row.station)}</small>`},{label:"Distance",render:(row)=>row.distance==null?"COORDS UNKNOWN":`${numeric(row.distance,1)} LY`},{label:"Arrival",render:(row)=>row.distance_ls==null?"—":`${numeric(row.distance_ls)} LS`},{label:"Pad",key:"pad"},{label:"Action",render:(row)=>`<button data-ws-page="engineering" data-ws-op="copy_system" data-system="${escapeHtml(row.system)}">COPY</button>`}],data.material_traders||[],"Journal coordinates are required to rank the bundled trader catalogue.");
+  const sourcesPanel = `${workspaceMetrics([{label:"Missing types",value:numeric(missingSources.length),detail:`${numeric(wishlist.missing)} UNITS`},{label:"Trader catalogue",value:numeric((data.material_traders||[]).length),detail:"NEAREST OFFLINE MATCHES"}])}${workspaceCard("MATERIAL ACQUISITION",sourceRows,`${missingSources.length} PRIORITIES`)}${workspaceCard("NEAREST MATERIAL TRADERS",traderRows,"RAW · MANUFACTURED · ENCODED")}<div class="workspace-actions"><button data-page="planet-materials">OPEN PLANET MATERIALS</button></div>`;
+
+  const odyssey = data.odyssey || {};
+  const odysseyGoals = (odyssey.goals || []).map((row)=>`<article class="engineering-wishlist-card ${odyssey.complete?"ready":"missing"}"><header><span>ODYSSEY WORKSHOP</span><b>QTY ${numeric(row.quantity)}</b></header><h3>${escapeHtml(row.name)}</h3><button class="danger-action" data-ws-page="engineering" data-ws-op="odyssey_unpin" data-name="${escapeHtml(row.name)}">REMOVE</button></article>`).join("");
+  const odysseyPanel = `${workspaceMetrics([{label:"Workshop goals",value:numeric((odyssey.goals||[]).length),detail:"SUITS · PERSONAL WEAPONS"},{label:"Required units",value:numeric(odyssey.required),detail:"PROFILE LOCKER"},{label:"Missing units",value:numeric(odyssey.missing),detail:odyssey.complete?"ALL GOALS READY":"COLLECTION REQUIRED"}])}<section class="engineering-odyssey-add"><select id="odyssey-blueprint">${(odyssey.catalogue||[]).map((name)=>`<option>${escapeHtml(name)}</option>`).join("")}</select><input id="odyssey-quantity" type="number" min="1" max="99" value="1"><button data-ws-page="engineering" data-ws-op="odyssey_pin">ADD GOAL</button></section><section class="engineering-wishlist-grid">${odysseyGoals||`<p class="workspace-empty">No Odyssey suit or personal-weapon goals pinned.</p>`}</section>${workspaceCard("ODYSSEY SHOPPING LIST",workspaceTable([{label:"Material",key:"name"},{label:"Have",key:"have"},{label:"Need",key:"need"},{label:"Missing",render:(row)=>`<b class="${row.deficit?"warn-text":"ok-text"}">${numeric(row.deficit)}</b>`}],odyssey.materials||[],"Add an Odyssey goal to calculate its locker requirements."),`${numeric(odyssey.missing)} MISSING`)}`;
+
+  const nextPlan = pins.find((row)=>row.craftable) || pins[0];
+  const nextEngineer = nextPlan ? (data.engineers||[]).find((person)=>(person.offers||[]).some((offer)=>offer.name===nextPlan.name && (!nextPlan.type || offer.type===nextPlan.type))) : null;
+  const nextMissing = nextPlan ? (nextPlan.materials||[]).filter((row)=>row.missing).sort((a,b)=>b.missing-a.missing) : [];
+  const operationPanel = `${workspaceMetrics([{label:"Selected ship",value:ship.label||"NONE",detail:ship.planned?`${slots.length} PLANNED HULL SLOTS`:ship.observed?`${slots.length} PHYSICAL SLOTS`:"LOADOUT AWAITING JOURNAL"},{label:"Wishlist",value:numeric(pins.length),detail:`${numeric(wishlist.ready)} READY`},{label:"Material deficit",value:numeric(wishlist.missing),detail:`${missingSources.length} MATERIAL TYPES`},{label:"Engineer access",value:numeric((data.engineers||[]).filter((row)=>String(row.progress).toLowerCase()==="unlocked").length),detail:`${(data.engineers||[]).length} CATALOGUED`}])}<section class="engineering-operation-grid">${workspaceCard("NEXT ACTION",nextPlan?`<div class="engineering-next-action"><small>${nextPlan.craftable?"MATERIALS READY":"COLLECTION REQUIRED"}</small><h2>${nextPlan.craftable?`FLY TO ${escapeHtml(nextEngineer?.name||"AN ENGINEER")}`:`COLLECT ${escapeHtml(nextMissing[0]?.name||"REQUIRED MATERIALS")}`}</h2><p>${escapeHtml(nextPlan.name)} · ${escapeHtml(nextPlan.type)} · ${escapeHtml(nextPlan.slot||"UNBOUND")} · TARGET G${numeric(nextPlan.grade)}</p>${nextEngineer?`<button data-ws-page="engineering" data-ws-op="copy_system" data-system="${escapeHtml(nextEngineer.system)}">COPY ${escapeHtml(nextEngineer.system)}</button>`:""}</div>`:`<div class="engineering-next-action"><small>PLAN REQUIRED</small><h2>SELECT A SHIP MODULE</h2><p>Open Ship Engineering, choose a live loadout or create a planned build, then bind a modification to its slot.</p><button data-engineering-view="engineering">OPEN SHIP ENGINEERING</button></div>`,nextPlan?(nextPlan.craftable?"CRAFT":"COLLECT"):"IDLE")}${workspaceCard("MISSING FOR NEXT PLAN",workspaceTable([{label:"Material",key:"name"},{label:"Have",key:"have"},{label:"Need",key:"amount"},{label:"Missing",key:"missing"}],nextMissing,"The next plan has all required stock."),`${nextMissing.length} TYPES`)}${workspaceCard("WORKFLOW",`<div class="engineering-workflow-links"><button data-engineering-view="engineering">1 · PLAN ON A SHIP SLOT</button><button data-engineering-view="wishlist">2 · PROTECT BUILD RESERVES</button><button data-engineering-view="sources">3 · COLLECT OR TRADE</button><button data-engineering-view="engineers">4 · NAVIGATE TO ENGINEER</button></div>`)}</section>`;
+
+  const tabs = [{id:"operations",label:"⌂ OPERATIONS"},{id:"engineering",label:"⚒ SHIP ENGINEERING"},{id:"wishlist",label:"▣ WISHLIST"},{id:"engineers",label:"♙ ENGINEERS"},{id:"materials",label:"▢ MATERIALS"},{id:"odyssey",label:"◈ ODYSSEY"},{id:"sources",label:"⌖ STATE FINDS"},{id:"brokers",label:"◇ TECH BROKERS"}];
   root.classList.remove("loading-panel");
-  root.innerHTML = `${workspaceMetrics([
-    {label: "Pinned upgrades", value: numeric(wishlist.pins), detail: `${numeric(wishlist.required)} REQUIRED UNITS`},
-    {label: "Material deficit", value: numeric(wishlist.missing), detail: wishlist.complete ? "ALL GOALS READY" : "COLLECTION REQUIRED"},
-    {label: "Odyssey goals", value: numeric(data.odyssey?.goals?.length), detail: `${numeric(data.odyssey?.missing)} MISSING UNITS`},
-    {label: "Inventory types", value: numeric(data.inventory?.length), detail: data.last_updated || "AWAITING MATERIALS"},
-  ])}<section class="workspace-grid two engineering-workspace-grid"><section class="engineering-add card"><header><span>ADD ENGINEERING GOAL</span></header><div><select id="engineering-blueprint">${(data.catalogue || []).map((row) => `<option value="${escapeHtml(row.name)}" data-grade="${number(row.grade, 5)}">${escapeHtml(row.name)} · G${numeric(row.grade)}</option>`).join("")}</select><label>TARGET GRADE<input id="engineering-grade" type="number" min="1" max="5" value="5"></label><label>CURRENT GRADE<input id="engineering-current-grade" type="number" min="0" max="4" value="0"></label><label>QUANTITY<input id="engineering-quantity" type="number" min="1" max="99" value="1"></label><button data-ws-page="engineering" data-ws-op="pin">PIN GOAL</button></div></section>${workspaceCard("PINNED BLUEPRINTS", workspaceRows(pinRows, "No engineering goals pinned."), `${pinRows.length} GOALS`)}${workspaceCard("COLLECTION PLAN", priorities, `${numeric(wishlist.missing)} MISSING`)}${workspaceCard("FSD INJECTION SYNTHESIS", `<div class="profile-ship-grid"><div><span>BASIC +25%</span><b>${numeric(data.synthesis?.basic)}</b></div><div><span>STANDARD +50%</span><b>${numeric(data.synthesis?.standard)}</b></div><div><span>PREMIUM +100%</span><b>${numeric(data.synthesis?.premium)}</b></div></div>`)}${workspaceCard("ENGINEER ACCESS", engineers, `${(data.engineers || []).length} KNOWN`)}${workspaceCard("ODYSSEY WORKSHOP", `<div class="odyssey-add"><select id="odyssey-blueprint">${(data.odyssey_catalogue || []).map((name) => `<option>${escapeHtml(name)}</option>`).join("")}</select><input id="odyssey-quantity" type="number" min="1" max="99" value="1"><button data-ws-page="engineering" data-ws-op="odyssey_pin">ADD GOAL</button></div>${workspaceRows(odysseyGoals, "No Odyssey suit or weapon goals pinned.")}${workspaceTable([{label: "Material", key: "name"}, {label: "Have", key: "have"}, {label: "Need", key: "need"}, {label: "Missing", key: "deficit"}], data.odyssey?.materials || [], "Add an Odyssey goal to calculate its shopping list.")}`, `${numeric(data.odyssey?.missing)} MISSING`)}${workspaceCard("MATERIAL INVENTORY", inventory, `${numeric((data.inventory || []).length)} TYPES`)}</section>`;
+  const activePanel = engineeringView==="operations"?operationPanel:engineeringView==="engineering"?engineeringPanel:engineeringView==="wishlist"?wishlistPanel:engineeringView==="engineers"?engineersPanel:engineeringView==="materials"?materialsPanel:engineeringView==="odyssey"?odysseyPanel:engineeringView==="sources"?sourcesPanel:brokersPanel;
+  root.innerHTML = `<nav class="engineering-suite-nav">${tabs.map((tab)=>`<button class="${engineeringView===tab.id?"active":""}" data-engineering-view="${tab.id}">${tab.label}<small>${tab.id==="wishlist"?pins.length:tab.id==="engineers"?(data.engineers||[]).length:tab.id==="materials"?(data.materials||[]).length:""}</small></button>`).join("")}</nav><div class="engineering-suite-body">${activePanel}</div><footer class="engineering-suite-source">${escapeHtml(data.source || "")} · LIVE JOURNAL STOCK · PROFILE-AWARE PLANS</footer>`;
+}
+
+function renderPowerplayWorkspace(data) {
+  const root = byId("powerplay-workspace");
+  const power = data.powerplay || {};
+  const aliases = {"a lavigny duval":"arissa_lavigny_duval","li yong rui":"li_yong_rui"};
+  const powerKey = String(power.power || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const powerSlug = aliases[powerKey] || powerKey.replace(/ /g, "_");
+  const location = power.location || {};
+  const cargo = workspaceTable(
+    [{label:"Action",key:"direction"},{label:"Commodity",key:"type"},{label:"Count",key:"count"},{label:"When",key:"timestamp"}],
+    power.cargo_history || [],
+    "Powerplay cargo activity will appear from live Journal events.",
+  );
+  root.classList.remove("loading-panel");
+  root.innerHTML = `<section class="powerplay-workspace"><article class="powerplay-identity">${powerSlug ? `<img src="assets/engineering/powerplay/${escapeHtml(powerSlug)}.png" onerror="this.hidden=true">` : ""}<div><small>POWERPLAY 2.0 · JOURNAL OBSERVED</small><h2>${escapeHtml(power.power || "NO ACTIVE PLEDGE")}</h2><p>${power.pledged ? "PLEDGED COMMANDER" : "No PowerplayJoin or Powerplay status is retained for this profile."}</p></div></article>${workspaceMetrics([{label:"Rank",value:power.rank==null?"UNKNOWN":numeric(power.rank),detail:"JOURNAL REPORTED"},{label:"Merits",value:power.merits==null?"UNKNOWN":numeric(power.merits),detail:"CURRENT TOTAL"},{label:"Salary",value:power.salary==null?"UNKNOWN":credits(power.salary),detail:"LAST PAYMENT"},{label:"Time pledged",value:power.time_pledged==null?"UNKNOWN":`${numeric(power.time_pledged/86400,1)} D`,detail:"AT LAST SNAPSHOT"}])}<section class="workspace-grid two">${workspaceCard("CURRENT POWERPLAY SYSTEM",`<div class="fact-list spacious"><div><span>SYSTEM</span><b>${escapeHtml(location.system || "UNKNOWN")}</b></div><div><span>CONTROLLING POWER</span><b>${escapeHtml(location.controlling_power || "UNKNOWN")}</b></div><div><span>STATE</span><b>${escapeHtml(location.state || "UNKNOWN")}</b></div><div><span>CONTROL PROGRESS</span><b>${location.control_progress==null?"UNKNOWN":`${numeric(location.control_progress*100,1)}%`}</b></div><div><span>REINFORCEMENT</span><b>${location.reinforcement==null?"UNKNOWN":numeric(location.reinforcement)}</b></div><div><span>UNDERMINING</span><b>${location.undermining==null?"UNKNOWN":numeric(location.undermining)}</b></div></div>${location.system ? `<div class="workspace-actions"><button data-ws-page="powerplay" data-ws-op="copy_system" data-system="${escapeHtml(location.system)}">COPY SYSTEM</button></div>` : ""}`)}${workspaceCard("POWERPLAY CARGO ACTIVITY",cargo,`${(power.cargo_history || []).length} EVENTS`)}</section></section>`;
 }
 
 function renderCarrierWorkspace(data) {
@@ -2814,7 +2903,8 @@ function renderWorkspace(state) {
     profile: renderProfileWorkspace, analytics: renderAnalyticsWorkspace,
     chronicle: renderChronicleWorkspace, mission: renderMissionWorkspace,
     ground: renderGroundWorkspace, mining: renderMiningWorkspace,
-    engineering: renderEngineeringWorkspace, carrier: renderCarrierWorkspace,
+    engineering: renderEngineeringWorkspace, powerplay: renderPowerplayWorkspace,
+    carrier: renderCarrierWorkspace,
     recon: renderReconWorkspace, achievements: renderAchievementsWorkspace,
     ledger: renderLedgerWorkspace, settings: renderSettingsWorkspace,
   };
@@ -2891,9 +2981,9 @@ function renderDashboard(state) {
     showPage(requestedPage.page);
   }
   renderAtlas(model);
-  text("rail-version", `v${model.app?.version || "5.4.2.4"} // WEBVIEW2`);
-  text("boot-version", `v${model.app?.version || "5.4.2.4"} // SECURE LOOPBACK // WEBVIEW2`);
-  text("about-version", `Version ${model.app?.version || "5.4.2.4"} // HTML Command Deck`);
+  text("rail-version", `v${model.app?.version || "5.4.3"} // WEBVIEW2`);
+  text("boot-version", `v${model.app?.version || "5.4.3"} // SECURE LOOPBACK // WEBVIEW2`);
+  text("about-version", `Version ${model.app?.version || "5.4.3"} // HTML Command Deck`);
   text("overview-subtitle", model.profile?.profile_label || "Journal-backed field intelligence");
   if (currentPage === "map" && !model.boot?.active) ensureAtlas();
 }
@@ -3159,6 +3249,47 @@ document.addEventListener("click", async (event) => {
     setStudioView(studioTab.dataset.studioView);
     return;
   }
+  const engineeringTab = event.target.closest("[data-engineering-view]");
+  if (engineeringTab) {
+    engineeringView = engineeringTab.dataset.engineeringView || "engineering";
+    engineeringSearch = "";
+    if (engineeringData) renderEngineeringWorkspace(engineeringData);
+    return;
+  }
+  const engineeringCategory = event.target.closest("[data-engineering-category]");
+  if (engineeringCategory) {
+    engineeringSlotCategory = engineeringCategory.dataset.engineeringCategory || "";
+    engineeringSelectedSlot = (engineeringData?.slots || []).find((row) => row.category === engineeringSlotCategory)?.slot || "";
+    engineeringSelectedBlueprint = "";
+    if (engineeringData) renderEngineeringWorkspace(engineeringData);
+    return;
+  }
+  const engineeringSlot = event.target.closest("[data-engineering-slot]");
+  if (engineeringSlot) {
+    engineeringSelectedSlot = engineeringSlot.dataset.engineeringSlot || "";
+    engineeringSlotCategory = (engineeringData?.slots || []).find((row) => row.slot === engineeringSelectedSlot)?.category || engineeringSlotCategory;
+    engineeringSelectedBlueprint = "";
+    if (engineeringData) renderEngineeringWorkspace(engineeringData);
+    return;
+  }
+  const engineeringBlueprint = event.target.closest("[data-engineering-blueprint]");
+  if (engineeringBlueprint) {
+    engineeringSelectedBlueprint = engineeringBlueprint.dataset.engineeringBlueprint || "";
+    if (engineeringData) renderEngineeringWorkspace(engineeringData);
+    return;
+  }
+  const engineeringEngineer = event.target.closest("[data-engineering-engineer]");
+  if (engineeringEngineer) {
+    engineeringSelectedEngineer = engineeringEngineer.dataset.engineeringEngineer || "";
+    if (engineeringData) renderEngineeringWorkspace(engineeringData);
+    return;
+  }
+  const engineeringFilter = event.target.closest("[data-engineering-material-filter]");
+  if (engineeringFilter) {
+    engineeringMaterialFilter = engineeringFilter.dataset.engineeringMaterialFilter || "all";
+    if (engineeringData) renderEngineeringWorkspace(engineeringData);
+    return;
+  }
   const studioOverlayButton = event.target.closest(".studio-overlay-card, .studio-index-row");
   if (studioOverlayButton) {
     selectStudioOverlay(studioOverlayButton.dataset.overlayId);
@@ -3277,7 +3408,7 @@ document.addEventListener("click", async (event) => {
     const page = workspaceButton.dataset.wsPage;
     const operation = workspaceButton.dataset.wsOp;
     const payload = {page, operation};
-    for (const [datasetKey, payloadKey] of [["expeditionId", "expedition_id"], ["objectiveId", "objective_id"], ["achievementId", "achievement_id"], ["bodyKey", "body_key"], ["pinId", "pin_id"], ["bookmarkId", "bookmark_id"], ["sessionIndex", "session_index"], ["carrierId", "carrier_id"], ["system", "system"], ["name", "name"]]) {
+    for (const [datasetKey, payloadKey] of [["expeditionId", "expedition_id"], ["objectiveId", "objective_id"], ["achievementId", "achievement_id"], ["bodyKey", "body_key"], ["pinId", "pin_id"], ["planId", "plan_id"], ["bookmarkId", "bookmark_id"], ["sessionIndex", "session_index"], ["carrierId", "carrier_id"], ["shipId", "ship_id"], ["slot", "slot"], ["system", "system"], ["name", "name"]]) {
       if (workspaceButton.dataset[datasetKey] !== undefined) payload[payloadKey] = workspaceButton.dataset[datasetKey];
     }
     if (page === "carrier" && payload.carrier_id === undefined) {
@@ -3289,7 +3420,7 @@ document.addEventListener("click", async (event) => {
     if (workspaceButton.dataset.resultIndex !== undefined) payload.result_index = number(workspaceButton.dataset.resultIndex, -1);
     if (workspaceButton.dataset.visited !== undefined) payload.visited = workspaceButton.dataset.visited === "true";
     if (workspaceButton.dataset.enabled !== undefined) payload.enabled = workspaceButton.dataset.enabled === "true";
-    if (["delete", "remove_objective", "delete_stop", "clear_route", "delete_candidate", "reset", "delete_waypoint", "clear_waypoints", "delete_theme", "delete_bookmark"].includes(operation)) {
+    if (["delete", "remove_objective", "delete_stop", "clear_route", "delete_candidate", "reset", "delete_waypoint", "clear_waypoints", "delete_theme", "delete_bookmark", "delete_build", "clear_slot"].includes(operation)) {
       if (!window.confirm("Confirm this profile-local change?")) return;
       payload.confirmed = true;
     }
@@ -3366,11 +3497,29 @@ document.addEventListener("click", async (event) => {
         exclude_carriers: Boolean(byId("mining-buyer-no-carriers")?.checked),
       });
       if (!payload.reference || !payload.commodity || number(payload.quantity) <= 0) return;
+    } else if (page === "engineering" && operation === "create_build") {
+      payload.ship_symbol = byId("engineering-new-ship")?.value || "";
+      payload.name = byId("engineering-new-build-name")?.value.trim() || "";
+      if (!payload.ship_symbol) return;
+    } else if (page === "engineering" && operation === "rename_build") {
+      payload.name = byId("engineering-build-name")?.value.trim() || "";
+      if (!payload.name) return;
+    } else if (page === "engineering" && operation === "clear_slot") {
+      payload.slot = engineeringSelectedSlot;
+      if (!payload.ship_id || !payload.slot) return;
     } else if (page === "engineering" && operation === "pin") {
-      payload.name = byId("engineering-blueprint")?.value || "";
+      const [moduleType, ...nameParts] = engineeringSelectedBlueprint.split("::");
+      payload.name = nameParts.join("::");
+      payload.module_type = moduleType || "";
       payload.grade = byId("engineering-grade")?.value;
       payload.current_grade = byId("engineering-current-grade")?.value;
       payload.quantity = byId("engineering-quantity")?.value;
+      payload.experimental = byId("engineering-experimental")?.value || "";
+      payload.slot = engineeringSelectedSlot;
+      payload.ship_id = engineeringData?.selected_ship_id || "";
+    } else if (page === "engineering" && operation === "import_preview") {
+      payload.build = byId("engineering-build-import")?.value || "";
+      if (!payload.build.trim()) return;
     } else if (page === "engineering" && operation === "odyssey_pin") {
       payload.name = byId("odyssey-blueprint")?.value || "";
       payload.quantity = byId("odyssey-quantity")?.value;
@@ -3459,6 +3608,19 @@ document.addEventListener("input", (event) => {
       {label: "Mapped", render: (row) => row.mapped ? "YES" : "NO"},
       {label: "Flags", render: (row) => escapeHtml((row.flags || []).join(" · "))},
     ], filtered, "No valuable bodies match that filter.");
+  } else if (event.target.id === "engineering-search") {
+    const value = event.target.value.toLocaleLowerCase();
+    clearTimeout(engineeringSearchTimer);
+    engineeringSearchTimer = window.setTimeout(() => {
+      engineeringSearch = value;
+      if (!engineeringData) return;
+      renderEngineeringWorkspace(engineeringData);
+      const input = byId("engineering-search");
+      if (input) {
+        input.focus({preventScroll: true});
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
+    }, 180);
   }
 });
 
@@ -3471,6 +3633,9 @@ document.addEventListener("change", async (event) => {
   } else if (event.target.id === "replay-session") {
     replaySelectedSessionIndex = Math.max(0, number(event.target.value));
     renderChronicleWorkspace(model.workspace?.data || {});
+  } else if (event.target.id === "engineering-ship-select") {
+    const accepted = await command("workspace", {page: "engineering", operation: "select_ship", ship_id: event.target.value});
+    showToast(accepted ? "Engineering ship selected" : "That fleet loadout is unavailable");
   }
 });
 

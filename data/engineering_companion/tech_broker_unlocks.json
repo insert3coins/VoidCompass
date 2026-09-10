@@ -1,0 +1,50 @@
+{
+  "source": "Human and Guardian Technology Broker recipes from the bundled material catalog",
+  "guidance": {
+    "Guardian": {
+      "blueprint": "Activate the Guardian structure, charge the pylons and scan the data terminal for the required blueprint segment.",
+      "components": "Collect destructible-panel components and Guardian Sentinel drops at Guardian structures; scan active obelisks for pattern data.",
+      "broker": "Take the complete one-time recipe to a Guardian Technology Broker and unlock the module."
+    },
+    "Human": {
+      "components": "Collect the complete listed recipe from normal material sources, mission rewards or the matching Material Trader.",
+      "broker": "Take the complete recipe to a Human Technology Broker and unlock the item."
+    }
+  },
+  "origins": {
+    "blueprint": "Guardian structure · activated data core",
+    "component": "Guardian structure · destructible panels and Sentinel drops",
+    "data": "Guardian structure · active obelisk scans",
+    "conventional": "Human material sources or the matching Material Trader"
+  },
+  "recommended_destinations": {
+    "Human": {
+      "system": "Altair",
+      "station": "Solo Orbiter",
+      "evidence": "Bundled recommendation · Spansh verified 2026-08-15"
+    },
+    "Guardian": {
+      "system": "EZ Aquarii",
+      "station": "Magnus Gateway",
+      "evidence": "Bundled recommendation · Spansh verified 2026-08-15"
+    }
+  },
+  "special_destinations": {
+    "SIRIUS": [
+      {"system": "Luyten's Star", "station": "Spirit of Laelaps", "distance_ls": 424},
+      {"system": "Alioth", "station": "The Witness Odysseus", "distance_ls": 1240},
+      {"system": "Leesti", "station": "Chariot of Rhea", "distance_ls": 3097},
+      {"system": "Arimpox", "station": "El Centinela Cadejo", "distance_ls": 154},
+      {"system": "Andecavi", "station": "Kumiho Sky", "distance_ls": 970},
+      {"system": "Siniang", "station": "Kandula's Truth", "distance_ls": 449},
+      {"system": "Onoros", "station": "Li Chyou Winds", "distance_ls": 244}
+    ]
+  },
+  "journal_unlock_aliases": {
+    "Sirius Modified Heat Sink Launcher": [
+      "Hpt_HeatSinkLauncher_Turret_Tiny"
+    ]
+  },
+  "broker_order": ["HUMAN", "GUARDIAN"],
+  "category_order": ["HUMAN TECH", "MODULES", "WEAPONS", "FIGHTERS"]
+}

@@ -1,0 +1,3438 @@
+[
+  {
+    "symbol": "SideWinder",
+    "name": "Sidewinder",
+    "manufacturer": "Faulcon DeLacy",
+    "size": "small",
+    "maximumSpeed": 220,
+    "boost": 320,
+    "core": {
+      "powerPlant": 2,
+      "thrusters": 2,
+      "frameShiftDrive": 2,
+      "lifeSupport": 1,
+      "powerDistributor": 1,
+      "sensors": 1,
+      "fuelTank": 1
+    },
+    "hardpoints": [
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 2,
+    "optional": [
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Eagle",
+    "name": "Eagle",
+    "manufacturer": "Core Dynamics",
+    "size": "small",
+    "maximumSpeed": 240,
+    "boost": 350,
+    "core": {
+      "powerPlant": 2,
+      "thrusters": 3,
+      "frameShiftDrive": 3,
+      "lifeSupport": 1,
+      "powerDistributor": 2,
+      "sensors": 2,
+      "fuelTank": 2
+    },
+    "hardpoints": [
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 1,
+    "optional": [
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2,
+        "restriction": "military"
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Hauler",
+    "name": "Hauler",
+    "manufacturer": "Zorgon Peterson",
+    "size": "small",
+    "maximumSpeed": 200,
+    "boost": 300,
+    "core": {
+      "powerPlant": 2,
+      "thrusters": 2,
+      "frameShiftDrive": 2,
+      "lifeSupport": 1,
+      "powerDistributor": 1,
+      "sensors": 1,
+      "fuelTank": 2
+    },
+    "hardpoints": [
+      {
+        "size": 1
+      }
+    ],
+    "utility": 2,
+    "optional": [
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Adder",
+    "name": "Adder",
+    "manufacturer": "Zorgon Peterson",
+    "size": "small",
+    "maximumSpeed": 220,
+    "boost": 320,
+    "core": {
+      "powerPlant": 3,
+      "thrusters": 3,
+      "frameShiftDrive": 3,
+      "lifeSupport": 1,
+      "powerDistributor": 2,
+      "sensors": 3,
+      "fuelTank": 3
+    },
+    "hardpoints": [
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 2,
+    "optional": [
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Viper",
+    "name": "Viper Mk III",
+    "manufacturer": "Faulcon DeLacy",
+    "size": "small",
+    "maximumSpeed": 320,
+    "boost": 400,
+    "core": {
+      "powerPlant": 3,
+      "thrusters": 3,
+      "frameShiftDrive": 3,
+      "lifeSupport": 2,
+      "powerDistributor": 3,
+      "sensors": 3,
+      "fuelTank": 2
+    },
+    "hardpoints": [
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 2,
+    "optional": [
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3,
+        "restriction": "military"
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "CobraMkIII",
+    "name": "Cobra Mk III",
+    "manufacturer": "Faulcon DeLacy",
+    "size": "small",
+    "maximumSpeed": 280,
+    "boost": 400,
+    "core": {
+      "powerPlant": 4,
+      "thrusters": 4,
+      "frameShiftDrive": 4,
+      "lifeSupport": 3,
+      "powerDistributor": 3,
+      "sensors": 3,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 2,
+    "optional": [
+      {
+        "size": 4
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Type6",
+    "name": "Type-6 Transporter",
+    "manufacturer": "Lakon Spaceways",
+    "size": "medium",
+    "maximumSpeed": 220,
+    "boost": 350,
+    "core": {
+      "powerPlant": 3,
+      "thrusters": 4,
+      "frameShiftDrive": 4,
+      "lifeSupport": 2,
+      "powerDistributor": 3,
+      "sensors": 2,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 3,
+    "optional": [
+      {
+        "size": 5
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Dolphin",
+    "name": "Dolphin",
+    "manufacturer": "Saud Kruger",
+    "size": "small",
+    "maximumSpeed": 250,
+    "boost": 350,
+    "core": {
+      "powerPlant": 4,
+      "thrusters": 5,
+      "frameShiftDrive": 4,
+      "lifeSupport": 4,
+      "powerDistributor": 3,
+      "sensors": 3,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 3,
+    "optional": [
+      {
+        "size": 5
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Type7",
+    "name": "Type-7 Transporter",
+    "manufacturer": "Lakon Spaceways",
+    "size": "large",
+    "maximumSpeed": 180,
+    "boost": 300,
+    "core": {
+      "powerPlant": 5,
+      "thrusters": 5,
+      "frameShiftDrive": 5,
+      "lifeSupport": 4,
+      "powerDistributor": 4,
+      "sensors": 3,
+      "fuelTank": 5
+    },
+    "hardpoints": [
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 6,
+        "name": "Slot01_Size6"
+      },
+      {
+        "size": 6,
+        "name": "Slot02_Size6"
+      },
+      {
+        "size": 6,
+        "name": "Slot03_Size5"
+      },
+      {
+        "size": 5,
+        "name": "Slot04_Size5"
+      },
+      {
+        "size": 5,
+        "name": "Slot05_Size4"
+      },
+      {
+        "size": 5,
+        "name": "Slot06_Size4"
+      },
+      {
+        "size": 3,
+        "name": "Slot07_Size2"
+      },
+      {
+        "size": 3,
+        "name": "Slot08_Size2"
+      },
+      {
+        "size": 2,
+        "name": "Slot09_Size2"
+      },
+      {
+        "size": 1,
+        "name": "Slot09_Size1"
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite",
+        "name": "PlanetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Asp",
+    "name": "Asp Explorer",
+    "manufacturer": "Lakon Spaceways",
+    "size": "medium",
+    "maximumSpeed": 250,
+    "boost": 340,
+    "core": {
+      "powerPlant": 5,
+      "thrusters": 5,
+      "frameShiftDrive": 5,
+      "lifeSupport": 4,
+      "powerDistributor": 4,
+      "sensors": 5,
+      "fuelTank": 5
+    },
+    "hardpoints": [
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 6
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Vulture",
+    "name": "Vulture",
+    "manufacturer": "Core Dynamics",
+    "size": "small",
+    "maximumSpeed": 210,
+    "boost": 340,
+    "core": {
+      "powerPlant": 4,
+      "thrusters": 5,
+      "frameShiftDrive": 4,
+      "lifeSupport": 3,
+      "powerDistributor": 5,
+      "sensors": 4,
+      "fuelTank": 3
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 5,
+        "name": "Slot01_Size5"
+      },
+      {
+        "size": 5,
+        "restriction": "military",
+        "name": "Military01"
+      },
+      {
+        "size": 4,
+        "name": "Slot02_Size4"
+      },
+      {
+        "size": 2,
+        "name": "Slot03_Size2"
+      },
+      {
+        "size": 1,
+        "name": "Slot05_Size1"
+      },
+      {
+        "size": 1,
+        "name": "Slot06_Size1"
+      },
+      {
+        "size": 1,
+        "name": "Slot07_Size1"
+      },
+      {
+        "size": 1,
+        "name": "Slot08_Size1"
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite",
+        "name": "PlanetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Empire_Trader",
+    "name": "Imperial Clipper",
+    "manufacturer": "Gutamaya",
+    "size": "large",
+    "maximumSpeed": 300,
+    "boost": 380,
+    "core": {
+      "powerPlant": 6,
+      "thrusters": 6,
+      "frameShiftDrive": 5,
+      "lifeSupport": 5,
+      "powerDistributor": 6,
+      "sensors": 5,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 7
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Federation_Dropship",
+    "name": "Federal Dropship",
+    "manufacturer": "Core Dynamics",
+    "size": "medium",
+    "maximumSpeed": 180,
+    "boost": 300,
+    "core": {
+      "powerPlant": 6,
+      "thrusters": 6,
+      "frameShiftDrive": 5,
+      "lifeSupport": 5,
+      "powerDistributor": 6,
+      "sensors": 4,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 6,
+        "name": "Slot01_Size6"
+      },
+      {
+        "size": 5,
+        "name": "Slot02_Size5"
+      },
+      {
+        "size": 5,
+        "name": "Slot03_Size5"
+      },
+      {
+        "size": 4,
+        "name": "Slot04_Size4"
+      },
+      {
+        "size": 4,
+        "restriction": "military",
+        "name": "Military01"
+      },
+      {
+        "size": 4,
+        "restriction": "military",
+        "name": "Military02"
+      },
+      {
+        "size": 3,
+        "name": "Slot05_Size3"
+      },
+      {
+        "size": 3,
+        "name": "Slot06_Size3"
+      },
+      {
+        "size": 2,
+        "name": "Slot09_Size2"
+      },
+      {
+        "size": 1,
+        "name": "Slot10_Size1"
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite",
+        "name": "PlanetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Orca",
+    "name": "Orca",
+    "manufacturer": "Saud Kruger",
+    "size": "large",
+    "maximumSpeed": 300,
+    "boost": 380,
+    "core": {
+      "powerPlant": 5,
+      "thrusters": 6,
+      "frameShiftDrive": 5,
+      "lifeSupport": 6,
+      "powerDistributor": 5,
+      "sensors": 4,
+      "fuelTank": 5
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 6
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Type9",
+    "name": "Type-9 Heavy",
+    "manufacturer": "Lakon Spaceways",
+    "size": "large",
+    "maximumSpeed": 130,
+    "boost": 200,
+    "core": {
+      "powerPlant": 6,
+      "thrusters": 7,
+      "frameShiftDrive": 6,
+      "lifeSupport": 5,
+      "powerDistributor": 6,
+      "sensors": 4,
+      "fuelTank": 6
+    },
+    "hardpoints": [
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 8,
+        "name": "Slot00_Size8"
+      },
+      {
+        "size": 8,
+        "name": "Slot01_Size8"
+      },
+      {
+        "size": 7,
+        "name": "Slot02_Size7"
+      },
+      {
+        "size": 6,
+        "name": "Slot03_Size6"
+      },
+      {
+        "size": 5,
+        "name": "Slot04_Size5"
+      },
+      {
+        "size": 4,
+        "name": "Slot05_Size4"
+      },
+      {
+        "size": 4,
+        "name": "Slot06_Size4"
+      },
+      {
+        "size": 3,
+        "name": "Slot07_Size3"
+      },
+      {
+        "size": 3,
+        "name": "Slot08_Size3"
+      },
+      {
+        "size": 2,
+        "name": "Slot11_Size2"
+      },
+      {
+        "size": 1,
+        "name": "Slot12_Size1"
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite",
+        "name": "PlanetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Python",
+    "name": "Python",
+    "manufacturer": "Faulcon DeLacy",
+    "size": "medium",
+    "maximumSpeed": 230,
+    "boost": 300,
+    "core": {
+      "powerPlant": 7,
+      "thrusters": 6,
+      "frameShiftDrive": 5,
+      "lifeSupport": 4,
+      "powerDistributor": 7,
+      "sensors": 6,
+      "fuelTank": 5
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 6
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "BelugaLiner",
+    "name": "Beluga Liner",
+    "manufacturer": "Saud Kruger",
+    "size": "large",
+    "maximumSpeed": 200,
+    "boost": 280,
+    "core": {
+      "powerPlant": 6,
+      "thrusters": 7,
+      "frameShiftDrive": 7,
+      "lifeSupport": 8,
+      "powerDistributor": 6,
+      "sensors": 5,
+      "fuelTank": 7
+    },
+    "hardpoints": [
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      }
+    ],
+    "utility": 6,
+    "optional": [
+      {
+        "size": 6
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "FerDeLance",
+    "name": "Fer-de-Lance",
+    "manufacturer": "Zorgon Peterson",
+    "size": "medium",
+    "maximumSpeed": 260,
+    "boost": 350,
+    "core": {
+      "powerPlant": 6,
+      "thrusters": 5,
+      "frameShiftDrive": 4,
+      "lifeSupport": 4,
+      "powerDistributor": 6,
+      "sensors": 4,
+      "fuelTank": 3
+    },
+    "hardpoints": [
+      {
+        "size": 4
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      }
+    ],
+    "utility": 6,
+    "optional": [
+      {
+        "size": 5
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Anaconda",
+    "name": "Anaconda",
+    "manufacturer": "Faulcon DeLacy",
+    "size": "large",
+    "maximumSpeed": 180,
+    "boost": 240,
+    "core": {
+      "powerPlant": 8,
+      "thrusters": 7,
+      "frameShiftDrive": 6,
+      "lifeSupport": 5,
+      "powerDistributor": 8,
+      "sensors": 8,
+      "fuelTank": 5
+    },
+    "hardpoints": [
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 8,
+    "optional": [
+      {
+        "size": 7,
+        "name": "Slot01_Size7"
+      },
+      {
+        "size": 6,
+        "name": "Slot02_Size6"
+      },
+      {
+        "size": 6,
+        "name": "Slot03_Size6"
+      },
+      {
+        "size": 6,
+        "name": "Slot04_Size6"
+      },
+      {
+        "size": 5,
+        "name": "Slot05_Size5"
+      },
+      {
+        "size": 5,
+        "name": "Slot06_Size5"
+      },
+      {
+        "size": 5,
+        "name": "Slot07_Size5"
+      },
+      {
+        "size": 5,
+        "restriction": "military",
+        "name": "Military01"
+      },
+      {
+        "size": 4,
+        "name": "Slot08_Size4"
+      },
+      {
+        "size": 4,
+        "name": "Slot09_Size4"
+      },
+      {
+        "size": 4,
+        "name": "Slot10_Size4"
+      },
+      {
+        "size": 2,
+        "name": "Slot13_Size2"
+      },
+      {
+        "size": 1,
+        "name": "Slot14_Size1"
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite",
+        "name": "PlanetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Federation_Corvette",
+    "name": "Federal Corvette",
+    "manufacturer": "Core Dynamics",
+    "size": "large",
+    "maximumSpeed": 200,
+    "boost": 260,
+    "core": {
+      "powerPlant": 8,
+      "thrusters": 7,
+      "frameShiftDrive": 6,
+      "lifeSupport": 5,
+      "powerDistributor": 8,
+      "sensors": 8,
+      "fuelTank": 5
+    },
+    "hardpoints": [
+      {
+        "size": 4
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 8,
+    "optional": [
+      {
+        "size": 7
+      },
+      {
+        "size": 7
+      },
+      {
+        "size": 7
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 5,
+        "restriction": "military"
+      },
+      {
+        "size": 5,
+        "restriction": "military"
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Cutter",
+    "name": "Imperial Cutter",
+    "manufacturer": "Gutamaya",
+    "size": "large",
+    "maximumSpeed": 200,
+    "boost": 320,
+    "core": {
+      "powerPlant": 8,
+      "thrusters": 8,
+      "frameShiftDrive": 7,
+      "lifeSupport": 7,
+      "powerDistributor": 7,
+      "sensors": 7,
+      "fuelTank": 6
+    },
+    "hardpoints": [
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      }
+    ],
+    "utility": 8,
+    "optional": [
+      {
+        "size": 8
+      },
+      {
+        "size": 8
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 5,
+        "restriction": "military"
+      },
+      {
+        "size": 5,
+        "restriction": "military"
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "DiamondBack",
+    "name": "Diamondback Scout",
+    "manufacturer": "Lakon Spaceways",
+    "size": "small",
+    "maximumSpeed": 280,
+    "boost": 380,
+    "core": {
+      "powerPlant": 4,
+      "thrusters": 4,
+      "frameShiftDrive": 4,
+      "lifeSupport": 2,
+      "powerDistributor": 3,
+      "sensors": 2,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Empire_Courier",
+    "name": "Imperial Courier",
+    "manufacturer": "Gutamaya",
+    "size": "small",
+    "maximumSpeed": 280,
+    "boost": 380,
+    "core": {
+      "powerPlant": 4,
+      "thrusters": 3,
+      "frameShiftDrive": 3,
+      "lifeSupport": 1,
+      "powerDistributor": 3,
+      "sensors": 2,
+      "fuelTank": 3
+    },
+    "hardpoints": [
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "DiamondBackXL",
+    "name": "Diamondback Explorer",
+    "manufacturer": "Lakon Spaceways",
+    "size": "small",
+    "maximumSpeed": 260,
+    "boost": 340,
+    "core": {
+      "powerPlant": 4,
+      "thrusters": 4,
+      "frameShiftDrive": 5,
+      "lifeSupport": 3,
+      "powerDistributor": 4,
+      "sensors": 3,
+      "fuelTank": 5
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 4
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Empire_Eagle",
+    "name": "Imperial Eagle",
+    "manufacturer": "Gutamaya",
+    "size": "small",
+    "maximumSpeed": 300,
+    "boost": 400,
+    "core": {
+      "powerPlant": 3,
+      "thrusters": 3,
+      "frameShiftDrive": 3,
+      "lifeSupport": 1,
+      "powerDistributor": 2,
+      "sensors": 2,
+      "fuelTank": 2
+    },
+    "hardpoints": [
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 1,
+    "optional": [
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2,
+        "restriction": "military"
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Federation_Dropship_MkII",
+    "name": "Federal Assault Ship",
+    "manufacturer": "Core Dynamics",
+    "size": "medium",
+    "maximumSpeed": 210,
+    "boost": 350,
+    "core": {
+      "powerPlant": 6,
+      "thrusters": 6,
+      "frameShiftDrive": 5,
+      "lifeSupport": 5,
+      "powerDistributor": 6,
+      "sensors": 4,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 5
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 4,
+        "restriction": "military"
+      },
+      {
+        "size": 4,
+        "restriction": "military"
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Federation_Gunship",
+    "name": "Federal Gunship",
+    "manufacturer": "Core Dynamics",
+    "size": "medium",
+    "maximumSpeed": 170,
+    "boost": 280,
+    "core": {
+      "powerPlant": 6,
+      "thrusters": 6,
+      "frameShiftDrive": 5,
+      "lifeSupport": 5,
+      "powerDistributor": 7,
+      "sensors": 5,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 6
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 4,
+        "restriction": "military"
+      },
+      {
+        "size": 4,
+        "restriction": "military"
+      },
+      {
+        "size": 4,
+        "restriction": "military"
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Viper_MkIV",
+    "name": "Viper Mk IV",
+    "manufacturer": "Faulcon DeLacy",
+    "size": "small",
+    "maximumSpeed": 270,
+    "boost": 340,
+    "core": {
+      "powerPlant": 4,
+      "thrusters": 4,
+      "frameShiftDrive": 4,
+      "lifeSupport": 2,
+      "powerDistributor": 3,
+      "sensors": 3,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 2,
+    "optional": [
+      {
+        "size": 4
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3,
+        "restriction": "military"
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "CobraMkIV",
+    "name": "Cobra Mk IV",
+    "manufacturer": "Faulcon DeLacy",
+    "size": "small",
+    "maximumSpeed": 200,
+    "boost": 300,
+    "core": {
+      "powerPlant": 4,
+      "thrusters": 4,
+      "frameShiftDrive": 4,
+      "lifeSupport": 3,
+      "powerDistributor": 3,
+      "sensors": 3,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 2,
+    "optional": [
+      {
+        "size": 4
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Independant_Trader",
+    "name": "Keelback",
+    "manufacturer": "Lakon Spaceways",
+    "size": "medium",
+    "maximumSpeed": 200,
+    "boost": 300,
+    "core": {
+      "powerPlant": 4,
+      "thrusters": 4,
+      "frameShiftDrive": 4,
+      "lifeSupport": 1,
+      "powerDistributor": 3,
+      "sensors": 2,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 3,
+    "optional": [
+      {
+        "size": 5,
+        "name": "Slot01_Size5"
+      },
+      {
+        "size": 5,
+        "name": "Slot02_Size5"
+      },
+      {
+        "size": 4,
+        "name": "Slot03_Size3"
+      },
+      {
+        "size": 3,
+        "name": "Slot04_Size3"
+      },
+      {
+        "size": 2,
+        "name": "Slot05_Size2"
+      },
+      {
+        "size": 2,
+        "name": "Slot06_Size2"
+      },
+      {
+        "size": 1,
+        "name": "Slot07_Size1"
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite",
+        "name": "PlanetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Asp_Scout",
+    "name": "Asp Scout",
+    "manufacturer": "Lakon Spaceways",
+    "size": "medium",
+    "maximumSpeed": 220,
+    "boost": 300,
+    "core": {
+      "powerPlant": 4,
+      "thrusters": 4,
+      "frameShiftDrive": 4,
+      "lifeSupport": 3,
+      "powerDistributor": 4,
+      "sensors": 4,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 2,
+    "optional": [
+      {
+        "size": 5,
+        "name": "Slot01_Size4"
+      },
+      {
+        "size": 4,
+        "name": "Slot02_Size4"
+      },
+      {
+        "size": 3,
+        "name": "Slot03_Size3"
+      },
+      {
+        "size": 3,
+        "name": "Slot04_Size3"
+      },
+      {
+        "size": 2,
+        "name": "Slot05_Size2"
+      },
+      {
+        "size": 2,
+        "name": "Slot06_Size2"
+      },
+      {
+        "size": 1,
+        "name": "Slot07_Size1"
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite",
+        "name": "PlanetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Type9_Military",
+    "name": "Type-10 Defender",
+    "manufacturer": "Lakon Spaceways",
+    "size": "large",
+    "maximumSpeed": 180,
+    "boost": 220,
+    "core": {
+      "powerPlant": 8,
+      "thrusters": 7,
+      "frameShiftDrive": 7,
+      "lifeSupport": 5,
+      "powerDistributor": 7,
+      "sensors": 4,
+      "fuelTank": 6
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 8,
+    "optional": [
+      {
+        "size": 8,
+        "name": "Slot01_Size8"
+      },
+      {
+        "size": 7,
+        "name": "Slot02_Size7"
+      },
+      {
+        "size": 6,
+        "name": "Slot03_Size6"
+      },
+      {
+        "size": 5,
+        "name": "Slot04_Size5"
+      },
+      {
+        "size": 4,
+        "name": "Slot05_Size4"
+      },
+      {
+        "size": 4,
+        "name": "Slot06_Size4"
+      },
+      {
+        "size": 3,
+        "name": "Slot07_Size3"
+      },
+      {
+        "size": 3,
+        "name": "Slot08_Size3"
+      },
+      {
+        "size": 2,
+        "name": "Slot11_Size2"
+      },
+      {
+        "size": 5,
+        "restriction": "military",
+        "name": "Military01"
+      },
+      {
+        "size": 5,
+        "restriction": "military",
+        "name": "Military02"
+      },
+      {
+        "size": 1,
+        "name": "Slot12_Size1"
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite",
+        "name": "PlanetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Krait_MkII",
+    "name": "Krait Mk II",
+    "manufacturer": "Faulcon DeLacy",
+    "size": "medium",
+    "maximumSpeed": 240,
+    "boost": 330,
+    "core": {
+      "powerPlant": 7,
+      "thrusters": 6,
+      "frameShiftDrive": 5,
+      "lifeSupport": 4,
+      "powerDistributor": 7,
+      "sensors": 6,
+      "fuelTank": 5
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 6
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "TypeX",
+    "name": "Alliance Chieftain",
+    "manufacturer": "Lakon Spaceways",
+    "size": "medium",
+    "maximumSpeed": 230,
+    "boost": 330,
+    "core": {
+      "powerPlant": 6,
+      "thrusters": 6,
+      "frameShiftDrive": 5,
+      "lifeSupport": 5,
+      "powerDistributor": 6,
+      "sensors": 4,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 6
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 4,
+        "restriction": "military"
+      },
+      {
+        "size": 4,
+        "restriction": "military"
+      },
+      {
+        "size": 4,
+        "restriction": "military"
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "TypeX_2",
+    "name": "Alliance Crusader",
+    "manufacturer": "Lakon Spaceways",
+    "size": "medium",
+    "maximumSpeed": 180,
+    "boost": 300,
+    "core": {
+      "powerPlant": 6,
+      "thrusters": 6,
+      "frameShiftDrive": 5,
+      "lifeSupport": 5,
+      "powerDistributor": 6,
+      "sensors": 4,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 6
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 4,
+        "restriction": "military"
+      },
+      {
+        "size": 4,
+        "restriction": "military"
+      },
+      {
+        "size": 4,
+        "restriction": "military"
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "TypeX_3",
+    "name": "Alliance Challenger",
+    "manufacturer": "Lakon Spaceways",
+    "size": "medium",
+    "maximumSpeed": 200,
+    "boost": 310,
+    "core": {
+      "powerPlant": 6,
+      "thrusters": 6,
+      "frameShiftDrive": 5,
+      "lifeSupport": 5,
+      "powerDistributor": 6,
+      "sensors": 4,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 6
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 4,
+        "restriction": "military"
+      },
+      {
+        "size": 4,
+        "restriction": "military"
+      },
+      {
+        "size": 4,
+        "restriction": "military"
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Krait_Light",
+    "name": "Krait Phantom",
+    "manufacturer": "Faulcon DeLacy",
+    "size": "medium",
+    "maximumSpeed": 250,
+    "boost": 350,
+    "core": {
+      "powerPlant": 7,
+      "thrusters": 6,
+      "frameShiftDrive": 5,
+      "lifeSupport": 4,
+      "powerDistributor": 7,
+      "sensors": 6,
+      "fuelTank": 5
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 6
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Mamba",
+    "name": "Mamba",
+    "manufacturer": "Zorgon Peterson",
+    "size": "medium",
+    "maximumSpeed": 310,
+    "boost": 380,
+    "core": {
+      "powerPlant": 6,
+      "thrusters": 5,
+      "frameShiftDrive": 4,
+      "lifeSupport": 4,
+      "powerDistributor": 6,
+      "sensors": 4,
+      "fuelTank": 3
+    },
+    "hardpoints": [
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 6,
+    "optional": [
+      {
+        "size": 5
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Python_NX",
+    "name": "Python Mk II",
+    "manufacturer": "Faulcon DeLacy",
+    "size": "medium",
+    "maximumSpeed": 256,
+    "boost": 345,
+    "core": {
+      "powerPlant": 6,
+      "thrusters": 6,
+      "frameShiftDrive": 5,
+      "lifeSupport": 4,
+      "powerDistributor": 6,
+      "sensors": 5,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      }
+    ],
+    "utility": 6,
+    "optional": [
+      {
+        "size": 6
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Type8",
+    "name": "Type-8 Transporter",
+    "manufacturer": "Lakon Spaceways",
+    "size": "medium",
+    "maximumSpeed": 200,
+    "boost": 340,
+    "core": {
+      "powerPlant": 5,
+      "thrusters": 5,
+      "frameShiftDrive": 5,
+      "lifeSupport": 3,
+      "powerDistributor": 4,
+      "sensors": 3,
+      "fuelTank": 5
+    },
+    "hardpoints": [
+      {
+        "size": 2,
+        "name": "MediumHardpoint1"
+      },
+      {
+        "size": 1,
+        "name": "SmallHardpoint1"
+      },
+      {
+        "size": 1,
+        "name": "SmallHardpoint2"
+      },
+      {
+        "size": 1,
+        "name": "SmallHardpoint4"
+      },
+      {
+        "size": 1,
+        "name": "SmallHardpoint5"
+      },
+      {
+        "size": 1,
+        "name": "SmallHardpoint6"
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 7
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Mandalay",
+    "name": "Mandalay",
+    "manufacturer": "Zorgon Peterson",
+    "size": "medium",
+    "maximumSpeed": 280,
+    "boost": 350,
+    "core": {
+      "powerPlant": 5,
+      "thrusters": 5,
+      "frameShiftDrive": 5,
+      "lifeSupport": 4,
+      "powerDistributor": 5,
+      "sensors": 5,
+      "fuelTank": 5
+    },
+    "hardpoints": [
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 6
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "CobraMkV",
+    "name": "Cobra Mk V",
+    "manufacturer": "Faulcon DeLacy",
+    "size": "small",
+    "maximumSpeed": 290,
+    "boost": 410,
+    "core": {
+      "powerPlant": 4,
+      "thrusters": 4,
+      "frameShiftDrive": 4,
+      "lifeSupport": 3,
+      "powerDistributor": 4,
+      "sensors": 3,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 5
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Corsair",
+    "name": "Corsair",
+    "manufacturer": "Gutamaya",
+    "size": "medium",
+    "maximumSpeed": 280,
+    "boost": 355,
+    "core": {
+      "powerPlant": 7,
+      "thrusters": 7,
+      "frameShiftDrive": 5,
+      "lifeSupport": 4,
+      "powerDistributor": 7,
+      "sensors": 6,
+      "fuelTank": 5
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 6
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "PantherMkII",
+    "name": "Panther Clipper Mk II",
+    "manufacturer": "Zorgon Peterson",
+    "size": "large",
+    "maximumSpeed": 180,
+    "boost": 250,
+    "core": {
+      "powerPlant": 8,
+      "thrusters": 8,
+      "frameShiftDrive": 7,
+      "lifeSupport": 5,
+      "powerDistributor": 7,
+      "sensors": 5,
+      "fuelTank": 7
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 6,
+    "optional": [
+      {
+        "size": 8,
+        "restriction": "cargo",
+        "name": "Cargo01"
+      },
+      {
+        "size": 8,
+        "name": "Slot01_Size8"
+      },
+      {
+        "size": 7,
+        "restriction": "cargo",
+        "name": "Cargo02"
+      },
+      {
+        "size": 7,
+        "name": "Slot02_Size7"
+      },
+      {
+        "size": 6,
+        "name": "Slot03_Size6"
+      },
+      {
+        "size": 6,
+        "name": "Slot04_Size6"
+      },
+      {
+        "size": 6,
+        "name": "Slot05_Size6"
+      },
+      {
+        "size": 5,
+        "name": "Slot06_Size5"
+      },
+      {
+        "size": 5,
+        "name": "Slot07_Size5"
+      },
+      {
+        "size": 4,
+        "name": "Slot08_Size4"
+      },
+      {
+        "size": 2,
+        "name": "Slot09_Size2"
+      },
+      {
+        "size": 1,
+        "name": "Slot10_Size1"
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite",
+        "name": "PlanetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "LakonMiner",
+    "name": "Type-11 Prospector",
+    "manufacturer": "Lakon Spaceways",
+    "size": "medium",
+    "maximumSpeed": 270,
+    "boost": 365,
+    "core": {
+      "powerPlant": 6,
+      "thrusters": 5,
+      "frameShiftDrive": 5,
+      "lifeSupport": 3,
+      "powerDistributor": 7,
+      "sensors": 3,
+      "fuelTank": 5
+    },
+    "hardpoints": [
+      {
+        "size": 3,
+        "restriction": "mining",
+        "name": "LargeMiningHardpoint1"
+      },
+      {
+        "size": 2,
+        "restriction": "mining",
+        "name": "MediumMiningHardpoint1"
+      },
+      {
+        "size": 2,
+        "restriction": "mining",
+        "name": "MediumMiningHardpoint2"
+      },
+      {
+        "size": 2,
+        "name": "MediumHardpoint3"
+      },
+      {
+        "size": 1,
+        "restriction": "mining",
+        "name": "SmallMiningHardpoint1"
+      },
+      {
+        "size": 1,
+        "name": "SmallHardpoint2"
+      },
+      {
+        "size": 1,
+        "name": "SmallHardpoint3"
+      },
+      {
+        "size": 1,
+        "name": "SmallHardpoint4"
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 6,
+        "name": "Slot01_Size6"
+      },
+      {
+        "size": 6,
+        "name": "Slot02_Size6"
+      },
+      {
+        "size": 6,
+        "name": "Slot03_Size6"
+      },
+      {
+        "size": 5,
+        "name": "Slot04_Size5"
+      },
+      {
+        "size": 5,
+        "name": "Slot05_Size5"
+      },
+      {
+        "size": 5,
+        "restriction": "limpetController",
+        "name": "LimpetController01"
+      },
+      {
+        "size": 5,
+        "restriction": "vesselHangar",
+        "name": "FighterBay01"
+      },
+      {
+        "size": 4,
+        "name": "Slot06_Size4"
+      },
+      {
+        "size": 3,
+        "name": "Slot07_Size3"
+      },
+      {
+        "size": 2,
+        "name": "Slot08_Size2"
+      },
+      {
+        "size": 1,
+        "name": "Slot09_Size1"
+      },
+      {
+        "size": 1,
+        "name": "Slot10_Size1"
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite",
+        "name": "PlanetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "Explorer_NX",
+    "name": "Caspian Explorer",
+    "manufacturer": "Zorgon Peterson",
+    "size": "large",
+    "maximumSpeed": 210,
+    "boost": 290,
+    "core": {
+      "powerPlant": 8,
+      "thrusters": 7,
+      "frameShiftDrive": 8,
+      "lifeSupport": 5,
+      "powerDistributor": 7,
+      "sensors": 8,
+      "fuelTank": 7
+    },
+    "hardpoints": [
+      {
+        "size": 3,
+        "name": "LargeHardpoint1"
+      },
+      {
+        "size": 2,
+        "name": "MediumHardpoint6"
+      },
+      {
+        "size": 2,
+        "name": "MediumHardpoint5"
+      },
+      {
+        "size": 2,
+        "name": "MediumHardpoint1"
+      },
+      {
+        "size": 2,
+        "name": "MediumHardpoint2"
+      },
+      {
+        "size": 2,
+        "name": "MediumHardpoint3"
+      },
+      {
+        "size": 2,
+        "name": "MediumHardpoint4"
+      }
+    ],
+    "utility": 6,
+    "optional": [
+      {
+        "size": 7
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 6
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 5
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "SmallCombat01_NX",
+    "name": "Kestrel Mk II",
+    "manufacturer": "Core Dynamics",
+    "size": "small",
+    "maximumSpeed": 270,
+    "boost": 360,
+    "core": {
+      "powerPlant": 5,
+      "thrusters": 5,
+      "frameShiftDrive": 4,
+      "lifeSupport": 1,
+      "powerDistributor": 5,
+      "sensors": 2,
+      "fuelTank": 4
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 5
+      },
+      {
+        "size": 4
+      },
+      {
+        "size": 4,
+        "restriction": "military"
+      },
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 1
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite"
+      }
+    ]
+  },
+  {
+    "symbol": "MediumTransport01",
+    "name": "Lynx Highliner",
+    "manufacturer": "Zorgon Peterson",
+    "size": "medium",
+    "maximumSpeed": 285,
+    "boost": 350,
+    "core": {
+      "powerPlant": 5,
+      "thrusters": 6,
+      "frameShiftDrive": 5,
+      "lifeSupport": 6,
+      "powerDistributor": 5,
+      "sensors": 3,
+      "fuelTank": 5
+    },
+    "hardpoints": [
+      {
+        "size": 3
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      },
+      {
+        "size": 2
+      }
+    ],
+    "utility": 4,
+    "optional": [
+      {
+        "size": 6,
+        "name": "Slot01_Size6"
+      },
+      {
+        "size": 6,
+        "restriction": "passenger",
+        "name": "Passenger01"
+      },
+      {
+        "size": 6,
+        "restriction": "passenger",
+        "name": "Passenger02"
+      },
+      {
+        "size": 5,
+        "restriction": "passenger",
+        "name": "Passenger03"
+      },
+      {
+        "size": 5,
+        "name": "Slot02_Size5"
+      },
+      {
+        "size": 4,
+        "name": "Slot03_Size4"
+      },
+      {
+        "size": 4,
+        "name": "Slot04_Size4"
+      },
+      {
+        "size": 3,
+        "name": "Slot05_Size3"
+      },
+      {
+        "size": 2,
+        "name": "Slot06_Size2"
+      },
+      {
+        "size": 1,
+        "name": "Slot07_Size1"
+      },
+      {
+        "size": 1,
+        "restriction": "planetaryApproachSuite",
+        "name": "PlanetaryApproachSuite"
+      }
+    ]
+  }
+]

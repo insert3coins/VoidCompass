@@ -1,0 +1,6388 @@
+[
+  {
+    "Type": "Armour",
+    "Name": "Angled Plating",
+    "Engineers": [
+      "Liz Ryder",
+      "Selene Jean",
+      "Petra Olmanova"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Compact Composites",
+        "Size": 5
+      },
+      {
+        "Name": "High Density Composites",
+        "Size": 3
+      },
+      {
+        "Name": "Zirconium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-3%",
+        "Property": "Hull Boost",
+        "IsGood": false
+      },
+      {
+        "Effect": "+8%",
+        "Property": "Kinetic Resistance",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "e8631809-2915-4373-905c-8dcf3bda6921",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Armour"
+    ],
+    "ExperimentalId": "armour::angled_plating"
+  },
+  {
+    "Type": "Armour",
+    "Name": "Deep Plating",
+    "Engineers": [
+      "Liz Ryder",
+      "Selene Jean",
+      "Petra Olmanova"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Compact Composites",
+        "Size": 5
+      },
+      {
+        "Name": "Mechanical Equipment",
+        "Size": 3
+      },
+      {
+        "Name": "Molybdenum",
+        "Size": 2
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+8%",
+        "Property": "Hull Boost",
+        "IsGood": true
+      },
+      {
+        "Effect": "-3%",
+        "Property": "Kinetic Resistance",
+        "IsGood": false
+      },
+      {
+        "Effect": "-3%",
+        "Property": "Thermal Resistance",
+        "IsGood": false
+      },
+      {
+        "Effect": "-3%",
+        "Property": "Explosive Resistance",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "b51706cc-d412-4559-8654-f812d2eb44b9",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Armour"
+    ],
+    "ExperimentalId": "armour::deep_plating"
+  },
+  {
+    "Type": "Armour",
+    "Name": "Layered Plating",
+    "Engineers": [
+      "Liz Ryder",
+      "Selene Jean",
+      "Petra Olmanova"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Heat Conduction Wiring",
+        "Size": 5
+      },
+      {
+        "Name": "High Density Composites",
+        "Size": 3
+      },
+      {
+        "Name": "Niobium",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-3%",
+        "Property": "Hull Boost",
+        "IsGood": false
+      },
+      {
+        "Effect": "+8%",
+        "Property": "Explosive Resistance",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "cdd19fcc-74b4-463a-a8f1-2e9909da664f",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Armour"
+    ],
+    "ExperimentalId": "armour::layered_plating"
+  },
+  {
+    "Type": "Armour",
+    "Name": "Reflective Plating",
+    "Engineers": [
+      "Liz Ryder",
+      "Selene Jean",
+      "Petra Olmanova"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Compact Composites",
+        "Size": 5
+      },
+      {
+        "Name": "Heat Dispersion Plate",
+        "Size": 3
+      },
+      {
+        "Name": "Thermic Alloys",
+        "Size": 2
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-3%",
+        "Property": "Hull Boost",
+        "IsGood": false
+      },
+      {
+        "Effect": "+8%",
+        "Property": "Thermal Resistance",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "6c88aa33-01db-4eda-928e-6ca8b9b1bc3d",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Armour"
+    ],
+    "ExperimentalId": "armour::reflective_plating"
+  },
+  {
+    "Type": "Beam Laser",
+    "Name": "Concordant Sequence",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Focus Crystals",
+        "Size": 5
+      },
+      {
+        "Name": "Modified Embedded Firmware",
+        "Size": 3
+      },
+      {
+        "Name": "Zirconium",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Wing shield regeneration increased",
+        "IsGood": true
+      },
+      {
+        "Effect": "+50%",
+        "Property": "Thermal Load",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "b556c19a-e756-45b1-846f-9ddc61af18a9",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Beam Laser"
+    ],
+    "ExperimentalId": "beam_laser::concordant_sequence"
+  },
+  {
+    "Type": "Beam Laser",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Compact Composites",
+        "Size": 5
+      },
+      {
+        "Name": "Vanadium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "32cb80c0-bb11-49ea-ae21-4c94eb5f9195",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Beam Laser"
+    ],
+    "ExperimentalId": "beam_laser::double_braced"
+  },
+  {
+    "Type": "Beam Laser",
+    "Name": "Flow Control",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 3
+      },
+      {
+        "Name": "Modified Embedded Firmware",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Power Draw",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "441e1d85-5174-4172-85ea-caee8d3c632d",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Beam Laser"
+    ],
+    "ExperimentalId": "beam_laser::flow_control"
+  },
+  {
+    "Type": "Beam Laser",
+    "Name": "Oversized",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Mechanical Components",
+        "Size": 3
+      },
+      {
+        "Name": "Ruthenium",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Damage",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "ceb5c729-4565-4869-ade8-5ee897e8b410",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Beam Laser"
+    ],
+    "ExperimentalId": "beam_laser::oversized"
+  },
+  {
+    "Type": "Beam Laser",
+    "Name": "Regeneration Sequence",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Refined Focus Crystals",
+        "Size": 3
+      },
+      {
+        "Name": "Shielding Sensors",
+        "Size": 4
+      },
+      {
+        "Name": "Peculiar Shield Frequency Data",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target wing shields regenerated",
+        "IsGood": true
+      },
+      {
+        "Effect": "-10%",
+        "Property": "Damage",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "3bece1bb-7c31-4735-8c18-54dc4a0057bc",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Beam Laser"
+    ],
+    "ExperimentalId": "beam_laser::regeneration_sequence"
+  },
+  {
+    "Type": "Beam Laser",
+    "Name": "Stripped Down",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Salvaged Alloys",
+        "Size": 5
+      },
+      {
+        "Name": "Carbon",
+        "Size": 5
+      },
+      {
+        "Name": "Tin",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Mass",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "dfc22aad-48b8-4f8d-af16-ec3b978fc8b6",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Beam Laser"
+    ],
+    "ExperimentalId": "beam_laser::stripped_down"
+  },
+  {
+    "Type": "Beam Laser",
+    "Name": "Thermal Conduit",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Heat Dispersion Plate",
+        "Size": 5
+      },
+      {
+        "Name": "Sulphur",
+        "Size": 5
+      },
+      {
+        "Name": "Tempered Alloys",
+        "Size": 5
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Damage increases with heat level",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "4e4e1f59-6762-47ff-b1fa-40ca43304698",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Beam Laser"
+    ],
+    "ExperimentalId": "beam_laser::thermal_conduit"
+  },
+  {
+    "Type": "Beam Laser",
+    "Name": "Thermal Shock",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Flawed Focus Crystals",
+        "Size": 5
+      },
+      {
+        "Name": "Heat Resistant Ceramics",
+        "Size": 3
+      },
+      {
+        "Name": "Conductive Components",
+        "Size": 3
+      },
+      {
+        "Name": "Tungsten",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target heat increased",
+        "IsGood": true
+      },
+      {
+        "Effect": "-10%",
+        "Property": "Damage",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "fe8b4daa-e65d-464c-811d-400d3632a3d6",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Beam Laser"
+    ],
+    "ExperimentalId": "beam_laser::thermal_shock"
+  },
+  {
+    "Type": "Beam Laser",
+    "Name": "Thermal Vent",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Flawed Focus Crystals",
+        "Size": 5
+      },
+      {
+        "Name": "Conductive Polymers",
+        "Size": 3
+      },
+      {
+        "Name": "Precipitated Alloys",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Heat reduced when striking a target",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "70f11414-7904-405c-92db-806178ee9df4",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Beam Laser"
+    ],
+    "ExperimentalId": "beam_laser::thermal_vent"
+  },
+  {
+    "Type": "Burst Laser",
+    "Name": "Concordant Sequence",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Focus Crystals",
+        "Size": 5
+      },
+      {
+        "Name": "Modified Embedded Firmware",
+        "Size": 3
+      },
+      {
+        "Name": "Zirconium",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Wing shield regeneration increased",
+        "IsGood": true
+      },
+      {
+        "Effect": "+50%",
+        "Property": "Thermal Load",
+        "IsGood": false
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Burst Laser"
+    ],
+    "ExperimentalId": "burst_laser::concordant_sequence"
+  },
+  {
+    "Type": "Burst Laser",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Compact Composites",
+        "Size": 5
+      },
+      {
+        "Name": "Vanadium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Burst Laser"
+    ],
+    "ExperimentalId": "burst_laser::double_braced"
+  },
+  {
+    "Type": "Burst Laser",
+    "Name": "Flow Control",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 3
+      },
+      {
+        "Name": "Modified Embedded Firmware",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Power Draw",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Burst Laser"
+    ],
+    "ExperimentalId": "burst_laser::flow_control"
+  },
+  {
+    "Type": "Burst Laser",
+    "Name": "Inertial Impact",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Flawed Focus Crystals",
+        "Size": 5
+      },
+      {
+        "Name": "Distorted Shield Cycle Recordings",
+        "Size": 5
+      },
+      {
+        "Name": "Atypical Disrupted Wake Echoes",
+        "Size": 5
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Damage partially kinetic",
+        "IsGood": true
+      },
+      {
+        "Effect": "+50%",
+        "Property": "Damage",
+        "IsGood": true
+      },
+      {
+        "Effect": "3",
+        "Property": "Jitter",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "6eda22d3-8049-4bab-a125-762b12fa576a",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Burst Laser"
+    ],
+    "ExperimentalId": "burst_laser::inertial_impact"
+  },
+  {
+    "Type": "Burst Laser",
+    "Name": "Multi-Servos",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Focus Crystals",
+        "Size": 4
+      },
+      {
+        "Name": "Conductive Polymers",
+        "Size": 2
+      },
+      {
+        "Name": "Configurable Components",
+        "Size": 2
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Rate of Fire",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "fd62292f-f5ed-4728-bc8a-3ae215ced386",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Burst Laser"
+    ],
+    "ExperimentalId": "burst_laser::multi-servos"
+  },
+  {
+    "Type": "Burst Laser",
+    "Name": "Oversized",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Mechanical Components",
+        "Size": 3
+      },
+      {
+        "Name": "Ruthenium",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Damage",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Burst Laser"
+    ],
+    "ExperimentalId": "burst_laser::oversized"
+  },
+  {
+    "Type": "Burst Laser",
+    "Name": "Phasing Sequence",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Focus Crystals",
+        "Size": 5
+      },
+      {
+        "Name": "Aberrant Shield Pattern Analysis",
+        "Size": 3
+      },
+      {
+        "Name": "Niobium",
+        "Size": 3
+      },
+      {
+        "Name": "Configurable Components",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Part of damage through shields",
+        "IsGood": true
+      },
+      {
+        "Effect": "-10%",
+        "Property": "Damage",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "47254ea9-c88f-43e0-9166-d1796649917b",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Burst Laser"
+    ],
+    "ExperimentalId": "burst_laser::phasing_sequence"
+  },
+  {
+    "Type": "Burst Laser",
+    "Name": "Scramble Spectrum",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Crystal Shards",
+        "Size": 5
+      },
+      {
+        "Name": "Untypical Shield Scans",
+        "Size": 3
+      },
+      {
+        "Name": "Exceptional Scrambled Emission Data",
+        "Size": 5
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target modules malfunctions",
+        "IsGood": true
+      },
+      {
+        "Effect": "-10%",
+        "Property": "Rate of Fire",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "4f42cb92-4440-4295-ada9-fcca788a65b8",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Burst Laser"
+    ],
+    "ExperimentalId": "burst_laser::scramble_spectrum"
+  },
+  {
+    "Type": "Burst Laser",
+    "Name": "Stripped Down",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Salvaged Alloys",
+        "Size": 5
+      },
+      {
+        "Name": "Carbon",
+        "Size": 5
+      },
+      {
+        "Name": "Tin",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Mass",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Burst Laser"
+    ],
+    "ExperimentalId": "burst_laser::stripped_down"
+  },
+  {
+    "Type": "Burst Laser",
+    "Name": "Thermal Shock",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Flawed Focus Crystals",
+        "Size": 5
+      },
+      {
+        "Name": "Heat Resistant Ceramics",
+        "Size": 3
+      },
+      {
+        "Name": "Conductive Components",
+        "Size": 3
+      },
+      {
+        "Name": "Tungsten",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target heat increased",
+        "IsGood": true
+      },
+      {
+        "Effect": "-10%",
+        "Property": "Damage",
+        "IsGood": false
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Burst Laser"
+    ],
+    "ExperimentalId": "burst_laser::thermal_shock"
+  },
+  {
+    "Type": "Cannon",
+    "Name": "Auto Loader",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Equipment",
+        "Size": 4
+      },
+      {
+        "Name": "Mechanical Components",
+        "Size": 3
+      },
+      {
+        "Name": "High Density Composites",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Auto reload while firing",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Cannon"
+    ],
+    "ExperimentalId": "cannon::auto_loader"
+  },
+  {
+    "Type": "Cannon",
+    "Name": "Dispersal Field",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Conductive Components",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 5
+      },
+      {
+        "Name": "Irregular Emission Data",
+        "Size": 5
+      },
+      {
+        "Name": "Worn Shield Emitters",
+        "Size": 5
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target gimbal/turret tracking reduced",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "0e2dbd63-335d-4dca-8050-c7ca8ddc56b0",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Cannon"
+    ],
+    "ExperimentalId": "cannon::dispersal_field"
+  },
+  {
+    "Type": "Cannon",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Compact Composites",
+        "Size": 5
+      },
+      {
+        "Name": "Vanadium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Cannon"
+    ],
+    "ExperimentalId": "cannon::double_braced"
+  },
+  {
+    "Type": "Cannon",
+    "Name": "Flow Control",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 3
+      },
+      {
+        "Name": "Modified Embedded Firmware",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Power Draw",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Cannon"
+    ],
+    "ExperimentalId": "cannon::flow_control"
+  },
+  {
+    "Type": "Cannon",
+    "Name": "Force Shell",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Zinc",
+        "Size": 5
+      },
+      {
+        "Name": "Phase Alloys",
+        "Size": 3
+      },
+      {
+        "Name": "Heat Conduction Wiring",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target pushed off course",
+        "IsGood": true
+      },
+      {
+        "Effect": "-17%",
+        "Property": "Shot Speed",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "62056851-d2f2-474d-ba77-66c030c900e9",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Cannon"
+    ],
+    "ExperimentalId": "cannon::force_shell"
+  },
+  {
+    "Type": "Cannon",
+    "Name": "High Yield Shell",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Proto Light Alloys",
+        "Size": 3
+      },
+      {
+        "Name": "Chemical Manipulators",
+        "Size": 3
+      },
+      {
+        "Name": "Nickel",
+        "Size": 5
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Damage partially explosive",
+        "IsGood": true
+      },
+      {
+        "Effect": "-10%",
+        "Property": "Rate of Fire",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "a950b42c-204f-4775-a0c5-21bfcec1fd14",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Cannon"
+    ],
+    "ExperimentalId": "cannon::high_yield_shell"
+  },
+  {
+    "Type": "Cannon",
+    "Name": "Multi-Servos",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Focus Crystals",
+        "Size": 4
+      },
+      {
+        "Name": "Conductive Polymers",
+        "Size": 2
+      },
+      {
+        "Name": "Configurable Components",
+        "Size": 2
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Rate of Fire",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Cannon"
+    ],
+    "ExperimentalId": "cannon::multi-servos"
+  },
+  {
+    "Type": "Cannon",
+    "Name": "Oversized",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Mechanical Components",
+        "Size": 3
+      },
+      {
+        "Name": "Ruthenium",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Damage",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Cannon"
+    ],
+    "ExperimentalId": "cannon::oversized"
+  },
+  {
+    "Type": "Cannon",
+    "Name": "Smart Rounds",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Security Firmware Patch",
+        "Size": 3
+      },
+      {
+        "Name": "Decoded Emission Data",
+        "Size": 3
+      },
+      {
+        "Name": "Classified Scan Databanks",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "No damage to untargeted ships",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Cannon"
+    ],
+    "ExperimentalId": "cannon::smart_rounds"
+  },
+  {
+    "Type": "Cannon",
+    "Name": "Stripped Down",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Salvaged Alloys",
+        "Size": 5
+      },
+      {
+        "Name": "Carbon",
+        "Size": 5
+      },
+      {
+        "Name": "Tin",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Mass",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Cannon"
+    ],
+    "ExperimentalId": "cannon::stripped_down"
+  },
+  {
+    "Type": "Cannon",
+    "Name": "Thermal Cascade",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Heat Conduction Wiring",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 4
+      },
+      {
+        "Name": "High Density Composites",
+        "Size": 3
+      },
+      {
+        "Name": "Phosphorus",
+        "Size": 5
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Shielded target heat increased",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "e5c8cab4-7a2f-450d-a937-2d0d8b9e3714",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Cannon"
+    ],
+    "ExperimentalId": "cannon::thermal_cascade"
+  },
+  {
+    "Type": "Fragment Cannon",
+    "Name": "Corrosive Shell",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Chemical Storage Units",
+        "Size": 5
+      },
+      {
+        "Name": "Precipitated Alloys",
+        "Size": 4
+      },
+      {
+        "Name": "Arsenic",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target armor hardness reduced",
+        "IsGood": true
+      },
+      {
+        "Effect": "-20%",
+        "Property": "Ammo Capacity",
+        "IsGood": false
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Fragment Cannon"
+    ],
+    "ExperimentalId": "fragment_cannon::corrosive_shell"
+  },
+  {
+    "Type": "Fragment Cannon",
+    "Name": "Dazzle Shell",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Manganese",
+        "Size": 4
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 5
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target sensor acuity reduced",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "0a1e29ee-2fc7-4cbd-bbda-e8803c3e03ac",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Fragment Cannon"
+    ],
+    "ExperimentalId": "fragment_cannon::dazzle_shell"
+  },
+  {
+    "Type": "Fragment Cannon",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Compact Composites",
+        "Size": 5
+      },
+      {
+        "Name": "Vanadium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Fragment Cannon"
+    ],
+    "ExperimentalId": "fragment_cannon::double_braced"
+  },
+  {
+    "Type": "Fragment Cannon",
+    "Name": "Drag Munition",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Carbon",
+        "Size": 5
+      },
+      {
+        "Name": "Grid Resistors",
+        "Size": 5
+      },
+      {
+        "Name": "Molybdenum",
+        "Size": 2
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target speed reduced",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "ca4cd540-660a-4fba-b38d-179f72125819",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Fragment Cannon"
+    ],
+    "ExperimentalId": "fragment_cannon::drag_munition"
+  },
+  {
+    "Type": "Fragment Cannon",
+    "Name": "Flow Control",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 3
+      },
+      {
+        "Name": "Modified Embedded Firmware",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Power Draw",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Fragment Cannon"
+    ],
+    "ExperimentalId": "fragment_cannon::flow_control"
+  },
+  {
+    "Type": "Fragment Cannon",
+    "Name": "Incendiary Rounds",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Heat Conduction Wiring",
+        "Size": 5
+      },
+      {
+        "Name": "Phosphorus",
+        "Size": 5
+      },
+      {
+        "Name": "Sulphur",
+        "Size": 5
+      },
+      {
+        "Name": "Phase Alloys",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Damage partially thermal",
+        "IsGood": true
+      },
+      {
+        "Effect": "-5%",
+        "Property": "Rate of Fire",
+        "IsGood": false
+      },
+      {
+        "Effect": "+200%",
+        "Property": "Thermal Load",
+        "IsGood": false
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Fragment Cannon"
+    ],
+    "ExperimentalId": "fragment_cannon::incendiary_rounds"
+  },
+  {
+    "Type": "Fragment Cannon",
+    "Name": "Multi-Servos",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Focus Crystals",
+        "Size": 4
+      },
+      {
+        "Name": "Conductive Polymers",
+        "Size": 2
+      },
+      {
+        "Name": "Configurable Components",
+        "Size": 2
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Rate of Fire",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Fragment Cannon"
+    ],
+    "ExperimentalId": "fragment_cannon::multi-servos"
+  },
+  {
+    "Type": "Fragment Cannon",
+    "Name": "Oversized",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Mechanical Components",
+        "Size": 3
+      },
+      {
+        "Name": "Ruthenium",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Damage",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Fragment Cannon"
+    ],
+    "ExperimentalId": "fragment_cannon::oversized"
+  },
+  {
+    "Type": "Fragment Cannon",
+    "Name": "Screening Shell",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Distorted Shield Cycle Recordings",
+        "Size": 5
+      },
+      {
+        "Name": "Modified Consumer Firmware",
+        "Size": 5
+      },
+      {
+        "Name": "Niobium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Effectiveness increase against munitions",
+        "IsGood": true
+      },
+      {
+        "Effect": "-50%",
+        "Property": "Reload Time",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "9cf533fc-ccb1-4c92-8b6b-dd700af2988a",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Fragment Cannon"
+    ],
+    "ExperimentalId": "fragment_cannon::screening_shell"
+  },
+  {
+    "Type": "Fragment Cannon",
+    "Name": "Stripped Down",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Salvaged Alloys",
+        "Size": 5
+      },
+      {
+        "Name": "Carbon",
+        "Size": 5
+      },
+      {
+        "Name": "Tin",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Mass",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Fragment Cannon"
+    ],
+    "ExperimentalId": "fragment_cannon::stripped_down"
+  },
+  {
+    "Type": "Frame Shift Drive",
+    "Name": "Deep Charge",
+    "Engineers": [
+      "Mel Brandon",
+      "Felicity Farseer",
+      "Elvira Martuuk",
+      "Chloe Sedesi",
+      "Professor Palin",
+      "Colonel Bris Dekker"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Atypical Disrupted Wake Echoes",
+        "Size": 5
+      },
+      {
+        "Name": "Galvanising Alloys",
+        "Size": 3
+      },
+      {
+        "Name": "Eccentric Hyperspace Trajectories",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+10%",
+        "Property": "Maximum Fuel Per Jump",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "56f1e58d-2044-4a31-8b54-ad0f99dfd64e",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Frame Shift Drive"
+    ],
+    "ExperimentalId": "frame_shift_drive::deep_charge"
+  },
+  {
+    "Type": "Frame Shift Drive",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Mel Brandon",
+      "Felicity Farseer",
+      "Elvira Martuuk",
+      "Chloe Sedesi",
+      "Professor Palin",
+      "Colonel Bris Dekker"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Atypical Disrupted Wake Echoes",
+        "Size": 5
+      },
+      {
+        "Name": "Galvanising Alloys",
+        "Size": 3
+      },
+      {
+        "Name": "Configurable Components",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+25%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Frame Shift Drive"
+    ],
+    "ExperimentalId": "frame_shift_drive::double_braced"
+  },
+  {
+    "Type": "Frame Shift Drive",
+    "Name": "Mass Manager",
+    "Engineers": [
+      "Mel Brandon",
+      "Felicity Farseer",
+      "Elvira Martuuk",
+      "Chloe Sedesi",
+      "Professor Palin",
+      "Colonel Bris Dekker"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Atypical Disrupted Wake Echoes",
+        "Size": 5
+      },
+      {
+        "Name": "Galvanising Alloys",
+        "Size": 3
+      },
+      {
+        "Name": "Eccentric Hyperspace Trajectories",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-8%",
+        "Property": "Integrity",
+        "IsGood": false
+      },
+      {
+        "Effect": "+4%",
+        "Property": "Optimal Mass",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "4d7d30c3-970b-4c6e-a507-89ac7e6441bd",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Frame Shift Drive"
+    ],
+    "ExperimentalId": "frame_shift_drive::mass_manager"
+  },
+  {
+    "Type": "Frame Shift Drive",
+    "Name": "Stripped Down",
+    "Engineers": [
+      "Mel Brandon",
+      "Felicity Farseer",
+      "Elvira Martuuk",
+      "Chloe Sedesi",
+      "Professor Palin",
+      "Colonel Bris Dekker"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Atypical Disrupted Wake Echoes",
+        "Size": 5
+      },
+      {
+        "Name": "Galvanising Alloys",
+        "Size": 3
+      },
+      {
+        "Name": "Proto Light Alloys",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Mass",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Frame Shift Drive"
+    ],
+    "ExperimentalId": "frame_shift_drive::stripped_down"
+  },
+  {
+    "Type": "Frame Shift Drive",
+    "Name": "Thermal Spread",
+    "Engineers": [
+      "Mel Brandon",
+      "Felicity Farseer",
+      "Elvira Martuuk",
+      "Chloe Sedesi",
+      "Professor Palin",
+      "Colonel Bris Dekker"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Atypical Disrupted Wake Echoes",
+        "Size": 5
+      },
+      {
+        "Name": "Galvanising Alloys",
+        "Size": 3
+      },
+      {
+        "Name": "Heat Vanes",
+        "Size": 1
+      },
+      {
+        "Name": "Grid Resistors",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Thermal Load",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Frame Shift Drive"
+    ],
+    "ExperimentalId": "frame_shift_drive::thermal_spread"
+  },
+  {
+    "Type": "Hull Reinforcement Package",
+    "Name": "Angled Plating",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Selene Jean"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Tempered Alloys",
+        "Size": 5
+      },
+      {
+        "Name": "Zirconium",
+        "Size": 3
+      },
+      {
+        "Name": "Carbon",
+        "Size": 5
+      },
+      {
+        "Name": "High Density Composites",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-5%",
+        "Property": "Hull Reinforcement",
+        "IsGood": false
+      },
+      {
+        "Effect": "+2%",
+        "Property": "Kinetic Resistance",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Hull Reinforcement Package"
+    ],
+    "ExperimentalId": "hull_reinforcement_package::angled_plating"
+  },
+  {
+    "Type": "Hull Reinforcement Package",
+    "Name": "Deep Plating",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Selene Jean"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Compact Composites",
+        "Size": 5
+      },
+      {
+        "Name": "Molybdenum",
+        "Size": 3
+      },
+      {
+        "Name": "Ruthenium",
+        "Size": 2
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+10%",
+        "Property": "Hull Reinforcement",
+        "IsGood": true
+      },
+      {
+        "Effect": "-2%",
+        "Property": "Kinetic Resistance",
+        "IsGood": false
+      },
+      {
+        "Effect": "-2%",
+        "Property": "Thermal Resistance",
+        "IsGood": false
+      },
+      {
+        "Effect": "-2%",
+        "Property": "Explosive Resistance",
+        "IsGood": false
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Hull Reinforcement Package"
+    ],
+    "ExperimentalId": "hull_reinforcement_package::deep_plating"
+  },
+  {
+    "Type": "Hull Reinforcement Package",
+    "Name": "Layered Plating",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Selene Jean"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Heat Conduction Wiring",
+        "Size": 5
+      },
+      {
+        "Name": "Shielding Sensors",
+        "Size": 3
+      },
+      {
+        "Name": "Tungsten",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-5%",
+        "Property": "Hull Reinforcement",
+        "IsGood": false
+      },
+      {
+        "Effect": "+2%",
+        "Property": "Explosive Resistance",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Hull Reinforcement Package"
+    ],
+    "ExperimentalId": "hull_reinforcement_package::layered_plating"
+  },
+  {
+    "Type": "Hull Reinforcement Package",
+    "Name": "Reflective Plating",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Selene Jean"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Heat Conduction Wiring",
+        "Size": 5
+      },
+      {
+        "Name": "Heat Dispersion Plate",
+        "Size": 3
+      },
+      {
+        "Name": "Proto Light Alloys",
+        "Size": 1
+      },
+      {
+        "Name": "Zinc",
+        "Size": 4
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-5%",
+        "Property": "Hull Reinforcement",
+        "IsGood": false
+      },
+      {
+        "Effect": "+2%",
+        "Property": "Thermal Resistance",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Hull Reinforcement Package"
+    ],
+    "ExperimentalId": "hull_reinforcement_package::reflective_plating"
+  },
+  {
+    "Type": "Mine Launcher",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Compact Composites",
+        "Size": 5
+      },
+      {
+        "Name": "Vanadium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Mine Launcher"
+    ],
+    "ExperimentalId": "mine_launcher::double_braced"
+  },
+  {
+    "Type": "Mine Launcher",
+    "Name": "Emissive Munitions",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Equipment",
+        "Size": 4
+      },
+      {
+        "Name": "Unexpected Emission Data",
+        "Size": 3
+      },
+      {
+        "Name": "Heat Exchangers",
+        "Size": 3
+      },
+      {
+        "Name": "Manganese",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target signature increased",
+        "IsGood": true
+      },
+      {
+        "Effect": "+100%",
+        "Property": "Thermal Load",
+        "IsGood": false
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Mine Launcher"
+    ],
+    "ExperimentalId": "mine_launcher::emissive_munitions"
+  },
+  {
+    "Type": "Mine Launcher",
+    "Name": "Flow Control",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 3
+      },
+      {
+        "Name": "Modified Embedded Firmware",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Power Draw",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Mine Launcher"
+    ],
+    "ExperimentalId": "mine_launcher::flow_control"
+  },
+  {
+    "Type": "Mine Launcher",
+    "Name": "Ion Disruptor",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Sulphur",
+        "Size": 5
+      },
+      {
+        "Name": "Phosphorus",
+        "Size": 5
+      },
+      {
+        "Name": "Chemical Distillery",
+        "Size": 3
+      },
+      {
+        "Name": "Electrochemical Arrays",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target thrusters reboot",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "d84e40ca-afc1-4b01-9940-034152d288e7",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Mine Launcher"
+    ],
+    "ExperimentalId": "mine_launcher::ion_disruptor"
+  },
+  {
+    "Type": "Mine Launcher",
+    "Name": "Overload Munitions",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Filament Composites",
+        "Size": 5
+      },
+      {
+        "Name": "Tagged Encryption Codes",
+        "Size": 4
+      },
+      {
+        "Name": "Aberrant Shield Pattern Analysis",
+        "Size": 2
+      },
+      {
+        "Name": "Germanium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Damage partially thermal",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Mine Launcher"
+    ],
+    "ExperimentalId": "mine_launcher::overload_munitions"
+  },
+  {
+    "Type": "Mine Launcher",
+    "Name": "Oversized",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Mechanical Components",
+        "Size": 3
+      },
+      {
+        "Name": "Ruthenium",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Damage",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Mine Launcher"
+    ],
+    "ExperimentalId": "mine_launcher::oversized"
+  },
+  {
+    "Type": "Mine Launcher",
+    "Name": "Radiant Canister",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Polonium",
+        "Size": 1
+      },
+      {
+        "Name": "Phase Alloys",
+        "Size": 3
+      },
+      {
+        "Name": "Heat Dispersion Plate",
+        "Size": 4
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Area heat increased, sensors disrupted",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "51f84837-e9a5-432c-a125-d4322099266c",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Mine Launcher"
+    ],
+    "ExperimentalId": "mine_launcher::radiant_canister"
+  },
+  {
+    "Type": "Mine Launcher",
+    "Name": "Reverberating Cascade",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Configurable Components",
+        "Size": 2
+      },
+      {
+        "Name": "Classified Scan Databanks",
+        "Size": 3
+      },
+      {
+        "Name": "Filament Composites",
+        "Size": 4
+      },
+      {
+        "Name": "Chromium",
+        "Size": 4
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target shield generator damaged",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Mine Launcher"
+    ],
+    "ExperimentalId": "mine_launcher::reverberating_cascade"
+  },
+  {
+    "Type": "Mine Launcher",
+    "Name": "Shift-Lock Canister",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Tempered Alloys",
+        "Size": 5
+      },
+      {
+        "Name": "Strange Wake Solutions",
+        "Size": 3
+      },
+      {
+        "Name": "Salvaged Alloys",
+        "Size": 5
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Area FSDs reboot",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "1f7b0deb-e023-43e5-96f6-ebf60d683e8b",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Mine Launcher"
+    ],
+    "ExperimentalId": "mine_launcher::shift-lock_canister"
+  },
+  {
+    "Type": "Mine Launcher",
+    "Name": "Stripped Down",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Salvaged Alloys",
+        "Size": 5
+      },
+      {
+        "Name": "Carbon",
+        "Size": 5
+      },
+      {
+        "Name": "Tin",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Mass",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Mine Launcher"
+    ],
+    "ExperimentalId": "mine_launcher::stripped_down"
+  },
+  {
+    "Type": "Missile Rack",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Compact Composites",
+        "Size": 5
+      },
+      {
+        "Name": "Vanadium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Missile Rack"
+    ],
+    "ExperimentalId": "missile_rack::double_braced"
+  },
+  {
+    "Type": "Missile Rack",
+    "Name": "Drag Munition (Seeker only)",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Carbon",
+        "Size": 5
+      },
+      {
+        "Name": "Grid Resistors",
+        "Size": 5
+      },
+      {
+        "Name": "Molybdenum",
+        "Size": 2
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target speed reduced",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Missile Rack"
+    ],
+    "ExperimentalId": "missile_rack::drag_munition_(seeker_only)"
+  },
+  {
+    "Type": "Missile Rack",
+    "Name": "Emissive Munitions",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Equipment",
+        "Size": 4
+      },
+      {
+        "Name": "Unexpected Emission Data",
+        "Size": 3
+      },
+      {
+        "Name": "Heat Exchangers",
+        "Size": 3
+      },
+      {
+        "Name": "Manganese",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target signature increased",
+        "IsGood": true
+      },
+      {
+        "Effect": "+100%",
+        "Property": "Thermal Load",
+        "IsGood": false
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Missile Rack"
+    ],
+    "ExperimentalId": "missile_rack::emissive_munitions"
+  },
+  {
+    "Type": "Missile Rack",
+    "Name": "Flow Control",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 3
+      },
+      {
+        "Name": "Modified Embedded Firmware",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Power Draw",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Missile Rack"
+    ],
+    "ExperimentalId": "missile_rack::flow_control"
+  },
+  {
+    "Type": "Missile Rack",
+    "Name": "FSD Interrupt (Dumbfire only)",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Strange Wake Solutions",
+        "Size": 3
+      },
+      {
+        "Name": "Anomalous FSD Telemetry",
+        "Size": 5
+      },
+      {
+        "Name": "Mechanical Equipment",
+        "Size": 5
+      },
+      {
+        "Name": "Configurable Components",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target FSD reboots",
+        "IsGood": true
+      },
+      {
+        "Effect": "-30%",
+        "Property": "Damage",
+        "IsGood": false
+      },
+      {
+        "Effect": "-50%",
+        "Property": "Rate of Fire",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "c1400054-1c2b-487c-8854-7a22d96d4cd2",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Missile Rack"
+    ],
+    "ExperimentalId": "missile_rack::fsd_interrupt_(dumbfire_only)"
+  },
+  {
+    "Type": "Missile Rack",
+    "Name": "Multi-Servos",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Focus Crystals",
+        "Size": 4
+      },
+      {
+        "Name": "Conductive Polymers",
+        "Size": 2
+      },
+      {
+        "Name": "Configurable Components",
+        "Size": 2
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Rate of Fire",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Missile Rack"
+    ],
+    "ExperimentalId": "missile_rack::multi-servos"
+  },
+  {
+    "Type": "Missile Rack",
+    "Name": "Overload Munitions",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Filament Composites",
+        "Size": 5
+      },
+      {
+        "Name": "Tagged Encryption Codes",
+        "Size": 4
+      },
+      {
+        "Name": "Aberrant Shield Pattern Analysis",
+        "Size": 2
+      },
+      {
+        "Name": "Germanium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Damage partially thermal",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "c157bbd1-a14d-4aa2-9081-94cbfbdee558",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Missile Rack"
+    ],
+    "ExperimentalId": "missile_rack::overload_munitions"
+  },
+  {
+    "Type": "Missile Rack",
+    "Name": "Oversized",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Mechanical Components",
+        "Size": 3
+      },
+      {
+        "Name": "Ruthenium",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Damage",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Missile Rack"
+    ],
+    "ExperimentalId": "missile_rack::oversized"
+  },
+  {
+    "Type": "Missile Rack",
+    "Name": "Penetrator Munitions (Dumbfire only)",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Galvanising Alloys",
+        "Size": 5
+      },
+      {
+        "Name": "Electrochemical Arrays",
+        "Size": 3
+      },
+      {
+        "Name": "Zirconium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target module damage",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "35578402-1bc7-4d19-828b-af31ebd79866",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Missile Rack"
+    ],
+    "ExperimentalId": "missile_rack::penetrator_munitions_(dumbfire_only)"
+  },
+  {
+    "Type": "Missile Rack",
+    "Name": "Stripped Down",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Salvaged Alloys",
+        "Size": 5
+      },
+      {
+        "Name": "Carbon",
+        "Size": 5
+      },
+      {
+        "Name": "Tin",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Mass",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Missile Rack"
+    ],
+    "ExperimentalId": "missile_rack::stripped_down"
+  },
+  {
+    "Type": "Missile Rack",
+    "Name": "Thermal Cascade",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Heat Conduction Wiring",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 4
+      },
+      {
+        "Name": "High Density Composites",
+        "Size": 3
+      },
+      {
+        "Name": "Phosphorus",
+        "Size": 5
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Shielded target heat increased",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Missile Rack"
+    ],
+    "ExperimentalId": "missile_rack::thermal_cascade"
+  },
+  {
+    "Type": "Multi-cannon",
+    "Name": "Auto Loader",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Equipment",
+        "Size": 4
+      },
+      {
+        "Name": "Mechanical Components",
+        "Size": 3
+      },
+      {
+        "Name": "High Density Composites",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Auto reload while firing",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "640d6dde-f497-42cd-8bc9-73ab3fa1b43a",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Multi-cannon"
+    ],
+    "ExperimentalId": "multi-cannon::auto_loader"
+  },
+  {
+    "Type": "Multi-cannon",
+    "Name": "Corrosive Shell",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Chemical Storage Units",
+        "Size": 5
+      },
+      {
+        "Name": "Precipitated Alloys",
+        "Size": 4
+      },
+      {
+        "Name": "Arsenic",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target armor hardness reduced",
+        "IsGood": true
+      },
+      {
+        "Effect": "-20%",
+        "Property": "Ammo Capacity",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "a6faa870-ff89-4e48-b607-424e065cbd43",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Multi-cannon"
+    ],
+    "ExperimentalId": "multi-cannon::corrosive_shell"
+  },
+  {
+    "Type": "Multi-cannon",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Compact Composites",
+        "Size": 5
+      },
+      {
+        "Name": "Vanadium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Multi-cannon"
+    ],
+    "ExperimentalId": "multi-cannon::double_braced"
+  },
+  {
+    "Type": "Multi-cannon",
+    "Name": "Emissive Munitions",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Equipment",
+        "Size": 4
+      },
+      {
+        "Name": "Unexpected Emission Data",
+        "Size": 3
+      },
+      {
+        "Name": "Heat Exchangers",
+        "Size": 3
+      },
+      {
+        "Name": "Manganese",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target signature increased",
+        "IsGood": true
+      },
+      {
+        "Effect": "+100%",
+        "Property": "Thermal Load",
+        "IsGood": false
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Multi-cannon"
+    ],
+    "ExperimentalId": "multi-cannon::emissive_munitions"
+  },
+  {
+    "Type": "Multi-cannon",
+    "Name": "Flow Control",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 3
+      },
+      {
+        "Name": "Modified Embedded Firmware",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Power Draw",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Multi-cannon"
+    ],
+    "ExperimentalId": "multi-cannon::flow_control"
+  },
+  {
+    "Type": "Multi-cannon",
+    "Name": "Incendiary Rounds",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Heat Conduction Wiring",
+        "Size": 5
+      },
+      {
+        "Name": "Phosphorus",
+        "Size": 5
+      },
+      {
+        "Name": "Sulphur",
+        "Size": 5
+      },
+      {
+        "Name": "Phase Alloys",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Damage partially thermal",
+        "IsGood": true
+      },
+      {
+        "Effect": "-5%",
+        "Property": "Rate of Fire",
+        "IsGood": false
+      },
+      {
+        "Effect": "+200%",
+        "Property": "Thermal Load",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "3526773e-a814-4bec-afbf-30db79a3e239",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Multi-cannon"
+    ],
+    "ExperimentalId": "multi-cannon::incendiary_rounds"
+  },
+  {
+    "Type": "Multi-cannon",
+    "Name": "Multi-Servos",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Focus Crystals",
+        "Size": 4
+      },
+      {
+        "Name": "Conductive Polymers",
+        "Size": 2
+      },
+      {
+        "Name": "Configurable Components",
+        "Size": 2
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Rate of Fire",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Multi-cannon"
+    ],
+    "ExperimentalId": "multi-cannon::multi-servos"
+  },
+  {
+    "Type": "Multi-cannon",
+    "Name": "Oversized",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Mechanical Components",
+        "Size": 3
+      },
+      {
+        "Name": "Ruthenium",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Damage",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Multi-cannon"
+    ],
+    "ExperimentalId": "multi-cannon::oversized"
+  },
+  {
+    "Type": "Multi-cannon",
+    "Name": "Smart Rounds",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Security Firmware Patch",
+        "Size": 3
+      },
+      {
+        "Name": "Decoded Emission Data",
+        "Size": 3
+      },
+      {
+        "Name": "Classified Scan Databanks",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "No damage to untargeted ships",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "2a3d8519-27af-44f2-a50b-33095964d1cc",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Multi-cannon"
+    ],
+    "ExperimentalId": "multi-cannon::smart_rounds"
+  },
+  {
+    "Type": "Multi-cannon",
+    "Name": "Stripped Down",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Salvaged Alloys",
+        "Size": 5
+      },
+      {
+        "Name": "Carbon",
+        "Size": 5
+      },
+      {
+        "Name": "Tin",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Mass",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Multi-cannon"
+    ],
+    "ExperimentalId": "multi-cannon::stripped_down"
+  },
+  {
+    "Type": "Multi-cannon",
+    "Name": "Thermal Shock",
+    "Engineers": [
+      "Marsha Hicks",
+      "Tod McQuinn",
+      "Zacariah Nemo"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Flawed Focus Crystals",
+        "Size": 5
+      },
+      {
+        "Name": "Heat Resistant Ceramics",
+        "Size": 3
+      },
+      {
+        "Name": "Conductive Components",
+        "Size": 3
+      },
+      {
+        "Name": "Tungsten",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target heat increased",
+        "IsGood": true
+      },
+      {
+        "Effect": "-10%",
+        "Property": "Damage",
+        "IsGood": false
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Multi-cannon"
+    ],
+    "ExperimentalId": "multi-cannon::thermal_shock"
+  },
+  {
+    "Type": "Plasma Accelerator",
+    "Name": "Dazzle Shell",
+    "Engineers": [
+      "Etienne Dorn",
+      "Zacariah Nemo",
+      "Bill Turner"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Manganese",
+        "Size": 4
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 5
+      },
+      {
+        "Name": "Mechanical Components",
+        "Size": 5
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target sensor acuity reduced",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Plasma Accelerator"
+    ],
+    "ExperimentalId": "plasma_accelerator::dazzle_shell"
+  },
+  {
+    "Type": "Plasma Accelerator",
+    "Name": "Dispersal Field",
+    "Engineers": [
+      "Etienne Dorn",
+      "Zacariah Nemo",
+      "Bill Turner"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Conductive Components",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 5
+      },
+      {
+        "Name": "Irregular Emission Data",
+        "Size": 5
+      },
+      {
+        "Name": "Worn Shield Emitters",
+        "Size": 5
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target gimbal/turret tracking reduced",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Plasma Accelerator"
+    ],
+    "ExperimentalId": "plasma_accelerator::dispersal_field"
+  },
+  {
+    "Type": "Plasma Accelerator",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Etienne Dorn",
+      "Zacariah Nemo",
+      "Bill Turner"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Compact Composites",
+        "Size": 5
+      },
+      {
+        "Name": "Vanadium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Plasma Accelerator"
+    ],
+    "ExperimentalId": "plasma_accelerator::double_braced"
+  },
+  {
+    "Type": "Plasma Accelerator",
+    "Name": "Flow Control",
+    "Engineers": [
+      "Etienne Dorn",
+      "Zacariah Nemo",
+      "Bill Turner"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 3
+      },
+      {
+        "Name": "Modified Embedded Firmware",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Power Draw",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Plasma Accelerator"
+    ],
+    "ExperimentalId": "plasma_accelerator::flow_control"
+  },
+  {
+    "Type": "Plasma Accelerator",
+    "Name": "Multi-Servos",
+    "Engineers": [
+      "Etienne Dorn",
+      "Zacariah Nemo",
+      "Bill Turner"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Focus Crystals",
+        "Size": 4
+      },
+      {
+        "Name": "Conductive Polymers",
+        "Size": 2
+      },
+      {
+        "Name": "Configurable Components",
+        "Size": 2
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Rate of Fire",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Plasma Accelerator"
+    ],
+    "ExperimentalId": "plasma_accelerator::multi-servos"
+  },
+  {
+    "Type": "Plasma Accelerator",
+    "Name": "Oversized",
+    "Engineers": [
+      "Etienne Dorn",
+      "Zacariah Nemo",
+      "Bill Turner"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Mechanical Components",
+        "Size": 3
+      },
+      {
+        "Name": "Ruthenium",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Damage",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Plasma Accelerator"
+    ],
+    "ExperimentalId": "plasma_accelerator::oversized"
+  },
+  {
+    "Type": "Plasma Accelerator",
+    "Name": "Phasing Sequence",
+    "Engineers": [
+      "Etienne Dorn",
+      "Zacariah Nemo",
+      "Bill Turner"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Focus Crystals",
+        "Size": 5
+      },
+      {
+        "Name": "Aberrant Shield Pattern Analysis",
+        "Size": 3
+      },
+      {
+        "Name": "Niobium",
+        "Size": 3
+      },
+      {
+        "Name": "Configurable Components",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Part of damage through shields",
+        "IsGood": true
+      },
+      {
+        "Effect": "-10%",
+        "Property": "Damage",
+        "IsGood": false
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Plasma Accelerator"
+    ],
+    "ExperimentalId": "plasma_accelerator::phasing_sequence"
+  },
+  {
+    "Type": "Plasma Accelerator",
+    "Name": "Plasma Slug",
+    "Engineers": [
+      "Etienne Dorn",
+      "Zacariah Nemo",
+      "Bill Turner"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Heat Exchangers",
+        "Size": 3
+      },
+      {
+        "Name": "Modified Embedded Firmware",
+        "Size": 2
+      },
+      {
+        "Name": "Refined Focus Crystals",
+        "Size": 2
+      },
+      {
+        "Name": "Mercury",
+        "Size": 4
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Reload from ship fuel",
+        "IsGood": true
+      },
+      {
+        "Effect": "-10%",
+        "Property": "Damage",
+        "IsGood": false
+      },
+      {
+        "Effect": "-100%",
+        "Property": "Ammo Capacity",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "58a7b1b6-57b9-40f2-9a5a-712a5388a5eb",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Plasma Accelerator"
+    ],
+    "ExperimentalId": "plasma_accelerator::plasma_slug"
+  },
+  {
+    "Type": "Plasma Accelerator",
+    "Name": "Stripped Down",
+    "Engineers": [
+      "Etienne Dorn",
+      "Zacariah Nemo",
+      "Bill Turner"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Salvaged Alloys",
+        "Size": 5
+      },
+      {
+        "Name": "Carbon",
+        "Size": 5
+      },
+      {
+        "Name": "Tin",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Mass",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Plasma Accelerator"
+    ],
+    "ExperimentalId": "plasma_accelerator::stripped_down"
+  },
+  {
+    "Type": "Plasma Accelerator",
+    "Name": "Target Lock Breaker",
+    "Engineers": [
+      "Etienne Dorn",
+      "Zacariah Nemo",
+      "Bill Turner"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Selenium",
+        "Size": 5
+      },
+      {
+        "Name": "Security Firmware Patch",
+        "Size": 3
+      },
+      {
+        "Name": "Adaptive Encryptors Capture",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target loses target lock",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "4cf42ed8-574f-4bb8-a1f2-ee154475b463",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Plasma Accelerator"
+    ],
+    "ExperimentalId": "plasma_accelerator::target_lock_breaker"
+  },
+  {
+    "Type": "Plasma Accelerator",
+    "Name": "Thermal Conduit",
+    "Engineers": [
+      "Etienne Dorn",
+      "Zacariah Nemo",
+      "Bill Turner"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Heat Dispersion Plate",
+        "Size": 5
+      },
+      {
+        "Name": "Sulphur",
+        "Size": 5
+      },
+      {
+        "Name": "Tempered Alloys",
+        "Size": 5
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Damage increases with heat level",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Plasma Accelerator"
+    ],
+    "ExperimentalId": "plasma_accelerator::thermal_conduit"
+  },
+  {
+    "Type": "Power Distributor",
+    "Name": "Cluster Capacitor",
+    "Engineers": [
+      "Etienne Dorn",
+      "The Dweller",
+      "Marco Qwent",
+      "Hera Tani"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Phosphorus",
+        "Size": 5
+      },
+      {
+        "Name": "Heat Resistant Ceramics",
+        "Size": 3
+      },
+      {
+        "Name": "Cadmium",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+8%",
+        "Property": "Weapons Capacity",
+        "IsGood": true
+      },
+      {
+        "Effect": "-2%",
+        "Property": "Weapons Recharge",
+        "IsGood": false
+      },
+      {
+        "Effect": "+8%",
+        "Property": "Engines Capacity",
+        "IsGood": true
+      },
+      {
+        "Effect": "-2%",
+        "Property": "Engines Recharge",
+        "IsGood": false
+      },
+      {
+        "Effect": "+8%",
+        "Property": "Systems Capacity",
+        "IsGood": true
+      },
+      {
+        "Effect": "-2%",
+        "Property": "Systems Recharge",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "c4231886-f988-4a31-a749-2a58550f9e44",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Power Distributor"
+    ],
+    "ExperimentalId": "power_distributor::cluster_capacitor"
+  },
+  {
+    "Type": "Power Distributor",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Etienne Dorn",
+      "The Dweller",
+      "Marco Qwent",
+      "Hera Tani"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Phosphorus",
+        "Size": 5
+      },
+      {
+        "Name": "Heat Resistant Ceramics",
+        "Size": 3
+      },
+      {
+        "Name": "Proprietary Composites",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Power Distributor"
+    ],
+    "ExperimentalId": "power_distributor::double_braced"
+  },
+  {
+    "Type": "Power Distributor",
+    "Name": "Flow Control",
+    "Engineers": [
+      "Etienne Dorn",
+      "The Dweller",
+      "Marco Qwent",
+      "Hera Tani"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Phosphorus",
+        "Size": 5
+      },
+      {
+        "Name": "Heat Resistant Ceramics",
+        "Size": 3
+      },
+      {
+        "Name": "Conductive Polymers",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Power Draw",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Power Distributor"
+    ],
+    "ExperimentalId": "power_distributor::flow_control"
+  },
+  {
+    "Type": "Power Distributor",
+    "Name": "Stripped Down",
+    "Engineers": [
+      "Etienne Dorn",
+      "The Dweller",
+      "Marco Qwent",
+      "Hera Tani"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Phosphorus",
+        "Size": 5
+      },
+      {
+        "Name": "Heat Resistant Ceramics",
+        "Size": 3
+      },
+      {
+        "Name": "Proto Light Alloys",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Mass",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Power Distributor"
+    ],
+    "ExperimentalId": "power_distributor::stripped_down"
+  },
+  {
+    "Type": "Power Distributor",
+    "Name": "Super Conduits",
+    "Engineers": [
+      "Etienne Dorn",
+      "The Dweller",
+      "Marco Qwent",
+      "Hera Tani"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Phosphorus",
+        "Size": 5
+      },
+      {
+        "Name": "Heat Resistant Ceramics",
+        "Size": 3
+      },
+      {
+        "Name": "Security Firmware Patch",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-4%",
+        "Property": "Weapons Capacity",
+        "IsGood": false
+      },
+      {
+        "Effect": "+4%",
+        "Property": "Weapons Recharge",
+        "IsGood": true
+      },
+      {
+        "Effect": "-4%",
+        "Property": "Engines Capacity",
+        "IsGood": false
+      },
+      {
+        "Effect": "+4%",
+        "Property": "Engines Recharge",
+        "IsGood": true
+      },
+      {
+        "Effect": "-4%",
+        "Property": "Systems Capacity",
+        "IsGood": false
+      },
+      {
+        "Effect": "+4%",
+        "Property": "Systems Recharge",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "b5bb35a1-e851-4d37-8f26-8fe828f84c95",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Power Distributor"
+    ],
+    "ExperimentalId": "power_distributor::super_conduits"
+  },
+  {
+    "Type": "Power Plant",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Etienne Dorn",
+      "Felicity Farseer",
+      "Marco Qwent",
+      "Hera Tani"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Grid Resistors",
+        "Size": 5
+      },
+      {
+        "Name": "Vanadium",
+        "Size": 3
+      },
+      {
+        "Name": "Proprietary Composites",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Power Plant"
+    ],
+    "ExperimentalId": "power_plant::double_braced"
+  },
+  {
+    "Type": "Power Plant",
+    "Name": "Monstered",
+    "Engineers": [
+      "Etienne Dorn",
+      "Felicity Farseer",
+      "Marco Qwent",
+      "Hera Tani"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Grid Resistors",
+        "Size": 5
+      },
+      {
+        "Name": "Vanadium",
+        "Size": 3
+      },
+      {
+        "Name": "Polymer Capacitors",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+10%",
+        "Property": "Mass",
+        "IsGood": false
+      },
+      {
+        "Effect": "+5%",
+        "Property": "Power Generation",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "12a57a09-0e05-41a9-9824-14a3618e7a0f",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Power Plant"
+    ],
+    "ExperimentalId": "power_plant::monstered"
+  },
+  {
+    "Type": "Power Plant",
+    "Name": "Stripped Down",
+    "Engineers": [
+      "Etienne Dorn",
+      "Felicity Farseer",
+      "Marco Qwent",
+      "Hera Tani"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Grid Resistors",
+        "Size": 5
+      },
+      {
+        "Name": "Vanadium",
+        "Size": 3
+      },
+      {
+        "Name": "Proto Light Alloys",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Mass",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Power Plant"
+    ],
+    "ExperimentalId": "power_plant::stripped_down"
+  },
+  {
+    "Type": "Power Plant",
+    "Name": "Thermal Spread",
+    "Engineers": [
+      "Etienne Dorn",
+      "Felicity Farseer",
+      "Marco Qwent",
+      "Hera Tani"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Grid Resistors",
+        "Size": 5
+      },
+      {
+        "Name": "Vanadium",
+        "Size": 3
+      },
+      {
+        "Name": "Heat Vanes",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Heat Efficiency",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "6cda2960-a05b-4dd1-978c-202d746e47bc",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Power Plant"
+    ],
+    "ExperimentalId": "power_plant::thermal_spread"
+  },
+  {
+    "Type": "Pulse Laser",
+    "Name": "Concordant Sequence",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Focus Crystals",
+        "Size": 5
+      },
+      {
+        "Name": "Modified Embedded Firmware",
+        "Size": 3
+      },
+      {
+        "Name": "Zirconium",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Wing shield regeneration increased",
+        "IsGood": true
+      },
+      {
+        "Effect": "+50%",
+        "Property": "Thermal Load",
+        "IsGood": false
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Pulse Laser"
+    ],
+    "ExperimentalId": "pulse_laser::concordant_sequence"
+  },
+  {
+    "Type": "Pulse Laser",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Compact Composites",
+        "Size": 5
+      },
+      {
+        "Name": "Vanadium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Pulse Laser"
+    ],
+    "ExperimentalId": "pulse_laser::double_braced"
+  },
+  {
+    "Type": "Pulse Laser",
+    "Name": "Emissive Munitions",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Equipment",
+        "Size": 4
+      },
+      {
+        "Name": "Unexpected Emission Data",
+        "Size": 3
+      },
+      {
+        "Name": "Heat Exchangers",
+        "Size": 3
+      },
+      {
+        "Name": "Manganese",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target signature increased",
+        "IsGood": true
+      },
+      {
+        "Effect": "+100%",
+        "Property": "Thermal Load",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "16c9ed0f-63c0-4ff2-b2e0-59bbb294632d",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Pulse Laser"
+    ],
+    "ExperimentalId": "pulse_laser::emissive_munitions"
+  },
+  {
+    "Type": "Pulse Laser",
+    "Name": "Flow Control",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 3
+      },
+      {
+        "Name": "Modified Embedded Firmware",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Power Draw",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Pulse Laser"
+    ],
+    "ExperimentalId": "pulse_laser::flow_control"
+  },
+  {
+    "Type": "Pulse Laser",
+    "Name": "Multi-Servos",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Focus Crystals",
+        "Size": 4
+      },
+      {
+        "Name": "Conductive Polymers",
+        "Size": 2
+      },
+      {
+        "Name": "Configurable Components",
+        "Size": 2
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Rate of Fire",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Pulse Laser"
+    ],
+    "ExperimentalId": "pulse_laser::multi-servos"
+  },
+  {
+    "Type": "Pulse Laser",
+    "Name": "Oversized",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Mechanical Components",
+        "Size": 3
+      },
+      {
+        "Name": "Ruthenium",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Damage",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Pulse Laser"
+    ],
+    "ExperimentalId": "pulse_laser::oversized"
+  },
+  {
+    "Type": "Pulse Laser",
+    "Name": "Phasing Sequence",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Focus Crystals",
+        "Size": 5
+      },
+      {
+        "Name": "Aberrant Shield Pattern Analysis",
+        "Size": 3
+      },
+      {
+        "Name": "Niobium",
+        "Size": 3
+      },
+      {
+        "Name": "Configurable Components",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Part of damage through shields",
+        "IsGood": true
+      },
+      {
+        "Effect": "-10%",
+        "Property": "Damage",
+        "IsGood": false
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Pulse Laser"
+    ],
+    "ExperimentalId": "pulse_laser::phasing_sequence"
+  },
+  {
+    "Type": "Pulse Laser",
+    "Name": "Scramble Spectrum",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Crystal Shards",
+        "Size": 5
+      },
+      {
+        "Name": "Untypical Shield Scans",
+        "Size": 3
+      },
+      {
+        "Name": "Exceptional Scrambled Emission Data",
+        "Size": 5
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target modules malfunctions",
+        "IsGood": true
+      },
+      {
+        "Effect": "-10%",
+        "Property": "Rate of Fire",
+        "IsGood": false
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Pulse Laser"
+    ],
+    "ExperimentalId": "pulse_laser::scramble_spectrum"
+  },
+  {
+    "Type": "Pulse Laser",
+    "Name": "Stripped Down",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Salvaged Alloys",
+        "Size": 5
+      },
+      {
+        "Name": "Carbon",
+        "Size": 5
+      },
+      {
+        "Name": "Tin",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Mass",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Pulse Laser"
+    ],
+    "ExperimentalId": "pulse_laser::stripped_down"
+  },
+  {
+    "Type": "Pulse Laser",
+    "Name": "Thermal Shock",
+    "Engineers": [
+      "Mel Brandon",
+      "The Dweller",
+      "Broo Tarquin"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Flawed Focus Crystals",
+        "Size": 5
+      },
+      {
+        "Name": "Heat Resistant Ceramics",
+        "Size": 3
+      },
+      {
+        "Name": "Conductive Components",
+        "Size": 3
+      },
+      {
+        "Name": "Tungsten",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target heat increased",
+        "IsGood": true
+      },
+      {
+        "Effect": "-10%",
+        "Property": "Damage",
+        "IsGood": false
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Pulse Laser"
+    ],
+    "ExperimentalId": "pulse_laser::thermal_shock"
+  },
+  {
+    "Type": "Rail Gun",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Etienne Dorn",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Compact Composites",
+        "Size": 5
+      },
+      {
+        "Name": "Vanadium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Rail Gun"
+    ],
+    "ExperimentalId": "rail_gun::double_braced"
+  },
+  {
+    "Type": "Rail Gun",
+    "Name": "Feedback Cascade",
+    "Engineers": [
+      "Etienne Dorn",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Open Symmetric Keys",
+        "Size": 5
+      },
+      {
+        "Name": "Shield Emitters",
+        "Size": 5
+      },
+      {
+        "Name": "Filament Composites",
+        "Size": 5
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target shield cell disrupted",
+        "IsGood": true
+      },
+      {
+        "Effect": "-20%",
+        "Property": "Damage",
+        "IsGood": false
+      },
+      {
+        "Effect": "-40%",
+        "Property": "Thermal Load",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "3c153755-3d2c-4832-bb73-d6b3d0e99a71",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Rail Gun"
+    ],
+    "ExperimentalId": "rail_gun::feedback_cascade"
+  },
+  {
+    "Type": "Rail Gun",
+    "Name": "Flow Control",
+    "Engineers": [
+      "Etienne Dorn",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 3
+      },
+      {
+        "Name": "Modified Embedded Firmware",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Power Draw",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Rail Gun"
+    ],
+    "ExperimentalId": "rail_gun::flow_control"
+  },
+  {
+    "Type": "Rail Gun",
+    "Name": "Multi-Servos",
+    "Engineers": [
+      "Etienne Dorn",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Focus Crystals",
+        "Size": 4
+      },
+      {
+        "Name": "Conductive Polymers",
+        "Size": 2
+      },
+      {
+        "Name": "Configurable Components",
+        "Size": 2
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Rate of Fire",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Rail Gun"
+    ],
+    "ExperimentalId": "rail_gun::multi-servos"
+  },
+  {
+    "Type": "Rail Gun",
+    "Name": "Oversized",
+    "Engineers": [
+      "Etienne Dorn",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Mechanical Components",
+        "Size": 3
+      },
+      {
+        "Name": "Ruthenium",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Damage",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Rail Gun"
+    ],
+    "ExperimentalId": "rail_gun::oversized"
+  },
+  {
+    "Type": "Rail Gun",
+    "Name": "Plasma Slug",
+    "Engineers": [
+      "Etienne Dorn",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Heat Exchangers",
+        "Size": 3
+      },
+      {
+        "Name": "Modified Embedded Firmware",
+        "Size": 2
+      },
+      {
+        "Name": "Refined Focus Crystals",
+        "Size": 2
+      },
+      {
+        "Name": "Mercury",
+        "Size": 4
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Reload from ship fuel",
+        "IsGood": true
+      },
+      {
+        "Effect": "-10%",
+        "Property": "Damage",
+        "IsGood": false
+      },
+      {
+        "Effect": "-40%",
+        "Property": "Thermal Load",
+        "IsGood": true
+      },
+      {
+        "Effect": "-100%",
+        "Property": "Ammo Capacity",
+        "IsGood": false
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Rail Gun"
+    ],
+    "ExperimentalId": "rail_gun::plasma_slug"
+  },
+  {
+    "Type": "Rail Gun",
+    "Name": "Stripped Down",
+    "Engineers": [
+      "Etienne Dorn",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Salvaged Alloys",
+        "Size": 5
+      },
+      {
+        "Name": "Carbon",
+        "Size": 5
+      },
+      {
+        "Name": "Tin",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Mass",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Rail Gun"
+    ],
+    "ExperimentalId": "rail_gun::stripped_down"
+  },
+  {
+    "Type": "Rail Gun",
+    "Name": "Super Penetrator",
+    "Engineers": [
+      "Etienne Dorn",
+      "Tod McQuinn",
+      "The Sarge"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Proto Light Alloys",
+        "Size": 3
+      },
+      {
+        "Name": "Refined Focus Crystals",
+        "Size": 3
+      },
+      {
+        "Name": "Zirconium",
+        "Size": 3
+      },
+      {
+        "Name": "Untypical Shield Scans",
+        "Size": 5
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target module damage",
+        "IsGood": true
+      },
+      {
+        "Effect": "-40%",
+        "Property": "Thermal Load",
+        "IsGood": true
+      },
+      {
+        "Effect": "+50%",
+        "Property": "Reload Time",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "4bb4ec50-40fb-473d-abaf-4fc386aa889c",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Rail Gun"
+    ],
+    "ExperimentalId": "rail_gun::super_penetrator"
+  },
+  {
+    "Type": "Shield Booster",
+    "Name": "Blast Block",
+    "Engineers": [
+      "Mel Brandon",
+      "Felicity Farseer",
+      "Lei Cheung",
+      "Didi Vatermann"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Inconsistent Shield Soak Analysis",
+        "Size": 5
+      },
+      {
+        "Name": "Heat Resistant Ceramics",
+        "Size": 3
+      },
+      {
+        "Name": "Heat Dispersion Plate",
+        "Size": 3
+      },
+      {
+        "Name": "Selenium",
+        "Size": 2
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-1%",
+        "Property": "Optimal Strength",
+        "IsGood": false
+      },
+      {
+        "Effect": "+2%",
+        "Property": "Explosive Resistance",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "eb1c4a92-03ef-4263-8051-9ac91b2d43b2",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Booster"
+    ],
+    "ExperimentalId": "shield_booster::blast_block"
+  },
+  {
+    "Type": "Shield Booster",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Mel Brandon",
+      "Felicity Farseer",
+      "Lei Cheung",
+      "Didi Vatermann"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Distorted Shield Cycle Recordings",
+        "Size": 5
+      },
+      {
+        "Name": "Galvanising Alloys",
+        "Size": 3
+      },
+      {
+        "Name": "Shield Emitters",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Booster"
+    ],
+    "ExperimentalId": "shield_booster::double_braced"
+  },
+  {
+    "Type": "Shield Booster",
+    "Name": "Flow Control",
+    "Engineers": [
+      "Mel Brandon",
+      "Felicity Farseer",
+      "Lei Cheung",
+      "Didi Vatermann"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Inconsistent Shield Soak Analysis",
+        "Size": 5
+      },
+      {
+        "Name": "Security Firmware Patch",
+        "Size": 3
+      },
+      {
+        "Name": "Focus Crystals",
+        "Size": 3
+      },
+      {
+        "Name": "Niobium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Power Draw",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Booster"
+    ],
+    "ExperimentalId": "shield_booster::flow_control"
+  },
+  {
+    "Type": "Shield Booster",
+    "Name": "Force Block",
+    "Engineers": [
+      "Mel Brandon",
+      "Felicity Farseer",
+      "Lei Cheung",
+      "Didi Vatermann"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Unidentified Scan Archives",
+        "Size": 5
+      },
+      {
+        "Name": "Shielding Sensors",
+        "Size": 3
+      },
+      {
+        "Name": "Aberrant Shield Pattern Analysis",
+        "Size": 2
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-1%",
+        "Property": "Optimal Strength",
+        "IsGood": false
+      },
+      {
+        "Effect": "+2%",
+        "Property": "Kinetic Resistance",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "cb95d9b4-a945-491d-95ad-e230c0454cd9",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Booster"
+    ],
+    "ExperimentalId": "shield_booster::force_block"
+  },
+  {
+    "Type": "Shield Booster",
+    "Name": "Super Capacitor",
+    "Engineers": [
+      "Mel Brandon",
+      "Felicity Farseer",
+      "Lei Cheung",
+      "Didi Vatermann"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Untypical Shield Scans",
+        "Size": 3
+      },
+      {
+        "Name": "Compact Composites",
+        "Size": 5
+      },
+      {
+        "Name": "Cadmium",
+        "Size": 2
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Optimal Strength",
+        "IsGood": true
+      },
+      {
+        "Effect": "-2%",
+        "Property": "Kinetic Resistance",
+        "IsGood": false
+      },
+      {
+        "Effect": "-2%",
+        "Property": "Thermal Resistance",
+        "IsGood": false
+      },
+      {
+        "Effect": "-2%",
+        "Property": "Explosive Resistance",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "4197c308-a3df-442a-91c2-db856b4f57cf",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Booster"
+    ],
+    "ExperimentalId": "shield_booster::super_capacitor"
+  },
+  {
+    "Type": "Shield Booster",
+    "Name": "Thermo Block",
+    "Engineers": [
+      "Mel Brandon",
+      "Felicity Farseer",
+      "Lei Cheung",
+      "Didi Vatermann"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Anomalous Bulk Scan Data",
+        "Size": 5
+      },
+      {
+        "Name": "Conductive Ceramics",
+        "Size": 3
+      },
+      {
+        "Name": "Heat Vanes",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-1%",
+        "Property": "Optimal Strength",
+        "IsGood": false
+      },
+      {
+        "Effect": "+2%",
+        "Property": "Thermal Resistance",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "c3340df8-c6da-49c9-b236-8f1cc4209088",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Booster"
+    ],
+    "ExperimentalId": "shield_booster::thermo_block"
+  },
+  {
+    "Type": "Shield Cell Bank",
+    "Name": "Boss Cells",
+    "Engineers": [
+      "Mel Brandon",
+      "Elvira Martuuk",
+      "Lori Jameson"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Chemical Storage Units",
+        "Size": 5
+      },
+      {
+        "Name": "Chromium",
+        "Size": 3
+      },
+      {
+        "Name": "Polymer Capacitors",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+20%",
+        "Property": "Spin Up Time",
+        "IsGood": false
+      },
+      {
+        "Effect": "+5%",
+        "Property": "Shield Reinforcement",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "87ed0cec-9624-4ecb-8ffb-cc941464e8d2",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Cell Bank"
+    ],
+    "ExperimentalId": "shield_cell_bank::boss_cells"
+  },
+  {
+    "Type": "Shield Cell Bank",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Mel Brandon",
+      "Elvira Martuuk",
+      "Lori Jameson"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Chemical Storage Units",
+        "Size": 5
+      },
+      {
+        "Name": "Chromium",
+        "Size": 3
+      },
+      {
+        "Name": "Yttrium",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Cell Bank"
+    ],
+    "ExperimentalId": "shield_cell_bank::double_braced"
+  },
+  {
+    "Type": "Shield Cell Bank",
+    "Name": "Flow Control",
+    "Engineers": [
+      "Mel Brandon",
+      "Elvira Martuuk",
+      "Lori Jameson"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Chemical Storage Units",
+        "Size": 5
+      },
+      {
+        "Name": "Chromium",
+        "Size": 3
+      },
+      {
+        "Name": "Conductive Polymers",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Power Draw",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Cell Bank"
+    ],
+    "ExperimentalId": "shield_cell_bank::flow_control"
+  },
+  {
+    "Type": "Shield Cell Bank",
+    "Name": "Recycling Cells",
+    "Engineers": [
+      "Mel Brandon",
+      "Elvira Martuuk",
+      "Lori Jameson"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Chemical Storage Units",
+        "Size": 5
+      },
+      {
+        "Name": "Chromium",
+        "Size": 3
+      },
+      {
+        "Name": "Configurable Components",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+10%",
+        "Property": "Duration",
+        "IsGood": true
+      },
+      {
+        "Effect": "-5%",
+        "Property": "Shield Reinforcement",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "c8aa2134-3153-47b8-a367-9c5dbb9c557d",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Cell Bank"
+    ],
+    "ExperimentalId": "shield_cell_bank::recycling_cells"
+  },
+  {
+    "Type": "Shield Cell Bank",
+    "Name": "Stripped Down",
+    "Engineers": [
+      "Mel Brandon",
+      "Elvira Martuuk",
+      "Lori Jameson"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Chemical Storage Units",
+        "Size": 5
+      },
+      {
+        "Name": "Chromium",
+        "Size": 3
+      },
+      {
+        "Name": "Proto Light Alloys",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Mass",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Cell Bank"
+    ],
+    "ExperimentalId": "shield_cell_bank::stripped_down"
+  },
+  {
+    "Type": "Shield Generator",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Mel Brandon",
+      "Elvira Martuuk",
+      "Lei Cheung",
+      "Didi Vatermann"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Worn Shield Emitters",
+        "Size": 5
+      },
+      {
+        "Name": "Flawed Focus Crystals",
+        "Size": 3
+      },
+      {
+        "Name": "Configurable Components",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Generator"
+    ],
+    "ExperimentalId": "shield_generator::double_braced"
+  },
+  {
+    "Type": "Shield Generator",
+    "Name": "Fast Charge",
+    "Engineers": [
+      "Mel Brandon",
+      "Elvira Martuuk",
+      "Lei Cheung",
+      "Didi Vatermann"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Worn Shield Emitters",
+        "Size": 5
+      },
+      {
+        "Name": "Flawed Focus Crystals",
+        "Size": 3
+      },
+      {
+        "Name": "Compound Shielding",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Regen Rate",
+        "IsGood": true
+      },
+      {
+        "Effect": "+15%",
+        "Property": "Broken Regen Rate",
+        "IsGood": true
+      },
+      {
+        "Effect": "-1%",
+        "Property": "Kinetic Resistance",
+        "IsGood": false
+      },
+      {
+        "Effect": "-1%",
+        "Property": "Thermal Resistance",
+        "IsGood": false
+      },
+      {
+        "Effect": "-1%",
+        "Property": "Explosive Resistance",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "42c5e92d-ccab-435a-b2c6-fd268d39d6f5",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Generator"
+    ],
+    "ExperimentalId": "shield_generator::fast_charge"
+  },
+  {
+    "Type": "Shield Generator",
+    "Name": "Force Block",
+    "Engineers": [
+      "Mel Brandon",
+      "Elvira Martuuk",
+      "Lei Cheung",
+      "Didi Vatermann"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Worn Shield Emitters",
+        "Size": 5
+      },
+      {
+        "Name": "Flawed Focus Crystals",
+        "Size": 3
+      },
+      {
+        "Name": "Decoded Emission Data",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-3%",
+        "Property": "Optimal Multiplier",
+        "IsGood": false
+      },
+      {
+        "Effect": "+8%",
+        "Property": "Kinetic Resistance",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Generator"
+    ],
+    "ExperimentalId": "shield_generator::force_block"
+  },
+  {
+    "Type": "Shield Generator",
+    "Name": "Hi-cap",
+    "Engineers": [
+      "Mel Brandon",
+      "Elvira Martuuk",
+      "Lei Cheung",
+      "Didi Vatermann"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Worn Shield Emitters",
+        "Size": 5
+      },
+      {
+        "Name": "Flawed Focus Crystals",
+        "Size": 3
+      },
+      {
+        "Name": "Conductive Polymers",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+10%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+6%",
+        "Property": "Optimal Multiplier",
+        "IsGood": true
+      },
+      {
+        "Effect": "+25%",
+        "Property": "Distributor Draw",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "603c1ba6-45e6-4401-af56-639c3e7c9b79",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Generator"
+    ],
+    "ExperimentalId": "shield_generator::hi-cap"
+  },
+  {
+    "Type": "Shield Generator",
+    "Name": "Lo-draw",
+    "Engineers": [
+      "Mel Brandon",
+      "Elvira Martuuk",
+      "Lei Cheung",
+      "Didi Vatermann"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Worn Shield Emitters",
+        "Size": 5
+      },
+      {
+        "Name": "Flawed Focus Crystals",
+        "Size": 3
+      },
+      {
+        "Name": "Conductive Polymers",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-20%",
+        "Property": "Power Draw",
+        "IsGood": true
+      },
+      {
+        "Effect": "-2%",
+        "Property": "Optimal Multiplier",
+        "IsGood": false
+      },
+      {
+        "Effect": "-20%",
+        "Property": "Distributor Draw",
+        "IsGood": true
+      },
+      {
+        "Effect": "-1%",
+        "Property": "Kinetic Resistance",
+        "IsGood": false
+      },
+      {
+        "Effect": "-1%",
+        "Property": "Thermal Resistance",
+        "IsGood": false
+      },
+      {
+        "Effect": "-1%",
+        "Property": "Explosive Resistance",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "66a39288-59d7-4cfb-914d-354a200c0210",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Generator"
+    ],
+    "ExperimentalId": "shield_generator::lo-draw"
+  },
+  {
+    "Type": "Shield Generator",
+    "Name": "Multi-weave",
+    "Engineers": [
+      "Mel Brandon",
+      "Elvira Martuuk",
+      "Lei Cheung",
+      "Didi Vatermann"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Worn Shield Emitters",
+        "Size": 5
+      },
+      {
+        "Name": "Flawed Focus Crystals",
+        "Size": 3
+      },
+      {
+        "Name": "Aberrant Shield Pattern Analysis",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+10%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+25%",
+        "Property": "Distributor Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Kinetic Resistance",
+        "IsGood": true
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Thermal Resistance",
+        "IsGood": true
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Explosive Resistance",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "dd46c8be-730c-4671-87fe-f98b181b66cf",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Generator"
+    ],
+    "ExperimentalId": "shield_generator::multi-weave"
+  },
+  {
+    "Type": "Shield Generator",
+    "Name": "Stripped Down",
+    "Engineers": [
+      "Mel Brandon",
+      "Elvira Martuuk",
+      "Lei Cheung",
+      "Didi Vatermann"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Worn Shield Emitters",
+        "Size": 5
+      },
+      {
+        "Name": "Flawed Focus Crystals",
+        "Size": 3
+      },
+      {
+        "Name": "Proto Light Alloys",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Mass",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Generator"
+    ],
+    "ExperimentalId": "shield_generator::stripped_down"
+  },
+  {
+    "Type": "Shield Generator",
+    "Name": "Thermo Block",
+    "Engineers": [
+      "Mel Brandon",
+      "Elvira Martuuk",
+      "Lei Cheung",
+      "Didi Vatermann"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Worn Shield Emitters",
+        "Size": 5
+      },
+      {
+        "Name": "Flawed Focus Crystals",
+        "Size": 3
+      },
+      {
+        "Name": "Heat Vanes",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-3%",
+        "Property": "Optimal Multiplier",
+        "IsGood": false
+      },
+      {
+        "Effect": "+8%",
+        "Property": "Thermal Resistance",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Shield Generator"
+    ],
+    "ExperimentalId": "shield_generator::thermo_block"
+  },
+  {
+    "Type": "Thrusters",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Mel Brandon",
+      "Felicity Farseer",
+      "Elvira Martuuk",
+      "Professor Palin",
+      "Chloe Sedesi"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Iron",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 3
+      },
+      {
+        "Name": "Proprietary Composites",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Thrusters"
+    ],
+    "ExperimentalId": "thrusters::double_braced"
+  },
+  {
+    "Type": "Thrusters",
+    "Name": "Drag Drives",
+    "Engineers": [
+      "Mel Brandon",
+      "Felicity Farseer",
+      "Elvira Martuuk",
+      "Professor Palin",
+      "Chloe Sedesi"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Iron",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 3
+      },
+      {
+        "Name": "Security Firmware Patch",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+4%",
+        "Property": "Optimal Multiplier",
+        "IsGood": true
+      },
+      {
+        "Effect": "+10%",
+        "Property": "Thermal Load",
+        "IsGood": false
+      }
+    ],
+    "CoriolisGuid": "68998b16-7b65-4f58-8bc0-6e0f2686c367",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Thrusters"
+    ],
+    "ExperimentalId": "thrusters::drag_drives"
+  },
+  {
+    "Type": "Thrusters",
+    "Name": "Drive Distributors",
+    "Engineers": [
+      "Mel Brandon",
+      "Felicity Farseer",
+      "Elvira Martuuk",
+      "Professor Palin",
+      "Chloe Sedesi"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Iron",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 3
+      },
+      {
+        "Name": "Security Firmware Patch",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+10%",
+        "Property": "Optimal Mass",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "bd3c1991-370e-4b9d-b8cd-d5dec3260647",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Thrusters"
+    ],
+    "ExperimentalId": "thrusters::drive_distributors"
+  },
+  {
+    "Type": "Thrusters",
+    "Name": "Stripped Down",
+    "Engineers": [
+      "Mel Brandon",
+      "Felicity Farseer",
+      "Elvira Martuuk",
+      "Professor Palin",
+      "Chloe Sedesi"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Iron",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 3
+      },
+      {
+        "Name": "Proto Light Alloys",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Mass",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Thrusters"
+    ],
+    "ExperimentalId": "thrusters::stripped_down"
+  },
+  {
+    "Type": "Thrusters",
+    "Name": "Thermal Spread",
+    "Engineers": [
+      "Mel Brandon",
+      "Felicity Farseer",
+      "Elvira Martuuk",
+      "Professor Palin",
+      "Chloe Sedesi"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Iron",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 3
+      },
+      {
+        "Name": "Heat Vanes",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Mass",
+        "IsGood": false
+      },
+      {
+        "Effect": "-10%",
+        "Property": "Thermal Load",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Thrusters"
+    ],
+    "ExperimentalId": "thrusters::thermal_spread"
+  },
+  {
+    "Type": "Torpedo Pylon",
+    "Name": "Double Braced",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Compact Composites",
+        "Size": 5
+      },
+      {
+        "Name": "Vanadium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+15%",
+        "Property": "Integrity",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Torpedo Pylon"
+    ],
+    "ExperimentalId": "torpedo_pylon::double_braced"
+  },
+  {
+    "Type": "Torpedo Pylon",
+    "Name": "Flow Control",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Hybrid Capacitors",
+        "Size": 3
+      },
+      {
+        "Name": "Modified Embedded Firmware",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Power Draw",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Torpedo Pylon"
+    ],
+    "ExperimentalId": "torpedo_pylon::flow_control"
+  },
+  {
+    "Type": "Torpedo Pylon",
+    "Name": "Mass Lock Munition",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Equipment",
+        "Size": 5
+      },
+      {
+        "Name": "High Density Composites",
+        "Size": 3
+      },
+      {
+        "Name": "Aberrant Shield Pattern Analysis",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target FSD inhibited",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "9e8635af-4077-4d7a-98dd-5220c8722688",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Torpedo Pylon"
+    ],
+    "ExperimentalId": "torpedo_pylon::mass_lock_munition"
+  },
+  {
+    "Type": "Torpedo Pylon",
+    "Name": "Oversized",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Scrap",
+        "Size": 5
+      },
+      {
+        "Name": "Mechanical Components",
+        "Size": 3
+      },
+      {
+        "Name": "Ruthenium",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "+5%",
+        "Property": "Power Draw",
+        "IsGood": false
+      },
+      {
+        "Effect": "+3%",
+        "Property": "Damage",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Torpedo Pylon"
+    ],
+    "ExperimentalId": "torpedo_pylon::oversized"
+  },
+  {
+    "Type": "Torpedo Pylon",
+    "Name": "Penetrator Payload",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Mechanical Components",
+        "Size": 3
+      },
+      {
+        "Name": "Tungsten",
+        "Size": 3
+      },
+      {
+        "Name": "Anomalous Bulk Scan Data",
+        "Size": 5
+      },
+      {
+        "Name": "Selenium",
+        "Size": 3
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target module damage",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "5d25c5bc-4b45-4119-bd87-71bfd0f85957",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Torpedo Pylon"
+    ],
+    "ExperimentalId": "torpedo_pylon::penetrator_payload"
+  },
+  {
+    "Type": "Torpedo Pylon",
+    "Name": "Reverberating Cascade",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Configurable Components",
+        "Size": 2
+      },
+      {
+        "Name": "Classified Scan Databanks",
+        "Size": 3
+      },
+      {
+        "Name": "Filament Composites",
+        "Size": 4
+      },
+      {
+        "Name": "Chromium",
+        "Size": 4
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "✓",
+        "Property": "Target shield generator damaged",
+        "IsGood": true
+      }
+    ],
+    "CoriolisGuid": "c03e2f4f-9520-44bb-9a1f-7a917e8e3a48",
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Torpedo Pylon"
+    ],
+    "ExperimentalId": "torpedo_pylon::reverberating_cascade"
+  },
+  {
+    "Type": "Torpedo Pylon",
+    "Name": "Stripped Down",
+    "Engineers": [
+      "Liz Ryder",
+      "Petra Olmanova",
+      "Juri Ishmaak"
+    ],
+    "Ingredients": [
+      {
+        "Name": "Salvaged Alloys",
+        "Size": 5
+      },
+      {
+        "Name": "Carbon",
+        "Size": 5
+      },
+      {
+        "Name": "Tin",
+        "Size": 1
+      }
+    ],
+    "Effects": [
+      {
+        "Effect": "-10%",
+        "Property": "Mass",
+        "IsGood": true
+      }
+    ],
+    "Kind": "ExperimentalEffect",
+    "Grade": null,
+    "ModuleTypes": [
+      "Torpedo Pylon"
+    ],
+    "ExperimentalId": "torpedo_pylon::stripped_down"
+  }
+]

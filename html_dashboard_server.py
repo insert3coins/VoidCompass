@@ -16,7 +16,9 @@ import time
 from urllib.parse import parse_qs, urlparse
 
 
-MAX_COMMAND_BYTES = 64 * 1024
+# Engineering build exports can carry a complete outfitting document.  Keep a
+# firm loopback limit while allowing normal EDEC/EDSY/SLEF/Coriolis payloads.
+MAX_COMMAND_BYTES = 2 * 1024 * 1024
 
 
 class _DashboardHTTPServer(ThreadingHTTPServer):
