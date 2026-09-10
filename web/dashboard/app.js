@@ -2693,7 +2693,7 @@ function renderEngineeringWorkspace(data) {
   const blueprintDetail = blueprint.name ? `<div class="engineering-blueprint-detail"><header><small>${escapeHtml(blueprint.type)}</small><h3>${escapeHtml(blueprint.name)}</h3><span>${escapeHtml(slot.name || "SELECTED MODULE")} · ${escapeHtml(slot.rating || "UNRATED")}</span></header><h4>MODIFICATION EFFECTS</h4><div class="engineering-effect-list">${effects || "<span>NO EFFECT DATA</span>"}</div><h4>TOP-GRADE MATERIALS</h4><div class="engineering-ingredient-list">${ingredients || "<span>NO MATERIAL DATA</span>"}</div><div class="engineering-plan-form"><label>TARGET GRADE<input id="engineering-grade" type="number" min="1" max="${numeric(blueprint.max_grade)}" value="${numeric(blueprint.max_grade)}"></label><label>CURRENT GRADE<input id="engineering-current-grade" type="number" min="0" max="${Math.max(0, number(blueprint.max_grade)-1)}" value="${Math.min(number(slot.engineeringGrade), Math.max(0, number(blueprint.max_grade)-1))}"></label><label>QUANTITY<input id="engineering-quantity" type="number" min="1" max="99" value="1"></label><label>EXPERIMENTAL<select id="engineering-experimental"><option value="">NONE</option>${experimentals.map((row) => `<option>${escapeHtml(row.name)}</option>`).join("")}</select></label><button class="primary" data-ws-page="engineering" data-ws-op="pin">${ship.planned ? "ASSIGN SLOT & ADD GOAL" : "ADD TO WISHLIST"}</button>${ship.planned && slot.assigned ? `<button class="danger-action" data-ws-page="engineering" data-ws-op="clear_slot" data-ship-id="${escapeHtml(ship.id)}">CLEAR SLOT & GOALS</button>` : ""}</div></div>` : `<div class="engineering-blueprint-empty"><b>${slot.engineerable === false ? "NO ENGINEERING AVAILABLE" : "SELECT A MODIFICATION"}</b><span>${slot.engineerable === false ? "This module cannot be modified." : "Choose a blueprint from the results to review effects, materials and grades."}</span></div>`;
   const buildManager = `<section class="engineering-build-manager"><div><b>SHIP BUILD WORKSHOP</b><span>${data.follow_current ? "FOLLOWING CURRENT JOURNAL SHIP" : ship.planned ? "EDITING A PROFILE PLANNED BUILD" : "VIEWING A RETAINED FLEET LOADOUT"}</span></div><button data-ws-page="engineering" data-ws-op="follow_current" class="${data.follow_current ? "active" : ""}">FOLLOW LIVE SHIP</button><details><summary>CREATE BUILD FOR ANY SHIP</summary><div><select id="engineering-new-ship">${newShipOptions}</select><input id="engineering-new-build-name" placeholder="BUILD NAME (OPTIONAL)"><button data-ws-page="engineering" data-ws-op="create_build">CREATE PLANNED BUILD</button></div></details>${ship.planned ? `<div class="engineering-build-edit"><input id="engineering-build-name" value="${escapeHtml(ship.label || "Planned build")}"><button data-ws-page="engineering" data-ws-op="rename_build" data-ship-id="${escapeHtml(ship.id)}">RENAME</button><button class="danger-action" data-ws-page="engineering" data-ws-op="delete_build" data-ship-id="${escapeHtml(ship.id)}">DELETE BUILD</button></div>` : ""}</section>`;
   const engineeringPanel = `${buildManager}<section class="engineering-ship-grid">
-    <article class="engineering-ship-card"><label>ACTIVE PLAN SHIP<select id="engineering-ship-select">${shipOptions}</select></label>${ship.asset ? `<img src="${escapeHtml(ship.asset)}" alt="${escapeHtml(ship.type || ship.label)}">` : `<div class="engineering-ship-placeholder">LOADOUT AWAITING JOURNAL</div>`}<h3>${escapeHtml(ship.label || "No observed ship")}</h3><p>${escapeHtml(ship.manufacturer || "JOURNAL SOURCE")} · ${escapeHtml(String(ship.size || "").toUpperCase())}${ship.planned ? " · PLANNED BUILD" : ""}</p><div class="engineering-ship-stats"><span><b>${data.ship_stats?.jump_range == null ? "—" : `${numeric(data.ship_stats.jump_range, 1)} LY`}</b>JUMP RANGE</span><span><b>${data.ship_stats?.unladen_mass == null ? "—" : `${numeric(data.ship_stats.unladen_mass, 1)} T`}</b>UNLADEN MASS</span><span><b>${data.ship_stats?.cargo == null ? "—" : `${numeric(data.ship_stats.cargo)} T`}</b>CARGO</span><span><b>${numeric(data.ship_stats?.engineerable)}</b>ENGINEERABLE</span></div><small>${ship.planned ? "Choose a slot and modification to assign its module type and create an Engineering goal." : "Select any observed fleet loadout without changing ships in Elite."}</small></article>
+    <article class="engineering-ship-card"><label>ACTIVE PLAN SHIP<select id="engineering-ship-select" data-refresh-on-change>${shipOptions}</select></label>${ship.asset ? `<img src="${escapeHtml(ship.asset)}" alt="${escapeHtml(ship.type || ship.label)}">` : `<div class="engineering-ship-placeholder">LOADOUT AWAITING JOURNAL</div>`}<h3>${escapeHtml(ship.label || "No observed ship")}</h3><p>${escapeHtml(ship.manufacturer || "JOURNAL SOURCE")} · ${escapeHtml(String(ship.size || "").toUpperCase())}${ship.planned ? " · PLANNED BUILD" : ""}</p><div class="engineering-ship-stats"><span><b>${data.ship_stats?.jump_range == null ? "—" : `${numeric(data.ship_stats.jump_range, 1)} LY`}</b>JUMP RANGE</span><span><b>${data.ship_stats?.unladen_mass == null ? "—" : `${numeric(data.ship_stats.unladen_mass, 1)} T`}</b>UNLADEN MASS</span><span><b>${data.ship_stats?.cargo == null ? "—" : `${numeric(data.ship_stats.cargo)} T`}</b>CARGO</span><span><b>${numeric(data.ship_stats?.engineerable)}</b>ENGINEERABLE</span></div><small>${ship.planned ? "Choose a slot and modification to assign its module type and create an Engineering goal." : "Select any observed fleet loadout without changing ships in Elite."}</small></article>
     <section class="engineering-workbench"><article class="engineering-module-card"><nav class="engineering-module-tabs">${categoryTabs}</nav><header class="engineering-module-heading"><div><small>MODULE GROUP</small><h3>${escapeHtml(engineeringSlotCategory || "NO LOADOUT")}</h3></div><b>${numeric(visibleSlots.length)} SLOTS</b></header><div class="engineering-slot-grid">${slotRows || `<p class="workspace-empty">Switch to this ship once in Elite to capture its physical Loadout slots.</p>`}</div></article><article class="engineering-planner-card"><div class="engineering-blueprint-browser"><section class="engineering-blueprint-results"><header><div><small>SELECTED SLOT</small><b>${escapeHtml(slot.name || "NO MODULE SELECTED")}</b></div><span>${escapeHtml(slot.rating || "—")}</span></header><input id="engineering-search" value="${escapeHtml(engineeringSearch)}" placeholder="SEARCH COMPATIBLE MODIFICATIONS…"><div class="engineering-catalog">${blueprintRows || `<p class="workspace-empty">${slot.engineerable === false ? "This slot has no Engineering modifications." : "No compatible modification found."}</p>`}</div></section>${blueprintDetail}</div></article></section>
   </section><section class="engineering-transfer"><button data-ws-page="engineering" data-ws-op="export_copy" ${ship.observed ? "" : "disabled"}>COPY OUTFITTING EXPORT</button><details><summary>IMPORT EDEC, EDSY/SLEF OR CORIOLIS BUILD</summary><textarea id="engineering-build-import" placeholder="PASTE BUILD JSON, URL OR EXPORT HERE"></textarea><button data-ws-page="engineering" data-ws-op="import_preview" ${ship.observed ? "" : "disabled"}>VALIDATE IMPORT</button></details></section>`;
 
@@ -2837,6 +2837,42 @@ function settingInput(id, label, value, type = "text") {
   return `<label class="settings-input"><span>${escapeHtml(label)}</span><input id="${id}" type="${type}" value="${escapeHtml(value ?? "")}" autocomplete="off"></label>`;
 }
 
+function cacheRebuildMeta(state = {}) {
+  const parts = [];
+  const processed = Math.max(0, number(state.processed));
+  const total = Math.max(0, number(state.total));
+  const systems = Math.max(0, number(state.systems));
+  if (total) parts.push(`${numeric(Math.min(processed, total))} / ${numeric(total)} JOURNAL FILES`);
+  if (systems) parts.push(`${numeric(systems)} SYSTEMS`);
+  return parts.join(" · ") || (state.running ? "COUNTING JOURNAL FILES" : "WAITING TO START");
+}
+
+function updateSettingsLive(data = {}) {
+  const state = data.cache_rebuild || {};
+  const running = Boolean(state.running);
+  const status = ["working", "failed", "warning", "ready"].includes(state.status) ? state.status : "ready";
+  const percent = clamp(state.percent);
+  const panel = byId("settings-cache-rebuild");
+  if (panel) panel.className = `cache-rebuild-state ${status}`;
+  text("settings-cache-phase", state.phase || (running ? "Preparing" : "Ready"));
+  text("settings-cache-detail", state.detail || "No cache rebuild has run for this profile this session.");
+  text("settings-cache-percent", `${numeric(percent)}%`);
+  text("settings-cache-meta", cacheRebuildMeta(state));
+  text("settings-cache-elapsed", number(state.elapsed_seconds) > 0 ? `${numeric(state.elapsed_seconds, 1)}S ELAPSED` : "");
+  const meter = byId("settings-cache-meter");
+  if (meter) meter.setAttribute("aria-valuenow", String(percent));
+  const bar = byId("settings-cache-bar");
+  if (bar) bar.style.width = `${percent}%`;
+  const button = byId("settings-cache-rebuild-button");
+  if (button) {
+    button.disabled = running;
+    button.textContent = running ? "REBUILDING CACHE…" : "REBUILD CACHE";
+    button.classList.toggle("busy", running);
+    if (running) button.setAttribute("aria-busy", "true");
+    else button.removeAttribute("aria-busy");
+  }
+}
+
 function renderSettingsWorkspace(data) {
   const root = byId("settings-workspace");
   const value = data.values || {};
@@ -2845,6 +2881,7 @@ function renderSettingsWorkspace(data) {
   const health = data.health || {};
   const editor = data.theme_editor || {};
   const themeColors = (editor.keys || []).map((key) => `<label><span>${escapeHtml(key.replaceAll("_", " "))}</span><input type="color" data-theme-color="${escapeHtml(key)}" value="${escapeHtml(editor.palette?.[key] || "#000000")}"></label>`).join("");
+  const rebuildPanel = `<div id="settings-cache-rebuild" class="cache-rebuild-state ready" role="status" aria-live="polite"><header><span><b id="settings-cache-phase">READY</b><small id="settings-cache-detail">No cache rebuild has run for this profile this session.</small></span><strong id="settings-cache-percent">0%</strong></header><div id="settings-cache-meter" class="cache-rebuild-meter" role="progressbar" aria-label="Cache rebuild progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="settings-cache-bar"></i></div><footer><span id="settings-cache-meta">WAITING TO START</span><span id="settings-cache-elapsed"></span></footer></div>`;
   root.classList.remove("loading-panel");
   root.innerHTML = `<section class="settings-workspace-grid">
     ${workspaceCard("CORE PATHS & ACCESSIBILITY", `${settingInput("setting-journal", "Journal folder", value.journal_path)}${settingInput("setting-screenshots", "Screenshot folder", value.screenshots_path)}${settingToggle("setting-screenshots-enabled", "Convert BMP screenshots to PNG", "Watch the configured screenshot folder.", value.screenshots_enabled)}<label class="settings-input"><span>Application scale</span><select id="setting-ui-scale">${[90,100,110,125,140].map((item) => `<option ${number(value.ui_scale_percent,100) === item ? "selected" : ""}>${item}</option>`).join("")}</select></label><label class="settings-input"><span>Navigation animation</span><select id="setting-motion-intensity">${["Calm","Standard","Energetic"].map((item) => `<option ${String(value.hud_animation_intensity || "Standard") === item ? "selected" : ""}>${item}</option>`).join("")}</select></label>${settingToggle("setting-reduced-motion", "Reduced motion", "Gentler activity pulses and transitions.", value.reduced_motion_enabled)}`)}
@@ -2853,8 +2890,9 @@ function renderSettingsWorkspace(data) {
     ${workspaceCard("EDSM & EDDN", `${settingInput("setting-edsm-name", "EDSM commander name", value.edsm_cmdr_name)}${settingInput("setting-edsm-key", "EDSM API key", value.edsm_api_key, "password")}${settingToggle("setting-edsm-upload", "Upload exploration events to EDSM", "Uses the active commander's credentials.", value.edsm_upload_enabled)}${settingToggle("setting-eddn-upload", "Upload visited markets to EDDN", "Community market publishing remains independent from Trade UI.", value.eddn_market_upload_enabled)}<p class="settings-note">${numeric(data.eddn?.uploads)} EDDN uploads this run${data.eddn?.last_error ? ` · LAST ERROR ${escapeHtml(data.eddn.last_error)}` : ""}</p><div class="workspace-actions"><button data-ws-page="settings" data-ws-op="test_edsm">TEST EDSM CREDENTIALS</button></div>`)}
     ${workspaceCard("GALNET RELAY", `${settingToggle("setting-galnet-enabled", "Enable Galnet relay", "Show the bottom-bar news ticker and permit background feed refreshes.", value.galnet_enabled)}${settingToggle("setting-galnet-rotate", "Rotate headlines automatically", "Hold the current dispatch when disabled; the archive remains available.", value.galnet_auto_rotate_enabled)}<label class="settings-input"><span>Headline rotation cadence</span><select id="setting-galnet-rotation">${[4,7,10,15,30,60].map((item) => `<option value="${item}" ${number(value.galnet_rotation_seconds,7) === item ? "selected" : ""}>${item} seconds</option>`).join("")}</select></label><label class="settings-input"><span>Feed refresh cadence</span><select id="setting-galnet-refresh">${[5,15,30,60,120,240].map((item) => `<option value="${item}" ${number(value.galnet_refresh_minutes,30) === item ? "selected" : ""}>${item < 60 ? `${item} minutes` : `${item / 60} hour${item === 60 ? "" : "s"}`}</option>`).join("")}</select></label><p class="settings-note">${escapeHtml(galnet.detail || "Galnet relay standing by.")} · ${numeric((galnet.articles || []).length)} cached dispatches</p><div class="workspace-actions wrap"><button id="galnet-settings-refresh">REFRESH NOW</button><button id="galnet-settings-clear" class="danger-action">CLEAR CACHE</button></div>`, galnet.busy ? "RECEIVING" : String(galnet.status || "STANDBY").toUpperCase())}
     ${workspaceCard("CARRIER INTEGRATION", `${settingInput("setting-discord", "Discord webhook URL", value.carrier_discord_webhook_url, "password")}<p class="settings-note">One webhook handles personal and Squadron Carrier status, jump and expedition updates.</p><div class="workspace-actions"><button data-ws-page="settings" data-ws-op="test_discord">SEND TEST PREVIEW</button><button data-page="carrier">OPEN CARRIER COMMAND</button></div>`)}
-    ${workspaceCard("DIAGNOSTICS & RECOVERY", `<div class="health-readout"><b>${escapeHtml(health.level || "NOMINAL")}</b><span>UI queue ${numeric(health.ui?.pending || health.ui_pending)} · max lag ${numeric(health.ui?.max_lag_ms || health.ui_max_lag_ms)} ms · disk queue ${numeric(health.persistence?.pending || health.writes_pending)}</span></div>${settingToggle("setting-runtime-trace", "Runtime performance trace", "Retain startup and UI timing evidence.", value.runtime_trace_enabled)}${settingToggle("setting-crash-report", "Crash and UI-freeze reporter", "Rotate current and previous diagnostic logs.", value.crash_reporting_enabled)}${settingToggle("setting-safe-mode", "Safe unclean-shutdown recovery", "Restore the last graceful profile checkpoint first.", value.recovery_safe_mode_enabled)}${settingToggle("setting-auto-backups", "Automatic profile safety snapshots", "Keep up to five snapshots before upgrades and cache rebuilds. Manual backup and restore rollback remain available.", value.automatic_profile_backups_enabled)}${settingToggle("setting-cache-edsm", "Upload history during cache rebuild", "Optional EDSM backfill while reconstructing profile history.", value.edsm_backfill_on_cache_rebuild)}<div class="workspace-actions wrap"><button data-ws-page="settings" data-ws-op="rebuild_cache">REBUILD CACHE</button><button data-ws-page="settings" data-ws-op="support_bundle">CREATE SUPPORT BUNDLE</button><button data-command="open_logs">OPEN LOGS</button><button data-ws-page="settings" data-ws-op="run_setup">RUN SETUP</button></div>`)}
+    ${workspaceCard("DIAGNOSTICS & RECOVERY", `<div class="health-readout"><b>${escapeHtml(health.level || "NOMINAL")}</b><span>UI queue ${numeric(health.ui?.pending || health.ui_pending)} · max lag ${numeric(health.ui?.max_lag_ms || health.ui_max_lag_ms)} ms · disk queue ${numeric(health.persistence?.pending || health.writes_pending)}</span></div>${settingToggle("setting-runtime-trace", "Runtime performance trace", "Retain startup and UI timing evidence.", value.runtime_trace_enabled)}${settingToggle("setting-crash-report", "Crash and UI-freeze reporter", "Rotate current and previous diagnostic logs.", value.crash_reporting_enabled)}${settingToggle("setting-safe-mode", "Safe unclean-shutdown recovery", "Restore the last graceful profile checkpoint first.", value.recovery_safe_mode_enabled)}${settingToggle("setting-auto-backups", "Automatic profile safety snapshots", "Keep up to five snapshots before upgrades and cache rebuilds. Manual backup and restore rollback remain available.", value.automatic_profile_backups_enabled)}${settingToggle("setting-cache-edsm", "Upload history during cache rebuild", "Optional EDSM backfill while reconstructing profile history.", value.edsm_backfill_on_cache_rebuild)}${rebuildPanel}<div class="workspace-actions wrap"><button id="settings-cache-rebuild-button" data-ws-page="settings" data-ws-op="rebuild_cache">REBUILD CACHE</button><button data-ws-page="settings" data-ws-op="support_bundle">CREATE SUPPORT BUNDLE</button><button data-command="open_logs">OPEN LOGS</button><button data-ws-page="settings" data-ws-op="run_setup">RUN SETUP</button></div>`)}
   </section><p id="settings-test-status" class="workspace-status ${escapeHtml(data.tools?.status || "ready")}">${escapeHtml(data.tools?.detail || "Integration tests have not run this session.")}</p><footer class="settings-savebar"><span>All settings belong to the active commander profile.</span><button id="settings-save-html">SAVE SETTINGS</button></footer>`;
+  updateSettingsLive(data);
 }
 
 function renderWorkspace(state) {
@@ -2879,6 +2917,7 @@ function renderWorkspace(state) {
     : (workspace.data || {});
   const fingerprint = JSON.stringify(fingerprintData);
   if (page === "settings" && workspaceFingerprints[page]) {
+    updateSettingsLive(workspace.data || {});
     const status = byId("settings-test-status");
     if (status) {
       status.className = `workspace-status ${workspace.data?.tools?.status || "ready"}`;
@@ -2895,7 +2934,7 @@ function renderWorkspace(state) {
   if (page === "planet-materials" && root?.dataset.profileKey === workspace.data?.profile_key && root.querySelector("form[data-dirty]")
       && root.planetSitesFingerprint === JSON.stringify(workspace.data?.sites || [])) return;
   const profileChanged = page === "planet-materials" && root?.dataset.profileKey !== workspace.data?.profile_key;
-  if (page !== "planet-materials" && !profileChanged && root?.contains(focused) && focused?.matches("input, textarea, select, [contenteditable='true']")) return;
+  if (page !== "planet-materials" && !profileChanged && root?.contains(focused) && focused?.matches("input, textarea, select, [contenteditable='true']") && !focused?.matches("[data-refresh-on-change]")) return;
   workspaceFingerprints[page] = fingerprint;
   const renderers = {
     "planet-materials": renderPlanetMaterialsWorkspace,
@@ -3561,11 +3600,21 @@ document.addEventListener("click", async (event) => {
     } else if (page === "settings" && operation === "rebuild_cache") {
       if (!window.confirm("Rebuild the active profile's journal cache now?")) return;
       payload.upload_edsm = Boolean(byId("setting-cache-edsm")?.checked);
+      updateSettingsLive({cache_rebuild: {
+        running: true, status: "working", phase: "Preparing", percent: 0,
+        detail: "Preparing the active profile before scanning journal history.",
+      }});
     }
+    const cacheRebuildCommand = page === "settings" && operation === "rebuild_cache";
     workspaceButton.disabled = true;
     const accepted = await command("workspace", payload);
-    workspaceButton.disabled = false;
-    showToast(accepted ? "Command applied" : "That action is not available from current journal state");
+    if (!cacheRebuildCommand) workspaceButton.disabled = false;
+    if (cacheRebuildCommand) {
+      if (!accepted) updateSettingsLive(model.workspace?.data || {});
+      showToast(accepted ? "Cache rebuild started — progress is shown in Diagnostics" : "A cache rebuild is already running");
+    } else {
+      showToast(accepted ? "Command applied" : "That action is not available from current journal state");
+    }
     return;
   }
   const filterButton = event.target.closest("[data-feed-filter]");
@@ -3634,7 +3683,9 @@ document.addEventListener("change", async (event) => {
     replaySelectedSessionIndex = Math.max(0, number(event.target.value));
     renderChronicleWorkspace(model.workspace?.data || {});
   } else if (event.target.id === "engineering-ship-select") {
-    const accepted = await command("workspace", {page: "engineering", operation: "select_ship", ship_id: event.target.value});
+    const shipId = event.target.value;
+    event.target.blur();
+    const accepted = await command("workspace", {page: "engineering", operation: "select_ship", ship_id: shipId});
     showToast(accepted ? "Engineering ship selected" : "That fleet loadout is unavailable");
   }
 });
