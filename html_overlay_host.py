@@ -44,6 +44,64 @@ def _native_handle(window):
         return 0
 
 
+def _foreground_window():
+    """Return the HWND that was active before an overlay was mapped."""
+    if os.name != "nt":
+        return 0
+    try:
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        getter = user32.GetForegroundWindow
+        getter.restype = ctypes.c_void_p
+        return int(getter() or 0)
+    except Exception:
+        return 0
+
+
+def _restore_foreground_window(hwnd):
+    """Give focus back to the previously active application window.
+
+    WebView2 can activate a newly mapped WinForms window even when pywebview
+    was asked for ``focus=False`` and the HWND carries ``WS_EX_NOACTIVATE``.
+    Reattach the host thread briefly when Windows rejects a direct foreground
+    request, then detach immediately after the restoration.
+    """
+    try:
+        hwnd = int(hwnd or 0)
+    except (TypeError, ValueError):
+        return False
+    if not hwnd or os.name != "nt":
+        return False
+    try:
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        target = ctypes.c_void_p(hwnd)
+        foreground = user32.SetForegroundWindow
+        foreground.argtypes = (ctypes.c_void_p,)
+        foreground.restype = ctypes.c_bool
+        if bool(foreground(target)):
+            return True
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        current_thread = kernel32.GetCurrentThreadId()
+        process_id = ctypes.c_uint32()
+        get_thread = user32.GetWindowThreadProcessId
+        get_thread.argtypes = (ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32))
+        get_thread.restype = ctypes.c_uint32
+        target_thread = get_thread(target, ctypes.byref(process_id))
+        if not target_thread or target_thread == current_thread:
+            return False
+        attach = user32.AttachThreadInput
+        attach.argtypes = (ctypes.c_uint32, ctypes.c_uint32, ctypes.c_bool)
+        attach.restype = ctypes.c_bool
+        if not bool(attach(current_thread, target_thread, True)):
+            return False
+        try:
+            return bool(foreground(target))
+        finally:
+            attach(current_thread, target_thread, False)
+    except Exception:
+        return False
+
+
 def _overlay_window_style(style, click_through=True):
     """Return taskbar-free extended styles for an on-screen overlay."""
     style = int(style) & ~WS_EX_APPWINDOW
@@ -166,9 +224,13 @@ def _set_windows_visibility(window, visible):
     if not hwnd:
         return False
     try:
-        ctypes.WinDLL("user32", use_last_error=True).ShowWindow(
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        previous = _foreground_window() if visible else 0
+        user32.ShowWindow(
             ctypes.c_void_p(hwnd), SW_SHOWNOACTIVATE if visible else SW_HIDE,
         )
+        if visible and previous and previous != hwnd and _foreground_window() != previous:
+            _restore_foreground_window(previous)
         return True
     except Exception:
         return False
@@ -206,9 +268,10 @@ def _request_json(url, payload=None, timeout=1.5):
 
 
 class _WindowController:
-    def __init__(self, overlay_id, window):
+    def __init__(self, overlay_id, window, restore_foreground=0):
         self.overlay_id = str(overlay_id)
         self.window = window
+        self.restore_foreground = int(restore_foreground or 0)
         self.last_geometry = None
         self.last_click_through = None
         self.last_visible = None
@@ -269,6 +332,9 @@ class _WindowController:
                         # Showing the native form is the operation that can
                         # make WebView2 restore its opaque fallback brush.
                         _apply_webview_transparency(self.window)
+                        if self.restore_foreground and _foreground_window() != self.restore_foreground:
+                            _restore_foreground_window(self.restore_foreground)
+                        self.restore_foreground = 0
                 else:
                     self.last_visible = None
             now = time.monotonic()
@@ -368,6 +434,7 @@ class _OverlayHost:
         # calls ShowWindow, eliminating WebView2's dynamic-window startup flash.
         start_x = HIDDEN_WINDOW_X if hidden else int((window_state or {}).get("x") or 0)
         start_y = HIDDEN_WINDOW_Y if hidden else int((window_state or {}).get("y") or 0)
+        restore_foreground = _foreground_window()
         window = self.webview.create_window(
             str(spec.get("title") or f"Void Compass {overlay_id}"),
             url=self.page_url(overlay_id, spec.get("template")),
@@ -377,7 +444,9 @@ class _OverlayHost:
             on_top=True, transparent=True, background_color="#000000",
             text_select=False, zoomable=False,
         )
-        self.controllers[str(overlay_id)] = _WindowController(overlay_id, window)
+        self.controllers[str(overlay_id)] = _WindowController(
+            overlay_id, window, restore_foreground=restore_foreground,
+        )
         return window
 
     def control_loop(self):
